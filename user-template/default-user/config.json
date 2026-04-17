@@ -1,0 +1,34 @@
+{
+  
+  "services": {
+    "webSearchService": {
+      "enabled": true,
+      "api_key": "",
+      "handler": "webSearchServiceHandler",
+      "endpoints": {
+        "search": {
+          "description": "搜索网页",
+          "url": "http://localhost:11008/search",
+          "query-string-format": "q=搜索内容",
+          "body-format": "{}"
+        }
+      }
+    },
+    "weatherService": {
+      "enabled": true,
+      "api_key": "",
+      "handler": "weatherServiceHandler",
+      "endpoints": {
+        "getWeather": {
+          "description": "天气查询",
+          "url": "https://geocoding-api.open-meteo.com/v1/search",
+          "query-string-format": "{\"city\":\"\",\"days\":3,\"language\":\"zh\"}",
+          "body-format": "{}"
+        }
+      }
+    }
+  },
+  "preferences": {
+    "language": "zh-CN"
+  }
+}

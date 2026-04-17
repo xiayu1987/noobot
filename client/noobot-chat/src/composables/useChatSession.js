@@ -1,0 +1,549 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { computed, reactive, ref } from "vue";
+import { ElMessage } from "element-plus";
+import { applyCompletedToolLogsToMessages } from "./sessionToolLogs";
+import {
+  buildAppendMessage,
+  buildViewMessage,
+  foldConversationMessages,
+} from "./messageModel";
+import {
+  chatSseApi,
+  getSessionDetailApi,
+  getSessionsApi,
+} from "../api/chatApi";
+
+export function useChatSession({
+  userId,
+  apiKey,
+  connected,
+  ensureConnected,
+  authFetch,
+  isImageMime,
+  classifyRealtimeLog,
+  scrollBottom,
+  clearUploadSelection = () => {},
+}) {
+  const input = ref("");
+  const uploadFiles = ref([]);
+  const sending = ref(false);
+  const sessions = ref([]);
+  const activeSessionId = ref("");
+  const loadingSessions = ref(false);
+  const loadingSessionDetail = ref(false);
+
+  const activeSession = computed(() =>
+    sessions.value.find((sessionItem) => sessionItem.id === activeSessionId.value),
+  );
+
+  function sessionTitleFromMessages(messages = [], fallback = "新会话") {
+    const firstUser = messages.find(
+      (messageItem) =>
+        messageItem.role === "user" && (messageItem.content || "").trim(),
+    );
+    return firstUser ? firstUser.content.slice(0, 20) : fallback;
+  }
+
+  function generateSessionId() {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+      /[xy]/g,
+      (placeholder) => {
+        const randomValue = Math.floor(Math.random() * 16);
+        const resolvedValue =
+          placeholder === "x" ? randomValue : (randomValue & 0x3) | 0x8;
+        return resolvedValue.toString(16);
+      },
+    );
+  }
+
+  function createLocalSession() {
+    const id = generateSessionId();
+    const newSessionItem = {
+      id,
+      title: "新会话",
+      isLocal: true,
+      loaded: true,
+      backendSessionId: id,
+      currentTaskId: "",
+      currentTaskStatus: "idle",
+      messageCount: 0,
+      lastMessage: null,
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    sessions.value.unshift(newSessionItem);
+    activeSessionId.value = id;
+  }
+
+  function newSession() {
+    if (sending.value) {
+      ElMessage.warning("发送中，暂不能新建会话");
+      return;
+    }
+    createLocalSession();
+  }
+
+  function mapSummaryToSession(item) {
+    const messages = Array.isArray(item.messages) ? item.messages : [];
+    const lastMessage = messages.length ? messages[messages.length - 1] : null;
+    return {
+      id: item.sessionId,
+      title: sessionTitleFromMessages(messages, item.sessionId.slice(0, 8)),
+      isLocal: false,
+      loaded: false,
+      backendSessionId: item.sessionId,
+      currentTaskId: item.currentTaskId || "",
+      currentTaskStatus: "idle",
+      messageCount: messages.length || 0,
+      lastMessage,
+      messages: [],
+      createdAt: item.createdAt || "",
+      updatedAt: item.updatedAt || "",
+      caller: item.caller || "",
+      depth: Number(item.depth || 0),
+    };
+  }
+
+  function revokeMessagePreviewUrls(messages = []) {
+    for (const messageItem of messages) {
+      const attachments = messageItem.attachments || [];
+      for (const attachmentItem of attachments) {
+        if (attachmentItem.previewUrl)
+          URL.revokeObjectURL(attachmentItem.previewUrl);
+      }
+    }
+  }
+
+  async function fetchSessions() {
+    if (!ensureConnected()) return;
+    loadingSessions.value = true;
+    try {
+      const prevActiveId = activeSessionId.value;
+      const res = await getSessionsApi(
+        { userId: userId.value },
+        { fetcher: authFetch },
+      );
+      if (!res.ok) throw new Error(`获取 sessions 失败: HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "获取 sessions 失败");
+
+      sessions.value = (data.sessions || [])
+        .filter((sessionItem) => String(sessionItem?.caller || "") === "user")
+        .sort(
+          (leftSession, rightSession) =>
+            new Date(rightSession.updatedAt || 0).getTime() -
+            new Date(leftSession.updatedAt || 0).getTime(),
+        )
+        .map(mapSummaryToSession);
+
+      for (const session of sessions.value) {
+        revokeMessagePreviewUrls(session.messages || []);
+      }
+
+      if (!sessions.value.length) {
+        createLocalSession();
+        return;
+      }
+      const keepActive =
+        prevActiveId &&
+        sessions.value.some((sessionItem) => sessionItem.id === prevActiveId);
+      const nextId = keepActive ? prevActiveId : sessions.value[0].id;
+      await selectSession(nextId, { force: true });
+    } catch (error) {
+      ElMessage.error(error.message || "加载会话失败");
+      if (!sessions.value.length) createLocalSession();
+    } finally {
+      loadingSessions.value = false;
+    }
+  }
+
+  function onUploadChange(file, fileList) {
+    uploadFiles.value = fileList
+      .map((fileItem) => fileItem.raw)
+      .filter(Boolean)
+      .map((raw) => ({
+        raw,
+        name: raw.name,
+        mimeType: raw.type || "application/octet-stream",
+        size: raw.size || 0,
+        previewUrl: isImageMime(raw.type || "") ? URL.createObjectURL(raw) : "",
+      }));
+  }
+
+  function clearUploads() {
+    for (const uploadFile of uploadFiles.value) {
+      if (uploadFile.previewUrl) URL.revokeObjectURL(uploadFile.previewUrl);
+    }
+    uploadFiles.value = [];
+    clearUploadSelection();
+  }
+
+  function appendMessage(role, content = "", attachments = []) {
+    const msg = reactive(buildAppendMessage(role, content, attachments));
+    activeSession.value.messages.push(msg);
+    activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
+    activeSession.value.lastMessage = msg;
+    activeSession.value.updatedAt = new Date().toISOString();
+    return msg;
+  }
+
+  function makeViewMessage(messageItem = {}) {
+    return reactive(
+      buildViewMessage(messageItem, {
+        userId: userId.value,
+        apiKey: apiKey.value,
+        isImageMime,
+      }),
+    );
+  }
+
+  function foldMessagesForView(messages = []) {
+    return foldConversationMessages(messages, makeViewMessage);
+  }
+
+  function applySessionDetail(detail, options = {}) {
+    const preserveCurrentMessages = Boolean(options.preserveCurrentMessages);
+    const sessionItem = sessions.value.find(
+      (candidateSession) => candidateSession.id === detail.sessionId,
+    );
+    if (!sessionItem) return;
+    const openThinkingDialogProcessIds = new Set(
+      (sessionItem.messages || [])
+        .filter(
+          (messageItem) =>
+            String(messageItem?.role || "") === "assistant" &&
+            Array.isArray(messageItem?.thinkingOpenNames) &&
+            messageItem.thinkingOpenNames.includes("thinking-panel") &&
+            String(messageItem?.dialogProcessId || "").trim(),
+        )
+        .map((messageItem) => String(messageItem.dialogProcessId || "").trim()),
+    );
+    if (!preserveCurrentMessages) {
+      revokeMessagePreviewUrls(sessionItem.messages || []);
+    }
+    sessionItem.loaded = true;
+    sessionItem.isLocal = false;
+    sessionItem.backendSessionId = detail.sessionId;
+    const sessionDocs = Array.isArray(detail.sessions) ? detail.sessions : [];
+    const mainSessionDoc =
+      sessionDocs.find((doc) => doc.sessionId === detail.sessionId) ||
+      sessionDocs[0] ||
+      {};
+    sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
+    sessionItem.currentTaskStatus = "idle";
+    sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
+    sessionItem.updatedAt = mainSessionDoc.updatedAt || sessionItem.updatedAt;
+    if (!preserveCurrentMessages) {
+      sessionItem.messages = foldMessagesForView(mainSessionDoc.messages || []);
+      for (const messageItem of sessionItem.messages || []) {
+        const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+        if (!dialogProcessId) continue;
+        if (openThinkingDialogProcessIds.has(dialogProcessId)) {
+          messageItem.thinkingOpenNames = ["thinking-panel"];
+        }
+      }
+    }
+    applyCompletedToolLogsToMessages(sessionItem.messages, sessionDocs);
+    sessionItem.messageCount = sessionItem.messages.length;
+    sessionItem.lastMessage = sessionItem.messages.length
+      ? sessionItem.messages[sessionItem.messages.length - 1]
+      : null;
+    if (!preserveCurrentMessages) {
+      sessionItem.title = sessionTitleFromMessages(
+        sessionItem.messages,
+        sessionItem.title || detail.sessionId.slice(0, 8),
+      );
+      scrollBottom();
+    }
+  }
+
+  async function fetchSessionDetail(sessionId) {
+    const res = await getSessionDetailApi(
+      { userId: userId.value, sessionId },
+      { fetcher: authFetch },
+    );
+    if (!res.ok) throw new Error(`获取 session 失败: HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.ok || !data.exists) throw new Error(data.error || "session 不存在");
+    return data;
+  }
+
+  async function selectSession(sessionId, options = {}) {
+    const { force = false } = options;
+    if (!sessionId) return;
+    const target = sessions.value.find(
+      (sessionItem) => sessionItem.id === sessionId,
+    );
+    if (!target) return;
+    if (!force && sessionId === activeSessionId.value) return;
+    if (sending.value && activeSessionId.value && sessionId !== activeSessionId.value) {
+      ElMessage.warning("消息发送中，已保持当前会话，聊天不中断");
+      return;
+    }
+    activeSessionId.value = sessionId;
+    if (target.isLocal || (target.loaded && !force)) return;
+
+    loadingSessionDetail.value = true;
+    try {
+      const detail = await fetchSessionDetail(sessionId);
+      applySessionDetail(detail);
+    } catch (error) {
+      ElMessage.error(error.message || "加载会话详情失败");
+    } finally {
+      loadingSessionDetail.value = false;
+    }
+  }
+
+  function parseSSEBlock(block) {
+    const lines = block.split("\n");
+    let event = "message";
+    let data = "";
+    for (const line of lines) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      if (line.startsWith("data:")) data += line.slice(5).trim();
+    }
+    try {
+      return { event, data: data ? JSON.parse(data) : {} };
+    } catch {
+      return { event, data: { text: data } };
+    }
+  }
+
+  async function streamChat(payload, onEvent) {
+    const res = await chatSseApi({ payload }, { fetcher: authFetch });
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        buffer += decoder.decode();
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+      for (const part of parts) {
+        if (!part.trim()) continue;
+        const evt = parseSSEBlock(part);
+        if (evt.event === "error")
+          throw new Error(evt.data?.error || "stream error");
+        onEvent(evt);
+      }
+    }
+
+    if (buffer.trim()) {
+      const evt = parseSSEBlock(buffer);
+      if (evt.event === "error")
+        throw new Error(evt.data?.error || "stream error");
+      onEvent(evt);
+    }
+  }
+
+  function toBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () =>
+        resolve(String(reader.result || "").split(",")[1] || "");
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function serializeAttachments(files) {
+    const out = [];
+    for (const fileItem of files) {
+      out.push({
+        name: fileItem.name,
+        mimeType: fileItem.mimeType || "application/octet-stream",
+        contentBase64: await toBase64(fileItem.raw),
+      });
+    }
+    return out;
+  }
+
+  async function send() {
+    if (!ensureConnected()) return;
+    if (sending.value || !activeSession.value) return;
+    if (!input.value.trim() && uploadFiles.value.length === 0) return;
+
+    sending.value = true;
+    const text = input.value.trim();
+    input.value = "";
+
+    const filesToSend = [...uploadFiles.value];
+    const userAttachments = filesToSend.map((fileItem) => ({
+      name: fileItem.name,
+      mimeType: fileItem.mimeType,
+      size: fileItem.size,
+      previewUrl: isImageMime(fileItem.mimeType || "")
+        ? URL.createObjectURL(fileItem.raw)
+        : "",
+    }));
+    appendMessage("user", text || "[仅上传附件]", userAttachments);
+    if (activeSession.value.title === "新会话" && text) {
+      activeSession.value.title = text.slice(0, 20);
+    }
+
+    const botMsg = appendMessage("assistant", "");
+    botMsg.pending = true;
+    scrollBottom();
+
+    try {
+      clearUploads();
+      const attachments = await serializeAttachments(filesToSend);
+      let finalDoneEventData = null;
+
+      const payload = {
+        userId: userId.value,
+        sessionId: activeSession.value.backendSessionId || activeSession.value.id,
+        message: text || "请先读取我上传的附件并总结关键信息。",
+        attachments,
+      };
+
+      await streamChat(payload, ({ event, data }) => {
+        if (event === "thinking") {
+          const item = classifyRealtimeLog(data);
+          if (item.dialogProcessId) botMsg.dialogProcessId = item.dialogProcessId;
+          botMsg.realtimeLogs = [...(botMsg.realtimeLogs || []), item].slice(-10);
+        } else if (event === "delta") {
+          botMsg.content += data.text || "";
+          scrollBottom();
+        } else if (event === "done") {
+          finalDoneEventData = data || {};
+          botMsg.pending = false;
+          botMsg.dialogProcessId =
+            data.dialogProcessId || botMsg.dialogProcessId || "";
+          const returnedId = data.sessionId || activeSession.value.backendSessionId;
+          if (activeSession.value.isLocal && returnedId) {
+            activeSession.value.backendSessionId = returnedId;
+            activeSession.value.isLocal = false;
+            activeSession.value.loaded = true;
+          }
+          if (Array.isArray(data.messages) && data.messages.length) {
+            const folded = foldMessagesForView(data.messages);
+            const lastAssistant =
+              [...folded]
+                .reverse()
+                .find(
+                  (assistantMessage) =>
+                    assistantMessage.role === "assistant" &&
+                    assistantMessage.dialogProcessId === botMsg.dialogProcessId,
+                ) ||
+              [...folded]
+                .reverse()
+                .find((assistantMessage) => assistantMessage.role === "assistant");
+            if (lastAssistant) {
+              const lastAssistantType = String(lastAssistant.type || "");
+              if (lastAssistantType && lastAssistantType !== "tool_call") {
+                botMsg.type = lastAssistantType;
+              }
+              botMsg.tool_calls = Array.isArray(lastAssistant.tool_calls)
+                ? lastAssistant.tool_calls
+                : [];
+              botMsg.dialogProcessId =
+                lastAssistant.dialogProcessId || botMsg.dialogProcessId;
+              botMsg.content = String(lastAssistant.content || botMsg.content || "");
+              if (Array.isArray(lastAssistant.attachments)) {
+                botMsg.attachments = lastAssistant.attachments;
+              }
+            }
+          }
+          scrollBottom();
+        }
+      });
+
+      const doneSessionId = String(
+        finalDoneEventData?.sessionId || activeSession.value.backendSessionId || "",
+      );
+      if (doneSessionId) {
+        try {
+          const detail = await fetchSessionDetail(doneSessionId);
+          const shouldPreserveCurrentMessages =
+            String(doneSessionId || "") ===
+              String(activeSession.value?.backendSessionId || "") &&
+            String(activeSession.value?.id || "") ===
+              String(activeSessionId.value || "");
+          applySessionDetail(detail, {
+            preserveCurrentMessages: shouldPreserveCurrentMessages,
+          });
+        } catch (loadDetailError) {
+          console.warn("load session detail after done failed", loadDetailError);
+        }
+      }
+    } catch (error) {
+      botMsg.pending = false;
+      const errorMessage = error.message || "未知错误";
+      botMsg.error = errorMessage;
+      if (!botMsg.content?.trim()) {
+        botMsg.content = `> 发生错误：${botMsg.error}`;
+      } else {
+        botMsg.content += `\n\n> 发生错误：${botMsg.error}`;
+      }
+      ElMessage.error(error.message);
+    } finally {
+      sending.value = false;
+    }
+  }
+
+  function closeMobileSidebarOnSelect(isMobileRef, mobileSidebarOpenRef) {
+    if (isMobileRef.value) mobileSidebarOpenRef.value = false;
+  }
+
+  function shouldRenderMessageInChat(messageItem) {
+    const messageRole = String(messageItem?.role || "");
+    const messageType = String(messageItem?.type || "");
+    if (
+      messageRole === "tool" ||
+      (messageRole === "assistant" && messageType === "tool_call")
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  function releaseAllPreviewUrls() {
+    clearUploads();
+    for (const sessionItem of sessions.value) {
+      revokeMessagePreviewUrls(sessionItem.messages || []);
+    }
+  }
+
+  function initSessionsAfterMount() {
+    if (connected.value) {
+      fetchSessions();
+    } else {
+      createLocalSession();
+    }
+  }
+
+  return {
+    input,
+    uploadFiles,
+    sending,
+    sessions,
+    activeSessionId,
+    activeSession,
+    loadingSessions,
+    loadingSessionDetail,
+    newSession,
+    fetchSessions,
+    selectSession,
+    send,
+    onUploadChange,
+    clearUploads,
+    shouldRenderMessageInChat,
+    closeMobileSidebarOnSelect,
+    releaseAllPreviewUrls,
+    initSessionsAfterMount,
+  };
+}

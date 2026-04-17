@@ -1,0 +1,15 @@
+http://{$CADDY_ADDR::10060} {
+  root * {$SITE_ROOT:./dist}
+  encode gzip zstd
+
+  route {
+    @api path_regexp api ^/api(/.*)?$
+    handle @api {
+      uri strip_prefix /api
+      reverse_proxy {$API_UPSTREAM:127.0.0.1:10061}
+    }
+
+    try_files {path} /index.html
+    file_server
+  }
+}

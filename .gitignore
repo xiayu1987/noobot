@@ -1,0 +1,32 @@
+# dependencies
+**/node_modules/
+
+# build outputs
+**/dist/
+**/.vite/
+
+# runtime logs & process files
+*.log
+logs/
+.pm2/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# local tools/binaries
+client/noobot-chat/deploy/bin/caddy
+
+# editor / system
+.DS_Store
+.idea/
+.vscode/
+
+client/noobot-chat/deploy/bin/*
+
+# optional local overrides
+*.local
+service/package-lock.json
+client/noobot-chat/package-lock.json
+

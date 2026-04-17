@@ -1,0 +1,94 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+function resolveFetcher(fetcher) {
+  return fetcher || fetch;
+}
+
+export function buildAttachmentUrl({ userId = "", attachmentId = "", apiKey = "" }) {
+  const normalizedUserId = encodeURIComponent(String(userId || "").trim());
+  const normalizedAttachmentId = encodeURIComponent(
+    String(attachmentId || "").trim(),
+  );
+  const query = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+  return `/api/internal/attachment/${normalizedUserId}/${normalizedAttachmentId}${query}`;
+}
+
+export async function connectApi(
+  { userId = "", connectCode = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/connect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: String(userId || "").trim(),
+      connectCode: String(connectCode || "").trim(),
+    }),
+  });
+}
+
+export async function getSessionsApi({ userId = "" }, { fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(`/api/internal/sessions/${encodeURIComponent(userId)}`);
+}
+
+export async function getSessionDetailApi(
+  { userId = "", sessionId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+  );
+}
+
+export async function chatSseApi({ payload }, { fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/chat/sse", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function getWorkspaceTreeApi({ userId = "" }, { fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(`/api/internal/workspace/tree/${encodeURIComponent(userId)}`);
+}
+
+export async function getWorkspaceFileApi(
+  { userId = "", path = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/workspace/file/${encodeURIComponent(userId)}?path=${encodeURIComponent(path)}`,
+  );
+}
+
+export async function putWorkspaceFileApi(
+  { userId = "", path = "", content = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(`/api/internal/workspace/file/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, content }),
+  });
+}
+
+export function buildWorkspaceDownloadUrl({
+  userId = "",
+  path = "",
+  apiKey = "",
+}) {
+  const baseUrl = `/api/internal/workspace/download/${encodeURIComponent(userId)}?path=${encodeURIComponent(path)}`;
+  return apiKey
+    ? `${baseUrl}&apikey=${encodeURIComponent(apiKey)}`
+    : baseUrl;
+}
