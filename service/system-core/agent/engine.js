@@ -18,32 +18,6 @@ import {
 import { mergeConfig } from "../config/index.js";
 import { emitEvent } from "../event/index.js";
 
-function buildRuntimeSystemPrompt(agentContext) {
-  const runtime = agentContext?.runtime || {};
-  const sys = runtime.systemRuntime || {};
-  const runtimeEnv = {
-    cwd: sys.cwd || agentContext?.cwd || runtime.cwd || "",
-    basePath: sys.basePath || agentContext?.basePath || runtime.basePath || "",
-    sessionId: sys.sessionId || "",
-    caller: sys.caller || runtime.caller || "",
-    parentSessionId: sys.parentSessionId || runtime.parentSessionId || "",
-    platform: sys.platform || agentContext?.platform || runtime.platform || "",
-    arch: sys.arch || agentContext?.arch || runtime.arch || "",
-    nodeVersion:
-      sys.nodeVersion || agentContext?.nodeVersion || runtime.nodeVersion || "",
-    now: sys.now || "",
-    timezone: sys.timezone || agentContext?.timezone || runtime.timezone || "",
-    dialogProcessId: sys.dialogProcessId || runtime.dialogProcessId || "",
-    workspaceDirectories:
-      sys.workspaceDirectories ||
-      agentContext?.workspaceDirectories ||
-      runtime.workspaceDirectories ||
-      [],
-    sessionTree: sys.sessionTree || runtime.sessionTree || {},
-  };
-  return `# 系统运行环境（非配置）\n${JSON.stringify(runtimeEnv, null, 2)}`;
-}
-
 function buildContextMessages(agentContext) {
   function toLangChainToolCalls(toolCalls = []) {
     return (toolCalls || [])
@@ -107,7 +81,7 @@ function buildContextMessages(agentContext) {
   for (const content of agentContext?.systemMessages || []) {
     out.push(new SystemMessage(content));
   }
-  out.push(new SystemMessage(buildRuntimeSystemPrompt(agentContext)));
+
   for (const msg of agentContext?.conversationMessages || []) {
     const role = msg.role || "";
     if (role === "assistant") {
@@ -204,8 +178,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     userConfig,
     defaultModelSpec,
     abortSignal,
-  } =
-    modelState;
+  } = modelState;
   assertNotAborted(abortSignal);
 
   if (turn > maxTurns) {
@@ -333,70 +306,6 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
 }
 
-async function filterAgentCollabToolsByDepth({
-  agentContext,
-  effectiveConfig,
-  eventListener,
-}) {
-  const tools = Array.isArray(agentContext?.tools) ? agentContext.tools : [];
-  const runtime = agentContext?.runtime || {};
-  const parentSessionId = String(runtime?.parentSessionId || "").trim();
-  const userId = String(runtime?.userId || "").trim();
-  const sessionManager = runtime?.sessionManager || null;
-  const configuredMaxParentDepth = Number(
-    effectiveConfig?.async?.maxSubAgentDepth ??
-      effectiveConfig?.async?.delegateToolParentMaxDepth ??
-      0,
-  );
-  const maxParentDepth =
-    Number.isFinite(configuredMaxParentDepth) && configuredMaxParentDepth > 0
-      ? configuredMaxParentDepth
-      : 1;
-
-  if (
-    !parentSessionId ||
-    !sessionManager ||
-    !userId
-  ) {
-    return tools;
-  }
-
-  let parentDepth = 0;
-  try {
-    parentDepth = Number(
-      await sessionManager.getSessionDepth({
-        userId,
-        sessionId: parentSessionId,
-      }) || 0,
-    );
-  } catch {
-    parentDepth = 0;
-  }
-
-  if (parentDepth < maxParentDepth) return tools;
-
-  const blockedToolNames = new Set([
-    "delegate_task_async",
-    "wait_async_task_result",
-    "delegateTaskAsync",
-    "waitAsyncTaskResult",
-  ]);
-  const filteredTools = tools.filter(
-    (toolDefinition) =>
-      !blockedToolNames.has(String(toolDefinition?.name || "")),
-  );
-
-  if (filteredTools.length !== tools.length) {
-    emitEvent(eventListener, "agent_collab_tools_disabled_by_depth", {
-      parentSessionId,
-      parentDepth,
-      maxParentDepth,
-      disabledTools: Array.from(blockedToolNames),
-    });
-  }
-  return filteredTools;
-}
-
 export async function runAgentTurn({ agentContext, userMessage }) {
   const runtime = agentContext?.runtime || {};
   const sys = runtime.systemRuntime || {};
@@ -406,11 +315,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
   const eventListener = runtime.eventListener || null;
   const abortSignal = runtime.abortSignal || null;
   const dialogProcessId = sys.dialogProcessId || "";
-  const tools = await filterAgentCollabToolsByDepth({
-    agentContext,
-    effectiveConfig,
-    eventListener,
-  });
+  const tools = Array.isArray(agentContext?.tools) ? agentContext.tools : [];
 
   const selectedModelSpec = resolveDefaultModelSpec({
     globalConfig,

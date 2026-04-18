@@ -204,7 +204,7 @@ export class ContextBuilder {
         sessionTree,
       }),
     };
-    agentContext.tools = buildTools({
+    agentContext.tools = await buildTools({
       sessionId: this.sessionId || "",
       parentSessionId: this.parentSessionId || "",
       agentContext,
