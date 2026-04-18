@@ -74,6 +74,19 @@ export function createUserInteractionTool({ agentContext }) {
         dialogProcessId,
       });
 
+      if (
+        result &&
+        typeof result === "object" &&
+        !Array.isArray(result) &&
+        result.confirmed === false
+      ) {
+        return {
+          confirmed: false,
+          cancelled: true,
+          response: String(result?.response || "cancelled"),
+        };
+      }
+
       if (normalizedFieldsPayload.fields?.length) {
         if (!result || typeof result !== "object" || Array.isArray(result)) {
           return JSON.stringify({

@@ -152,6 +152,18 @@ function handleInteractionConfirm(payload = {}) {
   }
 }
 
+function handleInteractionCancel() {
+  try {
+    submitInteractionResponse({
+      confirmed: false,
+      cancelled: true,
+      response: "cancelled",
+    });
+  } catch (error) {
+    ElMessage.error(error.message || "取消交互失败");
+  }
+}
+
 function scrollBottom() {
   nextTick(() => {
     const scrollbar = listRef.value;
@@ -364,6 +376,7 @@ function onAllowUserInteractionUpdate(value) {
         :request="pendingInteractionRequest"
         :submitting="interactionSubmitting"
         @confirm="handleInteractionConfirm"
+        @cancel="handleInteractionCancel"
       />
 
       <ChatComposer

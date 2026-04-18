@@ -11,7 +11,7 @@ const props = defineProps({
   submitting: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["confirm"]);
+const emit = defineEmits(["confirm", "cancel"]);
 
 const formData = reactive({});
 
@@ -40,6 +40,10 @@ function onConfirm() {
     return;
   }
   emit("confirm", { response: "confirmed" });
+}
+
+function onCancel() {
+  emit("cancel");
 }
 
 watch(
@@ -74,6 +78,9 @@ watch(
     </el-form>
 
     <div class="interaction-actions">
+      <el-button :disabled="submitting" @click="onCancel">
+        取消
+      </el-button>
       <el-button type="primary" :loading="submitting" @click="onConfirm">
         确认
       </el-button>
