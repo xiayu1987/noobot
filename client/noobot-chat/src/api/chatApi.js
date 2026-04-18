@@ -82,6 +82,20 @@ export async function putWorkspaceFileApi(
   });
 }
 
+export async function getRegularUsersApi({ fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/users");
+}
+
+export async function putRegularUsersApi({ users = [] }, { fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/users", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ users }),
+  });
+}
+
 export function buildWorkspaceDownloadUrl({
   userId = "",
   path = "",

@@ -9,6 +9,7 @@ import { ElMessage } from "element-plus";
 import { Menu, Star } from "@element-plus/icons-vue";
 import MarkdownIt from "markdown-it";
 import WorkspacePanel from "./WorkspacePanel.vue";
+import UserSettingsPanel from "./UserSettingsPanel.vue";
 import ChatComposer from "./ChatComposer.vue";
 import SessionSidebar from "./SessionSidebar.vue";
 import ChatMessageItem from "./ChatMessageItem.vue";
@@ -24,11 +25,13 @@ const isMobile = ref(false);
 const sidebarCollapsed = ref(false);
 const mobileSidebarOpen = ref(false);
 const workspaceVisible = ref(false);
+const userSettingsVisible = ref(false);
 
 let fetchSessionsAfterConnect = async () => {};
 const {
   connectCode,
   apiKey,
+  isSuperAdmin,
   connecting,
   connected,
   ensureConnected,
@@ -126,6 +129,15 @@ function openWorkspace() {
     return;
   }
   workspaceVisible.value = true;
+}
+
+function openUserSettings() {
+  if (!ensureConnected()) return;
+  if (!isSuperAdmin.value) {
+    ElMessage.warning("仅超级管理员可设置用户");
+    return;
+  }
+  userSettingsVisible.value = true;
 }
 
 function scrollBottom() {
@@ -255,6 +267,13 @@ onBeforeUnmount(() => {
         <el-button class="workspace-btn noobot-action-btn" @click="openWorkspace"
           >工作区</el-button
         >
+        <el-button
+          v-if="isSuperAdmin"
+          class="workspace-btn noobot-action-btn"
+          @click="openUserSettings"
+        >
+          用户设置
+        </el-button>
       </header>
 
       <div class="message-container">
@@ -317,6 +336,18 @@ onBeforeUnmount(() => {
         :user-id="userId"
         :api-key="apiKey"
         :active="workspaceVisible"
+      />
+    </el-drawer>
+    <el-drawer
+      v-model="userSettingsVisible"
+      title="用户设置"
+      size="56%"
+      destroy-on-close
+      class="workspace-drawer"
+    >
+      <UserSettingsPanel
+        :api-key="apiKey"
+        :active="userSettingsVisible"
       />
     </el-drawer>
   </div>

@@ -27,26 +27,72 @@ const globalConfig = loadGlobalConfig();
 const bot = new BotManager(globalConfig);
 const apiKeyStore = new Map();
 const apiKeyTtlMs = Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000);
+const defaultWorkspaceUsersConfig = {
+  users: [
+    {
+      userId: "xiayu",
+      connectCode: "change-your-connect-code",
+    },
+  ],
+};
 
 function workspaceRootPath() {
   return path.resolve(process.cwd(), String(globalConfig?.workspaceRoot || "../workspaces"));
 }
 
 async function readWorkspaceUsers() {
-  const filePath = path.join(workspaceRootPath(), "user.json");
-  let parsed = null;
-  try {
-    parsed = JSON.parse(await readFile(filePath, "utf8"));
-  } catch {
-    return [];
-  }
-  const src = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.users) ? parsed.users : [];
+  const usersConfig = await readWorkspaceUsersConfig();
+  const src = Array.isArray(usersConfig?.users) ? usersConfig.users : [];
   return src
     .map((item) => ({
       userId: String(item?.userId || "").trim(),
       connectCode: String(item?.connectCode || item?.code || "").trim(),
     }))
     .filter((item) => item.userId && item.connectCode);
+}
+
+function normalizeWorkspaceUsersConfig(input) {
+  const src = Array.isArray(input)
+    ? input
+    : Array.isArray(input?.users)
+      ? input.users
+      : [];
+  const users = src
+    .map((item) => ({
+      userId: String(item?.userId || "").trim(),
+      connectCode: String(item?.connectCode || item?.code || "").trim(),
+    }))
+    .filter((item) => item.userId && item.connectCode);
+  return { users };
+}
+
+function workspaceUsersFilePath() {
+  const filePath = path.join(workspaceRootPath(), "user.json");
+  return filePath;
+}
+
+async function readWorkspaceUsersConfig({ createIfMissing = false } = {}) {
+  const filePath = workspaceUsersFilePath();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(await readFile(filePath, "utf8"));
+  } catch {
+    if (createIfMissing) {
+      const payload = normalizeWorkspaceUsersConfig(defaultWorkspaceUsersConfig);
+      await writeWorkspaceUsersConfig(payload);
+      return payload;
+    }
+    return normalizeWorkspaceUsersConfig([]);
+  }
+  return normalizeWorkspaceUsersConfig(parsed);
+}
+
+async function writeWorkspaceUsersConfig(configPayload = {}) {
+  const filePath = workspaceUsersFilePath();
+  const payload = normalizeWorkspaceUsersConfig(configPayload);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  return payload;
 }
 
 function issueApiKey({ userId, role = "user" }) {
@@ -98,6 +144,15 @@ function requireApiKey(req, res, next) {
   next();
 }
 
+function requireSuperAdmin(req, res, next) {
+  const authInfo = req.auth || null;
+  if (String(authInfo?.role || "") !== "super_admin") {
+    res.status(403).json({ ok: false, error: "super admin required" });
+    return;
+  }
+  next();
+}
+
 app.post("/internal/connect", async (req, res) => {
   try {
     const userId = String(req.body?.userId || "").trim();
@@ -141,6 +196,35 @@ app.use((req, res, next) => {
     return;
   }
   requireApiKey(req, res, next);
+});
+
+app.get("/internal/admin/users", requireSuperAdmin, async (req, res) => {
+  try {
+    const payload = await readWorkspaceUsersConfig({ createIfMissing: true });
+    res.json({ ok: true, ...payload });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "read users failed" });
+  }
+});
+
+app.put("/internal/admin/users", requireSuperAdmin, async (req, res) => {
+  try {
+    const normalized = normalizeWorkspaceUsersConfig(req.body || {});
+    if (!normalized.users.length) {
+      throw new Error("at least one user is required");
+    }
+    const duplicateUserId = normalized.users.find(
+      (item, index) =>
+        normalized.users.findIndex((subItem) => subItem.userId === item.userId) !== index,
+    );
+    if (duplicateUserId) {
+      throw new Error(`duplicate userId: ${duplicateUserId.userId}`);
+    }
+    const payload = await writeWorkspaceUsersConfig(normalized);
+    res.json({ ok: true, ...payload });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "save users failed" });
+  }
 });
 
 async function handleChat(req, res) {

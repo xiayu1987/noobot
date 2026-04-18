@@ -11,6 +11,7 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
   const connectCode = ref(localStorage.getItem("noobot_connect_code") || "");
   const apiKey = ref(localStorage.getItem("noobot_api_key") || "");
   const apiKeyUserId = ref(localStorage.getItem("noobot_api_user_id") || "");
+  const apiRole = ref(localStorage.getItem("noobot_api_role") || "");
   const connecting = ref(false);
 
   const connected = computed(
@@ -19,15 +20,20 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
       String(apiKeyUserId.value || "").trim() ===
         String(userId.value || "").trim(),
   );
+  const isSuperAdmin = computed(
+    () => connected.value && String(apiRole.value || "") === "super_admin",
+  );
 
   function persistApiAuth() {
     if (apiKey.value && apiKeyUserId.value) {
       localStorage.setItem("noobot_api_key", apiKey.value);
       localStorage.setItem("noobot_api_user_id", apiKeyUserId.value);
+      localStorage.setItem("noobot_api_role", String(apiRole.value || ""));
       return;
     }
     localStorage.removeItem("noobot_api_key");
     localStorage.removeItem("noobot_api_user_id");
+    localStorage.removeItem("noobot_api_role");
   }
 
   function persistConnectProfile() {
@@ -48,6 +54,7 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
   function clearApiAuth() {
     apiKey.value = "";
     apiKeyUserId.value = "";
+    apiRole.value = "";
     persistApiAuth();
   }
 
@@ -94,6 +101,7 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
       }
       apiKey.value = String(data.apiKey || "");
       apiKeyUserId.value = String(userId.value || "").trim();
+      apiRole.value = String(data.role || "user");
       persistApiAuth();
       persistConnectProfile();
       if (!silent) ElMessage.success("连接成功");
@@ -121,8 +129,10 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
   return {
     connectCode,
     apiKey,
+    apiRole,
     connecting,
     connected,
+    isSuperAdmin,
     ensureConnected,
     authFetch,
     connectBackend,
