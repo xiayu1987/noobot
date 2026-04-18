@@ -267,6 +267,7 @@ export class BotManager {
     eventListener = null,
     caller = "user",
     parentSessionId = "",
+    abortSignal = null,
   }) {
     try {
       if (!message) throw new Error("userId/sessionId/message required");
@@ -365,7 +366,13 @@ export class BotManager {
       });
 
       const agentResult = await runAgentTurn({
-        agentContext,
+        agentContext: {
+          ...agentContext,
+          runtime: {
+            ...(agentContext?.runtime || {}),
+            abortSignal,
+          },
+        },
         userMessage: message,
       });
       emitEvent(runtimeEventListener, "agent_done", {

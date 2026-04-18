@@ -5,13 +5,14 @@
 -->
 <script setup>
 import { computed, ref } from "vue";
-import { Paperclip } from "@element-plus/icons-vue";
+import { VideoPause, Paperclip } from "@element-plus/icons-vue";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },
   uploadFiles: { type: Array, default: () => [] },
   sending: { type: Boolean, default: false },
   connected: { type: Boolean, default: false },
+  canStop: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -19,6 +20,7 @@ const emit = defineEmits([
   "upload-change",
   "clear-uploads",
   "send",
+  "stop",
 ]);
 
 const uploadRef = ref();
@@ -50,6 +52,10 @@ function onSend() {
   emit("send");
 }
 
+function onStop() {
+  emit("stop");
+}
+
 defineExpose({
   clearUploadSelection,
 });
@@ -58,6 +64,17 @@ defineExpose({
 <template>
   <div class="composer-wrapper">
     <div class="composer">
+      <!-- 停止按钮，相对于 composer 定位，溢出到上方 -->
+      <el-button
+        v-if="canStop"
+        type="danger"
+        class="stop-float-btn noobot-action-btn"
+        title="停止"
+        @click="onStop"
+      >
+        <el-icon :size="20"><VideoPause /></el-icon>
+      </el-button>
+
       <div class="toolbar">
         <el-upload
           ref="uploadRef"
@@ -115,9 +132,13 @@ defineExpose({
 .composer-wrapper {
   padding: 0 24px 24px;
   background: linear-gradient(180deg, transparent, #0f1219 20%);
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .composer {
+  position: relative; /* 作为悬浮按钮的参考系 */
   max-width: 800px;
   margin: 0 auto;
   background: #141926;
@@ -129,6 +150,26 @@ defineExpose({
   flex-direction: column;
   gap: 8px;
   transition: border-color 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.stop-float-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -60px; /* 离开对话框一段距离，悬浮在上方 */
+  z-index: 50; /* 提高层级，确保不被上方聊天记录遮挡 */
+  width: 40px;
+  height: 40px;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  /* 使用 Flexbox 确保内部图标完美居中，且按钮本身不被压缩 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .composer:focus-within {
@@ -149,6 +190,7 @@ defineExpose({
   background: var(--noobot-btn-secondary-bg);
   color: var(--noobot-btn-secondary-text);
   padding: 0 12px;
+  flex-shrink: 0;
 }
 
 .btn-icon {
@@ -165,6 +207,8 @@ defineExpose({
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  flex: 1;
+  min-width: 0;
 }
 
 .attachment-pill {
@@ -173,6 +217,7 @@ defineExpose({
   padding: 4px 10px;
   background: #1a2132;
   border: 1px solid #323e5c;
+  box-sizing: border-box;
 }
 
 .attachment-name {
@@ -186,12 +231,19 @@ defineExpose({
 
 .clear-files-btn {
   color: #9fb3e8;
+  flex-shrink: 0;
 }
 
 .input-area {
   display: flex;
   align-items: flex-end;
   gap: 12px;
+  width: 100%;
+}
+
+.chat-input {
+  flex: 1;
+  min-width: 0; /* 关键：防止在 flex 容器中被内容撑破导致变形 */
 }
 
 .chat-input :deep(.el-textarea__inner) {
@@ -212,11 +264,28 @@ defineExpose({
   padding: 12px 20px;
   height: auto;
   border-radius: 12px !important;
+  flex-shrink: 0; /* 关键：防止移动端屏幕变窄时发送按钮被挤压变形 */
 }
 
 @media (max-width: 768px) {
   .composer-wrapper {
     padding: 0 12px 16px;
+  }
+
+  .composer {
+    padding: 10px 12px;
+  }
+
+  .stop-float-btn {
+    top: -56px;
+  }
+
+  .attachment-pill {
+    max-width: 140px; /* 移动端适当减小附件胶囊的最大宽度 */
+  }
+
+  .send-btn {
+    padding: 10px 16px; /* 移动端适当缩小按钮内边距 */
   }
 }
 </style>

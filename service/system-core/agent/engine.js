@@ -187,11 +187,26 @@ function resolveLlmForTurn(modelState) {
   }
 }
 
+function assertNotAborted(signal = null) {
+  if (!signal?.aborted) return;
+  const error = new Error("dialog stopped by user");
+  error.name = "AbortError";
+  throw error;
+}
+
 async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   const { tools, messages, traces, turnMessages, dialogProcessId, maxTurns } =
     loopState;
-  const { eventListener, runtime, globalConfig, userConfig, defaultModelSpec } =
+  const {
+    eventListener,
+    runtime,
+    globalConfig,
+    userConfig,
+    defaultModelSpec,
+    abortSignal,
+  } =
     modelState;
+  assertNotAborted(abortSignal);
 
   if (turn > maxTurns) {
     const limitMsg = `工具调用轮次已达到上限(${maxTurns})，自动结束。`;
@@ -219,6 +234,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
 
   const ai = await modelState.llm.bindTools(tools).invoke(messages, {
     callbacks: llmCallbacks,
+    signal: abortSignal,
   });
   messages.push(ai);
   const calls = ai.tool_calls || [];
@@ -251,6 +267,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     count: calls.length,
   });
   for (const call of calls) {
+    assertNotAborted(abortSignal);
     emitEvent(eventListener, "tool_call_start", {
       turn,
       tool: call.name,
@@ -279,7 +296,9 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
 
     let toolResultText = "";
     try {
-      const result = await tool.invoke(call.args || {});
+      const result = await tool.invoke(call.args || {}, {
+        signal: abortSignal,
+      });
       toolResultText =
         typeof result === "string" ? result : JSON.stringify(result);
     } catch (error) {
@@ -385,6 +404,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
   const userConfig = runtime.userConfig || {};
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   const eventListener = runtime.eventListener || null;
+  const abortSignal = runtime.abortSignal || null;
   const dialogProcessId = sys.dialogProcessId || "";
   const tools = filterAgentCollabToolsByDepth({
     agentContext,
@@ -420,6 +440,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     globalConfig,
     userConfig,
     defaultModelSpec: selectedModelSpec,
+    abortSignal,
   };
   const loopState = {
     tools,

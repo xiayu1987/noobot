@@ -469,6 +469,7 @@ server.on("upgrade", (request, socket, head) => {
 wsServer.on("connection", (ws, request) => {
   const authInfo = request?.auth || null;
   let running = false;
+  let currentAbortController = null;
 
   const sendEvent = (event, data = {}) => {
     if (ws.readyState !== 1) return;
@@ -480,13 +481,24 @@ wsServer.on("connection", (ws, request) => {
   };
 
   ws.on("message", async (rawMessage) => {
-    if (running) {
-      sendEvent("error", { error: "session already running on this websocket" });
-      return;
-    }
-    running = true;
+    let abortSignal = null;
     try {
       const payload = JSON.parse(String(rawMessage || "{}"));
+      const action = String(payload?.action || "").trim().toLowerCase();
+      if (action === "stop") {
+        if (running && currentAbortController) {
+          currentAbortController.abort();
+        }
+        return;
+      }
+      if (running) {
+        sendEvent("error", { error: "session already running on this websocket" });
+        return;
+      }
+      running = true;
+      currentAbortController = new AbortController();
+      abortSignal = currentAbortController.signal;
+
       const {
         userId,
         sessionId,
@@ -538,7 +550,14 @@ wsServer.on("connection", (ws, request) => {
         message,
         attachments,
         eventListener,
+        abortSignal,
       });
+
+      if (abortSignal?.aborted) {
+        sendEvent("stopped", { message: "dialog stopped by user" });
+        ws.close(1000, "stopped");
+        return;
+      }
 
       sendEvent("done", {
         sessionId: result.sessionId,
@@ -550,10 +569,22 @@ wsServer.on("connection", (ws, request) => {
       });
       ws.close(1000, "done");
     } catch (err) {
+      if (abortSignal?.aborted) {
+        sendEvent("stopped", { message: "dialog stopped by user" });
+        ws.close(1000, "stopped");
+        return;
+      }
       sendEvent("error", { error: err.message || "unknown error" });
       ws.close(1011, "error");
     } finally {
       running = false;
+      currentAbortController = null;
+    }
+  });
+
+  ws.on("close", () => {
+    if (currentAbortController) {
+      currentAbortController.abort();
     }
   });
 });

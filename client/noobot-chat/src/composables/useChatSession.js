@@ -36,6 +36,8 @@ export function useChatSession({
   const activeSessionId = ref("");
   const loadingSessions = ref(false);
   const loadingSessionDetail = ref(false);
+  const activeChatSocket = ref(null);
+  const stopRequested = ref(false);
 
   const activeSession = computed(() =>
     sessions.value.find((sessionItem) => sessionItem.id === activeSessionId.value),
@@ -352,12 +354,17 @@ export function useChatSession({
     await new Promise((resolve, reject) => {
       const wsUrl = buildChatWebSocketUrl({ apiKey: apiKey.value || "" });
       const ws = new WebSocket(wsUrl);
+      activeChatSocket.value = ws;
+      stopRequested.value = false;
       let settled = false;
       let doneReceived = false;
 
       const finalize = (fn) => {
         if (settled) return;
         settled = true;
+        if (activeChatSocket.value === ws) {
+          activeChatSocket.value = null;
+        }
         fn();
       };
 
@@ -379,6 +386,9 @@ export function useChatSession({
           if (evt.event === "done") {
             doneReceived = true;
             ws.close(1000, "done");
+          } else if (evt.event === "stopped") {
+            doneReceived = true;
+            ws.close(1000, "stopped");
           }
         } catch (error) {
           ws.close(1011, "invalid_event");
@@ -391,13 +401,28 @@ export function useChatSession({
       };
 
       ws.onclose = () => {
-        if (doneReceived) {
+        if (doneReceived || stopRequested.value) {
           finalize(() => resolve());
           return;
         }
         finalize(() => reject(new Error("WebSocket 连接已关闭")));
       };
     });
+  }
+
+  function stopSending() {
+    if (!sending.value) return false;
+    stopRequested.value = true;
+    const ws = activeChatSocket.value;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action: "stop" }));
+      return true;
+    }
+    if (ws && ws.readyState === WebSocket.CONNECTING) {
+      ws.close(1000, "stop_requested");
+      return true;
+    }
+    return false;
   }
 
   function toBase64(file) {
@@ -510,6 +535,12 @@ export function useChatSession({
             }
           }
           scrollBottom();
+        } else if (event === "stopped") {
+          botMsg.pending = false;
+          if (!String(botMsg.content || "").trim()) {
+            botMsg.content = "（已停止）";
+          }
+          scrollBottom();
         }
       });
 
@@ -533,6 +564,12 @@ export function useChatSession({
       }
     } catch (error) {
       botMsg.pending = false;
+      if (stopRequested.value) {
+        if (!String(botMsg.content || "").trim()) {
+          botMsg.content = "（已停止）";
+        }
+        return;
+      }
       const errorMessage = error.message || "未知错误";
       botMsg.error = errorMessage;
       if (!botMsg.content?.trim()) {
@@ -543,6 +580,7 @@ export function useChatSession({
       ElMessage.error(error.message);
     } finally {
       sending.value = false;
+      stopRequested.value = false;
     }
   }
 
@@ -591,6 +629,7 @@ export function useChatSession({
     fetchSessions,
     selectSession,
     send,
+    stopSending,
     onUploadChange,
     clearUploads,
     shouldRenderMessageInChat,

@@ -173,6 +173,7 @@ const {
   selectSession,
   deleteSession,
   send,
+  stopSending,
   onUploadChange,
   clearUploads,
   shouldRenderMessageInChat,
@@ -339,10 +340,12 @@ onBeforeUnmount(() => {
         v-model="input"
         :upload-files="uploadFiles"
         :sending="sending"
+        :can-stop="sending"
         :connected="connected"
         @upload-change="onUploadChange"
         @clear-uploads="clearUploads"
         @send="send"
+        @stop="stopSending"
       />
     </main>
     <el-drawer
