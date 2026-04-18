@@ -50,7 +50,7 @@
   },
   "async": {
     "waitTimeoutMs": 120000,
-    "maxSubAgentDepth": 2
+    "maxSubAgentDepth": 3
   },
   "scriptTimeoutMs": 120000,
   "streaming": true,

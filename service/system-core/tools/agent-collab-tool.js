@@ -58,6 +58,98 @@ export function createAgentCollabTool({ agentContext }) {
     return safeJoin(subAgentDir, name);
   };
 
+  const delegateTaskItemSchema = z.object({
+    sessionId: z.string().optional().describe("子会话ID（UUID，可选，传入则续用）"),
+    task: z.string().describe("子任务内容"),
+    sharedTaskSpec: z.string().optional().describe("共享任务说明"),
+    deliverable: z.string().describe("最终交付物要求（文件名及说明）"),
+  });
+
+  const waitTaskItemSchema = z.object({
+    sessionId: z.string().describe("子会话ID（UUID）"),
+    task: z.string().describe("子任务内容（用于结果关联）"),
+    sharedTaskSpec: z.string().optional().describe("共享任务说明"),
+    deliverable: z.string().describe("最终交付物要求（用于结果关联）"),
+  });
+
+  const collectFileNamesFromValue = (value, outputSet) => {
+    if (!value) return;
+    if (typeof value === "string") {
+      const normalized = value.trim();
+      if (normalized) {
+        try {
+          outputSet.add(normalizeFileName(normalized));
+        } catch {
+          // ignore non-filename strings
+        }
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) collectFileNamesFromValue(item, outputSet);
+      return;
+    }
+    if (typeof value === "object") {
+      for (const [key, nested] of Object.entries(value)) {
+        const normalizedKey = String(key || "").toLowerCase();
+        if (
+          normalizedKey === "filename" ||
+          normalizedKey === "filenames" ||
+          normalizedKey === "files"
+        ) {
+          collectFileNamesFromValue(nested, outputSet);
+        }
+      }
+    }
+  };
+
+  const parseDeliverableFileNames = (deliverable = "") => {
+    const out = new Set();
+    const text = String(deliverable || "").trim();
+    if (!text) return [];
+
+    try {
+      const parsed = JSON.parse(text);
+      collectFileNamesFromValue(parsed, out);
+    } catch {
+      // not a json payload
+    }
+
+    const patternMatches =
+      text.match(/[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9_-]+/g) || [];
+    for (const fileName of patternMatches) {
+      try {
+        out.add(normalizeFileName(fileName));
+      } catch {
+        // ignore invalid match
+      }
+    }
+    return Array.from(out);
+  };
+
+  const readDeliverablesByTask = async (taskItem = {}) => {
+    const fileNames = parseDeliverableFileNames(taskItem?.deliverable || "");
+    const deliverableFiles = [];
+    const missingDeliverables = [];
+    for (const fileName of fileNames) {
+      try {
+        const filePath = await resolveSubAgentFile(fileName);
+        await access(filePath);
+        deliverableFiles.push({
+          fileName,
+          path: filePath,
+          content: await readFile(filePath, "utf8"),
+        });
+      } catch {
+        missingDeliverables.push(fileName);
+      }
+    }
+    return {
+      deliverableFiles,
+      missingDeliverables,
+    };
+  };
+
   const writeTaskDeliverableFile = new DynamicStructuredTool({
     name: "write_task_deliverable_file",
     description: "子任务写入任务交付物文件。文件名重复会报错。",
@@ -90,134 +182,215 @@ export function createAgentCollabTool({ agentContext }) {
     },
   });
 
-  const readTaskDeliverableFile = new DynamicStructuredTool({
-    name: "read_task_deliverable_file",
-    description: "读取子任务交付物文件",
-    schema: z.object({
-      fileName: z.string().describe("交付物文件名（仅文件名，不可含路径分隔符）"),
-    }),
-    func: async ({ fileName }) => {
-      try {
-        const filePath = await resolveSubAgentFile(fileName);
-        try {
-          await access(filePath);
-        } catch {
-          return JSON.stringify({
-            ok: false,
-            error: `file not found: ${String(fileName || "")}`,
-          });
-        }
-        return JSON.stringify({
-          ok: true,
-          fileName: String(fileName || ""),
-          path: filePath,
-          content: await readFile(filePath, "utf8"),
-        });
-      } catch (error) {
-        return JSON.stringify({
-          ok: false,
-          error: error?.message || String(error),
-        });
-      }
-    },
-  });
-
   const delegateTaskAsync = new DynamicStructuredTool({
     name: "delegate_task_async",
     description:
-      "多agent协助：异步执行子任务。传入父sessionid、任务、共享任务说明、规定最终交付物（文件名及说明）；可选传sessionId以继续之前子会话。",
+      "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含sessionId（可选）、task、sharedTaskSpec、deliverable。",
     schema: z.object({
       parentSessionId: z.string().describe("父会话ID（UUID）"),
-      sessionId: z.string().optional().describe("子会话ID（UUID，可选，传入则续用）"),
-      task: z.string().describe("子任务内容"),
-      sharedTaskSpec: z.string().optional().describe("共享任务说明"),
-      deliverable: z.string().describe("最终交付物要求（文件名及说明）"),
+      tasks: z
+        .array(delegateTaskItemSchema)
+        .min(1)
+        .describe("并发子任务列表"),
     }),
-    func: async ({
-      parentSessionId,
-      sessionId,
-      task,
-      sharedTaskSpec,
-      deliverable,
-    }) => {
+    func: async ({ parentSessionId, tasks }) => {
       if (!botManager || !userId)
         return JSON.stringify({
           ok: false,
           error: "runtime missing bot manager/user id",
         });
-      if (
-        !String(parentSessionId || "").trim() ||
-        !String(task || "").trim() ||
-        !String(deliverable || "").trim()
-      ) {
+      if (!String(parentSessionId || "").trim() || !Array.isArray(tasks) || !tasks.length) {
         return JSON.stringify({
           ok: false,
-          error: "parentSessionId/task/deliverable required",
+          error: "parentSessionId/tasks required",
         });
       }
-      const result = botManager.runAsyncSession({
-        userId,
-        parentSessionId: String(parentSessionId || "").trim(),
-        sessionId: String(sessionId || "").trim(),
-        task: String(task || "").trim(),
-        sharedTaskSpec: String(sharedTaskSpec || "").trim(),
-        deliverable: String(deliverable || "").trim(),
-        eventListener: runtimeEventListener,
-        sourceDialogProcessId: String(sourceDialogProcessId || ""),
-        userInteractionBridge,
-        runConfig,
-      });
-      return JSON.stringify(result, null, 2);
+      const normalizedParentSessionId = String(parentSessionId || "").trim();
+      const resultList = await Promise.all(
+        tasks.map(async (taskItem = {}, index) => {
+          const taskText = String(taskItem?.task || "").trim();
+          const deliverableText = String(taskItem?.deliverable || "").trim();
+          if (!taskText || !deliverableText) {
+            return {
+              ok: false,
+              index,
+              error: "task/deliverable required",
+              request: taskItem,
+            };
+          }
+          try {
+            const result = botManager.runAsyncSession({
+              userId,
+              parentSessionId: normalizedParentSessionId,
+              sessionId: String(taskItem?.sessionId || "").trim(),
+              task: taskText,
+              sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+              deliverable: deliverableText,
+              eventListener: runtimeEventListener,
+              sourceDialogProcessId: String(sourceDialogProcessId || ""),
+              userInteractionBridge,
+              runConfig,
+            });
+            return {
+              ok: true,
+              index,
+              ...result,
+              request: {
+                sessionId: String(taskItem?.sessionId || "").trim(),
+                task: taskText,
+                sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+                deliverable: deliverableText,
+              },
+            };
+          } catch (error) {
+            return {
+              ok: false,
+              index,
+              error: error?.message || String(error),
+              request: {
+                sessionId: String(taskItem?.sessionId || "").trim(),
+                task: taskText,
+                sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+                deliverable: deliverableText,
+              },
+            };
+          }
+        }),
+      );
+      const allOk = resultList.every((item) => item?.ok);
+      return JSON.stringify(
+        {
+          ok: allOk,
+          status: allOk ? "running" : "partial_failed",
+          parentSessionId: normalizedParentSessionId,
+          tasks: resultList,
+        },
+        null,
+        2,
+      );
     },
   });
 
   const waitAsyncTaskResult = new DynamicStructuredTool({
     name: "wait_async_task_result",
     description:
-      "等待异步子会话结果。传入父sessionid、sessionId、任务、最终交付物（文件名及说明），可选最大等待毫秒（可被用户配置覆盖默认值）。约束：父agent完成自身任务后才等待",
+      "并发等待多个异步子会话结果。传入父sessionid和tasks数组（每项含sessionId/task/sharedTaskSpec/deliverable），可选timeoutMs。全部完成后会检查并读取交付物文件。",
     schema: z.object({
       parentSessionId: z.string().describe("父会话ID（UUID）"),
-      sessionId: z.string().describe("子会话ID（UUID）"),
-      task: z.string().describe("子任务内容（用于结果关联）"),
-      deliverable: z.string().describe("最终交付物要求（用于结果关联）"),
+      tasks: z
+        .array(waitTaskItemSchema)
+        .min(1)
+        .describe("待检查的并发子任务列表"),
       timeoutMs: z.number().int().positive().optional().describe("最大等待毫秒数"),
     }),
-    func: async ({
-      parentSessionId,
-      sessionId,
-      task,
-      deliverable,
-      timeoutMs,
-    }) => {
+    func: async ({ parentSessionId, tasks, timeoutMs }) => {
       if (!botManager || !userId)
         return JSON.stringify({
           ok: false,
           error: "runtime missing bot manager/user id",
         });
-      if (
-        !String(parentSessionId || "").trim() ||
-        !String(sessionId || "").trim() ||
-        !String(task || "").trim() ||
-        !String(deliverable || "").trim()
-      ) {
+      if (!String(parentSessionId || "").trim() || !Array.isArray(tasks) || !tasks.length) {
         return JSON.stringify({
           ok: false,
-          error: "parentSessionId/sessionId/task/deliverable required",
+          error: "parentSessionId/tasks required",
         });
       }
-      const result = await botManager.waitAsyncSession({
-        userId,
-        parentSessionId: String(parentSessionId || "").trim(),
-        sessionId: String(sessionId || ""),
-        timeoutMs: Number(timeoutMs || defaultWaitMs),
-      });
+      const normalizedParentSessionId = String(parentSessionId || "").trim();
+      const resultList = await Promise.all(
+        tasks.map(async (taskItem = {}, index) => {
+          const normalizedSessionId = String(taskItem?.sessionId || "").trim();
+          const taskText = String(taskItem?.task || "").trim();
+          const deliverableText = String(taskItem?.deliverable || "").trim();
+          if (!normalizedSessionId || !taskText || !deliverableText) {
+            return {
+              ok: false,
+              index,
+              status: "invalid_request",
+              error: "sessionId/task/deliverable required",
+              request: taskItem,
+            };
+          }
+          const result = await botManager.waitAsyncSession({
+            userId,
+            parentSessionId: normalizedParentSessionId,
+            sessionId: normalizedSessionId,
+            timeoutMs: Number(timeoutMs || defaultWaitMs),
+          });
+          return {
+            ...result,
+            index,
+            request: {
+              sessionId: normalizedSessionId,
+              task: taskText,
+              sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+              deliverable: deliverableText,
+            },
+          };
+        }),
+      );
+      const hasFailedTask = resultList.some(
+        (item) => String(item?.status || "") === "failed" || item?.ok === false,
+      );
+      if (hasFailedTask) {
+        return JSON.stringify(
+          {
+            ok: false,
+            status: "failed",
+            parentSessionId: normalizedParentSessionId,
+            tasks: resultList,
+          },
+          null,
+          2,
+        );
+      }
+      const allCompleted = resultList.every(
+        (item) => String(item?.status || "") === "completed",
+      );
+      if (!allCompleted) {
+        return JSON.stringify(
+          {
+            ok: true,
+            status: "running",
+            parentSessionId: normalizedParentSessionId,
+            tasks: resultList,
+          },
+          null,
+          2,
+        );
+      }
+
+      const deliverableChecks = await Promise.all(
+        resultList.map(async (resultItem = {}) => {
+          const deliverables = await readDeliverablesByTask(resultItem.request || {});
+          return {
+            ...resultItem,
+            ...deliverables,
+          };
+        }),
+      );
+      const allDeliverablesReady = deliverableChecks.every(
+        (item) =>
+          Array.isArray(item?.missingDeliverables) &&
+          !item.missingDeliverables.length,
+      );
+      if (!allDeliverablesReady) {
+        return JSON.stringify(
+          {
+            ok: true,
+            status: "waiting_deliverables",
+            parentSessionId: normalizedParentSessionId,
+            tasks: deliverableChecks,
+          },
+          null,
+          2,
+        );
+      }
       return JSON.stringify(
         {
-          ...result,
-          request: {
-            task: String(task || ""),
-            deliverable: String(deliverable || ""),
-          },
+          ok: true,
+          status: "completed",
+          parentSessionId: normalizedParentSessionId,
+          tasks: deliverableChecks,
         },
         null,
         2,
@@ -306,7 +479,6 @@ export function createAgentCollabTool({ agentContext }) {
 
   return [
     writeTaskDeliverableFile,
-    readTaskDeliverableFile,
     delegateTaskAsync,
     waitAsyncTaskResult,
     planExecutionFlow,

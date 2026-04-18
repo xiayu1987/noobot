@@ -11,6 +11,7 @@ import { mergeConfig } from "../config/index.js";
 export class SessionManager {
   constructor(globalConfig) {
     this.globalConfig = globalConfig;
+    this._sessionTreeLocks = new Map();
   }
 
   _now() {
@@ -225,6 +226,27 @@ export class SessionManager {
     await this._writeJson(this._sessionTreeFile(basePath), payload);
   }
 
+  async _withSessionTreeLock(basePath, run) {
+    const lockKey = String(basePath || "");
+    const previousLock = this._sessionTreeLocks.get(lockKey) || Promise.resolve();
+    let releaseCurrentLock = () => {};
+    const currentLock = new Promise((resolve) => {
+      releaseCurrentLock = resolve;
+    });
+    const lockMarker = previousLock.then(() => currentLock);
+    this._sessionTreeLocks.set(lockKey, lockMarker);
+
+    await previousLock;
+    try {
+      return await run();
+    } finally {
+      releaseCurrentLock();
+      if (this._sessionTreeLocks.get(lockKey) === lockMarker) {
+        this._sessionTreeLocks.delete(lockKey);
+      }
+    }
+  }
+
   async ensureRuntimeDirs(userId) {
     const basePath = this._resolveBasePath(userId);
     await this._ensureRuntimeDirsByBasePath(basePath);
@@ -233,66 +255,68 @@ export class SessionManager {
   async upsertSessionTree({ userId, sessionId, parentSessionId = "" }) {
     if (!sessionId) return;
     const basePath = this._resolveBasePath(userId);
-    const sessionTree = await this._readSessionTree(basePath);
-    const now = this._now();
-    const normalizedSessionId = String(sessionId || "").trim();
-    const normalizedParentSessionId = String(parentSessionId || "").trim();
+    await this._withSessionTreeLock(basePath, async () => {
+      const sessionTree = await this._readSessionTree(basePath);
+      const now = this._now();
+      const normalizedSessionId = String(sessionId || "").trim();
+      const normalizedParentSessionId = String(parentSessionId || "").trim();
 
-    if (!sessionTree.nodes[normalizedSessionId]) {
-      sessionTree.nodes[normalizedSessionId] = {
-        sessionId: normalizedSessionId,
-        parentSessionId: normalizedParentSessionId,
-        children: [],
-        createdAt: now,
-        updatedAt: now,
-      };
-    } else {
-      sessionTree.nodes[normalizedSessionId].parentSessionId =
-        normalizedParentSessionId;
-      sessionTree.nodes[normalizedSessionId].updatedAt = now;
-      if (!Array.isArray(sessionTree.nodes[normalizedSessionId].children)) {
-        sessionTree.nodes[normalizedSessionId].children = [];
-      }
-    }
-
-    if (!normalizedParentSessionId) {
-      if (!sessionTree.roots.includes(normalizedSessionId)) {
-        sessionTree.roots.push(normalizedSessionId);
-      }
-    } else {
-      if (!sessionTree.nodes[normalizedParentSessionId]) {
-        sessionTree.nodes[normalizedParentSessionId] = {
-          sessionId: normalizedParentSessionId,
-          parentSessionId: "",
+      if (!sessionTree.nodes[normalizedSessionId]) {
+        sessionTree.nodes[normalizedSessionId] = {
+          sessionId: normalizedSessionId,
+          parentSessionId: normalizedParentSessionId,
           children: [],
           createdAt: now,
           updatedAt: now,
         };
+      } else {
+        sessionTree.nodes[normalizedSessionId].parentSessionId =
+          normalizedParentSessionId;
+        sessionTree.nodes[normalizedSessionId].updatedAt = now;
+        if (!Array.isArray(sessionTree.nodes[normalizedSessionId].children)) {
+          sessionTree.nodes[normalizedSessionId].children = [];
+        }
       }
-      const parentChildren = Array.isArray(
-        sessionTree.nodes[normalizedParentSessionId].children,
-      )
-        ? sessionTree.nodes[normalizedParentSessionId].children
-        : [];
-      if (!parentChildren.includes(normalizedSessionId)) {
-        parentChildren.push(normalizedSessionId);
-      }
-      sessionTree.nodes[normalizedParentSessionId].children = parentChildren;
-      sessionTree.nodes[normalizedParentSessionId].updatedAt = now;
-      sessionTree.roots = sessionTree.roots.filter(
-        (rootSessionId) => rootSessionId !== normalizedSessionId,
-      );
-      if (
-        !sessionTree.roots.includes(normalizedParentSessionId) &&
-        !String(
-          sessionTree.nodes[normalizedParentSessionId].parentSessionId || "",
-        )
-      ) {
-        sessionTree.roots.push(normalizedParentSessionId);
-      }
-    }
 
-    await this._writeSessionTree(basePath, sessionTree);
+      if (!normalizedParentSessionId) {
+        if (!sessionTree.roots.includes(normalizedSessionId)) {
+          sessionTree.roots.push(normalizedSessionId);
+        }
+      } else {
+        if (!sessionTree.nodes[normalizedParentSessionId]) {
+          sessionTree.nodes[normalizedParentSessionId] = {
+            sessionId: normalizedParentSessionId,
+            parentSessionId: "",
+            children: [],
+            createdAt: now,
+            updatedAt: now,
+          };
+        }
+        const parentChildren = Array.isArray(
+          sessionTree.nodes[normalizedParentSessionId].children,
+        )
+          ? sessionTree.nodes[normalizedParentSessionId].children
+          : [];
+        if (!parentChildren.includes(normalizedSessionId)) {
+          parentChildren.push(normalizedSessionId);
+        }
+        sessionTree.nodes[normalizedParentSessionId].children = parentChildren;
+        sessionTree.nodes[normalizedParentSessionId].updatedAt = now;
+        sessionTree.roots = sessionTree.roots.filter(
+          (rootSessionId) => rootSessionId !== normalizedSessionId,
+        );
+        if (
+          !sessionTree.roots.includes(normalizedParentSessionId) &&
+          !String(
+            sessionTree.nodes[normalizedParentSessionId].parentSessionId || "",
+          )
+        ) {
+          sessionTree.roots.push(normalizedParentSessionId);
+        }
+      }
+
+      await this._writeSessionTree(basePath, sessionTree);
+    });
   }
 
   async getSessionTree({ userId }) {
@@ -914,67 +938,69 @@ export class SessionManager {
       throw new Error("sessionId required");
     }
     const basePath = this._resolveBasePath(userId);
-    const sessionTree = await this._readSessionTree(basePath);
-    const nodeExists = Boolean(sessionTree?.nodes?.[normalizedSessionId]);
+    return await this._withSessionTreeLock(basePath, async () => {
+      const sessionTree = await this._readSessionTree(basePath);
+      const nodeExists = Boolean(sessionTree?.nodes?.[normalizedSessionId]);
 
-    const toDelete = [];
-    if (nodeExists) {
-      const queue = [normalizedSessionId];
-      const visited = new Set();
-      while (queue.length) {
-        const currentId = String(queue.shift() || "").trim();
-        if (!currentId || visited.has(currentId)) continue;
-        visited.add(currentId);
-        toDelete.push(currentId);
-        const children = Array.isArray(sessionTree?.nodes?.[currentId]?.children)
-          ? sessionTree.nodes[currentId].children
-          : [];
-        for (const child of children) queue.push(child);
+      const toDelete = [];
+      if (nodeExists) {
+        const queue = [normalizedSessionId];
+        const visited = new Set();
+        while (queue.length) {
+          const currentId = String(queue.shift() || "").trim();
+          if (!currentId || visited.has(currentId)) continue;
+          visited.add(currentId);
+          toDelete.push(currentId);
+          const children = Array.isArray(sessionTree?.nodes?.[currentId]?.children)
+            ? sessionTree.nodes[currentId].children
+            : [];
+          for (const child of children) queue.push(child);
+        }
+      } else {
+        toDelete.push(normalizedSessionId);
       }
-    } else {
-      toDelete.push(normalizedSessionId);
-    }
 
-    const deletedSessionIds = [];
-    for (const id of toDelete) {
-      let sessionDir = "";
-      try {
-        const sessionFile = await this._sessionFile(basePath, id);
-        sessionDir = path.dirname(sessionFile);
-      } catch {
-        sessionDir = path.join(this._sessionRoot(basePath), id);
+      const deletedSessionIds = [];
+      for (const id of toDelete) {
+        let sessionDir = "";
+        try {
+          const sessionFile = await this._sessionFile(basePath, id);
+          sessionDir = path.dirname(sessionFile);
+        } catch {
+          sessionDir = path.join(this._sessionRoot(basePath), id);
+        }
+        await rm(sessionDir, { recursive: true, force: true });
+        deletedSessionIds.push(id);
       }
-      await rm(sessionDir, { recursive: true, force: true });
-      deletedSessionIds.push(id);
-    }
 
-    if (nodeExists) {
-      const deleteSet = new Set(deletedSessionIds);
-      const nextNodes = {};
-      for (const [id, node] of Object.entries(sessionTree?.nodes || {})) {
-        if (deleteSet.has(id)) continue;
-        nextNodes[id] = {
-          ...node,
-          children: Array.isArray(node?.children)
-            ? node.children.filter((childId) => !deleteSet.has(String(childId || "").trim()))
-            : [],
+      if (nodeExists) {
+        const deleteSet = new Set(deletedSessionIds);
+        const nextNodes = {};
+        for (const [id, node] of Object.entries(sessionTree?.nodes || {})) {
+          if (deleteSet.has(id)) continue;
+          nextNodes[id] = {
+            ...node,
+            children: Array.isArray(node?.children)
+              ? node.children.filter((childId) => !deleteSet.has(String(childId || "").trim()))
+              : [],
+            updatedAt: this._now(),
+          };
+        }
+        const nextTree = {
+          roots: (sessionTree?.roots || []).filter(
+            (rootId) => !deleteSet.has(String(rootId || "").trim()),
+          ),
+          nodes: nextNodes,
           updatedAt: this._now(),
         };
+        await this._writeSessionTree(basePath, nextTree);
       }
-      const nextTree = {
-        roots: (sessionTree?.roots || []).filter(
-          (rootId) => !deleteSet.has(String(rootId || "").trim()),
-        ),
-        nodes: nextNodes,
-        updatedAt: this._now(),
-      };
-      await this._writeSessionTree(basePath, nextTree);
-    }
 
-    return {
-      ok: true,
-      sessionId: normalizedSessionId,
-      deletedSessionIds,
-    };
+      return {
+        ok: true,
+        sessionId: normalizedSessionId,
+        deletedSessionIds,
+      };
+    });
   }
 }
