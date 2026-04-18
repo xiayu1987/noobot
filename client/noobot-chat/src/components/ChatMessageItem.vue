@@ -7,13 +7,34 @@
 import { Document, WarningFilled } from "@element-plus/icons-vue";
 import ThinkingPanel from "./ThinkingPanel.vue";
 
-defineProps({
+const props = defineProps({
   messageItem: { type: Object, required: true },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
 });
+
+function getSubTaskStatusText() {
+  const messageItem = props.messageItem || {};
+  if (messageItem.pending) return "子任务处理中...";
+  if (messageItem.statusLabel === "已停止") return "子任务已停止";
+  if (messageItem.statusLabel === "生成失败") return "子任务处理失败";
+  return "子任务处理完成";
+}
+
+function hasSubTaskActivity(messageItem = {}) {
+  const realtimeLogs = Array.isArray(messageItem?.realtimeLogs)
+    ? messageItem.realtimeLogs
+    : [];
+  const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
+    ? messageItem.completedToolLogs
+    : [];
+  return (
+    realtimeLogs.some((logItem) => Boolean(logItem?.subAgentCall)) ||
+    completedToolLogs.some((logItem) => Number(logItem?.depth || 0) > 1)
+  );
+}
 </script>
 
 <template>
@@ -35,11 +56,20 @@ defineProps({
         </div>
         <div
           v-if="messageItem.role === 'assistant' && (messageItem.pending || messageItem.statusLabel)"
-          class="message-pending"
-          :class="{ done: !messageItem.pending }"
+          class="message-status-row"
         >
-          <span class="pending-dot"></span>
-          {{ messageItem.pending ? "生成中..." : messageItem.statusLabel }}
+          <div class="message-pending" :class="{ done: !messageItem.pending }">
+            <span class="pending-dot"></span>
+            {{ messageItem.pending ? "生成中..." : messageItem.statusLabel }}
+          </div>
+          <div
+            v-if="hasSubTaskActivity(messageItem)"
+            class="message-pending"
+            :class="{ done: !messageItem.pending }"
+          >
+            <span class="pending-dot"></span>
+            {{ getSubTaskStatusText() }}
+          </div>
         </div>
 
         <div v-if="messageItem.attachments?.length" class="msg-attachments">
@@ -169,10 +199,17 @@ defineProps({
 .message-pending {
   font-size: 12px;
   color: var(--noobot-msg-pending-text);
-  margin-bottom: 6px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.message-status-row {
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .pending-dot {

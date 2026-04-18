@@ -12,10 +12,6 @@ const props = defineProps({
 
 const hasThinking = computed(() => hasThinkingLogs(props.messageItem));
 
-function isSubAgentProcessing(messageItem = {}) {
-  return Boolean(messageItem?.pending);
-}
-
 function getRealtimeLogs(messageItem = {}) {
   return (messageItem.realtimeLogs || []).slice(-10);
 }
@@ -23,6 +19,10 @@ function getRealtimeLogs(messageItem = {}) {
 function hasThinkingLogs(messageItem = {}) {
   if (!messageItem || messageItem.role !== "assistant") return false;
   if (messageItem.pending) return true;
+  const hasRealtimeLogs = Array.isArray(messageItem.realtimeLogs)
+    ? messageItem.realtimeLogs.length > 0
+    : false;
+  if (hasRealtimeLogs) return true;
   return Array.isArray(messageItem.completedToolLogs)
     ? messageItem.completedToolLogs.length > 0
     : false;
@@ -119,11 +119,8 @@ function getThinkingDetailCount(messageItem = {}) {
 
 <template>
   <template v-if="hasThinking">
-    <el-collapse v-model="messageItem.thinkingOpenNames" class="thinking-collapse">
+      <el-collapse v-model="messageItem.thinkingOpenNames" class="thinking-collapse">
       <el-collapse-item name="thinking-panel" title="💡 展开思考过程">
-        <div v-if="isSubAgentProcessing(messageItem)" style="margin-bottom: 10px">
-          <el-tag size="small" type="warning" effect="dark">子任务处理中</el-tag>
-        </div>
         <el-tabs class="thinking-tabs">
           <el-tab-pane :label="`执行过程 (${getExecutionLogCount(messageItem)})`">
             <div class="thinking-body-scroll">
