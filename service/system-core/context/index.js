@@ -77,36 +77,34 @@ export class ContextBuilder {
     return this._effectiveConfigCache;
   }
 
-  _buildSystemRuntime({ runtimeBasePath = "" } = {}) {
+  _isUserInteractionAllowed() {
+    return this.runConfig?.allowUserInteraction !== false;
+  }
+
+  _buildStaticInfo({ runtimeBasePath = "" } = {}) {
     const resolvedRuntimeBasePath =
       runtimeBasePath || this._resolveRuntimeBasePath();
     return {
       cwd: process.cwd(),
       userId: this.userId || "",
       basePath: resolvedRuntimeBasePath,
-      sessionId: this.sessionId || "",
-      caller: this.caller || "user",
-      parentSessionId: this.parentSessionId || "",
       platform: process.platform,
       arch: process.arch,
       nodeVersion: process.version,
-      now: this._now(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
       globalDefaults: {
         workspaceRoot: this.globalConfig?.workspaceRoot || "",
-      },
-      config: {
-        allowUserInteraction: this.runConfig?.allowUserInteraction !== false,
       },
     };
   }
 
   async _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
-    const staticInfo = this._buildSystemRuntime({ runtimeBasePath });
+    const staticInfo = this._buildStaticInfo({ runtimeBasePath });
+    const resolvedBasePath = staticInfo.basePath || runtimeBasePath || "";
     return {
       cwd: staticInfo.cwd || process.cwd(),
       userId: staticInfo.userId || "",
-      basePath: staticInfo.basePath || runtimeBasePath || "",
+      basePath: resolvedBasePath,
       platform: staticInfo.platform || process.platform,
       arch: staticInfo.arch || process.arch,
       nodeVersion: staticInfo.nodeVersion || process.version,
@@ -115,18 +113,14 @@ export class ContextBuilder {
       globalDefaults: staticInfo.globalDefaults || {
         workspaceRoot: this.globalConfig?.workspaceRoot || "",
       },
-      workspaceDirectories: await this._resolveWorkspaceDirectories(
-        staticInfo.basePath || runtimeBasePath || "",
-      ),
+      workspaceDirectories: await this._resolveWorkspaceDirectories(resolvedBasePath),
     };
   }
 
-  async _resolveSessionTree() {
-    const runtimeBasePath = this._resolveRuntimeBasePath();
-    if (!runtimeBasePath) {
-      return { roots: [], nodes: {}, updatedAt: this._now() };
-    }
-    if (!this.sessionManager?.getSessionTree) {
+  async _resolveSessionTree({ runtimeBasePath = "" } = {}) {
+    const resolvedRuntimeBasePath =
+      runtimeBasePath || this._resolveRuntimeBasePath();
+    if (!resolvedRuntimeBasePath || !this.sessionManager?.getSessionTree) {
       return { roots: [], nodes: {}, updatedAt: this._now() };
     }
     return this.sessionManager.getSessionTree({ userId: this.userId });
@@ -176,7 +170,7 @@ export class ContextBuilder {
     );
   }
 
-  _buildRuntimeContext({ runtimeBasePath, dialogProcessId, sessionTree }) {
+  _buildRuntimeContext({ dialogProcessId, sessionTree }) {
     const normalizedDialogProcessId = String(dialogProcessId || "");
     const systemRuntime = {
       sessionId: this.sessionId || "",
@@ -185,6 +179,9 @@ export class ContextBuilder {
       dialogProcessId: normalizedDialogProcessId,
       sessionTree,
       now: this._now(),
+      config: {
+        allowUserInteraction: this._isUserInteractionAllowed(),
+      },
     };
 
     return {
@@ -206,7 +203,9 @@ export class ContextBuilder {
   ) {
     const resolvedRuntimeBasePath =
       runtimeBasePath || this._resolveRuntimeBasePath();
-    const sessionTree = await this._resolveSessionTree();
+    const sessionTree = await this._resolveSessionTree({
+      runtimeBasePath: resolvedRuntimeBasePath,
+    });
     const staticAgentContext = await this._buildStaticAgentContext({
       runtimeBasePath: resolvedRuntimeBasePath,
     });
@@ -215,7 +214,6 @@ export class ContextBuilder {
       systemMessages,
       conversationMessages,
       runtime: this._buildRuntimeContext({
-        runtimeBasePath: resolvedRuntimeBasePath,
         dialogProcessId,
         sessionTree,
       }),
@@ -248,7 +246,7 @@ export class ContextBuilder {
         relativePath: String(attachmentItem?.relativePath || ""),
       }));
     }
-    return await this.attachmentService.ingest({
+    return this.attachmentService.ingest({
       userId: this.userId,
       attachments: this.attachments,
     });
@@ -359,9 +357,24 @@ export class ContextBuilder {
     return JSON.stringify(directoryItems, null, 2);
   }
 
-  _buildCommonSystemMessages({
+  _buildDynamicInfo({ dialogProcessId = "" } = {}) {
+    return {
+      sessionId: this.sessionId || "",
+      caller: this.caller || "user",
+      parentSessionId: this.parentSessionId || "",
+      dialogProcessId: String(dialogProcessId || ""),
+      now: this._now(),
+      config: {
+        allowUserInteraction: this._isUserInteractionAllowed(),
+      },
+    };
+  }
+
+  _composeSystemPromptSections({
     systemPrompt,
-    systemRuntime,
+    staticInfo,
+    dynamicInfo,
+    longMemory = null,
     workspaceDirectories,
     modelSection,
     skills,
@@ -370,11 +383,20 @@ export class ContextBuilder {
   }) {
     return [
       systemPrompt,
-      toSystemSection("系统运行环境", JSON.stringify(systemRuntime, null, 2)),
+      toSystemSection("系统运行环境", JSON.stringify(staticInfo, null, 2)),
+      toSystemSection("当前会话动态信息", JSON.stringify(dynamicInfo, null, 2)),
       toSystemSection(
         "工作区目录信息",
         this._buildWorkspaceDirectorySection(workspaceDirectories),
       ),
+      ...(Array.isArray(longMemory)
+        ? [
+            toSystemSection(
+              "相关长期记忆",
+              JSON.stringify((longMemory || []).slice(-20), null, 2),
+            ),
+          ]
+        : []),
       toSystemSection(
         "可用模型与当前模型",
         JSON.stringify(modelSection, null, 2),
@@ -415,32 +437,37 @@ export class ContextBuilder {
 
   async _buildCommonContextData() {
     const runtimeBasePath = this._resolveRuntimeBasePath();
-    const systemPrompt = await this.getSystemPrompt();
-    const skills = await this._resolveSkills();
+    const [systemPrompt, skills, attachments, workspaceDirectories] =
+      await Promise.all([
+        this.getSystemPrompt(),
+        this._resolveSkills(),
+        this._resolveAttachments(),
+        this._resolveWorkspaceDirectories(runtimeBasePath),
+      ]);
     const services = this._resolveServices();
-    const attachments = await this._resolveAttachments();
-    const systemRuntime = this._buildSystemRuntime({
-      runtimeBasePath,
-    });
     const modelSection = this._resolveModelSection();
-    const workspaceDirectories =
-      await this._resolveWorkspaceDirectories(runtimeBasePath);
     return {
       runtimeBasePath,
       systemPrompt,
       skills,
       services,
       attachments,
-      systemRuntime,
       modelSection,
       workspaceDirectories,
     };
   }
 
-  _buildSystemMessagesFromCommon(contextData = {}) {
-    return this._buildCommonSystemMessages({
+  _composeSystemMessagesFromCommonData(
+    contextData = {},
+    { dialogProcessId = "", longMemory = null } = {},
+  ) {
+    return this._composeSystemPromptSections({
       systemPrompt: contextData.systemPrompt,
-      systemRuntime: contextData.systemRuntime,
+      staticInfo: this._buildStaticInfo({
+        runtimeBasePath: contextData.runtimeBasePath,
+      }),
+      dynamicInfo: this._buildDynamicInfo({ dialogProcessId }),
+      longMemory,
       workspaceDirectories: contextData.workspaceDirectories,
       modelSection: contextData.modelSection,
       skills: contextData.skills,
@@ -451,8 +478,10 @@ export class ContextBuilder {
 
   async buildInitialContext({ dialogProcessId = "" } = {}) {
     const commonContextData = await this._buildCommonContextData();
-    const systemMessages =
-      this._buildSystemMessagesFromCommon(commonContextData);
+    const systemMessages = this._composeSystemMessagesFromCommonData(
+      commonContextData,
+      { dialogProcessId },
+    );
     return this._buildAgentContext(systemMessages, [], {
       runtimeBasePath: commonContextData.runtimeBasePath,
       dialogProcessId,
@@ -467,16 +496,10 @@ export class ContextBuilder {
     const longMemory = await this._resolveLongMemory();
     const commonContextData = await this._buildCommonContextData();
     const conversationMessages = this._toConversationMessages(sessionRecords);
-    const commonSections =
-      this._buildSystemMessagesFromCommon(commonContextData);
-    const systemMessages = [
-      ...commonSections.slice(0, 3),
-      toSystemSection(
-        "相关长期记忆",
-        JSON.stringify((longMemory || []).slice(-20), null, 2),
-      ),
-      ...commonSections.slice(3),
-    ];
+    const systemMessages = this._composeSystemMessagesFromCommonData(
+      commonContextData,
+      { dialogProcessId, longMemory },
+    );
     return this._buildAgentContext(systemMessages, conversationMessages, {
       runtimeBasePath: commonContextData.runtimeBasePath,
       dialogProcessId,
