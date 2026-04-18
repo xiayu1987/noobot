@@ -1,5 +1,5 @@
 {
-  "workspaceRoot": "../workspaces",
+  "workspaceRoot": "../workspace",
   "workspaceTemplatePath": "../user-template/default-user",
   "defaultProvider": "qwen3_5_flash",
   "attachmentModels": {
