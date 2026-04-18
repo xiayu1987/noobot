@@ -12,7 +12,7 @@ import {
   foldConversationMessages,
 } from "./messageModel";
 import {
-  chatSseApi,
+  buildChatWebSocketUrl,
   deleteSessionApi,
   getSessionDetailApi,
   getSessionsApi,
@@ -348,53 +348,56 @@ export function useChatSession({
     }
   }
 
-  function parseSSEBlock(block) {
-    const lines = block.split("\n");
-    let event = "message";
-    let data = "";
-    for (const line of lines) {
-      if (line.startsWith("event:")) event = line.slice(6).trim();
-      if (line.startsWith("data:")) data += line.slice(5).trim();
-    }
-    try {
-      return { event, data: data ? JSON.parse(data) : {} };
-    } catch {
-      return { event, data: { text: data } };
-    }
-  }
-
   async function streamChat(payload, onEvent) {
-    const res = await chatSseApi({ payload }, { fetcher: authFetch });
-    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+    await new Promise((resolve, reject) => {
+      const wsUrl = buildChatWebSocketUrl({ apiKey: apiKey.value || "" });
+      const ws = new WebSocket(wsUrl);
+      let settled = false;
+      let doneReceived = false;
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
+      const finalize = (fn) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        buffer += decoder.decode();
-        break;
-      }
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split("\n\n");
-      buffer = parts.pop() || "";
-      for (const part of parts) {
-        if (!part.trim()) continue;
-        const evt = parseSSEBlock(part);
-        if (evt.event === "error")
-          throw new Error(evt.data?.error || "stream error");
-        onEvent(evt);
-      }
-    }
+      ws.onopen = () => {
+        ws.send(JSON.stringify(payload || {}));
+      };
 
-    if (buffer.trim()) {
-      const evt = parseSSEBlock(buffer);
-      if (evt.event === "error")
-        throw new Error(evt.data?.error || "stream error");
-      onEvent(evt);
-    }
+      ws.onmessage = (messageEvent) => {
+        try {
+          const parsed = JSON.parse(String(messageEvent?.data || "{}"));
+          const evt = {
+            event: String(parsed?.event || "message"),
+            data: parsed?.data || {},
+          };
+          if (evt.event === "error") {
+            throw new Error(evt.data?.error || "websocket stream error");
+          }
+          onEvent(evt);
+          if (evt.event === "done") {
+            doneReceived = true;
+            ws.close(1000, "done");
+          }
+        } catch (error) {
+          ws.close(1011, "invalid_event");
+          finalize(() => reject(error));
+        }
+      };
+
+      ws.onerror = () => {
+        finalize(() => reject(new Error("WebSocket 连接失败")));
+      };
+
+      ws.onclose = () => {
+        if (doneReceived) {
+          finalize(() => resolve());
+          return;
+        }
+        finalize(() => reject(new Error("WebSocket 连接已关闭")));
+      };
+    });
   }
 
   function toBase64(file) {

@@ -9,7 +9,7 @@
 - 长短期记忆管理（short/long memory，支持阈值与窗口配置）
 - Agent + 工具执行（文件/脚本/技能/外部服务/文档解析/模型切换）
 - 多 Agent 异步协作
-- HTTP + SSE 双通道响应（普通 JSON 与流式事件）
+- HTTP + WebSocket 双通道响应（普通 JSON 与流式事件）
 - 工作区文件与附件访问接口（树结构、读写、下载、附件直链）
 
 
@@ -66,9 +66,9 @@ npm start
 ### 对话
 
 - `POST /chat`
-- `POST /chat/sse`
+- `WS /chat/ws`
 
-请求字段（两者一致）：
+请求字段（HTTP/WS 一致）：
 
 - `userId`（必填）
 - `sessionId`（必填，必须是 UUID）

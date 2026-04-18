@@ -134,8 +134,3 @@ export function normalizeSseLogEvent(evt = {}) {
     },
   };
 }
-
-export function sseWrite(res, event, data) {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
-}

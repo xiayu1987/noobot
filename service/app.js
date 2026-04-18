@@ -5,6 +5,7 @@
  */
 import "dotenv/config";
 import express from "express";
+import { createServer } from "node:http";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import {
@@ -17,7 +18,8 @@ import {
 } from "node:fs/promises";
 import { BotManager } from "./system-core/bot-manage/index.js";
 import { loadGlobalConfig } from "./system-core/config/index.js";
-import { normalizeSseLogEvent, sseWrite } from "./system-core/event/index.js";
+import { WebSocketServer } from "ws";
+import { normalizeSseLogEvent } from "./system-core/event/index.js";
 import { safeJoin } from "./system-core/utils/fs-safe.js";
 
 const app = express();
@@ -109,7 +111,16 @@ function resolveAuthByApiKey(req) {
   const headerApiKey = String(req.headers["x-api-key"] || "").trim();
   const bearer = String(req.headers.authorization || "").trim();
   const bearerApiKey = bearer.startsWith("Bearer ") ? bearer.slice(7).trim() : "";
-  const queryApiKey = String(req.query?.apikey || "").trim();
+  let queryApiKey = String(req.query?.apikey || "").trim();
+  if (!queryApiKey && req.url) {
+    try {
+      queryApiKey = String(
+        new URL(req.url, "http://localhost").searchParams.get("apikey") || "",
+      ).trim();
+    } catch {
+      queryApiKey = "";
+    }
+  }
   const apiKey = headerApiKey || bearerApiKey || queryApiKey;
   if (!apiKey) return null;
   const authInfo = apiKeyStore.get(apiKey);
@@ -120,6 +131,13 @@ function resolveAuthByApiKey(req) {
     return null;
   }
   return authInfo;
+}
+
+function isForbiddenUserScope(authInfo, requestUserId = "") {
+  const normalizedRequestUserId = String(requestUserId || "").trim();
+  if (!normalizedRequestUserId) return false;
+  if (authInfo?.role === "super_admin") return false;
+  return String(authInfo?.userId || "") !== normalizedRequestUserId;
 }
 
 function requireApiKey(req, res, next) {
@@ -133,11 +151,7 @@ function requireApiKey(req, res, next) {
     String(req.params?.userId || "").trim() ||
     String(req.body?.userId || "").trim() ||
     String(req.query?.userId || "").trim();
-  if (
-    requestUserId &&
-    authInfo.role !== "super_admin" &&
-    String(authInfo.userId || "") !== requestUserId
-  ) {
+  if (isForbiddenUserScope(authInfo, requestUserId)) {
     res.status(403).json({ ok: false, error: "forbidden user scope" });
     return;
   }
@@ -413,73 +427,138 @@ app.get("/internal/attachment/:userId/:attachmentId", async (req, res) => {
 
 app.post("/chat", handleChat);
 
-app.post("/chat/sse", async (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders?.();
-
-  try {
-    const { userId, sessionId, parentSessionId = "", message, attachments = [] } = req.body || {};
-    if (!userId || !sessionId || !message)
-      throw new Error("userId/sessionId/message required");
-
-    const eventListener = {
-      onEvent: (evt) => {
-        const event = evt?.event || "thinking";
-        const data = evt?.data || {};
-        if (event === "llm_delta") {
-          if (data?.subAgentCall) {
-            const normalized = normalizeSseLogEvent({
-              ...evt,
-              event: "subagent_llm_delta",
-              data: {
-                ...data,
-                category: "system",
-                type: "subagent_delta",
-                event: "subagent_delta",
-                text: String(data.text || ""),
-              },
-            });
-            sseWrite(res, normalized.event, normalized.data);
-            return;
-          }
-          sseWrite(res, "delta", { text: String(data.text || "") });
-          return;
-        }
-        const normalized = normalizeSseLogEvent(evt);
-        sseWrite(res, normalized.event, normalized.data);
-      },
-    };
-
-    const result = await bot.runSession({
-      userId,
-      sessionId,
-      parentSessionId,
-      caller: "user",
-      message,
-      attachments,
-      eventListener,
-    });
-
-    sseWrite(res, "done", {
-      sessionId: result.sessionId,
-      answer: result.answer,
-      dialogProcessId: result.dialogProcessId || "",
-      messages: result.messages || [],
-      traces: result.traces || [],
-      executionLogs: result.executionLogs || [],
-    });
-  } catch (err) {
-    sseWrite(res, "error", { error: err.message || "unknown error" });
-  } finally {
-    res.end();
-  }
-});
-
 app.get("/health", (_, res) => res.json({ ok: true }));
 
+const server = createServer(app);
+const wsServer = new WebSocketServer({ noServer: true });
+
+function sendUpgradeError(socket, statusCode = 401, message = "Unauthorized") {
+  if (!socket.writable) return;
+  socket.write(
+    `HTTP/1.1 ${statusCode} ${message}\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(message)}\r\n\r\n${message}`,
+  );
+  socket.destroy();
+}
+
+server.on("upgrade", (request, socket, head) => {
+  let pathname = "";
+  try {
+    pathname = new URL(request.url || "", "http://localhost").pathname;
+  } catch {
+    sendUpgradeError(socket, 400, "Bad Request");
+    return;
+  }
+
+  if (pathname !== "/chat/ws") {
+    socket.destroy();
+    return;
+  }
+
+  const authInfo = resolveAuthByApiKey(request);
+  if (!authInfo) {
+    sendUpgradeError(socket, 401, "missing or invalid apiKey");
+    return;
+  }
+  request.auth = authInfo;
+
+  wsServer.handleUpgrade(request, socket, head, (ws) => {
+    wsServer.emit("connection", ws, request);
+  });
+});
+
+wsServer.on("connection", (ws, request) => {
+  const authInfo = request?.auth || null;
+  let running = false;
+
+  const sendEvent = (event, data = {}) => {
+    if (ws.readyState !== 1) return;
+    try {
+      ws.send(JSON.stringify({ event, data }));
+    } catch {
+      // ignore socket send errors
+    }
+  };
+
+  ws.on("message", async (rawMessage) => {
+    if (running) {
+      sendEvent("error", { error: "session already running on this websocket" });
+      return;
+    }
+    running = true;
+    try {
+      const payload = JSON.parse(String(rawMessage || "{}"));
+      const {
+        userId,
+        sessionId,
+        parentSessionId = "",
+        message,
+        attachments = [],
+      } = payload || {};
+
+      if (!userId || !sessionId || !message) {
+        throw new Error("userId/sessionId/message required");
+      }
+      if (isForbiddenUserScope(authInfo, userId)) {
+        throw new Error("forbidden user scope");
+      }
+
+      const eventListener = {
+        onEvent: (evt) => {
+          const event = evt?.event || "thinking";
+          const data = evt?.data || {};
+          if (event === "llm_delta") {
+            if (data?.subAgentCall) {
+              const normalized = normalizeSseLogEvent({
+                ...evt,
+                event: "subagent_llm_delta",
+                data: {
+                  ...data,
+                  category: "system",
+                  type: "subagent_delta",
+                  event: "subagent_delta",
+                  text: String(data.text || ""),
+                },
+              });
+              sendEvent(normalized.event, normalized.data);
+              return;
+            }
+            sendEvent("delta", { text: String(data.text || "") });
+            return;
+          }
+          const normalized = normalizeSseLogEvent(evt);
+          sendEvent(normalized.event, normalized.data);
+        },
+      };
+
+      const result = await bot.runSession({
+        userId,
+        sessionId,
+        parentSessionId,
+        caller: "user",
+        message,
+        attachments,
+        eventListener,
+      });
+
+      sendEvent("done", {
+        sessionId: result.sessionId,
+        answer: result.answer,
+        dialogProcessId: result.dialogProcessId || "",
+        messages: result.messages || [],
+        traces: result.traces || [],
+        executionLogs: result.executionLogs || [],
+      });
+      ws.close(1000, "done");
+    } catch (err) {
+      sendEvent("error", { error: err.message || "unknown error" });
+      ws.close(1011, "error");
+    } finally {
+      running = false;
+    }
+  });
+});
+
 const port = process.env.PORT || 10061;
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Agent server running on :${port}`);
 });
