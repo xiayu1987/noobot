@@ -46,7 +46,7 @@
     "useLastCompletedTaskRange": true
   },
   "script": {
-    "sandboxMode": false
+    "sandboxMode": true
   },
   "async": {
     "waitTimeoutMs": 120000,
