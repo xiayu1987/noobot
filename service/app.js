@@ -8,13 +8,13 @@ import express from "express";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import {
-  readFileSync,
-  readdirSync,
-  statSync,
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-} from "node:fs";
+  access,
+  mkdir,
+  readFile,
+  readdir,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { BotManager } from "./system-core/bot-manage/index.js";
 import { loadGlobalConfig } from "./system-core/config/index.js";
 import { normalizeSseLogEvent, sseWrite } from "./system-core/event/index.js";
@@ -32,12 +32,11 @@ function workspaceRootPath() {
   return path.resolve(process.cwd(), String(globalConfig?.workspaceRoot || "../workspaces"));
 }
 
-function readWorkspaceUsers() {
+async function readWorkspaceUsers() {
   const filePath = path.join(workspaceRootPath(), "user.json");
-  if (!existsSync(filePath)) return [];
   let parsed = null;
   try {
-    parsed = JSON.parse(readFileSync(filePath, "utf8"));
+    parsed = JSON.parse(await readFile(filePath, "utf8"));
   } catch {
     return [];
   }
@@ -99,7 +98,7 @@ function requireApiKey(req, res, next) {
   next();
 }
 
-app.post("/internal/connect", (req, res) => {
+app.post("/internal/connect", async (req, res) => {
   try {
     const userId = String(req.body?.userId || "").trim();
     const connectCode = String(req.body?.connectCode || "").trim();
@@ -122,7 +121,7 @@ app.post("/internal/connect", (req, res) => {
       return;
     }
 
-    const users = readWorkspaceUsers();
+    const users = await readWorkspaceUsers();
     const matchedUser = users.find(
       (item) => item.userId === userId && item.connectCode === connectCode,
     );
@@ -163,10 +162,10 @@ async function handleChat(req, res) {
   }
 }
 
-app.get("/internal/session/:userId/:sessionId", (req, res) => {
+app.get("/internal/session/:userId/:sessionId", async (req, res) => {
   try {
     const { userId, sessionId } = req.params;
-    const result = bot.session.getSessionData({
+    const result = await bot.session.getSessionData({
       userId,
       sessionId,
     });
@@ -176,17 +175,17 @@ app.get("/internal/session/:userId/:sessionId", (req, res) => {
   }
 });
 
-app.get("/internal/sessions/:userId", (req, res) => {
+app.get("/internal/sessions/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    const sessions = bot.session.getAllSessionsData({ userId });
+    const sessions = await bot.session.getAllSessionsData({ userId });
     res.json({ ok: true, userId, sessions });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-function buildWorkspaceTree(
+async function buildWorkspaceTree(
   rootPath,
   currentPath = "",
   depth = 0,
@@ -194,7 +193,7 @@ function buildWorkspaceTree(
 ) {
   if (depth > maxDepth) return [];
   const abs = currentPath ? safeJoin(rootPath, currentPath) : rootPath;
-  const entries = readdirSync(abs, { withFileTypes: true })
+  const entries = (await readdir(abs, { withFileTypes: true }))
     .filter((e) => !e.name.startsWith("."))
     .sort((a, b) => {
       if (a.isDirectory() && !b.isDirectory()) return -1;
@@ -202,7 +201,8 @@ function buildWorkspaceTree(
       return a.name.localeCompare(b.name);
     });
 
-  return entries.map((entry) => {
+  const nodes = [];
+  for (const entry of entries) {
     const relPath = currentPath
       ? path.posix.join(currentPath, entry.name)
       : entry.name;
@@ -212,39 +212,44 @@ function buildWorkspaceTree(
       type: entry.isDirectory() ? "dir" : "file",
     };
     if (entry.isDirectory()) {
-      node.children = buildWorkspaceTree(
+      node.children = await buildWorkspaceTree(
         rootPath,
         relPath,
         depth + 1,
         maxDepth,
       );
     }
-    return node;
-  });
+    nodes.push(node);
+  }
+  return nodes;
 }
 
-app.get("/internal/workspace/tree/:userId", (req, res) => {
+app.get("/internal/workspace/tree/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const basePath = bot.ensureUserWorkspace(userId);
-    const tree = buildWorkspaceTree(basePath);
+    const tree = await buildWorkspaceTree(basePath);
     res.json({ ok: true, userId, root: basePath, tree });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.get("/internal/workspace/file/:userId", (req, res) => {
+app.get("/internal/workspace/file/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const relPath = String(req.query.path || "");
     if (!relPath) throw new Error("path required");
     const basePath = bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
-    if (!existsSync(absPath)) throw new Error("file not found");
-    const st = statSync(absPath);
+    try {
+      await access(absPath);
+    } catch {
+      throw new Error("file not found");
+    }
+    const st = await stat(absPath);
     if (!st.isFile()) throw new Error("path is not a file");
-    const buf = readFileSync(absPath);
+    const buf = await readFile(absPath);
     const isText = !buf.includes(0);
     const content = isText ? buf.toString("utf8") : "";
     res.json({ ok: true, path: relPath, isText, size: st.size, content });
@@ -253,7 +258,7 @@ app.get("/internal/workspace/file/:userId", (req, res) => {
   }
 });
 
-app.put("/internal/workspace/file/:userId", (req, res) => {
+app.put("/internal/workspace/file/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const relPath = String(req.body?.path || "");
@@ -261,23 +266,27 @@ app.put("/internal/workspace/file/:userId", (req, res) => {
     if (!relPath) throw new Error("path required");
     const basePath = bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
-    mkdirSync(path.dirname(absPath), { recursive: true });
-    writeFileSync(absPath, content, "utf8");
+    await mkdir(path.dirname(absPath), { recursive: true });
+    await writeFile(absPath, content, "utf8");
     res.json({ ok: true, path: relPath });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.get("/internal/workspace/download/:userId", (req, res) => {
+app.get("/internal/workspace/download/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const relPath = String(req.query.path || "");
     if (!relPath) throw new Error("path required");
     const basePath = bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
-    if (!existsSync(absPath)) throw new Error("file not found");
-    const st = statSync(absPath);
+    try {
+      await access(absPath);
+    } catch {
+      throw new Error("file not found");
+    }
+    const st = await stat(absPath);
     if (!st.isFile()) throw new Error("path is not a file");
     res.download(absPath, path.basename(relPath));
   } catch (err) {
@@ -285,10 +294,10 @@ app.get("/internal/workspace/download/:userId", (req, res) => {
   }
 });
 
-app.get("/internal/attachment/:userId/:attachmentId", (req, res) => {
+app.get("/internal/attachment/:userId/:attachmentId", async (req, res) => {
   try {
     const { userId, attachmentId } = req.params;
-    const attachment = bot.getAttachmentById({ userId, attachmentId });
+    const attachment = await bot.getAttachmentById({ userId, attachmentId });
     if (!attachment) throw new Error("attachment not found");
 
     res.setHeader(

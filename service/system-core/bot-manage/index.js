@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
 import { SessionManager } from "../session/index.js";
@@ -72,10 +72,9 @@ export class BotManager {
     return this.attach.getAttachmentById({ userId, attachmentId });
   }
 
-  loadUserConfig(basePath) {
-    const raw = JSON.parse(
-      readFileSync(path.join(basePath, "config.json"), "utf8"),
-    );
+  async loadUserConfig(basePath) {
+    const rawText = await readFile(path.join(basePath, "config.json"), "utf8");
+    const raw = JSON.parse(rawText);
     return sanitizeUserConfig(raw);
   }
 
@@ -137,7 +136,7 @@ export class BotManager {
     return agentContext;
   }
 
-  _appendSessionTurn({
+  async _appendSessionTurn({
     userId,
     sessionId,
     role,
@@ -153,7 +152,7 @@ export class BotManager {
     parentSessionId = "",
     eventListener,
   }) {
-    this.session.appendTurn({
+    await this.session.appendTurn({
       userId,
       sessionId,
       parentSessionId,
@@ -171,7 +170,7 @@ export class BotManager {
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
 
-  _appendAgentMessages({
+  async _appendAgentMessages({
     userId,
     sessionId,
     parentSessionId = "",
@@ -180,7 +179,7 @@ export class BotManager {
     eventListener,
   }) {
     for (const messageItem of messages) {
-      this._appendSessionTurn({
+      await this._appendSessionTurn({
         userId,
         sessionId,
         role: messageItem.role || "assistant",
@@ -277,20 +276,20 @@ export class BotManager {
       const upstreamListener = eventListener;
       const basePath = this.ensureUserWorkspace(userId);
 
-      this.session.upsertSessionTree({
+      await this.session.upsertSessionTree({
         userId,
         sessionId: usedSessionId,
         parentSessionId,
       });
 
       const dialogProcessId = uuidv4();
-      const sessionBundle = this.session.getSessionBundle({
+      const sessionBundle = await this.session.getSessionBundle({
         userId,
         sessionId: usedSessionId,
         parentSessionId,
       });
       const isContinue = Boolean(sessionBundle?.exists);
-      const userConfig = this.loadUserConfig(basePath);
+      const userConfig = await this.loadUserConfig(basePath);
       const ingestedAttachments = await this.attach.ingest({
         userId,
         attachments,
@@ -307,7 +306,7 @@ export class BotManager {
         size: Number(attachmentItem?.size || 0),
       }));
 
-      this.session.createSession({
+      await this.session.createSession({
         userId,
         sessionId: usedSessionId,
         parentSessionId,
@@ -316,10 +315,10 @@ export class BotManager {
       });
 
       const executionStartIndex =
-        this.session.getExecutionBundle({
+        (await this.session.getExecutionBundle({
           userId,
           sessionId: usedSessionId,
-        })?.logs?.length || 0;
+        }))?.logs?.length || 0;
 
       const runtimeEventListener = createExecutionEventListener({
         sessionManager: this.session,
@@ -352,7 +351,7 @@ export class BotManager {
         dialogProcessId,
       });
 
-      this._appendSessionTurn({
+      await this._appendSessionTurn({
         userId,
         sessionId: usedSessionId,
         parentSessionId,
@@ -374,7 +373,7 @@ export class BotManager {
         traceCount: agentResult?.traces?.length || 0,
       });
 
-      this._appendAgentMessages({
+      await this._appendAgentMessages({
         userId,
         sessionId: usedSessionId,
         parentSessionId,
@@ -390,7 +389,7 @@ export class BotManager {
         eventListener: runtimeEventListener,
       });
 
-      this.memory.captureSessionToShortMemory({
+      await this.memory.captureSessionToShortMemory({
         userId,
         sessionId: usedSessionId,
         parentSessionId,
@@ -404,7 +403,7 @@ export class BotManager {
         sessionId: usedSessionId,
       });
 
-      const execution = this.session.getExecutionBundle({
+      const execution = await this.session.getExecutionBundle({
         userId,
         sessionId: usedSessionId,
       });
@@ -583,7 +582,7 @@ export class BotManager {
       const normalizedTimeoutMs = Math.max(1000, Number(timeoutMs || 120000));
 
       if (!job?.promise) {
-        const bundle = this.session.getSessionBundle({
+        const bundle = await this.session.getSessionBundle({
           userId,
           sessionId,
           parentSessionId,

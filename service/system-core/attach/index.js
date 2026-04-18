@@ -3,17 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  writeFileSync,
-  readFileSync,
-  existsSync,
-  mkdirSync,
-  statSync,
-} from "node:fs";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Buffer } from "node:buffer";
 import { v4 as uuidv4 } from "uuid";
-import { readJsonFile } from "../utils/json.js";
 
 export class AttachmentService {
   constructor(globalConfig) {
@@ -37,21 +30,34 @@ export class AttachmentService {
     return path.join(this._attachRoot(basePath), "attachments.json");
   }
 
-  _ensureAttachDirs(basePath) {
-    mkdirSync(this._attachRoot(basePath), { recursive: true });
+  async _ensureAttachDirs(basePath) {
+    await mkdir(this._attachRoot(basePath), { recursive: true });
   }
 
-  _readAttachIndex(basePath) {
-    this._ensureAttachDirs(basePath);
+  async _readAttachIndex(basePath) {
+    await this._ensureAttachDirs(basePath);
     const indexFile = this._attachIndexFile(basePath);
-    return readJsonFile(indexFile, {
+    try {
+      const raw = await readFile(indexFile, "utf8");
+      const parsed = JSON.parse(raw);
+      const attachments =
+        parsed?.attachments && typeof parsed.attachments === "object"
+          ? parsed.attachments
+          : {};
+      return {
+        updatedAt: String(parsed?.updatedAt || new Date().toISOString()),
+        attachments,
+      };
+    } catch {
+      return {
       updatedAt: new Date().toISOString(),
       attachments: {},
-    });
+      };
+    }
   }
 
-  _writeAttachIndex(basePath, indexData = {}) {
-    this._ensureAttachDirs(basePath);
+  async _writeAttachIndex(basePath, indexData = {}) {
+    await this._ensureAttachDirs(basePath);
     const indexFile = this._attachIndexFile(basePath);
     const payload = {
       updatedAt: new Date().toISOString(),
@@ -60,7 +66,7 @@ export class AttachmentService {
           ? indexData.attachments
           : {},
     };
-    writeFileSync(indexFile, JSON.stringify(payload, null, 2), "utf8");
+    await writeFile(indexFile, JSON.stringify(payload, null, 2), "utf8");
   }
 
   _normalizeRelativePath(basePath, absolutePath) {
@@ -87,7 +93,7 @@ export class AttachmentService {
   async ingest({ userId, attachments }) {
     const basePath = this._resolveBasePath(userId);
     if (!attachments?.length) return [];
-    const attachmentIndex = this._readAttachIndex(basePath);
+    const attachmentIndex = await this._readAttachIndex(basePath);
     const savedAttachmentRecords = [];
 
     for (const item of attachments) {
@@ -99,7 +105,7 @@ export class AttachmentService {
       const fileName = `${attachmentId}${extension}`;
       const savePath = path.join(this._attachRoot(basePath), fileName);
       const now = new Date().toISOString();
-      writeFileSync(savePath, bytes);
+      await writeFile(savePath, bytes);
       const attachmentRecord = this._buildAttachmentPublicRecord(basePath, {
         attachmentId,
         name,
@@ -112,22 +118,27 @@ export class AttachmentService {
       savedAttachmentRecords.push(attachmentRecord);
     }
 
-    this._writeAttachIndex(basePath, attachmentIndex);
+    await this._writeAttachIndex(basePath, attachmentIndex);
     return savedAttachmentRecords;
   }
 
-  getAttachmentById({ userId, attachmentId }) {
+  async getAttachmentById({ userId, attachmentId }) {
     const normalizedAttachmentId = String(attachmentId || "").trim();
     if (!normalizedAttachmentId) return null;
     const basePath = this._resolveBasePath(userId);
-    const attachmentIndex = this._readAttachIndex(basePath);
+    const attachmentIndex = await this._readAttachIndex(basePath);
     const record = attachmentIndex?.attachments?.[normalizedAttachmentId];
     if (!record) return null;
 
     const resolvedPath = String(record.path || "");
-    if (!resolvedPath || !existsSync(resolvedPath)) return null;
+    if (!resolvedPath) return null;
+    try {
+      await access(resolvedPath);
+    } catch {
+      return null;
+    }
 
-    const fileStat = statSync(resolvedPath);
+    const fileStat = await stat(resolvedPath);
     return {
       ...this._buildAttachmentPublicRecord(basePath, record),
       absolutePath: resolvedPath,
@@ -135,12 +146,12 @@ export class AttachmentService {
     };
   }
 
-  readAttachmentContent({ userId, attachmentId }) {
-    const record = this.getAttachmentById({ userId, attachmentId });
+  async readAttachmentContent({ userId, attachmentId }) {
+    const record = await this.getAttachmentById({ userId, attachmentId });
     if (!record) return null;
     return {
       ...record,
-      content: readFileSync(record.absolutePath),
+      content: await readFile(record.absolutePath),
     };
   }
 }

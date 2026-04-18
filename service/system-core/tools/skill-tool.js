@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdirSync, existsSync } from "node:fs";
+import { access, readdir } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
@@ -44,15 +44,23 @@ export function createSkillTool({ agentContext, sessionId }) {
       parentSkill: z.string().optional(),
     }),
     func: async ({ parentSkill }) => {
-      if (!existsSync(skillRoot)) return JSON.stringify([], null, 2);
+      try {
+        await access(skillRoot);
+      } catch {
+        return JSON.stringify([], null, 2);
+      }
 
       const rootDir = parentSkill
         ? safeJoin(skillRoot, parentSkill)
         : skillRoot;
-      if (!existsSync(rootDir)) return JSON.stringify([], null, 2);
+      try {
+        await access(rootDir);
+      } catch {
+        return JSON.stringify([], null, 2);
+      }
 
       const items = [];
-      const level1 = readdirSync(rootDir, { withFileTypes: true });
+      const level1 = await readdir(rootDir, { withFileTypes: true });
 
       for (const entry of level1) {
         const level1Path = entry.name;
@@ -64,7 +72,7 @@ export function createSkillTool({ agentContext, sessionId }) {
 
         if (!entry.isDirectory()) continue;
         const level2Dir = path.join(rootDir, entry.name);
-        const level2 = readdirSync(level2Dir, { withFileTypes: true });
+        const level2 = await readdir(level2Dir, { withFileTypes: true });
         for (const child of level2) {
           items.push({
             name: child.name,
@@ -101,7 +109,7 @@ export function createSkillTool({ agentContext, sessionId }) {
             2,
           );
         }
-        const task = sessionManager.startSkillTask({
+        const task = await sessionManager.startSkillTask({
           userId,
           sessionId,
           parentSessionId,
@@ -111,7 +119,7 @@ export function createSkillTool({ agentContext, sessionId }) {
         return JSON.stringify({ ok: true, action, task }, null, 2);
       }
 
-      const task = sessionManager.finishSkillTask({
+      const task = await sessionManager.finishSkillTask({
         userId,
         sessionId,
         parentSessionId,

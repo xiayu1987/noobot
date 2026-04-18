@@ -49,7 +49,7 @@ export function createExecutionEventListener({
 
       const { category, type } = classifyExecutionEvent(event);
       try {
-        sessionManager?.appendExecutionLog?.({
+        const maybePromise = sessionManager?.appendExecutionLog?.({
           userId,
           sessionId,
           parentSessionId,
@@ -60,6 +60,7 @@ export function createExecutionEventListener({
           data,
           ts,
         });
+        if (maybePromise?.catch) maybePromise.catch(() => {});
       } catch {
         // ignore log write errors
       }

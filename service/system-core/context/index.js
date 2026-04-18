@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { mergeConfig } from "../config/index.js";
 import { resolveDefaultModelSpec } from "../model/index.js";
@@ -45,8 +45,8 @@ export class ContextBuilder {
     this._effectiveConfigCache = null;
   }
 
-  getSystemPrompt() {
-    return readFileSync("./system-core/system-prompt/base.md", "utf8");
+  async getSystemPrompt() {
+    return readFile("./system-core/system-prompt/base.md", "utf8");
   }
 
   _resolveBasePath() {
@@ -94,7 +94,7 @@ export class ContextBuilder {
     };
   }
 
-  _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
+  async _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
     const staticInfo = this._buildSystemRuntime({ runtimeBasePath });
     return {
       cwd: staticInfo.cwd || process.cwd(),
@@ -108,13 +108,13 @@ export class ContextBuilder {
       globalDefaults: staticInfo.globalDefaults || {
         workspaceRoot: this.globalConfig?.workspaceRoot || "",
       },
-      workspaceDirectories: this._resolveWorkspaceDirectories(
+      workspaceDirectories: await this._resolveWorkspaceDirectories(
         staticInfo.basePath || runtimeBasePath || "",
       ),
     };
   }
 
-  _resolveSessionTree() {
+  async _resolveSessionTree() {
     const runtimeBasePath = this._resolveRuntimeBasePath();
     if (!runtimeBasePath) {
       return { roots: [], nodes: {}, updatedAt: this._now() };
@@ -125,14 +125,19 @@ export class ContextBuilder {
     return this.sessionManager.getSessionTree({ userId: this.userId });
   }
 
-  _resolveWorkspaceDirectories(runtimeBasePath = "") {
+  async _resolveWorkspaceDirectories(runtimeBasePath = "") {
     const basePath = String(runtimeBasePath || "").trim();
-    if (!basePath || !existsSync(basePath)) return [];
+    if (!basePath) return [];
+    try {
+      await access(basePath);
+    } catch {
+      return [];
+    }
 
     const directories = new Set();
     let level1Entries = [];
     try {
-      level1Entries = readdirSync(basePath, { withFileTypes: true });
+      level1Entries = await readdir(basePath, { withFileTypes: true });
     } catch {
       return [];
     }
@@ -143,10 +148,11 @@ export class ContextBuilder {
     }
 
     const runtimeDirPath = path.join(basePath, "runtime");
-    if (existsSync(runtimeDirPath)) {
+    try {
+      await access(runtimeDirPath);
       let runtimeLevel1Entries = [];
       try {
-        runtimeLevel1Entries = readdirSync(runtimeDirPath, {
+        runtimeLevel1Entries = await readdir(runtimeDirPath, {
           withFileTypes: true,
         });
       } catch {
@@ -156,7 +162,7 @@ export class ContextBuilder {
         if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
         directories.add(path.posix.join("runtime", entry.name));
       }
-    }
+    } catch {}
 
     return Array.from(directories).sort((leftDir, rightDir) =>
       leftDir.localeCompare(rightDir),
@@ -185,15 +191,15 @@ export class ContextBuilder {
     };
   }
 
-  _buildAgentContext(
+  async _buildAgentContext(
     systemMessages,
     conversationMessages,
     { runtimeBasePath = "", dialogProcessId = "" } = {},
   ) {
     const resolvedRuntimeBasePath =
       runtimeBasePath || this._resolveRuntimeBasePath();
-    const sessionTree = this._resolveSessionTree();
-    const staticAgentContext = this._buildStaticAgentContext({
+    const sessionTree = await this._resolveSessionTree();
+    const staticAgentContext = await this._buildStaticAgentContext({
       runtimeBasePath: resolvedRuntimeBasePath,
     });
     const agentContext = {
@@ -240,13 +246,13 @@ export class ContextBuilder {
     });
   }
 
-  _resolveSkills() {
+  async _resolveSkills() {
     const runtimeBasePath = this._resolveRuntimeBasePath();
     if (!this.skillService || !runtimeBasePath) return [];
     return this.skillService.listSkills({ userId: this.userId });
   }
 
-  _resolveLongMemory() {
+  async _resolveLongMemory() {
     const runtimeBasePath = this._resolveRuntimeBasePath();
     if (!this.memoryService || !runtimeBasePath) return [];
     return this.memoryService.readLongMemory({ userId: this.userId });
@@ -387,7 +393,7 @@ export class ContextBuilder {
     ];
   }
 
-  _resolveSessionRecords({ sessionId } = {}) {
+  async _resolveSessionRecords({ sessionId } = {}) {
     const resolvedSessionId = sessionId || this.sessionId || "";
     const runtimeBasePath = this._resolveRuntimeBasePath();
     if (!this.sessionManager || !runtimeBasePath || !resolvedSessionId)
@@ -401,8 +407,8 @@ export class ContextBuilder {
 
   async _buildCommonContextData() {
     const runtimeBasePath = this._resolveRuntimeBasePath();
-    const systemPrompt = this.getSystemPrompt();
-    const skills = this._resolveSkills();
+    const systemPrompt = await this.getSystemPrompt();
+    const skills = await this._resolveSkills();
     const services = this._resolveServices();
     const attachments = await this._resolveAttachments();
     const systemRuntime = this._buildSystemRuntime({
@@ -410,7 +416,7 @@ export class ContextBuilder {
     });
     const modelSection = this._resolveModelSection();
     const workspaceDirectories =
-      this._resolveWorkspaceDirectories(runtimeBasePath);
+      await this._resolveWorkspaceDirectories(runtimeBasePath);
     return {
       runtimeBasePath,
       systemPrompt,
@@ -447,10 +453,10 @@ export class ContextBuilder {
 
   async buildContinueContext({ dialogProcessId = "" } = {}) {
     const resolvedSessionId = this.sessionId || "";
-    const sessionRecords = this._resolveSessionRecords({
+    const sessionRecords = await this._resolveSessionRecords({
       sessionId: resolvedSessionId,
     });
-    const longMemory = this._resolveLongMemory();
+    const longMemory = await this._resolveLongMemory();
     const commonContextData = await this._buildCommonContextData();
     const conversationMessages = this._toConversationMessages(sessionRecords);
     const commonSections =

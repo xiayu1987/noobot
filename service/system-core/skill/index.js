@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdirSync, existsSync, readFileSync } from "node:fs";
+import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 export class SkillService {
@@ -20,43 +20,54 @@ export class SkillService {
     return path.resolve(workspaceRoot, normalizedUserId);
   }
 
-  listSkills({ userId }) {
+  async listSkills({ userId }) {
     const basePath = this._resolveBasePath(userId);
     const skillRoot = path.join(basePath, "skills");
-    const names = readdirSync(skillRoot, { withFileTypes: true })
+    let level1Entries = [];
+    try {
+      level1Entries = await readdir(skillRoot, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const names = level1Entries
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
 
-    return names.map((name) => {
+    return Promise.all(names.map(async (name) => {
       const configPath = path.join(skillRoot, name, "config.json");
-      if (existsSync(configPath)) {
-        const cfg = JSON.parse(readFileSync(configPath, "utf8"));
+      try {
+        await access(configPath);
+        const cfg = JSON.parse(await readFile(configPath, "utf8"));
         return {
           name,
           description: cfg.description || "",
           model: cfg.model || null,
         };
+      } catch {
+        return { name, description: "", model: null };
       }
-      return { name, description: "", model: null };
-    });
+    }));
   }
 
-  getSkill({ userId, skillName }) {
+  async getSkill({ userId, skillName }) {
     const basePath = this._resolveBasePath(userId);
     const root = path.join(basePath, "skills", skillName);
     const flowPath = path.join(root, "flow.json");
     const cfgPath = path.join(root, "config.json");
     const indexPath = path.join(root, "knowledge-base/index.json");
 
-    const flow = existsSync(flowPath)
-      ? JSON.parse(readFileSync(flowPath, "utf8"))
-      : {};
-    const config = existsSync(cfgPath)
-      ? JSON.parse(readFileSync(cfgPath, "utf8"))
-      : {};
-    const kbIndex = existsSync(indexPath)
-      ? JSON.parse(readFileSync(indexPath, "utf8"))
-      : {};
+    const readJson = async (filePath, fallback = {}) => {
+      try {
+        await access(filePath);
+        return JSON.parse(await readFile(filePath, "utf8"));
+      } catch {
+        return fallback;
+      }
+    };
+
+    const flow = await readJson(flowPath, {});
+    const config = await readJson(cfgPath, {});
+    const kbIndex = await readJson(indexPath, {});
 
     return { flow, config, kbIndex, root };
   }

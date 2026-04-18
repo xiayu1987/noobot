@@ -3,17 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
-import { readJsonFile } from "../utils/json.js";
 import { mergeConfig } from "../config/index.js";
 
 export class MemoryService {
@@ -54,18 +46,23 @@ export class MemoryService {
     return path.join(basePath, "memory/long-memory-model.md");
   }
 
-  _readLongMemoryModel(basePath) {
+  async _readLongMemoryModel(basePath) {
     const modelPath = this._longMemoryModelPath(basePath);
-    if (!existsSync(modelPath)) return "";
     try {
-      return readFileSync(modelPath, "utf8").trim();
+      await access(modelPath);
+      return (await readFile(modelPath, "utf8")).trim();
     } catch {
       return "";
     }
   }
 
-  _readJson(p, fallback = {}) {
-    return readJsonFile(p, fallback);
+  async _readJson(p, fallback = {}) {
+    try {
+      const raw = await readFile(p, "utf8");
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
   }
 
   _normalizeShortMemory(data) {
@@ -89,36 +86,36 @@ export class MemoryService {
     };
   }
 
-  _readShortMemory(basePath) {
+  async _readShortMemory(basePath) {
     const shortDir = this._shortPath(basePath);
-    mkdirSync(shortDir, { recursive: true });
+    await mkdir(shortDir, { recursive: true });
     const days = {};
-    const files = readdirSync(shortDir, { withFileTypes: true })
+    const files = (await readdir(shortDir, { withFileTypes: true }))
       .filter((d) => d.isFile() && d.name.endsWith(".json"))
       .map((d) => d.name);
     for (const file of files) {
       const day = file.replace(/\.json$/i, "");
-      const dayData = this._readJson(path.join(shortDir, file), { items: [] });
+      const dayData = await this._readJson(path.join(shortDir, file), { items: [] });
       const items = Array.isArray(dayData?.items) ? dayData.items : [];
       days[day] = items;
     }
     return this._normalizeShortMemory({ days });
   }
 
-  _writeShortMemory(basePath, short) {
+  async _writeShortMemory(basePath, short) {
     const shortDir = this._shortPath(basePath);
-    mkdirSync(shortDir, { recursive: true });
+    await mkdir(shortDir, { recursive: true });
     const dayMap = short?.days || {};
     const expectedFiles = new Set(
       Object.keys(dayMap).map((day) => `${String(day)}.json`),
     );
 
-    const currentFiles = readdirSync(shortDir, { withFileTypes: true })
+    const currentFiles = (await readdir(shortDir, { withFileTypes: true }))
       .filter((d) => d.isFile() && d.name.endsWith(".json"))
       .map((d) => d.name);
     for (const file of currentFiles) {
       if (expectedFiles.has(file)) continue;
-      rmSync(path.join(shortDir, file), { force: true });
+      await rm(path.join(shortDir, file), { force: true });
     }
 
     for (const [day, items] of Object.entries(dayMap)) {
@@ -127,7 +124,7 @@ export class MemoryService {
         items: Array.isArray(items) ? items : [],
         updatedAt: new Date().toISOString(),
       };
-      writeFileSync(
+      await writeFile(
         path.join(shortDir, `${day}.json`),
         JSON.stringify(payload, null, 2),
       );
@@ -192,12 +189,12 @@ export class MemoryService {
     this._assignShortItems(short, pending);
   }
 
-  readLongMemory({ userId }) {
+  async readLongMemory({ userId }) {
     const basePath = this._resolveBasePath(userId);
-    return this._readJson(this._longPath(basePath), { facts: [] }).facts || [];
+    return (await this._readJson(this._longPath(basePath), { facts: [] })).facts || [];
   }
 
-  captureSessionToShortMemory({
+  async captureSessionToShortMemory({
     userId,
     sessionId,
     parentSessionId = "",
@@ -205,7 +202,7 @@ export class MemoryService {
   }) {
     const basePath = this._resolveBasePath(userId);
     const sessionFile = this._sessionFile(basePath, sessionId, parentSessionId);
-    const sessionData = this._readJson(sessionFile, null);
+    const sessionData = await this._readJson(sessionFile, null);
     if (!sessionData) return false;
 
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
@@ -218,7 +215,7 @@ export class MemoryService {
     if (pendingCount < threshold) return false;
 
     const records = messages.slice(checkpoint);
-    const short = this._readShortMemory(basePath);
+    const short = await this._readShortMemory(basePath);
     const items = this._flattenShortItems(short);
     items.push({
       id: `${sessionId}-${Date.now()}-${messages.length}`,
@@ -231,18 +228,18 @@ export class MemoryService {
     });
     this._assignShortItems(short, items);
     this._compactShortMemory(short, userConfig);
-    this._writeShortMemory(basePath, short);
+    await this._writeShortMemory(basePath, short);
 
     sessionData.shortMemoryCheckpoint = messages.length;
     sessionData.updatedAt = new Date().toISOString();
-    writeFileSync(sessionFile, JSON.stringify(sessionData, null, 2));
+    await writeFile(sessionFile, JSON.stringify(sessionData, null, 2));
     return true;
   }
 
   async maybeSummarize({ userId, userConfig }) {
     const basePath = this._resolveBasePath(userId);
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
-    const short = this._readShortMemory(basePath);
+    const short = await this._readShortMemory(basePath);
     const unextracted = this._flattenShortItems(short)
       .filter((i) => !i.extracted)
       .sort((a, b) => this._toTs(a.createdAt) - this._toTs(b.createdAt));
@@ -255,7 +252,7 @@ export class MemoryService {
       sessionId: i.sessionId,
       records: i.records,
     }));
-    const longMem = this._readJson(this._longPath(basePath), { facts: [] });
+    const longMem = await this._readJson(this._longPath(basePath), { facts: [] });
     const existingFacts = Array.isArray(longMem?.facts) ? longMem.facts : [];
 
     const modelSpec = resolveDefaultModelSpec({
@@ -266,7 +263,7 @@ export class MemoryService {
       globalConfig: this.globalConfig,
       userConfig,
     });
-    const longMemoryModel = this._readLongMemoryModel(basePath);
+    const longMemoryModel = await this._readLongMemoryModel(basePath);
     const prompt = [
       "你是长期记忆提炼器。",
       longMemoryModel
@@ -291,7 +288,7 @@ export class MemoryService {
     longMem.facts = Array.isArray(facts)
       ? facts.slice(-500)
       : existingFacts.slice(-500);
-    writeFileSync(this._longPath(basePath), JSON.stringify(longMem, null, 2));
+    await writeFile(this._longPath(basePath), JSON.stringify(longMem, null, 2));
 
     const targetIds = new Set(target.map((t) => t.id));
     // 提取后立即删除
@@ -301,6 +298,6 @@ export class MemoryService {
     this._assignShortItems(short, remained);
 
     this._compactShortMemory(short, userConfig);
-    this._writeShortMemory(basePath, short);
+    await this._writeShortMemory(basePath, short);
   }
 }
