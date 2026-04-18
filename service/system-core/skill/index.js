@@ -48,27 +48,4 @@ export class SkillService {
       }
     }));
   }
-
-  async getSkill({ userId, skillName }) {
-    const basePath = this._resolveBasePath(userId);
-    const root = path.join(basePath, "skills", skillName);
-    const flowPath = path.join(root, "flow.json");
-    const cfgPath = path.join(root, "config.json");
-    const indexPath = path.join(root, "knowledge-base/index.json");
-
-    const readJson = async (filePath, fallback = {}) => {
-      try {
-        await access(filePath);
-        return JSON.parse(await readFile(filePath, "utf8"));
-      } catch {
-        return fallback;
-      }
-    };
-
-    const flow = await readJson(flowPath, {});
-    const config = await readJson(cfgPath, {});
-    const kbIndex = await readJson(indexPath, {});
-
-    return { flow, config, kbIndex, root };
-  }
 }
