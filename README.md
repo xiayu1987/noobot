@@ -66,7 +66,7 @@ Browser
 ```bash
 git clone <your-repo-url>
 cd noobot
-cp service/config/global.config.json service/config/global.config.local.json # 可选：先备份一份
+cp service/config/global.config.example.json service/config/global.config.json 创建配置文件
 # 编辑 service/config/global.config.json，配置你要使用的模型与 API Key
 chmod +x start.sh
 ./start.sh
