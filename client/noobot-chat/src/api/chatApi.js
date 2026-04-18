@@ -46,6 +46,17 @@ export async function getSessionDetailApi(
   );
 }
 
+export async function deleteSessionApi(
+  { userId = "", sessionId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function chatSseApi({ payload }, { fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch("/api/chat/sse", {

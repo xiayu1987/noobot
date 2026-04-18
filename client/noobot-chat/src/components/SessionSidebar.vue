@@ -4,10 +4,12 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   ChatDotRound,
   CircleCheckFilled,
   CircleCloseFilled,
+  Delete,
   Expand,
   Fold,
   Key,
@@ -37,9 +39,48 @@ const emit = defineEmits([
   "update:connect-code",
   "connect",
   "new-session",
+  "delete-session",
   "refresh-sessions",
   "select-session",
 ]);
+
+const sessionListRef = ref(null);
+const lastSessionListScrollTop = ref(0);
+let listWrapEl = null;
+
+function resolveSessionListWrap() {
+  return (
+    sessionListRef.value?.wrapRef ||
+    sessionListRef.value?.$el?.querySelector?.(".el-scrollbar__wrap") ||
+    null
+  );
+}
+
+function onSessionListScroll() {
+  if (!listWrapEl) return;
+  lastSessionListScrollTop.value = Number(listWrapEl.scrollTop || 0);
+}
+
+function bindSessionListScrollListener() {
+  const nextWrap = resolveSessionListWrap();
+  if (!nextWrap) return;
+  if (listWrapEl && listWrapEl !== nextWrap) {
+    listWrapEl.removeEventListener("scroll", onSessionListScroll);
+  }
+  listWrapEl = nextWrap;
+  listWrapEl.addEventListener("scroll", onSessionListScroll, { passive: true });
+}
+
+async function restoreSessionListScrollTop() {
+  await nextTick();
+  bindSessionListScrollListener();
+  if (!listWrapEl) return;
+  const maxTop = Math.max(
+    0,
+    Number(listWrapEl.scrollHeight || 0) - Number(listWrapEl.clientHeight || 0),
+  );
+  listWrapEl.scrollTop = Math.min(lastSessionListScrollTop.value, maxTop);
+}
 
 function onUserIdChange(value) {
   emit("update:user-id", value);
@@ -48,6 +89,22 @@ function onUserIdChange(value) {
 function onConnectCodeChange(value) {
   emit("update:connect-code", value);
 }
+
+onMounted(() => {
+  bindSessionListScrollListener();
+});
+
+onBeforeUnmount(() => {
+  if (listWrapEl) listWrapEl.removeEventListener("scroll", onSessionListScroll);
+});
+
+watch(
+  () => props.sessions,
+  () => {
+    restoreSessionListScrollTop();
+  },
+  { deep: true },
+);
 </script>
 
 <template>
@@ -150,7 +207,7 @@ function onConnectCodeChange(value) {
       </div>
     </div>
 
-    <el-scrollbar class="session-list">
+    <el-scrollbar ref="sessionListRef" class="session-list">
       <div class="session-list-inner">
         <div
           v-for="sessionItem in sessions"
@@ -173,6 +230,14 @@ function onConnectCodeChange(value) {
               }}
             </div>
           </div>
+          <button
+            type="button"
+            class="session-delete-btn noobot-action-btn"
+            title="删除会话"
+            @click.stop="emit('delete-session', sessionItem.id)"
+          >
+            <el-icon><Delete /></el-icon>
+          </button>
         </div>
       </div>
     </el-scrollbar>
@@ -428,6 +493,31 @@ function onConnectCodeChange(value) {
   gap: 4px;
 }
 
+.session-delete-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--noobot-btn-soft-border);
+  background: var(--noobot-btn-soft-bg);
+  color: var(--noobot-text-muted);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.session-item:hover .session-delete-btn,
+.session-item.active .session-delete-btn {
+  opacity: 1;
+}
+
+.session-delete-btn:hover {
+  color: #fecaca;
+  border-color: #b91c1c;
+  background: rgba(185, 28, 28, 0.16);
+}
+
 .title {
   font-size: 14px;
   font-weight: 500;
@@ -484,7 +574,8 @@ function onConnectCodeChange(value) {
 .sidebar.collapsed .brand-left,
 .sidebar.collapsed .sidebar-header,
 .sidebar.collapsed .title,
-.sidebar.collapsed .sid {
+.sidebar.collapsed .sid,
+.sidebar.collapsed .session-delete-btn {
   display: none;
   opacity: 0;
 }

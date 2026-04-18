@@ -259,6 +259,19 @@ app.get("/internal/session/:userId/:sessionId", async (req, res) => {
   }
 });
 
+app.delete("/internal/session/:userId/:sessionId", async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    const result = await bot.session.deleteSessionBranch({
+      userId,
+      sessionId,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "delete session failed" });
+  }
+});
+
 app.get("/internal/sessions/:userId", async (req, res) => {
   try {
     const { userId } = req.params;

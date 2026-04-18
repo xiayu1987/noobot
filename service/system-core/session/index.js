@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
 import { mergeConfig } from "../config/index.js";
@@ -906,5 +906,75 @@ export class SessionManager {
     sessionBundle.session.updatedAt = this._now();
     await this._writeJson(sessionFile, sessionBundle.session);
     return sessionBundle.session;
+  }
+
+  async deleteSessionBranch({ userId, sessionId }) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) {
+      throw new Error("sessionId required");
+    }
+    const basePath = this._resolveBasePath(userId);
+    const sessionTree = await this._readSessionTree(basePath);
+    const nodeExists = Boolean(sessionTree?.nodes?.[normalizedSessionId]);
+
+    const toDelete = [];
+    if (nodeExists) {
+      const queue = [normalizedSessionId];
+      const visited = new Set();
+      while (queue.length) {
+        const currentId = String(queue.shift() || "").trim();
+        if (!currentId || visited.has(currentId)) continue;
+        visited.add(currentId);
+        toDelete.push(currentId);
+        const children = Array.isArray(sessionTree?.nodes?.[currentId]?.children)
+          ? sessionTree.nodes[currentId].children
+          : [];
+        for (const child of children) queue.push(child);
+      }
+    } else {
+      toDelete.push(normalizedSessionId);
+    }
+
+    const deletedSessionIds = [];
+    for (const id of toDelete) {
+      let sessionDir = "";
+      try {
+        const sessionFile = await this._sessionFile(basePath, id);
+        sessionDir = path.dirname(sessionFile);
+      } catch {
+        sessionDir = path.join(this._sessionRoot(basePath), id);
+      }
+      await rm(sessionDir, { recursive: true, force: true });
+      deletedSessionIds.push(id);
+    }
+
+    if (nodeExists) {
+      const deleteSet = new Set(deletedSessionIds);
+      const nextNodes = {};
+      for (const [id, node] of Object.entries(sessionTree?.nodes || {})) {
+        if (deleteSet.has(id)) continue;
+        nextNodes[id] = {
+          ...node,
+          children: Array.isArray(node?.children)
+            ? node.children.filter((childId) => !deleteSet.has(String(childId || "").trim()))
+            : [],
+          updatedAt: this._now(),
+        };
+      }
+      const nextTree = {
+        roots: (sessionTree?.roots || []).filter(
+          (rootId) => !deleteSet.has(String(rootId || "").trim()),
+        ),
+        nodes: nextNodes,
+        updatedAt: this._now(),
+      };
+      await this._writeSessionTree(basePath, nextTree);
+    }
+
+    return {
+      ok: true,
+      sessionId: normalizedSessionId,
+      deletedSessionIds,
+    };
   }
 }

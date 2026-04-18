@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { Menu, Star } from "@element-plus/icons-vue";
 import MarkdownIt from "markdown-it";
 import WorkspacePanel from "./WorkspacePanel.vue";
@@ -171,6 +171,7 @@ const {
   newSession,
   fetchSessions,
   selectSession,
+  deleteSession,
   send,
   onUploadChange,
   clearUploads,
@@ -195,6 +196,24 @@ fetchSessionsAfterConnect = fetchSessions;
 function handleSelectSession(sessionId, options = {}) {
   closeMobileSidebarOnSelect(isMobile, mobileSidebarOpen);
   return selectSession(sessionId, options);
+}
+
+async function handleDeleteSession(sessionId) {
+  try {
+    await ElMessageBox.confirm("确定要删除吗？", "删除会话", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+      type: "warning",
+    });
+  } catch {
+    return;
+  }
+  try {
+    await deleteSession(sessionId);
+    ElMessage.success("会话已删除");
+  } catch (error) {
+    ElMessage.error(error.message || "删除会话失败");
+  }
 }
 
 onMounted(async () => {
@@ -244,6 +263,7 @@ onBeforeUnmount(() => {
       @update:connect-code="onConnectCodeUpdate"
       @connect="connectBackend"
       @new-session="newSession"
+      @delete-session="handleDeleteSession"
       @refresh-sessions="fetchSessions"
       @select-session="handleSelectSession"
     />

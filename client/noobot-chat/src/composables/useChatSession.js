@@ -13,6 +13,7 @@ import {
 } from "./messageModel";
 import {
   chatSseApi,
+  deleteSessionApi,
   getSessionDetailApi,
   getSessionsApi,
 } from "../api/chatApi";
@@ -89,6 +90,53 @@ export function useChatSession({
     createLocalSession();
   }
 
+  async function deleteSession(sessionId = "") {
+    const targetSessionId = String(sessionId || "").trim();
+    if (!targetSessionId) return false;
+    if (sending.value) {
+      ElMessage.warning("发送中，暂不能删除会话");
+      return false;
+    }
+
+    const index = sessions.value.findIndex(
+      (sessionItem) => sessionItem.id === targetSessionId,
+    );
+    if (index < 0) return false;
+    const targetSession = sessions.value[index];
+
+    if (targetSession?.isLocal) {
+      revokeMessagePreviewUrls(targetSession.messages || []);
+      sessions.value.splice(index, 1);
+      if (!sessions.value.length) {
+        createLocalSession();
+      } else if (activeSessionId.value === targetSessionId) {
+        activeSessionId.value = sessions.value[0].id;
+        await selectSession(activeSessionId.value, { force: true });
+      }
+      return true;
+    }
+
+    if (!ensureConnected()) return false;
+    const isDeletingActive = activeSessionId.value === targetSessionId;
+    const fallbackNextSessionId = isDeletingActive
+      ? String(
+          sessions.value[index + 1]?.id ||
+            sessions.value[index - 1]?.id ||
+            "",
+        )
+      : String(activeSessionId.value || "");
+    const res = await deleteSessionApi(
+      { userId: userId.value, sessionId: targetSessionId },
+      { fetcher: authFetch },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "删除会话失败");
+    }
+    await fetchSessions(fallbackNextSessionId);
+    return true;
+  }
+
   function mapSummaryToSession(item) {
     const messages = Array.isArray(item.messages) ? item.messages : [];
     const lastMessage = messages.length ? messages[messages.length - 1] : null;
@@ -120,11 +168,11 @@ export function useChatSession({
     }
   }
 
-  async function fetchSessions() {
+  async function fetchSessions(preferredActiveId = "") {
     if (!ensureConnected()) return;
     loadingSessions.value = true;
     try {
-      const prevActiveId = activeSessionId.value;
+      const prevActiveId = String(preferredActiveId || activeSessionId.value || "");
       const res = await getSessionsApi(
         { userId: userId.value },
         { fetcher: authFetch },
@@ -536,6 +584,7 @@ export function useChatSession({
     loadingSessions,
     loadingSessionDetail,
     newSession,
+    deleteSession,
     fetchSessions,
     selectSession,
     send,
