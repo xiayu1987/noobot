@@ -71,8 +71,8 @@ main() {
   [[ -d "$SERVICE_DIR" ]] || { echo "后端目录不存在: $SERVICE_DIR" >&2; exit 1; }
   mkdir -p "$PM2_HOME_DIR"
 
-  log "1/5 更新代码"
-  update_code
+  # log "1/5 更新代码"
+  # update_code
 
   log "2/5 安装依赖"
   npm --prefix "$CLIENT_DIR" install
