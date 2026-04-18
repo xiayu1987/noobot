@@ -44,27 +44,51 @@ export class SessionManager {
     return this._loopSession(parentSessionId, tree, nextChain);
   }
 
-  async _sessionDir(basePath, sessionId) {
+  async _sessionDir(basePath, sessionId, parentSessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return this._sessionRoot(basePath);
+
+    const normalizedParentSessionId = String(parentSessionId || "").trim();
+    if (
+      normalizedParentSessionId &&
+      normalizedParentSessionId !== normalizedSessionId
+    ) {
+      const parentDir = await this._sessionDir(
+        basePath,
+        normalizedParentSessionId,
+      );
+      return path.join(parentDir, normalizedSessionId);
+    }
+
     return path.join(
       this._sessionRoot(basePath),
       ...this._loopSession(
-        sessionId,
+        normalizedSessionId,
         await this._readSessionTree(basePath),
         [],
       ).reverse(),
     );
   }
 
-  async _sessionFile(basePath, sessionId) {
-    return path.join(await this._sessionDir(basePath, sessionId), "session.json");
+  async _sessionFile(basePath, sessionId, parentSessionId = "") {
+    return path.join(
+      await this._sessionDir(basePath, sessionId, parentSessionId),
+      "session.json",
+    );
   }
 
-  async _taskFile(basePath, sessionId) {
-    return path.join(await this._sessionDir(basePath, sessionId), "task.json");
+  async _taskFile(basePath, sessionId, parentSessionId = "") {
+    return path.join(
+      await this._sessionDir(basePath, sessionId, parentSessionId),
+      "task.json",
+    );
   }
 
-  async _executionFile(basePath, sessionId) {
-    return path.join(await this._sessionDir(basePath, sessionId), "execution.json");
+  async _executionFile(basePath, sessionId, parentSessionId = "") {
+    return path.join(
+      await this._sessionDir(basePath, sessionId, parentSessionId),
+      "execution.json",
+    );
   }
 
   _sessionTreeFile(basePath) {
