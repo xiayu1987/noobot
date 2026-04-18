@@ -33,4 +33,5 @@ client/noobot-chat/package-lock.json
 # local workspace data
 workspaces/
 workspace/
+!/user-template/default-user/runtime/workspace/
 service/config/global.config.json
