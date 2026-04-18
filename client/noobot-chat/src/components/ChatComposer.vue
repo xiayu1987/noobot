@@ -13,10 +13,12 @@ const props = defineProps({
   sending: { type: Boolean, default: false },
   connected: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
+  allowUserInteraction: { type: Boolean, default: true },
 });
 
 const emit = defineEmits([
   "update:modelValue",
+  "update:allowUserInteraction",
   "upload-change",
   "clear-uploads",
   "send",
@@ -56,6 +58,10 @@ function onStop() {
   emit("stop");
 }
 
+function onAllowUserInteractionChange(value) {
+  emit("update:allowUserInteraction", Boolean(value));
+}
+
 defineExpose({
   clearUploadSelection,
 });
@@ -75,6 +81,7 @@ defineExpose({
         <el-icon :size="20"><VideoPause /></el-icon>
       </el-button>
 
+      <!-- 顶部工具栏：附件上传与标签 -->
       <div class="toolbar">
         <el-upload
           ref="uploadRef"
@@ -103,6 +110,7 @@ defineExpose({
         </div>
       </div>
 
+      <!-- 输入区域 -->
       <div class="input-area">
         <el-input
           :model-value="modelValue"
@@ -114,6 +122,21 @@ defineExpose({
           @update:model-value="onInputChange"
           @keydown.enter.exact.prevent="onSend"
         />
+      </div>
+
+      <!-- 底部操作栏：交互开关与发送按钮对齐 -->
+      <div class="bottom-actions">
+        <div class="composer-options">
+          <el-switch
+            :model-value="allowUserInteraction"
+            inline-prompt
+            active-text="允许交互"
+            inactive-text="禁止交互"
+            @update:model-value="onAllowUserInteractionChange"
+            class="interaction-switch"
+          />
+        </div>
+        
         <el-button
           type="primary"
           class="send-btn noobot-action-btn"
@@ -138,7 +161,7 @@ defineExpose({
 }
 
 .composer {
-  position: relative; /* 作为悬浮按钮的参考系 */
+  position: relative;
   max-width: 800px;
   margin: 0 auto;
   background: #141926;
@@ -149,32 +172,36 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%;
   box-sizing: border-box;
+}
+
+.composer:focus-within {
+  border-color: #5a78bc;
+  box-shadow: 0 4px 20px rgba(38, 78, 164, 0.28);
 }
 
 .stop-float-btn {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: -60px; /* 离开对话框一段距离，悬浮在上方 */
-  z-index: 50; /* 提高层级，确保不被上方聊天记录遮挡 */
+  top: -60px;
+  z-index: 50;
   width: 40px;
   height: 40px;
   padding: 0 !important;
   border-radius: 50% !important;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-  /* 使用 Flexbox 确保内部图标完美居中，且按钮本身不被压缩 */
   display: flex;
   justify-content: center;
   align-items: center;
   flex-shrink: 0;
+  transition: transform 0.2s;
 }
 
-.composer:focus-within {
-  border-color: #5a78bc;
-  box-shadow: 0 4px 20px rgba(38, 78, 164, 0.28);
+.stop-float-btn:hover {
+  transform: translateX(-50%) scale(1.05);
 }
 
 .toolbar {
@@ -186,11 +213,12 @@ defineExpose({
 
 .poe-upload-btn {
   border-radius: 999px;
-  border: 1px solid var(--noobot-btn-secondary-border);
-  background: var(--noobot-btn-secondary-bg);
-  color: var(--noobot-btn-secondary-text);
+  border: 1px solid var(--noobot-btn-secondary-border, #323e5c);
+  background: var(--noobot-btn-secondary-bg, #1a2132);
+  color: var(--noobot-btn-secondary-text, #cfd9f8);
   padding: 0 12px;
   flex-shrink: 0;
+  transition: all 0.2s;
 }
 
 .btn-icon {
@@ -198,7 +226,7 @@ defineExpose({
 }
 
 .poe-upload-btn:hover {
-  background: var(--noobot-btn-secondary-bg-hover);
+  background: var(--noobot-btn-secondary-bg-hover, #232d45);
   border-color: #42507a;
 }
 
@@ -235,15 +263,13 @@ defineExpose({
 }
 
 .input-area {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-input {
-  flex: 1;
-  min-width: 0; /* 关键：防止在 flex 容器中被内容撑破导致变形 */
+  width: 100%;
 }
 
 .chat-input :deep(.el-textarea__inner) {
@@ -260,11 +286,38 @@ defineExpose({
   color: #7b86a7;
 }
 
+/* 底部操作栏：左右分布，垂直居中对齐 */
+.bottom-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+.composer-options {
+  display: flex;
+  align-items: center;
+}
+
+.interaction-switch {
+  --el-switch-on-color: #3b5998;
+  --el-switch-off-color: #4a5568;
+}
+
 .send-btn {
-  padding: 12px 20px;
+  padding: 10px 24px;
   height: auto;
   border-radius: 12px !important;
-  flex-shrink: 0; /* 关键：防止移动端屏幕变窄时发送按钮被挤压变形 */
+  font-weight: 500;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.send-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
 }
 
 @media (max-width: 768px) {
@@ -281,11 +334,15 @@ defineExpose({
   }
 
   .attachment-pill {
-    max-width: 140px; /* 移动端适当减小附件胶囊的最大宽度 */
+    max-width: 140px;
+  }
+
+  .bottom-actions {
+    margin-top: 2px;
   }
 
   .send-btn {
-    padding: 10px 16px; /* 移动端适当缩小按钮内边距 */
+    padding: 8px 18px;
   }
 }
 </style>

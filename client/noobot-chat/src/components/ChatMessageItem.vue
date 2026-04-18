@@ -33,8 +33,13 @@ defineProps({
             messageItem.type
           }}</el-tag>
         </div>
-        <div v-if="messageItem.role === 'assistant' && messageItem.pending" class="message-pending">
-          <span class="pending-dot"></span> 生成中...
+        <div
+          v-if="messageItem.role === 'assistant' && (messageItem.pending || messageItem.statusLabel)"
+          class="message-pending"
+          :class="{ done: !messageItem.pending }"
+        >
+          <span class="pending-dot"></span>
+          {{ messageItem.pending ? "生成中..." : messageItem.statusLabel }}
         </div>
 
         <div v-if="messageItem.attachments?.length" class="msg-attachments">
@@ -176,6 +181,19 @@ defineProps({
   border-radius: 50%;
   background: var(--noobot-msg-pending-dot);
   animation: pendingPulse 0.9s ease-in-out infinite;
+}
+
+.message-pending.done .pending-dot {
+  background: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2), 0 0 10px rgba(52, 211, 153, 0.9);
+  animation: none;
+  opacity: 1;
+  transform: scale(1);
+}
+
+.message-pending.done {
+  color: #86efac;
+  font-weight: 600;
 }
 
 @keyframes pendingPulse {

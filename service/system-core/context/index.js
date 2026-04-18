@@ -29,6 +29,7 @@ export class ContextBuilder {
     skillService,
     botManager = null,
     userInteractionBridge = null,
+    runConfig = {},
   }) {
     this.globalConfig = globalConfig;
     this.userConfig = userConfig;
@@ -44,6 +45,7 @@ export class ContextBuilder {
     this.skillService = skillService;
     this.botManager = botManager;
     this.userInteractionBridge = userInteractionBridge;
+    this.runConfig = runConfig;
     this._effectiveConfigCache = null;
   }
 
@@ -92,6 +94,9 @@ export class ContextBuilder {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
       globalDefaults: {
         workspaceRoot: this.globalConfig?.workspaceRoot || "",
+      },
+      config: {
+        allowUserInteraction: this.runConfig?.allowUserInteraction !== false,
       },
     };
   }

@@ -21,6 +21,7 @@ import {
 export function useChatSession({
   userId,
   apiKey,
+  allowUserInteraction,
   connected,
   ensureConnected,
   authFetch,
@@ -492,6 +493,7 @@ export function useChatSession({
 
     const botMsg = appendMessage("assistant", "");
     botMsg.pending = true;
+    botMsg.statusLabel = "";
     scrollBottom();
 
     try {
@@ -504,6 +506,10 @@ export function useChatSession({
         sessionId: activeSession.value.backendSessionId || activeSession.value.id,
         message: text || "请先读取我上传的附件并总结关键信息。",
         attachments,
+        config: {
+          allowUserInteraction:
+            allowUserInteraction?.value === false ? false : true,
+        },
       };
 
       await streamChat(payload, ({ event, data }) => {
@@ -526,6 +532,7 @@ export function useChatSession({
           pendingInteractionRequest.value = null;
           finalDoneEventData = data || {};
           botMsg.pending = false;
+          botMsg.statusLabel = "生成完成";
           botMsg.dialogProcessId =
             data.dialogProcessId || botMsg.dialogProcessId || "";
           const returnedId = data.sessionId || activeSession.value.backendSessionId;
@@ -566,6 +573,7 @@ export function useChatSession({
           scrollBottom();
         } else if (event === "stopped") {
           botMsg.pending = false;
+          botMsg.statusLabel = "已停止";
           pendingInteractionRequest.value = null;
           if (!String(botMsg.content || "").trim()) {
             botMsg.content = "（已停止）";
@@ -596,11 +604,13 @@ export function useChatSession({
       botMsg.pending = false;
       pendingInteractionRequest.value = null;
       if (stopRequested.value) {
+        botMsg.statusLabel = "已停止";
         if (!String(botMsg.content || "").trim()) {
           botMsg.content = "（已停止）";
         }
         return;
       }
+      botMsg.statusLabel = "生成失败";
       const errorMessage = error.message || "未知错误";
       botMsg.error = errorMessage;
       if (!botMsg.content?.trim()) {

@@ -20,6 +20,9 @@ import { useChatSession } from "../composables/useChatSession";
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
 const userId = ref(localStorage.getItem("noobot_user_id") || "user-001");
+const allowUserInteraction = ref(
+  localStorage.getItem("noobot_allow_user_interaction") !== "false",
+);
 const composerRef = ref();
 const listRef = ref();
 const isMobile = ref(false);
@@ -195,6 +198,7 @@ const {
 } = useChatSession({
   userId,
   apiKey,
+  allowUserInteraction,
   connected,
   ensureConnected,
   authFetch,
@@ -244,6 +248,14 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", updateViewportState);
   releaseAllPreviewUrls();
 });
+
+function onAllowUserInteractionUpdate(value) {
+  allowUserInteraction.value = Boolean(value);
+  localStorage.setItem(
+    "noobot_allow_user_interaction",
+    allowUserInteraction.value ? "true" : "false",
+  );
+}
 </script>
 
 <template>
@@ -361,7 +373,9 @@ onBeforeUnmount(() => {
         :sending="sending"
         :can-stop="sending"
         :connected="connected"
+        :allow-user-interaction="allowUserInteraction"
         @upload-change="onUploadChange"
+        @update:allow-user-interaction="onAllowUserInteractionUpdate"
         @clear-uploads="clearUploads"
         @send="send"
         @stop="stopSending"

@@ -24,6 +24,9 @@ function getRuntime(agentContext) {
 export function createAgentCollabTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const systemRuntime = runtime.systemRuntime || {};
+  const runConfig = {
+    allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
+  };
   const botManager = runtime.botManager || null;
   const userId = agentContext?.userId || runtime.userId || "";
   const runtimeEventListener = runtime.eventListener || null;
@@ -162,6 +165,7 @@ export function createAgentCollabTool({ agentContext }) {
         eventListener: runtimeEventListener,
         sourceDialogProcessId: String(sourceDialogProcessId || ""),
         userInteractionBridge,
+        runConfig,
       });
       return JSON.stringify(result, null, 2);
     },

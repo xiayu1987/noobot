@@ -167,6 +167,17 @@ function requireSuperAdmin(req, res, next) {
   next();
 }
 
+function normalizeRunConfig(input = {}) {
+  const allowUserInteractionRaw = input?.allowUserInteraction;
+  const allowUserInteraction =
+    allowUserInteractionRaw === undefined
+      ? true
+      : Boolean(allowUserInteractionRaw);
+  return {
+    allowUserInteraction,
+  };
+}
+
 app.post("/internal/connect", async (req, res) => {
   try {
     const userId = String(req.body?.userId || "").trim();
@@ -243,7 +254,14 @@ app.put("/internal/admin/users", requireSuperAdmin, async (req, res) => {
 
 async function handleChat(req, res) {
   try {
-    const { userId, sessionId, parentSessionId = "", message, attachments = [] } = req.body;
+    const {
+      userId,
+      sessionId,
+      parentSessionId = "",
+      message,
+      attachments = [],
+      config = {},
+    } = req.body;
     if (!userId || !sessionId || !message)
       throw new Error("userId/sessionId/message required");
     const result = await bot.runSession({
@@ -253,6 +271,7 @@ async function handleChat(req, res) {
       caller: "user",
       message,
       attachments,
+      runConfig: normalizeRunConfig(config),
     });
     res.json({ ok: true, ...result });
   } catch (err) {
@@ -556,6 +575,7 @@ wsServer.on("connection", (ws, request) => {
         parentSessionId = "",
         message,
         attachments = [],
+        config = {},
       } = payload || {};
 
       if (!userId || !sessionId || !message) {
@@ -603,6 +623,7 @@ wsServer.on("connection", (ws, request) => {
         eventListener,
         abortSignal,
         userInteractionBridge,
+        runConfig: normalizeRunConfig(config),
       });
 
       if (abortSignal?.aborted) {

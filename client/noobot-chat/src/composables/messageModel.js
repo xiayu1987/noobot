@@ -44,6 +44,7 @@ function createMessageModel(messageItem = {}) {
     expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
     error: messageItem.error || "",
     pending: Boolean(messageItem.pending),
+    statusLabel: messageItem.statusLabel || "",
     ts: messageItem.ts || new Date().toISOString(),
     taskId: messageItem.taskId || "",
   };

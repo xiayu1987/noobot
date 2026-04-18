@@ -13,6 +13,9 @@ import { createModelTool } from "./model-tool.js";
 import { createUserInteractionTool } from "./user-interaction-tool.js";
 
 export function buildTools(ctx) {
+  const allowUserInteraction =
+    ctx?.agentContext?.runtime?.systemRuntime?.config?.allowUserInteraction !==
+    false;
   return [
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
@@ -21,6 +24,6 @@ export function buildTools(ctx) {
     ...createServiceTool(ctx),
     ...createAgentCollabTool(ctx),
     ...createModelTool(ctx),
-    ...createUserInteractionTool(ctx),
+    ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
 }

@@ -51,7 +51,10 @@ watch(
 
 <template>
   <div v-if="request" class="interaction-card">
-    <div class="interaction-title">{{ request.content || "需要确认/补充信息" }}</div>
+    <div class="interaction-head">
+      <span class="interaction-badge">待确认</span>
+      <div class="interaction-title">{{ request.content || "需要确认/补充信息" }}</div>
+    </div>
 
     <el-form
       v-if="Array.isArray(request.fields) && request.fields.length"
@@ -80,6 +83,7 @@ watch(
 
 <style scoped>
 .interaction-card {
+  position: relative;
   margin: 0 max(24px, calc(50% - 400px)) 12px;
   padding: 14px 16px;
   border: 1px solid #2c3a55;
@@ -87,11 +91,41 @@ watch(
   background: #111827;
 }
 
+.interaction-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, #facc15, #fb7185);
+  box-shadow: 0 0 12px rgba(251, 113, 133, 0.6);
+}
+
+.interaction-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.interaction-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+  background: linear-gradient(135deg, #fde047, #fb7185);
+  box-shadow: 0 0 12px rgba(251, 113, 133, 0.45);
+}
+
 .interaction-title {
   color: #e8efff;
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .interaction-form :deep(.el-form-item__label) {
