@@ -47,10 +47,14 @@ export function createServiceTool({ agentContext }) {
     description:
       "调用外部服务。必须传 serviceName 和 endpointName，可传 queryString/body。",
     schema: z.object({
-      serviceName: z.string(),
-      endpointName: z.string(),
-      queryString: z.object({}).loose().optional(),
-      body: z.unknown().optional(),
+      serviceName: z.string().describe("服务名称，对应 services 下的 key"),
+      endpointName: z.string().describe("端点名称，对应 services.<name>.endpoints 下的 key"),
+      queryString: z
+        .object({})
+        .loose()
+        .optional()
+        .describe("查询参数对象，将拼接到 URL"),
+      body: z.unknown().optional().describe("请求体内容"),
     }),
     func: async ({ serviceName, endpointName, queryString = {}, body }) => {
       const globalConfig = agentContext?.runtime?.globalConfig || {};

@@ -41,7 +41,7 @@ export function createSkillTool({ agentContext, sessionId }) {
 - path：完整路径\
 用途：用于浏览和定位技能文件结构。",
     schema: z.object({
-      parentSkill: z.string().optional(),
+      parentSkill: z.string().optional().describe("要浏览的技能子路径（相对 skills 根目录）"),
     }),
     func: async ({ parentSkill }) => {
       try {
@@ -91,11 +91,11 @@ export function createSkillTool({ agentContext, sessionId }) {
     description:
       "设置 skill 任务状态。action=start 表示开始任务（仅匹配到技能后调用）；action=finish 表示结束任务（仅正确返回完整结果后调用，报错/需要确认/需要询问时禁止调用）。",
     schema: z.object({
-      action: z.enum(["start", "finish"]),
-      skillName: z.string().optional(),
-      taskName: z.string().optional(),
-      taskId: z.string().optional(),
-      result: z.string().optional(),
+      action: z.enum(["start", "finish"]).describe("任务动作：start 或 finish"),
+      skillName: z.string().optional().describe("技能名称，action=start 时必填"),
+      taskName: z.string().optional().describe("任务名称，action=start 时可填"),
+      taskId: z.string().optional().describe("任务ID，action=finish 时可填"),
+      result: z.string().optional().describe("任务结果说明，action=finish 时可填"),
     }),
     func: async ({ action, skillName, taskName, taskId, result }) => {
       if (!sessionManager || !sessionId || !userId || !basePath)

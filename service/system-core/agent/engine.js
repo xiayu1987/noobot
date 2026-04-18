@@ -333,7 +333,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
 }
 
-function filterAgentCollabToolsByDepth({
+async function filterAgentCollabToolsByDepth({
   agentContext,
   effectiveConfig,
   eventListener,
@@ -364,7 +364,7 @@ function filterAgentCollabToolsByDepth({
   let parentDepth = 0;
   try {
     parentDepth = Number(
-      sessionManager.getSessionDepth({
+      await sessionManager.getSessionDepth({
         userId,
         sessionId: parentSessionId,
       }) || 0,
@@ -406,7 +406,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
   const eventListener = runtime.eventListener || null;
   const abortSignal = runtime.abortSignal || null;
   const dialogProcessId = sys.dialogProcessId || "";
-  const tools = filterAgentCollabToolsByDepth({
+  const tools = await filterAgentCollabToolsByDepth({
     agentContext,
     effectiveConfig,
     eventListener,

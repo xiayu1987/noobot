@@ -10,6 +10,7 @@ import { Menu, Star } from "@element-plus/icons-vue";
 import MarkdownIt from "markdown-it";
 import WorkspacePanel from "./WorkspacePanel.vue";
 import UserSettingsPanel from "./UserSettingsPanel.vue";
+import UserInteractionForm from "./UserInteractionForm.vue";
 import ChatComposer from "./ChatComposer.vue";
 import SessionSidebar from "./SessionSidebar.vue";
 import ChatMessageItem from "./ChatMessageItem.vue";
@@ -140,6 +141,14 @@ function openUserSettings() {
   userSettingsVisible.value = true;
 }
 
+function handleInteractionConfirm(payload = {}) {
+  try {
+    submitInteractionResponse(payload || {});
+  } catch (error) {
+    ElMessage.error(error.message || "提交交互信息失败");
+  }
+}
+
 function scrollBottom() {
   nextTick(() => {
     const scrollbar = listRef.value;
@@ -174,6 +183,9 @@ const {
   deleteSession,
   send,
   stopSending,
+  pendingInteractionRequest,
+  interactionSubmitting,
+  submitInteractionResponse,
   onUploadChange,
   clearUploads,
   shouldRenderMessageInChat,
@@ -334,6 +346,13 @@ onBeforeUnmount(() => {
           </div>
         </el-scrollbar>
       </div>
+
+      <UserInteractionForm
+        v-if="pendingInteractionRequest"
+        :request="pendingInteractionRequest"
+        :submitting="interactionSubmitting"
+        @confirm="handleInteractionConfirm"
+      />
 
       <ChatComposer
         ref="composerRef"

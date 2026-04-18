@@ -27,6 +27,7 @@ export function createAgentCollabTool({ agentContext }) {
   const botManager = runtime.botManager || null;
   const userId = agentContext?.userId || runtime.userId || "";
   const runtimeEventListener = runtime.eventListener || null;
+  const userInteractionBridge = runtime.userInteractionBridge || null;
   const sourceDialogProcessId = systemRuntime.dialogProcessId || "";
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
@@ -58,8 +59,8 @@ export function createAgentCollabTool({ agentContext }) {
     name: "write_task_deliverable_file",
     description: "子任务写入任务交付物文件。文件名重复会报错。",
     schema: z.object({
-      fileName: z.string(),
-      content: z.string(),
+      fileName: z.string().describe("交付物文件名（仅文件名，不可含路径分隔符）"),
+      content: z.string().describe("交付物文件内容"),
     }),
     func: async ({ fileName, content }) => {
       try {
@@ -89,7 +90,7 @@ export function createAgentCollabTool({ agentContext }) {
     name: "read_task_deliverable_file",
     description: "读取子任务交付物文件",
     schema: z.object({
-      fileName: z.string(),
+      fileName: z.string().describe("交付物文件名（仅文件名，不可含路径分隔符）"),
     }),
     func: async ({ fileName }) => {
       try {
@@ -124,11 +125,11 @@ export function createAgentCollabTool({ agentContext }) {
     description:
       "多agent协助：异步执行子任务。传入父sessionid、任务、共享任务说明、规定最终交付物（文件名及说明）；可选传sessionId以继续之前子会话。",
     schema: z.object({
-      parentSessionId: z.string(),
-      sessionId: z.string().optional(),
-      task: z.string(),
-      sharedTaskSpec: z.string().optional(),
-      deliverable: z.string(),
+      parentSessionId: z.string().describe("父会话ID（UUID）"),
+      sessionId: z.string().optional().describe("子会话ID（UUID，可选，传入则续用）"),
+      task: z.string().describe("子任务内容"),
+      sharedTaskSpec: z.string().optional().describe("共享任务说明"),
+      deliverable: z.string().describe("最终交付物要求（文件名及说明）"),
     }),
     func: async ({
       parentSessionId,
@@ -161,6 +162,7 @@ export function createAgentCollabTool({ agentContext }) {
         deliverable: String(deliverable || "").trim(),
         eventListener: runtimeEventListener,
         sourceDialogProcessId: String(sourceDialogProcessId || ""),
+        userInteractionBridge,
       });
       return JSON.stringify(result, null, 2);
     },
@@ -171,11 +173,11 @@ export function createAgentCollabTool({ agentContext }) {
     description:
       "等待异步子会话结果。传入父sessionid、sessionId、任务、最终交付物（文件名及说明），可选最大等待毫秒（可被用户配置覆盖默认值）。约束：父agent完成自身任务后才等待",
     schema: z.object({
-      parentSessionId: z.string(),
-      sessionId: z.string(),
-      task: z.string(),
-      deliverable: z.string(),
-      timeoutMs: z.number().int().positive().optional(),
+      parentSessionId: z.string().describe("父会话ID（UUID）"),
+      sessionId: z.string().describe("子会话ID（UUID）"),
+      task: z.string().describe("子任务内容（用于结果关联）"),
+      deliverable: z.string().describe("最终交付物要求（用于结果关联）"),
+      timeoutMs: z.number().int().positive().optional().describe("最大等待毫秒数"),
     }),
     func: async ({
       parentSessionId,

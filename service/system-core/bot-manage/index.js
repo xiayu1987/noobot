@@ -86,6 +86,7 @@ export class BotManager {
     userConfig,
     attachments,
     eventListener,
+    userInteractionBridge = null,
   }) {
     return new ContextBuilder({
       globalConfig: this.globalConfig,
@@ -101,6 +102,7 @@ export class BotManager {
       attachmentService: this.attach,
       skillService: this.skill,
       botManager: this,
+      userInteractionBridge,
     });
   }
 
@@ -114,6 +116,7 @@ export class BotManager {
     attachments,
     eventListener,
     dialogProcessId = "",
+    userInteractionBridge = null,
   }) {
     const contextBuilder = this._buildContextBuilder({
       userId,
@@ -123,6 +126,7 @@ export class BotManager {
       userConfig,
       attachments,
       eventListener,
+      userInteractionBridge,
     });
     emitEvent(eventListener, "context_building", { sessionId, mode });
     const agentContext =
@@ -268,6 +272,7 @@ export class BotManager {
     caller = "user",
     parentSessionId = "",
     abortSignal = null,
+    userInteractionBridge = null,
   }) {
     try {
       if (!message) throw new Error("userId/sessionId/message required");
@@ -350,6 +355,7 @@ export class BotManager {
         attachments: ingestedAttachments,
         eventListener: runtimeEventListener,
         dialogProcessId,
+        userInteractionBridge,
       });
 
       await this._appendSessionTurn({
@@ -487,6 +493,7 @@ export class BotManager {
     attachments = [],
     eventListener = null,
     sourceDialogProcessId = "",
+    userInteractionBridge = null,
   }) {
     if (!userId || !parentSessionId) {
       throw new Error("userId/parentSessionId required");
@@ -541,6 +548,7 @@ export class BotManager {
       message,
       attachments,
       eventListener: asyncEventListener,
+      userInteractionBridge,
     })
       .then((result) => {
         job.status = "completed";

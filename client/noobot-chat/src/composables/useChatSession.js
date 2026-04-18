@@ -38,6 +38,8 @@ export function useChatSession({
   const loadingSessionDetail = ref(false);
   const activeChatSocket = ref(null);
   const stopRequested = ref(false);
+  const pendingInteractionRequest = ref(null);
+  const interactionSubmitting = ref(false);
 
   const activeSession = computed(() =>
     sessions.value.find((sessionItem) => sessionItem.id === activeSessionId.value),
@@ -425,6 +427,24 @@ export function useChatSession({
     return false;
   }
 
+  function submitInteractionResponse(response = {}) {
+    const request = pendingInteractionRequest.value;
+    const ws = activeChatSocket.value;
+    if (!request?.requestId || !ws || ws.readyState !== WebSocket.OPEN) {
+      throw new Error("交互通道不可用");
+    }
+    interactionSubmitting.value = true;
+    ws.send(
+      JSON.stringify({
+        action: "interaction_response",
+        requestId: request.requestId,
+        response: response || {},
+      }),
+    );
+    pendingInteractionRequest.value = null;
+    interactionSubmitting.value = false;
+  }
+
   function toBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -494,7 +514,16 @@ export function useChatSession({
         } else if (event === "delta") {
           botMsg.content += data.text || "";
           scrollBottom();
+        } else if (event === "interaction_request") {
+          pendingInteractionRequest.value = {
+            requestId: String(data?.requestId || ""),
+            content: String(data?.content || ""),
+            fields: Array.isArray(data?.fields) ? data.fields : [],
+            dialogProcessId: String(data?.dialogProcessId || ""),
+          };
+          scrollBottom();
         } else if (event === "done") {
+          pendingInteractionRequest.value = null;
           finalDoneEventData = data || {};
           botMsg.pending = false;
           botMsg.dialogProcessId =
@@ -537,6 +566,7 @@ export function useChatSession({
           scrollBottom();
         } else if (event === "stopped") {
           botMsg.pending = false;
+          pendingInteractionRequest.value = null;
           if (!String(botMsg.content || "").trim()) {
             botMsg.content = "（已停止）";
           }
@@ -564,6 +594,7 @@ export function useChatSession({
       }
     } catch (error) {
       botMsg.pending = false;
+      pendingInteractionRequest.value = null;
       if (stopRequested.value) {
         if (!String(botMsg.content || "").trim()) {
           botMsg.content = "（已停止）";
@@ -581,6 +612,7 @@ export function useChatSession({
     } finally {
       sending.value = false;
       stopRequested.value = false;
+      interactionSubmitting.value = false;
     }
   }
 
@@ -630,6 +662,9 @@ export function useChatSession({
     selectSession,
     send,
     stopSending,
+    pendingInteractionRequest,
+    interactionSubmitting,
+    submitInteractionResponse,
     onUploadChange,
     clearUploads,
     shouldRenderMessageInChat,

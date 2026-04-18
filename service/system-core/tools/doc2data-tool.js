@@ -98,7 +98,7 @@ export function createDoc2DataTool({ agentContext }) {
     description:
       "将文档提取文字。支持 office/pdf/图片。filePath 可传工作区相对路径或用户目录内绝对路径。",
     schema: z.object({
-      filePath: z.string(),
+      filePath: z.string().describe("待处理文档路径（工作区相对路径或用户目录内绝对路径）"),
       prompt: z
         .string()
         .optional()
@@ -109,7 +109,10 @@ export function createDoc2DataTool({ agentContext }) {
         .positive()
         .optional()
         .describe("文档转图片DPI，默认180"),
-      imageFormat: z.enum(["png", "jpg", "jpeg"]).optional(),
+      imageFormat: z
+        .enum(["png", "jpg", "jpeg"])
+        .optional()
+        .describe("文档转图片格式，默认 png"),
     }),
     func: async ({ filePath, prompt, dpi, imageFormat }) => {
       const inputFile = resolveInputFile(basePath, filePath);

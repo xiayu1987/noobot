@@ -470,6 +470,7 @@ wsServer.on("connection", (ws, request) => {
   const authInfo = request?.auth || null;
   let running = false;
   let currentAbortController = null;
+  const pendingInteractionRequests = new Map();
 
   const sendEvent = (event, data = {}) => {
     if (ws.readyState !== 1) return;
@@ -480,15 +481,65 @@ wsServer.on("connection", (ws, request) => {
     }
   };
 
+  const rejectAllPendingInteractions = (error) => {
+    for (const [, item] of pendingInteractionRequests.entries()) {
+      try {
+        item?.reject?.(error);
+      } catch {
+        // ignore reject failures
+      }
+      clearTimeout(item?.timer);
+    }
+    pendingInteractionRequests.clear();
+  };
+
+  const userInteractionBridge = {
+    requestUserInteraction: ({ content = "", fields = [], dialogProcessId = "" } = {}) =>
+      new Promise((resolve, reject) => {
+        const requestId = randomBytes(12).toString("hex");
+        const timeoutMs = 10 * 60 * 1000;
+        const timer = setTimeout(() => {
+          pendingInteractionRequests.delete(requestId);
+          reject(new Error("user interaction timeout"));
+        }, timeoutMs);
+
+        pendingInteractionRequests.set(requestId, {
+          resolve,
+          reject,
+          timer,
+        });
+
+        sendEvent("interaction_request", {
+          requestId,
+          content: String(content || ""),
+          fields: Array.isArray(fields) ? fields : [],
+          dialogProcessId: String(dialogProcessId || ""),
+        });
+      }),
+  };
+
   ws.on("message", async (rawMessage) => {
     let abortSignal = null;
     try {
       const payload = JSON.parse(String(rawMessage || "{}"));
       const action = String(payload?.action || "").trim().toLowerCase();
+      if (action === "interaction_response") {
+        const requestId = String(payload?.requestId || "").trim();
+        const requestItem = pendingInteractionRequests.get(requestId);
+        if (!requestItem) {
+          sendEvent("error", { error: "interaction request not found" });
+          return;
+        }
+        pendingInteractionRequests.delete(requestId);
+        clearTimeout(requestItem.timer);
+        requestItem.resolve(payload?.response ?? {});
+        return;
+      }
       if (action === "stop") {
         if (running && currentAbortController) {
           currentAbortController.abort();
         }
+        rejectAllPendingInteractions(new Error("dialog stopped by user"));
         return;
       }
       if (running) {
@@ -551,6 +602,7 @@ wsServer.on("connection", (ws, request) => {
         attachments,
         eventListener,
         abortSignal,
+        userInteractionBridge,
       });
 
       if (abortSignal?.aborted) {
@@ -586,6 +638,7 @@ wsServer.on("connection", (ws, request) => {
     if (currentAbortController) {
       currentAbortController.abort();
     }
+    rejectAllPendingInteractions(new Error("websocket closed"));
   });
 });
 

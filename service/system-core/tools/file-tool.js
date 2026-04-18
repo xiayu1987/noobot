@@ -11,7 +11,9 @@ export function createFileTool({ agentContext }) {
   const readFileTool = new DynamicStructuredTool({
     name: "read_file",
     description: "读取文本文件,可直接读取的文件",
-    schema: z.object({ path: z.string() }),
+    schema: z.object({
+      path: z.string().describe("要读取的文件路径（绝对路径或工作区内路径）"),
+    }),
     func: async ({ path }) => {
       if (!existsSync(path)) return "File not found";
       return readFileSync(path, "utf8");
@@ -21,7 +23,10 @@ export function createFileTool({ agentContext }) {
   const writeFileTool = new DynamicStructuredTool({
     name: "write_file",
     description: "写入文件",
-    schema: z.object({ path: z.string(), content: z.string() }),
+    schema: z.object({
+      path: z.string().describe("要写入的文件路径（绝对路径或工作区内路径）"),
+      content: z.string().describe("写入文件的文本内容"),
+    }),
     func: async ({ path, content }) => {
       writeFileSync(path, content, "utf8");
       return `OK: ${path}`;

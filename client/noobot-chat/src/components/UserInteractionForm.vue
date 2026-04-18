@@ -1,0 +1,121 @@
+<!--
+  Copyright (c) 2026 xiayu
+  Contact: 126240622+xiayu1987@users.noreply.github.com
+  SPDX-License-Identifier: MIT
+-->
+<script setup>
+import { reactive, watch } from "vue";
+
+const props = defineProps({
+  request: { type: Object, default: null },
+  submitting: { type: Boolean, default: false },
+});
+
+const emit = defineEmits(["confirm"]);
+
+const formData = reactive({});
+
+function resetForm() {
+  const fields = Array.isArray(props.request?.fields) ? props.request.fields : [];
+  for (const key of Object.keys(formData)) {
+    delete formData[key];
+  }
+  for (const fieldItem of fields) {
+    const key = String(fieldItem?.name || "").trim();
+    if (!key) continue;
+    formData[key] = "";
+  }
+}
+
+function onConfirm() {
+  const fields = Array.isArray(props.request?.fields) ? props.request.fields : [];
+  if (fields.length) {
+    const payload = {};
+    for (const fieldItem of fields) {
+      const key = String(fieldItem?.name || "").trim();
+      if (!key) continue;
+      payload[key] = String(formData[key] || "");
+    }
+    emit("confirm", payload);
+    return;
+  }
+  emit("confirm", { response: "confirmed" });
+}
+
+watch(
+  () => props.request?.requestId,
+  () => resetForm(),
+  { immediate: true },
+);
+</script>
+
+<template>
+  <div v-if="request" class="interaction-card">
+    <div class="interaction-title">{{ request.content || "需要确认/补充信息" }}</div>
+
+    <el-form
+      v-if="Array.isArray(request.fields) && request.fields.length"
+      label-position="top"
+      class="interaction-form"
+    >
+      <el-form-item
+        v-for="(fieldItem, index) in request.fields"
+        :key="`${fieldItem.name}-${index}`"
+        :label="`${fieldItem.displayName || fieldItem.name}${fieldItem.required ? ' *' : ''}`"
+      >
+        <el-input
+          v-model="formData[fieldItem.name]"
+          :placeholder="fieldItem.description || `请输入${fieldItem.displayName || fieldItem.name}`"
+        />
+      </el-form-item>
+    </el-form>
+
+    <div class="interaction-actions">
+      <el-button type="primary" :loading="submitting" @click="onConfirm">
+        确认
+      </el-button>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.interaction-card {
+  margin: 0 max(24px, calc(50% - 400px)) 12px;
+  padding: 14px 16px;
+  border: 1px solid #2c3a55;
+  border-radius: 12px;
+  background: #111827;
+}
+
+.interaction-title {
+  color: #e8efff;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.interaction-form :deep(.el-form-item__label) {
+  color: #b9c8ea;
+}
+
+.interaction-form :deep(.el-input__wrapper) {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.interaction-form :deep(.el-input) {
+  --el-input-text-color: #e8efff;
+  --el-input-placeholder-color: #93a4c7;
+}
+
+.interaction-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .interaction-card {
+    margin: 0 16px 10px;
+  }
+}
+</style>

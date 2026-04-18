@@ -10,6 +10,7 @@ import { createDoc2DataTool } from "./doc2data-tool.js";
 import { createServiceTool } from "./service-tool.js";
 import { createAgentCollabTool } from "./agent-collab-tool.js";
 import { createModelTool } from "./model-tool.js";
+import { createUserInteractionTool } from "./user-interaction-tool.js";
 
 export function buildTools(ctx) {
   return [
@@ -20,5 +21,6 @@ export function buildTools(ctx) {
     ...createServiceTool(ctx),
     ...createAgentCollabTool(ctx),
     ...createModelTool(ctx),
+    ...createUserInteractionTool(ctx),
   ];
 }

@@ -36,7 +36,9 @@ export function createScriptTool({ agentContext }) {
   const execute_script = new DynamicStructuredTool({
     name: "execute_script",
     description: "执行脚本。根据配置选择 local 或 docker sandbox 模式。",
-    schema: z.object({ command: z.string() }),
+    schema: z.object({
+      command: z.string().describe("要执行的 shell 命令"),
+    }),
     func: async ({ command }) => {
       const timeout = effectiveConfig?.scriptTimeoutMs || 120000;
       const sandbox = !!globalConfig?.script?.sandboxMode;

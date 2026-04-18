@@ -28,6 +28,7 @@ export class ContextBuilder {
     attachmentService,
     skillService,
     botManager = null,
+    userInteractionBridge = null,
   }) {
     this.globalConfig = globalConfig;
     this.userConfig = userConfig;
@@ -42,6 +43,7 @@ export class ContextBuilder {
     this.attachmentService = attachmentService;
     this.skillService = skillService;
     this.botManager = botManager;
+    this.userInteractionBridge = userInteractionBridge;
     this._effectiveConfigCache = null;
   }
 
@@ -186,6 +188,7 @@ export class ContextBuilder {
       eventListener: this.eventListener,
       sessionManager: this.sessionManager,
       botManager: this.botManager,
+      userInteractionBridge: this.userInteractionBridge,
       allEnabledProviders: this._resolveAllEnabledProviders(),
       systemRuntime,
     };
