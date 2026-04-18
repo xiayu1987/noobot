@@ -226,6 +226,45 @@ export class SessionManager {
     await this._writeJson(this._sessionTreeFile(basePath), payload);
   }
 
+  _normalizeSessionTreeShape(tree = {}) {
+    const nodes =
+      tree?.nodes && typeof tree.nodes === "object" ? { ...tree.nodes } : {};
+    for (const [nodeId, node] of Object.entries(nodes)) {
+      const normalizedNodeId = String(nodeId || "").trim();
+      if (!normalizedNodeId) {
+        delete nodes[nodeId];
+        continue;
+      }
+      const normalizedChildren = Array.isArray(node?.children)
+        ? Array.from(
+            new Set(
+              node.children
+                .map((childId) => String(childId || "").trim())
+                .filter(Boolean),
+            ),
+          )
+        : [];
+      nodes[normalizedNodeId] = {
+        ...node,
+        sessionId: normalizedNodeId,
+        parentSessionId: String(node?.parentSessionId || "").trim(),
+        children: normalizedChildren,
+      };
+      if (normalizedNodeId !== nodeId) delete nodes[nodeId];
+    }
+
+    const roots = Object.values(nodes)
+      .filter((node) => !String(node?.parentSessionId || "").trim())
+      .map((node) => String(node?.sessionId || "").trim())
+      .filter(Boolean);
+
+    return {
+      roots: Array.from(new Set(roots)),
+      nodes,
+      updatedAt: tree?.updatedAt || this._now(),
+    };
+  }
+
   async _withSessionTreeLock(basePath, run) {
     const lockKey = String(basePath || "");
     const previousLock = this._sessionTreeLocks.get(lockKey) || Promise.resolve();
@@ -256,7 +295,9 @@ export class SessionManager {
     if (!sessionId) return;
     const basePath = this._resolveBasePath(userId);
     await this._withSessionTreeLock(basePath, async () => {
-      const sessionTree = await this._readSessionTree(basePath);
+      const sessionTree = this._normalizeSessionTreeShape(
+        await this._readSessionTree(basePath),
+      );
       const now = this._now();
       const normalizedSessionId = String(sessionId || "").trim();
       const normalizedParentSessionId = String(parentSessionId || "").trim();
@@ -278,10 +319,15 @@ export class SessionManager {
         }
       }
 
+      for (const [nodeId, node] of Object.entries(sessionTree.nodes || {})) {
+        if (nodeId === normalizedParentSessionId) continue;
+        const children = Array.isArray(node?.children) ? node.children : [];
+        sessionTree.nodes[nodeId].children = children.filter(
+          (childId) => String(childId || "").trim() !== normalizedSessionId,
+        );
+      }
+
       if (!normalizedParentSessionId) {
-        if (!sessionTree.roots.includes(normalizedSessionId)) {
-          sessionTree.roots.push(normalizedSessionId);
-        }
       } else {
         if (!sessionTree.nodes[normalizedParentSessionId]) {
           sessionTree.nodes[normalizedParentSessionId] = {
@@ -315,7 +361,10 @@ export class SessionManager {
         }
       }
 
-      await this._writeSessionTree(basePath, sessionTree);
+      await this._writeSessionTree(
+        basePath,
+        this._normalizeSessionTreeShape(sessionTree),
+      );
     });
   }
 
@@ -939,7 +988,9 @@ export class SessionManager {
     }
     const basePath = this._resolveBasePath(userId);
     return await this._withSessionTreeLock(basePath, async () => {
-      const sessionTree = await this._readSessionTree(basePath);
+      const sessionTree = this._normalizeSessionTreeShape(
+        await this._readSessionTree(basePath),
+      );
       const nodeExists = Boolean(sessionTree?.nodes?.[normalizedSessionId]);
 
       const toDelete = [];
@@ -993,7 +1044,10 @@ export class SessionManager {
           nodes: nextNodes,
           updatedAt: this._now(),
         };
-        await this._writeSessionTree(basePath, nextTree);
+        await this._writeSessionTree(
+          basePath,
+          this._normalizeSessionTreeShape(nextTree),
+        );
       }
 
       return {
