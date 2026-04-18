@@ -3,11 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readFileSync } from "node:fs";
+import { access, readFile } from "node:fs/promises";
 
-export function readJsonFile(filePath, fallback = {}) {
-  if (!existsSync(filePath)) return fallback;
-  const raw = readFileSync(filePath, "utf8");
+export async function readJsonFile(filePath, fallback = {}) {
+  try {
+    await access(filePath);
+  } catch {
+    return fallback;
+  }
+  const raw = await readFile(filePath, "utf8");
   if (!raw || !raw.trim()) return fallback;
   return JSON.parse(raw);
 }

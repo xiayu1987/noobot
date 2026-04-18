@@ -25,7 +25,7 @@ import { safeJoin } from "./system-core/utils/fs-safe.js";
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 
-const globalConfig = loadGlobalConfig();
+const globalConfig = await loadGlobalConfig();
 const bot = new BotManager(globalConfig);
 const apiKeyStore = new Map();
 const apiKeyTtlMs = Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000);
@@ -184,7 +184,7 @@ app.post("/internal/connect", async (req, res) => {
       userId === superAdminUserId &&
       connectCode === superAdminCode
     ) {
-      bot.ensureUserWorkspace(userId);
+      await bot.ensureUserWorkspace(userId);
       const apiKey = issueApiKey({ userId, role: "super_admin" });
       res.json({ ok: true, role: "super_admin", userId, apiKey });
       return;
@@ -196,7 +196,7 @@ app.post("/internal/connect", async (req, res) => {
     );
     if (!matchedUser) throw new Error("连接码验证失败");
 
-    bot.ensureUserWorkspace(userId);
+    await bot.ensureUserWorkspace(userId);
     const apiKey = issueApiKey({ userId, role: "user" });
     res.json({ ok: true, role: "user", userId, apiKey });
   } catch (err) {
@@ -338,7 +338,7 @@ async function buildWorkspaceTree(
 app.get("/internal/workspace/tree/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    const basePath = bot.ensureUserWorkspace(userId);
+    const basePath = await bot.ensureUserWorkspace(userId);
     const tree = await buildWorkspaceTree(basePath);
     res.json({ ok: true, userId, root: basePath, tree });
   } catch (err) {
@@ -351,7 +351,7 @@ app.get("/internal/workspace/file/:userId", async (req, res) => {
     const { userId } = req.params;
     const relPath = String(req.query.path || "");
     if (!relPath) throw new Error("path required");
-    const basePath = bot.ensureUserWorkspace(userId);
+    const basePath = await bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
     try {
       await access(absPath);
@@ -375,7 +375,7 @@ app.put("/internal/workspace/file/:userId", async (req, res) => {
     const relPath = String(req.body?.path || "");
     const content = String(req.body?.content || "");
     if (!relPath) throw new Error("path required");
-    const basePath = bot.ensureUserWorkspace(userId);
+    const basePath = await bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
     await mkdir(path.dirname(absPath), { recursive: true });
     await writeFile(absPath, content, "utf8");
@@ -390,7 +390,7 @@ app.get("/internal/workspace/download/:userId", async (req, res) => {
     const { userId } = req.params;
     const relPath = String(req.query.path || "");
     if (!relPath) throw new Error("path required");
-    const basePath = bot.ensureUserWorkspace(userId);
+    const basePath = await bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
     try {
       await access(absPath);

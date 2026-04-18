@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -81,6 +81,6 @@ export function applySessionModelOverride(userConfig = {}, modelAlias = "") {
   return { ...safeUser, defaultProvider: alias };
 }
 
-export function loadGlobalConfig(filePath = "./config/global.config.json") {
-  return JSON.parse(readFileSync(filePath, "utf8"));
+export async function loadGlobalConfig(filePath = "./config/global.config.json") {
+  return JSON.parse(await readFile(filePath, "utf8"));
 }

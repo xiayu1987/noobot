@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, statSync } from "node:fs";
+import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -43,8 +43,12 @@ async function tryLoadUserServiceModule({
 }) {
   const handlerPath = resolveHandlerPath({ basePath, handlerModuleName });
   if (!handlerPath) return null;
-  if (!existsSync(handlerPath)) return null;
-  const mtimeMs = Number(statSync(handlerPath).mtimeMs || 0);
+  try {
+    await access(handlerPath);
+  } catch {
+    return null;
+  }
+  const mtimeMs = Number((await stat(handlerPath)).mtimeMs || 0);
   const cached = moduleCache.get(handlerPath);
   if (cached && cached.mtimeMs === mtimeMs) return cached.mod;
   const importedModule = await import(

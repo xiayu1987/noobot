@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { access, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
@@ -18,7 +18,7 @@ function getRuntime(agentContext) {
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 
-function toDataUrl(imagePath) {
+async function toDataUrl(imagePath) {
   const ext = path.extname(imagePath).toLowerCase();
   const mime =
     ext === ".png"
@@ -28,7 +28,7 @@ function toDataUrl(imagePath) {
         : ext === ".webp"
           ? "image/webp"
           : "application/octet-stream";
-  const b64 = readFileSync(imagePath).toString("base64");
+  const b64 = (await readFile(imagePath)).toString("base64");
   return `data:${mime};base64,${b64}`;
 }
 
@@ -40,16 +40,18 @@ function resolveAttachmentImageAlias({ globalConfig, userConfig }) {
   );
 }
 
-function buildImageBatches(imagePaths) {
-  const inputs = imagePaths.map((imagePath, idx) => {
-    const sizeBytes = Number(statSync(imagePath).size || 0);
-    return {
+async function buildImageBatches(imagePaths) {
+  const inputs = [];
+  for (let idx = 0; idx < imagePaths.length; idx += 1) {
+    const imagePath = imagePaths[idx];
+    const st = await stat(imagePath);
+    inputs.push({
       page: idx + 1,
       imagePath,
-      sizeBytes,
-      dataUrl: toDataUrl(imagePath),
-    };
-  });
+      sizeBytes: Number(st?.size || 0),
+      dataUrl: await toDataUrl(imagePath),
+    });
+  }
 
   const batches = [];
   let current = [];
@@ -69,7 +71,7 @@ function buildImageBatches(imagePaths) {
   return batches;
 }
 
-function resolveInputFile(basePath, filePath) {
+async function resolveInputFile(basePath, filePath) {
   if (!filePath) throw new Error("filePath required");
   if (path.isAbsolute(filePath)) {
     const resolvedBase = path.resolve(basePath);
@@ -82,7 +84,10 @@ function resolveInputFile(basePath, filePath) {
 
   const workspace = path.join(basePath, "runtime/workspace");
   const fromWorkspace = safeJoin(workspace, filePath);
-  if (existsSync(fromWorkspace)) return fromWorkspace;
+  try {
+    await access(fromWorkspace);
+    return fromWorkspace;
+  } catch {}
   return safeJoin(basePath, filePath);
 }
 
@@ -115,7 +120,7 @@ export function createDoc2DataTool({ agentContext }) {
         .describe("文档转图片格式，默认 png"),
     }),
     func: async ({ filePath, prompt, dpi, imageFormat }) => {
-      const inputFile = resolveInputFile(basePath, filePath);
+      const inputFile = await resolveInputFile(basePath, filePath);
       const outputRoot = path.join(
         basePath,
         "runtime",
@@ -157,7 +162,7 @@ export function createDoc2DataTool({ agentContext }) {
       const userPrompt =
         prompt || "请提取图片中的全部可读文字，按原有结构输出，不要编造内容。";
 
-      const imageBatches = buildImageBatches(images);
+      const imageBatches = await buildImageBatches(images);
       const batchResults = [];
       for (let i = 0; i < imageBatches.length; i += 1) {
         const batch = imageBatches[i];

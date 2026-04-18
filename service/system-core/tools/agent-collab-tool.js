@@ -5,7 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
@@ -48,9 +48,9 @@ export function createAgentCollabTool({ agentContext }) {
     return name;
   };
 
-  const resolveSubAgentFile = (fileName = "") => {
+  const resolveSubAgentFile = async (fileName = "") => {
     if (!subAgentDir) throw new Error("runtime basePath missing");
-    mkdirSync(subAgentDir, { recursive: true });
+    await mkdir(subAgentDir, { recursive: true });
     const name = normalizeFileName(fileName);
     return safeJoin(subAgentDir, name);
   };
@@ -64,14 +64,15 @@ export function createAgentCollabTool({ agentContext }) {
     }),
     func: async ({ fileName, content }) => {
       try {
-        const filePath = resolveSubAgentFile(fileName);
-        if (existsSync(filePath)) {
+        const filePath = await resolveSubAgentFile(fileName);
+        try {
+          await access(filePath);
           return JSON.stringify({
             ok: false,
             error: `file already exists: ${String(fileName || "")}`,
           });
-        }
-        writeFileSync(filePath, String(content || ""), "utf8");
+        } catch {}
+        await writeFile(filePath, String(content || ""), "utf8");
         return JSON.stringify({
           ok: true,
           fileName: String(fileName || ""),
@@ -94,23 +95,21 @@ export function createAgentCollabTool({ agentContext }) {
     }),
     func: async ({ fileName }) => {
       try {
-        const filePath = resolveSubAgentFile(fileName);
-        if (!existsSync(filePath)) {
+        const filePath = await resolveSubAgentFile(fileName);
+        try {
+          await access(filePath);
+        } catch {
           return JSON.stringify({
             ok: false,
             error: `file not found: ${String(fileName || "")}`,
           });
         }
-        return JSON.stringify(
-          {
-            ok: true,
-            fileName: String(fileName || ""),
-            path: filePath,
-            content: readFileSync(filePath, "utf8"),
-          },
-          null,
-          2,
-        );
+        return JSON.stringify({
+          ok: true,
+          fileName: String(fileName || ""),
+          path: filePath,
+          content: await readFile(filePath, "utf8"),
+        });
       } catch (error) {
         return JSON.stringify({
           ok: false,

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { cpSync, existsSync, statSync } from "node:fs";
+import { access, cp, stat } from "node:fs/promises";
 import path from "node:path";
 
 function resolveTemplateBase(workspaceTemplatePath = "") {
@@ -14,26 +14,35 @@ function resolveTemplateBase(workspaceTemplatePath = "") {
   return path.resolve(configuredTemplatePath);
 }
 
-export function ensureUserWorkspaceInitialized({
+export async function ensureUserWorkspaceInitialized({
   workspaceRoot,
   workspaceTemplatePath = "",
   userId,
 }) {
   const base = path.resolve(workspaceRoot, userId);
   const templateBase = resolveTemplateBase(workspaceTemplatePath);
-  if (!existsSync(templateBase)) {
+  try {
+    await access(templateBase);
+  } catch {
     throw new Error(
       `workspace template missing: ${templateBase}`,
     );
   }
 
-  if (existsSync(base)) {
-    const baseStat = statSync(base);
+  let baseExists = true;
+  try {
+    await access(base);
+  } catch {
+    baseExists = false;
+  }
+
+  if (baseExists) {
+    const baseStat = await stat(base);
     if (!baseStat.isDirectory()) {
       throw new Error(`user workspace path is not a directory: ${base}`);
     }
     // 目录已存在时，补齐模板中的缺失结构，不覆盖用户已有内容
-    cpSync(templateBase, base, {
+    await cp(templateBase, base, {
       recursive: true,
       force: false,
       errorOnExist: false,
@@ -41,6 +50,6 @@ export function ensureUserWorkspaceInitialized({
     return base;
   }
 
-  cpSync(templateBase, base, { recursive: true, force: false });
+  await cp(templateBase, base, { recursive: true, force: false });
   return base;
 }

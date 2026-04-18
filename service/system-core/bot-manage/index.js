@@ -15,7 +15,7 @@ import { runAgentTurn } from "../agent/engine.js";
 import { sanitizeUserConfig } from "../config/index.js";
 import { createExecutionEventListener, emitEvent } from "../event/index.js";
 import { ensureUserWorkspaceInitialized } from "../init/index.js";
-import { appendSystemErrorLog } from "../logs/index.js";
+import { appendSystemErrorLog } from "../tracking/index.js";
 
 function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -59,7 +59,7 @@ export class BotManager {
     return path.resolve(this.globalConfig.workspaceRoot, userId);
   }
 
-  ensureUserWorkspace(userId) {
+  async ensureUserWorkspace(userId) {
     return ensureUserWorkspaceInitialized({
       workspaceRoot: this.globalConfig.workspaceRoot,
       workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
@@ -200,7 +200,7 @@ export class BotManager {
     }
   }
 
-  _logSystemError({
+  async _logSystemError({
     userId = "",
     sessionId = "",
     parentSessionId = "",
@@ -210,8 +210,8 @@ export class BotManager {
     extra = {},
   }) {
     try {
-      const basePath = this.ensureUserWorkspace(userId);
-      appendSystemErrorLog({
+      const basePath = await this.ensureUserWorkspace(userId);
+      await appendSystemErrorLog({
         basePath,
         userId,
         sessionId,
@@ -280,7 +280,7 @@ export class BotManager {
 
       const usedSessionId = sessionId;
       const upstreamListener = eventListener;
-      const basePath = this.ensureUserWorkspace(userId);
+      const basePath = await this.ensureUserWorkspace(userId);
 
       await this.session.upsertSessionTree({
         userId,
@@ -433,7 +433,7 @@ export class BotManager {
         dialogProcessId,
       };
     } catch (error) {
-      this._logSystemError({
+      await this._logSystemError({
         userId,
         sessionId,
         parentSessionId,
@@ -560,7 +560,7 @@ export class BotManager {
         job.status = "failed";
         job.endedAt = this._now();
         job.error = error?.message || String(error);
-        this._logSystemError({
+        void this._logSystemError({
           userId,
           sessionId: usedSessionId,
           parentSessionId,
@@ -639,7 +639,7 @@ export class BotManager {
         error: job.error || "",
       };
     } catch (error) {
-      this._logSystemError({
+      await this._logSystemError({
         userId,
         sessionId,
         parentSessionId,

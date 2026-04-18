@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 
@@ -15,8 +15,12 @@ export function createFileTool({ agentContext }) {
       path: z.string().describe("要读取的文件路径（绝对路径或工作区内路径）"),
     }),
     func: async ({ path }) => {
-      if (!existsSync(path)) return "File not found";
-      return readFileSync(path, "utf8");
+      try {
+        await access(path);
+      } catch {
+        return "File not found";
+      }
+      return readFile(path, "utf8");
     },
   });
 
@@ -28,7 +32,7 @@ export function createFileTool({ agentContext }) {
       content: z.string().describe("写入文件的文本内容"),
     }),
     func: async ({ path, content }) => {
-      writeFileSync(path, content, "utf8");
+      await writeFile(path, content, "utf8");
       return `OK: ${path}`;
     },
   });

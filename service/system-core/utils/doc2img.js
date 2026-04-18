@@ -3,8 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir, access } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
@@ -98,7 +97,10 @@ async function pdfToImagesViaNodePoppler({
 
   if (!images.length) {
     const single = path.join(outputDir, base + ext);
-    if (existsSync(single)) images = [single];
+    try {
+      await access(single);
+      images = [single];
+    } catch {}
   }
 
   if (!images.length) throw new Error(`No image output from PDF: ${pdfFile}`);
@@ -114,8 +116,11 @@ export async function convertDocumentToImages({
 }) {
   if (!inputFile) throw new Error("inputFile required");
   const resolvedInput = path.resolve(inputFile);
-  if (!existsSync(resolvedInput))
+  try {
+    await access(resolvedInput);
+  } catch {
     throw new Error(`File not found: ${resolvedInput}`);
+  }
 
   if (isImageFile(resolvedInput)) {
     return {
