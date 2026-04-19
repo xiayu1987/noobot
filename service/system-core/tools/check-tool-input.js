@@ -3,12 +3,35 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { access } from "node:fs/promises";
+import path from "node:path";
 import { recoverableToolError } from "../error/index.js";
 
 function isUuid(value = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || "").trim(),
   );
+}
+
+function isWithinBasePath(basePath = "", targetPath = "") {
+  const rel = path.relative(basePath, targetPath);
+  if (!rel) return true;
+  return !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function resolveRuntimeBasePath(agentContext = {}) {
+  const runtime = agentContext?.runtime || {};
+  const basePath = String(agentContext?.basePath || runtime?.basePath || "").trim();
+  if (!basePath) {
+    throw recoverableToolError("runtime basePath missing", {
+      code: "RECOVERABLE_RUNTIME_BASEPATH_MISSING",
+    });
+  }
+  return path.resolve(basePath);
+}
+
+function resolveUserWorkspacePath(agentContext = {}) {
+  return resolveRuntimeBasePath(agentContext);
 }
 
 export async function assertValidParentSessionId({
@@ -55,3 +78,46 @@ export async function assertValidParentSessionId({
   return normalizedParentSessionId;
 }
 
+export async function assertAndResolveUserWorkspaceFilePath({
+  filePath = "",
+  agentContext = {},
+  fieldName = "filePath",
+  mustExist = false,
+}) {
+  const normalizedPath = String(filePath || "").trim();
+  if (!normalizedPath) {
+    throw recoverableToolError(`${fieldName} required`, {
+      code: "RECOVERABLE_INPUT_MISSING",
+      details: { field: fieldName },
+    });
+  }
+
+  const workspacePath = resolveUserWorkspacePath(agentContext);
+  const resolvedTargetPath = path.isAbsolute(normalizedPath)
+    ? path.resolve(normalizedPath)
+    : path.resolve(workspacePath, normalizedPath);
+
+  if (!isWithinBasePath(workspacePath, resolvedTargetPath)) {
+    throw recoverableToolError(`Path out of scope: ${normalizedPath}`, {
+      code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
+      details: {
+        field: fieldName,
+        filePath: normalizedPath,
+        allowedRoot: workspacePath,
+      },
+    });
+  }
+
+  if (mustExist) {
+    try {
+      await access(resolvedTargetPath);
+    } catch {
+      throw recoverableToolError(`File not found: ${normalizedPath}`, {
+        code: "RECOVERABLE_FILE_NOT_FOUND",
+        details: { field: fieldName, filePath: normalizedPath },
+      });
+    }
+  }
+
+  return resolvedTargetPath;
+}

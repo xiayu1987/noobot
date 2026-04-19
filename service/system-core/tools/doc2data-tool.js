@@ -3,15 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
-import { safeJoin } from "../utils/fs-safe.js";
 import { createChatModelByName, resolveModelSpecByAlias } from "../model/index.js";
 import { convertDocumentToImages } from "../utils/doc2img.js";
-import { recoverableToolError } from "../error/index.js";
+import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -72,32 +71,6 @@ async function buildImageBatches(imagePaths) {
   return batches;
 }
 
-async function resolveInputFile(basePath, filePath) {
-  if (!filePath) {
-    throw recoverableToolError("filePath required", {
-      code: "RECOVERABLE_INPUT_MISSING",
-    });
-  }
-  if (path.isAbsolute(filePath)) {
-    const resolvedBase = path.resolve(basePath);
-    const resolved = path.resolve(filePath);
-    if (!resolved.startsWith(resolvedBase)) {
-      throw recoverableToolError(`Path out of scope: ${filePath}`, {
-        code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
-      });
-    }
-    return resolved;
-  }
-
-  const workspace = path.join(basePath, "runtime/workspace");
-  const fromWorkspace = safeJoin(workspace, filePath);
-  try {
-    await access(fromWorkspace);
-    return fromWorkspace;
-  } catch {}
-  return safeJoin(basePath, filePath);
-}
-
 export function createDoc2DataTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const basePath = agentContext?.basePath || runtime.basePath || "";
@@ -127,7 +100,12 @@ export function createDoc2DataTool({ agentContext }) {
         .describe("文档转图片格式，默认 png"),
     }),
     func: async ({ filePath, prompt, dpi, imageFormat }) => {
-      const inputFile = await resolveInputFile(basePath, filePath);
+      const inputFile = await assertAndResolveUserWorkspaceFilePath({
+        filePath,
+        agentContext,
+        fieldName: "filePath",
+        mustExist: true,
+      });
       const outputRoot = path.join(
         basePath,
         "runtime",

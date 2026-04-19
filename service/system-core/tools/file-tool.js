@@ -3,37 +3,46 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 
 export function createFileTool({ agentContext }) {
   const readFileTool = new DynamicStructuredTool({
     name: "read_file",
-    description: "读取文本文件,可直接读取的文件",
+    description: "读取文本文件（仅允许用户工作区内路径）",
     schema: z.object({
-      path: z.string().describe("要读取的文件路径（绝对路径或工作区内路径）"),
+      filePath: z.string().describe("要读取的文件路径（工作区相对路径或用户目录内绝对路径）"),
     }),
-    func: async ({ path }) => {
-      try {
-        await access(path);
-      } catch {
-        return "File not found";
-      }
-      return readFile(path, "utf8");
+    func: async ({ filePath }) => {
+      const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
+        filePath,
+        agentContext,
+        fieldName: "filePath",
+        mustExist: true,
+      });
+      return readFile(resolvedPath, "utf8");
     },
   });
 
   const writeFileTool = new DynamicStructuredTool({
     name: "write_file",
-    description: "写入文件",
+    description: "写入文件（仅允许用户工作区内路径）",
     schema: z.object({
-      path: z.string().describe("要写入的文件路径（绝对路径或工作区内路径）"),
+      filePath: z.string().describe("要写入的文件路径（工作区相对路径或用户目录内绝对路径）"),
       content: z.string().describe("写入文件的文本内容"),
     }),
-    func: async ({ path, content }) => {
-      await writeFile(path, content, "utf8");
-      return `OK: ${path}`;
+    func: async ({ filePath, content }) => {
+      const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
+        filePath,
+        agentContext,
+        fieldName: "filePath",
+      });
+      await mkdir(path.dirname(resolvedPath), { recursive: true });
+      await writeFile(resolvedPath, content, "utf8");
+      return `OK: ${resolvedPath}`;
     },
   });
 
