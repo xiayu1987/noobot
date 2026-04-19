@@ -13,6 +13,14 @@ function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
 }
 
+function hasLongMemoryValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return Boolean(value.trim());
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
 export class ContextBuilder {
   constructor({
     globalConfig,
@@ -396,11 +404,13 @@ export class ContextBuilder {
         "工作区目录信息",
         this._buildWorkspaceDirectorySection(workspaceDirectories),
       ),
-      ...(Array.isArray(longMemory)
+      ...(hasLongMemoryValue(longMemory)
         ? [
             toSystemSection(
               "相关长期记忆",
-              JSON.stringify((longMemory || []).slice(-20), null, 2),
+              typeof longMemory === "string"
+                ? longMemory
+                : JSON.stringify(longMemory, null, 2),
             ),
           ]
         : []),

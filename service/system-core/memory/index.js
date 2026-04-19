@@ -92,6 +92,16 @@ export class MemoryService {
     return Array.isArray(short?.items) ? short.items : [];
   }
 
+  _normalizeModelContent(rawContent) {
+    if (rawContent === undefined) return "";
+    if (typeof rawContent === "string") return rawContent;
+    try {
+      return JSON.parse(JSON.stringify(rawContent));
+    } catch {
+      return String(rawContent ?? "");
+    }
+  }
+
   _sanitizeDialogRecordsForMemory(messages = []) {
     const out = [];
     for (const messageItem of messages) {
@@ -123,7 +133,8 @@ export class MemoryService {
 
   async readLongMemory({ userId }) {
     const basePath = this._resolveBasePath(userId);
-    return (await this._readJson(this._longPath(basePath), { facts: [] })).facts || [];
+    const longMem = await this._readJson(this._longPath(basePath), {});
+    return longMem.memory ?? "";
   }
 
   async captureSessionToShortMemory({
@@ -182,8 +193,8 @@ export class MemoryService {
     const promptPayload = target.map((i) => ({
       records: i.records,
     }));
-    const longMem = await this._readJson(this._longPath(basePath), { facts: [] });
-    const existingFacts = Array.isArray(longMem?.facts) ? longMem.facts : [];
+    const longMem = await this._readJson(this._longPath(basePath), {});
+    const existingLongMemory = longMem.memory ?? "";
 
     const modelSpec = resolveDefaultModelSpec({
       globalConfig: this.globalConfig,
@@ -201,27 +212,20 @@ export class MemoryService {
         : "若未提供建模规则，请优先提炼稳定偏好、长期约束。",
       "请基于“已有长期记忆”与“新短期记忆块”，产出最新的长期偏好。",
       "你可以对已有长期偏好进行总结处理",
-      `已有长期偏好:\n${JSON.stringify(existingFacts)}`,
+      `已有长期偏好:\n${typeof existingLongMemory === "string" ? existingLongMemory : JSON.stringify(existingLongMemory, null, 2)}`,
       `新短期记忆块:\n${JSON.stringify(promptPayload)}`,
     ].join("\n\n");
 
-    let facts = existingFacts;
+    let nextLongMemory = existingLongMemory;
     try {
       const res = await llm.invoke(prompt);
-      const contentText =
-        typeof res?.content === "string"
-          ? res.content
-          : JSON.stringify(res?.content ?? "");
-      const normalizedText = String(contentText || "").trim();
-      if (normalizedText) {
-        // 不强制要求模型返回 JSON，直接按文本记忆存储
-        facts = [normalizedText];
-      }
+      nextLongMemory = this._normalizeModelContent(res?.content);
     } catch {
-      facts = existingFacts;
+      nextLongMemory = existingLongMemory;
     }
 
-    longMem.facts = Array.isArray(facts) ? facts.slice(-500) : [];
+    longMem.memory = nextLongMemory;
+    longMem.updatedAt = new Date().toISOString();
     await writeFile(this._longPath(basePath), JSON.stringify(longMem, null, 2));
 
     // 提取后短期记忆全部清空

@@ -33,6 +33,7 @@ export function createScriptTool({ agentContext }) {
   const effectiveConfig = mergeConfig(globalConfig, runtime.userConfig || {});
   if (!basePath) return [];
   const workspace = path.join(basePath, "runtime/workspace");
+  const userRoot = basePath;
 
   const execute_script = new DynamicStructuredTool({
     name: "execute_script",
@@ -51,7 +52,7 @@ export function createScriptTool({ agentContext }) {
           ...r,
         });
       }
-      const dockerCmd = `docker run --rm -v "${workspace}:/workspace" -w /workspace node:20 bash -lc ${JSON.stringify(command)}`;
+      const dockerCmd = `docker run --rm -v "${userRoot}:/workspace" -w /workspace/runtime/workspace node:20 bash -lc ${JSON.stringify(command)}`;
       const r = await run(dockerCmd, workspace, timeout);
       return toToolJsonResult("execute_script", {
         ok: Number(r?.code || 0) === 0,
