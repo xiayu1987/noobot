@@ -5,11 +5,14 @@
  */
 import { access, cp, stat } from "node:fs/promises";
 import path from "node:path";
+import { fatalSystemError } from "../error/index.js";
 
 function resolveTemplateBase(workspaceTemplatePath = "") {
   const configuredTemplatePath = String(workspaceTemplatePath || "").trim();
   if (!configuredTemplatePath) {
-    throw new Error("workspaceTemplatePath required");
+    throw fatalSystemError("workspaceTemplatePath required", {
+      code: "FATAL_WORKSPACE_TEMPLATE_PATH_REQUIRED",
+    });
   }
   return path.resolve(configuredTemplatePath);
 }
@@ -24,9 +27,10 @@ export async function ensureUserWorkspaceInitialized({
   try {
     await access(templateBase);
   } catch {
-    throw new Error(
-      `workspace template missing: ${templateBase}`,
-    );
+    throw fatalSystemError(`workspace template missing: ${templateBase}`, {
+      code: "FATAL_WORKSPACE_TEMPLATE_MISSING",
+      details: { templateBase },
+    });
   }
 
   let baseExists = true;
@@ -39,7 +43,10 @@ export async function ensureUserWorkspaceInitialized({
   if (baseExists) {
     const baseStat = await stat(base);
     if (!baseStat.isDirectory()) {
-      throw new Error(`user workspace path is not a directory: ${base}`);
+      throw fatalSystemError(`user workspace path is not a directory: ${base}`, {
+        code: "FATAL_WORKSPACE_PATH_NOT_DIRECTORY",
+        details: { base },
+      });
     }
     // 目录已存在时，补齐模板中的缺失结构，不覆盖用户已有内容
     await cp(templateBase, base, {

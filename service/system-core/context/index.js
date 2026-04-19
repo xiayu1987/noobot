@@ -30,6 +30,7 @@ export class ContextBuilder {
     botManager = null,
     userInteractionBridge = null,
     runConfig = {},
+    abortSignal = null,
   }) {
     this.globalConfig = globalConfig;
     this.userConfig = userConfig;
@@ -46,6 +47,7 @@ export class ContextBuilder {
     this.botManager = botManager;
     this.userInteractionBridge = userInteractionBridge;
     this.runConfig = runConfig;
+    this.abortSignal = abortSignal;
     this._effectiveConfigCache = null;
   }
 
@@ -177,6 +179,7 @@ export class ContextBuilder {
       sessionManager: this.sessionManager,
       botManager: this.botManager,
       userInteractionBridge: this.userInteractionBridge,
+      abortSignal: this.abortSignal || null,
       allEnabledProviders: this._resolveAllEnabledProviders(),
       systemRuntime,
     };

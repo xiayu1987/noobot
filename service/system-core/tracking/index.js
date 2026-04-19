@@ -5,6 +5,7 @@
  */
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { fatalSystemError } from "../error/index.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -25,7 +26,11 @@ export async function appendSystemErrorLog({
   stack = "",
   extra = {},
 }) {
-  if (!basePath) throw new Error("basePath required");
+  if (!basePath) {
+    throw fatalSystemError("basePath required", {
+      code: "FATAL_BASE_PATH_REQUIRED",
+    });
+  }
   const logFile = getSystemErrorLogFilePath({ basePath });
   await mkdir(path.dirname(logFile), { recursive: true });
   const record = {

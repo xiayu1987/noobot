@@ -17,6 +17,7 @@ import {
 } from "../model/index.js";
 import { mergeConfig } from "../config/index.js";
 import { emitEvent } from "../event/index.js";
+import { isFatalError } from "../error/index.js";
 
 function buildContextMessages(agentContext) {
   function toLangChainToolCalls(toolCalls = []) {
@@ -275,6 +276,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       toolResultText =
         typeof result === "string" ? result : JSON.stringify(result);
     } catch (error) {
+      if (isFatalError(error)) throw error;
       toolResultText = `tool invoke error: ${error?.message || String(error)}`;
     }
 

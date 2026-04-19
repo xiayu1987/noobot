@@ -16,10 +16,21 @@ import { sanitizeUserConfig } from "../config/index.js";
 import { createExecutionEventListener, emitEvent } from "../event/index.js";
 import { ensureUserWorkspaceInitialized } from "../init/index.js";
 import { appendSystemErrorLog } from "../tracking/index.js";
+import { recoverableToolError } from "../error/index.js";
 
 function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(sessionId || ""),
+  );
+}
+
+function isAbortError(error) {
+  const name = String(error?.name || "").trim();
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    name === "AbortError" ||
+    message.includes("stopped by user") ||
+    message.includes("aborted")
   );
 }
 
@@ -43,15 +54,25 @@ export class BotManager {
     caller = "user",
     parentSessionId = "",
   }) {
-    if (!userId || !sessionId) throw new Error("userId/sessionId required");
+    if (!userId || !sessionId) {
+      throw recoverableToolError("userId/sessionId required", {
+        code: "RECOVERABLE_INPUT_MISSING",
+      });
+    }
     if (!isValidSessionId(sessionId)) {
-      throw new Error("invalid sessionId format (UUID required)");
+      throw recoverableToolError("invalid sessionId format (UUID required)", {
+        code: "RECOVERABLE_INVALID_SESSION_ID",
+      });
     }
     if (!["user", "bot"].includes(String(caller || ""))) {
-      throw new Error("invalid caller");
+      throw recoverableToolError("invalid caller", {
+        code: "RECOVERABLE_INVALID_CALLER",
+      });
     }
     if (parentSessionId && !isValidSessionId(parentSessionId)) {
-      throw new Error("invalid parentSessionId format");
+      throw recoverableToolError("invalid parentSessionId format", {
+        code: "RECOVERABLE_INVALID_PARENT_SESSION_ID",
+      });
     }
   }
 
@@ -88,6 +109,7 @@ export class BotManager {
     eventListener,
     userInteractionBridge = null,
     runConfig = {},
+    abortSignal = null,
   }) {
     return new ContextBuilder({
       globalConfig: this.globalConfig,
@@ -105,6 +127,7 @@ export class BotManager {
       botManager: this,
       userInteractionBridge,
       runConfig,
+      abortSignal,
     });
   }
 
@@ -120,6 +143,7 @@ export class BotManager {
     dialogProcessId = "",
     userInteractionBridge = null,
     runConfig = {},
+    abortSignal = null,
   }) {
     const contextBuilder = this._buildContextBuilder({
       userId,
@@ -131,6 +155,7 @@ export class BotManager {
       eventListener,
       userInteractionBridge,
       runConfig,
+      abortSignal,
     });
     emitEvent(eventListener, "context_building", { sessionId, mode });
     const agentContext =
@@ -280,7 +305,11 @@ export class BotManager {
     runConfig = {},
   }) {
     try {
-      if (!message) throw new Error("userId/sessionId/message required");
+      if (!message) {
+        throw recoverableToolError("userId/sessionId/message required", {
+          code: "RECOVERABLE_INPUT_MISSING",
+        });
+      }
       this._validateRunInput({ userId, sessionId, caller, parentSessionId });
 
       const usedSessionId = sessionId;
@@ -362,6 +391,7 @@ export class BotManager {
         dialogProcessId,
         userInteractionBridge,
         runConfig,
+        abortSignal,
       });
 
       await this._appendSessionTurn({
@@ -439,6 +469,9 @@ export class BotManager {
         dialogProcessId,
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       await this._logSystemError({
         userId,
         sessionId,
@@ -458,7 +491,11 @@ export class BotManager {
     attachments = [],
     eventListener = null,
   }) {
-    if (!sessionId) throw new Error("sessionId required");
+    if (!sessionId) {
+      throw recoverableToolError("sessionId required", {
+        code: "RECOVERABLE_INPUT_MISSING",
+      });
+    }
     return this.runSession({
       userId,
       sessionId,
@@ -477,7 +514,11 @@ export class BotManager {
     attachments = [],
     eventListener = null,
   }) {
-    if (!sessionId) throw new Error("sessionId required");
+    if (!sessionId) {
+      throw recoverableToolError("sessionId required", {
+        code: "RECOVERABLE_INPUT_MISSING",
+      });
+    }
     return this.runSession({
       userId,
       sessionId,
@@ -501,17 +542,24 @@ export class BotManager {
     sourceDialogProcessId = "",
     userInteractionBridge = null,
     runConfig = {},
+    abortSignal = null,
   }) {
     if (!userId || !parentSessionId) {
-      throw new Error("userId/parentSessionId required");
+      throw recoverableToolError("userId/parentSessionId required", {
+        code: "RECOVERABLE_INPUT_MISSING",
+      });
     }
     if (!isValidSessionId(parentSessionId)) {
-      throw new Error("invalid parentSessionId format");
+      throw recoverableToolError("invalid parentSessionId format", {
+        code: "RECOVERABLE_INVALID_PARENT_SESSION_ID",
+      });
     }
 
     const usedSessionId = String(sessionId || "").trim() || uuidv4();
     if (!isValidSessionId(usedSessionId)) {
-      throw new Error("invalid sessionId format");
+      throw recoverableToolError("invalid sessionId format", {
+        code: "RECOVERABLE_INVALID_SESSION_ID",
+      });
     }
 
     const message = [
@@ -555,6 +603,7 @@ export class BotManager {
       message,
       attachments,
       eventListener: asyncEventListener,
+      abortSignal,
       userInteractionBridge,
       runConfig,
     })
@@ -565,6 +614,12 @@ export class BotManager {
         return result;
       })
       .catch((error) => {
+        if (isAbortError(error)) {
+          job.status = "stopped";
+          job.endedAt = this._now();
+          job.error = "dialog stopped by user";
+          return null;
+        }
         job.status = "failed";
         job.endedAt = this._now();
         job.error = error?.message || String(error);
@@ -577,7 +632,7 @@ export class BotManager {
           error,
           extra: { task, sharedTaskSpec, deliverable },
         });
-        throw error;
+        return null;
       });
 
     return {
@@ -594,10 +649,12 @@ export class BotManager {
     parentSessionId,
     sessionId,
     timeoutMs = 120000,
-  }) {
+    }) {
     try {
       if (!userId || !parentSessionId || !sessionId) {
-        throw new Error("userId/parentSessionId/sessionId required");
+        throw recoverableToolError("userId/parentSessionId/sessionId required", {
+          code: "RECOVERABLE_INPUT_MISSING",
+        });
       }
 
       const key = this._asyncJobKey({ parentSessionId, sessionId });

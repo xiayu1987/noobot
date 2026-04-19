@@ -11,6 +11,7 @@ import { z } from "zod";
 import { safeJoin } from "../utils/fs-safe.js";
 import { createChatModelByName, resolveModelSpecByAlias } from "../model/index.js";
 import { convertDocumentToImages } from "../utils/doc2img.js";
+import { recoverableToolError } from "../error/index.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -72,12 +73,18 @@ async function buildImageBatches(imagePaths) {
 }
 
 async function resolveInputFile(basePath, filePath) {
-  if (!filePath) throw new Error("filePath required");
+  if (!filePath) {
+    throw recoverableToolError("filePath required", {
+      code: "RECOVERABLE_INPUT_MISSING",
+    });
+  }
   if (path.isAbsolute(filePath)) {
     const resolvedBase = path.resolve(basePath);
     const resolved = path.resolve(filePath);
     if (!resolved.startsWith(resolvedBase)) {
-      throw new Error(`Path out of scope: ${filePath}`);
+      throw recoverableToolError(`Path out of scope: ${filePath}`, {
+        code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
+      });
     }
     return resolved;
   }

@@ -3,10 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
 import { mergeConfig } from "../config/index.js";
+import { fatalSystemError } from "../error/index.js";
 
 export class SessionManager {
   constructor(globalConfig) {
@@ -22,7 +31,10 @@ export class SessionManager {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
-      throw new Error("workspaceRoot/userId required");
+      throw fatalSystemError("workspaceRoot/userId required", {
+        code: "FATAL_WORKSPACE_PATH_INVALID",
+        details: { userId: normalizedUserId, workspaceRoot },
+      });
     }
     return path.resolve(workspaceRoot, normalizedUserId);
   }
@@ -106,7 +118,19 @@ export class SessionManager {
 
   async _resolveParentSessionId(basePath, sessionId, parentSessionId = "") {
     const hintedParentSessionId = String(parentSessionId || "").trim();
-    if (hintedParentSessionId) return hintedParentSessionId;
+    if (hintedParentSessionId) {
+      const tree = await this._readSessionTree(basePath);
+      if (!tree?.nodes?.[hintedParentSessionId]) {
+        throw fatalSystemError(
+          `parent session not found (possibly deleted): ${hintedParentSessionId}`,
+          {
+            code: "FATAL_PARENT_SESSION_MISSING",
+            details: { hintedParentSessionId },
+          },
+        );
+      }
+      return hintedParentSessionId;
+    }
 
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return "";
@@ -240,14 +264,20 @@ export class SessionManager {
   async _writeSessionTree(basePath, tree) {
     const ensured = await this._ensureRuntimeDirsByBasePath(basePath);
     if (!ensured) {
-      throw new Error(`workspace not initialized: ${basePath}`);
+      throw fatalSystemError(`workspace not initialized: ${basePath}`, {
+        code: "FATAL_WORKSPACE_NOT_INITIALIZED",
+        details: { basePath },
+      });
     }
     const payload = {
       roots: Array.isArray(tree?.roots) ? tree.roots : [],
       nodes: tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {},
       updatedAt: this._now(),
     };
-    await this._writeJson(this._sessionTreeFile(basePath), payload);
+    const treeFile = this._sessionTreeFile(basePath);
+    const tempFile = `${treeFile}.tmp-${process.pid}-${Date.now()}`;
+    await writeFile(tempFile, JSON.stringify(payload, null, 2), "utf8");
+    await rename(tempFile, treeFile);
   }
 
   _normalizeSessionTreeShape(tree = {}) {
@@ -351,16 +381,15 @@ export class SessionManager {
         );
       }
 
-      if (!normalizedParentSessionId) {
-      } else {
+      if (normalizedParentSessionId) {
         if (!sessionTree.nodes[normalizedParentSessionId]) {
-          sessionTree.nodes[normalizedParentSessionId] = {
-            sessionId: normalizedParentSessionId,
-            parentSessionId: "",
-            children: [],
-            createdAt: now,
-            updatedAt: now,
-          };
+          throw fatalSystemError(
+            `parent session not found (possibly deleted): ${normalizedParentSessionId}`,
+            {
+              code: "FATAL_PARENT_SESSION_MISSING",
+              details: { normalizedParentSessionId },
+            },
+          );
         }
         const parentChildren = Array.isArray(
           sessionTree.nodes[normalizedParentSessionId].children,
@@ -1008,7 +1037,9 @@ export class SessionManager {
   async deleteSessionBranch({ userId, sessionId }) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
-      throw new Error("sessionId required");
+      throw fatalSystemError("sessionId required", {
+        code: "FATAL_SESSION_ID_REQUIRED",
+      });
     }
     const basePath = this._resolveBasePath(userId);
     return await this._withSessionTreeLock(basePath, async () => {

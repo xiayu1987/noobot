@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ChatOpenAI } from "@langchain/openai";
+import { fatalSystemError } from "../error/index.js";
 
 function isProviderEnabled(provider = {}) {
   return provider?.enabled !== false;
@@ -176,11 +177,19 @@ function buildModelKwargs(modelSpec = {}) {
 }
 
 function createChatModelFromSpec(modelSpec, options = {}) {
-  if (!modelSpec?.model) throw new Error("Model name is required");
+  if (!modelSpec?.model) {
+    throw fatalSystemError("Model name is required", {
+      code: "FATAL_MODEL_NAME_REQUIRED",
+    });
+  }
   const apiKey = resolveApiKey(modelSpec);
   if (!apiKey)
-    throw new Error(
+    throw fatalSystemError(
       `Missing api key for provider alias: ${modelSpec.alias || "unknown"}`,
+      {
+        code: "FATAL_PROVIDER_API_KEY_MISSING",
+        details: { alias: modelSpec.alias || "unknown" },
+      },
     );
 
   const modelKwargs = buildModelKwargs(modelSpec);
@@ -221,8 +230,12 @@ export function createChatModelByName(modelName, options = {}) {
     fallbackToDefault: false,
   });
   if (!modelSpec) {
-    throw new Error(
+    throw fatalSystemError(
       `enabled provider/model not found: ${String(modelName || "")}`,
+      {
+        code: "FATAL_MODEL_NOT_FOUND",
+        details: { modelName: String(modelName || "") },
+      },
     );
   }
   return createChatModelFromSpec(modelSpec, options);

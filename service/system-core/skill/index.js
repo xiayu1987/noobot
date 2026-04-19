@@ -5,6 +5,7 @@
  */
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { fatalSystemError } from "../error/index.js";
 
 export class SkillService {
   constructor(globalConfig) {
@@ -15,7 +16,9 @@ export class SkillService {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
-      throw new Error("workspaceRoot/userId required");
+      throw fatalSystemError("workspaceRoot/userId required", {
+        code: "FATAL_WORKSPACE_PATH_INVALID",
+      });
     }
     return path.resolve(workspaceRoot, normalizedUserId);
   }

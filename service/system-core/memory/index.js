@@ -7,6 +7,7 @@ import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promise
 import path from "node:path";
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
 import { mergeConfig } from "../config/index.js";
+import { fatalSystemError } from "../error/index.js";
 
 export class MemoryService {
   constructor(globalConfig) {
@@ -17,7 +18,9 @@ export class MemoryService {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
-      throw new Error("workspaceRoot/userId required");
+      throw fatalSystemError("workspaceRoot/userId required", {
+        code: "FATAL_WORKSPACE_PATH_INVALID",
+      });
     }
     return path.resolve(workspaceRoot, normalizedUserId);
   }

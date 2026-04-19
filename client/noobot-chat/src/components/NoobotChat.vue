@@ -238,8 +238,10 @@ async function handleDeleteSession(sessionId) {
     return;
   }
   try {
-    await deleteSession(sessionId);
-    ElMessage.success("会话已删除");
+    const deleted = await deleteSession(sessionId);
+    if (deleted) {
+      ElMessage.success("会话已删除");
+    }
   } catch (error) {
     ElMessage.error(error.message || "删除会话失败");
   }

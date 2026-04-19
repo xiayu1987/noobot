@@ -16,6 +16,12 @@ import {
   resolveModelSpecByName,
 } from "../model/index.js";
 import { safeJoin } from "../utils/fs-safe.js";
+import {
+  fatalSystemError,
+  isFatalError,
+  recoverableToolError,
+} from "../error/index.js";
+import { assertValidParentSessionId } from "./check-tool-input.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -30,6 +36,7 @@ export function createAgentCollabTool({ agentContext }) {
   const botManager = runtime.botManager || null;
   const userId = agentContext?.userId || runtime.userId || "";
   const runtimeEventListener = runtime.eventListener || null;
+  const abortSignal = runtime.abortSignal || null;
   const userInteractionBridge = runtime.userInteractionBridge || null;
   const sourceDialogProcessId = systemRuntime.dialogProcessId || "";
   const globalConfig = runtime.globalConfig || {};
@@ -41,18 +48,22 @@ export function createAgentCollabTool({ agentContext }) {
 
   const normalizeFileName = (fileName = "") => {
     const name = String(fileName || "").trim();
-    if (!name) throw new Error("fileName required");
+    if (!name) throw recoverableToolError("fileName required");
     if (name.includes("/") || name.includes("\\")) {
-      throw new Error("fileName must not contain path separators");
+      throw recoverableToolError("fileName must not contain path separators");
     }
     if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
-      throw new Error("invalid fileName");
+      throw recoverableToolError("invalid fileName");
     }
     return name;
   };
 
   const resolveSubAgentFile = async (fileName = "") => {
-    if (!subAgentDir) throw new Error("runtime basePath missing");
+    if (!subAgentDir) {
+      throw fatalSystemError("runtime basePath missing", {
+        code: "FATAL_RUNTIME_BASEPATH_MISSING",
+      });
+    }
     await mkdir(subAgentDir, { recursive: true });
     const name = normalizeFileName(fileName);
     return safeJoin(subAgentDir, name);
@@ -174,6 +185,7 @@ export function createAgentCollabTool({ agentContext }) {
           path: filePath,
         });
       } catch (error) {
+        if (isFatalError(error)) throw error;
         return JSON.stringify({
           ok: false,
           error: error?.message || String(error),
@@ -199,13 +211,16 @@ export function createAgentCollabTool({ agentContext }) {
           ok: false,
           error: "runtime missing bot manager/user id",
         });
-      if (!String(parentSessionId || "").trim() || !Array.isArray(tasks) || !tasks.length) {
-        return JSON.stringify({
-          ok: false,
-          error: "parentSessionId/tasks required",
+      const normalizedParentSessionId = await assertValidParentSessionId({
+        parentSessionId,
+        agentContext,
+      });
+      if (!Array.isArray(tasks) || !tasks.length) {
+        throw recoverableToolError("tasks required", {
+          code: "RECOVERABLE_INPUT_MISSING",
+          details: { field: "tasks" },
         });
       }
-      const normalizedParentSessionId = String(parentSessionId || "").trim();
       const resultList = await Promise.all(
         tasks.map(async (taskItem = {}, index) => {
           const taskText = String(taskItem?.task || "").trim();
@@ -230,6 +245,7 @@ export function createAgentCollabTool({ agentContext }) {
               sourceDialogProcessId: String(sourceDialogProcessId || ""),
               userInteractionBridge,
               runConfig,
+              abortSignal,
             });
             return {
               ok: true,
@@ -243,6 +259,7 @@ export function createAgentCollabTool({ agentContext }) {
               },
             };
           } catch (error) {
+            if (isFatalError(error)) throw error;
             return {
               ok: false,
               index,
@@ -289,13 +306,16 @@ export function createAgentCollabTool({ agentContext }) {
           ok: false,
           error: "runtime missing bot manager/user id",
         });
-      if (!String(parentSessionId || "").trim() || !Array.isArray(tasks) || !tasks.length) {
-        return JSON.stringify({
-          ok: false,
-          error: "parentSessionId/tasks required",
+      const normalizedParentSessionId = await assertValidParentSessionId({
+        parentSessionId,
+        agentContext,
+      });
+      if (!Array.isArray(tasks) || !tasks.length) {
+        throw recoverableToolError("tasks required", {
+          code: "RECOVERABLE_INPUT_MISSING",
+          details: { field: "tasks" },
         });
       }
-      const normalizedParentSessionId = String(parentSessionId || "").trim();
       const resultList = await Promise.all(
         tasks.map(async (taskItem = {}, index) => {
           const normalizedSessionId = String(taskItem?.sessionId || "").trim();
@@ -310,22 +330,38 @@ export function createAgentCollabTool({ agentContext }) {
               request: taskItem,
             };
           }
-          const result = await botManager.waitAsyncSession({
-            userId,
-            parentSessionId: normalizedParentSessionId,
-            sessionId: normalizedSessionId,
-            timeoutMs: Number(timeoutMs || defaultWaitMs),
-          });
-          return {
-            ...result,
-            index,
-            request: {
+          try {
+            const result = await botManager.waitAsyncSession({
+              userId,
+              parentSessionId: normalizedParentSessionId,
               sessionId: normalizedSessionId,
-              task: taskText,
-              sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
-              deliverable: deliverableText,
-            },
-          };
+              timeoutMs: Number(timeoutMs || defaultWaitMs),
+            });
+            return {
+              ...result,
+              index,
+              request: {
+                sessionId: normalizedSessionId,
+                task: taskText,
+                sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+                deliverable: deliverableText,
+              },
+            };
+          } catch (error) {
+            if (isFatalError(error)) throw error;
+            return {
+              ok: false,
+              index,
+              status: "failed",
+              error: error?.message || String(error),
+              request: {
+                sessionId: normalizedSessionId,
+                task: taskText,
+                sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+                deliverable: deliverableText,
+              },
+            };
+          }
         }),
       );
       const hasFailedTask = resultList.some(
@@ -336,6 +372,21 @@ export function createAgentCollabTool({ agentContext }) {
           {
             ok: false,
             status: "failed",
+            parentSessionId: normalizedParentSessionId,
+            tasks: resultList,
+          },
+          null,
+          2,
+        );
+      }
+      const hasStoppedTask = resultList.some(
+        (item) => String(item?.status || "") === "stopped",
+      );
+      if (hasStoppedTask) {
+        return JSON.stringify(
+          {
+            ok: true,
+            status: "stopped",
             parentSessionId: normalizedParentSessionId,
             tasks: resultList,
           },

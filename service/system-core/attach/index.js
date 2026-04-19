@@ -7,6 +7,7 @@ import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Buffer } from "node:buffer";
 import { v4 as uuidv4 } from "uuid";
+import { fatalSystemError } from "../error/index.js";
 
 export class AttachmentService {
   constructor(globalConfig) {
@@ -17,7 +18,9 @@ export class AttachmentService {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
-      throw new Error("workspaceRoot/userId required");
+      throw fatalSystemError("workspaceRoot/userId required", {
+        code: "FATAL_WORKSPACE_PATH_INVALID",
+      });
     }
     return path.resolve(workspaceRoot, normalizedUserId);
   }
