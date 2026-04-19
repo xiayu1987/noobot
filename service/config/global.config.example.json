@@ -32,7 +32,7 @@
       "description": "擅长通用对话、快速响应与多模态理解"
     }
   },
-  "memoryMaxItems": 100,
+  "memoryMaxItems": 50,
   "maxToolLoopTurns": 30,
   "session": {
     "recentMessageLimit": 20,
