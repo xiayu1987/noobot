@@ -6,8 +6,9 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Menu, Star } from "@element-plus/icons-vue";
+import { Menu } from "@element-plus/icons-vue";
 import MarkdownIt from "markdown-it";
+import noobotLogo from "../assets/noobot.svg";
 import WorkspacePanel from "./WorkspacePanel.vue";
 import UserSettingsPanel from "./UserSettingsPanel.vue";
 import UserInteractionForm from "./UserInteractionForm.vue";
@@ -354,9 +355,9 @@ async function handleWorkspaceReset() {
               class="empty-state"
             >
               <div class="empty-icon">
-                <el-icon><Star /></el-icon>
+                <img :src="noobotLogo" alt="Noobot Logo" class="empty-logo" />
               </div>
-              <p>开始与 noobot 的全新对话</p>
+              <p>开始与 Noobot 的全新对话</p>
             </div>
 
             <template
@@ -574,9 +575,14 @@ async function handleWorkspaceReset() {
 }
 
 .empty-icon {
-  font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.5;
+  opacity: 0.8;
+}
+
+.empty-logo {
+  width: 52px;
+  height: 52px;
+  display: block;
 }
 
 .mobile-mask {
