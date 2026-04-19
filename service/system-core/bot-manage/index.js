@@ -30,8 +30,13 @@ function isValidSessionId(sessionId = "") {
 function isAbortError(error) {
   const name = String(error?.name || "").trim();
   const message = String(error?.message || "").toLowerCase();
+  const code = String(error?.code || "").trim().toUpperCase();
   return (
     name === "AbortError" ||
+    name.toLowerCase() === "aborterror" ||
+    code === "ABORT_ERR" ||
+    message === "aborterror" ||
+    message.includes("aborterror") ||
     message.includes("stopped by user") ||
     message.includes("aborted")
   );
