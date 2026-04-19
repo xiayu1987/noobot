@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   ChatDotRound,
   CircleCheckFilled,
@@ -46,48 +46,37 @@ const emit = defineEmits([
 
 const sessionListRef = ref(null);
 const lastSessionListScrollTop = ref(0);
-let listWrapEl = null;
-
-function resolveSessionListWrap() {
-  return (
-    sessionListRef.value?.wrapRef ||
-    sessionListRef.value?.$el?.querySelector?.(".el-scrollbar__wrap") ||
-    null
-  );
-}
+// 使用 shallowRef 避免跨实例污染，且不需要深度响应式
+const listWrapEl = shallowRef(null);
 
 function onSessionListScroll() {
-  if (!listWrapEl) return;
-  lastSessionListScrollTop.value = Number(listWrapEl.scrollTop || 0);
+  if (!listWrapEl.value) return;
+  lastSessionListScrollTop.value = Number(listWrapEl.value.scrollTop || 0);
 }
 
 function bindSessionListScrollListener() {
-  const nextWrap = resolveSessionListWrap();
+  // 直接使用 Element Plus 暴露的 wrapRef
+  const nextWrap = sessionListRef.value?.wrapRef;
   if (!nextWrap) return;
-  if (listWrapEl && listWrapEl !== nextWrap) {
-    listWrapEl.removeEventListener("scroll", onSessionListScroll);
+  
+  if (listWrapEl.value && listWrapEl.value !== nextWrap) {
+    listWrapEl.value.removeEventListener("scroll", onSessionListScroll);
   }
-  listWrapEl = nextWrap;
-  listWrapEl.addEventListener("scroll", onSessionListScroll, { passive: true });
+  
+  listWrapEl.value = nextWrap;
+  listWrapEl.value.addEventListener("scroll", onSessionListScroll, { passive: true });
 }
 
 async function restoreSessionListScrollTop() {
   await nextTick();
   bindSessionListScrollListener();
-  if (!listWrapEl) return;
+  if (!listWrapEl.value) return;
+  
   const maxTop = Math.max(
     0,
-    Number(listWrapEl.scrollHeight || 0) - Number(listWrapEl.clientHeight || 0),
+    Number(listWrapEl.value.scrollHeight || 0) - Number(listWrapEl.value.clientHeight || 0)
   );
-  listWrapEl.scrollTop = Math.min(lastSessionListScrollTop.value, maxTop);
-}
-
-function onUserIdChange(value) {
-  emit("update:user-id", value);
-}
-
-function onConnectCodeChange(value) {
-  emit("update:connect-code", value);
+  listWrapEl.value.scrollTop = Math.min(lastSessionListScrollTop.value, maxTop);
 }
 
 onMounted(() => {
@@ -95,15 +84,15 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  if (listWrapEl) listWrapEl.removeEventListener("scroll", onSessionListScroll);
+  if (listWrapEl.value) {
+    listWrapEl.value.removeEventListener("scroll", onSessionListScroll);
+  }
 });
 
 watch(
   () => props.sessions,
-  () => {
-    restoreSessionListScrollTop();
-  },
-  { deep: true },
+  () => restoreSessionListScrollTop(),
+  { deep: true }
 );
 </script>
 
@@ -128,6 +117,7 @@ watch(
         type="button"
         @click="emit('toggle-sidebar')"
         :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
+        :aria-label="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
       >
         <el-icon>
           <Expand v-if="sidebarCollapsed" />
@@ -142,7 +132,7 @@ watch(
         size="default"
         placeholder="输入 User ID"
         class="custom-input"
-        @update:model-value="onUserIdChange"
+        @update:model-value="emit('update:user-id', $event)"
       >
         <template #prefix>
           <el-icon class="input-icon"><User /></el-icon>
@@ -156,14 +146,15 @@ watch(
           placeholder="输入连接码"
           class="custom-input connect-input"
           show-password
-          @update:model-value="onConnectCodeChange"
+          @update:model-value="emit('update:connect-code', $event)"
         >
           <template #prefix>
             <el-icon class="input-icon"><Key /></el-icon>
           </template>
         </el-input>
       </div>
-      <div class="connect-actions action-row">
+      
+      <div class="action-row">
         <el-button
           :type="connected ? 'success' : 'primary'"
           class="connect-btn noobot-action-btn"
@@ -177,6 +168,7 @@ watch(
           class="status-btn noobot-action-btn tail-btn"
           :class="{ connected }"
           :title="connected ? '已连接' : '未连接'"
+          :aria-label="connected ? '已连接' : '未连接'"
         >
           <el-icon class="status-icon">
             <CircleCheckFilled v-if="connected" />
@@ -185,25 +177,28 @@ watch(
         </button>
       </div>
 
-      <div class="sidebar-actions action-row">
+      <div class="action-row sidebar-actions">
+        <!-- 优化：使用 :icon 属性代替手动嵌套 el-icon，Element Plus 会自动处理间距 -->
         <el-button
           type="primary"
           class="new-chat-btn noobot-action-btn"
+          :icon="Plus"
           @click="emit('new-session')"
           :disabled="sending || !connected"
         >
-          <el-icon class="btn-icon"><Plus /></el-icon>
           新建会话
         </el-button>
+        
+        <!-- 优化：自闭合标签 + :icon 属性。没有默认插槽，彻底杜绝 loading 时的空 span 挤压问题 -->
         <el-button
           class="refresh-btn noobot-action-btn tail-btn"
+          :icon="Refresh"
           :loading="loadingSessions"
           @click="emit('refresh-sessions')"
           :disabled="!connected"
           title="刷新"
-        >
-          <el-icon><Refresh /></el-icon>
-        </el-button>
+          aria-label="刷新会话列表"
+        />
       </div>
     </div>
 
@@ -234,6 +229,7 @@ watch(
             type="button"
             class="session-delete-btn noobot-action-btn"
             title="删除会话"
+            aria-label="删除会话"
             @click.stop="emit('delete-session', sessionItem.id)"
           >
             <el-icon><Delete /></el-icon>
@@ -249,7 +245,7 @@ watch(
 .sidebar {
   width: 280px;
   min-width: 280px;
-  background: var(--noobot-surface-sidebar); /* 更深邃的背景色 */
+  background: var(--noobot-surface-sidebar);
   border-right: 1px solid var(--noobot-border-weak);
   display: flex;
   flex-direction: column;
@@ -349,25 +345,12 @@ watch(
   opacity: 0.7;
 }
 
-.btn-icon {
-  margin-right: 4px;
-}
-
 .connect-row {
   display: flex;
 }
 
 .connect-input {
   width: 100%;
-}
-
-.connect-actions {
-}
-
-.connect-btn {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 8px 16px;
 }
 
 .action-row {
@@ -380,9 +363,13 @@ watch(
   margin-top: 4px;
 }
 
+.connect-btn,
 .new-chat-btn {
   flex: 1 1 0;
   min-width: 0;
+}
+
+.new-chat-btn {
   background: var(--noobot-btn-primary-bg);
   border: none;
   transition: opacity 0.2s ease, transform 0.1s ease;
@@ -396,10 +383,7 @@ watch(
   transform: scale(0.98);
 }
 
-.refresh-btn {
-  margin-left: 0 !important;
-}
-
+/* 方形尾部按钮通用样式 */
 .tail-btn {
   flex: 0 0 36px;
   width: 36px;
@@ -408,10 +392,16 @@ watch(
   border: 1px solid var(--noobot-btn-soft-border);
   color: var(--noobot-btn-soft-text);
   padding: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
+  margin-left: 0 !important;
+}
+
+/* 确保 Element Plus 原生 icon 居中，消除可能存在的默认 margin */
+.tail-btn :deep(.el-icon) {
+  margin: 0 !important;
 }
 
 .refresh-btn:not(:disabled):hover {
