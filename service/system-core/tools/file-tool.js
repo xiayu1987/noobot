@@ -8,6 +8,7 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 export function createFileTool({ agentContext }) {
   const readFileTool = new DynamicStructuredTool({
@@ -23,7 +24,13 @@ export function createFileTool({ agentContext }) {
         fieldName: "filePath",
         mustExist: true,
       });
-      return readFile(resolvedPath, "utf8");
+      const content = await readFile(resolvedPath, "utf8");
+      return toToolJsonResult("read_file", {
+        ok: true,
+        resolvedPath,
+        fileName: path.basename(resolvedPath),
+        content,
+      });
     },
   });
 
@@ -42,8 +49,8 @@ export function createFileTool({ agentContext }) {
       });
       await mkdir(path.dirname(resolvedPath), { recursive: true });
       await writeFile(resolvedPath, content, "utf8");
-      return JSON.stringify({
-        toolName: "write_file",
+      return toToolJsonResult("write_file", {
+        ok: true,
         state: "OK",
         resolvedPath,
         fileName: path.basename(resolvedPath),

@@ -10,6 +10,7 @@ import { getRegularUsersApi, putRegularUsersApi } from "../api/chatApi";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },
+  connected: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
 });
 
@@ -91,7 +92,7 @@ function trySyncUsersFromJsonText() {
 }
 
 async function loadUsers() {
-  if (!props.apiKey) return;
+  if (!props.connected || !props.apiKey) return;
   loading.value = true;
   try {
     const res = await getRegularUsersApi({ fetcher: authFetch });
@@ -180,7 +181,7 @@ function validateUsers(list = []) {
 }
 
 async function saveUsers() {
-  if (!props.apiKey) return;
+  if (!props.connected || !props.apiKey) return;
   saving.value = true;
   try {
     if (!trySyncUsersFromJsonText()) {
@@ -214,7 +215,14 @@ watch(
 watch(
   () => props.apiKey,
   () => {
-    if (props.active) loadUsers();
+    if (props.active && props.connected) loadUsers();
+  },
+);
+
+watch(
+  () => props.connected,
+  (isConnected) => {
+    if (isConnected && props.active) loadUsers();
   },
 );
 

@@ -5,10 +5,11 @@
 -->
 <script setup>
 import { ref, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import {
   buildWorkspaceDownloadUrl,
   getWorkspaceFileApi,
+  postResetWorkspaceApi,
   getWorkspaceTreeApi,
   putWorkspaceFileApi,
 } from "../api/chatApi";
@@ -16,13 +17,16 @@ import {
 const props = defineProps({
   userId: { type: String, default: "" },
   apiKey: { type: String, default: "" },
+  connected: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
 });
+const emit = defineEmits(["workspace-reset"]);
 
 const tree = ref([]);
 const loadingTree = ref(false);
 const loadingFile = ref(false);
 const saving = ref(false);
+const resetting = ref(false);
 const activePath = ref("");
 const content = ref("");
 const isTextFile = ref(true);
@@ -42,7 +46,7 @@ function authFetch(url, options = {}) {
 }
 
 async function loadTree() {
-  if (!props.userId || !props.apiKey) return;
+  if (!props.connected || !props.userId || !props.apiKey) return;
   loadingTree.value = true;
   try {
     const res = await getWorkspaceTreeApi(
@@ -60,7 +64,14 @@ async function loadTree() {
 }
 
 async function openFile(node) {
-  if (!node || node.type !== "file" || !props.userId || !props.apiKey) return;
+  if (
+    !props.connected ||
+    !node ||
+    node.type !== "file" ||
+    !props.userId ||
+    !props.apiKey
+  )
+    return;
   loadingFile.value = true;
   try {
     const res = await getWorkspaceFileApi(
@@ -81,6 +92,7 @@ async function openFile(node) {
 
 async function saveFile() {
   if (
+    !props.connected ||
     !activePath.value ||
     !props.userId ||
     !props.apiKey ||
@@ -109,13 +121,51 @@ async function saveFile() {
 }
 
 function downloadFile() {
-  if (!activePath.value || !props.userId || !props.apiKey) return;
+  if (!props.connected || !activePath.value || !props.userId || !props.apiKey)
+    return;
   const downloadUrl = buildWorkspaceDownloadUrl({
     userId: props.userId,
     path: activePath.value,
     apiKey: props.apiKey,
   });
   window.open(downloadUrl, "_blank");
+}
+
+async function resetWorkspace() {
+  if (!props.connected || !props.userId || !props.apiKey) return;
+  try {
+    await ElMessageBox.confirm(
+      "确定要重置工作区吗？该用户目录下文件会被删除，并恢复为默认模板。",
+      "重置工作区",
+      {
+        confirmButtonText: "确定重置",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+  } catch {
+    return;
+  }
+
+  resetting.value = true;
+  try {
+    const res = await postResetWorkspaceApi(
+      { userId: props.userId },
+      { fetcher: authFetch },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "重置工作区失败");
+    activePath.value = "";
+    content.value = "";
+    isTextFile.value = true;
+    await loadTree();
+    emit("workspace-reset");
+    ElMessage.success("工作区已重置");
+  } catch (error) {
+    ElMessage.error(error.message || "重置工作区失败");
+  } finally {
+    resetting.value = false;
+  }
 }
 
 watch(
@@ -136,7 +186,14 @@ watch(
 watch(
   () => props.apiKey,
   () => {
-    if (props.active) loadTree();
+    if (props.active && props.connected) loadTree();
+  },
+);
+
+watch(
+  () => props.connected,
+  (isConnected) => {
+    if (isConnected && props.active) loadTree();
   },
 );
 </script>
@@ -152,10 +209,21 @@ watch(
           size="small"
           text
           @click="loadTree"
-          :loading="loadingTree"
+          :loading="loadingTree || resetting"
+          :disabled="resetting"
           title="刷新目录"
         >
           ↻
+        </el-button>
+        <el-button
+          class="danger-btn"
+          size="small"
+          @click="resetWorkspace"
+          :loading="resetting"
+          :disabled="loadingTree || loadingFile || saving"
+          title="重置工作区"
+        >
+          重置工作区
         </el-button>
       </div>
       <div class="panel-body">
@@ -321,6 +389,17 @@ watch(
 .dark-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.danger-btn {
+  background: #3a1117;
+  border: 1px solid #7f1d1d;
+  color: #fecaca;
+}
+.danger-btn:hover:not(:disabled) {
+  background: #58151c;
+  border-color: #b91c1c;
+  color: #fee2e2;
 }
 
 /* 左侧目录树 */

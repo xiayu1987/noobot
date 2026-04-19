@@ -8,6 +8,7 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 function run(cmd, cwd, timeoutMs) {
   return new Promise((resolve) => {
@@ -44,11 +45,19 @@ export function createScriptTool({ agentContext }) {
       const sandbox = !!globalConfig?.script?.sandboxMode;
       if (!sandbox) {
         const r = await run(command, workspace, timeout);
-        return JSON.stringify({ mode: "local", ...r });
+        return toToolJsonResult("execute_script", {
+          ok: Number(r?.code || 0) === 0,
+          mode: "local",
+          ...r,
+        });
       }
       const dockerCmd = `docker run --rm -v "${workspace}:/workspace" -w /workspace node:20 bash -lc ${JSON.stringify(command)}`;
       const r = await run(dockerCmd, workspace, timeout);
-      return JSON.stringify({ mode: "docker", ...r });
+      return toToolJsonResult("execute_script", {
+        ok: Number(r?.code || 0) === 0,
+        mode: "docker",
+        ...r,
+      });
     },
   });
 

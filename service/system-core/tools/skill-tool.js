@@ -8,6 +8,7 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { safeJoin } from "../utils/fs-safe.js";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 function getBasePath(agentContext) {
   return agentContext?.basePath || agentContext?.runtime?.basePath || "";
@@ -16,7 +17,6 @@ function getBasePath(agentContext) {
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
-
 export function createSkillTool({ agentContext, sessionId }) {
   const basePath = getBasePath(agentContext);
   const runtime = getRuntime(agentContext);
@@ -47,7 +47,7 @@ export function createSkillTool({ agentContext, sessionId }) {
       try {
         await access(skillRoot);
       } catch {
-        return JSON.stringify([], null, 2);
+        return toToolJsonResult("list_skills", { ok: true, items: [] }, true);
       }
 
       const rootDir = parentSkill
@@ -56,7 +56,7 @@ export function createSkillTool({ agentContext, sessionId }) {
       try {
         await access(rootDir);
       } catch {
-        return JSON.stringify([], null, 2);
+        return toToolJsonResult("list_skills", { ok: true, items: [] }, true);
       }
 
       const items = [];
@@ -82,7 +82,7 @@ export function createSkillTool({ agentContext, sessionId }) {
         }
       }
 
-      return JSON.stringify(items, null, 2);
+      return toToolJsonResult("list_skills", { ok: true, items }, true);
     },
   });
 
@@ -99,14 +99,16 @@ export function createSkillTool({ agentContext, sessionId }) {
     }),
     func: async ({ action, skillName, taskName, taskId, result }) => {
       if (!sessionManager || !sessionId || !userId || !basePath)
-        return "session context missing";
+        return toToolJsonResult("set_skill_task", {
+          ok: false,
+          message: "session context missing",
+        });
 
       if (action === "start") {
         if (!String(skillName || "").trim()) {
-          return JSON.stringify(
+          return toToolJsonResult(
+            "set_skill_task",
             { ok: false, message: "skillName is required when action=start" },
-            null,
-            2,
           );
         }
         const task = await sessionManager.startSkillTask({
@@ -116,7 +118,7 @@ export function createSkillTool({ agentContext, sessionId }) {
           skillName: skillName || "",
           taskName: taskName || "",
         });
-        return JSON.stringify({ ok: true, action, task }, null, 2);
+        return toToolJsonResult("set_skill_task", { ok: true, action, task }, true);
       }
 
       const task = await sessionManager.finishSkillTask({
@@ -127,8 +129,11 @@ export function createSkillTool({ agentContext, sessionId }) {
         result: result || "",
       });
       if (!task)
-        return JSON.stringify({ ok: false, message: "no start task found" });
-      return JSON.stringify({ ok: true, action, task }, null, 2);
+        return toToolJsonResult("set_skill_task", {
+          ok: false,
+          message: "no start task found",
+        });
+      return toToolJsonResult("set_skill_task", { ok: true, action, task }, true);
     },
   });
 

@@ -5,11 +5,11 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
-
 const fieldSchema = z.object({
   name: z.string().min(1).describe("字段名（返回对象的 key）"),
   displayName: z.string().min(1).describe("字段显示名称"),
@@ -40,7 +40,7 @@ export function createUserInteractionTool({ agentContext }) {
     }),
     func: async ({ content, fields }) => {
       if (!bridge?.requestUserInteraction) {
-        return JSON.stringify({
+        return toToolJsonResult("user_interaction", {
           ok: false,
           error: "user interaction bridge missing",
         });
@@ -48,7 +48,7 @@ export function createUserInteractionTool({ agentContext }) {
 
       const interactionContent = String(content || "").trim();
       if (!interactionContent) {
-        return JSON.stringify({
+        return toToolJsonResult("user_interaction", {
           ok: false,
           error: "交互内容/content required",
         });
@@ -62,7 +62,7 @@ export function createUserInteractionTool({ agentContext }) {
             : fields || {};
         normalizedFieldsPayload = fieldsPayloadSchema.parse(parsedFields || {});
       } catch (error) {
-        return JSON.stringify({
+        return toToolJsonResult("user_interaction", {
           ok: false,
           error: `invalid 字段 payload: ${error?.message || String(error)}`,
         });
@@ -80,16 +80,17 @@ export function createUserInteractionTool({ agentContext }) {
         !Array.isArray(result) &&
         result.confirmed === false
       ) {
-        return {
+        return toToolJsonResult("user_interaction", {
+          ok: true,
           confirmed: false,
           cancelled: true,
           response: String(result?.response || "cancelled"),
-        };
+        });
       }
 
       if (normalizedFieldsPayload.fields?.length) {
         if (!result || typeof result !== "object" || Array.isArray(result)) {
-          return JSON.stringify({
+          return toToolJsonResult("user_interaction", {
             ok: false,
             error: "invalid interaction response object",
           });
@@ -100,19 +101,24 @@ export function createUserInteractionTool({ agentContext }) {
           .filter(Boolean);
         for (const key of requiredFields) {
           if (!String(result?.[key] ?? "").trim()) {
-            return JSON.stringify({
+            return toToolJsonResult("user_interaction", {
               ok: false,
               error: `missing required field: ${key}`,
             });
           }
         }
-        return result;
+        return toToolJsonResult("user_interaction", {
+          ok: true,
+          confirmed: true,
+          ...(result || {}),
+        });
       }
 
-      return {
+      return toToolJsonResult("user_interaction", {
+        ok: true,
         confirmed: true,
         response: String(result?.response || ""),
-      };
+      });
     },
   });
 

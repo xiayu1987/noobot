@@ -270,6 +270,10 @@ function onAllowUserInteractionUpdate(value) {
     allowUserInteraction.value ? "true" : "false",
   );
 }
+
+async function handleWorkspaceReset() {
+  await fetchSessions();
+}
 </script>
 
 <template>
@@ -409,7 +413,9 @@ function onAllowUserInteractionUpdate(value) {
       <WorkspacePanel
         :user-id="userId"
         :api-key="apiKey"
+        :connected="connected"
         :active="workspaceVisible"
+        @workspace-reset="handleWorkspaceReset"
       />
     </el-drawer>
     <el-drawer
@@ -421,6 +427,7 @@ function onAllowUserInteractionUpdate(value) {
     >
       <UserSettingsPanel
         :api-key="apiKey"
+        :connected="connected"
         :active="userSettingsVisible"
       />
     </el-drawer>

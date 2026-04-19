@@ -22,11 +22,11 @@ import {
   recoverableToolError,
 } from "../error/index.js";
 import { assertValidParentSessionId } from "./check-tool-input.js";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
-
 export function createAgentCollabTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const systemRuntime = runtime.systemRuntime || {};
@@ -173,20 +173,20 @@ export function createAgentCollabTool({ agentContext }) {
         const filePath = await resolveSubAgentFile(fileName);
         try {
           await access(filePath);
-          return JSON.stringify({
+          return toToolJsonResult("write_task_deliverable_file", {
             ok: false,
             error: `file already exists: ${String(fileName || "")}`,
           });
         } catch {}
         await writeFile(filePath, String(content || ""), "utf8");
-        return JSON.stringify({
+        return toToolJsonResult("write_task_deliverable_file", {
           ok: true,
           fileName: String(fileName || ""),
           path: filePath,
         });
       } catch (error) {
         if (isFatalError(error)) throw error;
-        return JSON.stringify({
+        return toToolJsonResult("write_task_deliverable_file", {
           ok: false,
           error: error?.message || String(error),
         });
@@ -207,7 +207,7 @@ export function createAgentCollabTool({ agentContext }) {
     }),
     func: async ({ parentSessionId, tasks }) => {
       if (!botManager || !userId)
-        return JSON.stringify({
+        return toToolJsonResult("delegate_task_async", {
           ok: false,
           error: "runtime missing bot manager/user id",
         });
@@ -275,15 +275,15 @@ export function createAgentCollabTool({ agentContext }) {
         }),
       );
       const allOk = resultList.every((item) => item?.ok);
-      return JSON.stringify(
+      return toToolJsonResult(
+        "delegate_task_async",
         {
           ok: allOk,
           status: allOk ? "running" : "partial_failed",
           parentSessionId: normalizedParentSessionId,
           tasks: resultList,
         },
-        null,
-        2,
+        true,
       );
     },
   });
@@ -302,7 +302,7 @@ export function createAgentCollabTool({ agentContext }) {
     }),
     func: async ({ parentSessionId, tasks, timeoutMs }) => {
       if (!botManager || !userId)
-        return JSON.stringify({
+        return toToolJsonResult("wait_async_task_result", {
           ok: false,
           error: "runtime missing bot manager/user id",
         });
@@ -368,45 +368,45 @@ export function createAgentCollabTool({ agentContext }) {
         (item) => String(item?.status || "") === "failed" || item?.ok === false,
       );
       if (hasFailedTask) {
-        return JSON.stringify(
+        return toToolJsonResult(
+          "wait_async_task_result",
           {
             ok: false,
             status: "failed",
             parentSessionId: normalizedParentSessionId,
             tasks: resultList,
           },
-          null,
-          2,
+          true,
         );
       }
       const hasStoppedTask = resultList.some(
         (item) => String(item?.status || "") === "stopped",
       );
       if (hasStoppedTask) {
-        return JSON.stringify(
+        return toToolJsonResult(
+          "wait_async_task_result",
           {
             ok: true,
             status: "stopped",
             parentSessionId: normalizedParentSessionId,
             tasks: resultList,
           },
-          null,
-          2,
+          true,
         );
       }
       const allCompleted = resultList.every(
         (item) => String(item?.status || "") === "completed",
       );
       if (!allCompleted) {
-        return JSON.stringify(
+        return toToolJsonResult(
+          "wait_async_task_result",
           {
             ok: true,
             status: "running",
             parentSessionId: normalizedParentSessionId,
             tasks: resultList,
           },
-          null,
-          2,
+          true,
         );
       }
 
@@ -425,26 +425,26 @@ export function createAgentCollabTool({ agentContext }) {
           !item.missingDeliverables.length,
       );
       if (!allDeliverablesReady) {
-        return JSON.stringify(
+        return toToolJsonResult(
+          "wait_async_task_result",
           {
             ok: true,
             status: "waiting_deliverables",
             parentSessionId: normalizedParentSessionId,
             tasks: deliverableChecks,
           },
-          null,
-          2,
+          true,
         );
       }
-      return JSON.stringify(
+      return toToolJsonResult(
+        "wait_async_task_result",
         {
           ok: true,
           status: "completed",
           parentSessionId: normalizedParentSessionId,
           tasks: deliverableChecks,
         },
-        null,
-        2,
+        true,
       );
     },
   });
@@ -459,7 +459,10 @@ export function createAgentCollabTool({ agentContext }) {
     func: async ({ task }) => {
       const taskText = String(task || "").trim();
       if (!taskText)
-        return JSON.stringify({ ok: false, error: "task required" });
+        return toToolJsonResult("plan_execution_flow", {
+          ok: false,
+          error: "task required",
+        });
 
       const runtimeModel = String(runtime?.runtimeModel || "").trim();
       let llm;
@@ -512,7 +515,8 @@ export function createAgentCollabTool({ agentContext }) {
         }
       }
 
-      return JSON.stringify(
+      return toToolJsonResult(
+        "plan_execution_flow",
         {
           ok: true,
           task: taskText,
@@ -522,8 +526,7 @@ export function createAgentCollabTool({ agentContext }) {
           },
           ...(parsedPlan ? { plan: parsedPlan } : { planText: content }),
         },
-        null,
-        2,
+        true,
       );
     },
   });

@@ -365,6 +365,16 @@ app.get("/internal/workspace/tree/:userId", async (req, res) => {
   }
 });
 
+app.post("/internal/workspace/reset/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const basePath = await bot.resetUserWorkspace(userId);
+    res.json({ ok: true, userId, root: basePath });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "reset workspace failed" });
+  }
+});
+
 app.get("/internal/workspace/file/:userId", async (req, res) => {
   try {
     const { userId } = req.params;

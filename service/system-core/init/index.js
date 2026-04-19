@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, cp, stat } from "node:fs/promises";
+import { access, cp, mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { fatalSystemError } from "../error/index.js";
 
@@ -17,7 +17,7 @@ function resolveTemplateBase(workspaceTemplatePath = "") {
   return path.resolve(configuredTemplatePath);
 }
 
-export async function ensureUserWorkspaceInitialized({
+async function resolveWorkspaceInitPaths({
   workspaceRoot,
   workspaceTemplatePath = "",
   userId,
@@ -32,6 +32,20 @@ export async function ensureUserWorkspaceInitialized({
       details: { templateBase },
     });
   }
+  await mkdir(path.resolve(workspaceRoot), { recursive: true });
+  return { base, templateBase };
+}
+
+export async function ensureUserWorkspaceInitialized({
+  workspaceRoot,
+  workspaceTemplatePath = "",
+  userId,
+}) {
+  const { base, templateBase } = await resolveWorkspaceInitPaths({
+    workspaceRoot,
+    workspaceTemplatePath,
+    userId,
+  });
 
   let baseExists = true;
   try {
@@ -58,5 +72,20 @@ export async function ensureUserWorkspaceInitialized({
   }
 
   await cp(templateBase, base, { recursive: true, force: false });
+  return base;
+}
+
+export async function resetUserWorkspaceInitialized({
+  workspaceRoot,
+  workspaceTemplatePath = "",
+  userId,
+}) {
+  const { base, templateBase } = await resolveWorkspaceInitPaths({
+    workspaceRoot,
+    workspaceTemplatePath,
+    userId,
+  });
+  await rm(base, { recursive: true, force: true });
+  await cp(templateBase, base, { recursive: true, force: true });
   return base;
 }

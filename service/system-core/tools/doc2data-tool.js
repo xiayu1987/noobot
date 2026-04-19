@@ -11,6 +11,7 @@ import { z } from "zod";
 import { createChatModelByName, resolveModelSpecByAlias } from "../model/index.js";
 import { convertDocumentToImages } from "../utils/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -122,10 +123,14 @@ export function createDoc2DataTool({ agentContext }) {
 
       const images = converted.imagePaths || [];
       if (!images.length) {
-        return JSON.stringify(
-          { ok: false, message: "no images produced", input: converted.input },
-          null,
-          2,
+        return toToolJsonResult(
+          "doc_to_data",
+          {
+            ok: false,
+            message: "no images produced",
+            input: converted.input,
+          },
+          true,
         );
       }
 
@@ -179,7 +184,8 @@ export function createDoc2DataTool({ agentContext }) {
         });
       }
 
-      return JSON.stringify(
+      return toToolJsonResult(
+        "doc_to_data",
         {
           ok: true,
           input: converted.input,
@@ -196,8 +202,7 @@ export function createDoc2DataTool({ agentContext }) {
             name: modelSpec?.model || "",
           },
         },
-        null,
-        2,
+        true,
       );
     },
   });

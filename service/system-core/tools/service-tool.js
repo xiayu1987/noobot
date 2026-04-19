@@ -7,6 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
 import { invokeServiceHandler } from "../services/index.js";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 function getServices(agentContext) {
   const globalConfig = agentContext?.runtime?.globalConfig || {};
@@ -24,7 +25,7 @@ function normalizeName(v = "") {
 }
 
 function jsonError(payload = {}) {
-  return JSON.stringify({ ok: false, ...payload });
+  return toToolJsonResult("call_service", { ok: false, ...payload });
 }
 
 function validateInput({ serviceName, endpointName, queryString }) {
@@ -102,7 +103,18 @@ export function createServiceTool({ agentContext }) {
           queryString,
           body,
         });
-        return JSON.stringify(result, null, 2);
+        const normalizedResult =
+          result && typeof result === "object" && !Array.isArray(result)
+            ? result
+            : { data: result };
+        return toToolJsonResult(
+          "call_service",
+          {
+            ok: normalizedResult?.ok !== false,
+            ...normalizedResult,
+          },
+          true,
+        );
       } catch (error) {
         return jsonError({
           serviceName: normalizedServiceName,

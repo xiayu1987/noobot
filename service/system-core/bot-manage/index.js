@@ -14,7 +14,10 @@ import { SkillService } from "../skill/index.js";
 import { runAgentTurn } from "../agent/engine.js";
 import { sanitizeUserConfig } from "../config/index.js";
 import { createExecutionEventListener, emitEvent } from "../event/index.js";
-import { ensureUserWorkspaceInitialized } from "../init/index.js";
+import {
+  ensureUserWorkspaceInitialized,
+  resetUserWorkspaceInitialized,
+} from "../init/index.js";
 import { appendSystemErrorLog } from "../tracking/index.js";
 import { recoverableToolError } from "../error/index.js";
 
@@ -82,6 +85,15 @@ export class BotManager {
 
   async ensureUserWorkspace(userId) {
     return ensureUserWorkspaceInitialized({
+      workspaceRoot: this.globalConfig.workspaceRoot,
+      workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
+      userId,
+      globalConfig: this.globalConfig,
+    });
+  }
+
+  async resetUserWorkspace(userId) {
+    return resetUserWorkspaceInitialized({
       workspaceRoot: this.globalConfig.workspaceRoot,
       workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
       userId,
@@ -242,6 +254,7 @@ export class BotManager {
       const basePath = await this.ensureUserWorkspace(userId);
       await appendSystemErrorLog({
         basePath,
+        workspaceRoot: this.globalConfig?.workspaceRoot || "",
         userId,
         sessionId,
         parentSessionId,

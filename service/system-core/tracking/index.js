@@ -15,8 +15,14 @@ export function getSystemErrorLogFilePath({ basePath }) {
   return path.join(basePath, "system-error.log");
 }
 
+function resolveWorkspaceRootLogFilePath({ workspaceRoot = "" }) {
+  const root = path.resolve(String(workspaceRoot || "").trim());
+  return path.join(root, "system-error.log");
+}
+
 export async function appendSystemErrorLog({
   basePath,
+  workspaceRoot = "",
   userId = "",
   sessionId = "",
   parentSessionId = "",
@@ -32,7 +38,6 @@ export async function appendSystemErrorLog({
     });
   }
   const logFile = getSystemErrorLogFilePath({ basePath });
-  await mkdir(path.dirname(logFile), { recursive: true });
   const record = {
     ts: nowIso(),
     userId: String(userId || ""),
@@ -44,7 +49,14 @@ export async function appendSystemErrorLog({
     stack: String(stack || ""),
     extra: extra && typeof extra === "object" ? extra : {},
   };
-  await appendFile(logFile, `${JSON.stringify(record)}\n`, "utf8");
+  const targetFiles = new Set([logFile]);
+  if (String(workspaceRoot || "").trim()) {
+    targetFiles.add(resolveWorkspaceRootLogFilePath({ workspaceRoot }));
+  }
+  for (const targetFile of targetFiles) {
+    await mkdir(path.dirname(targetFile), { recursive: true });
+    await appendFile(targetFile, `${JSON.stringify(record)}\n`, "utf8");
+  }
   // 同时输出到服务端日志，便于线上排查
   // eslint-disable-next-line no-console
   console.error(`[system_error] ${record.ts} ${record.message}`, record);

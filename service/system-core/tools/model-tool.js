@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -25,10 +26,16 @@ export function createModelTool({
     }),
     func: async ({ modelName }) => {
       if (!runtime || !sessionId)
-        return JSON.stringify({ ok: false, error: "session context missing" });
+        return toToolJsonResult("switch_model", {
+          ok: false,
+          error: "session context missing",
+        });
       const input = String(modelName || "").trim();
       if (!input)
-        return JSON.stringify({ ok: false, error: "modelName required" });
+        return toToolJsonResult("switch_model", {
+          ok: false,
+          error: "modelName required",
+        });
       let alias = input;
       if (!allEnabledProviders[alias]) {
         const byModelName = Object.entries(allEnabledProviders).find(
@@ -37,13 +44,13 @@ export function createModelTool({
         if (byModelName) alias = byModelName[0];
       }
       if (!allEnabledProviders[alias]) {
-        return JSON.stringify({
+        return toToolJsonResult("switch_model", {
           ok: false,
           error: `enabled provider/model not found: ${input}`,
         });
       }
       runtime.runtimeModel = alias;
-      return JSON.stringify({
+      return toToolJsonResult("switch_model", {
         ok: true,
         sessionId,
         modelAlias: alias,

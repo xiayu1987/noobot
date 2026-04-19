@@ -54,6 +54,7 @@ function parseWriteFileResult(content = "") {
   const parsed = tryParseJsonContent(content);
   if (!parsed) return null;
   if (String(parsed?.toolName || "") !== "write_file") return null;
+  if (parsed?.ok === false) return null;
   if (String(parsed?.state || "").toUpperCase() !== "OK") return null;
   const resolvedPath = String(parsed?.resolvedPath || "").trim();
   const fileName = String(parsed?.fileName || "").trim();

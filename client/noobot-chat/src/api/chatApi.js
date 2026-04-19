@@ -69,6 +69,17 @@ export async function getWorkspaceTreeApi({ userId = "" }, { fetcher } = {}) {
   return runFetch(`/api/internal/workspace/tree/${encodeURIComponent(userId)}`);
 }
 
+export async function postResetWorkspaceApi(
+  { userId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/workspace/reset/${encodeURIComponent(userId)}`,
+    { method: "POST" },
+  );
+}
+
 export async function getWorkspaceFileApi(
   { userId = "", path = "" },
   { fetcher } = {},
