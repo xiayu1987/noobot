@@ -4,8 +4,9 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
+import { Plus } from "@element-plus/icons-vue";
 import { getRegularUsersApi, putRegularUsersApi } from "../api/chatApi";
 
 const props = defineProps({
@@ -17,10 +18,8 @@ const props = defineProps({
 const loading = ref(false);
 const saving = ref(false);
 const users = ref([]);
-const usersJsonText = ref("");
+const usersJsonDraft = ref("");
 const jsonParseError = ref("");
-const syncingFromUsers = ref(false);
-const syncingFromJson = ref(false);
 
 function authHeaders(extra = {}) {
   return {
@@ -54,19 +53,14 @@ function generateUuid() {
   });
 }
 
-function syncJsonFromUsers() {
-  syncingFromUsers.value = true;
-  usersJsonText.value = `${JSON.stringify({ users: users.value || [] }, null, 2)}\n`;
-  jsonParseError.value = "";
-  queueMicrotask(() => {
-    syncingFromUsers.value = false;
-  });
+function buildUsersJsonText(list = users.value) {
+  return `${JSON.stringify({ users: normalizeUsers(list) }, null, 2)}\n`;
 }
 
-function parseUsersFromJsonText() {
+function parseUsersFromJsonText(text = "") {
   let parsed = {};
   try {
-    parsed = JSON.parse(String(usersJsonText.value || "{}"));
+    parsed = JSON.parse(String(text || "{}"));
   } catch (error) {
     throw new Error(`JSON 格式错误: ${error.message || String(error)}`);
   }
@@ -74,22 +68,27 @@ function parseUsersFromJsonText() {
   return normalizeUsers(candidateList || []);
 }
 
-function trySyncUsersFromJsonText() {
-  if (syncingFromUsers.value) return true;
+function syncUsersFromJsonDraft() {
   try {
-    const parsedUsers = parseUsersFromJsonText();
-    syncingFromJson.value = true;
-    users.value = parsedUsers;
+    users.value = parseUsersFromJsonText(usersJsonDraft.value);
     jsonParseError.value = "";
-    queueMicrotask(() => {
-      syncingFromJson.value = false;
-    });
     return true;
   } catch (error) {
     jsonParseError.value = error.message || "JSON 格式错误";
     return false;
   }
 }
+
+const usersJsonText = computed({
+  get() {
+    if (jsonParseError.value) return usersJsonDraft.value;
+    return buildUsersJsonText(users.value);
+  },
+  set(value) {
+    usersJsonDraft.value = String(value || "");
+    syncUsersFromJsonDraft();
+  },
+});
 
 async function loadUsers() {
   if (!props.connected || !props.apiKey) return;
@@ -99,7 +98,8 @@ async function loadUsers() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "加载用户失败");
     users.value = normalizeUsers(data.users || []);
-    syncJsonFromUsers();
+    usersJsonDraft.value = buildUsersJsonText(users.value);
+    jsonParseError.value = "";
   } catch (error) {
     ElMessage.error(error.message || "加载用户失败");
   } finally {
@@ -123,7 +123,7 @@ function regenerateSingleUserConnectCode(index) {
 
 function generateConnectCodesForEmptyOnly() {
   try {
-    if (!trySyncUsersFromJsonText()) {
+    if (!syncUsersFromJsonDraft()) {
       throw new Error("请先修正右侧 JSON 格式错误");
     }
     const targetUsers = normalizeUsers(users.value);
@@ -137,6 +137,8 @@ function generateConnectCodesForEmptyOnly() {
         connectCode: currentCode || generateUuid(),
       };
     });
+    usersJsonDraft.value = buildUsersJsonText(users.value);
+    jsonParseError.value = "";
     ElMessage.success("已为连接码为空的用户生成连接码");
   } catch (error) {
     ElMessage.error(error.message || "生成连接码失败");
@@ -145,7 +147,7 @@ function generateConnectCodesForEmptyOnly() {
 
 function forceRegenerateAllConnectCodes() {
   try {
-    if (!trySyncUsersFromJsonText()) {
+    if (!syncUsersFromJsonDraft()) {
       throw new Error("请先修正右侧 JSON 格式错误");
     }
     const targetUsers = normalizeUsers(users.value);
@@ -156,6 +158,8 @@ function forceRegenerateAllConnectCodes() {
       userId: String(item.userId || "").trim(),
       connectCode: generateUuid(),
     }));
+    usersJsonDraft.value = buildUsersJsonText(users.value);
+    jsonParseError.value = "";
     ElMessage.success("已强制重新生成所有用户连接码");
   } catch (error) {
     ElMessage.error(error.message || "强制重新生成失败");
@@ -184,7 +188,7 @@ async function saveUsers() {
   if (!props.connected || !props.apiKey) return;
   saving.value = true;
   try {
-    if (!trySyncUsersFromJsonText()) {
+    if (!syncUsersFromJsonDraft()) {
       throw new Error("请先修正右侧 JSON 格式错误");
     }
     const payloadUsers = validateUsers(users.value);
@@ -195,7 +199,8 @@ async function saveUsers() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "保存用户失败");
     users.value = normalizeUsers(data.users || payloadUsers);
-    syncJsonFromUsers();
+    usersJsonDraft.value = buildUsersJsonText(users.value);
+    jsonParseError.value = "";
     ElMessage.success("用户配置已保存");
   } catch (error) {
     ElMessage.error(error.message || "保存用户失败");
@@ -229,16 +234,11 @@ watch(
 watch(
   () => users.value,
   () => {
-    if (!syncingFromJson.value) syncJsonFromUsers();
+    if (!jsonParseError.value) {
+      usersJsonDraft.value = buildUsersJsonText(users.value);
+    }
   },
   { deep: true },
-);
-
-watch(
-  () => usersJsonText.value,
-  () => {
-    if (!syncingFromUsers.value) trySyncUsersFromJsonText();
-  },
 );
 </script>
 
@@ -255,7 +255,7 @@ watch(
           @click="addUserRow"
           title="新增用户"
         >
-          ➕
+          <el-icon><Plus /></el-icon>
         </el-button>
       </div>
       <div class="panel-body">
