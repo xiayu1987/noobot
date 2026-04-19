@@ -34,17 +34,30 @@ export function createScriptTool({ agentContext }) {
   if (!basePath) return [];
   const workspace = path.join(basePath, "runtime/workspace");
   const userRoot = basePath;
+  const sandboxEnabled = !!globalConfig?.script?.sandboxMode;
+  const description = sandboxEnabled
+    ? [
+        "执行脚本（docker 沙箱模式）。",
+        "沙箱内目录约定：",
+        "- 用户目录整体挂载到容器内 /workspace",
+        "- 命令默认工作目录为 /workspace/runtime/workspace",
+        "输入输出文件请使用容器内路径（推荐相对当前目录或 /workspace 下路径）。",
+      ].join("\n")
+    : [
+        "执行脚本（local 模式）。",
+        `命令在本机目录执行：${workspace}`,
+        "输入输出文件请使用该目录下相对路径。",
+      ].join("\n");
 
   const execute_script = new DynamicStructuredTool({
     name: "execute_script",
-    description: "执行脚本。根据配置选择 local 或 docker sandbox 模式。",
+    description,
     schema: z.object({
       command: z.string().describe("要执行的 shell 命令"),
     }),
     func: async ({ command }) => {
       const timeout = effectiveConfig?.scriptTimeoutMs || 120000;
-      const sandbox = !!globalConfig?.script?.sandboxMode;
-      if (!sandbox) {
+      if (!sandboxEnabled) {
         const r = await run(command, workspace, timeout);
         return toToolJsonResult("execute_script", {
           ok: Number(r?.code || 0) === 0,
