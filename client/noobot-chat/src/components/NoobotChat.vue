@@ -363,6 +363,9 @@ function onAllowUserInteractionUpdate(value) {
               <ChatMessageItem
                 v-if="shouldRenderMessageInChat(messageItem)"
                 :message-item="messageItem"
+                :all-messages="activeSession?.rawMessages || activeSession?.messages || []"
+                :user-id="userId"
+                :auth-fetch="authFetch"
                 :render-markdown="renderMarkdown"
                 :format-time="formatTime"
                 :format-file-size="formatFileSize"

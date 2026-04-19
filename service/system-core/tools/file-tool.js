@@ -42,7 +42,12 @@ export function createFileTool({ agentContext }) {
       });
       await mkdir(path.dirname(resolvedPath), { recursive: true });
       await writeFile(resolvedPath, content, "utf8");
-      return `OK: ${resolvedPath}`;
+      return JSON.stringify({
+        toolName: "write_file",
+        state: "OK",
+        resolvedPath,
+        fileName: path.basename(resolvedPath),
+      });
     },
   });
 

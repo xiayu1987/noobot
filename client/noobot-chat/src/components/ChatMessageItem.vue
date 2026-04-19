@@ -4,11 +4,17 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { Document, WarningFilled } from "@element-plus/icons-vue";
+import { computed, onBeforeUnmount, ref } from "vue";
+import { Document, WarningFilled, Download, View } from "@element-plus/icons-vue";
+import { ElMessage } from "element-plus";
 import ThinkingPanel from "./ThinkingPanel.vue";
+import { downloadWorkspaceFileApi, getWorkspaceFileApi } from "../api/chatApi";
 
 const props = defineProps({
   messageItem: { type: Object, required: true },
+  allMessages: { type: Array, default: () => [] },
+  userId: { type: String, default: "" },
+  authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
@@ -35,6 +41,201 @@ function hasSubTaskActivity(messageItem = {}) {
     completedToolLogs.some((logItem) => Number(logItem?.depth || 0) > 1)
   );
 }
+
+function tryParseJsonContent(content = "") {
+  try {
+    return JSON.parse(String(content || ""));
+  } catch {
+    return null;
+  }
+}
+
+function parseWriteFileResult(content = "") {
+  const parsed = tryParseJsonContent(content);
+  if (!parsed) return null;
+  if (String(parsed?.toolName || "") !== "write_file") return null;
+  if (String(parsed?.state || "").toUpperCase() !== "OK") return null;
+  const resolvedPath = String(parsed?.resolvedPath || "").trim();
+  const fileName = String(parsed?.fileName || "").trim();
+  if (!resolvedPath || !fileName) return null;
+  return { resolvedPath, fileName };
+}
+
+async function onDownloadFile(fileItem = {}) {
+  const userId = String(props.userId || "").trim();
+  const relativePath = String(fileItem?.relativePath || "").trim();
+  if (!userId || !relativePath) return;
+  try {
+    const res = await downloadWorkspaceFileApi(
+      { userId, path: relativePath },
+      { fetcher: props.authFetch || undefined },
+    );
+    if (!res.ok) {
+      let errorText = `下载失败: HTTP ${res.status}`;
+      try {
+        const data = await res.json();
+        if (data?.error) errorText = String(data.error);
+      } catch {
+        // ignore parse error
+      }
+      throw new Error(errorText);
+    }
+    const blob = await res.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = String(fileItem?.fileName || "download");
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    ElMessage.error(error?.message || "下载失败");
+  }
+}
+
+function getFileExtension(fileName = "") {
+  const normalized = String(fileName || "").trim().toLowerCase();
+  const idx = normalized.lastIndexOf(".");
+  if (idx < 0) return "";
+  return normalized.slice(idx + 1);
+}
+
+function isMarkdownFile(fileName = "") {
+  return new Set(["md", "markdown", "mdx"]).has(getFileExtension(fileName));
+}
+
+function isImageFile(fileName = "") {
+  return new Set([
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "bmp",
+    "svg",
+    "ico",
+    "avif",
+  ]).has(getFileExtension(fileName));
+}
+
+const previewVisible = ref(false);
+const previewLoading = ref(false);
+const previewError = ref("");
+const previewFileName = ref("");
+const previewMode = ref("text");
+const previewTextContent = ref("");
+const previewImageUrl = ref("");
+
+function cleanupPreviewImageUrl() {
+  if (!previewImageUrl.value) return;
+  URL.revokeObjectURL(previewImageUrl.value);
+  previewImageUrl.value = "";
+}
+
+async function openFilePreview(fileItem = {}) {
+  const userId = String(props.userId || "").trim();
+  const relativePath = String(fileItem?.relativePath || "").trim();
+  const fileName = String(fileItem?.fileName || "").trim();
+  if (!userId || !relativePath || !fileName) return;
+
+  previewVisible.value = true;
+  previewLoading.value = true;
+  previewError.value = "";
+  previewFileName.value = fileName;
+  previewMode.value = "text";
+  previewTextContent.value = "";
+  cleanupPreviewImageUrl();
+
+  try {
+    if (isImageFile(fileName)) {
+      const downloadRes = await downloadWorkspaceFileApi(
+        { userId, path: relativePath },
+        { fetcher: props.authFetch || undefined },
+      );
+      if (!downloadRes.ok) {
+        let errorText = `预览失败: HTTP ${downloadRes.status}`;
+        try {
+          const data = await downloadRes.json();
+          if (data?.error) errorText = String(data.error);
+        } catch {
+          // ignore
+        }
+        throw new Error(errorText);
+      }
+      const blob = await downloadRes.blob();
+      previewImageUrl.value = URL.createObjectURL(blob);
+      previewMode.value = "image";
+      return;
+    }
+
+    const res = await getWorkspaceFileApi(
+      { userId, path: relativePath },
+      { fetcher: props.authFetch || undefined },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || "预览失败");
+    }
+    if (data.isText === false) {
+      throw new Error("当前文件类型暂不支持预览");
+    }
+    previewTextContent.value = String(data.content || "");
+    previewMode.value = isMarkdownFile(fileName) ? "markdown" : "text";
+  } catch (error) {
+    previewError.value = error?.message || "预览失败";
+  } finally {
+    previewLoading.value = false;
+  }
+}
+
+function closePreviewDialog() {
+  previewVisible.value = false;
+  previewLoading.value = false;
+  previewError.value = "";
+  previewFileName.value = "";
+  previewMode.value = "text";
+  previewTextContent.value = "";
+  cleanupPreviewImageUrl();
+}
+
+onBeforeUnmount(() => {
+  cleanupPreviewImageUrl();
+});
+
+function resolveRelativeWorkspacePath(absolutePath = "") {
+  const normalizedUserId = String(props.userId || "").trim();
+  const normalizedPath = String(absolutePath || "").trim();
+  if (!normalizedUserId || !normalizedPath) return "";
+  const marker = `/workspace/${normalizedUserId}/`;
+  const idx = normalizedPath.indexOf(marker);
+  if (idx < 0) return "";
+  return normalizedPath.slice(idx + marker.length);
+}
+
+const writtenFiles = computed(() => {
+  const dialogProcessId = String(props.messageItem?.dialogProcessId || "").trim();
+  if (!dialogProcessId) return [];
+  const out = [];
+  const seen = new Set();
+  for (const sessionMessage of props.allMessages || []) {
+    if (String(sessionMessage?.role || "") !== "tool") continue;
+    if (String(sessionMessage?.dialogProcessId || "").trim() !== dialogProcessId)
+      continue;
+    const parsed = parseWriteFileResult(sessionMessage?.content || "");
+    if (!parsed) continue;
+    const { resolvedPath, fileName } = parsed;
+    if (seen.has(resolvedPath)) continue;
+    seen.add(resolvedPath);
+    const relativePath = resolveRelativeWorkspacePath(resolvedPath);
+    out.push({
+      resolvedPath,
+      fileName,
+      relativePath,
+    });
+  }
+  return out;
+});
 </script>
 
 <template>
@@ -104,9 +305,72 @@ function hasSubTaskActivity(messageItem = {}) {
         </div>
 
         <div class="md" v-html="renderMarkdown(messageItem.content)" />
+
+        <!-- 醒目的生成文件展示区 -->
+        <div
+          v-if="messageItem.role === 'assistant' && writtenFiles.length"
+          class="written-files-container"
+        >
+          <div class="written-files-header">
+            <el-icon><Document /></el-icon>
+            <span>生成文件 ({{ writtenFiles.length }})</span>
+          </div>
+          <div class="written-files-list">
+            <template v-for="(fileItem, fileIndex) in writtenFiles" :key="`${fileItem.resolvedPath}-${fileIndex}`">
+              <button
+                v-if="fileItem.relativePath"
+                type="button"
+                class="written-file-link"
+                :title="fileItem.resolvedPath"
+                @click="openFilePreview(fileItem)"
+              >
+                <el-icon><View /></el-icon>
+                <span class="file-name-text">{{ fileItem.fileName }}</span>
+              </button>
+              <span v-else class="written-file-link disabled" :title="fileItem.resolvedPath">
+                <el-icon><Document /></el-icon>
+                <span class="file-name-text">{{ fileItem.fileName }}</span>
+              </span>
+              <button
+                v-if="fileItem.relativePath"
+                type="button"
+                class="written-file-download-btn"
+                :title="`下载 ${fileItem.fileName}`"
+                @click="onDownloadFile(fileItem)"
+              >
+                <el-icon><Download /></el-icon>
+              </button>
+            </template>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+
+  <el-dialog
+    v-model="previewVisible"
+    :title="`文件预览：${previewFileName || ''}`"
+    width="72%"
+    top="6vh"
+    class="generated-file-preview-dialog"
+    @closed="closePreviewDialog"
+  >
+    <div class="preview-body" v-loading="previewLoading">
+      <div v-if="previewError" class="preview-error">{{ previewError }}</div>
+      <img
+        v-else-if="previewMode === 'image' && previewImageUrl"
+        :src="previewImageUrl"
+        :alt="previewFileName"
+        class="preview-image"
+      />
+      <div
+        v-else-if="previewMode === 'markdown'"
+        class="preview-markdown"
+        v-html="renderMarkdown(previewTextContent)"
+      />
+      <pre v-else class="preview-text">{{ previewTextContent }}</pre>
+    </div>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -319,6 +583,127 @@ function hasSubTaskActivity(messageItem = {}) {
   overflow-x: auto;
 }
 
+/* --- 醒目的生成文件展示区样式 --- */
+.written-files-container {
+  margin-top: 16px;
+  padding: 14px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px dashed rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+}
+
+.written-files-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #60a5fa;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.written-files-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.written-file-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #1e3a8a;
+  border: 1px solid #3b82f6;
+  color: #bfdbfe;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  outline: none;
+  max-width: 100%;
+}
+
+.file-name-text {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.written-file-link:hover:not(.disabled) {
+  background: #2563eb;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  border-color: #60a5fa;
+}
+
+.written-file-link.disabled {
+  cursor: default;
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+  box-shadow: none;
+}
+
+.written-file-download-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #3b82f6;
+  background: #0f2742;
+  color: #bfdbfe;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.written-file-download-btn:hover {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.preview-body {
+  min-height: 240px;
+  max-height: 68vh;
+  overflow: auto;
+  background: #0b1220;
+  border: 1px solid #1f2d4a;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.preview-error {
+  color: #fca5a5;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 62vh;
+  margin: 0 auto;
+  display: block;
+  border-radius: 8px;
+}
+
+.preview-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #dbeafe;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.preview-markdown {
+  color: #dbeafe;
+  font-size: 13px;
+}
+
+/* --- Markdown 内部样式 --- */
 .md :deep(p) {
   margin: 0 0 12px 0;
 }

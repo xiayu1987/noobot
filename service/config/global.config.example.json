@@ -32,14 +32,8 @@
       "description": "擅长通用对话、快速响应与多模态理解"
     }
   },
-  "sessionToShortMemoryThreshold": 10,
-  "shortMemoryMaxItems": 1000,
-  "shortMemoryMaxExtractedItems": 300,
-  "shortMemoryExtractedTtlDays": 30,
-  "maxToolLoopTurns": 50,
-  "shortMemoryThreshold": 12,
-  "shortMemoryWindow": 8,
-  "longMemoryWindow": 20,
+  "memoryMaxItems": 100,
+  "maxToolLoopTurns": 30,
   "session": {
     "recentMessageLimit": 20,
     "useLastRunningTaskRange": true,

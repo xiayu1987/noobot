@@ -80,6 +80,7 @@ export function useChatSession({
       messageCount: 0,
       lastMessage: null,
       messages: [],
+      rawMessages: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -156,6 +157,7 @@ export function useChatSession({
       messageCount: messages.length || 0,
       lastMessage,
       messages: [],
+      rawMessages: [],
       createdAt: item.createdAt || "",
       updatedAt: item.updatedAt || "",
       caller: item.caller || "",
@@ -240,6 +242,7 @@ export function useChatSession({
   function appendMessage(role, content = "", attachments = []) {
     const msg = reactive(buildAppendMessage(role, content, attachments));
     activeSession.value.messages.push(msg);
+    activeSession.value.rawMessages.push(msg);
     activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
     activeSession.value.lastMessage = msg;
     activeSession.value.updatedAt = new Date().toISOString();
@@ -288,6 +291,9 @@ export function useChatSession({
       sessionDocs.find((doc) => doc.sessionId === detail.sessionId) ||
       sessionDocs[0] ||
       {};
+    sessionItem.rawMessages = (mainSessionDoc.messages || []).map((messageItem) =>
+      makeViewMessage(messageItem),
+    );
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
     sessionItem.currentTaskStatus = "idle";
     sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
@@ -542,6 +548,9 @@ export function useChatSession({
             activeSession.value.loaded = true;
           }
           if (Array.isArray(data.messages) && data.messages.length) {
+            activeSession.value.rawMessages = data.messages.map((messageItem) =>
+              makeViewMessage(messageItem),
+            );
             const folded = foldMessagesForView(data.messages);
             const lastAssistant =
               [...folded]

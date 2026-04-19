@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
 import { mergeConfig } from "../config/index.js";
@@ -26,7 +26,7 @@ export class MemoryService {
   }
 
   _shortPath(basePath) {
-    return path.join(basePath, "memory/short-memory");
+    return path.join(basePath, "memory/short-memory.json");
   }
 
   _longPath(basePath) {
@@ -68,76 +68,19 @@ export class MemoryService {
     }
   }
 
-  _normalizeShortMemory(data) {
-    const normalizedDays = {};
-
-    const days = data?.days || {};
-    for (const [day, items] of Object.entries(days)) {
-      if (!Array.isArray(items)) continue;
-      if (!normalizedDays[day]) normalizedDays[day] = [];
-      for (const item of items) {
-        normalizedDays[day].push({
-          ...item,
-          createdAt: item?.createdAt || `${day}T00:00:00.000Z`,
-        });
-      }
-    }
-
-    return {
-      days: normalizedDays,
-      updatedAt: data.updatedAt || new Date().toISOString(),
-    };
-  }
-
   async _readShortMemory(basePath) {
-    const shortDir = this._shortPath(basePath);
-    await mkdir(shortDir, { recursive: true });
-    const days = {};
-    const files = (await readdir(shortDir, { withFileTypes: true }))
-      .filter((d) => d.isFile() && d.name.endsWith(".json"))
-      .map((d) => d.name);
-    for (const file of files) {
-      const day = file.replace(/\.json$/i, "");
-      const dayData = await this._readJson(path.join(shortDir, file), { items: [] });
-      const items = Array.isArray(dayData?.items) ? dayData.items : [];
-      days[day] = items;
-    }
-    return this._normalizeShortMemory({ days });
+    return this._readJson(this._shortPath(basePath), {
+      items: [],
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async _writeShortMemory(basePath, short) {
-    const shortDir = this._shortPath(basePath);
-    await mkdir(shortDir, { recursive: true });
-    const dayMap = short?.days || {};
-    const expectedFiles = new Set(
-      Object.keys(dayMap).map((day) => `${String(day)}.json`),
-    );
-
-    const currentFiles = (await readdir(shortDir, { withFileTypes: true }))
-      .filter((d) => d.isFile() && d.name.endsWith(".json"))
-      .map((d) => d.name);
-    for (const file of currentFiles) {
-      if (expectedFiles.has(file)) continue;
-      await rm(path.join(shortDir, file), { force: true });
-    }
-
-    for (const [day, items] of Object.entries(dayMap)) {
-      const payload = {
-        date: day,
-        items: Array.isArray(items) ? items : [],
-        updatedAt: new Date().toISOString(),
-      };
-      await writeFile(
-        path.join(shortDir, `${day}.json`),
-        JSON.stringify(payload, null, 2),
-      );
-    }
-  }
-
-  _dayKey(ts = "") {
-    const d = new Date(ts || Date.now());
-    if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
-    return d.toISOString().slice(0, 10);
+    const payload = {
+      items: Array.isArray(short?.items) ? short.items : [],
+      updatedAt: new Date().toISOString(),
+    };
+    await writeFile(this._shortPath(basePath), JSON.stringify(payload, null, 2));
   }
 
   _toTs(v) {
@@ -146,49 +89,35 @@ export class MemoryService {
   }
 
   _flattenShortItems(short = {}) {
-    const days = short?.days || {};
+    return Array.isArray(short?.items) ? short.items : [];
+  }
+
+  _sanitizeDialogRecordsForMemory(messages = []) {
     const out = [];
-    for (const items of Object.values(days)) {
-      if (!Array.isArray(items)) continue;
-      for (const item of items) out.push(item);
+    for (const messageItem of messages) {
+      const role = String(messageItem?.role || "").trim();
+      const type = String(messageItem?.type || "").trim();
+      if (!["user", "assistant"].includes(role)) continue;
+      if (role === "assistant" && type === "tool_call") continue;
+      const content = String(messageItem?.content || "").trim();
+      if (!content) continue;
+      // 只保留长期记忆提炼需要的最小字段，避免记录额外噪音
+      out.push({
+        role,
+        content,
+      });
     }
     return out;
   }
 
   _assignShortItems(short, items = []) {
-    const days = {};
-    for (const item of items) {
-      const day = this._dayKey(item?.createdAt);
-      if (!days[day]) days[day] = [];
-      days[day].push(item);
-    }
-    for (const day of Object.keys(days)) {
-      days[day].sort((a, b) => this._toTs(a.createdAt) - this._toTs(b.createdAt));
-    }
-    short.days = days;
+    short.items = Array.isArray(items) ? items : [];
   }
 
-  _compactShortMemory(short, userConfig = {}) {
-    const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
-    const maxItems = Number(effectiveConfig.shortMemoryMaxItems || 1000);
-    const pendingTtlDays = Number(
-      effectiveConfig.shortMemoryPendingTtlDays || 3,
+  _compactShortMemory(short) {
+    const pending = this._flattenShortItems(short).sort(
+      (a, b) => this._toTs(a.createdAt) - this._toTs(b.createdAt),
     );
-    const ttlMs =
-      pendingTtlDays > 0 ? pendingTtlDays * 24 * 60 * 60 * 1000 : 0;
-    const now = Date.now();
-
-    // 规则：只保留“未提取”短期记忆；已提取立即删除
-    let pending = this._flattenShortItems(short)
-      .filter((i) => !i.extracted)
-      .filter((i) => {
-        if (!ttlMs) return true;
-        const t = this._toTs(i.createdAt);
-        return t > 0 && now - t <= ttlMs;
-      })
-      .sort((a, b) => this._toTs(a.createdAt) - this._toTs(b.createdAt));
-
-    if (pending.length > maxItems) pending = pending.slice(-maxItems);
     this._assignShortItems(short, pending);
   }
 
@@ -208,34 +137,34 @@ export class MemoryService {
     const sessionData = await this._readJson(sessionFile, null);
     if (!sessionData) return false;
 
-    const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
-    const threshold = Number(
-      effectiveConfig.sessionToShortMemoryThreshold || 10,
-    );
-    const messages = sessionData.messages || [];
-    const checkpoint = Number(sessionData.shortMemoryCheckpoint || 0);
-    const pendingCount = messages.length - checkpoint;
-    if (pendingCount < threshold) return false;
+    const messages = Array.isArray(sessionData.messages) ? sessionData.messages : [];
+    if (!messages.length) return false;
+    const latestDialogProcessId = String(
+      [...messages]
+        .reverse()
+        .find((messageItem) => String(messageItem?.dialogProcessId || "").trim())
+        ?.dialogProcessId || "",
+    ).trim();
+    if (!latestDialogProcessId) return false;
 
-    const records = messages.slice(checkpoint);
+    // 以“对话记录（dialogProcessId）”为单位提取，不再按 session checkpoint 切片
+    const dialogRecords = messages.filter(
+      (messageItem) =>
+        String(messageItem?.dialogProcessId || "").trim() ===
+        latestDialogProcessId,
+    );
+    const records = this._sanitizeDialogRecordsForMemory(dialogRecords);
+    if (!records.length) return false;
+
     const short = await this._readShortMemory(basePath);
     const items = this._flattenShortItems(short);
     items.push({
-      id: `${sessionId}-${Date.now()}-${messages.length}`,
-      sessionId,
-      fromIndex: checkpoint,
-      toIndex: messages.length,
       records,
-      extracted: false,
       createdAt: new Date().toISOString(),
     });
     this._assignShortItems(short, items);
-    this._compactShortMemory(short, userConfig);
+    this._compactShortMemory(short);
     await this._writeShortMemory(basePath, short);
-
-    sessionData.shortMemoryCheckpoint = messages.length;
-    sessionData.updatedAt = new Date().toISOString();
-    await writeFile(sessionFile, JSON.stringify(sessionData, null, 2));
     return true;
   }
 
@@ -244,15 +173,13 @@ export class MemoryService {
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
     const short = await this._readShortMemory(basePath);
     const unextracted = this._flattenShortItems(short)
-      .filter((i) => !i.extracted)
       .sort((a, b) => this._toTs(a.createdAt) - this._toTs(b.createdAt));
-    if (unextracted.length < Number(effectiveConfig.shortMemoryThreshold || 12))
+    const memoryMaxItems = Number(effectiveConfig.memoryMaxItems || 100);
+    if (unextracted.length < memoryMaxItems)
       return;
 
-    const limit = Number(effectiveConfig.longMemoryWindow || 20);
-    const target = unextracted.slice(0, limit);
+    const target = unextracted;
     const promptPayload = target.map((i) => ({
-      sessionId: i.sessionId,
       records: i.records,
     }));
     const longMem = await this._readJson(this._longPath(basePath), { facts: [] });
@@ -278,29 +205,27 @@ export class MemoryService {
       `新短期记忆块:\n${JSON.stringify(promptPayload)}`,
     ].join("\n\n");
 
-    let facts = [];
+    let facts = existingFacts;
     try {
       const res = await llm.invoke(prompt);
-      const parsed =
-        typeof res.content === "string" ? JSON.parse(res.content) : [];
-      facts = Array.isArray(parsed) ? parsed : [];
+      const contentText =
+        typeof res?.content === "string"
+          ? res.content
+          : JSON.stringify(res?.content ?? "");
+      const normalizedText = String(contentText || "").trim();
+      if (normalizedText) {
+        // 不强制要求模型返回 JSON，直接按文本记忆存储
+        facts = [normalizedText];
+      }
     } catch {
       facts = existingFacts;
     }
 
-    longMem.facts = Array.isArray(facts)
-      ? facts.slice(-500)
-      : existingFacts.slice(-500);
+    longMem.facts = Array.isArray(facts) ? facts.slice(-500) : [];
     await writeFile(this._longPath(basePath), JSON.stringify(longMem, null, 2));
 
-    const targetIds = new Set(target.map((t) => t.id));
-    // 提取后立即删除
-    const remained = this._flattenShortItems(short).filter(
-      (item) => !targetIds.has(item.id),
-    );
-    this._assignShortItems(short, remained);
-
-    this._compactShortMemory(short, userConfig);
+    // 提取后短期记忆全部清空
+    this._assignShortItems(short, []);
     await this._writeShortMemory(basePath, short);
   }
 }

@@ -79,6 +79,16 @@ export async function getWorkspaceFileApi(
   );
 }
 
+export async function downloadWorkspaceFileApi(
+  { userId = "", path = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/workspace/download/${encodeURIComponent(userId)}?path=${encodeURIComponent(path)}`,
+  );
+}
+
 export async function putWorkspaceFileApi(
   { userId = "", path = "", content = "" },
   { fetcher } = {},
