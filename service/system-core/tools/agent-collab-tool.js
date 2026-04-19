@@ -6,6 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
@@ -70,7 +71,6 @@ export function createAgentCollabTool({ agentContext }) {
   };
 
   const delegateTaskItemSchema = z.object({
-    sessionId: z.string().optional().describe("子会话ID（UUID，可选，传入则续用）"),
     task: z.string().describe("子任务内容"),
     sharedTaskSpec: z.string().optional().describe("共享任务说明"),
     deliverable: z.string().describe("最终交付物要求（文件名及说明）"),
@@ -197,7 +197,7 @@ export function createAgentCollabTool({ agentContext }) {
   const delegateTaskAsync = new DynamicStructuredTool({
     name: "delegate_task_async",
     description:
-      "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含sessionId（可选）、task、sharedTaskSpec、deliverable。",
+      "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含task、sharedTaskSpec、deliverable。sessionId 由系统自动生成并在结果中返回。",
     schema: z.object({
       parentSessionId: z.string().describe("父会话ID（UUID）"),
       tasks: z
@@ -225,19 +225,23 @@ export function createAgentCollabTool({ agentContext }) {
         tasks.map(async (taskItem = {}, index) => {
           const taskText = String(taskItem?.task || "").trim();
           const deliverableText = String(taskItem?.deliverable || "").trim();
+          const generatedSessionId = randomUUID();
           if (!taskText || !deliverableText) {
             return {
               ok: false,
               index,
               error: "task/deliverable required",
-              request: taskItem,
+              request: {
+                sessionId: generatedSessionId,
+                ...taskItem,
+              },
             };
           }
           try {
             const result = botManager.runAsyncSession({
               userId,
               parentSessionId: normalizedParentSessionId,
-              sessionId: String(taskItem?.sessionId || "").trim(),
+              sessionId: generatedSessionId,
               task: taskText,
               sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
               deliverable: deliverableText,
@@ -252,7 +256,7 @@ export function createAgentCollabTool({ agentContext }) {
               index,
               ...result,
               request: {
-                sessionId: String(taskItem?.sessionId || "").trim(),
+                sessionId: generatedSessionId,
                 task: taskText,
                 sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
                 deliverable: deliverableText,
@@ -265,7 +269,7 @@ export function createAgentCollabTool({ agentContext }) {
               index,
               error: error?.message || String(error),
               request: {
-                sessionId: String(taskItem?.sessionId || "").trim(),
+                sessionId: generatedSessionId,
                 task: taskText,
                 sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
                 deliverable: deliverableText,
