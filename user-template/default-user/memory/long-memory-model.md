@@ -30,6 +30,5 @@
   "history_preferences": {
     "preferred_conversation_style": null,// 对话风格（幽默、严肃、专业等）
     "common_topics": [],// 常关注的话题
-    "interaction_summary": []// 过去互动摘要或偏好记录
   }
 }
