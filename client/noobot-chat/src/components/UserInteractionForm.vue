@@ -4,7 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { reactive, watch } from "vue";
+import { nextTick, reactive, ref, watch } from "vue";
+import { ElMessage } from "element-plus";
 
 const props = defineProps({
   request: { type: Object, default: null },
@@ -14,6 +15,11 @@ const props = defineProps({
 const emit = defineEmits(["confirm", "cancel"]);
 
 const formData = reactive({});
+const firstInputRef = ref(null);
+
+function setFirstInputRef(el) {
+  firstInputRef.value = el || null;
+}
 
 function resetForm() {
   const fields = Array.isArray(props.request?.fields) ? props.request.fields : [];
@@ -28,13 +34,20 @@ function resetForm() {
 }
 
 function onConfirm() {
+  if (props.submitting) return;
   const fields = Array.isArray(props.request?.fields) ? props.request.fields : [];
   if (fields.length) {
     const payload = {};
     for (const fieldItem of fields) {
       const key = String(fieldItem?.name || "").trim();
       if (!key) continue;
-      payload[key] = String(formData[key] || "");
+      const value = String(formData[key] || "");
+      if (fieldItem?.required && !value.trim()) {
+        const label = String(fieldItem?.displayName || fieldItem?.name || key);
+        ElMessage.warning(`${label} 为必填项`);
+        return;
+      }
+      payload[key] = value;
     }
     emit("confirm", payload);
     return;
@@ -48,7 +61,11 @@ function onCancel() {
 
 watch(
   () => props.request?.requestId,
-  () => resetForm(),
+  async () => {
+    resetForm();
+    await nextTick();
+    firstInputRef.value?.focus?.();
+  },
   { immediate: true },
 );
 </script>
@@ -64,6 +81,7 @@ watch(
       v-if="Array.isArray(request.fields) && request.fields.length"
       label-position="top"
       class="interaction-form"
+      @keydown.enter.prevent="onConfirm"
     >
       <el-form-item
         v-for="(fieldItem, index) in request.fields"
@@ -71,6 +89,7 @@ watch(
         :label="`${fieldItem.displayName || fieldItem.name}${fieldItem.required ? ' *' : ''}`"
       >
         <el-input
+          :ref="index === 0 ? setFirstInputRef : null"
           v-model="formData[fieldItem.name]"
           :placeholder="fieldItem.description || `请输入${fieldItem.displayName || fieldItem.name}`"
         />

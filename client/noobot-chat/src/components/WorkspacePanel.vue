@@ -6,6 +6,7 @@
 <script setup>
 import { ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { Refresh } from "@element-plus/icons-vue";
 import {
   buildWorkspaceDownloadUrl,
   getWorkspaceFileApi,
@@ -204,17 +205,17 @@ watch(
     <div class="workspace-panel workspace-tree">
       <div class="panel-head">
         <span class="panel-title">项目目录</span>
+        <!-- 优化：使用 :icon 属性并自闭合，彻底解决 loading 时的空 span 挤压问题 -->
         <el-button
-          class="icon-btn"
+          class="refresh-btn noobot-action-btn tail-btn"
           size="small"
-          text
+          :icon="Refresh"
           @click="loadTree"
           :loading="loadingTree || resetting"
-          :disabled="resetting"
+          :disabled="!connected || resetting"
           title="刷新目录"
-        >
-          ↻
-        </el-button>
+          aria-label="刷新目录"
+        />
         <el-button
           class="danger-btn"
           size="small"
@@ -365,6 +366,30 @@ watch(
 .icon-btn:hover {
   color: #dce2f5;
   background: #1a2030;
+}
+
+.tail-btn {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  background: var(--noobot-btn-soft-bg);
+  border: 1px solid var(--noobot-btn-soft-border);
+  color: var(--noobot-btn-soft-text);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  margin-left: 0 !important;
+}
+
+.tail-btn :deep(.el-icon) {
+  margin: 0 !important;
+}
+
+.refresh-btn:not(:disabled):hover {
+  background: var(--noobot-btn-soft-bg-hover);
+  color: #fff;
 }
 
 .dark-btn {

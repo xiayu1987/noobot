@@ -195,7 +195,7 @@ watch(
           :icon="Refresh"
           :loading="loadingSessions"
           @click="emit('refresh-sessions')"
-          :disabled="!connected"
+          :disabled="!connected || sending"
           title="刷新"
           aria-label="刷新会话列表"
         />
@@ -230,6 +230,7 @@ watch(
             class="session-delete-btn noobot-action-btn"
             title="删除会话"
             aria-label="删除会话"
+            :disabled="sending"
             @click.stop="emit('delete-session', sessionItem.id)"
           >
             <el-icon><Delete /></el-icon>
@@ -506,6 +507,12 @@ watch(
   color: #fecaca;
   border-color: #b91c1c;
   background: rgba(185, 28, 28, 0.16);
+}
+
+.session-delete-btn:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .title {

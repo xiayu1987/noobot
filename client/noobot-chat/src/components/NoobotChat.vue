@@ -397,6 +397,7 @@ async function handleWorkspaceReset() {
         :can-stop="sending"
         :connected="connected"
         :allow-user-interaction="allowUserInteraction"
+        :interaction-active="Boolean(pendingInteractionRequest)"
         @upload-change="onUploadChange"
         @update:allow-user-interaction="onAllowUserInteractionUpdate"
         @clear-uploads="clearUploads"

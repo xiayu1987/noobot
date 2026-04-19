@@ -14,6 +14,7 @@ const props = defineProps({
   connected: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
+  interactionActive: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -30,7 +31,8 @@ const attachmentCount = computed(() => (props.uploadFiles || []).length);
 const sendDisabled = computed(
   () =>
     (!String(props.modelValue || "").trim() && !attachmentCount.value) ||
-    !props.connected,
+    !props.connected ||
+    props.interactionActive,
 );
 
 function onInputChange(value) {
@@ -51,6 +53,7 @@ function onClearUploads() {
 }
 
 function onSend() {
+  if (props.interactionActive) return;
   emit("send");
 }
 

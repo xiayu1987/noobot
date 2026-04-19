@@ -247,7 +247,7 @@ watch(
     <!-- 左侧表单编辑器 (280px 宽) -->
     <div class="workspace-panel">
       <div class="panel-head">
-        <span class="panel-title">用户表单</span>
+        <span class="panel-title">用户</span>
         <el-button
           class="icon-btn"
           size="small"
