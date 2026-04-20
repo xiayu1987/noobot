@@ -231,6 +231,22 @@ export class SessionManager {
     );
   }
 
+  _normalizeTaskItem(task = {}) {
+    const taskId = String(task?.taskId || "").trim();
+    const taskStatus = String(task?.taskStatus || task?.status || "").trim();
+    return {
+      taskId,
+      skillName: String(task?.skillName || "").trim(),
+      taskName: String(task?.taskName || "").trim(),
+      taskStatus:
+        taskStatus === "start" || taskStatus === "completed" ? taskStatus : "",
+      startedAt: String(task?.startedAt || "").trim(),
+      endedAt: String(task?.endedAt || "").trim(),
+      result: String(task?.result || "").trim(),
+      meta: task?.meta && typeof task.meta === "object" ? task.meta : {},
+    };
+  }
+
   async _ensureRuntimeDirsByBasePath(basePath) {
     try {
       await access(basePath);
@@ -888,7 +904,8 @@ export class SessionManager {
       messageIndex >= 0;
       messageIndex -= 1
     ) {
-      if ((messages[messageIndex]?.taskStatus || "") === "completed") {
+      const status = String(messages[messageIndex]?.taskStatus || "");
+      if (status === "completed") {
         startIndex = messageIndex;
         break;
       }
@@ -1012,6 +1029,65 @@ export class SessionManager {
     await this._writeJson(taskFile, sessionBundle.task);
     await this._writeJson(sessionFile, sessionBundle.session);
     return task;
+  }
+
+  async saveCurrentTurnTasks({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    currentTurnTasks = [],
+  }) {
+    const basePath = this._resolveBasePath(userId);
+    const { resolvedParentSessionId, sessionFile, taskFile } =
+      await this._resolveSessionScope(basePath, sessionId, parentSessionId);
+    await this.ensureSession(userId, sessionId, resolvedParentSessionId);
+    const sessionBundle = await this.getSessionBundle({
+      userId,
+      sessionId,
+      parentSessionId: resolvedParentSessionId,
+    });
+
+    const normalizedTurnTasks = (Array.isArray(currentTurnTasks)
+      ? currentTurnTasks
+      : []
+    )
+      .map((task) => this._normalizeTaskItem(task))
+      .filter((task) => task.taskId);
+    if (!normalizedTurnTasks.length) return sessionBundle.task;
+
+    const existingTasks = Array.isArray(sessionBundle.task?.tasks)
+      ? sessionBundle.task.tasks.map((task) => this._normalizeTaskItem(task))
+      : [];
+    const taskIndexMap = new Map(
+      existingTasks.map((task, index) => [task.taskId, index]),
+    );
+    for (const task of normalizedTurnTasks) {
+      const existingIndex = taskIndexMap.get(task.taskId);
+      if (existingIndex === undefined) {
+        existingTasks.push(task);
+        taskIndexMap.set(task.taskId, existingTasks.length - 1);
+      } else {
+        existingTasks[existingIndex] = {
+          ...existingTasks[existingIndex],
+          ...task,
+        };
+      }
+    }
+
+    const lastTask = normalizedTurnTasks[normalizedTurnTasks.length - 1] || null;
+    const currentTaskId = String(lastTask?.taskId || "").trim();
+    const now = this._now();
+
+    sessionBundle.task.tasks = existingTasks;
+    sessionBundle.task.currentTaskId = currentTaskId;
+    sessionBundle.task.updatedAt = now;
+
+    sessionBundle.session.currentTaskId = currentTaskId;
+    sessionBundle.session.updatedAt = now;
+
+    await this._writeJson(taskFile, sessionBundle.task);
+    await this._writeJson(sessionFile, sessionBundle.session);
+    return sessionBundle.task;
   }
 
   async getContextRecords({ userId, sessionId, userConfig = {} }) {

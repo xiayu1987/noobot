@@ -242,6 +242,8 @@ export class BotManager {
         dialogProcessId: messageItem.dialogProcessId || dialogProcessId || "",
         parentDialogProcessId:
           messageItem.parentDialogProcessId || parentDialogProcessId || "",
+        taskId: messageItem.taskId || null,
+        taskStatus: messageItem.taskStatus || null,
         tool_calls: Array.isArray(messageItem.tool_calls)
           ? messageItem.tool_calls
           : null,
@@ -463,6 +465,12 @@ export class BotManager {
         parentDialogProcessId,
         eventListener: runtimeEventListener,
       });
+      await this.session.saveCurrentTurnTasks({
+        userId,
+        sessionId: usedSessionId,
+        parentSessionId,
+        currentTurnTasks: agentResult?.turnTasks || [],
+      });
 
       await this.memory.captureSessionToShortMemory({
         userId,
@@ -492,6 +500,7 @@ export class BotManager {
         answer: agentResult.output,
         traces: agentResult.traces,
         messages: agentResult?.turnMessages || [],
+        turnTasks: agentResult?.turnTasks || [],
         executionLogs,
         dialogProcessId,
       };

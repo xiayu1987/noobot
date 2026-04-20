@@ -18,6 +18,10 @@ import {
 import { mergeConfig } from "../config/index.js";
 import { emitEvent } from "../event/index.js";
 import { isFatalError } from "../error/index.js";
+import {
+  resolveTurnMessagesStore,
+  resolveTurnTasksStore,
+} from "../context/current-turn-store.js";
 
 function buildContextMessages(agentContext) {
   function toLangChainToolCalls(toolCalls = []) {
@@ -170,8 +174,16 @@ function assertNotAborted(signal = null) {
 }
 
 async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
-  const { tools, messages, traces, turnMessages, dialogProcessId, maxTurns } =
-    loopState;
+  const {
+    tools,
+    messages,
+    traces,
+    turnMessages,
+    currentTurnMessages,
+    currentTurnTasks,
+    dialogProcessId,
+    maxTurns,
+  } = loopState;
   const {
     eventListener,
     runtime,
@@ -186,7 +198,12 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     const limitMsg = `工具调用轮次已达到上限(${maxTurns})，自动结束。`;
     traces.push({ tool: "system", args: { turn, maxTurns }, result: limitMsg });
     emitEvent(eventListener, "tool_loop_limit_reached", { turn, maxTurns });
-    return { output: limitMsg, traces, turnMessages };
+    return {
+      output: limitMsg,
+      traces,
+      turnMessages: Array.isArray(turnMessages) ? turnMessages : [],
+      turnTasks: Array.isArray(loopState?.turnTasks) ? loopState.turnTasks : [],
+    };
   }
 
   resolveLlmForTurn(modelState);
@@ -211,8 +228,16 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     signal: abortSignal,
   });
   messages.push(ai);
+  const turnMessageStore = resolveTurnMessagesStore(
+    currentTurnMessages,
+    turnMessages,
+  );
+  const turnTaskStore = resolveTurnTasksStore(
+    currentTurnTasks,
+    loopState.turnTasks || [],
+  );
   const calls = ai.tool_calls || [];
-  turnMessages.push({
+  turnMessageStore.push({
     role: "assistant",
     content: String(ai.content || ""),
     type: calls.length ? "tool_call" : "message",
@@ -234,7 +259,12 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   });
 
   if (!calls.length)
-    return { output: String(ai.content || ""), traces, turnMessages };
+    return {
+      output: String(ai.content || ""),
+      traces,
+      turnMessages: turnMessageStore.toArray(),
+      turnTasks: turnTaskStore.toArray(),
+    };
 
   emitEvent(eventListener, "tool_calls_detected", {
     turn,
@@ -258,7 +288,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       messages.push(
         new ToolMessage({ tool_call_id: call.id, content: notFoundMsg }),
       );
-      turnMessages.push({
+      turnMessageStore.push({
         role: "tool",
         content: String(notFoundMsg),
         type: "tool_result",
@@ -296,7 +326,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
         content: String(toolResultText),
       }),
     );
-    turnMessages.push({
+    turnMessageStore.push({
       role: "tool",
       content: String(toolResultText),
       type: "tool_result",
@@ -305,6 +335,8 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     });
   }
 
+  loopState.turnMessages = turnMessageStore.toArray();
+  loopState.turnTasks = turnTaskStore.toArray();
   return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
 }
 
@@ -354,6 +386,9 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     messages,
     traces: [],
     turnMessages: [],
+    turnTasks: [],
+    currentTurnMessages: runtime?.currentTurnMessages || null,
+    currentTurnTasks: runtime?.currentTurnTasks || null,
     dialogProcessId,
     maxTurns:
       Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0

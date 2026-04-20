@@ -6,6 +6,7 @@
 import { access, readdir } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
+import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { safeJoin } from "../utils/fs-safe.js";
 import { toToolJsonResult } from "./tool-json-result.js";
@@ -17,13 +18,12 @@ function getBasePath(agentContext) {
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
-export function createSkillTool({ agentContext, sessionId }) {
+
+export function createSkillTool({ agentContext }) {
   const basePath = getBasePath(agentContext);
   const runtime = getRuntime(agentContext);
-  const systemRuntime = runtime.systemRuntime || {};
-  const userId = agentContext?.userId || runtime.userId || "";
-  const sessionManager = runtime.sessionManager || null;
-  const parentSessionId = systemRuntime.parentSessionId || "";
+  const currentTurnMessages = runtime?.currentTurnMessages || null;
+  const currentTurnTasks = runtime?.currentTurnTasks || null;
   if (!basePath) return [];
   const skillRoot = path.join(basePath, "skills");
 
@@ -89,21 +89,15 @@ export function createSkillTool({ agentContext, sessionId }) {
   const manageSkillTaskTool = new DynamicStructuredTool({
     name: "set_skill_task",
     description:
-      "设置 skill 任务状态。action=start 表示开始任务（仅匹配到技能后调用）；action=finish 表示结束任务（仅正确返回完整结果后调用，报错/需要确认/需要询问时禁止调用）。",
+      "设置 skill 任务状态。action=start 表示开始任务（仅匹配到技能后调用）；action=completed 表示结束任务（仅正确返回完整结果后调用，报错/需要确认/需要询问时禁止调用）。",
     schema: z.object({
-      action: z.enum(["start", "finish"]).describe("任务动作：start 或 finish"),
+      action: z.enum(["start", "completed"]).describe("任务动作：start 或 completed"),
       skillName: z.string().optional().describe("技能名称，action=start 时必填"),
       taskName: z.string().optional().describe("任务名称，action=start 时可填"),
-      taskId: z.string().optional().describe("任务ID，action=finish 时可填"),
-      result: z.string().optional().describe("任务结果说明，action=finish 时可填"),
+      taskId: z.string().optional().describe("任务ID，action=completed 时可填"),
+      result: z.string().optional().describe("任务结果说明，action=completed 时可填"),
     }),
     func: async ({ action, skillName, taskName, taskId, result }) => {
-      if (!sessionManager || !sessionId || !userId || !basePath)
-        return toToolJsonResult("set_skill_task", {
-          ok: false,
-          message: "session context missing",
-        });
-
       if (action === "start") {
         if (!String(skillName || "").trim()) {
           return toToolJsonResult(
@@ -111,29 +105,80 @@ export function createSkillTool({ agentContext, sessionId }) {
             { ok: false, message: "skillName is required when action=start" },
           );
         }
-        const task = await sessionManager.startSkillTask({
-          userId,
-          sessionId,
-          parentSessionId,
-          skillName: skillName || "",
-          taskName: taskName || "",
-        });
-        return toToolJsonResult("set_skill_task", { ok: true, action, task }, true);
+        const createdTaskId = uuidv4();
+        if (
+          currentTurnTasks &&
+          typeof currentTurnTasks.push === "function" &&
+          currentTurnMessages &&
+          typeof currentTurnMessages.updateLast === "function"
+        ) {
+          currentTurnTasks.push({
+            taskId: createdTaskId,
+            skillName: String(skillName || "").trim(),
+            taskName: String(taskName || "").trim(),
+            taskStatus: "start",
+            startedAt: new Date().toISOString(),
+            endedAt: "",
+          });
+          currentTurnMessages.updateLast({
+            taskId: createdTaskId,
+            taskStatus: "start",
+          });
+        }
+        return toToolJsonResult(
+          "set_skill_task",
+          {
+            ok: true,
+            action,
+            task: {
+              taskId: createdTaskId,
+              skillName: skillName || "",
+              taskName: taskName || "",
+              taskStatus: "start",
+            },
+          },
+          true,
+        );
       }
-
-      const task = await sessionManager.finishSkillTask({
-        userId,
-        sessionId,
-        parentSessionId,
-        taskId: taskId || "",
-        result: result || "",
-      });
-      if (!task)
-        return toToolJsonResult("set_skill_task", {
-          ok: false,
-          message: "no start task found",
-        });
-      return toToolJsonResult("set_skill_task", { ok: true, action, task }, true);
+      let resolvedTaskId = String(taskId || "").trim();
+      if (
+        currentTurnTasks &&
+        typeof currentTurnTasks.last === "function" &&
+        typeof currentTurnTasks.updateLast === "function"
+      ) {
+        const lastTask = currentTurnTasks.last();
+        resolvedTaskId = resolvedTaskId || String(lastTask?.taskId || "").trim();
+        if (resolvedTaskId) {
+          currentTurnTasks.updateLast({
+            taskId: resolvedTaskId,
+            taskStatus: "completed",
+            endedAt: new Date().toISOString(),
+            result: result || "",
+          });
+          if (
+            currentTurnMessages &&
+            typeof currentTurnMessages.updateLast === "function"
+          ) {
+            currentTurnMessages.updateLast({
+              taskId: resolvedTaskId,
+              taskStatus: "completed",
+            });
+          }
+        }
+      }
+      return toToolJsonResult(
+        "set_skill_task",
+        {
+          ok: true,
+          action,
+          task: {
+            taskId: resolvedTaskId,
+            taskStatus: "completed",
+            result: result || "",
+          },
+        },
+        true,
+      );
     },
   });
 

@@ -8,6 +8,10 @@ import path from "node:path";
 import { mergeConfig } from "../config/index.js";
 import { resolveDefaultModelSpec } from "../model/index.js";
 import { buildTools } from "../tools/index.js";
+import {
+  createCurrentTurnMessagesStore,
+  createCurrentTurnTasksStore,
+} from "./current-turn-store.js";
 
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
@@ -190,6 +194,8 @@ export class ContextBuilder {
       abortSignal: this.abortSignal || null,
       allEnabledProviders: this._resolveAllEnabledProviders(),
       systemRuntime,
+      currentTurnMessages: createCurrentTurnMessagesStore(),
+      currentTurnTasks: createCurrentTurnTasksStore(),
     };
   }
 
