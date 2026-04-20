@@ -21,8 +21,8 @@
       "endpoints": {
         "getWeather": {
           "description": "天气查询",
-          "url": "https://geocoding-api.open-meteo.com/v1/search",
-          "query-string-format": "{\"city\":\"\",\"days\":3,\"language\":\"zh\"}",
+          "url": "https://wttr.in",
+          "query-string-format": "{\"city\":\"Chongqing\",\"format\":\"j1\"}",
           "body-format": "{}"
         }
       }
