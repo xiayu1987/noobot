@@ -199,6 +199,7 @@ export class BotManager {
     attachmentIds = [],
     attachments = [],
     dialogProcessId = "",
+    parentDialogProcessId = "",
     parentSessionId = "",
     eventListener,
   }) {
@@ -212,6 +213,7 @@ export class BotManager {
       taskId,
       taskStatus,
       dialogProcessId,
+      parentDialogProcessId,
       tool_calls,
       tool_call_id,
       attachmentIds,
@@ -226,6 +228,7 @@ export class BotManager {
     parentSessionId = "",
     messages = [],
     dialogProcessId = "",
+    parentDialogProcessId = "",
     eventListener,
   }) {
     for (const messageItem of messages) {
@@ -237,6 +240,8 @@ export class BotManager {
         type: messageItem.type || "",
         parentSessionId,
         dialogProcessId: messageItem.dialogProcessId || dialogProcessId || "",
+        parentDialogProcessId:
+          messageItem.parentDialogProcessId || parentDialogProcessId || "",
         tool_calls: Array.isArray(messageItem.tool_calls)
           ? messageItem.tool_calls
           : null,
@@ -318,6 +323,7 @@ export class BotManager {
     eventListener = null,
     caller = "user",
     parentSessionId = "",
+    parentDialogProcessId = "",
     abortSignal = null,
     userInteractionBridge = null,
     runConfig = {},
@@ -422,6 +428,7 @@ export class BotManager {
         attachmentIds: userMessageAttachmentIds,
         attachments: userMessageAttachments,
         dialogProcessId,
+        parentDialogProcessId,
         eventListener: runtimeEventListener,
       });
 
@@ -453,6 +460,7 @@ export class BotManager {
           },
         ],
         dialogProcessId,
+        parentDialogProcessId,
         eventListener: runtimeEventListener,
       });
 
@@ -479,6 +487,7 @@ export class BotManager {
       return {
         sessionId: usedSessionId,
         parentSessionId: parentSessionId || "",
+        parentDialogProcessId: parentDialogProcessId || "",
         caller: String(caller || "user"),
         answer: agentResult.output,
         traces: agentResult.traces,
@@ -558,6 +567,7 @@ export class BotManager {
     attachments = [],
     eventListener = null,
     sourceDialogProcessId = "",
+    parentDialogProcessId = "",
     userInteractionBridge = null,
     runConfig = {},
     abortSignal = null,
@@ -617,6 +627,7 @@ export class BotManager {
       userId,
       sessionId: usedSessionId,
       parentSessionId,
+      parentDialogProcessId,
       caller: "bot",
       message,
       attachments,
@@ -658,6 +669,7 @@ export class BotManager {
       status: "running",
       sessionId: usedSessionId,
       parentSessionId,
+      parentDialogProcessId: parentDialogProcessId || "",
       startedAt,
     };
   }

@@ -78,6 +78,64 @@ export async function assertValidParentSessionId({
   return normalizedParentSessionId;
 }
 
+export async function assertValidParentDialogProcessId({
+  parentSessionId = "",
+  parentDialogProcessId = "",
+  agentContext = {},
+  parentSessionFieldName = "parentSessionId",
+  dialogFieldName = "parentDialogProcessId",
+}) {
+  const normalizedParentSessionId = await assertValidParentSessionId({
+    parentSessionId,
+    agentContext,
+    fieldName: parentSessionFieldName,
+  });
+  const normalizedParentDialogProcessId = String(
+    parentDialogProcessId || "",
+  ).trim();
+  if (!normalizedParentDialogProcessId) {
+    throw recoverableToolError(`${dialogFieldName} required`, {
+      code: "RECOVERABLE_INPUT_MISSING",
+      details: { field: dialogFieldName },
+    });
+  }
+
+  const runtime = agentContext?.runtime || {};
+  const sessionManager = runtime?.sessionManager || null;
+  const userId = String(
+    agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
+  ).trim();
+  if (!sessionManager || !userId) {
+    throw recoverableToolError("session context missing", {
+      code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
+      details: { hasSessionManager: Boolean(sessionManager), hasUserId: Boolean(userId) },
+    });
+  }
+
+  const exists = await sessionManager.hasDialogProcessIdInSession({
+    userId,
+    sessionId: normalizedParentSessionId,
+    dialogProcessId: normalizedParentDialogProcessId,
+  });
+  if (!exists) {
+    throw recoverableToolError(
+      `${dialogFieldName} not found in parent session messages: ${normalizedParentDialogProcessId}`,
+      {
+        code: "RECOVERABLE_PARENT_DIALOG_PROCESS_NOT_FOUND",
+        details: {
+          field: dialogFieldName,
+          parentSessionId: normalizedParentSessionId,
+          parentDialogProcessId: normalizedParentDialogProcessId,
+        },
+      },
+    );
+  }
+  return {
+    parentSessionId: normalizedParentSessionId,
+    parentDialogProcessId: normalizedParentDialogProcessId,
+  };
+}
+
 export async function assertAndResolveUserWorkspaceFilePath({
   filePath = "",
   agentContext = {},

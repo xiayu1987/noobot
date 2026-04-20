@@ -205,6 +205,7 @@ export class SessionManager {
       content: message?.content || "",
       type: message?.type || "",
       dialogProcessId: message?.dialogProcessId || "",
+      parentDialogProcessId: message?.parentDialogProcessId || "",
       taskId: message?.taskId || "",
       taskStatus: message?.taskStatus || "",
       attachmentIds: Array.isArray(message?.attachmentIds)
@@ -698,6 +699,7 @@ export class SessionManager {
     taskId = null,
     taskStatus = null,
     dialogProcessId = "",
+    parentDialogProcessId = "",
     tool_calls = null,
     tool_call_id = "",
     attachmentIds = [],
@@ -729,6 +731,7 @@ export class SessionManager {
       content,
       type: type || "",
       dialogProcessId: dialogProcessId || "",
+      parentDialogProcessId: parentDialogProcessId || "",
       taskId: resolvedTaskId,
       taskStatus: resolvedTaskStatus,
       ts: this._now(),
@@ -760,6 +763,30 @@ export class SessionManager {
   async getSessionTurns({ userId, sessionId }) {
     const sessionBundle = await this.getSessionBundle({ userId, sessionId });
     return sessionBundle.session?.messages || [];
+  }
+
+  async hasDialogProcessIdInSession({
+    userId,
+    sessionId,
+    dialogProcessId = "",
+    parentSessionId = "",
+  }) {
+    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    if (!normalizedDialogProcessId) return false;
+    const sessionBundle = await this.getSessionBundle({
+      userId,
+      sessionId,
+      parentSessionId,
+    });
+    if (!sessionBundle?.exists) return false;
+    const messages = Array.isArray(sessionBundle?.session?.messages)
+      ? sessionBundle.session.messages
+      : [];
+    return messages.some(
+      (messageItem) =>
+        String(messageItem?.dialogProcessId || "").trim() ===
+        normalizedDialogProcessId,
+    );
   }
 
   async getExecutionBundle({ userId, sessionId }) {

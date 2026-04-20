@@ -375,7 +375,6 @@ export class ContextBuilder {
     return {
       sessionId: this.sessionId || "",
       caller: this.caller || "user",
-      parentSessionId: this.parentSessionId || "",
       dialogProcessId: String(dialogProcessId || ""),
       sessionTree,
       now: this._now(),

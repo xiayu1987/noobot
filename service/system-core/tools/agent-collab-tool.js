@@ -22,7 +22,10 @@ import {
   isFatalError,
   recoverableToolError,
 } from "../error/index.js";
-import { assertValidParentSessionId } from "./check-tool-input.js";
+import {
+  assertValidParentDialogProcessId,
+  assertValidParentSessionId,
+} from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 
 function getRuntime(agentContext) {
@@ -200,21 +203,28 @@ export function createAgentCollabTool({ agentContext }) {
       "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含task、sharedTaskSpec、deliverable。sessionId 由系统自动生成并在结果中返回。",
     schema: z.object({
       parentSessionId: z.string().describe("父会话ID（UUID）"),
+      parentDialogProcessId: z
+        .string()
+        .describe("父会话中的对话流程ID（必须存在于 parentSessionId 的消息中）"),
       tasks: z
         .array(delegateTaskItemSchema)
         .min(1)
         .describe("并发子任务列表"),
     }),
-    func: async ({ parentSessionId, tasks }) => {
+    func: async ({ parentSessionId, parentDialogProcessId, tasks }) => {
       if (!botManager || !userId)
         return toToolJsonResult("delegate_task_async", {
           ok: false,
           error: "runtime missing bot manager/user id",
         });
-      const normalizedParentSessionId = await assertValidParentSessionId({
+      const validatedParent = await assertValidParentDialogProcessId({
         parentSessionId,
+        parentDialogProcessId,
         agentContext,
       });
+      const normalizedParentSessionId = validatedParent.parentSessionId;
+      const normalizedParentDialogProcessId =
+        validatedParent.parentDialogProcessId;
       if (!Array.isArray(tasks) || !tasks.length) {
         throw recoverableToolError("tasks required", {
           code: "RECOVERABLE_INPUT_MISSING",
@@ -247,6 +257,7 @@ export function createAgentCollabTool({ agentContext }) {
               deliverable: deliverableText,
               eventListener: runtimeEventListener,
               sourceDialogProcessId: String(sourceDialogProcessId || ""),
+              parentDialogProcessId: normalizedParentDialogProcessId,
               userInteractionBridge,
               runConfig,
               abortSignal,
@@ -285,6 +296,7 @@ export function createAgentCollabTool({ agentContext }) {
           ok: allOk,
           status: allOk ? "running" : "partial_failed",
           parentSessionId: normalizedParentSessionId,
+          parentDialogProcessId: normalizedParentDialogProcessId,
           tasks: resultList,
         },
         true,
