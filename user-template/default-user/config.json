@@ -22,7 +22,7 @@
         "getWeather": {
           "description": "天气查询",
           "url": "https://wttr.in",
-          "query-string-format": "{\"city\":\"Chongqing\",\"format\":\"j1\"}",
+          "query-string-format": "{\"city\":\"\",\"format\":\"j1\"}",
           "body-format": "{}"
         }
       }
