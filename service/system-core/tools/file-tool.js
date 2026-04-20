@@ -7,7 +7,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
+import {
+  assertAndResolveUserWorkspaceFilePath,
+  assertValidFileNameFromPath,
+} from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 
 export function createFileTool({ agentContext }) {
@@ -18,6 +21,7 @@ export function createFileTool({ agentContext }) {
       filePath: z.string().describe("要读取的文件路径（工作区相对路径或用户目录内绝对路径）"),
     }),
     func: async ({ filePath }) => {
+      assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
       const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
         filePath,
         agentContext,
@@ -42,6 +46,7 @@ export function createFileTool({ agentContext }) {
       content: z.string().describe("写入文件的文本内容"),
     }),
     func: async ({ filePath, content }) => {
+      assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
       const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
         filePath,
         agentContext,

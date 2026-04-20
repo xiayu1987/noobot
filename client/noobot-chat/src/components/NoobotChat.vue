@@ -369,6 +369,7 @@ async function handleWorkspaceReset() {
                 v-if="shouldRenderMessageInChat(messageItem)"
                 :message-item="messageItem"
                 :all-messages="activeSession?.rawMessages || activeSession?.messages || []"
+                :session-docs="activeSession?.sessionDocs || []"
                 :user-id="userId"
                 :auth-fetch="authFetch"
                 :render-markdown="renderMarkdown"

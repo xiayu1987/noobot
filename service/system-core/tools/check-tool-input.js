@@ -34,6 +34,62 @@ function resolveUserWorkspacePath(agentContext = {}) {
   return resolveRuntimeBasePath(agentContext);
 }
 
+export function assertValidSimpleFileName({
+  fileName = "",
+  fieldName = "fileName",
+}) {
+  const normalizedFileName = String(fileName || "").trim();
+  if (!normalizedFileName) {
+    throw recoverableToolError(`${fieldName} required`, {
+      code: "RECOVERABLE_INPUT_MISSING",
+      details: { field: fieldName },
+    });
+  }
+  if (
+    normalizedFileName.includes("/") ||
+    normalizedFileName.includes("\\")
+  ) {
+    throw recoverableToolError(`${fieldName} must not contain path separators`, {
+      code: "RECOVERABLE_INVALID_FILE_NAME",
+      details: { field: fieldName, value: normalizedFileName },
+    });
+  }
+  if (/[\0-\x1F\x7F]/.test(normalizedFileName)) {
+    throw recoverableToolError(
+      `${fieldName} must not contain control characters`,
+      {
+        code: "RECOVERABLE_INVALID_FILE_NAME",
+        details: { field: fieldName, value: normalizedFileName },
+      },
+    );
+  }
+  return normalizedFileName;
+}
+
+export function assertValidFileNameFromPath({
+  filePath = "",
+  fieldName = "filePath",
+}) {
+  const normalizedPath = String(filePath || "").trim();
+  if (!normalizedPath) {
+    throw recoverableToolError(`${fieldName} required`, {
+      code: "RECOVERABLE_INPUT_MISSING",
+      details: { field: fieldName },
+    });
+  }
+  const parsedName = path.basename(path.normalize(normalizedPath));
+  if (!parsedName || parsedName === "." || parsedName === path.sep) {
+    throw recoverableToolError(`${fieldName} must include file name`, {
+      code: "RECOVERABLE_INVALID_FILE_NAME",
+      details: { field: fieldName, value: normalizedPath },
+    });
+  }
+  return assertValidSimpleFileName({
+    fileName: parsedName,
+    fieldName,
+  });
+}
+
 export async function assertValidParentSessionId({
   parentSessionId = "",
   agentContext = {},

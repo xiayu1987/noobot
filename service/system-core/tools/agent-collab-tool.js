@@ -25,6 +25,7 @@ import {
 import {
   assertValidParentDialogProcessId,
   assertValidParentSessionId,
+  assertValidSimpleFileName,
 } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 
@@ -50,18 +51,6 @@ export function createAgentCollabTool({ agentContext }) {
   const basePath = agentContext?.basePath || runtime.basePath || "";
   const subAgentDir = basePath ? path.join(basePath, "runtime/subagent") : "";
 
-  const normalizeFileName = (fileName = "") => {
-    const name = String(fileName || "").trim();
-    if (!name) throw recoverableToolError("fileName required");
-    if (name.includes("/") || name.includes("\\")) {
-      throw recoverableToolError("fileName must not contain path separators");
-    }
-    if (!/^[a-zA-Z0-9._-]+$/.test(name)) {
-      throw recoverableToolError("invalid fileName");
-    }
-    return name;
-  };
-
   const resolveSubAgentFile = async (fileName = "") => {
     if (!subAgentDir) {
       throw fatalSystemError("runtime basePath missing", {
@@ -69,7 +58,7 @@ export function createAgentCollabTool({ agentContext }) {
       });
     }
     await mkdir(subAgentDir, { recursive: true });
-    const name = normalizeFileName(fileName);
+    const name = assertValidSimpleFileName({ fileName, fieldName: "fileName" });
     return safeJoin(subAgentDir, name);
   };
 
@@ -92,7 +81,12 @@ export function createAgentCollabTool({ agentContext }) {
       const normalized = value.trim();
       if (normalized) {
         try {
-          outputSet.add(normalizeFileName(normalized));
+          outputSet.add(
+            assertValidSimpleFileName({
+              fileName: normalized,
+              fieldName: "deliverable.fileName",
+            }),
+          );
         } catch {
           // ignore non-filename strings
         }
@@ -133,7 +127,12 @@ export function createAgentCollabTool({ agentContext }) {
       text.match(/[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9_-]+/g) || [];
     for (const fileName of patternMatches) {
       try {
-        out.add(normalizeFileName(fileName));
+        out.add(
+          assertValidSimpleFileName({
+            fileName,
+            fieldName: "deliverable.fileName",
+          }),
+        );
       } catch {
         // ignore invalid match
       }
@@ -465,17 +464,16 @@ export function createAgentCollabTool({ agentContext }) {
     },
   });
 
-  const planExecutionFlow = new DynamicStructuredTool({
-    name: "plan_execution_flow",
-    description:
-      "流程规划工具：输入任务文本，调用大模型将任务拆分为可执行流程并返回。",
+  const planMultiTaskCollaboration = new DynamicStructuredTool({
+    name: "plan_multi_task_collaboration",
+    description: "多任务协作规划",
     schema: z.object({
       task: z.string().describe("需要拆分流程的任务文本"),
     }),
     func: async ({ task }) => {
       const taskText = String(task || "").trim();
       if (!taskText)
-        return toToolJsonResult("plan_execution_flow", {
+        return toToolJsonResult("plan_multi_task_collaboration", {
           ok: false,
           error: "task required",
         });
@@ -506,10 +504,11 @@ export function createAgentCollabTool({ agentContext }) {
       const res = await llm.invoke([
         new SystemMessage(
           [
-            "流程规划，请把用户任务拆分为可执行流程。",
+            "多任务协作规划。",
+            "请输出规划内容与任务调用链。",
             "输出必须是 JSON，不要使用 markdown 代码块。",
             "JSON 格式：",
-            '{ "summary": "任务概述", "flow": [{ "step": 1, "title": "步骤标题", "goal": "目标", "actions": ["具体动作"], "deliverable": "产出", "dependsOn": [1] }] }',
+            '{ "tasks":[{ "taskName":"任务a", "taskContent":"任务目标、内容", "sharedTaskSpec":"共享知识或数据","deliverable":"交付物(文件名)","subTasks":[] }] }',
           ].join("\n"),
         ),
         new HumanMessage(`任务文本：\n${taskText}`),
@@ -532,7 +531,7 @@ export function createAgentCollabTool({ agentContext }) {
       }
 
       return toToolJsonResult(
-        "plan_execution_flow",
+        "plan_multi_task_collaboration",
         {
           ok: true,
           task: taskText,
@@ -551,6 +550,6 @@ export function createAgentCollabTool({ agentContext }) {
     writeTaskDeliverableFile,
     delegateTaskAsync,
     waitAsyncTaskResult,
-    planExecutionFlow,
+    planMultiTaskCollaboration,
   ];
 }

@@ -13,6 +13,7 @@ import { downloadWorkspaceFileApi, getWorkspaceFileApi } from "../api/chatApi";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   allMessages: { type: Array, default: () => [] },
+  sessionDocs: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
   authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
@@ -50,16 +51,23 @@ function tryParseJsonContent(content = "") {
   }
 }
 
-function parseWriteFileResult(content = "") {
+function parseToolFileResult(content = "") {
   const parsed = tryParseJsonContent(content);
   if (!parsed) return null;
-  if (String(parsed?.toolName || "") !== "write_file") return null;
+  const toolName = String(parsed?.toolName || "").trim();
+  if (!["write_file", "write_task_deliverable_file"].includes(toolName)) return null;
   if (parsed?.ok === false) return null;
-  if (String(parsed?.state || "").toUpperCase() !== "OK") return null;
-  const resolvedPath = String(parsed?.resolvedPath || "").trim();
+
+  if (toolName === "write_file" && String(parsed?.state || "").toUpperCase() !== "OK") {
+    return null;
+  }
+
+  const resolvedPath = String(
+    parsed?.resolvedPath || parsed?.path || "",
+  ).trim();
   const fileName = String(parsed?.fileName || "").trim();
   if (!resolvedPath || !fileName) return null;
-  return { resolvedPath, fileName };
+  return { toolName, resolvedPath, fileName };
 }
 
 async function onDownloadFile(fileItem = {}) {
@@ -219,21 +227,52 @@ const writtenFiles = computed(() => {
   if (!dialogProcessId) return [];
   const out = [];
   const seen = new Set();
-  for (const sessionMessage of props.allMessages || []) {
-    if (String(sessionMessage?.role || "") !== "tool") continue;
-    if (String(sessionMessage?.dialogProcessId || "").trim() !== dialogProcessId)
-      continue;
-    const parsed = parseWriteFileResult(sessionMessage?.content || "");
-    if (!parsed) continue;
-    const { resolvedPath, fileName } = parsed;
-    if (seen.has(resolvedPath)) continue;
+  const relatedDialogIds = new Set([dialogProcessId]);
+  const candidateMessages = [
+    ...(Array.isArray(props.allMessages) ? props.allMessages : []),
+    ...((Array.isArray(props.sessionDocs) ? props.sessionDocs : []).flatMap((sessionDoc) =>
+      Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [],
+    )),
+  ];
+
+  const addCandidate = (sessionMessage = {}) => {
+    const parsed = parseToolFileResult(sessionMessage?.content || "");
+    if (!parsed) return;
+    const { resolvedPath, fileName, toolName } = parsed;
+    if (seen.has(resolvedPath)) return;
     seen.add(resolvedPath);
     const relativePath = resolveRelativeWorkspacePath(resolvedPath);
     out.push({
+      toolName,
       resolvedPath,
       fileName,
       relativePath,
     });
+  };
+
+  // 递归收集后代：子 session、子 session 的子 session ...（按 parentDialogProcessId 链路）
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const sessionMessage of candidateMessages) {
+      const parentId = String(sessionMessage?.parentDialogProcessId || "").trim();
+      const childDialogId = String(sessionMessage?.dialogProcessId || "").trim();
+      if (!parentId || !childDialogId) continue;
+      if (!relatedDialogIds.has(parentId)) continue;
+      if (relatedDialogIds.has(childDialogId)) continue;
+      relatedDialogIds.add(childDialogId);
+      changed = true;
+    }
+  }
+
+  // 收集当前轮次 + 全部后代链路上的工具产物文件
+  for (const sessionMessage of candidateMessages) {
+    if (String(sessionMessage?.role || "") !== "tool") continue;
+    const currentDialogId = String(sessionMessage?.dialogProcessId || "").trim();
+    const parentId = String(sessionMessage?.parentDialogProcessId || "").trim();
+    if (!relatedDialogIds.has(currentDialogId) && !relatedDialogIds.has(parentId))
+      continue;
+    addCandidate(sessionMessage);
   }
   return out;
 });

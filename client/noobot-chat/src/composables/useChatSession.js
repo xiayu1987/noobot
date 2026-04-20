@@ -81,6 +81,7 @@ export function useChatSession({
       lastMessage: null,
       messages: [],
       rawMessages: [],
+      sessionDocs: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -158,6 +159,7 @@ export function useChatSession({
       lastMessage,
       messages: [],
       rawMessages: [],
+      sessionDocs: [],
       createdAt: item.createdAt || "",
       updatedAt: item.updatedAt || "",
       caller: item.caller || "",
@@ -287,6 +289,7 @@ export function useChatSession({
     sessionItem.isLocal = false;
     sessionItem.backendSessionId = detail.sessionId;
     const sessionDocs = Array.isArray(detail.sessions) ? detail.sessions : [];
+    sessionItem.sessionDocs = sessionDocs;
     const mainSessionDoc =
       sessionDocs.find((doc) => doc.sessionId === detail.sessionId) ||
       sessionDocs[0] ||
@@ -524,8 +527,11 @@ export function useChatSession({
           if (item.dialogProcessId) botMsg.dialogProcessId = item.dialogProcessId;
           botMsg.realtimeLogs = [...(botMsg.realtimeLogs || []), item].slice(-10);
         } else if (event === "delta") {
-          botMsg.content += data.text || "";
-          scrollBottom();
+          const chunkText = String(data.text || "");
+          botMsg.content += chunkText;
+          if (chunkText) {
+            scrollBottom();
+          }
         } else if (event === "interaction_request") {
           pendingInteractionRequest.value = {
             requestId: String(data?.requestId || ""),
@@ -533,7 +539,6 @@ export function useChatSession({
             fields: Array.isArray(data?.fields) ? data.fields : [],
             dialogProcessId: String(data?.dialogProcessId || ""),
           };
-          scrollBottom();
         } else if (event === "done") {
           pendingInteractionRequest.value = null;
           finalDoneEventData = data || {};
