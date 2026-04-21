@@ -436,6 +436,7 @@ async function handleWorkspaceReset() {
         :api-key="apiKey"
         :connected="connected"
         :active="workspaceVisible"
+        :is-super-admin="isSuperAdmin"
         @workspace-reset="handleWorkspaceReset"
       />
     </el-drawer>

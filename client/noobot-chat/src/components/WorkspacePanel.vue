@@ -11,6 +11,7 @@ import {
   buildWorkspaceDownloadUrl,
   getWorkspaceFileApi,
   postResetWorkspaceApi,
+  postSyncWorkspaceApi,
   getWorkspaceTreeApi,
   putWorkspaceFileApi,
 } from "../api/chatApi";
@@ -20,6 +21,7 @@ const props = defineProps({
   apiKey: { type: String, default: "" },
   connected: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
+  isSuperAdmin: { type: Boolean, default: false },
 });
 const emit = defineEmits(["workspace-reset"]);
 
@@ -28,6 +30,7 @@ const loadingTree = ref(false);
 const loadingFile = ref(false);
 const saving = ref(false);
 const resetting = ref(false);
+const syncing = ref(false);
 const activePath = ref("");
 const content = ref("");
 const isTextFile = ref(true);
@@ -169,6 +172,25 @@ async function resetWorkspace() {
   }
 }
 
+async function syncWorkspace() {
+  if (!props.connected || !props.userId || !props.apiKey) return;
+  syncing.value = true;
+  try {
+    const res = await postSyncWorkspaceApi(
+      { userId: props.userId },
+      { fetcher: authFetch },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "同步配置失败");
+    await loadTree();
+    ElMessage.success("已完成增量同步");
+  } catch (error) {
+    ElMessage.error(error.message || "同步配置失败");
+  } finally {
+    syncing.value = false;
+  }
+}
+
 watch(
   () => props.active,
   (v) => {
@@ -212,16 +234,26 @@ watch(
           :icon="Refresh"
           @click="loadTree"
           :loading="loadingTree || resetting"
-          :disabled="!connected || resetting"
+          :disabled="!connected || resetting || syncing"
           title="刷新目录"
           aria-label="刷新目录"
         />
+        <el-button
+          class="dark-btn"
+          size="small"
+          @click="syncWorkspace"
+          :loading="syncing"
+          :disabled="loadingTree || loadingFile || saving || resetting"
+          title="增量同步配置"
+        >
+          同步配置
+        </el-button>
         <el-button
           class="danger-btn"
           size="small"
           @click="resetWorkspace"
           :loading="resetting"
-          :disabled="loadingTree || loadingFile || saving"
+          :disabled="loadingTree || loadingFile || saving || syncing"
           title="重置工作区"
         >
           重置工作区

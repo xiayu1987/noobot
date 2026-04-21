@@ -7,7 +7,13 @@
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { Plus } from "@element-plus/icons-vue";
-import { getRegularUsersApi, putRegularUsersApi } from "../api/chatApi";
+import {
+  getRegularUsersApi,
+  getTemplateFileApi,
+  getTemplateTreeApi,
+  putRegularUsersApi,
+  putTemplateFileApi,
+} from "../api/chatApi";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },
@@ -17,9 +23,17 @@ const props = defineProps({
 
 const loading = ref(false);
 const saving = ref(false);
+const activeTab = ref("users");
 const users = ref([]);
 const usersJsonDraft = ref("");
 const jsonParseError = ref("");
+const templateTree = ref([]);
+const templateLoadingTree = ref(false);
+const templateLoadingFile = ref(false);
+const templateSaving = ref(false);
+const templateActivePath = ref("");
+const templateContent = ref("");
+const templateIsTextFile = ref(true);
 
 function authHeaders(extra = {}) {
   return {
@@ -104,6 +118,61 @@ async function loadUsers() {
     ElMessage.error(error.message || "加载用户失败");
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadTemplateTree() {
+  if (!props.connected || !props.apiKey) return;
+  templateLoadingTree.value = true;
+  try {
+    const res = await getTemplateTreeApi({ fetcher: authFetch });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "加载默认用户目录失败");
+    templateTree.value = data.tree || [];
+  } catch (error) {
+    ElMessage.error(error.message || "加载默认用户目录失败");
+  } finally {
+    templateLoadingTree.value = false;
+  }
+}
+
+async function openTemplateFile(node) {
+  if (!props.connected || !props.apiKey || !node || node.type !== "file") return;
+  templateLoadingFile.value = true;
+  try {
+    const res = await getTemplateFileApi(
+      { path: node.path },
+      { fetcher: authFetch },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "读取默认用户文件失败");
+    templateActivePath.value = data.path || node.path;
+    templateIsTextFile.value = data.isText !== false;
+    templateContent.value = data.content || "";
+  } catch (error) {
+    ElMessage.error(error.message || "读取默认用户文件失败");
+  } finally {
+    templateLoadingFile.value = false;
+  }
+}
+
+async function saveTemplateFile() {
+  if (!props.connected || !props.apiKey || !templateActivePath.value) return;
+  if (!templateIsTextFile.value) return;
+  templateSaving.value = true;
+  try {
+    const res = await putTemplateFileApi(
+      { path: templateActivePath.value, content: templateContent.value },
+      { fetcher: authFetch },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "保存默认用户文件失败");
+    ElMessage.success("默认用户文件已保存");
+    await loadTemplateTree();
+  } catch (error) {
+    ElMessage.error(error.message || "保存默认用户文件失败");
+  } finally {
+    templateSaving.value = false;
   }
 }
 
@@ -212,7 +281,9 @@ async function saveUsers() {
 watch(
   () => props.active,
   (visible) => {
-    if (visible) loadUsers();
+    if (!visible) return;
+    if (activeTab.value === "users") loadUsers();
+    if (activeTab.value === "template") loadTemplateTree();
   },
   { immediate: true },
 );
@@ -220,16 +291,26 @@ watch(
 watch(
   () => props.apiKey,
   () => {
-    if (props.active && props.connected) loadUsers();
+    if (!props.active || !props.connected) return;
+    if (activeTab.value === "users") loadUsers();
+    if (activeTab.value === "template") loadTemplateTree();
   },
 );
 
 watch(
   () => props.connected,
   (isConnected) => {
-    if (isConnected && props.active) loadUsers();
+    if (!isConnected || !props.active) return;
+    if (activeTab.value === "users") loadUsers();
+    if (activeTab.value === "template") loadTemplateTree();
   },
 );
+
+watch(activeTab, (tabName) => {
+  if (!props.active || !props.connected) return;
+  if (tabName === "users") loadUsers();
+  if (tabName === "template") loadTemplateTree();
+});
 
 watch(
   () => users.value,
@@ -243,111 +324,159 @@ watch(
 </script>
 
 <template>
-  <div class="workspace-layout" v-loading="loading" element-loading-background="rgba(11, 13, 18, 0.8)">
-    <!-- 左侧表单编辑器 (280px 宽) -->
-    <div class="workspace-panel">
-      <div class="panel-head">
-        <span class="panel-title">用户</span>
-        <el-button
-          class="icon-btn"
-          size="small"
-          text
-          @click="addUserRow"
-          title="新增用户"
-        >
-          <el-icon><Plus /></el-icon>
-        </el-button>
-      </div>
-      <div class="panel-body">
-        <el-scrollbar class="tree-scroll">
-          <div class="users-list">
-            <div v-for="(item, idx) in users" :key="idx" class="user-row">
-              <div class="row-header">
-                <span class="user-idx">User {{ idx + 1 }}</span>
-                <el-button
-                  class="icon-btn danger-text"
-                  size="small"
-                  text
-                  @click="removeUserRow(idx)"
-                  title="删除"
-                >
-                  ✕
-                </el-button>
+  <el-tabs v-model="activeTab" class="settings-tabs">
+    <el-tab-pane label="用户设置" name="users">
+      <div class="workspace-layout" v-loading="loading" element-loading-background="rgba(11, 13, 18, 0.8)">
+        <div class="workspace-panel">
+          <div class="panel-head">
+            <span class="panel-title">用户</span>
+            <el-button class="icon-btn" size="small" text @click="addUserRow" title="新增用户">
+              <el-icon><Plus /></el-icon>
+            </el-button>
+          </div>
+          <div class="panel-body">
+            <el-scrollbar class="tree-scroll">
+              <div class="users-list">
+                <div v-for="(item, idx) in users" :key="idx" class="user-row">
+                  <div class="row-header">
+                    <span class="user-idx">User {{ idx + 1 }}</span>
+                    <el-button class="icon-btn danger-text" size="small" text @click="removeUserRow(idx)" title="删除">✕</el-button>
+                  </div>
+                  <el-input v-model="item.userId" placeholder="userId" clearable class="row-input" />
+                  <div class="code-row">
+                    <el-input v-model="item.connectCode" placeholder="connectCode" clearable class="row-input" />
+                    <el-button class="dark-btn action-btn" @click="regenerateSingleUserConnectCode(idx)" title="重新生成连接码">↻</el-button>
+                  </div>
+                </div>
+                <div v-if="!users.length" class="empty-tip">
+                  <div class="empty-icon">👥</div>
+                  <p>暂无用户，请点击右上角新增</p>
+                </div>
               </div>
-              <el-input
-                v-model="item.userId"
-                placeholder="userId"
-                clearable
-                class="row-input"
-              />
-              <div class="code-row">
-                <el-input
-                  v-model="item.connectCode"
-                  placeholder="connectCode"
-                  clearable
-                  class="row-input"
-                />
-                <el-button
-                  class="dark-btn action-btn"
-                  @click="regenerateSingleUserConnectCode(idx)"
-                  title="重新生成连接码"
-                >
-                  ↻
-                </el-button>
-              </div>
+            </el-scrollbar>
+          </div>
+        </div>
+
+        <div class="workspace-panel workspace-editor">
+          <div class="panel-head">
+            <div class="file-info">
+              <span class="active-file" title="workspace/user.json">workspace/user.json</span>
             </div>
-            <div v-if="!users.length" class="empty-tip">
-              <div class="empty-icon">👥</div>
-              <p>暂无用户，请点击右上角新增</p>
+            <div class="editor-actions">
+              <el-button size="small" class="dark-btn" @click="generateConnectCodesForEmptyOnly">批量生成(空值)</el-button>
+              <el-button size="small" class="dark-btn" @click="forceRegenerateAllConnectCodes">强制重置</el-button>
+              <el-button type="primary" class="primary-btn" size="small" @click="saveUsers" :loading="saving">保存</el-button>
             </div>
           </div>
-        </el-scrollbar>
-      </div>
-    </div>
-
-    <!-- 右侧 JSON 编辑器 (1fr 宽) -->
-    <div class="workspace-panel workspace-editor">
-      <div class="panel-head">
-        <div class="file-info">
-          <span class="active-file" title="workspace/user.json">workspace/user.json</span>
+          <div class="panel-body editor-body">
+            <div v-if="jsonParseError" class="json-error">⚠️ {{ jsonParseError }}</div>
+            <el-input
+              v-model="usersJsonText"
+              type="textarea"
+              resize="none"
+              class="editor-input"
+              spellcheck="false"
+              placeholder='{"users":[{"userId":"user-001","connectCode":"..."}]}'
+            />
+          </div>
         </div>
-        <div class="editor-actions">
-          <el-button size="small" class="dark-btn" @click="generateConnectCodesForEmptyOnly">
-            批量生成(空值)
-          </el-button>
-          <el-button size="small" class="dark-btn" @click="forceRegenerateAllConnectCodes">
-            强制重置
-          </el-button>
-          <el-button
-            type="primary"
-            class="primary-btn"
-            size="small"
-            @click="saveUsers"
-            :loading="saving"
+      </div>
+    </el-tab-pane>
+
+    <el-tab-pane label="默认用户设置" name="template">
+      <div class="workspace-layout">
+        <div class="workspace-panel workspace-tree">
+          <div class="panel-head">
+            <span class="panel-title">default-user 目录</span>
+            <el-button
+              class="refresh-btn noobot-action-btn tail-btn"
+              size="small"
+              @click="loadTemplateTree"
+              :loading="templateLoadingTree"
+              title="刷新目录"
+            >
+              ↻
+            </el-button>
+          </div>
+          <div class="panel-body">
+            <el-scrollbar class="tree-scroll">
+              <el-tree
+                :data="templateTree"
+                node-key="path"
+                :props="{ label: 'label', children: 'children' }"
+                @node-click="openTemplateFile"
+                highlight-current
+                class="custom-tree"
+              >
+                <template #default="{ data }">
+                  <span class="tree-node">
+                    <span class="node-icon">{{ data.type === "dir" ? "📁" : "📄" }}</span>
+                    <span class="node-label">{{ data.label }}</span>
+                  </span>
+                </template>
+              </el-tree>
+            </el-scrollbar>
+          </div>
+        </div>
+        <div class="workspace-panel workspace-editor">
+          <div class="panel-head">
+            <div class="file-info">
+              <span class="active-file" :title="templateActivePath">{{ templateActivePath || "未选择文件" }}</span>
+            </div>
+            <div class="editor-actions">
+              <el-button
+                type="primary"
+                class="primary-btn"
+                size="small"
+                @click="saveTemplateFile"
+                :disabled="!templateActivePath || !templateIsTextFile"
+                :loading="templateSaving"
+              >
+                保存
+              </el-button>
+            </div>
+          </div>
+          <div
+            class="panel-body editor-body"
+            v-loading="templateLoadingFile"
+            element-loading-background="rgba(11, 13, 18, 0.8)"
           >
-            保存
-          </el-button>
+            <template v-if="templateActivePath">
+              <el-input
+                v-if="templateIsTextFile"
+                v-model="templateContent"
+                type="textarea"
+                resize="none"
+                class="editor-input"
+                placeholder="开始编辑..."
+              />
+              <div v-else class="empty-tip">
+                <div class="empty-icon">📦</div>
+                <p>该文件为二进制文件，暂不支持在线编辑</p>
+              </div>
+            </template>
+            <div v-else class="empty-tip">
+              <div class="empty-icon">👈</div>
+              <p>请在左侧目录树中选择文件</p>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div class="panel-body editor-body">
-        <div v-if="jsonParseError" class="json-error">
-          ⚠️ {{ jsonParseError }}
-        </div>
-        <el-input
-          v-model="usersJsonText"
-          type="textarea"
-          resize="none"
-          class="editor-input"
-          spellcheck="false"
-          placeholder='{"users":[{"userId":"user-001","connectCode":"..."}]}'
-        />
-      </div>
-    </div>
-  </div>
+    </el-tab-pane>
+  </el-tabs>
 </template>
 
 <style scoped>
+.settings-tabs {
+  height: calc(100vh - 80px);
+}
+.settings-tabs :deep(.el-tabs__content) {
+  height: calc(100% - 44px);
+}
+.settings-tabs :deep(.el-tab-pane) {
+  height: 100%;
+}
+
 /* 整体布局：完全对齐第二个界面的 280px 1fr */
 .workspace-layout {
   display: grid;
@@ -403,6 +532,23 @@ watch(
   color: #dce2f5;
   background: #1a2030;
 }
+.tail-btn {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  background: var(--noobot-btn-soft-bg);
+  border: 1px solid var(--noobot-btn-soft-border);
+  color: var(--noobot-btn-soft-text);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.refresh-btn:not(:disabled):hover {
+  background: var(--noobot-btn-soft-bg-hover);
+  color: #fff;
+}
 .icon-btn.danger-text:hover {
   color: #f87171;
   background: rgba(239, 68, 68, 0.1);
@@ -435,6 +581,39 @@ watch(
 /* 左侧表单区域 (适配 280px 宽度) */
 .tree-scroll {
   height: 100%;
+}
+
+.custom-tree {
+  background: transparent;
+  padding: 8px;
+  color: #dce2f5;
+  --el-tree-node-hover-bg-color: #161b28;
+  --el-tree-text-color: #dce2f5;
+  --el-tree-expand-icon-color: #6b7280;
+}
+.custom-tree :deep(.el-tree-node__content) {
+  height: 32px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+}
+.custom-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
+  background-color: #1a2337;
+  color: #83a7ff;
+}
+.tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.node-icon {
+  font-size: 14px;
+  opacity: 0.9;
+}
+.node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .users-list {

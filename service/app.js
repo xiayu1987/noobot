@@ -127,6 +127,13 @@ async function collectConfigTemplateKeys() {
   return Array.from(keys).filter(Boolean).sort((a, b) => a.localeCompare(b));
 }
 
+function templateRootPath() {
+  return path.resolve(
+    process.cwd(),
+    String(globalConfigRaw?.workspaceTemplatePath || "../user-template/default-user"),
+  );
+}
+
 async function rebuildRuntimeConfig() {
   const paramsPayload = await readWorkspaceConfigParams({ createIfMissing: true });
   configParamsCache = paramsPayload.values || {};
@@ -381,6 +388,50 @@ app.put("/internal/admin/config-params", requireSuperAdmin, async (req, res) => 
   }
 });
 
+app.get("/internal/admin/template/tree", requireSuperAdmin, async (req, res) => {
+  try {
+    const root = templateRootPath();
+    await mkdir(root, { recursive: true });
+    const tree = await buildWorkspaceTree(root);
+    res.json({ ok: true, root, tree });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "load template tree failed" });
+  }
+});
+
+app.get("/internal/admin/template/file", requireSuperAdmin, async (req, res) => {
+  try {
+    const relPath = String(req.query.path || "");
+    if (!relPath) throw new Error("path required");
+    const root = templateRootPath();
+    const absPath = safeJoin(root, relPath);
+    await access(absPath);
+    const st = await stat(absPath);
+    if (!st.isFile()) throw new Error("path is not a file");
+    const buf = await readFile(absPath);
+    const isText = !buf.includes(0);
+    const content = isText ? buf.toString("utf8") : "";
+    res.json({ ok: true, path: relPath, isText, size: st.size, content });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "read template file failed" });
+  }
+});
+
+app.put("/internal/admin/template/file", requireSuperAdmin, async (req, res) => {
+  try {
+    const relPath = String(req.body?.path || "");
+    const content = String(req.body?.content || "");
+    if (!relPath) throw new Error("path required");
+    const root = templateRootPath();
+    const absPath = safeJoin(root, relPath);
+    await mkdir(path.dirname(absPath), { recursive: true });
+    await writeFile(absPath, content, "utf8");
+    res.json({ ok: true, path: relPath });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "save template file failed" });
+  }
+});
+
 async function handleChat(req, res) {
   try {
     const {
@@ -503,6 +554,16 @@ app.post("/internal/workspace/reset/:userId", async (req, res) => {
     res.json({ ok: true, userId, root: basePath });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "reset workspace failed" });
+  }
+});
+
+app.post("/internal/workspace/sync/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const basePath = await bot.syncUserWorkspace(userId);
+    res.json({ ok: true, userId, root: basePath });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "sync workspace failed" });
   }
 });
 

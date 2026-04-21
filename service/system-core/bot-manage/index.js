@@ -17,6 +17,7 @@ import { createExecutionEventListener, emitEvent } from "../event/index.js";
 import {
   ensureUserWorkspaceInitialized,
   resetUserWorkspaceInitialized,
+  syncUserWorkspaceFromTemplate,
 } from "../init/index.js";
 import { appendSystemErrorLog } from "../tracking/index.js";
 import { recoverableToolError } from "../error/index.js";
@@ -99,6 +100,15 @@ export class BotManager {
 
   async resetUserWorkspace(userId) {
     return resetUserWorkspaceInitialized({
+      workspaceRoot: this.globalConfig.workspaceRoot,
+      workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
+      userId,
+      globalConfig: this.globalConfig,
+    });
+  }
+
+  async syncUserWorkspace(userId) {
+    return syncUserWorkspaceFromTemplate({
       workspaceRoot: this.globalConfig.workspaceRoot,
       workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
       userId,

@@ -3,9 +3,27 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, cp, mkdir, rm, stat } from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fatalSystemError } from "../error/index.js";
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function deepMerge(base, override) {
+  if (!isPlainObject(base)) return isPlainObject(override) ? { ...override } : base;
+  if (!isPlainObject(override)) return { ...base };
+  const out = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const current = out[key];
+    if (isPlainObject(current) && isPlainObject(value)) {
+      out[key] = deepMerge(current, value);
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
 
 function resolveTemplateBase(workspaceTemplatePath = "") {
   const configuredTemplatePath = String(workspaceTemplatePath || "").trim();
@@ -87,5 +105,46 @@ export async function resetUserWorkspaceInitialized({
   });
   await rm(base, { recursive: true, force: true });
   await cp(templateBase, base, { recursive: true, force: true });
+  return base;
+}
+
+async function syncDirectoryIncremental(templateDir, userDir) {
+  await mkdir(userDir, { recursive: true });
+  const entries = await readdir(templateDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const src = path.join(templateDir, entry.name);
+    const dst = path.join(userDir, entry.name);
+    if (entry.isDirectory()) {
+      await syncDirectoryIncremental(src, dst);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (entry.name === "config.json") {
+      const [templateRaw, userRaw] = await Promise.all([
+        readFile(src, "utf8"),
+        readFile(dst, "utf8").catch(() => "{}"),
+      ]);
+      const templateJson = JSON.parse(templateRaw || "{}");
+      const userJson = JSON.parse(userRaw || "{}");
+      const merged = deepMerge(templateJson, userJson);
+      await writeFile(dst, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
+      continue;
+    }
+    await cp(src, dst, { force: true });
+  }
+}
+
+export async function syncUserWorkspaceFromTemplate({
+  workspaceRoot,
+  workspaceTemplatePath = "",
+  userId,
+}) {
+  const { base, templateBase } = await resolveWorkspaceInitPaths({
+    workspaceRoot,
+    workspaceTemplatePath,
+    userId,
+  });
+  await mkdir(base, { recursive: true });
+  await syncDirectoryIncremental(templateBase, base);
   return base;
 }

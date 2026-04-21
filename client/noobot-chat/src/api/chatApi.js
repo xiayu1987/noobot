@@ -80,6 +80,17 @@ export async function postResetWorkspaceApi(
   );
 }
 
+export async function postSyncWorkspaceApi(
+  { userId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/workspace/sync/${encodeURIComponent(userId)}`,
+    { method: "POST" },
+  );
+}
+
 export async function getWorkspaceFileApi(
   { userId = "", path = "" },
   { fetcher } = {},
@@ -115,6 +126,28 @@ export async function putWorkspaceFileApi(
 export async function getRegularUsersApi({ fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch("/api/internal/admin/users");
+}
+
+export async function getTemplateTreeApi({ fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/template/tree");
+}
+
+export async function getTemplateFileApi({ path = "" }, { fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(`/api/internal/admin/template/file?path=${encodeURIComponent(path)}`);
+}
+
+export async function putTemplateFileApi(
+  { path = "", content = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/template/file", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, content }),
+  });
 }
 
 export async function putRegularUsersApi({ users = [] }, { fetcher } = {}) {
