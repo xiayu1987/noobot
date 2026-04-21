@@ -11,6 +11,7 @@ import MarkdownIt from "markdown-it";
 import noobotLogo from "../assets/noobot.svg";
 import WorkspacePanel from "./WorkspacePanel.vue";
 import UserSettingsPanel from "./UserSettingsPanel.vue";
+import ConfigParamsPanel from "./ConfigParamsPanel.vue";
 import UserInteractionForm from "./UserInteractionForm.vue";
 import ChatComposer from "./ChatComposer.vue";
 import SessionSidebar from "./SessionSidebar.vue";
@@ -31,6 +32,7 @@ const sidebarCollapsed = ref(false);
 const mobileSidebarOpen = ref(false);
 const workspaceVisible = ref(false);
 const userSettingsVisible = ref(false);
+const configParamsVisible = ref(false);
 
 let fetchSessionsAfterConnect = async () => {};
 const {
@@ -143,6 +145,15 @@ function openUserSettings() {
     return;
   }
   userSettingsVisible.value = true;
+}
+
+function openConfigParams() {
+  if (!ensureConnected()) return;
+  if (!isSuperAdmin.value) {
+    ElMessage.warning("仅超级管理员可配置参数");
+    return;
+  }
+  configParamsVisible.value = true;
 }
 
 function handleInteractionConfirm(payload = {}) {
@@ -338,6 +349,13 @@ async function handleWorkspaceReset() {
         >
           用户设置
         </el-button>
+        <el-button
+          v-if="isSuperAdmin"
+          class="workspace-btn noobot-action-btn"
+          @click="openConfigParams"
+        >
+          参数配置
+        </el-button>
       </header>
 
       <div class="message-container">
@@ -432,6 +450,19 @@ async function handleWorkspaceReset() {
         :api-key="apiKey"
         :connected="connected"
         :active="userSettingsVisible"
+      />
+    </el-drawer>
+    <el-drawer
+      v-model="configParamsVisible"
+      title="参数配置"
+      size="56%"
+      destroy-on-close
+      class="workspace-drawer"
+    >
+      <ConfigParamsPanel
+        :api-key="apiKey"
+        :connected="connected"
+        :active="configParamsVisible"
       />
     </el-drawer>
   </div>

@@ -17,7 +17,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { BotManager } from "./system-core/bot-manage/index.js";
-import { loadGlobalConfig } from "./system-core/config/index.js";
+import { loadGlobalConfig, resolveConfigSecrets } from "./system-core/config/index.js";
 import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "./system-core/event/index.js";
 import { safeJoin } from "./system-core/utils/fs-safe.js";
@@ -25,10 +25,13 @@ import { safeJoin } from "./system-core/utils/fs-safe.js";
 const app = express();
 app.use(express.json({ limit: "20mb" }));
 
-const globalConfig = await loadGlobalConfig();
-const bot = new BotManager(globalConfig);
+const globalConfigRaw = await loadGlobalConfig();
+const CONFIG_PARAMS_FILE_NAME = "config-params.json";
+let configParamsCache = {};
+let globalConfig = globalConfigRaw;
+let bot = null;
 const apiKeyStore = new Map();
-const apiKeyTtlMs = Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000);
+let apiKeyTtlMs = Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000);
 const defaultWorkspaceUsersConfig = {
   users: [
     {
@@ -41,6 +44,101 @@ const defaultWorkspaceUsersConfig = {
 function workspaceRootPath() {
   return path.resolve(process.cwd(), String(globalConfig?.workspaceRoot || "../workspaces"));
 }
+
+function workspaceConfigParamsFilePath() {
+  return path.join(workspaceRootPath(), CONFIG_PARAMS_FILE_NAME);
+}
+
+function normalizeConfigParams(input = {}) {
+  const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
+  const values = Object.fromEntries(
+    Object.entries(rawValues)
+      .map(([key, value]) => [String(key || "").trim(), String(value ?? "").trim()])
+      .filter(([key]) => Boolean(key)),
+  );
+  return { values };
+}
+
+async function readWorkspaceConfigParams({ createIfMissing = false } = {}) {
+  const filePath = workspaceConfigParamsFilePath();
+  try {
+    const parsed = JSON.parse(await readFile(filePath, "utf8"));
+    return normalizeConfigParams(parsed);
+  } catch {
+    if (!createIfMissing) return normalizeConfigParams({});
+    const payload = normalizeConfigParams({});
+    await writeWorkspaceConfigParams(payload);
+    return payload;
+  }
+}
+
+async function writeWorkspaceConfigParams(input = {}) {
+  const payload = normalizeConfigParams(input);
+  const filePath = workspaceConfigParamsFilePath();
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  return payload;
+}
+
+function collectTemplateKeysFromObject(input, collector = new Set()) {
+  if (typeof input === "string") {
+    const pattern = /\$\{([A-Z0-9_]+)\}/gi;
+    let match = pattern.exec(input);
+    while (match) {
+      collector.add(String(match[1] || "").trim());
+      match = pattern.exec(input);
+    }
+    return collector;
+  }
+  if (Array.isArray(input)) {
+    for (const item of input) collectTemplateKeysFromObject(item, collector);
+    return collector;
+  }
+  if (input && typeof input === "object") {
+    for (const value of Object.values(input)) {
+      collectTemplateKeysFromObject(value, collector);
+    }
+  }
+  return collector;
+}
+
+async function readConfigJsonIfExists(filePath = "") {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+async function collectConfigTemplateKeys() {
+  const globalConfigFile = path.resolve(process.cwd(), "./config/global.config.json");
+  const templateConfigFile = path.resolve(
+    process.cwd(),
+    String(globalConfigRaw?.workspaceTemplatePath || "../user-template/default-user"),
+    "config.json",
+  );
+  const [globalCfgJson, templateCfgJson] = await Promise.all([
+    readConfigJsonIfExists(globalConfigFile),
+    readConfigJsonIfExists(templateConfigFile),
+  ]);
+  const keys = new Set();
+  collectTemplateKeysFromObject(globalCfgJson, keys);
+  collectTemplateKeysFromObject(templateCfgJson, keys);
+  return Array.from(keys).filter(Boolean).sort((a, b) => a.localeCompare(b));
+}
+
+async function rebuildRuntimeConfig() {
+  const paramsPayload = await readWorkspaceConfigParams({ createIfMissing: true });
+  configParamsCache = paramsPayload.values || {};
+  globalConfig = resolveConfigSecrets(globalConfigRaw, {
+    configParams: configParamsCache,
+  });
+  globalConfig.configParams = { ...configParamsCache };
+  apiKeyTtlMs = Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000);
+  bot = new BotManager(globalConfig);
+}
+
+await rebuildRuntimeConfig();
 
 async function readWorkspaceUsers() {
   const usersConfig = await readWorkspaceUsersConfig();
@@ -249,6 +347,37 @@ app.put("/internal/admin/users", requireSuperAdmin, async (req, res) => {
     res.json({ ok: true, ...payload });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "save users failed" });
+  }
+});
+
+app.get("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
+  try {
+    const [payload, keys] = await Promise.all([
+      readWorkspaceConfigParams({ createIfMissing: true }),
+      collectConfigTemplateKeys(),
+    ]);
+    res.json({
+      ok: true,
+      values: payload.values || {},
+      keys,
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "read config params failed" });
+  }
+});
+
+app.put("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
+  try {
+    const payload = await writeWorkspaceConfigParams(req.body || {});
+    await rebuildRuntimeConfig();
+    const keys = await collectConfigTemplateKeys();
+    res.json({
+      ok: true,
+      values: payload.values || {},
+      keys,
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "save config params failed" });
   }
 });
 

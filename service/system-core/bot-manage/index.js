@@ -12,7 +12,7 @@ import { ContextBuilder } from "../context/index.js";
 import { AttachmentService } from "../attach/index.js";
 import { SkillService } from "../skill/index.js";
 import { runAgentTurn } from "../agent/engine.js";
-import { sanitizeUserConfig } from "../config/index.js";
+import { resolveConfigSecrets, sanitizeUserConfig } from "../config/index.js";
 import { createExecutionEventListener, emitEvent } from "../event/index.js";
 import {
   ensureUserWorkspaceInitialized,
@@ -113,7 +113,10 @@ export class BotManager {
   async loadUserConfig(basePath) {
     const rawText = await readFile(path.join(basePath, "config.json"), "utf8");
     const raw = JSON.parse(rawText);
-    return sanitizeUserConfig(raw);
+    const resolvedRaw = resolveConfigSecrets(raw, {
+      configParams: this.globalConfig?.configParams || {},
+    });
+    return sanitizeUserConfig(resolvedRaw);
   }
 
   _buildContextBuilder({

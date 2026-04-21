@@ -126,6 +126,20 @@ export async function putRegularUsersApi({ users = [] }, { fetcher } = {}) {
   });
 }
 
+export async function getConfigParamsApi({ fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/config-params");
+}
+
+export async function putConfigParamsApi({ values = {} }, { fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/config-params", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ values }),
+  });
+}
+
 export function buildWorkspaceDownloadUrl({
   userId = "",
   path = "",

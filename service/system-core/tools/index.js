@@ -11,6 +11,7 @@ import { createServiceTool } from "./service-tool.js";
 import { createAgentCollabTool } from "./agent-collab-tool.js";
 import { createModelTool } from "./model-tool.js";
 import { createUserInteractionTool } from "./user-interaction-tool.js";
+import { createMcpTool } from "./mcp-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 
@@ -24,6 +25,7 @@ export async function buildTools(ctx) {
     ...createSkillTool(ctx),
     ...createDoc2DataTool(ctx),
     ...createServiceTool(ctx),
+    ...createMcpTool(ctx),
     ...createAgentCollabTool(ctx),
     ...createModelTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),

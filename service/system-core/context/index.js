@@ -290,6 +290,18 @@ export class ContextBuilder {
     return serviceEndpointList;
   }
 
+  _resolveAvailableMcpServers() {
+    const effectiveConfig = this._getEffectiveConfig();
+    const servers = effectiveConfig?.mcpServers || {};
+    return Object.entries(servers)
+      .filter(([, serverCfg]) => serverCfg?.isActive !== false)
+      .map(([name, serverCfg]) => ({
+        name,
+        type: String(serverCfg?.type || ""),
+        description: String(serverCfg?.description || ""),
+      }));
+  }
+
   _resolveCurrentModelInfo() {
     const modelSpec =
       resolveDefaultModelSpec({
@@ -399,6 +411,7 @@ export class ContextBuilder {
     modelSection,
     skills,
     services,
+    mcpServers,
     attachments,
   }) {
     return [
@@ -427,6 +440,10 @@ export class ContextBuilder {
       toSystemSection(
         "可用外部服务端点（serviceName + endpointName + description）",
         JSON.stringify(services, null, 2),
+      ),
+      toSystemSection(
+        "可用 MCP Servers（name + type + description）",
+        JSON.stringify(mcpServers, null, 2),
       ),
       toSystemSection(
         "当前附件保存路径",
@@ -467,12 +484,14 @@ export class ContextBuilder {
         this._resolveWorkspaceDirectories(runtimeBasePath),
       ]);
     const services = this._resolveServices();
+    const mcpServers = this._resolveAvailableMcpServers();
     const modelSection = this._resolveModelSection();
     return {
       runtimeBasePath,
       systemPrompt,
       skills,
       services,
+      mcpServers,
       attachments,
       modelSection,
       workspaceDirectories,
@@ -495,6 +514,7 @@ export class ContextBuilder {
       modelSection: contextData.modelSection,
       skills: contextData.skills,
       services: contextData.services,
+      mcpServers: contextData.mcpServers,
       attachments: contextData.attachments,
     });
     return {

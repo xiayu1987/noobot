@@ -25,9 +25,58 @@ function deepMerge(base, override) {
   return out;
 }
 
+function isString(value) {
+  return typeof value === "string";
+}
+
+function resolveTemplateInString(
+  input = "",
+  { configParams = {}, env = process.env } = {},
+) {
+  const params = isPlainObject(configParams) ? configParams : {};
+  const runtimeEnv = isPlainObject(env) ? env : {};
+  return String(input || "").replace(/\$\{([A-Z0-9_]+)\}/gi, (_, key) => {
+    const envValue = runtimeEnv?.[key];
+    if (envValue !== undefined && envValue !== null && String(envValue) !== "") {
+      return String(envValue);
+    }
+    const value = params?.[key];
+    if (value === undefined || value === null) return "";
+    return String(value);
+  });
+}
+
+export function resolveConfigSecrets(
+  input,
+  { configParams = {}, env = process.env } = {},
+) {
+  if (isString(input)) {
+    return resolveTemplateInString(input, { configParams, env });
+  }
+  if (Array.isArray(input)) {
+    return input.map((item) =>
+      resolveConfigSecrets(item, { configParams, env }),
+    );
+  }
+  if (isPlainObject(input)) {
+    return Object.fromEntries(
+      Object.entries(input).map(([key, value]) => [
+        key,
+        resolveConfigSecrets(value, { configParams, env }),
+      ]),
+    );
+  }
+  return input;
+}
+
+export function resolveConfigTemplates(input, variables = {}) {
+  return resolveConfigSecrets(input, { configParams: variables, env: {} });
+}
+
 // 用户可覆盖策略（只允许这些键被 user config 覆盖）
 // - 模型相关：defaultProvider/defaultModel/providers/attachmentModels
 // - 服务相关：services
+// - MCP相关：mcpServers
 // - 异步等待配置：async（用于 wait timeout）
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
@@ -35,6 +84,7 @@ const USER_OVERRIDE_POLICY = {
   providers: "deep",
   attachmentModels: "deep",
   services: "deep",
+  mcpServers: "deep",
   async: "deep",
 };
 
