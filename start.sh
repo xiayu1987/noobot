@@ -79,6 +79,9 @@ print_missing_dependency_hints() {
       bubblewrap)
         echo "- bubblewrap(bwrap)：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider=bubblewrap 时，执行脚本 的 Bubblewrap+overlayfs 沙箱模式才不可用。"
         ;;
+      firejail)
+        echo "- firejail：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider=firejail 时，执行脚本 的 Firejail 沙箱模式才不可用。"
+        ;;
     esac
   done
 
@@ -86,23 +89,23 @@ print_missing_dependency_hints() {
   log "建议安装命令（按你的系统选择执行）："
   case "$pm" in
     apt)
-      echo "  sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg bubblewrap"
+      echo "  sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg bubblewrap firejail"
       ;;
     dnf)
-      echo "  sudo dnf install -y libreoffice ffmpeg bubblewrap"
+      echo "  sudo dnf install -y libreoffice ffmpeg bubblewrap firejail"
       ;;
     yum)
-      echo "  sudo yum install -y libreoffice ffmpeg bubblewrap"
+      echo "  sudo yum install -y libreoffice ffmpeg bubblewrap firejail"
       ;;
     pacman)
-      echo "  sudo pacman -Sy --noconfirm libreoffice-fresh ffmpeg bubblewrap"
+      echo "  sudo pacman -Sy --noconfirm libreoffice-fresh ffmpeg bubblewrap firejail"
       ;;
     brew)
       echo "  brew install --cask libreoffice"
-      echo "  brew install ffmpeg bubblewrap"
+      echo "  brew install ffmpeg bubblewrap firejail"
       ;;
     *)
-      echo "  请使用你的系统包管理器安装：libreoffice ffmpeg bubblewrap"
+      echo "  请使用你的系统包管理器安装：libreoffice ffmpeg bubblewrap firejail"
       ;;
   esac
   echo ""
@@ -148,6 +151,7 @@ main() {
   command -v ffmpeg >/dev/null 2>&1 || missing_deps+=("ffmpeg")
   command -v docker >/dev/null 2>&1 || missing_deps+=("docker")
   command -v bwrap >/dev/null 2>&1 || missing_deps+=("bubblewrap")
+  command -v firejail >/dev/null 2>&1 || missing_deps+=("firejail")
 
   [[ -d "$CLIENT_DIR" ]] || { echo "前端目录不存在: $CLIENT_DIR" >&2; exit 1; }
   [[ -d "$SERVICE_DIR" ]] || { echo "后端目录不存在: $SERVICE_DIR" >&2; exit 1; }
