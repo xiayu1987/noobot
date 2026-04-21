@@ -4,12 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { exec } from "node:child_process";
-import { constants as fsConstants } from "node:fs";
-import { access, mkdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
+import {
+  buildBubblewrapCommand,
+  bwrapSupportsOption,
+  ensureBubblewrapOverlayReady,
+} from "../sandbox/bubblewrap-sandbox.js";
+import { buildDockerCommand } from "../sandbox/docker-sandbox.js";
+import { buildFirejailCommand } from "../sandbox/firejail-sandbox.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 
 function run(cmd, cwd, timeoutMs) {
@@ -36,15 +41,6 @@ function hasCommand(commandName = "") {
   });
 }
 
-async function bwrapSupportsOption(optionName = "") {
-  return new Promise((resolve) => {
-    exec("bwrap --help", (error, stdout) => {
-      if (error) return resolve(false);
-      resolve(String(stdout || "").includes(String(optionName || "")));
-    });
-  });
-}
-
 function resolveSandboxProvider(effectiveConfig = {}, globalConfig = {}) {
   const scriptCfg = effectiveConfig?.script || {};
   const globalScriptCfg = globalConfig?.script || {};
@@ -53,70 +49,9 @@ function resolveSandboxProvider(effectiveConfig = {}, globalConfig = {}) {
   )
     .trim()
     .toLowerCase();
+  if (provider === "firejail" || provider === "fj") return "firejail";
   if (provider === "bubblewrap" || provider === "bwrap") return "bubblewrap";
   return "docker";
-}
-
-function buildBubblewrapCommand({ userRoot, command }) {
-  const sandboxRoot = path.join(userRoot, "runtime/sandbox/bubblewrap");
-  const overlayUpper = path.join(sandboxRoot, "overlay-upper");
-  const overlayWork = path.join(sandboxRoot, "overlay-work");
-  const homeDir = "/workspace/runtime/workspace";
-  const argv = [
-    "bwrap",
-    "--die-with-parent",
-    "--new-session",
-    "--unshare-all",
-    "--share-net",
-    "--proc",
-    "/proc",
-    "--dev",
-    "/dev",
-    "--ro-bind",
-    "/sys",
-    "/sys",
-    "--overlay-src",
-    "/",
-    "--overlay",
-    JSON.stringify(overlayUpper),
-    JSON.stringify(overlayWork),
-    "/",
-    "--bind",
-    JSON.stringify(userRoot),
-    "/workspace",
-    "--chdir",
-    homeDir,
-    "--setenv",
-    "HOME",
-    homeDir,
-    "--setenv",
-    "PWD",
-    homeDir,
-    "--tmpfs",
-    "/tmp",
-    "--tmpfs",
-    "/var/tmp",
-    "--",
-    "bash",
-    "-lc",
-    JSON.stringify(command),
-  ];
-  return {
-    cmd: argv.join(" "),
-    sandboxRoot,
-    overlayUpper,
-    overlayWork,
-  };
-}
-
-async function ensureBubblewrapOverlayReady({ overlayUpper, overlayWork }) {
-  await mkdir(overlayUpper, { recursive: true });
-  await mkdir(overlayWork, { recursive: true });
-  await access(overlayUpper, fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK);
-  await access(overlayWork, fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK);
-  const probePath = path.join(overlayUpper, ".write-probe");
-  await writeFile(probePath, "ok");
-  await unlink(probePath).catch(() => {});
 }
 
 export function createScriptTool({ agentContext }) {
@@ -137,14 +72,34 @@ export function createScriptTool({ agentContext }) {
               "Bubblewrap + overlayfs 说明：",
               "- 宿主根文件系统作为 lowerdir",
               "- 用户目录下 runtime/sandbox/bubblewrap/overlay-upper|overlay-work 作为可写层",
-              "- 多次执行可复用可写层，实现“系统安装累加”",
+              "- 命令固定在持久目录 /workspace/runtime/sandbox/persist 执行，文件可累加",
+              "- 软件累加建议使用用户态安装：如 npm --prefix \"$HOME/.npm-global\"、pip install --user、将二进制放到 $HOME/bin",
             ]
+          : sandboxProvider === "firejail"
+            ? [
+                "Firejail 说明：",
+                "- 使用用户目录下 runtime/sandbox/firejail/home 作为持久 HOME",
+                "- 命令固定在 $HOME/runtime/sandbox/persist 执行，文件可累加",
+                "- 软件累加建议使用用户态安装：如 npm --prefix \"$HOME/.npm-global\"、pip install --user、将二进制放到 $HOME/bin",
+              ]
           : [
               "Docker 说明：",
               "- 用户目录整体挂载到容器内 /workspace",
             ]),
-        "- 命令默认工作目录为 /workspace/runtime/workspace",
-        "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
+        ...(sandboxProvider === "firejail"
+          ? [
+              "- 命令默认工作目录为 $HOME/runtime/sandbox/persist",
+              "输入输出文件请使用该目录相对路径或 $HOME 下路径。",
+            ]
+          : sandboxProvider === "bubblewrap"
+            ? [
+                "- 命令默认工作目录为 /workspace/runtime/sandbox/persist",
+                "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
+              ]
+          : [
+              "- 命令默认工作目录为 /workspace/runtime/workspace",
+              "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
+            ]),
       ].join("\n")
     : [
         "执行脚本（local 模式）。",
@@ -186,7 +141,7 @@ export function createScriptTool({ agentContext }) {
         if (!supportsOverlaySrc) {
           const dockerInstalled = await hasCommand("docker");
           if (dockerInstalled) {
-            const dockerCmd = `docker run --rm -v "${userRoot}:/workspace" -w /workspace/runtime/workspace node:20 bash -lc ${JSON.stringify(command)}`;
+            const dockerCmd = buildDockerCommand({ userRoot, command });
             const dr = await run(dockerCmd, workspace, timeout);
             return toToolJsonResult("execute_script", {
               ok: Number(dr?.code || 0) === 0,
@@ -230,7 +185,23 @@ export function createScriptTool({ agentContext }) {
           sandboxRoot: built.sandboxRoot,
           overlayUpper: built.overlayUpper,
           overlayWork: built.overlayWork,
+          persistDir: built.persistDir,
         };
+      } else if (sandboxProvider === "firejail") {
+        const firejailInstalled = await hasCommand("firejail");
+        if (!firejailInstalled) {
+          return toToolJsonResult("execute_script", {
+            ok: false,
+            mode: "firejail",
+            code: 127,
+            stdout: "",
+            stderr: "firejail 未安装，请先安装 firejail",
+          });
+        }
+        const built = buildFirejailCommand({ userRoot, command });
+        sandboxCmd = built.cmd;
+        mode = "firejail";
+        extra = { sandboxHome: built.homeDir, persistDir: built.persistDir };
       } else {
         const dockerInstalled = await hasCommand("docker");
         if (!dockerInstalled) {
@@ -242,7 +213,7 @@ export function createScriptTool({ agentContext }) {
             stderr: "docker 未安装，请先安装 docker",
           });
         }
-        sandboxCmd = `docker run --rm -v "${userRoot}:/workspace" -w /workspace/runtime/workspace node:20 bash -lc ${JSON.stringify(command)}`;
+        sandboxCmd = buildDockerCommand({ userRoot, command });
       }
       let r = await run(sandboxCmd, workspace, timeout);
       if (
@@ -254,7 +225,7 @@ export function createScriptTool({ agentContext }) {
       ) {
         const dockerInstalled = await hasCommand("docker");
         if (dockerInstalled) {
-          const dockerCmd = `docker run --rm -v "${userRoot}:/workspace" -w /workspace/runtime/workspace node:20 bash -lc ${JSON.stringify(command)}`;
+          const dockerCmd = buildDockerCommand({ userRoot, command });
           const dr = await run(dockerCmd, workspace, timeout);
           return toToolJsonResult("execute_script", {
             ok: Number(dr?.code || 0) === 0,
