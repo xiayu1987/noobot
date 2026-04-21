@@ -9,7 +9,8 @@
     "useLastCompletedTaskRange": true
   },
   "script": {
-    "sandboxMode": true
+    "sandboxMode": true,
+    "sandboxProvider": "docker"
   },
   "async": {
     "waitTimeoutMs": 120000,

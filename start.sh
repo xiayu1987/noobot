@@ -31,69 +31,81 @@ require_cmd() {
   fi
 }
 
-run_with_privilege() {
-  if [[ "$(id -u)" -eq 0 ]]; then
-    "$@"
-    return
-  fi
-  if command -v sudo >/dev/null 2>&1; then
-    sudo "$@"
-    return
-  fi
-  echo "缺少权限执行: $*" >&2
-  echo "请使用 root 运行或安装 sudo 后重试。" >&2
-  exit 1
-}
-
-install_system_packages() {
-  local packages=("$@")
+detect_pkg_manager() {
   if command -v apt-get >/dev/null 2>&1; then
-    run_with_privilege apt-get update
-    run_with_privilege apt-get install -y "${packages[@]}"
+    echo "apt"
     return
   fi
   if command -v dnf >/dev/null 2>&1; then
-    run_with_privilege dnf install -y "${packages[@]}"
+    echo "dnf"
     return
   fi
   if command -v yum >/dev/null 2>&1; then
-    run_with_privilege yum install -y "${packages[@]}"
+    echo "yum"
     return
   fi
   if command -v pacman >/dev/null 2>&1; then
-    # Arch 下 libreoffice 常见包名为 libreoffice-fresh
-    local mapped=()
-    for pkg in "${packages[@]}"; do
-      if [[ "$pkg" == "libreoffice" ]]; then
-        mapped+=("libreoffice-fresh")
-      else
-        mapped+=("$pkg")
-      fi
-    done
-    run_with_privilege pacman -Sy --noconfirm "${mapped[@]}"
+    echo "pacman"
     return
   fi
   if command -v brew >/dev/null 2>&1; then
-    brew install "${packages[@]}"
+    echo "brew"
     return
   fi
-  echo "无法识别系统包管理器，请手动安装: ${packages[*]}" >&2
-  exit 1
+  echo "unknown"
 }
 
-ensure_binary_with_package() {
-  local bin_name="$1"
-  local pkg_name="$2"
-  if command -v "$bin_name" >/dev/null 2>&1; then
-    return
-  fi
-  log "检测到缺少依赖: $bin_name，开始安装系统包: $pkg_name"
-  install_system_packages "$pkg_name"
-  if ! command -v "$bin_name" >/dev/null 2>&1; then
-    echo "安装后仍未找到命令: $bin_name（包: $pkg_name）" >&2
-    exit 1
-  fi
-  log "依赖安装完成: $bin_name"
+print_missing_dependency_hints() {
+  local missing=("$@")
+  [[ "${#missing[@]}" -gt 0 ]] || return
+
+  local pm
+  pm="$(detect_pkg_manager)"
+
+  echo ""
+  log "检测到以下可选依赖未安装（不会自动安装，请按提示手动安装）:"
+  for dep in "${missing[@]}"; do
+    case "$dep" in
+      libreoffice)
+        echo "- libreoffice：未安装将影响 Office 文档（doc/docx/xls/ppt 等）转换能力。"
+        ;;
+      ffmpeg)
+        echo "- ffmpeg：未安装将影响音视频处理与相关解析能力。"
+        ;;
+      docker)
+        echo "- docker：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider=docker 时，执行脚本 的 docker 沙箱模式才不可用。"
+        echo "  官方安装文档: https://docs.docker.com/engine/install/"
+        ;;
+      bubblewrap)
+        echo "- bubblewrap(bwrap)：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider=bubblewrap 时，执行脚本 的 Bubblewrap+overlayfs 沙箱模式才不可用。"
+        ;;
+    esac
+  done
+
+  echo ""
+  log "建议安装命令（按你的系统选择执行）："
+  case "$pm" in
+    apt)
+      echo "  sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg bubblewrap"
+      ;;
+    dnf)
+      echo "  sudo dnf install -y libreoffice ffmpeg bubblewrap"
+      ;;
+    yum)
+      echo "  sudo yum install -y libreoffice ffmpeg bubblewrap"
+      ;;
+    pacman)
+      echo "  sudo pacman -Sy --noconfirm libreoffice-fresh ffmpeg bubblewrap"
+      ;;
+    brew)
+      echo "  brew install --cask libreoffice"
+      echo "  brew install ffmpeg bubblewrap"
+      ;;
+    *)
+      echo "  请使用你的系统包管理器安装：libreoffice ffmpeg bubblewrap"
+      ;;
+  esac
+  echo ""
 }
 
 run_pm2() {
@@ -131,8 +143,11 @@ start_pm2() {
 
 main() {
   require_cmd npm
-  ensure_binary_with_package libreoffice libreoffice
-  ensure_binary_with_package ffmpeg ffmpeg
+  local missing_deps=()
+  command -v libreoffice >/dev/null 2>&1 || missing_deps+=("libreoffice")
+  command -v ffmpeg >/dev/null 2>&1 || missing_deps+=("ffmpeg")
+  command -v docker >/dev/null 2>&1 || missing_deps+=("docker")
+  command -v bwrap >/dev/null 2>&1 || missing_deps+=("bubblewrap")
 
   [[ -d "$CLIENT_DIR" ]] || { echo "前端目录不存在: $CLIENT_DIR" >&2; exit 1; }
   [[ -d "$SERVICE_DIR" ]] || { echo "后端目录不存在: $SERVICE_DIR" >&2; exit 1; }
@@ -174,6 +189,8 @@ main() {
   log "CLIENT_CADDY_BIN=$CLIENT_CADDY_BIN"
   log "前端访问地址: http://${FRONTEND_URL_ADDR}"
   log "后端 API(供前端反代): http://${API_UPSTREAM}"
+
+  print_missing_dependency_hints "${missing_deps[@]}"
 }
 
 main "$@"
