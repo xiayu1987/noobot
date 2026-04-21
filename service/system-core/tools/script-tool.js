@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { exec } from "node:child_process";
+import { constants as fsConstants } from "node:fs";
+import { access, mkdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
@@ -34,6 +36,15 @@ function hasCommand(commandName = "") {
   });
 }
 
+async function bwrapSupportsOption(optionName = "") {
+  return new Promise((resolve) => {
+    exec("bwrap --help", (error, stdout) => {
+      if (error) return resolve(false);
+      resolve(String(stdout || "").includes(String(optionName || "")));
+    });
+  });
+}
+
 function resolveSandboxProvider(effectiveConfig = {}, globalConfig = {}) {
   const scriptCfg = effectiveConfig?.script || {};
   const globalScriptCfg = globalConfig?.script || {};
@@ -46,16 +57,12 @@ function resolveSandboxProvider(effectiveConfig = {}, globalConfig = {}) {
   return "docker";
 }
 
-function buildBubblewrapCommand({ userRoot, workspace, command }) {
+function buildBubblewrapCommand({ userRoot, command }) {
   const sandboxRoot = path.join(userRoot, "runtime/sandbox/bubblewrap");
   const overlayUpper = path.join(sandboxRoot, "overlay-upper");
   const overlayWork = path.join(sandboxRoot, "overlay-work");
   const homeDir = "/workspace/runtime/workspace";
   const argv = [
-    "mkdir -p",
-    JSON.stringify(overlayUpper),
-    JSON.stringify(overlayWork),
-    "&&",
     "bwrap",
     "--die-with-parent",
     "--new-session",
@@ -100,6 +107,16 @@ function buildBubblewrapCommand({ userRoot, workspace, command }) {
     overlayUpper,
     overlayWork,
   };
+}
+
+async function ensureBubblewrapOverlayReady({ overlayUpper, overlayWork }) {
+  await mkdir(overlayUpper, { recursive: true });
+  await mkdir(overlayWork, { recursive: true });
+  await access(overlayUpper, fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK);
+  await access(overlayWork, fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK);
+  const probePath = path.join(overlayUpper, ".write-probe");
+  await writeFile(probePath, "ok");
+  await unlink(probePath).catch(() => {});
 }
 
 export function createScriptTool({ agentContext }) {
@@ -165,7 +182,48 @@ export function createScriptTool({ agentContext }) {
             stderr: "bwrap 未安装，请先安装 bubblewrap",
           });
         }
-        const built = buildBubblewrapCommand({ userRoot, workspace, command });
+        const supportsOverlaySrc = await bwrapSupportsOption("--overlay-src");
+        if (!supportsOverlaySrc) {
+          const dockerInstalled = await hasCommand("docker");
+          if (dockerInstalled) {
+            const dockerCmd = `docker run --rm -v "${userRoot}:/workspace" -w /workspace/runtime/workspace node:20 bash -lc ${JSON.stringify(command)}`;
+            const dr = await run(dockerCmd, workspace, timeout);
+            return toToolJsonResult("execute_script", {
+              ok: Number(dr?.code || 0) === 0,
+              mode: "docker",
+              fallbackFrom: "bubblewrap",
+              warning:
+                "当前 bubblewrap 版本不支持 --overlay-src，已自动回退到 docker。",
+              ...dr,
+            });
+          }
+          return toToolJsonResult("execute_script", {
+            ok: false,
+            mode: "bubblewrap",
+            code: 2,
+            stdout: "",
+            stderr:
+              "当前 bubblewrap 版本不支持 --overlay-src。请升级 bubblewrap，或将 script.sandboxProvider 改为 docker。",
+          });
+        }
+        const built = buildBubblewrapCommand({ userRoot, command });
+        try {
+          await ensureBubblewrapOverlayReady({
+            overlayUpper: built.overlayUpper,
+            overlayWork: built.overlayWork,
+          });
+        } catch (err) {
+          return toToolJsonResult("execute_script", {
+            ok: false,
+            mode: "bubblewrap",
+            code: 13,
+            stdout: "",
+            sandboxRoot: built.sandboxRoot,
+            overlayUpper: built.overlayUpper,
+            overlayWork: built.overlayWork,
+            stderr: `bubblewrap overlay 目录不可写，请检查权限（建议执行：sudo chown -R $(id -u):$(id -g) "${built.sandboxRoot}"）。${err?.message || String(err)}`,
+          });
+        }
         sandboxCmd = built.cmd;
         mode = "bubblewrap";
         extra = {
@@ -186,7 +244,32 @@ export function createScriptTool({ agentContext }) {
         }
         sandboxCmd = `docker run --rm -v "${userRoot}:/workspace" -w /workspace/runtime/workspace node:20 bash -lc ${JSON.stringify(command)}`;
       }
-      const r = await run(sandboxCmd, workspace, timeout);
+      let r = await run(sandboxCmd, workspace, timeout);
+      if (
+        mode === "bubblewrap" &&
+        Number(r?.code || 0) !== 0 &&
+        /Can't make overlay mount|userxattr:\s*Invalid argument/i.test(
+          String(r?.stderr || ""),
+        )
+      ) {
+        const dockerInstalled = await hasCommand("docker");
+        if (dockerInstalled) {
+          const dockerCmd = `docker run --rm -v "${userRoot}:/workspace" -w /workspace/runtime/workspace node:20 bash -lc ${JSON.stringify(command)}`;
+          const dr = await run(dockerCmd, workspace, timeout);
+          return toToolJsonResult("execute_script", {
+            ok: Number(dr?.code || 0) === 0,
+            mode: "docker",
+            fallbackFrom: "bubblewrap",
+            warning:
+              "当前内核/发行版不支持 bubblewrap overlay(userxattr)，已自动回退到 docker。",
+            ...dr,
+          });
+        }
+        r = {
+          ...r,
+          stderr: `${String(r?.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 script.sandboxProvider=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
+        };
+      }
       return toToolJsonResult("execute_script", {
         ok: Number(r?.code || 0) === 0,
         mode,
