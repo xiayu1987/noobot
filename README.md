@@ -61,6 +61,13 @@ Browser
 - npm 9+
 - Linux/macOS（`run-caddy.sh` 可自动下载 caddy）
 
+### 系统依赖（文档/多媒体工具）
+
+- `libreoffice`（文档转换）
+- `ffmpeg`（音视频处理）
+
+`./start.sh` 会在启动时检查并尝试自动安装以上依赖（需要 root 或 sudo 权限）。
+
 ## 快速开始
 
 ```bash
@@ -92,6 +99,8 @@ chmod +x start.sh
 - 前端访问地址（默认 `http://127.0.0.1:10060`）
 - 后端 API 反代地址（默认 `http://127.0.0.1:10061`）
 
+> 如果自动安装系统依赖失败，请手动安装后再执行 `./start.sh`。
+
 ## 常用配置
 
 ### 1) 根脚本环境变量（`start.sh`）
@@ -112,6 +121,16 @@ CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
 ```bash
 PORT=10061
 ```
+
+### 3) 后端配置文件（重点）
+
+- 配置项较多，完整说明请查看：
+  - **[CONFIGURATION.md](./CONFIGURATION.md)**
+
+### 4) 参数化配置（`${VAR_NAME}`）
+
+配置里可写 `${DASHSCOPE_API_KEY}` 这类占位符，运行时会自动解析。  
+详细规则与优先级同样见 [CONFIGURATION.md](./CONFIGURATION.md)。
 
 ## PM2（项目内托管）
 

@@ -1,19 +1,22 @@
 # service（后端）说明
 
-`service/` 是 noobot 的 Agent 后端，基于 **Express + LangChain**。
+`service/` 是 noobot 的后端运行时，基于 **Express + LangChain**。
 
-## 主要能力
+## 运行依赖
 
-- 多用户工作区隔离（`workspaceRoot/<userId>`，含附件与运行时目录）
-- 会话管理
-- 长短期记忆管理（short/long memory，支持阈值与窗口配置）
-- Agent + 工具执行（文件/脚本/技能/外部服务/文档解析/模型切换）
-- 多 Agent 异步协作
-- HTTP + WebSocket 双通道响应（普通 JSON 与流式事件）
-- 工作区文件与附件访问接口（树结构、读写、下载、附件直链）
+### Node 依赖
 
+- Node.js 18+（建议 20+）
+- npm 9+
 
-> 注：`node_modules/` 为依赖目录，文档中省略。
+### 系统依赖
+
+- `libreoffice`（office 文档转换）
+- `ffmpeg`（音视频处理）
+
+> 根目录 `start.sh` 会检查并尝试自动安装 `libreoffice` / `ffmpeg`（需要 sudo/root）。
+
+---
 
 ## 运行方式
 
@@ -23,40 +26,35 @@ npm install
 npm start
 ```
 
-默认端口来自 `.env` 中的 `PORT`（示例见 `.env.example`，默认 `10061`）。
+端口来自 `.env`（默认 `10061`，见 `.env.example`）。
 
-## 认证机制（重要）
+---
 
-除 `/health` 和 `/internal/connect` 外，其它接口都需要 `apiKey`。
+## 认证机制
 
-### 1) 获取 apiKey
+除 `/health` 与 `/internal/connect` 外，接口默认要求 `apiKey`。
 
-`POST /internal/connect`
+- `POST /internal/connect`：用 `userId + connectCode` 获取 `apiKey`
+- `apiKey` 可通过以下任一方式传递：
+  - Header: `x-api-key`
+  - Header: `Authorization: Bearer <apiKey>`
+  - Query: `?apikey=...`
 
-请求体：
+---
 
-```json
-{
-  "userId": "xxx",
-  "connectCode": "xxx"
-}
-```
+## 主要能力
 
-说明：
+- 多用户工作区（`workspace/<userId>`）
+- 会话与会话树管理
+- 短期/长期记忆管理
+- 工具调用与多轮工具循环
+- 子任务异步协作（sub-agent）
+- MCP 工具调用（支持 `streamableHttp` / `sse`）
+- 工作区文件浏览、编辑、下载、重置、增量同步
 
-- 普通用户从 `workspaceRoot/user.json` 校验 `userId + connectCode`
-- 超管从 `global.config.json.superAdmin` 校验
-- `apiKey` 存在内存中（进程重启后失效），并受 TTL 控制（默认 24h）
+---
 
-### 2) 传 apiKey
-
-可用任一方式：
-
-- Header: `x-api-key: <apiKey>`
-- Header: `Authorization: Bearer <apiKey>`
-- Query: `?apikey=<apiKey>`
-
-## API 概览（当前实现）
+## API 概览（当前）
 
 ### 公共
 
@@ -68,88 +66,68 @@ npm start
 - `POST /chat`
 - `WS /chat/ws`
 
-请求字段（HTTP/WS 一致）：
-
-- `userId`（必填）
-- `sessionId`（必填，必须是 UUID）
-- `message`（必填）
-- `parentSessionId`（可选，UUID）
-- `attachments`（可选）
-
-### 会话查询
+### 会话
 
 - `GET /internal/session/:userId/:sessionId`
 - `GET /internal/sessions/:userId`
+- `DELETE /internal/session/:userId/:sessionId`
 
-### 工作区文件管理
+### 工作区
 
 - `GET /internal/workspace/tree/:userId`
 - `GET /internal/workspace/file/:userId?path=...`
 - `PUT /internal/workspace/file/:userId`
 - `GET /internal/workspace/download/:userId?path=...`
+- `POST /internal/workspace/reset/:userId`
+- `POST /internal/workspace/sync/:userId`
 
-### 附件访问
+### 管理（超管）
 
-- `GET /internal/attachment/:userId/:attachmentId`
+- `GET /internal/admin/users`
+- `PUT /internal/admin/users`
+- `GET /internal/admin/config-params`
+- `PUT /internal/admin/config-params`
+- `GET /internal/admin/template/tree`
+- `GET /internal/admin/template/file?path=...`
+- `PUT /internal/admin/template/file`
 
+---
 
-## 工具（tools）清单
+## 配置说明（简版）
 
-当前注册工具：
+### 全局配置
 
-- `read_file` / `write_file`
-- `execute_script`
-- `list_skills` / `set_skill_task`
-- `doc_to_data`
-- `call_service`
-- `delegate_task_async` / `wait_async_task_result`
-- `write_task_deliverable_file` / `read_task_deliverable_file`
-- `plan_execution_flow`
-- `switch_model`
+- 文件：`service/config/global.config.json`
+- 示例：`service/config/global.config.example.json`
 
-## 配置说明
+关键字段：
 
-后端配置分两层：
+- `workspaceRoot`
+- `workspaceTemplatePath`
+- `providers`
+- `defaultProvider`
+- `services`
+- `mcpServers`
+- `superAdmin`
 
-1. 全局配置：`service/config/global.config.json`
-2. 用户配置：`workspaces/<userId>/config.json`（会覆盖同名全局项）
+### 用户配置
 
-### 1) 全局配置（global.config.json）
+- 文件：`workspace/<userId>/config.json`
 
-常用字段：
+支持覆盖部分全局项（如 providers/services/mcpServers 等）。
 
-- `workspaceRoot`：工作区根目录（默认 `../workspaces`）
-- `workspaceTemplatePath`：新用户工作区初始化模板目录（必填，例如 `../user-template/default-user`）
-- `defaultProvider`：默认模型别名（需在 `providers` 中存在）
-- `providers`：模型提供方配置集合（按别名组织）
-  - 典型字段：`enabled`、`api_key`、`base_url`、`model`、`format`、`temperature`、`max_tokens`
-- `attachmentModels`：附件处理模型映射（`audio/video/image`）
-- `sessionToShortMemoryThreshold`：会话写入短记忆阈值
-- `shortMemory*` / `longMemoryWindow`：短/长记忆策略
-- `maxToolLoopTurns`：单轮推理最大工具循环次数
-- `session.*`：会话上下文裁剪策略
-- `script.sandboxMode`：脚本工具是否启用 Docker 沙箱
-- `scriptTimeoutMs`：脚本执行超时
-- `async.*`：多 Agent 异步协作配置（等待超时/最大深度）
-- `streaming`：是否启用流式输出
-- `superAdmin.userId/connectCode`：超管连接凭据
+### 参数化配置（`${VAR_NAME}`）
 
-### 2) 用户配置（workspaces/<userId>/config.json）
+配置中可写 `${DASHSCOPE_API_KEY}` 这类占位符。实际值来源优先级：
 
-用户配置用于个性化或覆盖全局配置，当前项目里常见有：
+1. `process.env.VAR_NAME`
+2. `workspace/config-params.json`（由“参数配置”界面维护）
 
-- `services`：供 `call_service` 工具调用的外部服务定义
-  - 服务下可配置 `enabled`、`api_key`、`handler`、`endpoints`
-- `preferences`：偏好设置（如 `language`）
+---
 
-示例（当前仓库）：
+## 常见目录
 
-`workspaces/default-user/config.json` 已包含 `webSearchService`、`weatherService` 示例。
+- `service/system-core/`：核心能力（context/session/tools/mcp/memory 等）
+- `workspace/`：运行时数据（会话、附件、记忆、日志）
+- `user-template/default-user/`：新用户工作区模板
 
-### 3) 配置生效优先级
-
-一般规则：**用户配置 > 全局配置 > 代码默认值**。
-
-例如：模型、服务开关、部分运行策略会按该优先级合并。
-
-> 安全建议：`api_key`、`connectCode` 等敏感信息不要提交到公开仓库，建议使用环境变量或私有配置注入。

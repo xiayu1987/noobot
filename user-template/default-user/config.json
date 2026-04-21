@@ -77,6 +77,16 @@
       "headers": {
         "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
       }
+    },
+    "WebParser": {
+      "type": "sse",
+      "description": "网页解析（WebParser）MCP 服务，一个专用于网页内容解析的工具包。",
+      "isActive": true,
+      "name": "AliyunBailianMCP_WebParser",
+      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/WebParser/sse",
+      "headers": {
+        "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
+      }
     }
   },
   "preferences": {

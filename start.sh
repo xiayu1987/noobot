@@ -31,6 +31,71 @@ require_cmd() {
   fi
 }
 
+run_with_privilege() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+    return
+  fi
+  if command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+    return
+  fi
+  echo "缺少权限执行: $*" >&2
+  echo "请使用 root 运行或安装 sudo 后重试。" >&2
+  exit 1
+}
+
+install_system_packages() {
+  local packages=("$@")
+  if command -v apt-get >/dev/null 2>&1; then
+    run_with_privilege apt-get update
+    run_with_privilege apt-get install -y "${packages[@]}"
+    return
+  fi
+  if command -v dnf >/dev/null 2>&1; then
+    run_with_privilege dnf install -y "${packages[@]}"
+    return
+  fi
+  if command -v yum >/dev/null 2>&1; then
+    run_with_privilege yum install -y "${packages[@]}"
+    return
+  fi
+  if command -v pacman >/dev/null 2>&1; then
+    # Arch 下 libreoffice 常见包名为 libreoffice-fresh
+    local mapped=()
+    for pkg in "${packages[@]}"; do
+      if [[ "$pkg" == "libreoffice" ]]; then
+        mapped+=("libreoffice-fresh")
+      else
+        mapped+=("$pkg")
+      fi
+    done
+    run_with_privilege pacman -Sy --noconfirm "${mapped[@]}"
+    return
+  fi
+  if command -v brew >/dev/null 2>&1; then
+    brew install "${packages[@]}"
+    return
+  fi
+  echo "无法识别系统包管理器，请手动安装: ${packages[*]}" >&2
+  exit 1
+}
+
+ensure_binary_with_package() {
+  local bin_name="$1"
+  local pkg_name="$2"
+  if command -v "$bin_name" >/dev/null 2>&1; then
+    return
+  fi
+  log "检测到缺少依赖: $bin_name，开始安装系统包: $pkg_name"
+  install_system_packages "$pkg_name"
+  if ! command -v "$bin_name" >/dev/null 2>&1; then
+    echo "安装后仍未找到命令: $bin_name（包: $pkg_name）" >&2
+    exit 1
+  fi
+  log "依赖安装完成: $bin_name"
+}
+
 run_pm2() {
   (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx pm2 "$@")
 }
@@ -66,6 +131,8 @@ start_pm2() {
 
 main() {
   require_cmd npm
+  ensure_binary_with_package libreoffice libreoffice
+  ensure_binary_with_package ffmpeg ffmpeg
 
   [[ -d "$CLIENT_DIR" ]] || { echo "前端目录不存在: $CLIENT_DIR" >&2; exit 1; }
   [[ -d "$SERVICE_DIR" ]] || { echo "后端目录不存在: $SERVICE_DIR" >&2; exit 1; }
