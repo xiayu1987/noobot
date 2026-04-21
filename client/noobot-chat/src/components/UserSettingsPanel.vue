@@ -6,7 +6,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { Plus } from "@element-plus/icons-vue";
+import { MoreFilled, Plus, Refresh } from "@element-plus/icons-vue";
 import {
   getRegularUsersApi,
   getTemplateFileApi,
@@ -176,6 +176,26 @@ async function saveTemplateFile() {
   }
 }
 
+function handleUsersEditorAction(command = "") {
+  if (command === "generate-empty") {
+    generateConnectCodesForEmptyOnly();
+    return;
+  }
+  if (command === "regenerate-all") {
+    forceRegenerateAllConnectCodes();
+    return;
+  }
+  if (command === "save") {
+    saveUsers();
+  }
+}
+
+function handleTemplateEditorAction(command = "") {
+  if (command === "save") {
+    saveTemplateFile();
+  }
+}
+
 function addUserRow() {
   users.value.push({ userId: "", connectCode: "" });
 }
@@ -330,9 +350,11 @@ watch(
         <div class="workspace-panel">
           <div class="panel-head">
             <span class="panel-title">用户</span>
-            <el-button class="icon-btn" size="small" text @click="addUserRow" title="新增用户">
-              <el-icon><Plus /></el-icon>
-            </el-button>
+            <div class="tree-actions">
+              <el-button class="icon-btn" size="small" text @click="addUserRow" title="新增用户">
+                <el-icon><Plus /></el-icon>
+              </el-button>
+            </div>
           </div>
           <div class="panel-body">
             <el-scrollbar class="tree-scroll">
@@ -348,7 +370,7 @@ watch(
                     <el-button class="dark-btn action-btn" @click="regenerateSingleUserConnectCode(idx)" title="重新生成连接码">↻</el-button>
                   </div>
                 </div>
-                <div v-if="!users.length" class="empty-tip">
+                <div v-if="!users.length" class="empty-tip list-empty-tip">
                   <div class="empty-icon">👥</div>
                   <p>暂无用户，请点击右上角新增</p>
                 </div>
@@ -363,9 +385,21 @@ watch(
               <span class="active-file" title="workspace/user.json">workspace/user.json</span>
             </div>
             <div class="editor-actions">
-              <el-button size="small" class="dark-btn" @click="generateConnectCodesForEmptyOnly">批量生成(空值)</el-button>
-              <el-button size="small" class="dark-btn" @click="forceRegenerateAllConnectCodes">强制重置</el-button>
-              <el-button type="primary" class="primary-btn" size="small" @click="saveUsers" :loading="saving">保存</el-button>
+              <div class="desktop-actions">
+                <el-button size="small" class="dark-btn" @click="generateConnectCodesForEmptyOnly">批量生成(空值)</el-button>
+                <el-button size="small" class="dark-btn" @click="forceRegenerateAllConnectCodes">强制重置</el-button>
+                <el-button type="primary" class="primary-btn" size="small" @click="saveUsers" :loading="saving">保存</el-button>
+              </div>
+              <el-dropdown class="mobile-actions" trigger="click" @command="handleUsersEditorAction">
+                <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="generate-empty">批量生成(空值)</el-dropdown-item>
+                    <el-dropdown-item command="regenerate-all">强制重置</el-dropdown-item>
+                    <el-dropdown-item command="save">保存</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </div>
           <div class="panel-body editor-body">
@@ -388,15 +422,16 @@ watch(
         <div class="workspace-panel workspace-tree">
           <div class="panel-head">
             <span class="panel-title">default-user 目录</span>
-            <el-button
-              class="refresh-btn noobot-action-btn tail-btn"
-              size="small"
-              @click="loadTemplateTree"
-              :loading="templateLoadingTree"
-              title="刷新目录"
-            >
-              ↻
-            </el-button>
+            <div class="tree-actions">
+              <el-button
+                class="refresh-btn noobot-action-btn tail-btn"
+                size="small"
+                :icon="Refresh"
+                @click="loadTemplateTree"
+                :loading="templateLoadingTree"
+                title="刷新目录"
+              />
+            </div>
           </div>
           <div class="panel-body">
             <el-scrollbar class="tree-scroll">
@@ -424,16 +459,26 @@ watch(
               <span class="active-file" :title="templateActivePath">{{ templateActivePath || "未选择文件" }}</span>
             </div>
             <div class="editor-actions">
-              <el-button
-                type="primary"
-                class="primary-btn"
-                size="small"
-                @click="saveTemplateFile"
-                :disabled="!templateActivePath || !templateIsTextFile"
-                :loading="templateSaving"
-              >
-                保存
-              </el-button>
+              <div class="desktop-actions">
+                <el-button
+                  type="primary"
+                  class="primary-btn"
+                  size="small"
+                  @click="saveTemplateFile"
+                  :disabled="!templateActivePath || !templateIsTextFile"
+                  :loading="templateSaving"
+                >
+                  保存
+                </el-button>
+              </div>
+              <el-dropdown class="mobile-actions" trigger="click" @command="handleTemplateEditorAction">
+                <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="save">保存</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </div>
           <div
@@ -467,6 +512,7 @@ watch(
 </template>
 
 <style scoped>
+/* Tabs 样式适配 */
 .settings-tabs {
   height: calc(100vh - 80px);
 }
@@ -477,12 +523,12 @@ watch(
   height: 100%;
 }
 
-/* 整体布局：完全对齐第二个界面的 280px 1fr */
+/* 整体布局 */
 .workspace-layout {
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 16px;
-  height: calc(100vh - 80px); /* 适配 Drawer 内部高度 */
+  height: 100%; /* 在 Tab 内部使用 100% */
   padding: 0 4px 16px 4px;
   box-sizing: border-box;
 }
@@ -522,20 +568,35 @@ watch(
   background: #0b0d12;
 }
 
+/* 左侧按钮组 */
+.tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* 按钮样式适配主界面 */
 .icon-btn {
   color: #8a94af;
-  font-size: 14px;
+  font-size: 16px;
   padding: 4px 8px;
 }
+
 .icon-btn:hover {
   color: #dce2f5;
   background: #1a2030;
 }
+
+.icon-btn.danger-text:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .tail-btn {
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
   background: var(--noobot-btn-soft-bg);
   border: 1px solid var(--noobot-btn-soft-border);
   color: var(--noobot-btn-soft-text);
@@ -545,13 +606,14 @@ watch(
   justify-content: center;
   font-size: 16px;
 }
+
+.tail-btn :deep(.el-icon) {
+  margin: 0 !important;
+}
+
 .refresh-btn:not(:disabled):hover {
   background: var(--noobot-btn-soft-bg-hover);
   color: #fff;
-}
-.icon-btn.danger-text:hover {
-  color: #f87171;
-  background: rgba(239, 68, 68, 0.1);
 }
 
 .dark-btn {
@@ -559,6 +621,7 @@ watch(
   border: 1px solid #2a3040;
   color: #d7ddf2;
 }
+
 .dark-btn:hover:not(:disabled) {
   background: #1a2030;
   border-color: #334162;
@@ -569,16 +632,30 @@ watch(
   background: #2563eb;
   border: none;
 }
+
 .primary-btn:hover:not(:disabled) {
   background: #3b82f6;
 }
+
 .primary-btn:disabled,
 .dark-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* 左侧表单区域 (适配 280px 宽度) */
+.danger-btn {
+  background: #3a1117;
+  border: 1px solid #7f1d1d;
+  color: #fecaca;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: #58151c;
+  border-color: #b91c1c;
+  color: #fee2e2;
+}
+
+/* 左侧目录树 & 列表 */
 .tree-scroll {
   height: 100%;
 }
@@ -591,31 +668,37 @@ watch(
   --el-tree-text-color: #dce2f5;
   --el-tree-expand-icon-color: #6b7280;
 }
+
 .custom-tree :deep(.el-tree-node__content) {
   height: 32px;
   border-radius: 6px;
   margin-bottom: 2px;
 }
+
 .custom-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
   background-color: #1a2337;
   color: #83a7ff;
 }
+
 .tree-node {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
 }
+
 .node-icon {
   font-size: 14px;
   opacity: 0.9;
 }
+
 .node-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 用户列表特有样式 */
 .users-list {
   display: flex;
   flex-direction: column;
@@ -660,6 +743,7 @@ watch(
   border-color: #1f2430;
   box-shadow: 0 0 0 1px #1f2430 inset;
 }
+
 .row-input :deep(.el-input__inner) {
   color: #e6e8ef;
   font-size: 13px;
@@ -669,7 +753,7 @@ watch(
   padding: 8px 12px;
 }
 
-/* 右侧 JSON 编辑器 */
+/* 右侧编辑器 */
 .file-info {
   display: flex;
   align-items: center;
@@ -695,6 +779,16 @@ watch(
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.desktop-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-actions {
+  display: none;
 }
 
 .editor-body {
@@ -741,28 +835,35 @@ watch(
 
 /* 空状态 */
 .empty-tip {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   color: #6b7280;
   text-align: center;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.list-empty-tip {
+  position: static;
   padding: 40px 0;
-  font-size: 13px;
 }
 
 .empty-icon {
-  font-size: 36px;
-  margin-bottom: 12px;
+  font-size: 48px;
+  margin-bottom: 16px;
   opacity: 0.3;
 }
 
-/* 响应式适配：完全对齐第二个界面的移动端 */
+/* 响应式适配 */
 @media (max-width: 768px) {
   .workspace-layout {
     grid-template-columns: 1fr;
     grid-template-rows: 40% 60%;
-    height: calc(100vh - 60px);
+    height: 100%;
     gap: 12px;
     padding: 0;
   }
@@ -772,7 +873,15 @@ watch(
   }
 
   .active-file {
-    max-width: 120px;
+    max-width: 180px;
+  }
+
+  .desktop-actions {
+    display: none;
+  }
+
+  .mobile-actions {
+    display: inline-flex;
   }
 }
 </style>

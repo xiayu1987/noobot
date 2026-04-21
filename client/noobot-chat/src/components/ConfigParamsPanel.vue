@@ -6,6 +6,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
+import { MoreFilled, Plus } from "@element-plus/icons-vue";
 import { getConfigParamsApi, putConfigParamsApi } from "../api/chatApi";
 
 const props = defineProps({
@@ -162,6 +163,10 @@ async function saveParams() {
   }
 }
 
+function handleEditorAction(command = "") {
+  if (command === "save") saveParams();
+}
+
 watch(
   () => props.active,
   (visible) => {
@@ -200,7 +205,11 @@ watch(
     <div class="workspace-panel">
       <div class="panel-head">
         <span class="panel-title">参数列表</span>
-        <el-button class="icon-btn" size="small" text @click="addParamRow">+</el-button>
+        <div class="tree-actions">
+          <el-button class="icon-btn" size="small" text @click="addParamRow" title="新增参数">
+            <el-icon><Plus /></el-icon>
+          </el-button>
+        </div>
       </div>
       <div class="panel-body">
         <el-scrollbar class="tree-scroll">
@@ -213,9 +222,9 @@ watch(
               <el-input v-model="item.key" placeholder="参数名（如 DASHSCOPE_API_KEY）" clearable class="row-input" />
               <el-input v-model="item.value" placeholder="参数值" clearable class="row-input" />
             </div>
-            <div v-if="!params.length" class="empty-tip">
+            <div v-if="!params.length" class="empty-tip list-empty-tip">
               <div class="empty-icon">🔐</div>
-              <p>暂无参数</p>
+              <p>暂无参数，请点击右上角新增</p>
             </div>
           </div>
         </el-scrollbar>
@@ -228,9 +237,19 @@ watch(
           <span class="active-file" title="workspace/config-params.json">workspace/config-params.json</span>
         </div>
         <div class="editor-actions">
-          <el-button type="primary" class="primary-btn" size="small" @click="saveParams" :loading="saving">
-            保存
-          </el-button>
+          <div class="desktop-actions">
+            <el-button type="primary" class="primary-btn" size="small" @click="saveParams" :loading="saving">
+              保存
+            </el-button>
+          </div>
+          <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
+            <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="save">保存</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </div>
       <div class="panel-body editor-body">
@@ -249,6 +268,7 @@ watch(
 </template>
 
 <style scoped>
+/* 整体布局 */
 .workspace-layout {
   display: grid;
   grid-template-columns: 280px 1fr;
@@ -257,35 +277,283 @@ watch(
   padding: 0 4px 16px 4px;
   box-sizing: border-box;
 }
-.workspace-panel { display: flex; flex-direction: column; background: #0a0c11; border: 1px solid #1f2430; border-radius: 12px; overflow: hidden; }
-.panel-head { height: 48px; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; background: #10141d; border-bottom: 1px solid #1f2430; }
-.panel-title { font-size: 14px; font-weight: 600; color: #d7ddf2; }
-.panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #0b0d12; }
-.tree-scroll { height: 100%; }
-.users-list { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
-.user-row { display: flex; flex-direction: column; gap: 8px; background: #141926; padding: 12px; border-radius: 8px; border: 1px solid #1f2430; }
-.row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
-.user-idx { font-size: 12px; color: #8a94af; font-weight: 600; }
-.row-input :deep(.el-input__wrapper) { background: #0b0d12; border-color: #1f2430; box-shadow: 0 0 0 1px #1f2430 inset; }
-.row-input :deep(.el-input__inner) { color: #e6e8ef; font-size: 13px; }
-.icon-btn { color: #8a94af; }
-.icon-btn:hover { color: #dce2f5; background: #1a2030; }
-.icon-btn.danger-text:hover { color: #f87171; background: rgba(239, 68, 68, 0.1); }
-.file-info { display: flex; align-items: center; min-width: 0; flex: 1; margin-right: 16px; }
-.active-file { font-size: 13px; color: #a5b1ce; background: #141926; padding: 4px 10px; border-radius: 6px; border: 1px solid #1f2430; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.editor-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.primary-btn { background: #2563eb; border: none; }
-.primary-btn:hover:not(:disabled) { background: #3b82f6; }
-.editor-body { position: relative; }
-.editor-input { height: 100%; display: flex; flex-direction: column; }
-.editor-input :deep(.el-textarea__inner) { flex: 1; background: #0b0d12; color: #e6e8ef; border: none !important; box-shadow: none !important; border-radius: 0; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; line-height: 1.6; resize: none; }
-.json-error { background: rgba(239, 68, 68, 0.1); color: #ef4444; font-size: 12px; padding: 8px 16px; border-bottom: 1px solid rgba(239, 68, 68, 0.2); }
-.empty-tip { display: flex; flex-direction: column; align-items: center; justify-content: center; color: #6b7280; text-align: center; padding: 40px 0; font-size: 13px; }
-.empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.3; }
+
+/* 面板通用样式 */
+.workspace-panel {
+  display: flex;
+  flex-direction: column;
+  background: #0a0c11;
+  border: 1px solid #1f2430;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.panel-head {
+  height: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  background: #10141d;
+  border-bottom: 1px solid #1f2430;
+}
+
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #d7ddf2;
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0b0d12;
+}
+
+/* 左侧按钮组 */
+.tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* 按钮样式适配主界面 */
+.icon-btn {
+  color: #8a94af;
+  font-size: 16px;
+  padding: 4px 8px;
+}
+
+.icon-btn:hover {
+  color: #dce2f5;
+  background: #1a2030;
+}
+
+.icon-btn.danger-text:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.dark-btn {
+  background: #141926;
+  border: 1px solid #2a3040;
+  color: #d7ddf2;
+}
+
+.dark-btn:hover:not(:disabled) {
+  background: #1a2030;
+  border-color: #334162;
+  color: #fff;
+}
+
+.primary-btn {
+  background: #2563eb;
+  border: none;
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: #3b82f6;
+}
+
+.primary-btn:disabled,
+.dark-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 左侧列表 */
+.tree-scroll {
+  height: 100%;
+}
+
+.users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.user-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #141926;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #1f2430;
+}
+
+.row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.user-idx {
+  font-size: 12px;
+  color: #8a94af;
+  font-weight: 600;
+}
+
+.row-input :deep(.el-input__wrapper) {
+  background: #0b0d12;
+  border-color: #1f2430;
+  box-shadow: 0 0 0 1px #1f2430 inset;
+}
+
+.row-input :deep(.el-input__inner) {
+  color: #e6e8ef;
+  font-size: 13px;
+}
+
+/* 右侧编辑器 */
+.file-info {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  margin-right: 16px;
+}
+
+.active-file {
+  font-size: 13px;
+  color: #a5b1ce;
+  background: #141926;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #1f2430;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.desktop-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-actions {
+  display: none;
+}
+
+.tail-btn {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  background: var(--noobot-btn-soft-bg);
+  border: 1px solid var(--noobot-btn-soft-border);
+  color: var(--noobot-btn-soft-text);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.editor-body {
+  position: relative;
+}
+
+.editor-input {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-input :deep(.el-textarea__inner) {
+  flex: 1;
+  background: #0b0d12;
+  color: #e6e8ef;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  padding: 16px;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: none;
+}
+
+.editor-input :deep(.el-textarea__inner::placeholder) {
+  color: #4b5563;
+}
+
+.editor-input :deep(.el-textarea__inner:focus) {
+  outline: none;
+}
+
+.json-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  font-size: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* 空状态 */
+.empty-tip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.list-empty-tip {
+  position: static;
+  padding: 40px 0;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+/* 响应式适配 */
 @media (max-width: 768px) {
-  .workspace-layout { grid-template-columns: 1fr; grid-template-rows: 40% 60%; height: calc(100vh - 60px); gap: 12px; padding: 0; }
-  .panel-head { padding: 0 12px; }
-  .active-file { max-width: 120px; }
+  .workspace-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 40% 60%;
+    height: calc(100vh - 60px);
+    gap: 12px;
+    padding: 0;
+  }
+
+  .panel-head {
+    padding: 0 12px;
+  }
+
+  .active-file {
+    max-width: 180px;
+  }
+
+  .desktop-actions {
+    display: none;
+  }
+
+  .mobile-actions {
+    display: inline-flex;
+  }
 }
 </style>
-

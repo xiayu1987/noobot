@@ -6,7 +6,7 @@
 <script setup>
 import { ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Refresh } from "@element-plus/icons-vue";
+import { MoreFilled, Refresh } from "@element-plus/icons-vue";
 import {
   buildWorkspaceDownloadUrl,
   getWorkspaceFileApi,
@@ -191,6 +191,30 @@ async function syncWorkspace() {
   }
 }
 
+function handleTreeAction(command = "") {
+  if (command === "sync") {
+    syncWorkspace();
+    return;
+  }
+  if (command === "reset") {
+    resetWorkspace();
+    return;
+  }
+  if (command === "refresh") {
+    loadTree();
+  }
+}
+
+function handleEditorAction(command = "") {
+  if (command === "download") {
+    downloadFile();
+    return;
+  }
+  if (command === "save") {
+    saveFile();
+  }
+}
+
 watch(
   () => props.active,
   (v) => {
@@ -226,49 +250,38 @@ watch(
     <!-- 左侧目录树 -->
     <div class="workspace-panel workspace-tree">
       <div class="panel-head">
-        <span class="panel-title">项目目录</span>
-        <!-- 优化：使用 :icon 属性并自闭合，彻底解决 loading 时的空 span 挤压问题 -->
-        <el-button
-          class="refresh-btn noobot-action-btn tail-btn"
-          size="small"
-          :icon="Refresh"
-          @click="loadTree"
-          :loading="loadingTree || resetting"
-          :disabled="!connected || resetting || syncing"
-          title="刷新目录"
-          aria-label="刷新目录"
-        />
-        <el-button
-          class="dark-btn"
-          size="small"
-          @click="syncWorkspace"
-          :loading="syncing"
-          :disabled="loadingTree || loadingFile || saving || resetting"
-          title="增量同步配置"
-        >
-          同步配置
-        </el-button>
-        <el-button
-          class="danger-btn"
-          size="small"
-          @click="resetWorkspace"
-          :loading="resetting"
-          :disabled="loadingTree || loadingFile || saving || syncing"
-          title="重置工作区"
-        >
-          重置工作区
-        </el-button>
+        <span class="panel-title">目录</span>
+        <!-- 将按钮包裹在 tree-actions 中，统一控制间距 -->
+        <div class="tree-actions">
+          <div class="desktop-actions">
+            <el-button class="dark-btn" size="small" @click="syncWorkspace" :loading="syncing"
+              :disabled="loadingTree || loadingFile || saving || resetting" title="增量同步配置">
+              同步配置
+            </el-button>
+            <el-button class="danger-btn" size="small" @click="resetWorkspace" :loading="resetting"
+              :disabled="loadingTree || loadingFile || saving || syncing" title="重置工作区">
+              重置
+            </el-button>
+            <el-button class="refresh-btn noobot-action-btn tail-btn" size="small" :icon="Refresh" @click="loadTree"
+              :loading="loadingTree || resetting" :disabled="!connected || resetting || syncing" title="刷新目录"
+              aria-label="刷新目录" />
+          </div>
+          <el-dropdown class="mobile-actions" trigger="click" @command="handleTreeAction">
+            <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="refresh">刷新目录</el-dropdown-item>
+                <el-dropdown-item command="sync">同步配置</el-dropdown-item>
+                <el-dropdown-item command="reset">重置工作区</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
       </div>
       <div class="panel-body">
         <el-scrollbar class="tree-scroll">
-          <el-tree
-            :data="tree"
-            node-key="path"
-            :props="{ label: 'label', children: 'children' }"
-            @node-click="openFile"
-            highlight-current
-            class="custom-tree"
-          >
+          <el-tree :data="tree" node-key="path" :props="{ label: 'label', children: 'children' }" @node-click="openFile"
+            highlight-current class="custom-tree">
             <template #default="{ data }">
               <span class="tree-node">
                 <span class="node-icon">{{
@@ -291,42 +304,31 @@ watch(
           }}</span>
         </div>
         <div class="editor-actions">
-          <el-button
-            class="dark-btn"
-            size="small"
-            @click="downloadFile"
-            :disabled="!activePath"
-          >
-            下载
-          </el-button>
-          <el-button
-            type="primary"
-            class="primary-btn"
-            size="small"
-            @click="saveFile"
-            :disabled="!activePath || !isTextFile"
-            :loading="saving"
-          >
-            保存
-          </el-button>
+          <div class="desktop-actions">
+            <el-button class="dark-btn" size="small" @click="downloadFile" :disabled="!activePath">
+              下载
+            </el-button>
+            <el-button type="primary" class="primary-btn" size="small" @click="saveFile"
+              :disabled="!activePath || !isTextFile" :loading="saving">
+              保存
+            </el-button>
+          </div>
+          <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
+            <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="download">下载</el-dropdown-item>
+                <el-dropdown-item command="save">保存</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </div>
 
-      <div
-        class="panel-body editor-body"
-        v-loading="loadingFile"
-        element-loading-background="rgba(11, 13, 18, 0.8)"
-      >
+      <div class="panel-body editor-body" v-loading="loadingFile" element-loading-background="rgba(11, 13, 18, 0.8)">
         <template v-if="activePath">
-          <el-input
-            v-if="isTextFile"
-            v-model="content"
-            type="textarea"
-            resize="none"
-            class="editor-input"
-            :disabled="loadingFile"
-            placeholder="开始编辑..."
-          />
+          <el-input v-if="isTextFile" v-model="content" type="textarea" resize="none" class="editor-input"
+            :disabled="loadingFile" placeholder="开始编辑..." />
           <div v-else class="empty-tip">
             <div class="empty-icon">📦</div>
             <p>
@@ -349,7 +351,8 @@ watch(
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 16px;
-  height: calc(100vh - 80px); /* 适配 Drawer 内部高度 */
+  height: calc(100vh - 80px);
+  /* 适配 Drawer 内部高度 */
   padding: 0 4px 16px 4px;
   box-sizing: border-box;
 }
@@ -375,12 +378,6 @@ watch(
   border-bottom: 1px solid #1f2430;
 }
 
-.panel-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #d7ddf2;
-}
-
 .panel-body {
   flex: 1;
   min-height: 0;
@@ -389,21 +386,37 @@ watch(
   background: #0b0d12;
 }
 
+/* 左侧目录树按钮组 */
+.tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  /* 增加按钮之间的间距 */
+}
+
 /* 按钮样式适配主界面 */
 .icon-btn {
   color: #8a94af;
   font-size: 16px;
   padding: 4px 8px;
 }
+
 .icon-btn:hover {
   color: #dce2f5;
   background: #1a2030;
 }
 
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #d7ddf2;
+}
+
 .tail-btn {
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
   background: var(--noobot-btn-soft-bg);
   border: 1px solid var(--noobot-btn-soft-border);
   color: var(--noobot-btn-soft-text);
@@ -412,7 +425,6 @@ watch(
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  margin-left: 0 !important;
 }
 
 .tail-btn :deep(.el-icon) {
@@ -429,6 +441,7 @@ watch(
   border: 1px solid #2a3040;
   color: #d7ddf2;
 }
+
 .dark-btn:hover:not(:disabled) {
   background: #1a2030;
   border-color: #334162;
@@ -439,9 +452,11 @@ watch(
   background: #2563eb;
   border: none;
 }
+
 .primary-btn:hover:not(:disabled) {
   background: #3b82f6;
 }
+
 .primary-btn:disabled,
 .dark-btn:disabled {
   opacity: 0.5;
@@ -453,6 +468,7 @@ watch(
   border: 1px solid #7f1d1d;
   color: #fecaca;
 }
+
 .danger-btn:hover:not(:disabled) {
   background: #58151c;
   border-color: #b91c1c;
@@ -530,6 +546,16 @@ watch(
   flex-shrink: 0;
 }
 
+.desktop-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-actions {
+  display: none;
+}
+
 .editor-body {
   position: relative;
 }
@@ -600,6 +626,14 @@ watch(
 
   .active-file {
     max-width: 180px;
+  }
+
+  .desktop-actions {
+    display: none;
+  }
+
+  .mobile-actions {
+    display: inline-flex;
   }
 }
 </style>

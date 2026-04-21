@@ -6,7 +6,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Menu } from "@element-plus/icons-vue";
+import { Menu, MoreFilled } from "@element-plus/icons-vue";
 import MarkdownIt from "markdown-it";
 import noobotLogo from "../assets/noobot.svg";
 import WorkspacePanel from "./WorkspacePanel.vue";
@@ -286,6 +286,12 @@ function onAllowUserInteractionUpdate(value) {
 async function handleWorkspaceReset() {
   await fetchSessions();
 }
+
+function handleHeaderAction(command = "") {
+  if (command === "workspace") return openWorkspace();
+  if (command === "user-settings") return openUserSettings();
+  if (command === "config-params") return openConfigParams();
+}
 </script>
 
 <template>
@@ -339,23 +345,48 @@ async function handleWorkspaceReset() {
           <span class="head-sub">当前用户：{{ userId }}</span>
         </div>
         <div class="header-spacer"></div>
-        <el-button class="workspace-btn noobot-action-btn" @click="openWorkspace"
-          >工作区</el-button
+        <div class="desktop-header-actions">
+          <el-button class="workspace-btn noobot-action-btn" @click="openWorkspace"
+            >工作区</el-button
+          >
+          <el-button
+            v-if="isSuperAdmin"
+            class="workspace-btn noobot-action-btn"
+            @click="openUserSettings"
+          >
+            用户设置
+          </el-button>
+          <el-button
+            v-if="isSuperAdmin"
+            class="workspace-btn noobot-action-btn"
+            @click="openConfigParams"
+          >
+            参数配置
+          </el-button>
+        </div>
+        <el-dropdown
+          class="mobile-header-actions"
+          trigger="click"
+          @command="handleHeaderAction"
         >
-        <el-button
-          v-if="isSuperAdmin"
-          class="workspace-btn noobot-action-btn"
-          @click="openUserSettings"
-        >
-          用户设置
-        </el-button>
-        <el-button
-          v-if="isSuperAdmin"
-          class="workspace-btn noobot-action-btn"
-          @click="openConfigParams"
-        >
-          参数配置
-        </el-button>
+          <el-button
+            class="mobile-menu-btn noobot-action-btn"
+            type="button"
+            :icon="MoreFilled"
+            title="更多操作"
+          />
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="workspace">工作区</el-dropdown-item>
+              <el-dropdown-item v-if="isSuperAdmin" command="user-settings"
+                >用户设置</el-dropdown-item
+              >
+              <el-dropdown-item v-if="isSuperAdmin" command="config-params"
+                >参数配置</el-dropdown-item
+              >
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </header>
 
       <div class="message-container">
@@ -443,7 +474,7 @@ async function handleWorkspaceReset() {
     <el-drawer
       v-model="userSettingsVisible"
       title="用户设置"
-      size="56%"
+      size="72%"
       destroy-on-close
       class="workspace-drawer"
     >
@@ -456,7 +487,7 @@ async function handleWorkspaceReset() {
     <el-drawer
       v-model="configParamsVisible"
       title="参数配置"
-      size="56%"
+      size="72%"
       destroy-on-close
       class="workspace-drawer"
     >
@@ -527,6 +558,16 @@ async function handleWorkspaceReset() {
   background: var(--noobot-btn-secondary-bg);
   color: var(--noobot-btn-secondary-text);
   border-radius: 10px !important;
+}
+
+.desktop-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-header-actions {
+  display: none;
 }
 
 .workspace-btn:hover,
@@ -638,6 +679,14 @@ async function handleWorkspaceReset() {
     justify-content: center;
   }
 
+  .desktop-header-actions {
+    display: none;
+  }
+
+  .mobile-header-actions {
+    display: inline-flex;
+  }
+
   :deep(.workspace-drawer) {
     width: 100% !important;
   }
@@ -648,6 +697,16 @@ async function handleWorkspaceReset() {
 
   .msg-list-inner {
     padding: 16px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .desktop-header-actions {
+    display: none;
+  }
+
+  .mobile-header-actions {
+    display: inline-flex;
   }
 }
 </style>
