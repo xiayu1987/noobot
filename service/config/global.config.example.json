@@ -10,7 +10,16 @@
   },
   "script": {
     "sandboxMode": true,
-    "sandboxProvider": "docker"
+    "sandboxProvider": {
+      "default": "docker",
+      "docker": {
+        "dockerContainerScope": "global",
+        "dockerContainerName": "noobot-script-sandbox",
+        "dockerImage": "node:20"
+      },
+      "bubblewrap": {},
+      "firejail": {}
+    }
   },
   "async": {
     "waitTimeoutMs": 120000,

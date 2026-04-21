@@ -13,7 +13,10 @@ import {
   bwrapSupportsOption,
   ensureBubblewrapOverlayReady,
 } from "../sandbox/bubblewrap-sandbox.js";
-import { buildDockerCommand } from "../sandbox/docker-sandbox.js";
+import {
+  buildDockerCommand,
+  resolveDockerContainerScope,
+} from "../sandbox/docker-sandbox.js";
 import { buildFirejailCommand } from "../sandbox/firejail-sandbox.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 
@@ -44,17 +47,39 @@ function hasCommand(commandName = "") {
   });
 }
 
-function resolveSandboxProvider(effectiveConfig = {}, globalConfig = {}) {
-  const scriptCfg = effectiveConfig?.script || {};
-  const globalScriptCfg = globalConfig?.script || {};
-  const provider = String(
-    scriptCfg?.sandboxProvider || globalScriptCfg?.sandboxProvider || "",
-  )
+function normalizeSandboxProvider(provider = "") {
+  const normalized = String(provider || "")
     .trim()
     .toLowerCase();
-  if (provider === "firejail" || provider === "fj") return "firejail";
-  if (provider === "bubblewrap" || provider === "bwrap") return "bubblewrap";
+  if (normalized === "firejail" || normalized === "fj") return "firejail";
+  if (normalized === "bubblewrap" || normalized === "bwrap") return "bubblewrap";
   return "docker";
+}
+
+function resolveSandboxProviderConfig(scriptConfig = {}) {
+  const providerConfig = scriptConfig?.sandboxProvider;
+  if (!providerConfig || typeof providerConfig !== "object" || Array.isArray(providerConfig)) {
+    return { provider: "docker", providerDetail: {} };
+  }
+  const provider = normalizeSandboxProvider(providerConfig?.default || "docker");
+  const detail =
+    providerConfig?.[provider] &&
+    typeof providerConfig?.[provider] === "object" &&
+    !Array.isArray(providerConfig?.[provider])
+      ? providerConfig?.[provider]
+      : {};
+  return { provider, providerDetail: detail };
+}
+
+function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
+  void scriptConfig;
+  return {
+    dockerContainerScope:
+      providerDetail?.dockerContainerScope || "global",
+    dockerContainerName:
+      providerDetail?.dockerContainerName || "noobot-script-sandbox",
+    dockerImage: providerDetail?.dockerImage || "node:20",
+  };
 }
 
 function toolExecResult(mode, r = {}, extra = {}) {
@@ -76,32 +101,59 @@ function missingCommandResult(mode, commandName = "") {
   });
 }
 
-async function runDockerCommand({ userRoot, command, workspace, timeout }) {
-  const dockerCmd = buildDockerCommand({ userRoot, command });
-  return run(dockerCmd, workspace, timeout);
+async function runDockerCommand({
+  userRoot,
+  userId = "",
+  command,
+  workspace,
+  timeout,
+  scriptConfig = {},
+}) {
+  const built = buildDockerCommand({ userRoot, userId, command, scriptConfig });
+  const result = await run(built.cmd, workspace, timeout);
+  return { result, docker: built };
 }
 
 async function tryDockerFallback({
   userRoot,
+  userId = "",
   command,
   workspace,
   timeout,
+  scriptConfig = {},
   fallbackFrom,
   warning,
 }) {
   const dockerInstalled = await hasCommand("docker");
   if (!dockerInstalled) return null;
-  const dr = await runDockerCommand({ userRoot, command, workspace, timeout });
+  const { result: dr, docker } = await runDockerCommand({
+    userRoot,
+    userId,
+    command,
+    workspace,
+    timeout,
+    scriptConfig,
+  });
   return toToolJsonResult(TOOL_NAME, {
     ok: Number(dr?.code || 0) === 0,
     mode: "docker",
     fallbackFrom,
     warning,
+    containerName: docker?.containerName || "",
+    containerScope: docker?.scope || "",
+    containerImage: docker?.image || "",
+    containerMountSource: docker?.mountSource || "",
+    containerWorkdir: docker?.workdir || "",
     ...dr,
   });
 }
 
-function buildScriptToolDescription({ sandboxEnabled, sandboxProvider, workspace }) {
+function buildScriptToolDescription({
+  sandboxEnabled,
+  sandboxProvider,
+  workspace,
+  dockerConfig = {},
+}) {
   if (!sandboxEnabled) {
     return [
       "执行脚本（local 模式）。",
@@ -110,6 +162,7 @@ function buildScriptToolDescription({ sandboxEnabled, sandboxProvider, workspace
     ].join("\n");
   }
 
+  const dockerScope = resolveDockerContainerScope(dockerConfig);
   const providerDescriptionMap = {
     bubblewrap: [
       "Bubblewrap + overlayfs 说明：",
@@ -124,7 +177,11 @@ function buildScriptToolDescription({ sandboxEnabled, sandboxProvider, workspace
       "- 命令固定在 $HOME/runtime/sandbox/persist 执行，文件可累加",
       "- 软件累加建议使用用户态安装：如 npm --prefix \"$HOME/.npm-global\"、pip install --user、将二进制放到 $HOME/bin",
     ],
-    docker: ["Docker 说明：", "- 用户目录整体挂载到容器内 /workspace"],
+    docker: [
+      "Docker 说明：",
+      `- 容器复用范围：${dockerScope === "user" ? "按用户独立容器" : "所有用户共用同一容器（默认）"}`,
+      "- 首次执行会自动创建容器，后续复用同一容器（不删除），可累加安装软件",
+    ],
   };
 
   const workdirDescriptionMap = {
@@ -136,10 +193,16 @@ function buildScriptToolDescription({ sandboxEnabled, sandboxProvider, workspace
       "- 命令默认工作目录为 /workspace/runtime/sandbox/persist",
       "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
     ],
-    docker: [
-      "- 命令默认工作目录为 /workspace/runtime/workspace",
-      "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
-    ],
+    docker:
+      dockerScope === "user"
+        ? [
+            "- 命令默认工作目录为 /workspace/runtime/workspace",
+            "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
+          ]
+        : [
+            "- 命令默认工作目录为 /workspace/<userId>/runtime/workspace",
+            "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
+          ],
   };
 
   return [
@@ -158,12 +221,17 @@ export function createScriptTool({ agentContext }) {
 
   const workspace = path.join(basePath, "runtime/workspace");
   const userRoot = basePath;
+  const userId = String(runtime?.userId || "").trim();
+  const scriptConfig = effectiveConfig?.script || {};
   const sandboxEnabled = !!effectiveConfig?.script?.sandboxMode;
-  const sandboxProvider = resolveSandboxProvider(effectiveConfig, globalConfig);
+  const { provider: sandboxProvider, providerDetail } =
+    resolveSandboxProviderConfig(scriptConfig);
+  const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
   const description = buildScriptToolDescription({
     sandboxEnabled,
     sandboxProvider,
     workspace,
+    dockerConfig,
   });
 
   const execute_script = new DynamicStructuredTool({
@@ -192,9 +260,11 @@ export function createScriptTool({ agentContext }) {
         if (!supportsOverlaySrc) {
           const fallbackResult = await tryDockerFallback({
             userRoot,
+            userId,
             command,
             workspace,
             timeout,
+            scriptConfig: dockerConfig,
             fallbackFrom: "bubblewrap",
             warning: "当前 bubblewrap 版本不支持 --overlay-src，已自动回退到 docker。",
           });
@@ -205,7 +275,7 @@ export function createScriptTool({ agentContext }) {
             code: 2,
             stdout: "",
             stderr:
-              "当前 bubblewrap 版本不支持 --overlay-src。请升级 bubblewrap，或将 script.sandboxProvider 改为 docker。",
+              "当前 bubblewrap 版本不支持 --overlay-src。请升级 bubblewrap，或将 script.sandboxProvider.default 改为 docker。",
           });
         }
 
@@ -246,7 +316,20 @@ export function createScriptTool({ agentContext }) {
       } else {
         const dockerInstalled = await hasCommand("docker");
         if (!dockerInstalled) return missingCommandResult("docker", "docker");
-        sandboxCmd = buildDockerCommand({ userRoot, command });
+        const built = buildDockerCommand({
+          userRoot,
+          userId,
+          command,
+          scriptConfig: dockerConfig,
+        });
+        sandboxCmd = built.cmd;
+        extra = {
+          containerName: built.containerName,
+          containerScope: built.scope,
+          containerImage: built.image,
+          containerMountSource: built.mountSource,
+          containerWorkdir: built.workdir,
+        };
       }
 
       let r = await run(sandboxCmd, workspace, timeout);
@@ -259,9 +342,11 @@ export function createScriptTool({ agentContext }) {
       ) {
         const fallbackResult = await tryDockerFallback({
           userRoot,
+          userId,
           command,
           workspace,
           timeout,
+          scriptConfig: dockerConfig,
           fallbackFrom: "bubblewrap",
           warning:
             "当前内核/发行版不支持 bubblewrap overlay(userxattr)，已自动回退到 docker。",
@@ -269,7 +354,7 @@ export function createScriptTool({ agentContext }) {
         if (fallbackResult) return fallbackResult;
         r = {
           ...r,
-          stderr: `${String(r?.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 script.sandboxProvider=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
+          stderr: `${String(r?.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 script.sandboxProvider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
         };
       }
       return toolExecResult(mode, r, extra);
