@@ -355,7 +355,12 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     globalConfig,
     userConfig,
   });
-  const maxToolLoopTurns = Number(effectiveConfig?.maxToolLoopTurns || 30);
+  const runtimeMaxTurns = Number(sys?.config?.maxToolLoopTurns || 0);
+  const configMaxTurns = Number(effectiveConfig?.maxToolLoopTurns || 30);
+  const maxToolLoopTurns =
+    Number.isFinite(runtimeMaxTurns) && runtimeMaxTurns > 0
+      ? runtimeMaxTurns
+      : configMaxTurns;
   const llm = createChatModel({
     globalConfig,
     userConfig,

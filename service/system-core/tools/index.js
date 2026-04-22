@@ -6,7 +6,7 @@
 import { createFileTool } from "./file-tool.js";
 import { createScriptTool } from "./script-tool.js";
 import { createSkillTool } from "./skill-tool.js";
-import { createDoc2DataTool } from "./doc2data-tool.js";
+import { createContentProcessTool } from "./content-process-tool.js";
 import { createServiceTool } from "./service-tool.js";
 import { createAgentCollabTool } from "./agent-collab-tool.js";
 import { createModelTool } from "./model-tool.js";
@@ -16,26 +16,27 @@ import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 
 export async function buildTools(ctx) {
+  const runtime = ctx?.agentContext?.runtime || {};
+  const effectiveConfig = mergeConfig(
+    runtime?.globalConfig || {},
+    runtime?.userConfig || {},
+  );
   const allowUserInteraction =
     ctx?.agentContext?.runtime?.systemRuntime?.config?.allowUserInteraction !==
     false;
+  const processContentTaskEnabled =
+    effectiveConfig?.tools?.process_content_task?.enabled !== false;
   const baseTools = [
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
     ...createSkillTool(ctx),
-    ...createDoc2DataTool(ctx),
+    ...(processContentTaskEnabled ? createContentProcessTool(ctx) : []),
     ...createServiceTool(ctx),
     ...createMcpTool(ctx),
     ...createAgentCollabTool(ctx),
     ...createModelTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
-
-  const runtime = ctx?.agentContext?.runtime || {};
-  const effectiveConfig = mergeConfig(
-    runtime?.globalConfig || {},
-    runtime?.userConfig || {},
-  );
   return await filterToolsByRuntimePolicy({
     agentContext: ctx?.agentContext || {},
     tools: baseTools,

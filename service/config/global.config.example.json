@@ -8,6 +8,23 @@
     "useLastRunningTaskRange": true,
     "useLastCompletedTaskRange": true
   },
+  "tools": {
+    "web_search_to_data": {
+      "enabled": false,
+      "processMode": "direct"
+    },
+    "web_to_data": {
+      "enabled": true,
+      "processMode": "direct"
+    },
+    "doc_to_data": {
+      "enabled": true
+    },
+    "process_content_task": {
+      "enabled": true,
+      "maxToolLoopTurns": 2
+    }
+  },
   "script": {
     "sandboxMode": true,
     "sandboxProvider": {

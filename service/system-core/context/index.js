@@ -172,6 +172,14 @@ export class ContextBuilder {
 
   _buildRuntimeContext({ dialogProcessId, sessionTree }) {
     const normalizedDialogProcessId = String(dialogProcessId || "");
+    const configuredMaxToolLoopTurns = Number(
+      this.runConfig?.maxToolLoopTurns,
+    );
+    const resolvedMaxToolLoopTurns =
+      Number.isFinite(configuredMaxToolLoopTurns) &&
+      configuredMaxToolLoopTurns > 0
+        ? Math.floor(configuredMaxToolLoopTurns)
+        : 0;
     const systemRuntime = {
       sessionId: this.sessionId || "",
       caller: this.caller || "user",
@@ -181,6 +189,9 @@ export class ContextBuilder {
       now: this._now(),
       config: {
         allowUserInteraction: this._isUserInteractionAllowed(),
+        ...(resolvedMaxToolLoopTurns > 0
+          ? { maxToolLoopTurns: resolvedMaxToolLoopTurns }
+          : {}),
       },
     };
 

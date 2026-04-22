@@ -4,15 +4,27 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { MoreFilled, Refresh } from "@element-plus/icons-vue";
 import {
+  MoreFilled,
+  Refresh,
+  Folder,
+  Document,
+  Key,
+} from "@element-plus/icons-vue";
+import {
+  buildWorkspaceAllDownloadUrl,
   buildWorkspaceDownloadUrl,
+  getConfigParamCatalogApi,
+  getWorkspaceAllFileApi,
+  getWorkspaceAllTreeApi,
   getWorkspaceFileApi,
+  postSyncAllWorkspaceApi,
   postResetWorkspaceApi,
   postSyncWorkspaceApi,
   getWorkspaceTreeApi,
+  putWorkspaceAllFileApi,
   putWorkspaceFileApi,
 } from "../api/chatApi";
 
@@ -26,14 +38,31 @@ const props = defineProps({
 const emit = defineEmits(["workspace-reset"]);
 
 const tree = ref([]);
+const allWorkspaceTree = ref([]);
 const loadingTree = ref(false);
+const loadingAllTree = ref(false);
 const loadingFile = ref(false);
 const saving = ref(false);
 const resetting = ref(false);
 const syncing = ref(false);
+const syncingAll = ref(false);
 const activePath = ref("");
+const activePathSource = ref("user");
 const content = ref("");
 const isTextFile = ref(true);
+const editorInputRef = ref(null);
+const paramCatalog = ref([]);
+const loadingParamCatalog = ref(false);
+const activeResourceSection = ref("directory");
+const lastActiveResourceSection = ref("directory");
+const paramTreeData = computed(() =>
+  (paramCatalog.value || []).map((item) => ({
+    key: String(item?.key || "").trim(),
+    label: String(item?.key || "").trim(),
+    description: String(item?.description || "").trim(),
+    type: "param",
+  })),
+);
 
 function authHeaders(extra = {}) {
   return {
@@ -67,7 +96,45 @@ async function loadTree() {
   }
 }
 
-async function openFile(node) {
+async function loadAllWorkspaceTree() {
+  if (!props.connected || !props.apiKey || !props.isSuperAdmin) return;
+  loadingAllTree.value = true;
+  try {
+    const res = await getWorkspaceAllTreeApi({ fetcher: authFetch });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "加载全工作区失败");
+    allWorkspaceTree.value = data.tree || [];
+  } catch (error) {
+    ElMessage.error(error.message || "加载全工作区失败");
+  } finally {
+    loadingAllTree.value = false;
+  }
+}
+
+async function loadParamCatalog() {
+  if (!props.connected || !props.apiKey) return;
+  loadingParamCatalog.value = true;
+  try {
+    const res = await getConfigParamCatalogApi({ fetcher: authFetch });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "加载参数列表失败");
+    paramCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
+  } catch (error) {
+    ElMessage.error(error.message || "加载参数列表失败");
+  } finally {
+    loadingParamCatalog.value = false;
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([
+    loadTree(),
+    loadParamCatalog(),
+    props.isSuperAdmin ? loadAllWorkspaceTree() : Promise.resolve(),
+  ]);
+}
+
+async function openFile(node, source = "user") {
   if (
     !props.connected ||
     !node ||
@@ -78,13 +145,20 @@ async function openFile(node) {
     return;
   loadingFile.value = true;
   try {
-    const res = await getWorkspaceFileApi(
-      { userId: props.userId, path: node.path },
-      { fetcher: authFetch },
-    );
+    const res =
+      source === "all"
+        ? await getWorkspaceAllFileApi(
+            { path: node.path },
+            { fetcher: authFetch },
+          )
+        : await getWorkspaceFileApi(
+            { userId: props.userId, path: node.path },
+            { fetcher: authFetch },
+          );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "读取文件失败");
     activePath.value = data.path || node.path;
+    activePathSource.value = source === "all" ? "all" : "user";
     isTextFile.value = data.isText !== false;
     content.value = data.content || "";
   } catch (e) {
@@ -105,18 +179,27 @@ async function saveFile() {
     return;
   saving.value = true;
   try {
-    const res = await putWorkspaceFileApi(
-      {
-        userId: props.userId,
-        path: activePath.value,
-        content: content.value,
-      },
-      { fetcher: authFetch },
-    );
+    const res =
+      activePathSource.value === "all"
+        ? await putWorkspaceAllFileApi(
+            {
+              path: activePath.value,
+              content: content.value,
+            },
+            { fetcher: authFetch },
+          )
+        : await putWorkspaceFileApi(
+            {
+              userId: props.userId,
+              path: activePath.value,
+              content: content.value,
+            },
+            { fetcher: authFetch },
+          );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "保存失败");
     ElMessage.success("保存成功");
-    await loadTree();
+    await refreshAll();
   } catch (e) {
     ElMessage.error(e.message || "保存失败");
   } finally {
@@ -127,11 +210,17 @@ async function saveFile() {
 function downloadFile() {
   if (!props.connected || !activePath.value || !props.userId || !props.apiKey)
     return;
-  const downloadUrl = buildWorkspaceDownloadUrl({
-    userId: props.userId,
-    path: activePath.value,
-    apiKey: props.apiKey,
-  });
+  const downloadUrl =
+    activePathSource.value === "all"
+      ? buildWorkspaceAllDownloadUrl({
+          path: activePath.value,
+          apiKey: props.apiKey,
+        })
+      : buildWorkspaceDownloadUrl({
+          userId: props.userId,
+          path: activePath.value,
+          apiKey: props.apiKey,
+        });
   window.open(downloadUrl, "_blank");
 }
 
@@ -160,9 +249,10 @@ async function resetWorkspace() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "重置工作区失败");
     activePath.value = "";
+    activePathSource.value = "user";
     content.value = "";
     isTextFile.value = true;
-    await loadTree();
+    await refreshAll();
     emit("workspace-reset");
     ElMessage.success("工作区已重置");
   } catch (error) {
@@ -182,7 +272,7 @@ async function syncWorkspace() {
     );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "同步配置失败");
-    await loadTree();
+    await refreshAll();
     ElMessage.success("已完成增量同步");
   } catch (error) {
     ElMessage.error(error.message || "同步配置失败");
@@ -191,17 +281,51 @@ async function syncWorkspace() {
   }
 }
 
+async function syncAllWorkspace() {
+  if (!props.connected || !props.apiKey || !props.isSuperAdmin) return;
+  syncingAll.value = true;
+  try {
+    const res = await postSyncAllWorkspaceApi({ fetcher: authFetch });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "同步所有用户配置失败");
+    await refreshAll();
+    ElMessage.success(
+      `已完成同步（${Number(data.success || 0)}/${Number(data.total || 0)}）`,
+    );
+  } catch (error) {
+    ElMessage.error(error.message || "同步所有用户配置失败");
+  } finally {
+    syncingAll.value = false;
+  }
+}
+
+async function insertParamAtCursor(key = "") {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) return;
+  if (!activePath.value || !isTextFile.value) {
+    ElMessage.warning("请先选择可编辑文本文件");
+    return;
+  }
+  const token = `\${${normalizedKey}}`;
+  await nextTick();
+  const textarea = editorInputRef.value?.textarea || null;
+  if (!textarea) {
+    content.value = `${content.value || ""}${token}`;
+    return;
+  }
+  const start = Number(textarea.selectionStart ?? content.value.length);
+  const end = Number(textarea.selectionEnd ?? content.value.length);
+  const current = String(content.value || "");
+  content.value = `${current.slice(0, start)}${token}${current.slice(end)}`;
+  await nextTick();
+  const caret = start + token.length;
+  textarea.focus();
+  textarea.setSelectionRange(caret, caret);
+}
+
 function handleTreeAction(command = "") {
-  if (command === "sync") {
-    syncWorkspace();
-    return;
-  }
-  if (command === "reset") {
-    resetWorkspace();
-    return;
-  }
   if (command === "refresh") {
-    loadTree();
+    refreshAll();
   }
 }
 
@@ -216,9 +340,21 @@ function handleEditorAction(command = "") {
 }
 
 watch(
+  () => activeResourceSection.value,
+  (value) => {
+    const normalized = String(value || "").trim();
+    if (normalized) {
+      lastActiveResourceSection.value = normalized;
+      return;
+    }
+    activeResourceSection.value = lastActiveResourceSection.value || "directory";
+  },
+);
+
+watch(
   () => props.active,
   (v) => {
-    if (v) loadTree();
+    if (v) refreshAll();
   },
   { immediate: true },
 );
@@ -226,21 +362,30 @@ watch(
 watch(
   () => props.userId,
   () => {
-    if (props.active) loadTree();
+    if (props.active) refreshAll();
   },
 );
 
 watch(
   () => props.apiKey,
   () => {
-    if (props.active && props.connected) loadTree();
+    if (props.active && props.connected) refreshAll();
   },
 );
 
 watch(
   () => props.connected,
   (isConnected) => {
-    if (isConnected && props.active) loadTree();
+    if (isConnected && props.active) refreshAll();
+  },
+);
+
+watch(
+  () => props.isSuperAdmin,
+  (isSuperAdmin) => {
+    if (!isSuperAdmin && activeResourceSection.value === "all-workspace") {
+      activeResourceSection.value = "directory";
+    }
   },
 );
 </script>
@@ -250,48 +395,132 @@ watch(
     <!-- 左侧目录树 -->
     <div class="workspace-panel workspace-tree">
       <div class="panel-head">
-        <span class="panel-title">目录</span>
+        <span class="panel-title">资源</span>
         <!-- 将按钮包裹在 tree-actions 中，统一控制间距 -->
         <div class="tree-actions">
           <div class="desktop-actions">
-            <el-button class="dark-btn" size="small" @click="syncWorkspace" :loading="syncing"
-              :disabled="loadingTree || loadingFile || saving || resetting" title="增量同步配置">
-              同步配置
-            </el-button>
-            <el-button class="danger-btn" size="small" @click="resetWorkspace" :loading="resetting"
-              :disabled="loadingTree || loadingFile || saving || syncing" title="重置工作区">
-              重置
-            </el-button>
-            <el-button class="refresh-btn noobot-action-btn tail-btn" size="small" :icon="Refresh" @click="loadTree"
-              :loading="loadingTree || resetting" :disabled="!connected || resetting || syncing" title="刷新目录"
-              aria-label="刷新目录" />
+            <el-button class="refresh-btn noobot-action-btn tail-btn" size="small" :icon="Refresh" @click="refreshAll"
+              :loading="loadingTree || loadingAllTree || loadingParamCatalog || resetting || syncingAll"
+              :disabled="!connected || resetting || syncing || syncingAll" title="刷新目录和参数"
+              aria-label="刷新目录和参数" />
           </div>
           <el-dropdown class="mobile-actions" trigger="click" @command="handleTreeAction">
             <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="refresh">刷新目录</el-dropdown-item>
-                <el-dropdown-item command="sync">同步配置</el-dropdown-item>
-                <el-dropdown-item command="reset">重置工作区</el-dropdown-item>
+                <el-dropdown-item command="refresh">刷新目录和参数</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
         </div>
       </div>
       <div class="panel-body">
-        <el-scrollbar class="tree-scroll">
-          <el-tree :data="tree" node-key="path" :props="{ label: 'label', children: 'children' }" @node-click="openFile"
-            highlight-current class="custom-tree">
-            <template #default="{ data }">
-              <span class="tree-node">
-                <span class="node-icon">{{
-                  data.type === "dir" ? "📁" : "📄"
-                }}</span>
-                <span class="node-label">{{ data.label }}</span>
-              </span>
-            </template>
-          </el-tree>
-        </el-scrollbar>
+        <el-collapse v-model="activeResourceSection" accordion class="resource-collapse">
+          <el-collapse-item
+            name="directory"
+            title="目录"
+            class="resource-collapse-item"
+            :class="{
+              'resource-collapse-item--active': activeResourceSection === 'directory',
+              'resource-collapse-item--collapsed':
+                !!activeResourceSection && activeResourceSection !== 'directory',
+            }"
+          >
+            <div class="dir-inner-actions">
+              <el-button class="dark-btn" size="small" @click="syncWorkspace" :loading="syncing"
+                :disabled="loadingTree || loadingFile || saving || resetting" title="增量同步配置">
+                同步配置
+              </el-button>
+              <el-button class="danger-btn" size="small" @click="resetWorkspace" :loading="resetting"
+                :disabled="loadingTree || loadingFile || saving || syncing" title="重置工作区">
+                重置
+              </el-button>
+            </div>
+            <el-scrollbar class="tree-scroll">
+                <el-tree :data="tree" node-key="path" :props="{ label: 'label', children: 'children' }"
+                  @node-click="(data) => openFile(data, 'user')" highlight-current class="custom-tree">
+                <template #default="{ data }">
+                  <span class="tree-node">
+                    <el-icon class="node-icon">
+                      <Folder v-if="data.type === 'dir'" />
+                      <Document v-else />
+                    </el-icon>
+                    <span class="node-label">{{ data.label }}</span>
+                  </span>
+                </template>
+              </el-tree>
+            </el-scrollbar>
+          </el-collapse-item>
+          <el-collapse-item
+            v-if="isSuperAdmin"
+            name="all-workspace"
+            title="所有用户工作区"
+            class="resource-collapse-item"
+            :class="{
+              'resource-collapse-item--active': activeResourceSection === 'all-workspace',
+              'resource-collapse-item--collapsed':
+                !!activeResourceSection && activeResourceSection !== 'all-workspace',
+            }"
+          >
+            <div class="dir-inner-actions">
+              <el-button class="dark-btn" size="small" @click="syncAllWorkspace" :loading="syncingAll"
+                :disabled="loadingAllTree || loadingFile || saving || resetting || syncing" title="同步所有用户配置">
+                同步配置
+              </el-button>
+            </div>
+            <el-scrollbar
+              class="tree-scroll"
+              v-loading="loadingAllTree"
+              element-loading-background="rgba(11, 13, 18, 0.6)"
+            >
+              <el-tree
+                :data="allWorkspaceTree"
+                node-key="path"
+                :props="{ label: 'label', children: 'children' }"
+                @node-click="(data) => openFile(data, 'all')"
+                highlight-current
+                class="custom-tree"
+              >
+                <template #default="{ data }">
+                  <span class="tree-node">
+                    <el-icon class="node-icon">
+                      <Folder v-if="data.type === 'dir'" />
+                      <Document v-else />
+                    </el-icon>
+                    <span class="node-label">{{ data.label }}</span>
+                  </span>
+                </template>
+              </el-tree>
+            </el-scrollbar>
+          </el-collapse-item>
+          <el-collapse-item
+            name="params"
+            title="参数"
+            class="resource-collapse-item"
+            :class="{
+              'resource-collapse-item--active': activeResourceSection === 'params',
+              'resource-collapse-item--collapsed':
+                !!activeResourceSection && activeResourceSection !== 'params',
+            }"
+          >
+            <el-scrollbar class="tree-scroll" v-loading="loadingParamCatalog"
+              element-loading-background="rgba(11, 13, 18, 0.6)">
+              <el-tree :data="paramTreeData" node-key="key" :props="{ label: 'label', children: 'children' }"
+                class="custom-tree param-tree">
+                <template #default="{ data }">
+                  <span class="tree-node param-row" @dblclick.stop="insertParamAtCursor(data.key)">
+                    <el-icon class="node-icon"><Key /></el-icon>
+                    <span class="node-label">{{ data.label }}</span>
+                    <span class="param-desc" :title="data.description">{{ data.description || "（无说明）" }}</span>
+                  </span>
+                </template>
+              </el-tree>
+              <div v-if="!paramTreeData.length && !loadingParamCatalog" class="empty-tip left-empty">
+                <p>暂无参数</p>
+              </div>
+            </el-scrollbar>
+          </el-collapse-item>
+        </el-collapse>
       </div>
     </div>
 
@@ -300,7 +529,9 @@ watch(
       <div class="panel-head">
         <div class="file-info">
           <span class="active-file" :title="activePath">{{
-            activePath || "未选择文件"
+            activePath
+              ? `${activePathSource === 'all' ? '[全部工作区] ' : ''}${activePath}`
+              : "未选择文件"
           }}</span>
         </div>
         <div class="editor-actions">
@@ -327,18 +558,20 @@ watch(
 
       <div class="panel-body editor-body" v-loading="loadingFile" element-loading-background="rgba(11, 13, 18, 0.8)">
         <template v-if="activePath">
-          <el-input v-if="isTextFile" v-model="content" type="textarea" resize="none" class="editor-input"
+          <el-input v-if="isTextFile" ref="editorInputRef" v-model="content" type="textarea" resize="none" class="editor-input"
             :disabled="loadingFile" placeholder="开始编辑..." />
           <div v-else class="empty-tip">
-            <div class="empty-icon">📦</div>
-            <p>
-              该文件为二进制文件，暂不支持在线预览<br />请点击右上角下载查看
-            </p>
+            <el-empty
+              description="该文件为二进制文件，暂不支持在线预览，请点击右上角下载查看"
+              :image-size="72"
+            />
           </div>
         </template>
         <div v-else class="empty-tip">
-          <div class="empty-icon">👈</div>
-          <p>请在左侧目录树中选择要查看或编辑的文件</p>
+          <el-empty
+            description="请在左侧目录树中选择要查看或编辑的文件"
+            :image-size="72"
+          />
         </div>
       </div>
     </div>
@@ -384,6 +617,73 @@ watch(
   display: flex;
   flex-direction: column;
   background: #0b0d12;
+}
+
+.dir-inner-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px 0 10px;
+}
+
+.resource-collapse {
+  height: 100%;
+  min-height: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+
+.resource-collapse :deep(.el-collapse-item__header) {
+  height: 40px;
+  line-height: 40px;
+  padding: 0 12px;
+  background: #0e121b;
+  color: #d7ddf2;
+  border-bottom: 1px solid #1f2430;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.resource-collapse :deep(.el-collapse-item__header:hover) {
+  background: #141926;
+}
+
+.resource-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: 1px solid #1f2430;
+  background: #0b0d12;
+}
+
+.resource-collapse :deep(.el-collapse-item__content) {
+  padding: 0;
+}
+
+.resource-collapse :deep(.resource-collapse-item) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
+.resource-collapse :deep(.resource-collapse-item--active) {
+  flex: 1;
+}
+
+.resource-collapse :deep(.resource-collapse-item--active .el-collapse-item__wrap) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.resource-collapse :deep(.resource-collapse-item--active .el-collapse-item__content) {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.resource-collapse :deep(.resource-collapse-item--collapsed) {
+  margin-top: auto;
 }
 
 /* 左侧目录树按钮组 */
@@ -505,17 +805,34 @@ watch(
   align-items: center;
   gap: 8px;
   font-size: 13px;
+  width: 100%;
+  min-width: 0;
 }
 
 .node-icon {
   font-size: 14px;
   opacity: 0.9;
+  color: #9fb2e3;
 }
 
 .node-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.param-row {
+  cursor: pointer;
+}
+
+.param-desc {
+  margin-left: auto;
+  color: #7f8aa6;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
 }
 
 /* 右侧编辑器 */
@@ -554,6 +871,11 @@ watch(
 
 .mobile-actions {
   display: none;
+}
+
+.left-empty {
+  position: static;
+  min-height: 80px;
 }
 
 .editor-body {
@@ -608,6 +930,10 @@ watch(
   font-size: 48px;
   margin-bottom: 16px;
   opacity: 0.3;
+}
+
+.empty-tip :deep(.el-empty__description p) {
+  color: #7f8aa6;
 }
 
 /* 响应式适配 */

@@ -5,6 +5,23 @@
     "video": "qwen3_5_flash",
     "image": "qwen3_5_flash"
   },
+  "tools": {
+    "web_search_to_data": {
+      "enabled": false,
+      "processMode": "direct"
+    },
+    "web_to_data": {
+      "enabled": true,
+      "processMode": "direct"
+    },
+    "doc_to_data": {
+      "enabled": true
+    },
+    "process_content_task": {
+      "enabled": true,
+      "maxToolLoopTurns": 2
+    }
+  },
   "providers": {
     "openai": {
       "enabled": false,
@@ -74,16 +91,6 @@
       "isActive": true,
       "name": "AliyunBailianMCP_china-railway",
       "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/china-railway/sse",
-      "headers": {
-        "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
-      }
-    },
-    "WebParser": {
-      "type": "sse",
-      "description": "网页解析（WebParser）MCP 服务，一个专用于网页内容解析的工具包。",
-      "isActive": true,
-      "name": "AliyunBailianMCP_WebParser",
-      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/WebParser/sse",
       "headers": {
         "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
       }

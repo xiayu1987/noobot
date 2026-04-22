@@ -161,8 +161,10 @@ main() {
   # update_code
 
   log "2/5 安装依赖"
+  unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD || true
   npm --prefix "$CLIENT_DIR" install
   npm --prefix "$SERVICE_DIR" install
+  npm --prefix "$SERVICE_DIR" run postinstall --if-present
 
   log "3/5 构建前端"
   npm --prefix "$CLIENT_DIR" run build

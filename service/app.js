@@ -51,12 +51,21 @@ function workspaceConfigParamsFilePath() {
 
 function normalizeConfigParams(input = {}) {
   const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
+  const rawDescriptions =
+    input?.descriptions && typeof input.descriptions === "object"
+      ? input.descriptions
+      : {};
   const values = Object.fromEntries(
     Object.entries(rawValues)
       .map(([key, value]) => [String(key || "").trim(), String(value ?? "").trim()])
       .filter(([key]) => Boolean(key)),
   );
-  return { values };
+  const descriptions = Object.fromEntries(
+    Object.entries(rawDescriptions)
+      .map(([key, value]) => [String(key || "").trim(), String(value ?? "").trim()])
+      .filter(([key]) => Boolean(key)),
+  );
+  return { values, descriptions };
 }
 
 async function readWorkspaceConfigParams({ createIfMissing = false } = {}) {
@@ -125,6 +134,22 @@ async function collectConfigTemplateKeys() {
   collectTemplateKeysFromObject(globalCfgJson, keys);
   collectTemplateKeysFromObject(templateCfgJson, keys);
   return Array.from(keys).filter(Boolean).sort((a, b) => a.localeCompare(b));
+}
+
+async function collectConfigTemplateParamCatalog() {
+  const payload = await readWorkspaceConfigParams({ createIfMissing: true });
+  const allKeys = Object.keys(payload?.values || {})
+    .concat(Object.keys(payload?.descriptions || {}))
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  const dedupedKeys = Array.from(new Set(allKeys)).sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const descriptionMap = payload?.descriptions || {};
+  return dedupedKeys.map((key) => ({
+    key,
+    description: String(descriptionMap?.[key] || "").trim(),
+  }));
 }
 
 function templateRootPath() {
@@ -359,14 +384,17 @@ app.put("/internal/admin/users", requireSuperAdmin, async (req, res) => {
 
 app.get("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
   try {
-    const [payload, keys] = await Promise.all([
+    const [payload, keys, catalog] = await Promise.all([
       readWorkspaceConfigParams({ createIfMissing: true }),
       collectConfigTemplateKeys(),
+      collectConfigTemplateParamCatalog(),
     ]);
     res.json({
       ok: true,
       values: payload.values || {},
+      descriptions: payload.descriptions || {},
       keys,
+      catalog,
     });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "read config params failed" });
@@ -375,16 +403,41 @@ app.get("/internal/admin/config-params", requireSuperAdmin, async (req, res) => 
 
 app.put("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
   try {
-    const payload = await writeWorkspaceConfigParams(req.body || {});
+    const incoming = req.body || {};
+    const existing = await readWorkspaceConfigParams({ createIfMissing: true });
+    const payload = await writeWorkspaceConfigParams({
+      values:
+        incoming?.values && typeof incoming.values === "object"
+          ? incoming.values
+          : existing?.values || {},
+      descriptions:
+        incoming?.descriptions && typeof incoming.descriptions === "object"
+          ? incoming.descriptions
+          : existing?.descriptions || {},
+    });
     await rebuildRuntimeConfig();
-    const keys = await collectConfigTemplateKeys();
+    const [keys, catalog] = await Promise.all([
+      collectConfigTemplateKeys(),
+      collectConfigTemplateParamCatalog(),
+    ]);
     res.json({
       ok: true,
       values: payload.values || {},
+      descriptions: payload.descriptions || {},
       keys,
+      catalog,
     });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "save config params failed" });
+  }
+});
+
+app.get("/internal/config-params/catalog", async (req, res) => {
+  try {
+    const catalog = await collectConfigTemplateParamCatalog();
+    res.json({ ok: true, catalog });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "load config params catalog failed" });
   }
 });
 
@@ -567,6 +620,39 @@ app.post("/internal/workspace/sync/:userId", async (req, res) => {
   }
 });
 
+app.post("/internal/admin/workspace-all/sync", requireSuperAdmin, async (req, res) => {
+  try {
+    const root = workspaceRootPath();
+    await mkdir(root, { recursive: true });
+    const entries = await readdir(root, { withFileTypes: true });
+    const userDirs = entries
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => String(entry.name || "").trim())
+      .filter(Boolean);
+    const superAdminUserId = String(globalConfig?.superAdmin?.userId || "").trim();
+    if (superAdminUserId && !userDirs.includes(superAdminUserId)) {
+      userDirs.push(superAdminUserId);
+    }
+    const syncedUsers = [];
+    for (const userId of userDirs) {
+      try {
+        await bot.syncUserWorkspace(userId);
+        syncedUsers.push(userId);
+      } catch {
+        // ignore single-user sync error, continue syncing others
+      }
+    }
+    res.json({
+      ok: true,
+      syncedUsers,
+      total: userDirs.length,
+      success: syncedUsers.length,
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "sync all workspace failed" });
+  }
+});
+
 app.get("/internal/workspace/file/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -623,6 +709,65 @@ app.get("/internal/workspace/download/:userId", async (req, res) => {
     res.download(absPath, path.basename(relPath));
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.get("/internal/admin/workspace-all/tree", requireSuperAdmin, async (req, res) => {
+  try {
+    const root = workspaceRootPath();
+    await mkdir(root, { recursive: true });
+    const tree = await buildWorkspaceTree(root);
+    res.json({ ok: true, root, tree });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "load workspace tree failed" });
+  }
+});
+
+app.get("/internal/admin/workspace-all/file", requireSuperAdmin, async (req, res) => {
+  try {
+    const relPath = String(req.query.path || "");
+    if (!relPath) throw new Error("path required");
+    const root = workspaceRootPath();
+    const absPath = safeJoin(root, relPath);
+    await access(absPath);
+    const st = await stat(absPath);
+    if (!st.isFile()) throw new Error("path is not a file");
+    const buf = await readFile(absPath);
+    const isText = !buf.includes(0);
+    const content = isText ? buf.toString("utf8") : "";
+    res.json({ ok: true, path: relPath, isText, size: st.size, content });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "read workspace file failed" });
+  }
+});
+
+app.put("/internal/admin/workspace-all/file", requireSuperAdmin, async (req, res) => {
+  try {
+    const relPath = String(req.body?.path || "");
+    const content = String(req.body?.content || "");
+    if (!relPath) throw new Error("path required");
+    const root = workspaceRootPath();
+    const absPath = safeJoin(root, relPath);
+    await mkdir(path.dirname(absPath), { recursive: true });
+    await writeFile(absPath, content, "utf8");
+    res.json({ ok: true, path: relPath });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "save workspace file failed" });
+  }
+});
+
+app.get("/internal/admin/workspace-all/download", requireSuperAdmin, async (req, res) => {
+  try {
+    const relPath = String(req.query.path || "");
+    if (!relPath) throw new Error("path required");
+    const root = workspaceRootPath();
+    const absPath = safeJoin(root, relPath);
+    await access(absPath);
+    const st = await stat(absPath);
+    if (!st.isFile()) throw new Error("path is not a file");
+    res.download(absPath, path.basename(relPath));
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "download workspace file failed" });
   }
 });
 

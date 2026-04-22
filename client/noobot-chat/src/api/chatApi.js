@@ -69,6 +69,28 @@ export async function getWorkspaceTreeApi({ userId = "" }, { fetcher } = {}) {
   return runFetch(`/api/internal/workspace/tree/${encodeURIComponent(userId)}`);
 }
 
+export async function getWorkspaceAllTreeApi({ fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/workspace-all/tree");
+}
+
+export async function getWorkspaceAllFileApi({ path = "" }, { fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(`/api/internal/admin/workspace-all/file?path=${encodeURIComponent(path)}`);
+}
+
+export async function putWorkspaceAllFileApi(
+  { path = "", content = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/workspace-all/file", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, content }),
+  });
+}
+
 export async function postResetWorkspaceApi(
   { userId = "" },
   { fetcher } = {},
@@ -89,6 +111,13 @@ export async function postSyncWorkspaceApi(
     `/api/internal/workspace/sync/${encodeURIComponent(userId)}`,
     { method: "POST" },
   );
+}
+
+export async function postSyncAllWorkspaceApi({ fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/workspace-all/sync", {
+    method: "POST",
+  });
 }
 
 export async function getWorkspaceFileApi(
@@ -164,6 +193,11 @@ export async function getConfigParamsApi({ fetcher } = {}) {
   return runFetch("/api/internal/admin/config-params");
 }
 
+export async function getConfigParamCatalogApi({ fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/config-params/catalog");
+}
+
 export async function putConfigParamsApi({ values = {} }, { fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch("/api/internal/admin/config-params", {
@@ -182,4 +216,9 @@ export function buildWorkspaceDownloadUrl({
   return apiKey
     ? `${baseUrl}&apikey=${encodeURIComponent(apiKey)}`
     : baseUrl;
+}
+
+export function buildWorkspaceAllDownloadUrl({ path = "", apiKey = "" }) {
+  const baseUrl = `/api/internal/admin/workspace-all/download?path=${encodeURIComponent(path)}`;
+  return apiKey ? `${baseUrl}&apikey=${encodeURIComponent(apiKey)}` : baseUrl;
 }
