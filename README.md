@@ -95,7 +95,7 @@ noobot/
 
 ```bash
 # 1. 克隆项目
-git clone <your-repo-url>
+git clone https://github.com/xiayu1987/noobot.git
 cd noobot
 
 # 2. 创建后端配置文件
