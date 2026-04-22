@@ -161,6 +161,57 @@ export class BotManager {
     });
   }
 
+  _applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
+    const sourceTools = Array.isArray(agentContext?.tools)
+      ? agentContext.tools
+      : [];
+    if (!sourceTools.length) return agentContext;
+    const toolPolicy = runConfig?.toolPolicy || {};
+    const mode = String(toolPolicy?.mode || "").trim().toLowerCase();
+    const customTools = Array.isArray(toolPolicy?.customTools)
+      ? toolPolicy.customTools.filter(Boolean)
+      : [];
+    const includeToolNames = Array.isArray(toolPolicy?.includeToolNames)
+      ? toolPolicy.includeToolNames
+          .map((name) => String(name || "").trim())
+          .filter(Boolean)
+      : [];
+    const includedTools = includeToolNames.length
+      ? sourceTools.filter((toolItem) =>
+          includeToolNames.includes(String(toolItem?.name || "")),
+        )
+      : [];
+
+    let nextTools = sourceTools;
+    if (mode === "custom_only") {
+      nextTools = [...customTools, ...includedTools];
+    } else if (mode === "append_custom" && customTools.length) {
+      nextTools = [...sourceTools, ...customTools];
+    }
+
+    const allowToolNames = Array.isArray(toolPolicy?.allowToolNames)
+      ? toolPolicy.allowToolNames
+          .map((name) => String(name || "").trim())
+          .filter(Boolean)
+      : [];
+    if (allowToolNames.length) {
+      const allowSet = new Set(allowToolNames);
+      nextTools = nextTools.filter((toolItem) =>
+        allowSet.has(String(toolItem?.name || "")),
+      );
+    }
+
+    const dedupedTools = [];
+    const seenNames = new Set();
+    for (const toolItem of nextTools) {
+      const toolName = String(toolItem?.name || "").trim();
+      if (!toolName || seenNames.has(toolName)) continue;
+      seenNames.add(toolName);
+      dedupedTools.push(toolItem);
+    }
+    return { ...agentContext, tools: dedupedTools };
+  }
+
   async _buildAgentContext({
     mode,
     userId,
@@ -192,11 +243,15 @@ export class BotManager {
       mode === "initial"
         ? await contextBuilder.buildInitialContext({ dialogProcessId })
         : await contextBuilder.buildContinueContext({ dialogProcessId });
+    const scopedAgentContext = this._applyRunConfigToolPolicy(
+      agentContext,
+      runConfig,
+    );
     emitEvent(eventListener, "context_ready", {
       sessionId,
-      messageCount: agentContext?.conversationMessages?.length || 0,
+      messageCount: scopedAgentContext?.conversationMessages?.length || 0,
     });
-    return agentContext;
+    return scopedAgentContext;
   }
 
   async _appendSessionTurn({

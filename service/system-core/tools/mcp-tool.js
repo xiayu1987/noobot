@@ -5,7 +5,8 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { executeMcpTask } from "../mcp/index.js";
+import { randomUUID } from "node:crypto";
+import { createMcpAgentTools } from "../mcp/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { appendMcpErrorLog } from "../tracking/index.js";
 
@@ -32,27 +33,85 @@ export function createMcpTool({ agentContext }) {
       const globalConfig = runtime?.globalConfig || {};
       const userConfig = runtime?.userConfig || {};
       const systemRuntime = runtime?.systemRuntime || {};
+      const botManager = runtime?.botManager || null;
+      const eventListener = runtime?.eventListener || null;
       const signal = runtime?.abortSignal || null;
+      const userInteractionBridge = runtime?.userInteractionBridge || null;
       const basePath = String(agentContext?.basePath || "").trim();
       const workspaceRoot = String(globalConfig?.workspaceRoot || "").trim();
-      const userId = String(agentContext?.userId || "").trim();
+      const userId = String(runtime?.userId || agentContext?.userId || "").trim();
       const sessionId = String(systemRuntime?.sessionId || "").trim();
-      const parentSessionId = String(systemRuntime?.parentSessionId || "").trim();
+      const parentSessionId = sessionId;
+      const parentDialogProcessId = String(
+        systemRuntime?.dialogProcessId || "",
+      ).trim();
       const resolvedModelName = String(modelName || "").trim();
       try {
-        const result = await executeMcpTask({
+        if (!botManager || !userId || !sessionId) {
+          return jsonError({
+            mcpName: normalizedMcpName,
+            error: "runtime missing botManager/userId/sessionId",
+          });
+        }
+        const mcpToolset = await createMcpAgentTools({
           globalConfig,
           userConfig,
           mcpName: normalizedMcpName,
-          task: normalizedTask,
-          modelName: resolvedModelName,
           signal,
         });
+        if (!Array.isArray(mcpToolset?.tools) || !mcpToolset.tools.length) {
+          return toToolJsonResult("call_mcp_task", {
+            ok: true,
+            mcpName: normalizedMcpName,
+            status: "completed",
+            tools: [],
+            answer: "MCP服务器无可用工具。",
+          });
+        }
+        const subSessionId = randomUUID();
+        const subTaskMessage = [
+          `任务: ${normalizedTask}`,
+          `共享任务说明: 仅使用 MCP(${normalizedMcpName}) 工具完成任务。`,
+          "规定最终交付物（文件及说明）: 请输出最终可读结论。",
+        ].join("\n");
+        const subResult = await botManager.runSession({
+          userId,
+          sessionId: subSessionId,
+          message: subTaskMessage,
+          caller: "bot",
+          parentSessionId,
+          parentDialogProcessId,
+          eventListener,
+          userInteractionBridge,
+          runConfig: {
+            allowUserInteraction: true,
+            toolPolicy: {
+              mode: "custom_only",
+              customTools: mcpToolset.tools,
+              includeToolNames: ["user_interaction"],
+            },
+            runtimeModel: resolvedModelName || "",
+          },
+          abortSignal: signal,
+        });
+        const subAnswer = String(subResult?.answer || "").trim();
+        const subTraces = Array.isArray(subResult?.traces) ? subResult.traces : [];
+        const subMessages = Array.isArray(subResult?.messages)
+          ? subResult.messages
+          : [];
         return toToolJsonResult(
           "call_mcp_task",
           {
-            ok: result?.ok !== false,
-            ...result,
+            ok: true,
+            mcpName: normalizedMcpName,
+            status: "completed",
+            sessionId: subSessionId,
+            parentSessionId,
+            tools: mcpToolset.toolNames || [],
+            answer: subAnswer,
+            traces: subTraces,
+            messages: subMessages,
+            error: "",
           },
           true,
         );

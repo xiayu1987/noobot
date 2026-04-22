@@ -192,6 +192,7 @@ export class ContextBuilder {
       botManager: this.botManager,
       userInteractionBridge: this.userInteractionBridge,
       abortSignal: this.abortSignal || null,
+      runtimeModel: String(this.runConfig?.runtimeModel || "").trim(),
       allEnabledProviders: this._resolveAllEnabledProviders(),
       systemRuntime,
       currentTurnMessages: createCurrentTurnMessagesStore(),

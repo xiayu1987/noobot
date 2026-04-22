@@ -512,6 +512,50 @@ function normalizeMcpToolResult(result = {}) {
   return JSON.stringify(result || {});
 }
 
+function buildLangChainMcpTools({ mcpTools = [], client }) {
+  return (mcpTools || [])
+    .map((toolSpec) => {
+      const toolName = String(toolSpec?.name || "").trim();
+      if (!toolName) return null;
+      return new DynamicStructuredTool({
+        name: toolName,
+        description: buildMcpToolDescription(toolSpec),
+        schema: z.object({}).passthrough(),
+        func: async (args = {}) => {
+          const callResult = await client.callTool({ name: toolName, args });
+          return normalizeMcpToolResult(callResult);
+        },
+      });
+    })
+    .filter(Boolean);
+}
+
+export async function createMcpAgentTools({
+  globalConfig = {},
+  userConfig = {},
+  mcpName = "",
+  signal = null,
+}) {
+  const server = getMcpServerByName({ globalConfig, userConfig, mcpName });
+  if (!server) {
+    throw recoverableToolError(
+      `mcp server not found or inactive: ${String(mcpName || "")}`,
+    );
+  }
+  const client = createMcpClient({ server, signal });
+  await client.initialize();
+  const mcpTools = await client.listTools();
+  const tools = buildLangChainMcpTools({ mcpTools, client });
+  return {
+    mcpName: server.name,
+    server,
+    tools,
+    toolNames: mcpTools
+      .map((item) => String(item?.name || "").trim())
+      .filter(Boolean),
+  };
+}
+
 export async function executeMcpTask({
   globalConfig = {},
   userConfig = {},
@@ -529,10 +573,13 @@ export async function executeMcpTask({
     throw recoverableToolError(`mcp server not found or inactive: ${String(mcpName || "")}`);
   }
 
-  const client = createMcpClient({ server, signal });
-  await client.initialize();
-  const mcpTools = await client.listTools();
-  if (!mcpTools.length) {
+  const { tools: langchainTools, toolNames } = await createMcpAgentTools({
+    globalConfig,
+    userConfig,
+    mcpName: server.name,
+    signal,
+  });
+  if (!toolNames.length) {
     return {
       ok: true,
       mcpName: server.name,
@@ -545,22 +592,7 @@ export async function executeMcpTask({
   const llm = modelName
     ? createChatModelByName(modelName, { globalConfig, userConfig, streaming: false })
     : createChatModel({ globalConfig, userConfig, streaming: false });
-
-  const toolMap = new Map();
-  const langchainTools = mcpTools.map((toolSpec) => {
-    const toolName = String(toolSpec?.name || "").trim();
-    const dynamicTool = new DynamicStructuredTool({
-      name: toolName,
-      description: buildMcpToolDescription(toolSpec),
-      schema: z.object({}).passthrough(),
-      func: async (args = {}) => {
-        const callResult = await client.callTool({ name: toolName, args });
-        return normalizeMcpToolResult(callResult);
-      },
-    });
-    toolMap.set(toolName, dynamicTool);
-    return dynamicTool;
-  });
+  const toolMap = new Map(langchainTools.map((tool) => [tool.name, tool]));
 
   const messages = [
     new SystemMessage(
@@ -585,7 +617,7 @@ export async function executeMcpTask({
       return {
         ok: true,
         mcpName: server.name,
-        tools: mcpTools.map((item) => String(item?.name || "").trim()).filter(Boolean),
+        tools: toolNames,
         answer: toText(ai?.content || ""),
         traces,
       };
@@ -619,7 +651,7 @@ export async function executeMcpTask({
   return {
     ok: true,
     mcpName: server.name,
-    tools: mcpTools.map((item) => String(item?.name || "").trim()).filter(Boolean),
+    tools: toolNames,
     answer: "工具调用轮次达到上限，已停止。",
     traces,
   };
