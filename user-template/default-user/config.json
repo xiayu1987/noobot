@@ -1,0 +1,105 @@
+{
+  "defaultProvider": "qwen3_5_flash",
+  "attachmentModels": {
+    "audio": "omni",
+    "video": "qwen3_5_flash",
+    "image": "qwen3_5_flash"
+  },
+  "providers": {
+    "openai": {
+      "enabled": false,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "",
+      "model": "gemini-3.1-pro",
+      "format": "openai_compatible",
+      "reasoning_effort": "low",
+      "temperature": 0.5,
+      "max_tokens": 10000,
+      "description": ""
+    },
+    "qwen3_5_flash": {
+      "enabled": true,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen3.6-plus-2026-04-02",
+      "format": "dashscope",
+      "temperature": 0.5,
+      "max_tokens": 10000,
+      "preserve_thinking": false,
+      "thinking_budget": 1,
+      "description": "擅长通用对话、快速响应与多模态理解"
+    }
+  },
+  "services": {
+    "webSearchService": {
+      "enabled": true,
+      "api_key": "",
+      "handler": "webSearchServiceHandler",
+      "endpoints": {
+        "search": {
+          "description": "搜索网页",
+          "url": "http://localhost:11008/search",
+          "query-string-format": "q=搜索内容",
+          "body-format": "{}"
+        }
+      }
+    },
+    "weatherService": {
+      "enabled": true,
+      "api_key": "",
+      "handler": "weatherServiceHandler",
+      "endpoints": {
+        "getWeather": {
+          "description": "天气查询",
+          "url": "https://wttr.in",
+          "query-string-format": "{\"city\":\"\",\"format\":\"j1\"}",
+          "body-format": "{}"
+        }
+      }
+    }
+  },
+  "mcpServers": {
+    "amap-maps": {
+      "type": "streamableHttp",
+      "description": "高德地图MCP Server现已覆盖15大核心接口，提供全场景覆盖的地理信息服务，包括生成专属地图、导航到目的地、打车、地理编码、逆地理编码、IP定位、天气查询、骑行路径规划、步行路径规划、驾车路径规划、公交路径规划、距离测量、关键词搜索、周边搜索、详情搜索等。",
+      "isActive": true,
+      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/amap-maps/mcp",
+      "headers": {
+        "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
+      }
+    },
+    "china-railway": {
+      "type": "sse",
+      "description": "提供 12306购票信息查询等服务",
+      "isActive": true,
+      "name": "AliyunBailianMCP_china-railway",
+      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/china-railway/sse",
+      "headers": {
+        "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
+      }
+    },
+    "WebParser": {
+      "type": "sse",
+      "description": "网页解析（WebParser）MCP 服务，一个专用于网页内容解析的工具包。",
+      "isActive": true,
+      "name": "AliyunBailianMCP_WebParser",
+      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/WebParser/sse",
+      "headers": {
+        "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
+      }
+    },
+    "zhidemai": {
+      "type": "sse",
+      "description": "值得买科技MCP Server 1.0 开放4大核心接口，包括：内容检索、商品推荐、商品口碑，优惠比价。可以帮助用户查询商品的优惠信息、商品评测、商品概况、价格、购买渠道、性价比推荐等信息，并给出优惠商品的链接地址。",
+      "isActive": true,
+      "name": "AliyunBailianMCP_zhidemai",
+      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/zhidemai/sse",
+      "headers": {
+        "Authorization": "Bearer ${DASHSCOPE_API_KEY}"
+      }
+    }
+  },
+  "preferences": {
+    "language": "zh-CN"
+  }
+}
