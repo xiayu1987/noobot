@@ -1,175 +1,187 @@
-# noobot
+<center>
+  <img src="noobot.svg" width="200" height="200" />
+</center>
 
-一个前后端分离的 Node.js + Vue 项目，包含 Agent 后端、聊天前端和一键部署脚本。
+# <img src="noobot.svg" width="30" height="30" /> Noobot 
 
-> 免责声明：本项目主要用于学习与研究，请勿直接用于生产环境；如用于生产，风险与合规责任由使用者自行承担。
->
-> 安全提示：建议优先在隔离沙箱环境（如 Docker / 独立测试机）中安装和运行。
+Noobot 是一个前后端分离的智能对话系统，基于 Node.js 与 Vue 构建。项目内置了强大的 Agent 后端、流畅的聊天前端，并提供了一键部署脚本，助您快速搭建属于自己的 AI 助手工作站。
 
-## 项目结构
+> **⚠️ 免责声明**：本项目主要用于学习与研究，请勿直接用于生产环境；如用于生产，风险与合规责任由使用者自行承担。
+> 
+> **🛡️ 安全提示**：建议优先在隔离沙箱环境（如 Docker / 独立测试机）中安装和运行。
 
-- `service/`：Node.js 后端（Agent、会话、记忆、工具调用）
-- `client/noobot-chat/`：Vue 前端（Vite 构建）
-- `client/noobot-chat/deploy/`：Caddy 配置与启动脚本
-- `start.sh`：一键更新/安装/构建/重建 PM2 并启动服务
+---
 
-## 架构说明
+## ✨ 功能概览
 
-### 1) 整体架构（简图）
+- **👥 多用户隔离**：按用户目录独立存储工作区，数据互不干扰。
+- **🧠 智能会话与记忆**：支持新建会话、续聊、历史记录，具备长短期记忆机制，实现会话记忆沉淀。
+- **🛠️ 丰富的工具与技能**：
+  - 支持文件读写、脚本执行、文档解析等工具调用能力。
+  - 可扩展的技能目录与任务流程。
+  - **兼容 OpenClaw**，可无缝复用/迁移 OpenClaw 风格技能。
+- **⚡ 极致体验**：支持 SSE 流式输出，前端实时呈现生成过程。
+- **🚀 极简部署**：
+  - `start.sh` 一键完成：代码更新、依赖安装、前端构建、PM2 进程重建。
+  - 前端通过 Caddy 提供静态服务并反代后端 API。
+  - PM2 项目内托管（`PM2_HOME=.pm2`），零系统环境污染。
+
+---
+
+## 📂 项目结构
 
 ```text
-Browser
-  -> Caddy (静态资源 + /api 反代)
-  -> service (Express + Agent Runtime)
-  -> Model / Tools / Workspace(会话与记忆)
+noobot/
+├── service/                  # Node.js 后端（Agent 核心、会话、记忆、工具调用）
+├── client/noobot-chat/       # Vue 前端（基于 Vite 构建）
+│   └── deploy/               # Caddy 配置与启动脚本
+├── start.sh                  # 一键更新/安装/构建/启动脚本
+└── README.md                 # 项目说明文档
 ```
 
-### 2) 请求链路
+---
 
-1. 浏览器访问前端页面（由 Caddy 提供 `dist` 静态文件）
-2. 前端请求 `/api/*`，由 Caddy 反代到 `API_UPSTREAM`（默认 `127.0.0.1:10061`）
-3. 后端处理会话、上下文、记忆和工具调用
-4. 结果以普通响应或 SSE 流式返回给前端
+## 🏗️ 架构说明
 
-### 3) 运行与进程
+### 1. 整体架构
 
-- `start.sh` 统一执行：更新代码 → 安装依赖 → 构建前端 → 重建 PM2 进程
-- PM2 托管两个进程：
-  - `noobot-service`（后端）
-  - `noobot-client`（`serve:caddy`）
-- PM2 数据目录固定为项目内 `.pm2/`（避免污染系统默认 `~/.pm2`）
+```text
+[ Browser ] 
+    │
+    ▼
+[ Caddy ] ──(提供静态资源)──> dist/
+    │
+    └───(反向代理 /api)───> [ Service ] (Express + Agent Runtime)
+                               │
+                               ├──> Models (大模型 API)
+                               ├──> Tools (工具调用)
+                               └──> Workspace (会话状态与记忆存储)
+```
 
+### 2. 请求链路
 
-> 详细实现可查看：`service/README.md`
+1. 浏览器访问前端页面（由 Caddy 提供 `dist` 静态文件）。
+2. 前端请求 `/api/*`，由 Caddy 反代至 `API_UPSTREAM`（默认 `127.0.0.1:10061`）。
+3. 后端处理会话逻辑、上下文、记忆检索和工具调用。
+4. 结果以普通响应或 **SSE 流式** 返回给前端。
 
-## 功能概览
+### 3. 运行与进程管理
 
-- 多用户工作区隔离（按用户目录独立存储）
-- 会话管理（新建会话 / 续聊 / 会话历史）
-- 长短期记忆机制（会话记忆沉淀）
-- 技能机制（可扩展技能目录与任务流程）
-- 技能体系兼容 OpenClaw（可复用/迁移 OpenClaw 风格技能）
-- 工具调用能力（文件读写、脚本执行、文档解析等）
-- SSE 流式输出（前端实时查看生成过程）
-- 前后端一键启动（`start.sh`：更新、安装、构建、重建 PM2）
-- 前端通过 Caddy 提供静态服务并反代后端 API
-- PM2 项目内托管（`PM2_HOME=.pm2`，减少系统环境污染）
+- **统一启动**：`start.sh` 依次执行 `更新代码 → 安装依赖 → 构建前端 → 重建 PM2 进程`。
+- **双进程托管**：PM2 负责守护 `noobot-service`（后端）与 `noobot-client`（前端 Caddy 服务）。
+- **环境隔离**：PM2 数据目录固定为项目内的 `.pm2/`，避免污染系统默认的 `~/.pm2`。
 
-## 环境要求
+> 💡 *后端详细实现可查看：[`service/README.md`](./service/README.md)*
 
-- Node.js 18+（建议 20+）
-- npm 9+
-- Linux/macOS（`run-caddy.sh` 可自动下载 caddy）
+---
 
-### 系统依赖（文档/多媒体工具）
+## ⚙️ 环境要求
 
+- **Node.js**: v18+（推荐 v20+）
+- **npm**: v9+
+- **OS**: Linux / macOS（脚本会自动下载并配置 Caddy）
+
+### 系统依赖（用于文档与多媒体处理）
 - `libreoffice`（文档转换）
 - `ffmpeg`（音视频处理）
 
-`./start.sh` 会在启动时检查并尝试自动安装以上依赖（需要 root 或 sudo 权限）。
+> 📌 `./start.sh` 会在启动时检查并尝试自动安装以上依赖（需 root 或 sudo 权限）。若自动安装失败，请手动安装后重试。
 
-## 快速开始
+---
+
+## 🚀 快速开始
+
+### 1. 克隆与配置
 
 ```bash
+# 1. 克隆项目
 git clone <your-repo-url>
 cd noobot
-cp service/config/global.config.example.json service/config/global.config.json 创建配置文件
-# 编辑 service/config/global.config.json，配置你要使用的模型与 API Key
+
+# 2. 创建后端配置文件
+cp service/config/global.config.example.json service/config/global.config.json
+
+# 3. 赋予脚本执行权限
 chmod +x start.sh
+```
+
+> **⚠️ 首次运行前必读**：
+> 请务必编辑 `service/config/global.config.json`：
+> - 设置默认模型：`defaultProvider`
+> - 配置对应 Provider（如 `qwen3_5_flash` / `openai`）的 `api_key`、`base_url`、`model`
+> - 确保启用的 Provider（`enabled: true`）已填写有效的 API Key。
+
+### 2. 一键启动
+
+```bash
 ./start.sh
 ```
 
-> ⚠️ 首次运行前请先修改 `service/config/global.config.json`：
->
-> - 选择默认模型：`defaultProvider`
-> - 配置对应 provider（如 `qwen3_5_flash` / `openai`）的 `api_key`、`base_url`、`model`
-> - 至少确保你启用的 provider（`enabled: true`）已填写可用的密钥
+启动完成后，控制台将输出：
+- **前端访问地址**：默认 `http://127.0.0.1:10060`
+- **后端 API 地址**：默认 `http://127.0.0.1:10061`
 
-默认行为：
+---
 
-1. 更新代码（有 upstream 时 `git pull --rebase`）
-2. 安装依赖（client + service）
-3. 构建前端
-4. 重建 PM2 进程并启动：
-   - `noobot-service`
-   - `noobot-client`（`npm run serve:caddy`）
+## 🛠️ 常用配置
 
-启动完成后会输出：
+### 1. 启动脚本环境变量 (`start.sh`)
 
-- 前端访问地址（默认 `http://127.0.0.1:10060`）
-- 后端 API 反代地址（默认 `http://127.0.0.1:10061`）
+可以通过注入环境变量来修改默认端口：
+- `CADDY_ADDR`：前端监听地址（默认 `:10060`）
+- `API_UPSTREAM`：前端反代目标（默认 `127.0.0.1:10061`）
 
-> 如果自动安装系统依赖失败，请手动安装后再执行 `./start.sh`。
-
-## 常用配置
-
-### 1) 根脚本环境变量（`start.sh`）
-
-- `CADDY_ADDR`：前端监听地址，默认 `:10060`
-- `API_UPSTREAM`：前端反代目标，默认 `127.0.0.1:10061`
-
-示例：
-
+**示例：**
 ```bash
 CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
 ```
 
-### 2) 后端端口
+### 2. 后端端口配置
 
-后端读取 `service/.env`，可参考 `service/.env.example`：
-
-```bash
+后端端口由 `service/.env` 控制，可参考 `service/.env.example`：
+```env
 PORT=10061
 ```
 
-### 3) 后端配置文件（重点）
+### 3. 后端核心配置与参数化
 
-- 配置项较多，完整说明请查看：
-  - **[CONFIGURATION.md](./CONFIGURATION.md)**
+- **核心配置**：配置项较多，完整说明请务必查看 **[CONFIGURATION.md](./CONFIGURATION.md)**。
+- **参数化配置**：配置文件支持 `${VAR_NAME}` 占位符（如 `${DASHSCOPE_API_KEY}`），运行时会自动解析环境变量。详细规则与优先级见配置文档。
 
-### 4) 参数化配置（`${VAR_NAME}`）
+---
 
-配置里可写 `${DASHSCOPE_API_KEY}` 这类占位符，运行时会自动解析。  
-详细规则与优先级同样见 [CONFIGURATION.md](./CONFIGURATION.md)。
+## 📊 进程管理 (PM2)
 
-## PM2（项目内托管）
-
-项目使用 `PM2_HOME=.pm2`，避免污染系统默认 `~/.pm2`。
-
-可在 `service/` 下使用：
-
-```bash
-npm run pm2:list
-npm run pm2:logs
-npm run pm2:stop
-npm run pm2:delete
-```
-
-## 常见问题
-
-### 1) `npx pm2 list` 看不到进程
-
-请使用项目内脚本（已带 `PM2_HOME`）：
+本项目使用局部 PM2 (`PM2_HOME=.pm2`)。如需管理进程，请在 `service/` 目录下执行以下命令：
 
 ```bash
 cd service
-npm run pm2:list
+
+npm run pm2:list    # 查看运行中的进程
+npm run pm2:logs    # 查看实时日志
+npm run pm2:stop    # 停止服务
+npm run pm2:delete  # 删除进程
 ```
 
-### 2) 前端 caddy 二进制在哪里
+---
 
-默认下载到：
+## ❓ 常见问题 (FAQ)
 
-`client/noobot-chat/deploy/bin/caddy`
+**Q1: 为什么 `npx pm2 list` 看不到进程？**  
+A: 因为项目使用了局部 PM2 目录。请进入 `service` 目录并使用 `npm run pm2:list` 命令查看。
 
-### 3) 报错 `Client sent an HTTP request to an HTTPS server`
+**Q2: 前端 Caddy 二进制文件下载到哪里了？**  
+A: 默认存放在：`client/noobot-chat/deploy/bin/caddy`。
 
-请确认通过 `http://` 访问，且 Caddyfile 使用 `http://{$CADDY_ADDR...}`。
+**Q3: 页面报错 `Client sent an HTTP request to an HTTPS server` 怎么办？**  
+A: 请确认您是通过 `http://` 访问的页面，并且 `Caddyfile` 中配置的是 `http://{$CADDY_ADDR...}` 而非 https。
 
-## 开源协议
+---
 
-本项目使用 [MIT License](./LICENSE)。
+## 📄 开源协议
 
-## Maintainer Contact
+本项目采用 [MIT License](./LICENSE) 开源协议。
 
-- 126240622+xiayu1987@users.noreply.github.com
+## ✉️ 联系维护者
+
+- Email: 126240622+xiayu1987@users.noreply.github.com

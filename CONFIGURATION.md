@@ -23,9 +23,9 @@
 
 ### 1.4 运行端口
 
-- 文件：`service/.env`
-- 示例：`service/.env.example`
-- 关键项：`PORT`
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `PORT` | 端口号（如 `10061`） | 后端服务监听端口。配置文件：`service/.env`（示例：`service/.env.example`）。 |
 
 ---
 
@@ -35,38 +35,81 @@
 
 ### 2.1 基础路径
 
-- `workspaceRoot`：工作区根目录（默认 `../workspace`）
-- `workspaceTemplatePath`：用户初始化模板目录（默认 `../user-template/default-user`）
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `workspaceRoot` | 路径字符串（示例：`../workspace`） | 工作区根目录。 |
+| `workspaceTemplatePath` | 路径字符串（示例：`../user-template/default-user`） | 用户初始化模板目录。 |
 
 ### 2.2 记忆与推理
 
-- `memoryMaxItems`：短期记忆最大条目数，达到阈值触发长期记忆提炼
-- `maxToolLoopTurns`：单轮对话中工具循环最大轮次
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `memoryMaxItems` | 正整数 | 短期记忆最大条目数；达到阈值触发长期记忆提炼。 |
+| `maxToolLoopTurns` | 正整数 | 单轮对话中工具循环最大轮次。 |
 
 ### 2.3 会话上下文策略 `session`
 
-- `recentMessageLimit`：最近消息回看数量
-- `useLastRunningTaskRange`：是否优先取“最近运行任务开始之后”的消息范围
-- `useLastCompletedTaskRange`：是否优先取“最近完成任务之后”的消息范围
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `session.recentMessageLimit` | 正整数 | 最近消息回看数量。 |
+| `session.useLastRunningTaskRange` | `true` / `false` | 是否优先取“最近运行任务开始之后”的消息范围。 |
+| `session.useLastCompletedTaskRange` | `true` / `false` | 是否优先取“最近完成任务之后”的消息范围。 |
 
 ### 2.4 脚本执行 `script`
 
-- `sandboxMode`：脚本是否启用沙箱模式
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `script.sandboxMode` | `true` / `false` | 是否启用沙箱模式。`true` 时按 `sandboxProvider.default` 执行；`false` 时本机 local 执行。 |
+| `script.sandboxProvider` | 对象 | 沙箱提供方配置对象（见下方结构与子项）。 |
+
+`script.sandboxProvider` 结构：
+
+```json
+{
+  "sandboxProvider": {
+    "default": "docker",
+    "docker": {
+      "dockerContainerScope": "global",
+      "dockerContainerName": "noobot-script-sandbox",
+      "dockerImage": "node:20"
+    },
+    "bubblewrap": {},
+    "firejail": {}
+  }
+}
+```
+
+`sandboxProvider` 子项：
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `script.sandboxProvider.default` | `docker` / `bubblewrap` / `firejail` | 默认沙箱提供方。 |
+| `script.sandboxProvider.docker.dockerContainerScope` | `global` / `user` | Docker 容器复用范围：`global`=所有用户共用同一容器（默认）；`user`=每用户独立容器。 |
+| `script.sandboxProvider.docker.dockerContainerName` | 合法容器名字符串 | Docker 容器基础名称；`user` 模式会拼接 userId。 |
+| `script.sandboxProvider.docker.dockerImage` | 任意可拉取镜像（如 `node:20`） | Docker 执行镜像。 |
+| `script.sandboxProvider.bubblewrap` | 对象（当前可为空 `{}`） | Bubblewrap 专属参数预留。 |
+| `script.sandboxProvider.firejail` | 对象（当前可为空 `{}`） | Firejail 专属参数预留。 |
 
 ### 2.5 异步协作 `async`
 
-- `waitTimeoutMs`：异步任务等待超时
-- `maxSubAgentDepth`：子任务最大深度
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `async.waitTimeoutMs` | 正整数（毫秒） | 异步任务等待超时。 |
+| `async.maxSubAgentDepth` | 正整数 | 子任务最大深度。 |
 
 ### 2.6 其他运行参数
 
-- `scriptTimeoutMs`：脚本执行超时（毫秒）
-- `streaming`：是否启用流式响应
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `scriptTimeoutMs` | 正整数（毫秒） | 脚本执行超时。 |
+| `streaming` | `true` / `false` | 是否启用流式响应。 |
 
 ### 2.7 超级管理员
 
-- `superAdmin.userId`：超管账号
-- `superAdmin.connectCode`：超管连接码
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `superAdmin.userId` | 字符串 | 超级管理员用户 ID。 |
+| `superAdmin.connectCode` | 字符串 | 超级管理员连接码。 |
 
 ---
 
@@ -76,57 +119,62 @@
 
 ### 3.1 模型选择
 
-- `defaultProvider`：默认模型别名
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `defaultProvider` | `providers` 中已启用别名（如 `qwen3_5_flash`） | 默认模型别名。 |
 
 ### 3.2 附件模型映射 `attachmentModels`
 
-- `audio`：音频默认模型
-- `video`：视频默认模型
-- `image`：图片默认模型
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `attachmentModels.audio` | `providers` 中模型别名 | 音频处理默认模型。 |
+| `attachmentModels.video` | `providers` 中模型别名 | 视频处理默认模型。 |
+| `attachmentModels.image` | `providers` 中模型别名 | 图片处理默认模型。 |
 
 ### 3.3 模型提供方 `providers`
 
-每个 provider（如 `openai` / `qwen3_5_flash`）支持：
-
-- `enabled`：是否启用
-- `api_key`：模型密钥（建议使用 `${VAR_NAME}`）
-- `base_url`：模型网关地址
-- `model`：模型名
-- `format`：协议格式（如 `openai_compatible`、`dashscope`）
-- `reasoning_effort`：推理强度（部分模型支持）
-- `temperature`：温度参数
-- `max_tokens`：最大输出 token
-- `preserve_thinking`：是否保留思考（部分模型支持）
-- `thinking_budget`：思考预算（部分模型支持）
-- `description`：描述文本
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `providers.<provider>.enabled` | `true` / `false` | 是否启用该模型配置。 |
+| `providers.<provider>.api_key` | 明文密钥 / `${VAR_NAME}` | 模型密钥（建议用占位符）。 |
+| `providers.<provider>.base_url` | URL 字符串 | 模型网关地址。 |
+| `providers.<provider>.model` | 模型名字符串 | 实际调用模型名。 |
+| `providers.<provider>.format` | `openai_compatible` / `dashscope` / 其他适配值 | 协议格式。 |
+| `providers.<provider>.reasoning_effort` | `low` / `medium` / `high`（视模型支持） | 推理强度。 |
+| `providers.<provider>.temperature` | 数值（通常 `0~2`） | 温度参数。 |
+| `providers.<provider>.max_tokens` | 正整数 | 最大输出 token。 |
+| `providers.<provider>.preserve_thinking` | `true` / `false`（视模型支持） | 是否保留思考。 |
+| `providers.<provider>.thinking_budget` | 正整数（视模型支持） | 思考预算。 |
+| `providers.<provider>.description` | 字符串 | 提供方说明。 |
 
 ### 3.4 外部服务 `services`
 
-每个服务（如 `webSearchService` / `weatherService`）支持：
-
-- `enabled`：服务开关
-- `api_key`：服务密钥（可选）
-- `handler`：服务处理器名称（对应 `workspace/<userId>/services/*.js`）
-- `endpoints`：端点集合
-  - `description`
-  - `url`
-  - `query-string-format`
-  - `body-format`
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `services.<service>.enabled` | `true` / `false` | 服务开关。 |
+| `services.<service>.api_key` | 字符串 / `${VAR_NAME}` | 服务密钥（可选）。 |
+| `services.<service>.handler` | `workspace/<userId>/services/*.js` 对应处理器名 | 服务处理器名称。 |
+| `services.<service>.endpoints.<endpoint>.description` | 字符串 | 端点描述。 |
+| `services.<service>.endpoints.<endpoint>.url` | URL 字符串 | 端点地址。 |
+| `services.<service>.endpoints.<endpoint>.query-string-format` | 字符串 / JSON 字符串 | 查询参数格式说明。 |
+| `services.<service>.endpoints.<endpoint>.body-format` | 字符串 / JSON 字符串 | 请求体格式说明。 |
 
 ### 3.5 MCP 服务 `mcpServers`
 
-每个 MCP server（如 `amap-maps` / `china-railway` / `WebParser`）支持：
-
-- `type`：`streamableHttp` 或 `sse`
-- `description`：描述
-- `isActive`：是否启用
-- `name`：可选展示名
-- `baseUrl`：MCP 地址
-- `headers`：请求头（常见为 `Authorization`）
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `mcpServers.<name>.type` | `streamableHttp` / `sse` | MCP 连接类型。 |
+| `mcpServers.<name>.description` | 字符串 | MCP 服务描述。 |
+| `mcpServers.<name>.isActive` | `true` / `false` | 是否启用该 MCP 服务。 |
+| `mcpServers.<name>.name` | 字符串（可选） | 展示名。 |
+| `mcpServers.<name>.baseUrl` | URL 字符串 | MCP 服务地址。 |
+| `mcpServers.<name>.headers` | 对象（如 `Authorization`） | 请求头；支持 `${VAR_NAME}` 解析。 |
 
 ### 3.6 用户偏好 `preferences`
 
-- `language`：语言偏好（示例：`zh-CN`）
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `preferences.language` | 语言代码（如 `zh-CN`、`en-US`） | 语言偏好。 |
 
 ---
 
@@ -144,21 +192,17 @@
 
 ### 4.2 解析优先级
 
-运行时统一解析入口，优先级如下：
-
-1. `process.env.VAR_NAME`
-2. `workspace/config-params.json` 中的 `values.VAR_NAME`
-3. 若都没有，则替换为空字符串
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `${VAR_NAME}` | 取值来源：`process.env` / `workspace/config-params.json` / 空字符串 | 运行时解析优先级：`process.env.VAR_NAME` > `workspace/config-params.json.values.VAR_NAME` > `""`。 |
 
 ---
 
 ## 5. 配置覆盖关系
 
-一般生效规则：
-
-1. 先加载全局配置（`global.config.json`）
-2. 再加载用户配置（`workspace/<userId>/config.json`）
-3. 按白名单字段进行合并覆盖（用户配置覆盖全局同名项）
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| 同名配置项覆盖顺序 | 全局配置 -> 用户配置 | 先加载 `global.config.json`，再加载 `workspace/<userId>/config.json`；同名项由用户配置覆盖。 |
 
 ---
 
@@ -167,4 +211,3 @@
 - 不要在仓库提交明文密钥（`api_key`、`Bearer sk-...`）
 - 推荐使用 `${VAR_NAME}` + `workspace/config-params.json` 或环境变量注入
 - `workspace/` 建议加入 `.gitignore`
-

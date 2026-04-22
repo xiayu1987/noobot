@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" shape-rendering="crispEdges" width="400" height="400">
+    <!-- 1. 黑色轮廓与外边框 (O) -->
+    <path fill="#2d3436" d="
+        M9 4 h6 v1 h-6 Z 
+        M8 5 h1 v1 h-1 Z M15 5 h1 v1 h-1 Z 
+        M7 6 h1 v1 h-1 Z M16 6 h1 v1 h-1 Z 
+        M6 7 h1 v1 h-1 Z M17 7 h1 v1 h-1 Z 
+        M5 8 h1 v1 h-1 Z M18 8 h1 v1 h-1 Z 
+        M5 9 h1 v1 h-1 Z M18 9 h1 v1 h-1 Z 
+        M4 10 h2 v1 h-2 Z M18 10 h2 v1 h-2 Z 
+        M4 11 h2 v1 h-2 Z M18 11 h2 v1 h-2 Z 
+        M4 12 h2 v1 h-2 Z M18 12 h2 v1 h-2 Z 
+        M3 13 h2 v1 h-2 Z M19 13 h2 v1 h-2 Z 
+        M3 14 h2 v1 h-2 Z M19 14 h2 v1 h-2 Z 
+        M3 15 h2 v1 h-2 Z M19 15 h2 v1 h-2 Z 
+        M3 16 h2 v1 h-2 Z M19 16 h2 v1 h-2 Z 
+        M4 17 h2 v1 h-2 Z M18 17 h2 v1 h-2 Z 
+        M4 18 h2 v1 h-2 Z M18 18 h2 v1 h-2 Z 
+        M5 19 h2 v1 h-2 Z M17 19 h2 v1 h-2 Z 
+        M6 20 h12 v1 h-12 Z 
+        M8 21 h1 v1 h-1 Z M15 21 h1 v1 h-1 Z 
+        M7 22 h3 v1 h-3 Z M14 22 h3 v1 h-3 Z" />
+
+    <!-- 2. 银白色机器鸟主体装甲 (S) -->
+    <path fill="#dfe6e9" d="
+        M9 5 h6 v1 h-6 Z 
+        M8 6 h8 v1 h-8 Z 
+        M7 7 h10 v1 h-10 Z 
+        M6 8 h12 v1 h-12 Z 
+        M6 9 h2 v1 h-2 Z M12 9 h4 v1 h-4 Z 
+        M6 10 h2 v1 h-2 Z M12 10 h4 v1 h-4 Z 
+        M6 11 h2 v1 h-2 Z M12 11 h4 v1 h-4 Z 
+        M6 12 h6 v1 h-6 Z M16 12 h2 v1 h-2 Z 
+        M6 13 h3 v1 h-3 Z M17 13 h1 v1 h-1 Z 
+        M6 14 h4 v1 h-4 Z M18 14 h1 v1 h-1 Z 
+        M6 15 h4 v1 h-4 Z M18 15 h1 v1 h-1 Z 
+        M6 16 h6 v1 h-6 Z M16 16 h3 v1 h-3 Z 
+        M6 17 h11 v1 h-11 Z" />
+
+    <!-- 3. 浅灰色天线与底部阴影装甲 (A, D) -->
+    <path fill="#b2bec3" d="
+        M11 3 h2 v1 h-2 Z 
+        M6 18 h12 v1 h-12 Z 
+        M7 19 h10 v1 h-10 Z" />
+
+    <!-- 4. 头顶的绿色菜叶 (G) -->
+    <path fill="#00b894" d="
+        M10 1 h1 v1 h-1 Z M13 1 h1 v1 h-1 Z 
+        M11 2 h2 v1 h-2 Z" />
+
+    <!-- 5. 青蓝色 LED 发光眼睛 (E) -->
+    <path fill="#00cec9" d="
+        M8 9 h4 v3 h-4 Z 
+        M16 9 h2 v3 h-2 Z" />
+
+    <!-- 6. 亮黄色鸟喙上颚 (B) -->
+    <path fill="#fdcb6e" d="
+        M12 12 h4 v1 h-4 Z 
+        M11 13 h6 v1 h-6 Z" />
+
+    <!-- 7. 橙色鸟喙下颚 (C) -->
+    <path fill="#e17055" d="
+        M10 14 h8 v2 h-8 Z 
+        M12 16 h4 v1 h-4 Z" />
+
+    <!-- 8. 脸颊粉红散热红晕 (R) -->
+    <path fill="#ff7675" d="
+        M9 13 h2 v1 h-2 Z 
+        M17 13 h1 v1 h-1 Z" />
+
+    <!-- 9. 侧边深灰色机械小翅膀 (W) -->
+    <path fill="#636e72" d="
+        M5 13 h1 v5 h-1 Z" />
+</svg>
