@@ -87,16 +87,6 @@
       "headers": {
         "Authorization": "Bearer ${DASHSCOPE_API_KEY_MCP}"
       }
-    },
-    "zhidemai": {
-      "type": "sse",
-      "description": "值得买科技MCP Server 1.0 开放4大核心接口，包括：内容检索、商品推荐、商品口碑，优惠比价。可以帮助用户查询商品的优惠信息、商品评测、商品概况、价格、购买渠道、性价比推荐等信息，并给出优惠商品的链接地址。",
-      "isActive": true,
-      "name": "AliyunBailianMCP_zhidemai",
-      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/zhidemai/sse",
-      "headers": {
-        "Authorization": "Bearer ${DASHSCOPE_API_KEY}"
-      }
     }
   },
   "preferences": {

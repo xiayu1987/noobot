@@ -100,13 +100,16 @@ cd noobot
 
 # 2. 创建后端配置文件
 cp service/config/global.config.example.json service/config/global.config.json
+cp user-template/default-user/config.example.json user-template/default-user/config.json
 
 # 3. 赋予脚本执行权限
 chmod +x start.sh
 ```
 
 > **⚠️ 首次运行前必读**：
-> 请务必编辑 `service/config/global.config.json`：
+> 请务必编辑 
+> - `service/config/global.config.json`
+> - `user-template/default-user/config.json`
 > - 设置默认模型：`defaultProvider`
 > - 配置对应 Provider（如 `qwen3_5_flash` / `openai`）的 `api_key`、`base_url`、`model`
 > - 确保启用的 Provider（`enabled: true`）已填写有效的 API Key。

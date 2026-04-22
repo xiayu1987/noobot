@@ -35,3 +35,4 @@ workspaces/
 workspace/
 !/user-template/default-user/runtime/workspace/
 service/config/global.config.json
+user-template/default-user/config.json
