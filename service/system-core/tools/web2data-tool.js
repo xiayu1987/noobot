@@ -17,6 +17,7 @@ import {
   resolveDefaultModelSpec,
   resolveModelSpecByAlias,
 } from "../model/index.js";
+import { mergeConfig } from "../config/index.js";
 import { runWeb2Img } from "../utils/web2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
@@ -535,9 +536,12 @@ export async function runWebToDataPipeline({
 export function createWeb2DataTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const basePath = agentContext?.basePath || runtime.basePath || "";
+  const effectiveConfig = mergeConfig(
+    runtime?.globalConfig || {},
+    runtime?.userConfig || {},
+  );
   const processMode = normalizeProcessMode(
-    runtime?.userConfig?.tools?.web_to_data?.processMode ||
-      runtime?.globalConfig?.tools?.web_to_data?.processMode,
+    effectiveConfig?.tools?.web_to_data?.processMode,
   );
   if (!basePath) return [];
 
