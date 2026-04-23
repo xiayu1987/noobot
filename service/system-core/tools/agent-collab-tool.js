@@ -313,7 +313,7 @@ export function createAgentCollabTool({ agentContext }) {
         .array(waitTaskItemSchema)
         .min(1)
         .describe("待检查的并发子任务列表"),
-      timeoutMs: z.number().int().positive().optional().describe("最大等待毫秒数"),
+      timeoutMs: z.number().optional().describe("最大等待毫秒数（可选）"),
     }),
     func: async ({ parentSessionId, tasks, timeoutMs }) => {
       if (!botManager || !userId)
@@ -331,6 +331,11 @@ export function createAgentCollabTool({ agentContext }) {
           details: { field: "tasks" },
         });
       }
+      const normalizedTimeoutMs = Number(timeoutMs);
+      const resolvedTimeoutMs =
+        Number.isFinite(normalizedTimeoutMs) && normalizedTimeoutMs > 0
+          ? Math.floor(normalizedTimeoutMs)
+          : defaultWaitMs;
       const resultList = await Promise.all(
         tasks.map(async (taskItem = {}, index) => {
           const normalizedSessionId = String(taskItem?.sessionId || "").trim();
@@ -350,7 +355,7 @@ export function createAgentCollabTool({ agentContext }) {
               userId,
               parentSessionId: normalizedParentSessionId,
               sessionId: normalizedSessionId,
-              timeoutMs: Number(timeoutMs || defaultWaitMs),
+              timeoutMs: resolvedTimeoutMs,
             });
             return {
               ...result,
