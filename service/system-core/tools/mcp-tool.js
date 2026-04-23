@@ -70,9 +70,7 @@ export function createMcpTool({ agentContext }) {
         }
         const subSessionId = randomUUID();
         const subTaskMessage = [
-          `任务: ${normalizedTask}`,
-          `共享任务说明: 仅使用 MCP(${normalizedMcpName}) 工具完成任务。`,
-          "规定最终交付物（文件及说明）: 请输出最终可读结论。",
+          `任务: ${normalizedTask}`
         ].join("\n");
         const subResult = await botManager.runSession({
           userId,

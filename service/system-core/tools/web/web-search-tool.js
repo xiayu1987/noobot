@@ -6,32 +6,70 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
 import { JSDOM } from "jsdom";
-import { chromium } from "playwright";
 import { z } from "zod";
 import {
   createChatModelByName,
-  resolveDefaultModelSpec,
   resolveModelSpecByName,
-} from "../model/index.js";
-import { mergeConfig } from "../config/index.js";
-import { runWebToDataPipeline } from "./web2data-tool.js";
-import { toToolJsonResult } from "./tool-json-result.js";
+} from "../../model/index.js";
+import { mergeConfig } from "../../config/index.js";
+import { runWebToDataPipeline } from "./web-to-data-pipeline.js";
+import { toToolJsonResult } from "../tool-json-result.js";
+import { browseUrlHtml } from "./web-browser-simulate.js";
+import { browserLikeFetch } from "./web-fetch.js";
+
+const DEFAULT_ENGINES = ["google", "bing", "sogou", "so", "duckduckgo", "yahoo"];
+const SEARCH_ENGINE_HOST_SUFFIXES = [
+  "google.com",
+  "bing.com",
+  "so.com",
+  "sogou.com",
+  "duckduckgo.com",
+  "yahoo.com",
+];
 
 const SEARCH_ENGINES = {
-  baidu: {
-    name: "baidu",
-    buildUrl: (query) =>
-      `https://www.baidu.com/s?wd=${encodeURIComponent(String(query || ""))}`,
-  },
   google: {
     name: "google",
     buildUrl: (query) =>
       `https://www.google.com/search?q=${encodeURIComponent(String(query || ""))}&hl=zh-CN`,
   },
+  bing: {
+    name: "bing",
+    buildUrl: (query) =>
+      `https://cn.bing.com/search?q=${encodeURIComponent(String(query || ""))}`,
+  },
+  sogou: {
+    name: "sogou",
+    buildUrl: (query) =>
+      `https://www.sogou.com/web?query=${encodeURIComponent(String(query || ""))}`,
+  },
+  so: {
+    name: "so",
+    buildUrl: (query) =>
+      `https://www.so.com/s?q=${encodeURIComponent(String(query || ""))}`,
+  },
+  duckduckgo: {
+    name: "duckduckgo",
+    buildUrl: (query) =>
+      `https://duckduckgo.com/?q=${encodeURIComponent(String(query || ""))}`,
+  },
+  yahoo: {
+    name: "yahoo",
+    buildUrl: (query) =>
+      `https://search.yahoo.com/search?p=${encodeURIComponent(String(query || ""))}`,
+  },
 };
 
 function normalizeText(v = "") {
   return String(v || "").replace(/\s+/g, " ").trim();
+}
+
+function pickHost(urlValue = "") {
+  try {
+    return String(new URL(String(urlValue || "")).host || "").toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 function isLikelyWebHref(href = "") {
@@ -89,12 +127,8 @@ function extractEmbeddedUrl(value = "", baseUrl = "") {
 function isSearchEngineHost(urlValue = "") {
   try {
     const host = new URL(urlValue).hostname.toLowerCase();
-    return (
-      host.endsWith("baidu.com") ||
-      host.endsWith("google.com") ||
-      host.endsWith("bing.com") ||
-      host.endsWith("so.com") ||
-      host.endsWith("sogou.com")
+    return SEARCH_ENGINE_HOST_SUFFIXES.some((suffix) =>
+      host.endsWith(suffix),
     );
   } catch {
     return false;
@@ -133,18 +167,28 @@ function pickBestAnchorUrl(urls = []) {
   return direct || urls[0];
 }
 
-async function loadSearchHtmlByBrowser(page, searchUrl = "") {
-  await page.goto(searchUrl, {
-    waitUntil: "domcontentloaded",
-    timeout: 30000,
-  });
-  try {
-    await page.waitForLoadState("networkidle", { timeout: 5000 });
-  } catch {
-    // ignore
-  }
-  await page.waitForTimeout(500);
-  return await page.content();
+function normalizeSearchMode(value = "") {
+  const mode = String(value || "").trim().toLowerCase();
+  return mode === "browser_simulate" || mode === "browser-simulate" || mode === "browser"
+    ? "browser_simulate"
+    : "direct";
+}
+
+function normalizeWebProcessMode(value = "") {
+  const mode = String(value || "").trim().toLowerCase();
+  if (mode === "multimodal") return "multimodal";
+  return mode === "browser_simulate" || mode === "browser-simulate" || mode === "browser"
+    ? "browser_simulate"
+    : "direct";
+}
+
+async function loadSearchHtmlDirect(searchUrl = "") {
+  const res = await browserLikeFetch(searchUrl, { method: "GET" });
+  return {
+    html: await res.text(),
+    ok: res.ok,
+    status: res.status,
+  };
 }
 
 function extractAnchorCandidates({ html = "", searchUrl = "", engineName = "" }) {
@@ -256,17 +300,10 @@ async function resolveFinalUrl(inputUrl = "") {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const commonHeaders = {
-      "User-Agent":
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    };
     try {
-      const headRes = await fetch(normalized, {
+      const headRes = await browserLikeFetch(normalized, {
         method: "HEAD",
         redirect: "follow",
-        headers: commonHeaders,
         signal: controller.signal,
       });
       const resolved = normalizeText(headRes?.url || "");
@@ -274,10 +311,9 @@ async function resolveFinalUrl(inputUrl = "") {
     } catch {
       // ignore HEAD fallback to GET
     }
-    const getRes = await fetch(normalized, {
+    const getRes = await browserLikeFetch(normalized, {
       method: "GET",
       redirect: "follow",
-      headers: commonHeaders,
       signal: controller.signal,
     });
     const resolved = normalizeText(getRes?.url || "");
@@ -353,38 +389,40 @@ export function createWebSearchTool({ agentContext }) {
   const globalConfig = runtime?.globalConfig || {};
   const userConfig = runtime?.userConfig || {};
   const effectiveConfig = mergeConfig(globalConfig || {}, userConfig || {});
-  const webSearchProcessMode = String(
-    effectiveConfig?.tools?.web_search_to_data?.processMode || "",
-  )
-    .trim()
-    .toLowerCase();
+  const webSearchMode = normalizeSearchMode(
+    effectiveConfig?.tools?.web_search_to_data?.searchMode || "",
+  );
+  const webProcessMode = normalizeWebProcessMode(
+    effectiveConfig?.tools?.web_search_to_data?.switchWebMode || "",
+  );
+  const configMaxCandidates = Math.min(
+    30,
+    Math.max(
+      1,
+      Number(effectiveConfig?.tools?.web_search_to_data?.maxCandidates) || 30,
+    ),
+  );
+  const configTopK = Math.min(
+    10,
+    Math.max(1, Number(effectiveConfig?.tools?.web_search_to_data?.topK) || 10),
+  );
   const basePath = String(agentContext?.basePath || runtime?.basePath || "").trim();
   if (!basePath) return [];
 
   const webSearchToDataTool = new DynamicStructuredTool({
     name: "web_search_to_data",
     description:
-      "网页搜索并解析：先通过 Baidu/Google 搜索，提取搜索结果页链接，再由大模型筛选最符合链接，最后调用网页解析流程输出结果。",
+      "网页搜索并解析：先通过 Google/Bing/Sogou/360/DuckDuckGo/Yahoo 搜索，提取搜索结果页链接，再由大模型筛选最符合链接，最后调用网页解析流程输出结果。",
     schema: z.object({
       query: z.string().describe("搜索关键词"),
       engines: z
-        .array(z.enum(["baidu", "google"]))
+        .array(
+          z.enum(["google", "bing", "sogou", "so", "duckduckgo", "yahoo"]),
+        )
         .optional()
-        .describe("搜索引擎列表，默认 [baidu, google]"),
-      maxCandidates: z
-        .number()
-        .int()
-        .positive()
-        .max(60)
-        .optional()
-        .describe("最多候选链接数，默认 60，最大 60"),
-      topK: z
-        .number()
-        .int()
-        .positive()
-        .max(3)
-        .optional()
-        .describe("筛选后解析的链接数量，默认 3，最大 3"),
+        .describe(
+          `搜索引擎列表，默认 [${DEFAULT_ENGINES.join(", ")}]`,
+        ),
       modelName: z
         .string()
         .optional()
@@ -400,9 +438,7 @@ export function createWebSearchTool({ agentContext }) {
     }),
     func: async ({
       query,
-      engines = ["baidu", "google"],
-      maxCandidates = 60,
-      topK = 3,
+      engines = DEFAULT_ENGINES,
       modelName = "",
       prompt = "",
       useTrafilatura = true,
@@ -421,62 +457,70 @@ export function createWebSearchTool({ agentContext }) {
             .filter((x) => Boolean(SEARCH_ENGINES[x])),
         ),
       );
-      const effectiveEngines = engineList.length ? engineList : ["baidu", "google"];
+      const effectiveEngines = engineList.length
+        ? engineList
+        : DEFAULT_ENGINES;
       const finalMaxCandidates = Math.min(
-        60,
-        Math.max(1, Number(maxCandidates) || 60),
+        30,
+        Math.max(1, Number(configMaxCandidates) || 30),
       );
-      const allCandidates = [];
-      const searchRequests = [];
-      const browser = await chromium.launch({ headless: true });
-      try {
-        const context = await browser.newContext({
-          viewport: { width: 1366, height: 900 },
-          userAgent:
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
-          ignoreHTTPSErrors: true,
-        });
-        try {
-          for (const engineName of effectiveEngines) {
-            const engine = SEARCH_ENGINES[engineName];
-            const searchUrl = engine.buildUrl(normalizedQuery);
-            const page = await context.newPage();
-            try {
-              const html = await loadSearchHtmlByBrowser(page, searchUrl);
-              const extracted = extractAnchorCandidates({
-                html,
-                searchUrl,
-                engineName,
-              });
-              const extractedLimited = extracted.slice(0, finalMaxCandidates);
-              allCandidates.push(...extractedLimited);
-              searchRequests.push({
+      const engineResults = await Promise.all(
+        effectiveEngines.map(async (engineName) => {
+          const engine = SEARCH_ENGINES[engineName];
+          const searchUrl = engine.buildUrl(normalizedQuery);
+          try {
+            const loaded =
+              webSearchMode === "browser_simulate"
+                ? await browseUrlHtml({
+                    url: searchUrl,
+                    waitUntil: "domcontentloaded",
+                    timeout: 30000,
+                    networkIdleTimeout: 5000,
+                  })
+                : await loadSearchHtmlDirect(searchUrl);
+            if (webSearchMode === "browser_simulate" && !loaded?.ok) {
+              throw new Error(loaded?.error || "load failed");
+            }
+            const extracted = extractAnchorCandidates({
+              html: loaded?.html || "",
+              searchUrl,
+              engineName,
+            });
+            const extractedLimited = extracted.slice(0, finalMaxCandidates);
+            return {
+              candidates: extractedLimited,
+              request: {
                 engine: engineName,
                 url: searchUrl,
-                ok: true,
-                status: 200,
+                ok:
+                  webSearchMode === "browser_simulate"
+                    ? true
+                    : Boolean(loaded?.ok),
+                status:
+                  webSearchMode === "browser_simulate"
+                    ? Number(loaded?.status || 200)
+                    : Number(loaded?.status || 0),
                 rawCandidateCount: extracted.length,
                 candidateCount: extractedLimited.length,
-              });
-            } catch (error) {
-              searchRequests.push({
+              },
+            };
+          } catch (error) {
+            return {
+              candidates: [],
+              request: {
                 engine: engineName,
                 url: searchUrl,
                 ok: false,
                 status: 0,
                 candidateCount: 0,
                 error: error?.message || String(error),
-              });
-            } finally {
-              await page.close().catch(() => {});
-            }
+              },
+            };
           }
-        } finally {
-          await context.close().catch(() => {});
-        }
-      } finally {
-        await browser.close().catch(() => {});
-      }
+        }),
+      );
+      const searchRequests = engineResults.map((x) => x.request);
+      const allCandidates = engineResults.flatMap((x) => x.candidates);
 
       const dedupMap = new Map();
       for (const item of allCandidates) {
@@ -488,15 +532,23 @@ export function createWebSearchTool({ agentContext }) {
         finalMaxCandidates,
       );
       if (!dedupCandidates.length) {
+        const searchDomains = Array.from(
+          new Set(
+            searchRequests
+              .map((item) => pickHost(item?.url || ""))
+              .filter(Boolean),
+          ),
+        );
         return toToolJsonResult("web_search_to_data", {
           ok: false,
-          query: normalizedQuery,
-          searchRequests,
-          error: "no candidate links extracted",
+          searchDomains,
+          result: {
+            error: "no candidate links extracted",
+          },
         });
       }
 
-      const finalTopK = Math.min(3, Math.max(1, Number(topK) || 3));
+      const finalTopK = Math.min(10, Math.max(1, Number(configTopK) || 10));
       const selection = await selectCandidatesByModel({
         query: normalizedQuery,
         candidates: dedupCandidates,
@@ -509,58 +561,30 @@ export function createWebSearchTool({ agentContext }) {
       const selectedLinks = selection.indexes
         .map((idx) => dedupCandidates[idx - 1])
         .filter(Boolean);
-      const parsedPages = [];
-      for (const item of selectedLinks) {
-        try {
-          const resolvedHref = await resolveFinalUrl(item.href);
-          const parsed = await runWebToDataPipeline({
-            agentContext,
-            input: resolvedHref,
-            prompt,
-            useTrafilatura: useTrafilatura !== false,
-            processMode: webSearchProcessMode,
-          });
-          parsedPages.push({
-            href: item.href,
-            resolvedHref,
-            engine: item.engine,
-            ok: parsed?.ok === true,
-            result: parsed,
-          });
-        } catch (error) {
-          parsedPages.push({
-            href: item.href,
-            resolvedHref: item.href,
-            engine: item.engine,
-            ok: false,
-            error: error?.message || String(error),
-          });
-        }
-      }
+      const selectedResolvedUrls = await Promise.all(
+        selectedLinks.map((item) => resolveFinalUrl(item.href)),
+      );
+      const parsed = await runWebToDataPipeline({
+        agentContext,
+        urls: selectedResolvedUrls,
+        prompt,
+        useTrafilatura: useTrafilatura !== false,
+        processMode: webProcessMode,
+      });
 
-      const defaultModel = resolveDefaultModelSpec({ globalConfig, userConfig });
+      const searchDomains = Array.from(
+        new Set(
+          searchRequests
+            .map((item) => pickHost(item?.url || ""))
+            .filter(Boolean),
+        ),
+      );
       return toToolJsonResult(
         "web_search_to_data",
         {
           ok: true,
-          query: normalizedQuery,
-          searchRequests,
-          candidateCount: dedupCandidates.length,
-          candidates: dedupCandidates,
-          selectedIndexes: selection.indexes,
-          selectedLinks,
-          selectionModel: {
-            alias: selection?.model?.alias || defaultModel?.alias || "",
-            name: selection?.model?.model || defaultModel?.model || "",
-            usedFallback: selection.usedFallback === true,
-          },
-          selectionRaw: selection.raw || "",
-          parsedPages,
-          successCount: parsedPages.filter((x) => x.ok).length,
-          text: parsedPages
-            .filter((x) => x.ok && x?.result?.text)
-            .map((x) => `# ${x.href}\n${x.result.text}`)
-            .join("\n\n"),
+          searchDomains,
+          text: String(parsed?.text || ""),
         },
         true,
       );

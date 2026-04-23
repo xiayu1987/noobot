@@ -8,9 +8,9 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { mergeConfig } from "../config/index.js";
-import { createDoc2DataTool } from "./doc2data-tool.js";
-import { createWebSearchTool } from "./web-search-tool.js";
-import { createWeb2DataTool } from "./web2data-tool.js";
+import { createDoc2DataTool } from "./doc/doc2data-tool.js";
+import { createWebSearchTool } from "./web/web-search-tool.js";
+import { createWeb2DataTool } from "./web/web2data-tool.js";
 
 function jsonError(payload = {}) {
   return toToolJsonResult("process_content_task", { ok: false, ...payload });

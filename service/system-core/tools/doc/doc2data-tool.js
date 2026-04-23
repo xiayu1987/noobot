@@ -8,10 +8,10 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
-import { createChatModelByName, resolveModelSpecByAlias } from "../model/index.js";
-import { convertDocumentToImages } from "../utils/doc2img.js";
-import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
-import { toToolJsonResult } from "./tool-json-result.js";
+import { createChatModelByName, resolveModelSpecByAlias } from "../../model/index.js";
+import { convertDocumentToImages } from "./doc2img.js";
+import { assertAndResolveUserWorkspaceFilePath } from "../check-tool-input.js";
+import { toToolJsonResult } from "../tool-json-result.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};

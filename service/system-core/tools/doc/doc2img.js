@@ -8,7 +8,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { Poppler } from "node-poppler";
-import { recoverableToolError } from "../error/index.js";
+import { recoverableToolError } from "../../error/index.js";
 
 const require = createRequire(import.meta.url);
 

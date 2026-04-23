@@ -7,12 +7,15 @@
   },
   "tools": {
     "web_search_to_data": {
-      "enabled": false,
-      "processMode": "direct"
+      "enabled": true,
+      "searchMode": "browser_simulate",
+      "switchWebMode": "direct",
+      "maxCandidates": 30,
+      "topK": 10
     },
     "web_to_data": {
       "enabled": true,
-      "processMode": "direct"
+      "switchWebMode": "direct"
     },
     "doc_to_data": {
       "enabled": true
