@@ -249,6 +249,7 @@ async function runDirectFetchExtract(urls = [], concurrency = DEFAULT_CONCURRENC
 async function runBrowserSimulateExtract(
   urls = [],
   concurrency = DEFAULT_CONCURRENCY,
+  runtimeContext = null,
 ) {
   return mapWithConcurrency(
     urls,
@@ -262,6 +263,7 @@ async function runBrowserSimulateExtract(
           waitUntil: "domcontentloaded",
           timeout: 45000,
           networkIdleTimeout: 10000,
+          runtimeContext,
         });
         const blocked = looksBlockedPage({
           status: Number(loaded?.status || 0),
@@ -510,7 +512,7 @@ export async function runWebToDataPipeline({
 
   const records =
     mode === "browser_simulate"
-      ? await runBrowserSimulateExtract(resolvedUrls, parallelism)
+      ? await runBrowserSimulateExtract(resolvedUrls, parallelism, runtime)
       : await runDirectFetchExtract(resolvedUrls, parallelism);
   const imagePaths = [];
   const summary = await summarizeByModel({

@@ -89,6 +89,10 @@ export function createMcpTool({ agentContext }) {
               includeToolNames: ["user_interaction"],
             },
             runtimeModel: resolvedModelName || "",
+            sharedTools:
+              runtime?.sharedTools && typeof runtime.sharedTools === "object"
+                ? runtime.sharedTools
+                : {},
           },
           abortSignal: signal,
         });

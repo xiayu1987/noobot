@@ -8,6 +8,7 @@ import path from "node:path";
 import { mergeConfig } from "../config/index.js";
 import { resolveDefaultModelSpec } from "../model/index.js";
 import { buildTools } from "../tools/index.js";
+import { initRuntimeSharedBrowser } from "../tools/web/web-browser-simulate.js";
 import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
@@ -180,6 +181,11 @@ export class ContextBuilder {
       configuredMaxToolLoopTurns > 0
         ? Math.floor(configuredMaxToolLoopTurns)
         : 0;
+    const passthroughSharedTools =
+      this.runConfig?.sharedTools &&
+      typeof this.runConfig.sharedTools === "object"
+        ? this.runConfig.sharedTools
+        : {};
     const systemRuntime = {
       sessionId: this.sessionId || "",
       caller: this.caller || "user",
@@ -205,10 +211,26 @@ export class ContextBuilder {
       abortSignal: this.abortSignal || null,
       runtimeModel: String(this.runConfig?.runtimeModel || "").trim(),
       allEnabledProviders: this._resolveAllEnabledProviders(),
+      sharedTools: passthroughSharedTools,
       systemRuntime,
       currentTurnMessages: createCurrentTurnMessagesStore(),
       currentTurnTasks: createCurrentTurnTasksStore(),
     };
+  }
+
+  async _initializeSharedTools(runtimeContext = {}) {
+    if (!runtimeContext || typeof runtimeContext !== "object") return;
+    runtimeContext.sharedTools =
+      runtimeContext.sharedTools && typeof runtimeContext.sharedTools === "object"
+        ? runtimeContext.sharedTools
+        : {};
+    try {
+      await initRuntimeSharedBrowser(runtimeContext);
+    } catch (error) {
+      runtimeContext.sharedTools.browser = null;
+      runtimeContext.sharedTools.browserInitError =
+        error?.message || String(error);
+    }
   }
 
   async _buildAgentContext(
@@ -233,6 +255,7 @@ export class ContextBuilder {
         sessionTree,
       }),
     };
+    await this._initializeSharedTools(agentContext.runtime);
     agentContext.tools = await buildTools({
       sessionId: this.sessionId || "",
       parentSessionId: this.parentSessionId || "",

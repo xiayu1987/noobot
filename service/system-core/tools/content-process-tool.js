@@ -115,6 +115,10 @@ export function createContentProcessTool({ agentContext }) {
             },
             runtimeModel: resolvedModelName || "",
             maxToolLoopTurns: resolvedMaxToolLoopTurns,
+            sharedTools:
+              runtime?.sharedTools && typeof runtime.sharedTools === "object"
+                ? runtime.sharedTools
+                : {},
           },
           abortSignal: signal,
         });

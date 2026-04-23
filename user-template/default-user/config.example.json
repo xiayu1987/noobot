@@ -8,14 +8,14 @@
   "tools": {
     "web_search_to_data": {
       "enabled": true,
-      "searchMode": "direct",
-      "switchWebMode": "direct",
+      "searchMode": "browser_simulate",
+      "switchWebMode": "browser_simulate",
       "maxCandidates": 30,
       "topK": 10
     },
     "web_to_data": {
       "enabled": true,
-      "switchWebMode": "direct"
+      "switchWebMode": "browser_simulate"
     },
     "doc_to_data": {
       "enabled": true

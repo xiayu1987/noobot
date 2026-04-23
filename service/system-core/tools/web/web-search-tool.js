@@ -17,15 +17,36 @@ import { toToolJsonResult } from "../tool-json-result.js";
 import { browseUrlHtml } from "./web-browser-simulate.js";
 import { browserLikeFetch } from "./web-fetch.js";
 
-const DEFAULT_ENGINES = ["google", "bing", "sogou", "so", "duckduckgo", "yahoo"];
+
+const DEFAULT_ENGINES = [
+  "google",
+  "bing_global",
+  "bing_cn",
+  "sogou",
+  "duckduckgo",
+  "yahoo",
+];
 const SEARCH_ENGINE_HOST_SUFFIXES = [
   "google.com",
   "bing.com",
-  "so.com",
   "sogou.com",
   "duckduckgo.com",
   "yahoo.com",
 ];
+const MIN_ANCHOR_TEXT_LENGTH = 4;
+const MAX_PRIORITY_ENGINES = 2;
+const MULTI_PART_PUBLIC_SUFFIXES = new Set([
+  "com.cn",
+  "net.cn",
+  "org.cn",
+  "gov.cn",
+  "edu.cn",
+  "com.hk",
+  "com.tw",
+  "co.jp",
+  "co.uk",
+  "com.au",
+]);
 
 const SEARCH_ENGINES = {
   google: {
@@ -33,8 +54,13 @@ const SEARCH_ENGINES = {
     buildUrl: (query) =>
       `https://www.google.com/search?q=${encodeURIComponent(String(query || ""))}&hl=zh-CN`,
   },
-  bing: {
-    name: "bing",
+  bing_global: {
+    name: "bing_global",
+    buildUrl: (query) =>
+      `https://www.bing.com/search?q=${encodeURIComponent(String(query || ""))}`,
+  },
+  bing_cn: {
+    name: "bing_cn",
     buildUrl: (query) =>
       `https://cn.bing.com/search?q=${encodeURIComponent(String(query || ""))}`,
   },
@@ -42,11 +68,6 @@ const SEARCH_ENGINES = {
     name: "sogou",
     buildUrl: (query) =>
       `https://www.sogou.com/web?query=${encodeURIComponent(String(query || ""))}`,
-  },
-  so: {
-    name: "so",
-    buildUrl: (query) =>
-      `https://www.so.com/s?q=${encodeURIComponent(String(query || ""))}`,
   },
   duckduckgo: {
     name: "duckduckgo",
@@ -67,6 +88,28 @@ function normalizeText(v = "") {
 function pickHost(urlValue = "") {
   try {
     return String(new URL(String(urlValue || "")).host || "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function getPrimaryDomainFromHost(host = "") {
+  const normalized = String(host || "").trim().toLowerCase();
+  if (!normalized) return "";
+  const parts = normalized.split(".").filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  const last2 = `${parts[parts.length - 2]}.${parts[parts.length - 1]}`;
+  if (MULTI_PART_PUBLIC_SUFFIXES.has(last2) && parts.length >= 3) {
+    return `${parts[parts.length - 3]}.${last2}`;
+  }
+  return last2;
+}
+
+function getPrimaryDomainFromUrl(urlValue = "") {
+  try {
+    return getPrimaryDomainFromHost(
+      new URL(String(urlValue || "")).hostname.toLowerCase(),
+    );
   } catch {
     return "";
   }
@@ -167,6 +210,14 @@ function pickBestAnchorUrl(urls = []) {
   return direct || urls[0];
 }
 
+function shouldFilterSamePrimaryDomain({
+  enginePrimaryDomain = "",
+  hrefPrimaryDomain = "",
+}) {
+  if (!enginePrimaryDomain || !hrefPrimaryDomain) return false;
+  return enginePrimaryDomain === hrefPrimaryDomain;
+}
+
 function normalizeSearchMode(value = "") {
   const mode = String(value || "").trim().toLowerCase();
   return mode === "browser_simulate" || mode === "browser-simulate" || mode === "browser"
@@ -197,6 +248,7 @@ function extractAnchorCandidates({ html = "", searchUrl = "", engineName = "" })
   const links = Array.from(doc.querySelectorAll("a"));
   const out = [];
   const dedup = new Set();
+  const enginePrimaryDomain = getPrimaryDomainFromUrl(searchUrl);
 
   for (const a of links) {
     const rawHref = normalizeText(a.getAttribute("href") || "");
@@ -211,8 +263,16 @@ function extractAnchorCandidates({ html = "", searchUrl = "", engineName = "" })
     const ariaLabel = normalizeText(a.getAttribute("aria-label") || "");
     const innerHtml = normalizeText(a.innerHTML || "").slice(0, 300);
     const mergedText = normalizeText([text, title, ariaLabel].filter(Boolean).join(" "));
+    if (mergedText.length < MIN_ANCHOR_TEXT_LENGTH) continue;
     const hasReadableContent = Boolean(mergedText || innerHtml);
     if (!hasReadableContent) continue;
+    const hrefPrimaryDomain = getPrimaryDomainFromUrl(href);
+    if (shouldFilterSamePrimaryDomain({
+      enginePrimaryDomain,
+      hrefPrimaryDomain,
+    })) {
+      continue;
+    }
 
     const dedupKey = `${href}__${mergedText || innerHtml.slice(0, 120)}`;
     if (dedup.has(dedupKey)) continue;
@@ -263,12 +323,15 @@ function pickIndexesFromModelOutput(parsed, maxIdx) {
     if (Array.isArray(arr)) values.push(...arr);
   }
   const uniq = [];
+  const seen = new Set();
   for (const x of values) {
     const n = Number(x);
     if (!Number.isFinite(n)) continue;
     const idx = Math.floor(n);
     if (idx < 1 || idx > maxIdx) continue;
-    if (!uniq.includes(idx)) uniq.push(idx);
+    if (seen.has(idx)) continue;
+    seen.add(idx);
+    uniq.push(idx);
   }
   return uniq;
 }
@@ -290,6 +353,85 @@ function fallbackSelectCandidates({ query = "", candidates = [], topK = 3 }) {
   });
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, Math.max(1, topK)).map((x) => x.idx);
+}
+
+function rankEngineCandidateBuckets(engineResults = []) {
+  return (Array.isArray(engineResults) ? engineResults : [])
+    .map((item, index) => ({
+      index,
+      engine: String(item?.request?.engine || "").toLowerCase(),
+      candidates: Array.isArray(item?.candidates) ? item.candidates : [],
+    }))
+    .filter((item) => item.candidates.length > 0)
+    .sort((a, b) => {
+      if (b.candidates.length !== a.candidates.length) {
+        return b.candidates.length - a.candidates.length;
+      }
+      return a.index - b.index;
+    })
+    .slice(0, MAX_PRIORITY_ENGINES)
+    .map((item) => ({ ...item, cursor: 0 }));
+}
+
+function buildEnginePickPlan(pickedEngines = []) {
+  return {
+    // 第 1 引擎占单数位，第 2 引擎占双数位
+    preferredOrder: pickedEngines,
+    fallbackOrder: pickedEngines,
+  };
+}
+
+function takeCandidatesByPlan({
+  pickedEngines = [],
+  preferredOrder = [],
+  fallbackOrder = [],
+  maxCandidates = 30,
+}) {
+  const out = [];
+  const hasRemaining = () =>
+    pickedEngines.some((item) => item.cursor < item.candidates.length);
+  const pushFromEntry = (entry) => {
+    if (!entry) return false;
+    if (entry.cursor >= entry.candidates.length) return false;
+    out.push(entry.candidates[entry.cursor]);
+    entry.cursor += 1;
+    return true;
+  };
+
+  while (out.length < maxCandidates && hasRemaining()) {
+    let pushedInThisRound = false;
+    for (const preferred of preferredOrder) {
+      if (out.length >= maxCandidates || !hasRemaining()) break;
+      if (pushFromEntry(preferred)) {
+        pushedInThisRound = true;
+        continue;
+      }
+      for (const fallback of fallbackOrder) {
+        if (pushFromEntry(fallback)) {
+          pushedInThisRound = true;
+          break;
+        }
+      }
+    }
+    if (!pushedInThisRound) break;
+  }
+  return out;
+}
+
+function buildAllCandidatesByEnginePriority(engineResults = [], maxCandidates = 30) {
+  const finalMax = Math.max(1, Number(maxCandidates) || 30);
+  const pickedEngines = rankEngineCandidateBuckets(engineResults);
+  if (!pickedEngines.length) return [];
+  if (pickedEngines.length === 1) {
+    return pickedEngines[0].candidates.slice(0, finalMax);
+  }
+  const pickPlan = buildEnginePickPlan(pickedEngines);
+  return takeCandidatesByPlan({
+    pickedEngines,
+    preferredOrder: pickPlan.preferredOrder,
+    fallbackOrder: pickPlan.fallbackOrder,
+    maxCandidates: finalMax,
+  });
 }
 
 async function resolveFinalUrl(inputUrl = "") {
@@ -415,14 +557,6 @@ export function createWebSearchTool({ agentContext }) {
       "网页搜索并解析：通过 搜索引擎 搜索。",
     schema: z.object({
       query: z.string().describe("搜索关键词"),
-      engines: z
-        .array(
-          z.enum(["google", "bing", "sogou", "so", "duckduckgo", "yahoo"]),
-        )
-        .optional()
-        .describe(
-          `搜索引擎列表，默认 [${DEFAULT_ENGINES.join(", ")}]`,
-        ),
       modelName: z
         .string()
         .optional()
@@ -438,11 +572,11 @@ export function createWebSearchTool({ agentContext }) {
     }),
     func: async ({
       query,
-      engines = DEFAULT_ENGINES,
       modelName = "",
       prompt = "",
       useTrafilatura = true,
     }) => {
+      const engines = DEFAULT_ENGINES;
       const normalizedQuery = normalizeText(query);
       if (!normalizedQuery) {
         return toToolJsonResult("web_search_to_data", {
@@ -476,6 +610,7 @@ export function createWebSearchTool({ agentContext }) {
                     waitUntil: "domcontentloaded",
                     timeout: 30000,
                     networkIdleTimeout: 5000,
+                    runtimeContext: runtime,
                   })
                 : await loadSearchHtmlDirect(searchUrl);
             if (webSearchMode === "browser_simulate" && !loaded?.ok) {
@@ -520,7 +655,10 @@ export function createWebSearchTool({ agentContext }) {
         }),
       );
       const searchRequests = engineResults.map((x) => x.request);
-      const allCandidates = engineResults.flatMap((x) => x.candidates);
+      const allCandidates = buildAllCandidatesByEnginePriority(
+        engineResults,
+        finalMaxCandidates,
+      );
 
       const dedupMap = new Map();
       for (const item of allCandidates) {
@@ -561,9 +699,67 @@ export function createWebSearchTool({ agentContext }) {
       const selectedLinks = selection.indexes
         .map((idx) => dedupCandidates[idx - 1])
         .filter(Boolean);
-      const selectedResolvedUrls = await Promise.all(
-        selectedLinks.map((item) => resolveFinalUrl(item.href)),
+      const openedSelectedLinks = await Promise.all(
+        selectedLinks.map(async (item) => {
+          const originalUrl = String(item?.href || "").trim();
+          if (!originalUrl) {
+            return {
+              originalUrl: "",
+              finalUrl: "",
+              ok: false,
+              status: 0,
+              title: "",
+              error: "empty url",
+            };
+          }
+          try {
+            const loaded = await browseUrlHtml({
+              url: originalUrl,
+              waitUntil: "domcontentloaded",
+              timeout: 30000,
+              networkIdleTimeout: 5000,
+              runtimeContext: runtime,
+            });
+            const finalUrl = String(loaded?.finalUrl || "").trim();
+            if (loaded?.ok && /^https?:\/\//i.test(finalUrl)) {
+              return {
+                originalUrl,
+                finalUrl,
+                ok: true,
+                status: Number(loaded?.status || 0),
+                title: String(loaded?.title || ""),
+                error: "",
+              };
+            }
+            const resolvedUrl = await resolveFinalUrl(originalUrl);
+            return {
+              originalUrl,
+              finalUrl: resolvedUrl,
+              ok: false,
+              status: Number(loaded?.status || 0),
+              title: String(loaded?.title || ""),
+              error: String(loaded?.error || "open failed"),
+            };
+          } catch (error) {
+            const resolvedUrl = await resolveFinalUrl(originalUrl);
+            return {
+              originalUrl,
+              finalUrl: resolvedUrl,
+              ok: false,
+              status: 0,
+              title: "",
+              error: error?.message || String(error),
+            };
+          }
+        }),
       );
+      const selectedResolvedUrls = Array.from(
+        new Set(
+          openedSelectedLinks
+            .map((item) => String(item?.finalUrl || "").trim())
+            .filter((url) => /^https?:\/\//i.test(url)),
+        ),
+      ).slice(0, finalTopK);
       const parsed = await runWebToDataPipeline({
         agentContext,
         urls: selectedResolvedUrls,
