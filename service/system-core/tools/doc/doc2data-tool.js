@@ -91,8 +91,6 @@ export function createDoc2DataTool({ agentContext }) {
         .describe("默认提取全部可读文字并保持原结构"),
       dpi: z
         .number()
-        .int()
-        .positive()
         .optional()
         .describe("文档转图片DPI，默认180"),
       imageFormat: z
@@ -101,6 +99,11 @@ export function createDoc2DataTool({ agentContext }) {
         .describe("文档转图片格式，默认 png"),
     }),
     func: async ({ filePath, prompt, dpi, imageFormat }) => {
+      const normalizedDpi = Number(dpi);
+      const resolvedDpi =
+        Number.isFinite(normalizedDpi) && normalizedDpi > 0
+          ? Math.floor(normalizedDpi)
+          : 180;
       const inputFile = await assertAndResolveUserWorkspaceFilePath({
         filePath,
         agentContext,
@@ -118,7 +121,7 @@ export function createDoc2DataTool({ agentContext }) {
         inputFile,
         outputRoot,
         format: imageFormat || "png",
-        dpi: Number(dpi || 180),
+        dpi: resolvedDpi,
       });
 
       const images = converted.imagePaths || [];
