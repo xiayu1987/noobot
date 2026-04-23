@@ -45,16 +45,27 @@ export function createContentProcessTool({ agentContext }) {
   const contentProcessToolNames = contentProcessTools
     .map((tool) => String(tool?.name || "").trim())
     .filter(Boolean);
+  const toolDescMap = {
+    doc_to_data: "文档解析（office/pdf/图片提取文本）",
+    web_search_to_data: "网页搜索并解析（搜索后筛选链接并解析）",
+    web_to_data: "指定网页解析（URL 或 URL 列表文件）",
+  };
+  const enabledToolDescList = contentProcessToolNames.map((toolName) => {
+    const desc = toolDescMap[toolName] || "通用内容处理";
+    return `${toolName}: ${desc}`;
+  });
+  const dynamicDescription = contentProcessToolNames.length
+    ? `内容处理工具：当前启用子工具：${enabledToolDescList.join("；")}。子会话仅允许调用以上已启用工具。`
+    : "内容处理工具：当前未启用任何子工具。";
 
   const processContentTaskTool = new DynamicStructuredTool({
     name: "process_content_task",
-    description:
-      "内容处理工具：可做：1) 文档解析(doc_to_data：office/pdf/图片提取文本)；2) 网页搜索并解析(web_search_to_data：Baidu/Google 搜索后筛选链接并解析)；3) 指定网页解析(web_to_data：直接解析 URL 或 URL 列表文件)。子会话仅允许以上3个工具。",
+    description: dynamicDescription,
     schema: z.object({
       task: z
         .string()
         .describe(
-          "任务说明。请明确输入来源和目标输出，例如：'搜索英伟达DGX是什么，并汇总3个来源的核心结论'、'解析 workspace 中 report.pdf 并提取关键数据'",
+          "任务说明。请明确输入来源和目标输出，例如：'搜索英伟达DGX是什么，并汇总3个来源的核心结论'",
         ),
       modelName: z.string().optional().describe("可选：指定子任务执行模型（别名或模型名）"),
     }),

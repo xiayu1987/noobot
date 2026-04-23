@@ -41,7 +41,7 @@ export function createWeb2DataTool({ agentContext }) {
   const webToDataTool = new DynamicStructuredTool({
     name: "web_to_data",
     description:
-      "网页解析并提取内容。支持处理模式：direct(直接抓取清洗)、browser_simulate(浏览器模拟输入链接再清洗)、multimodal(浏览器截图并用多模态模型提取)。支持单 URL 或批量 URLs。",
+      "根据提供url进行网页解析并提取内容。支持单 URL 或批量 URLs。",
     schema: z.object({
       input: z
         .string()

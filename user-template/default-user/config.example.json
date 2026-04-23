@@ -8,7 +8,7 @@
   "tools": {
     "web_search_to_data": {
       "enabled": true,
-      "searchMode": "browser_simulate",
+      "searchMode": "direct",
       "switchWebMode": "direct",
       "maxCandidates": 30,
       "topK": 10

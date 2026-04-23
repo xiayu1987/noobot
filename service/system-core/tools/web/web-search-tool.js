@@ -412,7 +412,7 @@ export function createWebSearchTool({ agentContext }) {
   const webSearchToDataTool = new DynamicStructuredTool({
     name: "web_search_to_data",
     description:
-      "网页搜索并解析：先通过 Google/Bing/Sogou/360/DuckDuckGo/Yahoo 搜索，提取搜索结果页链接，再由大模型筛选最符合链接，最后调用网页解析流程输出结果。",
+      "网页搜索并解析：通过 搜索引擎 搜索。",
     schema: z.object({
       query: z.string().describe("搜索关键词"),
       engines: z
@@ -430,7 +430,7 @@ export function createWebSearchTool({ agentContext }) {
       prompt: z
         .string()
         .optional()
-        .describe("网页解析提示词，透传给 web_to_data 流程"),
+        .describe("网页解析提示词"),
       useTrafilatura: z
         .boolean()
         .optional()
