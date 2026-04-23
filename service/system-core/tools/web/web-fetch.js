@@ -24,6 +24,7 @@ const DEFAULT_BROWSER_HEADERS = {
   "sec-ch-ua-mobile": "?0",
   "sec-ch-ua-platform": "\"Linux\"",
 };
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 
 function withDefaultReferer(urlValue = "", referer = "") {
   if (String(referer || "").trim()) return String(referer).trim();
@@ -58,13 +59,46 @@ export async function browserLikeFetch(url, options = {}) {
     headers = {},
     method = "GET",
     redirect = "follow",
+    maxRedirects = 8,
     ...rest
   } = options || {};
 
-  return fetch(url, {
-    method,
-    redirect,
-    headers: buildBrowserLikeHeaders(url, headers),
-    ...rest,
-  });
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const doFetch = (targetUrl, reqMethod, reqRedirect = "manual") =>
+    fetch(targetUrl, {
+      ...rest,
+      method: reqMethod,
+      redirect: reqRedirect,
+      headers: buildBrowserLikeHeaders(targetUrl, headers),
+    });
+
+  if (redirect !== "follow") {
+    return doFetch(url, normalizedMethod, redirect);
+  }
+
+  let currentUrl = String(url || "").trim();
+  let currentMethod = normalizedMethod;
+  let hops = 0;
+  while (true) {
+    const res = await doFetch(currentUrl, currentMethod, "manual");
+    if (!REDIRECT_STATUS.has(Number(res.status || 0))) return res;
+    if (hops >= Math.max(0, Number(maxRedirects) || 0)) {
+      throw new Error(`too many redirects: ${currentUrl}`);
+    }
+    const location = String(res.headers.get("location") || "").trim();
+    if (!location) return res;
+    try {
+      currentUrl = new URL(location, currentUrl).toString();
+    } catch {
+      currentUrl = location;
+    }
+    if (
+      Number(res.status) === 303 ||
+      ((Number(res.status) === 301 || Number(res.status) === 302) &&
+        currentMethod === "POST")
+    ) {
+      currentMethod = "GET";
+    }
+    hops += 1;
+  }
 }

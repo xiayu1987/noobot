@@ -337,7 +337,7 @@ const writtenFiles = computed(() => {
           </div>
         </div>
 
-        <ThinkingPanel :message-item="messageItem" />
+        <ThinkingPanel :message-item="messageItem" :all-messages="allMessages" />
 
         <div v-if="messageItem.error" class="error-alert">
           <el-icon class="error-icon"><WarningFilled /></el-icon>

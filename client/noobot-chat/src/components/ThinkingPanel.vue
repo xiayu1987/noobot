@@ -4,16 +4,23 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
+  allMessages: { type: Array, default: () => [] },
 });
 
 const hasThinking = computed(() => hasThinkingLogs(props.messageItem));
+const nowTick = ref(Date.now());
+let timer = null;
 
 function getRealtimeLogs(messageItem = {}) {
   return (messageItem.realtimeLogs || []).slice(-10);
+}
+
+function getAllRealtimeLogs(messageItem = {}) {
+  return Array.isArray(messageItem?.realtimeLogs) ? messageItem.realtimeLogs : [];
 }
 
 function hasThinkingLogs(messageItem = {}) {
@@ -115,12 +122,128 @@ function getThinkingDetailCount(messageItem = {}) {
     : [];
   return completedToolLogs.length;
 }
+
+function parseTimeMs(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  if (typeof value === "number") {
+    return value > 1e11 ? value : value * 1000;
+  }
+  const asNumber = Number(value);
+  if (Number.isFinite(asNumber) && asNumber > 0) {
+    return asNumber > 1e11 ? asNumber : asNumber * 1000;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDuration(ms = 0) {
+  const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) {
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function getThinkingDurationMs(messageItem = {}) {
+  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const candidateMessages = Array.isArray(props.allMessages)
+    ? props.allMessages
+    : [];
+  const scopedMessages = dialogProcessId
+    ? candidateMessages.filter(
+        (item) =>
+          String(item?.dialogProcessId || "").trim() === dialogProcessId,
+      )
+    : candidateMessages;
+  const scopedTimes = scopedMessages
+    .map((item) => parseTimeMs(item?.ts))
+    .filter((x) => x > 0);
+  if (scopedTimes.length >= 2) {
+    const startMs = Math.min(...scopedTimes);
+    const endMs = messageItem?.pending
+      ? Math.max(nowTick.value, ...scopedTimes)
+      : Math.max(...scopedTimes);
+    return Math.max(0, endMs - startMs);
+  }
+
+  const msgTs = parseTimeMs(messageItem?.ts);
+  const startedAt = parseTimeMs(messageItem?.thinkingStartedAt);
+  const finishedAt = parseTimeMs(messageItem?.thinkingFinishedAt);
+  const realtimeLogs = getAllRealtimeLogs(messageItem);
+  const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
+    ? messageItem.completedToolLogs
+    : [];
+  const logTimes = [...realtimeLogs, ...completedToolLogs]
+    .map((logItem) => parseTimeMs(logItem?.ts))
+    .filter((x) => x > 0);
+  const startCandidates = [
+    startedAt,
+    ...(logTimes.length ? [Math.min(...logTimes)] : []),
+    msgTs,
+  ].filter((x) => x > 0);
+  if (!startCandidates.length) return 0;
+  const startMs = Math.min(...startCandidates);
+  const endMs = messageItem?.pending
+    ? nowTick.value
+    : Math.max(
+        startMs,
+        finishedAt,
+        ...(logTimes.length ? [Math.max(...logTimes)] : []),
+        msgTs,
+      );
+  return Math.max(0, endMs - startMs);
+}
+
+function getThinkingDurationLabel(messageItem = {}) {
+  return formatDuration(getThinkingDurationMs(messageItem));
+}
+
+function startTimer() {
+  if (timer) return;
+  timer = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 1000);
+}
+
+function stopTimer() {
+  if (!timer) return;
+  clearInterval(timer);
+  timer = null;
+}
+
+watch(
+  () => Boolean(props.messageItem?.pending),
+  (pending) => {
+    if (pending) startTimer();
+    else stopTimer();
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  if (props.messageItem?.pending) startTimer();
+});
+
+onBeforeUnmount(() => {
+  stopTimer();
+});
 </script>
 
 <template>
   <template v-if="hasThinking">
       <el-collapse v-model="messageItem.thinkingOpenNames" class="thinking-collapse">
-      <el-collapse-item name="thinking-panel" title="💡 展开思考过程">
+      <el-collapse-item name="thinking-panel">
+        <template #title>
+          <div class="thinking-title-row">
+            <span>💡 展开思考过程</span>
+            <span class="thinking-elapsed">
+              思考耗时：{{ getThinkingDurationLabel(messageItem) }}
+            </span>
+          </div>
+        </template>
         <el-tabs class="thinking-tabs">
           <el-tab-pane :label="`执行过程 (${getExecutionLogCount(messageItem)})`">
             <div class="thinking-body-scroll">
@@ -227,6 +350,19 @@ function getThinkingDetailCount(messageItem = {}) {
   padding: 0 12px;
   font-size: 13px;
   color: var(--noobot-thinking-header);
+}
+
+.thinking-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.thinking-elapsed {
+  font-size: 12px;
+  color: var(--noobot-thinking-muted);
 }
 
 .thinking-collapse :deep(.el-collapse-item__wrap) {
