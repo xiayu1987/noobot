@@ -108,6 +108,7 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
       await onConnected();
       return true;
     } catch (error) {
+      clearApiAuth();
       if (!silent) ElMessage.error(error.message || "连接失败");
       return false;
     } finally {
@@ -116,9 +117,9 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
   }
 
   async function tryAutoConnect() {
-    if (connected.value) return true;
     if (!String(userId.value || "").trim()) return false;
     if (!String(connectCode.value || "").trim()) return false;
+    // 刷新页面时始终向后端重新申请一次连接，避免服务重启后本地旧 apiKey 失效
     return Boolean(await connectBackend({ silent: true }));
   }
 

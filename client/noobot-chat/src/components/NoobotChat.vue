@@ -264,7 +264,6 @@ onMounted(async () => {
   window.addEventListener("resize", updateViewportState);
   const autoConnected = await tryAutoConnect();
   if (autoConnected) {
-    await fetchSessions();
     return;
   }
   initSessionsAfterMount();
@@ -371,7 +370,7 @@ function handleHeaderAction(command = "") {
         >
           <el-button
             class="mobile-menu-btn noobot-action-btn"
-            type="button"
+            native-type="button"
             :icon="MoreFilled"
             title="更多操作"
           />
