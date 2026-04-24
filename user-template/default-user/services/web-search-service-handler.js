@@ -33,6 +33,21 @@ function parseSearxInstancesYaml(text = "") {
   return out;
 }
 
+function normalizeInstanceList(list = []) {
+  const out = [];
+  for (const item of Array.isArray(list) ? list : []) {
+    try {
+      const normalized = new URL(String(item || "").trim())
+        .toString()
+        .replace(/\/+$/, "");
+      if (normalized && !out.includes(normalized)) out.push(normalized);
+    } catch {
+      // ignore invalid instance
+    }
+  }
+  return out;
+}
+
 async function getRemoteSearxInstances(fetch) {
   const now = Date.now();
   if (
@@ -206,13 +221,16 @@ export default async function webSearchServiceHandler({
   const apiKey = String(serviceCfg?.api_key || "").trim();
   if (apiKey) reqHeaders.Authorization = `Bearer ${apiKey}`;
 
-  const fallbackInstancesFromConfig = Array.isArray(serviceCfg?.fallback_instances)
-    ? serviceCfg.fallback_instances
-    : DEFAULT_SEARX_INSTANCES;
-  const remoteInstances = await getRemoteSearxInstances(fetch);
-  const fallbackInstances = Array.from(
-    new Set([...(remoteInstances || []), ...(fallbackInstancesFromConfig || [])]),
+  const fallbackInstancesFromConfig = normalizeInstanceList(
+    Array.isArray(serviceCfg?.fallback_instances)
+      ? serviceCfg.fallback_instances
+      : DEFAULT_SEARX_INSTANCES,
   );
+  const remoteInstances = await getRemoteSearxInstances(fetch);
+  const fallbackInstances = normalizeInstanceList([
+    ...(remoteInstances || []),
+    ...fallbackInstancesFromConfig,
+  ]);
   const result = await requestWithFallback({
     fetch,
     primaryUrl: url.toString(),
@@ -235,7 +253,6 @@ export default async function webSearchServiceHandler({
             label: "SEARX 实例来源地址",
             url: SEARX_INSTANCES_YAML_URL,
           },
-          fallback_instances: fallbackInstances,
           fallback_attempted_urls: result.attemptedFallbackUrls || [],
         }
       : {}),
