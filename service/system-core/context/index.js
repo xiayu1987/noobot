@@ -319,6 +319,7 @@ export class ContextBuilder {
           handler: serviceConfig?.handler || "",
           query_string_format: endpointCfg?.query_string_format || "",
           body_format: endpointCfg?.body_format || "",
+          custom_param_format: endpointCfg?.custom_param_format || "",
         });
       }
     }

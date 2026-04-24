@@ -655,7 +655,7 @@ watch(
     <el-dialog
       v-model="resetDialogVisible"
       :title="resetDialogTitle"
-      width="420px"
+      width="min(92vw, 420px)"
       append-to-body
       class="workspace-reset-dialog"
     >
@@ -1138,6 +1138,36 @@ watch(
 
   .mobile-actions {
     display: inline-flex;
+  }
+
+  .reset-section-group {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .reset-dialog-toolbar {
+    justify-content: space-between;
+  }
+
+  :deep(.workspace-reset-dialog .el-dialog) {
+    width: calc(100vw - 24px) !important;
+    max-width: 560px;
+    margin-top: 8vh !important;
+  }
+
+  :deep(.workspace-reset-dialog .el-dialog__body) {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  :deep(.workspace-reset-dialog .el-dialog__footer) {
+    padding: 10px 14px 14px;
+    display: flex;
+    gap: 8px;
+  }
+
+  :deep(.workspace-reset-dialog .el-dialog__footer .el-button) {
+    flex: 1;
   }
 }
 </style>

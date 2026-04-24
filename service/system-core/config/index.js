@@ -128,6 +128,7 @@ export function resolveConfigTemplates(input, variables = {}) {
 // - MCP相关：mcpServers
 // - 异步等待配置：async（用于 wait timeout）
 // - 工具相关：tools
+// - 偏好相关：preferences
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
   defaultModel: "replace",
@@ -137,6 +138,7 @@ const USER_OVERRIDE_POLICY = {
   mcpServers: "deep",
   async: "deep",
   tools: "deep",
+  preferences: "deep",
 };
 
 function cloneAllowedValue(key, value) {
