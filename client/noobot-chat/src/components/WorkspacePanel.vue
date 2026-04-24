@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import {
   MoreFilled,
   Refresh,
@@ -57,6 +57,23 @@ const paramCatalog = ref([]);
 const loadingParamCatalog = ref(false);
 const activeResourceSection = ref("directory");
 const lastActiveResourceSection = ref("directory");
+const resetDialogVisible = ref(false);
+const resetDialogMode = ref("user");
+const resetDialogSections = ref([]);
+const RESET_SECTION_OPTIONS = [
+  { value: "memory", label: "memory" },
+  { value: "runtime", label: "runtime" },
+  { value: "service", label: "service" },
+  { value: "skill", label: "skill" },
+  { value: "config", label: "config" },
+];
+const RESET_SECTION_DEFAULTS = ["service", "config"];
+const resetDialogTitle = computed(() =>
+  resetDialogMode.value === "all" ? "重置所有用户工作区" : "重置工作区",
+);
+const resetDialogConfirmLoading = computed(
+  () => resetting.value || resettingAll.value,
+);
 const paramTreeData = computed(() =>
   (paramCatalog.value || []).map((item) => ({
     key: String(item?.key || "").trim(),
@@ -228,24 +245,14 @@ function downloadFile() {
 
 async function resetWorkspace() {
   if (!props.connected || !props.userId || !props.apiKey) return;
-  try {
-    await ElMessageBox.confirm(
-      "确定要重置工作区吗？该用户目录下文件会被删除，并恢复为默认模板。",
-      "重置工作区",
-      {
-        confirmButtonText: "确定重置",
-        cancelButtonText: "取消",
-        type: "warning",
-      },
-    );
-  } catch {
-    return;
-  }
+  openResetDialog("user");
+}
 
+async function doResetWorkspace(sections = []) {
   resetting.value = true;
   try {
     const res = await postResetWorkspaceApi(
-      { userId: props.userId },
+      { userId: props.userId, sections },
       { fetcher: authFetch },
     );
     const data = await res.json();
@@ -303,23 +310,16 @@ async function syncAllWorkspace() {
 
 async function resetAllWorkspace() {
   if (!props.connected || !props.apiKey || !props.isSuperAdmin) return;
-  try {
-    await ElMessageBox.confirm(
-      "确定要重置所有用户工作区吗？将保留各用户 runtime 目录，其余内容会删除并从 default-user 模板重建。",
-      "重置所有用户工作区",
-      {
-        confirmButtonText: "确定重置",
-        cancelButtonText: "取消",
-        type: "warning",
-      },
-    );
-  } catch {
-    return;
-  }
+  openResetDialog("all");
+}
 
+async function doResetAllWorkspace(sections = []) {
   resettingAll.value = true;
   try {
-    const res = await postResetAllWorkspaceApi({ fetcher: authFetch });
+    const res = await postResetAllWorkspaceApi(
+      { sections },
+      { fetcher: authFetch },
+    );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "重置所有用户工作区失败");
     activePath.value = "";
@@ -334,6 +334,38 @@ async function resetAllWorkspace() {
     ElMessage.error(error.message || "重置所有用户工作区失败");
   } finally {
     resettingAll.value = false;
+  }
+}
+
+function openResetDialog(mode = "user") {
+  resetDialogMode.value = mode === "all" ? "all" : "user";
+  resetDialogSections.value = [...RESET_SECTION_DEFAULTS];
+  resetDialogVisible.value = true;
+}
+
+function selectAllResetSections() {
+  resetDialogSections.value = RESET_SECTION_OPTIONS.map((item) => item.value);
+}
+
+function clearAllResetSections() {
+  resetDialogSections.value = [];
+}
+
+async function confirmResetDialog() {
+  if (!Array.isArray(resetDialogSections.value) || !resetDialogSections.value.length) {
+    ElMessage.warning("请至少选择一个重置项");
+    return;
+  }
+  const sections = [...resetDialogSections.value];
+  resetDialogVisible.value = false;
+  try {
+    if (resetDialogMode.value === "all") {
+      await doResetAllWorkspace(sections);
+      return;
+    }
+    await doResetWorkspace(sections);
+  } catch {
+    // errors are handled in doResetWorkspace/doResetAllWorkspace
   }
 }
 
@@ -619,6 +651,46 @@ watch(
         </div>
       </div>
     </div>
+
+    <el-dialog
+      v-model="resetDialogVisible"
+      :title="resetDialogTitle"
+      width="420px"
+      append-to-body
+      class="workspace-reset-dialog"
+    >
+      <div class="reset-dialog-tip">
+        请勾选要重置的内容。系统会删除目标项并从
+        <code>default-user</code> 模板重新复制。
+      </div>
+      <div class="reset-dialog-toolbar">
+        <el-button text size="small" @click="selectAllResetSections">全选</el-button>
+        <el-button text size="small" @click="clearAllResetSections">清空</el-button>
+      </div>
+      <el-checkbox-group v-model="resetDialogSections" class="reset-section-group">
+        <el-checkbox
+          v-for="item in RESET_SECTION_OPTIONS"
+          :key="item.value"
+          :value="item.value"
+          :label="item.label"
+          border
+          class="reset-section-item"
+        >
+          {{ item.label }}
+        </el-checkbox>
+      </el-checkbox-group>
+      <div class="reset-dialog-note">未勾选项会保留现有内容。</div>
+      <template #footer>
+        <el-button @click="resetDialogVisible = false">取消</el-button>
+        <el-button
+          type="danger"
+          :loading="resetDialogConfirmLoading"
+          @click="confirmResetDialog"
+        >
+          确定重置
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -954,6 +1026,68 @@ watch(
 
 .editor-input :deep(.el-textarea__inner:focus) {
   outline: none;
+}
+
+:deep(.workspace-reset-dialog .el-dialog) {
+  border: 1px solid #2a3142;
+  background: #0f1420;
+}
+
+:deep(.workspace-reset-dialog .el-dialog__header) {
+  border-bottom: 1px solid #22293a;
+  margin-right: 0;
+  padding-bottom: 12px;
+}
+
+:deep(.workspace-reset-dialog .el-dialog__title) {
+  color: #e6e8ef;
+  font-weight: 600;
+}
+
+:deep(.workspace-reset-dialog .el-dialog__body) {
+  padding-top: 14px;
+}
+
+:deep(.workspace-reset-dialog .el-dialog__footer) {
+  border-top: 1px solid #22293a;
+}
+
+.reset-section-group {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 8px 12px;
+}
+
+.reset-dialog-tip {
+  font-size: 13px;
+  color: #aab2c5;
+  line-height: 1.6;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #2a3142;
+  background: #141a25;
+}
+
+.reset-dialog-tip code {
+  color: #8bb4ff;
+}
+
+.reset-dialog-toolbar {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.reset-section-item {
+  margin-right: 0 !important;
+}
+
+.reset-dialog-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #7f8aa6;
 }
 
 /* 空状态/二进制文件提示 */

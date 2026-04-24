@@ -3,9 +3,27 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  access,
+  cp,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { fatalSystemError } from "../error/index.js";
+
+const RESET_SECTION_PATHS = {
+  memory: ["memory"],
+  runtime: ["runtime"],
+  service: ["services"],
+  skill: ["skills"],
+  config: ["config.json", "config.example.json"],
+};
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -52,6 +70,35 @@ async function resolveWorkspaceInitPaths({
   }
   await mkdir(path.resolve(workspaceRoot), { recursive: true });
   return { base, templateBase };
+}
+
+function normalizeResetSections(inputSections) {
+  const all = Object.keys(RESET_SECTION_PATHS);
+  if (!Array.isArray(inputSections) || !inputSections.length) return all;
+  const normalized = Array.from(
+    new Set(
+      inputSections
+        .map((item) => String(item || "").trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+  const invalid = normalized.filter((item) => !all.includes(item));
+  if (invalid.length) {
+    throw fatalSystemError(`invalid reset sections: ${invalid.join(", ")}`, {
+      code: "FATAL_INVALID_RESET_SECTIONS",
+      details: { invalid, allowed: all },
+    });
+  }
+  return normalized;
+}
+
+async function pathExists(filePath = "") {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function ensureUserWorkspaceInitialized({
@@ -105,6 +152,33 @@ export async function resetUserWorkspaceInitialized({
   });
   await rm(base, { recursive: true, force: true });
   await cp(templateBase, base, { recursive: true, force: true });
+  return base;
+}
+
+export async function resetUserWorkspaceKeepRuntimeInitialized({
+  workspaceRoot,
+  workspaceTemplatePath = "",
+  userId,
+  resetSections = [],
+}) {
+  const { base, templateBase } = await resolveWorkspaceInitPaths({
+    workspaceRoot,
+    workspaceTemplatePath,
+    userId,
+  });
+  const sections = normalizeResetSections(resetSections);
+  await mkdir(base, { recursive: true });
+  const relativePaths = Array.from(
+    new Set(sections.flatMap((section) => RESET_SECTION_PATHS[section] || [])),
+  );
+  for (const relPath of relativePaths) {
+    const srcPath = path.join(templateBase, relPath);
+    const dstPath = path.join(base, relPath);
+    await rm(dstPath, { recursive: true, force: true });
+    if (!(await pathExists(srcPath))) continue;
+    await mkdir(path.dirname(dstPath), { recursive: true });
+    await cp(srcPath, dstPath, { recursive: true, force: true });
+  }
   return base;
 }
 

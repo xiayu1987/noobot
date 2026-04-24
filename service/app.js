@@ -10,12 +10,9 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   access,
-  cp,
   mkdir,
   readFile,
   readdir,
-  rename,
-  rm,
   stat,
   writeFile,
 } from "node:fs/promises";
@@ -160,39 +157,6 @@ function templateRootPath() {
     process.cwd(),
     String(globalConfigRaw?.workspaceTemplatePath || "../user-template/default-user"),
   );
-}
-
-async function resetUserWorkspaceKeepRuntime(userId = "") {
-  const normalizedUserId = String(userId || "").trim();
-  if (!normalizedUserId) throw new Error("userId required");
-  const root = workspaceRootPath();
-  const userBase = path.resolve(root, normalizedUserId);
-  const templateBase = templateRootPath();
-  await mkdir(root, { recursive: true });
-
-  const runtimeSrc = path.join(userBase, "runtime");
-  const runtimeTmp = path.join(
-    root,
-    `.${normalizedUserId}.runtime.keep.${Date.now()}`,
-  );
-  let movedRuntime = false;
-  try {
-    const st = await stat(runtimeSrc).catch(() => null);
-    if (st?.isDirectory()) {
-      await rename(runtimeSrc, runtimeTmp);
-      movedRuntime = true;
-    }
-    await rm(userBase, { recursive: true, force: true });
-    await cp(templateBase, userBase, { recursive: true, force: true });
-    if (movedRuntime) {
-      await rename(runtimeTmp, path.join(userBase, "runtime"));
-    }
-    return userBase;
-  } finally {
-    if (movedRuntime) {
-      await rm(runtimeTmp, { recursive: true, force: true }).catch(() => {});
-    }
-  }
 }
 
 async function rebuildRuntimeConfig() {
@@ -639,8 +603,14 @@ app.get("/internal/workspace/tree/:userId", async (req, res) => {
 app.post("/internal/workspace/reset/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
-    const basePath = await bot.resetUserWorkspace(userId);
-    res.json({ ok: true, userId, root: basePath });
+    const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
+    const basePath = await bot.resetUserWorkspace(userId, { sections });
+    res.json({
+      ok: true,
+      userId,
+      root: basePath,
+      sections,
+    });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "reset workspace failed" });
   }
@@ -691,6 +661,7 @@ app.post("/internal/admin/workspace-all/sync", requireSuperAdmin, async (req, re
 
 app.post("/internal/admin/workspace-all/reset", requireSuperAdmin, async (req, res) => {
   try {
+    const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
     const root = workspaceRootPath();
     await mkdir(root, { recursive: true });
     const entries = await readdir(root, { withFileTypes: true });
@@ -705,7 +676,7 @@ app.post("/internal/admin/workspace-all/reset", requireSuperAdmin, async (req, r
     const resetUsers = [];
     for (const userId of userDirs) {
       try {
-        await resetUserWorkspaceKeepRuntime(userId);
+        await bot.resetUserWorkspace(userId, { sections });
         resetUsers.push(userId);
       } catch {
         // ignore single-user failure and continue
@@ -716,7 +687,7 @@ app.post("/internal/admin/workspace-all/reset", requireSuperAdmin, async (req, r
       resetUsers,
       total: userDirs.length,
       success: resetUsers.length,
-      note: "runtime directory is preserved for each user",
+      sections,
     });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "reset all workspace failed" });

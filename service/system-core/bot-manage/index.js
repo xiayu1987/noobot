@@ -16,7 +16,7 @@ import { resolveConfigSecrets, sanitizeUserConfig } from "../config/index.js";
 import { createExecutionEventListener, emitEvent } from "../event/index.js";
 import {
   ensureUserWorkspaceInitialized,
-  resetUserWorkspaceInitialized,
+  resetUserWorkspaceKeepRuntimeInitialized,
   syncUserWorkspaceFromTemplate,
 } from "../init/index.js";
 import { appendSystemErrorLog } from "../tracking/index.js";
@@ -98,11 +98,12 @@ export class BotManager {
     });
   }
 
-  async resetUserWorkspace(userId) {
-    return resetUserWorkspaceInitialized({
+  async resetUserWorkspace(userId, options = {}) {
+    return resetUserWorkspaceKeepRuntimeInitialized({
       workspaceRoot: this.globalConfig.workspaceRoot,
       workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
       userId,
+      resetSections: Array.isArray(options?.sections) ? options.sections : [],
       globalConfig: this.globalConfig,
     });
   }

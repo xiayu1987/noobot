@@ -92,13 +92,17 @@ export async function putWorkspaceAllFileApi(
 }
 
 export async function postResetWorkspaceApi(
-  { userId = "" },
+  { userId = "", sections = [] },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch(
     `/api/internal/workspace/reset/${encodeURIComponent(userId)}`,
-    { method: "POST" },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sections }),
+    },
   );
 }
 
@@ -120,10 +124,15 @@ export async function postSyncAllWorkspaceApi({ fetcher } = {}) {
   });
 }
 
-export async function postResetAllWorkspaceApi({ fetcher } = {}) {
+export async function postResetAllWorkspaceApi(
+  { sections = [] } = {},
+  { fetcher } = {},
+) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch("/api/internal/admin/workspace-all/reset", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sections }),
   });
 }
 
