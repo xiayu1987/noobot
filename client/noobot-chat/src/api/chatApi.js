@@ -120,6 +120,13 @@ export async function postSyncAllWorkspaceApi({ fetcher } = {}) {
   });
 }
 
+export async function postResetAllWorkspaceApi({ fetcher } = {}) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch("/api/internal/admin/workspace-all/reset", {
+    method: "POST",
+  });
+}
+
 export async function getWorkspaceFileApi(
   { userId = "", path = "" },
   { fetcher } = {},

@@ -10,9 +10,12 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   access,
+  cp,
   mkdir,
   readFile,
   readdir,
+  rename,
+  rm,
   stat,
   writeFile,
 } from "node:fs/promises";
@@ -157,6 +160,39 @@ function templateRootPath() {
     process.cwd(),
     String(globalConfigRaw?.workspaceTemplatePath || "../user-template/default-user"),
   );
+}
+
+async function resetUserWorkspaceKeepRuntime(userId = "") {
+  const normalizedUserId = String(userId || "").trim();
+  if (!normalizedUserId) throw new Error("userId required");
+  const root = workspaceRootPath();
+  const userBase = path.resolve(root, normalizedUserId);
+  const templateBase = templateRootPath();
+  await mkdir(root, { recursive: true });
+
+  const runtimeSrc = path.join(userBase, "runtime");
+  const runtimeTmp = path.join(
+    root,
+    `.${normalizedUserId}.runtime.keep.${Date.now()}`,
+  );
+  let movedRuntime = false;
+  try {
+    const st = await stat(runtimeSrc).catch(() => null);
+    if (st?.isDirectory()) {
+      await rename(runtimeSrc, runtimeTmp);
+      movedRuntime = true;
+    }
+    await rm(userBase, { recursive: true, force: true });
+    await cp(templateBase, userBase, { recursive: true, force: true });
+    if (movedRuntime) {
+      await rename(runtimeTmp, path.join(userBase, "runtime"));
+    }
+    return userBase;
+  } finally {
+    if (movedRuntime) {
+      await rm(runtimeTmp, { recursive: true, force: true }).catch(() => {});
+    }
+  }
 }
 
 async function rebuildRuntimeConfig() {
@@ -650,6 +686,40 @@ app.post("/internal/admin/workspace-all/sync", requireSuperAdmin, async (req, re
     });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "sync all workspace failed" });
+  }
+});
+
+app.post("/internal/admin/workspace-all/reset", requireSuperAdmin, async (req, res) => {
+  try {
+    const root = workspaceRootPath();
+    await mkdir(root, { recursive: true });
+    const entries = await readdir(root, { withFileTypes: true });
+    const userDirs = entries
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => String(entry.name || "").trim())
+      .filter(Boolean);
+    const superAdminUserId = String(globalConfig?.superAdmin?.userId || "").trim();
+    if (superAdminUserId && !userDirs.includes(superAdminUserId)) {
+      userDirs.push(superAdminUserId);
+    }
+    const resetUsers = [];
+    for (const userId of userDirs) {
+      try {
+        await resetUserWorkspaceKeepRuntime(userId);
+        resetUsers.push(userId);
+      } catch {
+        // ignore single-user failure and continue
+      }
+    }
+    res.json({
+      ok: true,
+      resetUsers,
+      total: userDirs.length,
+      success: resetUsers.length,
+      note: "runtime directory is preserved for each user",
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "reset all workspace failed" });
   }
 });
 

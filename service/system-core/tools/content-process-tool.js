@@ -9,7 +9,6 @@ import { randomUUID } from "node:crypto";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { mergeConfig } from "../config/index.js";
 import { createDoc2DataTool } from "./doc/doc2data-tool.js";
-import { createWebSearchTool } from "./web/web-search-tool.js";
 import { createWeb2DataTool } from "./web/web2data-tool.js";
 
 function jsonError(payload = {}) {
@@ -27,7 +26,6 @@ export function createContentProcessTool({ agentContext }) {
       ? defaultEnabled
       : false;
   const docToDataEnabled = isToolEnabled("doc_to_data", true);
-  const webSearchEnabled = isToolEnabled("web_search_to_data", true);
   const webToDataEnabled = isToolEnabled("web_to_data", true);
   const configuredMaxToolLoopTurns = Number(
     effectiveConfig?.tools?.process_content_task?.maxToolLoopTurns,
@@ -39,16 +37,14 @@ export function createContentProcessTool({ agentContext }) {
       : 2;
   const contentProcessTools = [
     ...(docToDataEnabled ? createDoc2DataTool({ agentContext }) : []),
-    ...(webSearchEnabled ? createWebSearchTool({ agentContext }) : []),
     ...(webToDataEnabled ? createWeb2DataTool({ agentContext }) : []),
   ];
   const contentProcessToolNames = contentProcessTools
     .map((tool) => String(tool?.name || "").trim())
     .filter(Boolean);
   const toolDescMap = {
-    doc_to_data: "文档解析（office/pdf/图片提取文本）",
-    web_search_to_data: "网页搜索并解析（搜索后筛选链接并解析）",
-    web_to_data: "指定网页解析（URL 或 URL 列表文件）",
+    doc_to_data: "解析文档内容（office/pdf/图片提取文本）",
+    web_to_data: "解析网页内容（URL 或 URL 列表文件）",
   };
   const enabledToolDescList = contentProcessToolNames.map((toolName) => {
     const desc = toolDescMap[toolName] || "通用内容处理";
@@ -65,7 +61,7 @@ export function createContentProcessTool({ agentContext }) {
       task: z
         .string()
         .describe(
-          "任务说明。请明确输入来源和目标输出，例如：'搜索英伟达DGX是什么，并汇总3个来源的核心结论'",
+          "任务说明。请明确输入来源和目标输出",
         ),
       modelName: z.string().optional().describe("可选：指定子任务执行模型（别名或模型名）"),
     }),

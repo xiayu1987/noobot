@@ -68,6 +68,7 @@ export async function invokeServiceHandler({
   endpointName = "",
   serviceCfg = {},
   endpointCfg = {},
+  customParam = "",
   queryString = {},
   body,
 }) {
@@ -108,6 +109,7 @@ export async function invokeServiceHandler({
     endpointName,
     serviceCfg,
     endpointCfg,
+    custom_param: String(customParam || "").trim(),
     queryString,
     body,
     fetch: globalThis.fetch,

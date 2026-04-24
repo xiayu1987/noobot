@@ -317,8 +317,8 @@ export class ContextBuilder {
           description: endpointCfg?.description || "",
           url: endpointCfg?.url || "",
           handler: serviceConfig?.handler || "",
-          "query-string-format": endpointCfg?.["query-string-format"] || "",
-          "body-format": endpointCfg?.["body-format"] || "",
+          query_string_format: endpointCfg?.query_string_format || "",
+          body_format: endpointCfg?.body_format || "",
         });
       }
     }

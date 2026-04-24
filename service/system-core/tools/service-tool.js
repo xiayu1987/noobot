@@ -42,14 +42,25 @@ function validateInput({ serviceName, endpointName, queryString }) {
   return "";
 }
 
+function validateCustomParam(customParam) {
+  if (customParam === undefined || customParam === null) return "";
+  if (typeof customParam !== "string") return "custom_param must be a string";
+  if (!String(customParam).trim()) return "custom_param must not be empty";
+  return "";
+}
+
 export function createServiceTool({ agentContext }) {
   const callServiceTool = new DynamicStructuredTool({
     name: "call_service",
     description:
-      "调用外部服务。必须传 serviceName 和 endpointName，可传 queryString/body。",
+      "调用外部服务。必须传 serviceName 和 endpointName，可传 queryString/body/custom_param。",
     schema: z.object({
       serviceName: z.string().describe("服务名称，对应 services 下的 key"),
       endpointName: z.string().describe("端点名称，对应 services.<name>.endpoints 下的 key"),
+      custom_param: z
+        .string()
+        .optional()
+        .describe("额外自定义参数"),
       queryString: z
         .object({})
         .loose()
@@ -57,7 +68,7 @@ export function createServiceTool({ agentContext }) {
         .describe("查询参数对象，将拼接到 URL"),
       body: z.unknown().optional().describe("请求体内容"),
     }),
-    func: async ({ serviceName, endpointName, queryString = {}, body }) => {
+    func: async ({ serviceName, endpointName, custom_param, queryString = {}, body }) => {
       const globalConfig = agentContext?.runtime?.globalConfig || {};
       const userId = String(
         agentContext?.userId ||
@@ -67,6 +78,8 @@ export function createServiceTool({ agentContext }) {
       ).trim();
       const inputErr = validateInput({ serviceName, endpointName, queryString });
       if (inputErr) return jsonError({ error: inputErr });
+      const customParamErr = validateCustomParam(custom_param);
+      if (customParamErr) return jsonError({ error: customParamErr });
       if (!userId) return jsonError({ error: "userId missing in context" });
 
       const normalizedServiceName = normalizeName(serviceName);
@@ -100,6 +113,7 @@ export function createServiceTool({ agentContext }) {
           endpointName: normalizedEndpointName,
           serviceCfg,
           endpointCfg,
+          customParam: String(custom_param || "").trim(),
           queryString,
           body,
         });

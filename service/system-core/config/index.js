@@ -29,6 +29,55 @@ function isString(value) {
   return typeof value === "string";
 }
 
+const SNAKE_TO_CANONICAL_KEY_MAP = {
+  workspace_root: "workspaceRoot",
+  workspace_template_path: "workspaceTemplatePath",
+  memory_max_items: "memoryMaxItems",
+  max_tool_loop_turns: "maxToolLoopTurns",
+  recent_message_limit: "recentMessageLimit",
+  use_last_running_task_range: "useLastRunningTaskRange",
+  use_last_completed_task_range: "useLastCompletedTaskRange",
+  switch_web_mode: "switchWebMode",
+  sandbox_mode: "sandboxMode",
+  sandbox_provider: "sandboxProvider",
+  docker_container_scope: "dockerContainerScope",
+  docker_container_name: "dockerContainerName",
+  docker_image: "dockerImage",
+  wait_timeout_ms: "waitTimeoutMs",
+  max_sub_agent_depth: "maxSubAgentDepth",
+  script_timeout_ms: "scriptTimeoutMs",
+  super_admin: "superAdmin",
+  user_id: "userId",
+  connect_code: "connectCode",
+  default_provider: "defaultProvider",
+  default_model: "defaultModel",
+  attachment_models: "attachmentModels",
+  mcp_servers: "mcpServers",
+};
+
+function normalizeKnownConfigKeys(input, path = []) {
+  if (Array.isArray(input)) {
+    return input.map((item) => normalizeKnownConfigKeys(item, path));
+  }
+  if (!isPlainObject(input)) return input;
+
+  const currentPath = Array.isArray(path) ? path : [];
+  const inMcpServersSubtree =
+    currentPath[0] === "mcpServers" || currentPath[0] === "mcp_servers";
+
+  const out = {};
+  for (const [rawKey, value] of Object.entries(input)) {
+    const normalizedKey = inMcpServersSubtree
+      ? rawKey
+      : SNAKE_TO_CANONICAL_KEY_MAP[rawKey] || rawKey;
+    out[normalizedKey] = normalizeKnownConfigKeys(
+      value,
+      [...currentPath, normalizedKey],
+    );
+  }
+  return out;
+}
+
 function resolveTemplateInString(
   input = "",
   { configParams = {}, env = process.env } = {},
@@ -100,7 +149,7 @@ function cloneAllowedValue(key, value) {
 }
 
 export function sanitizeUserConfig(input = {}) {
-  const src = isPlainObject(input) ? input : {};
+  const src = normalizeKnownConfigKeys(isPlainObject(input) ? input : {});
   const out = {};
   for (const key of Object.keys(USER_OVERRIDE_POLICY)) {
     const value = cloneAllowedValue(key, src[key]);
@@ -112,7 +161,9 @@ export function sanitizeUserConfig(input = {}) {
 }
 
 export function mergeConfig(globalConfig = {}, userConfig = {}) {
-  const globalBase = isPlainObject(globalConfig) ? { ...globalConfig } : {};
+  const globalBase = normalizeKnownConfigKeys(
+    isPlainObject(globalConfig) ? { ...globalConfig } : {},
+  );
   const safeUser = sanitizeUserConfig(userConfig);
   const out = { ...globalBase };
   for (const [key, userValue] of Object.entries(safeUser)) {
@@ -134,5 +185,5 @@ export function applySessionModelOverride(userConfig = {}, modelAlias = "") {
 }
 
 export async function loadGlobalConfig(filePath = "./config/global.config.json") {
-  return JSON.parse(await readFile(filePath, "utf8"));
+  return normalizeKnownConfigKeys(JSON.parse(await readFile(filePath, "utf8")));
 }

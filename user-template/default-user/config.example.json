@@ -1,28 +1,21 @@
 {
-  "defaultProvider": "qwen3_5_flash",
-  "attachmentModels": {
+  "default_provider": "qwen3_5_flash",
+  "attachment_models": {
     "audio": "omni",
     "video": "qwen3_5_flash",
     "image": "qwen3_5_flash"
   },
   "tools": {
-    "web_search_to_data": {
-      "enabled": true,
-      "searchMode": "browser_simulate",
-      "switchWebMode": "browser_simulate",
-      "maxCandidates": 30,
-      "topK": 10
-    },
     "web_to_data": {
       "enabled": true,
-      "switchWebMode": "browser_simulate"
+      "switch_web_mode": "browser_simulate"
     },
     "doc_to_data": {
       "enabled": true
     },
     "process_content_task": {
       "enabled": true,
-      "maxToolLoopTurns": 2
+      "max_tool_loop_turns": 2
     }
   },
   "providers": {
@@ -51,34 +44,36 @@
     }
   },
   "services": {
-    "webSearchService": {
+    "web_search_service": {
       "enabled": true,
       "api_key": "",
-      "handler": "webSearchServiceHandler",
+      "handler": "web-search-service-handler",
       "endpoints": {
         "search": {
           "description": "搜索网页",
+          "custom_param_format": "searx实例地址",
           "url": "http://localhost:11008/search",
-          "query-string-format": "q=搜索内容",
-          "body-format": "{}"
+          "query_string_format": "q=搜索内容",
+          "body_format": "{}"
         }
       }
     },
-    "weatherService": {
+    "weather_service": {
       "enabled": true,
       "api_key": "",
-      "handler": "weatherServiceHandler",
+      "handler": "weather-service-handler",
       "endpoints": {
-        "getWeather": {
+        "get_weather": {
           "description": "天气查询",
+          "custom_param_format": "j1",
           "url": "https://wttr.in",
-          "query-string-format": "{\"city\":\"\",\"format\":\"j1\"}",
-          "body-format": "{}"
+          "query_string_format": "{\"city\":\"\",\"format\":\"j1\"}",
+          "body_format": "{}"
         }
       }
     }
   },
-  "mcpServers": {
+  "mcp_servers": {
     "china-railway": {
       "type": "sse",
       "description": "提供 12306购票信息查询等服务",

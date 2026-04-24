@@ -20,6 +20,7 @@ import {
   getWorkspaceAllFileApi,
   getWorkspaceAllTreeApi,
   getWorkspaceFileApi,
+  postResetAllWorkspaceApi,
   postSyncAllWorkspaceApi,
   postResetWorkspaceApi,
   postSyncWorkspaceApi,
@@ -46,6 +47,7 @@ const saving = ref(false);
 const resetting = ref(false);
 const syncing = ref(false);
 const syncingAll = ref(false);
+const resettingAll = ref(false);
 const activePath = ref("");
 const activePathSource = ref("user");
 const content = ref("");
@@ -299,6 +301,42 @@ async function syncAllWorkspace() {
   }
 }
 
+async function resetAllWorkspace() {
+  if (!props.connected || !props.apiKey || !props.isSuperAdmin) return;
+  try {
+    await ElMessageBox.confirm(
+      "确定要重置所有用户工作区吗？将保留各用户 runtime 目录，其余内容会删除并从 default-user 模板重建。",
+      "重置所有用户工作区",
+      {
+        confirmButtonText: "确定重置",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+  } catch {
+    return;
+  }
+
+  resettingAll.value = true;
+  try {
+    const res = await postResetAllWorkspaceApi({ fetcher: authFetch });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "重置所有用户工作区失败");
+    activePath.value = "";
+    activePathSource.value = "user";
+    content.value = "";
+    isTextFile.value = true;
+    await refreshAll();
+    ElMessage.success(
+      `已完成重置（${Number(data.success || 0)}/${Number(data.total || 0)}）`,
+    );
+  } catch (error) {
+    ElMessage.error(error.message || "重置所有用户工作区失败");
+  } finally {
+    resettingAll.value = false;
+  }
+}
+
 async function insertParamAtCursor(key = "") {
   const normalizedKey = String(key || "").trim();
   if (!normalizedKey) return;
@@ -464,8 +502,14 @@ watch(
           >
             <div class="dir-inner-actions">
               <el-button class="dark-btn" size="small" @click="syncAllWorkspace" :loading="syncingAll"
-                :disabled="loadingAllTree || loadingFile || saving || resetting || syncing" title="同步所有用户配置">
+                :disabled="loadingAllTree || loadingFile || saving || resetting || syncing || resettingAll"
+                title="同步所有用户配置">
                 同步配置
+              </el-button>
+              <el-button class="danger-btn" size="small" @click="resetAllWorkspace" :loading="resettingAll"
+                :disabled="loadingAllTree || loadingFile || saving || resetting || syncing || syncingAll"
+                title="重置所有用户工作区（保留 runtime）">
+                重置
               </el-button>
             </div>
             <el-scrollbar

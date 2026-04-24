@@ -1,54 +1,47 @@
 {
-  "workspaceRoot": "../workspace",
-  "workspaceTemplatePath": "../user-template/default-user",
-  "memoryMaxItems": 50,
-  "maxToolLoopTurns": 30,
+  "workspace_root": "../workspace",
+  "workspace_template_path": "../user-template/default-user",
+  "memory_max_items": 50,
+  "max_tool_loop_turns": 30,
   "session": {
-    "recentMessageLimit": 20,
-    "useLastRunningTaskRange": true,
-    "useLastCompletedTaskRange": true
+    "recent_message_limit": 20,
+    "use_last_running_task_range": true,
+    "use_last_completed_task_range": true
   },
   "tools": {
-    "web_search_to_data": {
-      "enabled": true,
-      "searchMode": "browser_simulate",
-      "switchWebMode": "browser_simulate",
-      "maxCandidates": 30,
-      "topK": 10
-    },
     "web_to_data": {
       "enabled": true,
-      "switchWebMode": "browser_simulate"
+      "switch_web_mode": "browser_simulate"
     },
     "doc_to_data": {
       "enabled": true
     },
     "process_content_task": {
       "enabled": true,
-      "maxToolLoopTurns": 2
+      "max_tool_loop_turns": 2
     }
   },
   "script": {
-    "sandboxMode": true,
-    "sandboxProvider": {
+    "sandbox_mode": true,
+    "sandbox_provider": {
       "default": "docker",
       "docker": {
-        "dockerContainerScope": "global",
-        "dockerContainerName": "noobot-script-sandbox",
-        "dockerImage": "node:20"
+        "docker_container_scope": "global",
+        "docker_container_name": "noobot-script-sandbox",
+        "docker_image": "node:20"
       },
       "bubblewrap": {},
       "firejail": {}
     }
   },
   "async": {
-    "waitTimeoutMs": 120000,
-    "maxSubAgentDepth": 3
+    "wait_timeout_ms": 120000,
+    "max_sub_agent_depth": 3
   },
-  "scriptTimeoutMs": 120000,
+  "script_timeout_ms": 120000,
   "streaming": true,
-  "superAdmin": {
-    "userId": "admin",
-    "connectCode": "change-your-connect-code"
+  "super_admin": {
+    "user_id": "admin",
+    "connect_code": "change-your-connect-code"
   }
 }
