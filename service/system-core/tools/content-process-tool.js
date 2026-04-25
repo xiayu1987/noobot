@@ -118,6 +118,16 @@ export function createContentProcessTool({ agentContext }) {
           },
           abortSignal: signal,
         });
+        const answer = String(subResult?.answer || "").trim();
+        const traces = Array.isArray(subResult?.traces) ? subResult.traces : [];
+        const messages = Array.isArray(subResult?.messages) ? subResult.messages : [];
+        const usedTools = Array.from(
+          new Set(
+            traces
+              .map((item) => String(item?.tool || "").trim())
+              .filter(Boolean),
+          ),
+        );
 
         return toToolJsonResult(
           "process_content_task",
@@ -128,9 +138,14 @@ export function createContentProcessTool({ agentContext }) {
             parentSessionId,
             tools: contentProcessToolNames,
             maxToolLoopTurns: resolvedMaxToolLoopTurns,
-            answer: String(subResult?.answer || "").trim(),
-            traces: Array.isArray(subResult?.traces) ? subResult.traces : [],
-            messages: Array.isArray(subResult?.messages) ? subResult.messages : [],
+            answer,
+            summary: {
+              answer_length: answer.length,
+              trace_count: traces.length,
+              message_count: messages.length,
+              used_tools: usedTools,
+              dialog_process_id: String(subResult?.dialogProcessId || ""),
+            },
             error: "",
           },
           true,

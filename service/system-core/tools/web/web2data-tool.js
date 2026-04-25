@@ -63,7 +63,28 @@ export function createWeb2DataTool({ agentContext }) {
         useTrafilatura: useTrafilatura !== false,
         processMode,
       });
-      return toToolJsonResult("web_to_data", payload, true);
+      const text = String(payload?.text || "").trim();
+      return toToolJsonResult(
+        "web_to_data",
+        {
+          ok: payload?.ok === true,
+          status: payload?.ok === true ? "completed" : "failed",
+          mode: payload?.mode || processMode,
+          message: String(payload?.message || ""),
+          input: payload?.input || input || "",
+          urls: Array.isArray(payload?.urls) ? payload.urls : [],
+          successCount: Number(payload?.successCount || 0),
+          resultCount: Number(payload?.resultCount || 0),
+          imageCount: Number(payload?.imageCount || 0),
+          batchCount: Number(payload?.batchCount || 0),
+          text,
+          model: payload?.model || {},
+          summary: {
+            text_length: text.length,
+          },
+        },
+        true,
+      );
     },
   });
 

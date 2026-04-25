@@ -5,9 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
 import {
@@ -16,21 +14,35 @@ import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
 } from "../model/index.js";
-import { safeJoin } from "../utils/fs-safe.js";
 import {
-  fatalSystemError,
   isFatalError,
   recoverableToolError,
 } from "../error/index.js";
 import {
   assertValidParentDialogProcessId,
   assertValidParentSessionId,
-  assertValidSimpleFileName,
 } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function cloneData(value) {
+  if (typeof globalThis.structuredClone === "function") {
+    try {
+      return globalThis.structuredClone(value);
+    } catch {}
+  }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return value;
+  }
 }
 export function createAgentCollabTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
@@ -48,167 +60,201 @@ export function createAgentCollabTool({ agentContext }) {
   const userConfig = runtime.userConfig || {};
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   const defaultWaitMs = Number(effectiveConfig?.async?.waitTimeoutMs || 120000);
-  const basePath = agentContext?.basePath || runtime.basePath || "";
-  const subAgentDir = basePath ? path.join(basePath, "runtime/subagent") : "";
-
-  const resolveSubAgentFile = async (fileName = "") => {
-    if (!subAgentDir) {
-      throw fatalSystemError("runtime basePath missing", {
-        code: "FATAL_RUNTIME_BASEPATH_MISSING",
-      });
+  runtime.childAsyncResultContainers = Array.isArray(
+    runtime.childAsyncResultContainers,
+  )
+    ? runtime.childAsyncResultContainers
+    : [];
+  runtime.sharedTools =
+    runtime.sharedTools && typeof runtime.sharedTools === "object"
+      ? runtime.sharedTools
+      : {};
+  const getAsyncResultContainerStore = () => {
+    if (!(runtime.sharedTools.asyncResultContainers instanceof Map)) {
+      runtime.sharedTools.asyncResultContainers = new Map();
     }
-    await mkdir(subAgentDir, { recursive: true });
-    const name = assertValidSimpleFileName({ fileName, fieldName: "fileName" });
-    return safeJoin(subAgentDir, name);
+    return runtime.sharedTools.asyncResultContainers;
+  };
+  const upsertAsyncResultContainer = (container = {}) => {
+    if (!isPlainObject(container)) return null;
+    const containerId = String(container?.id || "").trim();
+    if (!containerId) return null;
+    const normalized = {
+      id: containerId,
+      parentSessionId: String(container?.parentSessionId || "").trim(),
+      parentDialogProcessId: String(
+        container?.parentDialogProcessId || "",
+      ).trim(),
+      status: String(container?.status || "running").trim() || "running",
+      updatedAt: String(container?.updatedAt || new Date().toISOString()),
+      tasks: Array.isArray(container?.tasks)
+        ? container.tasks.map((item = {}, index) => ({
+            index,
+            sessionId: String(item?.sessionId || "").trim(),
+            task: String(item?.task || "").trim(),
+            sharedTaskSpec: String(item?.sharedTaskSpec || "").trim(),
+            deliverable: String(item?.deliverable || "").trim(),
+            status: String(item?.status || "running").trim() || "running",
+            startedAt: String(item?.startedAt || "").trim(),
+            endedAt: String(item?.endedAt || "").trim(),
+            error: String(item?.error || "").trim(),
+            result: item?.result ?? null,
+          }))
+        : [],
+    };
+    const store = getAsyncResultContainerStore();
+    store.set(containerId, normalized);
+    return normalized;
+  };
+  const patchAsyncResultTask = ({
+    containerId = "",
+    sessionId = "",
+    patch = {},
+  } = {}) => {
+    const normalizedContainerId = String(containerId || "").trim();
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedContainerId || !normalizedSessionId || !isPlainObject(patch))
+      return null;
+    const store = getAsyncResultContainerStore();
+    const existing = store.get(normalizedContainerId);
+    if (!isPlainObject(existing) || !Array.isArray(existing.tasks)) return null;
+    const targetIndex = existing.tasks.findIndex(
+      (item) => String(item?.sessionId || "").trim() === normalizedSessionId,
+    );
+    if (targetIndex < 0) return null;
+    existing.tasks[targetIndex] = {
+      ...(existing.tasks[targetIndex] || {}),
+      ...patch,
+    };
+    existing.updatedAt = new Date().toISOString();
+    store.set(normalizedContainerId, existing);
+    return cloneData(existing.tasks[targetIndex]);
+  };
+  const updateContainerStatusByTasks = (container = {}) => {
+    if (!isPlainObject(container)) return "unknown";
+    const taskList = Array.isArray(container.tasks) ? container.tasks : [];
+    if (!taskList.length) return "running";
+    if (taskList.some((task) => String(task?.status || "") === "failed")) {
+      return "failed";
+    }
+    if (taskList.every((task) => String(task?.status || "") === "completed")) {
+      return "completed";
+    }
+    if (taskList.some((task) => String(task?.status || "") === "stopped")) {
+      return "stopped";
+    }
+    return "running";
+  };
+  const nowIso = () => new Date().toISOString();
+  const toTaskRequest = (taskItem = {}, sessionId = "") => ({
+    sessionId: String(sessionId || "").trim(),
+    task: String(taskItem?.task || "").trim(),
+    sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+  });
+  const createChildAsyncResultContainer = ({
+    parentSessionId = "",
+    parentDialogProcessId = "",
+    request = {},
+  } = {}) => {
+    const container = upsertAsyncResultContainer({
+      id: randomUUID(),
+      parentSessionId,
+      parentDialogProcessId,
+      status: "running",
+      updatedAt: nowIso(),
+      tasks: [
+        {
+          index: 0,
+          sessionId: String(request?.sessionId || "").trim(),
+          task: String(request?.task || "").trim(),
+          sharedTaskSpec: String(request?.sharedTaskSpec || "").trim(),
+          status: "running",
+          startedAt: "",
+          endedAt: "",
+          error: "",
+          result: null,
+        },
+      ],
+    });
+    return addChildAsyncResultContainer(container);
+  };
+  const patchContainerTaskAndStatus = ({
+    container = null,
+    sessionId = "",
+    patch = {},
+  } = {}) => {
+    if (!isPlainObject(container)) return;
+    patchAsyncResultTask({
+      containerId: String(container?.id || ""),
+      sessionId,
+      patch,
+    });
+    container.status = updateContainerStatusByTasks(container);
+    container.updatedAt = nowIso();
+  };
+  const summarizeTaskResultsStatus = (taskResults = []) => {
+    const failed = taskResults.some(
+      (item) => String(item?.status || "") === "failed" || item?.ok === false,
+    );
+    if (failed) return "failed";
+    const stopped = taskResults.some(
+      (item) => String(item?.status || "") === "stopped",
+    );
+    if (stopped) return "stopped";
+    const completed = taskResults.every(
+      (item) => String(item?.status || "") === "completed",
+    );
+    return completed ? "completed" : "running";
+  };
+  const summarizeAsyncTaskResult = (result = null) => {
+    if (!result || typeof result !== "object") return null;
+    const answer = String(result?.answer || "").trim();
+    return {
+      sessionId: String(result?.sessionId || "").trim(),
+      parentSessionId: String(result?.parentSessionId || "").trim(),
+      parentDialogProcessId: String(result?.parentDialogProcessId || "").trim(),
+      dialogProcessId: String(result?.dialogProcessId || "").trim(),
+      answer,
+      hasAnswer: Boolean(answer),
+      messageCount: Array.isArray(result?.messages) ? result.messages.length : 0,
+      traceCount: Array.isArray(result?.traces) ? result.traces.length : 0,
+      turnTaskCount: Array.isArray(result?.turnTasks) ? result.turnTasks.length : 0,
+    };
+  };
+  const addChildAsyncResultContainer = (container = {}) => {
+    if (!isPlainObject(container)) return null;
+    const normalized = upsertAsyncResultContainer(container) || container;
+    const containerId = String(normalized?.id || "").trim();
+    if (!containerId) return null;
+    const list = runtime.childAsyncResultContainers;
+    const hitIndex = list.findIndex(
+      (item) => String(item?.id || "").trim() === containerId,
+    );
+    if (hitIndex >= 0) {
+      list[hitIndex] = normalized;
+    } else {
+      list.push(normalized);
+    }
+    return normalized;
   };
 
   const delegateTaskItemSchema = z.object({
     task: z.string().describe("子任务内容"),
     sharedTaskSpec: z.string().optional().describe("共享任务说明"),
-    deliverable: z.string().describe("最终交付物要求（文件名及说明）"),
-  });
-
-  const waitTaskItemSchema = z.object({
-    sessionId: z.string().describe("子会话ID（UUID）"),
-    task: z.string().describe("子任务内容（用于结果关联）"),
-    sharedTaskSpec: z.string().optional().describe("共享任务说明"),
-    deliverable: z.string().describe("最终交付物要求（用于结果关联）"),
-  });
-
-  const collectFileNamesFromValue = (value, outputSet) => {
-    if (!value) return;
-    if (typeof value === "string") {
-      const normalized = value.trim();
-      if (normalized) {
-        try {
-          outputSet.add(
-            assertValidSimpleFileName({
-              fileName: normalized,
-              fieldName: "deliverable.fileName",
-            }),
-          );
-        } catch {
-          // ignore non-filename strings
-        }
-      }
-      return;
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) collectFileNamesFromValue(item, outputSet);
-      return;
-    }
-    if (typeof value === "object") {
-      for (const [key, nested] of Object.entries(value)) {
-        const normalizedKey = String(key || "").toLowerCase();
-        if (
-          normalizedKey === "filename" ||
-          normalizedKey === "filenames" ||
-          normalizedKey === "files"
-        ) {
-          collectFileNamesFromValue(nested, outputSet);
-        }
-      }
-    }
-  };
-
-  const parseDeliverableFileNames = (deliverable = "") => {
-    const out = new Set();
-    const text = String(deliverable || "").trim();
-    if (!text) return [];
-
-    try {
-      const parsed = JSON.parse(text);
-      collectFileNamesFromValue(parsed, out);
-    } catch {
-      // not a json payload
-    }
-
-    const patternMatches =
-      text.match(/[A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9_-]+/g) || [];
-    for (const fileName of patternMatches) {
-      try {
-        out.add(
-          assertValidSimpleFileName({
-            fileName,
-            fieldName: "deliverable.fileName",
-          }),
-        );
-      } catch {
-        // ignore invalid match
-      }
-    }
-    return Array.from(out);
-  };
-
-  const readDeliverablesByTask = async (taskItem = {}) => {
-    const fileNames = parseDeliverableFileNames(taskItem?.deliverable || "");
-    const deliverableFiles = [];
-    const missingDeliverables = [];
-    for (const fileName of fileNames) {
-      try {
-        const filePath = await resolveSubAgentFile(fileName);
-        await access(filePath);
-        deliverableFiles.push({
-          fileName,
-          path: filePath,
-          content: await readFile(filePath, "utf8"),
-        });
-      } catch {
-        missingDeliverables.push(fileName);
-      }
-    }
-    return {
-      deliverableFiles,
-      missingDeliverables,
-    };
-  };
-
-  const writeTaskDeliverableFile = new DynamicStructuredTool({
-    name: "write_task_deliverable_file",
-    description: "子任务写入任务交付物文件。文件名重复会报错。",
-    schema: z.object({
-      fileName: z.string().describe("交付物文件名（仅文件名，不可含路径分隔符）"),
-      content: z.string().describe("交付物文件内容"),
-    }),
-    func: async ({ fileName, content }) => {
-      try {
-        const filePath = await resolveSubAgentFile(fileName);
-        try {
-          await access(filePath);
-          return toToolJsonResult("write_task_deliverable_file", {
-            ok: false,
-            error: `file already exists: ${String(fileName || "")}`,
-          });
-        } catch {}
-        await writeFile(filePath, String(content || ""), "utf8");
-        return toToolJsonResult("write_task_deliverable_file", {
-          ok: true,
-          fileName: String(fileName || ""),
-          path: filePath,
-        });
-      } catch (error) {
-        if (isFatalError(error)) throw error;
-        return toToolJsonResult("write_task_deliverable_file", {
-          ok: false,
-          error: error?.message || String(error),
-        });
-      }
-    },
   });
 
   const delegateTaskAsync = new DynamicStructuredTool({
     name: "delegate_task_async",
     description:
-      "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含task、sharedTaskSpec、deliverable。sessionId 由系统自动生成并在结果中返回。",
+      "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含task、sharedTaskSpec。汇总结果并返回。",
     schema: z.object({
       parentSessionId: z.string().describe("父会话ID（UUID）"),
       parentDialogProcessId: z
         .string()
-        .describe("父会话中的对话流程ID（必须存在于 parentSessionId 的消息中）"),
-      tasks: z
-        .array(delegateTaskItemSchema)
-        .min(1)
-        .describe("并发子任务列表"),
+        .describe(
+          "父会话中的对话流程ID（必须存在于 parentSessionId 的消息中）",
+        ),
+      tasks: z.array(delegateTaskItemSchema).min(1).describe("并发子任务列表"),
     }),
     func: async ({ parentSessionId, parentDialogProcessId, tasks }) => {
       if (!botManager || !userId)
@@ -232,17 +278,31 @@ export function createAgentCollabTool({ agentContext }) {
       }
       const resultList = await Promise.all(
         tasks.map(async (taskItem = {}, index) => {
-          const taskText = String(taskItem?.task || "").trim();
-          const deliverableText = String(taskItem?.deliverable || "").trim();
           const generatedSessionId = randomUUID();
-          if (!taskText || !deliverableText) {
+          const request = toTaskRequest(taskItem, generatedSessionId);
+          const taskText = request.task;
+          const childContainer = createChildAsyncResultContainer({
+            parentSessionId: normalizedParentSessionId,
+            parentDialogProcessId: normalizedParentDialogProcessId,
+            request,
+          });
+          if (!taskText) {
+            patchContainerTaskAndStatus({
+              container: childContainer,
+              sessionId: generatedSessionId,
+              patch: {
+                status: "failed",
+                error: "task required",
+                endedAt: nowIso(),
+              },
+            });
             return {
               ok: false,
               index,
-              error: "task/deliverable required",
+              error: "task required",
+              parentAsyncResultContainer: childContainer || null,
               request: {
-                sessionId: generatedSessionId,
-                ...taskItem,
+                ...request,
               },
             };
           }
@@ -253,41 +313,54 @@ export function createAgentCollabTool({ agentContext }) {
               sessionId: generatedSessionId,
               task: taskText,
               sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
-              deliverable: deliverableText,
               eventListener: runtimeEventListener,
               sourceDialogProcessId: String(sourceDialogProcessId || ""),
               parentDialogProcessId: normalizedParentDialogProcessId,
               userInteractionBridge,
               runConfig,
               abortSignal,
+              parentAsyncResultContainer: childContainer,
             });
+            const resolvedContainer = addChildAsyncResultContainer(
+              result?.parentAsyncResultContainer || childContainer,
+            );
+            if (resolvedContainer) {
+              runtime.parentAsyncResultContainer = resolvedContainer;
+            }
             return {
               ok: true,
               index,
               ...result,
-              request: {
-                sessionId: generatedSessionId,
-                task: taskText,
-                sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
-                deliverable: deliverableText,
-              },
+              parentAsyncResultContainer:
+                resolvedContainer || childContainer || null,
+              request,
             };
           } catch (error) {
             if (isFatalError(error)) throw error;
+            patchContainerTaskAndStatus({
+              container: childContainer,
+              sessionId: generatedSessionId,
+              patch: {
+                status: "failed",
+                error: error?.message || String(error),
+                endedAt: nowIso(),
+              },
+            });
             return {
               ok: false,
               index,
               error: error?.message || String(error),
-              request: {
-                sessionId: generatedSessionId,
-                task: taskText,
-                sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
-                deliverable: deliverableText,
-              },
+              parentAsyncResultContainer: childContainer || null,
+              request,
             };
           }
         }),
       );
+      const createdContainers = resultList
+        .map((item = {}) =>
+          addChildAsyncResultContainer(item?.parentAsyncResultContainer),
+        )
+        .filter(Boolean);
       const allOk = resultList.every((item) => item?.ok);
       return toToolJsonResult(
         "delegate_task_async",
@@ -296,6 +369,7 @@ export function createAgentCollabTool({ agentContext }) {
           status: allOk ? "running" : "partial_failed",
           parentSessionId: normalizedParentSessionId,
           parentDialogProcessId: normalizedParentDialogProcessId,
+          child_async_result_containers: cloneData(createdContainers),
           tasks: resultList,
         },
         true,
@@ -306,29 +380,25 @@ export function createAgentCollabTool({ agentContext }) {
   const waitAsyncTaskResult = new DynamicStructuredTool({
     name: "wait_async_task_result",
     description:
-      "并发等待多个异步子会话结果。传入父sessionid和tasks数组（每项含sessionId/task/sharedTaskSpec/deliverable），可选timeoutMs。全部完成后会检查并读取交付物文件。",
+      "并发等待当前上下文中 childAsyncResultContainers 的全部异步子任务结果。可选 timeoutMs。",
     schema: z.object({
-      parentSessionId: z.string().describe("父会话ID（UUID）"),
-      tasks: z
-        .array(waitTaskItemSchema)
-        .min(1)
-        .describe("待检查的并发子任务列表"),
       timeoutMs: z.number().optional().describe("最大等待毫秒数（可选）"),
     }),
-    func: async ({ parentSessionId, tasks, timeoutMs }) => {
+    func: async ({ timeoutMs }) => {
       if (!botManager || !userId)
         return toToolJsonResult("wait_async_task_result", {
           ok: false,
           error: "runtime missing bot manager/user id",
         });
-      const normalizedParentSessionId = await assertValidParentSessionId({
-        parentSessionId,
-        agentContext,
-      });
-      if (!Array.isArray(tasks) || !tasks.length) {
-        throw recoverableToolError("tasks required", {
+      const containers = (
+        Array.isArray(runtime.childAsyncResultContainers)
+          ? runtime.childAsyncResultContainers
+          : []
+      ).filter((item) => isPlainObject(item) && Array.isArray(item?.tasks));
+      if (!containers.length) {
+        throw recoverableToolError("childAsyncResultContainers required", {
           code: "RECOVERABLE_INPUT_MISSING",
-          details: { field: "tasks" },
+          details: { field: "childAsyncResultContainers" },
         });
       }
       const normalizedTimeoutMs = Number(timeoutMs);
@@ -336,56 +406,129 @@ export function createAgentCollabTool({ agentContext }) {
         Number.isFinite(normalizedTimeoutMs) && normalizedTimeoutMs > 0
           ? Math.floor(normalizedTimeoutMs)
           : defaultWaitMs;
-      const resultList = await Promise.all(
-        tasks.map(async (taskItem = {}, index) => {
-          const normalizedSessionId = String(taskItem?.sessionId || "").trim();
-          const taskText = String(taskItem?.task || "").trim();
-          const deliverableText = String(taskItem?.deliverable || "").trim();
-          if (!normalizedSessionId || !taskText || !deliverableText) {
+      const containerResults = await Promise.all(
+        containers.map(async (containerItem = {}) => {
+          const containerId = String(containerItem?.id || "").trim();
+          const resolvedParentSessionId = String(
+            containerItem?.parentSessionId || "",
+          ).trim();
+          if (!resolvedParentSessionId) {
             return {
+              id: containerId,
               ok: false,
-              index,
               status: "invalid_request",
-              error: "sessionId/task/deliverable required",
-              request: taskItem,
+              error: "parentSessionId required",
+              tasks: [],
             };
           }
-          try {
-            const result = await botManager.waitAsyncSession({
-              userId,
-              parentSessionId: normalizedParentSessionId,
-              sessionId: normalizedSessionId,
-              timeoutMs: resolvedTimeoutMs,
+          const normalizedParentSessionId = await assertValidParentSessionId({
+            parentSessionId: resolvedParentSessionId,
+            agentContext,
+          });
+          const taskList = Array.isArray(containerItem?.tasks)
+            ? containerItem.tasks
+            : [];
+          const taskResults = await Promise.all(
+            taskList.map(async (taskItem = {}, index) => {
+              const normalizedSessionId = String(
+                taskItem?.sessionId || "",
+              ).trim();
+              const taskText = String(taskItem?.task || "").trim();
+              if (!normalizedSessionId || !taskText) {
+                return {
+                  ok: false,
+                  index,
+                  status: "invalid_request",
+                  error: "sessionId/task required",
+                  request: taskItem,
+                };
+              }
+              try {
+                const result = await botManager.waitAsyncSession({
+                  userId,
+                  parentSessionId: normalizedParentSessionId,
+                  sessionId: normalizedSessionId,
+                  timeoutMs: resolvedTimeoutMs,
+                });
+                return {
+                  ...result,
+                  result: summarizeAsyncTaskResult(result?.result),
+                  index,
+                  request: {
+                    sessionId: normalizedSessionId,
+                    task: taskText,
+                    sharedTaskSpec: String(
+                      taskItem?.sharedTaskSpec || "",
+                    ).trim(),
+                  },
+                };
+              } catch (error) {
+                if (isFatalError(error)) throw error;
+                return {
+                  ok: false,
+                  index,
+                  status: "failed",
+                  error: error?.message || String(error),
+                  request: {
+                    sessionId: normalizedSessionId,
+                    task: taskText,
+                    sharedTaskSpec: String(
+                      taskItem?.sharedTaskSpec || "",
+                    ).trim(),
+                  },
+                };
+              }
+            }),
+          );
+          for (const item of taskResults) {
+            patchContainerTaskAndStatus({
+              container: containerItem,
+              sessionId: String(item?.request?.sessionId || ""),
+              patch: {
+                status: String(item?.status || "running"),
+                startedAt: String(item?.startedAt || "").trim(),
+                endedAt: String(item?.endedAt || "").trim(),
+                error: String(item?.error || "").trim(),
+                result: item?.result ?? null,
+              },
             });
-            return {
-              ...result,
-              index,
-              request: {
-                sessionId: normalizedSessionId,
-                task: taskText,
-                sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
-                deliverable: deliverableText,
-              },
-            };
-          } catch (error) {
-            if (isFatalError(error)) throw error;
-            return {
-              ok: false,
-              index,
-              status: "failed",
-              error: error?.message || String(error),
-              request: {
-                sessionId: normalizedSessionId,
-                task: taskText,
-                sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
-                deliverable: deliverableText,
-              },
-            };
           }
+          const status = summarizeTaskResultsStatus(taskResults);
+          return {
+            id: containerId,
+            parentSessionId: normalizedParentSessionId,
+            ok: status !== "failed",
+            status,
+            tasks: taskResults,
+          };
         }),
       );
-      const hasFailedTask = resultList.some(
-        (item) => String(item?.status || "") === "failed" || item?.ok === false,
+      const allTaskResults = containerResults.flatMap((item) =>
+        Array.isArray(item?.tasks) ? item.tasks : [],
+      );
+      const containerStatuses = containerResults.map((item) => ({
+        id: String(item?.id || "").trim(),
+        parentSessionId: String(item?.parentSessionId || "").trim(),
+        status: String(item?.status || "").trim(),
+        ok: item?.ok !== false,
+      }));
+      const taskStats = {
+        total: allTaskResults.length,
+        completed: allTaskResults.filter(
+          (item) => String(item?.status || "") === "completed",
+        ).length,
+        running: allTaskResults.filter(
+          (item) => String(item?.status || "") === "running",
+        ).length,
+        failed: allTaskResults.filter(
+          (item) => String(item?.status || "") === "failed",
+        ).length,
+        stopped: allTaskResults.filter(
+          (item) => String(item?.status || "") === "stopped",
+        ).length,
+      };
+      const hasFailedTask = containerResults.some(
+        (item) => String(item?.status || "") === "failed",
       );
       if (hasFailedTask) {
         return toToolJsonResult(
@@ -393,13 +536,14 @@ export function createAgentCollabTool({ agentContext }) {
           {
             ok: false,
             status: "failed",
-            parentSessionId: normalizedParentSessionId,
-            tasks: resultList,
+            child_async_result_containers: cloneData(containers),
+            container_statuses: containerStatuses,
+            task_stats: taskStats,
           },
           true,
         );
       }
-      const hasStoppedTask = resultList.some(
+      const hasStoppedTask = containerResults.some(
         (item) => String(item?.status || "") === "stopped",
       );
       if (hasStoppedTask) {
@@ -408,13 +552,14 @@ export function createAgentCollabTool({ agentContext }) {
           {
             ok: true,
             status: "stopped",
-            parentSessionId: normalizedParentSessionId,
-            tasks: resultList,
+            child_async_result_containers: cloneData(containers),
+            container_statuses: containerStatuses,
+            task_stats: taskStats,
           },
           true,
         );
       }
-      const allCompleted = resultList.every(
+      const allCompleted = containerResults.every(
         (item) => String(item?.status || "") === "completed",
       );
       if (!allCompleted) {
@@ -423,35 +568,9 @@ export function createAgentCollabTool({ agentContext }) {
           {
             ok: true,
             status: "running",
-            parentSessionId: normalizedParentSessionId,
-            tasks: resultList,
-          },
-          true,
-        );
-      }
-
-      const deliverableChecks = await Promise.all(
-        resultList.map(async (resultItem = {}) => {
-          const deliverables = await readDeliverablesByTask(resultItem.request || {});
-          return {
-            ...resultItem,
-            ...deliverables,
-          };
-        }),
-      );
-      const allDeliverablesReady = deliverableChecks.every(
-        (item) =>
-          Array.isArray(item?.missingDeliverables) &&
-          !item.missingDeliverables.length,
-      );
-      if (!allDeliverablesReady) {
-        return toToolJsonResult(
-          "wait_async_task_result",
-          {
-            ok: true,
-            status: "waiting_deliverables",
-            parentSessionId: normalizedParentSessionId,
-            tasks: deliverableChecks,
+            child_async_result_containers: cloneData(containers),
+            container_statuses: containerStatuses,
+            task_stats: taskStats,
           },
           true,
         );
@@ -461,8 +580,9 @@ export function createAgentCollabTool({ agentContext }) {
         {
           ok: true,
           status: "completed",
-          parentSessionId: normalizedParentSessionId,
-          tasks: deliverableChecks,
+          child_async_result_containers: cloneData(containers),
+          container_statuses: containerStatuses,
+          task_stats: taskStats,
         },
         true,
       );
@@ -513,7 +633,7 @@ export function createAgentCollabTool({ agentContext }) {
             "请输出规划内容与任务调用链。",
             "输出必须是 JSON，不要使用 markdown 代码块。",
             "JSON 格式：",
-            '{ "tasks":[{ "taskName":"任务a", "taskContent":"任务目标、内容", "sharedTaskSpec":"共享知识或数据","deliverable":"交付物(文件名)","subTasks":[] }] }',
+            '{ "tasks":[{ "taskName":"任务a", "taskContent":"任务目标、内容", "sharedTaskSpec":"共享知识或数据","subTasks":[] }] }',
           ].join("\n"),
         ),
         new HumanMessage(`任务文本：\n${taskText}`),
@@ -552,7 +672,6 @@ export function createAgentCollabTool({ agentContext }) {
   });
 
   return [
-    writeTaskDeliverableFile,
     delegateTaskAsync,
     waitAsyncTaskResult,
     planMultiTaskCollaboration,

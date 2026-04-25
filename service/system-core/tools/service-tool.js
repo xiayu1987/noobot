@@ -107,6 +107,7 @@ export function createServiceTool({ agentContext }) {
 
       try {
         const result = await invokeServiceHandler({
+          agentContext,
           globalConfig,
           userId,
           serviceName: normalizedServiceName,

@@ -62,6 +62,7 @@ async function tryLoadUserServiceModule({
 }
 
 export async function invokeServiceHandler({
+  agentContext = null,
   globalConfig = {},
   userId = "",
   serviceName = "",
@@ -105,6 +106,7 @@ export async function invokeServiceHandler({
     );
   }
   return await userHandler({
+    agentContext,
     serviceName,
     endpointName,
     serviceCfg,
@@ -112,6 +114,5 @@ export async function invokeServiceHandler({
     custom_param: String(customParam || "").trim(),
     queryString,
     body,
-    fetch: globalThis.fetch,
   });
 }

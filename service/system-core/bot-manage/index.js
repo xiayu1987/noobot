@@ -43,6 +43,10 @@ function isAbortError(error) {
   );
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export class BotManager {
   constructor(globalConfig) {
     this.globalConfig = globalConfig;
@@ -141,6 +145,7 @@ export class BotManager {
     userInteractionBridge = null,
     runConfig = {},
     abortSignal = null,
+    parentAsyncResultContainer = null,
   }) {
     return new ContextBuilder({
       globalConfig: this.globalConfig,
@@ -159,7 +164,91 @@ export class BotManager {
       userInteractionBridge,
       runConfig,
       abortSignal,
+      parentAsyncResultContainer,
     });
+  }
+
+  _upsertParentAsyncTask({
+    parentAsyncResultContainer = null,
+    sessionId = "",
+    parentSessionId = "",
+    task = "",
+    sharedTaskSpec = "",
+    patch = {},
+  }) {
+    if (!isPlainObject(parentAsyncResultContainer)) return null;
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return null;
+    if (!Array.isArray(parentAsyncResultContainer.tasks)) {
+      parentAsyncResultContainer.tasks = [];
+    }
+    const taskList = parentAsyncResultContainer.tasks;
+    const targetIndex = taskList.findIndex(
+      (item) => String(item?.sessionId || "").trim() === normalizedSessionId,
+    );
+    const baseTask =
+      targetIndex >= 0
+        ? taskList[targetIndex] || {}
+        : {
+            sessionId: normalizedSessionId,
+            parentSessionId: String(parentSessionId || "").trim(),
+            task: String(task || "").trim(),
+            sharedTaskSpec: String(sharedTaskSpec || "").trim(),
+            status: "running",
+            startedAt: "",
+            endedAt: "",
+            error: "",
+            result: null,
+          };
+    const mergedTask = {
+      ...baseTask,
+      ...(isPlainObject(patch) ? patch : {}),
+      sessionId: normalizedSessionId,
+    };
+    if (targetIndex >= 0) {
+      taskList[targetIndex] = mergedTask;
+    } else {
+      taskList.push(mergedTask);
+    }
+    parentAsyncResultContainer.updatedAt = this._now();
+    const normalizedStatuses = taskList.map((item) =>
+      String(item?.status || "running"),
+    );
+    if (normalizedStatuses.some((status) => status === "failed")) {
+      parentAsyncResultContainer.status = "failed";
+    } else if (normalizedStatuses.every((status) => status === "completed")) {
+      parentAsyncResultContainer.status = "completed";
+    } else if (normalizedStatuses.some((status) => status === "stopped")) {
+      parentAsyncResultContainer.status = "stopped";
+    } else {
+      parentAsyncResultContainer.status = "running";
+    }
+    return mergedTask;
+  }
+
+  _ensureParentAsyncResultContainer({
+    parentAsyncResultContainer = null,
+    caller = "user",
+    parentSessionId = "",
+    parentDialogProcessId = "",
+  }) {
+    let container = parentAsyncResultContainer;
+    if (!isPlainObject(container)) {
+      if (String(caller || "user") !== "bot") return null;
+      container = {};
+    }
+    container.id = String(container?.id || "").trim() || uuidv4();
+    container.parentSessionId =
+      String(container?.parentSessionId || "").trim() ||
+      String(parentSessionId || "").trim();
+    container.parentDialogProcessId =
+      String(container?.parentDialogProcessId || "").trim() ||
+      String(parentDialogProcessId || "").trim();
+    container.status = String(container?.status || "running").trim() || "running";
+    container.updatedAt =
+      String(container?.updatedAt || "").trim() || this._now();
+    container.tasks = Array.isArray(container?.tasks) ? container.tasks : [];
+    return container;
   }
 
   _applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
@@ -226,6 +315,7 @@ export class BotManager {
     userInteractionBridge = null,
     runConfig = {},
     abortSignal = null,
+    parentAsyncResultContainer = null,
   }) {
     const contextBuilder = this._buildContextBuilder({
       userId,
@@ -238,6 +328,7 @@ export class BotManager {
       userInteractionBridge,
       runConfig,
       abortSignal,
+      parentAsyncResultContainer,
     });
     emitEvent(eventListener, "context_building", { sessionId, mode });
     const agentContext =
@@ -398,7 +489,9 @@ export class BotManager {
     abortSignal = null,
     userInteractionBridge = null,
     runConfig = {},
+    parentAsyncResultContainer = null,
   }) {
+    let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     try {
       if (!message) {
         throw recoverableToolError("userId/sessionId/message required", {
@@ -406,6 +499,12 @@ export class BotManager {
         });
       }
       this._validateRunInput({ userId, sessionId, caller, parentSessionId });
+      resolvedParentAsyncResultContainer = this._ensureParentAsyncResultContainer({
+        parentAsyncResultContainer,
+        caller,
+        parentSessionId,
+        parentDialogProcessId,
+      });
 
       const usedSessionId = sessionId;
       const upstreamListener = eventListener;
@@ -487,6 +586,7 @@ export class BotManager {
         userInteractionBridge,
         runConfig,
         abortSignal,
+        parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       });
 
       await this._appendSessionTurn({
@@ -560,6 +660,28 @@ export class BotManager {
         sessionId: usedSessionId,
       });
       const executionLogs = (execution?.logs || []).slice(executionStartIndex);
+      this._upsertParentAsyncTask({
+        parentAsyncResultContainer: resolvedParentAsyncResultContainer,
+        sessionId: usedSessionId,
+        parentSessionId,
+        patch: {
+          status: "completed",
+          endedAt: this._now(),
+          error: "",
+          result: {
+            sessionId: usedSessionId,
+            parentSessionId: parentSessionId || "",
+            parentDialogProcessId: parentDialogProcessId || "",
+            caller: String(caller || "user"),
+            answer: agentResult.output,
+            traces: agentResult.traces,
+            messages: agentResult?.turnMessages || [],
+            turnTasks: agentResult?.turnTasks || [],
+            executionLogs,
+            dialogProcessId,
+          },
+        },
+      });
 
       return {
         sessionId: usedSessionId,
@@ -572,8 +694,24 @@ export class BotManager {
         turnTasks: agentResult?.turnTasks || [],
         executionLogs,
         dialogProcessId,
+        ...(resolvedParentAsyncResultContainer
+          ? { parentAsyncResultContainer: resolvedParentAsyncResultContainer }
+          : {}),
       };
     } catch (error) {
+      this._upsertParentAsyncTask({
+        parentAsyncResultContainer: resolvedParentAsyncResultContainer,
+        sessionId,
+        parentSessionId,
+        patch: {
+          status: isAbortError(error) ? "stopped" : "failed",
+          endedAt: this._now(),
+          error: isAbortError(error)
+            ? "dialog stopped by user"
+            : error?.message || String(error),
+          result: null,
+        },
+      });
       if (isAbortError(error)) {
         throw error;
       }
@@ -641,7 +779,6 @@ export class BotManager {
     sessionId = "",
     task = "",
     sharedTaskSpec = "",
-    deliverable = "",
     attachments = [],
     eventListener = null,
     sourceDialogProcessId = "",
@@ -649,6 +786,8 @@ export class BotManager {
     userInteractionBridge = null,
     runConfig = {},
     abortSignal = null,
+    onDone = null,
+    parentAsyncResultContainer = null,
   }) {
     if (!userId || !parentSessionId) {
       throw recoverableToolError("userId/parentSessionId required", {
@@ -671,7 +810,6 @@ export class BotManager {
     const message = [
       `任务: ${task || ""}`,
       `共享任务说明: ${sharedTaskSpec || ""}`,
-      `规定最终交付物（文件及说明）: ${deliverable || ""}`,
     ].join("\n");
 
     const key = this._asyncJobKey({
@@ -679,6 +817,25 @@ export class BotManager {
       sessionId: usedSessionId,
     });
     const startedAt = this._now();
+    const resolvedParentAsyncResultContainer = isPlainObject(
+      parentAsyncResultContainer,
+    )
+      ? parentAsyncResultContainer
+      : {};
+    this._upsertParentAsyncTask({
+      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
+      sessionId: usedSessionId,
+      parentSessionId,
+      task,
+      sharedTaskSpec,
+      patch: {
+        status: "running",
+        startedAt,
+        endedAt: "",
+        error: "",
+        result: null,
+      },
+    });
     const job = {
       key,
       sessionId: usedSessionId,
@@ -688,7 +845,7 @@ export class BotManager {
       endedAt: "",
       result: null,
       error: "",
-      input: { task, sharedTaskSpec, deliverable },
+      input: { task, sharedTaskSpec },
       promise: null,
     };
     this.asyncJobs.set(key, job);
@@ -700,6 +857,12 @@ export class BotManager {
       task,
       sourceDialogProcessId,
     });
+    const notifyDone = (payload = {}) => {
+      if (typeof onDone !== "function") return;
+      try {
+        onDone(payload);
+      } catch {}
+    };
 
     job.promise = this.runSession({
       userId,
@@ -713,11 +876,22 @@ export class BotManager {
       abortSignal,
       userInteractionBridge,
       runConfig,
+      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
     })
       .then((result) => {
         job.status = "completed";
         job.endedAt = this._now();
         job.result = result;
+        notifyDone({
+          ok: true,
+          status: "completed",
+          sessionId: usedSessionId,
+          parentSessionId,
+          startedAt: job.startedAt,
+          endedAt: job.endedAt,
+          result,
+          error: "",
+        });
         return result;
       })
       .catch((error) => {
@@ -725,11 +899,31 @@ export class BotManager {
           job.status = "stopped";
           job.endedAt = this._now();
           job.error = "dialog stopped by user";
+          notifyDone({
+            ok: true,
+            status: "stopped",
+            sessionId: usedSessionId,
+            parentSessionId,
+            startedAt: job.startedAt,
+            endedAt: job.endedAt,
+            result: null,
+            error: job.error,
+          });
           return null;
         }
         job.status = "failed";
         job.endedAt = this._now();
         job.error = error?.message || String(error);
+        notifyDone({
+          ok: false,
+          status: "failed",
+          sessionId: usedSessionId,
+          parentSessionId,
+          startedAt: job.startedAt,
+          endedAt: job.endedAt,
+          result: null,
+          error: job.error,
+        });
         void this._logSystemError({
           userId,
           sessionId: usedSessionId,
@@ -737,7 +931,7 @@ export class BotManager {
           source: "BotManager.runAsyncSession",
           event: "run_async_session_failed",
           error,
-          extra: { task, sharedTaskSpec, deliverable },
+          extra: { task, sharedTaskSpec },
         });
         return null;
       });
@@ -749,6 +943,7 @@ export class BotManager {
       parentSessionId,
       parentDialogProcessId: parentDialogProcessId || "",
       startedAt,
+      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
     };
   }
 
@@ -775,9 +970,49 @@ export class BotManager {
           sessionId,
           parentSessionId,
         });
+        if (bundle?.exists) {
+          const sessionItem =
+            (Array.isArray(bundle?.sessions) ? bundle.sessions : []).find(
+              (item) => String(item?.sessionId || "") === String(sessionId || ""),
+            ) || {};
+          const messages = Array.isArray(sessionItem?.messages)
+            ? sessionItem.messages
+            : [];
+          const answerMessage = [...messages]
+            .reverse()
+            .find(
+              (item) =>
+                String(item?.role || "") === "assistant" &&
+                String(item?.type || "message") !== "tool_call",
+            );
+          const executionBundle = await this.session.getExecutionBundle({
+            userId,
+            sessionId,
+          });
+          return {
+            ok: true,
+            status: "completed",
+            sessionId,
+            parentSessionId,
+            result: {
+              sessionId,
+              parentSessionId,
+              parentDialogProcessId: "",
+              caller: "bot",
+              answer: String(answerMessage?.content || ""),
+              traces: [],
+              messages,
+              turnTasks: [],
+              executionLogs: Array.isArray(executionBundle?.logs)
+                ? executionBundle.logs
+                : [],
+              dialogProcessId: String(answerMessage?.dialogProcessId || ""),
+            },
+          };
+        }
         return {
-          ok: !!bundle?.exists,
-          status: bundle?.exists ? "completed" : "not_found",
+          ok: false,
+          status: "not_found",
           sessionId,
           parentSessionId,
         };

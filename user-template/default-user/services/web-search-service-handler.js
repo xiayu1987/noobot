@@ -73,14 +73,27 @@ async function getRemoteSearxInstances(fetch) {
   }
 }
 
-async function parseResponseData(res) {
+async function parseResponseData(res, { textCleaner = null, requestUrl = "" } = {}) {
   const contentType = res.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
-  return isJson ? await res.json() : await res.text();
+  if (isJson) return await res.json();
+  const text = await res.text();
+  const cleaned = textCleaner?.cleanAny
+    ? textCleaner.cleanAny(text, { contentType, url: requestUrl })
+    : text;
+  if (cleaned === text) return text;
+  return {
+    type: "cleaned_text",
+    text: String(cleaned || ""),
+    original_length: text.length,
+    cleaned_length: String(cleaned || "").length,
+    content_type: contentType,
+  };
 }
 
 async function requestWithFallback({
   fetch,
+  textCleaner = null,
   primaryUrl = "",
   reqHeaders = {},
   query = "",
@@ -98,7 +111,10 @@ async function requestWithFallback({
         ok: true,
         status: res.status,
         statusText: res.statusText,
-        data: await parseResponseData(res),
+        data: await parseResponseData(res, {
+          textCleaner,
+          requestUrl: primaryUrl,
+        }),
         source: "primary",
       };
     }
@@ -108,7 +124,10 @@ async function requestWithFallback({
         ok: false,
         status: res.status,
         statusText: res.statusText,
-        data: await parseResponseData(res),
+        data: await parseResponseData(res, {
+          textCleaner,
+          requestUrl: primaryUrl,
+        }),
         source: "primary",
       };
     }
@@ -154,7 +173,10 @@ async function requestWithFallback({
       target.searchParams.set("format", "json");
       attemptedFallbackUrls.push(target.toString());
       const res = await fetch(target.toString(), { method: "GET" });
-      const data = await parseResponseData(res);
+      const data = await parseResponseData(res, {
+        textCleaner,
+        requestUrl: target.toString(),
+      });
       if (res.ok) {
         return {
           ok: true,
@@ -182,13 +204,21 @@ async function requestWithFallback({
 }
 
 export default async function webSearchServiceHandler({
+  agentContext = null,
   endpointCfg,
   serviceCfg,
   custom_param = "",
   queryString = {},
   body,
-  fetch,
 }) {
+  const fetcher = agentContext?.runtime?.sharedTools?.fetch;
+  if (typeof fetcher !== "function") {
+    return {
+      ok: false,
+      error: "fetch missing in agentContext.runtime.sharedTools",
+    };
+  }
+  const textCleaner = agentContext?.runtime?.sharedTools?.textCleaner || null;
   const hint = formatHint(endpointCfg);
   if (body !== undefined && body !== null && String(body).trim() !== "") {
     return {
@@ -226,13 +256,14 @@ export default async function webSearchServiceHandler({
       ? serviceCfg.fallback_instances
       : DEFAULT_SEARX_INSTANCES,
   );
-  const remoteInstances = await getRemoteSearxInstances(fetch);
+  const remoteInstances = await getRemoteSearxInstances(fetcher);
   const fallbackInstances = normalizeInstanceList([
     ...(remoteInstances || []),
     ...fallbackInstancesFromConfig,
   ]);
   const result = await requestWithFallback({
-    fetch,
+    fetch: fetcher,
+    textCleaner,
     primaryUrl: url.toString(),
     reqHeaders,
     query: search,

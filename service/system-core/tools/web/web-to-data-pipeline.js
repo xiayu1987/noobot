@@ -12,15 +12,15 @@ import {
   resolveDefaultModelSpec,
   resolveModelSpecByAlias,
 } from "../../model/index.js";
-import { runWeb2Img } from "./web2img.js";
+import { runWeb2Img } from "../../utils/web2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../check-tool-input.js";
-import { browseUrlHtml } from "./web-browser-simulate.js";
+import { browseUrlHtml } from "../../utils/web-browser-simulate.js";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
   extractVisibleTextFromHtml,
-} from "./web-text-cleaner.js";
-import { browserLikeFetch } from "./web-fetch.js";
+} from "../../utils/web-text-cleaner.js";
+import { browserLikeFetch } from "../../utils/web-fetch.js";
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_TEXT_CHARS = 12000;

@@ -9,7 +9,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { createChatModelByName, resolveModelSpecByAlias } from "../../model/index.js";
-import { convertDocumentToImages } from "./doc2img.js";
+import { convertDocumentToImages } from "../../utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../check-tool-input.js";
 import { toToolJsonResult } from "../tool-json-result.js";
 
@@ -182,27 +182,33 @@ export function createDoc2DataTool({ agentContext }) {
           batch: i + 1,
           pages: pageNums,
           totalBytes: batch.reduce((sum, item) => sum + item.sizeBytes, 0),
-          imagePaths: batch.map((x) => x.imagePath),
           text,
         });
       }
+      const mergedText = batchResults.map((b) => b.text).join("\n\n");
+      const totalImageBytes = imageBatches
+        .flatMap((batch) => batch)
+        .reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
 
       return toToolJsonResult(
         "doc_to_data",
         {
           ok: true,
+          status: "completed",
           input: converted.input,
           pdfPath: converted.pdfPath,
           imageCount: images.length,
-          processedImageCount: images.length,
-          imagePaths: images,
-          batchMaxBytes: MAX_BATCH_BYTES,
-          batchCount: batchResults.length,
-          batches: batchResults,
-          text: batchResults.map((b) => b.text).join("\n\n"),
+          text: mergedText,
           model: {
             alias: modelSpec?.alias || "",
             name: modelSpec?.model || "",
+          },
+          summary: {
+            batch_count: batchResults.length,
+            total_image_bytes: totalImageBytes,
+            batch_max_bytes: MAX_BATCH_BYTES,
+            text_length: mergedText.length,
+            pages: batchResults.flatMap((item) => item.pages || []),
           },
         },
         true,

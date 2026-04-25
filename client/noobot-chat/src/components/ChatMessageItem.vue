@@ -55,7 +55,7 @@ function parseToolFileResult(content = "") {
   const parsed = tryParseJsonContent(content);
   if (!parsed) return null;
   const toolName = String(parsed?.toolName || "").trim();
-  if (!["write_file", "write_task_deliverable_file"].includes(toolName)) return null;
+  if (!["write_file"].includes(toolName)) return null;
   if (parsed?.ok === false) return null;
 
   if (toolName === "write_file" && String(parsed?.state || "").toUpperCase() !== "OK") {

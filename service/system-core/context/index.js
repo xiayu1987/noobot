@@ -8,7 +8,13 @@ import path from "node:path";
 import { mergeConfig } from "../config/index.js";
 import { resolveDefaultModelSpec } from "../model/index.js";
 import { buildTools } from "../tools/index.js";
-import { initRuntimeSharedBrowser } from "../tools/web/web-browser-simulate.js";
+import { initRuntimeSharedBrowser } from "../utils/web-browser-simulate.js";
+import {
+  cleanAndDedupTextLines,
+  extractReadableTextFromHtml,
+  extractVisibleTextFromHtml,
+} from "../utils/web-text-cleaner.js";
+import { cleanTextUniversal } from "../utils/text-cleaner.js";
 import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
@@ -44,6 +50,7 @@ export class ContextBuilder {
     userInteractionBridge = null,
     runConfig = {},
     abortSignal = null,
+    parentAsyncResultContainer = null,
   }) {
     this.globalConfig = globalConfig;
     this.userConfig = userConfig;
@@ -61,6 +68,7 @@ export class ContextBuilder {
     this.userInteractionBridge = userInteractionBridge;
     this.runConfig = runConfig;
     this.abortSignal = abortSignal;
+    this.parentAsyncResultContainer = parentAsyncResultContainer;
     this._effectiveConfigCache = null;
   }
 
@@ -212,6 +220,12 @@ export class ContextBuilder {
       runtimeModel: String(this.runConfig?.runtimeModel || "").trim(),
       allEnabledProviders: this._resolveAllEnabledProviders(),
       sharedTools: passthroughSharedTools,
+      childAsyncResultContainers: [],
+      parentAsyncResultContainer:
+        this.parentAsyncResultContainer &&
+        typeof this.parentAsyncResultContainer === "object"
+          ? this.parentAsyncResultContainer
+          : null,
       systemRuntime,
       currentTurnMessages: createCurrentTurnMessagesStore(),
       currentTurnTasks: createCurrentTurnTasksStore(),
@@ -224,6 +238,37 @@ export class ContextBuilder {
       runtimeContext.sharedTools && typeof runtimeContext.sharedTools === "object"
         ? runtimeContext.sharedTools
         : {};
+    runtimeContext.sharedTools.fetch =
+      typeof globalThis.fetch === "function"
+        ? (url, init = {}) => globalThis.fetch(url, init)
+        : null;
+    runtimeContext.sharedTools.textCleaner = {
+      cleanUniversal(input = "", options = {}) {
+        return cleanTextUniversal(input, options || {});
+      },
+      cleanText(input = "", maxLines = 4000) {
+        return cleanAndDedupTextLines(String(input || ""), maxLines);
+      },
+      cleanHtml(input = "", { url = "", readable = false } = {}) {
+        const html = String(input || "");
+        if (!html) return "";
+        if (readable) {
+          return (
+            extractReadableTextFromHtml(html, String(url || "")) ||
+            extractVisibleTextFromHtml(html)
+          );
+        }
+        return extractVisibleTextFromHtml(html);
+      },
+      cleanAny(input = "", { contentType = "", url = "" } = {}) {
+        return cleanTextUniversal(String(input || ""), {
+          format: "auto",
+          contentType: String(contentType || ""),
+          url: String(url || ""),
+          maxChars: 200000,
+        });
+      },
+    };
     try {
       await initRuntimeSharedBrowser(runtimeContext);
     } catch (error) {

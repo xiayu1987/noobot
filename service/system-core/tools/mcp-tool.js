@@ -101,6 +101,13 @@ export function createMcpTool({ agentContext }) {
         const subMessages = Array.isArray(subResult?.messages)
           ? subResult.messages
           : [];
+        const traceToolNames = Array.from(
+          new Set(
+            subTraces
+              .map((item) => String(item?.tool || "").trim())
+              .filter(Boolean),
+          ),
+        );
         return toToolJsonResult(
           "call_mcp_task",
           {
@@ -111,8 +118,13 @@ export function createMcpTool({ agentContext }) {
             parentSessionId,
             tools: mcpToolset.toolNames || [],
             answer: subAnswer,
-            traces: subTraces,
-            messages: subMessages,
+            summary: {
+              answer_length: subAnswer.length,
+              trace_count: subTraces.length,
+              message_count: subMessages.length,
+              used_tools: traceToolNames,
+              dialog_process_id: String(subResult?.dialogProcessId || ""),
+            },
             error: "",
           },
           true,
