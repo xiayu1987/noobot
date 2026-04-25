@@ -222,8 +222,13 @@ export function createScriptTool({ agentContext }) {
   const workspace = path.join(basePath, "runtime/workspace");
   const userRoot = basePath;
   const userId = String(runtime?.userId || "").trim();
-  const scriptConfig = effectiveConfig?.script || {};
-  const sandboxEnabled = !!effectiveConfig?.script?.sandboxMode;
+  const scriptConfig =
+    effectiveConfig?.tools?.execute_script &&
+    typeof effectiveConfig.tools.execute_script === "object" &&
+    !Array.isArray(effectiveConfig.tools.execute_script)
+      ? effectiveConfig.tools.execute_script
+      : {};
+  const sandboxEnabled = !!scriptConfig?.sandboxMode;
   const { provider: sandboxProvider, providerDetail } =
     resolveSandboxProviderConfig(scriptConfig);
   const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
@@ -241,7 +246,7 @@ export function createScriptTool({ agentContext }) {
       command: z.string().describe("要执行的 shell 命令"),
     }),
     func: async ({ command }) => {
-      const timeout = effectiveConfig?.scriptTimeoutMs || DEFAULT_TIMEOUT;
+      const timeout = Number(scriptConfig?.scriptTimeoutMs || DEFAULT_TIMEOUT);
 
       if (!sandboxEnabled) {
         const r = await run(command, workspace, timeout);
@@ -275,7 +280,7 @@ export function createScriptTool({ agentContext }) {
             code: 2,
             stdout: "",
             stderr:
-              "当前 bubblewrap 版本不支持 --overlay-src。请升级 bubblewrap，或将 script.sandboxProvider.default 改为 docker。",
+              "当前 bubblewrap 版本不支持 --overlay-src。请升级 bubblewrap，或将 tools.execute_script.sandbox_provider.default 改为 docker。",
           });
         }
 
@@ -354,7 +359,7 @@ export function createScriptTool({ agentContext }) {
         if (fallbackResult) return fallbackResult;
         r = {
           ...r,
-          stderr: `${String(r?.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 script.sandboxProvider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
+          stderr: `${String(r?.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 tools.execute_script.sandbox_provider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
         };
       }
       return toolExecResult(mode, r, extra);

@@ -57,71 +57,66 @@
 
 ### 2.4 工具配置 `tools`
 
-> `tools` 支持全局与用户同名覆盖；常见做法是全局给默认值，用户按需覆写。
+> 工具配置建议使用“**实际工具名**”（下划线分割）作为 key。  
+> `enabled` 缺省为 `true`；只有显式 `false` 才禁用。
+
+#### 2.4.1 文件与脚本类
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `tools.web_search_to_data.enabled` | `true` / `false` | 是否启用网页搜索并解析工具。 |
-| `tools.web_search_to_data.searchMode` | `direct` / `browser_simulate` | 搜索模式：`direct`=HTTP 直接抓搜索页；`browser_simulate`=浏览器模拟打开搜索页。 |
-| `tools.web_search_to_data.switchWebMode` | `direct` / `browser_simulate` / `multimodal` | 搜索命中链接后的网页处理模式。 |
-| `tools.web_search_to_data.maxCandidates` | `1~30` 整数 | 搜索结果候选链接上限。 |
-| `tools.web_search_to_data.topK` | `1~10` 整数 | 送入网页解析流程的最终链接数上限。 |
-| `tools.web_to_data.enabled` | `true` / `false` | 是否启用网页解析工具。 |
-| `tools.web_to_data.switchWebMode` | `direct` / `browser_simulate` / `multimodal` | 网页解析模式：直连抓取 / 浏览器模拟 / 多模态截图。 |
-| `tools.doc_to_data.enabled` | `true` / `false` | 是否启用文档解析工具。 |
-| `tools.process_content_task.enabled` | `true` / `false` | 是否启用内容处理任务工具（子 bot 协同）。 |
-| `tools.process_content_task.maxToolLoopTurns` | 正整数（建议 `1~10`） | 内容处理任务内部最大工具循环轮数。 |
+| `tools.read_file.enabled` | `true` / `false` | 读文件工具开关。 |
+| `tools.write_file.enabled` | `true` / `false` | 写文件工具开关。 |
+| `tools.execute_script.enabled` | `true` / `false` | 脚本执行工具开关。 |
+| `tools.execute_script.sandbox_mode` | `true` / `false` | 脚本沙箱开关。 |
+| `tools.execute_script.sandbox_provider.default` | `docker` / `bubblewrap` / `firejail` | 默认沙箱提供方。 |
+| `tools.execute_script.sandbox_provider.docker.docker_container_scope` | `global` / `user` | Docker 容器复用范围。 |
+| `tools.execute_script.sandbox_provider.docker.docker_container_name` | 字符串 | Docker 容器基础名称。 |
+| `tools.execute_script.sandbox_provider.docker.docker_image` | 镜像名 | Docker 镜像。 |
+| `tools.execute_script.script_timeout_ms` | 正整数（毫秒） | 脚本超时。 |
 
-### 2.5 脚本执行 `script`
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `script.sandboxMode` | `true` / `false` | 是否启用沙箱模式。`true` 时按 `sandboxProvider.default` 执行；`false` 时本机 local 执行。 |
-| `script.sandboxProvider` | 对象 | 沙箱提供方配置对象（见下方结构与子项）。 |
-
-`script.sandboxProvider` 结构：
-
-```json
-{
-  "sandboxProvider": {
-    "default": "docker",
-    "docker": {
-      "dockerContainerScope": "global",
-      "dockerContainerName": "noobot-script-sandbox",
-      "dockerImage": "node:20"
-    },
-    "bubblewrap": {},
-    "firejail": {}
-  }
-}
-```
-
-`sandboxProvider` 子项：
+#### 2.4.2 技能与服务调用类
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `script.sandboxProvider.default` | `docker` / `bubblewrap` / `firejail` | 默认沙箱提供方。 |
-| `script.sandboxProvider.docker.dockerContainerScope` | `global` / `user` | Docker 容器复用范围：`global`=所有用户共用同一容器（默认）；`user`=每用户独立容器。 |
-| `script.sandboxProvider.docker.dockerContainerName` | 合法容器名字符串 | Docker 容器基础名称；`user` 模式会拼接 userId。 |
-| `script.sandboxProvider.docker.dockerImage` | 任意可拉取镜像（如 `node:20`） | Docker 执行镜像。 |
-| `script.sandboxProvider.bubblewrap` | 对象（当前可为空 `{}`） | Bubblewrap 专属参数预留。 |
-| `script.sandboxProvider.firejail` | 对象（当前可为空 `{}`） | Firejail 专属参数预留。 |
+| `tools.list_skills.enabled` | `true` / `false` | 列技能工具开关。 |
+| `tools.set_skill_task.enabled` | `true` / `false` | 技能任务状态工具开关。 |
+| `tools.call_service.enabled` | `true` / `false` | 服务调用工具开关。 |
+| `tools.call_mcp_task.enabled` | `true` / `false` | MCP 调用工具开关。 |
 
-### 2.6 异步协作 `async`
+#### 2.4.3 多任务协作类
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `async.waitTimeoutMs` | 正整数（毫秒） | 异步任务等待超时。 |
-| `async.maxSubAgentDepth` | 正整数 | 子任务最大深度。 |
+| `tools.delegate_task_async.enabled` | `true` / `false` | 异步委派工具开关。 |
+| `tools.delegate_task_async.wait_timeout_ms` | 正整数（毫秒） | 等待超时。 |
+| `tools.delegate_task_async.max_sub_agent_depth` | 正整数 | 子任务最大深度。 |
+| `tools.wait_async_task_result.enabled` | `true` / `false` | 等待异步结果工具开关。 |
+| `tools.plan_multi_task_collaboration.enabled` | `true` / `false` | 多任务规划工具开关。 |
 
-### 2.7 其他运行参数
+#### 2.4.4 模型与交互类
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `scriptTimeoutMs` | 正整数（毫秒） | 脚本执行超时。 |
+| `tools.switch_model.enabled` | `true` / `false` | 切模型工具开关。 |
+| `tools.user_interaction.enabled` | `true` / `false` | 用户交互工具开关。 |
+
+#### 2.4.5 内容处理类
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `tools.web_to_data.enabled` | `true` / `false` | 网页解析子工具开关（仅 `process_content_task` 内部使用，不是顶层可直接调用工具）。 |
+| `tools.web_to_data.switch_web_mode` | `direct` / `browser_simulate` / `multimodal` | 网页解析子工具模式（仅 `process_content_task` 内部使用）。 |
+| `tools.doc_to_data.enabled` | `true` / `false` | 文档解析子工具开关（仅 `process_content_task` 内部使用，不是顶层可直接调用工具）。 |
+| `tools.process_content_task.enabled` | `true` / `false` | 内容处理任务顶层工具开关。 |
+| `tools.process_content_task.max_tool_loop_turns` | 正整数 | 子任务内部工具轮次上限。 |
+
+### 2.5 其他运行参数
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
 | `streaming` | `true` / `false` | 是否启用流式响应。 |
 
-### 2.8 超级管理员
+### 2.6 超级管理员
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
@@ -150,18 +145,19 @@
 
 ### 3.3 工具配置 `tools`
 
+用户配置支持覆盖大部分工具项（示例）：
+
+#### 3.3.1 内容处理类（常见用户覆盖）
+
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `tools.web_search_to_data.enabled` | `true` / `false` | 用户级网页搜索并解析工具开关。 |
-| `tools.web_search_to_data.searchMode` | `direct` / `browser_simulate` | 用户级搜索模式覆盖。 |
-| `tools.web_search_to_data.switchWebMode` | `direct` / `browser_simulate` / `multimodal` | 用户级网页处理模式覆盖。 |
-| `tools.web_search_to_data.maxCandidates` | `1~30` 整数 | 用户级候选链接上限覆盖。 |
-| `tools.web_search_to_data.topK` | `1~10` 整数 | 用户级最终解析链接数上限覆盖。 |
-| `tools.web_to_data.enabled` | `true` / `false` | 用户级网页解析工具开关。 |
-| `tools.web_to_data.switchWebMode` | `direct` / `browser_simulate` / `multimodal` | 用户级网页解析模式覆盖。 |
-| `tools.doc_to_data.enabled` | `true` / `false` | 用户级文档解析工具开关。 |
+| `tools.web_to_data.enabled` | `true` / `false` | 用户级网页解析子工具开关（仅 `process_content_task` 内部使用）。 |
+| `tools.web_to_data.switch_web_mode` | `direct` / `browser_simulate` / `multimodal` | 用户级网页解析子工具模式覆盖（仅 `process_content_task` 内部使用）。 |
+| `tools.doc_to_data.enabled` | `true` / `false` | 用户级文档解析子工具开关（仅 `process_content_task` 内部使用）。 |
 | `tools.process_content_task.enabled` | `true` / `false` | 用户级内容处理任务工具开关。 |
-| `tools.process_content_task.maxToolLoopTurns` | 正整数（建议 `1~10`） | 用户级内容处理任务内部最大工具轮数。 |
+| `tools.process_content_task.max_tool_loop_turns` | 正整数 | 用户级内容处理任务内部最大工具轮数。 |
+
+> 注意：`tools.execute_script` 由服务端控制，用户配置不会生效（已在后端禁改）。
 
 ### 3.4 模型提供方 `providers`
 
@@ -188,19 +184,19 @@
 | `services.<service>.handler` | `workspace/<userId>/services/*.js` 对应处理器名 | 服务处理器名称。 |
 | `services.<service>.endpoints.<endpoint>.description` | 字符串 | 端点描述。 |
 | `services.<service>.endpoints.<endpoint>.url` | URL 字符串 | 端点地址。 |
-| `services.<service>.endpoints.<endpoint>.query-string-format` | 字符串 / JSON 字符串 | 查询参数格式说明。 |
-| `services.<service>.endpoints.<endpoint>.body-format` | 字符串 / JSON 字符串 | 请求体格式说明。 |
+| `services.<service>.endpoints.<endpoint>.query_string_format` | 字符串 / JSON 字符串 | 查询参数格式说明。 |
+| `services.<service>.endpoints.<endpoint>.body_format` | 字符串 / JSON 字符串 | 请求体格式说明。 |
 
-### 3.6 MCP 服务 `mcpServers`
+### 3.6 MCP 服务 `mcp_servers`
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `mcpServers.<name>.type` | `streamableHttp` / `sse` | MCP 连接类型。 |
-| `mcpServers.<name>.description` | 字符串 | MCP 服务描述。 |
-| `mcpServers.<name>.isActive` | `true` / `false` | 是否启用该 MCP 服务。 |
-| `mcpServers.<name>.name` | 字符串（可选） | 展示名。 |
-| `mcpServers.<name>.baseUrl` | URL 字符串 | MCP 服务地址。 |
-| `mcpServers.<name>.headers` | 对象（如 `Authorization`） | 请求头；支持 `${VAR_NAME}` 解析。 |
+| `mcp_servers.<name>.type` | `streamableHttp` / `sse` | MCP 连接类型。 |
+| `mcp_servers.<name>.description` | 字符串 | MCP 服务描述。 |
+| `mcp_servers.<name>.isActive` | `true` / `false` | 是否启用该 MCP 服务。 |
+| `mcp_servers.<name>.name` | 字符串（可选） | 展示名。 |
+| `mcp_servers.<name>.baseUrl` | URL 字符串 | MCP 服务地址。 |
+| `mcp_servers.<name>.headers` | 对象（如 `Authorization`） | 请求头；支持 `${VAR_NAME}` 解析。 |
 
 ### 3.7 用户偏好 `preferences`
 
@@ -235,6 +231,11 @@
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
 | 同名配置项覆盖顺序 | 全局配置 -> 用户配置 | 先加载 `global.config.json`，再加载 `workspace/<userId>/config.json`；同名项由用户配置覆盖。 |
+
+补充限制：
+
+- `workspace_root`、`workspace_template_path`：不允许用户配置覆盖。
+- `tools.execute_script`：不允许用户配置覆盖。
 
 ---
 

@@ -126,7 +126,6 @@ export function resolveConfigTemplates(input, variables = {}) {
 // - 模型相关：defaultProvider/defaultModel/providers/attachmentModels
 // - 服务相关：services
 // - MCP相关：mcpServers
-// - 异步等待配置：async（用于 wait timeout）
 // - 工具相关：tools
 // - 偏好相关：preferences
 const USER_OVERRIDE_POLICY = {
@@ -136,18 +135,61 @@ const USER_OVERRIDE_POLICY = {
   attachmentModels: "deep",
   services: "deep",
   mcpServers: "deep",
-  async: "deep",
   tools: "deep",
   preferences: "deep",
 };
 
+// 用户配置绝不允许覆盖的顶层键（防止后续误加入 USER_OVERRIDE_POLICY）
+const USER_OVERRIDE_TOP_LEVEL_DENY_KEYS = new Set([
+  "workspaceRoot",
+  "workspaceTemplatePath",
+]);
+
+// 用户配置禁止覆盖的路径（基于 normalizeKnownConfigKeys 之后的 key）
+// 例如：tools.execute_script 由服务端控制，客户端不可改
+const USER_OVERRIDE_DENY_PATHS = new Set([
+  "tools.execute_script",
+]);
+
+function stripDeniedPaths(rootKey = "", value) {
+  if (!isPlainObject(value)) return value;
+  const root = String(rootKey || "").trim();
+  if (!root) return value;
+  const deniedChildren = Array.from(USER_OVERRIDE_DENY_PATHS)
+    .filter((item) => item.startsWith(`${root}.`))
+    .map((item) => item.slice(root.length + 1))
+    .filter(Boolean);
+  if (!deniedChildren.length) return value;
+
+  const out = { ...value };
+  for (const relativePath of deniedChildren) {
+    const parts = relativePath.split(".").filter(Boolean);
+    if (!parts.length) continue;
+    let node = out;
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      const segment = parts[i];
+      if (!isPlainObject(node?.[segment])) {
+        node = null;
+        break;
+      }
+      node = node[segment];
+    }
+    if (!node || !isPlainObject(node)) continue;
+    delete node[parts[parts.length - 1]];
+  }
+  return out;
+}
+
 function cloneAllowedValue(key, value) {
+  if (USER_OVERRIDE_TOP_LEVEL_DENY_KEYS.has(String(key || ""))) {
+    return undefined;
+  }
   const mode = USER_OVERRIDE_POLICY[key];
   if (!mode) return undefined;
   if (mode === "replace") {
     return typeof value === "string" ? value : undefined;
   }
-  return isPlainObject(value) ? { ...value } : undefined;
+  return isPlainObject(value) ? stripDeniedPaths(key, { ...value }) : undefined;
 }
 
 export function sanitizeUserConfig(input = {}) {

@@ -9,6 +9,41 @@
     "use_last_completed_task_range": true
   },
   "tools": {
+    "read_file": {
+      "enabled": true
+    },
+    "write_file": {
+      "enabled": true
+    },
+    "list_skills": {
+      "enabled": true
+    },
+    "set_skill_task": {
+      "enabled": true
+    },
+    "call_service": {
+      "enabled": true
+    },
+    "call_mcp_task": {
+      "enabled": true
+    },
+    "delegate_task_async": {
+      "enabled": true,
+      "wait_timeout_ms": 120000,
+      "max_sub_agent_depth": 3
+    },
+    "wait_async_task_result": {
+      "enabled": true
+    },
+    "plan_multi_task_collaboration": {
+      "enabled": true
+    },
+    "switch_model": {
+      "enabled": true
+    },
+    "user_interaction": {
+      "enabled": true
+    },
     "web_to_data": {
       "enabled": true,
       "switch_web_mode": "browser_simulate"
@@ -19,26 +54,23 @@
     "process_content_task": {
       "enabled": true,
       "max_tool_loop_turns": 2
-    }
-  },
-  "script": {
-    "sandbox_mode": true,
-    "sandbox_provider": {
-      "default": "docker",
-      "docker": {
-        "docker_container_scope": "global",
-        "docker_container_name": "noobot-script-sandbox",
-        "docker_image": "node:20"
+    },
+    "execute_script": {
+      "enabled": true,
+      "sandbox_mode": true,
+      "sandbox_provider": {
+        "default": "docker",
+        "docker": {
+          "docker_container_scope": "global",
+          "docker_container_name": "noobot-script-sandbox",
+          "docker_image": "node:20"
+        },
+        "bubblewrap": {},
+        "firejail": {}
       },
-      "bubblewrap": {},
-      "firejail": {}
+      "script_timeout_ms": 120000
     }
   },
-  "async": {
-    "wait_timeout_ms": 120000,
-    "max_sub_agent_depth": 3
-  },
-  "script_timeout_ms": 120000,
   "streaming": true,
   "super_admin": {
     "user_id": "admin",

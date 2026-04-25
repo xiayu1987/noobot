@@ -59,7 +59,15 @@ export function createAgentCollabTool({ agentContext }) {
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
-  const defaultWaitMs = Number(effectiveConfig?.async?.waitTimeoutMs || 120000);
+  const defaultWaitMs = Number(
+    effectiveConfig?.tools?.wait_async_task_result?.wait_timeout_ms ??
+      effectiveConfig?.tools?.wait_async_task_result?.waitTimeoutMs ??
+      effectiveConfig?.tools?.delegate_task_async?.wait_timeout_ms ??
+      effectiveConfig?.tools?.delegate_task_async?.waitTimeoutMs ??
+      effectiveConfig?.tools?.agent_collab?.wait_timeout_ms ??
+      effectiveConfig?.tools?.agent_collab?.waitTimeoutMs ??
+      120000,
+  );
   runtime.childAsyncResultContainers = Array.isArray(
     runtime.childAsyncResultContainers,
   )
