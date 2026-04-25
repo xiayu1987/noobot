@@ -68,6 +68,13 @@ export function createAgentCollabTool({ agentContext }) {
       effectiveConfig?.tools?.agent_collab?.waitTimeoutMs ??
       120000,
   );
+  const defaultPollIntervalMs = Number(
+    effectiveConfig?.tools?.wait_async_task_result?.poll_interval_ms ??
+      effectiveConfig?.tools?.wait_async_task_result?.pollIntervalMs ??
+      effectiveConfig?.tools?.delegate_task_async?.poll_interval_ms ??
+      effectiveConfig?.tools?.delegate_task_async?.pollIntervalMs ??
+      5000,
+  );
   runtime.childAsyncResultContainers = Array.isArray(
     runtime.childAsyncResultContainers,
   )
@@ -391,8 +398,12 @@ export function createAgentCollabTool({ agentContext }) {
       "并发等待当前上下文中 childAsyncResultContainers 的全部异步子任务结果。可选 timeoutMs。",
     schema: z.object({
       timeoutMs: z.number().optional().describe("最大等待毫秒数（可选）"),
+      pollIntervalMs: z
+        .number()
+        .optional()
+        .describe("轮询间隔毫秒数（可选，默认 5000ms）"),
     }),
-    func: async ({ timeoutMs }) => {
+    func: async ({ timeoutMs, pollIntervalMs }) => {
       if (!botManager || !userId)
         return toToolJsonResult("wait_async_task_result", {
           ok: false,
@@ -414,6 +425,16 @@ export function createAgentCollabTool({ agentContext }) {
         Number.isFinite(normalizedTimeoutMs) && normalizedTimeoutMs > 0
           ? Math.floor(normalizedTimeoutMs)
           : defaultWaitMs;
+      const normalizedPollIntervalMs = Number(pollIntervalMs);
+      const resolvedPollIntervalMs =
+        Number.isFinite(normalizedPollIntervalMs) &&
+        normalizedPollIntervalMs > 0
+          ? Math.floor(normalizedPollIntervalMs)
+          : Math.max(1000, Math.floor(defaultPollIntervalMs || 5000));
+      const singleWaitMs = Math.max(
+        1000,
+        Math.min(resolvedTimeoutMs, resolvedPollIntervalMs),
+      );
       const containerResults = await Promise.all(
         containers.map(async (containerItem = {}) => {
           const containerId = String(containerItem?.id || "").trim();
@@ -456,7 +477,7 @@ export function createAgentCollabTool({ agentContext }) {
                   userId,
                   parentSessionId: normalizedParentSessionId,
                   sessionId: normalizedSessionId,
-                  timeoutMs: resolvedTimeoutMs,
+                  timeoutMs: singleWaitMs,
                 });
                 return {
                   ...result,
@@ -544,6 +565,8 @@ export function createAgentCollabTool({ agentContext }) {
           {
             ok: false,
             status: "failed",
+            checked_at: nowIso(),
+            next_poll_in_ms: resolvedPollIntervalMs,
             child_async_result_containers: cloneData(containers),
             container_statuses: containerStatuses,
             task_stats: taskStats,
@@ -560,6 +583,8 @@ export function createAgentCollabTool({ agentContext }) {
           {
             ok: true,
             status: "stopped",
+            checked_at: nowIso(),
+            next_poll_in_ms: resolvedPollIntervalMs,
             child_async_result_containers: cloneData(containers),
             container_statuses: containerStatuses,
             task_stats: taskStats,
@@ -576,6 +601,8 @@ export function createAgentCollabTool({ agentContext }) {
           {
             ok: true,
             status: "running",
+            checked_at: nowIso(),
+            next_poll_in_ms: resolvedPollIntervalMs,
             child_async_result_containers: cloneData(containers),
             container_statuses: containerStatuses,
             task_stats: taskStats,
@@ -588,6 +615,8 @@ export function createAgentCollabTool({ agentContext }) {
         {
           ok: true,
           status: "completed",
+          checked_at: nowIso(),
+          next_poll_in_ms: 0,
           child_async_result_containers: cloneData(containers),
           container_statuses: containerStatuses,
           task_stats: taskStats,

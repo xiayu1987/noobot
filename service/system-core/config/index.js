@@ -44,6 +44,7 @@ const SNAKE_TO_CANONICAL_KEY_MAP = {
   docker_container_name: "dockerContainerName",
   docker_image: "dockerImage",
   wait_timeout_ms: "waitTimeoutMs",
+  poll_interval_ms: "pollIntervalMs",
   max_sub_agent_depth: "maxSubAgentDepth",
   script_timeout_ms: "scriptTimeoutMs",
   super_admin: "superAdmin",

@@ -27,10 +27,12 @@
     "delegate_task_async": {
       "enabled": true,
       "wait_timeout_ms": 120000,
-      "max_sub_agent_depth": 3
+      "max_sub_agent_depth": 3,
+      "poll_interval_ms": 5000
     },
     "wait_async_task_result": {
-      "enabled": true
+      "enabled": true,
+      "poll_interval_ms": 5000
     },
     "plan_multi_task_collaboration": {
       "enabled": true

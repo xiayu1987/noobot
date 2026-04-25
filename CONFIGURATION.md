@@ -89,8 +89,10 @@
 |---|---|---|
 | `tools.delegate_task_async.enabled` | `true` / `false` | 异步委派工具开关。 |
 | `tools.delegate_task_async.wait_timeout_ms` | 正整数（毫秒） | 等待超时。 |
+| `tools.delegate_task_async.poll_interval_ms` | 正整数（毫秒） | 状态轮询间隔（建议 3000~10000）。 |
 | `tools.delegate_task_async.max_sub_agent_depth` | 正整数 | 子任务最大深度。 |
 | `tools.wait_async_task_result.enabled` | `true` / `false` | 等待异步结果工具开关。 |
+| `tools.wait_async_task_result.poll_interval_ms` | 正整数（毫秒） | 单次 wait 默认等待时长（达到后返回当前状态）。 |
 | `tools.plan_multi_task_collaboration.enabled` | `true` / `false` | 多任务规划工具开关。 |
 
 #### 2.4.4 模型与交互类
