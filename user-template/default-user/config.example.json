@@ -52,7 +52,7 @@
         "search": {
           "description": "搜索网页",
           "custom_param_format": "searx实例地址",
-          "url": "http://localhost:11008/search",
+          "url": "${web_search_service_search_address}",
           "query_string_format": "q=搜索内容",
           "body_format": "{}"
         }
