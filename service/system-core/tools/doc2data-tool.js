@@ -8,10 +8,10 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
-import { createChatModelByName, resolveModelSpecByAlias } from "../../model/index.js";
-import { convertDocumentToImages } from "../../utils/doc/doc2img.js";
-import { assertAndResolveUserWorkspaceFilePath } from "../check-tool-input.js";
-import { toToolJsonResult } from "../tool-json-result.js";
+import { createChatModelByName, resolveModelSpecByAlias } from "../model/index.js";
+import { convertDocumentToImages } from "../utils/doc/doc2img.js";
+import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -42,17 +42,17 @@ function resolveAttachmentImageAlias({ globalConfig, userConfig }) {
 }
 
 async function buildImageBatches(imagePaths) {
-  const inputs = [];
-  for (let idx = 0; idx < imagePaths.length; idx += 1) {
-    const imagePath = imagePaths[idx];
-    const st = await stat(imagePath);
-    inputs.push({
-      page: idx + 1,
-      imagePath,
-      sizeBytes: Number(st?.size || 0),
-      dataUrl: await toDataUrl(imagePath),
-    });
-  }
+  const inputs = await Promise.all(
+    imagePaths.map(async (imagePath, idx) => {
+      const st = await stat(imagePath);
+      return {
+        page: idx + 1,
+        imagePath,
+        sizeBytes: Number(st?.size || 0),
+        dataUrl: await toDataUrl(imagePath),
+      };
+    }),
+  );
 
   const batches = [];
   let current = [];
@@ -98,7 +98,7 @@ export function createDoc2DataTool({ agentContext }) {
         .optional()
         .describe("文档转图片格式，默认 png"),
     }),
-    func: async ({ filePath, prompt, dpi, imageFormat }) => {
+    func: async ({ filePath, prompt, dpi, imageFormat = "png" }) => {
       const normalizedDpi = Number(dpi);
       const resolvedDpi =
         Number.isFinite(normalizedDpi) && normalizedDpi > 0
@@ -120,7 +120,7 @@ export function createDoc2DataTool({ agentContext }) {
       const converted = await convertDocumentToImages({
         inputFile,
         outputRoot,
-        format: imageFormat || "png",
+        format: imageFormat,
         dpi: resolvedDpi,
       });
 

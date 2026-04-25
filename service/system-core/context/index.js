@@ -32,6 +32,44 @@ function hasLongMemoryValue(value) {
   return true;
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function defaultSharedFetch(url, init = {}) {
+  return await globalThis.fetch(url, init);
+}
+
+function createDefaultTextCleaner() {
+  return {
+    cleanUniversal(input = "", options = {}) {
+      return cleanTextUniversal(input, options || {});
+    },
+    cleanText(input = "", maxLines = 4000) {
+      return cleanAndDedupTextLines(String(input || ""), maxLines);
+    },
+    cleanHtml(input = "", { url = "", readable = false } = {}) {
+      const html = String(input || "");
+      if (!html) return "";
+      if (readable) {
+        return (
+          extractReadableTextFromHtml(html, String(url || "")) ||
+          extractVisibleTextFromHtml(html)
+        );
+      }
+      return extractVisibleTextFromHtml(html);
+    },
+    cleanAny(input = "", { contentType = "", url = "" } = {}) {
+      return cleanTextUniversal(String(input || ""), {
+        format: "auto",
+        contentType: String(contentType || ""),
+        url: String(url || ""),
+        maxChars: 200000,
+      });
+    },
+  };
+}
+
 export class ContextBuilder {
   constructor({
     globalConfig,
@@ -233,48 +271,31 @@ export class ContextBuilder {
   }
 
   async _initializeSharedTools(runtimeContext = {}) {
-    if (!runtimeContext || typeof runtimeContext !== "object") return;
-    runtimeContext.sharedTools =
-      runtimeContext.sharedTools && typeof runtimeContext.sharedTools === "object"
-        ? runtimeContext.sharedTools
-        : {};
-    runtimeContext.sharedTools.fetch =
-      typeof globalThis.fetch === "function"
-        ? (url, init = {}) => globalThis.fetch(url, init)
-        : null;
-    runtimeContext.sharedTools.textCleaner = {
-      cleanUniversal(input = "", options = {}) {
-        return cleanTextUniversal(input, options || {});
-      },
-      cleanText(input = "", maxLines = 4000) {
-        return cleanAndDedupTextLines(String(input || ""), maxLines);
-      },
-      cleanHtml(input = "", { url = "", readable = false } = {}) {
-        const html = String(input || "");
-        if (!html) return "";
-        if (readable) {
-          return (
-            extractReadableTextFromHtml(html, String(url || "")) ||
-            extractVisibleTextFromHtml(html)
-          );
-        }
-        return extractVisibleTextFromHtml(html);
-      },
-      cleanAny(input = "", { contentType = "", url = "" } = {}) {
-        return cleanTextUniversal(String(input || ""), {
-          format: "auto",
-          contentType: String(contentType || ""),
-          url: String(url || ""),
-          maxChars: 200000,
-        });
-      },
+    if (!isPlainObject(runtimeContext)) return;
+    const sharedTools = isPlainObject(runtimeContext.sharedTools)
+      ? runtimeContext.sharedTools
+      : {};
+    runtimeContext.sharedTools = sharedTools;
+
+    if (typeof sharedTools.fetch !== "function") {
+      sharedTools.fetch =
+        typeof globalThis.fetch === "function" ? defaultSharedFetch : null;
+    }
+
+    const defaultTextCleaner = createDefaultTextCleaner();
+    const currentTextCleaner = isPlainObject(sharedTools.textCleaner)
+      ? sharedTools.textCleaner
+      : {};
+    sharedTools.textCleaner = {
+      ...defaultTextCleaner,
+      ...currentTextCleaner,
     };
+
     try {
       await initRuntimeSharedBrowser(runtimeContext);
     } catch (error) {
-      runtimeContext.sharedTools.browser = null;
-      runtimeContext.sharedTools.browserInitError =
-        error?.message || String(error);
+      sharedTools.browser = null;
+      sharedTools.browserInitError = error?.message || String(error);
     }
   }
 

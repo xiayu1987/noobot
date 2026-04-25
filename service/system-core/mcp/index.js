@@ -33,6 +33,12 @@ function resolveHeaders(rawHeaders = {}, configParams = {}) {
     : {};
 }
 
+function resolveFetchImpl(fetchImpl = null) {
+  if (typeof fetchImpl === "function") return fetchImpl;
+  if (typeof globalThis.fetch === "function") return globalThis.fetch.bind(globalThis);
+  throw recoverableToolError("fetch unavailable for mcp client");
+}
+
 function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName = "" }) {
   const name = String(mcpName || "").trim();
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
@@ -57,10 +63,11 @@ function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName = "" }
 }
 
 class StreamableHttpMcpClient {
-  constructor({ baseUrl, headers = {}, signal = null }) {
+  constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
     this.baseUrl = String(baseUrl || "").trim();
     this.headers = resolveHeaders(headers);
     this.signal = signal || null;
+    this.fetch = resolveFetchImpl(fetchImpl);
     this.id = 1;
     this.sessionId = "";
   }
@@ -73,7 +80,7 @@ class StreamableHttpMcpClient {
       ...this.headers,
       ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
     };
-    const response = await fetch(this.baseUrl, {
+    const response = await this.fetch(this.baseUrl, {
       method: "POST",
       headers: requestHeaders,
       body: JSON.stringify({
@@ -134,7 +141,7 @@ class StreamableHttpMcpClient {
       ...this.headers,
       ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
     };
-    await fetch(this.baseUrl, {
+    await this.fetch(this.baseUrl, {
       method: "POST",
       headers: requestHeaders,
       body: JSON.stringify({
@@ -204,10 +211,11 @@ function parseSseEventBlock(rawBlock = "") {
 }
 
 class SseMcpClient {
-  constructor({ baseUrl, headers = {}, signal = null }) {
+  constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
     this.baseUrl = String(baseUrl || "").trim();
     this.headers = resolveHeaders(headers);
     this.signal = signal || null;
+    this.fetch = resolveFetchImpl(fetchImpl);
     this.id = 1;
     this.messageUrl = "";
     this._streamAbortController = null;
@@ -282,7 +290,7 @@ class SseMcpClient {
         );
       }
     }
-    const response = await fetch(this.baseUrl, {
+    const response = await this.fetch(this.baseUrl, {
       method: "GET",
       headers,
       signal: this._streamAbortController.signal,
@@ -380,7 +388,7 @@ class SseMcpClient {
       this._pending.set(requestId, { resolve, reject, timer });
     });
 
-    const postResponse = await fetch(this.messageUrl, {
+    const postResponse = await this.fetch(this.messageUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -431,7 +439,7 @@ class SseMcpClient {
 
   async _notify({ method, params = {} }) {
     await this.connect();
-    await fetch(this.messageUrl, {
+    await this.fetch(this.messageUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -478,11 +486,12 @@ class SseMcpClient {
   }
 }
 
-function createMcpClient({ server = {}, signal = null }) {
+function createMcpClient({ server = {}, signal = null, fetchImpl = null }) {
   const commonOptions = {
     baseUrl: server?.baseUrl || "",
     headers: server?.headers || {},
     signal,
+    fetchImpl,
   };
   if (String(server?.type || "").trim() === "sse") {
     return new SseMcpClient(commonOptions);
@@ -535,6 +544,7 @@ export async function createMcpAgentTools({
   userConfig = {},
   mcpName = "",
   signal = null,
+  fetchImpl = null,
 }) {
   const server = getMcpServerByName({ globalConfig, userConfig, mcpName });
   if (!server) {
@@ -542,7 +552,7 @@ export async function createMcpAgentTools({
       `mcp server not found or inactive: ${String(mcpName || "")}`,
     );
   }
-  const client = createMcpClient({ server, signal });
+  const client = createMcpClient({ server, signal, fetchImpl });
   await client.initialize();
   const mcpTools = await client.listTools();
   const tools = buildLangChainMcpTools({ mcpTools, client });
@@ -563,6 +573,7 @@ export async function executeMcpTask({
   task = "",
   modelName = "",
   signal = null,
+  fetchImpl = null,
 }) {
   const normalizedTask = String(task || "").trim();
   if (!normalizedTask) {
@@ -578,6 +589,7 @@ export async function executeMcpTask({
     userConfig,
     mcpName: server.name,
     signal,
+    fetchImpl,
   });
   if (!toolNames.length) {
     return {

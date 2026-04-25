@@ -6,21 +6,25 @@
 import { mkdir, readFile, stat, writeFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
+import { z } from "zod";
+import { mergeConfig } from "../config/index.js";
 import {
   createChatModelByName,
   resolveDefaultModelSpec,
   resolveModelSpecByAlias,
-} from "../../model/index.js";
-import { runWeb2Img } from "../../utils/web2img.js";
-import { assertAndResolveUserWorkspaceFilePath } from "../check-tool-input.js";
-import { browseUrlHtml } from "../../utils/web-browser-simulate.js";
+} from "../model/index.js";
+import { runWeb2Img } from "../utils/web2img.js";
+import { browseUrlHtml } from "../utils/web-browser-simulate.js";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
   extractVisibleTextFromHtml,
-} from "../../utils/web-text-cleaner.js";
-import { browserLikeFetch } from "../../utils/web-fetch.js";
+} from "../utils/web-text-cleaner.js";
+import { browserLikeFetch } from "../utils/web-fetch.js";
+import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
+import { toToolJsonResult } from "./tool-json-result.js";
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_TEXT_CHARS = 12000;
@@ -96,6 +100,11 @@ function normalizeConcurrency(value) {
   const num = Number(value);
   if (!Number.isFinite(num)) return DEFAULT_CONCURRENCY;
   return Math.max(1, Math.min(MAX_CONCURRENCY, Math.floor(num)));
+}
+
+function resolveFetcher(runtime = {}) {
+  const contextFetcher = runtime?.sharedTools?.fetch;
+  return typeof contextFetcher === "function" ? contextFetcher : browserLikeFetch;
 }
 
 async function mapWithConcurrency(items = [], worker, concurrency = DEFAULT_CONCURRENCY) {
@@ -207,40 +216,45 @@ async function buildImageBatches(imagePaths = []) {
   return batches;
 }
 
-async function runDirectFetchExtract(urls = [], concurrency = DEFAULT_CONCURRENCY) {
+async function runDirectFetchExtract(
+  urls = [],
+  concurrency = DEFAULT_CONCURRENCY,
+  runtimeContext = null,
+) {
+  const fetcher = resolveFetcher(runtimeContext || {});
   return mapWithConcurrency(
     urls,
     async (url) => {
-    try {
-      const res = await browserLikeFetch(url, { method: "GET" });
-      const html = await res.text();
-      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      const pageTitle = normalizeText(titleMatch?.[1] || "");
-      const readableText = extractReadableTextFromHtml(html, url);
-      const fullText = extractVisibleTextFromHtml(html);
-      return {
-        url,
-        status: res.ok ? "ok" : "error",
-        mode: "direct",
-        title: pageTitle,
-        usefulText: cleanAndDedupTextLines(
-          `${pageTitle ? `# ${pageTitle}\n` : ""}${readableText || fullText}`,
-          4000,
-        ),
-        fullText,
-        error: res.ok ? "" : `http status ${res.status}`,
-      };
-    } catch (error) {
-      return {
-        url,
-        status: "error",
-        mode: "direct",
-        title: "",
-        usefulText: "",
-        fullText: "",
-        error: error?.message || String(error),
-      };
-    }
+      try {
+        const res = await fetcher(url, { method: "GET" });
+        const html = await res.text();
+        const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        const pageTitle = normalizeText(titleMatch?.[1] || "");
+        const readableText = extractReadableTextFromHtml(html, url);
+        const fullText = extractVisibleTextFromHtml(html);
+        return {
+          url,
+          status: res.ok ? "ok" : "error",
+          mode: "direct",
+          title: pageTitle,
+          usefulText: cleanAndDedupTextLines(
+            `${pageTitle ? `# ${pageTitle}\n` : ""}${readableText || fullText}`,
+            4000,
+          ),
+          fullText,
+          error: res.ok ? "" : `http status ${res.status}`,
+        };
+      } catch (error) {
+        return {
+          url,
+          status: "error",
+          mode: "direct",
+          title: "",
+          usefulText: "",
+          fullText: "",
+          error: error?.message || String(error),
+        };
+      }
     },
     concurrency,
   );
@@ -254,61 +268,61 @@ async function runBrowserSimulateExtract(
   return mapWithConcurrency(
     urls,
     async (url) => {
-    try {
-      let loaded = null;
-      let success = false;
-      for (let attempt = 1; attempt <= BROWSER_RETRY_COUNT + 1; attempt += 1) {
-        loaded = await browseUrlHtml({
-          url,
-          waitUntil: "domcontentloaded",
-          timeout: 45000,
-          networkIdleTimeout: 10000,
-          runtimeContext,
-        });
-        const blocked = looksBlockedPage({
-          status: Number(loaded?.status || 0),
-          title: normalizeText(loaded?.title || ""),
-          html: String(loaded?.html || ""),
-          text: String(loaded?.text || ""),
-        });
-        if (loaded?.ok && !blocked) {
-          success = true;
-          break;
+      try {
+        let loaded = null;
+        let success = false;
+        for (let attempt = 1; attempt <= BROWSER_RETRY_COUNT + 1; attempt += 1) {
+          loaded = await browseUrlHtml({
+            url,
+            waitUntil: "domcontentloaded",
+            timeout: 45000,
+            networkIdleTimeout: 10000,
+            runtimeContext,
+          });
+          const blocked = looksBlockedPage({
+            status: Number(loaded?.status || 0),
+            title: normalizeText(loaded?.title || ""),
+            html: String(loaded?.html || ""),
+            text: String(loaded?.text || ""),
+          });
+          if (loaded?.ok && !blocked) {
+            success = true;
+            break;
+          }
         }
+        if (!success || !loaded) {
+          throw new Error(
+            loaded?.error || `访问被拦截或服务不可用(status=${loaded?.status || 0})`,
+          );
+        }
+        const pageTitle = normalizeText(loaded.title || "");
+        const html = String(loaded.html || "");
+        const bodyInnerText = String(loaded.text || "");
+        const readableText = extractReadableTextFromHtml(html, url);
+        const fullText = cleanAndDedupTextLines(bodyInnerText, 10000);
+        return {
+          url,
+          status: "ok",
+          mode: "browser_simulate",
+          title: pageTitle,
+          usefulText: cleanAndDedupTextLines(
+            `${pageTitle ? `# ${pageTitle}\n` : ""}${readableText || fullText}`,
+            4000,
+          ),
+          fullText,
+          error: "",
+        };
+      } catch (error) {
+        return {
+          url,
+          status: "error",
+          mode: "browser_simulate",
+          title: "",
+          usefulText: "",
+          fullText: "",
+          error: error?.message || String(error),
+        };
       }
-      if (!success || !loaded) {
-        throw new Error(
-          loaded?.error || `访问被拦截或服务不可用(status=${loaded?.status || 0})`,
-        );
-      }
-      const pageTitle = normalizeText(loaded.title || "");
-      const html = String(loaded.html || "");
-      const bodyInnerText = String(loaded.text || "");
-      const readableText = extractReadableTextFromHtml(html, url);
-      const fullText = cleanAndDedupTextLines(bodyInnerText, 10000);
-      return {
-        url,
-        status: "ok",
-        mode: "browser_simulate",
-        title: pageTitle,
-        usefulText: cleanAndDedupTextLines(
-          `${pageTitle ? `# ${pageTitle}\n` : ""}${readableText || fullText}`,
-          4000,
-        ),
-        fullText,
-        error: "",
-      };
-    } catch (error) {
-      return {
-        url,
-        status: "error",
-        mode: "browser_simulate",
-        title: "",
-        usefulText: "",
-        fullText: "",
-        error: error?.message || String(error),
-      };
-    }
     },
     concurrency,
   );
@@ -513,11 +527,10 @@ export async function runWebToDataPipeline({
   const records =
     mode === "browser_simulate"
       ? await runBrowserSimulateExtract(resolvedUrls, parallelism, runtime)
-      : await runDirectFetchExtract(resolvedUrls, parallelism);
-  const imagePaths = [];
+      : await runDirectFetchExtract(resolvedUrls, parallelism, runtime);
   const summary = await summarizeByModel({
     records,
-    imagePaths,
+    imagePaths: [],
     prompt,
     globalConfig,
     userConfig,
@@ -537,4 +550,69 @@ export async function runWebToDataPipeline({
     model: summary.model,
     records,
   };
+}
+
+export function createWeb2DataTool({ agentContext }) {
+  const runtime = getRuntime(agentContext);
+  const basePath = agentContext?.basePath || runtime.basePath || "";
+  const effectiveConfig = mergeConfig(
+    runtime?.globalConfig || {},
+    runtime?.userConfig || {},
+  );
+  const processMode = normalizeProcessMode(
+    effectiveConfig?.tools?.web_to_data?.switchWebMode,
+  );
+  if (!basePath) return [];
+
+  const webToDataTool = new DynamicStructuredTool({
+    name: "web_to_data",
+    description:
+      "根据提供url进行网页解析并提取内容。支持单 URL 或批量 URLs。",
+    schema: z.object({
+      input: z
+        .string()
+        .optional()
+        .describe("URL 或工作区内 txt 列表文件路径（可包含多行 URL）"),
+      urls: z.array(z.string()).optional().describe("批量 URL 列表"),
+      prompt: z.string().optional().describe("默认提取网页核心事实并按条目输出"),
+      useTrafilatura: z
+        .boolean()
+        .optional()
+        .describe("仅 multimodal 模式生效：是否优先使用 Readability 提取正文，默认 true"),
+    }),
+    func: async ({ input = "", urls = [], prompt, useTrafilatura }) => {
+      const payload = await runWebToDataPipeline({
+        agentContext,
+        input,
+        urls,
+        prompt,
+        useTrafilatura: useTrafilatura !== false,
+        processMode,
+      });
+      const text = String(payload?.text || "").trim();
+      return toToolJsonResult(
+        "web_to_data",
+        {
+          ok: payload?.ok === true,
+          status: payload?.ok === true ? "completed" : "failed",
+          mode: payload?.mode || processMode,
+          message: String(payload?.message || ""),
+          input: payload?.input || input || "",
+          urls: Array.isArray(payload?.urls) ? payload.urls : [],
+          successCount: Number(payload?.successCount || 0),
+          resultCount: Number(payload?.resultCount || 0),
+          imageCount: Number(payload?.imageCount || 0),
+          batchCount: Number(payload?.batchCount || 0),
+          text,
+          model: payload?.model || {},
+          summary: {
+            text_length: text.length,
+          },
+        },
+        true,
+      );
+    },
+  });
+
+  return [webToDataTool];
 }

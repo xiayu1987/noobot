@@ -58,6 +58,10 @@ export function createMcpTool({ agentContext }) {
           userConfig,
           mcpName: normalizedMcpName,
           signal,
+          fetchImpl:
+            typeof runtime?.sharedTools?.fetch === "function"
+              ? runtime.sharedTools.fetch
+              : null,
         });
         if (!Array.isArray(mcpToolset?.tools) || !mcpToolset.tools.length) {
           return toToolJsonResult("call_mcp_task", {

@@ -48,7 +48,7 @@ function normalizeInstanceList(list = []) {
   return out;
 }
 
-async function getRemoteSearxInstances(fetch) {
+async function getRemoteSearxInstances(fetcher) {
   const now = Date.now();
   if (
     Array.isArray(remoteInstanceCache.instances) &&
@@ -58,7 +58,7 @@ async function getRemoteSearxInstances(fetch) {
     return remoteInstanceCache.instances;
   }
   try {
-    const res = await fetch(SEARX_INSTANCES_YAML_URL, { method: "GET" });
+    const res = await fetcher(SEARX_INSTANCES_YAML_URL, { method: "GET" });
     if (!res.ok) return [];
     const yamlText = await res.text();
     const parsed = parseSearxInstancesYaml(yamlText);
@@ -92,7 +92,7 @@ async function parseResponseData(res, { textCleaner = null, requestUrl = "" } = 
 }
 
 async function requestWithFallback({
-  fetch,
+  fetcher,
   textCleaner = null,
   primaryUrl = "",
   reqHeaders = {},
@@ -102,7 +102,7 @@ async function requestWithFallback({
 }) {
   const attemptedFallbackUrls = [];
   try {
-    const res = await fetch(primaryUrl, {
+    const res = await fetcher(primaryUrl, {
       method: "GET",
       headers: reqHeaders,
     });
@@ -172,7 +172,7 @@ async function requestWithFallback({
       target.searchParams.set("q", query);
       target.searchParams.set("format", "json");
       attemptedFallbackUrls.push(target.toString());
-      const res = await fetch(target.toString(), { method: "GET" });
+      const res = await fetcher(target.toString(), { method: "GET" });
       const data = await parseResponseData(res, {
         textCleaner,
         requestUrl: target.toString(),
@@ -262,7 +262,7 @@ export default async function webSearchServiceHandler({
     ...fallbackInstancesFromConfig,
   ]);
   const result = await requestWithFallback({
-    fetch: fetcher,
+    fetcher,
     textCleaner,
     primaryUrl: url.toString(),
     reqHeaders,
