@@ -178,6 +178,24 @@ export class ContextBuilder {
     return this.sessionManager.getSessionTree({ userId: this.userId });
   }
 
+  async _resolveSessionTreeWithRootSessionId({ runtimeBasePath = "" } = {}) {
+    const sessionTree = await this._resolveSessionTree({ runtimeBasePath });
+    const rootSessionId =
+      this.sessionManager?.getRootSessionId &&
+      this.userId &&
+      this.sessionId
+        ? await this.sessionManager.getRootSessionId({
+            userId: this.userId,
+            sessionId: this.sessionId,
+            sessionTree,
+          })
+        : this.sessionId;
+    return {
+      sessionTree,
+      rootSessionId: String(rootSessionId || this.sessionId || "").trim(),
+    };
+  }
+
   async _resolveWorkspaceDirectories(runtimeBasePath = "") {
     const basePath = String(runtimeBasePath || "").trim();
     if (!basePath) return [];
@@ -328,23 +346,37 @@ export class ContextBuilder {
   async _buildAgentContext(
     systemMessages,
     conversationMessages,
-    { runtimeBasePath = "", dialogProcessId = "" } = {},
+    {
+      runtimeBasePath = "",
+      dialogProcessId = "",
+      sessionTree = null,
+      rootSessionId = "",
+    } = {},
   ) {
     const resolvedRuntimeBasePath =
       runtimeBasePath || this._resolveRuntimeBasePath();
-    const sessionTree = await this._resolveSessionTree({
-      runtimeBasePath: resolvedRuntimeBasePath,
-    });
-    const rootSessionId =
-      this.sessionManager?.getRootSessionId &&
-      this.userId &&
-      this.sessionId
-        ? await this.sessionManager.getRootSessionId({
-            userId: this.userId,
-            sessionId: this.sessionId,
-            sessionTree,
-          })
-        : this.sessionId;
+    const resolvedSessionTree = isPlainObject(sessionTree)
+      ? sessionTree
+      : await this._resolveSessionTree({
+          runtimeBasePath: resolvedRuntimeBasePath,
+        });
+    const resolvedRootSessionId = String(rootSessionId || "").trim()
+      ? String(rootSessionId || "").trim()
+      : await (async () => {
+          if (
+            this.sessionManager?.getRootSessionId &&
+            this.userId &&
+            this.sessionId
+          ) {
+            const resolvedId = await this.sessionManager.getRootSessionId({
+              userId: this.userId,
+              sessionId: this.sessionId,
+              sessionTree: resolvedSessionTree,
+            });
+            return String(resolvedId || this.sessionId || "").trim();
+          }
+          return String(this.sessionId || "").trim();
+        })();
     const staticAgentContext = await this._buildStaticAgentContext({
       runtimeBasePath: resolvedRuntimeBasePath,
     });
@@ -354,8 +386,8 @@ export class ContextBuilder {
       conversationMessages,
       runtime: this._buildRuntimeContext({
         dialogProcessId,
-        sessionTree,
-        rootSessionId,
+        sessionTree: resolvedSessionTree,
+        rootSessionId: resolvedRootSessionId,
       }),
     };
     await this._initializeSharedTools(agentContext.runtime);
@@ -541,6 +573,33 @@ export class ContextBuilder {
     };
   }
 
+  async _resolveConnectorStatusSection({
+    rootSessionId = "",
+    connectorChannelStore = null,
+  } = {}) {
+    const normalizedRootSessionId = String(rootSessionId || "").trim();
+    if (
+      !normalizedRootSessionId ||
+      !connectorChannelStore ||
+      typeof connectorChannelStore.inspectSessionConnectors !== "function"
+    ) {
+      return {
+        root_session_id: normalizedRootSessionId,
+        connectors: { databases: [], terminals: [] },
+        summary: {
+          total_count: 0,
+          connected_count: 0,
+          error_count: 0,
+          unknown_count: 0,
+        },
+      };
+    }
+    return connectorChannelStore.inspectSessionConnectors({
+      sessionId: normalizedRootSessionId,
+      timeoutMs: 6000,
+    });
+  }
+
   _composeSystemInfoSections({
     systemPrompt,
     staticInfo,
@@ -552,6 +611,7 @@ export class ContextBuilder {
     services,
     mcpServers,
     attachments,
+    connectorStatusSection,
   }) {
     return [
       systemPrompt,
@@ -583,6 +643,10 @@ export class ContextBuilder {
       toSystemSection(
         "可用 MCP Servers（name + type + description）",
         JSON.stringify(mcpServers, null, 2),
+      ),
+      toSystemSection(
+        "当前连接器信息（脱敏，含状态）",
+        JSON.stringify(connectorStatusSection || {}, null, 2),
       ),
       toSystemSection(
         "当前附件保存路径",
@@ -639,8 +703,15 @@ export class ContextBuilder {
 
   async _buildSystemContext({ dialogProcessId = "", longMemory = null } = {}) {
     const contextData = await this._buildContextData();
-    const sessionTree = await this._resolveSessionTree({
+    const {
+      sessionTree,
+      rootSessionId,
+    } = await this._resolveSessionTreeWithRootSessionId({
       runtimeBasePath: contextData.runtimeBasePath,
+    });
+    const connectorStatusSection = await this._resolveConnectorStatusSection({
+      rootSessionId,
+      connectorChannelStore: getConnectorChannelStore(),
     });
     const systemContext = this._composeSystemInfoSections({
       systemPrompt: contextData.systemPrompt,
@@ -655,20 +726,28 @@ export class ContextBuilder {
       services: contextData.services,
       mcpServers: contextData.mcpServers,
       attachments: contextData.attachments,
+      connectorStatusSection,
     });
     return {
       systemContext,
       runtimeBasePath: contextData.runtimeBasePath,
+      sessionTree,
+      rootSessionId,
     };
   }
 
   async buildInitialContext({ dialogProcessId = "" } = {}) {
-    const { systemContext, runtimeBasePath } = await this._buildSystemContext({
-      dialogProcessId,
-    });
+    const {
+      systemContext,
+      runtimeBasePath,
+      sessionTree,
+      rootSessionId,
+    } = await this._buildSystemContext({ dialogProcessId });
     return this._buildAgentContext(systemContext, [], {
       runtimeBasePath,
       dialogProcessId,
+      sessionTree,
+      rootSessionId,
     });
   }
 
@@ -678,14 +757,18 @@ export class ContextBuilder {
       sessionId: resolvedSessionId,
     });
     const longMemory = await this._resolveLongMemory();
-    const { systemContext, runtimeBasePath } = await this._buildSystemContext({
-      dialogProcessId,
-      longMemory,
-    });
+    const {
+      systemContext,
+      runtimeBasePath,
+      sessionTree,
+      rootSessionId,
+    } = await this._buildSystemContext({ dialogProcessId, longMemory });
     const conversationMessages = this._toConversationMessages(sessionRecords);
     return this._buildAgentContext(systemContext, conversationMessages, {
       runtimeBasePath,
       dialogProcessId,
+      sessionTree,
+      rootSessionId,
     });
   }
 }

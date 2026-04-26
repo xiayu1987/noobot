@@ -15,15 +15,43 @@ function normalizeConnectorType(input = "") {
   return "";
 }
 
+function hasSensitiveKeyName(keyName = "") {
+  const normalizedKeyName = String(keyName || "").trim().toLowerCase();
+  if (!normalizedKeyName) return false;
+  return (
+    normalizedKeyName.includes("password") ||
+    normalizedKeyName.includes("passwd") ||
+    normalizedKeyName.includes("secret") ||
+    normalizedKeyName.includes("token") ||
+    normalizedKeyName.includes("apikey") ||
+    normalizedKeyName.includes("api_key") ||
+    normalizedKeyName.includes("connectionstring") ||
+    normalizedKeyName.includes("connection_string")
+  );
+}
+
+function sanitizeConnectorMeta(connectionMeta = {}) {
+  const sourceMeta =
+    connectionMeta && typeof connectionMeta === "object" ? connectionMeta : {};
+  const sanitizedMeta = {};
+  for (const [metaKey, metaValue] of Object.entries(sourceMeta)) {
+    const normalizedMetaKey = String(metaKey || "").trim();
+    if (!normalizedMetaKey || hasSensitiveKeyName(normalizedMetaKey)) continue;
+    sanitizedMeta[normalizedMetaKey] = metaValue;
+  }
+  return sanitizedMeta;
+}
+
 function toSerializableConnector(connector = {}) {
   return {
     connectorName: String(connector?.connectorName || "").trim(),
     connectorType: normalizeConnectorType(connector?.connectorType || ""),
     connectedAt: String(connector?.connectedAt || ""),
-    connectionMeta:
+    connectionMeta: sanitizeConnectorMeta(
       connector?.connectionMeta && typeof connector.connectionMeta === "object"
         ? { ...connector.connectionMeta }
         : {},
+    ),
   };
 }
 
@@ -156,6 +184,174 @@ class ConnectorChannelStore {
         stdout: String(execution?.stdout || ""),
         stderr: String(execution?.stderr || ""),
       },
+    };
+  }
+
+  _buildHealthCommand(connectorType = "") {
+    const normalizedConnectorType = normalizeConnectorType(connectorType);
+    if (normalizedConnectorType === "database") return "SELECT 1 WHERE 1=1";
+    if (normalizedConnectorType === "terminal")
+      return "printf __NOOBOT_CONNECTOR_HEALTH__";
+    return "";
+  }
+
+  async inspectSessionConnectors({
+    sessionId = "",
+    timeoutMs = 6000,
+  } = {}) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) {
+      return {
+        root_session_id: "",
+        connectors: { databases: [], terminals: [] },
+        summary: {
+          total_count: 0,
+          connected_count: 0,
+          error_count: 0,
+          unknown_count: 0,
+        },
+      };
+    }
+    const sourceConnectors = this.getSessionConnectors(normalizedSessionId);
+    const databaseSourceList = Array.isArray(sourceConnectors?.databases)
+      ? sourceConnectors.databases
+      : [];
+    const terminalSourceList = Array.isArray(sourceConnectors?.terminals)
+      ? sourceConnectors.terminals
+      : [];
+    const resolveConnectorStatus = async (
+      connectorItem = {},
+      connectorType = "",
+    ) => {
+      const connectorName = String(connectorItem?.connectorName || "").trim();
+      const baseStatus = {
+        connector_name: connectorName,
+        connector_type: connectorType,
+        connected_at: String(connectorItem?.connectedAt || "").trim(),
+        connection_meta: sanitizeConnectorMeta(connectorItem?.connectionMeta || {}),
+        status: "unknown",
+        status_code: 503,
+        status_message: "status unavailable",
+      };
+      if (!connectorName) return baseStatus;
+      const healthCommand = this._buildHealthCommand(connectorType);
+      if (!healthCommand) return baseStatus;
+      try {
+        const executionResult = await this.executeConnectorCommand({
+          sessionId: normalizedSessionId,
+          connectorName,
+          connectorType,
+          command: healthCommand,
+          timeoutMs,
+        });
+        const executionCode = Number(executionResult?.output?.code ?? 0);
+        const executionOk = executionResult?.ok === true;
+        return {
+          ...baseStatus,
+          status: executionOk ? "connected" : "error",
+          status_code: Number.isFinite(executionCode)
+            ? executionCode
+            : executionOk
+              ? 0
+              : 1,
+          status_message: executionOk
+            ? "ok"
+            : String(executionResult?.output?.stderr || "").trim(),
+          checked_at: new Date().toISOString(),
+        };
+      } catch (error) {
+        return {
+          ...baseStatus,
+          status: "error",
+          status_code: 500,
+          status_message: String(
+            error?.message || error || "health check failed",
+          ),
+          checked_at: new Date().toISOString(),
+        };
+      }
+    };
+    const databases = await Promise.all(
+      databaseSourceList.map((connectorItem) =>
+        resolveConnectorStatus(connectorItem, "database"),
+      ),
+    );
+    const terminals = await Promise.all(
+      terminalSourceList.map((connectorItem) =>
+        resolveConnectorStatus(connectorItem, "terminal"),
+      ),
+    );
+    const allConnectors = [...databases, ...terminals];
+    return {
+      root_session_id: normalizedSessionId,
+      connectors: {
+        databases,
+        terminals,
+      },
+      summary: {
+        total_count: allConnectors.length,
+        connected_count: allConnectors.filter(
+          (connectorItem) => String(connectorItem?.status || "") === "connected",
+        ).length,
+        error_count: allConnectors.filter(
+          (connectorItem) => String(connectorItem?.status || "") === "error",
+        ).length,
+        unknown_count: allConnectors.filter(
+          (connectorItem) => String(connectorItem?.status || "") === "unknown",
+        ).length,
+      },
+    };
+  }
+
+  async inspectConnectorRuntimeStatus({
+    sessionId = "",
+    connectorName = "",
+    connectorType = "",
+    timeoutMs = 6000,
+  } = {}) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedConnectorName = String(connectorName || "").trim();
+    const normalizedConnectorType = normalizeConnectorType(connectorType);
+    if (!normalizedSessionId) {
+      return {
+        connector_name: normalizedConnectorName,
+        connector_type: normalizedConnectorType,
+        status: "unknown",
+        status_code: 400,
+        status_message: "sessionId required",
+      };
+    }
+    if (!normalizedConnectorName || !normalizedConnectorType) {
+      return {
+        connector_name: normalizedConnectorName,
+        connector_type: normalizedConnectorType,
+        status: "invalid",
+        status_code: 400,
+        status_message: "invalid connector identity",
+      };
+    }
+    const inspected = await this.inspectSessionConnectors({
+      sessionId: normalizedSessionId,
+      timeoutMs,
+    });
+    const bucketName =
+      normalizedConnectorType === "database" ? "databases" : "terminals";
+    const sourceList = Array.isArray(inspected?.connectors?.[bucketName])
+      ? inspected.connectors[bucketName]
+      : [];
+    const hitConnector =
+      sourceList.find(
+        (connectorItem) =>
+          String(connectorItem?.connector_name || "").trim() ===
+          normalizedConnectorName,
+      ) || null;
+    if (hitConnector) return hitConnector;
+    return {
+      connector_name: normalizedConnectorName,
+      connector_type: normalizedConnectorType,
+      status: "unknown",
+      status_code: 404,
+      status_message: "connector not found in inspected result",
     };
   }
 }

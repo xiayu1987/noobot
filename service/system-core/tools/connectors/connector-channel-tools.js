@@ -188,88 +188,48 @@ function maskConnectionInfo(info = {}) {
   return out;
 }
 
-function toSafeConnector(connector = {}) {
-  const connectorType = String(connector?.connectorType || "")
-    .trim()
-    .toLowerCase();
-  const meta = pickObject(connector?.connectionMeta);
-  const safeMeta = {};
-  if (connectorType === "database") {
-    safeMeta.database_type = String(
-      meta?.databaseType || meta?.database_type || "",
-    ).trim();
-  } else if (connectorType === "terminal") {
-    const port = Number(meta?.port);
-    if (Number.isFinite(port) && port > 0) safeMeta.port = port;
-  }
-  return {
-    connector_name: String(connector?.connectorName || "").trim(),
-    connector_type: connectorType,
-    status: "connected",
-    status_code: 0,
-    connected_at: String(connector?.connectedAt || "").trim(),
-    connection_meta: safeMeta,
-  };
-}
-
 async function resolveConnectorRuntimeStatus({
   store = null,
   rootSessionId = "",
-  connector = {},
+  connectorName = "",
+  connectorType = "",
 } = {}) {
-  const safeConnector = toSafeConnector(connector);
-  if (!store || typeof store.executeConnectorCommand !== "function") {
+  const normalizedConnectorName = String(connectorName || "").trim();
+  const normalizedConnectorType = String(connectorType || "")
+    .trim()
+    .toLowerCase();
+  if (!store || typeof store.inspectConnectorRuntimeStatus !== "function") {
     return {
-      ...safeConnector,
+      connector_name: normalizedConnectorName,
+      connector_type: normalizedConnectorType,
       status: "unknown",
       status_code: 503,
       status_message: "connector channel store unavailable",
     };
   }
-  const connectorName = String(safeConnector?.connector_name || "").trim();
-  const connectorType = String(safeConnector?.connector_type || "").trim();
-  if (!connectorName || !connectorType) {
+  if (
+    !normalizedConnectorName ||
+    !["database", "terminal"].includes(normalizedConnectorType)
+  ) {
     return {
-      ...safeConnector,
+      connector_name: normalizedConnectorName,
+      connector_type: normalizedConnectorType,
       status: "invalid",
       status_code: 400,
       status_message: "invalid connector identity",
     };
   }
-  const healthCommand =
-    connectorType === "database"
-      ? "SELECT 1 WHERE 1=1"
-      : connectorType === "terminal"
-        ? "printf __NOOBOT_CONNECTOR_HEALTH__"
-        : "";
-  if (!healthCommand) {
-    return {
-      ...safeConnector,
-      status: "unknown",
-      status_code: 400,
-      status_message: "unsupported connector type",
-    };
-  }
   try {
-    const executionResult = await store.executeConnectorCommand({
+    return await store.inspectConnectorRuntimeStatus({
       sessionId: String(rootSessionId || "").trim(),
-      connectorName,
-      connectorType,
-      command: healthCommand,
+      connectorName: normalizedConnectorName,
+      connectorType: normalizedConnectorType,
       timeoutMs: 8000,
     });
-    const statusCode = Number(executionResult?.output?.code ?? 0);
-    const success = executionResult?.ok === true;
-    return {
-      ...safeConnector,
-      status: success ? "connected" : "error",
-      status_code: Number.isFinite(statusCode) ? statusCode : success ? 0 : 1,
-      status_message: success ? "ok" : String(executionResult?.output?.stderr || "").trim(),
-      checked_at: new Date().toISOString(),
-    };
   } catch (error) {
     return {
-      ...safeConnector,
+      connector_name: normalizedConnectorName,
+      connector_type: normalizedConnectorType,
       status: "error",
       status_code: 500,
       status_message: String(error?.message || error || "health check failed"),
@@ -482,7 +442,8 @@ export function createConnectorChannelTools({ agentContext }) {
       const runtimeStatus = await resolveConnectorRuntimeStatus({
         store,
         rootSessionId,
-        connector: connected,
+        connectorName,
+        connectorType: "database",
       });
       return toToolJsonResult(
         "database_connect_connector",
@@ -614,7 +575,8 @@ export function createConnectorChannelTools({ agentContext }) {
       const runtimeStatus = await resolveConnectorRuntimeStatus({
         store,
         rootSessionId,
-        connector: connected,
+        connectorName,
+        connectorType: "terminal",
       });
       return toToolJsonResult(
         "terminal_connect_connector",
@@ -706,7 +668,7 @@ export function createConnectorChannelTools({ agentContext }) {
     description: "查看当前 session 的全部连接器（仅返回脱敏后的连接信息）。",
     schema: z.object({}),
     func: async () => {
-      if (!store || typeof store.getSessionConnectors !== "function") {
+      if (!store || typeof store.inspectSessionConnectors !== "function") {
         return toToolJsonResult("inspect_connectors", {
           ok: false,
           error: "connector channel store missing",
@@ -718,31 +680,17 @@ export function createConnectorChannelTools({ agentContext }) {
           error: "rootSessionId missing in systemRuntime",
         });
       }
-      const all = store.getSessionConnectors(rootSessionId);
-      const databaseSource = Array.isArray(all?.databases) ? all.databases : [];
-      const terminalSource = Array.isArray(all?.terminals) ? all.terminals : [];
-      const databases = await Promise.all(
-        databaseSource.map((connector) =>
-          resolveConnectorRuntimeStatus({
-            store,
-            rootSessionId,
-            connector,
-          }),
-        ),
-      );
-      const terminals = await Promise.all(
-        terminalSource.map((connector) =>
-          resolveConnectorRuntimeStatus({
-            store,
-            rootSessionId,
-            connector,
-          }),
-        ),
-      );
-      runtime.connectorChannels = {
-        databases: Array.isArray(all?.databases) ? all.databases : [],
-        terminals: Array.isArray(all?.terminals) ? all.terminals : [],
-      };
+      const inspected = await store.inspectSessionConnectors({
+        sessionId: rootSessionId,
+        timeoutMs: 8000,
+      });
+      const databases = Array.isArray(inspected?.connectors?.databases)
+        ? inspected.connectors.databases
+        : [];
+      const terminals = Array.isArray(inspected?.connectors?.terminals)
+        ? inspected.connectors.terminals
+        : [];
+      runtime.connectorChannels = store.getSessionConnectors(rootSessionId);
       return toToolJsonResult(
         "inspect_connectors",
         {
@@ -755,7 +703,9 @@ export function createConnectorChannelTools({ agentContext }) {
           summary: {
             database_count: databases.length,
             terminal_count: terminals.length,
-            total_count: databases.length + terminals.length,
+            total_count: Number(
+              inspected?.summary?.total_count ?? databases.length + terminals.length,
+            ),
           },
         },
         true,
