@@ -43,7 +43,7 @@ const TOOL_CONFIG_ALIASES = {
   web_to_data: ["web_to_data"],
   doc_to_data: ["doc_to_data"],
   process_content_task: ["process_content_task"],
-  process_connector_task: ["process_connector_task"],
+  process_connector_tool: ["process_connector_tool"],
   database_connect_connector: ["database_connect_connector"],
   terminal_connect_connector: ["terminal_connect_connector"],
   access_connector: ["access_connector"],

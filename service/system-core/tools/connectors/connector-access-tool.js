@@ -11,7 +11,7 @@ import { toToolJsonResult } from "../tool-json-result.js";
 import { createConnectorChannelTools } from "./connector-channel-tools.js";
 
 function jsonError(payload = {}) {
-  return toToolJsonResult("process_connector_task", { ok: false, ...payload });
+  return toToolJsonResult("process_connector_tool", { ok: false, ...payload });
 }
 
 function isAbortError(error) {
@@ -34,7 +34,7 @@ export function createConnectorAccessTool({ agentContext }) {
     runtime?.userConfig || {},
   );
   const processConnectorTaskEnabled =
-    effectiveConfig?.tools?.process_connector_task?.enabled !== false;
+    effectiveConfig?.tools?.process_connector_tool?.enabled !== false;
   if (!processConnectorTaskEnabled) return [];
 
   const botManager = runtime?.botManager || null;
@@ -48,13 +48,13 @@ export function createConnectorAccessTool({ agentContext }) {
   const allowUserInteraction =
     systemRuntime?.config?.allowUserInteraction !== false;
   const maxToolLoopTurns = Number(
-    effectiveConfig?.tools?.process_connector_task?.max_tool_loop_turns ??
-      effectiveConfig?.tools?.process_connector_task?.maxToolLoopTurns ??
+    effectiveConfig?.tools?.process_connector_tool?.max_tool_loop_turns ??
+      effectiveConfig?.tools?.process_connector_tool?.maxToolLoopTurns ??
       6,
   );
 
   const processConnectorTaskTool = new DynamicStructuredTool({
-    name: "process_connector_task",
+    name: "process_connector_tool",
     description:
       "连接器访问工具，可以连接并查看数据库及终端，通过调用连接器相关工具完成连接与命令执行。",
     schema: z.object({
@@ -114,7 +114,7 @@ export function createConnectorAccessTool({ agentContext }) {
           ),
         );
         return toToolJsonResult(
-          "process_connector_task",
+          "process_connector_tool",
           {
             ok: true,
             status: "completed",

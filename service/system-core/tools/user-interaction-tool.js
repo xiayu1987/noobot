@@ -169,7 +169,7 @@ export function createUserInteractionTool({ agentContext }) {
       if (hasSensitiveFields) {
         return toToolJsonResult("user_interaction", {
           ok: false,
-          error: "存在敏感字段，请用连接器连接",
+          error: "存在敏感字段，如果是数据库或者终端请用process_connector_tool连接器连接",
         });
       }
 

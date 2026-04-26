@@ -188,56 +188,6 @@ function maskConnectionInfo(info = {}) {
   return out;
 }
 
-async function resolveConnectorRuntimeStatus({
-  store = null,
-  rootSessionId = "",
-  connectorName = "",
-  connectorType = "",
-} = {}) {
-  const normalizedConnectorName = String(connectorName || "").trim();
-  const normalizedConnectorType = String(connectorType || "")
-    .trim()
-    .toLowerCase();
-  if (!store || typeof store.inspectConnectorRuntimeStatus !== "function") {
-    return {
-      connector_name: normalizedConnectorName,
-      connector_type: normalizedConnectorType,
-      status: "unknown",
-      status_code: 503,
-      status_message: "connector channel store unavailable",
-    };
-  }
-  if (
-    !normalizedConnectorName ||
-    !["database", "terminal"].includes(normalizedConnectorType)
-  ) {
-    return {
-      connector_name: normalizedConnectorName,
-      connector_type: normalizedConnectorType,
-      status: "invalid",
-      status_code: 400,
-      status_message: "invalid connector identity",
-    };
-  }
-  try {
-    return await store.inspectConnectorRuntimeStatus({
-      sessionId: String(rootSessionId || "").trim(),
-      connectorName: normalizedConnectorName,
-      connectorType: normalizedConnectorType,
-      timeoutMs: 8000,
-    });
-  } catch (error) {
-    return {
-      connector_name: normalizedConnectorName,
-      connector_type: normalizedConnectorType,
-      status: "error",
-      status_code: 500,
-      status_message: String(error?.message || error || "health check failed"),
-      checked_at: new Date().toISOString(),
-    };
-  }
-}
-
 function addRuntimeConnectorChannel(runtime = {}, connector = {}) {
   const normalizedType = String(connector?.connectorType || "")
     .trim()
@@ -439,12 +389,21 @@ export function createConnectorChannelTools({ agentContext }) {
         connectionInfo,
       });
       addRuntimeConnectorChannel(runtime, connected);
-      const runtimeStatus = await resolveConnectorRuntimeStatus({
-        store,
-        rootSessionId,
-        connectorName,
-        connectorType: "database",
-      });
+      const runtimeStatus =
+        typeof store?.inspectConnectorRuntimeStatus === "function"
+          ? await store.inspectConnectorRuntimeStatus({
+              sessionId: rootSessionId,
+              connectorName,
+              connectorType: "database",
+              timeoutMs: 8000,
+            })
+          : {
+              connector_name: connectorName,
+              connector_type: "database",
+              status: "unknown",
+              status_code: 503,
+              status_message: "connector runtime status inspector unavailable",
+            };
       return toToolJsonResult(
         "database_connect_connector",
         buildConnectionStatusPayload({
@@ -572,12 +531,21 @@ export function createConnectorChannelTools({ agentContext }) {
         connectionInfo,
       });
       addRuntimeConnectorChannel(runtime, connected);
-      const runtimeStatus = await resolveConnectorRuntimeStatus({
-        store,
-        rootSessionId,
-        connectorName,
-        connectorType: "terminal",
-      });
+      const runtimeStatus =
+        typeof store?.inspectConnectorRuntimeStatus === "function"
+          ? await store.inspectConnectorRuntimeStatus({
+              sessionId: rootSessionId,
+              connectorName,
+              connectorType: "terminal",
+              timeoutMs: 8000,
+            })
+          : {
+              connector_name: connectorName,
+              connector_type: "terminal",
+              status: "unknown",
+              status_code: 503,
+              status_message: "connector runtime status inspector unavailable",
+            };
       return toToolJsonResult(
         "terminal_connect_connector",
         buildConnectionStatusPayload({

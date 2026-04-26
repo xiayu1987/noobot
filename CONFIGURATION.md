@@ -116,8 +116,8 @@
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `tools.process_connector_task.enabled` | `true` / `false` | 连接器编排工具开关。 |
-| `tools.process_connector_task.max_tool_loop_turns` | 正整数 | 连接器子任务内部工具轮次上限。 |
+| `tools.process_connector_tool.enabled` | `true` / `false` | 连接器编排工具开关。 |
+| `tools.process_connector_tool.max_tool_loop_turns` | 正整数 | 连接器子任务内部工具轮次上限。 |
 | `tools.database_connect_connector.enabled` | `true` / `false` | 数据库连接器工具开关。 |
 | `tools.database_connect_connector.connectors` | 对象 | 预置数据库连接配置（按连接器名索引，支持多个）。 |
 | `tools.terminal_connect_connector.enabled` | `true` / `false` | 终端连接器工具开关。 |
@@ -243,8 +243,8 @@
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `tools.process_connector_task.enabled` | `true` / `false` | 用户级连接器编排工具开关。 |
-| `tools.process_connector_task.max_tool_loop_turns` | 正整数 | 用户级连接器子任务工具轮次。 |
+| `tools.process_connector_tool.enabled` | `true` / `false` | 用户级连接器编排工具开关。 |
+| `tools.process_connector_tool.max_tool_loop_turns` | 正整数 | 用户级连接器子任务工具轮次。 |
 | `tools.database_connect_connector.connectors` | 对象 | 用户级预置数据库连接（建议使用参数化密码 `${...}`）。 |
 | `tools.terminal_connect_connector.connectors` | 对象 | 用户级预置终端连接（建议使用参数化密码 `${...}`）。 |
 | `tools.access_connector.max_output_chars` | 正整数 | 用户级连接器输出长度控制。 |

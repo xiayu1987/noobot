@@ -302,6 +302,62 @@ export function useChatSession({
     return foldConversationMessages(messages, makeViewMessage);
   }
 
+  function pickAssistantMessagesForCurrentTurn({
+    foldedMessages = [],
+    dialogProcessId = "",
+  }) {
+    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    const messageList = Array.isArray(foldedMessages) ? foldedMessages : [];
+    const lastUserMessageIndex = (() => {
+      for (
+        let messageIndex = messageList.length - 1;
+        messageIndex >= 0;
+        messageIndex -= 1
+      ) {
+        if (String(messageList[messageIndex]?.role || "") === "user") {
+          return messageIndex;
+        }
+      }
+      return -1;
+    })();
+    const assistantMessagesAfterLastUser = messageList.filter(
+      (messageItem, messageIndex) =>
+        messageIndex > lastUserMessageIndex &&
+        String(messageItem?.role || "") === "assistant",
+    );
+    if (!assistantMessagesAfterLastUser.length) return [];
+    if (!normalizedDialogProcessId) return assistantMessagesAfterLastUser;
+    const matchedMessages = assistantMessagesAfterLastUser.filter(
+      (messageItem) =>
+        String(messageItem?.dialogProcessId || "").trim() ===
+        normalizedDialogProcessId,
+    );
+    return matchedMessages.length
+      ? matchedMessages
+      : assistantMessagesAfterLastUser;
+  }
+
+  function mergeAssistantContents(assistantMessages = []) {
+    const contentList = [];
+    for (const assistantMessage of assistantMessages) {
+      const content = String(assistantMessage?.content || "").trim();
+      if (!content) continue;
+      if (contentList[contentList.length - 1] === content) continue;
+      contentList.push(content);
+    }
+    return contentList.join("\n\n");
+  }
+
+  function markAssistantMessageStopped(botMessage) {
+    botMessage.pending = false;
+    botMessage.statusLabel = "已停止";
+    pendingInteractionRequest.value = null;
+    interactionSubmitting.value = false;
+    if (!String(botMessage.content || "").trim()) {
+      botMessage.content = "（已停止）";
+    }
+  }
+
   function applySessionDetail(detail, options = {}) {
     const preserveCurrentMessages = Boolean(options.preserveCurrentMessages);
     const sessionItem = sessions.value.find(
@@ -601,7 +657,6 @@ export function useChatSession({
       clearUploads();
       const attachments = await serializeAttachments(filesToSend);
       let finalDoneEventData = null;
-      let stopConfirmed = false;
 
       const payload = {
         userId: userId.value,
@@ -617,7 +672,9 @@ export function useChatSession({
       await streamChat(payload, ({ event, data }) => {
         if (event === "thinking") {
           const item = classifyRealtimeLog(data);
-          if (item.dialogProcessId) botMsg.dialogProcessId = item.dialogProcessId;
+          if (!item.subAgentCall && item.dialogProcessId) {
+            botMsg.dialogProcessId = item.dialogProcessId;
+          }
           botMsg.realtimeLogs = [...(botMsg.realtimeLogs || []), item].slice(-10);
         } else if (event === "delta") {
           const chunkText = String(data.text || "");
@@ -656,18 +713,17 @@ export function useChatSession({
               makeViewMessage(messageItem),
             );
             const folded = foldMessagesForView(data.messages);
+            const assistantMessagesForCurrentTurn =
+              pickAssistantMessagesForCurrentTurn({
+                foldedMessages: folded,
+                dialogProcessId: botMsg.dialogProcessId || data.dialogProcessId,
+              });
             const lastAssistant =
-              [...folded]
-                .reverse()
-                .find(
-                  (assistantMessage) =>
-                    assistantMessage.role === "assistant" &&
-                    assistantMessage.dialogProcessId === botMsg.dialogProcessId,
-                ) ||
-              [...folded]
-                .reverse()
-                .find((assistantMessage) => assistantMessage.role === "assistant");
+              assistantMessagesForCurrentTurn[assistantMessagesForCurrentTurn.length - 1];
             if (lastAssistant) {
+              const mergedAssistantContent = mergeAssistantContents(
+                assistantMessagesForCurrentTurn,
+              );
               const lastAssistantType = String(lastAssistant.type || "");
               if (lastAssistantType && lastAssistantType !== "tool_call") {
                 botMsg.type = lastAssistantType;
@@ -677,7 +733,7 @@ export function useChatSession({
                 : [];
               botMsg.dialogProcessId =
                 lastAssistant.dialogProcessId || botMsg.dialogProcessId;
-              botMsg.content = String(lastAssistant.content || botMsg.content || "");
+              botMsg.content = String(mergedAssistantContent || botMsg.content || "");
               if (Array.isArray(lastAssistant.attachments)) {
                 botMsg.attachments = lastAssistant.attachments;
               }
@@ -685,28 +741,12 @@ export function useChatSession({
           }
           scrollBottom();
         } else if (event === "stopped") {
-          stopConfirmed = true;
-          botMsg.pending = false;
-          botMsg.statusLabel = "已停止";
-          pendingInteractionRequest.value = null;
-          interactionSubmitting.value = false;
-          if (!String(botMsg.content || "").trim()) {
-            botMsg.content = "（已停止）";
-          }
+          markAssistantMessageStopped(botMsg);
           scrollBottom();
         }
       });
       if (stopRequested.value) {
-        stopConfirmed = true;
-        botMsg.pending = false;
-        botMsg.statusLabel = "已停止";
-        if (stopConfirmed) {
-          pendingInteractionRequest.value = null;
-          interactionSubmitting.value = false;
-        }
-        if (!String(botMsg.content || "").trim()) {
-          botMsg.content = "（已停止）";
-        }
+        markAssistantMessageStopped(botMsg);
         scrollBottom();
         return;
       }
@@ -765,11 +805,7 @@ export function useChatSession({
 
   function shouldRenderMessageInChat(messageItem) {
     const messageRole = String(messageItem?.role || "");
-    const messageType = String(messageItem?.type || "");
-    if (
-      messageRole === "tool" ||
-      (messageRole === "assistant" && messageType === "tool_call")
-    ) {
+    if (messageRole === "tool") {
       return false;
     }
     return true;

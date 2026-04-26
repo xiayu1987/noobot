@@ -73,9 +73,9 @@
       },
       "script_timeout_ms": 120000
     },
-    "process_connector_task": {
+    "process_connector_tool": {
       "enabled": true,
-      "max_tool_loop_turns": 6
+      "max_tool_loop_turns": 20
     },
     "access_connector": {
       "enabled": true,

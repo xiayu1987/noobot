@@ -1017,7 +1017,18 @@ wsServer.on("connection", (ws, request) => {
           const event = evt?.event || "thinking";
           const data = evt?.data || {};
           if (event === "llm_delta") {
-            if (data?.subAgentCall) {
+            const currentEventSessionId = String(data?.sessionId || "").trim();
+            const currentSubAgentSessionId = String(
+              data?.subAgentSessionId || "",
+            ).trim();
+            const rootSessionId = String(sessionId || "").trim();
+            const isSubTaskDelta =
+              data?.subAgentCall ||
+              (currentSubAgentSessionId &&
+                currentSubAgentSessionId !== rootSessionId) ||
+              (currentEventSessionId &&
+                currentEventSessionId !== rootSessionId);
+            if (isSubTaskDelta) {
               const normalized = normalizeSseLogEvent({
                 ...evt,
                 event: "subagent_llm_delta",

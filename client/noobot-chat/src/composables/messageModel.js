@@ -75,12 +75,57 @@ function buildViewMessage(
 }
 
 function foldConversationMessages(messages = [], buildView) {
-  return normalizeArray(messages)
+  const foldedMessages = normalizeArray(messages)
     .filter((messageItem) => {
       const role = String(messageItem?.role || "");
       return role === "assistant" || role === "user";
     })
     .map((messageItem) => buildView(messageItem));
+
+  const mergedMessages = [];
+  for (const currentMessage of foldedMessages) {
+    const previousMessage = mergedMessages[mergedMessages.length - 1] || null;
+    const currentRole = String(currentMessage?.role || "");
+    const previousRole = String(previousMessage?.role || "");
+    const currentDialogProcessId = String(
+      currentMessage?.dialogProcessId || "",
+    ).trim();
+    const previousDialogProcessId = String(
+      previousMessage?.dialogProcessId || "",
+    ).trim();
+    const canMergeAssistantMessage =
+      previousMessage &&
+      currentRole === "assistant" &&
+      previousRole === "assistant" &&
+      currentDialogProcessId &&
+      previousDialogProcessId &&
+      currentDialogProcessId === previousDialogProcessId;
+    if (!canMergeAssistantMessage) {
+      mergedMessages.push(currentMessage);
+      continue;
+    }
+
+    const previousContent = String(previousMessage?.content || "").trim();
+    const currentContent = String(currentMessage?.content || "").trim();
+    const mergedContent = [previousContent, currentContent].filter(Boolean).join("\n\n");
+    previousMessage.content = mergedContent;
+
+    const currentType = String(currentMessage?.type || "").trim();
+    if (currentType && currentType !== "tool_call") {
+      previousMessage.type = currentType;
+    }
+    const previousToolCalls = normalizeArray(previousMessage?.tool_calls);
+    const currentToolCalls = normalizeArray(currentMessage?.tool_calls);
+    previousMessage.tool_calls = [...previousToolCalls, ...currentToolCalls];
+    const currentAttachments = normalizeArray(currentMessage?.attachments);
+    const previousAttachments = normalizeArray(previousMessage?.attachments);
+
+    if (currentAttachments.length && !previousAttachments.length) {
+      previousMessage.attachments = currentAttachments;
+    }
+    previousMessage.ts = currentMessage?.ts || previousMessage?.ts;
+  }
+  return mergedMessages;
 }
 
 export {
