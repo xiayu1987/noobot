@@ -983,6 +983,8 @@ wsServer.on("connection", (ws, request) => {
           currentAbortController.abort();
         }
         rejectAllPendingInteractions(new Error("dialog stopped by user"));
+        sendEvent("stopped", { message: "dialog stopped by user" });
+        ws.close(1000, "stopped");
         return;
       }
       if (running) {

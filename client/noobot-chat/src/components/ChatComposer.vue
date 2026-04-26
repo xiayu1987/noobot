@@ -32,7 +32,7 @@ const sendDisabled = computed(
   () =>
     (!String(props.modelValue || "").trim() && !attachmentCount.value) ||
     !props.connected ||
-    props.interactionActive,
+    (props.interactionActive && props.sending),
 );
 
 function onInputChange(value) {

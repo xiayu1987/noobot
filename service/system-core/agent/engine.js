@@ -173,6 +173,19 @@ function assertNotAborted(signal = null) {
   throw error;
 }
 
+function isAbortError(error) {
+  const name = String(error?.name || "").trim().toLowerCase();
+  const code = String(error?.code || "").trim().toUpperCase();
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    name === "aborterror" ||
+    code === "ABORT_ERR" ||
+    message.includes("aborterror") ||
+    message.includes("stopped by user") ||
+    message.includes("aborted")
+  );
+}
+
 async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   const {
     tools,
@@ -306,6 +319,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       toolResultText =
         typeof result === "string" ? result : JSON.stringify(result);
     } catch (error) {
+      if (isAbortError(error)) throw error;
       if (isFatalError(error)) throw error;
       toolResultText = `tool invoke error: ${error?.message || String(error)}`;
     }

@@ -14,6 +14,19 @@ function jsonError(payload = {}) {
   return toToolJsonResult("call_mcp_task", { ok: false, ...payload });
 }
 
+function isAbortError(error) {
+  const name = String(error?.name || "").trim().toLowerCase();
+  const code = String(error?.code || "").trim().toUpperCase();
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    name === "aborterror" ||
+    code === "ABORT_ERR" ||
+    message.includes("aborterror") ||
+    message.includes("stopped by user") ||
+    message.includes("aborted")
+  );
+}
+
 export function createMcpTool({ agentContext }) {
   const callMcpTaskTool = new DynamicStructuredTool({
     name: "call_mcp_task",
@@ -135,6 +148,7 @@ export function createMcpTool({ agentContext }) {
           true,
         );
       } catch (error) {
+        if (isAbortError(error)) throw error;
         if (basePath) {
           await appendMcpErrorLog({
             basePath,

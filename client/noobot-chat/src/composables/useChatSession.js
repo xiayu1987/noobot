@@ -42,6 +42,42 @@ export function useChatSession({
   const stopRequested = ref(false);
   const pendingInteractionRequest = ref(null);
   const interactionSubmitting = ref(false);
+  let stopCloseTimer = null;
+  let forceStopFinalizeTimer = null;
+  let resolveCurrentStream = null;
+
+  function markPendingAssistantMessageStopped() {
+    const sessionItem = activeSession.value;
+    const messageList = Array.isArray(sessionItem?.messages)
+      ? sessionItem.messages
+      : [];
+    for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
+      const messageItem = messageList[messageIndex];
+      if (String(messageItem?.role || "") !== "assistant") continue;
+      if (!messageItem?.pending) continue;
+      messageItem.pending = false;
+      messageItem.statusLabel = "已停止";
+      if (!String(messageItem.content || "").trim()) {
+        messageItem.content = "（已停止）";
+      }
+      break;
+    }
+  }
+
+  function forceStopUiFinalize() {
+    if (!sending.value) return;
+    pendingInteractionRequest.value = null;
+    interactionSubmitting.value = false;
+    markPendingAssistantMessageStopped();
+    sending.value = false;
+    if (activeChatSocket.value) {
+      try {
+        activeChatSocket.value.close(1000, "stop_force_finalize");
+      } catch {}
+      activeChatSocket.value = null;
+    }
+    scrollBottom();
+  }
 
   const activeSession = computed(() =>
     sessions.value.find((sessionItem) => sessionItem.id === activeSessionId.value),
@@ -375,11 +411,21 @@ export function useChatSession({
       const finalize = (fn) => {
         if (settled) return;
         settled = true;
+        if (stopCloseTimer) {
+          clearTimeout(stopCloseTimer);
+          stopCloseTimer = null;
+        }
+        if (forceStopFinalizeTimer) {
+          clearTimeout(forceStopFinalizeTimer);
+          forceStopFinalizeTimer = null;
+        }
+        resolveCurrentStream = null;
         if (activeChatSocket.value === ws) {
           activeChatSocket.value = null;
         }
         fn();
       };
+      resolveCurrentStream = () => finalize(() => resolve());
 
       ws.onopen = () => {
         ws.send(JSON.stringify(payload || {}));
@@ -428,11 +474,47 @@ export function useChatSession({
     stopRequested.value = true;
     const ws = activeChatSocket.value;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ action: "stop" }));
+      try {
+        ws.send(JSON.stringify({ action: "stop" }));
+      } catch {}
+      if (stopCloseTimer) clearTimeout(stopCloseTimer);
+      stopCloseTimer = setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1000, "stop_requested");
+        }
+      }, 300);
+      if (forceStopFinalizeTimer) clearTimeout(forceStopFinalizeTimer);
+      forceStopFinalizeTimer = setTimeout(() => {
+        const latestSocket = activeChatSocket.value;
+        if (
+          latestSocket &&
+          (latestSocket.readyState === WebSocket.OPEN ||
+            latestSocket.readyState === WebSocket.CONNECTING)
+        ) {
+          latestSocket.close(1000, "stop_force_finalize");
+        }
+        const resolveStream = resolveCurrentStream;
+        if (typeof resolveStream === "function") {
+          resolveStream();
+        }
+        forceStopUiFinalize();
+      }, 5000);
       return true;
     }
     if (ws && ws.readyState === WebSocket.CONNECTING) {
       ws.close(1000, "stop_requested");
+      if (forceStopFinalizeTimer) clearTimeout(forceStopFinalizeTimer);
+      forceStopFinalizeTimer = setTimeout(() => {
+        const resolveStream = resolveCurrentStream;
+        if (typeof resolveStream === "function") {
+          resolveStream();
+        }
+        forceStopUiFinalize();
+      }, 5000);
+      return true;
+    }
+    if (stopRequested.value) {
+      forceStopUiFinalize();
       return true;
     }
     return false;
@@ -519,6 +601,7 @@ export function useChatSession({
       clearUploads();
       const attachments = await serializeAttachments(filesToSend);
       let finalDoneEventData = null;
+      let stopConfirmed = false;
 
       const payload = {
         userId: userId.value,
@@ -602,15 +685,31 @@ export function useChatSession({
           }
           scrollBottom();
         } else if (event === "stopped") {
+          stopConfirmed = true;
           botMsg.pending = false;
           botMsg.statusLabel = "已停止";
           pendingInteractionRequest.value = null;
+          interactionSubmitting.value = false;
           if (!String(botMsg.content || "").trim()) {
             botMsg.content = "（已停止）";
           }
           scrollBottom();
         }
       });
+      if (stopRequested.value) {
+        stopConfirmed = true;
+        botMsg.pending = false;
+        botMsg.statusLabel = "已停止";
+        if (stopConfirmed) {
+          pendingInteractionRequest.value = null;
+          interactionSubmitting.value = false;
+        }
+        if (!String(botMsg.content || "").trim()) {
+          botMsg.content = "（已停止）";
+        }
+        scrollBottom();
+        return;
+      }
 
       const doneSessionId = String(
         finalDoneEventData?.sessionId || activeSession.value.backendSessionId || "",
@@ -632,14 +731,16 @@ export function useChatSession({
       }
     } catch (error) {
       botMsg.pending = false;
-      pendingInteractionRequest.value = null;
       if (stopRequested.value) {
+        pendingInteractionRequest.value = null;
+        interactionSubmitting.value = false;
         botMsg.statusLabel = "已停止";
         if (!String(botMsg.content || "").trim()) {
           botMsg.content = "（已停止）";
         }
         return;
       }
+      pendingInteractionRequest.value = null;
       botMsg.statusLabel = "生成失败";
       const errorMessage = error.message || "未知错误";
       botMsg.error = errorMessage;
@@ -652,7 +753,9 @@ export function useChatSession({
     } finally {
       sending.value = false;
       stopRequested.value = false;
-      interactionSubmitting.value = false;
+      if (!pendingInteractionRequest.value) {
+        interactionSubmitting.value = false;
+      }
     }
   }
 
