@@ -7,6 +7,8 @@ import {
   extractReadableTextFromHtml,
   extractVisibleTextFromHtml,
 } from "./web-text-cleaner.js";
+import { cleanTerminalOutputForLLM } from "./terminal-output-cleaner.js";
+import { cleanDatabaseOutputForLLM } from "./database-output-cleaner.js";
 
 const NOISE_PATTERNS = [
   /^(广告|推广|赞助|相关推荐|猜你想看|猜你喜欢|热门推荐|热搜)$/i,
@@ -33,7 +35,7 @@ function postCleanText(input = "", maxChars = 120000) {
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => line.length >= 2)
-    .filter((line) => !NOISE_PATTERNS.some((p) => p.test(line)));
+    .filter((line) => !NOISE_PATTERNS.some((pattern) => pattern.test(line)));
 
   const out = [];
   const seen = new Set();
@@ -92,4 +94,18 @@ export function cleanTextUniversal(
   if (autoFormat === "html") return cleanHtmlText(text, { url, maxChars });
   if (autoFormat === "markdown") return cleanMarkdownText(text, maxChars);
   return cleanPlainText(text, maxChars);
+}
+
+export function cleanConnectorOutputForLLM(
+  { connectorType = "", output = {} } = {},
+  { maxChars = 8000 } = {},
+) {
+  const normalizedType = String(connectorType || "").trim().toLowerCase();
+  if (normalizedType === "terminal") {
+    return cleanTerminalOutputForLLM(output, { maxChars });
+  }
+  if (normalizedType === "database") {
+    return cleanDatabaseOutputForLLM(output, { maxChars });
+  }
+  return cleanTerminalOutputForLLM(output, { maxChars });
 }

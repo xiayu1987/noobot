@@ -56,6 +56,16 @@ export class SessionManager {
     return this._loopSession(parentSessionId, tree, nextChain);
   }
 
+  _resolveRootSessionIdFromTree(sessionId = "", tree = {}) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return "";
+    const nodes =
+      tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {};
+    if (!nodes?.[normalizedSessionId]) return normalizedSessionId;
+    const chain = this._loopSession(normalizedSessionId, tree, []);
+    return String(chain?.[chain.length - 1] || normalizedSessionId).trim();
+  }
+
   async _sessionDir(basePath, sessionId, parentSessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return this._sessionRoot(basePath);
@@ -441,6 +451,16 @@ export class SessionManager {
   async getSessionTree({ userId }) {
     const basePath = this._resolveBasePath(userId);
     return this._readSessionTree(basePath);
+  }
+
+  async getRootSessionId({ userId, sessionId, sessionTree = null }) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return "";
+    const tree =
+      sessionTree && typeof sessionTree === "object"
+        ? this._normalizeSessionTreeShape(sessionTree)
+        : await this.getSessionTree({ userId });
+    return this._resolveRootSessionIdFromTree(normalizedSessionId, tree);
   }
 
   async getSessionDepth({ userId, sessionId }) {

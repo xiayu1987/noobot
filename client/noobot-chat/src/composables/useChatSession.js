@@ -17,6 +17,7 @@ import {
   getSessionDetailApi,
   getSessionsApi,
 } from "../api/chatApi";
+import { encryptPayloadBySessionId } from "../utils/sessionCrypto";
 
 export function useChatSession({
   userId,
@@ -444,11 +445,20 @@ export function useChatSession({
       throw new Error("交互通道不可用");
     }
     interactionSubmitting.value = true;
+    const requireEncryption = request?.requireEncryption === true;
+    const sessionId = String(request?.sessionId || "").trim();
+    const responsePayload =
+      requireEncryption && sessionId
+        ? {
+            encrypted: true,
+            payload: encryptPayloadBySessionId(response || {}, sessionId),
+          }
+        : response || {};
     ws.send(
       JSON.stringify({
         action: "interaction_response",
         requestId: request.requestId,
-        response: response || {},
+        response: responsePayload,
       }),
     );
     pendingInteractionRequest.value = null;
@@ -538,6 +548,12 @@ export function useChatSession({
             content: String(data?.content || ""),
             fields: Array.isArray(data?.fields) ? data.fields : [],
             dialogProcessId: String(data?.dialogProcessId || ""),
+            requireEncryption: data?.requireEncryption === true,
+            sessionId: String(data?.sessionId || ""),
+            toolName: String(data?.toolName || ""),
+            needConnectionInfo: data?.needConnectionInfo === true,
+            connectorName: String(data?.connectorName || ""),
+            connectorType: String(data?.connectorType || ""),
           };
         } else if (event === "done") {
           pendingInteractionRequest.value = null;

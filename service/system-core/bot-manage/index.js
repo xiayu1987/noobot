@@ -261,11 +261,17 @@ export class BotManager {
     const customTools = Array.isArray(toolPolicy?.customTools)
       ? toolPolicy.customTools.filter(Boolean)
       : [];
-    const includeToolNames = Array.isArray(toolPolicy?.includeToolNames)
+    const configuredIncludeToolNames = Array.isArray(toolPolicy?.includeToolNames)
       ? toolPolicy.includeToolNames
           .map((name) => String(name || "").trim())
           .filter(Boolean)
       : [];
+    const includeToolNames = Array.from(
+      new Set([
+        ...configuredIncludeToolNames,
+        ...(runConfig?.allowUserInteraction !== false ? ["user_interaction"] : []),
+      ]),
+    );
     const includedTools = includeToolNames.length
       ? sourceTools.filter((toolItem) =>
           includeToolNames.includes(String(toolItem?.name || "")),

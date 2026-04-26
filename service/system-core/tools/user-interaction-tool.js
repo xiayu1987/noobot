@@ -10,6 +10,100 @@ import { toToolJsonResult } from "./tool-json-result.js";
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
+
+const SENSITIVE_FIELD_KEYWORDS = [
+  "password",
+  "passwd",
+  "pwd",
+  "secret",
+  "token",
+  "auth",
+  "authorization",
+  "bearer",
+  "cookie",
+  "session",
+  "api_key",
+  "apikey",
+  "app_key",
+  "app_secret",
+  "access_key",
+  "access_token",
+  "refresh_token",
+  "private_key",
+  "public_key",
+  "ssh_key",
+  "client_secret",
+  "client_id",
+  "credential",
+  "credentials",
+  "connection_string",
+  "dsn",
+  "jdbc",
+  "uri",
+  "conn_str",
+  "密钥",
+  "密码",
+  "口令",
+  "私钥",
+  "公钥",
+  "连接串",
+  "连接字符串",
+  "数据库连接",
+  "令牌",
+  "凭证",
+];
+
+function normalizeSensitiveText(input = "") {
+  return String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function canonicalSensitiveText(input = "") {
+  return normalizeSensitiveText(input).replace(/[_-]+/g, "");
+}
+
+function containsRelation(left = "", right = "") {
+  const l = String(left || "").trim();
+  const r = String(right || "").trim();
+  if (!l || !r) return false;
+  if (l.includes(r) || r.includes(l)) {
+    if (Math.min(l.length, r.length) >= 4) return true;
+  }
+  return false;
+}
+
+function isSensitiveField(field = {}) {
+  const texts = [
+    normalizeSensitiveText(field?.name || ""),
+    normalizeSensitiveText(field?.displayName || ""),
+    normalizeSensitiveText(field?.description || ""),
+  ];
+  const canonicalTexts = texts.map((item) => canonicalSensitiveText(item));
+  const merged = texts.join(" ");
+  const sensitivePatterns = [
+    /\b(api|access|refresh|bearer|auth|session)[_\s-]?(key|token|secret)\b/i,
+    /\b(connection|conn|database|db)[_\s-]?(string|url|uri|dsn)\b/i,
+    /\b(private|public|ssh|client)[_\s-]?key\b/i,
+    /(密码|口令|密钥|私钥|公钥|连接串|连接字符串|凭证|令牌)/,
+  ];
+  if (sensitivePatterns.some((pattern) => pattern.test(merged))) return true;
+  return texts.some((text, index) =>
+    SENSITIVE_FIELD_KEYWORDS.some((keyword) => {
+      const normalizedKeyword = normalizeSensitiveText(keyword);
+      const canonicalKeyword = canonicalSensitiveText(keyword);
+      return (
+        text.includes(normalizedKeyword) ||
+        canonicalTexts[index].includes(canonicalKeyword) ||
+        containsRelation(text, normalizedKeyword) ||
+        containsRelation(canonicalTexts[index], canonicalKeyword)
+      );
+    }),
+  );
+}
 const fieldSchema = z.object({
   name: z.string().min(1).describe("字段名（返回对象的 key）"),
   displayName: z.string().min(1).describe("字段显示名称"),
@@ -26,6 +120,7 @@ export function createUserInteractionTool({ agentContext }) {
   const bridge = runtime.userInteractionBridge || null;
   const systemRuntime = runtime.systemRuntime || {};
   const dialogProcessId = String(systemRuntime.dialogProcessId || "").trim();
+  const sessionId = String(systemRuntime.sessionId || "").trim();
 
   const userInteractionTool = new DynamicStructuredTool({
     name: "user_interaction",
@@ -68,10 +163,23 @@ export function createUserInteractionTool({ agentContext }) {
         });
       }
 
+      const hasSensitiveFields = (normalizedFieldsPayload.fields || []).some(
+        isSensitiveField,
+      );
+      if (hasSensitiveFields) {
+        return toToolJsonResult("user_interaction", {
+          ok: false,
+          error: "存在敏感字段，请用连接器连接",
+        });
+      }
+
       const result = await bridge.requestUserInteraction({
         content: interactionContent,
         fields: normalizedFieldsPayload.fields || [],
         dialogProcessId,
+        requireEncryption: false,
+        sessionId,
+        toolName: "user_interaction",
       });
 
       if (

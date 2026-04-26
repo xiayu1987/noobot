@@ -16,6 +16,11 @@ import {
 } from "../utils/web-text-cleaner.js";
 import { cleanTextUniversal } from "../utils/text-cleaner.js";
 import {
+  decryptPayloadBySessionId,
+  encryptPayloadBySessionId,
+} from "../utils/session-crypto.js";
+import { getConnectorChannelStore } from "../connectors/channel-store.js";
+import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
 } from "./current-turn-store.js";
@@ -217,7 +222,7 @@ export class ContextBuilder {
     );
   }
 
-  _buildRuntimeContext({ dialogProcessId, sessionTree }) {
+  _buildRuntimeContext({ dialogProcessId, sessionTree, rootSessionId = "" }) {
     const normalizedDialogProcessId = String(dialogProcessId || "");
     const configuredMaxToolLoopTurns = Number(
       this.runConfig?.maxToolLoopTurns,
@@ -234,6 +239,7 @@ export class ContextBuilder {
         : {};
     const systemRuntime = {
       sessionId: this.sessionId || "",
+      rootSessionId: String(rootSessionId || this.sessionId || "").trim(),
       caller: this.caller || "user",
       parentSessionId: this.parentSessionId || "",
       dialogProcessId: normalizedDialogProcessId,
@@ -276,6 +282,10 @@ export class ContextBuilder {
       ? runtimeContext.sharedTools
       : {};
     runtimeContext.sharedTools = sharedTools;
+    const sessionId = String(runtimeContext?.systemRuntime?.sessionId || "").trim();
+    const rootSessionId = String(
+      runtimeContext?.systemRuntime?.rootSessionId || sessionId || "",
+    ).trim();
 
     if (typeof sharedTools.fetch !== "function") {
       sharedTools.fetch =
@@ -290,6 +300,22 @@ export class ContextBuilder {
       ...defaultTextCleaner,
       ...currentTextCleaner,
     };
+    sharedTools.sessionCrypto = {
+      encryptBySessionId(payload = {}, sid = sessionId) {
+        return encryptPayloadBySessionId(payload, String(sid || sessionId || ""));
+      },
+      decryptBySessionId(cipherText = "", sid = sessionId) {
+        return decryptPayloadBySessionId(
+          String(cipherText || ""),
+          String(sid || sessionId || ""),
+        );
+      },
+    };
+    const connectorChannelStore = getConnectorChannelStore();
+    sharedTools.connectorChannelStore = connectorChannelStore;
+    runtimeContext.connectorChannels = rootSessionId
+      ? connectorChannelStore.getSessionConnectors(rootSessionId)
+      : { databases: [], terminals: [] };
 
     try {
       await initRuntimeSharedBrowser(runtimeContext);
@@ -309,6 +335,16 @@ export class ContextBuilder {
     const sessionTree = await this._resolveSessionTree({
       runtimeBasePath: resolvedRuntimeBasePath,
     });
+    const rootSessionId =
+      this.sessionManager?.getRootSessionId &&
+      this.userId &&
+      this.sessionId
+        ? await this.sessionManager.getRootSessionId({
+            userId: this.userId,
+            sessionId: this.sessionId,
+            sessionTree,
+          })
+        : this.sessionId;
     const staticAgentContext = await this._buildStaticAgentContext({
       runtimeBasePath: resolvedRuntimeBasePath,
     });
@@ -319,6 +355,7 @@ export class ContextBuilder {
       runtime: this._buildRuntimeContext({
         dialogProcessId,
         sessionTree,
+        rootSessionId,
       }),
     };
     await this._initializeSharedTools(agentContext.runtime);

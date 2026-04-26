@@ -68,6 +68,42 @@
         "firejail": {}
       },
       "script_timeout_ms": 120000
+    },
+    "process_connector_task": {
+      "enabled": true,
+      "max_tool_loop_turns": 6
+    },
+    "access_connector": {
+      "enabled": true,
+      "max_output_chars": 8000
+    },
+    "database_connect_connector": {
+      "enabled": true,
+      "connectors": {
+        "example_database": {
+          "database_type": "mysql",
+          "host": "127.0.0.1",
+          "port": 3306,
+          "username": "readonly_user",
+          "password": "${example_database_password}",
+          "database": "example_db"
+        }
+      }
+    },
+    "terminal_connect_connector": {
+      "enabled": true,
+      "connectors": {
+        "example_terminal": {
+          "terminal_type": "ssh",
+          "host": "10.0.0.8",
+          "port": 22,
+          "username": "ops",
+          "password": "${example_terminal_password}"
+        }
+      }
+    },
+    "inspect_connectors": {
+      "enabled": true
     }
   },
   "providers": {

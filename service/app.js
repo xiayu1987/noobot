@@ -21,6 +21,10 @@ import { loadGlobalConfig, resolveConfigSecrets } from "./system-core/config/ind
 import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "./system-core/event/index.js";
 import { safeJoin } from "./system-core/utils/fs-safe.js";
+import { initConnectorChannelStore } from "./system-core/connectors/channel-store.js";
+import {
+  decryptPayloadBySessionId,
+} from "./system-core/utils/session-crypto.js";
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
@@ -171,6 +175,7 @@ async function rebuildRuntimeConfig() {
 }
 
 await rebuildRuntimeConfig();
+initConnectorChannelStore();
 
 async function readWorkspaceUsers() {
   const usersConfig = await readWorkspaceUsersConfig();
@@ -901,7 +906,17 @@ wsServer.on("connection", (ws, request) => {
   };
 
   const userInteractionBridge = {
-    requestUserInteraction: ({ content = "", fields = [], dialogProcessId = "" } = {}) =>
+    requestUserInteraction: ({
+      content = "",
+      fields = [],
+      dialogProcessId = "",
+      requireEncryption = false,
+      sessionId = "",
+      toolName = "",
+      needConnectionInfo = false,
+      connectorName = "",
+      connectorType = "",
+    } = {}) =>
       new Promise((resolve, reject) => {
         const requestId = randomBytes(12).toString("hex");
         const timeoutMs = 10 * 60 * 1000;
@@ -914,6 +929,8 @@ wsServer.on("connection", (ws, request) => {
           resolve,
           reject,
           timer,
+          requireEncryption: Boolean(requireEncryption),
+          sessionId: String(sessionId || "").trim(),
         });
 
         sendEvent("interaction_request", {
@@ -921,6 +938,12 @@ wsServer.on("connection", (ws, request) => {
           content: String(content || ""),
           fields: Array.isArray(fields) ? fields : [],
           dialogProcessId: String(dialogProcessId || ""),
+          requireEncryption: Boolean(requireEncryption),
+          sessionId: String(sessionId || "").trim(),
+          toolName: String(toolName || "").trim(),
+          needConnectionInfo: Boolean(needConnectionInfo),
+          connectorName: String(connectorName || "").trim(),
+          connectorType: String(connectorType || "").trim(),
         });
       }),
   };
@@ -939,7 +962,20 @@ wsServer.on("connection", (ws, request) => {
         }
         pendingInteractionRequests.delete(requestId);
         clearTimeout(requestItem.timer);
-        requestItem.resolve(payload?.response ?? {});
+        let normalizedResponse = payload?.response ?? {};
+        if (requestItem?.requireEncryption) {
+          const encryptedPayload = normalizedResponse?.payload;
+          const encryptedFlag = normalizedResponse?.encrypted === true;
+          const sid = String(requestItem?.sessionId || "").trim();
+          if (!encryptedFlag || !String(encryptedPayload || "").trim() || !sid) {
+            throw new Error("encrypted interaction response required");
+          }
+          normalizedResponse = decryptPayloadBySessionId(
+            String(encryptedPayload || ""),
+            sid,
+          );
+        }
+        requestItem.resolve(normalizedResponse);
         return;
       }
       if (action === "stop") {

@@ -12,6 +12,7 @@ import { createAgentCollabTool } from "./agent-collab-tool.js";
 import { createModelTool } from "./model-tool.js";
 import { createUserInteractionTool } from "./user-interaction-tool.js";
 import { createMcpTool } from "./mcp-tool.js";
+import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 
@@ -42,6 +43,11 @@ const TOOL_CONFIG_ALIASES = {
   web_to_data: ["web_to_data"],
   doc_to_data: ["doc_to_data"],
   process_content_task: ["process_content_task"],
+  process_connector_task: ["process_connector_task"],
+  database_connect_connector: ["database_connect_connector"],
+  terminal_connect_connector: ["terminal_connect_connector"],
+  access_connector: ["access_connector"],
+  inspect_connectors: ["inspect_connectors"],
 };
 
 function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
@@ -74,6 +80,7 @@ export async function buildTools(ctx) {
     ...createContentProcessTool(ctx),
     ...createServiceTool(ctx),
     ...createMcpTool(ctx),
+    ...createConnectorAccessTool(ctx),
     ...createAgentCollabTool(ctx),
     ...createModelTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),

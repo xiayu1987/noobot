@@ -46,6 +46,8 @@ export function createMcpTool({ agentContext }) {
         systemRuntime?.dialogProcessId || "",
       ).trim();
       const resolvedModelName = String(modelName || "").trim();
+      const allowUserInteraction =
+        systemRuntime?.config?.allowUserInteraction !== false;
       try {
         if (!botManager || !userId || !sessionId) {
           return jsonError({
@@ -86,11 +88,10 @@ export function createMcpTool({ agentContext }) {
           eventListener,
           userInteractionBridge,
           runConfig: {
-            allowUserInteraction: true,
+            allowUserInteraction,
             toolPolicy: {
               mode: "custom_only",
               customTools: mcpToolset.tools,
-              includeToolNames: ["user_interaction"],
             },
             runtimeModel: resolvedModelName || "",
             sharedTools:

@@ -112,13 +112,93 @@
 | `tools.process_content_task.enabled` | `true` / `false` | 内容处理任务顶层工具开关。 |
 | `tools.process_content_task.max_tool_loop_turns` | 正整数 | 子任务内部工具轮次上限。 |
 
-### 2.5 其他运行参数
+#### 2.4.6 连接器类
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `tools.process_connector_task.enabled` | `true` / `false` | 连接器编排工具开关。 |
+| `tools.process_connector_task.max_tool_loop_turns` | 正整数 | 连接器子任务内部工具轮次上限。 |
+| `tools.database_connect_connector.enabled` | `true` / `false` | 数据库连接器工具开关。 |
+| `tools.database_connect_connector.connectors` | 对象 | 预置数据库连接配置（按连接器名索引，支持多个）。 |
+| `tools.terminal_connect_connector.enabled` | `true` / `false` | 终端连接器工具开关。 |
+| `tools.terminal_connect_connector.connectors` | 对象 | 预置终端连接配置（按连接器名索引，支持多个）。 |
+| `tools.inspect_connectors.enabled` | `true` / `false` | 查看当前会话连接器状态工具开关。 |
+| `tools.access_connector.enabled` | `true` / `false` | 执行已连接连接器命令工具开关。 |
+| `tools.access_connector.max_output_chars` | 正整数 | 连接器输出清洗后的最大字符数（保留尾部）。 |
+
+连接器配置结构（按连接器名组织）：
+
+| 配置路径 | 字段名 | 可选项 | 描述 |
+|---|---|---|---|
+| `tools.database_connect_connector.connectors.<connector_name>` | `database_type` | `mysql` / `postgres` / `sqlite` | 数据库类型。 |
+| `tools.database_connect_connector.connectors.<connector_name>` | `host` | 主机/IP | MySQL/Postgres 常用。 |
+| `tools.database_connect_connector.connectors.<connector_name>` | `port` | 端口号 | MySQL/Postgres 常用。 |
+| `tools.database_connect_connector.connectors.<connector_name>` | `username` | 字符串 | MySQL/Postgres 常用用户名。 |
+| `tools.database_connect_connector.connectors.<connector_name>` | `password` | 字符串 / `${VAR_NAME}` | 建议参数化。 |
+| `tools.database_connect_connector.connectors.<connector_name>` | `database` | 字符串 | MySQL/Postgres 数据库名。 |
+| `tools.database_connect_connector.connectors.<connector_name>` | `file_path` | 文件路径 | SQLite 常用。 |
+| `tools.terminal_connect_connector.connectors.<connector_name>` | `terminal_type` | `ssh` | 终端类型。 |
+| `tools.terminal_connect_connector.connectors.<connector_name>` | `host` | 主机/IP | SSH 主机地址。 |
+| `tools.terminal_connect_connector.connectors.<connector_name>` | `port` | 端口号 | SSH 端口（常用 22）。 |
+| `tools.terminal_connect_connector.connectors.<connector_name>` | `username` | 字符串 | SSH 用户名。 |
+| `tools.terminal_connect_connector.connectors.<connector_name>` | `password` | 字符串 / `${VAR_NAME}` | 建议参数化。 |
+
+工具入参补充：
+
+- `database_connect_connector`
+  - `connector_name`
+  - `database_type`
+  - `default_values`（可选，对象或 JSON 字符串；仅非敏感默认值）
+- `terminal_connect_connector`
+  - `connector_name`
+  - `terminal_type`
+  - `default_values`（可选，对象或 JSON 字符串；仅非敏感默认值）
+
+行为说明：
+
+- 缺少连接信息时会请求用户补全（仅在会话允许交互时）。
+- 同名连接器已连接时返回 `status=already_connected`，并提示改用 `access_connector`。
+- `database_connect_connector` / `terminal_connect_connector` / `inspect_connectors` 返回实际状态字段：
+  - `status`
+  - `status_code`
+  - `status_message`
+  - `checked_at`
+
+### 2.5 模型默认与提供方
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `defaultProvider`（或 `default_provider`） | `providers` 中已启用别名 | 全局默认模型别名。 |
+| `providers.<provider>.enabled` | `true` / `false` | 是否启用该模型配置。 |
+| `providers.<provider>.api_key` | 明文密钥 / `${VAR_NAME}` | 模型密钥（建议用占位符）。 |
+| `providers.<provider>.base_url` | URL 字符串 | 模型网关地址。 |
+| `providers.<provider>.model` | 模型名字符串 | 实际调用模型名。 |
+| `providers.<provider>.format` | `openai_compatible` / `dashscope` / 其他适配值 | 协议格式。 |
+| `providers.<provider>.reasoning_effort` | `low` / `medium` / `high`（视模型支持） | 推理强度。 |
+| `providers.<provider>.temperature` | 数值（通常 `0~2`） | 温度参数。 |
+| `providers.<provider>.max_tokens` | 正整数 | 最大输出 token。 |
+| `providers.<provider>.preserve_thinking` | `true` / `false`（视模型支持） | 是否保留思考。 |
+| `providers.<provider>.thinking_budget` | 正整数（视模型支持） | 思考预算。 |
+| `providers.<provider>.description` | 字符串 | 提供方说明。 |
+
+### 2.6 MCP 服务 `mcp_servers`
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `mcp_servers.<name>.type` | `streamableHttp` / `sse` | MCP 连接类型。 |
+| `mcp_servers.<name>.description` | 字符串 | MCP 服务描述。 |
+| `mcp_servers.<name>.isActive` | `true` / `false` | 是否启用该 MCP 服务。 |
+| `mcp_servers.<name>.name` | 字符串（可选） | 展示名。 |
+| `mcp_servers.<name>.baseUrl` | URL 字符串 | MCP 服务地址。 |
+| `mcp_servers.<name>.headers` | 对象（如 `Authorization`） | 请求头；支持 `${VAR_NAME}` 解析。 |
+
+### 2.7 其他运行参数
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
 | `streaming` | `true` / `false` | 是否启用流式响应。 |
 
-### 2.6 超级管理员
+### 2.8 超级管理员
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
@@ -158,6 +238,19 @@
 | `tools.doc_to_data.enabled` | `true` / `false` | 用户级文档解析子工具开关（仅 `process_content_task` 内部使用）。 |
 | `tools.process_content_task.enabled` | `true` / `false` | 用户级内容处理任务工具开关。 |
 | `tools.process_content_task.max_tool_loop_turns` | 正整数 | 用户级内容处理任务内部最大工具轮数。 |
+
+#### 3.3.2 连接器类（常见用户覆盖）
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `tools.process_connector_task.enabled` | `true` / `false` | 用户级连接器编排工具开关。 |
+| `tools.process_connector_task.max_tool_loop_turns` | 正整数 | 用户级连接器子任务工具轮次。 |
+| `tools.database_connect_connector.connectors` | 对象 | 用户级预置数据库连接（建议使用参数化密码 `${...}`）。 |
+| `tools.terminal_connect_connector.connectors` | 对象 | 用户级预置终端连接（建议使用参数化密码 `${...}`）。 |
+| `tools.access_connector.max_output_chars` | 正整数 | 用户级连接器输出长度控制。 |
+| `tools.database_connect_connector.enabled` | `true` / `false` | 用户级数据库连接器工具开关。 |
+| `tools.terminal_connect_connector.enabled` | `true` / `false` | 用户级终端连接器工具开关。 |
+| `tools.inspect_connectors.enabled` | `true` / `false` | 用户级连接器状态检查工具开关。 |
 
 > 注意：`tools.execute_script` 由服务端控制，用户配置不会生效（已在后端禁改）。
 

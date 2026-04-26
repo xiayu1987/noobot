@@ -81,6 +81,8 @@ export function createContentProcessTool({ agentContext }) {
         systemRuntime?.dialogProcessId || "",
       ).trim();
       const resolvedModelName = String(modelName || "").trim();
+      const allowUserInteraction =
+        systemRuntime?.config?.allowUserInteraction !== false;
       if (!botManager || !userId || !sessionId) {
         return jsonError({
           error: "runtime missing botManager/userId/sessionId",
@@ -104,7 +106,7 @@ export function createContentProcessTool({ agentContext }) {
           eventListener,
           userInteractionBridge,
           runConfig: {
-            allowUserInteraction: true,
+            allowUserInteraction,
             toolPolicy: {
               mode: "custom_only",
               customTools: contentProcessTools,
