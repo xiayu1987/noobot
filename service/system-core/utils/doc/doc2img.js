@@ -40,12 +40,12 @@ const OFFICE_EXTS = new Set([
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".bmp"]);
 
-function sanitizeName(s) {
-  return s.replace(/[^\w.-]+/g, "_");
+function sanitizeName(inputName) {
+  return inputName.replace(/[^\w.-]+/g, "_");
 }
 
-async function ensureDir(p) {
-  await mkdir(p, { recursive: true });
+async function ensureDir(directoryPath) {
+  await mkdir(directoryPath, { recursive: true });
 }
 
 function isOfficeFile(filePath) {
@@ -88,13 +88,13 @@ async function pdfToImagesViaNodePoppler({
   const ext = format === "jpg" || format === "jpeg" ? ".jpg" : ".png";
   const files = await readdir(outputDir);
   let images = files
-    .filter((n) => n.startsWith(base + "-") && n.toLowerCase().endsWith(ext))
-    .sort((a, b) => {
-      const pa = Number((a.match(/-(\d+)\./) || [])[1] || 0);
-      const pb = Number((b.match(/-(\d+)\./) || [])[1] || 0);
-      return pa - pb;
+    .filter((fileName) => fileName.startsWith(base + "-") && fileName.toLowerCase().endsWith(ext))
+    .sort((leftFileName, rightFileName) => {
+      const leftPageNumber = Number((leftFileName.match(/-(\d+)\./) || [])[1] || 0);
+      const rightPageNumber = Number((rightFileName.match(/-(\d+)\./) || [])[1] || 0);
+      return leftPageNumber - rightPageNumber;
     })
-    .map((n) => path.join(outputDir, n));
+    .map((fileName) => path.join(outputDir, fileName));
 
   if (!images.length) {
     const single = path.join(outputDir, base + ext);

@@ -5,6 +5,10 @@ import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { chromium } from "playwright";
+import {
+  extractReadableLinesFromHtml,
+  isReadabilityExtractorReady,
+} from "./web-text-cleaner.js";
 
 const require = createRequire(import.meta.url);
 const fsp = fs.promises;
@@ -19,18 +23,7 @@ try {
   HAS_SHARP = false;
 }
 
-let Readability = null;
-let JSDOM = null;
-let HAS_READABILITY = false;
-try {
-  ({ Readability } = require('@mozilla/readability'));
-  ({ JSDOM } = require('jsdom'));
-  HAS_READABILITY = true;
-} catch (_) {
-  Readability = null;
-  JSDOM = null;
-  HAS_READABILITY = false;
-}
+const HAS_READABILITY = isReadabilityExtractorReady();
 
 const DEFAULT_CONFIG = {
   expand_patterns: [
@@ -78,13 +71,13 @@ function deepMerge(base, override) {
   return out;
 }
 
-function isPlainObject(v) {
-  return v && typeof v === 'object' && !Array.isArray(v);
+function isPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function fileExists(p) {
+async function fileExists(filePath) {
   try {
-    await fsp.access(p, fs.constants.F_OK);
+    await fsp.access(filePath, fs.constants.F_OK);
     return true;
   } catch {
     return false;
@@ -94,22 +87,22 @@ async function fileExists(p) {
 /* ---------------------------
  * 基础工具
  * --------------------------- */
-function isUrl(s) {
-  return /^https?:\/\//i.test((s || '').trim());
+function isUrl(textValue) {
+  return /^https?:\/\//i.test((textValue || '').trim());
 }
 
 function safeName(name, maxLen = 120) {
-  let n = (name || '').replace(/[^\w\-.]+/g, '_').replace(/^_+|_+$/g, '');
-  if (n.length > maxLen) n = n.slice(0, maxLen).replace(/_+$/g, '');
-  return n || 'unknown';
+  let normalizedName = (name || '').replace(/[^\w\-.]+/g, '_').replace(/^_+|_+$/g, '');
+  if (normalizedName.length > maxLen) normalizedName = normalizedName.slice(0, maxLen).replace(/_+$/g, '');
+  return normalizedName || 'unknown';
 }
 
 function safeStemFromUrl(url, maxLen = 120) {
   let cleaned = (url || '').trim().replace(/^https?:\/\//i, '');
   cleaned = cleaned.replace(/[^\w\-.]+/g, '_').replace(/^_+|_+$/g, '');
   if (cleaned.length > maxLen) cleaned = cleaned.slice(0, maxLen).replace(/_+$/g, '');
-  const h = crypto.createHash('md5').update(url, 'utf8').digest('hex').slice(0, 10);
-  return cleaned ? `${cleaned}_${h}` : h;
+  const hashValue = crypto.createHash('md5').update(url, 'utf8').digest('hex').slice(0, 10);
+  return cleaned ? `${cleaned}_${hashValue}` : hashValue;
 }
 
 function hostDirName(url) {
@@ -121,55 +114,53 @@ function hostDirName(url) {
 }
 
 async function loadUrls(inputValue) {
-  const v = (inputValue || '').trim();
-  if (isUrl(v)) return [v];
+  const normalizedInput = (inputValue || '').trim();
+  if (isUrl(normalizedInput)) return [normalizedInput];
 
-  const p = path.resolve(expandHome(v));
-  const st = await statSafe(p);
+  const resolvedPath = path.resolve(expandHome(normalizedInput));
+  const statResult = await statSafe(resolvedPath);
 
-  if (st && st.isFile()) {
-    const txt = await fsp.readFile(p, 'utf-8');
-    return txt
+  if (statResult && statResult.isFile()) {
+    const fileText = await fsp.readFile(resolvedPath, 'utf-8');
+    return fileText
       .split(/\r?\n/)
-      .map(s => s.trim())
-      .filter(s => s && !s.startsWith('#') && isUrl(s));
+      .map(lineText => lineText.trim())
+      .filter(lineText => lineText && !lineText.startsWith('#') && isUrl(lineText));
   }
 
-  if (st && st.isDirectory()) {
-    const files = (await fsp.readdir(p))
-      .filter(f => f.toLowerCase().endsWith('.txt'))
-      .sort((a, b) => a.localeCompare(b));
-    const urls = [];
-    for (const f of files) {
-      const txt = await fsp.readFile(path.join(p, f), 'utf-8');
-      for (const line of txt.split(/\r?\n/)) {
-        const s = line.trim();
-        if (s && !s.startsWith('#') && isUrl(s)) urls.push(s);
-      }
-    }
-    return urls;
+  if (statResult && statResult.isDirectory()) {
+    const files = (await fsp.readdir(resolvedPath))
+      .filter(fileName => fileName.toLowerCase().endsWith('.txt'))
+      .sort((leftName, rightName) => leftName.localeCompare(rightName));
+    const fileContents = await Promise.all(
+      files.map(fileName => fsp.readFile(path.join(resolvedPath, fileName), 'utf-8'))
+    );
+    return fileContents.flatMap(fileText => fileText
+      .split(/\r?\n/)
+      .map(lineText => lineText.trim())
+      .filter(lineText => lineText && !lineText.startsWith('#') && isUrl(lineText)));
   }
 
   throw new Error(`无法识别输入：${inputValue}（不是 URL / 文件 / 目录）`);
 }
 
-async function statSafe(p) {
+async function statSafe(filePath) {
   try {
-    return await fsp.stat(p);
+    return await fsp.stat(filePath);
   } catch {
     return null;
   }
 }
 
-function expandHome(p) {
-  if (!p) return p;
-  if (p === '~') return process.env.HOME || process.env.USERPROFILE || p;
-  if (p.startsWith('~/')) return path.join(process.env.HOME || process.env.USERPROFILE || '', p.slice(2));
-  return p;
+function expandHome(filePath) {
+  if (!filePath) return filePath;
+  if (filePath === '~') return process.env.HOME || process.env.USERPROFILE || filePath;
+  if (filePath.startsWith('~/')) return path.join(process.env.HOME || process.env.USERPROFILE || '', filePath.slice(2));
+  return filePath;
 }
 
-function escapeRegex(s) {
-  return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function escapeRegex(textValue) {
+  return String(textValue || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /* ---------------------------
@@ -188,12 +179,12 @@ async function tryExpandContent(page, patterns) {
   for (const kw of patterns || []) {
     try {
       const loc = page.locator(`text=/${escapeRegex(kw)}/i`);
-      const c = Math.min(await loc.count(), 20);
-      for (let i = 0; i < c; i++) {
+      const itemCount = Math.min(await loc.count(), 20);
+      for (let itemIndex = 0; itemIndex < itemCount; itemIndex++) {
         try {
-          const el = loc.nth(i);
-          if (await el.isVisible({ timeout: 500 })) {
-            await el.click({ timeout: 800 });
+          const targetElement = loc.nth(itemIndex);
+          if (await targetElement.isVisible({ timeout: 500 })) {
+            await targetElement.click({ timeout: 800 });
             await page.waitForTimeout(150);
           }
         } catch (_) {}
@@ -204,17 +195,17 @@ async function tryExpandContent(page, patterns) {
 
 async function autoScroll(page, maxSteps = 35, stepPx = 1400, waitMs = 450) {
   let lastH = 0;
-  for (let i = 0; i < maxSteps; i++) {
+  for (let stepIndex = 0; stepIndex < maxSteps; stepIndex++) {
     await page.evaluate((sp) => window.scrollBy(0, sp), stepPx);
     await page.waitForTimeout(waitMs);
-    let h = await page.evaluate(() => (document.body ? document.body.scrollHeight : 0));
-    if (h <= lastH) {
+    let scrollHeight = await page.evaluate(() => (document.body ? document.body.scrollHeight : 0));
+    if (scrollHeight <= lastH) {
       await page.waitForTimeout(waitMs);
       const h2 = await page.evaluate(() => (document.body ? document.body.scrollHeight : 0));
-      if (h2 <= h) break;
-      h = h2;
+      if (h2 <= scrollHeight) break;
+      scrollHeight = h2;
     }
-    lastH = h;
+    lastH = scrollHeight;
   }
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(300);
@@ -223,7 +214,7 @@ async function autoScroll(page, maxSteps = 35, stepPx = 1400, waitMs = 450) {
 async function waitTextStable(page, rounds = 10, intervalMs = 700) {
   let stable = 0;
   let lastLen = -1;
-  for (let i = 0; i < rounds; i++) {
+  for (let roundIndex = 0; roundIndex < rounds; roundIndex++) {
     const curLen = await page.evaluate(() => (document.body?.innerText || '').length);
     if (curLen === lastLen) {
       stable++;
@@ -239,83 +230,111 @@ async function waitTextStable(page, rounds = 10, intervalMs = 700) {
 /* ---------------------------
  * 清洗与去重
  * --------------------------- */
-function normalizeForDedup(s) {
-  let t = String(s || '').trim().toLowerCase();
-  t = t.replace(/https?:\/\/\S+|www\.\S+/g, '');
-  t = t.replace(/\s+/g, '');
-  t = t.replace(/[^\u4e00-\u9fff0-9a-z]+/g, '');
-  return t;
+function normalizeForDedup(textValue) {
+  let normalizedText = String(textValue || '').trim().toLowerCase();
+  normalizedText = normalizedText.replace(/https?:\/\/\S+|www\.\S+/g, '');
+  normalizedText = normalizedText.replace(/\s+/g, '');
+  normalizedText = normalizedText.replace(/[^\u4e00-\u9fff0-9a-z]+/g, '');
+  return normalizedText;
 }
 
-function isNoiseOrAdLine(s, adPatterns) {
-  const t = String(s || '').replace(/\s+/g, ' ').trim();
-  if (!t) return true;
-  if (t.length <= 2) return true;
-
-  const low = t.toLowerCase();
-  for (const p of adPatterns || []) {
+function prepareAdPatternMatchers(adPatterns) {
+  const matchers = [];
+  for (const patternText of adPatterns || []) {
+    const normalizedPattern = String(patternText || '').trim();
+    if (!normalizedPattern) continue;
     try {
-      const re = new RegExp(p, 'i');
-      if (re.test(low) && t.length <= 60) return true;
-    } catch (_) {
-      if (low.includes(String(p).toLowerCase()) && t.length <= 60) return true;
+      matchers.push({ type: 'regex', value: new RegExp(normalizedPattern, 'i') });
+    } catch {
+      matchers.push({ type: 'string', value: normalizedPattern.toLowerCase() });
+    }
+  }
+  return matchers;
+}
+
+function isNoiseOrAdLine(lineText, adPatterns, adPatternMatchers = null) {
+  const normalizedLine = String(lineText || '').replace(/\s+/g, ' ').trim();
+  if (!normalizedLine) return true;
+  if (normalizedLine.length <= 2) return true;
+
+  const lowerLine = normalizedLine.toLowerCase();
+  const matchers = Array.isArray(adPatternMatchers)
+    ? adPatternMatchers
+    : prepareAdPatternMatchers(adPatterns);
+  for (const matcher of matchers) {
+    if (
+      matcher?.type === 'regex' &&
+      matcher.value instanceof RegExp &&
+      matcher.value.test(lowerLine) &&
+      normalizedLine.length <= 60
+    ) {
+      return true;
+    }
+    if (
+      matcher?.type === 'string' &&
+      lowerLine.includes(String(matcher.value || '')) &&
+      normalizedLine.length <= 60
+    ) {
+      return true;
     }
   }
 
-  if ((t.match(/[|｜/·•>\-]/g) || []).length >= 4 && t.length <= 80) return true;
-  if (/^[\W_0-9]+$/u.test(t)) return true;
+  if ((normalizedLine.match(/[|｜/·•>\-]/g) || []).length >= 4 && normalizedLine.length <= 80) return true;
+  if (/^[\W_0-9]+$/u.test(normalizedLine)) return true;
 
   return false;
 }
 
 // 简单文本相似度（Dice coefficient）
-function diceCoefficient(a, b) {
-  if (a === b) return 1;
-  if (!a || !b) return 0;
-  if (a.length < 2 || b.length < 2) return 0;
+function diceCoefficient(leftText, rightText) {
+  if (leftText === rightText) return 1;
+  if (!leftText || !rightText) return 0;
+  if (leftText.length < 2 || rightText.length < 2) return 0;
 
   const bigrams = new Map();
-  for (let i = 0; i < a.length - 1; i++) {
-    const bg = a.slice(i, i + 2);
-    bigrams.set(bg, (bigrams.get(bg) || 0) + 1);
+  for (let leftIndex = 0; leftIndex < leftText.length - 1; leftIndex++) {
+    const biGram = leftText.slice(leftIndex, leftIndex + 2);
+    bigrams.set(biGram, (bigrams.get(biGram) || 0) + 1);
   }
 
   let overlap = 0;
-  for (let i = 0; i < b.length - 1; i++) {
-    const bg = b.slice(i, i + 2);
-    const cnt = bigrams.get(bg) || 0;
-    if (cnt > 0) {
-      bigrams.set(bg, cnt - 1);
+  for (let rightIndex = 0; rightIndex < rightText.length - 1; rightIndex++) {
+    const biGram = rightText.slice(rightIndex, rightIndex + 2);
+    const currentCount = bigrams.get(biGram) || 0;
+    if (currentCount > 0) {
+      bigrams.set(biGram, currentCount - 1);
       overlap++;
     }
   }
 
-  return (2 * overlap) / ((a.length - 1) + (b.length - 1));
+  return (2 * overlap) / ((leftText.length - 1) + (rightText.length - 1));
 }
 
 function cleanAndDedupLines(lines, adPatterns, simThreshold = 0.94) {
   const out = [];
   const seenExact = new Set();
   const recentNorms = [];
+  const adPatternMatchers = prepareAdPatternMatchers(adPatterns);
 
-  for (const x of lines || []) {
-    const t = String(x || '').replace(/\s+/g, ' ').trim();
-    if (!t) continue;
-    if (isNoiseOrAdLine(t, adPatterns)) continue;
+  for (const lineValue of lines || []) {
+    const normalizedLine = String(lineValue || '').replace(/\s+/g, ' ').trim();
+    if (!normalizedLine) continue;
+    if (isNoiseOrAdLine(normalizedLine, adPatterns, adPatternMatchers)) continue;
 
-    const n = normalizeForDedup(t);
-    if (!n) continue;
-    if (seenExact.has(n)) continue;
+    const normalizedForCompare = normalizeForDedup(normalizedLine);
+    if (!normalizedForCompare) continue;
+    if (seenExact.has(normalizedForCompare)) continue;
 
     let duplicate = false;
-    const recent = recentNorms.slice(-200);
-    for (const pn of recent) {
-      if (n === pn || n.includes(pn) || pn.includes(n)) {
+    const startIndex = Math.max(0, recentNorms.length - 200);
+    for (let recentIndex = startIndex; recentIndex < recentNorms.length; recentIndex++) {
+      const previousNormalized = recentNorms[recentIndex];
+      if (normalizedForCompare === previousNormalized || normalizedForCompare.includes(previousNormalized) || previousNormalized.includes(normalizedForCompare)) {
         duplicate = true;
         break;
       }
-      if (n.length > 20 && pn.length > 20) {
-        const ratio = diceCoefficient(n, pn);
+      if (normalizedForCompare.length > 20 && previousNormalized.length > 20) {
+        const ratio = diceCoefficient(normalizedForCompare, previousNormalized);
         if (ratio >= simThreshold) {
           duplicate = true;
           break;
@@ -325,31 +344,12 @@ function cleanAndDedupLines(lines, adPatterns, simThreshold = 0.94) {
 
     if (duplicate) continue;
 
-    seenExact.add(n);
-    recentNorms.push(n);
-    out.push(t);
+    seenExact.add(normalizedForCompare);
+    recentNorms.push(normalizedForCompare);
+    out.push(normalizedLine);
   }
 
   return out;
-}
-
-/* ---------------------------
- * 可选正文清洗（替代 trafilatura）
- * --------------------------- */
-function extractWithReadabilityFromHtml(html, adPatterns) {
-  if (!HAS_READABILITY || !html) return [];
-
-  try {
-    const dom = new JSDOM(html, { url: 'https://example.com/' });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
-    const text = (article?.textContent || '').trim();
-    if (!text) return [];
-    const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    return cleanAndDedupLines(lines, adPatterns, 0.94);
-  } catch {
-    return [];
-  }
 }
 
 /* ---------------------------
@@ -358,21 +358,21 @@ function extractWithReadabilityFromHtml(html, adPatterns) {
 async function extractOrderedSegments(page, maxItems = 8000) {
   const js = `
 () => {
-  const visible = (el) => {
-    if (!el) return false;
-    const st = getComputedStyle(el);
-    if (!st) return true;
-    if (st.display === "none" || st.visibility === "hidden") return false;
-    const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0;
+  const visible = (elementNode) => {
+    if (!elementNode) return false;
+    const computedStyle = getComputedStyle(elementNode);
+    if (!computedStyle) return true;
+    if (computedStyle.display === "none" || computedStyle.visibility === "hidden") return false;
+    const boundingRect = elementNode.getBoundingClientRect();
+    return boundingRect.width > 0 && boundingRect.height > 0;
   };
 
-  const norm = (s) => (s || "").replace(/\\r/g, "").replace(/\\u00a0/g, " ").trim();
+  const normalizeText = (textValue) => (textValue || "").replace(/\\r/g, "").replace(/\\u00a0/g, " ").trim();
 
-  const detectLang = (el) => {
-    const c = (el.className || "") + " " + (el.getAttribute("data-language") || "");
-    const m = c.match(/(?:language|lang)[-_:]?([a-zA-Z0-9#+.-]+)/i);
-    return m && m[1] ? m[1].toLowerCase() : "";
+  const detectLang = (elementNode) => {
+    const classLanguageText = (elementNode.className || "") + " " + (elementNode.getAttribute("data-language") || "");
+    const langMatch = classLanguageText.match(/(?:language|lang)[-_:]?([a-zA-Z0-9#+.-]+)/i);
+    return langMatch && langMatch[1] ? langMatch[1].toLowerCase() : "";
   };
 
   const pickRoot = () => {
@@ -390,14 +390,14 @@ async function extractOrderedSegments(page, maxItems = 8000) {
     let best = null;
     let bestScore = -1;
 
-    for (const sel of candidates) {
-      for (const el of document.querySelectorAll(sel)) {
-        if (!visible(el)) continue;
-        const tlen = (el.innerText || "").length;
-        const codeN = el.querySelectorAll("pre, code").length;
-        const score = tlen + codeN * 300;
+    for (const selectorText of candidates) {
+      for (const elementNode of document.querySelectorAll(selectorText)) {
+        if (!visible(elementNode)) continue;
+        const textLength = (elementNode.innerText || "").length;
+        const codeBlockCount = elementNode.querySelectorAll("pre, code").length;
+        const score = textLength + codeBlockCount * 300;
         if (score > bestScore) {
-          best = el;
+          best = elementNode;
           bestScore = score;
         }
       }
@@ -409,28 +409,28 @@ async function extractOrderedSegments(page, maxItems = 8000) {
 
   const root = pickRoot();
 
-  const isInNoiseArea = (el) => {
-    if (!root.contains(el)) return true;
-    return !!el.closest("nav, footer, aside, form, noscript, script, style, .sidebar, .recommend, .related");
+  const isInNoiseArea = (elementNode) => {
+    if (!root.contains(elementNode)) return true;
+    return !!elementNode.closest("nav, footer, aside, form, noscript, script, style, .sidebar, .recommend, .related");
   };
 
   const nodes = root.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,code");
   const out = [];
   const seen = new Set();
 
-  for (const el of nodes) {
-    if (!visible(el)) continue;
-    if (isInNoiseArea(el)) continue;
+  for (const elementNode of nodes) {
+    if (!visible(elementNode)) continue;
+    if (isInNoiseArea(elementNode)) continue;
 
-    const tag = (el.tagName || "").toLowerCase();
+    const tag = (elementNode.tagName || "").toLowerCase();
 
     if (tag === "pre") {
-      const text = norm(el.innerText || el.textContent || "");
+      const text = normalizeText(elementNode.innerText || elementNode.textContent || "");
       if (!text) continue;
 
-      let lang = detectLang(el);
-      const c = el.querySelector("code");
-      if (!lang && c) lang = detectLang(c);
+      let lang = detectLang(elementNode);
+      const codeElement = elementNode.querySelector("code");
+      if (!lang && codeElement) lang = detectLang(codeElement);
 
       const key = "C:" + text.replace(/\\s+/g, "").slice(0, 500);
       if (seen.has(key)) continue;
@@ -441,8 +441,8 @@ async function extractOrderedSegments(page, maxItems = 8000) {
     }
 
     if (tag === "code") {
-      if (el.closest("pre")) continue;
-      const text = norm(el.innerText || el.textContent || "");
+      if (elementNode.closest("pre")) continue;
+      const text = normalizeText(elementNode.innerText || elementNode.textContent || "");
       if (!text) continue;
 
       const looksCode = /[{}();=<>[\\].:+\\-_*\\/\\\\]|import |def |class |function |SELECT |FROM |WHERE/i.test(text);
@@ -452,11 +452,11 @@ async function extractOrderedSegments(page, maxItems = 8000) {
       if (seen.has(key)) continue;
       seen.add(key);
 
-      out.push({type: "code", lang: detectLang(el), text});
+      out.push({type: "code", lang: detectLang(elementNode), text});
       continue;
     }
 
-    const text = norm(el.innerText || el.textContent || "");
+    const text = normalizeText(elementNode.innerText || elementNode.textContent || "");
     if (!text || text.length < 2) continue;
 
     let line = text;
@@ -482,17 +482,17 @@ async function extractOrderedSegments(page, maxItems = 8000) {
   }
 
   const out = [];
-  for (const s of segs) {
-    if (!s || typeof s !== 'object') continue;
-    const tp = String(s.type || '').trim();
-    if (tp === 'code') {
-      const text = String(s.text || '').replace(/^\n+|\n+$/g, '');
+  for (const segmentItem of segs) {
+    if (!segmentItem || typeof segmentItem !== 'object') continue;
+    const segmentType = String(segmentItem.type || '').trim();
+    if (segmentType === 'code') {
+      const text = String(segmentItem.text || '').replace(/^\n+|\n+$/g, '');
       if (text.length < 8) continue;
-      out.push({ type: 'code', lang: String(s.lang || '').trim(), text });
-    } else if (tp === 'text') {
-      const t = String(s.text || '').replace(/\s+/g, ' ').trim();
-      if (!t) continue;
-      out.push({ type: 'text', text: t });
+      out.push({ type: 'code', lang: String(segmentItem.lang || '').trim(), text });
+    } else if (segmentType === 'text') {
+      const normalizedText = String(segmentItem.text || '').replace(/\s+/g, ' ').trim();
+      if (!normalizedText) continue;
+      out.push({ type: 'text', text: normalizedText });
     }
     if (out.length >= maxItems) break;
   }
@@ -503,11 +503,12 @@ function segmentsToMarkdown(segments, adPatterns, maxChars = 800000) {
   const parts = [];
   let total = 0;
   let prevKey = '';
+  const adPatternMatchers = prepareAdPatternMatchers(adPatterns);
 
   for (const seg of segments || []) {
     let chunk = '';
     if (seg.type === 'text') {
-      if (isNoiseOrAdLine(seg.text, adPatterns)) continue;
+      if (isNoiseOrAdLine(seg.text, adPatterns, adPatternMatchers)) continue;
       chunk = `${seg.text}\n`;
     } else {
       const lang = String(seg.lang || '').trim();
@@ -534,58 +535,58 @@ function segmentsToMarkdown(segments, adPatterns, maxChars = 800000) {
 /* ---------------------------
  * 图片后处理（缩放、压缩、分切）
  * --------------------------- */
-function calcTargetSize(w, h, maxSide, maxPixels) {
+function calcTargetSize(imageWidth, imageHeight, maxSide, maxPixels) {
   let scale = 1.0;
 
   if (maxSide > 0) {
-    const m = Math.max(w, h);
-    if (m > maxSide) scale = Math.min(scale, maxSide / m);
+    const maxImageSide = Math.max(imageWidth, imageHeight);
+    if (maxImageSide > maxSide) scale = Math.min(scale, maxSide / maxImageSide);
   }
 
   if (maxPixels > 0) {
-    const px = w * h;
-    if (px * (scale ** 2) > maxPixels) {
-      scale = Math.min(scale, Math.sqrt(maxPixels / px));
+    const pixelCount = imageWidth * imageHeight;
+    if (pixelCount * (scale ** 2) > maxPixels) {
+      scale = Math.min(scale, Math.sqrt(maxPixels / pixelCount));
     }
   }
 
-  const nw = Math.max(1, Math.round(w * scale));
-  const nh = Math.max(1, Math.round(h * scale));
-  return [nw, nh];
+  const targetWidth = Math.max(1, Math.round(imageWidth * scale));
+  const targetHeight = Math.max(1, Math.round(imageHeight * scale));
+  return [targetWidth, targetHeight];
 }
 
 function normalizeImageFormat(fmt) {
-  const f = String(fmt || '').trim().toLowerCase();
-  if (f === 'jpg' || f === 'jpeg') return 'jpg';
-  if (f === 'png') return 'png';
-  if (f === 'webp') return 'webp';
+  const normalizedFormat = String(fmt || '').trim().toLowerCase();
+  if (normalizedFormat === 'jpg' || normalizedFormat === 'jpeg') return 'jpg';
+  if (normalizedFormat === 'png') return 'png';
+  if (normalizedFormat === 'webp') return 'webp';
   return 'jpg';
 }
 
 async function saveImageSharp(sharpInst, outPath, imgFormat, jpegQuality, dpi) {
   await fsp.mkdir(path.dirname(outPath), { recursive: true });
-  let s = sharpInst.withMetadata({ density: Number(dpi) || 300 });
+  let sharpPipeline = sharpInst.withMetadata({ density: Number(dpi) || 300 });
 
   if (imgFormat === 'jpg') {
-    s = s.jpeg({
+    sharpPipeline = sharpPipeline.jpeg({
       quality: clampInt(jpegQuality, 1, 100),
       mozjpeg: true
     });
   } else if (imgFormat === 'png') {
-    s = s.png({ compressionLevel: 9, adaptiveFiltering: true });
+    sharpPipeline = sharpPipeline.png({ compressionLevel: 9, adaptiveFiltering: true });
   } else if (imgFormat === 'webp') {
-    s = s.webp({
+    sharpPipeline = sharpPipeline.webp({
       quality: clampInt(jpegQuality, 1, 100),
       effort: 6
     });
   }
-  await s.toFile(outPath);
+  await sharpPipeline.toFile(outPath);
 }
 
-function clampInt(v, min, max) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max, Math.round(n)));
+function clampInt(inputValue, min, max) {
+  const numberValue = Number(inputValue);
+  if (!Number.isFinite(numberValue)) return min;
+  return Math.max(min, Math.min(max, Math.round(numberValue)));
 }
 
 async function postprocessScreenshot(rawImagePath, outDir, stem, imageCfg) {
@@ -609,22 +610,22 @@ async function postprocessScreenshot(rawImagePath, outDir, stem, imageCfg) {
   const outPaths = [];
 
   const meta = await sharp(rawImagePath).metadata();
-  const w = Number(meta.width || 0);
-  const h = Number(meta.height || 0);
-  if (!w || !h) return [rawImagePath];
+  const imageWidth = Number(meta.width || 0);
+  const imageHeight = Number(meta.height || 0);
+  if (!imageWidth || !imageHeight) return [rawImagePath];
 
   let needSplit = false;
   if (splitLongImage) {
-    if (h > Math.max(splitMaxHeight, Math.floor(w * splitThresholdRatio))) needSplit = true;
+    if (imageHeight > Math.max(splitMaxHeight, Math.floor(imageWidth * splitThresholdRatio))) needSplit = true;
   }
 
   if (!needSplit) {
-    const [nw, nh] = calcTargetSize(w, h, maxSide, maxPixels);
-    let s = sharp(rawImagePath);
-    if (nw !== w || nh !== h) s = s.resize(nw, nh, { fit: 'fill', kernel: sharp.kernel.lanczos3 });
+    const [targetWidth, targetHeight] = calcTargetSize(imageWidth, imageHeight, maxSide, maxPixels);
+    let sharpPipeline = sharp(rawImagePath);
+    if (targetWidth !== imageWidth || targetHeight !== imageHeight) sharpPipeline = sharpPipeline.resize(targetWidth, targetHeight, { fit: 'fill', kernel: sharp.kernel.lanczos3 });
 
     const outPath = path.join(outDir, `${stem}${suffix}`);
-    await saveImageSharp(s, outPath, imgFormat, jpegQuality, dpi);
+    await saveImageSharp(sharpPipeline, outPath, imgFormat, jpegQuality, dpi);
     outPaths.push(outPath);
     return outPaths;
   }
@@ -633,20 +634,20 @@ async function postprocessScreenshot(rawImagePath, outDir, stem, imageCfg) {
   let top = 0;
   let idx = 1;
 
-  while (top < h) {
-    const bottom = Math.min(h, top + splitMaxHeight);
+  while (top < imageHeight) {
+    const bottom = Math.min(imageHeight, top + splitMaxHeight);
     const ch = bottom - top;
 
     let crop = sharp(rawImagePath).extract({
       left: 0,
       top: Math.floor(top),
-      width: Math.floor(w),
+      width: Math.floor(imageWidth),
       height: Math.floor(ch)
     });
 
-    const [nw, nh] = calcTargetSize(w, ch, maxSide, maxPixels);
-    if (nw !== w || nh !== ch) {
-      crop = crop.resize(nw, nh, { fit: 'fill', kernel: sharp.kernel.lanczos3 });
+    const [targetWidth, targetHeight] = calcTargetSize(imageWidth, ch, maxSide, maxPixels);
+    if (targetWidth !== imageWidth || targetHeight !== ch) {
+      crop = crop.resize(targetWidth, targetHeight, { fit: 'fill', kernel: sharp.kernel.lanczos3 });
     }
 
     const outPath = path.join(outDir, `${stem}_part${String(idx).padStart(3, '0')}${suffix}`);
@@ -654,7 +655,7 @@ async function postprocessScreenshot(rawImagePath, outDir, stem, imageCfg) {
     outPaths.push(outPath);
 
     idx += 1;
-    if (bottom >= h) break;
+    if (bottom >= imageHeight) break;
     top += step;
   }
 
@@ -682,7 +683,11 @@ async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = tr
   if (preferTrafilatura && HAS_READABILITY) {
     try {
       const html = await page.content();
-      trafiLines = extractWithReadabilityFromHtml(html, adPatterns);
+      trafiLines = extractReadableLinesFromHtml(html, {
+        urlValue: page.url(),
+        maxLines: 1200,
+        extraNoisePatterns: adPatterns,
+      });
     } catch {
       trafiLines = [];
     }
@@ -696,7 +701,7 @@ async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = tr
   usefulParts.push(orderedMd.trim() ? orderedMd : '[未提取到内容]');
 
   usefulParts.push('\n## 文本清洗附录');
-  if (trafiLines.length) usefulParts.push(...trafiLines.slice(0, 1200));
+  if (trafiLines.length) usefulParts.push(...trafiLines);
   else usefulParts.push('[未提取到 trafilatura/readability 文本]');
 
   let usefulText = `${usefulParts.join('\n').trim()}\n`;
@@ -708,7 +713,7 @@ async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = tr
     fullText = '';
   }
 
-  let fullLines = fullText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  let fullLines = fullText.split(/\r?\n/).map(lineText => lineText.trim()).filter(Boolean);
   fullLines = cleanAndDedupLines(fullLines, adPatterns, 0.96);
   fullText = `${fullLines.join('\n').trim()}\n`;
 
@@ -789,7 +794,7 @@ async function processOneUrl(url, outputDir, browser, preferTrafilatura, config)
 
       host_dir_uri: pathToFileURL(hostDir).href,
       raw_image_path_uri: rawExists ? pathToFileURL(rawImagePath).href : '',
-      image_paths_uri: processedImages.map(p => pathToFileURL(path.resolve(p)).href),
+      image_paths_uri: processedImages.map(imagePath => pathToFileURL(path.resolve(imagePath)).href),
       useful_text_path_uri: pathToFileURL(usefulTextPath).href,
       full_text_path_uri: pathToFileURL(fullTextPath).href,
 
@@ -832,7 +837,7 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
           `  useful: ${res.useful_text_path}\n` +
           `  full  : ${res.full_text_path}`
         );
-      } catch (e) {
+      } catch (error) {
         const err = {
           url,
           host_dir: '',
@@ -846,7 +851,7 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
           useful_text_path_uri: '',
           full_text_path_uri: '',
           status: 'error',
-          error: String(e && e.message ? e.message : e)
+          error: String(error && error.message ? error.message : error)
         };
         results.push(err);
         console.error(`[ERROR] ${url}\n  reason: ${err.error}`);

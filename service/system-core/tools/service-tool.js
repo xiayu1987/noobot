@@ -20,8 +20,8 @@ function isServiceEnabled(serviceCfg) {
   return serviceCfg?.enabled !== false;
 }
 
-function normalizeName(v = "") {
-  return String(v || "").trim();
+function normalizeName(value = "") {
+  return String(value || "").trim();
 }
 
 function jsonError(payload = {}) {
@@ -29,10 +29,10 @@ function jsonError(payload = {}) {
 }
 
 function validateInput({ serviceName, endpointName, queryString }) {
-  const s = normalizeName(serviceName);
-  const e = normalizeName(endpointName);
-  if (!s) return "serviceName required";
-  if (!e) return "endpointName required";
+  const normalizedServiceName = normalizeName(serviceName);
+  const normalizedEndpointName = normalizeName(endpointName);
+  if (!normalizedServiceName) return "serviceName required";
+  if (!normalizedEndpointName) return "endpointName required";
   if (
     queryString !== undefined &&
     (typeof queryString !== "object" || Array.isArray(queryString))

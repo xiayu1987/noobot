@@ -680,6 +680,7 @@ export function createConnectorChannelTools({ agentContext }) {
           {
             ok: result?.ok === true,
             status: result?.ok ? "completed" : "failed",
+            message: result?.ok ? "执行完成" : "执行失败",
             connector: result?.connector || {},
             output: cleanConnectorOutputForLLM(
               {

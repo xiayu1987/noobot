@@ -108,8 +108,8 @@ async function loadTree() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "加载工作区失败");
     tree.value = data.tree || [];
-  } catch (e) {
-    ElMessage.error(e.message || "加载工作区失败");
+  } catch (error) {
+    ElMessage.error(error.message || "加载工作区失败");
   } finally {
     loadingTree.value = false;
   }
@@ -180,8 +180,8 @@ async function openFile(node, source = "user") {
     activePathSource.value = source === "all" ? "all" : "user";
     isTextFile.value = data.isText !== false;
     content.value = data.content || "";
-  } catch (e) {
-    ElMessage.error(e.message || "读取文件失败");
+  } catch (error) {
+    ElMessage.error(error.message || "读取文件失败");
   } finally {
     loadingFile.value = false;
   }
@@ -219,8 +219,8 @@ async function saveFile() {
     if (!res.ok || !data.ok) throw new Error(data.error || "保存失败");
     ElMessage.success("保存成功");
     await refreshAll();
-  } catch (e) {
-    ElMessage.error(e.message || "保存失败");
+  } catch (error) {
+    ElMessage.error(error.message || "保存失败");
   } finally {
     saving.value = false;
   }
@@ -423,8 +423,8 @@ watch(
 
 watch(
   () => props.active,
-  (v) => {
-    if (v) refreshAll();
+  (isActive) => {
+    if (isActive) refreshAll();
   },
   { immediate: true },
 );

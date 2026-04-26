@@ -29,8 +29,8 @@ const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 function withDefaultReferer(urlValue = "", referer = "") {
   if (String(referer || "").trim()) return String(referer).trim();
   try {
-    const u = new URL(String(urlValue || ""));
-    return `${u.protocol}//${u.host}/`;
+    const parsedUrl = new URL(String(urlValue || ""));
+    return `${parsedUrl.protocol}//${parsedUrl.host}/`;
   } catch {
     return "";
   }

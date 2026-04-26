@@ -23,8 +23,8 @@ const RETAIN_MS = 60 * 60 * 1000; // 仅保留最近 1 小时
 
 let lastCleanupAt = 0;
 
-function pad(n, len = 2) {
-  return String(n).padStart(len, '0');
+function pad(numberValue, lengthValue = 2) {
+  return String(numberValue).padStart(lengthValue, '0');
 }
 
 function formatDateForFile(date = new Date()) {
@@ -61,12 +61,12 @@ function getWritableLogFilePath(entrySizeBytes) {
   const files = fs.readdirSync(LOG_DIR);
 
   const indices = files
-    .map((f) => {
-      const m = f.match(regex);
-      return m ? Number(m[1]) : null;
+    .map((fileName) => {
+      const matchResult = fileName.match(regex);
+      return matchResult ? Number(matchResult[1]) : null;
     })
-    .filter((v) => Number.isInteger(v))
-    .sort((a, b) => a - b);
+    .filter((indexNumber) => Number.isInteger(indexNumber))
+    .sort((leftIndex, rightIndex) => leftIndex - rightIndex);
 
   let index = indices.length ? indices[indices.length - 1] : 1;
   let filePath = path.join(LOG_DIR, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
@@ -136,7 +136,7 @@ async function decodeBodyByEncoding(buffer, encoding) {
     if (enc.includes('deflate')) return await inflate(buffer);
     if (enc.includes('br')) return await brotliDecompress(buffer);
     return buffer;
-  } catch (e) {
+  } catch (error) {
     // 解压失败就返回原始数据，避免影响代理功能
     return buffer;
   }
@@ -188,8 +188,8 @@ proxy.on('proxyRes', (proxyRes, req, res) => {
       const text = decoded.toString('utf8');
       const finalText = normalizeBodyText(text, proxyRes.headers['content-type']);
       logResponse(proxyRes, finalText);
-    } catch (e) {
-      appendLog(`\n[Response Log Error] ${new Date().toLocaleString()} ${e.stack || e}\n`);
+    } catch (error) {
+      appendLog(`\n[Response Log Error] ${new Date().toLocaleString()} ${error.stack || error}\n`);
     }
   });
 });

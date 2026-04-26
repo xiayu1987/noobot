@@ -138,13 +138,13 @@ function parseTimeMs(value) {
 
 function formatDuration(ms = 0) {
   const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  if (h > 0) {
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  const hourValue = Math.floor(total / 3600);
+  const minuteValue = Math.floor((total % 3600) / 60);
+  const secondValue = total % 60;
+  if (hourValue > 0) {
+    return `${String(hourValue).padStart(2, "0")}:${String(minuteValue).padStart(2, "0")}:${String(secondValue).padStart(2, "0")}`;
   }
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${String(minuteValue).padStart(2, "0")}:${String(secondValue).padStart(2, "0")}`;
 }
 
 function getThinkingDurationMs(messageItem = {}) {
@@ -160,7 +160,7 @@ function getThinkingDurationMs(messageItem = {}) {
     : candidateMessages;
   const scopedTimes = scopedMessages
     .map((item) => parseTimeMs(item?.ts))
-    .filter((x) => x > 0);
+    .filter((timeValue) => timeValue > 0);
   if (scopedTimes.length >= 2) {
     const startMs = Math.min(...scopedTimes);
     const endMs = messageItem?.pending
@@ -178,12 +178,12 @@ function getThinkingDurationMs(messageItem = {}) {
     : [];
   const logTimes = [...realtimeLogs, ...completedToolLogs]
     .map((logItem) => parseTimeMs(logItem?.ts))
-    .filter((x) => x > 0);
+    .filter((timeValue) => timeValue > 0);
   const startCandidates = [
     startedAt,
     ...(logTimes.length ? [Math.min(...logTimes)] : []),
     msgTs,
-  ].filter((x) => x > 0);
+  ].filter((timeValue) => timeValue > 0);
   if (!startCandidates.length) return 0;
   const startMs = Math.min(...startCandidates);
   const endMs = messageItem?.pending

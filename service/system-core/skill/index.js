@@ -33,8 +33,8 @@ export class SkillService {
       return [];
     }
     const names = level1Entries
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name);
+      .filter((entryItem) => entryItem.isDirectory())
+      .map((entryItem) => entryItem.name);
 
     return Promise.all(names.map(async (name) => {
       const configPath = path.join(skillRoot, name, "config.json");

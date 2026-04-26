@@ -9,22 +9,22 @@ function bytesToText(bytes = new Uint8Array()) {
 function xorBytes(data = new Uint8Array(), key = new Uint8Array()) {
   if (!data?.length || !key?.length) return new Uint8Array();
   const out = new Uint8Array(data.length);
-  for (let i = 0; i < data.length; i += 1) {
-    out[i] = data[i] ^ key[i % key.length];
+  for (let byteIndex = 0; byteIndex < data.length; byteIndex += 1) {
+    out[byteIndex] = data[byteIndex] ^ key[byteIndex % key.length];
   }
   return out;
 }
 
 function bytesToBase64(bytes = new Uint8Array()) {
   let binary = "";
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  for (let byteIndex = 0; byteIndex < bytes.length; byteIndex += 1) binary += String.fromCharCode(bytes[byteIndex]);
   return btoa(binary);
 }
 
 function base64ToBytes(base64 = "") {
   const binary = atob(String(base64 || ""));
   const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+  for (let byteIndex = 0; byteIndex < binary.length; byteIndex += 1) out[byteIndex] = binary.charCodeAt(byteIndex);
   return out;
 }
 

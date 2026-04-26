@@ -13,8 +13,8 @@ function xorBytes(data = Buffer.alloc(0), key = Buffer.alloc(0)) {
     return Buffer.alloc(0);
   }
   const out = Buffer.allocUnsafe(data.length);
-  for (let i = 0; i < data.length; i += 1) {
-    out[i] = data[i] ^ key[i % key.length];
+  for (let byteIndex = 0; byteIndex < data.length; byteIndex += 1) {
+    out[byteIndex] = data[byteIndex] ^ key[byteIndex % key.length];
   }
   return out;
 }

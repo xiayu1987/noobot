@@ -249,8 +249,8 @@ export function createScriptTool({ agentContext }) {
       const timeout = Number(scriptConfig?.scriptTimeoutMs || DEFAULT_TIMEOUT);
 
       if (!sandboxEnabled) {
-        const r = await run(command, workspace, timeout);
-        return toolExecResult("local", r);
+        const runResult = await run(command, workspace, timeout);
+        return toolExecResult("local", runResult);
       }
 
       let sandboxCmd = "";
@@ -337,12 +337,12 @@ export function createScriptTool({ agentContext }) {
         };
       }
 
-      let r = await run(sandboxCmd, workspace, timeout);
+      let runResult = await run(sandboxCmd, workspace, timeout);
       if (
         mode === "bubblewrap" &&
-        Number(r?.code || 0) !== 0 &&
+        Number(runResult?.code || 0) !== 0 &&
         /Can't make overlay mount|userxattr:\s*Invalid argument/i.test(
-          String(r?.stderr || ""),
+          String(runResult?.stderr || ""),
         )
       ) {
         const fallbackResult = await tryDockerFallback({
@@ -357,12 +357,12 @@ export function createScriptTool({ agentContext }) {
             "当前内核/发行版不支持 bubblewrap overlay(userxattr)，已自动回退到 docker。",
         });
         if (fallbackResult) return fallbackResult;
-        r = {
-          ...r,
-          stderr: `${String(r?.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 tools.execute_script.sandbox_provider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
+        runResult = {
+          ...runResult,
+          stderr: `${String(runResult?.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 tools.execute_script.sandbox_provider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
         };
       }
-      return toolExecResult(mode, r, extra);
+      return toolExecResult(mode, runResult, extra);
     },
   });
 

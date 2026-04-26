@@ -67,11 +67,11 @@ function canonicalSensitiveText(input = "") {
 }
 
 function containsRelation(left = "", right = "") {
-  const l = String(left || "").trim();
-  const r = String(right || "").trim();
-  if (!l || !r) return false;
-  if (l.includes(r) || r.includes(l)) {
-    if (Math.min(l.length, r.length) >= 4) return true;
+  const normalizedLeft = String(left || "").trim();
+  const normalizedRight = String(right || "").trim();
+  if (!normalizedLeft || !normalizedRight) return false;
+  if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) {
+    if (Math.min(normalizedLeft.length, normalizedRight.length) >= 4) return true;
   }
   return false;
 }

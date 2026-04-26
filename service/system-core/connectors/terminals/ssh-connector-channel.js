@@ -43,9 +43,9 @@ function buildChannelKey({
 }
 
 function resetSshState(key = "") {
-  const k = String(key || "").trim();
-  if (!k) return;
-  const state = sshShellStates.get(k);
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) return;
+  const state = sshShellStates.get(normalizedKey);
   if (!state) return;
   try {
     state?.stream?.end?.();
@@ -57,7 +57,7 @@ function resetSshState(key = "") {
   } catch {
     // ignore
   }
-  sshShellStates.delete(k);
+  sshShellStates.delete(normalizedKey);
 }
 
 async function ensureSshShellState({

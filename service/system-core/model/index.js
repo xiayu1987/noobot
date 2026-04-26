@@ -145,12 +145,12 @@ export function resolveSkillModelSpec({
   });
 }
 
-export function isSameModelSpec(a, b) {
+export function isSameModelSpec(leftModelSpec, rightModelSpec) {
   return (
-    (a?.alias || "") === (b?.alias || "") &&
-    (a?.model || "") === (b?.model || "") &&
-    (a?.base_url || "") === (b?.base_url || "") &&
-    (a?.format || "") === (b?.format || "")
+    (leftModelSpec?.alias || "") === (rightModelSpec?.alias || "") &&
+    (leftModelSpec?.model || "") === (rightModelSpec?.model || "") &&
+    (leftModelSpec?.base_url || "") === (rightModelSpec?.base_url || "") &&
+    (leftModelSpec?.format || "") === (rightModelSpec?.format || "")
   );
 }
 

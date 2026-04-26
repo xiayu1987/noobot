@@ -172,8 +172,8 @@ function stripDeniedPaths(rootKey = "", value) {
     const parts = relativePath.split(".").filter(Boolean);
     if (!parts.length) continue;
     let node = out;
-    for (let i = 0; i < parts.length - 1; i += 1) {
-      const segment = parts[i];
+    for (let partIndex = 0; partIndex < parts.length - 1; partIndex += 1) {
+      const segment = parts[partIndex];
       if (!isPlainObject(node?.[segment])) {
         node = null;
         break;

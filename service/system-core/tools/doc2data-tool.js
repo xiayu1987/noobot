@@ -157,19 +157,19 @@ export function createDoc2DataTool({ agentContext }) {
 
       const imageBatches = await buildImageBatches(images);
       const batchResults = [];
-      for (let i = 0; i < imageBatches.length; i += 1) {
-        const batch = imageBatches[i];
-        const pageNums = batch.map((x) => x.page);
+      for (let batchIndex = 0; batchIndex < imageBatches.length; batchIndex += 1) {
+        const batch = imageBatches[batchIndex];
+        const pageNums = batch.map((imageItem) => imageItem.page);
         const range = `${pageNums[0]}-${pageNums[pageNums.length - 1]}`;
         const message = new HumanMessage({
           content: [
             {
               type: "text",
-              text: `${userPrompt}\n\n这是第 ${i + 1} 批图片，页码范围 ${range}。请按页码顺序输出。`,
+              text: `${userPrompt}\n\n这是第 ${batchIndex + 1} 批图片，页码范围 ${range}。请按页码顺序输出。`,
             },
-            ...batch.map((img) => ({
+            ...batch.map((imageItem) => ({
               type: "image_url",
-              image_url: { url: img.dataUrl },
+              image_url: { url: imageItem.dataUrl },
             })),
           ],
         });
@@ -179,13 +179,13 @@ export function createDoc2DataTool({ agentContext }) {
             ? res.content
             : JSON.stringify(res?.content || "");
         batchResults.push({
-          batch: i + 1,
+          batch: batchIndex + 1,
           pages: pageNums,
           totalBytes: batch.reduce((sum, item) => sum + item.sizeBytes, 0),
           text,
         });
       }
-      const mergedText = batchResults.map((b) => b.text).join("\n\n");
+      const mergedText = batchResults.map((batchResult) => batchResult.text).join("\n\n");
       const totalImageBytes = imageBatches
         .flatMap((batch) => batch)
         .reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);

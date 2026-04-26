@@ -564,7 +564,7 @@ async function buildWorkspaceTree(
   if (depth > maxDepth) return [];
   const abs = currentPath ? safeJoin(rootPath, currentPath) : rootPath;
   const entries = (await readdir(abs, { withFileTypes: true }))
-    .filter((e) => !e.name.startsWith("."))
+    .filter((dirEntry) => !dirEntry.name.startsWith("."))
     .sort((a, b) => {
       if (a.isDirectory() && !b.isDirectory()) return -1;
       if (!a.isDirectory() && b.isDirectory()) return 1;

@@ -46,21 +46,48 @@ function isUrl(input = "") {
 
 function looksBlockedPage({ status = 0, title = "", html = "", text = "" }) {
   if (Number(status) >= 500) return true;
-  const sample = `${title}\n${text}\n${html}`.toLowerCase();
-  const patterns = [
+  const normalizedTitle = normalizeText(title).toLowerCase();
+  const normalizedText = String(text || "").toLowerCase();
+  const leadingTextSample = normalizedText.slice(0, 8000);
+  const titleOrTextSample = `${normalizedTitle}\n${leadingTextSample}`;
+  const strongPatterns = [
     "503 service temporarily unavailable",
     "service temporarily unavailable",
     "openresty",
     "access denied",
-    "forbidden",
+    "403 forbidden",
     "verification required",
-    "captcha",
     "robot check",
     "安全验证",
     "访问受限",
     "请求过于频繁",
   ];
-  return patterns.some((p) => sample.includes(p));
+  if (strongPatterns.some((patternText) => titleOrTextSample.includes(patternText))) {
+    return true;
+  }
+
+  // “captcha” 在很多正常页面的脚本配置里会出现，不应单独作为拦截信号
+  const hasCaptchaSignal = /captcha|hcaptcha|recaptcha/i.test(
+    `${normalizedTitle}\n${leadingTextSample}`,
+  );
+  const hasChallengeSignal = /verification required|robot check|安全验证|请完成验证|访问受限/i.test(
+    `${normalizedTitle}\n${leadingTextSample}`,
+  );
+  if (hasCaptchaSignal && hasChallengeSignal) return true;
+
+  // 仅在正文很短且包含拦截特征时，才用 html 兜底判定
+  if (leadingTextSample.length < 500) {
+    const normalizedHtml = String(html || "").toLowerCase().slice(0, 20000);
+    if (
+      /openresty|access denied|403 forbidden|service temporarily unavailable/.test(
+        normalizedHtml,
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function normalizeProcessMode(value = "") {
@@ -90,8 +117,8 @@ function uniqueUrls(urls = []) {
   return Array.from(
     new Set(
       (urls || [])
-        .map((x) => String(x || "").trim())
-        .filter((x) => isUrl(x)),
+        .map((urlValue) => String(urlValue || "").trim())
+        .filter((urlValue) => isUrl(urlValue)),
     ),
   );
 }
@@ -129,30 +156,30 @@ async function mapWithConcurrency(items = [], worker, concurrency = DEFAULT_CONC
 }
 
 async function loadUrlsFromInputValue(inputValue = "") {
-  const v = String(inputValue || "").trim();
-  if (!v) return [];
-  if (isUrl(v)) return [v];
-  const st = await stat(v).catch(() => null);
-  if (!st) return [];
-  if (st.isFile()) {
-    const txt = await readFile(v, "utf-8");
-    return txt
+  const normalizedInputValue = String(inputValue || "").trim();
+  if (!normalizedInputValue) return [];
+  if (isUrl(normalizedInputValue)) return [normalizedInputValue];
+  const statResult = await stat(normalizedInputValue).catch(() => null);
+  if (!statResult) return [];
+  if (statResult.isFile()) {
+    const textContent = await readFile(normalizedInputValue, "utf-8");
+    return textContent
       .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter((s) => s && !s.startsWith("#") && isUrl(s));
+      .map((lineText) => lineText.trim())
+      .filter((lineText) => lineText && !lineText.startsWith("#") && isUrl(lineText));
   }
-  if (st.isDirectory()) {
-    const files = (await readdir(v)).filter((name) =>
+  if (statResult.isDirectory()) {
+    const files = (await readdir(normalizedInputValue)).filter((name) =>
       name.toLowerCase().endsWith(".txt"),
     );
     const urls = [];
     for (const fileName of files) {
-      const txt = await readFile(path.join(v, fileName), "utf-8");
+      const textContent = await readFile(path.join(normalizedInputValue, fileName), "utf-8");
       urls.push(
-        ...txt
+        ...textContent
           .split(/\r?\n/)
-          .map((s) => s.trim())
-          .filter((s) => s && !s.startsWith("#") && isUrl(s)),
+          .map((lineText) => lineText.trim())
+          .filter((lineText) => lineText && !lineText.startsWith("#") && isUrl(lineText)),
       );
     }
     return urls;
@@ -335,9 +362,9 @@ async function summarizeByModel({
   globalConfig = {},
   userConfig = {},
 }) {
-  const okRecords = records.filter((x) => x?.status === "ok");
+  const okRecords = records.filter((recordItem) => recordItem?.status === "ok");
   const usefulTextParts = okRecords.map(
-    (x) => `## ${x?.url || ""}\n${x?.usefulText || ""}`,
+    (recordItem) => `## ${recordItem?.url || ""}\n${recordItem?.usefulText || ""}`,
   );
   const imageAlias =
     userConfig?.attachmentModels?.image ||
@@ -365,32 +392,32 @@ async function summarizeByModel({
   const batchResults = [];
   if (imagePaths.length > 0) {
     const batches = await buildImageBatches(imagePaths);
-    for (let i = 0; i < batches.length; i += 1) {
-      const batch = batches[i];
-      const res = await llm.invoke([
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+      const batch = batches[batchIndex];
+      const modelResponse = await llm.invoke([
         new HumanMessage({
           content: [
             {
               type: "text",
-              text: `${userPrompt}\n\n这是第 ${i + 1} 批网页截图。\n\n网页文本参考：\n${sharedText}`,
+              text: `${userPrompt}\n\n这是第 ${batchIndex + 1} 批网页截图。\n\n网页文本参考：\n${sharedText}`,
             },
-            ...batch.map((img) => ({
+            ...batch.map((imageItem) => ({
               type: "image_url",
-              image_url: { url: img.dataUrl },
+              image_url: { url: imageItem.dataUrl },
             })),
           ],
         }),
       ]);
       batchResults.push({
-        batch: i + 1,
+        batch: batchIndex + 1,
         imageCount: batch.length,
         totalBytes: batch.reduce((sum, item) => sum + item.sizeBytes, 0),
-        imagePaths: batch.map((x) => x.imagePath),
-        text: toModelText(res?.content),
+        imagePaths: batch.map((imageItem) => imageItem.imagePath),
+        text: toModelText(modelResponse?.content),
       });
     }
   } else {
-    const res = await llm.invoke([
+    const modelResponse = await llm.invoke([
       new HumanMessage({
         content: `${userPrompt}\n\n网页文本参考：\n${sharedText}`,
       }),
@@ -400,13 +427,13 @@ async function summarizeByModel({
       imageCount: 0,
       totalBytes: 0,
       imagePaths: [],
-      text: toModelText(res?.content),
+      text: toModelText(modelResponse?.content),
     });
   }
 
   return {
     batchResults,
-    text: batchResults.map((x) => x.text).join("\n\n"),
+    text: batchResults.map((batchResult) => batchResult.text).join("\n\n"),
     model: {
       alias: modelSpec?.alias || "",
       name: modelSpec?.model || "",
@@ -528,6 +555,34 @@ export async function runWebToDataPipeline({
     mode === "browser_simulate"
       ? await runBrowserSimulateExtract(resolvedUrls, parallelism, runtime)
       : await runDirectFetchExtract(resolvedUrls, parallelism, runtime);
+  const successCount = records.filter((recordItem) => recordItem?.status === "ok").length;
+  if (successCount <= 0) {
+    const errorMessages = records
+      .map((recordItem) =>
+        recordItem?.status === "error"
+          ? `${recordItem?.url || ""}: ${recordItem?.error || "unknown error"}`
+          : "",
+      )
+      .filter(Boolean)
+      .slice(0, 3);
+    return {
+      ok: false,
+      mode,
+      input,
+      urls: resolvedUrls,
+      resultCount: records.length,
+      successCount: 0,
+      imageCount: 0,
+      batchCount: 0,
+      batches: [],
+      text: "",
+      model: {},
+      message: errorMessages.length
+        ? `网页提取失败：${errorMessages.join(" | ")}`
+        : "网页提取失败：没有可用结果",
+      records,
+    };
+  }
   const summary = await summarizeByModel({
     records,
     imagePaths: [],
@@ -535,7 +590,6 @@ export async function runWebToDataPipeline({
     globalConfig,
     userConfig,
   });
-  const successCount = records.filter((x) => x?.status === "ok").length;
   return {
     ok: successCount > 0,
     mode,

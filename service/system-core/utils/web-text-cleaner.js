@@ -79,8 +79,8 @@ function removeShortTextNodes(doc, minLength = MIN_TAG_TEXT_LENGTH) {
   const targets = doc.querySelectorAll(
     "p,span,a,li,td,th,label,button,strong,em,b,i,small,time,figcaption,summary,dd,dt,blockquote,code,pre,h1,h2,h3,h4,h5,h6,div",
   );
-  for (let i = targets.length - 1; i >= 0; i -= 1) {
-    const node = targets[i];
+  for (let targetIndex = targets.length - 1; targetIndex >= 0; targetIndex -= 1) {
+    const node = targets[targetIndex];
     if (!node || node.children?.length > 0) continue; // 只清理叶子节点，避免误删正文容器
     const text = normalizeText(node.textContent || "");
     if (!text || text.length < minLength) {
@@ -101,8 +101,20 @@ function aggressiveCleanText(input = "", maxLines = 4000) {
     .map((line) => normalizeText(line))
     .filter(Boolean)
     .filter((line) => line.length >= 2)
-    .filter((line) => !noisePatterns.some((p) => p.test(line)));
+    .filter((line) => !noisePatterns.some((noisePattern) => noisePattern.test(line)));
   return cleanAndDedupTextLines(lines.join("\n"), maxLines);
+}
+
+function filterByExtraNoisePatterns(lines = [], extraNoisePatterns = []) {
+  if (!Array.isArray(lines) || !lines.length) return [];
+  const normalizedPatterns = (Array.isArray(extraNoisePatterns) ? extraNoisePatterns : [])
+    .map((patternItem) => String(patternItem || "").trim().toLowerCase())
+    .filter(Boolean);
+  if (!normalizedPatterns.length) return lines;
+  return lines.filter((lineText) => {
+    const normalizedLine = String(lineText || "").toLowerCase();
+    return !normalizedPatterns.some((patternText) => normalizedLine.includes(patternText));
+  });
 }
 
 export function extractVisibleTextFromHtml(html = "") {
@@ -130,4 +142,24 @@ export function extractReadableTextFromHtml(html = "", urlValue = "") {
   } catch {
     return "";
   }
+}
+
+export function isReadabilityExtractorReady() {
+  return typeof Readability === "function" && typeof JSDOM === "function";
+}
+
+export function extractReadableLinesFromHtml(
+  html = "",
+  { urlValue = "", maxLines = 1200, extraNoisePatterns = [] } = {},
+) {
+  const cleanedText = extractReadableTextFromHtml(html, urlValue);
+  if (!cleanedText) return [];
+  const lines = cleanedText
+    .split(/\r?\n/)
+    .map((lineText) => normalizeText(lineText))
+    .filter(Boolean);
+  return filterByExtraNoisePatterns(lines, extraNoisePatterns).slice(
+    0,
+    Math.max(0, Number(maxLines) || 0),
+  );
 }

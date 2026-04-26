@@ -83,9 +83,9 @@ export class MemoryService {
     await writeFile(this._shortPath(basePath), JSON.stringify(payload, null, 2));
   }
 
-  _toTs(v) {
-    const t = new Date(v || 0).getTime();
-    return Number.isNaN(t) ? 0 : t;
+  _toTs(value) {
+    const timestamp = new Date(value || 0).getTime();
+    return Number.isNaN(timestamp) ? 0 : timestamp;
   }
 
   _flattenShortItems(short = {}) {
@@ -190,8 +190,8 @@ export class MemoryService {
       return;
 
     const target = unextracted;
-    const promptPayload = target.map((i) => ({
-      records: i.records,
+    const promptPayload = target.map((item) => ({
+      records: item.records,
     }));
     const longMem = await this._readJson(this._longPath(basePath), {});
     const existingLongMemory = longMem.memory ?? "";
