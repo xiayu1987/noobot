@@ -181,7 +181,7 @@ function connectorStatusClass(status = "") {
     <div class="sidebar-header">
       <el-input
         :model-value="userId"
-        size="default"
+        size="large"
         placeholder="输入 User ID"
         class="custom-input"
         @update:model-value="emit('update:user-id', $event)"
@@ -194,7 +194,7 @@ function connectorStatusClass(status = "") {
       <div class="connect-row">
         <el-input
           :model-value="connectCode"
-          size="default"
+          size="large"
           placeholder="输入连接码"
           class="custom-input connect-input"
           show-password
@@ -213,7 +213,7 @@ function connectorStatusClass(status = "") {
           :loading="connecting"
           @click="emit('connect')"
         >
-          {{ connecting ? "连接中" : "连接" }}
+          {{ connecting ? "连接中..." : "建立连接" }}
         </el-button>
         <button
           type="button"
@@ -230,7 +230,6 @@ function connectorStatusClass(status = "") {
       </div>
 
       <div class="action-row sidebar-actions">
-        <!-- 优化：使用 :icon 属性代替手动嵌套 el-icon，Element Plus 会自动处理间距 -->
         <el-button
           type="primary"
           class="new-chat-btn noobot-action-btn"
@@ -241,7 +240,6 @@ function connectorStatusClass(status = "") {
           新建会话
         </el-button>
         
-        <!-- 优化：自闭合标签 + :icon 属性。没有默认插槽，彻底杜绝 loading 时的空 span 挤压问题 -->
         <el-button
           class="refresh-btn noobot-action-btn tail-btn"
           :icon="Refresh"
@@ -256,27 +254,29 @@ function connectorStatusClass(status = "") {
 
     <div class="connector-summary">
       <div class="connector-summary-title">当前勾选连接器</div>
-      <div
-        v-for="connectorGroup in connectorSummaryGroups"
-        :key="connectorGroup.key"
-        class="connector-summary-item"
-      >
-        <span class="connector-summary-label">{{ connectorGroup.label }}</span>
-        <span
-          v-if="connectorGroup.selectedName"
-          class="connector-summary-value"
+      <div class="connector-summary-list">
+        <div
+          v-for="connectorGroup in connectorSummaryGroups"
+          :key="connectorGroup.key"
+          class="connector-summary-item"
         >
-          <el-icon
-            class="connector-summary-status"
-            :class="connectorStatusClass(connectorGroup.status)"
+          <span class="connector-summary-label">{{ connectorGroup.label }}</span>
+          <span
+            v-if="connectorGroup.selectedName"
+            class="connector-summary-value"
           >
-            <component :is="connectorStatusIcon(connectorGroup.status)" />
-          </el-icon>
-          <span class="connector-summary-name">{{
-            connectorGroup.selectedName
-          }}</span>
-        </span>
-        <span v-else class="connector-summary-empty">未勾选</span>
+            <el-icon
+              class="connector-summary-status"
+              :class="connectorStatusClass(connectorGroup.status)"
+            >
+              <component :is="connectorStatusIcon(connectorGroup.status)" />
+            </el-icon>
+            <span class="connector-summary-name">{{
+              connectorGroup.selectedName
+            }}</span>
+          </span>
+          <span v-else class="connector-summary-empty">未勾选</span>
+        </div>
       </div>
     </div>
 
@@ -320,8 +320,34 @@ function connectorStatusClass(status = "") {
 </template>
 
 <style scoped>
-/* 侧边栏主容器 */
+/* 定义内部美化变量，提供开箱即用的高级深色主题 */
 .sidebar {
+  --noobot-surface-sidebar: #0b0f19;
+  --noobot-border-weak: rgba(255, 255, 255, 0.06);
+  --noobot-text-strong: #f8fafc;
+  --noobot-text-main: #cbd5e1;
+  --noobot-text-weak: #94a3b8;
+  --noobot-text-muted: #64748b;
+  --noobot-text-accent: #60a5fa;
+  --noobot-surface-soft: #141a29;
+  --noobot-surface-soft-hover: #1e293b;
+  --noobot-border-soft: rgba(255, 255, 255, 0.1);
+  --noobot-border-primary: #3b82f6;
+  --noobot-btn-primary-bg: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  --noobot-btn-primary-hover-opacity: 0.9;
+  --noobot-btn-soft-bg: #1e293b;
+  --noobot-btn-soft-bg-hover: #334155;
+  --noobot-btn-soft-border: rgba(255, 255, 255, 0.08);
+  --noobot-btn-soft-text: #cbd5e1;
+  --noobot-surface-item-hover: rgba(255, 255, 255, 0.03);
+  --noobot-surface-primary-soft: rgba(59, 130, 246, 0.12);
+  --noobot-surface-primary-soft-strong: rgba(59, 130, 246, 0.25);
+  --noobot-status-success: #10b981;
+  --noobot-status-idle: #64748b;
+  --noobot-status-running: #3b82f6;
+  --noobot-status-done: #10b981;
+  --noobot-status-error: #ef4444;
+
   width: 280px;
   min-width: 280px;
   background: var(--noobot-surface-sidebar);
@@ -346,7 +372,7 @@ function connectorStatusClass(status = "") {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 72px;
+  height: 76px;
   box-sizing: border-box;
 }
 
@@ -358,19 +384,26 @@ function connectorStatusClass(status = "") {
 }
 
 .brand-logo {
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 2px 8px rgba(59, 130, 246, 0.4));
+  transition: transform 0.3s ease;
+}
+
+.brand-logo:hover {
+  transform: scale(1.05) rotate(-5deg);
 }
 
 .brand-logo-img {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   display: block;
 }
 
 .brand-text {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--noobot-text-strong);
+  font-size: 18px;
+  font-weight: 800;
+  background: linear-gradient(to right, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  color: transparent;
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
@@ -381,15 +414,18 @@ function connectorStatusClass(status = "") {
   color: var(--noobot-btn-soft-text);
   width: 32px;
   height: 32px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
 }
 
 .collapse-btn:hover {
   background: var(--noobot-btn-soft-bg-hover);
   color: var(--noobot-text-strong);
+  transform: scale(1.05);
 }
 
 /* 顶部操作区 */
@@ -397,22 +433,35 @@ function connectorStatusClass(status = "") {
   padding: 0 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   border-bottom: 1px solid var(--noobot-border-weak);
 }
 
+/* 连接器面板 - 玻璃拟态风格 */
 .connector-summary {
-  margin: 14px 16px 12px;
-  padding: 10px;
-  border: 1px solid var(--noobot-border-weak);
-  border-radius: 10px;
+  margin: 16px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .connector-summary-title {
   font-size: 12px;
+  font-weight: 600;
   color: var(--noobot-text-weak);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.connector-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .connector-summary-item {
@@ -420,8 +469,11 @@ function connectorStatusClass(status = "") {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
 }
 
 .connector-summary-label {
@@ -432,7 +484,7 @@ function connectorStatusClass(status = "") {
 .connector-summary-value {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -440,36 +492,31 @@ function connectorStatusClass(status = "") {
   font-size: 12px;
 }
 
-.connector-summary-status.status-connected {
-  color: #67c23a;
-}
-
-.connector-summary-status.status-error {
-  color: #f56c6c;
-}
-
-.connector-summary-status.status-unknown {
-  color: #e6a23c;
-}
+.connector-summary-status.status-connected { color: #34d399; }
+.connector-summary-status.status-error { color: #f87171; }
+.connector-summary-status.status-unknown { color: #fbbf24; }
 
 .connector-summary-name {
-  max-width: 120px;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--noobot-text-strong);
+  font-weight: 500;
 }
 
 .connector-summary-empty {
-  color: var(--noobot-text-weak);
+  color: var(--noobot-text-muted);
+  font-style: italic;
 }
 
 /* 自定义输入框样式覆盖 */
 .custom-input :deep(.el-input__wrapper) {
-  border-radius: 8px;
+  border-radius: 10px;
   background-color: var(--noobot-surface-soft);
   box-shadow: 0 0 0 1px var(--noobot-border-soft) inset;
   transition: all 0.2s ease;
+  padding: 0 12px;
 }
 
 .custom-input :deep(.el-input__wrapper.is-focus),
@@ -480,11 +527,13 @@ function connectorStatusClass(status = "") {
 
 .custom-input :deep(.el-input__inner) {
   color: var(--noobot-text-main);
+  height: 40px;
 }
 
 .input-icon {
-  font-size: 14px;
+  font-size: 16px;
   opacity: 0.7;
+  color: var(--noobot-text-weak);
 }
 
 .connect-row {
@@ -497,7 +546,7 @@ function connectorStatusClass(status = "") {
 
 .action-row {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
@@ -509,16 +558,23 @@ function connectorStatusClass(status = "") {
 .new-chat-btn {
   flex: 1 1 0;
   min-width: 0;
+  height: 40px;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
 .new-chat-btn {
   background: var(--noobot-btn-primary-bg);
   border: none;
-  transition: opacity 0.2s ease, transform 0.1s ease;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+  transition: all 0.2s ease;
 }
 
 .new-chat-btn:not(:disabled):hover {
   opacity: var(--noobot-btn-primary-hover-opacity);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
+  transform: translateY(-1px);
 }
 
 .new-chat-btn:not(:disabled):active {
@@ -527,9 +583,10 @@ function connectorStatusClass(status = "") {
 
 /* 方形尾部按钮通用样式 */
 .tail-btn {
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   background: var(--noobot-btn-soft-bg);
   border: 1px solid var(--noobot-btn-soft-border);
   color: var(--noobot-btn-soft-text);
@@ -537,11 +594,11 @@ function connectorStatusClass(status = "") {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 18px;
   margin-left: 0 !important;
+  transition: all 0.2s ease;
 }
 
-/* 确保 Element Plus 原生 icon 居中，消除可能存在的默认 margin */
 .tail-btn :deep(.el-icon) {
   margin: 0 !important;
 }
@@ -549,20 +606,24 @@ function connectorStatusClass(status = "") {
 .refresh-btn:not(:disabled):hover {
   background: var(--noobot-btn-soft-bg-hover);
   color: #fff;
+  transform: rotate(15deg);
 }
 
 .status-btn {
   cursor: default;
   pointer-events: none;
   color: var(--noobot-text-muted);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .status-btn.connected {
   color: var(--noobot-status-success);
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
 }
 
 .status-icon {
-  font-size: 14px;
+  font-size: 18px;
 }
 
 /* 会话列表区 */
@@ -571,18 +632,18 @@ function connectorStatusClass(status = "") {
 }
 
 .session-list-inner {
-  padding: 12px;
+  padding: 5px 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .session-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 12px;
+  border-radius: 12px;
   cursor: pointer;
   border: 1px solid transparent;
   background: transparent;
@@ -591,30 +652,35 @@ function connectorStatusClass(status = "") {
 
 .session-item:hover {
   background: var(--noobot-surface-item-hover);
+  transform: translateY(-1px);
 }
 
 .session-item.active {
   background: var(--noobot-surface-primary-soft);
   border-color: var(--noobot-surface-primary-soft-strong);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .session-icon-wrapper {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
   background: var(--noobot-surface-soft-hover);
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  color: var(--noobot-text-main);
 }
 
 .session-item.active .session-icon-wrapper {
-  background: var(--noobot-surface-primary-soft-strong);
+  background: var(--noobot-btn-primary-bg);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
 .session-icon {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .session-info {
@@ -626,8 +692,8 @@ function connectorStatusClass(status = "") {
 }
 
 .session-delete-btn {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border: 1px solid var(--noobot-btn-soft-border);
   background: var(--noobot-btn-soft-bg);
   color: var(--noobot-text-muted);
@@ -636,18 +702,20 @@ function connectorStatusClass(status = "") {
   align-items: center;
   justify-content: center;
   opacity: 0;
+  transform: scale(0.9);
   transition: all 0.2s ease;
 }
 
 .session-item:hover .session-delete-btn,
 .session-item.active .session-delete-btn {
   opacity: 1;
+  transform: scale(1);
 }
 
 .session-delete-btn:hover {
-  color: #fecaca;
-  border-color: #b91c1c;
-  background: rgba(185, 28, 28, 0.16);
+  color: #fca5a5;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .session-delete-btn:disabled {
@@ -667,7 +735,7 @@ function connectorStatusClass(status = "") {
 }
 
 .session-item.active .title {
-  color: var(--noobot-text-accent);
+  color: var(--noobot-text-strong);
   font-weight: 600;
 }
 
@@ -706,11 +774,12 @@ function connectorStatusClass(status = "") {
 /* 折叠状态处理 */
 .sidebar.collapsed .brand {
   justify-content: center;
-  padding: 20px 0;
+  padding: 24px 0;
 }
 
 .sidebar.collapsed .brand-left,
 .sidebar.collapsed .sidebar-header,
+.sidebar.collapsed .connector-summary,
 .sidebar.collapsed .title,
 .sidebar.collapsed .sid,
 .sidebar.collapsed .session-delete-btn {
@@ -722,7 +791,7 @@ function connectorStatusClass(status = "") {
   display: grid;
   place-items: center;
   width: 100%;
-  padding: 10px 0;
+  padding: 12px 0;
   gap: 0;
 }
 

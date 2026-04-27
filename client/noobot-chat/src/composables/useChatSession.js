@@ -67,6 +67,7 @@ export function useChatSession({
   const stopRequested = ref(false);
   const pendingInteractionRequest = ref(null);
   const interactionSubmitting = ref(false);
+  const connectorRefreshTasksBySessionId = new Map();
   let stopCloseTimer = null;
   let forceStopFinalizeTimer = null;
   let resolveCurrentStream = null;
@@ -604,6 +605,22 @@ export function useChatSession({
     }
   }
 
+  function refreshSessionConnectorsAsync(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return Promise.resolve();
+    const pendingTask = connectorRefreshTasksBySessionId.get(normalizedSessionId);
+    if (pendingTask) return pendingTask;
+    const taskPromise = (async () => {
+      try {
+        await refreshSessionConnectors(normalizedSessionId);
+      } finally {
+        connectorRefreshTasksBySessionId.delete(normalizedSessionId);
+      }
+    })();
+    connectorRefreshTasksBySessionId.set(normalizedSessionId, taskPromise);
+    return taskPromise;
+  }
+
   async function updateSessionSelectedConnector({
     connectorType = "",
     connectorName = "",
@@ -668,11 +685,11 @@ export function useChatSession({
     }
     activeSessionId.value = sessionId;
     if (target.isLocal) {
-      await refreshSessionConnectors(sessionId);
+      refreshSessionConnectorsAsync(sessionId);
       return;
     }
     if (target.loaded && !force) {
-      await refreshSessionConnectors(sessionId);
+      refreshSessionConnectorsAsync(sessionId);
       return;
     }
 
@@ -680,7 +697,7 @@ export function useChatSession({
     try {
       const detail = await fetchSessionDetail(sessionId);
       applySessionDetail(detail);
-      await refreshSessionConnectors(sessionId);
+      refreshSessionConnectorsAsync(sessionId);
     } catch (error) {
       ElMessage.error(error.message || "加载会话详情失败");
     } finally {
@@ -956,7 +973,7 @@ export function useChatSession({
                 connectorName: connectedName,
                 status: connectedStatus,
               });
-              refreshSessionConnectors(activeSession.value.id);
+              refreshSessionConnectorsAsync(activeSession.value.id);
             }
             try {
               submitInteractionResponse({
@@ -1062,7 +1079,9 @@ export function useChatSession({
           applySessionDetail(detail, {
             preserveCurrentMessages: shouldPreserveCurrentMessages,
           });
-          await refreshSessionConnectors(activeSession.value?.id || doneSessionId);
+          refreshSessionConnectorsAsync(
+            activeSession.value?.id || doneSessionId,
+          );
         } catch (loadDetailError) {
           console.warn("load session detail after done failed", loadDetailError);
         }
@@ -1140,6 +1159,7 @@ export function useChatSession({
     send,
     stopSending,
     refreshSessionConnectors,
+    refreshSessionConnectorsAsync,
     updateSessionSelectedConnector,
     pendingInteractionRequest,
     interactionSubmitting,

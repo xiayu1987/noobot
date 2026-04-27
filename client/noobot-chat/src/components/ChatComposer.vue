@@ -9,10 +9,10 @@ import {
   VideoPause,
   Paperclip,
   ArrowDown,
-  ArrowRight,
   CircleCheckFilled,
   WarningFilled,
   CircleCloseFilled,
+  Connection
 } from "@element-plus/icons-vue";
 
 const props = defineProps({
@@ -45,6 +45,7 @@ const sendDisabled = computed(
     !props.connected ||
     (props.interactionActive && props.sending),
 );
+
 const connectorGroups = computed(() => {
   const sourceGroups =
     props?.connectorPanelState?.groups &&
@@ -57,6 +58,7 @@ const connectorGroups = computed(() => {
     email: Array.isArray(sourceGroups.email) ? sourceGroups.email : [],
   };
 });
+
 const selectedConnectors = computed(() => {
   const sourceSelected =
     props?.connectorPanelState?.selectedConnectors &&
@@ -69,11 +71,13 @@ const selectedConnectors = computed(() => {
     email: String(sourceSelected.email || "").trim(),
   };
 });
+
 const connectorGroupDefinitions = [
   { key: "database", label: "数据库" },
   { key: "terminal", label: "终端" },
   { key: "email", label: "邮件" },
 ];
+
 const collapsedConnectorSummaryItems = computed(() =>
   connectorGroupDefinitions
     .map((groupDefinition) => {
@@ -81,7 +85,7 @@ const collapsedConnectorSummaryItems = computed(() =>
         selectedConnectors.value?.[groupDefinition.key] || "",
       ).trim();
       if (!selectedConnectorName) return null;
-      return `${groupDefinition.label}：${selectedConnectorName}`;
+      return `${groupDefinition.label}: ${selectedConnectorName}`;
     })
     .filter(Boolean),
 );
@@ -151,7 +155,7 @@ defineExpose({
 <template>
   <div class="composer-wrapper">
     <div class="composer">
-      <!-- 停止按钮，相对于 composer 定位，溢出到上方 -->
+      <!-- 停止按钮 -->
       <el-button
         v-if="canStop"
         type="danger"
@@ -162,71 +166,84 @@ defineExpose({
         <el-icon :size="20"><VideoPause /></el-icon>
       </el-button>
 
-      <div class="connector-panel-shell">
-        <div class="connector-panel-header">
-          <div class="connector-panel-title">连接器</div>
-          <el-button
-            text
-            size="small"
-            class="connector-toggle-btn noobot-action-btn"
-            @click="toggleConnectorPanelExpanded"
-          >
-            <el-icon class="connector-toggle-icon">
-              <ArrowDown v-if="connectorPanelExpanded" />
-              <ArrowRight v-else />
-            </el-icon>
-            {{ connectorPanelExpanded ? "收起" : "展开" }}
-          </el-button>
-        </div>
+      <!-- 连接器面板 -->
+      <div class="connector-panel-shell" :class="{ 'is-expanded': connectorPanelExpanded }">
+        <!-- 头部区域：标题、折叠摘要、展开收起按钮排成一排 -->
+        <div class="connector-panel-header" @click="toggleConnectorPanelExpanded">
+          <div class="connector-panel-title">
+            <el-icon class="title-icon"><Connection /></el-icon>
+            <span>连接器</span>
+          </div>
 
-        <div v-if="!connectorPanelExpanded" class="connector-collapsed-summary">
-          <span
-            v-for="summaryItem in collapsedConnectorSummaryItems"
-            :key="summaryItem"
-            class="connector-summary-pill"
-          >
-            {{ summaryItem }}
-          </span>
-          <span
-            v-if="!collapsedConnectorSummaryItems.length"
-            class="connector-summary-empty"
-          >
-            未选择连接器
-          </span>
-        </div>
-
-        <div v-else class="connector-panel">
-          <div
-            v-for="groupDefinition in connectorGroupDefinitions"
-            :key="groupDefinition.key"
-            class="connector-group"
-          >
-            <div class="connector-group-title">{{ groupDefinition.label }}</div>
-            <el-radio-group
-              size="small"
-              :model-value="selectedConnectors[groupDefinition.key]"
-              @update:model-value="
-                onConnectorSelected(groupDefinition.key, $event)
-              "
+          <!-- 折叠状态下的摘要 -->
+          <div class="connector-collapsed-summary" v-show="!connectorPanelExpanded">
+            <span
+              v-for="summaryItem in collapsedConnectorSummaryItems"
+              :key="summaryItem"
+              class="connector-summary-pill"
             >
-              <el-radio-button
-                v-for="connectorItem in connectorGroups[groupDefinition.key]"
-                :key="`${groupDefinition.key}-${connectorItem.connectorName}`"
-                :label="connectorItem.connectorName"
-              >
-                <span class="connector-option">
-                  <el-icon
-                    class="connector-status-icon"
-                    :class="connectorStatusClass(connectorItem.status)"
-                  >
-                    <component :is="connectorStatusIcon(connectorItem.status)" />
-                  </el-icon>
-                  <span class="connector-name">{{ connectorItem.connectorName }}</span>
-                </span>
-              </el-radio-button>
-            </el-radio-group>
+              {{ summaryItem }}
+            </span>
+            <span
+              v-if="!collapsedConnectorSummaryItems.length"
+              class="connector-summary-empty"
+            >
+              未选择连接器
+            </span>
+          </div>
+
+          <!-- 展开/收起按钮 (通过 margin-left: auto 始终靠右) -->
+          <div class="connector-toggle-btn">
+            <span class="toggle-text">{{ connectorPanelExpanded ? "收起" : "展开" }}</span>
+            <el-icon class="connector-toggle-icon" :class="{ 'is-rotated': connectorPanelExpanded }">
+              <ArrowDown />
+            </el-icon>
           </div>
         </div>
+
+        <!-- 展开状态下的详细面板 -->
+        <el-collapse-transition>
+          <div v-show="connectorPanelExpanded" class="connector-panel">
+            <div class="connector-categories-grid">
+              <div
+                v-for="groupDefinition in connectorGroupDefinitions"
+                :key="groupDefinition.key"
+                class="connector-group"
+              >
+                <div class="connector-group-title">{{ groupDefinition.label }}</div>
+                <!-- 纵向布局的单选组 -->
+                <el-radio-group
+                  class="vertical-radio-group"
+                  :model-value="selectedConnectors[groupDefinition.key]"
+                  @update:model-value="onConnectorSelected(groupDefinition.key, $event)"
+                >
+                  <el-radio
+                    v-for="connectorItem in connectorGroups[groupDefinition.key]"
+                    :key="`${groupDefinition.key}-${connectorItem.connectorName}`"
+                    :value="connectorItem.connectorName"
+                    class="custom-radio"
+                  >
+                    <span class="connector-option">
+                      <el-icon
+                        class="connector-status-icon"
+                        :class="connectorStatusClass(connectorItem.status)"
+                      >
+                        <component :is="connectorStatusIcon(connectorItem.status)" />
+                      </el-icon>
+                      <span class="connector-name" :title="connectorItem.connectorName">
+                        {{ connectorItem.connectorName }}
+                      </span>
+                    </span>
+                  </el-radio>
+                  
+                  <div v-if="!connectorGroups[groupDefinition.key]?.length" class="empty-group-tip">
+                    暂无可用连接
+                  </div>
+                </el-radio-group>
+              </div>
+            </div>
+          </div>
+        </el-collapse-transition>
       </div>
 
       <!-- 顶部工具栏：附件上传与标签 -->
@@ -319,7 +336,7 @@ defineExpose({
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%;
   box-sizing: border-box;
@@ -352,6 +369,200 @@ defineExpose({
   transform: translateX(-50%) scale(1.05);
 }
 
+/* ================= 连接器面板样式优化 ================= */
+.connector-panel-shell {
+  border: 1px solid #283149;
+  border-radius: 12px;
+  background: #101522;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.connector-panel-shell.is-expanded {
+  border-color: #3a4767;
+  background: #121826;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.connector-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.connector-panel-header:hover {
+  background: #171e2e;
+}
+
+.connector-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #afbfdf;
+  flex-shrink: 0;
+}
+
+.title-icon {
+  font-size: 14px;
+  color: #5a78bc;
+}
+
+.connector-collapsed-summary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none; /* Firefox */
+}
+
+.connector-collapsed-summary::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.connector-summary-pill {
+  border: 1px solid #3a4767;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #d0dcf9;
+  background: #1a2439;
+  flex-shrink: 0;
+}
+
+.connector-summary-empty {
+  font-size: 12px;
+  color: #5c6b8a;
+}
+
+.connector-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #7f8fb2;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.2s;
+  margin-left: auto; /* 核心修改：确保按钮始终靠右，位置不随中间内容变化而移动 */
+}
+
+.connector-panel-header:hover .connector-toggle-btn {
+  color: #b6c5e6;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.connector-toggle-icon {
+  transition: transform 0.3s ease;
+}
+
+.connector-toggle-icon.is-rotated {
+  transform: rotate(180deg);
+}
+
+.connector-panel {
+  padding: 0 12px 12px 12px;
+  border-top: 1px solid #1f273b;
+}
+
+/* 自动适应的网格布局，支持未来更多分类 */
+.connector-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.connector-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.connector-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a9bbd;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #283149;
+}
+
+/* 纵向排列的单选组 */
+.vertical-radio-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* 核心修改：确保单选框、图标、文字绝对纵向居中对齐 */
+.custom-radio {
+  display: flex;
+  align-items: center;
+  margin-right: 0;
+  height: 30px;
+  padding: 4px 0;
+}
+
+.custom-radio :deep(.el-radio__input) {
+  display: inline-flex;
+}
+
+.custom-radio :deep(.el-radio__label) {
+  display: flex;
+  padding-left: 6px;
+  height: 100%;
+}
+
+.custom-radio :deep(.el-radio__inner) {
+  background-color: #1a2132;
+  border-color: #3a4767;
+}
+
+.connector-option {
+  display: flex;
+  gap: 6px;
+  height: 100%;
+  align-items: center;
+}
+
+.connector-status-icon {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.connector-status-icon.status-connected { color: #67c23a; }
+.connector-status-icon.status-error { color: #f56c6c; }
+.connector-status-icon.status-unknown { color: #e6a23c; }
+
+.connector-name {
+  font-size: 13px;
+  color: #cfd9f8;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 100%;
+}
+
+.empty-group-tip {
+  font-size: 12px;
+  color: #4a5568;
+  padding: 4px 0;
+}
+
+/* ================= 底部工具栏与输入区 ================= */
 .toolbar {
   display: flex;
   align-items: center;
@@ -369,9 +580,7 @@ defineExpose({
   transition: all 0.2s;
 }
 
-.btn-icon {
-  margin-right: 4px;
-}
+.btn-icon { margin-right: 4px; }
 
 .poe-upload-btn:hover {
   background: var(--noobot-btn-secondary-bg-hover, #232d45);
@@ -405,108 +614,6 @@ defineExpose({
   display: block;
 }
 
-.connector-panel-shell {
-  border: 1px solid #283149;
-  border-radius: 12px;
-  padding: 8px 10px;
-  background: #121a2a;
-}
-
-.connector-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.connector-panel-title {
-  font-size: 12px;
-  color: #afbfdf;
-}
-
-.connector-toggle-btn {
-  color: #9fb3e8;
-  padding: 0;
-  height: auto;
-}
-
-.connector-toggle-icon {
-  margin-right: 4px;
-}
-
-.connector-collapsed-summary {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.connector-summary-pill {
-  border: 1px solid #3a4767;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 12px;
-  color: #d0dcf9;
-  background: #1a2439;
-}
-
-.connector-summary-empty {
-  font-size: 12px;
-  color: #7f8fb2;
-}
-
-.connector-panel {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  width: 100%;
-  margin-top: 10px;
-}
-
-.connector-group {
-  min-width: 0;
-  border: 1px solid #2f3a58;
-  border-radius: 10px;
-  padding: 8px;
-  background: #172035;
-}
-
-.connector-group-title {
-  font-size: 12px;
-  color: #b6c5e6;
-  margin-bottom: 8px;
-}
-
-.connector-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 160px;
-}
-
-.connector-status-icon {
-  font-size: 12px;
-}
-
-.connector-status-icon.status-connected {
-  color: #67c23a;
-}
-
-.connector-status-icon.status-error {
-  color: #f56c6c;
-}
-
-.connector-status-icon.status-unknown {
-  color: #e6a23c;
-}
-
-.connector-name {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .clear-files-btn {
   color: #9fb3e8;
   flex-shrink: 0;
@@ -533,10 +640,9 @@ defineExpose({
 }
 
 .chat-input :deep(.el-textarea__inner::placeholder) {
-  color: #7b86a7;
+  color: #6b7694;
 }
 
-/* 底部操作栏：左右分布，垂直居中对齐 */
 .bottom-actions {
   display: flex;
   align-items: center;
@@ -571,36 +677,12 @@ defineExpose({
 }
 
 @media (max-width: 768px) {
-  .composer-wrapper {
-    padding: 0 12px 16px;
-  }
-
-  .composer {
-    padding: 10px 12px;
-  }
-
-  .stop-float-btn {
-    top: -56px;
-  }
-
-  .attachment-pill {
-    max-width: 140px;
-  }
-
-  .connector-panel {
-    grid-template-columns: 1fr;
-  }
-
-  .connector-group {
-    padding: 6px;
-  }
-
-  .bottom-actions {
-    margin-top: 2px;
-  }
-
-  .send-btn {
-    padding: 8px 18px;
-  }
+  .composer-wrapper { padding: 0 12px 16px; }
+  .composer { padding: 10px 12px; }
+  .stop-float-btn { top: -56px; }
+  .attachment-pill { max-width: 140px; }
+  .connector-categories-grid { grid-template-columns: 1fr; gap: 12px; }
+  .bottom-actions { margin-top: 2px; }
+  .send-btn { padding: 8px 18px; }
 }
 </style>

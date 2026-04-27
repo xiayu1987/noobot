@@ -210,7 +210,7 @@ const {
   deleteSession,
   send,
   stopSending,
-  refreshSessionConnectors,
+  refreshSessionConnectorsAsync,
   updateSessionSelectedConnector,
   pendingInteractionRequest,
   interactionSubmitting,
@@ -287,7 +287,7 @@ function onAllowUserInteractionUpdate(value) {
 async function handleWorkspaceReset() {
   await fetchSessions();
   if (activeSessionId.value) {
-    await refreshSessionConnectors(activeSessionId.value);
+    refreshSessionConnectorsAsync(activeSessionId.value);
   }
 }
 
