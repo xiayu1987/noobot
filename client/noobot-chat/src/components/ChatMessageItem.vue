@@ -427,10 +427,10 @@ const displayedAttachmentMetas = computed(() => {
       <div class="meta">
         <span class="time">{{ formatTime(messageItem.ts) }}</span>
         <span
-          v-if="messageItem.role === 'assistant' && messageModelLabel"
           class="model-label"
+          :class="{ empty: !(messageItem.role === 'assistant' && messageModelLabel) }"
         >
-          {{ messageModelLabel }}
+          {{ messageItem.role === "assistant" ? messageModelLabel || "占位" : "占位" }}
         </span>
       </div>
 
@@ -658,7 +658,15 @@ const displayedAttachmentMetas = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  min-height: 24px;
+}
+
+.time {
+  line-height: 20px;
+  font-size: 12px;
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .model-label {
@@ -667,8 +675,15 @@ const displayedAttachmentMetas = computed(() => {
   background: var(--noobot-msg-tag-bg);
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: 999px;
-  padding: 1px 8px;
-  line-height: 1.6;
+  padding: 2px 8px;
+  line-height: 1.4;
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.model-label.empty {
+  visibility: hidden;
 }
 
 .bubble {

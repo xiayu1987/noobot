@@ -9,6 +9,86 @@ import { Buffer } from "node:buffer";
 import { v4 as uuidv4 } from "uuid";
 import { fatalSystemError, recoverableToolError } from "../error/index.js";
 
+export function mergeAttachmentMetas(existingAttachmentMetas = [], incomingAttachmentMetas = []) {
+  const existingList = Array.isArray(existingAttachmentMetas)
+    ? existingAttachmentMetas
+    : [];
+  const incomingList = Array.isArray(incomingAttachmentMetas)
+    ? incomingAttachmentMetas
+    : [];
+  if (!incomingList.length) return existingList;
+  const mergedList = [...existingList];
+  const existingAttachmentIdSet = new Set(
+    existingList
+      .map((attachmentItem) => String(attachmentItem?.attachmentId || "").trim())
+      .filter(Boolean),
+  );
+  for (const attachmentItem of incomingList) {
+    const attachmentId = String(attachmentItem?.attachmentId || "").trim();
+    if (attachmentId && existingAttachmentIdSet.has(attachmentId)) continue;
+    mergedList.push(attachmentItem);
+    if (attachmentId) existingAttachmentIdSet.add(attachmentId);
+  }
+  return mergedList;
+}
+
+export function mapAttachmentRecordsToMetas(
+  attachmentRecords = [],
+  { fallbackMimeType = "application/octet-stream", fallbackGenerationSource = "" } = {},
+) {
+  const recordList = Array.isArray(attachmentRecords) ? attachmentRecords : [];
+  return recordList.map((attachmentItem) => ({
+    attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+    name: String(attachmentItem?.name || "").trim(),
+    mimeType: String(attachmentItem?.mimeType || fallbackMimeType).trim(),
+    size: Number(attachmentItem?.size || 0),
+    generatedByModel: attachmentItem?.generatedByModel === true,
+    generationSource: String(
+      attachmentItem?.generationSource || fallbackGenerationSource || "",
+    ).trim(),
+  }));
+}
+
+export function appendAttachmentMetasToRuntimeAndTurn({
+  runtime = {},
+  turnMessageStore = null,
+  attachmentMetas = [],
+} = {}) {
+  const normalizedAttachmentMetas = Array.isArray(attachmentMetas)
+    ? attachmentMetas
+    : [];
+  if (!normalizedAttachmentMetas.length) return;
+
+  if (!Array.isArray(runtime.attachmentMetas)) {
+    runtime.attachmentMetas = [];
+  }
+  runtime.attachmentMetas = mergeAttachmentMetas(
+    runtime.attachmentMetas,
+    normalizedAttachmentMetas,
+  );
+
+  if (!turnMessageStore || typeof turnMessageStore.updateLast !== "function") {
+    return;
+  }
+  let latestAssistantMessage = null;
+  turnMessageStore.updateLast(
+    {},
+    (messageItem) => {
+      if (String(messageItem?.role || "").trim() !== "assistant") return false;
+      latestAssistantMessage = messageItem;
+      return true;
+    },
+  );
+  const mergedAttachmentMetas = mergeAttachmentMetas(
+    latestAssistantMessage?.attachmentMetas || [],
+    normalizedAttachmentMetas,
+  );
+  turnMessageStore.updateLast(
+    { attachmentMetas: mergedAttachmentMetas },
+    (messageItem) => String(messageItem?.role || "").trim() === "assistant",
+  );
+}
+
 export class AttachmentService {
   constructor(globalConfig) {
     this.globalConfig = globalConfig;

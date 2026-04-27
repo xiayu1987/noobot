@@ -19,6 +19,10 @@ import { mergeConfig } from "../config/index.js";
 import { emitEvent } from "../event/index.js";
 import { isFatalError } from "../error/index.js";
 import {
+  appendAttachmentMetasToRuntimeAndTurn,
+  mapAttachmentRecordsToMetas,
+} from "../attach/index.js";
+import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
 } from "../context/current-turn-store.js";
@@ -198,26 +202,16 @@ async function persistModelGeneratedArtifacts({
     artifacts: allMediaCandidates,
     generationSource: "llm_output",
   });
-  const attachmentMetas = savedRecords.map((attachmentItem) => ({
-    attachmentId: String(attachmentItem?.attachmentId || ""),
-    name: String(attachmentItem?.name || ""),
-    mimeType: String(attachmentItem?.mimeType || "application/octet-stream"),
-    size: Number(attachmentItem?.size || 0),
-    generatedByModel: attachmentItem?.generatedByModel === true,
-    generationSource: String(attachmentItem?.generationSource || "llm_output"),
-  }));
+  const attachmentMetas = mapAttachmentRecordsToMetas(savedRecords, {
+    fallbackMimeType: "application/octet-stream",
+    fallbackGenerationSource: "llm_output",
+  });
   if (!attachmentMetas.length) return [];
-  if (!Array.isArray(runtime.attachmentMetas)) {
-    runtime.attachmentMetas = [];
-  }
-  runtime.attachmentMetas = [
-    ...runtime.attachmentMetas,
-    ...attachmentMetas,
-  ];
-  turnMessageStore?.updateLast(
-    { attachmentMetas },
-    (messageItem) => String(messageItem?.role || "") === "assistant",
-  );
+  appendAttachmentMetasToRuntimeAndTurn({
+    runtime,
+    turnMessageStore,
+    attachmentMetas,
+  });
   emitEvent(eventListener, "model_generated_attachments_saved", {
     dialogProcessId: String(dialogProcessId || ""),
     count: attachmentMetas.length,
@@ -394,6 +388,18 @@ function assertNotAborted(signal = null) {
   throw error;
 }
 
+function createStreamingCallbacks(eventListener = null) {
+  if (!eventListener?.onEvent) return undefined;
+  return [
+    {
+      handleLLMNewToken: (token) =>
+        emitEvent(eventListener, "llm_delta", {
+          text: String(token || ""),
+        }),
+    },
+  ];
+}
+
 function isAbortError(error) {
   const name = String(error?.name || "").trim().toLowerCase();
   const code = String(error?.code || "").trim().toUpperCase();
@@ -405,29 +411,6 @@ function isAbortError(error) {
     message.includes("stopped by user") ||
     message.includes("aborted")
   );
-}
-
-function mergeAttachmentMetas(existingAttachmentMetas = [], incomingAttachmentMetas = []) {
-  const existingList = Array.isArray(existingAttachmentMetas)
-    ? existingAttachmentMetas
-    : [];
-  const incomingList = Array.isArray(incomingAttachmentMetas)
-    ? incomingAttachmentMetas
-    : [];
-  if (!incomingList.length) return existingList;
-  const mergedList = [...existingList];
-  const existingAttachmentIdSet = new Set(
-    existingList
-      .map((attachmentItem) => String(attachmentItem?.attachmentId || "").trim())
-      .filter(Boolean),
-  );
-  for (const attachmentItem of incomingList) {
-    const attachmentId = String(attachmentItem?.attachmentId || "").trim();
-    if (attachmentId && existingAttachmentIdSet.has(attachmentId)) continue;
-    mergedList.push(attachmentItem);
-    if (attachmentId) existingAttachmentIdSet.add(attachmentId);
-  }
-  return mergedList;
 }
 
 function extractAttachmentMetasFromToolResult(toolName = "", toolResultText = "") {
@@ -495,16 +478,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       turn,
       mode: "no_tools",
     });
-    const llmCallbacks = eventListener?.onEvent
-      ? [
-          {
-            handleLLMNewToken: (token) =>
-              emitEvent(eventListener, "llm_delta", {
-                text: String(token || ""),
-              }),
-          },
-        ]
-      : undefined;
+    const llmCallbacks = createStreamingCallbacks(eventListener);
     const modelResponse = await modelState.llm.invoke(messages, {
       callbacks: llmCallbacks,
       signal: abortSignal,
@@ -553,16 +527,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     tools.map((toolDefinition) => [toolDefinition.name, toolDefinition]),
   );
   emitEvent(eventListener, "llm_call_start", { turn });
-  const llmCallbacks = eventListener?.onEvent
-    ? [
-        {
-          handleLLMNewToken: (token) =>
-            emitEvent(eventListener, "llm_delta", {
-              text: String(token || ""),
-            }),
-        },
-      ]
-    : undefined;
+  const llmCallbacks = createStreamingCallbacks(eventListener);
 
   const ai = await modelState.llm.bindTools(tools).invoke(messages, {
     callbacks: llmCallbacks,
@@ -691,23 +656,11 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       toolResultText,
     );
     if (extractedAttachmentMetas.length) {
-      const assistantMessage = turnMessageStore.updateLast(
-        {},
-        (messageItem) => String(messageItem?.role || "").trim() === "assistant",
-      );
-      const mergedAttachmentMetas = mergeAttachmentMetas(
-        assistantMessage?.attachmentMetas || [],
-        extractedAttachmentMetas,
-      );
-      turnMessageStore.updateLast(
-        { attachmentMetas: mergedAttachmentMetas },
-        (messageItem) => String(messageItem?.role || "").trim() === "assistant",
-      );
-      if (!Array.isArray(runtime.attachmentMetas)) runtime.attachmentMetas = [];
-      runtime.attachmentMetas = mergeAttachmentMetas(
-        runtime.attachmentMetas,
-        extractedAttachmentMetas,
-      );
+      appendAttachmentMetasToRuntimeAndTurn({
+        runtime,
+        turnMessageStore,
+        attachmentMetas: extractedAttachmentMetas,
+      });
     }
   }
 

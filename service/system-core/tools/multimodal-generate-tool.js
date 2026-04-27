@@ -7,6 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import OpenAI from "openai";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
+import { mapAttachmentRecordsToMetas } from "../attach/index.js";
 import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
@@ -14,13 +15,7 @@ import {
 import { toToolJsonResult } from "./tool-json-result.js";
 
 function resolveModelApiKey(modelSpec = {}) {
-  if (modelSpec.api_key) return String(modelSpec.api_key || "");
-  if (String(modelSpec.format || "") === "dashscope") {
-    return String(
-      process.env.DASHSCOPE_API_KEY || process.env.OPENAI_API_KEY || "",
-    );
-  }
-  return String(process.env.OPENAI_API_KEY || "");
+  return String(modelSpec?.api_key || "").trim();
 }
 
 function resolveModelBaseUrl(modelSpec = {}) {
@@ -70,6 +65,29 @@ function parseDataUrlToImageArtifact(dataUrl = "", fileName = "generated_image_1
 function normalizeImageSize(imageSize = "1024x1024") {
   const normalizedImageSize = String(imageSize || "1024x1024").trim();
   return normalizedImageSize || "1024x1024";
+}
+
+function resolveGenerationModelSpec({
+  modelName = "",
+  runtimeModel = "",
+  globalConfig = {},
+  userConfig = {},
+}) {
+  const preferredModelName = String(modelName || "").trim();
+  const currentRuntimeModel = String(runtimeModel || "").trim();
+  const resolvedModelName = preferredModelName || currentRuntimeModel;
+  const resolvedModelSpec = resolvedModelName
+    ? resolveModelSpecByName({
+        modelName: resolvedModelName,
+        globalConfig,
+        userConfig,
+        fallbackToDefault: true,
+      })
+    : resolveDefaultModelSpec({ globalConfig, userConfig });
+  return {
+    resolvedModelName,
+    resolvedModelSpec,
+  };
 }
 
 function extractImageArtifactsFromResponsesOutput(responseOutputItems = []) {
@@ -201,7 +219,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
   const userConfig = runtime?.userConfig || {};
   const attachmentService = runtime?.attachmentService || null;
   const userId = String(runtime?.userId || agentContext?.userId || "").trim();
-  const multimodalGenerateCallMode = "openai_responses_api";
   const sharedFetch =
     typeof runtime?.sharedTools?.fetch === "function"
       ? runtime.sharedTools.fetch
@@ -234,17 +251,16 @@ export function createMultimodalGenerateTool({ agentContext }) {
         });
       }
       try {
-        const preferredModelName = String(model_name || "").trim();
-        const runtimeModel = String(runtime?.runtimeModel || "").trim();
-        const resolvedModelName = preferredModelName || runtimeModel;
-        resolvedModelSpec = resolvedModelName
-          ? resolveModelSpecByName({
-              modelName: resolvedModelName,
-              globalConfig,
-              userConfig,
-              fallbackToDefault: true,
-            })
-          : resolveDefaultModelSpec({ globalConfig, userConfig });
+        const {
+          resolvedModelName,
+          resolvedModelSpec: selectedModelSpec,
+        } = resolveGenerationModelSpec({
+          modelName: model_name,
+          runtimeModel: runtime?.runtimeModel,
+          globalConfig,
+          userConfig,
+        });
+        resolvedModelSpec = selectedModelSpec;
         const generationSupport = checkImageGenerationSupport(
           resolvedModelSpec || {},
         );
@@ -314,20 +330,19 @@ export function createMultimodalGenerateTool({ agentContext }) {
                 generationSource: "multimodal_generate_tool",
               })
             : [];
-        const attachmentMetas = savedAttachmentRecords.map((attachmentItem) => ({
-          attachmentId: String(attachmentItem?.attachmentId || ""),
-          name: String(attachmentItem?.name || ""),
-          mimeType: String(attachmentItem?.mimeType || "image/png"),
-          size: Number(attachmentItem?.size || 0),
-          generatedByModel: attachmentItem?.generatedByModel === true,
-          generationSource: String(attachmentItem?.generationSource || ""),
-        }));
+        const attachmentMetas = mapAttachmentRecordsToMetas(
+          savedAttachmentRecords,
+          {
+            fallbackMimeType: "image/png",
+            fallbackGenerationSource: "multimodal_generate_tool",
+          },
+        );
         return toToolJsonResult(
           "multimodal_generate",
           {
             ok: true,
             status: "completed",
-            callMode: multimodalGenerateCallMode,
+            callMode: "openai_responses_api",
             modelAlias: String(resolvedModelSpec?.alias || "").trim(),
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
