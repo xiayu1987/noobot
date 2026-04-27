@@ -209,6 +209,11 @@ export class SessionManager {
   }
 
   _normalizeMessage(message = {}) {
+    const normalizedAttachmentMetas = Array.isArray(message?.attachmentMetas)
+      ? message.attachmentMetas
+      : Array.isArray(message?.attachments)
+        ? message.attachments
+        : [];
     const normalizedMessage = {
       ...message,
       role: message?.role || "",
@@ -218,14 +223,13 @@ export class SessionManager {
       parentDialogProcessId: message?.parentDialogProcessId || "",
       taskId: message?.taskId || "",
       taskStatus: message?.taskStatus || "",
-      attachmentIds: Array.isArray(message?.attachmentIds)
-        ? message.attachmentIds.filter(Boolean)
-        : [],
-      attachments: Array.isArray(message?.attachments)
-        ? message.attachments
-        : [],
+      modelAlias: String(message?.modelAlias || "").trim(),
+      modelName: String(message?.modelName || "").trim(),
+      attachmentMetas: normalizedAttachmentMetas,
       ts: message?.ts || this._now(),
     };
+    delete normalizedMessage.attachmentIds;
+    delete normalizedMessage.attachments;
     if (
       normalizedMessage.type === "tool_call" &&
       !Array.isArray(normalizedMessage.tool_calls)
@@ -738,8 +742,9 @@ export class SessionManager {
     parentDialogProcessId = "",
     tool_calls = null,
     tool_call_id = "",
-    attachmentIds = [],
-    attachments = [],
+    attachmentMetas = [],
+    modelAlias = "",
+    modelName = "",
     parentSessionId = "",
   }) {
     const basePath = this._resolveBasePath(userId);
@@ -770,6 +775,8 @@ export class SessionManager {
       parentDialogProcessId: parentDialogProcessId || "",
       taskId: resolvedTaskId,
       taskStatus: resolvedTaskStatus,
+      modelAlias: String(modelAlias || "").trim(),
+      modelName: String(modelName || "").trim(),
       ts: this._now(),
     });
 
@@ -777,11 +784,8 @@ export class SessionManager {
     if (Array.isArray(tool_calls) && tool_calls.length) {
       turn.tool_calls = tool_calls;
     }
-    if (Array.isArray(attachmentIds) && attachmentIds.length) {
-      turn.attachmentIds = attachmentIds.filter(Boolean);
-    }
-    if (Array.isArray(attachments) && attachments.length) {
-      turn.attachments = attachments;
+    if (Array.isArray(attachmentMetas) && attachmentMetas.length) {
+      turn.attachmentMetas = attachmentMetas;
     }
 
     sessionBundle.session.messages.push(turn);

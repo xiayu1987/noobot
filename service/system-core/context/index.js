@@ -84,7 +84,7 @@ export class ContextBuilder {
     sessionId = "",
     caller = "user",
     parentSessionId = "",
-    attachments = [],
+    attachmentMetas = [],
     sessionManager,
     memoryService,
     attachmentService,
@@ -102,7 +102,7 @@ export class ContextBuilder {
     this.sessionId = sessionId;
     this.caller = caller;
     this.parentSessionId = parentSessionId;
-    this.attachments = attachments;
+    this.attachmentMetas = attachmentMetas;
     this.sessionManager = sessionManager;
     this.memoryService = memoryService;
     this.attachmentService = attachmentService;
@@ -240,7 +240,12 @@ export class ContextBuilder {
     );
   }
 
-  _buildRuntimeContext({ dialogProcessId, sessionTree, rootSessionId = "" }) {
+  _buildRuntimeContext({
+    dialogProcessId,
+    sessionTree,
+    rootSessionId = "",
+    attachmentMetas = [],
+  }) {
     const normalizedDialogProcessId = String(dialogProcessId || "");
     const configuredMaxToolLoopTurns = Number(
       this.runConfig?.maxToolLoopTurns,
@@ -272,10 +277,12 @@ export class ContextBuilder {
     };
 
     return {
+      userId: this.userId || "",
       globalConfig: this.globalConfig,
       userConfig: this.userConfig,
       eventListener: this.eventListener,
       sessionManager: this.sessionManager,
+      attachmentService: this.attachmentService,
       botManager: this.botManager,
       userInteractionBridge: this.userInteractionBridge,
       abortSignal: this.abortSignal || null,
@@ -291,6 +298,7 @@ export class ContextBuilder {
       systemRuntime,
       currentTurnMessages: createCurrentTurnMessagesStore(),
       currentTurnTasks: createCurrentTurnTasksStore(),
+      attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
     };
   }
 
@@ -351,6 +359,7 @@ export class ContextBuilder {
       dialogProcessId = "",
       sessionTree = null,
       rootSessionId = "",
+      attachmentMetas = [],
     } = {},
   ) {
     const resolvedRuntimeBasePath =
@@ -388,6 +397,7 @@ export class ContextBuilder {
         dialogProcessId,
         sessionTree: resolvedSessionTree,
         rootSessionId: resolvedRootSessionId,
+        attachmentMetas,
       }),
     };
     await this._initializeSharedTools(agentContext.runtime);
@@ -402,13 +412,18 @@ export class ContextBuilder {
   async _resolveAttachments() {
     const runtimeBasePath = this._resolveRuntimeBasePath();
     if (!this.attachmentService || !runtimeBasePath) return [];
-    const hasIngestedRecords = (this.attachments || []).some(
+    const effectiveConfig = this._getEffectiveConfig();
+    const attachmentPolicy =
+      effectiveConfig?.attachments && typeof effectiveConfig.attachments === "object"
+        ? effectiveConfig.attachments
+        : {};
+    const hasIngestedRecords = (this.attachmentMetas || []).some(
       (attachmentItem) =>
         String(attachmentItem?.attachmentId || "").trim() &&
         String(attachmentItem?.path || "").trim(),
     );
     if (hasIngestedRecords) {
-      return (this.attachments || []).map((attachmentItem) => ({
+      return (this.attachmentMetas || []).map((attachmentItem) => ({
         attachmentId: String(attachmentItem?.attachmentId || ""),
         name: String(attachmentItem?.name || ""),
         mimeType: String(
@@ -421,7 +436,8 @@ export class ContextBuilder {
     }
     return this.attachmentService.ingest({
       userId: this.userId,
-      attachments: this.attachments,
+      attachments: this.attachmentMetas,
+      attachmentPolicy,
     });
   }
 
@@ -483,6 +499,28 @@ export class ContextBuilder {
       alias: modelSpec?.alias || "",
       name: modelSpec?.model || "",
       description: modelSpec?.description || "",
+      multimodal_generation: this._normalizeModelMultimodalInfo(modelSpec),
+    };
+  }
+
+  _normalizeModelMultimodalInfo(modelSpec = {}) {
+    const multimodalGeneration = isPlainObject(modelSpec?.multimodal_generation)
+      ? modelSpec.multimodal_generation
+      : {};
+    const supportGeneration = isPlainObject(multimodalGeneration?.support_generation)
+      ? multimodalGeneration.support_generation
+      : {};
+    const supportScope = Array.isArray(supportGeneration?.support_scope)
+      ? supportGeneration.support_scope
+          .map((scopeItem) => String(scopeItem || "").trim())
+          .filter(Boolean)
+      : [];
+    return {
+      support_understanding: multimodalGeneration?.support_understanding === true,
+      support_generation: {
+        enabled: supportGeneration?.enabled === true,
+        support_scope: supportScope,
+      },
     };
   }
 
@@ -490,11 +528,12 @@ export class ContextBuilder {
     const effectiveConfig = this._getEffectiveConfig();
     const providers = effectiveConfig?.providers || {};
     return Object.entries(providers)
-      .filter(([, cfg]) => cfg?.enabled !== false)
-      .map(([alias, cfg]) => ({
+      .filter(([, providerConfig]) => providerConfig?.enabled !== false)
+      .map(([alias, providerConfig]) => ({
         alias,
-        name: cfg?.model || "",
-        description: cfg?.description || "",
+        name: providerConfig?.model || "",
+        description: providerConfig?.description || "",
+        multimodal_generation: this._normalizeModelMultimodalInfo(providerConfig),
       }));
   }
 
@@ -520,10 +559,11 @@ export class ContextBuilder {
       type: item.type || "",
       tool_calls: Array.isArray(item.tool_calls) ? item.tool_calls : [],
       tool_call_id: item.tool_call_id || "",
-      attachmentIds: Array.isArray(item.attachmentIds)
-        ? item.attachmentIds
-        : [],
-      attachments: Array.isArray(item.attachments) ? item.attachments : [],
+      attachmentMetas: Array.isArray(item.attachmentMetas)
+        ? item.attachmentMetas
+        : Array.isArray(item.attachments)
+          ? item.attachments
+          : [],
     }));
   }
 
@@ -610,7 +650,7 @@ export class ContextBuilder {
     skills,
     services,
     mcpServers,
-    attachments,
+    attachmentMetas,
     connectorStatusSection,
   }) {
     return [
@@ -649,10 +689,10 @@ export class ContextBuilder {
         JSON.stringify(connectorStatusSection || {}, null, 2),
       ),
       toSystemSection(
-        "当前附件保存路径",
-        attachments?.length
+        "当前附件元信息",
+        attachmentMetas?.length
           ? JSON.stringify(
-              attachments.map((attachmentItem) =>
+              attachmentMetas.map((attachmentItem) =>
                 typeof attachmentItem === "string"
                   ? attachmentItem
                   : attachmentItem?.path || attachmentItem,
@@ -679,7 +719,7 @@ export class ContextBuilder {
 
   async _buildContextData() {
     const runtimeBasePath = this._resolveRuntimeBasePath();
-    const [systemPrompt, skills, attachments, workspaceDirectories] =
+    const [systemPrompt, skills, attachmentMetas, workspaceDirectories] =
       await Promise.all([
         this.getSystemPrompt(),
         this._resolveSkills(),
@@ -695,7 +735,7 @@ export class ContextBuilder {
       skills,
       services,
       mcpServers,
-      attachments,
+      attachmentMetas,
       modelSection,
       workspaceDirectories,
     };
@@ -725,7 +765,7 @@ export class ContextBuilder {
       skills: contextData.skills,
       services: contextData.services,
       mcpServers: contextData.mcpServers,
-      attachments: contextData.attachments,
+      attachmentMetas: contextData.attachmentMetas,
       connectorStatusSection,
     });
     return {
@@ -733,6 +773,7 @@ export class ContextBuilder {
       runtimeBasePath: contextData.runtimeBasePath,
       sessionTree,
       rootSessionId,
+      attachmentMetas: contextData.attachmentMetas,
     };
   }
 
@@ -742,12 +783,14 @@ export class ContextBuilder {
       runtimeBasePath,
       sessionTree,
       rootSessionId,
+      attachmentMetas,
     } = await this._buildSystemContext({ dialogProcessId });
     return this._buildAgentContext(systemContext, [], {
       runtimeBasePath,
       dialogProcessId,
       sessionTree,
       rootSessionId,
+      attachmentMetas,
     });
   }
 
@@ -762,6 +805,7 @@ export class ContextBuilder {
       runtimeBasePath,
       sessionTree,
       rootSessionId,
+      attachmentMetas,
     } = await this._buildSystemContext({ dialogProcessId, longMemory });
     const conversationMessages = this._toConversationMessages(sessionRecords);
     return this._buildAgentContext(systemContext, conversationMessages, {
@@ -769,6 +813,7 @@ export class ContextBuilder {
       dialogProcessId,
       sessionTree,
       rootSessionId,
+      attachmentMetas,
     });
   }
 }

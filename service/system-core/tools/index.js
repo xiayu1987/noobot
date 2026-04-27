@@ -13,6 +13,7 @@ import { createModelTool } from "./model-tool.js";
 import { createUserInteractionTool } from "./user-interaction-tool.js";
 import { createMcpTool } from "./mcp-tool.js";
 import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
+import { createMultimodalGenerateTool } from "./multimodal-generate-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 
@@ -48,6 +49,7 @@ const TOOL_CONFIG_ALIASES = {
   terminal_connect_connector: ["terminal_connect_connector"],
   access_connector: ["access_connector"],
   inspect_connectors: ["inspect_connectors"],
+  multimodal_generate: ["multimodal_generate"],
 };
 
 function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
@@ -64,6 +66,33 @@ function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
   });
 }
 
+function hasEnabledMultimodalGenerationProvider(effectiveConfig = {}) {
+  const providers = effectiveConfig?.providers || {};
+  for (const providerConfig of Object.values(providers)) {
+    if (!providerConfig || typeof providerConfig !== "object") continue;
+    if (providerConfig.enabled === false) continue;
+    const multimodalGeneration =
+      providerConfig?.multimodal_generation &&
+      typeof providerConfig.multimodal_generation === "object"
+        ? providerConfig.multimodal_generation
+        : {};
+    const supportGeneration =
+      multimodalGeneration?.support_generation &&
+      typeof multimodalGeneration.support_generation === "object"
+        ? multimodalGeneration.support_generation
+        : {};
+    const generationEnabled = supportGeneration?.enabled === true;
+    if (!generationEnabled) continue;
+    const supportScope = Array.isArray(supportGeneration?.support_scope)
+      ? supportGeneration.support_scope.map((scopeItem) =>
+          String(scopeItem || "").trim().toLowerCase(),
+        )
+      : [];
+    if (supportScope.includes("image")) return true;
+  }
+  return false;
+}
+
 export async function buildTools(ctx) {
   const runtime = ctx?.agentContext?.runtime || {};
   const effectiveConfig = mergeConfig(
@@ -73,6 +102,9 @@ export async function buildTools(ctx) {
   const allowUserInteraction =
     ctx?.agentContext?.runtime?.systemRuntime?.config?.allowUserInteraction !==
     false;
+  const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(
+    effectiveConfig,
+  );
   const baseTools = [
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
@@ -80,6 +112,7 @@ export async function buildTools(ctx) {
     ...createContentProcessTool(ctx),
     ...createServiceTool(ctx),
     ...createMcpTool(ctx),
+    ...(enableMultimodalGenerateTool ? createMultimodalGenerateTool(ctx) : []),
     ...createConnectorAccessTool(ctx),
     ...createAgentCollabTool(ctx),
     ...createModelTool(ctx),

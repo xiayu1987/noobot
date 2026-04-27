@@ -367,7 +367,11 @@ async function summarizeByModel({
     (recordItem) => `## ${recordItem?.url || ""}\n${recordItem?.usefulText || ""}`,
   );
   const imageAlias =
+    userConfig?.attachments?.attachmentModels?.image ||
+    userConfig?.attachments?.models?.image ||
     userConfig?.attachmentModels?.image ||
+    globalConfig?.attachments?.attachmentModels?.image ||
+    globalConfig?.attachments?.models?.image ||
     globalConfig?.attachmentModels?.image ||
     "";
   const modelSpec =

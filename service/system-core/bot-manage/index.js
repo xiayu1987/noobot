@@ -140,7 +140,7 @@ export class BotManager {
     caller,
     parentSessionId,
     userConfig,
-    attachments,
+    attachmentMetas,
     eventListener,
     userInteractionBridge = null,
     runConfig = {},
@@ -155,7 +155,7 @@ export class BotManager {
       sessionId,
       caller,
       parentSessionId,
-      attachments,
+      attachmentMetas,
       sessionManager: this.session,
       memoryService: this.memory,
       attachmentService: this.attach,
@@ -315,7 +315,7 @@ export class BotManager {
     caller,
     parentSessionId,
     userConfig,
-    attachments,
+    attachmentMetas,
     eventListener,
     dialogProcessId = "",
     userInteractionBridge = null,
@@ -329,7 +329,7 @@ export class BotManager {
       caller,
       parentSessionId,
       userConfig,
-      attachments,
+      attachmentMetas,
       eventListener,
       userInteractionBridge,
       runConfig,
@@ -362,8 +362,9 @@ export class BotManager {
     taskStatus = null,
     tool_calls = null,
     tool_call_id = "",
-    attachmentIds = [],
-    attachments = [],
+    attachmentMetas = [],
+    modelAlias = "",
+    modelName = "",
     dialogProcessId = "",
     parentDialogProcessId = "",
     parentSessionId = "",
@@ -382,8 +383,9 @@ export class BotManager {
       parentDialogProcessId,
       tool_calls,
       tool_call_id,
-      attachmentIds,
-      attachments,
+      attachmentMetas,
+      modelAlias,
+      modelName,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -414,6 +416,11 @@ export class BotManager {
           ? messageItem.tool_calls
           : null,
         tool_call_id: messageItem.tool_call_id || "",
+        attachmentMetas: Array.isArray(messageItem.attachmentMetas)
+          ? messageItem.attachmentMetas
+          : null,
+        modelAlias: String(messageItem.modelAlias || "").trim(),
+        modelName: String(messageItem.modelName || "").trim(),
         eventListener,
       });
     }
@@ -530,21 +537,6 @@ export class BotManager {
       });
       const isContinue = Boolean(sessionBundle?.exists);
       const userConfig = await this.loadUserConfig(basePath);
-      const ingestedAttachments = await this.attach.ingest({
-        userId,
-        attachments,
-      });
-      const userMessageAttachmentIds = ingestedAttachments.map(
-        (attachmentItem) => String(attachmentItem?.attachmentId || ""),
-      );
-      const userMessageAttachments = ingestedAttachments.map((attachmentItem) => ({
-        attachmentId: String(attachmentItem?.attachmentId || ""),
-        name: String(attachmentItem?.name || ""),
-        mimeType: String(
-          attachmentItem?.mimeType || "application/octet-stream",
-        ),
-        size: Number(attachmentItem?.size || 0),
-      }));
 
       await this.session.createSession({
         userId,
@@ -586,7 +578,7 @@ export class BotManager {
         caller,
         parentSessionId,
         userConfig,
-        attachments: ingestedAttachments,
+        attachmentMetas: attachments,
         eventListener: runtimeEventListener,
         dialogProcessId,
         userInteractionBridge,
@@ -594,6 +586,18 @@ export class BotManager {
         abortSignal,
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       });
+      const userMessageAttachmentMetas = (
+        Array.isArray(agentContext?.runtime?.attachmentMetas)
+          ? agentContext.runtime.attachmentMetas
+          : []
+      ).map((attachmentItem) => ({
+        attachmentId: String(attachmentItem?.attachmentId || ""),
+        name: String(attachmentItem?.name || ""),
+        mimeType: String(
+          attachmentItem?.mimeType || "application/octet-stream",
+        ),
+        size: Number(attachmentItem?.size || 0),
+      }));
 
       await this._appendSessionTurn({
         userId,
@@ -602,8 +606,7 @@ export class BotManager {
         role: "user",
         content: message,
         type: "message",
-        attachmentIds: userMessageAttachmentIds,
-        attachments: userMessageAttachments,
+        attachmentMetas: userMessageAttachmentMetas,
         dialogProcessId,
         parentDialogProcessId,
         eventListener: runtimeEventListener,

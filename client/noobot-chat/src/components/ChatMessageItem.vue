@@ -70,6 +70,7 @@ function parseToolFileResult(content = "") {
   return { toolName, resolvedPath, fileName };
 }
 
+
 async function onDownloadFile(fileItem = {}) {
   const userId = String(props.userId || "").trim();
   const relativePath = String(fileItem?.relativePath || "").trim();
@@ -135,11 +136,37 @@ const previewFileName = ref("");
 const previewMode = ref("text");
 const previewTextContent = ref("");
 const previewImageUrl = ref("");
+const attachmentPreviewVisible = ref(false);
+const attachmentPreviewType = ref("");
+const attachmentPreviewUrl = ref("");
+const attachmentPreviewName = ref("");
 
 function cleanupPreviewImageUrl() {
   if (!previewImageUrl.value) return;
   URL.revokeObjectURL(previewImageUrl.value);
   previewImageUrl.value = "";
+}
+
+function openAttachmentPreview(attachmentItem = {}) {
+  const attachmentMimeType = String(attachmentItem?.mimeType || "").trim();
+  const attachmentPreviewSourceUrl = String(
+    attachmentItem?.previewUrl || "",
+  ).trim();
+  if (!attachmentPreviewSourceUrl) return;
+  const isImageAttachment = props.isImageMime(attachmentMimeType);
+  const isVideoAttachment = attachmentMimeType.startsWith("video/");
+  if (!isImageAttachment && !isVideoAttachment) return;
+  attachmentPreviewType.value = isImageAttachment ? "image" : "video";
+  attachmentPreviewUrl.value = attachmentPreviewSourceUrl;
+  attachmentPreviewName.value = String(attachmentItem?.name || "").trim();
+  attachmentPreviewVisible.value = true;
+}
+
+function closeAttachmentPreview() {
+  attachmentPreviewVisible.value = false;
+  attachmentPreviewType.value = "";
+  attachmentPreviewUrl.value = "";
+  attachmentPreviewName.value = "";
 }
 
 async function openFilePreview(fileItem = {}) {
@@ -210,6 +237,7 @@ function closePreviewDialog() {
 
 onBeforeUnmount(() => {
   cleanupPreviewImageUrl();
+  closeAttachmentPreview();
 });
 
 function resolveRelativeWorkspacePath(absolutePath = "") {
@@ -276,6 +304,117 @@ const writtenFiles = computed(() => {
   }
   return out;
 });
+
+const messageModelLabel = computed(() => {
+  const modelRuns = Array.isArray(props.messageItem?.modelRuns)
+    ? props.messageItem.modelRuns.filter((runLabel) => String(runLabel || "").trim())
+    : [];
+  if (modelRuns.length) return modelRuns.join(" -> ");
+  const modelAlias = String(props.messageItem?.modelAlias || "").trim();
+  const modelName = String(props.messageItem?.modelName || "").trim();
+  if (modelAlias && modelName) return `${modelAlias} (${modelName})`;
+  return modelAlias || modelName || "";
+});
+
+function mergeAttachmentMetas(existingAttachmentMetas = [], incomingAttachmentMetas = []) {
+  const existingList = Array.isArray(existingAttachmentMetas)
+    ? existingAttachmentMetas
+    : [];
+  const incomingList = Array.isArray(incomingAttachmentMetas)
+    ? incomingAttachmentMetas
+    : [];
+  if (!incomingList.length) return existingList;
+  const mergedList = [...existingList];
+  const existingKeySet = new Set(
+    existingList.map((attachmentItem) =>
+      String(
+        attachmentItem?.attachmentId ||
+          `${attachmentItem?.name || ""}|${attachmentItem?.size || 0}`,
+      ).trim(),
+    ),
+  );
+  for (const attachmentItem of incomingList) {
+    const attachmentKey = String(
+      attachmentItem?.attachmentId ||
+        `${attachmentItem?.name || ""}|${attachmentItem?.size || 0}`,
+    ).trim();
+    if (!attachmentKey || existingKeySet.has(attachmentKey)) continue;
+    existingKeySet.add(attachmentKey);
+    mergedList.push(attachmentItem);
+  }
+  return mergedList;
+}
+
+function collectRelatedDialogProcessIds(candidateMessages = [], rootDialogProcessId = "") {
+  const normalizedRootDialogProcessId = String(rootDialogProcessId || "").trim();
+  if (!normalizedRootDialogProcessId) return new Set();
+  const relatedDialogProcessIdSet = new Set([normalizedRootDialogProcessId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const sessionMessage of candidateMessages) {
+      const parentDialogProcessId = String(
+        sessionMessage?.parentDialogProcessId || "",
+      ).trim();
+      const childDialogProcessId = String(
+        sessionMessage?.dialogProcessId || "",
+      ).trim();
+      if (!parentDialogProcessId || !childDialogProcessId) continue;
+      if (!relatedDialogProcessIdSet.has(parentDialogProcessId)) continue;
+      if (relatedDialogProcessIdSet.has(childDialogProcessId)) continue;
+      relatedDialogProcessIdSet.add(childDialogProcessId);
+      changed = true;
+    }
+  }
+  return relatedDialogProcessIdSet;
+}
+
+const displayedAttachmentMetas = computed(() => {
+  const baseAttachmentMetas = Array.isArray(props.messageItem?.attachmentMetas)
+    ? props.messageItem.attachmentMetas
+    : [];
+  if (String(props.messageItem?.role || "").trim() !== "assistant") {
+    return baseAttachmentMetas;
+  }
+  const rootDialogProcessId = String(props.messageItem?.dialogProcessId || "").trim();
+  if (!rootDialogProcessId) return baseAttachmentMetas;
+
+  const candidateMessages = [
+    ...(Array.isArray(props.allMessages) ? props.allMessages : []),
+    ...((Array.isArray(props.sessionDocs) ? props.sessionDocs : []).flatMap((sessionDoc) =>
+      Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [],
+    )),
+  ];
+  const relatedDialogProcessIdSet = collectRelatedDialogProcessIds(
+    candidateMessages,
+    rootDialogProcessId,
+  );
+  let mergedAttachmentMetas = [...baseAttachmentMetas];
+  for (const sessionMessage of candidateMessages) {
+    if (String(sessionMessage?.role || "").trim() !== "assistant") continue;
+    const messageDialogProcessId = String(
+      sessionMessage?.dialogProcessId || "",
+    ).trim();
+    const messageParentDialogProcessId = String(
+      sessionMessage?.parentDialogProcessId || "",
+    ).trim();
+    if (
+      !relatedDialogProcessIdSet.has(messageDialogProcessId) &&
+      !relatedDialogProcessIdSet.has(messageParentDialogProcessId)
+    ) {
+      continue;
+    }
+    const currentAttachmentMetas = Array.isArray(sessionMessage?.attachmentMetas)
+      ? sessionMessage.attachmentMetas
+      : [];
+    if (!currentAttachmentMetas.length) continue;
+    mergedAttachmentMetas = mergeAttachmentMetas(
+      mergedAttachmentMetas,
+      currentAttachmentMetas,
+    );
+  }
+  return mergedAttachmentMetas;
+});
 </script>
 
 <template>
@@ -287,6 +426,12 @@ const writtenFiles = computed(() => {
     <div class="msg-content">
       <div class="meta">
         <span class="time">{{ formatTime(messageItem.ts) }}</span>
+        <span
+          v-if="messageItem.role === 'assistant' && messageModelLabel"
+          class="model-label"
+        >
+          {{ messageModelLabel }}
+        </span>
       </div>
 
       <div class="bubble">
@@ -310,30 +455,6 @@ const writtenFiles = computed(() => {
           >
             <span class="pending-dot"></span>
             {{ getSubTaskStatusText() }}
-          </div>
-        </div>
-
-        <div v-if="messageItem.attachments?.length" class="msg-attachments">
-          <div
-            v-for="(attachmentItem, attachmentIndex) in messageItem.attachments"
-            :key="attachmentIndex"
-            class="file-card"
-          >
-            <img
-              v-if="isImageMime(attachmentItem.mimeType || '') && attachmentItem.previewUrl"
-              :src="attachmentItem.previewUrl"
-              :alt="attachmentItem.name"
-              class="file-thumb"
-            />
-            <div v-else class="file-icon">
-              <el-icon><Document /></el-icon>
-            </div>
-            <div class="file-meta">
-              <div class="file-name">{{ attachmentItem.name }}</div>
-              <div class="file-size">
-                {{ formatFileSize(attachmentItem.size || 0) }}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -383,9 +504,78 @@ const writtenFiles = computed(() => {
             </template>
           </div>
         </div>
+
+        <div v-if="displayedAttachmentMetas.length" class="msg-attachments">
+          <div
+            v-for="(attachmentItem, attachmentIndex) in displayedAttachmentMetas"
+            :key="attachmentIndex"
+            class="file-card"
+          >
+            <button
+              v-if="isImageMime(attachmentItem.mimeType || '') && attachmentItem.previewUrl"
+              type="button"
+              class="attachment-preview-btn"
+              :title="`预览 ${attachmentItem.name || ''}`"
+              @click="openAttachmentPreview(attachmentItem)"
+            >
+              <img
+                :src="attachmentItem.previewUrl"
+                :alt="attachmentItem.name"
+                class="file-thumb"
+              />
+            </button>
+            <button
+              v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && attachmentItem.previewUrl"
+              type="button"
+              class="attachment-preview-btn"
+              :title="`预览 ${attachmentItem.name || ''}`"
+              @click="openAttachmentPreview(attachmentItem)"
+            >
+              <video
+                class="file-thumb"
+                :src="attachmentItem.previewUrl"
+                muted
+                preload="metadata"
+              />
+            </button>
+            <div v-else class="file-icon">
+              <el-icon><Document /></el-icon>
+            </div>
+            <div class="file-meta">
+              <div class="file-name">{{ attachmentItem.name }}</div>
+              <div class="file-size">
+                {{ formatFileSize(attachmentItem.size || 0) }}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+
+  <el-dialog
+    v-model="attachmentPreviewVisible"
+    :title="`附件预览：${attachmentPreviewName || ''}`"
+    width="72%"
+    top="6vh"
+    @closed="closeAttachmentPreview"
+  >
+    <div class="preview-body">
+      <img
+        v-if="attachmentPreviewType === 'image' && attachmentPreviewUrl"
+        :src="attachmentPreviewUrl"
+        :alt="attachmentPreviewName"
+        class="preview-image"
+      />
+      <video
+        v-else-if="attachmentPreviewType === 'video' && attachmentPreviewUrl"
+        class="preview-video"
+        :src="attachmentPreviewUrl"
+        controls
+        autoplay
+      />
+    </div>
+  </el-dialog>
 
   <el-dialog
     v-model="previewVisible"
@@ -465,6 +655,20 @@ const writtenFiles = computed(() => {
   color: var(--noobot-msg-meta);
   margin-bottom: 6px;
   padding: 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.model-label {
+  font-size: 11px;
+  color: var(--noobot-msg-tag-text);
+  background: var(--noobot-msg-tag-bg);
+  border: 1px solid var(--noobot-msg-assistant-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  line-height: 1.6;
 }
 
 .bubble {
@@ -570,7 +774,9 @@ const writtenFiles = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--noobot-msg-assistant-border);
 }
 
 .file-card {
@@ -588,6 +794,21 @@ const writtenFiles = computed(() => {
   height: 44px;
   border-radius: 8px;
   object-fit: cover;
+}
+
+.attachment-preview-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.attachment-preview-btn:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .file-icon {
@@ -725,6 +946,13 @@ const writtenFiles = computed(() => {
   max-width: 100%;
   max-height: 62vh;
   margin: 0 auto;
+  display: block;
+  border-radius: 8px;
+}
+
+.preview-video {
+  width: 100%;
+  max-height: 62vh;
   display: block;
   border-radius: 8px;
 }

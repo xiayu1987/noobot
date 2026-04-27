@@ -206,8 +206,8 @@ export function useChatSession({
 
   function revokeMessagePreviewUrls(messages = []) {
     for (const messageItem of messages) {
-      const attachments = messageItem.attachments || [];
-      for (const attachmentItem of attachments) {
+      const attachmentMetas = messageItem.attachmentMetas || [];
+      for (const attachmentItem of attachmentMetas) {
         if (attachmentItem.previewUrl)
           URL.revokeObjectURL(attachmentItem.previewUrl);
       }
@@ -278,8 +278,8 @@ export function useChatSession({
     clearUploadSelection();
   }
 
-  function appendMessage(role, content = "", attachments = []) {
-    const msg = reactive(buildAppendMessage(role, content, attachments));
+  function appendMessage(role, content = "", attachmentMetas = []) {
+    const msg = reactive(buildAppendMessage(role, content, attachmentMetas));
     activeSession.value.messages.push(msg);
     activeSession.value.rawMessages.push(msg);
     activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
@@ -734,8 +734,13 @@ export function useChatSession({
               botMsg.dialogProcessId =
                 lastAssistant.dialogProcessId || botMsg.dialogProcessId;
               botMsg.content = String(mergedAssistantContent || botMsg.content || "");
-              if (Array.isArray(lastAssistant.attachments)) {
-                botMsg.attachments = lastAssistant.attachments;
+              botMsg.modelAlias = String(lastAssistant.modelAlias || "").trim();
+              botMsg.modelName = String(lastAssistant.modelName || "").trim();
+              if (Array.isArray(lastAssistant.modelRuns)) {
+                botMsg.modelRuns = lastAssistant.modelRuns;
+              }
+              if (Array.isArray(lastAssistant.attachmentMetas)) {
+                botMsg.attachmentMetas = lastAssistant.attachmentMetas;
               }
             }
           }

@@ -55,6 +55,18 @@
 | `session.useLastRunningTaskRange` | `true` / `false` | 是否优先取“最近运行任务开始之后”的消息范围。 |
 | `session.useLastCompletedTaskRange` | `true` / `false` | 是否优先取“最近完成任务之后”的消息范围。 |
 
+### 2.3.1 附件上传限制 `attachments`
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `attachments.max_file_count` | 正整数 | 单次请求允许上传的附件数量上限。 |
+| `attachments.max_file_size_bytes` | 正整数（字节） | 单个附件大小上限。 |
+| `attachments.max_total_size_bytes` | 正整数（字节） | 单次请求全部附件总大小上限。 |
+| `attachments.allowed_extensions` | 扩展名列表（如 `.pdf`、`.png`、`.mp4`） | 附件后缀白名单。为空表示不限制后缀。 |
+| `attachments.attachment_models.audio` | `providers` 中模型别名 | 音频附件处理默认模型。 |
+| `attachments.attachment_models.video` | `providers` 中模型别名 | 视频附件处理默认模型。 |
+| `attachments.attachment_models.image` | `providers` 中模型别名 | 图片附件处理默认模型。 |
+
 ### 2.4 工具配置 `tools`
 
 > 工具配置建议使用“**实际工具名**”（下划线分割）作为 key。  
@@ -101,6 +113,7 @@
 |---|---|---|
 | `tools.switch_model.enabled` | `true` / `false` | 切模型工具开关。 |
 | `tools.user_interaction.enabled` | `true` / `false` | 用户交互工具开关。 |
+| `tools.multimodal_generate.enabled` | `true` / `false` | 多模态生成工具开关（调用当前模型执行生成）。 |
 
 #### 2.4.5 内容处理类
 
@@ -180,6 +193,16 @@
 | `providers.<provider>.preserve_thinking` | `true` / `false`（视模型支持） | 是否保留思考。 |
 | `providers.<provider>.thinking_budget` | 正整数（视模型支持） | 思考预算。 |
 | `providers.<provider>.description` | 字符串 | 提供方说明。 |
+| `providers.<provider>.multimodal_generation.support_understanding` | `true` / `false` | 是否支持多模态理解。 |
+| `providers.<provider>.multimodal_generation.support_generation.enabled` | `true` / `false` | 是否支持多模态生成。 |
+| `providers.<provider>.multimodal_generation.support_generation.support_scope` | 列表（如 `image`） | 多模态生成支持范围。 |
+
+当前示例配置中的 `providers` 别名：
+
+- `gemini_3_flash`
+- `nano_banana`
+- `qwen3_6_plus_2026_04_02`
+- `qwen3_5_omni_plus`
 
 ### 2.6 MCP 服务 `mcp_servers`
 
@@ -215,15 +238,24 @@
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `defaultProvider` | `providers` 中已启用别名（如 `qwen3_5_flash`） | 默认模型别名。 |
+| `defaultProvider` | `providers` 中已启用别名（如 `qwen3_6_plus_2026_04_02`） | 默认模型别名。 |
 
-### 3.2 附件模型映射 `attachmentModels`
+### 3.2 附件模型映射 `attachments.attachment_models`
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `attachmentModels.audio` | `providers` 中模型别名 | 音频处理默认模型。 |
-| `attachmentModels.video` | `providers` 中模型别名 | 视频处理默认模型。 |
-| `attachmentModels.image` | `providers` 中模型别名 | 图片处理默认模型。 |
+| `attachments.attachment_models.audio` | `providers` 中模型别名 | 音频处理默认模型。 |
+| `attachments.attachment_models.video` | `providers` 中模型别名 | 视频处理默认模型。 |
+| `attachments.attachment_models.image` | `providers` 中模型别名 | 图片处理默认模型。 |
+
+### 3.2.1 用户附件上传限制覆盖 `attachments`
+
+| 参数名 | 可选项 | 描述 |
+|---|---|---|
+| `attachments.max_file_count` | 正整数 | 用户级单次上传数量上限覆盖。 |
+| `attachments.max_file_size_bytes` | 正整数（字节） | 用户级单文件大小上限覆盖。 |
+| `attachments.max_total_size_bytes` | 正整数（字节） | 用户级总大小上限覆盖。 |
+| `attachments.allowed_extensions` | 扩展名列表 | 用户级扩展名白名单覆盖。 |
 
 ### 3.3 工具配置 `tools`
 
@@ -248,6 +280,7 @@
 | `tools.database_connect_connector.connectors` | 对象 | 用户级预置数据库连接（建议使用参数化密码 `${...}`）。 |
 | `tools.terminal_connect_connector.connectors` | 对象 | 用户级预置终端连接（建议使用参数化密码 `${...}`）。 |
 | `tools.access_connector.max_output_chars` | 正整数 | 用户级连接器输出长度控制。 |
+| `tools.multimodal_generate.enabled` | `true` / `false` | 用户级多模态生成工具开关。 |
 | `tools.database_connect_connector.enabled` | `true` / `false` | 用户级数据库连接器工具开关。 |
 | `tools.terminal_connect_connector.enabled` | `true` / `false` | 用户级终端连接器工具开关。 |
 | `tools.inspect_connectors.enabled` | `true` / `false` | 用户级连接器状态检查工具开关。 |
@@ -269,6 +302,9 @@
 | `providers.<provider>.preserve_thinking` | `true` / `false`（视模型支持） | 是否保留思考。 |
 | `providers.<provider>.thinking_budget` | 正整数（视模型支持） | 思考预算。 |
 | `providers.<provider>.description` | 字符串 | 提供方说明。 |
+| `providers.<provider>.multimodal_generation.support_understanding` | `true` / `false` | 是否支持多模态理解。 |
+| `providers.<provider>.multimodal_generation.support_generation.enabled` | `true` / `false` | 是否支持多模态生成。 |
+| `providers.<provider>.multimodal_generation.support_generation.support_scope` | 列表（如 `image`） | 多模态生成支持范围。 |
 
 ### 3.5 外部服务 `services`
 
@@ -309,9 +345,17 @@
 
 ```json
 {
-  "api_key": "${DASHSCOPE_API_KEY}"
+  "api_key": "${DASHSCOPE_API_KEY}",
+  "base_url": "${DASHSCOPE_API_ADDRESS}"
 }
 ```
+
+常见变量示例：
+
+- `${OPENAI_API_KEY}`
+- `${OPENAI_API_ADDRESS}`
+- `${DASHSCOPE_API_KEY}`
+- `${DASHSCOPE_API_ADDRESS}`
 
 ### 4.2 解析优先级
 

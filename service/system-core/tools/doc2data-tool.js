@@ -35,7 +35,11 @@ async function toDataUrl(imagePath) {
 
 function resolveAttachmentImageAlias({ globalConfig, userConfig }) {
   return (
+    userConfig?.attachments?.attachmentModels?.image ||
+    userConfig?.attachments?.models?.image ||
     userConfig?.attachmentModels?.image ||
+    globalConfig?.attachments?.attachmentModels?.image ||
+    globalConfig?.attachments?.models?.image ||
     globalConfig?.attachmentModels?.image ||
     ""
   );

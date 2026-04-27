@@ -1,9 +1,71 @@
 {
-  "default_provider": "qwen3_5_flash",
-  "attachment_models": {
-    "audio": "omni",
-    "video": "qwen3_5_flash",
-    "image": "qwen3_5_flash"
+  "default_provider": "qwen3_6_plus_2026_04_02",
+  "attachments": {
+    "max_file_count": 8,
+    "max_file_size_bytes": 10485760,
+    "max_total_size_bytes": 31457280,
+    "allowed_extensions": [
+      ".txt",
+      ".md",
+      ".markdown",
+      ".json",
+      ".csv",
+      ".xml",
+      ".pdf",
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".webp",
+      ".doc",
+      ".docx",
+      ".xls",
+      ".xlsx",
+      ".ppt",
+      ".pptx",
+      ".rtf",
+      ".odt",
+      ".ods",
+      ".odp",
+      ".mp4",
+      ".mov",
+      ".avi",
+      ".mkv",
+      ".webm",
+      ".m4v",
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".ts",
+      ".tsx",
+      ".jsx",
+      ".jsonc",
+      ".yaml",
+      ".yml",
+      ".py",
+      ".java",
+      ".go",
+      ".rs",
+      ".cpp",
+      ".c",
+      ".h",
+      ".hpp",
+      ".cs",
+      ".php",
+      ".rb",
+      ".sh",
+      ".bash",
+      ".zsh",
+      ".sql",
+      ".toml",
+      ".ini",
+      ".env",
+      ".log"
+    ],
+    "attachment_models": {
+      "audio": "qwen3_5_omni_plus",
+      "video": "qwen3_5_omni_plus",
+      "image": "qwen3_5_flash"
+    }
   },
   "tools": {
     "read_file": {
@@ -104,31 +166,87 @@
     },
     "inspect_connectors": {
       "enabled": true
+    },
+    "multimodal_generate": {
+      "enabled": true
     }
   },
   "providers": {
-    "openai": {
+    "gemini_3_flash": {
       "enabled": false,
       "api_key": "${OPENAI_API_KEY}",
-      "base_url": "",
-      "model": "gemini-3.1-pro",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gemini-3-flash",
       "format": "openai_compatible",
       "reasoning_effort": "low",
       "temperature": 0.5,
       "max_tokens": 10000,
-      "description": ""
+      "description": "擅长通用对话、多模态推理",
+      "multimodal_generation": {
+        "support_understanding": true,
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
     },
-    "qwen3_5_flash": {
+    "nano_banana": {
+      "enabled": false,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "nano-banana",
+      "format": "openai_compatible",
+      "reasoning_effort": "low",
+      "temperature": 0.5,
+      "max_tokens": 10000,
+      "description": "擅长图片生成",
+      "multimodal_generation": {
+        "support_understanding": false,
+        "support_generation": {
+          "enabled": true,
+          "support_scope": [
+            "image"
+          ]
+        }
+      }
+    },
+    "qwen3_6_plus_2026_04_02": {
       "enabled": true,
       "api_key": "${DASHSCOPE_API_KEY}",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.6-plus-2026-04-02",
       "format": "dashscope",
       "temperature": 0.5,
       "max_tokens": 10000,
       "preserve_thinking": false,
       "thinking_budget": 1,
-      "description": "擅长通用对话、快速响应与多模态理解"
+      "description": "擅长通用对话、快速响应",
+      "multimodal_generation": {
+        "support_understanding": false,
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "qwen3_5_omni_plus": {
+      "enabled": false,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_API_ADDRESS}",
+      "model": "qwen3.5-omni-plus",
+      "format": "dashscope",
+      "temperature": 0.5,
+      "max_tokens": 10000,
+      "preserve_thinking": false,
+      "thinking_budget": 1,
+      "description": "多模态理解",
+      "multimodal_generation": {
+        "support_understanding": true,
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
     }
   },
   "services": {

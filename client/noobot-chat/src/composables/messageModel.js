@@ -9,6 +9,15 @@ function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function buildModelRunLabel(messageItem = {}) {
+  const modelAlias = String(messageItem?.modelAlias || "").trim();
+  const modelName = String(
+    messageItem?.modelName || messageItem?.model || "",
+  ).trim();
+  if (modelAlias && modelName) return `${modelAlias} (${modelName})`;
+  return modelAlias || modelName || "";
+}
+
 function normalizeAttachment(
   attachmentItem = {},
   { userId = "", apiKey = "", isImageMime = () => false } = {},
@@ -25,11 +34,19 @@ function normalizeAttachment(
     mimeType,
     previewUrl:
       String(attachmentItem?.previewUrl || "") ||
-      (attachmentUrl && isImageMime(mimeType) ? attachmentUrl : ""),
+      (attachmentUrl &&
+      (isImageMime(mimeType) || mimeType.startsWith("video/"))
+        ? attachmentUrl
+        : ""),
   };
 }
 
 function createMessageModel(messageItem = {}) {
+  const normalizedAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
+    ? messageItem.attachmentMetas
+    : Array.isArray(messageItem?.attachments)
+      ? messageItem.attachments
+      : [];
   return {
     role: messageItem.role || "assistant",
     content: messageItem.content || "",
@@ -37,7 +54,10 @@ function createMessageModel(messageItem = {}) {
     tool_calls: normalizeArray(messageItem.tool_calls),
     tool_call_id: messageItem.tool_call_id || "",
     dialogProcessId: messageItem.dialogProcessId || "",
-    attachments: normalizeArray(messageItem.attachments),
+    modelAlias: messageItem.modelAlias || "",
+    modelName: messageItem.modelName || messageItem.model || "",
+    modelRuns: normalizeArray(messageItem.modelRuns),
+    attachmentMetas: normalizeArray(normalizedAttachmentMetas),
     realtimeLogs: normalizeArray(messageItem.realtimeLogs),
     completedToolLogs: normalizeArray(messageItem.completedToolLogs),
     thinkingOpenNames: normalizeArray(messageItem.thinkingOpenNames),
@@ -50,12 +70,12 @@ function createMessageModel(messageItem = {}) {
   };
 }
 
-function buildAppendMessage(role, content = "", attachments = []) {
+function buildAppendMessage(role, content = "", attachmentMetas = []) {
   return createMessageModel({
     role,
     content,
     type: "message",
-    attachments,
+    attachmentMetas,
     ts: Date.now(),
   });
 }
@@ -64,13 +84,18 @@ function buildViewMessage(
   messageItem = {},
   { userId = "", apiKey = "", isImageMime = () => false } = {},
 ) {
-  const normalizedAttachments = normalizeArray(messageItem.attachments).map(
+  const sourceAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
+    ? messageItem.attachmentMetas
+    : Array.isArray(messageItem?.attachments)
+      ? messageItem.attachments
+      : [];
+  const normalizedAttachments = normalizeArray(sourceAttachmentMetas).map(
     (attachmentItem) =>
       normalizeAttachment(attachmentItem, { userId, apiKey, isImageMime }),
   );
   return createMessageModel({
     ...messageItem,
-    attachments: normalizedAttachments,
+    attachmentMetas: normalizedAttachments,
   });
 }
 
@@ -84,6 +109,14 @@ function foldConversationMessages(messages = [], buildView) {
 
   const mergedMessages = [];
   for (const currentMessage of foldedMessages) {
+    const currentModelRunLabel = buildModelRunLabel(currentMessage);
+    if (currentModelRunLabel) {
+      const currentModelRuns = normalizeArray(currentMessage.modelRuns);
+      if (!currentModelRuns.includes(currentModelRunLabel)) {
+        currentMessage.modelRuns = [...currentModelRuns, currentModelRunLabel];
+      }
+    }
+
     const previousMessage = mergedMessages[mergedMessages.length - 1] || null;
     const currentRole = String(currentMessage?.role || "");
     const previousRole = String(previousMessage?.role || "");
@@ -117,13 +150,25 @@ function foldConversationMessages(messages = [], buildView) {
     const previousToolCalls = normalizeArray(previousMessage?.tool_calls);
     const currentToolCalls = normalizeArray(currentMessage?.tool_calls);
     previousMessage.tool_calls = [...previousToolCalls, ...currentToolCalls];
-    const currentAttachments = normalizeArray(currentMessage?.attachments);
-    const previousAttachments = normalizeArray(previousMessage?.attachments);
+    const currentAttachmentMetas = normalizeArray(currentMessage?.attachmentMetas);
+    const previousAttachmentMetas = normalizeArray(previousMessage?.attachmentMetas);
 
-    if (currentAttachments.length && !previousAttachments.length) {
-      previousMessage.attachments = currentAttachments;
+    if (currentAttachmentMetas.length && !previousAttachmentMetas.length) {
+      previousMessage.attachmentMetas = currentAttachmentMetas;
     }
     previousMessage.ts = currentMessage?.ts || previousMessage?.ts;
+    if (String(currentMessage?.modelAlias || "").trim()) {
+      previousMessage.modelAlias = String(currentMessage.modelAlias || "").trim();
+    }
+    if (String(currentMessage?.modelName || "").trim()) {
+      previousMessage.modelName = String(currentMessage.modelName || "").trim();
+    }
+    const previousModelRuns = normalizeArray(previousMessage?.modelRuns);
+    const currentModelRuns = normalizeArray(currentMessage?.modelRuns);
+    const mergedModelRuns = Array.from(
+      new Set([...previousModelRuns, ...currentModelRuns].filter(Boolean)),
+    );
+    previousMessage.modelRuns = mergedModelRuns;
   }
   return mergedMessages;
 }
