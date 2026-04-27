@@ -47,6 +47,7 @@ const TOOL_CONFIG_ALIASES = {
   process_connector_tool: ["process_connector_tool"],
   database_connect_connector: ["database_connect_connector"],
   terminal_connect_connector: ["terminal_connect_connector"],
+  email_connect_connector: ["email_connect_connector"],
   access_connector: ["access_connector"],
   inspect_connectors: ["inspect_connectors"],
   multimodal_generate: ["multimodal_generate"],

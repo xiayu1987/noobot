@@ -5,7 +5,15 @@
 -->
 <script setup>
 import { computed, ref } from "vue";
-import { VideoPause, Paperclip } from "@element-plus/icons-vue";
+import {
+  VideoPause,
+  Paperclip,
+  ArrowDown,
+  ArrowRight,
+  CircleCheckFilled,
+  WarningFilled,
+  CircleCloseFilled,
+} from "@element-plus/icons-vue";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },
@@ -15,6 +23,7 @@ const props = defineProps({
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
   interactionActive: { type: Boolean, default: false },
+  connectorPanelState: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits([
@@ -22,17 +31,59 @@ const emit = defineEmits([
   "update:allowUserInteraction",
   "upload-change",
   "clear-uploads",
+  "connector-selected",
   "send",
   "stop",
 ]);
 
 const uploadRef = ref();
+const connectorPanelExpanded = ref(false);
 const attachmentCount = computed(() => (props.uploadFiles || []).length);
 const sendDisabled = computed(
   () =>
     (!String(props.modelValue || "").trim() && !attachmentCount.value) ||
     !props.connected ||
     (props.interactionActive && props.sending),
+);
+const connectorGroups = computed(() => {
+  const sourceGroups =
+    props?.connectorPanelState?.groups &&
+    typeof props.connectorPanelState.groups === "object"
+      ? props.connectorPanelState.groups
+      : {};
+  return {
+    database: Array.isArray(sourceGroups.database) ? sourceGroups.database : [],
+    terminal: Array.isArray(sourceGroups.terminal) ? sourceGroups.terminal : [],
+    email: Array.isArray(sourceGroups.email) ? sourceGroups.email : [],
+  };
+});
+const selectedConnectors = computed(() => {
+  const sourceSelected =
+    props?.connectorPanelState?.selectedConnectors &&
+    typeof props.connectorPanelState.selectedConnectors === "object"
+      ? props.connectorPanelState.selectedConnectors
+      : {};
+  return {
+    database: String(sourceSelected.database || "").trim(),
+    terminal: String(sourceSelected.terminal || "").trim(),
+    email: String(sourceSelected.email || "").trim(),
+  };
+});
+const connectorGroupDefinitions = [
+  { key: "database", label: "数据库" },
+  { key: "terminal", label: "终端" },
+  { key: "email", label: "邮件" },
+];
+const collapsedConnectorSummaryItems = computed(() =>
+  connectorGroupDefinitions
+    .map((groupDefinition) => {
+      const selectedConnectorName = String(
+        selectedConnectors.value?.[groupDefinition.key] || "",
+      ).trim();
+      if (!selectedConnectorName) return null;
+      return `${groupDefinition.label}：${selectedConnectorName}`;
+    })
+    .filter(Boolean),
 );
 
 function onInputChange(value) {
@@ -65,6 +116,33 @@ function onAllowUserInteractionChange(value) {
   emit("update:allowUserInteraction", Boolean(value));
 }
 
+function connectorStatusIcon(status = "") {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (normalizedStatus === "connected") return CircleCheckFilled;
+  if (normalizedStatus === "error") return CircleCloseFilled;
+  return WarningFilled;
+}
+
+function connectorStatusClass(status = "") {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (normalizedStatus === "connected") return "status-connected";
+  if (normalizedStatus === "error") return "status-error";
+  return "status-unknown";
+}
+
+function onConnectorSelected(connectorType = "", connectorName = "") {
+  const normalizedType = String(connectorType || "").trim();
+  if (!["database", "terminal", "email"].includes(normalizedType)) return;
+  emit("connector-selected", {
+    connectorType: normalizedType,
+    connectorName: String(connectorName || "").trim(),
+  });
+}
+
+function toggleConnectorPanelExpanded() {
+  connectorPanelExpanded.value = !connectorPanelExpanded.value;
+}
+
 defineExpose({
   clearUploadSelection,
 });
@@ -83,6 +161,73 @@ defineExpose({
       >
         <el-icon :size="20"><VideoPause /></el-icon>
       </el-button>
+
+      <div class="connector-panel-shell">
+        <div class="connector-panel-header">
+          <div class="connector-panel-title">连接器</div>
+          <el-button
+            text
+            size="small"
+            class="connector-toggle-btn noobot-action-btn"
+            @click="toggleConnectorPanelExpanded"
+          >
+            <el-icon class="connector-toggle-icon">
+              <ArrowDown v-if="connectorPanelExpanded" />
+              <ArrowRight v-else />
+            </el-icon>
+            {{ connectorPanelExpanded ? "收起" : "展开" }}
+          </el-button>
+        </div>
+
+        <div v-if="!connectorPanelExpanded" class="connector-collapsed-summary">
+          <span
+            v-for="summaryItem in collapsedConnectorSummaryItems"
+            :key="summaryItem"
+            class="connector-summary-pill"
+          >
+            {{ summaryItem }}
+          </span>
+          <span
+            v-if="!collapsedConnectorSummaryItems.length"
+            class="connector-summary-empty"
+          >
+            未选择连接器
+          </span>
+        </div>
+
+        <div v-else class="connector-panel">
+          <div
+            v-for="groupDefinition in connectorGroupDefinitions"
+            :key="groupDefinition.key"
+            class="connector-group"
+          >
+            <div class="connector-group-title">{{ groupDefinition.label }}</div>
+            <el-radio-group
+              size="small"
+              :model-value="selectedConnectors[groupDefinition.key]"
+              @update:model-value="
+                onConnectorSelected(groupDefinition.key, $event)
+              "
+            >
+              <el-radio-button
+                v-for="connectorItem in connectorGroups[groupDefinition.key]"
+                :key="`${groupDefinition.key}-${connectorItem.connectorName}`"
+                :label="connectorItem.connectorName"
+              >
+                <span class="connector-option">
+                  <el-icon
+                    class="connector-status-icon"
+                    :class="connectorStatusClass(connectorItem.status)"
+                  >
+                    <component :is="connectorStatusIcon(connectorItem.status)" />
+                  </el-icon>
+                  <span class="connector-name">{{ connectorItem.connectorName }}</span>
+                </span>
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+        </div>
+      </div>
 
       <!-- 顶部工具栏：附件上传与标签 -->
       <div class="toolbar">
@@ -260,6 +405,108 @@ defineExpose({
   display: block;
 }
 
+.connector-panel-shell {
+  border: 1px solid #283149;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #121a2a;
+}
+
+.connector-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.connector-panel-title {
+  font-size: 12px;
+  color: #afbfdf;
+}
+
+.connector-toggle-btn {
+  color: #9fb3e8;
+  padding: 0;
+  height: auto;
+}
+
+.connector-toggle-icon {
+  margin-right: 4px;
+}
+
+.connector-collapsed-summary {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.connector-summary-pill {
+  border: 1px solid #3a4767;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #d0dcf9;
+  background: #1a2439;
+}
+
+.connector-summary-empty {
+  font-size: 12px;
+  color: #7f8fb2;
+}
+
+.connector-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.connector-group {
+  min-width: 0;
+  border: 1px solid #2f3a58;
+  border-radius: 10px;
+  padding: 8px;
+  background: #172035;
+}
+
+.connector-group-title {
+  font-size: 12px;
+  color: #b6c5e6;
+  margin-bottom: 8px;
+}
+
+.connector-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+}
+
+.connector-status-icon {
+  font-size: 12px;
+}
+
+.connector-status-icon.status-connected {
+  color: #67c23a;
+}
+
+.connector-status-icon.status-error {
+  color: #f56c6c;
+}
+
+.connector-status-icon.status-unknown {
+  color: #e6a23c;
+}
+
+.connector-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .clear-files-btn {
   color: #9fb3e8;
   flex-shrink: 0;
@@ -338,6 +585,14 @@ defineExpose({
 
   .attachment-pill {
     max-width: 140px;
+  }
+
+  .connector-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .connector-group {
+    padding: 6px;
   }
 
   .bottom-actions {

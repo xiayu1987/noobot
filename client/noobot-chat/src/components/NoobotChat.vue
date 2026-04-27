@@ -210,6 +210,8 @@ const {
   deleteSession,
   send,
   stopSending,
+  refreshSessionConnectors,
+  updateSessionSelectedConnector,
   pendingInteractionRequest,
   interactionSubmitting,
   submitInteractionResponse,
@@ -284,6 +286,20 @@ function onAllowUserInteractionUpdate(value) {
 
 async function handleWorkspaceReset() {
   await fetchSessions();
+  if (activeSessionId.value) {
+    await refreshSessionConnectors(activeSessionId.value);
+  }
+}
+
+async function onConnectorSelected({
+  connectorType = "",
+  connectorName = "",
+} = {}) {
+  try {
+    await updateSessionSelectedConnector({ connectorType, connectorName });
+  } catch (error) {
+    ElMessage.error(error.message || "更新连接器勾选失败");
+  }
 }
 
 function handleHeaderAction(command = "") {
@@ -318,6 +334,7 @@ function handleHeaderAction(command = "") {
       :loading-sessions="loadingSessions"
       :sessions="sessions"
       :active-session-id="activeSessionId"
+      :active-connector-panel-state="activeSession?.connectorPanelState || {}"
       @toggle-sidebar="toggleSidebar"
       @update:user-id="onUserIdUpdate"
       @update:connect-code="onConnectCodeUpdate"
@@ -442,6 +459,7 @@ function handleHeaderAction(command = "") {
         ref="composerRef"
         v-model="input"
         :upload-files="uploadFiles"
+        :connector-panel-state="activeSession?.connectorPanelState || {}"
         :sending="sending"
         :can-stop="sending"
         :connected="connected"
@@ -450,6 +468,7 @@ function handleHeaderAction(command = "") {
         @upload-change="onUploadChange"
         @update:allow-user-interaction="onAllowUserInteractionUpdate"
         @clear-uploads="clearUploads"
+        @connector-selected="onConnectorSelected"
         @send="send"
         @stop="stopSending"
       />

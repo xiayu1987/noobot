@@ -21,7 +21,10 @@ import { loadGlobalConfig, resolveConfigSecrets } from "./system-core/config/ind
 import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "./system-core/event/index.js";
 import { safeJoin } from "./system-core/utils/fs-safe.js";
-import { initConnectorChannelStore } from "./system-core/connectors/channel-store.js";
+import {
+  getConnectorChannelStore,
+  initConnectorChannelStore,
+} from "./system-core/connectors/channel-store.js";
 import {
   decryptPayloadBySessionId,
 } from "./system-core/utils/session-crypto.js";
@@ -308,8 +311,18 @@ function normalizeRunConfig(input = {}) {
     allowUserInteractionRaw === undefined
       ? true
       : Boolean(allowUserInteractionRaw);
+  const selectedConnectorsSource =
+    input?.selectedConnectors && typeof input.selectedConnectors === "object"
+      ? input.selectedConnectors
+      : {};
+  const normalizeConnectorName = (value = "") => String(value || "").trim();
   return {
     allowUserInteraction,
+    selectedConnectors: {
+      database: normalizeConnectorName(selectedConnectorsSource?.database),
+      terminal: normalizeConnectorName(selectedConnectorsSource?.terminal),
+      email: normalizeConnectorName(selectedConnectorsSource?.email),
+    },
   };
 }
 
@@ -552,6 +565,101 @@ app.get("/internal/sessions/:userId", async (req, res) => {
     res.json({ ok: true, userId, sessions });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.get("/internal/connectors/:userId/:sessionId", async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    const rootSessionId = await bot.session.getRootSessionId({ userId, sessionId });
+    const connectorChannelStore = getConnectorChannelStore();
+    const inspectedConnectors = await connectorChannelStore.inspectSessionConnectors({
+      sessionId: rootSessionId,
+      timeoutMs: 6000,
+    });
+    const selectedConnectors = await bot.session.getRootSessionSelectedConnectors({
+      userId,
+      sessionId: rootSessionId || sessionId,
+    });
+    res.json({
+      ok: true,
+      userId,
+      sessionId,
+      rootSessionId,
+      connectors: inspectedConnectors?.connectors || {
+        databases: [],
+        terminals: [],
+        emails: [],
+      },
+      summary: inspectedConnectors?.summary || {
+        total_count: 0,
+        connected_count: 0,
+        error_count: 0,
+        unknown_count: 0,
+      },
+      selectedConnectors,
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "get connectors failed" });
+  }
+});
+
+app.put("/internal/connectors/:userId/:sessionId/selection", async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    const selectedConnectorsInput =
+      req.body?.selectedConnectors && typeof req.body.selectedConnectors === "object"
+        ? req.body.selectedConnectors
+        : {};
+    const normalizeConnectorName = (value = "") => String(value || "").trim();
+    const selectedConnectors = {
+      database: normalizeConnectorName(selectedConnectorsInput?.database),
+      terminal: normalizeConnectorName(selectedConnectorsInput?.terminal),
+      email: normalizeConnectorName(selectedConnectorsInput?.email),
+    };
+    const rootSessionId = await bot.session.getRootSessionId({ userId, sessionId });
+    const connectorChannelStore = getConnectorChannelStore();
+    const currentConnectors = connectorChannelStore.getSessionConnectors(rootSessionId);
+    const connectorNameSets = {
+      database: new Set(
+        (Array.isArray(currentConnectors?.databases) ? currentConnectors.databases : [])
+          .map((connectorItem) => String(connectorItem?.connectorName || "").trim())
+          .filter(Boolean),
+      ),
+      terminal: new Set(
+        (Array.isArray(currentConnectors?.terminals) ? currentConnectors.terminals : [])
+          .map((connectorItem) => String(connectorItem?.connectorName || "").trim())
+          .filter(Boolean),
+      ),
+      email: new Set(
+        (Array.isArray(currentConnectors?.emails) ? currentConnectors.emails : [])
+          .map((connectorItem) => String(connectorItem?.connectorName || "").trim())
+          .filter(Boolean),
+      ),
+    };
+    for (const connectorType of ["database", "terminal", "email"]) {
+      const selectedConnectorName = String(selectedConnectors?.[connectorType] || "").trim();
+      if (!selectedConnectorName) continue;
+      if (!connectorNameSets[connectorType].has(selectedConnectorName)) {
+        throw new Error(`selected connector not connected: ${connectorType}/${selectedConnectorName}`);
+      }
+    }
+    const savedSelectedConnectors = await bot.session.setRootSessionSelectedConnectors({
+      userId,
+      sessionId: rootSessionId || sessionId,
+      selectedConnectors,
+    });
+    res.json({
+      ok: true,
+      userId,
+      sessionId,
+      rootSessionId,
+      selectedConnectors: savedSelectedConnectors,
+    });
+  } catch (err) {
+    res
+      .status(400)
+      .json({ ok: false, error: err.message || "save selected connectors failed" });
   }
 });
 
@@ -916,6 +1024,8 @@ wsServer.on("connection", (ws, request) => {
       needConnectionInfo = false,
       connectorName = "",
       connectorType = "",
+      interactionType = "",
+      interactionData = {},
     } = {}) =>
       new Promise((resolve, reject) => {
         const requestId = randomBytes(12).toString("hex");
@@ -944,6 +1054,11 @@ wsServer.on("connection", (ws, request) => {
           needConnectionInfo: Boolean(needConnectionInfo),
           connectorName: String(connectorName || "").trim(),
           connectorType: String(connectorType || "").trim(),
+          interactionType: String(interactionType || "").trim(),
+          interactionData:
+            interactionData && typeof interactionData === "object"
+              ? interactionData
+              : {},
         });
       }),
   };

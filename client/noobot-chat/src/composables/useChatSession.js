@@ -14,8 +14,10 @@ import {
 import {
   buildChatWebSocketUrl,
   deleteSessionApi,
+  getSessionConnectorsApi,
   getSessionDetailApi,
   getSessionsApi,
+  putSessionConnectorSelectionApi,
 } from "../api/chatApi";
 import { encryptPayloadBySessionId } from "../utils/sessionCrypto";
 
@@ -31,6 +33,29 @@ export function useChatSession({
   scrollBottom,
   clearUploadSelection = () => {},
 }) {
+  function createConnectorPanelState(overrides = {}) {
+    return {
+      rootSessionId: String(overrides?.rootSessionId || "").trim(),
+      groups: {
+        database: Array.isArray(overrides?.groups?.database)
+          ? overrides.groups.database
+          : [],
+        terminal: Array.isArray(overrides?.groups?.terminal)
+          ? overrides.groups.terminal
+          : [],
+        email: Array.isArray(overrides?.groups?.email)
+          ? overrides.groups.email
+          : [],
+      },
+      selectedConnectors: {
+        database: String(overrides?.selectedConnectors?.database || "").trim(),
+        terminal: String(overrides?.selectedConnectors?.terminal || "").trim(),
+        email: String(overrides?.selectedConnectors?.email || "").trim(),
+      },
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   const input = ref("");
   const uploadFiles = ref([]);
   const sending = ref(false);
@@ -119,6 +144,7 @@ export function useChatSession({
       messages: [],
       rawMessages: [],
       sessionDocs: [],
+      connectorPanelState: createConnectorPanelState(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -197,6 +223,7 @@ export function useChatSession({
       messages: [],
       rawMessages: [],
       sessionDocs: [],
+      connectorPanelState: createConnectorPanelState(),
       createdAt: item.createdAt || "",
       updatedAt: item.updatedAt || "",
       caller: item.caller || "",
@@ -418,6 +445,204 @@ export function useChatSession({
     }
   }
 
+  function normalizeConnectorGroupItems(groupItems = []) {
+    return (Array.isArray(groupItems) ? groupItems : []).map((connectorItem) => ({
+      connectorName: String(
+        connectorItem?.connector_name || connectorItem?.connectorName || "",
+      ).trim(),
+      connectorType: String(
+        connectorItem?.connector_type || connectorItem?.connectorType || "",
+      ).trim(),
+      status: String(connectorItem?.status || "unknown").trim(),
+      statusCode: Number(connectorItem?.status_code ?? 0),
+      statusMessage: String(connectorItem?.status_message || "").trim(),
+      checkedAt: String(connectorItem?.checked_at || "").trim(),
+      connectionMeta:
+        connectorItem?.connection_meta && typeof connectorItem.connection_meta === "object"
+          ? connectorItem.connection_meta
+          : connectorItem?.connectionMeta && typeof connectorItem.connectionMeta === "object"
+            ? connectorItem.connectionMeta
+            : {},
+    }));
+  }
+
+  function applySessionConnectorPayload(sessionItem, payload = {}) {
+    if (!sessionItem) return;
+    const selectedSource =
+      payload?.selectedConnectors && typeof payload.selectedConnectors === "object"
+        ? payload.selectedConnectors
+        : payload?.selected_connectors && typeof payload.selected_connectors === "object"
+          ? payload.selected_connectors
+          : {};
+    sessionItem.connectorPanelState = createConnectorPanelState({
+      rootSessionId:
+        payload?.rootSessionId || payload?.root_session_id || payload?.sessionId || "",
+      groups: {
+        database: normalizeConnectorGroupItems(
+          payload?.connectors?.databases || payload?.groups?.database || [],
+        ),
+        terminal: normalizeConnectorGroupItems(
+          payload?.connectors?.terminals || payload?.groups?.terminal || [],
+        ),
+        email: normalizeConnectorGroupItems(
+          payload?.connectors?.emails || payload?.groups?.email || [],
+        ),
+      },
+      selectedConnectors: {
+        database: String(selectedSource?.database || "").trim(),
+        terminal: String(selectedSource?.terminal || "").trim(),
+        email: String(selectedSource?.email || "").trim(),
+      },
+    });
+  }
+
+  function upsertConnectedConnectorInPanelState(
+    sessionItem,
+    {
+      connectorType = "",
+      connectorName = "",
+      status = "connected",
+    } = {},
+  ) {
+    if (!sessionItem) return;
+    const normalizedConnectorType = String(connectorType || "").trim();
+    const normalizedConnectorName = String(connectorName || "").trim();
+    if (
+      !["database", "terminal", "email"].includes(normalizedConnectorType) ||
+      !normalizedConnectorName
+    ) {
+      return;
+    }
+    const panelState =
+      sessionItem.connectorPanelState &&
+      typeof sessionItem.connectorPanelState === "object"
+        ? sessionItem.connectorPanelState
+        : createConnectorPanelState();
+    const groupItems = Array.isArray(panelState?.groups?.[normalizedConnectorType])
+      ? [...panelState.groups[normalizedConnectorType]]
+      : [];
+    const hitIndex = groupItems.findIndex(
+      (connectorItem) =>
+        String(connectorItem?.connectorName || "").trim() ===
+        normalizedConnectorName,
+    );
+    const connectorStatus = String(status || "connected").trim() || "connected";
+    const nextConnectorItem = {
+      connectorName: normalizedConnectorName,
+      connectorType: normalizedConnectorType,
+      status: connectorStatus,
+      statusCode: connectorStatus === "connected" ? 0 : 1,
+      statusMessage: connectorStatus,
+      checkedAt: new Date().toISOString(),
+      connectionMeta: {},
+    };
+    if (hitIndex >= 0) {
+      groupItems[hitIndex] = {
+        ...groupItems[hitIndex],
+        ...nextConnectorItem,
+      };
+    } else {
+      groupItems.push(nextConnectorItem);
+    }
+    const selectedConnectors =
+      panelState?.selectedConnectors &&
+      typeof panelState.selectedConnectors === "object"
+        ? panelState.selectedConnectors
+        : {};
+    sessionItem.connectorPanelState = createConnectorPanelState({
+      ...panelState,
+      groups: {
+        database: Array.isArray(panelState?.groups?.database)
+          ? panelState.groups.database
+          : [],
+        terminal: Array.isArray(panelState?.groups?.terminal)
+          ? panelState.groups.terminal
+          : [],
+        email: Array.isArray(panelState?.groups?.email)
+          ? panelState.groups.email
+          : [],
+        [normalizedConnectorType]: groupItems,
+      },
+      selectedConnectors: {
+        database: String(selectedConnectors?.database || "").trim(),
+        terminal: String(selectedConnectors?.terminal || "").trim(),
+        email: String(selectedConnectors?.email || "").trim(),
+        [normalizedConnectorType]: normalizedConnectorName,
+      },
+    });
+  }
+
+  async function refreshSessionConnectors(sessionId = "") {
+    if (!ensureConnected()) return;
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return;
+    const sessionItem = sessions.value.find(
+      (candidateSessionItem) => String(candidateSessionItem?.id || "").trim() === normalizedSessionId,
+    );
+    if (!sessionItem) {
+      return;
+    }
+    try {
+      const response = await getSessionConnectorsApi(
+        {
+          userId: userId.value,
+          sessionId:
+            sessionItem.backendSessionId || sessionItem.id || normalizedSessionId,
+        },
+        { fetcher: authFetch },
+      );
+      const payload = await response.json();
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.error || "获取连接器状态失败");
+      }
+      applySessionConnectorPayload(sessionItem, payload);
+    } catch (error) {
+      console.warn("refresh session connectors failed", error);
+      sessionItem.connectorPanelState = createConnectorPanelState(
+        sessionItem.connectorPanelState || {},
+      );
+    }
+  }
+
+  async function updateSessionSelectedConnector({
+    connectorType = "",
+    connectorName = "",
+  } = {}) {
+    if (!ensureConnected() || !activeSession.value) return false;
+    const sessionItem = activeSession.value;
+    const normalizedType = String(connectorType || "").trim();
+    if (!["database", "terminal", "email"].includes(normalizedType)) return false;
+    const normalizedName = String(connectorName || "").trim();
+    const currentSelectedConnectors =
+      sessionItem.connectorPanelState?.selectedConnectors &&
+      typeof sessionItem.connectorPanelState.selectedConnectors === "object"
+        ? sessionItem.connectorPanelState.selectedConnectors
+        : {};
+    const nextSelectedConnectors = {
+      database: String(currentSelectedConnectors?.database || "").trim(),
+      terminal: String(currentSelectedConnectors?.terminal || "").trim(),
+      email: String(currentSelectedConnectors?.email || "").trim(),
+      [normalizedType]: normalizedName,
+    };
+    const response = await putSessionConnectorSelectionApi(
+      {
+        userId: userId.value,
+        sessionId: sessionItem.backendSessionId || sessionItem.id,
+        selectedConnectors: nextSelectedConnectors,
+      },
+      { fetcher: authFetch },
+    );
+    const payload = await response.json();
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(payload?.error || "保存连接器勾选状态失败");
+    }
+    sessionItem.connectorPanelState = createConnectorPanelState({
+      ...(sessionItem.connectorPanelState || {}),
+      selectedConnectors: payload?.selectedConnectors || nextSelectedConnectors,
+    });
+    return true;
+  }
+
   async function fetchSessionDetail(sessionId) {
     const res = await getSessionDetailApi(
       { userId: userId.value, sessionId },
@@ -442,12 +667,20 @@ export function useChatSession({
       return;
     }
     activeSessionId.value = sessionId;
-    if (target.isLocal || (target.loaded && !force)) return;
+    if (target.isLocal) {
+      await refreshSessionConnectors(sessionId);
+      return;
+    }
+    if (target.loaded && !force) {
+      await refreshSessionConnectors(sessionId);
+      return;
+    }
 
     loadingSessionDetail.value = true;
     try {
       const detail = await fetchSessionDetail(sessionId);
       applySessionDetail(detail);
+      await refreshSessionConnectors(sessionId);
     } catch (error) {
       ElMessage.error(error.message || "加载会话详情失败");
     } finally {
@@ -576,8 +809,11 @@ export function useChatSession({
     return false;
   }
 
-  function submitInteractionResponse(response = {}) {
-    const request = pendingInteractionRequest.value;
+  function submitInteractionResponse(response = {}, requestOverride = null) {
+    const request =
+      requestOverride && typeof requestOverride === "object"
+        ? requestOverride
+        : pendingInteractionRequest.value;
     const ws = activeChatSocket.value;
     if (!request?.requestId || !ws || ws.readyState !== WebSocket.OPEN) {
       throw new Error("交互通道不可用");
@@ -599,7 +835,9 @@ export function useChatSession({
         response: responsePayload,
       }),
     );
-    pendingInteractionRequest.value = null;
+    if (!requestOverride) {
+      pendingInteractionRequest.value = null;
+    }
     interactionSubmitting.value = false;
   }
 
@@ -666,6 +904,17 @@ export function useChatSession({
         config: {
           allowUserInteraction:
             allowUserInteraction?.value === false ? false : true,
+          selectedConnectors: {
+            database: String(
+              activeSession.value?.connectorPanelState?.selectedConnectors?.database || "",
+            ).trim(),
+            terminal: String(
+              activeSession.value?.connectorPanelState?.selectedConnectors?.terminal || "",
+            ).trim(),
+            email: String(
+              activeSession.value?.connectorPanelState?.selectedConnectors?.email || "",
+            ).trim(),
+          },
         },
       };
 
@@ -683,6 +932,44 @@ export function useChatSession({
             scrollBottom();
           }
         } else if (event === "interaction_request") {
+          const interactionType = String(data?.interactionType || "").trim();
+          if (interactionType === "connector_connected") {
+            const interactionData =
+              data?.interactionData && typeof data.interactionData === "object"
+                ? data.interactionData
+                : {};
+            const connectedType = String(
+              data?.connectorType || interactionData?.connectorType || "",
+            ).trim();
+            const connectedName = String(
+              data?.connectorName || interactionData?.connectorName || "",
+            ).trim();
+            const connectedStatus = String(
+              interactionData?.status || "connected",
+            ).trim();
+            if (
+              ["database", "terminal", "email"].includes(connectedType) &&
+              connectedName
+            ) {
+              upsertConnectedConnectorInPanelState(activeSession.value, {
+                connectorType: connectedType,
+                connectorName: connectedName,
+                status: connectedStatus,
+              });
+              refreshSessionConnectors(activeSession.value.id);
+            }
+            try {
+              submitInteractionResponse({
+                confirmed: true,
+                response: "connector_connected_ack",
+              }, {
+                requestId: String(data?.requestId || ""),
+                requireEncryption: data?.requireEncryption === true,
+                sessionId: String(data?.sessionId || ""),
+              });
+            } catch {}
+            return;
+          }
           pendingInteractionRequest.value = {
             requestId: String(data?.requestId || ""),
             content: String(data?.content || ""),
@@ -694,6 +981,11 @@ export function useChatSession({
             needConnectionInfo: data?.needConnectionInfo === true,
             connectorName: String(data?.connectorName || ""),
             connectorType: String(data?.connectorType || ""),
+            interactionType,
+            interactionData:
+              data?.interactionData && typeof data.interactionData === "object"
+                ? data.interactionData
+                : {},
           };
         } else if (event === "done") {
           pendingInteractionRequest.value = null;
@@ -770,6 +1062,7 @@ export function useChatSession({
           applySessionDetail(detail, {
             preserveCurrentMessages: shouldPreserveCurrentMessages,
           });
+          await refreshSessionConnectors(activeSession.value?.id || doneSessionId);
         } catch (loadDetailError) {
           console.warn("load session detail after done failed", loadDetailError);
         }
@@ -846,6 +1139,8 @@ export function useChatSession({
     selectSession,
     send,
     stopSending,
+    refreshSessionConnectors,
+    updateSessionSelectedConnector,
     pendingInteractionRequest,
     interactionSubmitting,
     submitInteractionResponse,

@@ -5,12 +5,16 @@
  */
 import { executeDatabaseCommand } from "./databases/index.js";
 import { executeTerminalCommand } from "./terminals/index.js";
+import { executeEmailCommand } from "./emails/index.js";
 
 function normalizeConnectorType(input = "") {
   const value = String(input || "").trim().toLowerCase();
   if (value === "database" || value === "db") return "database";
   if (value === "terminal" || value === "server_terminal" || value === "shell") {
     return "terminal";
+  }
+  if (value === "email" || value === "mail" || value === "smtp_imap") {
+    return "email";
   }
   return "";
 }
@@ -67,16 +71,28 @@ class ConnectorChannelStore {
       this.sessionBuckets.set(sid, {
         databases: new Map(),
         terminals: new Map(),
+        emails: new Map(),
       });
     }
-    return this.sessionBuckets.get(sid);
+    const bucket = this.sessionBuckets.get(sid);
+    if (!(bucket?.emails instanceof Map)) {
+      bucket.emails = new Map();
+    }
+    return bucket;
   }
 
   getSessionConnectors(sessionId = "") {
     const bucket = this._ensureSessionBucket(sessionId);
     return {
-      databases: Array.from(bucket.databases.values()).map(toSerializableConnector),
-      terminals: Array.from(bucket.terminals.values()).map(toSerializableConnector),
+      databases: Array.from((bucket.databases || new Map()).values()).map(
+        toSerializableConnector,
+      ),
+      terminals: Array.from((bucket.terminals || new Map()).values()).map(
+        toSerializableConnector,
+      ),
+      emails: Array.from((bucket.emails || new Map()).values()).map(
+        toSerializableConnector,
+      ),
     };
   }
 
@@ -89,7 +105,7 @@ class ConnectorChannelStore {
     const normalizedName = String(connectorName || "").trim();
     const normalizedType = normalizeConnectorType(connectorType);
     if (!normalizedName) throw new Error("connectorName required");
-    if (!normalizedType) throw new Error("connectorType must be database|terminal");
+    if (!normalizedType) throw new Error("connectorType must be database|terminal|email");
     const bucket = this._ensureSessionBucket(sessionId);
     const connectedAt = new Date().toISOString();
     const info =
@@ -104,30 +120,63 @@ class ConnectorChannelStore {
           ? {
               databaseType: String(info?.database_type || info?.databaseType || ""),
             }
-          : {
+          : normalizedType === "terminal"
+            ? {
               terminalType: String(
                 info?.terminal_type || info?.terminalType || "",
               ),
               host: String(info?.host || info?.ip || ""),
               port: Number(info?.port || 22),
               username: String(info?.username || ""),
+            }
+            : {
+              smtpHost: String(info?.smtp_host || info?.smtpHost || ""),
+              smtpPort: Number(info?.smtp_port || info?.smtpPort || 587),
+              imapHost: String(info?.imap_host || info?.imapHost || ""),
+              imapPort: Number(info?.imap_port || info?.imapPort || 993),
+              username: String(info?.username || ""),
             },
     };
     if (normalizedType === "database") {
       bucket.databases.set(normalizedName, channel);
-    } else {
+    } else if (normalizedType === "terminal") {
       bucket.terminals.set(normalizedName, channel);
+    } else {
+      bucket.emails.set(normalizedName, channel);
     }
     return toSerializableConnector(channel);
+  }
+
+  disconnectConnector({
+    sessionId = "",
+    connectorName = "",
+    connectorType = "",
+  } = {}) {
+    const normalizedName = String(connectorName || "").trim();
+    const normalizedType = normalizeConnectorType(connectorType);
+    if (!normalizedName || !normalizedType) return false;
+    const bucket = this._ensureSessionBucket(sessionId);
+    const sourceMap =
+      normalizedType === "database"
+        ? bucket.databases
+        : normalizedType === "terminal"
+          ? bucket.terminals
+          : bucket.emails;
+    return sourceMap.delete(normalizedName);
   }
 
   _getChannel({ sessionId = "", connectorName = "", connectorType = "" } = {}) {
     const normalizedName = String(connectorName || "").trim();
     const normalizedType = normalizeConnectorType(connectorType);
     if (!normalizedName) throw new Error("connectorName required");
-    if (!normalizedType) throw new Error("connectorType must be database|terminal");
+    if (!normalizedType) throw new Error("connectorType must be database|terminal|email");
     const bucket = this._ensureSessionBucket(sessionId);
-    const sourceMap = normalizedType === "database" ? bucket.databases : bucket.terminals;
+    const sourceMap =
+      normalizedType === "database"
+        ? bucket.databases
+        : normalizedType === "terminal"
+          ? bucket.terminals
+          : bucket.emails;
     const channel = sourceMap.get(normalizedName);
     if (!channel) {
       throw new Error(`connector not connected in current session: ${normalizedName}`);
@@ -141,6 +190,7 @@ class ConnectorChannelStore {
     connectorType = "",
     command = "",
     timeoutMs = 30000,
+    emailAttachmentHandler = null,
   } = {}) {
     const channel = this._getChannel({ sessionId, connectorName, connectorType });
     const normalizedType = normalizeConnectorType(connectorType);
@@ -169,6 +219,28 @@ class ConnectorChannelStore {
         },
       };
     }
+    if (normalizedType === "email") {
+      const execution = await executeEmailCommand({
+        command: cmd,
+        attachmentHandler:
+          typeof emailAttachmentHandler === "function"
+            ? emailAttachmentHandler
+            : null,
+        connectionInfo:
+          channel?.connectionInfo && typeof channel.connectionInfo === "object"
+            ? channel.connectionInfo
+            : {},
+      });
+      return {
+        ok: execution?.ok === true,
+        connector: toSerializableConnector(channel),
+        output: {
+          code: Number(execution?.code || 0),
+          stdout: String(execution?.stdout || ""),
+          stderr: String(execution?.stderr || ""),
+        },
+      };
+    }
     const execution = await executeDatabaseCommand({
       command: cmd,
       connectionInfo:
@@ -192,6 +264,8 @@ class ConnectorChannelStore {
     if (normalizedConnectorType === "database") return "SELECT 1 WHERE 1=1";
     if (normalizedConnectorType === "terminal")
       return "printf __NOOBOT_CONNECTOR_HEALTH__";
+    if (normalizedConnectorType === "email")
+      return JSON.stringify({ action: "list", folder: "INBOX", page: 1, page_size: 1 });
     return "";
   }
 
@@ -203,7 +277,7 @@ class ConnectorChannelStore {
     if (!normalizedSessionId) {
       return {
         root_session_id: "",
-        connectors: { databases: [], terminals: [] },
+        connectors: { databases: [], terminals: [], emails: [] },
         summary: {
           total_count: 0,
           connected_count: 0,
@@ -218,6 +292,9 @@ class ConnectorChannelStore {
       : [];
     const terminalSourceList = Array.isArray(sourceConnectors?.terminals)
       ? sourceConnectors.terminals
+      : [];
+    const emailSourceList = Array.isArray(sourceConnectors?.emails)
+      ? sourceConnectors.emails
       : [];
     const resolveConnectorStatus = async (
       connectorItem = {},
@@ -281,12 +358,18 @@ class ConnectorChannelStore {
         resolveConnectorStatus(connectorItem, "terminal"),
       ),
     );
-    const allConnectors = [...databases, ...terminals];
+    const emails = await Promise.all(
+      emailSourceList.map((connectorItem) =>
+        resolveConnectorStatus(connectorItem, "email"),
+      ),
+    );
+    const allConnectors = [...databases, ...terminals, ...emails];
     return {
       root_session_id: normalizedSessionId,
       connectors: {
         databases,
         terminals,
+        emails,
       },
       summary: {
         total_count: allConnectors.length,
@@ -335,7 +418,11 @@ class ConnectorChannelStore {
       timeoutMs,
     });
     const bucketName =
-      normalizedConnectorType === "database" ? "databases" : "terminals";
+      normalizedConnectorType === "database"
+        ? "databases"
+        : normalizedConnectorType === "terminal"
+          ? "terminals"
+          : "emails";
     const sourceList = Array.isArray(inspected?.connectors?.[bucketName])
       ? inspected.connectors[bucketName]
       : [];

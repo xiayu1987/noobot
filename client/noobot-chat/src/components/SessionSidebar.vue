@@ -4,10 +4,11 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   ChatDotRound,
   CircleCheckFilled,
+  WarningFilled,
   CircleCloseFilled,
   Delete,
   Expand,
@@ -31,6 +32,7 @@ const props = defineProps({
   loadingSessions: { type: Boolean, default: false },
   sessions: { type: Array, default: () => [] },
   activeSessionId: { type: String, default: "" },
+  activeConnectorPanelState: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits([
@@ -94,6 +96,56 @@ watch(
   () => restoreSessionListScrollTop(),
   { deep: true }
 );
+
+const connectorSummaryGroups = computed(() => {
+  const panelState =
+    props.activeConnectorPanelState &&
+    typeof props.activeConnectorPanelState === "object"
+      ? props.activeConnectorPanelState
+      : {};
+  const groups =
+    panelState.groups && typeof panelState.groups === "object"
+      ? panelState.groups
+      : {};
+  const selectedConnectors =
+    panelState.selectedConnectors && typeof panelState.selectedConnectors === "object"
+      ? panelState.selectedConnectors
+      : {};
+  const buildGroup = (groupKey = "", groupLabel = "") => {
+    const items = Array.isArray(groups?.[groupKey]) ? groups[groupKey] : [];
+    const selectedName = String(selectedConnectors?.[groupKey] || "").trim();
+    const selectedItem =
+      items.find(
+        (connectorItem) =>
+          String(connectorItem?.connectorName || "").trim() === selectedName,
+      ) || null;
+    return {
+      key: groupKey,
+      label: groupLabel,
+      selectedName,
+      status: String(selectedItem?.status || "unknown").trim(),
+    };
+  };
+  return [
+    buildGroup("database", "数据库"),
+    buildGroup("terminal", "终端"),
+    buildGroup("email", "邮件"),
+  ];
+});
+
+function connectorStatusIcon(status = "") {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (normalizedStatus === "connected") return CircleCheckFilled;
+  if (normalizedStatus === "error") return CircleCloseFilled;
+  return WarningFilled;
+}
+
+function connectorStatusClass(status = "") {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (normalizedStatus === "connected") return "status-connected";
+  if (normalizedStatus === "error") return "status-error";
+  return "status-unknown";
+}
 </script>
 
 <template>
@@ -199,6 +251,32 @@ watch(
           title="刷新"
           aria-label="刷新会话列表"
         />
+      </div>
+    </div>
+
+    <div class="connector-summary">
+      <div class="connector-summary-title">当前勾选连接器</div>
+      <div
+        v-for="connectorGroup in connectorSummaryGroups"
+        :key="connectorGroup.key"
+        class="connector-summary-item"
+      >
+        <span class="connector-summary-label">{{ connectorGroup.label }}</span>
+        <span
+          v-if="connectorGroup.selectedName"
+          class="connector-summary-value"
+        >
+          <el-icon
+            class="connector-summary-status"
+            :class="connectorStatusClass(connectorGroup.status)"
+          >
+            <component :is="connectorStatusIcon(connectorGroup.status)" />
+          </el-icon>
+          <span class="connector-summary-name">{{
+            connectorGroup.selectedName
+          }}</span>
+        </span>
+        <span v-else class="connector-summary-empty">未勾选</span>
       </div>
     </div>
 
@@ -321,6 +399,69 @@ watch(
   flex-direction: column;
   gap: 12px;
   border-bottom: 1px solid var(--noobot-border-weak);
+}
+
+.connector-summary {
+  margin: 14px 16px 12px;
+  padding: 10px;
+  border: 1px solid var(--noobot-border-weak);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.connector-summary-title {
+  font-size: 12px;
+  color: var(--noobot-text-weak);
+  margin-bottom: 8px;
+}
+
+.connector-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.connector-summary-label {
+  color: var(--noobot-text-weak);
+  flex-shrink: 0;
+}
+
+.connector-summary-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.connector-summary-status {
+  font-size: 12px;
+}
+
+.connector-summary-status.status-connected {
+  color: #67c23a;
+}
+
+.connector-summary-status.status-error {
+  color: #f56c6c;
+}
+
+.connector-summary-status.status-unknown {
+  color: #e6a23c;
+}
+
+.connector-summary-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--noobot-text-strong);
+}
+
+.connector-summary-empty {
+  color: var(--noobot-text-weak);
 }
 
 /* 自定义输入框样式覆盖 */

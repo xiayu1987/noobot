@@ -269,7 +269,10 @@ export class BotManager {
     const includeToolNames = Array.from(
       new Set([
         ...configuredIncludeToolNames,
-        ...(runConfig?.allowUserInteraction !== false ? ["user_interaction"] : []),
+        ...(runConfig?.allowUserInteraction !== false &&
+        runConfig?.toolPolicy?.forceIncludeUserInteraction !== false
+          ? ["user_interaction"]
+          : []),
       ]),
     );
     const includedTools = includeToolNames.length

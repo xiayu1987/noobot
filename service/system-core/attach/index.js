@@ -443,6 +443,14 @@ export class AttachmentService {
     return savedAttachmentRecords;
   }
 
+  async ingestEmailArtifacts({ userId, artifacts = [] } = {}) {
+    return this.ingestGeneratedArtifacts({
+      userId,
+      artifacts,
+      generationSource: "email_connector_read",
+    });
+  }
+
   async getAttachmentById({ userId, attachmentId }) {
     const normalizedAttachmentId = String(attachmentId || "").trim();
     if (!normalizedAttachmentId) return null;

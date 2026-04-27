@@ -36,6 +36,31 @@ export async function getSessionsApi({ userId = "" }, { fetcher } = {}) {
   return runFetch(`/api/internal/sessions/${encodeURIComponent(userId)}`);
 }
 
+export async function getSessionConnectorsApi(
+  { userId = "", sessionId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/connectors/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+  );
+}
+
+export async function putSessionConnectorSelectionApi(
+  { userId = "", sessionId = "", selectedConnectors = {} },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/connectors/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/selection`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selectedConnectors }),
+    },
+  );
+}
+
 export async function getSessionDetailApi(
   { userId = "", sessionId = "" },
   { fetcher } = {},

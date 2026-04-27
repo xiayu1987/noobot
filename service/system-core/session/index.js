@@ -261,6 +261,19 @@ export class SessionManager {
     };
   }
 
+  _normalizeSelectedConnectors(selectedConnectors = {}) {
+    const source =
+      selectedConnectors && typeof selectedConnectors === "object"
+        ? selectedConnectors
+        : {};
+    const normalizeConnectorName = (value = "") => String(value || "").trim();
+    return {
+      database: normalizeConnectorName(source?.database),
+      terminal: normalizeConnectorName(source?.terminal),
+      email: normalizeConnectorName(source?.email),
+    };
+  }
+
   async _ensureRuntimeDirsByBasePath(basePath) {
     try {
       await access(basePath);
@@ -1159,6 +1172,50 @@ export class SessionManager {
     sessionBundle.session.updatedAt = this._now();
     await this._writeJson(sessionFile, sessionBundle.session);
     return sessionBundle.session;
+  }
+
+  async getRootSessionSelectedConnectors({ userId, sessionId }) {
+    const rootSessionId = await this.getRootSessionId({ userId, sessionId });
+    if (!rootSessionId) return this._normalizeSelectedConnectors({});
+    const sessionBundle = await this.getSessionBundle({
+      userId,
+      sessionId: rootSessionId,
+    });
+    if (!sessionBundle?.exists || !sessionBundle?.session) {
+      return this._normalizeSelectedConnectors({});
+    }
+    return this._normalizeSelectedConnectors(
+      sessionBundle.session.selectedConnectors || {},
+    );
+  }
+
+  async setRootSessionSelectedConnectors({
+    userId,
+    sessionId,
+    selectedConnectors = {},
+  }) {
+    const rootSessionId = await this.getRootSessionId({ userId, sessionId });
+    if (!rootSessionId) return this._normalizeSelectedConnectors({});
+    const basePath = this._resolveBasePath(userId);
+    const { resolvedParentSessionId, sessionFile } = await this._resolveSessionScope(
+      basePath,
+      rootSessionId,
+      "",
+    );
+    const sessionBundle = await this.getSessionBundle({
+      userId,
+      sessionId: rootSessionId,
+      parentSessionId: resolvedParentSessionId,
+    });
+    if (!sessionBundle?.exists || !sessionBundle?.session) {
+      return this._normalizeSelectedConnectors({});
+    }
+    sessionBundle.session.selectedConnectors = this._normalizeSelectedConnectors(
+      selectedConnectors,
+    );
+    sessionBundle.session.updatedAt = this._now();
+    await this._writeJson(sessionFile, sessionBundle.session);
+    return sessionBundle.session.selectedConnectors;
   }
 
   async deleteSessionBranch({ userId, sessionId }) {

@@ -125,7 +125,7 @@ export function createUserInteractionTool({ agentContext }) {
   const userInteractionTool = new DynamicStructuredTool({
     name: "user_interaction",
     description:
-      "当需要用户确认或补充信息时调用该工具。输入交互内容和字段定义，工具会等待前端用户填写并返回结果。",
+      "当需要用户确认或补充信息时调用该工具。输入交互内容和字段定义，工具会等待前端用户填写并返回结果。连接器访问，数据库，终端，邮件等连接请求时禁止调用该工具",
     schema: z.object({
       content: z.string().min(1).describe("交互内容"),
       fields: z

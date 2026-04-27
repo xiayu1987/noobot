@@ -91,12 +91,35 @@ function resolveTemplateInString(
 ) {
   const params = isPlainObject(configParams) ? configParams : {};
   const runtimeEnv = isPlainObject(env) ? env : {};
+  const lowerCaseParamKeyMap = Object.fromEntries(
+    Object.entries(params).map(([paramKey, paramValue]) => [
+      String(paramKey || "").trim().toLowerCase(),
+      paramValue,
+    ]),
+  );
+  const lowerCaseEnvKeyMap = Object.fromEntries(
+    Object.entries(runtimeEnv).map(([envKey, envValue]) => [
+      String(envKey || "").trim().toLowerCase(),
+      envValue,
+    ]),
+  );
   return String(input || "").replace(/\$\{([A-Z0-9_]+)\}/gi, (_, key) => {
-    const envValue = runtimeEnv?.[key];
+    const normalizedKey = String(key || "").trim();
+    const lowerCaseKey = normalizedKey.toLowerCase();
+    const upperCaseKey = normalizedKey.toUpperCase();
+    const envValue =
+      runtimeEnv?.[normalizedKey] ??
+      runtimeEnv?.[upperCaseKey] ??
+      runtimeEnv?.[lowerCaseKey] ??
+      lowerCaseEnvKeyMap?.[lowerCaseKey];
     if (envValue !== undefined && envValue !== null && String(envValue) !== "") {
       return String(envValue);
     }
-    const value = params?.[key];
+    const value =
+      params?.[normalizedKey] ??
+      params?.[upperCaseKey] ??
+      params?.[lowerCaseKey] ??
+      lowerCaseParamKeyMap?.[lowerCaseKey];
     if (value === undefined || value === null) return "";
     return String(value);
   });

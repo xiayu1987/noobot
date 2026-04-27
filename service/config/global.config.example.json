@@ -178,6 +178,21 @@
     },
     "multimodal_generate": {
       "enabled": true
+    },
+    "email_connect_connector": {
+      "enabled": true,
+      "connectors": {
+        "example_email": {
+          "smtp_host": "${EMAIL_SMTP_HOST}",
+          "smtp_port": "${EMAIL_SMTP_PORT}",
+          "imap_host": "${EMAIL_IMAP_HOST}",
+          "imap_port": "${EMAIL_IMAP_PORT}",
+          "username": "${EMAIL_ACCOUNT}",
+          "password": "${EMAIL_AUTH_CODE}",
+          "from_email": "${EMAIL_FROM_ADDRESS}",
+          "to_email": "${EMAIL_TO_ADDRESS}"
+        }
+      }
     }
   },
   "providers": {

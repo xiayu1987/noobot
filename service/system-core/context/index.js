@@ -270,6 +270,11 @@ export class ContextBuilder {
       now: this._now(),
       config: {
         allowUserInteraction: this._isUserInteractionAllowed(),
+        selectedConnectors: {
+          database: String(this.runConfig?.selectedConnectors?.database || "").trim(),
+          terminal: String(this.runConfig?.selectedConnectors?.terminal || "").trim(),
+          email: String(this.runConfig?.selectedConnectors?.email || "").trim(),
+        },
         ...(resolvedMaxToolLoopTurns > 0
           ? { maxToolLoopTurns: resolvedMaxToolLoopTurns }
           : {}),
@@ -601,6 +606,11 @@ export class ContextBuilder {
   }
 
   _buildDynamicInfo({ dialogProcessId = "", sessionTree = {} } = {}) {
+    const selectedConnectors =
+      this.runConfig?.selectedConnectors &&
+      typeof this.runConfig.selectedConnectors === "object"
+        ? this.runConfig.selectedConnectors
+        : {};
     return {
       sessionId: this.sessionId || "",
       caller: this.caller || "user",
@@ -609,6 +619,11 @@ export class ContextBuilder {
       now: this._now(),
       config: {
         allowUserInteraction: this._isUserInteractionAllowed(),
+        selectedConnectors: {
+          database: String(selectedConnectors?.database || "").trim(),
+          terminal: String(selectedConnectors?.terminal || "").trim(),
+          email: String(selectedConnectors?.email || "").trim(),
+        },
       },
     };
   }
@@ -625,7 +640,7 @@ export class ContextBuilder {
     ) {
       return {
         root_session_id: normalizedRootSessionId,
-        connectors: { databases: [], terminals: [] },
+        connectors: { databases: [], terminals: [], emails: [] },
         summary: {
           total_count: 0,
           connected_count: 0,

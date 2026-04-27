@@ -56,7 +56,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const processConnectorTaskTool = new DynamicStructuredTool({
     name: "process_connector_tool",
     description:
-      "连接器访问工具，可以连接并查看数据库及终端，通过调用连接器相关工具完成连接与命令执行。",
+      "连接器访问工具，可以连接并查看数据库、终端及邮件，通过调用连接器相关工具完成连接与命令执行。",
     schema: z.object({
       task: z.string().describe("资源相关任务描述"),
       modelName: z.string().optional().describe("可选：指定模型"),
@@ -88,9 +88,15 @@ export function createConnectorAccessTool({ agentContext }) {
           userInteractionBridge,
           runConfig: {
             allowUserInteraction,
+            selectedConnectors:
+              runtime?.systemRuntime?.config?.selectedConnectors &&
+              typeof runtime.systemRuntime.config.selectedConnectors === "object"
+                ? runtime.systemRuntime.config.selectedConnectors
+                : {},
             toolPolicy: {
               mode: "custom_only",
               customTools: subTools,
+              forceIncludeUserInteraction: false,
             },
             runtimeModel: String(modelName || "").trim(),
             maxToolLoopTurns:
