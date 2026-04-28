@@ -198,6 +198,7 @@
   "providers": {
     "gemini_3_flash": {
       "enabled": false,
+      "used_for_conversation": true,
       "api_key": "${OPENAI_API_KEY}",
       "base_url": "${OPENAI_API_ADDRESS}",
       "model": "gemini-3-flash",
@@ -216,6 +217,7 @@
     },
     "nano_banana": {
       "enabled": false,
+      "used_for_conversation": false,
       "api_key": "${OPENAI_API_KEY}",
       "base_url": "${OPENAI_API_ADDRESS}",
       "model": "nano-banana",
@@ -236,6 +238,7 @@
     },
     "qwen3_6_plus_2026_04_02": {
       "enabled": true,
+      "used_for_conversation": true,
       "api_key": "${DASHSCOPE_API_KEY}",
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.6-plus-2026-04-02",
@@ -255,6 +258,7 @@
     },
     "qwen3_5_omni_plus": {
       "enabled": false,
+      "used_for_conversation": true,
       "api_key": "${DASHSCOPE_API_KEY}",
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.5-omni-plus",

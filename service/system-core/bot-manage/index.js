@@ -121,8 +121,18 @@ export class BotManager {
     });
   }
 
-  getAttachmentById({ userId, attachmentId }) {
-    return this.attach.getAttachmentById({ userId, attachmentId });
+  getAttachmentById({
+    userId,
+    attachmentId,
+    sessionId = "",
+    attachmentSource = "",
+  }) {
+    return this.attach.getAttachmentById({
+      userId,
+      attachmentId,
+      sessionId,
+      attachmentSource,
+    });
   }
 
   async loadUserConfig(basePath) {

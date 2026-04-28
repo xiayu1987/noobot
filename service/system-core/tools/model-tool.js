@@ -11,6 +11,12 @@ function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
 
+function isConversationModel(providerSpec = {}) {
+  if (!providerSpec || typeof providerSpec !== "object") return false;
+  const configuredValue = providerSpec.used_for_conversation;
+  return configuredValue === undefined ? true : configuredValue === true;
+}
+
 export function createModelTool({
   agentContext,
   sessionId,
@@ -47,6 +53,12 @@ export function createModelTool({
         return toToolJsonResult("switch_model", {
           ok: false,
           error: `enabled provider/model not found: ${input}`,
+        });
+      }
+      if (!isConversationModel(allEnabledProviders[alias])) {
+        return toToolJsonResult("switch_model", {
+          ok: false,
+          error: `model is not available for conversation switch: ${alias}`,
         });
       }
       runtime.runtimeModel = alias;

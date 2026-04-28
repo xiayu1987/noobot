@@ -22,6 +22,7 @@ import {
   mergeConnectionInfo,
   normalizeDatabaseType,
   normalizeProvidedDatabaseDefaults,
+  resolveRememberedConnectorInfo,
   resolveConfiguredConnectorInfo,
 } from "./connector-toolkit.js";
 
@@ -29,6 +30,7 @@ export function createDatabaseConnectorTools(context = {}) {
   const {
     runtime,
     store,
+    historyStore,
     rootSessionId,
     allowUserInteraction,
     bridge,
@@ -94,7 +96,15 @@ export function createDatabaseConnectorTools(context = {}) {
         connectorName,
         connectorType: "database",
       });
+      const rememberedConnectionInfo = await resolveRememberedConnectorInfo({
+        historyStore,
+        userId: runtime?.userId || "",
+        rootSessionId,
+        connectorType: "database",
+        connectorName,
+      });
       const providedDefaults = normalizeProvidedDatabaseDefaults(default_values);
+      connectionInfo = mergeConnectionInfo(connectionInfo, rememberedConnectionInfo);
       connectionInfo = mergeConnectionInfo(connectionInfo, providedDefaults);
       connectionInfo = mergeConnectionInfo(connectionInfo, {
         database_type: databaseType,
@@ -180,6 +190,22 @@ export function createDatabaseConnectorTools(context = {}) {
         );
       }
       addRuntimeConnectorChannel(runtime, connected);
+      if (
+        historyStore &&
+        typeof historyStore.upsertConnectedConnector === "function"
+      ) {
+        await historyStore.upsertConnectedConnector({
+          userId: String(runtime?.userId || "").trim(),
+          sessionId: rootSessionId,
+          connectorType: "database",
+          connectorName,
+          connectionInfo,
+          connectionMeta:
+            connected?.connectionMeta && typeof connected.connectionMeta === "object"
+              ? connected.connectionMeta
+              : {},
+        });
+      }
       if (bridge?.requestUserInteraction) {
         try {
           await bridge.requestUserInteraction({

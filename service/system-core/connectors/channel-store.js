@@ -5,6 +5,7 @@
  */
 import { executeDatabaseCommand } from "./databases/index.js";
 import { executeTerminalCommand } from "./terminals/index.js";
+import { releaseTerminalChannel } from "./terminals/index.js";
 import { executeEmailCommand } from "./emails/index.js";
 
 function normalizeConnectorType(input = "") {
@@ -162,7 +163,70 @@ class ConnectorChannelStore {
         : normalizedType === "terminal"
           ? bucket.terminals
           : bucket.emails;
-    return sourceMap.delete(normalizedName);
+    const existingChannel = sourceMap.get(normalizedName) || null;
+    const deleted = sourceMap.delete(normalizedName);
+    if (deleted && normalizedType === "terminal") {
+      releaseTerminalChannel({
+        connectionInfo:
+          existingChannel?.connectionInfo &&
+          typeof existingChannel.connectionInfo === "object"
+            ? existingChannel.connectionInfo
+            : {},
+        sessionId: String(sessionId || "").trim(),
+        connectorName: normalizedName,
+      });
+    }
+    return deleted;
+  }
+
+  releaseSessionConnectors(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) {
+      return {
+        released: false,
+        sessionId: "",
+        releasedCounts: { databases: 0, terminals: 0, emails: 0, total: 0 },
+      };
+    }
+    const bucket = this.sessionBuckets.get(normalizedSessionId);
+    if (!bucket) {
+      return {
+        released: false,
+        sessionId: normalizedSessionId,
+        releasedCounts: { databases: 0, terminals: 0, emails: 0, total: 0 },
+      };
+    }
+    const databaseChannels = Array.from(
+      (bucket.databases || new Map()).values(),
+    );
+    const terminalChannels = Array.from(
+      (bucket.terminals || new Map()).values(),
+    );
+    const emailChannels = Array.from((bucket.emails || new Map()).values());
+    for (const terminalChannel of terminalChannels) {
+      releaseTerminalChannel({
+        connectionInfo:
+          terminalChannel?.connectionInfo &&
+          typeof terminalChannel.connectionInfo === "object"
+            ? terminalChannel.connectionInfo
+            : {},
+        sessionId: normalizedSessionId,
+        connectorName: String(terminalChannel?.connectorName || "").trim(),
+      });
+    }
+    this.sessionBuckets.delete(normalizedSessionId);
+    const releasedCounts = {
+      databases: databaseChannels.length,
+      terminals: terminalChannels.length,
+      emails: emailChannels.length,
+      total:
+        databaseChannels.length + terminalChannels.length + emailChannels.length,
+    };
+    return {
+      released: releasedCounts.total > 0,
+      sessionId: normalizedSessionId,
+      releasedCounts,
+    };
   }
 
   _getChannel({ sessionId = "", connectorName = "", connectorType = "" } = {}) {

@@ -199,6 +199,12 @@ async function persistModelGeneratedArtifacts({
   if (!allMediaCandidates.length) return [];
   const savedRecords = await attachmentService.ingestGeneratedArtifacts({
     userId,
+    sessionId: String(
+      runtime?.systemRuntime?.rootSessionId ||
+        runtime?.systemRuntime?.sessionId ||
+        "",
+    ).trim(),
+    attachmentSource: "model",
     artifacts: allMediaCandidates,
     generationSource: "llm_output",
   });
@@ -704,6 +710,9 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     ...buildContextMessages(agentContext),
     new HumanMessage(userMessage),
   ];
+  if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
+    runtime.systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
+  }
 
   const modelState = {
     llm,

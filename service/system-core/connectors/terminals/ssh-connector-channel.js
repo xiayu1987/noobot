@@ -234,3 +234,15 @@ export async function executeSshCommand({
     };
   }
 }
+
+export function closeSshChannel({
+  channelKey = "",
+  sessionId = "",
+  connectorName = "",
+} = {}) {
+  const key = buildChannelKey({ channelKey, sessionId, connectorName });
+  if (!key) return false;
+  if (!sshShellStates.has(key)) return false;
+  resetSshState(key);
+  return true;
+}

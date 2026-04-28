@@ -45,6 +45,110 @@ function formatToolLogsTree(logs = []) {
   });
 }
 
+function buildSessionTreeOrder(sessionDocuments = []) {
+  const sessionById = new Map();
+  const childSessionIdsByParentId = new Map();
+  for (const sessionDocument of sessionDocuments || []) {
+    const sessionId = String(sessionDocument?.sessionId || "").trim();
+    if (!sessionId) continue;
+    sessionById.set(sessionId, sessionDocument);
+    const parentSessionId = String(sessionDocument?.parentSessionId || "").trim();
+    if (!parentSessionId) continue;
+    const currentChildSessionIds =
+      childSessionIdsByParentId.get(parentSessionId) || [];
+    childSessionIdsByParentId.set(parentSessionId, [
+      ...currentChildSessionIds,
+      sessionId,
+    ]);
+  }
+
+  function sortSessionIdsByCreatedAt(sessionIds = []) {
+    return [...(sessionIds || [])].sort((leftSessionId, rightSessionId) => {
+      const leftSessionDocument = sessionById.get(leftSessionId) || {};
+      const rightSessionDocument = sessionById.get(rightSessionId) || {};
+      const leftCreatedAt = new Date(leftSessionDocument?.createdAt || 0).getTime();
+      const rightCreatedAt = new Date(rightSessionDocument?.createdAt || 0).getTime();
+      if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
+      return String(leftSessionId || "").localeCompare(String(rightSessionId || ""));
+    });
+  }
+
+  const rootSessionDocument = pickRootSessionDocument(sessionDocuments);
+  const rootSessionId = String(rootSessionDocument?.sessionId || "").trim();
+  const rootSessionIds = rootSessionId ? [rootSessionId] : [];
+  const additionalRootSessionIds = [];
+  for (const sessionDocument of sessionDocuments || []) {
+    const sessionId = String(sessionDocument?.sessionId || "").trim();
+    if (!sessionId || rootSessionIds.includes(sessionId)) continue;
+    const parentSessionId = String(sessionDocument?.parentSessionId || "").trim();
+    if (!parentSessionId || !sessionById.has(parentSessionId)) {
+      additionalRootSessionIds.push(sessionId);
+    }
+  }
+  const orderedRootSessionIds = [
+    ...rootSessionIds,
+    ...sortSessionIdsByCreatedAt(additionalRootSessionIds),
+  ];
+
+  const visitedSessionIds = new Set();
+  const orderedSessionIds = [];
+  function traverseSession(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId || visitedSessionIds.has(normalizedSessionId)) return;
+    visitedSessionIds.add(normalizedSessionId);
+    orderedSessionIds.push(normalizedSessionId);
+    const childSessionIds = sortSessionIdsByCreatedAt(
+      childSessionIdsByParentId.get(normalizedSessionId) || [],
+    );
+    for (const childSessionId of childSessionIds) {
+      traverseSession(childSessionId);
+    }
+  }
+  for (const sessionId of orderedRootSessionIds) {
+    traverseSession(sessionId);
+  }
+  for (const sessionId of sessionById.keys()) {
+    if (visitedSessionIds.has(sessionId)) continue;
+    traverseSession(sessionId);
+  }
+  return new Map(
+    orderedSessionIds.map((sessionId, sessionIndex) => [sessionId, sessionIndex]),
+  );
+}
+
+function sortLogsBySessionTree(logs = [], sessionOrderById = new Map()) {
+  const logTypeOrder = { tool_call: 1, tool_result: 2 };
+  return [...(logs || [])].sort((leftLog, rightLog) => {
+    const leftSessionOrder = Number(
+      sessionOrderById.get(String(leftLog?.sessionId || "").trim()),
+    );
+    const rightSessionOrder = Number(
+      sessionOrderById.get(String(rightLog?.sessionId || "").trim()),
+    );
+    const normalizedLeftSessionOrder = Number.isFinite(leftSessionOrder)
+      ? leftSessionOrder
+      : Number.MAX_SAFE_INTEGER;
+    const normalizedRightSessionOrder = Number.isFinite(rightSessionOrder)
+      ? rightSessionOrder
+      : Number.MAX_SAFE_INTEGER;
+    if (normalizedLeftSessionOrder !== normalizedRightSessionOrder) {
+      return normalizedLeftSessionOrder - normalizedRightSessionOrder;
+    }
+
+    const leftTime = new Date(leftLog?.ts || 0).getTime();
+    const rightTime = new Date(rightLog?.ts || 0).getTime();
+    if (leftTime !== rightTime) return leftTime - rightTime;
+
+    const leftType = String(leftLog?.type || "").trim();
+    const rightType = String(rightLog?.type || "").trim();
+    const leftTypeOrder = Number(logTypeOrder[leftType] || 99);
+    const rightTypeOrder = Number(logTypeOrder[rightType] || 99);
+    if (leftTypeOrder !== rightTypeOrder) return leftTypeOrder - rightTypeOrder;
+
+    return String(leftLog?.text || "").localeCompare(String(rightLog?.text || ""));
+  });
+}
+
 function buildToolLogsFromSessions(sessionDocuments = []) {
   const sessionById = new Map();
   const resolvedDepthBySessionId = new Map();
@@ -95,6 +199,9 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
       const messageType = String(messageItem?.type || "");
       const messageTime = String(messageItem?.ts || new Date().toISOString());
       const dialogProcessId = String(messageItem?.dialogProcessId || "");
+      const parentDialogProcessId = String(
+        messageItem?.parentDialogProcessId || "",
+      );
 
       if (
         messageType === "tool_call" ||
@@ -122,6 +229,7 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
             depth: sessionDepth,
             toolCallId,
             dialogProcessId,
+            parentDialogProcessId,
           });
         }
       }
@@ -138,6 +246,7 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
           depth: sessionDepth,
           toolCallId,
           dialogProcessId,
+          parentDialogProcessId,
         });
       }
     }
@@ -152,6 +261,7 @@ function buildToolLogsFromSessions(sessionDocuments = []) {
 
 function buildToolLogsByDialogProcessId(sessionDocuments = []) {
   const groupedLogs = new Map();
+  const sessionOrderById = buildSessionTreeOrder(sessionDocuments);
   const sessionById = new Map();
   const childSessionIdsByParentId = new Map();
 
@@ -249,13 +359,32 @@ function buildToolLogsByDialogProcessId(sessionDocuments = []) {
       if (!sessionById.has(relatedSessionId)) continue;
       for (const toolLog of allToolLogs) {
         if (String(toolLog?.sessionId || "") !== relatedSessionId) continue;
+        const toolLogDialogProcessId = String(toolLog?.dialogProcessId || "");
+        const toolLogParentDialogProcessId = String(
+          toolLog?.parentDialogProcessId || "",
+        );
+        const isSameDialogRound =
+          toolLogDialogProcessId === dialogProcessId ||
+          toolLogParentDialogProcessId === dialogProcessId;
+        if (!isSameDialogRound) continue;
         additionalLogs.push(toolLog);
       }
     }
     const currentLogs = groupedLogs.get(dialogProcessId) || [];
+    const mergedLogs = sortLogsBySessionTree(
+      mergeUniqueLogs(currentLogs, additionalLogs),
+      sessionOrderById,
+    );
     groupedLogs.set(
       dialogProcessId,
-      mergeUniqueLogs(currentLogs, additionalLogs),
+      mergedLogs,
+    );
+  }
+
+  for (const [dialogProcessId, logs] of groupedLogs.entries()) {
+    groupedLogs.set(
+      dialogProcessId,
+      sortLogsBySessionTree(logs || [], sessionOrderById),
     );
   }
 

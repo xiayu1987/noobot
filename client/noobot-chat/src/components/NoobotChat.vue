@@ -19,7 +19,64 @@ import ChatMessageItem from "./ChatMessageItem.vue";
 import { useApiConnection } from "../composables/useApiConnection";
 import { useChatSession } from "../composables/useChatSession";
 
-const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
+const defaultFenceRenderer =
+  md.renderer.rules.fence ||
+  ((tokens, idx, options, env, self) =>
+    self.renderToken(tokens, idx, options));
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx] || {};
+  const info = String(token?.info || "").trim().toLowerCase();
+  if (info === "mermaid") {
+    const diagramCode = md.utils.escapeHtml(String(token?.content || ""));
+    return `<div class="mermaid">${diagramCode}</div>`;
+  }
+  return defaultFenceRenderer(tokens, idx, options, env, self);
+};
+
+function looksLikeMermaidLine(rawLine = "") {
+  const line = String(rawLine || "").trim();
+  if (!line) return false;
+  const mermaidPrefixes = [
+    "graph ",
+    "flowchart ",
+    "sequenceDiagram",
+    "classDiagram",
+    "stateDiagram",
+    "erDiagram",
+    "journey",
+    "gantt",
+    "pie ",
+    "mindmap",
+    "timeline",
+  ];
+  return mermaidPrefixes.some((prefix) => line.startsWith(prefix));
+}
+
+function normalizeMermaidMarkdown(inputText = "") {
+  const sourceText = String(inputText || "");
+  if (!sourceText.trim()) return sourceText;
+  const lines = sourceText.split(/\r?\n/);
+  const outputLines = [];
+  let inCodeFence = false;
+
+  for (const currentLine of lines) {
+    const trimmedLine = String(currentLine || "").trim();
+    if (trimmedLine.startsWith("```")) {
+      inCodeFence = !inCodeFence;
+      outputLines.push(currentLine);
+      continue;
+    }
+    if (!inCodeFence && looksLikeMermaidLine(currentLine)) {
+      outputLines.push("```mermaid");
+      outputLines.push(currentLine);
+      outputLines.push("```");
+      continue;
+    }
+    outputLines.push(currentLine);
+  }
+  return outputLines.join("\n");
+}
 
 const userId = ref(localStorage.getItem("noobot_user_id") || "user-001");
 const allowUserInteraction = ref(
@@ -107,7 +164,7 @@ function classifyRealtimeLog(data = {}) {
 }
 
 function renderMarkdown(text) {
-  return md.render(text || "");
+  return md.render(normalizeMermaidMarkdown(text || ""));
 }
 
 function updateViewportState() {

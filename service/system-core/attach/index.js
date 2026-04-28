@@ -3,11 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Buffer } from "node:buffer";
 import { v4 as uuidv4 } from "uuid";
 import { fatalSystemError, recoverableToolError } from "../error/index.js";
+
+const DEFAULT_ATTACHMENT_SESSION_ID = "unknown_session";
+const DEFAULT_ATTACHMENT_SOURCE = "user";
+const ATTACHMENT_SOURCES = new Set(["user", "model", "email"]);
 
 export function mergeAttachmentMetas(existingAttachmentMetas = [], incomingAttachmentMetas = []) {
   const existingList = Array.isArray(existingAttachmentMetas)
@@ -39,6 +43,12 @@ export function mapAttachmentRecordsToMetas(
   const recordList = Array.isArray(attachmentRecords) ? attachmentRecords : [];
   return recordList.map((attachmentItem) => ({
     attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+    sessionId: String(
+      attachmentItem?.sessionId || DEFAULT_ATTACHMENT_SESSION_ID,
+    ).trim(),
+    attachmentSource: String(
+      attachmentItem?.attachmentSource || DEFAULT_ATTACHMENT_SOURCE,
+    ).trim(),
     name: String(attachmentItem?.name || "").trim(),
     mimeType: String(attachmentItem?.mimeType || fallbackMimeType).trim(),
     size: Number(attachmentItem?.size || 0),
@@ -94,6 +104,42 @@ export class AttachmentService {
     this.globalConfig = globalConfig;
   }
 
+  _normalizeAttachmentSessionId(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (normalizedSessionId === DEFAULT_ATTACHMENT_SESSION_ID) return "";
+    return normalizedSessionId;
+  }
+
+  _normalizeAttachmentSource(attachmentSource = "") {
+    const normalizedAttachmentSource = String(attachmentSource || "")
+      .trim()
+      .toLowerCase();
+    if (ATTACHMENT_SOURCES.has(normalizedAttachmentSource)) {
+      return normalizedAttachmentSource;
+    }
+    return DEFAULT_ATTACHMENT_SOURCE;
+  }
+
+  _resolveAttachmentScope({
+    sessionId = "",
+    attachmentSource = "",
+    requireSessionId = false,
+  } = {}) {
+    const normalizedSessionId = this._normalizeAttachmentSessionId(sessionId);
+    if (requireSessionId && !normalizedSessionId) {
+      throw recoverableToolError("sessionId required for attachment persistence", {
+        code: "RECOVERABLE_ATTACHMENT_SESSION_ID_REQUIRED",
+        details: {
+          hint: "pass rootSessionId or sessionId when saving attachments",
+        },
+      });
+    }
+    return {
+      sessionId: normalizedSessionId || DEFAULT_ATTACHMENT_SESSION_ID,
+      attachmentSource: this._normalizeAttachmentSource(attachmentSource),
+    };
+  }
+
   _resolveBasePath(userId = "") {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
@@ -109,17 +155,49 @@ export class AttachmentService {
     return path.join(basePath, "runtime/attach");
   }
 
-  _attachIndexFile(basePath) {
-    return path.join(this._attachRoot(basePath), "attachments.json");
+  _attachScopedRoot(basePath) {
+    return path.join(this._attachRoot(basePath), "scoped");
+  }
+
+  _attachScopeRoot(basePath, { sessionId = "", attachmentSource = "" } = {}) {
+    const resolvedScope = this._resolveAttachmentScope({
+      sessionId,
+      attachmentSource,
+    });
+    return path.join(
+      this._attachScopedRoot(basePath),
+      resolvedScope.sessionId,
+      resolvedScope.attachmentSource,
+    );
+  }
+
+  _attachIndexFile(
+    basePath,
+    { sessionId = "", attachmentSource = "" } = {},
+  ) {
+    return path.join(
+      this._attachScopeRoot(basePath, {
+        sessionId,
+        attachmentSource,
+      }),
+      "attachments.json",
+    );
   }
 
   async _ensureAttachDirs(basePath) {
     await mkdir(this._attachRoot(basePath), { recursive: true });
   }
 
-  async _readAttachIndex(basePath) {
+  async _readAttachIndex(
+    basePath,
+    { sessionId = "", attachmentSource = "" } = {},
+  ) {
     await this._ensureAttachDirs(basePath);
-    const indexFile = this._attachIndexFile(basePath);
+    const resolvedScope = this._resolveAttachmentScope({
+      sessionId,
+      attachmentSource,
+    });
+    const indexFile = this._attachIndexFile(basePath, resolvedScope);
     try {
       const raw = await readFile(indexFile, "utf8");
       const parsed = JSON.parse(raw);
@@ -129,21 +207,38 @@ export class AttachmentService {
           : {};
       return {
         updatedAt: String(parsed?.updatedAt || new Date().toISOString()),
+        sessionId: String(parsed?.sessionId || resolvedScope.sessionId),
+        attachmentSource: String(
+          parsed?.attachmentSource || resolvedScope.attachmentSource,
+        ),
         attachments,
       };
     } catch {
       return {
-      updatedAt: new Date().toISOString(),
-      attachments: {},
+        updatedAt: new Date().toISOString(),
+        sessionId: resolvedScope.sessionId,
+        attachmentSource: resolvedScope.attachmentSource,
+        attachments: {},
       };
     }
   }
 
-  async _writeAttachIndex(basePath, indexData = {}) {
+  async _writeAttachIndex(
+    basePath,
+    indexData = {},
+    { sessionId = "", attachmentSource = "" } = {},
+  ) {
     await this._ensureAttachDirs(basePath);
-    const indexFile = this._attachIndexFile(basePath);
+    const resolvedScope = this._resolveAttachmentScope({
+      sessionId,
+      attachmentSource,
+    });
+    const indexFile = this._attachIndexFile(basePath, resolvedScope);
+    await mkdir(path.dirname(indexFile), { recursive: true });
     const payload = {
       updatedAt: new Date().toISOString(),
+      sessionId: resolvedScope.sessionId,
+      attachmentSource: resolvedScope.attachmentSource,
       attachments:
         indexData?.attachments && typeof indexData.attachments === "object"
           ? indexData.attachments
@@ -170,6 +265,12 @@ export class AttachmentService {
         String(attachmentRecord.relativePath || "") ||
         this._normalizeRelativePath(basePath, String(attachmentRecord.path || "")),
       createdAt: String(attachmentRecord.createdAt || new Date().toISOString()),
+      sessionId: String(
+        attachmentRecord.sessionId || DEFAULT_ATTACHMENT_SESSION_ID,
+      ),
+      attachmentSource: String(
+        attachmentRecord.attachmentSource || DEFAULT_ATTACHMENT_SOURCE,
+      ),
       generatedByModel: attachmentRecord?.generatedByModel === true,
       generationSource: String(attachmentRecord?.generationSource || ""),
     };
@@ -203,17 +304,27 @@ export class AttachmentService {
   async _saveAttachmentRecord({
     basePath,
     attachmentIndex,
+    sessionId = "",
+    attachmentSource = "",
     name = "",
     mimeType = "application/octet-stream",
     contentBytes = Buffer.alloc(0),
     generatedByModel = false,
     generationSource = "",
   }) {
+    const resolvedScope = this._resolveAttachmentScope({
+      sessionId,
+      attachmentSource,
+    });
     const attachmentId = uuidv4();
     const extension = this._normalizeExtension(name, mimeType);
     const fileName = `${attachmentId}${extension}`;
-    const savePath = path.join(this._attachRoot(basePath), fileName);
+    const savePath = path.join(
+      this._attachScopeRoot(basePath, resolvedScope),
+      fileName,
+    );
     const now = new Date().toISOString();
+    await mkdir(path.dirname(savePath), { recursive: true });
     await writeFile(savePath, contentBytes);
     const attachmentRecord = this._buildAttachmentPublicRecord(basePath, {
       attachmentId,
@@ -222,11 +333,53 @@ export class AttachmentService {
       size: contentBytes.length,
       path: savePath,
       createdAt: now,
+      sessionId: resolvedScope.sessionId,
+      attachmentSource: resolvedScope.attachmentSource,
       generatedByModel,
       generationSource,
     });
     attachmentIndex.attachments[attachmentId] = attachmentRecord;
     return attachmentRecord;
+  }
+
+  async _findAttachmentRecordAcrossScopedIndexes(basePath, attachmentId = "") {
+    const normalizedAttachmentId = String(attachmentId || "").trim();
+    if (!normalizedAttachmentId) return null;
+    const scopedRootPath = this._attachScopedRoot(basePath);
+    let sessionDirectoryEntries = [];
+    try {
+      sessionDirectoryEntries = await readdir(scopedRootPath, {
+        withFileTypes: true,
+      });
+    } catch {
+      return null;
+    }
+    for (const sessionDirectoryEntry of sessionDirectoryEntries) {
+      if (!sessionDirectoryEntry?.isDirectory?.()) continue;
+      const scopedSessionId = String(sessionDirectoryEntry.name || "").trim();
+      if (!scopedSessionId) continue;
+      const sessionRootPath = path.join(scopedRootPath, scopedSessionId);
+      let sourceDirectoryEntries = [];
+      try {
+        sourceDirectoryEntries = await readdir(sessionRootPath, {
+          withFileTypes: true,
+        });
+      } catch {
+        continue;
+      }
+      for (const sourceDirectoryEntry of sourceDirectoryEntries) {
+        if (!sourceDirectoryEntry?.isDirectory?.()) continue;
+        const scopedAttachmentSource = String(sourceDirectoryEntry.name || "").trim();
+        if (!scopedAttachmentSource) continue;
+        const scopedIndex = await this._readAttachIndex(basePath, {
+          sessionId: scopedSessionId,
+          attachmentSource: scopedAttachmentSource,
+        });
+        const hitRecord = scopedIndex?.attachments?.[normalizedAttachmentId] || null;
+        if (hitRecord) return hitRecord;
+      }
+    }
+    return null;
   }
 
   _resolveAttachmentPolicy(attachmentPolicy = {}) {
@@ -306,9 +459,20 @@ export class AttachmentService {
     return whitelist.includes(normalizedExtension);
   }
 
-  async ingest({ userId, attachments, attachmentPolicy = {} }) {
+  async ingest({
+    userId,
+    sessionId = "",
+    attachmentSource = "user",
+    attachments,
+    attachmentPolicy = {},
+  }) {
     const basePath = this._resolveBasePath(userId);
     if (!attachments?.length) return [];
+    const resolvedScope = this._resolveAttachmentScope({
+      sessionId,
+      attachmentSource,
+      requireSessionId: true,
+    });
     const resolvedPolicy = this._resolveAttachmentPolicy(attachmentPolicy);
     if (
       resolvedPolicy.maxFileCount > 0 &&
@@ -326,7 +490,7 @@ export class AttachmentService {
         },
       );
     }
-    const attachmentIndex = await this._readAttachIndex(basePath);
+    const attachmentIndex = await this._readAttachIndex(basePath, resolvedScope);
     const savedAttachmentRecords = [];
     let totalUploadedBytes = 0;
 
@@ -397,6 +561,8 @@ export class AttachmentService {
       const attachmentRecord = await this._saveAttachmentRecord({
         basePath,
         attachmentIndex,
+        sessionId: resolvedScope.sessionId,
+        attachmentSource: resolvedScope.attachmentSource,
         name: String(name || ""),
         mimeType: normalizedMimeType || "application/octet-stream",
         contentBytes: bytes,
@@ -404,19 +570,26 @@ export class AttachmentService {
       savedAttachmentRecords.push(attachmentRecord);
     }
 
-    await this._writeAttachIndex(basePath, attachmentIndex);
+    await this._writeAttachIndex(basePath, attachmentIndex, resolvedScope);
     return savedAttachmentRecords;
   }
 
   async ingestGeneratedArtifacts({
     userId,
+    sessionId = "",
+    attachmentSource = "model",
     artifacts = [],
     generationSource = "llm_output",
   }) {
     const basePath = this._resolveBasePath(userId);
     const sourceArtifacts = Array.isArray(artifacts) ? artifacts : [];
     if (!sourceArtifacts.length) return [];
-    const attachmentIndex = await this._readAttachIndex(basePath);
+    const resolvedScope = this._resolveAttachmentScope({
+      sessionId,
+      attachmentSource,
+      requireSessionId: true,
+    });
+    const attachmentIndex = await this._readAttachIndex(basePath, resolvedScope);
     const savedAttachmentRecords = [];
     for (const artifactItem of sourceArtifacts) {
       const artifactName = String(artifactItem?.name || "").trim();
@@ -431,6 +604,8 @@ export class AttachmentService {
       const attachmentRecord = await this._saveAttachmentRecord({
         basePath,
         attachmentIndex,
+        sessionId: resolvedScope.sessionId,
+        attachmentSource: resolvedScope.attachmentSource,
         name: artifactName,
         mimeType: artifactMimeType || "application/octet-stream",
         contentBytes: artifactBytes,
@@ -439,24 +614,45 @@ export class AttachmentService {
       });
       savedAttachmentRecords.push(attachmentRecord);
     }
-    await this._writeAttachIndex(basePath, attachmentIndex);
+    await this._writeAttachIndex(basePath, attachmentIndex, resolvedScope);
     return savedAttachmentRecords;
   }
 
-  async ingestEmailArtifacts({ userId, artifacts = [] } = {}) {
+  async ingestEmailArtifacts({ userId, sessionId = "", artifacts = [] } = {}) {
     return this.ingestGeneratedArtifacts({
       userId,
+      sessionId,
+      attachmentSource: "email",
       artifacts,
       generationSource: "email_connector_read",
     });
   }
 
-  async getAttachmentById({ userId, attachmentId }) {
+  async getAttachmentById({
+    userId,
+    attachmentId,
+    sessionId = "",
+    attachmentSource = "",
+  }) {
     const normalizedAttachmentId = String(attachmentId || "").trim();
     if (!normalizedAttachmentId) return null;
     const basePath = this._resolveBasePath(userId);
-    const attachmentIndex = await this._readAttachIndex(basePath);
-    const record = attachmentIndex?.attachments?.[normalizedAttachmentId];
+    const resolvedScope = this._resolveAttachmentScope({
+      sessionId,
+      attachmentSource,
+    });
+    const hasExplicitScope =
+      String(sessionId || "").trim() || String(attachmentSource || "").trim();
+    let record = null;
+    if (hasExplicitScope) {
+      const scopedIndex = await this._readAttachIndex(basePath, resolvedScope);
+      record = scopedIndex?.attachments?.[normalizedAttachmentId] || null;
+    } else {
+      record = await this._findAttachmentRecordAcrossScopedIndexes(
+        basePath,
+        normalizedAttachmentId,
+      );
+    }
     if (!record) return null;
 
     const resolvedPath = String(record.path || "");
@@ -473,6 +669,27 @@ export class AttachmentService {
       absolutePath: resolvedPath,
       size: Number(fileStat.size || record.size || 0),
     };
+  }
+
+  async readAttachmentMetas({
+    userId,
+    sessionId = "",
+    attachmentSource = "",
+  } = {}) {
+    const basePath = this._resolveBasePath(userId);
+    const resolvedScope = this._resolveAttachmentScope({
+      sessionId,
+      attachmentSource,
+    });
+    const attachmentIndex = await this._readAttachIndex(basePath, resolvedScope);
+    const attachmentRecords = Object.values(
+      attachmentIndex?.attachments && typeof attachmentIndex.attachments === "object"
+        ? attachmentIndex.attachments
+        : {},
+    );
+    return attachmentRecords.map((attachmentRecord) =>
+      this._buildAttachmentPublicRecord(basePath, attachmentRecord),
+    );
   }
 
   async readAttachmentContent({ userId, attachmentId }) {

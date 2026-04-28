@@ -26,6 +26,10 @@ import {
   initConnectorChannelStore,
 } from "./system-core/connectors/channel-store.js";
 import {
+  getConnectorHistoryStore,
+  initConnectorHistoryStore,
+} from "./system-core/connectors/history-store.js";
+import {
   decryptPayloadBySessionId,
 } from "./system-core/utils/session-crypto.js";
 
@@ -175,10 +179,12 @@ async function rebuildRuntimeConfig() {
   globalConfig.configParams = { ...configParamsCache };
   apiKeyTtlMs = Number(globalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000);
   bot = new BotManager(globalConfig);
+  initConnectorHistoryStore({ workspaceRoot: workspaceRootPath() });
 }
 
 await rebuildRuntimeConfig();
 initConnectorChannelStore();
+initConnectorHistoryStore({ workspaceRoot: workspaceRootPath() });
 
 async function readWorkspaceUsers() {
   const usersConfig = await readWorkspaceUsersConfig();
@@ -305,25 +311,92 @@ function requireSuperAdmin(req, res, next) {
   next();
 }
 
+function normalizeSelectedConnectors(input = {}) {
+  const source = input && typeof input === "object" ? input : {};
+  const normalizeConnectorName = (value = "") => String(value || "").trim();
+  return {
+    database: normalizeConnectorName(source?.database),
+    terminal: normalizeConnectorName(source?.terminal),
+    email: normalizeConnectorName(source?.email),
+  };
+}
+
 function normalizeRunConfig(input = {}) {
   const allowUserInteractionRaw = input?.allowUserInteraction;
   const allowUserInteraction =
     allowUserInteractionRaw === undefined
       ? true
       : Boolean(allowUserInteractionRaw);
-  const selectedConnectorsSource =
-    input?.selectedConnectors && typeof input.selectedConnectors === "object"
-      ? input.selectedConnectors
-      : {};
-  const normalizeConnectorName = (value = "") => String(value || "").trim();
   return {
     allowUserInteraction,
-    selectedConnectors: {
-      database: normalizeConnectorName(selectedConnectorsSource?.database),
-      terminal: normalizeConnectorName(selectedConnectorsSource?.terminal),
-      email: normalizeConnectorName(selectedConnectorsSource?.email),
-    },
+    selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
   };
+}
+
+function normalizeHistoryConnectorItems(items = []) {
+  return (Array.isArray(items) ? items : []).map((connectorItem) => ({
+    connector_name: String(connectorItem?.connector_name || "").trim(),
+    connector_type: String(connectorItem?.connector_type || "").trim(),
+    connected_at: String(connectorItem?.last_connected_at || "").trim(),
+    connection_meta:
+      connectorItem?.connection_meta && typeof connectorItem.connection_meta === "object"
+        ? connectorItem.connection_meta
+        : {},
+    status: String(connectorItem?.status || "disconnected").trim() || "disconnected",
+    status_code: Number(connectorItem?.status_code ?? 410),
+    status_message:
+      String(connectorItem?.status_message || "").trim() || "未连接（历史记录）",
+    checked_at:
+      String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
+    last_connected_at: String(connectorItem?.last_connected_at || "").trim(),
+    connect_count: Number(connectorItem?.connect_count || 0),
+    connection_defaults:
+      connectorItem?.connection_defaults &&
+      typeof connectorItem.connection_defaults === "object"
+        ? connectorItem.connection_defaults
+        : {},
+  }));
+}
+
+function mergeRuntimeAndHistoryConnectorGroup({
+  runtimeConnectors = [],
+  historyConnectors = [],
+} = {}) {
+  const runtimeList = Array.isArray(runtimeConnectors) ? runtimeConnectors : [];
+  const historyList = normalizeHistoryConnectorItems(historyConnectors);
+  const mergedByName = new Map();
+  for (const historyItem of historyList) {
+    const connectorName = String(historyItem?.connector_name || "").trim();
+    if (!connectorName) continue;
+    mergedByName.set(connectorName, historyItem);
+  }
+  for (const runtimeItem of runtimeList) {
+    const connectorName = String(runtimeItem?.connector_name || "").trim();
+    if (!connectorName) continue;
+    const previousItem = mergedByName.get(connectorName) || {};
+    mergedByName.set(connectorName, {
+      ...previousItem,
+      ...runtimeItem,
+      status: String(runtimeItem?.status || "connected").trim() || "connected",
+      status_code: Number(runtimeItem?.status_code ?? 0),
+      status_message: String(runtimeItem?.status_message || "ok").trim(),
+      checked_at:
+        String(runtimeItem?.checked_at || runtimeItem?.connected_at || "").trim() ||
+        String(previousItem?.checked_at || "").trim(),
+      last_connected_at:
+        String(runtimeItem?.connected_at || "").trim() ||
+        String(previousItem?.last_connected_at || "").trim(),
+    });
+  }
+  return Array.from(mergedByName.values()).sort((leftConnector, rightConnector) => {
+    const leftTime = new Date(
+      leftConnector?.last_connected_at || leftConnector?.checked_at || 0,
+    ).getTime();
+    const rightTime = new Date(
+      rightConnector?.last_connected_at || rightConnector?.checked_at || 0,
+    ).getTime();
+    return rightTime - leftTime;
+  });
 }
 
 app.post("/internal/connect", async (req, res) => {
@@ -548,11 +621,52 @@ app.get("/internal/session/:userId/:sessionId", async (req, res) => {
 app.delete("/internal/session/:userId/:sessionId", async (req, res) => {
   try {
     const { userId, sessionId } = req.params;
+    const normalizedSessionId = String(sessionId || "").trim();
+    const rootSessionId = await bot.session.getRootSessionId({
+      userId,
+      sessionId: normalizedSessionId,
+    });
+    let releasedConnectors = {
+      released: false,
+      sessionId: String(rootSessionId || "").trim(),
+      releasedCounts: { databases: 0, terminals: 0, emails: 0, total: 0 },
+    };
+    const shouldReleaseRootConnectors =
+      normalizedSessionId && rootSessionId && normalizedSessionId === rootSessionId;
+    if (shouldReleaseRootConnectors) {
+      const connectorChannelStore = getConnectorChannelStore();
+      if (
+        connectorChannelStore &&
+        typeof connectorChannelStore.releaseSessionConnectors === "function"
+      ) {
+        releasedConnectors = connectorChannelStore.releaseSessionConnectors(
+          rootSessionId,
+        );
+      }
+    }
     const result = await bot.session.deleteSessionBranch({
       userId,
       sessionId,
     });
-    res.json({ ok: true, ...result });
+    let deletedConnectorHistory = false;
+    if (shouldReleaseRootConnectors) {
+      const connectorHistoryStore = getConnectorHistoryStore();
+      if (
+        connectorHistoryStore &&
+        typeof connectorHistoryStore.deleteSessionHistory === "function"
+      ) {
+        deletedConnectorHistory = await connectorHistoryStore.deleteSessionHistory({
+          userId,
+          sessionId: rootSessionId,
+        });
+      }
+    }
+    res.json({
+      ok: true,
+      ...result,
+      releasedConnectors,
+      deletedConnectorHistory,
+    });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "delete session failed" });
   }
@@ -573,10 +687,36 @@ app.get("/internal/connectors/:userId/:sessionId", async (req, res) => {
     const { userId, sessionId } = req.params;
     const rootSessionId = await bot.session.getRootSessionId({ userId, sessionId });
     const connectorChannelStore = getConnectorChannelStore();
+    const connectorHistoryStore = getConnectorHistoryStore();
     const inspectedConnectors = await connectorChannelStore.inspectSessionConnectors({
       sessionId: rootSessionId,
       timeoutMs: 6000,
     });
+    const historyConnectors =
+      connectorHistoryStore &&
+      typeof connectorHistoryStore.listSessionConnectors === "function"
+        ? await connectorHistoryStore.listSessionConnectors({
+            userId,
+            sessionId: rootSessionId,
+          })
+        : { database: [], terminal: [], email: [] };
+    const mergedDatabases = mergeRuntimeAndHistoryConnectorGroup({
+      runtimeConnectors: inspectedConnectors?.connectors?.databases || [],
+      historyConnectors: historyConnectors?.database || [],
+    });
+    const mergedTerminals = mergeRuntimeAndHistoryConnectorGroup({
+      runtimeConnectors: inspectedConnectors?.connectors?.terminals || [],
+      historyConnectors: historyConnectors?.terminal || [],
+    });
+    const mergedEmails = mergeRuntimeAndHistoryConnectorGroup({
+      runtimeConnectors: inspectedConnectors?.connectors?.emails || [],
+      historyConnectors: historyConnectors?.email || [],
+    });
+    const allMergedConnectors = [
+      ...mergedDatabases,
+      ...mergedTerminals,
+      ...mergedEmails,
+    ];
     const selectedConnectors = await bot.session.getRootSessionSelectedConnectors({
       userId,
       sessionId: rootSessionId || sessionId,
@@ -586,16 +726,22 @@ app.get("/internal/connectors/:userId/:sessionId", async (req, res) => {
       userId,
       sessionId,
       rootSessionId,
-      connectors: inspectedConnectors?.connectors || {
-        databases: [],
-        terminals: [],
-        emails: [],
+      connectors: {
+        databases: mergedDatabases,
+        terminals: mergedTerminals,
+        emails: mergedEmails,
       },
-      summary: inspectedConnectors?.summary || {
-        total_count: 0,
-        connected_count: 0,
-        error_count: 0,
-        unknown_count: 0,
+      summary: {
+        total_count: allMergedConnectors.length,
+        connected_count: allMergedConnectors.filter(
+          (connectorItem) => String(connectorItem?.status || "") === "connected",
+        ).length,
+        error_count: allMergedConnectors.filter(
+          (connectorItem) => String(connectorItem?.status || "") === "error",
+        ).length,
+        unknown_count: allMergedConnectors.filter(
+          (connectorItem) => String(connectorItem?.status || "") === "unknown",
+        ).length,
       },
       selectedConnectors,
     });
@@ -607,43 +753,10 @@ app.get("/internal/connectors/:userId/:sessionId", async (req, res) => {
 app.put("/internal/connectors/:userId/:sessionId/selection", async (req, res) => {
   try {
     const { userId, sessionId } = req.params;
-    const selectedConnectorsInput =
-      req.body?.selectedConnectors && typeof req.body.selectedConnectors === "object"
-        ? req.body.selectedConnectors
-        : {};
-    const normalizeConnectorName = (value = "") => String(value || "").trim();
-    const selectedConnectors = {
-      database: normalizeConnectorName(selectedConnectorsInput?.database),
-      terminal: normalizeConnectorName(selectedConnectorsInput?.terminal),
-      email: normalizeConnectorName(selectedConnectorsInput?.email),
-    };
+    const selectedConnectors = normalizeSelectedConnectors(
+      req.body?.selectedConnectors,
+    );
     const rootSessionId = await bot.session.getRootSessionId({ userId, sessionId });
-    const connectorChannelStore = getConnectorChannelStore();
-    const currentConnectors = connectorChannelStore.getSessionConnectors(rootSessionId);
-    const connectorNameSets = {
-      database: new Set(
-        (Array.isArray(currentConnectors?.databases) ? currentConnectors.databases : [])
-          .map((connectorItem) => String(connectorItem?.connectorName || "").trim())
-          .filter(Boolean),
-      ),
-      terminal: new Set(
-        (Array.isArray(currentConnectors?.terminals) ? currentConnectors.terminals : [])
-          .map((connectorItem) => String(connectorItem?.connectorName || "").trim())
-          .filter(Boolean),
-      ),
-      email: new Set(
-        (Array.isArray(currentConnectors?.emails) ? currentConnectors.emails : [])
-          .map((connectorItem) => String(connectorItem?.connectorName || "").trim())
-          .filter(Boolean),
-      ),
-    };
-    for (const connectorType of ["database", "terminal", "email"]) {
-      const selectedConnectorName = String(selectedConnectors?.[connectorType] || "").trim();
-      if (!selectedConnectorName) continue;
-      if (!connectorNameSets[connectorType].has(selectedConnectorName)) {
-        throw new Error(`selected connector not connected: ${connectorType}/${selectedConnectorName}`);
-      }
-    }
     const savedSelectedConnectors = await bot.session.setRootSessionSelectedConnectors({
       userId,
       sessionId: rootSessionId || sessionId,
@@ -928,7 +1041,14 @@ app.get("/internal/admin/workspace-all/download", requireSuperAdmin, async (req,
 app.get("/internal/attachment/:userId/:attachmentId", async (req, res) => {
   try {
     const { userId, attachmentId } = req.params;
-    const attachment = await bot.getAttachmentById({ userId, attachmentId });
+    const sessionId = String(req.query?.sessionId || "").trim();
+    const attachmentSource = String(req.query?.attachmentSource || "").trim();
+    const attachment = await bot.getAttachmentById({
+      userId,
+      attachmentId,
+      sessionId,
+      attachmentSource,
+    });
     if (!attachment) throw new Error("attachment not found");
 
     res.setHeader(
