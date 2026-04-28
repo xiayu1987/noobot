@@ -20,6 +20,7 @@ import {
   encryptPayloadBySessionId,
 } from "../utils/session-crypto.js";
 import { getConnectorChannelStore } from "../connectors/channel-store.js";
+import { getConnectorHistoryStore } from "../connectors/history-store.js";
 import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
@@ -39,6 +40,125 @@ function hasLongMemoryValue(value) {
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeHistoryConnectorItems(items = []) {
+  return (Array.isArray(items) ? items : []).map((connectorItem) => ({
+    connector_name: String(connectorItem?.connector_name || "").trim(),
+    connector_type: String(connectorItem?.connector_type || "").trim(),
+    connected_at: String(connectorItem?.last_connected_at || "").trim(),
+    connection_meta:
+      connectorItem?.connection_meta && typeof connectorItem.connection_meta === "object"
+        ? connectorItem.connection_meta
+        : {},
+    status: String(connectorItem?.status || "disconnected").trim() || "disconnected",
+    status_code: Number(connectorItem?.status_code ?? 410),
+    status_message:
+      String(connectorItem?.status_message || "").trim() || "未连接（历史记录）",
+    checked_at:
+      String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
+    last_connected_at: String(connectorItem?.last_connected_at || "").trim(),
+    connect_count: Number(connectorItem?.connect_count || 0),
+    connection_defaults:
+      connectorItem?.connection_defaults &&
+      typeof connectorItem.connection_defaults === "object"
+        ? connectorItem.connection_defaults
+        : {},
+  }));
+}
+
+function mergeRuntimeAndHistoryConnectorGroup({
+  runtimeConnectors = [],
+  historyConnectors = [],
+} = {}) {
+  const runtimeList = Array.isArray(runtimeConnectors) ? runtimeConnectors : [];
+  const historyList = normalizeHistoryConnectorItems(historyConnectors);
+  const mergedByName = new Map();
+  for (const historyItem of historyList) {
+    const connectorName = String(historyItem?.connector_name || "").trim();
+    if (!connectorName) continue;
+    mergedByName.set(connectorName, historyItem);
+  }
+  for (const runtimeItem of runtimeList) {
+    const connectorName = String(runtimeItem?.connector_name || "").trim();
+    if (!connectorName) continue;
+    const previousItem = mergedByName.get(connectorName) || {};
+    mergedByName.set(connectorName, {
+      ...previousItem,
+      ...runtimeItem,
+      status: String(runtimeItem?.status || "connected").trim() || "connected",
+      status_code: Number(runtimeItem?.status_code ?? 0),
+      status_message: String(runtimeItem?.status_message || "ok").trim(),
+      checked_at:
+        String(runtimeItem?.checked_at || runtimeItem?.connected_at || "").trim() ||
+        String(previousItem?.checked_at || "").trim(),
+      last_connected_at:
+        String(runtimeItem?.connected_at || "").trim() ||
+        String(previousItem?.last_connected_at || "").trim(),
+    });
+  }
+  return Array.from(mergedByName.values()).sort((leftConnector, rightConnector) => {
+    const leftTime = new Date(
+      leftConnector?.last_connected_at || leftConnector?.checked_at || 0,
+    ).getTime();
+    const rightTime = new Date(
+      rightConnector?.last_connected_at || rightConnector?.checked_at || 0,
+    ).getTime();
+    return rightTime - leftTime;
+  });
+}
+
+function resolveConnectorSubType(connectorItem = {}) {
+  const connectionMeta =
+    connectorItem?.connection_meta && typeof connectorItem.connection_meta === "object"
+      ? connectorItem.connection_meta
+      : {};
+  const subTypeCandidates = [
+    connectionMeta?.databaseType,
+    connectionMeta?.database_type,
+    connectionMeta?.terminalType,
+    connectionMeta?.terminal_type,
+    connectionMeta?.emailType,
+    connectionMeta?.email_type,
+    connectionMeta?.subType,
+    connectionMeta?.sub_type,
+  ];
+  for (const subTypeCandidate of subTypeCandidates) {
+    const normalizedSubType = String(subTypeCandidate || "").trim();
+    if (normalizedSubType) return normalizedSubType;
+  }
+  const connectorType = String(connectorItem?.connector_type || "").trim();
+  if (connectorType === "email") return "smtp_imap";
+  return "";
+}
+
+function toCompactConnectorInfo(connectorItem = {}) {
+  return {
+    connector_name: String(connectorItem?.connector_name || "").trim(),
+    connector_type: String(connectorItem?.connector_type || "").trim(),
+    connector_sub_type: resolveConnectorSubType(connectorItem),
+  };
+}
+
+function buildSelectedCompactConnector({
+  connectorType = "",
+  connectorName = "",
+  sourceList = [],
+} = {}) {
+  const normalizedConnectorType = String(connectorType || "").trim();
+  const normalizedConnectorName = String(connectorName || "").trim();
+  if (!normalizedConnectorName) return null;
+  const hitConnector =
+    (Array.isArray(sourceList) ? sourceList : []).find(
+      (connectorItem) =>
+        String(connectorItem?.connector_name || "").trim() ===
+        normalizedConnectorName,
+    ) || null;
+  return {
+    connector_name: normalizedConnectorName,
+    connector_type: normalizedConnectorType,
+    connector_sub_type: String(hitConnector?.connector_sub_type || "").trim(),
+  };
 }
 
 async function defaultSharedFetch(url, init = {}) {
@@ -343,10 +463,12 @@ export class ContextBuilder {
       },
     };
     const connectorChannelStore = getConnectorChannelStore();
+    const connectorHistoryStore = getConnectorHistoryStore();
     sharedTools.connectorChannelStore = connectorChannelStore;
+    sharedTools.connectorHistoryStore = connectorHistoryStore;
     runtimeContext.connectorChannels = rootSessionId
       ? connectorChannelStore.getSessionConnectors(rootSessionId)
-      : { databases: [], terminals: [] };
+      : { databases: [], terminals: [], emails: [] };
 
     try {
       await initRuntimeSharedBrowser(runtimeContext);
@@ -430,6 +552,10 @@ export class ContextBuilder {
     if (hasIngestedRecords) {
       return (this.attachmentMetas || []).map((attachmentItem) => ({
         attachmentId: String(attachmentItem?.attachmentId || ""),
+        sessionId: String(attachmentItem?.sessionId || this.sessionId || ""),
+        attachmentSource: String(
+          attachmentItem?.attachmentSource || "user",
+        ).trim(),
         name: String(attachmentItem?.name || ""),
         mimeType: String(
           attachmentItem?.mimeType || "application/octet-stream",
@@ -441,6 +567,8 @@ export class ContextBuilder {
     }
     return this.attachmentService.ingest({
       userId: this.userId,
+      sessionId: this.sessionId || "",
+      attachmentSource: "user",
       attachments: this.attachmentMetas,
       attachmentPolicy,
     });
@@ -504,6 +632,10 @@ export class ContextBuilder {
       alias: modelSpec?.alias || "",
       name: modelSpec?.model || "",
       description: modelSpec?.description || "",
+      used_for_conversation:
+        modelSpec?.used_for_conversation === undefined
+          ? true
+          : modelSpec?.used_for_conversation === true,
       multimodal_generation: this._normalizeModelMultimodalInfo(modelSpec),
     };
   }
@@ -538,6 +670,10 @@ export class ContextBuilder {
         alias,
         name: providerConfig?.model || "",
         description: providerConfig?.description || "",
+        used_for_conversation:
+          providerConfig?.used_for_conversation === undefined
+            ? true
+            : providerConfig?.used_for_conversation === true,
         multimodal_generation: this._normalizeModelMultimodalInfo(providerConfig),
       }));
   }
@@ -575,7 +711,9 @@ export class ContextBuilder {
   _buildWorkspaceDirectorySection(workspaceDirectories = []) {
     const descriptions = {
       runtime: "运行时数据根目录",
-      "runtime/attach": "附件文件与附件索引（attachments.json）",
+      "runtime/attach": "附件根目录（按 sessionId 与来源分目录存储）",
+      "runtime/attach/scoped": "附件分组目录：scoped/<sessionId>/<source>/attachments.json",
+      "runtime/connectors": "连接器运行与历史信息（如 connector-history.json）",
       "runtime/session": "会话与执行记录",
       "runtime/workspace": "脚本执行与中间产物工作区",
       "runtime/memory": "短期/长期记忆数据",
@@ -631,8 +769,15 @@ export class ContextBuilder {
   async _resolveConnectorStatusSection({
     rootSessionId = "",
     connectorChannelStore = null,
+    connectorHistoryStore = null,
+    selectedConnectors = {},
   } = {}) {
     const normalizedRootSessionId = String(rootSessionId || "").trim();
+    const normalizedSelectedConnectors = {
+      database: String(selectedConnectors?.database || "").trim(),
+      terminal: String(selectedConnectors?.terminal || "").trim(),
+      email: String(selectedConnectors?.email || "").trim(),
+    };
     if (
       !normalizedRootSessionId ||
       !connectorChannelStore ||
@@ -641,18 +786,80 @@ export class ContextBuilder {
       return {
         root_session_id: normalizedRootSessionId,
         connectors: { databases: [], terminals: [], emails: [] },
-        summary: {
-          total_count: 0,
-          connected_count: 0,
-          error_count: 0,
-          unknown_count: 0,
+        current_connectors: {
+          database: buildSelectedCompactConnector({
+            connectorType: "database",
+            connectorName: normalizedSelectedConnectors.database,
+          }),
+          terminal: buildSelectedCompactConnector({
+            connectorType: "terminal",
+            connectorName: normalizedSelectedConnectors.terminal,
+          }),
+          email: buildSelectedCompactConnector({
+            connectorType: "email",
+            connectorName: normalizedSelectedConnectors.email,
+          }),
         },
       };
     }
-    return connectorChannelStore.inspectSessionConnectors({
+    const inspectedConnectors = await connectorChannelStore.inspectSessionConnectors({
       sessionId: normalizedRootSessionId,
       timeoutMs: 6000,
     });
+    const historyConnectors =
+      connectorHistoryStore &&
+      typeof connectorHistoryStore.listSessionConnectors === "function"
+        ? await connectorHistoryStore.listSessionConnectors({
+            userId: this.userId,
+            sessionId: normalizedRootSessionId,
+          })
+        : { database: [], terminal: [], email: [] };
+    const mergedDatabases = mergeRuntimeAndHistoryConnectorGroup({
+      runtimeConnectors: inspectedConnectors?.connectors?.databases || [],
+      historyConnectors: historyConnectors?.database || [],
+    });
+    const mergedTerminals = mergeRuntimeAndHistoryConnectorGroup({
+      runtimeConnectors: inspectedConnectors?.connectors?.terminals || [],
+      historyConnectors: historyConnectors?.terminal || [],
+    });
+    const mergedEmails = mergeRuntimeAndHistoryConnectorGroup({
+      runtimeConnectors: inspectedConnectors?.connectors?.emails || [],
+      historyConnectors: historyConnectors?.email || [],
+    });
+    const compactDatabases = mergedDatabases.map((connectorItem) =>
+      toCompactConnectorInfo(connectorItem),
+    );
+    const compactTerminals = mergedTerminals.map((connectorItem) =>
+      toCompactConnectorInfo(connectorItem),
+    );
+    const compactEmails = mergedEmails.map((connectorItem) =>
+      toCompactConnectorInfo(connectorItem),
+    );
+    return {
+      root_session_id: normalizedRootSessionId,
+      connectors: {
+        databases: compactDatabases,
+        terminals: compactTerminals,
+        emails: compactEmails,
+      },
+      current_connectors: {
+        database: buildSelectedCompactConnector({
+          connectorType: "database",
+          connectorName: normalizedSelectedConnectors.database,
+          sourceList: compactDatabases,
+        }),
+        terminal: buildSelectedCompactConnector({
+          connectorType: "terminal",
+          connectorName: normalizedSelectedConnectors.terminal,
+          sourceList: compactTerminals,
+        }),
+        email: buildSelectedCompactConnector({
+          connectorType: "email",
+          connectorName: normalizedSelectedConnectors.email,
+          sourceList: compactEmails,
+        }),
+      },
+    };
   }
 
   _composeSystemInfoSections({
@@ -700,7 +907,7 @@ export class ContextBuilder {
         JSON.stringify(mcpServers, null, 2),
       ),
       toSystemSection(
-        "当前连接器信息（脱敏，含状态）",
+        "当前连接器信息",
         JSON.stringify(connectorStatusSection || {}, null, 2),
       ),
       toSystemSection(
@@ -767,6 +974,12 @@ export class ContextBuilder {
     const connectorStatusSection = await this._resolveConnectorStatusSection({
       rootSessionId,
       connectorChannelStore: getConnectorChannelStore(),
+      connectorHistoryStore: getConnectorHistoryStore(),
+      selectedConnectors:
+        this.runConfig?.selectedConnectors &&
+        typeof this.runConfig.selectedConnectors === "object"
+          ? this.runConfig.selectedConnectors
+          : {},
     });
     const systemContext = this._composeSystemInfoSections({
       systemPrompt: contextData.systemPrompt,

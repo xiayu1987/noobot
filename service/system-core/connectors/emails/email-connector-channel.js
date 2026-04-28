@@ -21,8 +21,8 @@ function parseEmailCommand(command = "") {
     throw new Error("email command JSON object required");
   }
   const action = String(parsedCommand?.action || "").trim().toLowerCase();
-  if (!["send", "list", "read"].includes(action)) {
-    throw new Error("email command action must be send|list|read");
+  if (!["send", "list", "read", "list_folders"].includes(action)) {
+    throw new Error("email command action must be send|list|read|list_folders");
   }
   return { action, payload: parsedCommand };
 }
@@ -123,6 +123,33 @@ async function executeSendEmail({ payload = {}, connectionInfo = {} } = {}) {
   };
 }
 
+async function executeListFolders({ connectionInfo = {} } = {}) {
+  const { ImapFlow } = await import("imapflow");
+  const normalizedConnectionInfo = normalizeEmailConnectionInfo(connectionInfo);
+  const imapClient = new ImapFlow({
+    host: normalizedConnectionInfo.imapHost,
+    port: normalizedConnectionInfo.imapPort,
+    secure: normalizedConnectionInfo.imapSecure,
+    auth: {
+      user: normalizedConnectionInfo.username,
+      pass: normalizedConnectionInfo.password,
+    },
+  });
+  await imapClient.connect();
+  try {
+    const folderTree = await imapClient.list();
+    const folders = (Array.isArray(folderTree) ? folderTree : []).map((item) => ({
+      path: String(item?.path || ""),
+      name: String(item?.name || ""),
+      delimiter: String(item?.delimiter || "/"),
+      flags: Array.isArray(item?.flags) ? Array.from(item.flags) : [],
+    }));
+    return { action: "list_folders", folders };
+  } finally {
+    await imapClient.logout();
+  }
+}
+
 async function executeListEmail({ payload = {}, connectionInfo = {} } = {}) {
   const { ImapFlow } = await import("imapflow");
   const normalizedConnectionInfo = normalizeEmailConnectionInfo(connectionInfo);
@@ -144,7 +171,7 @@ async function executeListEmail({ payload = {}, connectionInfo = {} } = {}) {
   try {
     const mailboxLock = await imapClient.getMailboxLock(folder);
     try {
-      const allUids = await imapClient.search(unseenOnly ? { seen: false } : {});
+      const allUids = await imapClient.search(unseenOnly ? { seen: false } : {}, { uid: true });
       const normalizedUids = (Array.isArray(allUids) ? allUids : [])
         .map((uid) => Number(uid || 0))
         .filter((uid) => Number.isFinite(uid) && uid > 0)
@@ -170,7 +197,7 @@ async function executeListEmail({ payload = {}, connectionInfo = {} } = {}) {
         uid: true,
         envelope: true,
         internalDate: true,
-      })) {
+      }, { uid: true })) {
         messageSummaries.push({
           uid: Number(messageItem?.uid || 0),
           subject: String(messageItem?.envelope?.subject || "").trim(),
@@ -271,7 +298,7 @@ async function executeReadEmail({
     try {
       let resolvedUid = Number.isFinite(uid) && uid > 0 ? Math.floor(uid) : 0;
       if (!resolvedUid) {
-        const allUids = await imapClient.search({});
+        const allUids = await imapClient.search({}, { uid: true });
         const latestUid = (Array.isArray(allUids) ? allUids : [])
           .map((uidItem) => Number(uidItem || 0))
           .filter((uidItem) => Number.isFinite(uidItem) && uidItem > 0)
@@ -445,6 +472,8 @@ export async function executeEmailCommand({
         connectionInfo,
         attachmentHandler,
       });
+    } else if (action === "list_folders") {
+      resultPayload = await executeListFolders({ connectionInfo });
     }
     return {
       ok: true,

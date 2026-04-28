@@ -4,11 +4,13 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref } from "vue";
 import { Document, WarningFilled, Download, View } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import ThinkingPanel from "./ThinkingPanel.vue";
+import MessagePreviewContent from "./MessagePreviewContent.vue";
 import { downloadWorkspaceFileApi, getWorkspaceFileApi } from "../api/chatApi";
+import { renderMermaidInElement } from "../utils/mermaid-renderer";
 
 const props = defineProps({
   messageItem: { type: Object, required: true },
@@ -140,6 +142,236 @@ const attachmentPreviewVisible = ref(false);
 const attachmentPreviewType = ref("");
 const attachmentPreviewUrl = ref("");
 const attachmentPreviewName = ref("");
+const messageMarkdownRef = ref(null);
+
+function scheduleMermaidRender() {
+  nextTick(async () => {
+    try {
+      await renderMermaidInElement(messageMarkdownRef.value);
+    } catch (error) {
+      // ignore
+    }
+  });
+}
+
+function stripBackgroundStylesFromHtml(htmlContent = "") {
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = String(htmlContent || "");
+  const allElements = wrapper.querySelectorAll("*");
+  for (const elementNode of allElements) {
+    const styleText = String(elementNode.getAttribute("style") || "").trim();
+    if (!styleText) continue;
+    const keptStyleRules = styleText
+      .split(";")
+      .map((styleRule) => styleRule.trim())
+      .filter(Boolean)
+      .filter((styleRule) => {
+        const ruleName = String(styleRule.split(":")[0] || "")
+          .trim()
+          .toLowerCase();
+        return ruleName !== "background" && ruleName !== "background-color";
+      });
+    if (keptStyleRules.length) {
+      elementNode.setAttribute("style", keptStyleRules.join("; "));
+    } else {
+      elementNode.removeAttribute("style");
+    }
+  }
+  return wrapper.innerHTML;
+}
+
+function applyInlineStylesForCopy(htmlContent = "") {
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = String(htmlContent || "");
+  const setStyle = (elementNode, styleMap = {}) => {
+    if (!elementNode) return;
+    const mergedStyles = Object.entries(styleMap)
+      .filter(([, styleValue]) => styleValue !== null && styleValue !== undefined)
+      .map(([styleKey, styleValue]) => `${styleKey}: ${styleValue}`)
+      .join("; ");
+    if (!mergedStyles) return;
+    const originalStyles = String(elementNode.getAttribute("style") || "").trim();
+    elementNode.setAttribute(
+      "style",
+      originalStyles ? `${originalStyles}; ${mergedStyles}` : mergedStyles,
+    );
+  };
+
+  wrapper.querySelectorAll("p").forEach((elementNode) => {
+    setStyle(elementNode, { margin: "0 0 12px 0" });
+  });
+  wrapper.querySelectorAll("a").forEach((elementNode) => {
+    setStyle(elementNode, { color: "#2563eb", "text-decoration": "none" });
+  });
+  wrapper.querySelectorAll("pre").forEach((elementNode) => {
+    setStyle(elementNode, {
+      background: "#f8fafc",
+      color: "#111827",
+      border: "1px solid #e5e7eb",
+      "border-radius": "8px",
+      padding: "12px",
+      "overflow-x": "auto",
+      margin: "12px 0",
+    });
+  });
+  wrapper.querySelectorAll("code").forEach((elementNode) => {
+    setStyle(elementNode, {
+      background: "#f3f4f6",
+      color: "#111827",
+      padding: "2px 6px",
+      "border-radius": "4px",
+      "font-family": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    });
+  });
+  wrapper.querySelectorAll("pre code").forEach((elementNode) => {
+    setStyle(elementNode, { background: "transparent", padding: "0" });
+  });
+  wrapper.querySelectorAll("table").forEach((elementNode) => {
+    setStyle(elementNode, {
+      width: "100%",
+      "border-collapse": "collapse",
+      margin: "12px 0",
+      "font-size": "13px",
+      border: "1px solid #d1d5db",
+    });
+  });
+  wrapper.querySelectorAll("th, td").forEach((elementNode) => {
+    setStyle(elementNode, {
+      border: "1px solid #d1d5db",
+      padding: "8px 10px",
+      "text-align": "left",
+      "vertical-align": "top",
+    });
+  });
+  wrapper.querySelectorAll("th").forEach((elementNode) => {
+    setStyle(elementNode, { background: "#eef2ff", "font-weight": "600" });
+  });
+  wrapper.querySelectorAll("ul, ol").forEach((elementNode) => {
+    setStyle(elementNode, { margin: "8px 0 12px 20px", "padding-left": "16px" });
+  });
+  wrapper.querySelectorAll("li").forEach((elementNode) => {
+    setStyle(elementNode, { margin: "4px 0", "line-height": "1.7" });
+  });
+  wrapper.querySelectorAll(".mermaid").forEach((elementNode) => {
+    setStyle(elementNode, {
+      margin: "12px 0",
+      padding: "10px",
+      border: "1px solid #d1d5db",
+      "border-radius": "8px",
+      background: "#ffffff",
+      "overflow-x": "auto",
+      "max-width": "760px",
+    });
+  });
+  wrapper.querySelectorAll(".mermaid svg").forEach((elementNode) => {
+    setStyle(elementNode, {
+      width: "100%",
+      "max-width": "760px",
+      height: "auto",
+      display: "block",
+    });
+  });
+  return wrapper.innerHTML;
+}
+
+function buildHtmlDocumentForCopy(htmlBodyContent = "") {
+  const normalizedHtmlBodyContent = String(htmlBodyContent || "").trim();
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Noobot Markdown Preview</title>
+  <style>
+    body { margin: 0; padding: 16px; color: #111827; background: #ffffff; line-height: 1.6; font-size: 14px; }
+    p { margin: 0 0 12px 0; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    pre { background: #f8fafc !important; color: #111827 !important; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; overflow-x: auto; margin: 12px 0; }
+    code { background: #f3f4f6 !important; color: #111827 !important; padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    pre code { background: transparent !important; padding: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; border: 1px solid #d1d5db; }
+    th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2ff !important; font-weight: 600; }
+    tr:nth-child(even) td { background: #f8fafc !important; }
+    ul, ol { margin: 8px 0 12px 20px; padding-left: 16px; }
+    li { margin: 4px 0; line-height: 1.7; }
+    ul li::marker { color: #60a5fa; }
+    ol li::marker { color: #93c5fd; font-weight: 600; }
+    .mermaid { margin: 12px 0; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff !important; overflow-x: auto; max-width: 760px; }
+    .mermaid svg { width: 100% !important; max-width: 760px !important; height: auto !important; display: block; }
+    .mermaid-render-error { color: #b91c1c; background: #fff1f2 !important; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+${normalizedHtmlBodyContent}
+</body>
+</html>`;
+}
+
+function fallbackCopyHtml(htmlContent = "", plainText = "") {
+  const normalizedHtmlContent = String(htmlContent || "");
+  const normalizedPlainText = String(plainText || "");
+  const onCopy = (event) => {
+    event.preventDefault();
+    event.clipboardData?.setData("text/html", normalizedHtmlContent);
+    event.clipboardData?.setData("text/plain", normalizedPlainText);
+  };
+  document.addEventListener("copy", onCopy);
+  const copied = document.execCommand("copy");
+  document.removeEventListener("copy", onCopy);
+  return copied;
+}
+
+async function onCopyMarkdownRich(renderedPreviewHtml = "") {
+  try {
+    const rawHtmlContent = String(
+      renderedPreviewHtml || props.renderMarkdown(previewTextContent.value) || "",
+    ).trim();
+    if (!rawHtmlContent) {
+      ElMessage.warning("没有可复制的内容");
+      return;
+    }
+    const normalizedHtmlContent = applyInlineStylesForCopy(
+      stripBackgroundStylesFromHtml(rawHtmlContent),
+    );
+    const htmlPageContent = buildHtmlDocumentForCopy(normalizedHtmlContent);
+    if (navigator.clipboard && typeof window.ClipboardItem === "function") {
+      const clipboardItem = new window.ClipboardItem({
+        "text/html": new Blob([htmlPageContent], { type: "text/html" }),
+        "text/plain": new Blob([htmlPageContent], { type: "text/plain" }),
+      });
+      await navigator.clipboard.write([clipboardItem]);
+      ElMessage.success("已复制为 HTML 页面");
+      return;
+    }
+    if (!fallbackCopyHtml(htmlPageContent, htmlPageContent)) {
+      throw new Error("copy failed");
+    }
+    ElMessage.success("已复制为 HTML 页面");
+  } catch (error) {
+    ElMessage.error(error?.message || "格式复制失败");
+  }
+}
+
+async function onCopyMarkdownText() {
+  try {
+    const markdownText = String(previewTextContent.value || "");
+    if (!markdownText.trim()) {
+      ElMessage.warning("没有可复制的文本");
+      return;
+    }
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(markdownText);
+    } else {
+      const copied = fallbackCopyHtml("", markdownText);
+      if (!copied) throw new Error("copy failed");
+    }
+    ElMessage.success("已复制 Markdown 文本");
+  } catch (error) {
+    ElMessage.error(error?.message || "文本复制失败");
+  }
+}
 
 function cleanupPreviewImageUrl() {
   if (!previewImageUrl.value) return;
@@ -238,6 +470,14 @@ function closePreviewDialog() {
 onBeforeUnmount(() => {
   cleanupPreviewImageUrl();
   closeAttachmentPreview();
+});
+
+onMounted(() => {
+  scheduleMermaidRender();
+});
+
+onUpdated(() => {
+  scheduleMermaidRender();
 });
 
 function resolveRelativeWorkspacePath(absolutePath = "") {
@@ -465,7 +705,7 @@ const displayedAttachmentMetas = computed(() => {
           {{ messageItem.error }}
         </div>
 
-        <div class="md" v-html="renderMarkdown(messageItem.content)" />
+        <div ref="messageMarkdownRef" class="md" v-html="renderMarkdown(messageItem.content)" />
 
         <!-- 醒目的生成文件展示区 -->
         <div
@@ -558,23 +798,17 @@ const displayedAttachmentMetas = computed(() => {
     :title="`附件预览：${attachmentPreviewName || ''}`"
     width="72%"
     top="6vh"
+    destroy-on-close
     @closed="closeAttachmentPreview"
   >
-    <div class="preview-body">
-      <img
-        v-if="attachmentPreviewType === 'image' && attachmentPreviewUrl"
-        :src="attachmentPreviewUrl"
-        :alt="attachmentPreviewName"
-        class="preview-image"
-      />
-      <video
-        v-else-if="attachmentPreviewType === 'video' && attachmentPreviewUrl"
-        class="preview-video"
-        :src="attachmentPreviewUrl"
-        controls
-        autoplay
-      />
-    </div>
+    <MessagePreviewContent
+      content-type="attachment"
+      :active="attachmentPreviewVisible"
+      :attachment-preview-type="attachmentPreviewType"
+      :attachment-preview-url="attachmentPreviewUrl"
+      :attachment-preview-name="attachmentPreviewName"
+      :render-markdown="renderMarkdown"
+    />
   </el-dialog>
 
   <el-dialog
@@ -583,23 +817,22 @@ const displayedAttachmentMetas = computed(() => {
     width="72%"
     top="6vh"
     class="generated-file-preview-dialog"
+    destroy-on-close
     @closed="closePreviewDialog"
   >
-    <div class="preview-body" v-loading="previewLoading">
-      <div v-if="previewError" class="preview-error">{{ previewError }}</div>
-      <img
-        v-else-if="previewMode === 'image' && previewImageUrl"
-        :src="previewImageUrl"
-        :alt="previewFileName"
-        class="preview-image"
-      />
-      <div
-        v-else-if="previewMode === 'markdown'"
-        class="preview-markdown"
-        v-html="renderMarkdown(previewTextContent)"
-      />
-      <pre v-else class="preview-text">{{ previewTextContent }}</pre>
-    </div>
+    <MessagePreviewContent
+      content-type="file"
+      :active="previewVisible"
+      :preview-loading="previewLoading"
+      :preview-error="previewError"
+      :preview-file-name="previewFileName"
+      :preview-mode="previewMode"
+      :preview-text-content="previewTextContent"
+      :preview-image-url="previewImageUrl"
+      :render-markdown="renderMarkdown"
+      @copy-markdown-rich="onCopyMarkdownRich"
+      @copy-markdown-text="onCopyMarkdownText"
+    />
   </el-dialog>
 </template>
 
@@ -947,14 +1180,21 @@ const displayedAttachmentMetas = computed(() => {
   min-height: 240px;
   max-height: 68vh;
   overflow: auto;
-  background: #0b1220;
-  border: 1px solid #1f2d4a;
+  background: #ffffff;
+  border: 1px solid #dbe3f0;
   border-radius: 10px;
   padding: 14px;
 }
 
 .preview-error {
   color: #fca5a5;
+}
+
+.preview-copy-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-bottom: 10px;
 }
 
 .preview-image {
@@ -976,14 +1216,47 @@ const displayedAttachmentMetas = computed(() => {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #dbeafe;
+  color: #111827;
   font-size: 13px;
   line-height: 1.6;
+  background: #ffffff;
 }
 
 .preview-markdown {
-  color: #dbeafe;
+  color: #111827;
   font-size: 13px;
+  background: #ffffff;
+}
+
+.preview-markdown :deep(code) {
+  background: #f3f4f6;
+  color: #111827;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.preview-markdown :deep(pre) {
+  background: #f8fafc;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.preview-markdown :deep(pre code) {
+  background: transparent;
+  padding: 0;
+}
+
+.md :deep(.mermaid-render-error),
+.preview-markdown :deep(.mermaid-render-error) {
+  color: #b91c1c;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 8px;
+  padding: 10px;
+  white-space: pre-wrap;
 }
 
 /* --- Markdown 内部样式 --- */
@@ -1027,5 +1300,77 @@ const displayedAttachmentMetas = computed(() => {
   padding: 0;
   color: inherit;
   font-size: 0.9em;
+}
+
+.md :deep(ul),
+.md :deep(ol),
+.preview-markdown :deep(ul),
+.preview-markdown :deep(ol) {
+  margin: 8px 0 12px 20px;
+  padding-left: 16px;
+}
+
+.md :deep(li),
+.preview-markdown :deep(li) {
+  margin: 4px 0;
+  line-height: 1.7;
+}
+
+.md :deep(ul li::marker),
+.preview-markdown :deep(ul li::marker) {
+  color: #60a5fa;
+}
+
+.md :deep(ol li::marker),
+.preview-markdown :deep(ol li::marker) {
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.md :deep(table),
+.preview-markdown :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+  border: 1px solid var(--noobot-msg-assistant-border);
+}
+
+.md :deep(th),
+.md :deep(td),
+.preview-markdown :deep(th),
+.preview-markdown :deep(td) {
+  border: 1px solid var(--noobot-msg-assistant-border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md :deep(th),
+.preview-markdown :deep(th) {
+  background: rgba(148, 163, 184, 0.15);
+  font-weight: 600;
+}
+
+.md :deep(tr:nth-child(even) td),
+.preview-markdown :deep(tr:nth-child(even) td) {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.md :deep(.mermaid),
+.preview-markdown :deep(.mermaid) {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--noobot-msg-assistant-border);
+  border-radius: 8px;
+  background: #ffffff;
+  overflow-x: auto;
+}
+
+.md :deep(.mermaid svg),
+.preview-markdown :deep(.mermaid svg) {
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 </style>

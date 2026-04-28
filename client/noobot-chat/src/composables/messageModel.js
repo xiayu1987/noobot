@@ -26,11 +26,21 @@ function normalizeAttachment(
   const mimeType = String(
     attachmentItem?.mimeType || "application/octet-stream",
   );
+  const sessionId = String(attachmentItem?.sessionId || "").trim();
+  const attachmentSource = String(attachmentItem?.attachmentSource || "").trim();
   const attachmentUrl = attachmentId
-    ? buildAttachmentUrl({ userId, attachmentId, apiKey })
+    ? buildAttachmentUrl({
+        userId,
+        attachmentId,
+        apiKey,
+        sessionId,
+        attachmentSource,
+      })
     : "";
   return {
     ...attachmentItem,
+    sessionId,
+    attachmentSource,
     mimeType,
     previewUrl:
       String(attachmentItem?.previewUrl || "") ||

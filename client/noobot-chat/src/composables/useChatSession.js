@@ -17,7 +17,6 @@ import {
   getSessionConnectorsApi,
   getSessionDetailApi,
   getSessionsApi,
-  putSessionConnectorSelectionApi,
 } from "../api/chatApi";
 import { encryptPayloadBySessionId } from "../utils/sessionCrypto";
 
@@ -33,7 +32,29 @@ export function useChatSession({
   scrollBottom,
   clearUploadSelection = () => {},
 }) {
+  const CONNECTOR_TYPES = ["database", "terminal", "email"];
+  const CONNECTOR_TYPE_SET = new Set(CONNECTOR_TYPES);
+
+  function normalizeConnectorType(connectorType = "") {
+    return String(connectorType || "").trim();
+  }
+
+  function normalizeSelectedConnectors(selectedConnectors = {}) {
+    const source =
+      selectedConnectors && typeof selectedConnectors === "object"
+        ? selectedConnectors
+        : {};
+    return {
+      database: String(source?.database || "").trim(),
+      terminal: String(source?.terminal || "").trim(),
+      email: String(source?.email || "").trim(),
+    };
+  }
+
   function createConnectorPanelState(overrides = {}) {
+    const normalizedSelectedConnectors = normalizeSelectedConnectors(
+      overrides?.selectedConnectors || {},
+    );
     return {
       rootSessionId: String(overrides?.rootSessionId || "").trim(),
       groups: {
@@ -47,11 +68,7 @@ export function useChatSession({
           ? overrides.groups.email
           : [],
       },
-      selectedConnectors: {
-        database: String(overrides?.selectedConnectors?.database || "").trim(),
-        terminal: String(overrides?.selectedConnectors?.terminal || "").trim(),
-        email: String(overrides?.selectedConnectors?.email || "").trim(),
-      },
+      selectedConnectors: normalizedSelectedConnectors,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -467,33 +484,90 @@ export function useChatSession({
     }));
   }
 
+  function pickDefaultConnectorName(groupItems = []) {
+    const sourceItems = Array.isArray(groupItems) ? groupItems : [];
+    if (!sourceItems.length) return "";
+    const parseTime = (connectorItem = {}) => {
+      const checkedTime = new Date(
+        String(
+          connectorItem?.checkedAt ||
+            connectorItem?.checked_at ||
+            connectorItem?.connectedAt ||
+            connectorItem?.connected_at ||
+            0,
+        ),
+      ).getTime();
+      return Number.isFinite(checkedTime) ? checkedTime : 0;
+    };
+    const connectedItems = sourceItems.filter(
+      (connectorItem) =>
+        String(connectorItem?.status || "").trim().toLowerCase() === "connected",
+    );
+    const sortByRecent = (leftConnector, rightConnector) =>
+      parseTime(rightConnector) - parseTime(leftConnector);
+    const latestConnectedItem = connectedItems.sort(sortByRecent)[0] || null;
+    const latestItem = [...sourceItems].sort(sortByRecent)[0] || null;
+    const targetItem = latestConnectedItem || latestItem;
+    return String(targetItem?.connectorName || "").trim();
+  }
+
+  function resolveSelectedConnectorsWithDefaults({
+    groups = {},
+    selectedConnectors = {},
+  } = {}) {
+    const normalizedGroups =
+      groups && typeof groups === "object" ? groups : {};
+    const selectedSource =
+      selectedConnectors && typeof selectedConnectors === "object"
+        ? selectedConnectors
+        : {};
+    const output = normalizeSelectedConnectors({});
+    for (const connectorType of CONNECTOR_TYPES) {
+      const groupItems = Array.isArray(normalizedGroups?.[connectorType])
+        ? normalizedGroups[connectorType]
+        : [];
+      const selectedConnectorName = String(
+        selectedSource?.[connectorType] || "",
+      ).trim();
+      output[connectorType] = selectedConnectorName || pickDefaultConnectorName(groupItems);
+    }
+    return output;
+  }
+
   function applySessionConnectorPayload(sessionItem, payload = {}) {
     if (!sessionItem) return;
+    const currentSelectedConnectors = normalizeSelectedConnectors(
+      sessionItem?.connectorPanelState?.selectedConnectors || {},
+    );
     const selectedSource =
       payload?.selectedConnectors && typeof payload.selectedConnectors === "object"
         ? payload.selectedConnectors
         : payload?.selected_connectors && typeof payload.selected_connectors === "object"
           ? payload.selected_connectors
           : {};
+    const nextGroups = {
+      database: normalizeConnectorGroupItems(
+        payload?.connectors?.databases || payload?.groups?.database || [],
+      ),
+      terminal: normalizeConnectorGroupItems(
+        payload?.connectors?.terminals || payload?.groups?.terminal || [],
+      ),
+      email: normalizeConnectorGroupItems(
+        payload?.connectors?.emails || payload?.groups?.email || [],
+      ),
+    };
+    const nextSelectedConnectors = resolveSelectedConnectorsWithDefaults({
+      groups: nextGroups,
+      selectedConnectors: {
+        ...currentSelectedConnectors,
+        ...normalizeSelectedConnectors(selectedSource),
+      },
+    });
     sessionItem.connectorPanelState = createConnectorPanelState({
       rootSessionId:
         payload?.rootSessionId || payload?.root_session_id || payload?.sessionId || "",
-      groups: {
-        database: normalizeConnectorGroupItems(
-          payload?.connectors?.databases || payload?.groups?.database || [],
-        ),
-        terminal: normalizeConnectorGroupItems(
-          payload?.connectors?.terminals || payload?.groups?.terminal || [],
-        ),
-        email: normalizeConnectorGroupItems(
-          payload?.connectors?.emails || payload?.groups?.email || [],
-        ),
-      },
-      selectedConnectors: {
-        database: String(selectedSource?.database || "").trim(),
-        terminal: String(selectedSource?.terminal || "").trim(),
-        email: String(selectedSource?.email || "").trim(),
-      },
+      groups: nextGroups,
+      selectedConnectors: nextSelectedConnectors,
     });
   }
 
@@ -509,7 +583,7 @@ export function useChatSession({
     const normalizedConnectorType = String(connectorType || "").trim();
     const normalizedConnectorName = String(connectorName || "").trim();
     if (
-      !["database", "terminal", "email"].includes(normalizedConnectorType) ||
+      !CONNECTOR_TYPE_SET.has(normalizedConnectorType) ||
       !normalizedConnectorName
     ) {
       return;
@@ -545,11 +619,13 @@ export function useChatSession({
     } else {
       groupItems.push(nextConnectorItem);
     }
-    const selectedConnectors =
-      panelState?.selectedConnectors &&
-      typeof panelState.selectedConnectors === "object"
-        ? panelState.selectedConnectors
-        : {};
+    const selectedConnectors = normalizeSelectedConnectors(
+      panelState?.selectedConnectors || {},
+    );
+    const nextSelectedConnectors = {
+      ...selectedConnectors,
+      [normalizedConnectorType]: normalizedConnectorName,
+    };
     sessionItem.connectorPanelState = createConnectorPanelState({
       ...panelState,
       groups: {
@@ -564,12 +640,7 @@ export function useChatSession({
           : [],
         [normalizedConnectorType]: groupItems,
       },
-      selectedConnectors: {
-        database: String(selectedConnectors?.database || "").trim(),
-        terminal: String(selectedConnectors?.terminal || "").trim(),
-        email: String(selectedConnectors?.email || "").trim(),
-        [normalizedConnectorType]: normalizedConnectorName,
-      },
+      selectedConnectors: nextSelectedConnectors,
     });
   }
 
@@ -625,37 +696,21 @@ export function useChatSession({
     connectorType = "",
     connectorName = "",
   } = {}) {
-    if (!ensureConnected() || !activeSession.value) return false;
+    if (!activeSession.value) return false;
     const sessionItem = activeSession.value;
-    const normalizedType = String(connectorType || "").trim();
-    if (!["database", "terminal", "email"].includes(normalizedType)) return false;
+    const normalizedType = normalizeConnectorType(connectorType);
+    if (!CONNECTOR_TYPE_SET.has(normalizedType)) return false;
     const normalizedName = String(connectorName || "").trim();
-    const currentSelectedConnectors =
-      sessionItem.connectorPanelState?.selectedConnectors &&
-      typeof sessionItem.connectorPanelState.selectedConnectors === "object"
-        ? sessionItem.connectorPanelState.selectedConnectors
-        : {};
+    const currentSelectedConnectors = normalizeSelectedConnectors(
+      sessionItem.connectorPanelState?.selectedConnectors || {},
+    );
     const nextSelectedConnectors = {
-      database: String(currentSelectedConnectors?.database || "").trim(),
-      terminal: String(currentSelectedConnectors?.terminal || "").trim(),
-      email: String(currentSelectedConnectors?.email || "").trim(),
+      ...currentSelectedConnectors,
       [normalizedType]: normalizedName,
     };
-    const response = await putSessionConnectorSelectionApi(
-      {
-        userId: userId.value,
-        sessionId: sessionItem.backendSessionId || sessionItem.id,
-        selectedConnectors: nextSelectedConnectors,
-      },
-      { fetcher: authFetch },
-    );
-    const payload = await response.json();
-    if (!response.ok || payload?.ok !== true) {
-      throw new Error(payload?.error || "保存连接器勾选状态失败");
-    }
     sessionItem.connectorPanelState = createConnectorPanelState({
       ...(sessionItem.connectorPanelState || {}),
-      selectedConnectors: payload?.selectedConnectors || nextSelectedConnectors,
+      selectedConnectors: normalizeSelectedConnectors(nextSelectedConnectors),
     });
     return true;
   }
@@ -921,17 +976,9 @@ export function useChatSession({
         config: {
           allowUserInteraction:
             allowUserInteraction?.value === false ? false : true,
-          selectedConnectors: {
-            database: String(
-              activeSession.value?.connectorPanelState?.selectedConnectors?.database || "",
-            ).trim(),
-            terminal: String(
-              activeSession.value?.connectorPanelState?.selectedConnectors?.terminal || "",
-            ).trim(),
-            email: String(
-              activeSession.value?.connectorPanelState?.selectedConnectors?.email || "",
-            ).trim(),
-          },
+          selectedConnectors: normalizeSelectedConnectors(
+            activeSession.value?.connectorPanelState?.selectedConnectors || {},
+          ),
         },
       };
 
@@ -965,7 +1012,7 @@ export function useChatSession({
               interactionData?.status || "connected",
             ).trim();
             if (
-              ["database", "terminal", "email"].includes(connectedType) &&
+              CONNECTOR_TYPE_SET.has(connectedType) &&
               connectedName
             ) {
               upsertConnectedConnectorInPanelState(activeSession.value, {

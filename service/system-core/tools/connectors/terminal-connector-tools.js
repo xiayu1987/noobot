@@ -20,6 +20,7 @@ import {
   maskConnectionInfo,
   mergeConnectionInfo,
   normalizeProvidedTerminalDefaults,
+  resolveRememberedConnectorInfo,
   normalizeTerminalType,
   resolveConfiguredConnectorInfo,
   terminalFields,
@@ -29,6 +30,7 @@ export function createTerminalConnectorTools(context = {}) {
   const {
     runtime,
     store,
+    historyStore,
     rootSessionId,
     allowUserInteraction,
     bridge,
@@ -94,7 +96,15 @@ export function createTerminalConnectorTools(context = {}) {
         connectorName,
         connectorType: "terminal",
       });
+      const rememberedConnectionInfo = await resolveRememberedConnectorInfo({
+        historyStore,
+        userId: runtime?.userId || "",
+        rootSessionId,
+        connectorType: "terminal",
+        connectorName,
+      });
       const providedDefaults = normalizeProvidedTerminalDefaults(default_values);
+      connectionInfo = mergeConnectionInfo(connectionInfo, rememberedConnectionInfo);
       connectionInfo = mergeConnectionInfo(connectionInfo, providedDefaults);
       connectionInfo = mergeConnectionInfo(connectionInfo, {
         terminal_type: terminalType,
@@ -180,6 +190,22 @@ export function createTerminalConnectorTools(context = {}) {
         );
       }
       addRuntimeConnectorChannel(runtime, connected);
+      if (
+        historyStore &&
+        typeof historyStore.upsertConnectedConnector === "function"
+      ) {
+        await historyStore.upsertConnectedConnector({
+          userId: String(runtime?.userId || "").trim(),
+          sessionId: rootSessionId,
+          connectorType: "terminal",
+          connectorName,
+          connectionInfo,
+          connectionMeta:
+            connected?.connectionMeta && typeof connected.connectionMeta === "object"
+              ? connected.connectionMeta
+              : {},
+        });
+      }
       if (bridge?.requestUserInteraction) {
         try {
           await bridge.requestUserInteraction({

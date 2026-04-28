@@ -21,6 +21,7 @@ import {
   maskConnectionInfo,
   mergeConnectionInfo,
   normalizeProvidedEmailDefaults,
+  resolveRememberedConnectorInfo,
   resolveConfiguredConnectorInfo,
 } from "./connector-toolkit.js";
 
@@ -28,6 +29,7 @@ export function createEmailConnectorTools(context = {}) {
   const {
     runtime,
     store,
+    historyStore,
     rootSessionId,
     allowUserInteraction,
     bridge,
@@ -85,7 +87,15 @@ export function createEmailConnectorTools(context = {}) {
         connectorName,
         connectorType: "email",
       });
+      const rememberedConnectionInfo = await resolveRememberedConnectorInfo({
+        historyStore,
+        userId: runtime?.userId || "",
+        rootSessionId,
+        connectorType: "email",
+        connectorName,
+      });
       const providedDefaults = normalizeProvidedEmailDefaults(default_values);
+      connectionInfo = mergeConnectionInfo(connectionInfo, rememberedConnectionInfo);
       connectionInfo = mergeConnectionInfo(connectionInfo, providedDefaults);
       const fields = attachDefaultValuesToFields(
         alignFieldsWithConnectionInfo(emailFields(), connectionInfo),
@@ -164,6 +174,22 @@ export function createEmailConnectorTools(context = {}) {
         );
       }
       addRuntimeConnectorChannel(runtime, connected);
+      if (
+        historyStore &&
+        typeof historyStore.upsertConnectedConnector === "function"
+      ) {
+        await historyStore.upsertConnectedConnector({
+          userId: String(runtime?.userId || "").trim(),
+          sessionId: rootSessionId,
+          connectorType: "email",
+          connectorName,
+          connectionInfo,
+          connectionMeta:
+            connected?.connectionMeta && typeof connected.connectionMeta === "object"
+              ? connected.connectionMeta
+              : {},
+        });
+      }
       if (bridge?.requestUserInteraction) {
         try {
           await bridge.requestUserInteraction({

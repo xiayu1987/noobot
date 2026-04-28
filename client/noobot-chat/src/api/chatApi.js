@@ -7,12 +7,26 @@ function resolveFetcher(fetcher) {
   return fetcher || fetch;
 }
 
-export function buildAttachmentUrl({ userId = "", attachmentId = "", apiKey = "" }) {
+export function buildAttachmentUrl({
+  userId = "",
+  attachmentId = "",
+  apiKey = "",
+  sessionId = "",
+  attachmentSource = "",
+}) {
   const normalizedUserId = encodeURIComponent(String(userId || "").trim());
   const normalizedAttachmentId = encodeURIComponent(
     String(attachmentId || "").trim(),
   );
-  const query = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
+  const queryParams = [];
+  if (apiKey) queryParams.push(`apikey=${encodeURIComponent(apiKey)}`);
+  if (sessionId)
+    queryParams.push(`sessionId=${encodeURIComponent(String(sessionId || "").trim())}`);
+  if (attachmentSource)
+    queryParams.push(
+      `attachmentSource=${encodeURIComponent(String(attachmentSource || "").trim())}`,
+    );
+  const query = queryParams.length ? `?${queryParams.join("&")}` : "";
   return `/api/internal/attachment/${normalizedUserId}/${normalizedAttachmentId}${query}`;
 }
 

@@ -15,6 +15,15 @@ import {
   Connection
 } from "@element-plus/icons-vue";
 
+const CONNECTOR_GROUP_DEFINITIONS = [
+  { key: "database", label: "数据库" },
+  { key: "terminal", label: "终端" },
+  { key: "email", label: "邮件" },
+];
+const CONNECTOR_GROUP_KEYS = new Set(
+  CONNECTOR_GROUP_DEFINITIONS.map((groupDefinition) => groupDefinition.key),
+);
+
 const props = defineProps({
   modelValue: { type: String, default: "" },
   uploadFiles: { type: Array, default: () => [] },
@@ -59,24 +68,19 @@ const connectorGroups = computed(() => {
   };
 });
 
+const connectorGroupDefinitions = CONNECTOR_GROUP_DEFINITIONS;
 const selectedConnectors = computed(() => {
-  const sourceSelected =
+  const selectedSource =
     props?.connectorPanelState?.selectedConnectors &&
     typeof props.connectorPanelState.selectedConnectors === "object"
       ? props.connectorPanelState.selectedConnectors
       : {};
   return {
-    database: String(sourceSelected.database || "").trim(),
-    terminal: String(sourceSelected.terminal || "").trim(),
-    email: String(sourceSelected.email || "").trim(),
+    database: String(selectedSource?.database || "").trim(),
+    terminal: String(selectedSource?.terminal || "").trim(),
+    email: String(selectedSource?.email || "").trim(),
   };
 });
-
-const connectorGroupDefinitions = [
-  { key: "database", label: "数据库" },
-  { key: "terminal", label: "终端" },
-  { key: "email", label: "邮件" },
-];
 
 const collapsedConnectorSummaryItems = computed(() =>
   connectorGroupDefinitions
@@ -136,10 +140,11 @@ function connectorStatusClass(status = "") {
 
 function onConnectorSelected(connectorType = "", connectorName = "") {
   const normalizedType = String(connectorType || "").trim();
-  if (!["database", "terminal", "email"].includes(normalizedType)) return;
+  if (!CONNECTOR_GROUP_KEYS.has(normalizedType)) return;
+  const normalizedName = String(connectorName || "").trim();
   emit("connector-selected", {
     connectorType: normalizedType,
-    connectorName: String(connectorName || "").trim(),
+    connectorName: normalizedName,
   });
 }
 

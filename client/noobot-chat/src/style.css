@@ -19,8 +19,21 @@ body,
     sans-serif;
 }
 
+body {
+  overflow: hidden;
+}
+
+
 * {
   box-sizing: border-box;
+}
+
+/* Mermaid tooltip 使用 absolute 定位时可能撑大页面滚动区域 */
+.mermaidTooltip {
+  position: fixed !important;
+  z-index: 4000;
+  max-width: min(360px, 80vw);
+  pointer-events: none;
 }
 
 /* 全局按钮设计变量（可在主题切换时统一改） */

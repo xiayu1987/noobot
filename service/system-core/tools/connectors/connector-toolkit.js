@@ -420,6 +420,7 @@ function createConnectorToolContext(agentContext = {}) {
   const allowUserInteraction = systemRuntime?.config?.allowUserInteraction !== false;
   const bridge = runtime?.userInteractionBridge || null;
   const store = runtime?.sharedTools?.connectorChannelStore || null;
+  const historyStore = runtime?.sharedTools?.connectorHistoryStore || null;
   const maxAccessOutputChars = Number(
     effectiveConfig?.tools?.access_connector?.max_output_chars ??
       effectiveConfig?.tools?.access_connector?.maxOutputChars ??
@@ -434,17 +435,76 @@ function createConnectorToolContext(agentContext = {}) {
     allowUserInteraction,
     bridge,
     store,
+    historyStore,
     maxAccessOutputChars,
   };
+}
+
+async function resolveRememberedConnectorInfo({
+  historyStore = null,
+  userId = "",
+  rootSessionId = "",
+  connectorType = "",
+  connectorName = "",
+} = {}) {
+  if (
+    !historyStore ||
+    typeof historyStore.listSessionConnectors !== "function"
+  ) {
+    return {};
+  }
+  const normalizedUserId = String(userId || "").trim();
+  const normalizedRootSessionId = String(rootSessionId || "").trim();
+  const normalizedConnectorType = normalizeConnectorType(connectorType);
+  const normalizedConnectorName = String(connectorName || "").trim();
+  if (
+    !normalizedUserId ||
+    !normalizedRootSessionId ||
+    !normalizedConnectorType ||
+    !normalizedConnectorName
+  ) {
+    return {};
+  }
+  const groupedHistory = await historyStore.listSessionConnectors({
+    userId: normalizedUserId,
+    sessionId: normalizedRootSessionId,
+  });
+  const historyList = Array.isArray(groupedHistory?.[normalizedConnectorType])
+    ? groupedHistory[normalizedConnectorType]
+    : [];
+  const hitConnector =
+    historyList.find(
+      (connectorItem) =>
+        String(connectorItem?.connector_name || "").trim() ===
+        normalizedConnectorName,
+    ) || null;
+  const defaults =
+    hitConnector?.connection_defaults &&
+    typeof hitConnector.connection_defaults === "object"
+      ? hitConnector.connection_defaults
+      : {};
+  return collectNonSensitiveDefaults(defaults);
 }
 
 function buildAccessConnectorTool(context = {}) {
   const {
     runtime,
+    effectiveConfig,
     store,
+    historyStore,
     rootSessionId,
+    allowUserInteraction,
+    bridge,
+    dialogProcessId,
+    sessionId,
     maxAccessOutputChars,
   } = context;
+  const resolveReconnectToolName = (connectorType = "") =>
+    connectorType === "database"
+      ? "database_connect_connector"
+      : connectorType === "terminal"
+        ? "terminal_connect_connector"
+        : "email_connect_connector";
   const buildEmailAttachmentHandler = () => {
     const userId = String(runtime?.userId || "").trim();
     const attachmentService = runtime?.attachmentService || null;
@@ -452,6 +512,11 @@ function buildAccessConnectorTool(context = {}) {
     return async (artifacts = [], options = {}) => {
       const sourceArtifacts = Array.isArray(artifacts) ? artifacts : [];
       if (!sourceArtifacts.length) return [];
+      const runtimeSessionId = String(
+        runtime?.systemRuntime?.rootSessionId ||
+          runtime?.systemRuntime?.sessionId ||
+          "",
+      ).trim();
       const generationSource = String(
         options?.generationSource || "email_connector_read",
       ).trim();
@@ -460,16 +525,25 @@ function buildAccessConnectorTool(context = {}) {
         typeof attachmentService.ingestEmailArtifacts === "function"
           ? await attachmentService.ingestEmailArtifacts({
               userId,
+              sessionId: runtimeSessionId,
               artifacts: sourceArtifacts,
             })
           : await attachmentService.ingestGeneratedArtifacts({
               userId,
+              sessionId: runtimeSessionId,
+              attachmentSource:
+                generationSource === "email_connector_read" ? "email" : "model",
               artifacts: sourceArtifacts,
               generationSource,
             });
       return (Array.isArray(savedRecords) ? savedRecords : []).map(
         (attachmentItem, attachmentIndex) => ({
           attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+          sessionId: String(attachmentItem?.sessionId || runtimeSessionId).trim(),
+          attachmentSource: String(
+            attachmentItem?.attachmentSource ||
+              (generationSource === "email_connector_read" ? "email" : "model"),
+          ).trim(),
           name: String(attachmentItem?.name || "").trim(),
           mimeType: String(
             attachmentItem?.mimeType || "application/octet-stream",
@@ -546,6 +620,70 @@ function buildAccessConnectorTool(context = {}) {
         });
       }
       const connectorName = selectedConnectorName;
+      const connectedConnector = findConnectedConnector({
+        store,
+        rootSessionId,
+        connectorName,
+        connectorType,
+      });
+      if (!connectedConnector) {
+        const configuredConnectionInfo = resolveConfiguredConnectorInfo({
+          effectiveConfig,
+          connectorName,
+          connectorType,
+        });
+        const rememberedConnectionInfo = await resolveRememberedConnectorInfo({
+          historyStore,
+          userId: runtime?.userId || "",
+          rootSessionId,
+          connectorType,
+          connectorName,
+        });
+        const connectionDefaults = {
+          ...collectNonSensitiveDefaults(configuredConnectionInfo),
+          ...rememberedConnectionInfo,
+        };
+        const reconnectToolName = resolveReconnectToolName(connectorType);
+        const reconnectMessage = `当前已勾选连接器「${connectorName}」未连接，请先重新连接后再执行命令`;
+        if (allowUserInteraction && bridge?.requestUserInteraction) {
+          try {
+            await bridge.requestUserInteraction({
+              content: reconnectMessage,
+              fields: [],
+              dialogProcessId,
+              requireEncryption: false,
+              sessionId,
+              toolName: reconnectToolName,
+              connectorName,
+              connectorType,
+              interactionType: "connector_reconnect_required",
+              interactionData: {
+                connectorName,
+                connectorType,
+                reconnectToolName,
+                defaultValues: connectionDefaults,
+              },
+            });
+          } catch {}
+        }
+        return toToolJsonResult(
+          "access_connector",
+          {
+            ok: false,
+            status: "needs_reconnect",
+            error: `selected connector not connected: ${connectorType}/${connectorName}`,
+            message: reconnectMessage,
+            reconnect_required: true,
+            reconnect_tool: reconnectToolName,
+            connector: {
+              connector_name: connectorName,
+              connector_type: connectorType,
+            },
+            default_values: connectionDefaults,
+          },
+          true,
+        );
+      }
       try {
         const result = await store.executeConnectorCommand({
           sessionId: rootSessionId,
@@ -613,5 +751,6 @@ export {
   buildConnectionStatusPayload,
   buildRuntimeConnectorStatus,
   createConnectorToolContext,
+  resolveRememberedConnectorInfo,
   buildAccessConnectorTool,
 };

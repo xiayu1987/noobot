@@ -225,13 +225,33 @@ export function createMultimodalGenerateTool({ agentContext }) {
       : typeof globalThis.fetch === "function"
         ? globalThis.fetch.bind(globalThis)
         : null;
+  const resolveGenerationContentInput = (inputGenerationContent = "") => {
+    const normalizedInputGenerationContent = String(
+      inputGenerationContent || "",
+    ).trim();
+    const runtimeSessionId = String(runtime?.systemRuntime?.sessionId || "").trim();
+    const runtimeRootSessionId = String(
+      runtime?.systemRuntime?.rootSessionId || "",
+    ).trim();
+    const isRootSession =
+      runtimeSessionId &&
+      runtimeRootSessionId &&
+      runtimeSessionId === runtimeRootSessionId;
+    if (!isRootSession) return normalizedInputGenerationContent;
+    const currentTurnUserMessage = String(
+      runtime?.systemRuntime?.currentTurnUserMessage || "",
+    ).trim();
+    return currentTurnUserMessage || normalizedInputGenerationContent;
+  };
 
   const multimodalGenerateTool = new DynamicStructuredTool({
     name: "multimodal_generate",
     description:
-      "图片生成工具。输入生成内容，生成图片。",
+      "图片生成工具。根据输入的 generation_content 生成图片。注意：不要篡改添加生成内容",
     schema: z.object({
-      生成内容: z.string().describe("生成内容"),
+      generation_content: z
+        .string()
+        .describe("generation content，不要篡改添加生成内容"),
       model_name: z
         .string()
         .optional()
@@ -241,13 +261,13 @@ export function createMultimodalGenerateTool({ agentContext }) {
         .optional()
         .describe("可选：图片尺寸，例如 1024x1024"),
     }),
-    func: async ({ 生成内容, model_name = "", image_size = "1024x1024" }) => {
-      const generationContent = String(生成内容 || "").trim();
+    func: async ({ generation_content, model_name = "", image_size = "1024x1024" }) => {
+      const generationContent = resolveGenerationContentInput(generation_content);
       let resolvedModelSpec = null;
       if (!generationContent) {
         return toToolJsonResult("multimodal_generate", {
           ok: false,
-          error: "生成内容 required",
+          error: "generation_content required",
         });
       }
       try {
@@ -326,6 +346,12 @@ export function createMultimodalGenerateTool({ agentContext }) {
           attachmentService && userId && generatedAttachments.length
             ? await attachmentService.ingestGeneratedArtifacts({
                 userId,
+                sessionId: String(
+                  runtime?.systemRuntime?.rootSessionId ||
+                    runtime?.systemRuntime?.sessionId ||
+                    "",
+                ).trim(),
+                attachmentSource: "model",
                 artifacts: generatedAttachments,
                 generationSource: "multimodal_generate_tool",
               })
