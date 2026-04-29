@@ -12,7 +12,11 @@ import { safeJoin } from "../utils/fs-safe.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 
 function getBasePath(agentContext) {
-  return agentContext?.basePath || agentContext?.runtime?.basePath || "";
+  return (
+    agentContext?.environment?.workspace?.basePath ||
+    agentContext?.runtime?.basePath ||
+    ""
+  );
 }
 
 function getRuntime(agentContext) {

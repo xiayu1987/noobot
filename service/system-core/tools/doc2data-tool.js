@@ -78,7 +78,8 @@ async function buildImageBatches(imagePaths) {
 
 export function createDoc2DataTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
-  const basePath = agentContext?.basePath || runtime.basePath || "";
+  const basePath =
+    agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
   if (!basePath) return [];

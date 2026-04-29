@@ -455,7 +455,8 @@ export async function runWebToDataPipeline({
   concurrency = DEFAULT_CONCURRENCY,
 }) {
   const runtime = getRuntime(agentContext);
-  const basePath = agentContext?.basePath || runtime.basePath || "";
+  const basePath =
+    agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
   if (!basePath) {
@@ -612,7 +613,8 @@ export async function runWebToDataPipeline({
 
 export function createWeb2DataTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
-  const basePath = agentContext?.basePath || runtime.basePath || "";
+  const basePath =
+    agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const effectiveConfig = mergeConfig(
     runtime?.globalConfig || {},
     runtime?.userConfig || {},
