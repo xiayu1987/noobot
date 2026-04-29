@@ -28,6 +28,43 @@ function normalizeHistoryConnectorItems(items = []) {
   }));
 }
 
+function normalizeRuntimeConnectorItems(items = [], connectorType = "") {
+  const normalizedConnectorType = String(connectorType || "").trim();
+  return (Array.isArray(items) ? items : []).map((connectorItem) => ({
+    connector_name: String(
+      connectorItem?.connector_name || connectorItem?.connectorName || "",
+    ).trim(),
+    connector_type:
+      String(
+        connectorItem?.connector_type ||
+          connectorItem?.connectorType ||
+          normalizedConnectorType,
+      ).trim() || normalizedConnectorType,
+    connected_at: String(
+      connectorItem?.connected_at || connectorItem?.connectedAt || "",
+    ).trim(),
+    connection_meta:
+      connectorItem?.connection_meta && typeof connectorItem.connection_meta === "object"
+        ? connectorItem.connection_meta
+        : connectorItem?.connectionMeta && typeof connectorItem.connectionMeta === "object"
+          ? connectorItem.connectionMeta
+          : {},
+    status: String(connectorItem?.status || "connected").trim() || "connected",
+    status_code: Number(connectorItem?.status_code ?? connectorItem?.statusCode ?? 0),
+    status_message:
+      String(
+        connectorItem?.status_message || connectorItem?.statusMessage || "ok",
+      ).trim() || "ok",
+    checked_at: String(
+      connectorItem?.checked_at ||
+        connectorItem?.checkedAt ||
+        connectorItem?.connected_at ||
+        connectorItem?.connectedAt ||
+        "",
+    ).trim(),
+  }));
+}
+
 function mergeRuntimeAndHistoryConnectorGroup({
   runtimeConnectors = [],
   historyConnectors = [],
@@ -173,8 +210,7 @@ export async function resolveConnectorStatusSection({
     );
   if (
     !normalizedRootSessionId ||
-    !connectorChannelStore ||
-    typeof connectorChannelStore.inspectSessionConnectors !== "function"
+    !connectorChannelStore
   ) {
     return {
       root_session_id: normalizedRootSessionId,
@@ -182,10 +218,22 @@ export async function resolveConnectorStatusSection({
       current_connectors: buildCurrentConnectors(),
     };
   }
-  const inspectedConnectors = await connectorChannelStore.inspectSessionConnectors({
-    sessionId: normalizedRootSessionId,
-    timeoutMs: 6000,
-  });
+  const runtimeConnectorSnapshot =
+    typeof connectorChannelStore.getSessionConnectors === "function"
+      ? connectorChannelStore.getSessionConnectors(normalizedRootSessionId)
+      : { databases: [], terminals: [], emails: [] };
+  const runtimeDatabases = normalizeRuntimeConnectorItems(
+    runtimeConnectorSnapshot?.databases || [],
+    "database",
+  );
+  const runtimeTerminals = normalizeRuntimeConnectorItems(
+    runtimeConnectorSnapshot?.terminals || [],
+    "terminal",
+  );
+  const runtimeEmails = normalizeRuntimeConnectorItems(
+    runtimeConnectorSnapshot?.emails || [],
+    "email",
+  );
   const historyConnectors =
     connectorHistoryStore &&
     typeof connectorHistoryStore.listSessionConnectors === "function"
@@ -195,15 +243,15 @@ export async function resolveConnectorStatusSection({
         })
       : { database: [], terminal: [], email: [] };
   const mergedDatabases = mergeRuntimeAndHistoryConnectorGroup({
-    runtimeConnectors: inspectedConnectors?.connectors?.databases || [],
+    runtimeConnectors: runtimeDatabases,
     historyConnectors: historyConnectors?.database || [],
   });
   const mergedTerminals = mergeRuntimeAndHistoryConnectorGroup({
-    runtimeConnectors: inspectedConnectors?.connectors?.terminals || [],
+    runtimeConnectors: runtimeTerminals,
     historyConnectors: historyConnectors?.terminal || [],
   });
   const mergedEmails = mergeRuntimeAndHistoryConnectorGroup({
-    runtimeConnectors: inspectedConnectors?.connectors?.emails || [],
+    runtimeConnectors: runtimeEmails,
     historyConnectors: historyConnectors?.email || [],
   });
   const compactDatabases = mergedDatabases.map((connectorItem) =>

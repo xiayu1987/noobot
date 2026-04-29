@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
+let systemPromptCachePromise = null;
 
 export {
   resolveRuntimeBasePath,
@@ -17,7 +18,14 @@ export { resolveAvailableMcpServers } from "./mcp-provider.js";
 export { resolveModelSection, resolveAllEnabledProviders } from "./model-provider.js";
 
 export async function loadSystemPrompt() {
-  return readFile("./system-core/system-prompt/base.md", "utf8");
+  if (!systemPromptCachePromise) {
+    systemPromptCachePromise = readFile("./system-core/system-prompt/base.md", "utf8")
+      .catch((error) => {
+        systemPromptCachePromise = null;
+        throw error;
+      });
+  }
+  return systemPromptCachePromise;
 }
 
 export async function resolveSessionTreeWithRootSessionId({
