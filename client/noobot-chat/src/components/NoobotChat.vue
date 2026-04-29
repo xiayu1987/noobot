@@ -5,7 +5,6 @@
 -->
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
 import { Menu, MoreFilled } from "@element-plus/icons-vue";
 import MarkdownIt from "markdown-it";
 import noobotLogo from "../assets/noobot.svg";
@@ -18,6 +17,7 @@ import SessionSidebar from "./SessionSidebar.vue";
 import ChatMessageItem from "./ChatMessageItem.vue";
 import { useApiConnection } from "../composables/useApiConnection";
 import { useChatSession } from "../composables/useChatSession";
+import { useUiFeedback } from "../composables/useUiFeedback";
 
 const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
 const defaultFenceRenderer =
@@ -90,6 +90,7 @@ const mobileSidebarOpen = ref(false);
 const workspaceVisible = ref(false);
 const userSettingsVisible = ref(false);
 const configParamsVisible = ref(false);
+const { notify: notifyUi, confirmDeleteSession } = useUiFeedback();
 
 let fetchSessionsAfterConnect = async () => {};
 const {
@@ -104,6 +105,7 @@ const {
   tryAutoConnect,
 } = useApiConnection({
   userId,
+  notify: notifyUi,
   onConnected: async () => {
     await fetchSessionsAfterConnect();
   },
@@ -189,7 +191,7 @@ function closeMobileSidebar() {
 function openWorkspace() {
   if (!ensureConnected()) return;
   if (!userId.value?.trim()) {
-    ElMessage.warning("请先输入 User ID");
+    notifyUi({ type: "warning", message: "请先输入 User ID" });
     return;
   }
   workspaceVisible.value = true;
@@ -198,7 +200,7 @@ function openWorkspace() {
 function openUserSettings() {
   if (!ensureConnected()) return;
   if (!isSuperAdmin.value) {
-    ElMessage.warning("仅超级管理员可设置用户");
+    notifyUi({ type: "warning", message: "仅超级管理员可设置用户" });
     return;
   }
   userSettingsVisible.value = true;
@@ -213,7 +215,7 @@ function handleInteractionConfirm(payload = {}) {
   try {
     submitInteractionResponse(payload || {});
   } catch (error) {
-    ElMessage.error(error.message || "提交交互信息失败");
+    notifyUi({ type: "error", message: error.message || "提交交互信息失败" });
   }
 }
 
@@ -225,7 +227,7 @@ function handleInteractionCancel() {
       response: "cancelled",
     });
   } catch (error) {
-    ElMessage.error(error.message || "取消交互失败");
+    notifyUi({ type: "error", message: error.message || "取消交互失败" });
   }
 }
 
@@ -284,6 +286,7 @@ const {
   isImageMime,
   classifyRealtimeLog,
   scrollBottom,
+  notify: notifyUi,
   clearUploadSelection: () => composerRef.value?.clearUploadSelection?.(),
 });
 
@@ -296,21 +299,17 @@ function handleSelectSession(sessionId, options = {}) {
 
 async function handleDeleteSession(sessionId) {
   try {
-    await ElMessageBox.confirm("确定要删除吗？", "删除会话", {
-      confirmButtonText: "确定",
-      cancelButtonText: "取消",
-      type: "warning",
-    });
+    await confirmDeleteSession();
   } catch {
     return;
   }
   try {
     const deleted = await deleteSession(sessionId);
     if (deleted) {
-      ElMessage.success("会话已删除");
+      notifyUi({ type: "success", message: "会话已删除" });
     }
   } catch (error) {
-    ElMessage.error(error.message || "删除会话失败");
+    notifyUi({ type: "error", message: error.message || "删除会话失败" });
   }
 }
 
@@ -351,7 +350,7 @@ async function onConnectorSelected({
   try {
     await updateSessionSelectedConnector({ connectorType, connectorName });
   } catch (error) {
-    ElMessage.error(error.message || "更新连接器勾选失败");
+    notifyUi({ type: "error", message: error.message || "更新连接器勾选失败" });
   }
 }
 

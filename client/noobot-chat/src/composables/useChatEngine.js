@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ElMessage } from "element-plus";
 import { normalizeSelectedConnectors } from "../models/sessionModel";
 import { RoleEnum, StreamEventEnum } from "../constants/chatConstants";
 
@@ -71,6 +70,7 @@ export function useChatEngine({
   submitInteractionResponse,
   chatWebSocketClient,
   ensureConnected,
+  notify = () => {},
 } = {}) {
   function markPendingAssistantMessageStopped() {
     const sessionItem = activeSession.value;
@@ -324,7 +324,7 @@ export function useChatEngine({
       } else {
         botMsg.content += `\n\n> 发生错误：${botMsg.error}`;
       }
-      ElMessage.error(error.message);
+      notify({ type: "error", message: error.message || "发送失败" });
     } finally {
       sending.value = false;
       chatWebSocketClient.clearStopRequested();

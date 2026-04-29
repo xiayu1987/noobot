@@ -42,7 +42,7 @@ export function createDatabaseConnectorTools(context = {}) {
   const databaseConnectConnectorTool = new DynamicStructuredTool({
     name: "database_connect_connector",
     description:
-      "数据库连接器连接工具。输入连接器名称和数据库类型。",
+      "数据库连接器连接工具，可以创建并连接。输入连接器名称和数据库类型。",
     schema: z.object({
       connector_name: z.string().describe("连接器名称"),
       database_type: z.string().describe("数据库类型：mysql/postgres/sqlite"),

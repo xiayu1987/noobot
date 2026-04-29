@@ -12,7 +12,7 @@ export function createWaitTool() {
     name: "wait",
     description: "同步等待指定毫秒后返回（最大 1 分钟）",
     schema: z.object({
-      waitMs: z.number().int().min(0).describe("等待时间（毫秒）"),
+      waitMs: z.number().describe("等待时间（毫秒）"),
     }),
     func: async ({ waitMs }) => {
       const MAX_WAIT_MS = 1 * 60 * 1000;

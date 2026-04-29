@@ -43,6 +43,7 @@ export function useChatSession({
   isImageMime,
   classifyRealtimeLog,
   scrollBottom,
+  notify = () => {},
   clearUploadSelection = () => {},
 }) {
   const chatStore = useChatStore();
@@ -137,6 +138,7 @@ export function useChatSession({
     scrollBottom,
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     clearUploads,
+    notify,
   });
 
   const chatEngine = useChatEngine({
@@ -168,6 +170,7 @@ export function useChatSession({
     submitInteractionResponse,
     chatWebSocketClient,
     ensureConnected,
+    notify,
   });
 
   function closeMobileSidebarOnSelect(isMobileRef, mobileSidebarOpenRef) {

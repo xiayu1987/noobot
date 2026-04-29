@@ -225,28 +225,15 @@ export function createMultimodalGenerateTool({ agentContext }) {
       : typeof globalThis.fetch === "function"
         ? globalThis.fetch.bind(globalThis)
         : null;
-  const resolveGenerationContentInput = (inputGenerationContent = "") => {
-    const normalizedInputGenerationContent = String(
-      inputGenerationContent || "",
-    ).trim();
-    const runtimeCaller = String(
-      runtime?.systemRuntime?.caller || "user",
-    ).trim().toLowerCase();
-    if (runtimeCaller !== "user") return normalizedInputGenerationContent;
-    const currentTurnUserMessage = String(
-      runtime?.systemRuntime?.currentTurnUserMessage || "",
-    ).trim();
-    return currentTurnUserMessage || normalizedInputGenerationContent;
-  };
 
   const multimodalGenerateTool = new DynamicStructuredTool({
     name: "multimodal_generate",
     description:
-      "图片生成工具。根据输入的 generation_content 生成图片。注意：不要篡改添加生成内容",
+      "图片生成工具。根据输入的 generation_content 生成图片。注意：不要篡改生成内容描述",
     schema: z.object({
       generation_content: z
         .string()
-        .describe("generation content，不要篡改添加生成内容"),
+        .describe("generation content，不要篡改添加生成内容描述"),
       model_name: z
         .string()
         .optional()
@@ -257,15 +244,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         .describe("可选：图片尺寸，例如 1024x1024"),
     }),
     func: async ({ generation_content, model_name = "", image_size = "1024x1024" }) => {
-      const runtimeCaller = String(
-        runtime?.systemRuntime?.caller || "user",
-      ).trim().toLowerCase();
-      const generationContent = resolveGenerationContentInput(generation_content);
-      const generationContentSource =
-        runtimeCaller === "user" &&
-        String(runtime?.systemRuntime?.currentTurnUserMessage || "").trim()
-          ? "current_turn_user_message"
-          : "tool_input_generation_content";
+      const generationContent = String(generation_content || "").trim();
       let resolvedModelSpec = null;
       if (!generationContent) {
         return toToolJsonResult("multimodal_generate", {
@@ -347,11 +326,11 @@ export function createMultimodalGenerateTool({ agentContext }) {
         }
         const savedAttachmentRecords =
           attachmentService && userId && generatedAttachments.length
-            ? await attachmentService.ingestGeneratedArtifacts({
+              ? await attachmentService.ingestGeneratedArtifacts({
                 userId,
                 sessionId: String(
-                  runtime?.systemRuntime?.rootSessionId ||
-                    runtime?.systemRuntime?.sessionId ||
+                  runtime?.systemRuntime?.sessionId ||
+                    runtime?.systemRuntime?.rootSessionId ||
                     "",
                 ).trim(),
                 attachmentSource: "model",
@@ -376,7 +355,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             modelAlias: String(resolvedModelSpec?.alias || "").trim(),
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
-            generationContentSource,
+            generationContentSource: "tool_input_generation_content",
             attachmentMetas,
             summary: {
               generated_image_count: imageArtifacts.length,

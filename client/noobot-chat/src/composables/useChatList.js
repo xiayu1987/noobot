@@ -3,8 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ElMessage } from "element-plus";
 import { RoleEnum } from "../constants/chatConstants";
+import {
+  buildDialogProcessParentMap,
+  flattenSessionMessages,
+  mergeAttachmentMetas,
+  resolveRootDialogProcessIdByChain,
+} from "./dialogProcessChain";
 
 export function useChatList({
   userId,
@@ -28,7 +33,85 @@ export function useChatList({
   scrollBottom,
   refreshSessionConnectorsAsync,
   clearUploads,
+  notify = () => {},
 } = {}) {
+  function buildChildAttachmentMetasByParentDialogProcessId(
+    sessionDocs = [],
+    rootSessionId = "",
+    rootMessages = [],
+  ) {
+    const output = new Map();
+    const rootDialogProcessIdSet = new Set(
+      (Array.isArray(rootMessages) ? rootMessages : [])
+        .filter((messageItem) => String(messageItem?.role || "") === RoleEnum.ASSISTANT)
+        .map((messageItem) => String(messageItem?.dialogProcessId || "").trim())
+        .filter(Boolean),
+    );
+    if (!rootDialogProcessIdSet.size) return output;
+    const parentByDialogProcessId = buildDialogProcessParentMap(
+      flattenSessionMessages(sessionDocs),
+    );
+    for (const sessionDoc of Array.isArray(sessionDocs) ? sessionDocs : []) {
+      const sessionId = String(sessionDoc?.sessionId || "").trim();
+      if (!sessionId || sessionId === String(rootSessionId || "").trim()) continue;
+      const messageList = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
+      for (const messageItem of messageList) {
+        const attachmentMetas = Array.isArray(messageItem?.attachmentMetas)
+          ? messageItem.attachmentMetas
+          : [];
+        if (!attachmentMetas.length) continue;
+        const parentDialogProcessId = String(
+          messageItem?.parentDialogProcessId || "",
+        ).trim();
+        if (!parentDialogProcessId) continue;
+        const rootDialogProcessId = resolveRootDialogProcessIdByChain({
+          startDialogProcessId: parentDialogProcessId,
+          rootDialogProcessIdSet,
+          parentByDialogProcessId,
+        });
+        if (!rootDialogProcessId) continue;
+        const normalizedAttachmentMetas =
+          makeViewMessage({ attachmentMetas }).attachmentMetas || [];
+        const mergedAttachmentMetas = mergeAttachmentMetas(
+          output.get(rootDialogProcessId) || [],
+          normalizedAttachmentMetas,
+        );
+        output.set(rootDialogProcessId, mergedAttachmentMetas);
+      }
+    }
+    return output;
+  }
+
+  function mergeChildTurnAttachmentsIntoRootMessages({
+    rootMessages = [],
+    sessionDocs = [],
+    rootSessionId = "",
+  } = {}) {
+    const messages = Array.isArray(rootMessages) ? rootMessages : [];
+    if (!messages.length) return messages;
+    const childAttachmentMetasByParentDialogProcessId =
+      buildChildAttachmentMetasByParentDialogProcessId(
+        sessionDocs,
+        rootSessionId,
+        messages,
+      );
+    if (!childAttachmentMetasByParentDialogProcessId.size) return messages;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const messageItem = messages[index];
+      if (String(messageItem?.role || "") !== RoleEnum.ASSISTANT) continue;
+      const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+      if (!dialogProcessId) continue;
+      const childAttachmentMetas =
+        childAttachmentMetasByParentDialogProcessId.get(dialogProcessId) || [];
+      if (!childAttachmentMetas.length) continue;
+      messageItem.attachmentMetas = mergeAttachmentMetas(
+        messageItem?.attachmentMetas || [],
+        childAttachmentMetas,
+      );
+    }
+    return messages;
+  }
+
   function createLocalSession() {
     const id = generateSessionId();
     const newSessionItem = {
@@ -54,7 +137,7 @@ export function useChatList({
 
   function newSession() {
     if (sending.value) {
-      ElMessage.warning("发送中，暂不能新建会话");
+      notify({ type: "warning", message: "发送中，暂不能新建会话" });
       return;
     }
     createLocalSession();
@@ -133,6 +216,11 @@ export function useChatList({
 
     if (!preserveCurrentMessages) {
       sessionItem.messages = foldMessagesForView(mainSessionDoc.messages || []);
+      mergeChildTurnAttachmentsIntoRootMessages({
+        rootMessages: sessionItem.messages,
+        sessionDocs,
+        rootSessionId: detail.sessionId,
+      });
       for (const messageItem of sessionItem.messages || []) {
         const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
         if (!dialogProcessId) continue;
@@ -204,7 +292,7 @@ export function useChatList({
       const nextId = keepActive ? prevActiveId : sessions.value[0].id;
       await selectSession(nextId, { force: true });
     } catch (error) {
-      ElMessage.error(error.message || "加载会话失败");
+      notify({ type: "error", message: error.message || "加载会话失败" });
       if (!sessions.value.length) createLocalSession();
     } finally {
       loadingSessions.value = false;
@@ -218,7 +306,7 @@ export function useChatList({
     if (!target) return;
     if (!force && sessionId === activeSessionId.value) return;
     if (sending.value && activeSessionId.value && sessionId !== activeSessionId.value) {
-      ElMessage.warning("消息发送中，已保持当前会话，聊天不中断");
+      notify({ type: "warning", message: "消息发送中，已保持当前会话，聊天不中断" });
       return;
     }
 
@@ -238,7 +326,7 @@ export function useChatList({
       applySessionDetail(detail);
       refreshSessionConnectorsAsync(sessionId);
     } catch (error) {
-      ElMessage.error(error.message || "加载会话详情失败");
+      notify({ type: "error", message: error.message || "加载会话详情失败" });
     } finally {
       loadingSessionDetail.value = false;
     }
@@ -248,7 +336,7 @@ export function useChatList({
     const targetSessionId = String(sessionId || "").trim();
     if (!targetSessionId) return false;
     if (sending.value) {
-      ElMessage.warning("发送中，暂不能删除会话");
+      notify({ type: "warning", message: "发送中，暂不能删除会话" });
       return false;
     }
 

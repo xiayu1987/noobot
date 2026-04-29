@@ -4,10 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
 import { connectApi } from "../api/chatApi";
 
-export function useApiConnection({ userId, onConnected = async () => {} }) {
+export function useApiConnection({
+  userId,
+  onConnected = async () => {},
+  notify = () => {},
+}) {
   const connectCode = ref(localStorage.getItem("noobot_connect_code") || "");
   const apiKey = ref(localStorage.getItem("noobot_api_key") || "");
   const apiKeyUserId = ref(localStorage.getItem("noobot_api_user_id") || "");
@@ -60,7 +63,7 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
 
   function ensureConnected() {
     if (connected.value) return true;
-    ElMessage.warning("请先输入用户名和连接码，点击连接");
+    notify({ type: "warning", message: "请先输入用户名和连接码，点击连接" });
     return false;
   }
 
@@ -82,11 +85,11 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
   async function connectBackend({ silent = false } = {}) {
     if (connecting.value) return;
     if (!userId.value.trim()) {
-      if (!silent) ElMessage.warning("请先输入用户名");
+      if (!silent) notify({ type: "warning", message: "请先输入用户名" });
       return;
     }
     if (!connectCode.value.trim()) {
-      if (!silent) ElMessage.warning("请输入连接码");
+      if (!silent) notify({ type: "warning", message: "请输入连接码" });
       return;
     }
     connecting.value = true;
@@ -104,12 +107,12 @@ export function useApiConnection({ userId, onConnected = async () => {} }) {
       apiRole.value = String(data.role || "user");
       persistApiAuth();
       persistConnectProfile();
-      if (!silent) ElMessage.success("连接成功");
+      if (!silent) notify({ type: "success", message: "连接成功" });
       await onConnected();
       return true;
     } catch (error) {
       clearApiAuth();
-      if (!silent) ElMessage.error(error.message || "连接失败");
+      if (!silent) notify({ type: "error", message: error.message || "连接失败" });
       return false;
     } finally {
       connecting.value = false;

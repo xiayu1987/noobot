@@ -513,8 +513,8 @@ function buildAccessConnectorTool(context = {}) {
       const sourceArtifacts = Array.isArray(artifacts) ? artifacts : [];
       if (!sourceArtifacts.length) return [];
       const runtimeSessionId = String(
-        runtime?.systemRuntime?.rootSessionId ||
-          runtime?.systemRuntime?.sessionId ||
+        runtime?.systemRuntime?.sessionId ||
+          runtime?.systemRuntime?.rootSessionId ||
           "",
       ).trim();
       const generationSource = String(
