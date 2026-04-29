@@ -29,6 +29,7 @@ import {
   initializeRuntimeEnvironment,
 } from "./runtime-environment-builder.js";
 import { composeSystemInfoSections } from "./system-prompt-formatter.js";
+import { mapToAgentContextSchema } from "./agent-context-mapper.js";
 
 export class ContextBuilder {
   constructor(input = {}) {
@@ -201,101 +202,20 @@ export class ContextBuilder {
     });
     await initializeRuntimeEnvironment(runtime);
 
-    const systemRuntime = runtime?.systemRuntime || {};
-    const selectedConnectorsSource =
-      systemRuntime?.config?.selectedConnectors &&
-      typeof systemRuntime.config.selectedConnectors === "object"
-        ? systemRuntime.config.selectedConnectors
-        : {};
-    const selectedConnectors = Object.fromEntries(
-      Object.entries(selectedConnectorsSource)
-        .map(([connectorType, connectorName]) => [
-          String(connectorType || "").trim(),
-          String(connectorName || "").trim(),
-        ])
-        .filter(([connectorType]) => Boolean(connectorType)),
-    );
-    const agentContext = {
-      environment: {
-        os: {
-          platform: staticAgentContext.platform || process.platform,
-          arch: staticAgentContext.arch || process.arch,
-          timezone:
-            staticAgentContext.timezone ||
-            Intl.DateTimeFormat().resolvedOptions().timeZone ||
-            "",
-          nodeVersion: staticAgentContext.nodeVersion || process.version,
-        },
-        workspace: {
-          cwd: staticAgentContext.cwd || process.cwd(),
-          basePath: staticAgentContext.basePath || "",
-          workspaceDirectories: Array.isArray(staticAgentContext.workspaceDirectories)
-            ? staticAgentContext.workspaceDirectories
-            : [],
-          globalDefaults:
-            staticAgentContext.globalDefaults &&
-            typeof staticAgentContext.globalDefaults === "object"
-              ? staticAgentContext.globalDefaults
-              : { workspaceRoot: this.globalConfig?.workspaceRoot || "" },
-        },
-        identity: {
-          userId: staticAgentContext.userId || this.userId || "",
-        },
-      },
-      execution: {
-        dialogProcessId: String(systemRuntime?.dialogProcessId || dialogProcessId || "").trim(),
-        timestamp: String(systemRuntime?.now || this._now()).trim(),
-        flags: {
-          allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
-          maxToolLoopTurns: Number(systemRuntime?.config?.maxToolLoopTurns || 0),
-        },
-        models: {
-          runtimeModel: String(runtime?.runtimeModel || "").trim(),
-          allEnabledProviders:
-            runtime?.allEnabledProviders &&
-            typeof runtime.allEnabledProviders === "object"
-              ? runtime.allEnabledProviders
-              : {},
-        },
-        controllers: {
-          abortSignal: runtime?.abortSignal || null,
-          parentAsyncResultContainer: runtime?.parentAsyncResultContainer || null,
-          runtime,
-        },
-      },
-      session: {
-        root: {
-          id: String(systemRuntime?.rootSessionId || resolvedRootSessionId || "").trim(),
-          tree: systemRuntime?.sessionTree || resolvedSessionTree || {},
-          sharedState: {},
-        },
-        parent: {
-          id: String(systemRuntime?.parentSessionId || this.parentSessionId || "").trim(),
-          caller: String(systemRuntime?.caller || this.caller || "user").trim(),
-        },
-        current: {
-          id: String(systemRuntime?.sessionId || this.sessionId || "").trim(),
-          attachments: Array.isArray(runtime?.attachmentMetas)
-            ? runtime.attachmentMetas
-            : [],
-          connectors: selectedConnectors,
-          turnStore: {
-            currentTurnMessages: runtime?.currentTurnMessages || null,
-            currentTurnTasks: runtime?.currentTurnTasks || null,
-          },
-        },
-      },
-      payload: {
-        messages: {
-          system: Array.isArray(systemMessages) ? systemMessages : [],
-          history: Array.isArray(conversationMessages) ? conversationMessages : [],
-        },
-        tools: {
-          registry: [],
-          shared: runtime?.sharedTools || {},
-        },
-      },
-    };
+    const agentContext = mapToAgentContextSchema({
+      staticAgentContext,
+      runtime,
+      dialogProcessId,
+      resolvedRootSessionId,
+      resolvedSessionTree,
+      sessionId: this.sessionId,
+      parentSessionId: this.parentSessionId,
+      caller: this.caller,
+      now: this._now(),
+      systemMessages,
+      conversationMessages,
+      globalConfig: this.globalConfig,
+    });
     const builtTools = await buildTools({
       sessionId: this.sessionId || "",
       parentSessionId: this.parentSessionId || "",
