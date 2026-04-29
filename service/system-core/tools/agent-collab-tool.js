@@ -50,11 +50,38 @@ function cloneData(value) {
 function normalizeString(value = "") {
   return String(value || "").trim();
 }
+
+function normalizeSelectedConnectors(selectedConnectors = {}) {
+  const source =
+    selectedConnectors && typeof selectedConnectors === "object"
+      ? selectedConnectors
+      : {};
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([connectorType, connectorName]) => [
+        String(connectorType || "").trim(),
+        String(connectorName || "").trim(),
+      ])
+      .filter(([connectorType]) => Boolean(connectorType)),
+  );
+}
 export function createAgentCollabTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const systemRuntime = runtime.systemRuntime || {};
   const runConfig = {
     allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
+    selectedConnectors: normalizeSelectedConnectors(
+      systemRuntime?.config?.selectedConnectors || {},
+    ),
+    runtimeModel: String(runtime?.runtimeModel || "").trim(),
+    ...(Number.isFinite(Number(systemRuntime?.config?.maxToolLoopTurns)) &&
+    Number(systemRuntime?.config?.maxToolLoopTurns) > 0
+      ? { maxToolLoopTurns: Math.floor(Number(systemRuntime.config.maxToolLoopTurns)) }
+      : {}),
+    sharedTools:
+      runtime?.sharedTools && typeof runtime.sharedTools === "object"
+        ? runtime.sharedTools
+        : {},
   };
   const botManager = runtime.botManager || null;
   const userId = agentContext?.userId || runtime.userId || "";
@@ -62,6 +89,7 @@ export function createAgentCollabTool({ agentContext }) {
   const abortSignal = runtime.abortSignal || null;
   const userInteractionBridge = runtime.userInteractionBridge || null;
   const sourceDialogProcessId = systemRuntime.dialogProcessId || "";
+  const sourceSessionId = String(systemRuntime?.sessionId || "").trim();
   const rootSessionId = String(systemRuntime?.rootSessionId || "").trim();
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
@@ -342,8 +370,8 @@ export function createAgentCollabTool({ agentContext }) {
     if (!attachmentService || !userId) return [];
     const parentSessionId = String(container?.parentSessionId || "").trim();
     const attachmentSessionId = String(
-      runtime?.systemRuntime?.rootSessionId ||
-        runtime?.systemRuntime?.sessionId ||
+      runtime?.systemRuntime?.sessionId ||
+        runtime?.systemRuntime?.rootSessionId ||
         rootSessionId ||
         parentSessionId ||
         "",
@@ -438,27 +466,46 @@ export function createAgentCollabTool({ agentContext }) {
   const delegateTaskAsync = new DynamicStructuredTool({
     name: "delegate_task_async",
     description:
-      "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含taskName、taskContent。汇总结果并返回。",
+      "多agent协助：异步并发执行多个子任务。自动使用当前会话ID与当前对话轮ID作为父级上下文。",
     schema: z.object({
-      parentSessionId: z.string().describe("父会话ID（UUID）"),
-      parentDialogProcessId: z
-        .string()
-        .describe(
-          "父会话中的对话流程ID（必须存在于 parentSessionId 的消息中）",
-        ),
       tasks: z.array(delegateTaskItemSchema).min(1).describe("并发子任务列表"),
     }),
-    func: async ({ parentSessionId, parentDialogProcessId, tasks }) => {
+    func: async ({ tasks }) => {
       if (!botManager || !userId)
         return toToolJsonResult("delegate_task_async", {
           ok: false,
           error: "runtime missing bot manager/user id",
         });
-      const validatedParent = await assertValidParentDialogProcessId({
-        parentSessionId,
-        parentDialogProcessId,
-        agentContext,
-      });
+      const resolveValidatedParent = async () => {
+        const normalizedParentSessionId = normalizeString(sourceSessionId);
+        if (!normalizedParentSessionId) {
+          throw recoverableToolError("runtime sessionId missing", {
+            code: "RECOVERABLE_INPUT_MISSING",
+            details: {
+              field: "runtime.systemRuntime.sessionId",
+              hint: "delegate_task_async requires current session context",
+            },
+          });
+        }
+        const normalizedParentDialogProcessId = normalizeString(
+          sourceDialogProcessId,
+        );
+        if (!normalizedParentDialogProcessId) {
+          throw recoverableToolError("runtime dialogProcessId missing", {
+            code: "RECOVERABLE_INPUT_MISSING",
+            details: {
+              field: "runtime.systemRuntime.dialogProcessId",
+              hint: "delegate_task_async requires current dialog process context",
+            },
+          });
+        }
+        return assertValidParentDialogProcessId({
+          parentSessionId: normalizedParentSessionId,
+          parentDialogProcessId: normalizedParentDialogProcessId,
+          agentContext,
+        });
+      };
+      const validatedParent = await resolveValidatedParent();
       const normalizedParentSessionId = validatedParent.parentSessionId;
       const normalizedParentDialogProcessId =
         validatedParent.parentDialogProcessId;
@@ -606,10 +653,8 @@ export function createAgentCollabTool({ agentContext }) {
         normalizedPollIntervalMs > 0
           ? Math.floor(normalizedPollIntervalMs)
           : Math.max(1000, Math.floor(defaultPollIntervalMs || 5000));
-      const singleWaitMs = Math.max(
-        1000,
-        Math.min(resolvedTimeoutMs, resolvedPollIntervalMs),
-      );
+      // 等待单次子任务结果时，优先使用 timeoutMs，避免因轮询窗口过短导致上层工具循环提前耗尽。
+      const singleWaitMs = Math.max(1000, resolvedTimeoutMs);
       const containerResults = await Promise.all(
         containers.map(async (containerItem = {}) => {
           const containerId = String(containerItem?.id || "").trim();

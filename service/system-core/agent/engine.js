@@ -200,8 +200,8 @@ async function persistModelGeneratedArtifacts({
   const savedRecords = await attachmentService.ingestGeneratedArtifacts({
     userId,
     sessionId: String(
-      runtime?.systemRuntime?.rootSessionId ||
-        runtime?.systemRuntime?.sessionId ||
+      runtime?.systemRuntime?.sessionId ||
+        runtime?.systemRuntime?.rootSessionId ||
         "",
     ).trim(),
     attachmentSource: "model",

@@ -41,7 +41,7 @@ export function createEmailConnectorTools(context = {}) {
   const emailConnectConnectorTool = new DynamicStructuredTool({
     name: "email_connect_connector",
     description:
-      "邮件连接器连接工具。用于配置 SMTP/IMAP 连接，可后续通过 access_connector 收发邮件。",
+      "邮件连接器连接工具，可以创建并连接。用于配置 SMTP/IMAP 连接，可后续通过 access_connector 收发邮件。",
     schema: z.object({
       connector_name: z.string().describe("连接器名称"),
       default_values: z

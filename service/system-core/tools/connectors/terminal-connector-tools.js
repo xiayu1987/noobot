@@ -42,7 +42,7 @@ export function createTerminalConnectorTools(context = {}) {
   const terminalConnectConnectorTool = new DynamicStructuredTool({
     name: "terminal_connect_connector",
     description:
-      "终端连接器连接工具。输入连接器名称和终端类型。",
+      "终端连接器连接工具，可以创建并连接。输入连接器名称和终端类型。",
     schema: z.object({
       connector_name: z.string().describe("连接器名称"),
       terminal_type: z.string().describe("终端类型：ssh"),

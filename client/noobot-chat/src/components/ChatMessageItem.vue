@@ -19,6 +19,11 @@ import {
   copyMarkdownRichAsHtmlPage,
   copyMarkdownText,
 } from "../utils/markdown-copy";
+import {
+  collectRelatedDialogProcessIds,
+  flattenSessionMessages,
+  mergeAttachmentMetas,
+} from "../composables/dialogProcessChain";
 
 const props = defineProps({
   messageItem: { type: Object, required: true },
@@ -460,13 +465,14 @@ const writtenFiles = computed(() => {
   if (!dialogProcessId) return [];
   const out = [];
   const seen = new Set();
-  const relatedDialogIds = new Set([dialogProcessId]);
   const candidateMessages = [
     ...(Array.isArray(props.allMessages) ? props.allMessages : []),
-    ...((Array.isArray(props.sessionDocs) ? props.sessionDocs : []).flatMap((sessionDoc) =>
-      Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [],
-    )),
+    ...flattenSessionMessages(props.sessionDocs),
   ];
+  const relatedDialogIds = collectRelatedDialogProcessIds(
+    candidateMessages,
+    dialogProcessId,
+  );
 
   const addCandidate = (sessionMessage = {}) => {
     const parsed = parseToolFileResult(sessionMessage?.content || "");
@@ -482,21 +488,6 @@ const writtenFiles = computed(() => {
       relativePath,
     });
   };
-
-  // 递归收集后代：子 session、子 session 的子 session ...（按 parentDialogProcessId 链路）
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const sessionMessage of candidateMessages) {
-      const parentId = String(sessionMessage?.parentDialogProcessId || "").trim();
-      const childDialogId = String(sessionMessage?.dialogProcessId || "").trim();
-      if (!parentId || !childDialogId) continue;
-      if (!relatedDialogIds.has(parentId)) continue;
-      if (relatedDialogIds.has(childDialogId)) continue;
-      relatedDialogIds.add(childDialogId);
-      changed = true;
-    }
-  }
 
   // 收集当前轮次 + 全部后代链路上的工具产物文件
   for (const sessionMessage of candidateMessages) {
@@ -521,59 +512,6 @@ const messageModelLabel = computed(() => {
   return modelAlias || modelName || "";
 });
 
-function mergeAttachmentMetas(existingAttachmentMetas = [], incomingAttachmentMetas = []) {
-  const existingList = Array.isArray(existingAttachmentMetas)
-    ? existingAttachmentMetas
-    : [];
-  const incomingList = Array.isArray(incomingAttachmentMetas)
-    ? incomingAttachmentMetas
-    : [];
-  if (!incomingList.length) return existingList;
-  const mergedList = [...existingList];
-  const existingKeySet = new Set(
-    existingList.map((attachmentItem) =>
-      String(
-        attachmentItem?.attachmentId ||
-          `${attachmentItem?.name || ""}|${attachmentItem?.size || 0}`,
-      ).trim(),
-    ),
-  );
-  for (const attachmentItem of incomingList) {
-    const attachmentKey = String(
-      attachmentItem?.attachmentId ||
-        `${attachmentItem?.name || ""}|${attachmentItem?.size || 0}`,
-    ).trim();
-    if (!attachmentKey || existingKeySet.has(attachmentKey)) continue;
-    existingKeySet.add(attachmentKey);
-    mergedList.push(attachmentItem);
-  }
-  return mergedList;
-}
-
-function collectRelatedDialogProcessIds(candidateMessages = [], rootDialogProcessId = "") {
-  const normalizedRootDialogProcessId = String(rootDialogProcessId || "").trim();
-  if (!normalizedRootDialogProcessId) return new Set();
-  const relatedDialogProcessIdSet = new Set([normalizedRootDialogProcessId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const sessionMessage of candidateMessages) {
-      const parentDialogProcessId = String(
-        sessionMessage?.parentDialogProcessId || "",
-      ).trim();
-      const childDialogProcessId = String(
-        sessionMessage?.dialogProcessId || "",
-      ).trim();
-      if (!parentDialogProcessId || !childDialogProcessId) continue;
-      if (!relatedDialogProcessIdSet.has(parentDialogProcessId)) continue;
-      if (relatedDialogProcessIdSet.has(childDialogProcessId)) continue;
-      relatedDialogProcessIdSet.add(childDialogProcessId);
-      changed = true;
-    }
-  }
-  return relatedDialogProcessIdSet;
-}
-
 const displayedAttachmentMetas = computed(() => {
   const baseAttachmentMetas = Array.isArray(props.messageItem?.attachmentMetas)
     ? props.messageItem.attachmentMetas
@@ -586,9 +524,7 @@ const displayedAttachmentMetas = computed(() => {
 
   const candidateMessages = [
     ...(Array.isArray(props.allMessages) ? props.allMessages : []),
-    ...((Array.isArray(props.sessionDocs) ? props.sessionDocs : []).flatMap((sessionDoc) =>
-      Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [],
-    )),
+    ...flattenSessionMessages(props.sessionDocs),
   ];
   const relatedDialogProcessIdSet = collectRelatedDialogProcessIds(
     candidateMessages,
