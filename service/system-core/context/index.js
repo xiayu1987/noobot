@@ -86,6 +86,8 @@ export class ContextBuilder {
     this.abortSignal = abortSignal;
     this.parentAsyncResultContainer = parentAsyncResultContainer;
     this._effectiveConfigCache = null;
+    this._runtimeBasePathCache = "";
+    this._workspaceDirectoriesPromise = null;
   }
 
   _now() {
@@ -99,10 +101,19 @@ export class ContextBuilder {
   }
 
   _resolveRuntimeBasePath() {
-    return resolveRuntimeBasePath({
+    if (this._runtimeBasePathCache) return this._runtimeBasePathCache;
+    this._runtimeBasePathCache = resolveRuntimeBasePath({
       userId: this.userId,
       globalConfig: this.globalConfig,
     });
+    return this._runtimeBasePathCache;
+  }
+
+  async _resolveWorkspaceDirectoriesCached(runtimeBasePath = "") {
+    if (!this._workspaceDirectoriesPromise) {
+      this._workspaceDirectoriesPromise = resolveWorkspaceDirectories(runtimeBasePath);
+    }
+    return this._workspaceDirectoriesPromise;
   }
 
   async _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
@@ -126,7 +137,9 @@ export class ContextBuilder {
       globalDefaults: staticInfo.globalDefaults || {
         workspaceRoot: this.globalConfig?.workspaceRoot || "",
       },
-      workspaceDirectories: await resolveWorkspaceDirectories(resolvedBasePath),
+      workspaceDirectories: await this._resolveWorkspaceDirectoriesCached(
+        resolvedBasePath,
+      ),
     };
   }
 
@@ -261,7 +274,7 @@ export class ContextBuilder {
           userId: this.userId,
           sessionId: this.sessionId,
         }),
-        resolveWorkspaceDirectories(runtimeBasePath),
+        this._resolveWorkspaceDirectoriesCached(runtimeBasePath),
         resolveSessionTreeWithRootSessionId({
           runtimeBasePath,
           sessionManager: this.sessionManager,
