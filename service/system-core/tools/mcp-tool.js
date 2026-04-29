@@ -27,6 +27,21 @@ function isAbortError(error) {
   );
 }
 
+function normalizeSelectedConnectors(selectedConnectors = {}) {
+  const source =
+    selectedConnectors && typeof selectedConnectors === "object"
+      ? selectedConnectors
+      : {};
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([connectorType, connectorName]) => [
+        String(connectorType || "").trim(),
+        String(connectorName || "").trim(),
+      ])
+      .filter(([connectorType]) => Boolean(connectorType)),
+  );
+}
+
 export function createMcpTool({ agentContext }) {
   const callMcpTaskTool = new DynamicStructuredTool({
     name: "call_mcp_task",
@@ -63,8 +78,13 @@ export function createMcpTool({ agentContext }) {
         systemRuntime?.dialogProcessId || "",
       ).trim();
       const resolvedModelName = String(modelName || "").trim();
-      const allowUserInteraction =
-        systemRuntime?.config?.allowUserInteraction !== false;
+  const allowUserInteraction =
+    systemRuntime?.config?.allowUserInteraction !== false;
+  const maxToolLoopTurns = Number(
+    effectiveConfig?.tools?.call_mcp_task?.max_tool_loop_turns ??
+      effectiveConfig?.tools?.call_mcp_task?.maxToolLoopTurns ??
+      6,
+  );
       try {
         if (!botManager || !userId || !sessionId) {
           return jsonError({
@@ -106,11 +126,18 @@ export function createMcpTool({ agentContext }) {
           userInteractionBridge,
           runConfig: {
             allowUserInteraction,
+            selectedConnectors: normalizeSelectedConnectors(
+              runtime?.systemRuntime?.config?.selectedConnectors || {},
+            ),
             toolPolicy: {
               mode: "custom_only",
               customTools: mcpToolset.tools,
             },
             runtimeModel: resolvedModelName || "",
+            maxToolLoopTurns:
+              Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
+                ? Math.floor(maxToolLoopTurns)
+                : 6,
             sharedTools:
               runtime?.sharedTools && typeof runtime.sharedTools === "object"
                 ? runtime.sharedTools

@@ -28,6 +28,21 @@ function isAbortError(error) {
   );
 }
 
+function normalizeSelectedConnectors(selectedConnectors = {}) {
+  const source =
+    selectedConnectors && typeof selectedConnectors === "object"
+      ? selectedConnectors
+      : {};
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([connectorType, connectorName]) => [
+        String(connectorType || "").trim(),
+        String(connectorName || "").trim(),
+      ])
+      .filter(([connectorType]) => Boolean(connectorType)),
+  );
+}
+
 export function createContentProcessTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
   const effectiveConfig = mergeConfig(
@@ -120,6 +135,9 @@ export function createContentProcessTool({ agentContext }) {
           userInteractionBridge,
           runConfig: {
             allowUserInteraction,
+            selectedConnectors: normalizeSelectedConnectors(
+              runtime?.systemRuntime?.config?.selectedConnectors || {},
+            ),
             toolPolicy: {
               mode: "custom_only",
               customTools: contentProcessTools,
