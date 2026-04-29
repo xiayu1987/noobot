@@ -118,6 +118,37 @@ body {
   --noobot-thinking-tab-bar: #6f88c9;
 }
 
+/* 预览弹框主色调（全局，适配 teleported el-dialog） */
+.attachment-preview-dialog,
+.generated-file-preview-dialog {
+  background: #0f1420 !important;
+  border: 1px solid #2a3040 !important;
+}
+
+.attachment-preview-dialog .el-dialog__header,
+.generated-file-preview-dialog .el-dialog__header {
+  margin-right: 0 !important;
+  padding: 14px 18px !important;
+  background: #141b2b !important;
+  border-bottom: 1px solid #2a3040 !important;
+}
+
+.attachment-preview-dialog .el-dialog__title,
+.generated-file-preview-dialog .el-dialog__title {
+  color: #dce2f5 !important;
+  font-weight: 600 !important;
+}
+
+.attachment-preview-dialog .el-dialog__headerbtn .el-dialog__close,
+.generated-file-preview-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: #9fb3e8 !important;
+}
+
+.attachment-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close,
+.generated-file-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: #dce2f5 !important;
+}
+
 /* 统一功能性按钮基类 */
 .noobot-action-btn {
   border-radius: var(--noobot-btn-radius) !important;

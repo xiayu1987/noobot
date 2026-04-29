@@ -206,10 +206,6 @@ function openUserSettings() {
 
 function openConfigParams() {
   if (!ensureConnected()) return;
-  if (!isSuperAdmin.value) {
-    ElMessage.warning("仅超级管理员可配置参数");
-    return;
-  }
   configParamsVisible.value = true;
 }
 
@@ -430,7 +426,6 @@ function handleHeaderAction(command = "") {
             用户设置
           </el-button>
           <el-button
-            v-if="isSuperAdmin"
             class="workspace-btn noobot-action-btn"
             @click="openConfigParams"
           >
@@ -454,7 +449,7 @@ function handleHeaderAction(command = "") {
               <el-dropdown-item v-if="isSuperAdmin" command="user-settings"
                 >用户设置</el-dropdown-item
               >
-              <el-dropdown-item v-if="isSuperAdmin" command="config-params"
+              <el-dropdown-item command="config-params"
                 >参数配置</el-dropdown-item
               >
             </el-dropdown-menu>
@@ -567,6 +562,8 @@ function handleHeaderAction(command = "") {
       class="workspace-drawer"
     >
       <ConfigParamsPanel
+        :user-id="userId"
+        :is-super-admin="isSuperAdmin"
         :api-key="apiKey"
         :connected="connected"
         :active="configParamsVisible"

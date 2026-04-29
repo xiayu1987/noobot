@@ -13,13 +13,24 @@ const props = defineProps({
   apiKey: { type: String, default: "" },
   connected: { type: Boolean, default: false },
   active: { type: Boolean, default: false },
+  userId: { type: String, default: "" },
+  isSuperAdmin: { type: Boolean, default: false },
 });
 
+const activeScope = ref("user");
 const loading = ref(false);
 const saving = ref(false);
 const params = ref([]);
 const paramsJsonDraft = ref("");
 const jsonParseError = ref("");
+const activeScopeLabel = computed(() =>
+  activeScope.value === "system" ? "系统参数" : "用户参数",
+);
+const activeScopeFilePath = computed(() =>
+  activeScope.value === "system"
+    ? "workspace/config-params.json"
+    : `workspace/${String(props.userId || "").trim() || "<user>"}/config-params.json`,
+);
 
 function authHeaders(extra = {}) {
   return {
@@ -118,11 +129,11 @@ function removeParamRow(index) {
   params.value.splice(index, 1);
 }
 
-async function loadParams() {
+async function loadParams(scope = activeScope.value) {
   if (!props.connected || !props.apiKey) return;
   loading.value = true;
   try {
-    const res = await getConfigParamsApi({ fetcher: authFetch });
+    const res = await getConfigParamsApi({ scope, fetcher: authFetch });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "加载参数失败");
     params.value = paramsListFromApi({
@@ -140,13 +151,20 @@ async function loadParams() {
 
 async function saveParams() {
   if (!props.connected || !props.apiKey) return;
+  if (activeScope.value === "system" && !props.isSuperAdmin) {
+    ElMessage.warning("普通用户不能保存系统参数");
+    return;
+  }
   saving.value = true;
   try {
     if (!syncParamsFromJsonDraft()) {
       throw new Error("请先修正右侧 JSON 格式错误");
     }
     const values = toValuesObject(params.value);
-    const res = await putConfigParamsApi({ values }, { fetcher: authFetch });
+    const res = await putConfigParamsApi(
+      { scope: activeScope.value, values },
+      { fetcher: authFetch },
+    );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "保存参数失败");
     params.value = paramsListFromApi({
@@ -163,6 +181,11 @@ async function saveParams() {
   }
 }
 
+function onScopeChanged(scope = "user") {
+  activeScope.value = String(scope || "user") === "system" ? "system" : "user";
+  loadParams(activeScope.value);
+}
+
 function handleEditorAction(command = "") {
   if (command === "save") saveParams();
 }
@@ -170,7 +193,7 @@ function handleEditorAction(command = "") {
 watch(
   () => props.active,
   (visible) => {
-    if (visible) loadParams();
+    if (visible) loadParams(activeScope.value);
   },
   { immediate: true },
 );
@@ -178,14 +201,23 @@ watch(
 watch(
   () => props.apiKey,
   () => {
-    if (props.active && props.connected) loadParams();
+    if (props.active && props.connected) loadParams(activeScope.value);
   },
 );
 
 watch(
   () => props.connected,
   (isConnected) => {
-    if (isConnected && props.active) loadParams();
+    if (isConnected && props.active) loadParams(activeScope.value);
+  },
+);
+
+watch(
+  () => props.isSuperAdmin,
+  (isSuperAdmin) => {
+    if (!isSuperAdmin && activeScope.value === "system") {
+      onScopeChanged("user");
+    }
   },
 );
 
@@ -201,79 +233,161 @@ watch(
 </script>
 
 <template>
-  <div class="workspace-layout" v-loading="loading" element-loading-background="rgba(11, 13, 18, 0.8)">
-    <div class="workspace-panel">
-      <div class="panel-head">
-        <span class="panel-title">参数列表</span>
-        <div class="tree-actions">
-          <el-button class="icon-btn" size="small" text @click="addParamRow" title="新增参数">
-            <el-icon><Plus /></el-icon>
-          </el-button>
-        </div>
-      </div>
-      <div class="panel-body">
-        <el-scrollbar class="tree-scroll">
-          <div class="users-list">
-            <div v-for="(item, idx) in params" :key="idx" class="user-row">
-              <div class="row-header">
-                <span class="user-idx">Param {{ idx + 1 }}</span>
-                <el-button class="icon-btn danger-text" size="small" text @click="removeParamRow(idx)">✕</el-button>
+  <el-tabs v-model="activeScope" class="settings-tabs" @tab-change="onScopeChanged">
+    <el-tab-pane label="用户参数" name="user">
+      <div class="workspace-layout" v-loading="loading" element-loading-background="rgba(11, 13, 18, 0.8)">
+        <div class="workspace-panel">
+          <div class="panel-head">
+            <span class="panel-title">{{ activeScopeLabel }}列表</span>
+            <div class="tree-actions">
+              <el-button class="icon-btn" size="small" text @click="addParamRow" title="新增参数">
+                <el-icon><Plus /></el-icon>
+              </el-button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <el-scrollbar class="tree-scroll">
+              <div class="users-list">
+                <div v-for="(item, idx) in params" :key="idx" class="user-row">
+                  <div class="row-header">
+                    <span class="user-idx">Param {{ idx + 1 }}</span>
+                    <el-button class="icon-btn danger-text" size="small" text @click="removeParamRow(idx)">✕</el-button>
+                  </div>
+                  <el-input v-model="item.key" placeholder="参数名（如 DASHSCOPE_API_KEY）" clearable class="row-input" />
+                  <el-input v-model="item.value" placeholder="参数值" clearable class="row-input" />
+                </div>
+                <div v-if="!params.length" class="empty-tip list-empty-tip">
+                  <div class="empty-icon">🔐</div>
+                  <p>暂无参数，请点击右上角新增</p>
+                </div>
               </div>
-              <el-input v-model="item.key" placeholder="参数名（如 DASHSCOPE_API_KEY）" clearable class="row-input" />
-              <el-input v-model="item.value" placeholder="参数值" clearable class="row-input" />
-            </div>
-            <div v-if="!params.length" class="empty-tip list-empty-tip">
-              <div class="empty-icon">🔐</div>
-              <p>暂无参数，请点击右上角新增</p>
-            </div>
+            </el-scrollbar>
           </div>
-        </el-scrollbar>
-      </div>
-    </div>
+        </div>
 
-    <div class="workspace-panel workspace-editor">
-      <div class="panel-head">
-        <div class="file-info">
-          <span class="active-file" title="workspace/config-params.json">workspace/config-params.json</span>
-        </div>
-        <div class="editor-actions">
-          <div class="desktop-actions">
-            <el-button type="primary" class="primary-btn" size="small" @click="saveParams" :loading="saving">
-              保存
-            </el-button>
+        <div class="workspace-panel workspace-editor">
+          <div class="panel-head">
+            <div class="file-info">
+              <span class="active-file" :title="activeScopeFilePath">{{ activeScopeFilePath }}</span>
+            </div>
+            <div class="editor-actions">
+              <div class="desktop-actions">
+                <el-button type="primary" class="primary-btn" size="small" @click="saveParams" :loading="saving">
+                  保存
+                </el-button>
+              </div>
+              <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
+                <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="save">保存</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </div>
-          <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
-            <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="save">保存</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <div class="panel-body editor-body">
+            <div v-if="jsonParseError" class="json-error">⚠️ {{ jsonParseError }}</div>
+            <el-input
+              v-model="paramsJsonText"
+              type="textarea"
+              resize="none"
+              class="editor-input"
+              spellcheck="false"
+              placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
+            />
+          </div>
         </div>
       </div>
-      <div class="panel-body editor-body">
-        <div v-if="jsonParseError" class="json-error">⚠️ {{ jsonParseError }}</div>
-        <el-input
-          v-model="paramsJsonText"
-          type="textarea"
-          resize="none"
-          class="editor-input"
-          spellcheck="false"
-          placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
-        />
+    </el-tab-pane>
+    <el-tab-pane v-if="isSuperAdmin" label="系统参数" name="system">
+      <div class="workspace-layout" v-loading="loading" element-loading-background="rgba(11, 13, 18, 0.8)">
+        <div class="workspace-panel">
+          <div class="panel-head">
+            <span class="panel-title">{{ activeScopeLabel }}列表</span>
+            <div class="tree-actions">
+              <el-button class="icon-btn" size="small" text @click="addParamRow" title="新增参数">
+                <el-icon><Plus /></el-icon>
+              </el-button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <el-scrollbar class="tree-scroll">
+              <div class="users-list">
+                <div v-for="(item, idx) in params" :key="idx" class="user-row">
+                  <div class="row-header">
+                    <span class="user-idx">Param {{ idx + 1 }}</span>
+                    <el-button class="icon-btn danger-text" size="small" text @click="removeParamRow(idx)">✕</el-button>
+                  </div>
+                  <el-input v-model="item.key" placeholder="参数名（如 DASHSCOPE_API_KEY）" clearable class="row-input" />
+                  <el-input v-model="item.value" placeholder="参数值" clearable class="row-input" />
+                </div>
+                <div v-if="!params.length" class="empty-tip list-empty-tip">
+                  <div class="empty-icon">🔐</div>
+                  <p>暂无参数，请点击右上角新增</p>
+                </div>
+              </div>
+            </el-scrollbar>
+          </div>
+        </div>
+        <div class="workspace-panel workspace-editor">
+          <div class="panel-head">
+            <div class="file-info">
+              <span class="active-file" :title="activeScopeFilePath">{{ activeScopeFilePath }}</span>
+            </div>
+            <div class="editor-actions">
+              <div class="desktop-actions">
+                <el-button type="primary" class="primary-btn" size="small" @click="saveParams" :loading="saving">
+                  保存
+                </el-button>
+              </div>
+              <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
+                <el-button class="tail-btn noobot-action-btn" :icon="MoreFilled" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="save">保存</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+          <div class="panel-body editor-body">
+            <div v-if="jsonParseError" class="json-error">⚠️ {{ jsonParseError }}</div>
+            <el-input
+              v-model="paramsJsonText"
+              type="textarea"
+              resize="none"
+              class="editor-input"
+              spellcheck="false"
+              placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
+            />
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
+    </el-tab-pane>
+  </el-tabs>
 </template>
 
 <style scoped>
+/* Tabs 样式适配 */
+.settings-tabs {
+  height: calc(100vh - 80px);
+}
+
+.settings-tabs :deep(.el-tabs__content) {
+  height: calc(100% - 44px);
+}
+
+.settings-tabs :deep(.el-tab-pane) {
+  height: 100%;
+}
+
 /* 整体布局 */
 .workspace-layout {
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 16px;
-  height: calc(100vh - 80px);
+  height: 100%;
   padding: 0 4px 16px 4px;
   box-sizing: border-box;
 }

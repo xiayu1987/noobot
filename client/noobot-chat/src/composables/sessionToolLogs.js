@@ -280,50 +280,11 @@ function buildToolLogsByDialogProcessId(sessionDocuments = []) {
   }
 
   const allToolLogs = buildToolLogsFromSessions(sessionDocuments);
-  for (const toolLog of allToolLogs) {
-    const dialogProcessId = String(toolLog?.dialogProcessId || "");
-    if (!dialogProcessId) continue;
-    const previousLogs = groupedLogs.get(dialogProcessId) || [];
-    groupedLogs.set(dialogProcessId, [...previousLogs, toolLog]);
-  }
-
   const rootSessionDocument = pickRootSessionDocument(sessionDocuments);
+  const rootSessionId = String(rootSessionDocument?.sessionId || "").trim();
   const rootSessionMessages = Array.isArray(rootSessionDocument?.messages)
     ? rootSessionDocument.messages
     : [];
-
-  function collectSessionIdsFromObject(value, outputSet) {
-    if (!value || typeof value !== "object") return;
-    if (Array.isArray(value)) {
-      for (const item of value) collectSessionIdsFromObject(item, outputSet);
-      return;
-    }
-    for (const [key, nestedValue] of Object.entries(value)) {
-      const normalizedKey = String(key || "").toLowerCase();
-      if (
-        (normalizedKey === "sessionid" ||
-          normalizedKey === "subagentsessionid") &&
-        typeof nestedValue === "string" &&
-        nestedValue.trim()
-      ) {
-        outputSet.add(nestedValue.trim());
-      }
-      collectSessionIdsFromObject(nestedValue, outputSet);
-    }
-  }
-
-  function parseToolResultSessionIds(contentText = "") {
-    const sessionIds = new Set();
-    const normalizedContentText = String(contentText || "").trim();
-    if (!normalizedContentText) return sessionIds;
-    try {
-      const parsed = JSON.parse(normalizedContentText);
-      collectSessionIdsFromObject(parsed, sessionIds);
-    } catch {
-      // ignore non-json content
-    }
-    return sessionIds;
-  }
 
   function collectDescendantSessionIds(sessionId, outputSet) {
     if (!sessionId || outputSet.has(sessionId)) return;
@@ -334,51 +295,66 @@ function buildToolLogsByDialogProcessId(sessionDocuments = []) {
     }
   }
 
-  const relatedSessionIdsByDialogProcessId = new Map();
-  for (const messageItem of rootSessionMessages) {
-    if (String(messageItem?.role || "") !== "tool") continue;
-    const dialogProcessId = String(messageItem?.dialogProcessId || "");
-    if (!dialogProcessId) continue;
-    const existingSessionIds =
-      relatedSessionIdsByDialogProcessId.get(dialogProcessId) || new Set();
-    const parsedSessionIds = parseToolResultSessionIds(
-      messageItem?.content || "",
-    );
-    for (const parsedSessionId of parsedSessionIds) {
-      collectDescendantSessionIds(parsedSessionId, existingSessionIds);
+  const relatedSessionIds = new Set();
+  if (rootSessionId) collectDescendantSessionIds(rootSessionId, relatedSessionIds);
+
+  const relevantLogs = allToolLogs.filter((toolLog) => {
+    const sessionId = String(toolLog?.sessionId || "").trim();
+    if (!sessionId) return false;
+    if (!relatedSessionIds.size) return true;
+    return relatedSessionIds.has(sessionId);
+  });
+
+  const logsByDialogProcessId = new Map();
+  const childDialogIdsByParentDialogId = new Map();
+  for (const toolLog of relevantLogs) {
+    const dialogProcessId = String(toolLog?.dialogProcessId || "").trim();
+    const parentDialogProcessId = String(
+      toolLog?.parentDialogProcessId || "",
+    ).trim();
+    if (dialogProcessId) {
+      const existingLogs = logsByDialogProcessId.get(dialogProcessId) || [];
+      logsByDialogProcessId.set(dialogProcessId, [...existingLogs, toolLog]);
     }
-    relatedSessionIdsByDialogProcessId.set(dialogProcessId, existingSessionIds);
+    if (parentDialogProcessId && dialogProcessId) {
+      const existingChildren =
+        childDialogIdsByParentDialogId.get(parentDialogProcessId) || new Set();
+      existingChildren.add(dialogProcessId);
+      childDialogIdsByParentDialogId.set(parentDialogProcessId, existingChildren);
+    }
   }
 
-  for (const [
-    dialogProcessId,
-    relatedSessionIds,
-  ] of relatedSessionIdsByDialogProcessId.entries()) {
-    const additionalLogs = [];
-    for (const relatedSessionId of relatedSessionIds) {
-      if (!sessionById.has(relatedSessionId)) continue;
-      for (const toolLog of allToolLogs) {
-        if (String(toolLog?.sessionId || "") !== relatedSessionId) continue;
-        const toolLogDialogProcessId = String(toolLog?.dialogProcessId || "");
-        const toolLogParentDialogProcessId = String(
-          toolLog?.parentDialogProcessId || "",
-        );
-        const isSameDialogRound =
-          toolLogDialogProcessId === dialogProcessId ||
-          toolLogParentDialogProcessId === dialogProcessId;
-        if (!isSameDialogRound) continue;
-        additionalLogs.push(toolLog);
+  const rootDialogProcessIds = new Set();
+  for (const messageItem of rootSessionMessages) {
+    if (String(messageItem?.role || "") !== "assistant") continue;
+    const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+    if (dialogProcessId) rootDialogProcessIds.add(dialogProcessId);
+  }
+
+  for (const rootDialogProcessId of rootDialogProcessIds) {
+    const visitedDialogIds = new Set();
+    const pendingDialogIds = [rootDialogProcessId];
+    const roundLogs = [];
+    while (pendingDialogIds.length) {
+      const currentDialogProcessId = String(pendingDialogIds.shift() || "").trim();
+      if (!currentDialogProcessId || visitedDialogIds.has(currentDialogProcessId)) {
+        continue;
+      }
+      visitedDialogIds.add(currentDialogProcessId);
+      const currentLogs = logsByDialogProcessId.get(currentDialogProcessId) || [];
+      roundLogs.push(...currentLogs);
+      const childDialogIds =
+        childDialogIdsByParentDialogId.get(currentDialogProcessId) || new Set();
+      for (const childDialogProcessId of childDialogIds) {
+        if (!visitedDialogIds.has(childDialogProcessId)) {
+          pendingDialogIds.push(childDialogProcessId);
+        }
       }
     }
-    const currentLogs = groupedLogs.get(dialogProcessId) || [];
-    const mergedLogs = sortLogsBySessionTree(
-      mergeUniqueLogs(currentLogs, additionalLogs),
+    groupedLogs.set(rootDialogProcessId, sortLogsBySessionTree(
+      mergeUniqueLogs([], roundLogs),
       sessionOrderById,
-    );
-    groupedLogs.set(
-      dialogProcessId,
-      mergedLogs,
-    );
+    ));
   }
 
   for (const [dialogProcessId, logs] of groupedLogs.entries()) {

@@ -47,6 +47,33 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function normalizeConfigParams(input = {}) {
+  const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
+  return Object.fromEntries(
+    Object.entries(rawValues)
+      .map(([paramKey, paramValue]) => [
+        String(paramKey || "").trim(),
+        String(paramValue ?? "").trim(),
+      ])
+      .filter(([paramKey]) => Boolean(paramKey)),
+  );
+}
+
+function mergeConfigParamsWithFallback(systemParams = {}, userParams = {}) {
+  const base = {
+    ...(systemParams && typeof systemParams === "object" ? systemParams : {}),
+  };
+  const userSource = userParams && typeof userParams === "object" ? userParams : {};
+  for (const [paramKey, rawValue] of Object.entries(userSource)) {
+    const normalizedKey = String(paramKey || "").trim();
+    if (!normalizedKey) continue;
+    const normalizedValue = String(rawValue ?? "").trim();
+    if (!normalizedValue) continue;
+    base[normalizedKey] = normalizedValue;
+  }
+  return base;
+}
+
 export class BotManager {
   constructor(globalConfig) {
     this.globalConfig = globalConfig;
@@ -136,12 +163,34 @@ export class BotManager {
   }
 
   async loadUserConfig(basePath) {
-    const rawText = await readFile(path.join(basePath, "config.json"), "utf8");
+    const [rawText, userConfigParamsRawText] = await Promise.all([
+      readFile(path.join(basePath, "config.json"), "utf8"),
+      readFile(path.join(basePath, "config-params.json"), "utf8").catch(() => "{}"),
+    ]);
     const raw = JSON.parse(rawText);
+    let userConfigParamsJson = {};
+    try {
+      userConfigParamsJson = JSON.parse(String(userConfigParamsRawText || "{}"));
+    } catch {
+      userConfigParamsJson = {};
+    }
+    const userConfigParams = normalizeConfigParams(userConfigParamsJson);
+    const systemConfigParams =
+      this.globalConfig?.configParams && typeof this.globalConfig.configParams === "object"
+        ? this.globalConfig.configParams
+        : {};
+    const mergedConfigParams = mergeConfigParamsWithFallback(
+      systemConfigParams,
+      userConfigParams,
+    );
     const resolvedRaw = resolveConfigSecrets(raw, {
-      configParams: this.globalConfig?.configParams || {},
+      configParams: mergedConfigParams,
     });
-    return sanitizeUserConfig(resolvedRaw);
+    const sanitized = sanitizeUserConfig(resolvedRaw);
+    return {
+      ...sanitized,
+      configParams: mergedConfigParams,
+    };
   }
 
   _buildContextBuilder({
