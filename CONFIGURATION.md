@@ -18,8 +18,11 @@
 
 ### 1.3 参数化变量配置
 
-- 文件：`workspace/config-params.json`
+- 系统参数文件：`workspace/config-params.json`
+- 用户参数文件：`workspace/<userId>/config-params.json`
 - 用途：给 `${VAR_NAME}` 这类占位符提供值（可在前端“参数配置”界面维护）
+  - 普通用户：可维护“用户参数”
+  - 超级用户：可维护“用户参数 + 系统参数”
 
 ### 1.4 运行端口
 
@@ -361,7 +364,8 @@
 
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
-| `${VAR_NAME}` | 取值来源：`process.env` / `workspace/config-params.json` / 空字符串 | 运行时解析优先级：`process.env.VAR_NAME` > `workspace/config-params.json.values.VAR_NAME` > `""`。 |
+| `${VAR_NAME}`（系统配置解析） | 取值来源：`process.env` / `workspace/config-params.json` / 空字符串 | 系统配置解析优先级：`process.env.VAR_NAME` > `workspace/config-params.json.values.VAR_NAME` > `""`。 |
+| `${VAR_NAME}`（用户配置解析） | 取值来源：`process.env` / `workspace/<userId>/config-params.json` / `workspace/config-params.json` / 空字符串 | 用户配置解析优先级：`process.env.VAR_NAME` > `workspace/<userId>/config-params.json.values.VAR_NAME` > `workspace/config-params.json.values.VAR_NAME` > `""`。 |
 
 ---
 
@@ -370,6 +374,7 @@
 | 参数名 | 可选项 | 描述 |
 |---|---|---|
 | 同名配置项覆盖顺序 | 全局配置 -> 用户配置 | 先加载 `global.config.json`，再加载 `workspace/<userId>/config.json`；同名项由用户配置覆盖。 |
+| 参数占位符值覆盖顺序 | 系统参数 -> 用户参数 | 对用户配置解析时，`workspace/<userId>/config-params.json` 同名键覆盖 `workspace/config-params.json`。 |
 
 补充限制：
 
@@ -381,5 +386,5 @@
 ## 6. 安全建议
 
 - 不要在仓库提交明文密钥（`api_key`、`Bearer sk-...`）
-- 推荐使用 `${VAR_NAME}` + `workspace/config-params.json` 或环境变量注入
+- 推荐使用 `${VAR_NAME}` + `workspace/config-params.json` / `workspace/<userId>/config-params.json` 或环境变量注入
 - `workspace/` 建议加入 `.gitignore`

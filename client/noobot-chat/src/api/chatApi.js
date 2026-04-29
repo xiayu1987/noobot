@@ -243,22 +243,29 @@ export async function putRegularUsersApi({ users = [] }, { fetcher } = {}) {
   });
 }
 
-export async function getConfigParamsApi({ fetcher } = {}) {
+export async function getConfigParamsApi({ scope = "user", fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
-  return runFetch("/api/internal/admin/config-params");
+  return runFetch(
+    `/api/internal/config-params?scope=${encodeURIComponent(String(scope || "user"))}`,
+  );
 }
 
-export async function getConfigParamCatalogApi({ fetcher } = {}) {
+export async function getConfigParamCatalogApi({ scope = "system", fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
-  return runFetch("/api/internal/config-params/catalog");
+  return runFetch(
+    `/api/internal/config-params/catalog?scope=${encodeURIComponent(String(scope || "system"))}`,
+  );
 }
 
-export async function putConfigParamsApi({ values = {} }, { fetcher } = {}) {
+export async function putConfigParamsApi(
+  { scope = "user", values = {}, descriptions = {} },
+  { fetcher } = {},
+) {
   const runFetch = resolveFetcher(fetcher);
-  return runFetch("/api/internal/admin/config-params", {
+  return runFetch("/api/internal/config-params", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ values }),
+    body: JSON.stringify({ scope, values, descriptions }),
   });
 }
 

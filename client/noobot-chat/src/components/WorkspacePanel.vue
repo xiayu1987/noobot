@@ -53,8 +53,10 @@ const activePathSource = ref("user");
 const content = ref("");
 const isTextFile = ref(true);
 const editorInputRef = ref(null);
-const paramCatalog = ref([]);
-const loadingParamCatalog = ref(false);
+const systemParamCatalog = ref([]);
+const userParamCatalog = ref([]);
+const loadingSystemParamCatalog = ref(false);
+const loadingUserParamCatalog = ref(false);
 const activeResourceSection = ref("directory");
 const lastActiveResourceSection = ref("directory");
 const resetDialogVisible = ref(false);
@@ -74,8 +76,16 @@ const resetDialogTitle = computed(() =>
 const resetDialogConfirmLoading = computed(
   () => resetting.value || resettingAll.value,
 );
-const paramTreeData = computed(() =>
-  (paramCatalog.value || []).map((item) => ({
+const systemParamTreeData = computed(() =>
+  (systemParamCatalog.value || []).map((item) => ({
+    key: String(item?.key || "").trim(),
+    label: String(item?.key || "").trim(),
+    description: String(item?.description || "").trim(),
+    type: "param",
+  })),
+);
+const userParamTreeData = computed(() =>
+  (userParamCatalog.value || []).map((item) => ({
     key: String(item?.key || "").trim(),
     label: String(item?.key || "").trim(),
     description: String(item?.description || "").trim(),
@@ -130,25 +140,36 @@ async function loadAllWorkspaceTree() {
   }
 }
 
-async function loadParamCatalog() {
+async function loadParamCatalog(scope = "system") {
   if (!props.connected || !props.apiKey) return;
-  loadingParamCatalog.value = true;
+  const normalizedScope = String(scope || "").trim().toLowerCase() === "user" ? "user" : "system";
+  if (normalizedScope === "system") loadingSystemParamCatalog.value = true;
+  else loadingUserParamCatalog.value = true;
   try {
-    const res = await getConfigParamCatalogApi({ fetcher: authFetch });
+    const res = await getConfigParamCatalogApi({
+      scope: normalizedScope,
+      fetcher: authFetch,
+    });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "加载参数列表失败");
-    paramCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
+    if (normalizedScope === "system") {
+      systemParamCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
+    } else {
+      userParamCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
+    }
   } catch (error) {
     ElMessage.error(error.message || "加载参数列表失败");
   } finally {
-    loadingParamCatalog.value = false;
+    if (normalizedScope === "system") loadingSystemParamCatalog.value = false;
+    else loadingUserParamCatalog.value = false;
   }
 }
 
 async function refreshAll() {
   await Promise.all([
     loadTree(),
-    loadParamCatalog(),
+    loadParamCatalog("system"),
+    loadParamCatalog("user"),
     props.isSuperAdmin ? loadAllWorkspaceTree() : Promise.resolve(),
   ]);
 }
@@ -470,7 +491,7 @@ watch(
         <div class="tree-actions">
           <div class="desktop-actions">
             <el-button class="refresh-btn noobot-action-btn tail-btn" size="small" :icon="Refresh" @click="refreshAll"
-              :loading="loadingTree || loadingAllTree || loadingParamCatalog || resetting || syncingAll"
+              :loading="loadingTree || loadingAllTree || loadingSystemParamCatalog || loadingUserParamCatalog || resetting || syncingAll"
               :disabled="!connected || resetting || syncing || syncingAll" title="刷新目录和参数"
               aria-label="刷新目录和参数" />
           </div>
@@ -570,18 +591,18 @@ watch(
             </el-scrollbar>
           </el-collapse-item>
           <el-collapse-item
-            name="params"
-            title="参数"
+            name="system-params"
+            title="系统参数"
             class="resource-collapse-item"
             :class="{
-              'resource-collapse-item--active': activeResourceSection === 'params',
+              'resource-collapse-item--active': activeResourceSection === 'system-params',
               'resource-collapse-item--collapsed':
-                !!activeResourceSection && activeResourceSection !== 'params',
+                !!activeResourceSection && activeResourceSection !== 'system-params',
             }"
           >
-            <el-scrollbar class="tree-scroll" v-loading="loadingParamCatalog"
+            <el-scrollbar class="tree-scroll" v-loading="loadingSystemParamCatalog"
               element-loading-background="rgba(11, 13, 18, 0.6)">
-              <el-tree :data="paramTreeData" node-key="key" :props="{ label: 'label', children: 'children' }"
+              <el-tree :data="systemParamTreeData" node-key="key" :props="{ label: 'label', children: 'children' }"
                 class="custom-tree param-tree">
                 <template #default="{ data }">
                   <span class="tree-node param-row" @dblclick.stop="insertParamAtCursor(data.key)">
@@ -591,7 +612,34 @@ watch(
                   </span>
                 </template>
               </el-tree>
-              <div v-if="!paramTreeData.length && !loadingParamCatalog" class="empty-tip left-empty">
+              <div v-if="!systemParamTreeData.length && !loadingSystemParamCatalog" class="empty-tip left-empty">
+                <p>暂无参数</p>
+              </div>
+            </el-scrollbar>
+          </el-collapse-item>
+          <el-collapse-item
+            name="user-params"
+            title="用户参数"
+            class="resource-collapse-item"
+            :class="{
+              'resource-collapse-item--active': activeResourceSection === 'user-params',
+              'resource-collapse-item--collapsed':
+                !!activeResourceSection && activeResourceSection !== 'user-params',
+            }"
+          >
+            <el-scrollbar class="tree-scroll" v-loading="loadingUserParamCatalog"
+              element-loading-background="rgba(11, 13, 18, 0.6)">
+              <el-tree :data="userParamTreeData" node-key="key" :props="{ label: 'label', children: 'children' }"
+                class="custom-tree param-tree">
+                <template #default="{ data }">
+                  <span class="tree-node param-row" @dblclick.stop="insertParamAtCursor(data.key)">
+                    <el-icon class="node-icon"><Key /></el-icon>
+                    <span class="node-label">{{ data.label }}</span>
+                    <span class="param-desc" :title="data.description">{{ data.description || "（无说明）" }}</span>
+                  </span>
+                </template>
+              </el-tree>
+              <div v-if="!userParamTreeData.length && !loadingUserParamCatalog" class="empty-tip left-empty">
                 <p>暂无参数</p>
               </div>
             </el-scrollbar>

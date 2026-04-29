@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createFileTool } from "./file-tool.js";
+import { createWaitTool } from "./wait-tool.js";
 import { createScriptTool } from "./script-tool.js";
 import { createSkillTool } from "./skill-tool.js";
 import { createContentProcessTool } from "./content-process-tool.js";
@@ -17,6 +18,14 @@ import { createMultimodalGenerateTool } from "./multimodal-generate-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 
+const DEFAULT_MAX_SUB_AGENT_DEPTH = 1;
+const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
+  "delegate_task_async",
+  "wait_async_task_result",
+  "delegateTaskAsync",
+  "waitAsyncTaskResult",
+]);
+
 function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled = true) {
   const normalized = String(toolName || "").trim();
   if (!normalized) return defaultEnabled;
@@ -25,9 +34,14 @@ function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled 
   return toolConfig.enabled !== false;
 }
 
+function normalizeToolName(toolDefinition = {}) {
+  return String(toolDefinition?.name || "").trim();
+}
+
 const TOOL_CONFIG_ALIASES = {
   read_file: ["read_file", "file"],
   write_file: ["write_file", "file"],
+  wait: ["wait"],
   execute_script: ["execute_script"],
   list_skills: ["list_skills", "skill"],
   set_skill_task: ["set_skill_task", "skill"],
@@ -56,7 +70,7 @@ const TOOL_CONFIG_ALIASES = {
 function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
   const source = Array.isArray(tools) ? tools : [];
   return source.filter((toolDefinition) => {
-    const name = String(toolDefinition?.name || "").trim();
+    const name = normalizeToolName(toolDefinition);
     const candidates =
       Array.isArray(TOOL_CONFIG_ALIASES[name]) && TOOL_CONFIG_ALIASES[name].length
         ? TOOL_CONFIG_ALIASES[name]
@@ -94,6 +108,22 @@ function hasEnabledMultimodalGenerationProvider(effectiveConfig = {}) {
   return false;
 }
 
+function resolveMaxSubAgentDepth(effectiveConfig = {}) {
+  const configuredValue = Number(
+    effectiveConfig?.tools?.delegate_task_async?.max_sub_agent_depth ??
+      effectiveConfig?.tools?.delegate_task_async?.maxSubAgentDepth ??
+      effectiveConfig?.tools?.delegate_task_async?.delegate_tool_parent_max_depth ??
+      effectiveConfig?.tools?.delegate_task_async?.delegateToolParentMaxDepth ??
+      effectiveConfig?.tools?.agent_collab?.max_sub_agent_depth ??
+      effectiveConfig?.tools?.agent_collab?.maxSubAgentDepth ??
+      0,
+  );
+  if (!Number.isFinite(configuredValue) || configuredValue <= 0) {
+    return DEFAULT_MAX_SUB_AGENT_DEPTH;
+  }
+  return configuredValue;
+}
+
 export async function buildTools(ctx) {
   const runtime = ctx?.agentContext?.runtime || {};
   const effectiveConfig = mergeConfig(
@@ -107,6 +137,7 @@ export async function buildTools(ctx) {
     effectiveConfig,
   );
   const baseTools = [
+    ...createWaitTool(ctx),
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
     ...createSkillTool(ctx),
@@ -140,58 +171,49 @@ async function filterToolsByRuntimePolicy({
       ? agentContext.tools
       : [];
   const runtime = agentContext?.runtime || {};
-  const parentSessionId = String(runtime?.parentSessionId || "").trim();
+  const sessionId = String(
+    runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
+  ).trim();
+  const parentSessionId = String(
+    runtime?.systemRuntime?.parentSessionId || runtime?.parentSessionId || "",
+  ).trim();
   const userId = String(runtime?.userId || "").trim();
   const sessionManager = runtime?.sessionManager || null;
-  const configuredMaxParentDepth = Number(
-    effectiveConfig?.tools?.delegate_task_async?.max_sub_agent_depth ??
-      effectiveConfig?.tools?.delegate_task_async?.maxSubAgentDepth ??
-      effectiveConfig?.tools?.delegate_task_async?.delegate_tool_parent_max_depth ??
-      effectiveConfig?.tools?.delegate_task_async?.delegateToolParentMaxDepth ??
-      effectiveConfig?.tools?.agent_collab?.max_sub_agent_depth ??
-      effectiveConfig?.tools?.agent_collab?.maxSubAgentDepth ??
-      0,
-  );
-  const maxParentDepth =
-    Number.isFinite(configuredMaxParentDepth) && configuredMaxParentDepth > 0
-      ? configuredMaxParentDepth
-      : 1;
+  const maxSubAgentDepth = resolveMaxSubAgentDepth(effectiveConfig);
 
-  if (!parentSessionId || !sessionManager || !userId) {
+  if (!sessionManager || !userId) {
     return sourceTools;
   }
 
-  let parentDepth = 0;
+  const depthTargetSessionId = sessionId || parentSessionId;
+  if (!depthTargetSessionId) return sourceTools;
+
+  let currentDepth = 0;
   try {
-    parentDepth = Number(
+    currentDepth = Number(
       (await sessionManager.getSessionDepth({
         userId,
-        sessionId: parentSessionId,
+        sessionId: depthTargetSessionId,
       })) || 0,
     );
   } catch {
-    parentDepth = 0;
+    currentDepth = 0;
   }
 
-  if (parentDepth < maxParentDepth) return sourceTools;
+  if (currentDepth < maxSubAgentDepth) return sourceTools;
 
-  const blockedToolNames = new Set([
-    "delegate_task_async",
-    "wait_async_task_result",
-    "delegateTaskAsync",
-    "waitAsyncTaskResult",
-  ]);
   const filteredTools = sourceTools.filter(
     (toolDefinition) =>
-      !blockedToolNames.has(String(toolDefinition?.name || "")),
+      !BLOCKED_AGENT_COLLAB_TOOL_NAMES.has(normalizeToolName(toolDefinition)),
   );
 
   if (filteredTools.length !== sourceTools.length) {
     emitEvent(eventListener, "agent_collab_tools_disabled_by_depth", {
+      sessionId: depthTargetSessionId,
       parentSessionId,
-      parentDepth,
-      maxParentDepth,
-      disabledTools: Array.from(blockedToolNames),
+      currentDepth,
+      maxSubAgentDepth,
+      disabledTools: Array.from(BLOCKED_AGENT_COLLAB_TOOL_NAMES),
     });
   }
   return filteredTools;

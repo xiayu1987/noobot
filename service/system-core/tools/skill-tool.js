@@ -89,7 +89,7 @@ export function createSkillTool({ agentContext }) {
   const manageSkillTaskTool = new DynamicStructuredTool({
     name: "set_skill_task",
     description:
-      "设置 skill 任务状态。action=start 表示开始任务（仅匹配到技能后调用）；action=completed 表示结束任务（仅正确返回完整结果后调用，报错/需要确认/需要询问时禁止调用）。",
+      "设置 skill 任务状态。action=start 表示开始任务（仅匹配到技能后调用）；action=completed 表示结束任务（仅正确返回完整结果后调用，报错/需要确认/需要询问时禁止调用completed）。",
     schema: z.object({
       action: z.enum(["start", "completed"]).describe("任务动作：start 或 completed"),
       skillName: z.string().optional().describe("技能名称，action=start 时必填"),

@@ -123,6 +123,12 @@ function getThinkingDetailCount(messageItem = {}) {
   return completedToolLogs.length;
 }
 
+function getThinkingTreePrefix(toolLogItem = {}) {
+  const depth = Math.max(1, Number(toolLogItem?.depth || 1));
+  if (depth <= 1) return "•";
+  return `${"│  ".repeat(Math.max(0, depth - 2))}└─`;
+}
+
 function parseTimeMs(value) {
   if (value === null || value === undefined || value === "") return 0;
   if (typeof value === "number") {
@@ -286,6 +292,9 @@ onBeforeUnmount(() => {
                     class="thinking-step tool-step thinking-detail-step thinking-single-line"
                     :style="{ marginLeft: `${toolLogItem.indent || 0}px` }"
                   >
+                    <span class="thinking-tree-prefix">
+                      {{ getThinkingTreePrefix(toolLogItem) }}
+                    </span>
                     <span class="thinking-event">[{{ toolLogItem.type || toolLogItem.event }}]</span>
                     <span
                       class="thinking-detail-text thinking-line-text is-expandable"
@@ -427,6 +436,12 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+
+.thinking-tree-prefix {
+  flex: 0 0 auto;
+  color: var(--noobot-thinking-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .thinking-detail-step .thinking-event {

@@ -21,7 +21,8 @@ const emit = defineEmits(["copy-markdown-rich", "copy-markdown-text"]);
 const markdownContainerRef = ref(null);
 
 function emitCopyMarkdownRich() {
-  emit("copy-markdown-rich", String(markdownContainerRef.value?.innerHTML || ""));
+  if (!markdownContainerRef.value) return;
+  emit("copy-markdown-rich", String(markdownContainerRef.value.innerHTML || ""));
 }
 
 watch(
@@ -41,6 +42,7 @@ watch(
 
 <template>
   <div class="preview-body" v-loading="contentType === 'file' && previewLoading">
+    <!-- 附件预览 -->
     <template v-if="contentType === 'attachment'">
       <img
         v-if="attachmentPreviewType === 'image' && attachmentPreviewUrl"
@@ -57,172 +59,180 @@ watch(
       />
     </template>
 
+    <!-- 文件预览 -->
     <template v-else>
       <div
         v-if="previewMode === 'markdown' && !previewLoading && !previewError"
         class="preview-copy-actions"
       >
-        <el-button size="small" @click="emitCopyMarkdownRich">格式复制</el-button>
+        <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">格式复制</el-button>
         <el-button size="small" @click="emit('copy-markdown-text')">文本复制</el-button>
       </div>
       <div v-if="previewError" class="preview-error">{{ previewError }}</div>
+      
       <img
         v-else-if="previewMode === 'image' && previewImageUrl"
         :src="previewImageUrl"
         :alt="previewFileName"
         class="preview-image"
       />
+      
+      <!-- Markdown 渲染区 -->
       <div
         v-else-if="previewMode === 'markdown'"
         ref="markdownContainerRef"
         class="preview-markdown"
         v-html="renderMarkdown(previewTextContent)"
       />
+      
+      <!-- 纯文本渲染区 -->
       <pre v-else class="preview-text">{{ previewTextContent }}</pre>
     </template>
   </div>
 </template>
 
 <style scoped>
+/* ==================== 基础容器样式 ==================== */
 .preview-body {
   min-height: 240px;
   max-height: 68vh;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: #ffffff;
-  border: 1px solid #dbe3f0;
-  border-radius: 10px;
-  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s ease;
+}
+
+/* 自定义滚动条 */
+.preview-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.preview-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.preview-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.preview-body::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .preview-error {
-  color: #fca5a5;
+  color: #ef4444;
+  background: #fef2f2;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
 }
 
 .preview-copy-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   justify-content: flex-end;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .preview-image {
   max-width: 100%;
-  max-height: 62vh;
+  max-height: 60vh;
   margin: 0 auto;
   display: block;
-  border-radius: 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .preview-video {
   width: 100%;
-  max-height: 62vh;
+  max-height: 60vh;
   display: block;
-  border-radius: 8px;
+  border-radius: 6px;
+  background: #000;
 }
 
 .preview-text {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #111827;
-  font-size: 13px;
+  color: #334155;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
   line-height: 1.6;
-  background: #ffffff;
 }
 
+/* ==================== Markdown 核心排版样式 ==================== */
 .preview-markdown {
-  color: #111827;
-  font-size: 13px;
-  background: #ffffff;
-}
-
-.preview-markdown :deep(code) {
-  background: #f3f4f6;
-  color: #111827;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.preview-markdown :deep(pre) {
-  background: #f8fafc;
-  color: #111827;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px;
-  overflow-x: auto;
-}
-
-.preview-markdown :deep(pre code) {
-  background: transparent;
-  padding: 0;
-}
-
-.preview-markdown :deep(ul),
-.preview-markdown :deep(ol) {
-  margin: 8px 0 12px 20px;
-  padding-left: 16px;
-}
-
-.preview-markdown :deep(li) {
-  margin: 4px 0;
+  color: #1f2937;
+  font-size: 15px;
   line-height: 1.7;
+  word-wrap: break-word;
 }
 
-.preview-markdown :deep(ul li::marker) {
-  color: #60a5fa;
+/* 段落与基础元素 */
+.preview-markdown :deep(p) { margin-top: 0; margin-bottom: 16px; }
+.preview-markdown :deep(a) { color: #3b82f6; text-decoration: none; }
+.preview-markdown :deep(a:hover) { text-decoration: underline; }
+.preview-markdown :deep(hr) { height: 1px; padding: 0; margin: 24px 0; background-color: #e5e7eb; border: 0; }
+
+/* 标题 */
+.preview-markdown :deep(h1), .preview-markdown :deep(h2), .preview-markdown :deep(h3),
+.preview-markdown :deep(h4), .preview-markdown :deep(h5), .preview-markdown :deep(h6) {
+  margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; color: #111827;
+}
+.preview-markdown :deep(h1) { font-size: 1.8em; padding-bottom: 0.3em; border-bottom: 1px solid #e5e7eb; }
+.preview-markdown :deep(h2) { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid #e5e7eb; }
+.preview-markdown :deep(h3) { font-size: 1.25em; }
+.preview-markdown :deep(h4) { font-size: 1em; }
+
+/* 引用块 */
+.preview-markdown :deep(blockquote) {
+  margin: 16px 0; padding: 12px 16px; color: #4b5563; background-color: #f9fafb;
+  border-left: 4px solid #d1d5db; border-radius: 0 6px 6px 0; font-style: italic;
+}
+.preview-markdown :deep(blockquote p:last-child) { margin-bottom: 0; }
+
+/* 列表 */
+.preview-markdown :deep(ul), .preview-markdown :deep(ol) { margin-top: 0; margin-bottom: 16px; padding-left: 2em; }
+.preview-markdown :deep(li) { margin: 4px 0; }
+.preview-markdown :deep(li > p) { margin-top: 16px; }
+.preview-markdown :deep(ul li::marker) { color: #6b7280; }
+.preview-markdown :deep(ol li::marker) { color: #4b5563; font-weight: 500; }
+
+/* 行内代码 */
+.preview-markdown :deep(code) {
+  background-color: #f3f4f6; color: #db2777; padding: 0.2em 0.4em; border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em;
 }
 
-.preview-markdown :deep(ol li::marker) {
-  color: #93c5fd;
-  font-weight: 600;
+/* 多行代码块 */
+.preview-markdown :deep(pre) {
+  background-color: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 16px;
+  overflow-x: auto; margin-bottom: 16px;
 }
+.preview-markdown :deep(pre code) { background-color: transparent; color: inherit; padding: 0; font-size: 13.5px; border-radius: 0; }
 
-.preview-markdown :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 12px 0;
-  font-size: 13px;
-  border: 1px solid var(--noobot-msg-assistant-border, #e5e7eb);
-}
+/* 表格 */
+.preview-markdown :deep(table) { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
+.preview-markdown :deep(th), .preview-markdown :deep(td) { border: 1px solid #d1d5db; padding: 10px 14px; text-align: left; }
+.preview-markdown :deep(th) { background-color: #f3f4f6; font-weight: 600; color: #374151; }
+.preview-markdown :deep(tr:nth-child(even)) { background-color: #f9fafb; }
+.preview-markdown :deep(tr:hover) { background-color: #f3f4f6; }
 
-.preview-markdown :deep(th),
-.preview-markdown :deep(td) {
-  border: 1px solid var(--noobot-msg-assistant-border, #e5e7eb);
-  padding: 8px 10px;
-  text-align: left;
-  vertical-align: top;
-}
-
-.preview-markdown :deep(th) {
-  background: rgba(148, 163, 184, 0.15);
-  font-weight: 600;
-}
-
-.preview-markdown :deep(tr:nth-child(even) td) {
-  background: rgba(148, 163, 184, 0.08);
-}
-
+/* Mermaid 图表 */
 .preview-markdown :deep(.mermaid) {
-  margin: 12px 0;
-  padding: 10px;
-  border: 1px solid var(--noobot-msg-assistant-border, #e5e7eb);
-  border-radius: 8px;
-  background: #ffffff;
-  overflow-x: auto;
+  margin: 20px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px;
+  background: #ffffff; overflow-x: auto; display: flex; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
-
-.preview-markdown :deep(.mermaid svg) {
-  max-width: 100%;
-  height: auto;
-  display: block;
-}
-
+.preview-markdown :deep(.mermaid svg) { max-width: 100% !important; height: auto !important; display: block; }
 .preview-markdown :deep(.mermaid-render-error) {
-  color: #b91c1c;
-  background: #fff1f2;
-  border: 1px solid #fecdd3;
-  border-radius: 8px;
-  padding: 10px;
-  white-space: pre-wrap;
+  color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px;
+  padding: 12px; white-space: pre-wrap; font-family: monospace;
 }
 </style>

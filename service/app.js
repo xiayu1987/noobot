@@ -60,6 +60,12 @@ function workspaceConfigParamsFilePath() {
   return path.join(workspaceRootPath(), CONFIG_PARAMS_FILE_NAME);
 }
 
+function userConfigParamsFilePath(userId = "") {
+  const normalizedUserId = String(userId || "").trim();
+  if (!normalizedUserId) throw new Error("userId required");
+  return path.join(workspaceRootPath(), normalizedUserId, CONFIG_PARAMS_FILE_NAME);
+}
+
 function normalizeConfigParams(input = {}) {
   const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
   const rawDescriptions =
@@ -95,6 +101,27 @@ async function readWorkspaceConfigParams({ createIfMissing = false } = {}) {
 async function writeWorkspaceConfigParams(input = {}) {
   const payload = normalizeConfigParams(input);
   const filePath = workspaceConfigParamsFilePath();
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  return payload;
+}
+
+async function readUserConfigParams({ userId = "", createIfMissing = false } = {}) {
+  const filePath = userConfigParamsFilePath(userId);
+  try {
+    const parsed = JSON.parse(await readFile(filePath, "utf8"));
+    return normalizeConfigParams(parsed);
+  } catch {
+    if (!createIfMissing) return normalizeConfigParams({});
+    const payload = normalizeConfigParams({});
+    await writeUserConfigParams({ userId, input: payload });
+    return payload;
+  }
+}
+
+async function writeUserConfigParams({ userId = "", input = {} } = {}) {
+  const payload = normalizeConfigParams(input);
+  const filePath = userConfigParamsFilePath(userId);
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   return payload;
@@ -147,6 +174,20 @@ async function collectConfigTemplateKeys() {
   return Array.from(keys).filter(Boolean).sort((a, b) => a.localeCompare(b));
 }
 
+async function collectUserConfigTemplateKeys(userId = "") {
+  const normalizedUserId = String(userId || "").trim();
+  if (!normalizedUserId) return [];
+  const userConfigFile = path.join(workspaceRootPath(), normalizedUserId, "config.json");
+  const [globalCfgJson, userCfgJson] = await Promise.all([
+    readConfigJsonIfExists(path.resolve(process.cwd(), "./config/global.config.json")),
+    readConfigJsonIfExists(userConfigFile),
+  ]);
+  const keys = new Set();
+  collectTemplateKeysFromObject(globalCfgJson, keys);
+  collectTemplateKeysFromObject(userCfgJson, keys);
+  return Array.from(keys).filter(Boolean).sort((a, b) => a.localeCompare(b));
+}
+
 async function collectConfigTemplateParamCatalog() {
   const payload = await readWorkspaceConfigParams({ createIfMissing: true });
   const allKeys = Object.keys(payload?.values || {})
@@ -160,6 +201,30 @@ async function collectConfigTemplateParamCatalog() {
   return dedupedKeys.map((key) => ({
     key,
     description: String(descriptionMap?.[key] || "").trim(),
+  }));
+}
+
+function buildConfigParamCatalog({
+  keys = [],
+  descriptions = {},
+  values = {},
+  extraKeys = [],
+} = {}) {
+  const mergedKeys = Array.from(
+    new Set(
+      [
+        ...(Array.isArray(keys) ? keys : []),
+        ...Object.keys(descriptions || {}),
+        ...Object.keys(values || {}),
+        ...(Array.isArray(extraKeys) ? extraKeys : []),
+      ]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+  return mergedKeys.map((key) => ({
+    key,
+    description: String(descriptions?.[key] || "").trim(),
   }));
 }
 
@@ -473,51 +538,108 @@ app.put("/internal/admin/users", requireSuperAdmin, async (req, res) => {
   }
 });
 
-app.get("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
+function resolveConfigParamScope(req) {
+  const scope = String(req.query?.scope || req.body?.scope || "user")
+    .trim()
+    .toLowerCase();
+  return scope === "system" ? "system" : "user";
+}
+
+async function readScopedConfigParams({ req, createIfMissing = true } = {}) {
+  const scope = resolveConfigParamScope(req);
+  if (scope === "system") {
+    const payload = await readWorkspaceConfigParams({ createIfMissing });
+    return { scope, userId: "", payload };
+  }
+  const userId = String(req?.auth?.userId || "").trim();
+  if (!userId) throw new Error("missing user auth");
+  const payload = await readUserConfigParams({ userId, createIfMissing });
+  return { scope, userId, payload };
+}
+
+async function writeScopedConfigParams({
+  req,
+  values = undefined,
+  descriptions = undefined,
+} = {}) {
+  const { scope, userId, payload: existing } = await readScopedConfigParams({
+    req,
+    createIfMissing: true,
+  });
+  const nextPayload = {
+    values:
+      values && typeof values === "object" ? values : existing?.values || {},
+    descriptions:
+      descriptions && typeof descriptions === "object"
+        ? descriptions
+        : existing?.descriptions || {},
+  };
+  if (scope === "system") {
+    const payload = await writeWorkspaceConfigParams(nextPayload);
+    return { scope, userId: "", payload };
+  }
+  const payload = await writeUserConfigParams({ userId, input: nextPayload });
+  return { scope, userId, payload };
+}
+
+async function buildScopedConfigParamsResponse({ req, payload = {}, userId = "" } = {}) {
+  const scope = resolveConfigParamScope(req);
+  const keys =
+    scope === "system"
+      ? await collectConfigTemplateKeys()
+      : await collectUserConfigTemplateKeys(userId);
+  const catalog = buildConfigParamCatalog({
+    keys,
+    descriptions: payload?.descriptions || {},
+    values: payload?.values || {},
+  });
+  return {
+    ok: true,
+    scope,
+    userId: String(userId || "").trim(),
+    values: payload.values || {},
+    descriptions: payload.descriptions || {},
+    keys,
+    catalog,
+  };
+}
+
+app.get("/internal/config-params", async (req, res) => {
   try {
-    const [payload, keys, catalog] = await Promise.all([
-      readWorkspaceConfigParams({ createIfMissing: true }),
-      collectConfigTemplateKeys(),
-      collectConfigTemplateParamCatalog(),
-    ]);
-    res.json({
-      ok: true,
-      values: payload.values || {},
-      descriptions: payload.descriptions || {},
-      keys,
-      catalog,
+    const scope = resolveConfigParamScope(req);
+    if (scope === "system" && String(req?.auth?.role || "") !== "super_admin") {
+      res.status(403).json({ ok: false, error: "super admin required for system params" });
+      return;
+    }
+    const { payload, userId } = await readScopedConfigParams({
+      req,
+      createIfMissing: true,
     });
+    res.json(await buildScopedConfigParamsResponse({ req, payload, userId }));
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "read config params failed" });
   }
 });
 
-app.put("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
+app.put("/internal/config-params", async (req, res) => {
   try {
+    const scope = resolveConfigParamScope(req);
+    if (scope === "system" && String(req?.auth?.role || "") !== "super_admin") {
+      res.status(403).json({ ok: false, error: "super admin required for system params" });
+      return;
+    }
     const incoming = req.body || {};
-    const existing = await readWorkspaceConfigParams({ createIfMissing: true });
-    const payload = await writeWorkspaceConfigParams({
+    const { payload, userId } = await writeScopedConfigParams({
+      req,
       values:
-        incoming?.values && typeof incoming.values === "object"
-          ? incoming.values
-          : existing?.values || {},
+        incoming?.values && typeof incoming.values === "object" ? incoming.values : undefined,
       descriptions:
         incoming?.descriptions && typeof incoming.descriptions === "object"
           ? incoming.descriptions
-          : existing?.descriptions || {},
+          : undefined,
     });
-    await rebuildRuntimeConfig();
-    const [keys, catalog] = await Promise.all([
-      collectConfigTemplateKeys(),
-      collectConfigTemplateParamCatalog(),
-    ]);
-    res.json({
-      ok: true,
-      values: payload.values || {},
-      descriptions: payload.descriptions || {},
-      keys,
-      catalog,
-    });
+    if (scope === "system") await rebuildRuntimeConfig();
+    res.json(await buildScopedConfigParamsResponse({ req, payload, userId }));
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "save config params failed" });
   }
@@ -525,10 +647,52 @@ app.put("/internal/admin/config-params", requireSuperAdmin, async (req, res) => 
 
 app.get("/internal/config-params/catalog", async (req, res) => {
   try {
-    const catalog = await collectConfigTemplateParamCatalog();
-    res.json({ ok: true, catalog });
+    const scope = resolveConfigParamScope(req);
+    let payload = normalizeConfigParams({});
+    if (scope === "system") {
+      payload = await readWorkspaceConfigParams({ createIfMissing: true });
+    } else {
+      const userId = String(req?.auth?.userId || "").trim();
+      payload = await readUserConfigParams({ userId, createIfMissing: true });
+    }
+    const keys =
+      scope === "system"
+        ? await collectConfigTemplateKeys()
+        : await collectUserConfigTemplateKeys(String(req?.auth?.userId || "").trim());
+    const catalog = buildConfigParamCatalog({
+      keys,
+      descriptions: payload?.descriptions || {},
+      values: payload?.values || {},
+    });
+    res.json({ ok: true, scope, catalog });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message || "load config params catalog failed" });
+  }
+});
+
+app.get("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
+  try {
+    req.query = { ...(req.query || {}), scope: "system" };
+    const { payload } = await readScopedConfigParams({ req, createIfMissing: true });
+    res.json(await buildScopedConfigParamsResponse({ req, payload }));
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "read config params failed" });
+  }
+});
+
+app.put("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
+  try {
+    req.query = { ...(req.query || {}), scope: "system" };
+    const incoming = req.body || {};
+    const { payload } = await writeScopedConfigParams({
+      req,
+      values: incoming?.values,
+      descriptions: incoming?.descriptions,
+    });
+    await rebuildRuntimeConfig();
+    res.json(await buildScopedConfigParamsResponse({ req, payload }));
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "save config params failed" });
   }
 });
 

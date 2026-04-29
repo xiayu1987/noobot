@@ -254,6 +254,25 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
     }
     out[key] = userValue;
   }
+  const userRuntimeConfigParams =
+    userConfig?.configParams && isPlainObject(userConfig.configParams)
+      ? userConfig.configParams
+      : null;
+  if (userRuntimeConfigParams) {
+    const mergedRuntimeConfigParams = {
+      ...(isPlainObject(globalBase?.configParams) ? globalBase.configParams : {}),
+    };
+    for (const [paramKey, rawValue] of Object.entries(userRuntimeConfigParams)) {
+      const normalizedKey = String(paramKey || "").trim();
+      if (!normalizedKey) continue;
+      const normalizedValue = String(rawValue ?? "").trim();
+      if (!normalizedValue) continue;
+      mergedRuntimeConfigParams[normalizedKey] = normalizedValue;
+    }
+    out.configParams = {
+      ...mergedRuntimeConfigParams,
+    };
+  }
   return out;
 }
 

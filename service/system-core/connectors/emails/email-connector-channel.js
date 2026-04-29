@@ -97,6 +97,8 @@ async function executeSendEmail({ payload = {}, connectionInfo = {} } = {}) {
     throw new Error("email send action requires 'to' (or configure to_email in connector)");
   }
   const transporter = createTransport({
+    logger: false,
+    debug: false,
     host: normalizedConnectionInfo.smtpHost,
     port: normalizedConnectionInfo.smtpPort,
     secure: normalizedConnectionInfo.smtpSecure,
@@ -127,6 +129,7 @@ async function executeListFolders({ connectionInfo = {} } = {}) {
   const { ImapFlow } = await import("imapflow");
   const normalizedConnectionInfo = normalizeEmailConnectionInfo(connectionInfo);
   const imapClient = new ImapFlow({
+    logger: false,
     host: normalizedConnectionInfo.imapHost,
     port: normalizedConnectionInfo.imapPort,
     secure: normalizedConnectionInfo.imapSecure,
@@ -158,6 +161,7 @@ async function executeListEmail({ payload = {}, connectionInfo = {} } = {}) {
   const unseenOnly = payload?.unseen_only === true;
 
   const imapClient = new ImapFlow({
+    logger: false,
     host: normalizedConnectionInfo.imapHost,
     port: normalizedConnectionInfo.imapPort,
     secure: normalizedConnectionInfo.imapSecure,
@@ -171,7 +175,8 @@ async function executeListEmail({ payload = {}, connectionInfo = {} } = {}) {
   try {
     const mailboxLock = await imapClient.getMailboxLock(folder);
     try {
-      const allUids = await imapClient.search(unseenOnly ? { seen: false } : {}, { uid: true });
+      // 修复：将空对象 {} 替换为 { all: true } 以确保能正确匹配所有邮件
+      const allUids = await imapClient.search(unseenOnly ? { seen: false } : { all: true }, { uid: true });
       const normalizedUids = (Array.isArray(allUids) ? allUids : [])
         .map((uid) => Number(uid || 0))
         .filter((uid) => Number.isFinite(uid) && uid > 0)
@@ -284,6 +289,7 @@ async function executeReadEmail({
   const folder = String(payload?.folder || "INBOX").trim() || "INBOX";
   const uid = Number(payload?.uid || 0);
   const imapClient = new ImapFlow({
+    logger: false,
     host: normalizedConnectionInfo.imapHost,
     port: normalizedConnectionInfo.imapPort,
     secure: normalizedConnectionInfo.imapSecure,
@@ -298,7 +304,8 @@ async function executeReadEmail({
     try {
       let resolvedUid = Number.isFinite(uid) && uid > 0 ? Math.floor(uid) : 0;
       if (!resolvedUid) {
-        const allUids = await imapClient.search({}, { uid: true });
+        // 修复：将空对象 {} 替换为 { all: true } 以确保能正确匹配所有邮件
+        const allUids = await imapClient.search({ all: true }, { uid: true });
         const latestUid = (Array.isArray(allUids) ? allUids : [])
           .map((uidItem) => Number(uidItem || 0))
           .filter((uidItem) => Number.isFinite(uidItem) && uidItem > 0)

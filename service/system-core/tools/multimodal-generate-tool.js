@@ -229,15 +229,10 @@ export function createMultimodalGenerateTool({ agentContext }) {
     const normalizedInputGenerationContent = String(
       inputGenerationContent || "",
     ).trim();
-    const runtimeSessionId = String(runtime?.systemRuntime?.sessionId || "").trim();
-    const runtimeRootSessionId = String(
-      runtime?.systemRuntime?.rootSessionId || "",
-    ).trim();
-    const isRootSession =
-      runtimeSessionId &&
-      runtimeRootSessionId &&
-      runtimeSessionId === runtimeRootSessionId;
-    if (!isRootSession) return normalizedInputGenerationContent;
+    const runtimeCaller = String(
+      runtime?.systemRuntime?.caller || "user",
+    ).trim().toLowerCase();
+    if (runtimeCaller !== "user") return normalizedInputGenerationContent;
     const currentTurnUserMessage = String(
       runtime?.systemRuntime?.currentTurnUserMessage || "",
     ).trim();
@@ -262,7 +257,15 @@ export function createMultimodalGenerateTool({ agentContext }) {
         .describe("可选：图片尺寸，例如 1024x1024"),
     }),
     func: async ({ generation_content, model_name = "", image_size = "1024x1024" }) => {
+      const runtimeCaller = String(
+        runtime?.systemRuntime?.caller || "user",
+      ).trim().toLowerCase();
       const generationContent = resolveGenerationContentInput(generation_content);
+      const generationContentSource =
+        runtimeCaller === "user" &&
+        String(runtime?.systemRuntime?.currentTurnUserMessage || "").trim()
+          ? "current_turn_user_message"
+          : "tool_input_generation_content";
       let resolvedModelSpec = null;
       if (!generationContent) {
         return toToolJsonResult("multimodal_generate", {
@@ -372,6 +375,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             modelAlias: String(resolvedModelSpec?.alias || "").trim(),
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
+            generationContentSource,
             attachmentMetas,
             summary: {
               generated_image_count: imageArtifacts.length,
