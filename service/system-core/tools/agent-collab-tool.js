@@ -392,6 +392,7 @@ export function createAgentCollabTool({ agentContext }) {
       attachmentMetas = mapAttachmentRecordsToMetas(savedRecords, {
         fallbackMimeType: "text/markdown",
         fallbackGenerationSource: "async_subtask_result",
+        userId,
       });
     } catch {
       return [];

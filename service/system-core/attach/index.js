@@ -38,25 +38,35 @@ export function mergeAttachmentMetas(existingAttachmentMetas = [], incomingAttac
 
 export function mapAttachmentRecordsToMetas(
   attachmentRecords = [],
-  { fallbackMimeType = "application/octet-stream", fallbackGenerationSource = "" } = {},
+  {
+    fallbackMimeType = "application/octet-stream",
+    fallbackGenerationSource = "",
+  } = {},
 ) {
   const recordList = Array.isArray(attachmentRecords) ? attachmentRecords : [];
-  return recordList.map((attachmentItem) => ({
-    attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-    sessionId: String(
+  return recordList.map((attachmentItem) => {
+    const attachmentId = String(attachmentItem?.attachmentId || "").trim();
+    const sessionId = String(
       attachmentItem?.sessionId || DEFAULT_ATTACHMENT_SESSION_ID,
-    ).trim(),
-    attachmentSource: String(
+    ).trim();
+    const attachmentSource = String(
       attachmentItem?.attachmentSource || DEFAULT_ATTACHMENT_SOURCE,
-    ).trim(),
-    name: String(attachmentItem?.name || "").trim(),
-    mimeType: String(attachmentItem?.mimeType || fallbackMimeType).trim(),
-    size: Number(attachmentItem?.size || 0),
-    generatedByModel: attachmentItem?.generatedByModel === true,
-    generationSource: String(
-      attachmentItem?.generationSource || fallbackGenerationSource || "",
-    ).trim(),
-  }));
+    ).trim();
+    return {
+      attachmentId,
+      sessionId,
+      attachmentSource,
+      name: String(attachmentItem?.name || "").trim(),
+      mimeType: String(attachmentItem?.mimeType || fallbackMimeType).trim(),
+      size: Number(attachmentItem?.size || 0),
+      path: String(attachmentItem?.path || "").trim(),
+      relativePath: String(attachmentItem?.relativePath || "").trim(),
+      generatedByModel: attachmentItem?.generatedByModel === true,
+      generationSource: String(
+        attachmentItem?.generationSource || fallbackGenerationSource || "",
+      ).trim(),
+    };
+  });
 }
 
 export function appendAttachmentMetasToRuntimeAndTurn({

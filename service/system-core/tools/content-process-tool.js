@@ -47,7 +47,7 @@ export function createContentProcessTool({ agentContext }) {
     Number.isFinite(configuredMaxToolLoopTurns) &&
     configuredMaxToolLoopTurns > 0
       ? Math.min(20, Math.max(1, Math.floor(configuredMaxToolLoopTurns)))
-      : 2;
+      : 4;
   const contentProcessTools = [
     ...(docToDataEnabled ? createDoc2DataTool({ agentContext }) : []),
     ...(webToDataEnabled ? createWeb2DataTool({ agentContext }) : []),

@@ -211,6 +211,7 @@ async function persistModelGeneratedArtifacts({
   const attachmentMetas = mapAttachmentRecordsToMetas(savedRecords, {
     fallbackMimeType: "application/octet-stream",
     fallbackGenerationSource: "llm_output",
+    userId,
   });
   if (!attachmentMetas.length) return [];
   appendAttachmentMetasToRuntimeAndTurn({
@@ -225,7 +226,10 @@ async function persistModelGeneratedArtifacts({
   return attachmentMetas;
 }
 
-function buildContextMessages(agentContext) {
+function buildContextMessages(
+  agentContext,
+  { currentUserMessage = "" } = {},
+) {
   function toLangChainToolCalls(toolCalls = []) {
     return (toolCalls || [])
       .map((tc) => {
@@ -259,36 +263,70 @@ function buildContextMessages(agentContext) {
       .filter(Boolean);
   }
 
-  function buildHumanMessageContent(msg = {}) {
+  function resolveAttachmentMetas(msg = {}, fallbackAttachmentMetas = []) {
+    if (Array.isArray(msg?.attachmentMetas)) return msg.attachmentMetas;
+    if (Array.isArray(msg?.attachments)) return msg.attachments;
+    return Array.isArray(fallbackAttachmentMetas) ? fallbackAttachmentMetas : [];
+  }
+
+  function buildHumanMessageContent(msg = {}, fallbackAttachmentMetas = []) {
     const textContent = String(msg?.content || "");
-    const attachmentMetas = Array.isArray(msg?.attachmentMetas)
-      ? msg.attachmentMetas
-      : Array.isArray(msg?.attachments)
-        ? msg.attachments
-        : [];
-    if (!attachmentMetas.length) return textContent;
+    void fallbackAttachmentMetas;
+    return textContent;
+  }
 
-    const attachmentLines = attachmentMetas.map((attachmentItem, index) => {
-      const attachmentId = String(attachmentItem?.attachmentId || "").trim();
-      const name = String(attachmentItem?.name || "").trim();
-      const mimeType = String(
-        attachmentItem?.mimeType || "application/octet-stream",
-      ).trim();
-      const size = Number(attachmentItem?.size || 0);
-      return `- [${index + 1}] id=${attachmentId || "unknown"}, name=${name || "unknown"}, mimeType=${mimeType}, size=${size}`;
-    });
+  function buildUserMetaInfoContent(msg = {}, fallbackMeta = {}) {
+    const attachmentMetas = resolveAttachmentMetas(
+      msg,
+      fallbackMeta?.attachmentMetas || [],
+    );
+    const payload = {
+      userName: String(msg?.userName || fallbackMeta?.userName || "").trim(),
+      sessionId: String(msg?.sessionId || fallbackMeta?.sessionId || "").trim(),
+      parentSessionId: String(
+        msg?.parentSessionId || fallbackMeta?.parentSessionId || "",
+      ).trim(),
+      dialogProcessId: String(
+        msg?.dialogProcessId || fallbackMeta?.dialogProcessId || "",
+      ).trim(),
+      parentDialogProcessId: String(
+        msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
+      ).trim(),
+      attachments: attachmentMetas.map((attachmentItem) => ({
+        attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+        name: String(attachmentItem?.name || "").trim(),
+        path: String(attachmentItem?.path || "").trim(),
+        relativePath: String(attachmentItem?.relativePath || "").trim(),
+      })),
+    };
+    return JSON.stringify(payload, null, 2);
+  }
 
-    const attachmentSection = [
-      "[附件信息]",
-      ...attachmentLines,
-      "[/附件信息]",
-    ].join("\n");
-
-    if (!textContent.trim()) return attachmentSection;
-    return `${textContent}\n\n${attachmentSection}`;
+  function buildHumanMessagesForUser(msg = {}, fallbackMeta = {}) {
+    const contentMessage = new HumanMessage(
+      buildHumanMessageContent(msg, fallbackMeta?.attachmentMetas || []),
+    );
+    const metaMessage = new HumanMessage(
+      `[用户元信息]\n${buildUserMetaInfoContent(msg, fallbackMeta)}\n[/用户元信息]`,
+    );
+    return [contentMessage, metaMessage];
   }
 
   const out = [];
+  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const systemRuntime = runtime?.systemRuntime || {};
+  const fallbackUserMeta = {
+    userName: String(runtime?.userId || "").trim(),
+    sessionId: String(systemRuntime?.sessionId || "").trim(),
+    parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
+    dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+    parentDialogProcessId: String(
+      systemRuntime?.parentDialogProcessId || "",
+    ).trim(),
+    attachmentMetas: Array.isArray(runtime?.attachmentMetas)
+      ? runtime.attachmentMetas
+      : [],
+  };
   const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
     ? agentContext.payload.messages.system
     : [];
@@ -327,7 +365,25 @@ function buildContextMessages(agentContext) {
       continue;
     }
 
-    out.push(new HumanMessage(buildHumanMessageContent(msg)));
+    out.push(...buildHumanMessagesForUser(msg, fallbackUserMeta));
+  }
+  const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
+  if (normalizedCurrentUserMessage) {
+    out.push(
+      ...buildHumanMessagesForUser(
+        {
+          role: "user",
+          content: normalizedCurrentUserMessage,
+          userName: fallbackUserMeta.userName,
+          attachmentMetas: fallbackUserMeta.attachmentMetas,
+          sessionId: fallbackUserMeta.sessionId,
+          parentSessionId: fallbackUserMeta.parentSessionId,
+          dialogProcessId: fallbackUserMeta.dialogProcessId,
+          parentDialogProcessId: fallbackUserMeta.parentDialogProcessId,
+        },
+        fallbackUserMeta,
+      ),
+    );
   }
   return out;
 }
@@ -701,7 +757,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     userConfig,
   });
   const runtimeMaxTurns = Number(sys?.config?.maxToolLoopTurns || 0);
-  const configMaxTurns = Number(effectiveConfig?.maxToolLoopTurns || 30);
+  const configMaxTurns = Number(effectiveConfig?.maxToolLoopTurns || 4);
   const maxToolLoopTurns =
     Number.isFinite(runtimeMaxTurns) && runtimeMaxTurns > 0
       ? runtimeMaxTurns
@@ -716,10 +772,9 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     model: selectedModelSpec?.model || "",
   });
 
-  const messages = [
-    ...buildContextMessages(agentContext),
-    new HumanMessage(userMessage),
-  ];
+  const messages = buildContextMessages(agentContext, {
+    currentUserMessage: userMessage,
+  });
   if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
     runtime.systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
   }
@@ -747,7 +802,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     maxTurns:
       Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
         ? maxToolLoopTurns
-        : 30,
+        : 4,
   };
   return await runFunctionCallLoop({ modelState, loopState, turn: 1 });
 }
