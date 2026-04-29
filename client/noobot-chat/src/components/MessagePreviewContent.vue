@@ -1,5 +1,5 @@
 <script setup>
-import { watch, nextTick, ref } from "vue";
+import { computed, watch, nextTick, ref } from "vue";
 import { renderMermaidInElement } from "../utils/mermaid-renderer";
 
 const props = defineProps({
@@ -8,6 +8,9 @@ const props = defineProps({
   attachmentPreviewType: { type: String, default: "" },
   attachmentPreviewUrl: { type: String, default: "" },
   attachmentPreviewName: { type: String, default: "" },
+  attachmentPreviewLoading: { type: Boolean, default: false },
+  attachmentPreviewError: { type: String, default: "" },
+  attachmentPreviewTextContent: { type: String, default: "" },
   previewLoading: { type: Boolean, default: false },
   previewError: { type: String, default: "" },
   previewFileName: { type: String, default: "" },
@@ -19,6 +22,31 @@ const props = defineProps({
 
 const emit = defineEmits(["copy-markdown-rich", "copy-markdown-text"]);
 const markdownContainerRef = ref(null);
+const isAttachment = computed(() => props.contentType === "attachment");
+const resolvedLoading = computed(() =>
+  isAttachment.value ? props.attachmentPreviewLoading : props.previewLoading,
+);
+const resolvedError = computed(() =>
+  isAttachment.value ? props.attachmentPreviewError : props.previewError,
+);
+const resolvedPreviewMode = computed(() =>
+  isAttachment.value ? props.attachmentPreviewType || "text" : props.previewMode || "text",
+);
+const resolvedPreviewText = computed(() =>
+  isAttachment.value ? props.attachmentPreviewTextContent : props.previewTextContent,
+);
+const resolvedPreviewUrl = computed(() =>
+  isAttachment.value ? props.attachmentPreviewUrl : props.previewImageUrl,
+);
+const resolvedPreviewName = computed(() =>
+  isAttachment.value ? props.attachmentPreviewName : props.previewFileName,
+);
+const showCopyActions = computed(
+  () =>
+    resolvedPreviewMode.value === "markdown" &&
+    !resolvedLoading.value &&
+    !resolvedError.value,
+);
 
 function emitCopyMarkdownRich() {
   if (!markdownContainerRef.value) return;
@@ -26,9 +54,14 @@ function emitCopyMarkdownRich() {
 }
 
 watch(
-  () => [props.active, props.contentType, props.previewTextContent, props.previewMode],
-  async ([active, contentType, content, mode]) => {
-    if (!active || contentType !== "file" || mode !== "markdown" || !content) return;
+  () => [
+    props.active,
+    resolvedPreviewText.value,
+    resolvedPreviewMode.value,
+  ],
+  async ([active, content, mode]) => {
+    const isMarkdown = mode === "markdown" && Boolean(content);
+    if (!active || !isMarkdown) return;
     await nextTick();
     try {
       await renderMermaidInElement(markdownContainerRef.value);
@@ -41,53 +74,32 @@ watch(
 </script>
 
 <template>
-  <div class="preview-body" v-loading="contentType === 'file' && previewLoading">
-    <!-- 附件预览 -->
-    <template v-if="contentType === 'attachment'">
-      <img
-        v-if="attachmentPreviewType === 'image' && attachmentPreviewUrl"
-        :src="attachmentPreviewUrl"
-        :alt="attachmentPreviewName"
-        class="preview-image"
-      />
-      <video
-        v-else-if="attachmentPreviewType === 'video' && attachmentPreviewUrl"
-        class="preview-video"
-        :src="attachmentPreviewUrl"
-        controls
-        autoplay
-      />
-    </template>
-
-    <!-- 文件预览 -->
-    <template v-else>
-      <div
-        v-if="previewMode === 'markdown' && !previewLoading && !previewError"
-        class="preview-copy-actions"
-      >
-        <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">格式复制</el-button>
-        <el-button size="small" @click="emit('copy-markdown-text')">文本复制</el-button>
-      </div>
-      <div v-if="previewError" class="preview-error">{{ previewError }}</div>
-      
-      <img
-        v-else-if="previewMode === 'image' && previewImageUrl"
-        :src="previewImageUrl"
-        :alt="previewFileName"
-        class="preview-image"
-      />
-      
-      <!-- Markdown 渲染区 -->
-      <div
-        v-else-if="previewMode === 'markdown'"
-        ref="markdownContainerRef"
-        class="preview-markdown"
-        v-html="renderMarkdown(previewTextContent)"
-      />
-      
-      <!-- 纯文本渲染区 -->
-      <pre v-else class="preview-text">{{ previewTextContent }}</pre>
-    </template>
+  <div class="preview-body" v-loading="resolvedLoading">
+    <div v-if="showCopyActions" class="preview-copy-actions">
+      <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">格式复制</el-button>
+      <el-button size="small" @click="emit('copy-markdown-text')">文本复制</el-button>
+    </div>
+    <div v-if="resolvedError" class="preview-error">{{ resolvedError }}</div>
+    <img
+      v-else-if="resolvedPreviewMode === 'image' && resolvedPreviewUrl"
+      :src="resolvedPreviewUrl"
+      :alt="resolvedPreviewName"
+      class="preview-image"
+    />
+    <video
+      v-else-if="resolvedPreviewMode === 'video' && resolvedPreviewUrl"
+      class="preview-video"
+      :src="resolvedPreviewUrl"
+      controls
+      autoplay
+    />
+    <div
+      v-else-if="resolvedPreviewMode === 'markdown'"
+      ref="markdownContainerRef"
+      class="preview-markdown"
+      v-html="renderMarkdown(resolvedPreviewText)"
+    />
+    <pre v-else class="preview-text">{{ resolvedPreviewText }}</pre>
   </div>
 </template>
 
@@ -100,7 +112,7 @@ watch(
   overflow-x: hidden;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 0px;
   padding: 20px 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   transition: all 0.3s ease;

@@ -11,7 +11,7 @@ import { fatalSystemError, recoverableToolError } from "../error/index.js";
 
 const DEFAULT_ATTACHMENT_SESSION_ID = "unknown_session";
 const DEFAULT_ATTACHMENT_SOURCE = "user";
-const ATTACHMENT_SOURCES = new Set(["user", "model", "email"]);
+const ATTACHMENT_SOURCES = new Set(["user", "model", "email", "subtask"]);
 
 export function mergeAttachmentMetas(existingAttachmentMetas = [], incomingAttachmentMetas = []) {
   const existingList = Array.isArray(existingAttachmentMetas)

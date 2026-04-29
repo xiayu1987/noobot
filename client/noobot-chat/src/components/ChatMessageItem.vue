@@ -9,7 +9,11 @@ import { Document, WarningFilled, Download, View } from "@element-plus/icons-vue
 import { ElMessage } from "element-plus";
 import ThinkingPanel from "./ThinkingPanel.vue";
 import MessagePreviewContent from "./MessagePreviewContent.vue";
-import { downloadWorkspaceFileApi, getWorkspaceFileApi } from "../api/chatApi";
+import {
+  buildAttachmentUrl,
+  downloadWorkspaceFileApi,
+  getWorkspaceFileApi,
+} from "../api/chatApi";
 import { renderMermaidInElement } from "../utils/mermaid-renderer";
 import {
   copyMarkdownRichAsHtmlPage,
@@ -110,6 +114,38 @@ async function onDownloadFile(fileItem = {}) {
   }
 }
 
+async function onDownloadAttachment(attachmentItem = {}) {
+  const attachmentUrl = String(
+    attachmentItem?.previewUrl ||
+      buildAttachmentUrl({
+        userId: String(props.userId || "").trim(),
+        attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+        sessionId: String(attachmentItem?.sessionId || "").trim(),
+        attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+      }) ||
+      "",
+  ).trim();
+  if (!attachmentUrl) return;
+  try {
+    const runFetch = props.authFetch || fetch;
+    const res = await runFetch(attachmentUrl);
+    if (!res?.ok) {
+      throw new Error(`下载失败: HTTP ${res?.status || 500}`);
+    }
+    const blob = await res.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = String(attachmentItem?.name || "attachment");
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    ElMessage.error(error?.message || "下载失败");
+  }
+}
+
 function getFileExtension(fileName = "") {
   const normalized = String(fileName || "").trim().toLowerCase();
   const idx = normalized.lastIndexOf(".");
@@ -146,6 +182,45 @@ const attachmentPreviewVisible = ref(false);
 const attachmentPreviewType = ref("");
 const attachmentPreviewUrl = ref("");
 const attachmentPreviewName = ref("");
+const attachmentPreviewLoading = ref(false);
+const attachmentPreviewError = ref("");
+const attachmentPreviewTextContent = ref("");
+
+function isMarkdownMime(mimeType = "", fileName = "") {
+  const normalizedMimeType = String(mimeType || "").trim().toLowerCase();
+  const normalizedFileName = String(fileName || "").trim().toLowerCase();
+  return (
+    normalizedMimeType === "text/markdown" ||
+    normalizedMimeType === "text/x-markdown" ||
+    normalizedMimeType === "application/markdown" ||
+    normalizedMimeType === "application/x-markdown" ||
+    normalizedFileName.endsWith(".md") ||
+    normalizedFileName.endsWith(".markdown") ||
+    normalizedFileName.endsWith(".mdx")
+  );
+}
+
+function isTextPreviewMime(mimeType = "") {
+  const normalizedMimeType = String(mimeType || "").trim().toLowerCase();
+  return (
+    normalizedMimeType.startsWith("text/") ||
+    normalizedMimeType.includes("json") ||
+    normalizedMimeType.includes("xml") ||
+    normalizedMimeType.includes("yaml") ||
+    normalizedMimeType.includes("javascript")
+  );
+}
+
+function canPreviewAttachment(attachmentItem = {}) {
+  const attachmentMimeType = String(attachmentItem?.mimeType || "").trim();
+  const attachmentName = String(attachmentItem?.name || "").trim();
+  return (
+    props.isImageMime(attachmentMimeType) ||
+    attachmentMimeType.startsWith("video/") ||
+    isTextPreviewMime(attachmentMimeType) ||
+    isMarkdownMime(attachmentMimeType, attachmentName)
+  );
+}
 const messageMarkdownRef = ref(null);
 
 function scheduleMermaidRender() {
@@ -190,24 +265,94 @@ async function onCopyMarkdownText() {
   }
 }
 
+async function onCopyAttachmentMarkdownRich(renderedPreviewHtml = "") {
+  try {
+    const rawHtmlContent = String(
+      renderedPreviewHtml || props.renderMarkdown(attachmentPreviewTextContent.value) || "",
+    ).trim();
+    await copyMarkdownRichAsHtmlPage(rawHtmlContent);
+    ElMessage.success("已复制为 HTML 页面");
+  } catch (error) {
+    const errorMessage = String(error?.message || "格式复制失败");
+    if (errorMessage.includes("没有可复制")) {
+      ElMessage.warning(errorMessage);
+      return;
+    }
+    ElMessage.error(errorMessage);
+  }
+}
+
+async function onCopyAttachmentMarkdownText() {
+  try {
+    const markdownText = String(attachmentPreviewTextContent.value || "");
+    await copyMarkdownText(markdownText);
+    ElMessage.success("已复制 Markdown 文本");
+  } catch (error) {
+    const errorMessage = String(error?.message || "文本复制失败");
+    if (errorMessage.includes("没有可复制")) {
+      ElMessage.warning(errorMessage);
+      return;
+    }
+    ElMessage.error(errorMessage);
+  }
+}
+
 function cleanupPreviewImageUrl() {
   if (!previewImageUrl.value) return;
   URL.revokeObjectURL(previewImageUrl.value);
   previewImageUrl.value = "";
 }
 
-function openAttachmentPreview(attachmentItem = {}) {
+async function openAttachmentPreview(attachmentItem = {}) {
   const attachmentMimeType = String(attachmentItem?.mimeType || "").trim();
+  const attachmentName = String(attachmentItem?.name || "").trim();
   const attachmentPreviewSourceUrl = String(
-    attachmentItem?.previewUrl || "",
+    attachmentItem?.previewUrl ||
+      buildAttachmentUrl({
+        userId: String(props.userId || "").trim(),
+        attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+        sessionId: String(attachmentItem?.sessionId || "").trim(),
+        attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+      }) ||
+      "",
   ).trim();
   if (!attachmentPreviewSourceUrl) return;
   const isImageAttachment = props.isImageMime(attachmentMimeType);
   const isVideoAttachment = attachmentMimeType.startsWith("video/");
-  if (!isImageAttachment && !isVideoAttachment) return;
-  attachmentPreviewType.value = isImageAttachment ? "image" : "video";
-  attachmentPreviewUrl.value = attachmentPreviewSourceUrl;
-  attachmentPreviewName.value = String(attachmentItem?.name || "").trim();
+  if (isImageAttachment || isVideoAttachment) {
+    attachmentPreviewType.value = isImageAttachment ? "image" : "video";
+    attachmentPreviewUrl.value = attachmentPreviewSourceUrl;
+    attachmentPreviewName.value = attachmentName;
+    attachmentPreviewError.value = "";
+    attachmentPreviewTextContent.value = "";
+    attachmentPreviewLoading.value = false;
+    attachmentPreviewVisible.value = true;
+    return;
+  }
+  if (!isTextPreviewMime(attachmentMimeType) && !isMarkdownMime(attachmentMimeType, attachmentName)) {
+    return;
+  }
+  attachmentPreviewVisible.value = true;
+  attachmentPreviewLoading.value = true;
+  attachmentPreviewError.value = "";
+  attachmentPreviewTextContent.value = "";
+  attachmentPreviewUrl.value = "";
+  attachmentPreviewName.value = attachmentName;
+  attachmentPreviewType.value = isMarkdownMime(attachmentMimeType, attachmentName)
+    ? "markdown"
+    : "text";
+  try {
+    const runFetch = props.authFetch || fetch;
+    const response = await runFetch(attachmentPreviewSourceUrl);
+    if (!response?.ok) {
+      throw new Error(`预览失败: HTTP ${response?.status || 500}`);
+    }
+    attachmentPreviewTextContent.value = String(await response.text());
+  } catch (error) {
+    attachmentPreviewError.value = error?.message || "附件预览失败";
+  } finally {
+    attachmentPreviewLoading.value = false;
+  }
   attachmentPreviewVisible.value = true;
 }
 
@@ -216,6 +361,9 @@ function closeAttachmentPreview() {
   attachmentPreviewType.value = "";
   attachmentPreviewUrl.value = "";
   attachmentPreviewName.value = "";
+  attachmentPreviewLoading.value = false;
+  attachmentPreviewError.value = "";
+  attachmentPreviewTextContent.value = "";
 }
 
 async function openFilePreview(fileItem = {}) {
@@ -596,7 +744,16 @@ const displayedAttachmentMetas = computed(() => {
               />
             </button>
             <div v-else class="file-icon">
-              <el-icon><Document /></el-icon>
+              <button
+                v-if="canPreviewAttachment(attachmentItem)"
+                type="button"
+                class="attachment-preview-btn file-icon-button"
+                :title="`预览 ${attachmentItem.name || ''}`"
+                @click="openAttachmentPreview(attachmentItem)"
+              >
+                <el-icon><Document /></el-icon>
+              </button>
+              <el-icon v-else><Document /></el-icon>
             </div>
             <div class="file-meta">
               <div class="file-name">{{ attachmentItem.name }}</div>
@@ -604,6 +761,14 @@ const displayedAttachmentMetas = computed(() => {
                 {{ formatFileSize(attachmentItem.size || 0) }}
               </div>
             </div>
+            <button
+              type="button"
+              class="attachment-download-btn"
+              :title="`下载 ${attachmentItem.name || ''}`"
+              @click="onDownloadAttachment(attachmentItem)"
+            >
+              <el-icon><Download /></el-icon>
+            </button>
           </div>
         </div>
       </div>
@@ -625,7 +790,12 @@ const displayedAttachmentMetas = computed(() => {
       :attachment-preview-type="attachmentPreviewType"
       :attachment-preview-url="attachmentPreviewUrl"
       :attachment-preview-name="attachmentPreviewName"
+      :attachment-preview-loading="attachmentPreviewLoading"
+      :attachment-preview-error="attachmentPreviewError"
+      :attachment-preview-text-content="attachmentPreviewTextContent"
       :render-markdown="renderMarkdown"
+      @copy-markdown-rich="onCopyAttachmentMarkdownRich"
+      @copy-markdown-text="onCopyAttachmentMarkdownText"
     />
   </el-dialog>
 
@@ -887,8 +1057,17 @@ const displayedAttachmentMetas = computed(() => {
   background: var(--noobot-msg-file-icon-bg);
 }
 
+.file-icon-button {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .file-meta {
   min-width: 0;
+  flex: 1;
 }
 
 .file-name {
@@ -903,6 +1082,19 @@ const displayedAttachmentMetas = computed(() => {
 .file-size {
   font-size: 12px;
   color: var(--noobot-msg-file-size);
+}
+
+.attachment-download-btn {
+  border: 1px solid var(--noobot-msg-file-card-border);
+  background: transparent;
+  color: var(--noobot-msg-file-name);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .md {
