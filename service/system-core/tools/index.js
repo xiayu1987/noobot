@@ -125,7 +125,10 @@ function resolveMaxSubAgentDepth(effectiveConfig = {}) {
 }
 
 export async function buildTools(ctx) {
-  const runtime = ctx?.agentContext?.runtime || {};
+  const runtime =
+    ctx?.agentContext?.runtime ||
+    ctx?.agentContext?.execution?.controllers?.runtime ||
+    {};
   const effectiveConfig = mergeConfig(
     runtime?.globalConfig || {},
     runtime?.userConfig || {},
@@ -167,10 +170,11 @@ async function filterToolsByRuntimePolicy({
 }) {
   const sourceTools = Array.isArray(tools)
     ? tools
-    : Array.isArray(agentContext?.tools)
-      ? agentContext.tools
+    : Array.isArray(agentContext?.payload?.tools?.registry)
+      ? agentContext.payload.tools.registry
       : [];
-  const runtime = agentContext?.runtime || {};
+  const runtime =
+    agentContext?.runtime || agentContext?.execution?.controllers?.runtime || {};
   const sessionId = String(
     runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
   ).trim();

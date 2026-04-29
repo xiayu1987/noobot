@@ -21,7 +21,9 @@ function isWithinBasePath(basePath = "", targetPath = "") {
 
 function resolveRuntimeBasePath(agentContext = {}) {
   const runtime = agentContext?.runtime || {};
-  const basePath = String(agentContext?.basePath || runtime?.basePath || "").trim();
+  const basePath = String(
+    agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
+  ).trim();
   if (!basePath) {
     throw recoverableToolError("runtime basePath missing", {
       code: "RECOVERABLE_RUNTIME_BASEPATH_MISSING",

@@ -214,7 +214,8 @@ function buildScriptToolDescription({
 
 export function createScriptTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
-  const basePath = agentContext?.basePath || runtime.basePath || "";
+  const basePath =
+    agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};
   const effectiveConfig = mergeConfig(globalConfig, runtime.userConfig || {});
   if (!basePath) return [];

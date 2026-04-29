@@ -50,7 +50,11 @@ export function createMcpTool({ agentContext }) {
       const eventListener = runtime?.eventListener || null;
       const signal = runtime?.abortSignal || null;
       const userInteractionBridge = runtime?.userInteractionBridge || null;
-      const basePath = String(agentContext?.basePath || "").trim();
+      const basePath = String(
+        agentContext?.environment?.workspace?.basePath ||
+          runtime?.basePath ||
+          "",
+      ).trim();
       const workspaceRoot = String(globalConfig?.workspaceRoot || "").trim();
       const userId = String(runtime?.userId || agentContext?.userId || "").trim();
       const sessionId = String(systemRuntime?.sessionId || "").trim();

@@ -289,11 +289,18 @@ function buildContextMessages(agentContext) {
   }
 
   const out = [];
-  for (const content of agentContext?.systemMessages || []) {
+  const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
+    ? agentContext.payload.messages.system
+    : [];
+  const historyMessages = Array.isArray(agentContext?.payload?.messages?.history)
+    ? agentContext.payload.messages.history
+    : [];
+
+  for (const content of systemMessages) {
     out.push(new SystemMessage(content));
   }
 
-  for (const msg of agentContext?.conversationMessages || []) {
+  for (const msg of historyMessages) {
     const role = msg.role || "";
     if (role === "assistant") {
       const toolCalls = toLangChainToolCalls(msg.tool_calls || []);
@@ -676,7 +683,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
 }
 
 export async function runAgentTurn({ agentContext, userMessage }) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = agentContext?.execution?.controllers?.runtime || {};
   const sys = runtime.systemRuntime || {};
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
@@ -684,7 +691,9 @@ export async function runAgentTurn({ agentContext, userMessage }) {
   const eventListener = runtime.eventListener || null;
   const abortSignal = runtime.abortSignal || null;
   const dialogProcessId = sys.dialogProcessId || "";
-  const tools = Array.isArray(agentContext?.tools) ? agentContext.tools : [];
+  const tools = Array.isArray(agentContext?.payload?.tools?.registry)
+    ? agentContext.payload.tools.registry
+    : [];
 
   const selectedModelSpec = resolveDefaultModelSpec({
     globalConfig,

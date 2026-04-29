@@ -207,23 +207,29 @@ export class BotManager {
     parentAsyncResultContainer = null,
   }) {
     return new ContextBuilder({
-      globalConfig: this.globalConfig,
-      userConfig,
-      eventListener,
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
-      attachmentMetas,
-      sessionManager: this.session,
-      memoryService: this.memory,
-      attachmentService: this.attach,
-      skillService: this.skill,
-      botManager: this,
-      userInteractionBridge,
-      runConfig,
-      abortSignal,
-      parentAsyncResultContainer,
+      config: {
+        globalConfig: this.globalConfig,
+        userConfig,
+      },
+      serviceContainer: {
+        eventListener,
+        sessionManager: this.session,
+        memoryService: this.memory,
+        attachmentService: this.attach,
+        skillService: this.skill,
+        botManager: this,
+        userInteractionBridge,
+      },
+      sessionContext: {
+        userId,
+        sessionId,
+        caller,
+        parentSessionId,
+        attachmentMetas,
+        runConfig,
+        abortSignal,
+        parentAsyncResultContainer,
+      },
     });
   }
 
@@ -311,8 +317,8 @@ export class BotManager {
   }
 
   _applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
-    const sourceTools = Array.isArray(agentContext?.tools)
-      ? agentContext.tools
+    const sourceTools = Array.isArray(agentContext?.payload?.tools?.registry)
+      ? agentContext.payload.tools.registry
       : [];
     if (!sourceTools.length) return agentContext;
     const toolPolicy = runConfig?.toolPolicy || {};
@@ -367,7 +373,16 @@ export class BotManager {
       seenNames.add(toolName);
       dedupedTools.push(toolItem);
     }
-    return { ...agentContext, tools: dedupedTools };
+    return {
+      ...agentContext,
+      payload: {
+        ...(agentContext?.payload || {}),
+        tools: {
+          ...(agentContext?.payload?.tools || {}),
+          registry: dedupedTools,
+        },
+      },
+    };
   }
 
   async _buildAgentContext({
@@ -409,7 +424,8 @@ export class BotManager {
     );
     emitEvent(eventListener, "context_ready", {
       sessionId,
-      messageCount: scopedAgentContext?.conversationMessages?.length || 0,
+      messageCount:
+        scopedAgentContext?.payload?.messages?.history?.length || 0,
     });
     return scopedAgentContext;
   }
@@ -649,8 +665,10 @@ export class BotManager {
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       });
       const userMessageAttachmentMetas = (
-        Array.isArray(agentContext?.runtime?.attachmentMetas)
-          ? agentContext.runtime.attachmentMetas
+        Array.isArray(
+          agentContext?.execution?.controllers?.runtime?.attachmentMetas,
+        )
+          ? agentContext.execution.controllers.runtime.attachmentMetas
           : []
       ).map((attachmentItem) => ({
         attachmentId: String(attachmentItem?.attachmentId || ""),
@@ -677,9 +695,24 @@ export class BotManager {
       const agentResult = await runAgentTurn({
         agentContext: {
           ...agentContext,
-          runtime: {
-            ...(agentContext?.runtime || {}),
-            abortSignal,
+          execution: {
+            ...(agentContext?.execution || {}),
+            controllers: {
+              ...(agentContext?.execution?.controllers || {}),
+              runtime: {
+                ...(agentContext?.execution?.controllers?.runtime || {}),
+                abortSignal,
+              },
+            },
+          },
+          payload: {
+            ...(agentContext?.payload || {}),
+            tools: {
+              ...(agentContext?.payload?.tools || {}),
+              registry: Array.isArray(agentContext?.payload?.tools?.registry)
+                ? agentContext.payload.tools.registry
+                : [],
+            },
           },
         },
         userMessage: message,
