@@ -4,23 +4,61 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  access,
-  mkdir,
   readdir,
-  readFile,
-  rename,
   rm,
-  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { v4 as uuidv4 } from "uuid";
 import { mergeConfig } from "../config/index.js";
 import { fatalSystemError } from "../error/index.js";
+import { PathResolver } from "./path-resolver.js";
+import { StorageService } from "./storage-service.js";
+import { SessionTreeManager } from "./session-tree-manager.js";
+import { TaskManager } from "./task-manager.js";
+import { ExecutionManager } from "./execution-manager.js";
+import { SessionStoreManager } from "./session-store-manager.js";
 
 export class SessionManager {
   constructor(globalConfig) {
     this.globalConfig = globalConfig;
-    this._sessionTreeLocks = new Map();
+    this.pathResolver = new PathResolver(globalConfig || {});
+    this.storageService = new StorageService({
+      pathResolver: this.pathResolver,
+    });
+    this.sessionTreeManager = new SessionTreeManager({
+      storageService: this.storageService,
+      pathResolver: this.pathResolver,
+      now: () => this._now(),
+    });
+    this.sessionStoreManager = new SessionStoreManager({
+      now: () => this._now(),
+      ensureRuntimeDirsByBasePath: (...args) =>
+        this._ensureRuntimeDirsByBasePath(...args),
+      resolveParentSessionId: (...args) => this._resolveParentSessionId(...args),
+      resolveSessionScope: (...args) => this._resolveSessionScope(...args),
+      sessionDir: (...args) => this._sessionDir(...args),
+      sessionFile: (...args) => this._sessionFile(...args),
+      taskFile: (...args) => this._taskFile(...args),
+      executionFile: (...args) => this._executionFile(...args),
+      exists: (...args) => this.storageService.exists(...args),
+      readJson: (...args) => this.storageService.readJson(...args),
+      writeJson: (...args) => this.storageService.writeJson(...args),
+      normalizeMessage: (...args) => this._normalizeMessage(...args),
+      normalizeMessages: (...args) => this._normalizeMessages(...args),
+    });
+    this.taskManager = new TaskManager({
+      now: () => this._now(),
+      resolveSessionScope: (...args) => this._resolveSessionScope(...args),
+      ensureSession: (...args) => this.ensureSession(...args),
+      getSessionBundle: (...args) => this.getSessionBundle(...args),
+      writeJson: (...args) => this.storageService.writeJson(...args),
+      normalizeTaskItem: (...args) => this._normalizeTaskItem(...args),
+    });
+    this.executionManager = new ExecutionManager({
+      now: () => this._now(),
+      resolveSessionScope: (...args) => this._resolveSessionScope(...args),
+      readJson: (...args) => this.storageService.readJson(...args),
+      writeJson: (...args) => this.storageService.writeJson(...args),
+    });
   }
 
   _now() {
@@ -28,19 +66,11 @@ export class SessionManager {
   }
 
   _resolveBasePath(userId = "") {
-    const normalizedUserId = String(userId || "").trim();
-    const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
-    if (!normalizedUserId || !workspaceRoot) {
-      throw fatalSystemError("workspaceRoot/userId required", {
-        code: "FATAL_WORKSPACE_PATH_INVALID",
-        details: { userId: normalizedUserId, workspaceRoot },
-      });
-    }
-    return path.resolve(workspaceRoot, normalizedUserId);
+    return this.pathResolver.resolveBasePath(userId);
   }
 
   _sessionRoot(basePath) {
-    return path.join(basePath, "runtime/session");
+    return this.pathResolver.sessionRoot(basePath);
   }
 
   _loopSession(sessionId, tree, chain = []) {
@@ -57,13 +87,7 @@ export class SessionManager {
   }
 
   _resolveRootSessionIdFromTree(sessionId = "", tree = {}) {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return "";
-    const nodes =
-      tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {};
-    if (!nodes?.[normalizedSessionId]) return normalizedSessionId;
-    const chain = this._loopSession(normalizedSessionId, tree, []);
-    return String(chain?.[chain.length - 1] || normalizedSessionId).trim();
+    return this.sessionTreeManager.resolveRootSessionIdFromTree(sessionId, tree);
   }
 
   async _sessionDir(basePath, sessionId, parentSessionId = "") {
@@ -114,16 +138,11 @@ export class SessionManager {
   }
 
   _sessionTreeFile(basePath) {
-    return path.join(this._sessionRoot(basePath), "session-tree.json");
+    return this.pathResolver.sessionTreeFile(basePath);
   }
 
   async _readJson(filePath, fallback = {}) {
-    try {
-      const raw = await readFile(filePath, "utf8");
-      return JSON.parse(raw);
-    } catch {
-      return fallback;
-    }
+    return this.storageService.readJson(filePath, fallback);
   }
 
   async _resolveParentSessionId(basePath, sessionId, parentSessionId = "") {
@@ -172,22 +191,11 @@ export class SessionManager {
   }
 
   async _readExecutionBundle(basePath, sessionId, parentSessionId = "") {
-    const { executionFile } = await this._resolveSessionScope(
+    return this.executionManager.readExecutionBundle(
       basePath,
       sessionId,
       parentSessionId,
     );
-    const executionBundle = await this._readJson(executionFile, {
-      sessionId,
-      logs: [],
-      updatedAt: this._now(),
-    });
-    executionBundle.sessionId = executionBundle.sessionId || sessionId;
-    executionBundle.logs = Array.isArray(executionBundle.logs)
-      ? executionBundle.logs
-      : [];
-    executionBundle.updatedAt = executionBundle.updatedAt || this._now();
-    return executionBundle;
   }
 
   async _writeExecutionBundle(
@@ -196,16 +204,16 @@ export class SessionManager {
     parentSessionId = "",
     execution = {},
   ) {
-    const { executionFile } = await this._resolveSessionScope(
+    await this.executionManager.writeExecutionBundle(
       basePath,
       sessionId,
       parentSessionId,
+      execution,
     );
-    await this._writeJson(executionFile, execution);
   }
 
   async _writeJson(filePath, data) {
-    await writeFile(filePath, JSON.stringify(data, null, 2));
+    await this.storageService.writeJson(filePath, data);
   }
 
   _normalizeMessage(message = {}) {
@@ -275,113 +283,23 @@ export class SessionManager {
   }
 
   async _ensureRuntimeDirsByBasePath(basePath) {
-    try {
-      await access(basePath);
-    } catch {
-      return false;
-    }
-    await mkdir(this._sessionRoot(basePath), { recursive: true });
-    return true;
+    return this.storageService.ensureRuntimeDirsByBasePath(basePath);
   }
 
   async _readSessionTree(basePath) {
-    const ensured = await this._ensureRuntimeDirsByBasePath(basePath);
-    if (!ensured) {
-      return { roots: [], nodes: {}, updatedAt: this._now() };
-    }
-    const sessionTreeFile = this._sessionTreeFile(basePath);
-    const sessionTreeData = await this._readJson(sessionTreeFile, {
-      roots: [],
-      nodes: {},
-      updatedAt: this._now(),
-    });
-    return {
-      roots: Array.isArray(sessionTreeData?.roots) ? sessionTreeData.roots : [],
-      nodes:
-        sessionTreeData?.nodes && typeof sessionTreeData.nodes === "object"
-          ? sessionTreeData.nodes
-          : {},
-      updatedAt: sessionTreeData?.updatedAt || this._now(),
-    };
+    return this.sessionTreeManager.readSessionTree(basePath);
   }
 
   async _writeSessionTree(basePath, tree) {
-    const ensured = await this._ensureRuntimeDirsByBasePath(basePath);
-    if (!ensured) {
-      throw fatalSystemError(`workspace not initialized: ${basePath}`, {
-        code: "FATAL_WORKSPACE_NOT_INITIALIZED",
-        details: { basePath },
-      });
-    }
-    const payload = {
-      roots: Array.isArray(tree?.roots) ? tree.roots : [],
-      nodes: tree?.nodes && typeof tree.nodes === "object" ? tree.nodes : {},
-      updatedAt: this._now(),
-    };
-    const treeFile = this._sessionTreeFile(basePath);
-    const tempFile = `${treeFile}.tmp-${process.pid}-${Date.now()}`;
-    await writeFile(tempFile, JSON.stringify(payload, null, 2), "utf8");
-    await rename(tempFile, treeFile);
+    await this.sessionTreeManager.writeSessionTree(basePath, tree);
   }
 
   _normalizeSessionTreeShape(tree = {}) {
-    const nodes =
-      tree?.nodes && typeof tree.nodes === "object" ? { ...tree.nodes } : {};
-    for (const [nodeId, node] of Object.entries(nodes)) {
-      const normalizedNodeId = String(nodeId || "").trim();
-      if (!normalizedNodeId) {
-        delete nodes[nodeId];
-        continue;
-      }
-      const normalizedChildren = Array.isArray(node?.children)
-        ? Array.from(
-            new Set(
-              node.children
-                .map((childId) => String(childId || "").trim())
-                .filter(Boolean),
-            ),
-          )
-        : [];
-      nodes[normalizedNodeId] = {
-        ...node,
-        sessionId: normalizedNodeId,
-        parentSessionId: String(node?.parentSessionId || "").trim(),
-        children: normalizedChildren,
-      };
-      if (normalizedNodeId !== nodeId) delete nodes[nodeId];
-    }
-
-    const roots = Object.values(nodes)
-      .filter((node) => !String(node?.parentSessionId || "").trim())
-      .map((node) => String(node?.sessionId || "").trim())
-      .filter(Boolean);
-
-    return {
-      roots: Array.from(new Set(roots)),
-      nodes,
-      updatedAt: tree?.updatedAt || this._now(),
-    };
+    return this.sessionTreeManager.normalizeSessionTreeShape(tree);
   }
 
   async _withSessionTreeLock(basePath, run) {
-    const lockKey = String(basePath || "");
-    const previousLock = this._sessionTreeLocks.get(lockKey) || Promise.resolve();
-    let releaseCurrentLock = () => {};
-    const currentLock = new Promise((resolve) => {
-      releaseCurrentLock = resolve;
-    });
-    const lockMarker = previousLock.then(() => currentLock);
-    this._sessionTreeLocks.set(lockKey, lockMarker);
-
-    await previousLock;
-    try {
-      return await run();
-    } finally {
-      releaseCurrentLock();
-      if (this._sessionTreeLocks.get(lockKey) === lockMarker) {
-        this._sessionTreeLocks.delete(lockKey);
-      }
-    }
+    return this.sessionTreeManager.withSessionTreeLock(basePath, run);
   }
 
   async ensureRuntimeDirs(userId) {
@@ -390,78 +308,11 @@ export class SessionManager {
   }
 
   async upsertSessionTree({ userId, sessionId, parentSessionId = "" }) {
-    if (!sessionId) return;
     const basePath = this._resolveBasePath(userId);
-    await this._withSessionTreeLock(basePath, async () => {
-      const sessionTree = this._normalizeSessionTreeShape(
-        await this._readSessionTree(basePath),
-      );
-      const now = this._now();
-      const normalizedSessionId = String(sessionId || "").trim();
-      const normalizedParentSessionId = String(parentSessionId || "").trim();
-
-      if (!sessionTree.nodes[normalizedSessionId]) {
-        sessionTree.nodes[normalizedSessionId] = {
-          sessionId: normalizedSessionId,
-          parentSessionId: normalizedParentSessionId,
-          children: [],
-          createdAt: now,
-          updatedAt: now,
-        };
-      } else {
-        sessionTree.nodes[normalizedSessionId].parentSessionId =
-          normalizedParentSessionId;
-        sessionTree.nodes[normalizedSessionId].updatedAt = now;
-        if (!Array.isArray(sessionTree.nodes[normalizedSessionId].children)) {
-          sessionTree.nodes[normalizedSessionId].children = [];
-        }
-      }
-
-      for (const [nodeId, node] of Object.entries(sessionTree.nodes || {})) {
-        if (nodeId === normalizedParentSessionId) continue;
-        const children = Array.isArray(node?.children) ? node.children : [];
-        sessionTree.nodes[nodeId].children = children.filter(
-          (childId) => String(childId || "").trim() !== normalizedSessionId,
-        );
-      }
-
-      if (normalizedParentSessionId) {
-        if (!sessionTree.nodes[normalizedParentSessionId]) {
-          throw fatalSystemError(
-            `parent session not found (possibly deleted): ${normalizedParentSessionId}`,
-            {
-              code: "FATAL_PARENT_SESSION_MISSING",
-              details: { normalizedParentSessionId },
-            },
-          );
-        }
-        const parentChildren = Array.isArray(
-          sessionTree.nodes[normalizedParentSessionId].children,
-        )
-          ? sessionTree.nodes[normalizedParentSessionId].children
-          : [];
-        if (!parentChildren.includes(normalizedSessionId)) {
-          parentChildren.push(normalizedSessionId);
-        }
-        sessionTree.nodes[normalizedParentSessionId].children = parentChildren;
-        sessionTree.nodes[normalizedParentSessionId].updatedAt = now;
-        sessionTree.roots = sessionTree.roots.filter(
-          (rootSessionId) => rootSessionId !== normalizedSessionId,
-        );
-        if (
-          !sessionTree.roots.includes(normalizedParentSessionId) &&
-          !String(
-            sessionTree.nodes[normalizedParentSessionId].parentSessionId || "",
-          )
-        ) {
-          sessionTree.roots.push(normalizedParentSessionId);
-        }
-      }
-
-      await this._writeSessionTree(
-        basePath,
-        this._normalizeSessionTreeShape(sessionTree),
-      );
+    await this.sessionTreeManager.upsertSessionTree({
+      basePath,
+      sessionId,
+      parentSessionId,
     });
   }
 
@@ -602,82 +453,13 @@ export class SessionManager {
 
   async ensureSession(userId, sessionId, parentSessionId = "", meta = {}) {
     const basePath = this._resolveBasePath(userId);
-    await this._ensureRuntimeDirsByBasePath(basePath);
-    const resolvedParentSessionId = await this._resolveParentSessionId(
+    await this.sessionStoreManager.ensureSession({
       basePath,
+      userId,
       sessionId,
       parentSessionId,
-    );
-    const sessionDir = await this._sessionDir(
-      basePath,
-      sessionId,
-      resolvedParentSessionId,
-    );
-    await mkdir(sessionDir, { recursive: true });
-
-    const sessionFile = await this._sessionFile(
-      basePath,
-      sessionId,
-      resolvedParentSessionId,
-    );
-    let sessionExists = true;
-    try {
-      await access(sessionFile);
-    } catch {
-      sessionExists = false;
-    }
-    if (!sessionExists) {
-      await this._writeJson(sessionFile, {
-        sessionId,
-        parentSessionId: resolvedParentSessionId || "",
-        caller: meta?.caller || "user",
-        modelAlias: meta?.modelAlias || "",
-        currentTaskId: "",
-        shortMemoryCheckpoint: 0,
-        messages: [],
-        createdAt: this._now(),
-        updatedAt: this._now(),
-      });
-    }
-
-    const taskFile = await this._taskFile(
-      basePath,
-      sessionId,
-      resolvedParentSessionId,
-    );
-    let taskExists = true;
-    try {
-      await access(taskFile);
-    } catch {
-      taskExists = false;
-    }
-    if (!taskExists) {
-      await this._writeJson(taskFile, {
-        sessionId,
-        currentTaskId: "",
-        tasks: [],
-        updatedAt: this._now(),
-      });
-    }
-
-    const executionFile = await this._executionFile(
-      basePath,
-      sessionId,
-      resolvedParentSessionId,
-    );
-    let executionExists = true;
-    try {
-      await access(executionFile);
-    } catch {
-      executionExists = false;
-    }
-    if (!executionExists) {
-      await this._writeJson(executionFile, {
-        sessionId,
-        logs: [],
-        updatedAt: this._now(),
-      });
-    }
+      meta,
+    });
   }
 
   async createSession({
@@ -696,51 +478,11 @@ export class SessionManager {
 
   async getSessionBundle({ userId, sessionId, parentSessionId = "" }) {
     const basePath = this._resolveBasePath(userId);
-    const resolvedParentSessionId = await this._resolveParentSessionId(
+    return this.sessionStoreManager.getSessionBundle({
       basePath,
       sessionId,
       parentSessionId,
-    );
-    const sessionFile = await this._sessionFile(
-      basePath,
-      sessionId,
-      resolvedParentSessionId,
-    );
-    const taskFile = await this._taskFile(
-      basePath,
-      sessionId,
-      resolvedParentSessionId,
-    );
-
-    try {
-      await access(sessionFile);
-    } catch {
-      return { exists: false, session: null, task: null };
-    }
-
-    const session = await this._readJson(sessionFile, {});
-    session.parentSessionId = session.parentSessionId || resolvedParentSessionId || "";
-    session.caller = session.caller || "user";
-    session.modelAlias = session.modelAlias || "";
-
-    const normalizedMessages = this._normalizeMessages(session.messages || []);
-    const beforeJson = JSON.stringify(session.messages || []);
-    const afterJson = JSON.stringify(normalizedMessages);
-    session.messages = normalizedMessages;
-    if (beforeJson !== afterJson) {
-      session.updatedAt = session.updatedAt || this._now();
-      await this._writeJson(sessionFile, session);
-    }
-
-    return {
-      exists: true,
-      session,
-      task: await this._readJson(taskFile, {
-        sessionId,
-        currentTaskId: "",
-        tasks: [],
-      }),
-    };
+    });
   }
 
   async appendTurn({
@@ -761,56 +503,24 @@ export class SessionManager {
     parentSessionId = "",
   }) {
     const basePath = this._resolveBasePath(userId);
-    const resolvedParentSessionId = await this._resolveParentSessionId(
+    await this.sessionStoreManager.appendTurn({
       basePath,
-      sessionId,
-      parentSessionId,
-    );
-    await this.ensureSession(userId, sessionId, resolvedParentSessionId);
-    const sessionBundle = await this.getSessionBundle({
       userId,
       sessionId,
-      parentSessionId: resolvedParentSessionId,
-    });
-
-    const resolvedTaskId = taskId ?? sessionBundle.session?.currentTaskId ?? "";
-    const resolvedTaskStatus = taskStatus ?? (resolvedTaskId ? "start" : "");
-
-    sessionBundle.session.messages = this._normalizeMessages(
-      sessionBundle.session.messages || [],
-    );
-
-    const turn = this._normalizeMessage({
       role,
       content,
-      type: type || "",
-      dialogProcessId: dialogProcessId || "",
-      parentDialogProcessId: parentDialogProcessId || "",
-      taskId: resolvedTaskId,
-      taskStatus: resolvedTaskStatus,
-      modelAlias: String(modelAlias || "").trim(),
-      modelName: String(modelName || "").trim(),
-      ts: this._now(),
+      type,
+      taskId,
+      taskStatus,
+      dialogProcessId,
+      parentDialogProcessId,
+      tool_calls,
+      tool_call_id,
+      attachmentMetas,
+      modelAlias,
+      modelName,
+      parentSessionId,
     });
-
-    if (tool_call_id) turn.tool_call_id = tool_call_id;
-    if (Array.isArray(tool_calls) && tool_calls.length) {
-      turn.tool_calls = tool_calls;
-    }
-    if (Array.isArray(attachmentMetas) && attachmentMetas.length) {
-      turn.attachmentMetas = attachmentMetas;
-    }
-
-    sessionBundle.session.messages.push(turn);
-    sessionBundle.session.updatedAt = this._now();
-    if (sessionBundle.session.shortMemoryCheckpoint === undefined) {
-      sessionBundle.session.shortMemoryCheckpoint = 0;
-    }
-
-    await this._writeJson(
-      await this._sessionFile(basePath, sessionId, resolvedParentSessionId),
-      sessionBundle.session,
-    );
   }
 
   async getSessionTurns({ userId, sessionId }) {
@@ -864,31 +574,17 @@ export class SessionManager {
     parentSessionId = "",
   }) {
     const basePath = this._resolveBasePath(userId);
-    const { resolvedParentSessionId } = await this._resolveSessionScope(
+    await this.executionManager.appendExecutionLog({
       basePath,
       sessionId,
-      parentSessionId,
-    );
-    const executionBundle = await this._readExecutionBundle(
-      basePath,
-      sessionId,
-      resolvedParentSessionId,
-    );
-    executionBundle.logs.push({
       dialogProcessId,
       event,
       category,
       type,
-      data: data || {},
-      ts: ts || this._now(),
+      data,
+      ts,
+      parentSessionId,
     });
-    executionBundle.updatedAt = this._now();
-    await this._writeExecutionBundle(
-      basePath,
-      sessionId,
-      resolvedParentSessionId,
-      executionBundle,
-    );
   }
 
   _sessionContextConfig(userConfig = {}) {
@@ -961,57 +657,15 @@ export class SessionManager {
     parentSessionId = "",
   }) {
     const basePath = this._resolveBasePath(userId);
-    const { resolvedParentSessionId, sessionFile, taskFile } =
-      await this._resolveSessionScope(basePath, sessionId, parentSessionId);
-
-    await this.ensureSession(userId, sessionId, resolvedParentSessionId);
-    const sessionBundle = await this.getSessionBundle({
+    return this.taskManager.startSkillTask({
       userId,
       sessionId,
-      parentSessionId: resolvedParentSessionId,
-    });
-
-    const now = this._now();
-    const previousTaskId =
-      sessionBundle.task.currentTaskId || sessionBundle.session.currentTaskId || "";
-    if (previousTaskId) {
-      const previousTask = (sessionBundle.task.tasks || []).find(
-        (taskItem) => taskItem.taskId === previousTaskId,
-      );
-      if (previousTask && previousTask.status !== "completed") {
-        previousTask.status = "completed";
-        previousTask.endedAt = now;
-      }
-    }
-
-    const taskId = uuidv4();
-    const task = {
-      taskId,
       skillName,
-      taskName: taskName || `task-${skillName || "unknown"}`,
-      status: "start",
-      startedAt: now,
-      endedAt: "",
+      taskName,
       meta,
-    };
-
-    sessionBundle.task.tasks = sessionBundle.task.tasks || [];
-    sessionBundle.task.tasks.push(task);
-    sessionBundle.task.currentTaskId = taskId;
-    sessionBundle.task.updatedAt = now;
-
-    sessionBundle.session.currentTaskId = taskId;
-    if (sessionBundle.session.messages?.length) {
-      const lastMessage =
-        sessionBundle.session.messages[sessionBundle.session.messages.length - 1];
-      lastMessage.taskId = taskId;
-      lastMessage.taskStatus = "start";
-    }
-    sessionBundle.session.updatedAt = now;
-
-    await this._writeJson(taskFile, sessionBundle.task);
-    await this._writeJson(sessionFile, sessionBundle.session);
-    return task;
+      parentSessionId,
+      basePath,
+    });
   }
 
   async finishSkillTask({
@@ -1022,50 +676,14 @@ export class SessionManager {
     parentSessionId = "",
   }) {
     const basePath = this._resolveBasePath(userId);
-    const { resolvedParentSessionId, sessionFile, taskFile } =
-      await this._resolveSessionScope(basePath, sessionId, parentSessionId);
-
-    await this.ensureSession(userId, sessionId, resolvedParentSessionId);
-    const sessionBundle = await this.getSessionBundle({
+    return this.taskManager.finishSkillTask({
       userId,
       sessionId,
-      parentSessionId: resolvedParentSessionId,
+      taskId,
+      result,
+      parentSessionId,
+      basePath,
     });
-
-    const now = this._now();
-    const currentTaskId =
-      taskId ||
-      sessionBundle.task.currentTaskId ||
-      sessionBundle.session.currentTaskId;
-    if (!currentTaskId) return null;
-
-    const task = (sessionBundle.task.tasks || []).find(
-      (taskItem) => taskItem.taskId === currentTaskId,
-    );
-    if (!task) return null;
-
-    task.status = "completed";
-    task.endedAt = now;
-    if (result) task.result = result;
-
-    if (sessionBundle.task.currentTaskId === currentTaskId) {
-      sessionBundle.task.currentTaskId = "";
-    }
-    sessionBundle.task.updatedAt = now;
-
-    if (sessionBundle.session.currentTaskId === currentTaskId) {
-      sessionBundle.session.currentTaskId = "";
-    }
-    if (sessionBundle.session.messages?.length) {
-      const lastMessage =
-        sessionBundle.session.messages[sessionBundle.session.messages.length - 1];
-      lastMessage.taskStatus = "completed";
-    }
-    sessionBundle.session.updatedAt = now;
-
-    await this._writeJson(taskFile, sessionBundle.task);
-    await this._writeJson(sessionFile, sessionBundle.session);
-    return task;
   }
 
   async saveCurrentTurnTasks({
@@ -1075,56 +693,13 @@ export class SessionManager {
     currentTurnTasks = [],
   }) {
     const basePath = this._resolveBasePath(userId);
-    const { resolvedParentSessionId, sessionFile, taskFile } =
-      await this._resolveSessionScope(basePath, sessionId, parentSessionId);
-    await this.ensureSession(userId, sessionId, resolvedParentSessionId);
-    const sessionBundle = await this.getSessionBundle({
+    return this.taskManager.saveCurrentTurnTasks({
       userId,
       sessionId,
-      parentSessionId: resolvedParentSessionId,
+      parentSessionId,
+      currentTurnTasks,
+      basePath,
     });
-
-    const normalizedTurnTasks = (Array.isArray(currentTurnTasks)
-      ? currentTurnTasks
-      : []
-    )
-      .map((task) => this._normalizeTaskItem(task))
-      .filter((task) => task.taskId);
-    if (!normalizedTurnTasks.length) return sessionBundle.task;
-
-    const existingTasks = Array.isArray(sessionBundle.task?.tasks)
-      ? sessionBundle.task.tasks.map((task) => this._normalizeTaskItem(task))
-      : [];
-    const taskIndexMap = new Map(
-      existingTasks.map((task, index) => [task.taskId, index]),
-    );
-    for (const task of normalizedTurnTasks) {
-      const existingIndex = taskIndexMap.get(task.taskId);
-      if (existingIndex === undefined) {
-        existingTasks.push(task);
-        taskIndexMap.set(task.taskId, existingTasks.length - 1);
-      } else {
-        existingTasks[existingIndex] = {
-          ...existingTasks[existingIndex],
-          ...task,
-        };
-      }
-    }
-
-    const lastTask = normalizedTurnTasks[normalizedTurnTasks.length - 1] || null;
-    const currentTaskId = String(lastTask?.taskId || "").trim();
-    const now = this._now();
-
-    sessionBundle.task.tasks = existingTasks;
-    sessionBundle.task.currentTaskId = currentTaskId;
-    sessionBundle.task.updatedAt = now;
-
-    sessionBundle.session.currentTaskId = currentTaskId;
-    sessionBundle.session.updatedAt = now;
-
-    await this._writeJson(taskFile, sessionBundle.task);
-    await this._writeJson(sessionFile, sessionBundle.session);
-    return sessionBundle.task;
   }
 
   async getContextRecords({ userId, sessionId, userConfig = {} }) {
