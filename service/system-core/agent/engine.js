@@ -427,8 +427,6 @@ function isAbortError(error) {
 }
 
 function extractAttachmentMetasFromToolResult(toolName = "", toolResultText = "") {
-  const normalizedToolName = String(toolName || "").trim();
-  if (normalizedToolName !== "multimodal_generate") return [];
   const normalizedToolResultText = String(toolResultText || "").trim();
   if (!normalizedToolResultText) return [];
   try {
@@ -436,6 +434,7 @@ function extractAttachmentMetasFromToolResult(toolName = "", toolResultText = ""
     const attachmentMetas = Array.isArray(parsedResult?.attachmentMetas)
       ? parsedResult.attachmentMetas
       : [];
+    if (!attachmentMetas.length) return [];
     return attachmentMetas.map((attachmentItem) => ({
       attachmentId: String(attachmentItem?.attachmentId || "").trim(),
       name: String(attachmentItem?.name || "").trim(),
@@ -443,6 +442,8 @@ function extractAttachmentMetasFromToolResult(toolName = "", toolResultText = ""
         attachmentItem?.mimeType || "application/octet-stream",
       ).trim(),
       size: Number(attachmentItem?.size || 0),
+      sessionId: String(attachmentItem?.sessionId || "").trim(),
+      attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
       generatedByModel: attachmentItem?.generatedByModel === true,
       generationSource: String(attachmentItem?.generationSource || "").trim(),
     }));

@@ -109,13 +109,25 @@ export function createDatabaseConnectorTools(context = {}) {
       connectionInfo = mergeConnectionInfo(connectionInfo, {
         database_type: databaseType,
       });
-      const fields = attachDefaultValuesToFields(
+      const baseFields = attachDefaultValuesToFields(
         alignFieldsWithConnectionInfo(
           databaseFields(databaseType),
           connectionInfo,
         ),
         connectionInfo,
       );
+      const fields = [
+        {
+          name: "connector_name",
+          displayName: "连接器名称",
+          required: false,
+          default_value: connectorName,
+          defaultValue: connectorName,
+        },
+        ...baseFields.filter(
+          (fieldItem) => String(fieldItem?.name || "").trim() !== "connector_name",
+        ),
+      ];
       const missing = getMissingFieldNames(fields, connectionInfo);
       const needConnectionInfo = missing.length > 0;
 

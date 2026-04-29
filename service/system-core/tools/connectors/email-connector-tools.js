@@ -97,10 +97,22 @@ export function createEmailConnectorTools(context = {}) {
       const providedDefaults = normalizeProvidedEmailDefaults(default_values);
       connectionInfo = mergeConnectionInfo(connectionInfo, rememberedConnectionInfo);
       connectionInfo = mergeConnectionInfo(connectionInfo, providedDefaults);
-      const fields = attachDefaultValuesToFields(
+      const baseFields = attachDefaultValuesToFields(
         alignFieldsWithConnectionInfo(emailFields(), connectionInfo),
         connectionInfo,
       );
+      const fields = [
+        {
+          name: "connector_name",
+          displayName: "连接器名称",
+          required: false,
+          default_value: connectorName,
+          defaultValue: connectorName,
+        },
+        ...baseFields.filter(
+          (fieldItem) => String(fieldItem?.name || "").trim() !== "connector_name",
+        ),
+      ];
       const missing = getMissingFieldNames(fields, connectionInfo);
       const needConnectionInfo = missing.length > 0;
 

@@ -5,9 +5,11 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
+import { mapAttachmentRecordsToMetas } from "../attach/index.js";
 import {
   createChatModel,
   createChatModelByName,
@@ -44,6 +46,10 @@ function cloneData(value) {
     return value;
   }
 }
+
+function normalizeString(value = "") {
+  return String(value || "").trim();
+}
 export function createAgentCollabTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const systemRuntime = runtime.systemRuntime || {};
@@ -56,8 +62,10 @@ export function createAgentCollabTool({ agentContext }) {
   const abortSignal = runtime.abortSignal || null;
   const userInteractionBridge = runtime.userInteractionBridge || null;
   const sourceDialogProcessId = systemRuntime.dialogProcessId || "";
+  const rootSessionId = String(systemRuntime?.rootSessionId || "").trim();
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
+  const attachmentService = runtime.attachmentService || null;
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   const defaultWaitMs = Number(
     effectiveConfig?.tools?.wait_async_task_result?.wait_timeout_ms ??
@@ -106,14 +114,16 @@ export function createAgentCollabTool({ agentContext }) {
         ? container.tasks.map((item = {}, index) => ({
             index,
             sessionId: String(item?.sessionId || "").trim(),
-            task: String(item?.task || "").trim(),
-            sharedTaskSpec: String(item?.sharedTaskSpec || "").trim(),
+            taskName: String(item?.taskName || "").trim(),
+            taskContent: String(item?.taskContent || "").trim(),
             deliverable: String(item?.deliverable || "").trim(),
             status: String(item?.status || "running").trim() || "running",
             startedAt: String(item?.startedAt || "").trim(),
             endedAt: String(item?.endedAt || "").trim(),
             error: String(item?.error || "").trim(),
             result: item?.result ?? null,
+            attachmentId: String(item?.attachmentId || "").trim(),
+            attachmentName: String(item?.attachmentName || "").trim(),
           }))
         : [],
     };
@@ -163,8 +173,8 @@ export function createAgentCollabTool({ agentContext }) {
   const nowIso = () => new Date().toISOString();
   const toTaskRequest = (taskItem = {}, sessionId = "") => ({
     sessionId: String(sessionId || "").trim(),
-    task: String(taskItem?.task || "").trim(),
-    sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+    taskName: String(taskItem?.taskName || "").trim(),
+    taskContent: String(taskItem?.taskContent || "").trim(),
   });
   const createChildAsyncResultContainer = ({
     parentSessionId = "",
@@ -181,13 +191,15 @@ export function createAgentCollabTool({ agentContext }) {
         {
           index: 0,
           sessionId: String(request?.sessionId || "").trim(),
-          task: String(request?.task || "").trim(),
-          sharedTaskSpec: String(request?.sharedTaskSpec || "").trim(),
+          taskName: String(request?.taskName || "").trim(),
+          taskContent: String(request?.taskContent || "").trim(),
           status: "running",
           startedAt: "",
           endedAt: "",
           error: "",
           result: null,
+          attachmentId: "",
+          attachmentName: "",
         },
       ],
     });
@@ -221,6 +233,74 @@ export function createAgentCollabTool({ agentContext }) {
     );
     return completed ? "completed" : "running";
   };
+  const buildWaitTaskRequest = ({
+    sessionId = "",
+    taskName = "",
+    taskContent = "",
+  } = {}) => ({
+    sessionId: normalizeString(sessionId),
+    taskName: normalizeString(taskName),
+    taskContent: normalizeString(taskContent),
+  });
+  const buildDelegateTaskFailureResult = ({
+    index = 0,
+    error = "",
+    request = {},
+    parentAsyncResultContainer = null,
+  } = {}) => ({
+    ok: false,
+    index,
+    error: normalizeString(error),
+    parentAsyncResultContainer: parentAsyncResultContainer || null,
+    request: {
+      ...request,
+    },
+  });
+  const buildWaitTaskInvalidResult = ({
+    index = 0,
+    request = {},
+    error = "sessionId/taskName/taskContent required",
+  } = {}) => ({
+    ok: false,
+    index,
+    status: "invalid_request",
+    error: normalizeString(error),
+    request,
+  });
+  const buildWaitTaskFailedResult = ({
+    index = 0,
+    request = {},
+    error = "",
+  } = {}) => ({
+    ok: false,
+    index,
+    status: "failed",
+    error: normalizeString(error),
+    request,
+  });
+  const buildWaitAsyncTaskResultPayload = ({
+    ok = true,
+    status = "running",
+    nextPollInMs = 0,
+    containers = [],
+    containerStatuses = [],
+    taskStats = {},
+    attachmentMetas = [],
+  } = {}) =>
+    toToolJsonResult(
+      "wait_async_task_result",
+      {
+        ok,
+        status,
+        checked_at: nowIso(),
+        next_poll_in_ms: nextPollInMs,
+        child_async_result_containers: cloneData(containers),
+        container_statuses: containerStatuses,
+        task_stats: taskStats,
+        attachmentMetas,
+      },
+      true,
+    );
   const summarizeAsyncTaskResult = (result = null) => {
     if (!result || typeof result !== "object") return null;
     const answer = String(result?.answer || "").trim();
@@ -235,6 +315,102 @@ export function createAgentCollabTool({ agentContext }) {
       traceCount: Array.isArray(result?.traces) ? result.traces.length : 0,
       turnTaskCount: Array.isArray(result?.turnTasks) ? result.turnTasks.length : 0,
     };
+  };
+  const toSafeArtifactName = (value = "") =>
+    String(value || "")
+      .replace(/[\\/:*?"<>|]+/g, "_")
+      .replace(/\s+/g, "_")
+      .slice(0, 80);
+  const toFinalResultMarkdownText = (taskResultItem = {}) => {
+    const rawResult = taskResultItem?.rawResult ?? taskResultItem?.result ?? null;
+    const answer = String(rawResult?.answer || "").trim();
+    if (answer) return answer;
+    if (typeof rawResult === "string") return String(rawResult || "").trim();
+    if (rawResult && typeof rawResult === "object") {
+      try {
+        return JSON.stringify(rawResult, null, 2);
+      } catch {}
+    }
+    const fallbackError = String(taskResultItem?.error || "").trim();
+    if (fallbackError) return fallbackError;
+    return String(taskResultItem?.status || "").trim() || "(无结果)";
+  };
+  const persistCompletedTaskResultsAsAttachments = async ({
+    container = {},
+    taskResults = [],
+  } = {}) => {
+    if (!attachmentService || !userId) return [];
+    const parentSessionId = String(container?.parentSessionId || "").trim();
+    const attachmentSessionId = String(
+      runtime?.systemRuntime?.rootSessionId ||
+        runtime?.systemRuntime?.sessionId ||
+        rootSessionId ||
+        parentSessionId ||
+        "",
+    ).trim();
+    if (!attachmentSessionId) return [];
+    const taskList = Array.isArray(container?.tasks) ? container.tasks : [];
+    const attachedSessionIdSet = new Set(
+      taskList
+        .filter((taskItem) => normalizeString(taskItem?.attachmentId))
+        .map((taskItem) => normalizeString(taskItem?.sessionId))
+        .filter(Boolean),
+    );
+    const pendingItems = (Array.isArray(taskResults) ? taskResults : []).filter(
+      (item = {}) => {
+        const status = normalizeString(item?.status);
+        const sessionId = normalizeString(item?.request?.sessionId);
+        if (!sessionId) return false;
+        if (!["completed", "failed", "stopped"].includes(status)) return false;
+        return !attachedSessionIdSet.has(sessionId);
+      },
+    );
+    if (!pendingItems.length) return [];
+    const generatedAttachments = pendingItems.map((item = {}, index) => {
+      const status = String(item?.status || "").trim() || "running";
+      const taskName = normalizeString(item?.request?.taskName);
+      const sessionId = normalizeString(item?.request?.sessionId);
+      const fileLabel =
+        toSafeArtifactName(taskName) || toSafeArtifactName(sessionId) || `task_${index + 1}`;
+      const markdownText = toFinalResultMarkdownText(item);
+      return {
+        __sessionId: sessionId,
+        name: `subtask-${fileLabel}-${status}.md`,
+        mimeType: "text/markdown",
+        contentBase64: Buffer.from(markdownText || "(无结果)", "utf8").toString("base64"),
+      };
+    });
+    let attachmentMetas = [];
+    try {
+      const savedRecords = await attachmentService.ingestGeneratedArtifacts({
+        userId,
+        sessionId: attachmentSessionId,
+        attachmentSource: "subtask",
+        generationSource: "async_subtask_result",
+        artifacts: generatedAttachments,
+      });
+      attachmentMetas = mapAttachmentRecordsToMetas(savedRecords, {
+        fallbackMimeType: "text/markdown",
+        fallbackGenerationSource: "async_subtask_result",
+      });
+    } catch {
+      return [];
+    }
+    for (let index = 0; index < attachmentMetas.length; index += 1) {
+      const meta = attachmentMetas[index] || {};
+      const artifact = generatedAttachments[index] || {};
+      const sessionId = String(artifact?.__sessionId || "").trim();
+      if (!sessionId) continue;
+      patchAsyncResultTask({
+        containerId: String(container?.id || "").trim(),
+        sessionId,
+        patch: {
+          attachmentId: String(meta?.attachmentId || "").trim(),
+          attachmentName: String(meta?.name || artifact?.name || "").trim(),
+        },
+      });
+    }
+    return attachmentMetas;
   };
   const addChildAsyncResultContainer = (container = {}) => {
     if (!isPlainObject(container)) return null;
@@ -254,14 +430,14 @@ export function createAgentCollabTool({ agentContext }) {
   };
 
   const delegateTaskItemSchema = z.object({
-    task: z.string().describe("子任务内容"),
-    sharedTaskSpec: z.string().optional().describe("共享任务说明"),
+    taskName: z.string().describe("子任务名称"),
+    taskContent: z.string().describe("子任务内容"),
   });
 
   const delegateTaskAsync = new DynamicStructuredTool({
     name: "delegate_task_async",
     description:
-      "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含task、sharedTaskSpec。汇总结果并返回。",
+      "多agent协助：异步并发执行多个子任务。传入父sessionid和tasks数组，每个task中包含taskName、taskContent。汇总结果并返回。",
     schema: z.object({
       parentSessionId: z.string().describe("父会话ID（UUID）"),
       parentDialogProcessId: z
@@ -295,31 +471,30 @@ export function createAgentCollabTool({ agentContext }) {
         tasks.map(async (taskItem = {}, index) => {
           const generatedSessionId = randomUUID();
           const request = toTaskRequest(taskItem, generatedSessionId);
-          const taskText = request.task;
+          const taskName = request.taskName;
+          const taskContent = request.taskContent;
+          const taskText = [taskName, taskContent].filter(Boolean).join("\n");
           const childContainer = createChildAsyncResultContainer({
             parentSessionId: normalizedParentSessionId,
             parentDialogProcessId: normalizedParentDialogProcessId,
             request,
           });
-          if (!taskText) {
+          if (!taskName || !taskContent) {
             patchContainerTaskAndStatus({
               container: childContainer,
               sessionId: generatedSessionId,
               patch: {
                 status: "failed",
-                error: "task required",
+                error: "taskName/taskContent required",
                 endedAt: nowIso(),
               },
             });
-            return {
-              ok: false,
+            return buildDelegateTaskFailureResult({
               index,
-              error: "task required",
-              parentAsyncResultContainer: childContainer || null,
-              request: {
-                ...request,
-              },
-            };
+              error: "taskName/taskContent required",
+              parentAsyncResultContainer: childContainer,
+              request,
+            });
           }
           try {
             const result = botManager.runAsyncSession({
@@ -327,7 +502,7 @@ export function createAgentCollabTool({ agentContext }) {
               parentSessionId: normalizedParentSessionId,
               sessionId: generatedSessionId,
               task: taskText,
-              sharedTaskSpec: String(taskItem?.sharedTaskSpec || "").trim(),
+              sharedTaskSpec: "",
               eventListener: runtimeEventListener,
               sourceDialogProcessId: String(sourceDialogProcessId || ""),
               parentDialogProcessId: normalizedParentDialogProcessId,
@@ -361,13 +536,12 @@ export function createAgentCollabTool({ agentContext }) {
                 endedAt: nowIso(),
               },
             });
-            return {
-              ok: false,
+            return buildDelegateTaskFailureResult({
               index,
               error: error?.message || String(error),
-              parentAsyncResultContainer: childContainer || null,
+              parentAsyncResultContainer: childContainer,
               request,
-            };
+            });
           }
         }),
       );
@@ -459,18 +633,17 @@ export function createAgentCollabTool({ agentContext }) {
             : [];
           const taskResults = await Promise.all(
             taskList.map(async (taskItem = {}, index) => {
-              const normalizedSessionId = String(
-                taskItem?.sessionId || "",
-              ).trim();
-              const taskText = String(taskItem?.task || "").trim();
-              if (!normalizedSessionId || !taskText) {
-                return {
-                  ok: false,
+              const request = buildWaitTaskRequest({
+                sessionId: taskItem?.sessionId,
+                taskName: taskItem?.taskName,
+                taskContent: taskItem?.taskContent,
+              });
+              const normalizedSessionId = request.sessionId;
+              if (!request.sessionId || !request.taskName || !request.taskContent) {
+                return buildWaitTaskInvalidResult({
                   index,
-                  status: "invalid_request",
-                  error: "sessionId/task required",
-                  request: taskItem,
-                };
+                  request,
+                });
               }
               try {
                 const result = await botManager.waitAsyncSession({
@@ -481,31 +654,18 @@ export function createAgentCollabTool({ agentContext }) {
                 });
                 return {
                   ...result,
+                  rawResult: cloneData(result?.result ?? null),
                   result: summarizeAsyncTaskResult(result?.result),
                   index,
-                  request: {
-                    sessionId: normalizedSessionId,
-                    task: taskText,
-                    sharedTaskSpec: String(
-                      taskItem?.sharedTaskSpec || "",
-                    ).trim(),
-                  },
+                  request,
                 };
               } catch (error) {
                 if (isFatalError(error)) throw error;
-                return {
-                  ok: false,
+                return buildWaitTaskFailedResult({
                   index,
-                  status: "failed",
+                  request,
                   error: error?.message || String(error),
-                  request: {
-                    sessionId: normalizedSessionId,
-                    task: taskText,
-                    sharedTaskSpec: String(
-                      taskItem?.sharedTaskSpec || "",
-                    ).trim(),
-                  },
-                };
+                });
               }
             }),
           );
@@ -523,12 +683,17 @@ export function createAgentCollabTool({ agentContext }) {
             });
           }
           const status = summarizeTaskResultsStatus(taskResults);
+          const attachmentMetas = await persistCompletedTaskResultsAsAttachments({
+            container: containerItem,
+            taskResults,
+          });
           return {
             id: containerId,
             parentSessionId: normalizedParentSessionId,
             ok: status !== "failed",
             status,
             tasks: taskResults,
+            attachmentMetas,
           };
         }),
       );
@@ -556,73 +721,60 @@ export function createAgentCollabTool({ agentContext }) {
           (item) => String(item?.status || "") === "stopped",
         ).length,
       };
+      const attachmentMetas = containerResults.flatMap((item) =>
+        Array.isArray(item?.attachmentMetas) ? item.attachmentMetas : [],
+      );
       const hasFailedTask = containerResults.some(
         (item) => String(item?.status || "") === "failed",
       );
       if (hasFailedTask) {
-        return toToolJsonResult(
-          "wait_async_task_result",
-          {
-            ok: false,
-            status: "failed",
-            checked_at: nowIso(),
-            next_poll_in_ms: resolvedPollIntervalMs,
-            child_async_result_containers: cloneData(containers),
-            container_statuses: containerStatuses,
-            task_stats: taskStats,
-          },
-          true,
-        );
+        return buildWaitAsyncTaskResultPayload({
+          ok: false,
+          status: "failed",
+          nextPollInMs: resolvedPollIntervalMs,
+          containers,
+          containerStatuses,
+          taskStats,
+          attachmentMetas,
+        });
       }
       const hasStoppedTask = containerResults.some(
         (item) => String(item?.status || "") === "stopped",
       );
       if (hasStoppedTask) {
-        return toToolJsonResult(
-          "wait_async_task_result",
-          {
-            ok: true,
-            status: "stopped",
-            checked_at: nowIso(),
-            next_poll_in_ms: resolvedPollIntervalMs,
-            child_async_result_containers: cloneData(containers),
-            container_statuses: containerStatuses,
-            task_stats: taskStats,
-          },
-          true,
-        );
+        return buildWaitAsyncTaskResultPayload({
+          ok: true,
+          status: "stopped",
+          nextPollInMs: resolvedPollIntervalMs,
+          containers,
+          containerStatuses,
+          taskStats,
+          attachmentMetas,
+        });
       }
       const allCompleted = containerResults.every(
         (item) => String(item?.status || "") === "completed",
       );
       if (!allCompleted) {
-        return toToolJsonResult(
-          "wait_async_task_result",
-          {
-            ok: true,
-            status: "running",
-            checked_at: nowIso(),
-            next_poll_in_ms: resolvedPollIntervalMs,
-            child_async_result_containers: cloneData(containers),
-            container_statuses: containerStatuses,
-            task_stats: taskStats,
-          },
-          true,
-        );
-      }
-      return toToolJsonResult(
-        "wait_async_task_result",
-        {
+        return buildWaitAsyncTaskResultPayload({
           ok: true,
-          status: "completed",
-          checked_at: nowIso(),
-          next_poll_in_ms: 0,
-          child_async_result_containers: cloneData(containers),
-          container_statuses: containerStatuses,
-          task_stats: taskStats,
-        },
-        true,
-      );
+          status: "running",
+          nextPollInMs: resolvedPollIntervalMs,
+          containers,
+          containerStatuses,
+          taskStats,
+          attachmentMetas,
+        });
+      }
+      return buildWaitAsyncTaskResultPayload({
+        ok: true,
+        status: "completed",
+        nextPollInMs: 0,
+        containers,
+        containerStatuses,
+        taskStats,
+        attachmentMetas,
+      });
     },
   });
 
@@ -670,7 +822,7 @@ export function createAgentCollabTool({ agentContext }) {
             "请输出规划内容与任务调用链。",
             "输出必须是 JSON，不要使用 markdown 代码块。",
             "JSON 格式：",
-            '{ "tasks":[{ "taskName":"任务a", "taskContent":"任务目标、内容", "sharedTaskSpec":"共享知识或数据","subTasks":[] }] }',
+            '{ "tasks":[{ "taskName":"任务a", "taskContent":"任务目标、内容","subTasks":[] }] }',
           ].join("\n"),
         ),
         new HumanMessage(`任务文本：\n${taskText}`),
