@@ -14,6 +14,7 @@
     "element-plus": "^2.11.1",
     "markdown-it": "^14.1.1",
     "mermaid": "^11.14.0",
+    "pinia": "^3.0.4",
     "vue": "^3.5.32"
   },
   "devDependencies": {

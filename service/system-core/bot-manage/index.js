@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 import { SessionManager } from "../session/index.js";
 import { MemoryService } from "../memory/index.js";
 import { ContextBuilder } from "../context/index.js";
-import { AttachmentService } from "../attach/index.js";
+import { AttachmentService, mapAttachmentRecordsToMetas } from "../attach/index.js";
 import { SkillService } from "../skill/index.js";
 import { runAgentTurn } from "../agent/engine.js";
 import { resolveConfigSecrets, sanitizeUserConfig } from "../config/index.js";
@@ -664,20 +664,18 @@ export class BotManager {
         abortSignal,
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       });
-      const userMessageAttachmentMetas = (
-        Array.isArray(
-          agentContext?.execution?.controllers?.runtime?.attachmentMetas,
-        )
-          ? agentContext.execution.controllers.runtime.attachmentMetas
-          : []
-      ).map((attachmentItem) => ({
-        attachmentId: String(attachmentItem?.attachmentId || ""),
-        name: String(attachmentItem?.name || ""),
-        mimeType: String(
-          attachmentItem?.mimeType || "application/octet-stream",
-        ),
-        size: Number(attachmentItem?.size || 0),
-      }));
+      const runtimeAttachmentMetas = Array.isArray(
+        agentContext?.execution?.controllers?.runtime?.attachmentMetas,
+      )
+        ? agentContext.execution.controllers.runtime.attachmentMetas
+        : [];
+      const userMessageAttachmentMetas = mapAttachmentRecordsToMetas(
+        runtimeAttachmentMetas,
+        {
+          fallbackMimeType: "application/octet-stream",
+          userId,
+        },
+      );
 
       await this._appendSessionTurn({
         userId,

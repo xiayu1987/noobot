@@ -364,6 +364,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           {
             fallbackMimeType: "image/png",
             fallbackGenerationSource: "multimodal_generate_tool",
+            userId,
           },
         );
         return toToolJsonResult(
