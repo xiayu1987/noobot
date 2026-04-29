@@ -30,6 +30,7 @@ export function createEmailConnectorTools(context = {}) {
     runtime,
     store,
     historyStore,
+    connectorEventListener,
     rootSessionId,
     allowUserInteraction,
     bridge,
@@ -76,6 +77,10 @@ export function createEmailConnectorTools(context = {}) {
         connectorType: "email",
       });
       if (existingConnected) {
+        connectorEventListener?.onConnectorAlreadyConnected?.({
+          connectorType: "email",
+          connectorName,
+        });
         return buildAlreadyConnectedResponse(
           "email_connect_connector",
           existingConnected,
@@ -186,42 +191,12 @@ export function createEmailConnectorTools(context = {}) {
         );
       }
       addRuntimeConnectorChannel(runtime, connected);
-      if (
-        historyStore &&
-        typeof historyStore.upsertConnectedConnector === "function"
-      ) {
-        await historyStore.upsertConnectedConnector({
-          userId: String(runtime?.userId || "").trim(),
-          sessionId: rootSessionId,
-          connectorType: "email",
-          connectorName,
-          connectionInfo,
-          connectionMeta:
-            connected?.connectionMeta && typeof connected.connectionMeta === "object"
-              ? connected.connectionMeta
-              : {},
-        });
-      }
-      if (bridge?.requestUserInteraction) {
-        try {
-          await bridge.requestUserInteraction({
-            content: `邮件连接器连接成功：${connectorName}`,
-            fields: [],
-            dialogProcessId,
-            requireEncryption: false,
-            sessionId,
-            toolName: "email_connect_connector",
-            connectorName,
-            connectorType: "email",
-            interactionType: "connector_connected",
-            interactionData: {
-              connectorName,
-              connectorType: "email",
-              status: "connected",
-            },
-          });
-        } catch {}
-      }
+      await connectorEventListener?.onConnectorConnected?.({
+        connectorType: "email",
+        connectorName,
+        connectionInfo,
+        connector: connected,
+      });
       return toToolJsonResult(
         "email_connect_connector",
         buildConnectionStatusPayload({

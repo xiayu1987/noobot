@@ -20,6 +20,7 @@ export function createConnectorChannelTools({ agentContext }) {
     store,
     rootSessionId,
     runtime,
+    connectorEventListener,
   } = connectorToolContext;
 
   const accessConnectorDescriptor = buildAccessConnectorTool(connectorToolContext);
@@ -70,7 +71,40 @@ export function createConnectorChannelTools({ agentContext }) {
       const emails = Array.isArray(inspected?.connectors?.emails)
         ? inspected.connectors.emails
         : [];
+      const totalCount = Number(
+        inspected?.summary?.total_count ??
+          databases.length + terminals.length + emails.length,
+      );
       runtime.connectorChannels = store.getSessionConnectors(rootSessionId);
+      if (
+        connectorEventListener &&
+        typeof connectorEventListener.syncRuntimeConnectorChannels === "function"
+      ) {
+        connectorEventListener.syncRuntimeConnectorChannels();
+      }
+      if (totalCount <= 0) {
+        return toToolJsonResult(
+          "inspect_connectors",
+          {
+            ok: false,
+            status: "no_connectors",
+            error: "没有连接器，可以通过connect_connector工具创建",
+            message: "没有连接器，可以通过connect_connector工具创建",
+            connectors: {
+              databases,
+              terminals,
+              emails,
+            },
+            summary: {
+              database_count: 0,
+              terminal_count: 0,
+              email_count: 0,
+              total_count: 0,
+            },
+          },
+          true,
+        );
+      }
       return toToolJsonResult(
         "inspect_connectors",
         {
@@ -85,10 +119,7 @@ export function createConnectorChannelTools({ agentContext }) {
             database_count: databases.length,
             terminal_count: terminals.length,
             email_count: emails.length,
-            total_count: Number(
-              inspected?.summary?.total_count ??
-                databases.length + terminals.length + emails.length,
-            ),
+            total_count: totalCount,
           },
         },
         true,

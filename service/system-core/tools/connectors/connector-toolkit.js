@@ -329,6 +329,31 @@ function addRuntimeConnectorChannel(runtime = {}, connector = {}) {
   runtime.connectorChannels = next;
 }
 
+function upsertRuntimeSelectedConnector(
+  runtime = {},
+  { connectorType = "", connectorName = "" } = {},
+) {
+  const normalizedType = normalizeConnectorType(connectorType);
+  const normalizedName = String(connectorName || "").trim();
+  if (!["database", "terminal", "email"].includes(normalizedType)) return;
+  if (!normalizedName) return;
+  if (!runtime.systemRuntime || typeof runtime.systemRuntime !== "object") {
+    runtime.systemRuntime = {};
+  }
+  if (!runtime.systemRuntime.config || typeof runtime.systemRuntime.config !== "object") {
+    runtime.systemRuntime.config = {};
+  }
+  const currentSelected =
+    runtime.systemRuntime.config.selectedConnectors &&
+    typeof runtime.systemRuntime.config.selectedConnectors === "object"
+      ? runtime.systemRuntime.config.selectedConnectors
+      : {};
+  runtime.systemRuntime.config.selectedConnectors = {
+    ...currentSelected,
+    [normalizedType]: normalizedName,
+  };
+}
+
 function findConnectedConnector({
   store = null,
   rootSessionId = "",
@@ -421,6 +446,7 @@ function createConnectorToolContext(agentContext = {}) {
   const bridge = runtime?.userInteractionBridge || null;
   const store = runtime?.sharedTools?.connectorChannelStore || null;
   const historyStore = runtime?.sharedTools?.connectorHistoryStore || null;
+  const connectorEventListener = runtime?.sharedTools?.connectorEventListener || null;
   const maxAccessOutputChars = Number(
     effectiveConfig?.tools?.access_connector?.max_output_chars ??
       effectiveConfig?.tools?.access_connector?.maxOutputChars ??
@@ -436,6 +462,7 @@ function createConnectorToolContext(agentContext = {}) {
     bridge,
     store,
     historyStore,
+    connectorEventListener,
     maxAccessOutputChars,
   };
 }
@@ -492,6 +519,7 @@ function buildAccessConnectorTool(context = {}) {
     effectiveConfig,
     store,
     historyStore,
+    connectorEventListener,
     rootSessionId,
     allowUserInteraction,
     bridge,
@@ -644,28 +672,14 @@ function buildAccessConnectorTool(context = {}) {
           ...rememberedConnectionInfo,
         };
         const reconnectToolName = resolveReconnectToolName(connectorType);
-        const reconnectMessage = `当前已勾选连接器「${connectorName}」未连接，请先重新连接后再执行命令`;
-        if (allowUserInteraction && bridge?.requestUserInteraction) {
-          try {
-            await bridge.requestUserInteraction({
-              content: reconnectMessage,
-              fields: [],
-              dialogProcessId,
-              requireEncryption: false,
-              sessionId,
-              toolName: reconnectToolName,
-              connectorName,
-              connectorType,
-              interactionType: "connector_reconnect_required",
-              interactionData: {
-                connectorName,
-                connectorType,
-                reconnectToolName,
-                defaultValues: connectionDefaults,
-              },
-            });
-          } catch {}
-        }
+        const reconnectMessage = `当前已勾选连接器「${connectorName}」未连接，请使用连接器工具重新连接后再执行命令`;
+        await connectorEventListener?.notifyReconnectRequired?.({
+          connectorType,
+          connectorName,
+          reconnectToolName,
+          defaultValues: connectionDefaults,
+          message: reconnectMessage,
+        });
         return toToolJsonResult(
           "access_connector",
           {
@@ -693,6 +707,15 @@ function buildAccessConnectorTool(context = {}) {
           emailAttachmentHandler: buildEmailAttachmentHandler(),
         });
         runtime.connectorChannels = store.getSessionConnectors(rootSessionId);
+        if (
+          connectorEventListener &&
+          typeof connectorEventListener.onConnectorAccessed === "function"
+        ) {
+          connectorEventListener.onConnectorAccessed({
+            connectorType,
+            connectorName,
+          });
+        }
         const executionFailedMessage = String(
           result?.output?.stderr || result?.output?.stdout || "",
         ).trim();
@@ -753,4 +776,5 @@ export {
   createConnectorToolContext,
   resolveRememberedConnectorInfo,
   buildAccessConnectorTool,
+  upsertRuntimeSelectedConnector,
 };

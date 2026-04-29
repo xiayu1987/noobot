@@ -31,6 +31,7 @@ export function createDatabaseConnectorTools(context = {}) {
     runtime,
     store,
     historyStore,
+    connectorEventListener,
     rootSessionId,
     allowUserInteraction,
     bridge,
@@ -85,6 +86,10 @@ export function createDatabaseConnectorTools(context = {}) {
         connectorType: "database",
       });
       if (existingConnected) {
+        connectorEventListener?.onConnectorAlreadyConnected?.({
+          connectorType: "database",
+          connectorName,
+        });
         return buildAlreadyConnectedResponse(
           "database_connect_connector",
           existingConnected,
@@ -202,42 +207,12 @@ export function createDatabaseConnectorTools(context = {}) {
         );
       }
       addRuntimeConnectorChannel(runtime, connected);
-      if (
-        historyStore &&
-        typeof historyStore.upsertConnectedConnector === "function"
-      ) {
-        await historyStore.upsertConnectedConnector({
-          userId: String(runtime?.userId || "").trim(),
-          sessionId: rootSessionId,
-          connectorType: "database",
-          connectorName,
-          connectionInfo,
-          connectionMeta:
-            connected?.connectionMeta && typeof connected.connectionMeta === "object"
-              ? connected.connectionMeta
-              : {},
-        });
-      }
-      if (bridge?.requestUserInteraction) {
-        try {
-          await bridge.requestUserInteraction({
-            content: `数据库连接器连接成功：${connectorName}`,
-            fields: [],
-            dialogProcessId,
-            requireEncryption: false,
-            sessionId,
-            toolName: "database_connect_connector",
-            connectorName,
-            connectorType: "database",
-            interactionType: "connector_connected",
-            interactionData: {
-              connectorName,
-              connectorType: "database",
-              status: "connected",
-            },
-          });
-        } catch {}
-      }
+      await connectorEventListener?.onConnectorConnected?.({
+        connectorType: "database",
+        connectorName,
+        connectionInfo,
+        connector: connected,
+      });
       return toToolJsonResult(
         "database_connect_connector",
         buildConnectionStatusPayload({

@@ -16,6 +16,7 @@ import {
 } from "../utils/session-crypto.js";
 import { getConnectorChannelStore } from "../connectors/channel-store.js";
 import { getConnectorHistoryStore } from "../connectors/history-store.js";
+import { createConnectorEventListener } from "../connectors/connector-event-listener.js";
 import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
@@ -150,6 +151,16 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   const connectorHistoryStore = getConnectorHistoryStore();
   sharedTools.connectorChannelStore = connectorChannelStore;
   sharedTools.connectorHistoryStore = connectorHistoryStore;
+  sharedTools.connectorEventListener = createConnectorEventListener({
+    runtime: runtimeContext,
+    store: connectorChannelStore,
+    historyStore: connectorHistoryStore,
+    rootSessionId,
+    sessionId,
+    dialogProcessId: String(runtimeContext?.systemRuntime?.dialogProcessId || "").trim(),
+    allowUserInteraction: runtimeContext?.systemRuntime?.config?.allowUserInteraction !== false,
+    bridge: runtimeContext?.userInteractionBridge || null,
+  });
   runtimeContext.connectorChannels = rootSessionId
     ? connectorChannelStore.getSessionConnectors(rootSessionId)
     : { databases: [], terminals: [], emails: [] };
