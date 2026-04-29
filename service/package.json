@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "node --watch app.js",
+    "check:tool-schema:live:gemini:admin": "node scripts/check-openai-tool-schema.js --live --model gemini_3_flash --userId admin",
     "postinstall": "playwright install chromium",
     "init": "node scripts/init.js",
     "pm2:start": "PM2_HOME=../.pm2 npx pm2 start app.js --name noobot-service",

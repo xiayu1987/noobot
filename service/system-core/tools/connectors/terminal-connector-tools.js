@@ -31,6 +31,7 @@ export function createTerminalConnectorTools(context = {}) {
     runtime,
     store,
     historyStore,
+    connectorEventListener,
     rootSessionId,
     allowUserInteraction,
     bridge,
@@ -85,6 +86,10 @@ export function createTerminalConnectorTools(context = {}) {
         connectorType: "terminal",
       });
       if (existingConnected) {
+        connectorEventListener?.onConnectorAlreadyConnected?.({
+          connectorType: "terminal",
+          connectorName,
+        });
         return buildAlreadyConnectedResponse(
           "terminal_connect_connector",
           existingConnected,
@@ -202,42 +207,12 @@ export function createTerminalConnectorTools(context = {}) {
         );
       }
       addRuntimeConnectorChannel(runtime, connected);
-      if (
-        historyStore &&
-        typeof historyStore.upsertConnectedConnector === "function"
-      ) {
-        await historyStore.upsertConnectedConnector({
-          userId: String(runtime?.userId || "").trim(),
-          sessionId: rootSessionId,
-          connectorType: "terminal",
-          connectorName,
-          connectionInfo,
-          connectionMeta:
-            connected?.connectionMeta && typeof connected.connectionMeta === "object"
-              ? connected.connectionMeta
-              : {},
-        });
-      }
-      if (bridge?.requestUserInteraction) {
-        try {
-          await bridge.requestUserInteraction({
-            content: `终端连接器连接成功：${connectorName}`,
-            fields: [],
-            dialogProcessId,
-            requireEncryption: false,
-            sessionId,
-            toolName: "terminal_connect_connector",
-            connectorName,
-            connectorType: "terminal",
-            interactionType: "connector_connected",
-            interactionData: {
-              connectorName,
-              connectorType: "terminal",
-              status: "connected",
-            },
-          });
-        } catch {}
-      }
+      await connectorEventListener?.onConnectorConnected?.({
+        connectorType: "terminal",
+        connectorName,
+        connectionInfo,
+        connector: connected,
+      });
       return toToolJsonResult(
         "terminal_connect_connector",
         buildConnectionStatusPayload({

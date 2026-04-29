@@ -56,7 +56,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const processConnectorTaskTool = new DynamicStructuredTool({
     name: "process_connector_tool",
     description:
-      "连接器访问工具，可以连接并查看数据库、终端及邮件，通过调用连接器相关工具完成连接与命令执行。",
+      "连接器访问工具，可以创建连接并查看数据库、终端及邮件，通过调用连接器相关工具完成连接与命令执行。",
     schema: z.object({
       task: z.string().describe("资源相关任务描述"),
       modelName: z.string().optional().describe("可选：指定模型"),
