@@ -1,0 +1,65 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+:root[data-theme="light"] {
+  /* Semantic · Surface / Text */
+  --noobot-surface-sidebar: color-mix(in srgb, var(--noobot-base-slate-50) 84%, var(--noobot-base-white));
+  --noobot-surface-soft: color-mix(in srgb, var(--noobot-base-slate-900) 4%, transparent);
+  --noobot-surface-soft-hover: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-surface-item-hover: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
+  --noobot-surface-primary-soft: color-mix(in srgb, var(--noobot-base-blue-500) 12%, transparent);
+  --noobot-surface-primary-soft-strong: color-mix(in srgb, var(--noobot-base-blue-500) 28%, transparent);
+  --noobot-border-weak: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
+  --noobot-border-soft: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-text-strong: var(--noobot-base-slate-900);
+  --noobot-text-main: var(--noobot-base-slate-800);
+  --noobot-text-secondary: var(--noobot-base-slate-600);
+  --noobot-text-muted: var(--noobot-base-slate-500);
+  --noobot-text-accent: var(--noobot-base-blue-700);
+
+  /* Component · Message / Thinking */
+  --noobot-msg-assistant-bg: var(--noobot-base-white);
+  --noobot-msg-assistant-text: var(--noobot-base-slate-900);
+  --noobot-msg-user-bg: color-mix(in srgb, var(--noobot-base-blue-500) 16%, var(--noobot-base-white));
+  --noobot-msg-user-border: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-msg-user-text: var(--noobot-base-slate-900);
+  --noobot-msg-tag-bg: var(--noobot-base-slate-200);
+  --noobot-msg-tag-text: var(--noobot-base-slate-700);
+  --noobot-msg-file-card-bg: color-mix(in srgb, var(--noobot-base-white) 92%, transparent);
+  --noobot-msg-file-name: var(--noobot-base-slate-900);
+  --noobot-msg-file-size: var(--noobot-base-slate-500);
+  --noobot-msg-inline-code-bg: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-msg-inline-code-text: var(--noobot-base-blue-700);
+  --noobot-msg-code-block-bg: var(--noobot-base-slate-900);
+  --noobot-msg-code-block-text: var(--noobot-base-slate-200);
+  --noobot-thinking-bg: var(--noobot-base-indigo-50);
+  --noobot-thinking-header: var(--noobot-base-slate-700);
+  --noobot-thinking-text: var(--noobot-base-slate-700);
+  --noobot-thinking-muted: var(--noobot-base-slate-500);
+  --noobot-thinking-event: var(--noobot-base-slate-800);
+  --noobot-thinking-line-border: color-mix(in srgb, var(--noobot-base-slate-900) 10%, transparent);
+
+  /* Semantic · Panel / Overlay */
+  --noobot-panel-bg: color-mix(in srgb, var(--noobot-base-white) 92%, transparent);
+  --noobot-panel-head-bg: color-mix(in srgb, var(--noobot-base-slate-50) 95%, transparent);
+  --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-divider: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-slate-900) 24%, transparent);
+  --noobot-accent-soft: color-mix(in srgb, var(--noobot-base-blue-500) 16%, transparent);
+  --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 12%, transparent);
+  --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
+  --noobot-accent-soft: color-mix(in srgb, var(--noobot-base-blue-700) 14%, transparent);
+
+  /* Semantic · Preview */
+  --noobot-preview-bg: var(--noobot-base-white);
+  --noobot-preview-text: var(--noobot-base-slate-800);
+  --noobot-preview-border: var(--noobot-base-slate-300);
+  --noobot-preview-danger-bg: var(--noobot-base-red-100);
+  --noobot-preview-danger-text: var(--noobot-base-red-500);
+  --noobot-preview-danger-border: var(--noobot-base-red-200);
+
+  --noobot-app-bg: var(--noobot-base-slate-50);
+}

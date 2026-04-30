@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+:root {
+  /* ========== Base Tokens（基础层） ========== */
+  --noobot-base-white: #ffffff;
+  --noobot-base-black: #000000;
+  --noobot-base-cyan: #60a5fa;
+  --noobot-base-pink: #60a5fa;
+  --noobot-base-blue-500: #3b82f6;
+  --noobot-base-blue-400: #60a5fa;
+  --noobot-base-blue-600: #2563eb;
+  --noobot-base-indigo-500: #6366f1;
+  --noobot-base-violet-500: #8b5cf6;
+  --noobot-base-slate-50: #f8fafc;
+  --noobot-base-slate-200: #e2e8f0;
+  --noobot-base-slate-300: #cbd5e1;
+  --noobot-base-slate-400: #94a3b8;
+  --noobot-base-slate-500: #64748b;
+  --noobot-base-slate-600: #475569;
+  --noobot-base-slate-700: #334155;
+  --noobot-base-slate-800: #1e293b;
+  --noobot-base-slate-900: #0f172a;
+  --noobot-base-indigo-50: #eef2ff;
+  --noobot-base-emerald-400: #34d399;
+  --noobot-base-emerald-500: #10b981;
+  --noobot-base-red-500: #ef4444;
+  --noobot-base-red-100: #fef2f2;
+  --noobot-base-red-200: #fecaca;
+  --noobot-base-rose-50: #fff1f2;
+  --noobot-base-rose-300: #fda4af;
+  --noobot-base-rose-700: #be123c;
+  --noobot-base-violet-400: #a855f7;
+  --noobot-base-blue-700: #1d4ed8;
+}
