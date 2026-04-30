@@ -746,8 +746,9 @@ watch(
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 16px;
-  height: calc(100vh - 80px);
-  /* 适配 Drawer 内部高度 */
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   padding: 0 4px 16px 4px;
   box-sizing: border-box;
 }
@@ -1006,6 +1007,19 @@ watch(
 
 .editor-body {
   position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-input {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-input :deep(.el-textarea) {
+  height: 100%;
 }
 
 :deep(.workspace-reset-dialog .el-dialog) {
@@ -1096,8 +1110,9 @@ watch(
 @media (max-width: 768px) {
   .workspace-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: 40% 60%;
-    height: calc(100vh - 60px);
+    grid-template-rows: 42% 58%;
+    height: 100%;
+    min-height: 0;
     gap: 12px;
     padding: 0;
   }
