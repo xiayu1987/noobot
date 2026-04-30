@@ -12,9 +12,29 @@ import { createChatModelByName, resolveModelSpecByAlias } from "../model/index.j
 import { convertDocumentToImages } from "../utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
+}
+
+function tDoc(runtime = {}, key = "", params = {}) {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    noImagesProduced: {
+      "zh-CN": "未生成可用图片",
+      "en-US": "no images produced",
+    },
+    extractPrompt: {
+      "zh-CN": "请提取图片中的全部可读文字，按原有结构输出，不要编造内容。",
+      "en-US": "Extract all readable text from the images, keep original structure, and do not fabricate content.",
+    },
+    batchPrompt: {
+      "zh-CN": `这是第 ${Number(params.batchIndex || 1)} 批图片，页码范围 ${String(params.range || "")}。请按页码顺序输出。`,
+      "en-US": `This is image batch ${Number(params.batchIndex || 1)}, page range ${String(params.range || "")}. Output in page order.`,
+    },
+  };
+  return pickToolText({ locale, dict, key, params });
 }
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
@@ -86,22 +106,21 @@ export function createDoc2DataTool({ agentContext }) {
 
   const doc2dataTool = new DynamicStructuredTool({
     name: "doc_to_data",
-    description:
-      "将文档提取文字。支持 office/pdf/图片。filePath 可传工作区相对路径或用户目录内绝对路径。",
+    description: tTool(runtime, "tools.doc2data.description"),
     schema: z.object({
-      filePath: z.string().describe("待处理文档路径（工作区相对路径或用户目录内绝对路径）"),
+      filePath: z.string().describe(tTool(runtime, "tools.doc2data.fieldFilePath")),
       prompt: z
         .string()
         .optional()
-        .describe("默认提取全部可读文字并保持原结构"),
+        .describe(tTool(runtime, "tools.doc2data.fieldPrompt")),
       dpi: z
         .number()
         .optional()
-        .describe("文档转图片DPI，默认180"),
+        .describe(tTool(runtime, "tools.doc2data.fieldDpi")),
       imageFormat: z
         .enum(["png", "jpg", "jpeg"])
         .optional()
-        .describe("文档转图片格式，默认 png"),
+        .describe(tTool(runtime, "tools.doc2data.fieldImageFormat")),
     }),
     func: async ({ filePath, prompt, dpi, imageFormat = "png" }) => {
       const normalizedDpi = Number(dpi);
@@ -135,7 +154,7 @@ export function createDoc2DataTool({ agentContext }) {
           "doc_to_data",
           {
             ok: false,
-            message: "no images produced",
+            message: tDoc(runtime, "noImagesProduced"),
             input: converted.input,
           },
           true,
@@ -158,7 +177,7 @@ export function createDoc2DataTool({ agentContext }) {
         streaming: false,
       });
       const userPrompt =
-        prompt || "请提取图片中的全部可读文字，按原有结构输出，不要编造内容。";
+        prompt || tDoc(runtime, "extractPrompt");
 
       const imageBatches = await buildImageBatches(images);
       const batchResults = [];
@@ -170,7 +189,10 @@ export function createDoc2DataTool({ agentContext }) {
           content: [
             {
               type: "text",
-              text: `${userPrompt}\n\n这是第 ${batchIndex + 1} 批图片，页码范围 ${range}。请按页码顺序输出。`,
+              text: `${userPrompt}\n\n${tDoc(runtime, "batchPrompt", {
+                batchIndex: batchIndex + 1,
+                range,
+              })}`,
             },
             ...batch.map((imageItem) => ({
               type: "image_url",

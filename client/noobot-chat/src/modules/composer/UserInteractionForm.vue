@@ -6,6 +6,7 @@
 <script setup>
 import { nextTick, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
+import { useLocale } from "../../shared/i18n/useLocale";
 
 const props = defineProps({
   request: { type: Object, default: null },
@@ -16,6 +17,7 @@ const emit = defineEmits(["confirm", "cancel"]);
 
 const formData = reactive({});
 const firstInputRef = ref(null);
+const { t } = useLocale();
 
 function setFirstInputRef(el) {
   firstInputRef.value = el || null;
@@ -46,7 +48,7 @@ function onConfirm() {
       const value = String(formData[key] || "");
       if (fieldItem?.required && !value.trim()) {
         const label = String(fieldItem?.displayName || fieldItem?.name || key);
-        ElMessage.warning(`${label} 为必填项`);
+        ElMessage.warning(t("composer.fieldRequired", { label }));
         return;
       }
       payload[key] = value;
@@ -75,8 +77,8 @@ watch(
 <template>
   <div v-if="request" class="interaction-card">
     <div class="interaction-head">
-      <span class="interaction-badge">待确认</span>
-      <div class="interaction-title">{{ request.content || "需要确认/补充信息" }}</div>
+      <span class="interaction-badge">{{ t("composer.pendingConfirm") }}</span>
+      <div class="interaction-title">{{ request.content || t("composer.confirmOrSupplement") }}</div>
     </div>
 
     <el-form
@@ -93,17 +95,17 @@ watch(
         <el-input
           :ref="index === 0 ? setFirstInputRef : null"
           v-model="formData[fieldItem.name]"
-          :placeholder="fieldItem.description || `请输入${fieldItem.displayName || fieldItem.name}`"
+          :placeholder="fieldItem.description || t('composer.inputField', { field: fieldItem.displayName || fieldItem.name })"
         />
       </el-form-item>
     </el-form>
 
     <div class="interaction-actions">
       <el-button :disabled="submitting" @click="onCancel">
-        取消
+        {{ t("common.cancel") }}
       </el-button>
       <el-button type="primary" :loading="submitting" @click="onConfirm">
-        确认
+        {{ t("infra.confirm") }}
       </el-button>
     </div>
   </div>

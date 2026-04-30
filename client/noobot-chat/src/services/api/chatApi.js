@@ -31,16 +31,21 @@ export function buildAttachmentUrl({
 }
 
 export async function connectApi(
-  { userId = "", connectCode = "" },
+  { userId = "", connectCode = "", locale = "" },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
+  const normalizedLocale = String(locale || "").trim();
   return runFetch("/api/internal/connect", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(normalizedLocale ? { "x-noobot-locale": normalizedLocale } : {}),
+    },
     body: JSON.stringify({
       userId: String(userId || "").trim(),
       connectCode: String(connectCode || "").trim(),
+      locale: normalizedLocale,
     }),
   });
 }

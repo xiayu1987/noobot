@@ -7,11 +7,40 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createMcpAgentTools } from "../mcp/index.js";
+import { mergeConfig } from "../config/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { appendMcpErrorLog } from "../tracking/index.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 function jsonError(payload = {}) {
   return toToolJsonResult("call_mcp_task", { ok: false, ...payload });
+}
+
+function tMcp(runtime = {}, key = "", params = {}) {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    mcpNameRequired: {
+      "zh-CN": "mcpName required",
+      "en-US": "mcpName required",
+    },
+    taskRequired: {
+      "zh-CN": "task required",
+      "en-US": "task required",
+    },
+    runtimeMissing: {
+      "zh-CN": "运行时缺少 botManager/userId/sessionId",
+      "en-US": "runtime missing botManager/userId/sessionId",
+    },
+    noToolsAvailable: {
+      "zh-CN": "MCP服务器无可用工具。",
+      "en-US": "No available tools on MCP server.",
+    },
+    taskPrefix: {
+      "zh-CN": `任务: ${String(params.task || "").trim()}`,
+      "en-US": `Task: ${String(params.task || "").trim()}`,
+    },
+  };
+  return pickToolText({ locale, dict, key, params });
 }
 
 function isAbortError(error) {
@@ -43,23 +72,24 @@ function normalizeSelectedConnectors(selectedConnectors = {}) {
 }
 
 export function createMcpTool({ agentContext }) {
+  const runtime = agentContext?.runtime || {};
   const callMcpTaskTool = new DynamicStructuredTool({
     name: "call_mcp_task",
-    description: "调用指定 MCP Server 完成任务。传入 mcpName 与 task。",
+    description: tTool(runtime, "tools.mcp.description"),
     schema: z.object({
-      mcpName: z.string().describe("MCP 服务名称，对应配置 mcpServers 的 key"),
-      task: z.string().describe("要让 MCP 工具链执行的任务描述"),
-      modelName: z.string().optional().describe("可选：指定执行该任务使用的模型别名或模型名"),
+      mcpName: z.string().describe(tTool(runtime, "tools.mcp.fieldMcpName")),
+      task: z.string().describe(tTool(runtime, "tools.mcp.fieldTask")),
+      modelName: z.string().optional().describe(tTool(runtime, "tools.mcp.fieldModelName")),
     }),
     func: async ({ mcpName, task, modelName = "" }) => {
       const normalizedMcpName = String(mcpName || "").trim();
       const normalizedTask = String(task || "").trim();
-      if (!normalizedMcpName) return jsonError({ error: "mcpName required" });
-      if (!normalizedTask) return jsonError({ error: "task required" });
+      if (!normalizedMcpName) return jsonError({ error: tMcp(runtime, "mcpNameRequired") });
+      if (!normalizedTask) return jsonError({ error: tMcp(runtime, "taskRequired") });
 
-      const runtime = agentContext?.runtime || {};
       const globalConfig = runtime?.globalConfig || {};
       const userConfig = runtime?.userConfig || {};
+      const effectiveConfig = mergeConfig(globalConfig, userConfig);
       const systemRuntime = runtime?.systemRuntime || {};
       const botManager = runtime?.botManager || null;
       const eventListener = runtime?.eventListener || null;
@@ -78,18 +108,18 @@ export function createMcpTool({ agentContext }) {
         systemRuntime?.dialogProcessId || "",
       ).trim();
       const resolvedModelName = String(modelName || "").trim();
-  const allowUserInteraction =
-    systemRuntime?.config?.allowUserInteraction !== false;
-  const maxToolLoopTurns = Number(
-    effectiveConfig?.tools?.call_mcp_task?.max_tool_loop_turns ??
-      effectiveConfig?.tools?.call_mcp_task?.maxToolLoopTurns ??
-      6,
-  );
+      const allowUserInteraction =
+        systemRuntime?.config?.allowUserInteraction !== false;
+      const maxToolLoopTurns = Number(
+        effectiveConfig?.tools?.call_mcp_task?.max_tool_loop_turns ??
+          effectiveConfig?.tools?.call_mcp_task?.maxToolLoopTurns ??
+          6,
+      );
       try {
         if (!botManager || !userId || !sessionId) {
           return jsonError({
             mcpName: normalizedMcpName,
-            error: "runtime missing botManager/userId/sessionId",
+            error: tMcp(runtime, "runtimeMissing"),
           });
         }
         const mcpToolset = await createMcpAgentTools({
@@ -108,13 +138,11 @@ export function createMcpTool({ agentContext }) {
             mcpName: normalizedMcpName,
             status: "completed",
             tools: [],
-            answer: "MCP服务器无可用工具。",
+            answer: tMcp(runtime, "noToolsAvailable"),
           });
         }
         const subSessionId = randomUUID();
-        const subTaskMessage = [
-          `任务: ${normalizedTask}`
-        ].join("\n");
+        const subTaskMessage = [tMcp(runtime, "taskPrefix", { task: normalizedTask })].join("\n");
         const subResult = await botManager.runSession({
           userId,
           sessionId: subSessionId,

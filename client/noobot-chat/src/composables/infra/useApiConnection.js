@@ -12,7 +12,7 @@ export function useApiConnection({
   onConnected = async () => {},
   notify = () => {},
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const connectCode = ref(localStorage.getItem("noobot_connect_code") || "");
   const apiKey = ref(localStorage.getItem("noobot_api_key") || "");
   const apiKeyUserId = ref(localStorage.getItem("noobot_api_user_id") || "");
@@ -73,6 +73,9 @@ export function useApiConnection({
     const mergedHeaders = {
       ...(options.headers || {}),
       ...(apiKey.value ? { "x-api-key": apiKey.value } : {}),
+      ...(String(locale.value || "").trim()
+        ? { "x-noobot-locale": String(locale.value || "").trim() }
+        : {}),
     };
     const res = await fetch(url, {
       ...options,
@@ -99,6 +102,7 @@ export function useApiConnection({
       const res = await connectApi({
         userId: userId.value.trim(),
         connectCode: connectCode.value.trim(),
+        locale: String(locale.value || "").trim(),
       });
       const data = await res.json();
       if (!res.ok || !data.ok || !data.apiKey) {

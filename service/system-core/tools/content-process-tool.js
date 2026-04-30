@@ -10,9 +10,26 @@ import { toToolJsonResult } from "./tool-json-result.js";
 import { mergeConfig } from "../config/index.js";
 import { createDoc2DataTool } from "./doc2data-tool.js";
 import { createWeb2DataTool } from "./web2data-tool.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 function jsonError(payload = {}) {
   return toToolJsonResult("process_content_task", { ok: false, ...payload });
+}
+
+function tContent(runtime = {}, key = "") {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    taskRequired: { "zh-CN": "task required", "en-US": "task required" },
+    runtimeMissing: {
+      "zh-CN": "运行时缺少 botManager/userId/sessionId",
+      "en-US": "runtime missing botManager/userId/sessionId",
+    },
+    toolsUnavailable: {
+      "zh-CN": "内容处理工具不可用",
+      "en-US": "content process tools not available",
+    },
+  };
+  return pickToolText({ locale, dict, key });
 }
 
 function isAbortError(error) {
@@ -71,16 +88,16 @@ export function createContentProcessTool({ agentContext }) {
     .map((tool) => String(tool?.name || "").trim())
     .filter(Boolean);
   const toolDescMap = {
-    doc_to_data: "解析文档内容（office/pdf/图片提取文本）",
-    web_to_data: "解析网页内容（URL 或 URL 列表文件）",
+    doc_to_data: tTool(runtime, "tools.content_process.toolDescDoc"),
+    web_to_data: tTool(runtime, "tools.content_process.toolDescWeb"),
   };
   const enabledToolDescList = contentProcessToolNames.map((toolName) => {
-    const desc = toolDescMap[toolName] || "通用内容处理";
+    const desc = toolDescMap[toolName] || tTool(runtime, "tools.content_process.toolDescGeneric");
     return `${toolName}: ${desc}`;
   });
   const dynamicDescription = contentProcessToolNames.length
-    ? `内容处理工具：当前启用子工具：${enabledToolDescList.join("；")}。子会话仅允许调用以上已启用工具。`
-    : "内容处理工具：当前未启用任何子工具。";
+    ? `${tTool(runtime, "tools.content_process.dynamicDescEnabledPrefix")}${enabledToolDescList.join("；")}${tTool(runtime, "tools.content_process.dynamicDescEnabledSuffix")}`
+    : tTool(runtime, "tools.content_process.dynamicDescDisabled");
 
   const processContentTaskTool = new DynamicStructuredTool({
     name: "process_content_task",
@@ -88,14 +105,12 @@ export function createContentProcessTool({ agentContext }) {
     schema: z.object({
       task: z
         .string()
-        .describe(
-          "任务说明。请明确输入来源和目标输出",
-        ),
-      modelName: z.string().optional().describe("可选：指定子任务执行模型（别名或模型名）"),
+        .describe(tTool(runtime, "tools.content_process.fieldTask")),
+      modelName: z.string().optional().describe(tTool(runtime, "tools.content_process.fieldModelName")),
     }),
     func: async ({ task, modelName = "" }) => {
       const normalizedTask = String(task || "").trim();
-      if (!normalizedTask) return jsonError({ error: "task required" });
+      if (!normalizedTask) return jsonError({ error: tContent(runtime, "taskRequired") });
 
       const systemRuntime = runtime?.systemRuntime || {};
       const botManager = runtime?.botManager || null;
@@ -113,12 +128,12 @@ export function createContentProcessTool({ agentContext }) {
         systemRuntime?.config?.allowUserInteraction !== false;
       if (!botManager || !userId || !sessionId) {
         return jsonError({
-          error: "runtime missing botManager/userId/sessionId",
+          error: tContent(runtime, "runtimeMissing"),
         });
       }
       if (!contentProcessTools.length) {
         return jsonError({
-          error: "content process tools not available",
+          error: tContent(runtime, "toolsUnavailable"),
         });
       }
 

@@ -24,6 +24,8 @@ import {
   normalizeTerminalType,
   resolveConfiguredConnectorInfo,
   terminalFields,
+  resolveRuntimeLocale,
+  tConnector,
 } from "./connector-toolkit.js";
 
 export function createTerminalConnectorTools(context = {}) {
@@ -53,6 +55,7 @@ export function createTerminalConnectorTools(context = {}) {
         .describe("可选：终端连接默认值（不含 password），可传 JSON 字符串或对象"),
     }),
     func: async ({ connector_name, terminal_type, default_values }) => {
+      const runtimeLocale = resolveRuntimeLocale(runtime);
       if (!store || typeof store.connectConnector !== "function") {
         return toToolJsonResult("terminal_connect_connector", {
           ok: false,
@@ -93,6 +96,7 @@ export function createTerminalConnectorTools(context = {}) {
         return buildAlreadyConnectedResponse(
           "terminal_connect_connector",
           existingConnected,
+          runtime,
         );
       }
 
@@ -116,7 +120,7 @@ export function createTerminalConnectorTools(context = {}) {
       });
       const baseFields = attachDefaultValuesToFields(
         alignFieldsWithConnectionInfo(
-          terminalFields(terminalType),
+          terminalFields(terminalType, runtimeLocale),
           connectionInfo,
         ),
         connectionInfo,
@@ -124,7 +128,7 @@ export function createTerminalConnectorTools(context = {}) {
       const fields = [
         {
           name: "connector_name",
-          displayName: "连接器名称",
+          displayName: tConnector(runtime, "connectorNameLabel"),
           required: false,
           default_value: connectorName,
           defaultValue: connectorName,
@@ -140,7 +144,7 @@ export function createTerminalConnectorTools(context = {}) {
         if (!allowUserInteraction) {
           return toToolJsonResult("terminal_connect_connector", {
             ok: false,
-            error: "缺少连接信息，且当前会话已禁用用户交互",
+            error: tConnector(runtime, "missingConnectionInfoNoInteraction"),
           });
         }
         if (!bridge?.requestUserInteraction) {
@@ -150,7 +154,9 @@ export function createTerminalConnectorTools(context = {}) {
           });
         }
         const interactionResult = await bridge.requestUserInteraction({
-          content: `请补全终端连接信息（${terminalType}）`,
+          content: tConnector(runtime, "fillTerminalConnectionInfo", {
+            terminalType,
+          }),
           fields,
           dialogProcessId,
           requireEncryption: true,
@@ -164,7 +170,7 @@ export function createTerminalConnectorTools(context = {}) {
           return toToolJsonResult("terminal_connect_connector", {
             ok: false,
             cancelled: true,
-            error: "用户取消了操作",
+            error: tConnector(runtime, "userCancelledAction"),
           });
         }
         connectionInfo = mergeConnectionInfo(connectionInfo, interactionResult);

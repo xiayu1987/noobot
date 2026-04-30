@@ -12,11 +12,12 @@ import {
   CircleCloseFilled,
   Connection,
 } from "@element-plus/icons-vue";
+import { useLocale } from "../../shared/i18n/useLocale";
 
 const CONNECTOR_GROUP_DEFINITIONS = [
-  { key: "database", label: "数据库" },
-  { key: "terminal", label: "终端" },
-  { key: "email", label: "邮件" },
+  { key: "database", labelKey: "common.database" },
+  { key: "terminal", labelKey: "common.terminal" },
+  { key: "email", labelKey: "common.email" },
 ];
 const CONNECTOR_GROUP_KEYS = new Set(
   CONNECTOR_GROUP_DEFINITIONS.map((groupDefinition) => groupDefinition.key),
@@ -29,6 +30,7 @@ const props = defineProps({
 const emit = defineEmits(["connector-selected"]);
 
 const connectorPanelExpanded = ref(false);
+const { t } = useLocale();
 
 const connectorGroups = computed(() => {
   const sourceGroups =
@@ -62,7 +64,7 @@ const collapsedConnectorSummaryItems = computed(() =>
       selectedConnectors.value?.[groupDefinition.key] || "",
     ).trim();
     if (!selectedConnectorName) return null;
-    return `${groupDefinition.label}: ${selectedConnectorName}`;
+    return `${t(groupDefinition.labelKey)}: ${selectedConnectorName}`;
   }).filter(Boolean),
 );
 
@@ -103,7 +105,7 @@ function toggleConnectorPanelExpanded() {
     <div class="connector-panel-header" @click="toggleConnectorPanelExpanded">
       <div class="connector-panel-title">
         <el-icon class="title-icon"><Connection /></el-icon>
-        <span>连接器</span>
+        <span>{{ t("composer.connectors") }}</span>
       </div>
 
       <div class="connector-collapsed-summary" v-show="!connectorPanelExpanded">
@@ -118,12 +120,12 @@ function toggleConnectorPanelExpanded() {
           v-if="!collapsedConnectorSummaryItems.length"
           class="connector-summary-empty"
         >
-          未选择连接器
+          {{ t("composer.noConnectorSelected") }}
         </span>
       </div>
 
       <div class="connector-toggle-btn noobot-flat-soft-btn">
-        <span class="toggle-text">{{ connectorPanelExpanded ? "收起" : "展开" }}</span>
+        <span class="toggle-text">{{ connectorPanelExpanded ? t("message.collapse") : t("composer.expand") }}</span>
         <el-icon class="connector-toggle-icon" :class="{ 'is-rotated': connectorPanelExpanded }">
           <ArrowDown />
         </el-icon>
@@ -138,7 +140,7 @@ function toggleConnectorPanelExpanded() {
             :key="groupDefinition.key"
             class="connector-group noobot-flat-card"
           >
-            <div class="connector-group-title">{{ groupDefinition.label }}</div>
+            <div class="connector-group-title">{{ t(groupDefinition.labelKey) }}</div>
             <el-radio-group
               class="vertical-radio-group"
               :model-value="selectedConnectors[groupDefinition.key]"
@@ -164,7 +166,7 @@ function toggleConnectorPanelExpanded() {
               </el-radio>
 
               <div v-if="!connectorGroups[groupDefinition.key]?.length" class="empty-group-tip">
-                暂无可用连接
+                {{ t("composer.noAvailableConnections") }}
               </div>
             </el-radio-group>
           </div>

@@ -13,6 +13,42 @@ import {
   resolveModelSpecByName,
 } from "../model/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+
+function tMultimodal(runtime = {}, key = "", params = {}) {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    imagesApiNotEnabledError: {
+      "zh-CN": "当前账号未开通图片生成能力（403 Images API is not enabled）。",
+      "en-US": "Current account does not have image generation enabled (403 Images API is not enabled).",
+    },
+    imagesApiNotEnabledMessage: {
+      "zh-CN": "请在对应平台开通 Images API 权限，或切换到已开通图片生成能力的模型/密钥。",
+      "en-US": "Enable Images API on your platform, or switch to a model/key with image generation enabled.",
+    },
+    multimodalUnsupportedError: {
+      "zh-CN": `当前模型不支持多模态生成（图片）：${String(params.model || "").trim()}`,
+      "en-US": `Current model does not support multimodal image generation: ${String(params.model || "").trim()}`,
+    },
+    multimodalUnsupportedMessage: {
+      "zh-CN": "请切换到支持图片生成的模型，或通过 model_name 指定支持生成的模型。",
+      "en-US": "Switch to a model that supports image generation, or specify one via model_name.",
+    },
+    generationContentRequired: {
+      "zh-CN": "generation_content required",
+      "en-US": "generation_content required",
+    },
+    modelApiKeyMissing: {
+      "zh-CN": "model api key missing",
+      "en-US": "model api key missing",
+    },
+    generateFailed: {
+      "zh-CN": "multimodal generate failed",
+      "en-US": "multimodal generate failed",
+    },
+  };
+  return pickToolText({ locale, dict, key, params });
+}
 
 function resolveModelApiKey(modelSpec = {}) {
   return String(modelSpec?.api_key || "").trim();
@@ -173,7 +209,7 @@ async function generateWithOpenaiResponsesApi({
 }
 
 
-function buildImageGenerationErrorResult({ error, resolvedModelSpec = {} }) {
+function buildImageGenerationErrorResult({ error, resolvedModelSpec = {}, runtime = {} }) {
   const errorStatusCode = Number(error?.status || error?.statusCode || 0);
   const errorMessage = String(error?.message || String(error || "")).trim();
   const normalizedMessage = errorMessage.toLowerCase();
@@ -188,9 +224,8 @@ function buildImageGenerationErrorResult({ error, resolvedModelSpec = {} }) {
       ok: false,
       status: "failed",
       code: "RECOVERABLE_IMAGES_API_NOT_ENABLED",
-      error: "当前账号未开通图片生成能力（403 Images API is not enabled）。",
-      message:
-        "请在对应平台开通 Images API 权限，或切换到已开通图片生成能力的模型/密钥。",
+      error: tMultimodal(runtime, "imagesApiNotEnabledError"),
+      message: tMultimodal(runtime, "imagesApiNotEnabledMessage"),
       modelAlias,
       model: modelName,
     };
@@ -199,7 +234,7 @@ function buildImageGenerationErrorResult({ error, resolvedModelSpec = {} }) {
   return {
     ok: false,
     status: "failed",
-    error: errorMessage || "multimodal generate failed",
+    error: errorMessage || tMultimodal(runtime, "generateFailed"),
     modelAlias,
     model: modelName,
   };
@@ -228,20 +263,19 @@ export function createMultimodalGenerateTool({ agentContext }) {
 
   const multimodalGenerateTool = new DynamicStructuredTool({
     name: "multimodal_generate",
-    description:
-      "图片生成工具。根据输入的 generation_content 生成图片。注意：不要篡改生成内容描述",
+    description: tTool(runtime, "tools.multimodal.description"),
     schema: z.object({
       generation_content: z
         .string()
-        .describe("generation content，不要篡改添加生成内容描述"),
+        .describe(tTool(runtime, "tools.multimodal.fieldGenerationContent")),
       model_name: z
         .string()
         .optional()
-        .describe("可选：指定模型（provider别名或模型名）"),
+        .describe(tTool(runtime, "tools.multimodal.fieldModelName")),
       image_size: z
         .string()
         .optional()
-        .describe("可选：图片尺寸，例如 1024x1024"),
+        .describe(tTool(runtime, "tools.multimodal.fieldImageSize")),
     }),
     func: async ({ generation_content, model_name = "", image_size = "1024x1024" }) => {
       const generationContent = String(generation_content || "").trim();
@@ -249,7 +283,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
       if (!generationContent) {
         return toToolJsonResult("multimodal_generate", {
           ok: false,
-          error: "generation_content required",
+          error: tMultimodal(runtime, "generationContentRequired"),
         });
       }
       try {
@@ -278,9 +312,10 @@ export function createMultimodalGenerateTool({ agentContext }) {
             ok: false,
             status: "failed",
             code: "RECOVERABLE_MODEL_MULTIMODAL_GENERATION_UNSUPPORTED",
-            error: `当前模型不支持多模态生成（图片）：${currentModelAlias || currentModelName || "unknown_model"}`,
-            message:
-              "请切换到支持图片生成的模型，或通过 model_name 指定支持生成的模型。",
+            error: tMultimodal(runtime, "multimodalUnsupportedError", {
+              model: currentModelAlias || currentModelName || "unknown_model",
+            }),
+            message: tMultimodal(runtime, "multimodalUnsupportedMessage"),
             modelAlias: currentModelAlias,
             model: currentModelName,
           });
@@ -294,7 +329,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             ok: false,
             status: "failed",
             code: "RECOVERABLE_MODEL_API_KEY_MISSING",
-            error: "model api key missing",
+            error: tMultimodal(runtime, "modelApiKeyMissing"),
           });
         }
         const openaiClient = new OpenAI({
@@ -373,6 +408,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
               typeof resolvedModelSpec === "object" && resolvedModelSpec
                 ? resolvedModelSpec
                 : {},
+            runtime,
           }),
         );
       }

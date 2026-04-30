@@ -23,6 +23,8 @@ import {
   normalizeProvidedEmailDefaults,
   resolveRememberedConnectorInfo,
   resolveConfiguredConnectorInfo,
+  resolveRuntimeLocale,
+  tConnector,
 } from "./connector-toolkit.js";
 
 export function createEmailConnectorTools(context = {}) {
@@ -51,6 +53,7 @@ export function createEmailConnectorTools(context = {}) {
         .describe("可选：邮件连接默认值（不含 password），可传 JSON 字符串或对象"),
     }),
     func: async ({ connector_name, default_values }) => {
+      const runtimeLocale = resolveRuntimeLocale(runtime);
       if (!store || typeof store.connectConnector !== "function") {
         return toToolJsonResult("email_connect_connector", {
           ok: false,
@@ -84,6 +87,7 @@ export function createEmailConnectorTools(context = {}) {
         return buildAlreadyConnectedResponse(
           "email_connect_connector",
           existingConnected,
+          runtime,
         );
       }
 
@@ -103,13 +107,13 @@ export function createEmailConnectorTools(context = {}) {
       connectionInfo = mergeConnectionInfo(connectionInfo, rememberedConnectionInfo);
       connectionInfo = mergeConnectionInfo(connectionInfo, providedDefaults);
       const baseFields = attachDefaultValuesToFields(
-        alignFieldsWithConnectionInfo(emailFields(), connectionInfo),
+        alignFieldsWithConnectionInfo(emailFields(runtimeLocale), connectionInfo),
         connectionInfo,
       );
       const fields = [
         {
           name: "connector_name",
-          displayName: "连接器名称",
+          displayName: tConnector(runtime, "connectorNameLabel"),
           required: false,
           default_value: connectorName,
           defaultValue: connectorName,
@@ -125,7 +129,7 @@ export function createEmailConnectorTools(context = {}) {
         if (!allowUserInteraction) {
           return toToolJsonResult("email_connect_connector", {
             ok: false,
-            error: "缺少连接信息，且当前会话已禁用用户交互",
+            error: tConnector(runtime, "missingConnectionInfoNoInteraction"),
           });
         }
         if (!bridge?.requestUserInteraction) {
@@ -135,7 +139,7 @@ export function createEmailConnectorTools(context = {}) {
           });
         }
         const interactionResult = await bridge.requestUserInteraction({
-          content: "请补全邮件连接信息（SMTP/IMAP）",
+          content: tConnector(runtime, "fillEmailConnectionInfo"),
           fields,
           dialogProcessId,
           requireEncryption: true,
@@ -149,7 +153,7 @@ export function createEmailConnectorTools(context = {}) {
           return toToolJsonResult("email_connect_connector", {
             ok: false,
             cancelled: true,
-            error: "用户取消了操作",
+            error: tConnector(runtime, "userCancelledAction"),
           });
         }
         connectionInfo = mergeConnectionInfo(connectionInfo, interactionResult);
