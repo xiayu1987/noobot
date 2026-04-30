@@ -1,0 +1,213 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { reactive } from "vue";
+import { storeToRefs } from "pinia";
+import { applyCompletedToolLogsToMessages } from "../infra/sessionToolLogs";
+import {
+  buildAppendMessage,
+  buildViewMessage,
+  foldConversationMessages,
+} from "../infra/messageModel";
+import {
+  buildChatWebSocketUrl,
+  deleteSessionApi,
+  getSessionConnectorsApi,
+  getSessionDetailApi,
+  getSessionsApi,
+} from "../../services/api/chatApi";
+import { encryptPayloadBySessionId } from "../../shared/utils/sessionCrypto";
+import { RoleEnum } from "../../shared/constants/chatConstants";
+import {
+  createConnectorPanelState,
+  generateSessionId,
+  sessionTitleFromMessages,
+} from "../../shared/models/sessionModel";
+import { createChatWebSocketClient } from "../../services/ws/chatWebSocketClient";
+import { useChatInput } from "./useChatInput";
+import { useAgentInteraction } from "./useAgentInteraction";
+import { useConnectorPanel } from "../infra/useConnectorPanel";
+import { useChatList } from "./useChatList";
+import { useChatEngine } from "./useChatEngine";
+import { useChatStore } from "../../shared/stores/useChatStore";
+
+export function useChatSession({
+  userId,
+  apiKey,
+  allowUserInteraction,
+  connected,
+  ensureConnected,
+  authFetch,
+  isImageMime,
+  classifyRealtimeLog,
+  scrollBottom,
+  notify = () => {},
+  clearUploadSelection = () => {},
+}) {
+  const chatStore = useChatStore();
+  const {
+    sending,
+    sessions,
+    activeSessionId,
+    activeSession,
+    loadingSessions,
+    loadingSessionDetail,
+  } = storeToRefs(chatStore);
+
+  const {
+    input,
+    uploadFiles,
+    onUploadChange,
+    clearUploads,
+    serializeAttachments,
+  } = useChatInput({
+    isImageMime,
+    clearUploadSelection,
+  });
+
+  const chatWebSocketClient = createChatWebSocketClient({
+    resolveWebSocketUrl: () =>
+      buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
+  });
+
+  const {
+    pendingInteractionRequest,
+    interactionSubmitting,
+    clearPendingInteraction,
+    setPendingInteractionRequest,
+    submitInteractionResponse,
+  } = useAgentInteraction({
+    encryptPayloadBySessionId,
+    sendJson: (payload) => chatWebSocketClient.sendJson(payload),
+  });
+
+  const connectorPanel = useConnectorPanel({
+    ensureConnected,
+    getSessionConnectorsApi,
+    userId,
+    authFetch,
+    sessions,
+    activeSession,
+  });
+
+  function appendMessage(role, content = "", attachmentMetas = []) {
+    const msg = reactive(buildAppendMessage(role, content, attachmentMetas));
+    activeSession.value.messages.push(msg);
+    activeSession.value.rawMessages.push(msg);
+    activeSession.value.messageCount = (activeSession.value.messageCount || 0) + 1;
+    activeSession.value.lastMessage = msg;
+    activeSession.value.updatedAt = new Date().toISOString();
+    return msg;
+  }
+
+  function makeViewMessage(messageItem = {}) {
+    return reactive(
+      buildViewMessage(messageItem, {
+        userId: userId.value,
+        apiKey: apiKey.value,
+        isImageMime,
+      }),
+    );
+  }
+
+  function foldMessagesForView(messages = []) {
+    return foldConversationMessages(messages, makeViewMessage);
+  }
+
+  const chatList = useChatList({
+    userId,
+    connected,
+    ensureConnected,
+    authFetch,
+    sessions,
+    activeSessionId,
+    loadingSessions,
+    loadingSessionDetail,
+    sending,
+    createConnectorPanelState,
+    generateSessionId,
+    sessionTitleFromMessages,
+    applyCompletedToolLogsToMessages,
+    getSessionsApi,
+    getSessionDetailApi,
+    deleteSessionApi,
+    makeViewMessage,
+    foldMessagesForView,
+    scrollBottom,
+    refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
+    clearUploads,
+    notify,
+  });
+
+  const chatEngine = useChatEngine({
+    userId,
+    allowUserInteraction,
+    isImageMime,
+    classifyRealtimeLog,
+    scrollBottom,
+    activeSession,
+    activeSessionId,
+    sending,
+    input,
+    uploadFiles,
+    clearUploads,
+    serializeAttachments,
+    appendMessage,
+    makeViewMessage,
+    foldMessagesForView,
+    fetchSessionDetail: chatList.fetchSessionDetail,
+    applySessionDetail: chatList.applySessionDetail,
+    refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
+    connectorTypeSet: connectorPanel.connectorTypeSet,
+    upsertConnectedConnectorInPanelState:
+      connectorPanel.upsertConnectedConnectorInPanelState,
+    pendingInteractionRequest,
+    interactionSubmitting,
+    clearPendingInteraction,
+    setPendingInteractionRequest,
+    submitInteractionResponse,
+    chatWebSocketClient,
+    ensureConnected,
+    notify,
+  });
+
+  function closeMobileSidebarOnSelect(isMobileRef, mobileSidebarOpenRef) {
+    if (isMobileRef.value) mobileSidebarOpenRef.value = false;
+  }
+
+  function shouldRenderMessageInChat(messageItem) {
+    const messageRole = String(messageItem?.role || "");
+    return messageRole !== RoleEnum.TOOL;
+  }
+
+  return {
+    input,
+    uploadFiles,
+    sending,
+    sessions,
+    activeSessionId,
+    activeSession,
+    loadingSessions,
+    loadingSessionDetail,
+    newSession: chatList.newSession,
+    deleteSession: chatList.deleteSession,
+    fetchSessions: chatList.fetchSessions,
+    selectSession: chatList.selectSession,
+    send: chatEngine.send,
+    stopSending: chatEngine.stopSending,
+    refreshSessionConnectors: connectorPanel.refreshSessionConnectors,
+    refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
+    updateSessionSelectedConnector: connectorPanel.updateSessionSelectedConnector,
+    pendingInteractionRequest,
+    interactionSubmitting,
+    submitInteractionResponse,
+    onUploadChange,
+    clearUploads,
+    shouldRenderMessageInChat,
+    closeMobileSidebarOnSelect,
+    releaseAllPreviewUrls: chatList.releaseAllPreviewUrls,
+    initSessionsAfterMount: chatList.initSessionsAfterMount,
+  };
+}

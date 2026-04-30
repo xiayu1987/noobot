@@ -1,0 +1,64 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+:root {
+  /* ========== Component Tokens · Message ========== */
+  --noobot-msg-assistant-avatar: var(--noobot-base-blue-500);
+  --noobot-msg-user-avatar: var(--noobot-base-slate-500);
+  --noobot-msg-meta: var(--noobot-text-secondary);
+  --noobot-msg-assistant-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-base-black));
+  --noobot-msg-assistant-border: var(--noobot-panel-border);
+  --noobot-msg-assistant-text: color-mix(in srgb, var(--noobot-text-main) 90%, var(--noobot-base-white));
+  --noobot-msg-user-bg: var(--noobot-base-blue-500);
+  --noobot-msg-user-border: color-mix(in srgb, var(--noobot-base-blue-500) 44%, var(--noobot-base-slate-900));
+  --noobot-msg-user-text: color-mix(in srgb, var(--noobot-base-white) 80%, var(--noobot-base-blue-500));
+  --noobot-msg-tag-bg: var(--noobot-panel-muted);
+  --noobot-msg-tag-text: var(--noobot-text-main);
+  --noobot-msg-pending-text: color-mix(in srgb, var(--noobot-base-blue-400) 82%, var(--noobot-base-slate-100));
+  --noobot-msg-pending-dot: var(--noobot-base-blue-400);
+  --noobot-msg-error-bg: color-mix(in srgb, var(--noobot-base-red-500) 18%, var(--noobot-base-black));
+  --noobot-msg-error-border: color-mix(in srgb, var(--noobot-base-red-500) 48%, var(--noobot-base-slate-700));
+  --noobot-msg-error-text: color-mix(in srgb, var(--noobot-base-red-500) 34%, var(--noobot-base-white));
+  --noobot-msg-file-card-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 72%, transparent);
+  --noobot-msg-file-card-border: var(--noobot-panel-border);
+  --noobot-msg-file-icon-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 74%, var(--noobot-base-slate-900));
+  --noobot-msg-file-name: color-mix(in srgb, var(--noobot-base-slate-200) 92%, var(--noobot-base-blue-500));
+  --noobot-msg-file-size: var(--noobot-text-secondary);
+  --noobot-msg-link: var(--noobot-text-accent);
+  --noobot-msg-inline-code-bg: color-mix(in srgb, var(--noobot-base-blue-500) 14%, transparent);
+  --noobot-msg-inline-code-text: var(--noobot-base-blue-600);
+  --noobot-msg-code-block-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 86%, var(--noobot-base-black));
+  --noobot-msg-code-block-text: var(--noobot-base-slate-50);
+
+  /* ========== Component Tokens · Message Size ========== */
+  --noobot-msg-avatar-size: 38px;
+  --noobot-msg-avatar-font-size: 14px;
+  --noobot-msg-meta-font-size: 12px;
+  --noobot-msg-caption-font-size: 13px;
+  --noobot-msg-font-size: 15px;
+  --noobot-msg-line-height: 1.6;
+  --noobot-msg-bubble-pad-y: 14px;
+  --noobot-msg-bubble-pad-x: 18px;
+  --noobot-msg-corner-accent-radius: 4px;
+  --noobot-msg-file-thumb-size: 44px;
+  --noobot-msg-icon-btn-size: 30px;
+  --noobot-msg-inline-icon-btn-size: 34px;
+  --noobot-msg-markdown-pre-padding: 16px;
+  --noobot-msg-table-cell-padding-y: 8px;
+  --noobot-msg-table-cell-padding-x: 10px;
+
+  /* ========== Component Tokens · Thinking Panel ========== */
+  --noobot-thinking-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-base-black));
+  --noobot-thinking-header: var(--noobot-text-secondary);
+  --noobot-thinking-text: var(--noobot-text-main);
+  --noobot-thinking-muted: var(--noobot-text-muted);
+  --noobot-thinking-event: var(--noobot-text-main);
+  --noobot-thinking-line-border: var(--noobot-divider);
+  --noobot-thinking-tool-border: var(--noobot-divider);
+  --noobot-thinking-tab: var(--noobot-text-secondary);
+  --noobot-thinking-tab-active: var(--noobot-text-main);
+  --noobot-thinking-tab-bar: var(--noobot-border-primary);
+}

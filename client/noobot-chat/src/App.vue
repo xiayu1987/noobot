@@ -4,9 +4,9 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import NoobotChat from "./components/NoobotChat.vue";
+import AppShell from "./app/AppShell.vue";
 </script>
 
 <template>
-  <NoobotChat />
+  <AppShell />
 </template>

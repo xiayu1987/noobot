@@ -1,0 +1,599 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+@import "./tokens/base.css";
+@import "./tokens/semantic.css";
+@import "./tokens/theme-light.css";
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+}
+
+body {
+  overflow: hidden;
+}
+
+
+* {
+  box-sizing: border-box;
+}
+
+/* Mermaid tooltip 使用 absolute 定位时可能撑大页面滚动区域 */
+.mermaidTooltip {
+  position: fixed !important;
+  z-index: 4000;
+  max-width: min(360px, 80vw);
+  pointer-events: none;
+}
+
+/* 预览弹框主色调（全局，适配 teleported el-dialog） */
+.attachment-preview-dialog,
+.generated-file-preview-dialog {
+  background: var(--noobot-panel-bg) !important;
+  border: 1px solid var(--noobot-panel-border) !important;
+}
+
+.attachment-preview-dialog .el-dialog__header,
+.generated-file-preview-dialog .el-dialog__header {
+  margin-right: 0 !important;
+  padding: 14px 18px !important;
+  background: var(--noobot-panel-head-bg) !important;
+  border-bottom: 1px solid var(--noobot-divider) !important;
+}
+
+.attachment-preview-dialog .el-dialog__title,
+.generated-file-preview-dialog .el-dialog__title {
+  color: var(--noobot-text-strong) !important;
+  font-weight: 600 !important;
+}
+
+.attachment-preview-dialog .el-dialog__headerbtn .el-dialog__close,
+.generated-file-preview-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.attachment-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close,
+.generated-file-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: var(--noobot-text-strong) !important;
+}
+
+/* 统一功能性按钮基类 */
+.noobot-action-btn {
+  border-radius: var(--noobot-btn-radius) !important;
+  font-weight: var(--noobot-btn-font-weight) !important;
+  transition: var(--noobot-btn-transition);
+}
+
+.noobot-action-btn:disabled {
+  opacity: var(--noobot-btn-disabled-opacity);
+}
+
+.noobot-action-btn:not(:disabled):hover,
+.noobot-action-btn:not(:disabled):active {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* 聊天气泡相关通用语义类（统一收敛） */
+.noobot-flat-card {
+  background: var(--noobot-msg-file-card-bg);
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+  box-shadow: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.noobot-flat-card:hover {
+  border-color: var(--noobot-panel-border);
+  box-shadow: none;
+}
+
+.noobot-flat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--noobot-space-xs);
+  padding: 2px var(--noobot-space-xs);
+  border-radius: 999px;
+  font-size: var(--noobot-msg-meta-font-size);
+  color: var(--noobot-msg-tag-text);
+  background: var(--noobot-panel-muted);
+  border: 1px solid var(--noobot-panel-border);
+  box-shadow: none;
+}
+
+.noobot-flat-icon-btn,
+.noobot-flat-inline-icon-btn {
+  border-radius: var(--noobot-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 60%, transparent);
+  background: var(--noobot-panel-muted);
+  color: var(--noobot-text-main);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.noobot-flat-icon-btn {
+  width: var(--noobot-msg-icon-btn-size);
+  height: var(--noobot-msg-icon-btn-size);
+}
+
+.noobot-flat-inline-icon-btn {
+  width: var(--noobot-msg-inline-icon-btn-size);
+  height: var(--noobot-msg-inline-icon-btn-size);
+}
+
+.noobot-flat-icon-btn:hover,
+.noobot-flat-inline-icon-btn:hover {
+  background: var(--noobot-panel-muted);
+  color: var(--noobot-text-main);
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
+  box-shadow: none;
+}
+
+.noobot-flat-soft-btn {
+  border: 1px solid color-mix(in srgb, var(--noobot-btn-secondary-border) 58%, transparent);
+  background: var(--noobot-btn-secondary-bg);
+  color: var(--noobot-btn-secondary-text);
+}
+
+.noobot-flat-soft-btn:hover:not(:disabled) {
+  background: var(--noobot-btn-secondary-bg-hover);
+  border-color: color-mix(in srgb, var(--noobot-btn-secondary-border) 68%, transparent);
+  color: var(--noobot-text-strong);
+}
+
+/* 关键操作位（附件/展开/工作区/用户设置/参数管理/左侧收折）边框弱化 */
+.noobot-action-btn.noobot-flat-soft-btn,
+.noobot-action-btn.noobot-flat-icon-btn,
+.noobot-action-btn.noobot-flat-inline-icon-btn,
+.el-button.noobot-flat-soft-btn,
+.el-button.noobot-flat-icon-btn,
+.el-button.noobot-flat-inline-icon-btn {
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 42%, transparent) !important;
+}
+
+.attachment-download-btn.noobot-flat-icon-btn,
+.attachment-preview-btn.noobot-flat-icon-btn,
+.connector-toggle-btn.noobot-flat-soft-btn,
+.workspace-btn.noobot-flat-soft-btn,
+.dark-btn.noobot-flat-soft-btn,
+.collapse-btn.noobot-flat-soft-btn {
+  border-color: transparent !important;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent) !important;
+  color: var(--noobot-text-strong) !important;
+}
+
+.attachment-download-btn.noobot-flat-icon-btn:hover,
+.connector-toggle-btn.noobot-flat-soft-btn:hover,
+.workspace-btn.noobot-flat-soft-btn:hover,
+.dark-btn.noobot-flat-soft-btn:hover,
+.collapse-btn.noobot-flat-soft-btn:hover {
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 18%, transparent) !important;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 88%, transparent) !important;
+  color: var(--noobot-base-white) !important;
+}
+
+.attachment-download-btn.noobot-flat-icon-btn .el-icon,
+.workspace-btn.noobot-flat-soft-btn .el-icon,
+.dark-btn.noobot-flat-soft-btn .el-icon,
+.collapse-btn.noobot-flat-soft-btn .el-icon {
+  color: inherit !important;
+  opacity: 0.98;
+}
+
+.noobot-tail-btn {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  background: var(--noobot-btn-soft-bg);
+  border: 1px solid var(--noobot-btn-soft-border);
+  color: var(--noobot-btn-soft-text);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.noobot-tail-btn .el-icon {
+  margin: 0 !important;
+}
+
+/* 工作区/配置类页面的统一面板语义类 */
+.noobot-workspace-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--noobot-panel-bg);
+}
+
+.noobot-workspace-head {
+  height: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  background: var(--noobot-panel-head-bg);
+  border-bottom: 1px solid var(--noobot-border-weak);
+}
+
+.noobot-workspace-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--noobot-text-main);
+}
+
+.noobot-workspace-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--noobot-panel-bg);
+}
+
+.noobot-list-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-xs);
+  padding: var(--noobot-space-md);
+  background: var(--noobot-panel-muted);
+}
+
+.noobot-editor-textarea {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.noobot-editor-textarea .el-textarea__inner {
+  flex: 1;
+  background: var(--noobot-panel-muted);
+  color: var(--noobot-text-main);
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  padding: 16px;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: var(--noobot-msg-caption-font-size);
+  line-height: 1.6;
+  resize: none;
+}
+
+.noobot-editor-textarea .el-textarea__inner::placeholder {
+  color: var(--noobot-text-muted);
+}
+
+.noobot-editor-textarea .el-textarea__inner:focus {
+  outline: none;
+}
+
+body {
+  background: var(--noobot-app-bg);
+  color: var(--noobot-text-main);
+}
+
+*::selection {
+  background: color-mix(in srgb, var(--noobot-cyber-cyan) 28%, transparent);
+  color: var(--noobot-text-strong);
+}
+
+/* 统一滚动条视觉 */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--noobot-text-muted) 45%, transparent);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--noobot-surface-soft);
+}
+
+/* Element Plus 全局收敛 */
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  background: transparent !important;
+  border: 1px solid var(--noobot-glass-border) !important;
+  box-shadow: none !important;
+  color: var(--noobot-text-main) !important;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused,
+.el-textarea__inner:focus {
+  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 72%, transparent) !important;
+  box-shadow: var(--noobot-focus-ring) !important;
+}
+
+.el-button {
+  border-radius: var(--noobot-btn-radius) !important;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease !important;
+}
+
+.el-button:not(:disabled):hover {
+  transform: none;
+  filter: none;
+}
+
+.el-button--primary {
+  border: none !important;
+  background: var(--noobot-btn-primary-bg) !important;
+  box-shadow: none;
+}
+
+.el-button--primary:not(:disabled):hover {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--noobot-btn-primary-bg) 90%, var(--noobot-base-white)) !important;
+}
+
+.el-card,
+.el-dropdown-menu,
+.el-popover {
+  background: color-mix(in srgb, var(--noobot-panel-bg) 94%, transparent) !important;
+  border: 1px solid var(--noobot-panel-border) !important;
+  backdrop-filter: none;
+}
+
+/* 头部设置下拉菜单（teleported）统一系统色调 */
+.noobot-settings-dropdown.el-popper {
+  border: 1px solid var(--noobot-panel-border) !important;
+}
+
+.noobot-settings-dropdown .el-dropdown-menu {
+  background: color-mix(in srgb, var(--noobot-panel-bg) 96%, transparent) !important;
+  border: 1px solid var(--noobot-panel-border) !important;
+  padding: 4px !important;
+}
+
+.noobot-settings-dropdown .el-dropdown-menu__item {
+  color: var(--noobot-text-main) !important;
+  border-radius: 8px;
+}
+
+.noobot-settings-dropdown .el-dropdown-menu__item:hover,
+.noobot-settings-dropdown .el-dropdown-menu__item:focus {
+  background: var(--noobot-panel-muted) !important;
+  color: var(--noobot-text-strong) !important;
+}
+
+.noobot-settings-dropdown .el-dropdown-menu__item.is-disabled {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.el-dialog {
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+
+/* Tabs / Drawer / Collapse 统一 */
+.el-tabs__header {
+  border-bottom: 1px solid var(--noobot-divider) !important;
+}
+.el-tabs__item {
+  color: var(--noobot-text-secondary) !important;
+}
+.el-tabs__item.is-active {
+  color: var(--noobot-text-main) !important;
+}
+.el-tabs__active-bar {
+  background: var(--noobot-text-accent) !important;
+}
+
+.el-drawer,
+.el-dialog {
+  background: var(--noobot-panel-bg) !important;
+  border: 1px solid var(--noobot-panel-border) !important;
+  box-shadow: none;
+}
+
+.el-drawer__header,
+.el-dialog__header {
+  background: var(--noobot-panel-head-bg) !important;
+  border-bottom: 1px solid var(--noobot-divider) !important;
+}
+
+.el-drawer__title,
+.el-dialog__title {
+  color: var(--noobot-text-strong) !important;
+  font-weight: 600 !important;
+}
+
+.el-collapse-item__header {
+  background: transparent !important;
+  color: var(--noobot-text-main) !important;
+}
+
+/* 空态与提示收敛 */
+.el-empty__description p,
+.el-alert__description {
+  color: var(--noobot-text-secondary) !important;
+}
+
+/* 工具条按钮收敛 */
+.noobot-action-btn,
+.noobot-flat-icon-btn,
+.noobot-flat-inline-icon-btn,
+.noobot-tail-btn {
+  backdrop-filter: none;
+}
+
+/* 工作区统一底色，减少各组件硬编码视觉差 */
+.noobot-workspace-panel {
+  background: var(--noobot-panel-bg) !important;
+  border-color: var(--noobot-panel-border) !important;
+}
+.noobot-workspace-head {
+  background: var(--noobot-panel-head-bg) !important;
+  border-bottom-color: var(--noobot-divider) !important;
+}
+.noobot-workspace-body {
+  background: color-mix(in srgb, var(--noobot-panel-bg) 92%, var(--noobot-surface-sidebar)) !important;
+}
+.noobot-list-row {
+  background: color-mix(in srgb, var(--noobot-panel-muted) 78%, var(--noobot-surface-sidebar)) !important;
+}
+
+/* 消息内容与 markdown 区视觉收敛 */
+.md pre,
+.preview-markdown pre {
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 88%, transparent);
+}
+.md table th,
+.preview-markdown table th {
+  background: color-mix(in srgb, var(--noobot-panel-border) 45%, transparent) !important;
+}
+
+/* 第三轮收敛：覆盖组件内硬编码色，亮暗主题一致 */
+.chat-header,
+.workspace-drawer .el-drawer__header,
+.noobot-workspace-head {
+  background: var(--noobot-panel-head-bg) !important;
+}
+
+.main-content,
+.composer-wrapper,
+.composer,
+.connector-panel-shell,
+.connector-panel-shell.is-expanded,
+.interaction-card,
+.workspace-drawer .el-drawer__body,
+.skeleton-loading {
+  background: var(--noobot-panel-bg) !important;
+}
+
+.mobile-mask {
+  background: var(--noobot-mask-bg) !important;
+}
+
+.composer,
+.interaction-card {
+  border-color: var(--noobot-panel-border) !important;
+}
+
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--noobot-base-blue-500) 36%, transparent) !important;
+  box-shadow: var(--noobot-focus-ring) !important;
+}
+
+.chat-input .el-textarea__inner,
+.interaction-form .el-input__wrapper,
+.noobot-editor-textarea .el-textarea__inner {
+  color: var(--noobot-text-main) !important;
+  background: transparent !important;
+  border-color: var(--noobot-panel-border) !important;
+}
+
+.chat-input .el-textarea__inner::placeholder,
+.noobot-editor-textarea .el-textarea__inner::placeholder {
+  color: var(--noobot-text-muted) !important;
+}
+
+.connector-panel-header:hover,
+.session-item:hover {
+  background: var(--noobot-panel-muted) !important;
+}
+
+.connector-group-title,
+.interaction-form .el-form-item__label,
+.file-size,
+.head-sub,
+.connector-summary-empty {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.connector-name,
+.file-name,
+.interaction-title,
+.user-idx {
+  color: var(--noobot-text-main) !important;
+}
+
+.preview-body {
+  color: var(--noobot-preview-text) !important;
+  background: var(--noobot-preview-bg) !important;
+  border-color: var(--noobot-preview-border) !important;
+}
+
+.preview-error {
+  color: var(--noobot-preview-danger-text) !important;
+  background: var(--noobot-preview-danger-bg) !important;
+  border-color: var(--noobot-preview-danger-border) !important;
+}
+
+.preview-text,
+.preview-markdown {
+  color: var(--noobot-preview-text) !important;
+}
+
+.session-delete-btn:hover,
+.icon-btn.danger-text:hover {
+  background: var(--noobot-danger-soft) !important;
+}
+
+.status-btn.connected {
+  background: color-mix(in srgb, var(--noobot-status-success) 16%, var(--noobot-panel-bg)) !important;
+  border-color: color-mix(in srgb, var(--noobot-status-success) 36%, transparent) !important;
+}
+
+/* 低动态偏好兼容 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 移动端全面适配 */
+@media (max-width: 768px) {
+  html,
+  body,
+  #app {
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .el-drawer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+
+  .el-dialog {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    margin-top: 5vh !important;
+  }
+
+  .el-button,
+  .noobot-action-btn {
+    min-height: 34px;
+  }
+
+  .el-input__wrapper,
+  .el-select__wrapper {
+    min-height: 34px !important;
+  }
+}
