@@ -1,390 +1,238 @@
-# 配置说明（完整）
+# Configuration
 
-本文档汇总 noobot 当前所有主要配置项，包括全局配置、用户配置、参数化变量与环境变量。
+[中文](./CONFIGURATION.zh-CN.md) | English
 
----
+This document describes the latest Noobot configuration structure based on:
 
-## 1. 配置文件位置
-
-### 1.1 全局配置
-
-- 文件：`service/config/global.config.json`
-- 示例：`service/config/global.config.example.json`
-
-### 1.2 用户配置
-
-- 模板：`user-template/default-user/config.json`
-- 运行时：`workspace/<userId>/config.json`
-
-### 1.3 参数化变量配置
-
-- 系统参数文件：`workspace/config-params.json`
-- 用户参数文件：`workspace/<userId>/config-params.json`
-- 用途：给 `${VAR_NAME}` 这类占位符提供值（可在前端“参数配置”界面维护）
-  - 普通用户：可维护“用户参数”
-  - 超级用户：可维护“用户参数 + 系统参数”
-
-### 1.4 运行端口
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `PORT` | 端口号（如 `10061`） | 后端服务监听端口。配置文件：`service/.env`（示例：`service/.env.example`）。 |
+- `service/config/global.config.example.json`
+- `user-template/default-user/config.example.json`
+- `service/.env.example`
 
 ---
 
-## 2. 全局配置（`global.config.json`）
+## 1) Config Files
 
-> 以下字段基于 `service/config/global.config.example.json`。
+### Global
 
-### 2.1 基础路径
+- `service/config/global.config.json`
+- Example: `service/config/global.config.example.json`
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `workspaceRoot` | 路径字符串（示例：`../workspace`） | 工作区根目录。 |
-| `workspaceTemplatePath` | 路径字符串（示例：`../user-template/default-user`） | 用户初始化模板目录。 |
+### User
 
-### 2.2 记忆与推理
+- Template: `user-template/default-user/config.json`
+- Runtime: `workspace/<userId>/config.json`
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `memoryMaxItems` | 正整数 | 短期记忆最大条目数；达到阈值触发长期记忆提炼。 |
-| `maxToolLoopTurns` | 正整数 | 单轮对话中工具循环最大轮次。 |
+### Param Files (for `${VAR_NAME}`)
 
-### 2.3 会话上下文策略 `session`
+- System: `workspace/config-params.json`
+- User: `workspace/<userId>/config-params.json`
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `session.recentMessageLimit` | 正整数 | 最近消息回看数量。 |
-| `session.useLastRunningTaskRange` | `true` / `false` | 是否优先取“最近运行任务开始之后”的消息范围。 |
-| `session.useLastCompletedTaskRange` | `true` / `false` | 是否优先取“最近完成任务之后”的消息范围。 |
+These values are used to resolve placeholders in config files.
 
-### 2.3.1 附件上传限制 `attachments`
+### Env
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `attachments.max_file_count` | 正整数 | 单次请求允许上传的附件数量上限。 |
-| `attachments.max_file_size_bytes` | 正整数（字节） | 单个附件大小上限。 |
-| `attachments.max_total_size_bytes` | 正整数（字节） | 单次请求全部附件总大小上限。 |
-| `attachments.allowed_extensions` | 扩展名列表（如 `.pdf`、`.png`、`.mp4`） | 附件后缀白名单。为空表示不限制后缀。 |
-| `attachments.attachment_models.audio` | `providers` 中模型别名 | 音频附件处理默认模型。 |
-| `attachments.attachment_models.video` | `providers` 中模型别名 | 视频附件处理默认模型。 |
-| `attachments.attachment_models.image` | `providers` 中模型别名 | 图片附件处理默认模型。 |
+- `service/.env` (example: `service/.env.example`)
+- Current required key:
+  - `PORT` (default example: `10061`)
 
-### 2.4 工具配置 `tools`
+---
 
-> 工具配置建议使用“**实际工具名**”（下划线分割）作为 key。  
-> `enabled` 缺省为 `true`；只有显式 `false` 才禁用。
+## 2) Global Config (`global.config.json`)
 
-#### 2.4.1 文件与脚本类
+## 2.1 Core
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `tools.read_file.enabled` | `true` / `false` | 读文件工具开关。 |
-| `tools.write_file.enabled` | `true` / `false` | 写文件工具开关。 |
-| `tools.execute_script.enabled` | `true` / `false` | 脚本执行工具开关。 |
-| `tools.execute_script.sandbox_mode` | `true` / `false` | 脚本沙箱开关。 |
-| `tools.execute_script.sandbox_provider.default` | `docker` / `bubblewrap` / `firejail` | 默认沙箱提供方。 |
-| `tools.execute_script.sandbox_provider.docker.docker_container_scope` | `global` / `user` | Docker 容器复用范围。 |
-| `tools.execute_script.sandbox_provider.docker.docker_container_name` | 字符串 | Docker 容器基础名称。 |
-| `tools.execute_script.sandbox_provider.docker.docker_image` | 镜像名 | Docker 镜像。 |
-| `tools.execute_script.script_timeout_ms` | 正整数（毫秒） | 脚本超时。 |
+- `workspace_root`
+- `workspace_template_path`
+- `default_provider`
+- `memory_max_items`
+- `max_tool_loop_turns`
+- `streaming`
 
-#### 2.4.2 技能与服务调用类
+## 2.2 Session
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `tools.list_skills.enabled` | `true` / `false` | 列技能工具开关。 |
-| `tools.set_skill_task.enabled` | `true` / `false` | 技能任务状态工具开关。 |
-| `tools.call_service.enabled` | `true` / `false` | 服务调用工具开关。 |
-| `tools.call_mcp_task.enabled` | `true` / `false` | MCP 调用工具开关。 |
+`session`:
 
-#### 2.4.3 多任务协作类
+- `recent_message_limit`
+- `use_last_running_task_range`
+- `use_last_completed_task_range`
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `tools.delegate_task_async.enabled` | `true` / `false` | 异步委派工具开关。 |
-| `tools.delegate_task_async.wait_timeout_ms` | 正整数（毫秒） | 等待超时。 |
-| `tools.delegate_task_async.poll_interval_ms` | 正整数（毫秒） | 状态轮询间隔（建议 3000~10000）。 |
-| `tools.delegate_task_async.max_sub_agent_depth` | 正整数 | 子任务最大深度。 |
-| `tools.wait_async_task_result.enabled` | `true` / `false` | 等待异步结果工具开关。 |
-| `tools.wait_async_task_result.poll_interval_ms` | 正整数（毫秒） | 单次 wait 默认等待时长（达到后返回当前状态）。 |
-| `tools.plan_multi_task_collaboration.enabled` | `true` / `false` | 多任务规划工具开关。 |
+## 2.3 Attachments
 
-#### 2.4.4 模型与交互类
+`attachments`:
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `tools.switch_model.enabled` | `true` / `false` | 切模型工具开关。 |
-| `tools.user_interaction.enabled` | `true` / `false` | 用户交互工具开关。 |
-| `tools.multimodal_generate.enabled` | `true` / `false` | 多模态生成工具开关（调用当前模型执行生成）。 |
+- `max_file_count`
+- `max_file_size_bytes`
+- `max_total_size_bytes`
+- `allowed_extensions`
+- `attachment_models.audio`
+- `attachment_models.video`
+- `attachment_models.image`
 
-#### 2.4.5 内容处理类
+## 2.4 Tools
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `tools.web_to_data.enabled` | `true` / `false` | 网页解析子工具开关（仅 `process_content_task` 内部使用，不是顶层可直接调用工具）。 |
-| `tools.web_to_data.switch_web_mode` | `direct` / `browser_simulate` / `multimodal` | 网页解析子工具模式（仅 `process_content_task` 内部使用）。 |
-| `tools.doc_to_data.enabled` | `true` / `false` | 文档解析子工具开关（仅 `process_content_task` 内部使用，不是顶层可直接调用工具）。 |
-| `tools.process_content_task.enabled` | `true` / `false` | 内容处理任务顶层工具开关。 |
-| `tools.process_content_task.max_tool_loop_turns` | 正整数 | 子任务内部工具轮次上限。 |
+`tools.<tool_name>.enabled` is supported for all tools.  
+Current example includes:
 
-#### 2.4.6 连接器类
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `tools.process_connector_tool.enabled` | `true` / `false` | 连接器编排工具开关。 |
-| `tools.process_connector_tool.max_tool_loop_turns` | 正整数 | 连接器子任务内部工具轮次上限。 |
-| `tools.database_connect_connector.enabled` | `true` / `false` | 数据库连接器工具开关。 |
-| `tools.database_connect_connector.connectors` | 对象 | 预置数据库连接配置（按连接器名索引，支持多个）。 |
-| `tools.terminal_connect_connector.enabled` | `true` / `false` | 终端连接器工具开关。 |
-| `tools.terminal_connect_connector.connectors` | 对象 | 预置终端连接配置（按连接器名索引，支持多个）。 |
-| `tools.inspect_connectors.enabled` | `true` / `false` | 查看当前会话连接器状态工具开关。 |
-| `tools.access_connector.enabled` | `true` / `false` | 执行已连接连接器命令工具开关。 |
-| `tools.access_connector.max_output_chars` | 正整数 | 连接器输出清洗后的最大字符数（保留尾部）。 |
-
-连接器配置结构（按连接器名组织）：
-
-| 配置路径 | 字段名 | 可选项 | 描述 |
-|---|---|---|---|
-| `tools.database_connect_connector.connectors.<connector_name>` | `database_type` | `mysql` / `postgres` / `sqlite` | 数据库类型。 |
-| `tools.database_connect_connector.connectors.<connector_name>` | `host` | 主机/IP | MySQL/Postgres 常用。 |
-| `tools.database_connect_connector.connectors.<connector_name>` | `port` | 端口号 | MySQL/Postgres 常用。 |
-| `tools.database_connect_connector.connectors.<connector_name>` | `username` | 字符串 | MySQL/Postgres 常用用户名。 |
-| `tools.database_connect_connector.connectors.<connector_name>` | `password` | 字符串 / `${VAR_NAME}` | 建议参数化。 |
-| `tools.database_connect_connector.connectors.<connector_name>` | `database` | 字符串 | MySQL/Postgres 数据库名。 |
-| `tools.database_connect_connector.connectors.<connector_name>` | `file_path` | 文件路径 | SQLite 常用。 |
-| `tools.terminal_connect_connector.connectors.<connector_name>` | `terminal_type` | `ssh` | 终端类型。 |
-| `tools.terminal_connect_connector.connectors.<connector_name>` | `host` | 主机/IP | SSH 主机地址。 |
-| `tools.terminal_connect_connector.connectors.<connector_name>` | `port` | 端口号 | SSH 端口（常用 22）。 |
-| `tools.terminal_connect_connector.connectors.<connector_name>` | `username` | 字符串 | SSH 用户名。 |
-| `tools.terminal_connect_connector.connectors.<connector_name>` | `password` | 字符串 / `${VAR_NAME}` | 建议参数化。 |
-
-工具入参补充：
-
+- `read_file`
+- `write_file`
+- `list_skills`
+- `set_skill_task`
+- `call_service`
+- `call_mcp_task`
+- `delegate_task_async`
+- `wait_async_task_result`
+- `plan_multi_task_collaboration`
+- `switch_model`
+- `user_interaction`
+- `web_to_data`
+- `doc_to_data`
+- `process_content_task`
+- `execute_script`
+- `process_connector_tool`
+- `access_connector`
 - `database_connect_connector`
-  - `connector_name`
-  - `database_type`
-  - `default_values`（可选，对象或 JSON 字符串；仅非敏感默认值）
 - `terminal_connect_connector`
-  - `connector_name`
-  - `terminal_type`
-  - `default_values`（可选，对象或 JSON 字符串；仅非敏感默认值）
+- `email_connect_connector`
+- `inspect_connectors`
+- `multimodal_generate`
 
-行为说明：
+### Tool-specific key examples
 
-- 缺少连接信息时会请求用户补全（仅在会话允许交互时）。
-- 同名连接器已连接时返回 `status=already_connected`，并提示改用 `access_connector`。
-- `database_connect_connector` / `terminal_connect_connector` / `inspect_connectors` 返回实际状态字段：
-  - `status`
-  - `status_code`
-  - `status_message`
-  - `checked_at`
+- `delegate_task_async.wait_timeout_ms`
+- `delegate_task_async.poll_interval_ms`
+- `delegate_task_async.max_sub_agent_depth`
+- `wait_async_task_result.poll_interval_ms`
+- `process_content_task.max_tool_loop_turns`
+- `process_connector_tool.max_tool_loop_turns`
+- `access_connector.max_output_chars`
+- `execute_script.sandbox_mode`
+- `execute_script.script_timeout_ms`
+- `execute_script.sandbox_provider.default` (`docker` / `bubblewrap` / `firejail`)
+- `execute_script.sandbox_provider.docker.*`
 
-### 2.5 模型默认与提供方
+## 2.5 Connector Presets
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `defaultProvider`（或 `default_provider`） | `providers` 中已启用别名 | 全局默认模型别名。 |
-| `providers.<provider>.enabled` | `true` / `false` | 是否启用该模型配置。 |
-| `providers.<provider>.api_key` | 明文密钥 / `${VAR_NAME}` | 模型密钥（建议用占位符）。 |
-| `providers.<provider>.base_url` | URL 字符串 | 模型网关地址。 |
-| `providers.<provider>.model` | 模型名字符串 | 实际调用模型名。 |
-| `providers.<provider>.format` | `openai_compatible` / `dashscope` / 其他适配值 | 协议格式。 |
-| `providers.<provider>.reasoning_effort` | `low` / `medium` / `high`（视模型支持） | 推理强度。 |
-| `providers.<provider>.temperature` | 数值（通常 `0~2`） | 温度参数。 |
-| `providers.<provider>.max_tokens` | 正整数 | 最大输出 token。 |
-| `providers.<provider>.preserve_thinking` | `true` / `false`（视模型支持） | 是否保留思考。 |
-| `providers.<provider>.thinking_budget` | 正整数（视模型支持） | 思考预算。 |
-| `providers.<provider>.description` | 字符串 | 提供方说明。 |
-| `providers.<provider>.multimodal_generation.support_understanding` | `true` / `false` | 是否支持多模态理解。 |
-| `providers.<provider>.multimodal_generation.support_generation.enabled` | `true` / `false` | 是否支持多模态生成。 |
-| `providers.<provider>.multimodal_generation.support_generation.support_scope` | 列表（如 `image`） | 多模态生成支持范围。 |
+### Database
 
-当前示例配置中的 `providers` 别名：
+`tools.database_connect_connector.connectors.<name>`:
+
+- `database_type` (`mysql` / `postgres` / `sqlite`)
+- `host`
+- `port`
+- `username`
+- `password` (recommended `${VAR_NAME}`)
+- `database` (for mysql/postgres)
+- `file_path` (for sqlite)
+
+### Terminal
+
+`tools.terminal_connect_connector.connectors.<name>`:
+
+- `terminal_type` (`ssh`)
+- `host`
+- `port`
+- `username`
+- `password` (recommended `${VAR_NAME}`)
+
+### Email
+
+`tools.email_connect_connector.connectors.<name>`:
+
+- `smtp_host`
+- `smtp_port`
+- `imap_host`
+- `imap_port`
+- `username`
+- `password`
+- `from_email`
+- `to_email`
+
+## 2.6 Providers
+
+`providers.<alias>` keys (example):
+
+- `enabled`
+- `used_for_conversation`
+- `api_key`
+- `base_url`
+- `model`
+- `format` (`openai_compatible` / `dashscope`)
+- `reasoning_effort` (if supported)
+- `temperature`
+- `max_tokens`
+- `preserve_thinking` (if supported)
+- `thinking_budget` (if supported)
+- `description`
+- `multimodal_generation.support_understanding`
+- `multimodal_generation.support_generation.enabled`
+- `multimodal_generation.support_generation.support_scope`
+
+Current example aliases:
 
 - `gemini_3_flash`
 - `nano_banana`
 - `qwen3_6_plus_2026_04_02`
 - `qwen3_5_omni_plus`
 
-### 2.6 MCP 服务 `mcp_servers`
+## 2.7 MCP Servers
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `mcp_servers.<name>.type` | `streamableHttp` / `sse` | MCP 连接类型。 |
-| `mcp_servers.<name>.description` | 字符串 | MCP 服务描述。 |
-| `mcp_servers.<name>.isActive` | `true` / `false` | 是否启用该 MCP 服务。 |
-| `mcp_servers.<name>.name` | 字符串（可选） | 展示名。 |
-| `mcp_servers.<name>.baseUrl` | URL 字符串 | MCP 服务地址。 |
-| `mcp_servers.<name>.headers` | 对象（如 `Authorization`） | 请求头；支持 `${VAR_NAME}` 解析。 |
+`mcp_servers.<name>`:
 
-### 2.7 其他运行参数
+- `type` (`sse` / `streamableHttp`)
+- `description`
+- `isActive`
+- `name`
+- `baseUrl`
+- `headers` (supports `${VAR_NAME}`)
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `streaming` | `true` / `false` | 是否启用流式响应。 |
+## 2.8 Super Admin
 
-### 2.8 超级管理员
+`super_admin`:
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `superAdmin.userId` | 字符串 | 超级管理员用户 ID。 |
-| `superAdmin.connectCode` | 字符串 | 超级管理员连接码。 |
+- `user_id`
+- `connect_code`
 
 ---
 
-## 3. 用户配置（`workspace/<userId>/config.json`）
+## 3) User Config (`workspace/<userId>/config.json`)
 
-> 以下字段来自默认模板 `user-template/default-user/config.json`。
+User config can override global behavior.
 
-### 3.1 模型选择
+Main sections:
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `defaultProvider` | `providers` 中已启用别名（如 `qwen3_6_plus_2026_04_02`） | 默认模型别名。 |
-
-### 3.2 附件模型映射 `attachments.attachment_models`
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `attachments.attachment_models.audio` | `providers` 中模型别名 | 音频处理默认模型。 |
-| `attachments.attachment_models.video` | `providers` 中模型别名 | 视频处理默认模型。 |
-| `attachments.attachment_models.image` | `providers` 中模型别名 | 图片处理默认模型。 |
-
-### 3.2.1 用户附件上传限制覆盖 `attachments`
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `attachments.max_file_count` | 正整数 | 用户级单次上传数量上限覆盖。 |
-| `attachments.max_file_size_bytes` | 正整数（字节） | 用户级单文件大小上限覆盖。 |
-| `attachments.max_total_size_bytes` | 正整数（字节） | 用户级总大小上限覆盖。 |
-| `attachments.allowed_extensions` | 扩展名列表 | 用户级扩展名白名单覆盖。 |
-
-### 3.3 工具配置 `tools`
-
-用户配置支持覆盖大部分工具项（示例）：
-
-#### 3.3.1 内容处理类（常见用户覆盖）
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `tools.web_to_data.enabled` | `true` / `false` | 用户级网页解析子工具开关（仅 `process_content_task` 内部使用）。 |
-| `tools.web_to_data.switch_web_mode` | `direct` / `browser_simulate` / `multimodal` | 用户级网页解析子工具模式覆盖（仅 `process_content_task` 内部使用）。 |
-| `tools.doc_to_data.enabled` | `true` / `false` | 用户级文档解析子工具开关（仅 `process_content_task` 内部使用）。 |
-| `tools.process_content_task.enabled` | `true` / `false` | 用户级内容处理任务工具开关。 |
-| `tools.process_content_task.max_tool_loop_turns` | 正整数 | 用户级内容处理任务内部最大工具轮数。 |
-
-#### 3.3.2 连接器类（常见用户覆盖）
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `tools.process_connector_tool.enabled` | `true` / `false` | 用户级连接器编排工具开关。 |
-| `tools.process_connector_tool.max_tool_loop_turns` | 正整数 | 用户级连接器子任务工具轮次。 |
-| `tools.database_connect_connector.connectors` | 对象 | 用户级预置数据库连接（建议使用参数化密码 `${...}`）。 |
-| `tools.terminal_connect_connector.connectors` | 对象 | 用户级预置终端连接（建议使用参数化密码 `${...}`）。 |
-| `tools.access_connector.max_output_chars` | 正整数 | 用户级连接器输出长度控制。 |
-| `tools.multimodal_generate.enabled` | `true` / `false` | 用户级多模态生成工具开关。 |
-| `tools.database_connect_connector.enabled` | `true` / `false` | 用户级数据库连接器工具开关。 |
-| `tools.terminal_connect_connector.enabled` | `true` / `false` | 用户级终端连接器工具开关。 |
-| `tools.inspect_connectors.enabled` | `true` / `false` | 用户级连接器状态检查工具开关。 |
-
-> 注意：`tools.execute_script` 由服务端控制，用户配置不会生效（已在后端禁改）。
-
-### 3.4 模型提供方 `providers`
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `providers.<provider>.enabled` | `true` / `false` | 是否启用该模型配置。 |
-| `providers.<provider>.api_key` | 明文密钥 / `${VAR_NAME}` | 模型密钥（建议用占位符）。 |
-| `providers.<provider>.base_url` | URL 字符串 | 模型网关地址。 |
-| `providers.<provider>.model` | 模型名字符串 | 实际调用模型名。 |
-| `providers.<provider>.format` | `openai_compatible` / `dashscope` / 其他适配值 | 协议格式。 |
-| `providers.<provider>.reasoning_effort` | `low` / `medium` / `high`（视模型支持） | 推理强度。 |
-| `providers.<provider>.temperature` | 数值（通常 `0~2`） | 温度参数。 |
-| `providers.<provider>.max_tokens` | 正整数 | 最大输出 token。 |
-| `providers.<provider>.preserve_thinking` | `true` / `false`（视模型支持） | 是否保留思考。 |
-| `providers.<provider>.thinking_budget` | 正整数（视模型支持） | 思考预算。 |
-| `providers.<provider>.description` | 字符串 | 提供方说明。 |
-| `providers.<provider>.multimodal_generation.support_understanding` | `true` / `false` | 是否支持多模态理解。 |
-| `providers.<provider>.multimodal_generation.support_generation.enabled` | `true` / `false` | 是否支持多模态生成。 |
-| `providers.<provider>.multimodal_generation.support_generation.support_scope` | 列表（如 `image`） | 多模态生成支持范围。 |
-
-### 3.5 外部服务 `services`
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `services.<service>.enabled` | `true` / `false` | 服务开关。 |
-| `services.<service>.api_key` | 字符串 / `${VAR_NAME}` | 服务密钥（可选）。 |
-| `services.<service>.handler` | `workspace/<userId>/services/*.js` 对应处理器名 | 服务处理器名称。 |
-| `services.<service>.endpoints.<endpoint>.description` | 字符串 | 端点描述。 |
-| `services.<service>.endpoints.<endpoint>.url` | URL 字符串 | 端点地址。 |
-| `services.<service>.endpoints.<endpoint>.query_string_format` | 字符串 / JSON 字符串 | 查询参数格式说明。 |
-| `services.<service>.endpoints.<endpoint>.body_format` | 字符串 / JSON 字符串 | 请求体格式说明。 |
-
-### 3.6 MCP 服务 `mcp_servers`
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `mcp_servers.<name>.type` | `streamableHttp` / `sse` | MCP 连接类型。 |
-| `mcp_servers.<name>.description` | 字符串 | MCP 服务描述。 |
-| `mcp_servers.<name>.isActive` | `true` / `false` | 是否启用该 MCP 服务。 |
-| `mcp_servers.<name>.name` | 字符串（可选） | 展示名。 |
-| `mcp_servers.<name>.baseUrl` | URL 字符串 | MCP 服务地址。 |
-| `mcp_servers.<name>.headers` | 对象（如 `Authorization`） | 请求头；支持 `${VAR_NAME}` 解析。 |
-
-### 3.7 用户偏好 `preferences`
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `preferences.language` | 语言代码（如 `zh-CN`、`en-US`） | 语言偏好。 |
+- `default_provider`
+- `attachments` (same structure as global)
+- `tools` (same structure as global)
+- `providers` (same structure as global)
+- `mcp_servers` (same structure as global)
+- `streaming`
+- `super_admin` (optional for user-side overrides)
 
 ---
 
-## 4. 参数化变量（`${VAR_NAME}`）
+## 4) Placeholder Resolution
 
-### 4.1 使用方式
-
-在配置中可直接写：
+Recommended style:
 
 ```json
 {
-  "api_key": "${DASHSCOPE_API_KEY}",
-  "base_url": "${DASHSCOPE_API_ADDRESS}"
+  "api_key": "${DASHSCOPE_API_KEY}"
 }
 ```
 
-常见变量示例：
+Typical value sources:
 
-- `${OPENAI_API_KEY}`
-- `${OPENAI_API_ADDRESS}`
-- `${DASHSCOPE_API_KEY}`
-- `${DASHSCOPE_API_ADDRESS}`
+1. `workspace/<userId>/config-params.json`
+2. `workspace/config-params.json`
+3. environment variables
 
-### 4.2 解析优先级
-
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| `${VAR_NAME}`（系统配置解析） | 取值来源：`process.env` / `workspace/config-params.json` / 空字符串 | 系统配置解析优先级：`process.env.VAR_NAME` > `workspace/config-params.json.values.VAR_NAME` > `""`。 |
-| `${VAR_NAME}`（用户配置解析） | 取值来源：`process.env` / `workspace/<userId>/config-params.json` / `workspace/config-params.json` / 空字符串 | 用户配置解析优先级：`process.env.VAR_NAME` > `workspace/<userId>/config-params.json.values.VAR_NAME` > `workspace/config-params.json.values.VAR_NAME` > `""`。 |
+(Exact runtime precedence depends on implementation path.)
 
 ---
 
-## 5. 配置覆盖关系
+## 5) Migration Notes
 
-| 参数名 | 可选项 | 描述 |
-|---|---|---|
-| 同名配置项覆盖顺序 | 全局配置 -> 用户配置 | 先加载 `global.config.json`，再加载 `workspace/<userId>/config.json`；同名项由用户配置覆盖。 |
-| 参数占位符值覆盖顺序 | 系统参数 -> 用户参数 | 对用户配置解析时，`workspace/<userId>/config-params.json` 同名键覆盖 `workspace/config-params.json`。 |
+- Use snake_case keys shown in latest `*.example.json`.
+- If old camelCase keys exist, align them to snake_case gradually.
+- After changing config, restart service (`./start.sh` recommended).
 
-补充限制：
-
-- `workspace_root`、`workspace_template_path`：不允许用户配置覆盖。
-- `tools.execute_script`：不允许用户配置覆盖。
-
----
-
-## 6. 安全建议
-
-- 不要在仓库提交明文密钥（`api_key`、`Bearer sk-...`）
-- 推荐使用 `${VAR_NAME}` + `workspace/config-params.json` / `workspace/<userId>/config-params.json` 或环境变量注入
-- `workspace/` 建议加入 `.gitignore`
