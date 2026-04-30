@@ -384,7 +384,6 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
       :loading-sessions="loadingSessions"
       :sessions="sessions"
       :active-session-id="activeSessionId"
-      :active-connector-panel-state="activeSession?.connectorPanelState || {}"
       @toggle-sidebar="toggleSidebar"
       @update:user-id="onUserIdUpdate"
       @update:connect-code="onConnectCodeUpdate"

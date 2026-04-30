@@ -2,7 +2,7 @@
 
 [中文](./CONFIGURATION.zh-CN.md) | English
 
-This document describes the latest Noobot configuration structure based on:
+Based on latest examples:
 
 - `service/config/global.config.example.json`
 - `user-template/default-user/config.example.json`
@@ -10,229 +10,194 @@ This document describes the latest Noobot configuration structure based on:
 
 ---
 
-## 1) Config Files
+## 1) File Locations
 
-### Global
-
-- `service/config/global.config.json`
-- Example: `service/config/global.config.example.json`
-
-### User
-
-- Template: `user-template/default-user/config.json`
-- Runtime: `workspace/<userId>/config.json`
-
-### Param Files (for `${VAR_NAME}`)
-
-- System: `workspace/config-params.json`
-- User: `workspace/<userId>/config-params.json`
-
-These values are used to resolve placeholders in config files.
-
-### Env
-
-- `service/.env` (example: `service/.env.example`)
-- Current required key:
-  - `PORT` (default example: `10061`)
+| Scope | Path | Description |
+|---|---|---|
+| Global config | `service/config/global.config.json` | System-wide runtime config |
+| Global example | `service/config/global.config.example.json` | Latest reference template |
+| User template | `user-template/default-user/config.json` | Default user config template |
+| User runtime config | `workspace/<userId>/config.json` | Per-user effective config |
+| System params | `workspace/config-params.json` | Placeholder values for all users |
+| User params | `workspace/<userId>/config-params.json` | Placeholder values for one user |
+| Env file | `service/.env` | Backend env vars (example: `.env.example`) |
 
 ---
 
-## 2) Global Config (`global.config.json`)
+## 2) Environment Variables
 
-## 2.1 Core
-
-- `workspace_root`
-- `workspace_template_path`
-- `default_provider`
-- `memory_max_items`
-- `max_tool_loop_turns`
-- `streaming`
-
-## 2.2 Session
-
-`session`:
-
-- `recent_message_limit`
-- `use_last_running_task_range`
-- `use_last_completed_task_range`
-
-## 2.3 Attachments
-
-`attachments`:
-
-- `max_file_count`
-- `max_file_size_bytes`
-- `max_total_size_bytes`
-- `allowed_extensions`
-- `attachment_models.audio`
-- `attachment_models.video`
-- `attachment_models.image`
-
-## 2.4 Tools
-
-`tools.<tool_name>.enabled` is supported for all tools.  
-Current example includes:
-
-- `read_file`
-- `write_file`
-- `list_skills`
-- `set_skill_task`
-- `call_service`
-- `call_mcp_task`
-- `delegate_task_async`
-- `wait_async_task_result`
-- `plan_multi_task_collaboration`
-- `switch_model`
-- `user_interaction`
-- `web_to_data`
-- `doc_to_data`
-- `process_content_task`
-- `execute_script`
-- `process_connector_tool`
-- `access_connector`
-- `database_connect_connector`
-- `terminal_connect_connector`
-- `email_connect_connector`
-- `inspect_connectors`
-- `multimodal_generate`
-
-### Tool-specific key examples
-
-- `delegate_task_async.wait_timeout_ms`
-- `delegate_task_async.poll_interval_ms`
-- `delegate_task_async.max_sub_agent_depth`
-- `wait_async_task_result.poll_interval_ms`
-- `process_content_task.max_tool_loop_turns`
-- `process_connector_tool.max_tool_loop_turns`
-- `access_connector.max_output_chars`
-- `execute_script.sandbox_mode`
-- `execute_script.script_timeout_ms`
-- `execute_script.sandbox_provider.default` (`docker` / `bubblewrap` / `firejail`)
-- `execute_script.sandbox_provider.docker.*`
-
-## 2.5 Connector Presets
-
-### Database
-
-`tools.database_connect_connector.connectors.<name>`:
-
-- `database_type` (`mysql` / `postgres` / `sqlite`)
-- `host`
-- `port`
-- `username`
-- `password` (recommended `${VAR_NAME}`)
-- `database` (for mysql/postgres)
-- `file_path` (for sqlite)
-
-### Terminal
-
-`tools.terminal_connect_connector.connectors.<name>`:
-
-- `terminal_type` (`ssh`)
-- `host`
-- `port`
-- `username`
-- `password` (recommended `${VAR_NAME}`)
-
-### Email
-
-`tools.email_connect_connector.connectors.<name>`:
-
-- `smtp_host`
-- `smtp_port`
-- `imap_host`
-- `imap_port`
-- `username`
-- `password`
-- `from_email`
-- `to_email`
-
-## 2.6 Providers
-
-`providers.<alias>` keys (example):
-
-- `enabled`
-- `used_for_conversation`
-- `api_key`
-- `base_url`
-- `model`
-- `format` (`openai_compatible` / `dashscope`)
-- `reasoning_effort` (if supported)
-- `temperature`
-- `max_tokens`
-- `preserve_thinking` (if supported)
-- `thinking_budget` (if supported)
-- `description`
-- `multimodal_generation.support_understanding`
-- `multimodal_generation.support_generation.enabled`
-- `multimodal_generation.support_generation.support_scope`
-
-Current example aliases:
-
-- `gemini_3_flash`
-- `nano_banana`
-- `qwen3_6_plus_2026_04_02`
-- `qwen3_5_omni_plus`
-
-## 2.7 MCP Servers
-
-`mcp_servers.<name>`:
-
-- `type` (`sse` / `streamableHttp`)
-- `description`
-- `isActive`
-- `name`
-- `baseUrl`
-- `headers` (supports `${VAR_NAME}`)
-
-## 2.8 Super Admin
-
-`super_admin`:
-
-- `user_id`
-- `connect_code`
+| Key | Type | Example | Description |
+|---|---|---|---|
+| `PORT` | number | `10061` | Backend listen port |
 
 ---
 
-## 3) User Config (`workspace/<userId>/config.json`)
+## 3) Global Config (`global.config.json`)
 
-User config can override global behavior.
+### 3.1 Core
 
-Main sections:
+| Key | Type | Description |
+|---|---|---|
+| `workspace_root` | string(path) | Workspace root directory |
+| `workspace_template_path` | string(path) | Default user template path |
+| `default_provider` | string | Default model provider alias |
+| `memory_max_items` | number | Short-memory item limit |
+| `max_tool_loop_turns` | number | Max tool loop turns per request |
+| `streaming` | boolean | Enable SSE streaming output |
 
-- `default_provider`
-- `attachments` (same structure as global)
-- `tools` (same structure as global)
-- `providers` (same structure as global)
-- `mcp_servers` (same structure as global)
-- `streaming`
-- `super_admin` (optional for user-side overrides)
+### 3.2 Session
+
+| Key | Type | Description |
+|---|---|---|
+| `session.recent_message_limit` | number | Number of recent messages in context |
+| `session.use_last_running_task_range` | boolean | Prefer context since last running task |
+| `session.use_last_completed_task_range` | boolean | Prefer context since last completed task |
+
+### 3.3 Attachments
+
+| Key | Type | Description |
+|---|---|---|
+| `attachments.max_file_count` | number | Max files per request |
+| `attachments.max_file_size_bytes` | number | Max size per file |
+| `attachments.max_total_size_bytes` | number | Max total upload size |
+| `attachments.allowed_extensions` | string[] | Allowed suffix whitelist |
+| `attachments.attachment_models.audio` | string | Provider alias for audio understanding |
+| `attachments.attachment_models.video` | string | Provider alias for video understanding |
+| `attachments.attachment_models.image` | string | Provider alias for image understanding |
+
+### 3.4 Tools
+
+> All tools support: `tools.<tool_name>.enabled`.
+
+| Key | Type | Description |
+|---|---|---|
+| `tools.delegate_task_async.wait_timeout_ms` | number | Async task wait timeout |
+| `tools.delegate_task_async.poll_interval_ms` | number | Async task poll interval |
+| `tools.delegate_task_async.max_sub_agent_depth` | number | Max sub-agent depth |
+| `tools.wait_async_task_result.poll_interval_ms` | number | Poll interval for wait tool |
+| `tools.process_content_task.max_tool_loop_turns` | number | Loop cap in content task |
+| `tools.process_connector_tool.max_tool_loop_turns` | number | Loop cap in connector task |
+| `tools.access_connector.max_output_chars` | number | Connector output truncation limit |
+| `tools.execute_script.sandbox_mode` | boolean | Enable script sandbox mode |
+| `tools.execute_script.script_timeout_ms` | number | Script timeout |
+| `tools.execute_script.sandbox_provider.default` | enum | `docker` / `bubblewrap` / `firejail` |
+| `tools.execute_script.sandbox_provider.docker.docker_container_scope` | enum | `global` / `user` |
+| `tools.execute_script.sandbox_provider.docker.docker_container_name` | string | Docker sandbox container base name |
+| `tools.execute_script.sandbox_provider.docker.docker_image` | string | Docker image for sandbox |
+
+### 3.5 Connector Presets
+
+#### Database preset (`tools.database_connect_connector.connectors.<name>`)
+
+| Key | Type | Description |
+|---|---|---|
+| `database_type` | enum | `mysql` / `postgres` / `sqlite` |
+| `host` | string | DB host (mysql/postgres) |
+| `port` | number | DB port |
+| `username` | string | DB username |
+| `password` | string | DB password (recommend `${VAR_NAME}`) |
+| `database` | string | DB name (mysql/postgres) |
+| `file_path` | string(path) | SQLite file path |
+
+#### Terminal preset (`tools.terminal_connect_connector.connectors.<name>`)
+
+| Key | Type | Description |
+|---|---|---|
+| `terminal_type` | enum | `ssh` |
+| `host` | string | SSH host |
+| `port` | number | SSH port |
+| `username` | string | SSH username |
+| `password` | string | SSH password (recommend `${VAR_NAME}`) |
+
+#### Email preset (`tools.email_connect_connector.connectors.<name>`)
+
+| Key | Type | Description |
+|---|---|---|
+| `smtp_host` | string | SMTP server |
+| `smtp_port` | number/string | SMTP port |
+| `imap_host` | string | IMAP server |
+| `imap_port` | number/string | IMAP port |
+| `username` | string | Email account |
+| `password` | string | Auth password/code |
+| `from_email` | string | Default sender |
+| `to_email` | string | Default recipient |
+
+### 3.6 Providers (`providers.<alias>`)
+
+| Key | Type | Description |
+|---|---|---|
+| `enabled` | boolean | Enable this provider |
+| `used_for_conversation` | boolean | Can be used in chat |
+| `api_key` | string | API key (`${VAR_NAME}` supported) |
+| `base_url` | string(url) | Model API base URL |
+| `model` | string | Model name |
+| `format` | enum | `openai_compatible` / `dashscope` |
+| `reasoning_effort` | string | Optional (if supported) |
+| `temperature` | number | Sampling temperature |
+| `max_tokens` | number | Max output tokens |
+| `preserve_thinking` | boolean | Optional (if supported) |
+| `thinking_budget` | number | Optional (if supported) |
+| `description` | string | Provider description |
+| `multimodal_generation.support_understanding` | boolean | Multi-modal understanding support |
+| `multimodal_generation.support_generation.enabled` | boolean | Multi-modal generation enabled |
+| `multimodal_generation.support_generation.support_scope` | string[] | e.g. `["image"]` |
+
+### 3.7 MCP Servers (`mcp_servers.<name>`)
+
+| Key | Type | Description |
+|---|---|---|
+| `type` | enum | `sse` / `streamableHttp` |
+| `description` | string | Service description |
+| `isActive` | boolean | Enable this MCP service |
+| `name` | string | Display name |
+| `baseUrl` | string(url) | MCP endpoint |
+| `headers` | object | Request headers (`${VAR_NAME}` supported) |
+
+### 3.8 Super Admin
+
+| Key | Type | Description |
+|---|---|---|
+| `super_admin.user_id` | string | Super admin user id |
+| `super_admin.connect_code` | string | Super admin connect code |
 
 ---
 
-## 4) Placeholder Resolution
+## 4) User Config (`workspace/<userId>/config.json`)
 
-Recommended style:
+User config can override global values.
+
+| Section | Description |
+|---|---|
+| `default_provider` | User default provider |
+| `attachments` | User attachment policy override |
+| `tools` | User tool enable/options override |
+| `providers` | User provider override |
+| `mcp_servers` | User MCP override |
+| `streaming` | User streaming behavior |
+
+---
+
+## 5) Placeholder Resolution (`${VAR_NAME}`)
+
+| Source | Path |
+|---|---|
+| User params | `workspace/<userId>/config-params.json` |
+| System params | `workspace/config-params.json` |
+| Environment | process env |
+
+Recommended format:
 
 ```json
-{
-  "api_key": "${DASHSCOPE_API_KEY}"
-}
+{ "api_key": "${DASHSCOPE_API_KEY}" }
 ```
-
-Typical value sources:
-
-1. `workspace/<userId>/config-params.json`
-2. `workspace/config-params.json`
-3. environment variables
-
-(Exact runtime precedence depends on implementation path.)
 
 ---
 
-## 5) Migration Notes
+## 6) Migration Notes
 
-- Use snake_case keys shown in latest `*.example.json`.
-- If old camelCase keys exist, align them to snake_case gradually.
-- After changing config, restart service (`./start.sh` recommended).
+| Item | Recommendation |
+|---|---|
+| Key naming | Use snake_case (latest example format) |
+| Legacy keys | Migrate camelCase gradually |
+| After changes | Restart with `./start.sh` |
 

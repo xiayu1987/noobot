@@ -201,7 +201,7 @@ export const enUSMessages = {
   },
   "composer": {
     "stop": "Stop",
-    "inputPlaceholder": "Type a message. Shift+Enter for newline, Enter to send...",
+    "inputPlaceholder": "Shift+Enter for newline",
     "allowInteraction": "Allow Interaction",
     "disallowInteraction": "Disallow Interaction",
     "sending": "Sending",

@@ -201,7 +201,7 @@ export const zhCNMessages = {
   },
   "composer": {
     "stop": "停止",
-    "inputPlaceholder": "输入消息，Shift + Enter 换行，Enter 发送...",
+    "inputPlaceholder": "Shift + Enter 换行",
     "allowInteraction": "允许交互",
     "disallowInteraction": "禁止交互",
     "sending": "发送中",

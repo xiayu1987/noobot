@@ -4,10 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed } from "vue";
 import {
   CircleCheckFilled,
-  WarningFilled,
   CircleCloseFilled,
   Expand,
   Fold,
@@ -17,7 +15,6 @@ import {
   User,
 } from "@element-plus/icons-vue";
 import noobotLogo from "../../shared/assets/noobot.svg";
-import SessionConnectorSummary from "./SessionConnectorSummary.vue";
 import SessionListPanel from "./SessionListPanel.vue";
 import { useLocale } from "../../shared/i18n/useLocale";
 
@@ -33,7 +30,6 @@ const props = defineProps({
   loadingSessions: { type: Boolean, default: false },
   sessions: { type: Array, default: () => [] },
   activeSessionId: { type: String, default: "" },
-  activeConnectorPanelState: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits([
@@ -47,56 +43,6 @@ const emit = defineEmits([
   "select-session",
 ]);
 const { t } = useLocale();
-
-const connectorSummaryGroups = computed(() => {
-  const panelState =
-    props.activeConnectorPanelState &&
-    typeof props.activeConnectorPanelState === "object"
-      ? props.activeConnectorPanelState
-      : {};
-  const groups =
-    panelState.groups && typeof panelState.groups === "object"
-      ? panelState.groups
-      : {};
-  const selectedConnectors =
-    panelState.selectedConnectors && typeof panelState.selectedConnectors === "object"
-      ? panelState.selectedConnectors
-      : {};
-  const buildGroup = (groupKey = "", groupLabel = "") => {
-    const items = Array.isArray(groups?.[groupKey]) ? groups[groupKey] : [];
-    const selectedName = String(selectedConnectors?.[groupKey] || "").trim();
-    const selectedItem =
-      items.find(
-        (connectorItem) =>
-          String(connectorItem?.connectorName || "").trim() === selectedName,
-      ) || null;
-    return {
-      key: groupKey,
-      label: groupLabel,
-      selectedName,
-      status: String(selectedItem?.status || "unknown").trim(),
-    };
-  };
-  return [
-    buildGroup("database", t("common.database")),
-    buildGroup("terminal", t("common.terminal")),
-    buildGroup("email", t("common.email")),
-  ];
-});
-
-function connectorStatusIcon(status = "") {
-  const normalizedStatus = String(status || "").trim().toLowerCase();
-  if (normalizedStatus === "connected") return CircleCheckFilled;
-  if (normalizedStatus === "error") return CircleCloseFilled;
-  return WarningFilled;
-}
-
-function connectorStatusClass(status = "") {
-  const normalizedStatus = String(status || "").trim().toLowerCase();
-  if (normalizedStatus === "connected") return "status-connected";
-  if (normalizedStatus === "error") return "status-error";
-  return "status-unknown";
-}
 </script>
 
 <template>
@@ -201,14 +147,6 @@ function connectorStatusClass(status = "") {
           :aria-label="t('common.refreshSessionList')"
         />
       </div>
-    </div>
-
-    <div class="connector-summary-wrap">
-      <SessionConnectorSummary
-        :connector-summary-groups="connectorSummaryGroups"
-        :connector-status-class="connectorStatusClass"
-        :connector-status-icon="connectorStatusIcon"
-      />
     </div>
 
     <SessionListPanel
