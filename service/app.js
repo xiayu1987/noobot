@@ -22,6 +22,13 @@ import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "./system-core/event/index.js";
 import { safeJoin } from "./system-core/utils/fs-safe.js";
 import {
+  normalizeLocale,
+  resolveLocaleFromAcceptLanguage,
+  pickLocaleText,
+  DEFAULT_LOCALE,
+} from "./system-core/i18n/index.js";
+import { BACKEND_I18N } from "./system-core/i18n/backend-messages.js";
+import {
   getConnectorChannelStore,
   initConnectorChannelStore,
 } from "./system-core/connectors/channel-store.js";
@@ -35,6 +42,32 @@ import {
 
 const app = express();
 app.use(express.json({ limit: "20mb" }));
+
+function resolveRequestLocale(req = {}, fallbackLocale = DEFAULT_LOCALE) {
+  const headerLocale = String(req?.headers?.["x-noobot-locale"] || "").trim();
+  if (headerLocale) return normalizeLocale(headerLocale);
+  const queryLocale = String(req?.query?.locale || "").trim();
+  if (queryLocale) return normalizeLocale(queryLocale);
+  const bodyLocale = String(req?.body?.locale || "").trim();
+  if (bodyLocale) return normalizeLocale(bodyLocale);
+  const acceptLanguage = String(req?.headers?.["accept-language"] || "").trim();
+  if (acceptLanguage) return resolveLocaleFromAcceptLanguage(acceptLanguage);
+  return normalizeLocale(fallbackLocale);
+}
+
+function bt(key = "", locale = DEFAULT_LOCALE) {
+  return pickLocaleText({
+    locale,
+    dict: BACKEND_I18N,
+    key,
+    fallbackLocale: DEFAULT_LOCALE,
+  });
+}
+
+app.use((req, _res, next) => {
+  req.locale = resolveRequestLocale(req, DEFAULT_LOCALE);
+  next();
+});
 
 const globalConfigRaw = await loadGlobalConfig();
 const CONFIG_PARAMS_FILE_NAME = "config-params.json";
@@ -352,7 +385,7 @@ function isForbiddenUserScope(authInfo, requestUserId = "") {
 function requireApiKey(req, res, next) {
   const authInfo = resolveAuthByApiKey(req);
   if (!authInfo) {
-    res.status(401).json({ ok: false, error: "missing or invalid apiKey" });
+    res.status(401).json({ ok: false, error: bt("auth.missingApiKey", req.locale) });
     return;
   }
   req.auth = authInfo;
@@ -361,7 +394,7 @@ function requireApiKey(req, res, next) {
     String(req.body?.userId || "").trim() ||
     String(req.query?.userId || "").trim();
   if (isForbiddenUserScope(authInfo, requestUserId)) {
-    res.status(403).json({ ok: false, error: "forbidden user scope" });
+    res.status(403).json({ ok: false, error: bt("auth.forbiddenUserScope", req.locale) });
     return;
   }
   next();
@@ -370,7 +403,7 @@ function requireApiKey(req, res, next) {
 function requireSuperAdmin(req, res, next) {
   const authInfo = req.auth || null;
   if (String(authInfo?.role || "") !== "super_admin") {
-    res.status(403).json({ ok: false, error: "super admin required" });
+    res.status(403).json({ ok: false, error: bt("auth.superAdminRequired", req.locale) });
     return;
   }
   next();
@@ -392,13 +425,15 @@ function normalizeRunConfig(input = {}) {
     allowUserInteractionRaw === undefined
       ? true
       : Boolean(allowUserInteractionRaw);
+  const locale = normalizeLocale(input?.locale || DEFAULT_LOCALE);
   return {
     allowUserInteraction,
+    locale,
     selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
   };
 }
 
-function normalizeHistoryConnectorItems(items = []) {
+function normalizeHistoryConnectorItems(items = [], locale = DEFAULT_LOCALE) {
   return (Array.isArray(items) ? items : []).map((connectorItem) => ({
     connector_name: String(connectorItem?.connector_name || "").trim(),
     connector_type: String(connectorItem?.connector_type || "").trim(),
@@ -410,7 +445,8 @@ function normalizeHistoryConnectorItems(items = []) {
     status: String(connectorItem?.status || "disconnected").trim() || "disconnected",
     status_code: Number(connectorItem?.status_code ?? 410),
     status_message:
-      String(connectorItem?.status_message || "").trim() || "未连接（历史记录）",
+      String(connectorItem?.status_message || "").trim() ||
+      bt("status.disconnectedFromHistory", locale),
     checked_at:
       String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
     last_connected_at: String(connectorItem?.last_connected_at || "").trim(),
@@ -426,9 +462,10 @@ function normalizeHistoryConnectorItems(items = []) {
 function mergeRuntimeAndHistoryConnectorGroup({
   runtimeConnectors = [],
   historyConnectors = [],
+  locale = DEFAULT_LOCALE,
 } = {}) {
   const runtimeList = Array.isArray(runtimeConnectors) ? runtimeConnectors : [];
-  const historyList = normalizeHistoryConnectorItems(historyConnectors);
+  const historyList = normalizeHistoryConnectorItems(historyConnectors, locale);
   const mergedByName = new Map();
   for (const historyItem of historyList) {
     const connectorName = String(historyItem?.connector_name || "").trim();
@@ -469,7 +506,7 @@ app.post("/internal/connect", async (req, res) => {
     const userId = String(req.body?.userId || "").trim();
     const connectCode = String(req.body?.connectCode || "").trim();
     if (!userId || !connectCode) {
-      throw new Error("userId/connectCode required");
+      throw new Error(bt("connect.userIdConnectCodeRequired", req.locale));
     }
 
     const superAdmin = globalConfig?.superAdmin || {};
@@ -491,13 +528,13 @@ app.post("/internal/connect", async (req, res) => {
     const matchedUser = users.find(
       (item) => item.userId === userId && item.connectCode === connectCode,
     );
-    if (!matchedUser) throw new Error("连接码验证失败");
+    if (!matchedUser) throw new Error(bt("connect.codeVerifyFailed", req.locale));
 
     await bot.ensureUserWorkspace(userId);
     const apiKey = issueApiKey({ userId, role: "user" });
     res.json({ ok: true, role: "user", userId, apiKey });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "connect failed" });
+    res.status(400).json({ ok: false, error: err.message || bt("connect.failed", req.locale) });
   }
 });
 
@@ -514,7 +551,7 @@ app.get("/internal/admin/users", requireSuperAdmin, async (req, res) => {
     const payload = await readWorkspaceUsersConfig({ createIfMissing: true });
     res.json({ ok: true, ...payload });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "read users failed" });
+    res.status(400).json({ ok: false, error: err.message || bt("common.readUsersFailed", req.locale) });
   }
 });
 
@@ -534,7 +571,7 @@ app.put("/internal/admin/users", requireSuperAdmin, async (req, res) => {
     const payload = await writeWorkspaceUsersConfig(normalized);
     res.json({ ok: true, ...payload });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "save users failed" });
+    res.status(400).json({ ok: false, error: err.message || bt("common.saveUsersFailed", req.locale) });
   }
 });
 
@@ -608,7 +645,10 @@ app.get("/internal/config-params", async (req, res) => {
   try {
     const scope = resolveConfigParamScope(req);
     if (scope === "system" && String(req?.auth?.role || "") !== "super_admin") {
-      res.status(403).json({ ok: false, error: "super admin required for system params" });
+      res.status(403).json({
+        ok: false,
+        error: bt("common.superAdminRequiredForSystemParams", req.locale),
+      });
       return;
     }
     const { payload, userId } = await readScopedConfigParams({
@@ -617,7 +657,10 @@ app.get("/internal/config-params", async (req, res) => {
     });
     res.json(await buildScopedConfigParamsResponse({ req, payload, userId }));
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "read config params failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.readConfigParamsFailed", req.locale),
+    });
   }
 });
 
@@ -625,7 +668,10 @@ app.put("/internal/config-params", async (req, res) => {
   try {
     const scope = resolveConfigParamScope(req);
     if (scope === "system" && String(req?.auth?.role || "") !== "super_admin") {
-      res.status(403).json({ ok: false, error: "super admin required for system params" });
+      res.status(403).json({
+        ok: false,
+        error: bt("common.superAdminRequiredForSystemParams", req.locale),
+      });
       return;
     }
     const incoming = req.body || {};
@@ -641,7 +687,10 @@ app.put("/internal/config-params", async (req, res) => {
     if (scope === "system") await rebuildRuntimeConfig();
     res.json(await buildScopedConfigParamsResponse({ req, payload, userId }));
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "save config params failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.saveConfigParamsFailed", req.locale),
+    });
   }
 });
 
@@ -666,7 +715,10 @@ app.get("/internal/config-params/catalog", async (req, res) => {
     });
     res.json({ ok: true, scope, catalog });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "load config params catalog failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.loadConfigParamsCatalogFailed", req.locale),
+    });
   }
 });
 
@@ -676,7 +728,10 @@ app.get("/internal/admin/config-params", requireSuperAdmin, async (req, res) => 
     const { payload } = await readScopedConfigParams({ req, createIfMissing: true });
     res.json(await buildScopedConfigParamsResponse({ req, payload }));
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "read config params failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.readConfigParamsFailed", req.locale),
+    });
   }
 });
 
@@ -692,7 +747,10 @@ app.put("/internal/admin/config-params", requireSuperAdmin, async (req, res) => 
     await rebuildRuntimeConfig();
     res.json(await buildScopedConfigParamsResponse({ req, payload }));
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "save config params failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.saveConfigParamsFailed", req.locale),
+    });
   }
 });
 
@@ -703,25 +761,31 @@ app.get("/internal/admin/template/tree", requireSuperAdmin, async (req, res) => 
     const tree = await buildWorkspaceTree(root);
     res.json({ ok: true, root, tree });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "load template tree failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.loadTemplateTreeFailed", req.locale),
+    });
   }
 });
 
 app.get("/internal/admin/template/file", requireSuperAdmin, async (req, res) => {
   try {
     const relPath = String(req.query.path || "");
-    if (!relPath) throw new Error("path required");
+    if (!relPath) throw new Error(bt("common.pathRequired", req.locale));
     const root = templateRootPath();
     const absPath = safeJoin(root, relPath);
     await access(absPath);
     const st = await stat(absPath);
-    if (!st.isFile()) throw new Error("path is not a file");
+    if (!st.isFile()) throw new Error(bt("common.pathIsNotFile", req.locale));
     const buf = await readFile(absPath);
     const isText = !buf.includes(0);
     const content = isText ? buf.toString("utf8") : "";
     res.json({ ok: true, path: relPath, isText, size: st.size, content });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "read template file failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.readTemplateFileFailed", req.locale),
+    });
   }
 });
 
@@ -729,14 +793,17 @@ app.put("/internal/admin/template/file", requireSuperAdmin, async (req, res) => 
   try {
     const relPath = String(req.body?.path || "");
     const content = String(req.body?.content || "");
-    if (!relPath) throw new Error("path required");
+    if (!relPath) throw new Error(bt("common.pathRequired", req.locale));
     const root = templateRootPath();
     const absPath = safeJoin(root, relPath);
     await mkdir(path.dirname(absPath), { recursive: true });
     await writeFile(absPath, content, "utf8");
     res.json({ ok: true, path: relPath });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "save template file failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.saveTemplateFileFailed", req.locale),
+    });
   }
 });
 
@@ -752,7 +819,7 @@ async function handleChat(req, res) {
       config = {},
     } = req.body;
     if (!userId || !sessionId || !message)
-      throw new Error("userId/sessionId/message required");
+      throw new Error(bt("common.userSessionMessageRequired", req.locale));
     const result = await bot.runSession({
       userId,
       sessionId,
@@ -832,7 +899,10 @@ app.delete("/internal/session/:userId/:sessionId", async (req, res) => {
       deletedConnectorHistory,
     });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "delete session failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.deleteSessionFailed", req.locale),
+    });
   }
 });
 
@@ -867,14 +937,17 @@ app.get("/internal/connectors/:userId/:sessionId", async (req, res) => {
     const mergedDatabases = mergeRuntimeAndHistoryConnectorGroup({
       runtimeConnectors: inspectedConnectors?.connectors?.databases || [],
       historyConnectors: historyConnectors?.database || [],
+      locale: req.locale,
     });
     const mergedTerminals = mergeRuntimeAndHistoryConnectorGroup({
       runtimeConnectors: inspectedConnectors?.connectors?.terminals || [],
       historyConnectors: historyConnectors?.terminal || [],
+      locale: req.locale,
     });
     const mergedEmails = mergeRuntimeAndHistoryConnectorGroup({
       runtimeConnectors: inspectedConnectors?.connectors?.emails || [],
       historyConnectors: historyConnectors?.email || [],
+      locale: req.locale,
     });
     const allMergedConnectors = [
       ...mergedDatabases,
@@ -910,7 +983,10 @@ app.get("/internal/connectors/:userId/:sessionId", async (req, res) => {
       selectedConnectors,
     });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "get connectors failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.getConnectorsFailed", req.locale),
+    });
   }
 });
 
@@ -936,7 +1012,10 @@ app.put("/internal/connectors/:userId/:sessionId/selection", async (req, res) =>
   } catch (err) {
     res
       .status(400)
-      .json({ ok: false, error: err.message || "save selected connectors failed" });
+      .json({
+        ok: false,
+        error: err.message || bt("common.saveSelectedConnectorsFailed", req.locale),
+      });
   }
 });
 
@@ -1002,7 +1081,10 @@ app.post("/internal/workspace/reset/:userId", async (req, res) => {
       sections,
     });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "reset workspace failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.resetWorkspaceFailed", req.locale),
+    });
   }
 });
 
@@ -1012,7 +1094,10 @@ app.post("/internal/workspace/sync/:userId", async (req, res) => {
     const basePath = await bot.syncUserWorkspace(userId);
     res.json({ ok: true, userId, root: basePath });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "sync workspace failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.syncWorkspaceFailed", req.locale),
+    });
   }
 });
 
@@ -1045,7 +1130,10 @@ app.post("/internal/admin/workspace-all/sync", requireSuperAdmin, async (req, re
       success: syncedUsers.length,
     });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "sync all workspace failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.syncAllWorkspaceFailed", req.locale),
+    });
   }
 });
 
@@ -1080,7 +1168,10 @@ app.post("/internal/admin/workspace-all/reset", requireSuperAdmin, async (req, r
       sections,
     });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "reset all workspace failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.resetAllWorkspaceFailed", req.locale),
+    });
   }
 });
 
@@ -1088,16 +1179,16 @@ app.get("/internal/workspace/file/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const relPath = String(req.query.path || "");
-    if (!relPath) throw new Error("path required");
+    if (!relPath) throw new Error(bt("common.pathRequired", req.locale));
     const basePath = await bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
     try {
       await access(absPath);
     } catch {
-      throw new Error("file not found");
+      throw new Error(bt("common.fileNotFound", req.locale));
     }
     const st = await stat(absPath);
-    if (!st.isFile()) throw new Error("path is not a file");
+    if (!st.isFile()) throw new Error(bt("common.pathIsNotFile", req.locale));
     const buf = await readFile(absPath);
     const isText = !buf.includes(0);
     const content = isText ? buf.toString("utf8") : "";
@@ -1112,7 +1203,7 @@ app.put("/internal/workspace/file/:userId", async (req, res) => {
     const { userId } = req.params;
     const relPath = String(req.body?.path || "");
     const content = String(req.body?.content || "");
-    if (!relPath) throw new Error("path required");
+    if (!relPath) throw new Error(bt("common.pathRequired", req.locale));
     const basePath = await bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
     await mkdir(path.dirname(absPath), { recursive: true });
@@ -1127,16 +1218,16 @@ app.get("/internal/workspace/download/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const relPath = String(req.query.path || "");
-    if (!relPath) throw new Error("path required");
+    if (!relPath) throw new Error(bt("common.pathRequired", req.locale));
     const basePath = await bot.ensureUserWorkspace(userId);
     const absPath = safeJoin(basePath, relPath);
     try {
       await access(absPath);
     } catch {
-      throw new Error("file not found");
+      throw new Error(bt("common.fileNotFound", req.locale));
     }
     const st = await stat(absPath);
-    if (!st.isFile()) throw new Error("path is not a file");
+    if (!st.isFile()) throw new Error(bt("common.pathIsNotFile", req.locale));
     res.download(absPath, path.basename(relPath));
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -1150,25 +1241,31 @@ app.get("/internal/admin/workspace-all/tree", requireSuperAdmin, async (req, res
     const tree = await buildWorkspaceTree(root);
     res.json({ ok: true, root, tree });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "load workspace tree failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.loadWorkspaceTreeFailed", req.locale),
+    });
   }
 });
 
 app.get("/internal/admin/workspace-all/file", requireSuperAdmin, async (req, res) => {
   try {
     const relPath = String(req.query.path || "");
-    if (!relPath) throw new Error("path required");
+    if (!relPath) throw new Error(bt("common.pathRequired", req.locale));
     const root = workspaceRootPath();
     const absPath = safeJoin(root, relPath);
     await access(absPath);
     const st = await stat(absPath);
-    if (!st.isFile()) throw new Error("path is not a file");
+    if (!st.isFile()) throw new Error(bt("common.pathIsNotFile", req.locale));
     const buf = await readFile(absPath);
     const isText = !buf.includes(0);
     const content = isText ? buf.toString("utf8") : "";
     res.json({ ok: true, path: relPath, isText, size: st.size, content });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "read workspace file failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.readWorkspaceFileFailed", req.locale),
+    });
   }
 });
 
@@ -1176,29 +1273,35 @@ app.put("/internal/admin/workspace-all/file", requireSuperAdmin, async (req, res
   try {
     const relPath = String(req.body?.path || "");
     const content = String(req.body?.content || "");
-    if (!relPath) throw new Error("path required");
+    if (!relPath) throw new Error(bt("common.pathRequired", req.locale));
     const root = workspaceRootPath();
     const absPath = safeJoin(root, relPath);
     await mkdir(path.dirname(absPath), { recursive: true });
     await writeFile(absPath, content, "utf8");
     res.json({ ok: true, path: relPath });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "save workspace file failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.saveWorkspaceFileFailed", req.locale),
+    });
   }
 });
 
 app.get("/internal/admin/workspace-all/download", requireSuperAdmin, async (req, res) => {
   try {
     const relPath = String(req.query.path || "");
-    if (!relPath) throw new Error("path required");
+    if (!relPath) throw new Error(bt("common.pathRequired", req.locale));
     const root = workspaceRootPath();
     const absPath = safeJoin(root, relPath);
     await access(absPath);
     const st = await stat(absPath);
-    if (!st.isFile()) throw new Error("path is not a file");
+    if (!st.isFile()) throw new Error(bt("common.pathIsNotFile", req.locale));
     res.download(absPath, path.basename(relPath));
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message || "download workspace file failed" });
+    res.status(400).json({
+      ok: false,
+      error: err.message || bt("common.downloadWorkspaceFileFailed", req.locale),
+    });
   }
 });
 
@@ -1213,7 +1316,7 @@ app.get("/internal/attachment/:userId/:attachmentId", async (req, res) => {
       sessionId,
       attachmentSource,
     });
-    if (!attachment) throw new Error("attachment not found");
+    if (!attachment) throw new Error(bt("common.attachmentNotFound", req.locale));
 
     res.setHeader(
       "Content-Type",
@@ -1225,7 +1328,7 @@ app.get("/internal/attachment/:userId/:attachmentId", async (req, res) => {
     );
     res.sendFile(attachment.absolutePath);
   } catch (err) {
-    res.status(404).json({ ok: false, error: err.message || "not found" });
+    res.status(404).json({ ok: false, error: err.message || bt("common.notFound", req.locale) });
   }
 });
 
@@ -1245,11 +1348,12 @@ function sendUpgradeError(socket, statusCode = 401, message = "Unauthorized") {
 }
 
 server.on("upgrade", (request, socket, head) => {
+  const requestLocale = resolveRequestLocale(request, DEFAULT_LOCALE);
   let pathname = "";
   try {
     pathname = new URL(request.url || "", "http://localhost").pathname;
   } catch {
-    sendUpgradeError(socket, 400, "Bad Request");
+    sendUpgradeError(socket, 400, bt("ws.badRequest", requestLocale));
     return;
   }
 
@@ -1260,10 +1364,11 @@ server.on("upgrade", (request, socket, head) => {
 
   const authInfo = resolveAuthByApiKey(request);
   if (!authInfo) {
-    sendUpgradeError(socket, 401, "missing or invalid apiKey");
+    sendUpgradeError(socket, 401, bt("auth.missingApiKey", requestLocale));
     return;
   }
   request.auth = authInfo;
+  request.locale = requestLocale;
 
   wsServer.handleUpgrade(request, socket, head, (ws) => {
     wsServer.emit("connection", ws, request);
@@ -1272,6 +1377,7 @@ server.on("upgrade", (request, socket, head) => {
 
 wsServer.on("connection", (ws, request) => {
   const authInfo = request?.auth || null;
+  let currentLocale = normalizeLocale(request?.locale || DEFAULT_LOCALE);
   let running = false;
   let currentAbortController = null;
   const pendingInteractionRequests = new Map();
@@ -1316,7 +1422,7 @@ wsServer.on("connection", (ws, request) => {
         const timeoutMs = 10 * 60 * 1000;
         const timer = setTimeout(() => {
           pendingInteractionRequests.delete(requestId);
-          reject(new Error("user interaction timeout"));
+          reject(new Error(bt("ws.userInteractionTimeout", currentLocale)));
         }, timeoutMs);
 
         pendingInteractionRequests.set(requestId, {
@@ -1356,7 +1462,7 @@ wsServer.on("connection", (ws, request) => {
         const requestId = String(payload?.requestId || "").trim();
         const requestItem = pendingInteractionRequests.get(requestId);
         if (!requestItem) {
-          sendEvent("error", { error: "interaction request not found" });
+          sendEvent("error", { error: bt("ws.interactionNotFound", currentLocale) });
           return;
         }
         pendingInteractionRequests.delete(requestId);
@@ -1367,7 +1473,7 @@ wsServer.on("connection", (ws, request) => {
           const encryptedFlag = normalizedResponse?.encrypted === true;
           const sid = String(requestItem?.sessionId || "").trim();
           if (!encryptedFlag || !String(encryptedPayload || "").trim() || !sid) {
-            throw new Error("encrypted interaction response required");
+            throw new Error(bt("ws.interactionEncryptedRequired", currentLocale));
           }
           normalizedResponse = decryptPayloadBySessionId(
             String(encryptedPayload || ""),
@@ -1381,13 +1487,13 @@ wsServer.on("connection", (ws, request) => {
         if (running && currentAbortController) {
           currentAbortController.abort();
         }
-        rejectAllPendingInteractions(new Error("dialog stopped by user"));
-        sendEvent("stopped", { message: "dialog stopped by user" });
+        rejectAllPendingInteractions(new Error(bt("ws.dialogStoppedByUser", currentLocale)));
+        sendEvent("stopped", { message: bt("ws.dialogStoppedByUser", currentLocale) });
         ws.close(1000, "stopped");
         return;
       }
       if (running) {
-        sendEvent("error", { error: "session already running on this websocket" });
+        sendEvent("error", { error: bt("ws.sessionAlreadyRunning", currentLocale) });
         return;
       }
       running = true;
@@ -1403,12 +1509,13 @@ wsServer.on("connection", (ws, request) => {
         attachments = [],
         config = {},
       } = payload || {};
+      currentLocale = normalizeLocale(config?.locale || currentLocale);
 
       if (!userId || !sessionId || !message) {
-        throw new Error("userId/sessionId/message required");
+        throw new Error(bt("ws.userSessionMessageRequired", currentLocale));
       }
       if (isForbiddenUserScope(authInfo, userId)) {
-        throw new Error("forbidden user scope");
+        throw new Error(bt("auth.forbiddenUserScope", currentLocale));
       }
 
       const eventListener = {
@@ -1465,7 +1572,7 @@ wsServer.on("connection", (ws, request) => {
       });
 
       if (abortSignal?.aborted) {
-        sendEvent("stopped", { message: "dialog stopped by user" });
+        sendEvent("stopped", { message: bt("ws.dialogStoppedByUser", currentLocale) });
         ws.close(1000, "stopped");
         return;
       }
@@ -1481,11 +1588,11 @@ wsServer.on("connection", (ws, request) => {
       ws.close(1000, "done");
     } catch (err) {
       if (abortSignal?.aborted) {
-        sendEvent("stopped", { message: "dialog stopped by user" });
+        sendEvent("stopped", { message: bt("ws.dialogStoppedByUser", currentLocale) });
         ws.close(1000, "stopped");
         return;
       }
-      sendEvent("error", { error: err.message || "unknown error" });
+      sendEvent("error", { error: err.message || bt("ws.unknownError", currentLocale) });
       ws.close(1011, "error");
     } finally {
       running = false;
@@ -1497,7 +1604,7 @@ wsServer.on("connection", (ws, request) => {
     if (currentAbortController) {
       currentAbortController.abort();
     }
-    rejectAllPendingInteractions(new Error("websocket closed"));
+    rejectAllPendingInteractions(new Error(bt("ws.socketClosed", currentLocale)));
   });
 });
 

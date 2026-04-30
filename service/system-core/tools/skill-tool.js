@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { safeJoin } from "../utils/fs-safe.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 function getBasePath(agentContext) {
   return (
@@ -23,6 +24,17 @@ function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
 
+function tSkill(runtime = {}, key = "") {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    skillNameRequiredOnStart: {
+      "zh-CN": "action=start 时必须提供 skillName",
+      "en-US": "skillName is required when action=start",
+    },
+  };
+  return pickToolText({ locale, dict, key });
+}
+
 export function createSkillTool({ agentContext }) {
   const basePath = getBasePath(agentContext);
   const runtime = getRuntime(agentContext);
@@ -33,19 +45,9 @@ export function createSkillTool({ agentContext }) {
 
   const listSkillTool = new DynamicStructuredTool({
     name: "list_skills",
-    description:
-      "列出技能目录结构。\
-参数说明：\
-- parentSkill（可选）：技能路径；不传时默认从 skills 根目录开始。\
-行为说明：\
-- 返回指定目录下的第一层和第二层目录/文件。\
-返回字段：\
-- name：名称\
-- type：类型（dir 或 file）\
-- path：完整路径\
-用途：用于浏览和定位技能文件结构。",
+    description: tTool(runtime, "tools.skill.listDescription"),
     schema: z.object({
-      parentSkill: z.string().optional().describe("要浏览的技能子路径（相对 skills 根目录）"),
+      parentSkill: z.string().optional().describe(tTool(runtime, "tools.skill.fieldParentSkill")),
     }),
     func: async ({ parentSkill }) => {
       try {
@@ -92,21 +94,20 @@ export function createSkillTool({ agentContext }) {
 
   const manageSkillTaskTool = new DynamicStructuredTool({
     name: "set_skill_task",
-    description:
-      "设置 skill 任务状态。action=start 表示开始任务（仅匹配到技能后调用）；action=completed 表示结束任务（仅正确返回完整结果后调用，报错/需要确认/需要询问时禁止调用completed）。",
+    description: tTool(runtime, "tools.skill.setDescription"),
     schema: z.object({
-      action: z.enum(["start", "completed"]).describe("任务动作：start 或 completed"),
-      skillName: z.string().optional().describe("技能名称，action=start 时必填"),
-      taskName: z.string().optional().describe("任务名称，action=start 时可填"),
-      taskId: z.string().optional().describe("任务ID，action=completed 时可填"),
-      result: z.string().optional().describe("任务结果说明，action=completed 时可填"),
+      action: z.enum(["start", "completed"]).describe(tTool(runtime, "tools.skill.fieldAction")),
+      skillName: z.string().optional().describe(tTool(runtime, "tools.skill.fieldSkillName")),
+      taskName: z.string().optional().describe(tTool(runtime, "tools.skill.fieldTaskName")),
+      taskId: z.string().optional().describe(tTool(runtime, "tools.skill.fieldTaskId")),
+      result: z.string().optional().describe(tTool(runtime, "tools.skill.fieldResult")),
     }),
     func: async ({ action, skillName, taskName, taskId, result }) => {
       if (action === "start") {
         if (!String(skillName || "").trim()) {
           return toToolJsonResult(
             "set_skill_task",
-            { ok: false, message: "skillName is required when action=start" },
+            { ok: false, message: tSkill(runtime, "skillNameRequiredOnStart") },
           );
         }
         const createdTaskId = uuidv4();

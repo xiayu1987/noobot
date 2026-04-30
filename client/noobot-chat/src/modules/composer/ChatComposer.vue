@@ -10,6 +10,7 @@ import {
 } from "@element-plus/icons-vue";
 import ConnectorSelectorPanel from "./ConnectorSelectorPanel.vue";
 import ComposerAttachmentToolbar from "./ComposerAttachmentToolbar.vue";
+import { useLocale } from "../../shared/i18n/useLocale";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },
@@ -33,6 +34,7 @@ const emit = defineEmits([
 ]);
 
 const attachmentToolbarRef = ref();
+const { t } = useLocale();
 const attachmentCount = computed(() => (props.uploadFiles || []).length);
 const sendDisabled = computed(
   () =>
@@ -91,7 +93,7 @@ defineExpose({
         v-if="canStop"
         type="danger"
         class="stop-float-btn noobot-action-btn"
-        title="停止"
+        :title="t('composer.stop')"
         @click="onStop"
       >
         <el-icon :size="20"><VideoPause /></el-icon>
@@ -117,7 +119,7 @@ defineExpose({
           type="textarea"
           :rows="3"
           resize="none"
-          placeholder="输入消息，Shift + Enter 换行，Enter 发送..."
+          :placeholder="t('composer.inputPlaceholder')"
           class="chat-input"
           @update:model-value="onInputChange"
           @keydown.enter.exact.prevent="onSend"
@@ -130,8 +132,8 @@ defineExpose({
           <el-switch
             :model-value="allowUserInteraction"
             inline-prompt
-            active-text="允许交互"
-            inactive-text="禁止交互"
+            :active-text="t('composer.allowInteraction')"
+            :inactive-text="t('composer.disallowInteraction')"
             @update:model-value="onAllowUserInteractionChange"
             class="interaction-switch"
           />
@@ -144,7 +146,7 @@ defineExpose({
           :disabled="sendDisabled"
           @click="onSend"
         >
-          {{ sending ? "发送中" : "发送" }}
+          {{ sending ? t("composer.sending") : t("composer.send") }}
         </el-button>
       </div>
     </div>

@@ -26,6 +26,18 @@ import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
 } from "../context/current-turn-store.js";
+import { pickLocaleText, resolveLocaleFromRuntime } from "../i18n/index.js";
+
+function tEngine(runtime = {}, key = "", params = {}) {
+  const locale = resolveLocaleFromRuntime(runtime);
+  const dict = {
+    toolLoopLimitReached: {
+      "zh-CN": `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,
+      "en-US": `Tool call turns reached the limit (${Number(params.maxTurns || 0)}), auto-stopped.`,
+    },
+  };
+  return pickLocaleText({ locale, dict, key, params });
+}
 
 function normalizeAiTextContent(aiContent) {
   if (typeof aiContent === "string") return String(aiContent || "");
@@ -530,7 +542,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   assertNotAborted(abortSignal);
 
   if (turn > maxTurns) {
-    const limitMsg = `工具调用轮次已达到上限(${maxTurns})，自动结束。`;
+    const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
     traces.push({ tool: "system", args: { turn, maxTurns }, result: limitMsg });
     emitEvent(eventListener, "tool_loop_limit_reached", { turn, maxTurns });
     return {

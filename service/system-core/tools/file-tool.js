@@ -12,13 +12,14 @@ import {
   assertValidFileNameFromPath,
 } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { tTool } from "./tool-i18n.js";
 
 export function createFileTool({ agentContext }) {
   const readFileTool = new DynamicStructuredTool({
     name: "read_file",
-    description: "读取文本文件（仅允许用户工作区内路径）",
+    description: tTool(agentContext, "tools.file.readDescription"),
     schema: z.object({
-      filePath: z.string().describe("要读取的文件路径（工作区相对路径或用户目录内绝对路径）"),
+      filePath: z.string().describe(tTool(agentContext, "tools.file.readFilePathField")),
     }),
     func: async ({ filePath }) => {
       assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
@@ -40,10 +41,10 @@ export function createFileTool({ agentContext }) {
 
   const writeFileTool = new DynamicStructuredTool({
     name: "write_file",
-    description: "写入文件（仅允许用户工作区内路径）",
+    description: tTool(agentContext, "tools.file.writeDescription"),
     schema: z.object({
-      filePath: z.string().describe("要写入的文件路径（工作区相对路径或用户目录内绝对路径）"),
-      content: z.string().describe("写入文件的文本内容"),
+      filePath: z.string().describe(tTool(agentContext, "tools.file.writeFilePathField")),
+      content: z.string().describe(tTool(agentContext, "tools.file.writeContentField")),
     }),
     func: async ({ filePath, content }) => {
       assertValidFileNameFromPath({ filePath, fieldName: "filePath" });

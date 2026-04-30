@@ -73,7 +73,7 @@ export function useChatEngine({
   ensureConnected,
   notify = () => {},
 } = {}) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   function markPendingAssistantMessageStopped() {
     const sessionItem = activeSession.value;
     const messageList = Array.isArray(sessionItem?.messages) ? sessionItem.messages : [];
@@ -158,6 +158,7 @@ export function useChatEngine({
         attachments,
         config: {
           allowUserInteraction: allowUserInteraction?.value === false ? false : true,
+          locale: String(locale.value || "").trim(),
           selectedConnectors: normalizeSelectedConnectors(
             activeSession.value?.connectorPanelState?.selectedConnectors || {},
           ),

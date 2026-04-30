@@ -19,6 +19,7 @@ import {
 } from "../sandbox/docker-sandbox.js";
 import { buildFirejailCommand } from "../sandbox/firejail-sandbox.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 const TOOL_NAME = "execute_script";
 const DEFAULT_TIMEOUT = 120000;
@@ -37,6 +38,37 @@ function run(cmd, cwd, timeoutMs) {
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
+}
+
+function tScript(runtime = {}, key = "", params = {}) {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    commandNotInstalled: {
+      "zh-CN": `${String(params.commandName || "").trim()} 未安装，请先安装 ${String(params.commandName || "").trim()}`,
+      "en-US": `${String(params.commandName || "").trim()} is not installed. Please install ${String(params.commandName || "").trim()} first.`,
+    },
+    fallbackOverlaySrc: {
+      "zh-CN": "当前 bubblewrap 版本不支持 --overlay-src，已自动回退到 docker。",
+      "en-US": "Current bubblewrap version does not support --overlay-src. Automatically fell back to docker.",
+    },
+    overlaySrcUnsupported: {
+      "zh-CN": "当前 bubblewrap 版本不支持 --overlay-src。请升级 bubblewrap，或将 tools.execute_script.sandbox_provider.default 改为 docker。",
+      "en-US": "Current bubblewrap version does not support --overlay-src. Upgrade bubblewrap, or switch tools.execute_script.sandbox_provider.default to docker.",
+    },
+    overlayDirNotWritable: {
+      "zh-CN": `bubblewrap overlay 目录不可写，请检查权限（建议执行：sudo chown -R $(id -u):$(id -g) \"${String(params.sandboxRoot || "").trim()}\"）。${String(params.reason || "").trim()}`,
+      "en-US": `bubblewrap overlay directory is not writable. Check permissions (suggestion: sudo chown -R $(id -u):$(id -g) \"${String(params.sandboxRoot || "").trim()}\"). ${String(params.reason || "").trim()}`,
+    },
+    fallbackUserxattr: {
+      "zh-CN": "当前内核/发行版不支持 bubblewrap overlay(userxattr)，已自动回退到 docker。",
+      "en-US": "Current kernel/distribution does not support bubblewrap overlay(userxattr). Automatically fell back to docker.",
+    },
+    userxattrUnsupported: {
+      "zh-CN": `${String(params.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 tools.execute_script.sandbox_provider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
+      "en-US": `${String(params.stderr || "")}\nCurrent system does not support bubblewrap overlay(userxattr). Use tools.execute_script.sandbox_provider.default=docker, or upgrade kernel with CONFIG_OVERLAY_FS_USERXATTR enabled.`,
+    },
+  };
+  return pickToolText({ locale, dict, key, params });
 }
 
 function hasCommand(commandName = "") {
@@ -91,13 +123,13 @@ function toolExecResult(mode, r = {}, extra = {}) {
   });
 }
 
-function missingCommandResult(mode, commandName = "") {
+function missingCommandResult(mode, commandName = "", runtime = {}) {
   return toToolJsonResult(TOOL_NAME, {
     ok: false,
     mode,
     code: 127,
     stdout: "",
-    stderr: `${commandName} 未安装，请先安装 ${commandName}`,
+    stderr: tScript(runtime, "commandNotInstalled", { commandName }),
   });
 }
 
@@ -149,6 +181,7 @@ async function tryDockerFallback({
 }
 
 function buildScriptToolDescription({
+  runtime,
   sandboxEnabled,
   sandboxProvider,
   workspace,
@@ -156,57 +189,61 @@ function buildScriptToolDescription({
 }) {
   if (!sandboxEnabled) {
     return [
-      "执行脚本（local 模式）。",
-      `命令在本机目录执行：${workspace}`,
-      "输入输出文件请使用该目录下相对路径。",
+      tTool(runtime, "tools.script.localModeTitle"),
+      `${tTool(runtime, "tools.script.localModeWorkspacePrefix")}${workspace}`,
+      tTool(runtime, "tools.script.localModePathHint"),
     ].join("\n");
   }
 
   const dockerScope = resolveDockerContainerScope(dockerConfig);
   const providerDescriptionMap = {
     bubblewrap: [
-      "Bubblewrap + overlayfs 说明：",
-      "- 宿主根文件系统作为 lowerdir",
-      "- 用户目录下 runtime/sandbox/bubblewrap/overlay-upper|overlay-work 作为可写层",
-      "- 命令固定在持久目录 /workspace/runtime/sandbox/persist 执行，文件可累加",
-      "- 软件累加建议使用用户态安装：如 npm --prefix \"$HOME/.npm-global\"、pip install --user、将二进制放到 $HOME/bin",
+      tTool(runtime, "tools.script.bubblewrap.title"),
+      tTool(runtime, "tools.script.bubblewrap.line1"),
+      tTool(runtime, "tools.script.bubblewrap.line2"),
+      tTool(runtime, "tools.script.bubblewrap.line3"),
+      tTool(runtime, "tools.script.bubblewrap.line4"),
     ],
     firejail: [
-      "Firejail 说明：",
-      "- 使用用户目录下 runtime/sandbox/firejail/home 作为持久 HOME",
-      "- 命令固定在 $HOME/runtime/sandbox/persist 执行，文件可累加",
-      "- 软件累加建议使用用户态安装：如 npm --prefix \"$HOME/.npm-global\"、pip install --user、将二进制放到 $HOME/bin",
+      tTool(runtime, "tools.script.firejail.title"),
+      tTool(runtime, "tools.script.firejail.line1"),
+      tTool(runtime, "tools.script.firejail.line2"),
+      tTool(runtime, "tools.script.firejail.line3"),
     ],
     docker: [
-      "Docker 说明：",
-      `- 容器复用范围：${dockerScope === "user" ? "按用户独立容器" : "所有用户共用同一容器（默认）"}`,
-      "- 首次执行会自动创建容器，后续复用同一容器（不删除），可累加安装软件",
+      tTool(runtime, "tools.script.docker.title"),
+      `- ${
+        dockerScope === "user"
+          ? tTool(runtime, "tools.script.docker.scope.user")
+          : tTool(runtime, "tools.script.docker.scope.global")
+      }`,
+      tTool(runtime, "tools.script.docker.reuse"),
     ],
   };
 
   const workdirDescriptionMap = {
     firejail: [
-      "- 命令默认工作目录为 $HOME/runtime/sandbox/persist",
-      "输入输出文件请使用该目录相对路径或 $HOME 下路径。",
+      tTool(runtime, "tools.script.workdir.firejail.line1"),
+      tTool(runtime, "tools.script.workdir.firejail.line2"),
     ],
     bubblewrap: [
-      "- 命令默认工作目录为 /workspace/runtime/sandbox/persist",
-      "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
+      tTool(runtime, "tools.script.workdir.bubblewrap.line1"),
+      tTool(runtime, "tools.script.workdir.bubblewrap.line2"),
     ],
     docker:
       dockerScope === "user"
         ? [
-            "- 命令默认工作目录为 /workspace/runtime/workspace",
-            "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
+            tTool(runtime, "tools.script.workdir.docker.user.line1"),
+            tTool(runtime, "tools.script.workdir.docker.user.line2"),
           ]
         : [
-            "- 命令默认工作目录为 /workspace/<userId>/runtime/workspace",
-            "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
+            tTool(runtime, "tools.script.workdir.docker.global.line1"),
+            tTool(runtime, "tools.script.workdir.docker.global.line2"),
           ],
   };
 
   return [
-    `执行脚本（沙箱模式，provider=${sandboxProvider}）。`,
+    `${tTool(runtime, "tools.script.sandboxModeTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.sandboxModeTitleSuffix")}`,
     ...(providerDescriptionMap[sandboxProvider] || providerDescriptionMap.docker),
     ...(workdirDescriptionMap[sandboxProvider] || workdirDescriptionMap.docker),
   ].join("\n");
@@ -234,6 +271,7 @@ export function createScriptTool({ agentContext }) {
     resolveSandboxProviderConfig(scriptConfig);
   const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
   const description = buildScriptToolDescription({
+    runtime,
     sandboxEnabled,
     sandboxProvider,
     workspace,
@@ -244,7 +282,7 @@ export function createScriptTool({ agentContext }) {
     name: TOOL_NAME,
     description,
     schema: z.object({
-      command: z.string().describe("要执行的 shell 命令"),
+      command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
     }),
     func: async ({ command }) => {
       const timeout = Number(scriptConfig?.scriptTimeoutMs || DEFAULT_TIMEOUT);
@@ -260,7 +298,7 @@ export function createScriptTool({ agentContext }) {
 
       if (sandboxProvider === "bubblewrap") {
         const bwrapInstalled = await hasCommand("bwrap");
-        if (!bwrapInstalled) return missingCommandResult("bubblewrap", "bwrap");
+        if (!bwrapInstalled) return missingCommandResult("bubblewrap", "bwrap", runtime);
 
         const supportsOverlaySrc = await bwrapSupportsOption("--overlay-src");
         if (!supportsOverlaySrc) {
@@ -272,7 +310,7 @@ export function createScriptTool({ agentContext }) {
             timeout,
             scriptConfig: dockerConfig,
             fallbackFrom: "bubblewrap",
-            warning: "当前 bubblewrap 版本不支持 --overlay-src，已自动回退到 docker。",
+            warning: tScript(runtime, "fallbackOverlaySrc"),
           });
           if (fallbackResult) return fallbackResult;
           return toToolJsonResult(TOOL_NAME, {
@@ -280,8 +318,7 @@ export function createScriptTool({ agentContext }) {
             mode: "bubblewrap",
             code: 2,
             stdout: "",
-            stderr:
-              "当前 bubblewrap 版本不支持 --overlay-src。请升级 bubblewrap，或将 tools.execute_script.sandbox_provider.default 改为 docker。",
+            stderr: tScript(runtime, "overlaySrcUnsupported"),
           });
         }
 
@@ -300,7 +337,10 @@ export function createScriptTool({ agentContext }) {
             sandboxRoot: built.sandboxRoot,
             overlayUpper: built.overlayUpper,
             overlayWork: built.overlayWork,
-            stderr: `bubblewrap overlay 目录不可写，请检查权限（建议执行：sudo chown -R $(id -u):$(id -g) "${built.sandboxRoot}"）。${err?.message || String(err)}`,
+            stderr: tScript(runtime, "overlayDirNotWritable", {
+              sandboxRoot: built.sandboxRoot,
+              reason: err?.message || String(err),
+            }),
           });
         }
         sandboxCmd = built.cmd;
@@ -313,7 +353,9 @@ export function createScriptTool({ agentContext }) {
         };
       } else if (sandboxProvider === "firejail") {
         const firejailInstalled = await hasCommand("firejail");
-        if (!firejailInstalled) return missingCommandResult("firejail", "firejail");
+        if (!firejailInstalled) {
+          return missingCommandResult("firejail", "firejail", runtime);
+        }
 
         const built = buildFirejailCommand({ userRoot, command });
         sandboxCmd = built.cmd;
@@ -321,7 +363,7 @@ export function createScriptTool({ agentContext }) {
         extra = { sandboxHome: built.homeDir, persistDir: built.persistDir };
       } else {
         const dockerInstalled = await hasCommand("docker");
-        if (!dockerInstalled) return missingCommandResult("docker", "docker");
+        if (!dockerInstalled) return missingCommandResult("docker", "docker", runtime);
         const built = buildDockerCommand({
           userRoot,
           userId,
@@ -354,13 +396,14 @@ export function createScriptTool({ agentContext }) {
           timeout,
           scriptConfig: dockerConfig,
           fallbackFrom: "bubblewrap",
-          warning:
-            "当前内核/发行版不支持 bubblewrap overlay(userxattr)，已自动回退到 docker。",
+          warning: tScript(runtime, "fallbackUserxattr"),
         });
         if (fallbackResult) return fallbackResult;
         runResult = {
           ...runResult,
-          stderr: `${String(runResult?.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 tools.execute_script.sandbox_provider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
+          stderr: tScript(runtime, "userxattrUnsupported", {
+            stderr: String(runResult?.stderr || ""),
+          }),
         };
       }
       return toolExecResult(mode, runResult, extra);

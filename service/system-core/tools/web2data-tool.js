@@ -25,6 +25,7 @@ import {
 import { browserLikeFetch } from "../utils/web-fetch.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_TEXT_CHARS = 12000;
@@ -34,6 +35,53 @@ const MAX_CONCURRENCY = 60;
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
+}
+
+function tWeb(runtime = {}, key = "", params = {}) {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    truncated: {
+      "zh-CN": "[文本过长，已截断]",
+      "en-US": "[Text too long, truncated]",
+    },
+    blockedOrUnavailable: {
+      "zh-CN": `访问被拦截或服务不可用(status=${Number(params.status || 0)})`,
+      "en-US": `Access blocked or service unavailable (status=${Number(params.status || 0)})`,
+    },
+    summarizePrompt: {
+      "zh-CN": "请基于截图与文本提取网页核心信息：主题、关键事实、数据点、结论、代码片段（若有），并按清晰结构输出。",
+      "en-US": "Based on screenshots and text, extract core webpage information: topic, key facts, data points, conclusions, and code snippets (if any), then output clearly.",
+    },
+    screenshotBatch: {
+      "zh-CN": `这是第 ${Number(params.batchIndex || 1)} 批网页截图。\n\n网页文本参考：\n${String(params.sharedText || "")}`,
+      "en-US": `This is batch ${Number(params.batchIndex || 1)} of webpage screenshots.\n\nWeb text reference:\n${String(params.sharedText || "")}`,
+    },
+    textReference: {
+      "zh-CN": `网页文本参考：\n${String(params.sharedText || "")}`,
+      "en-US": `Web text reference:\n${String(params.sharedText || "")}`,
+    },
+    runtimeBasePathMissing: {
+      "zh-CN": "runtime basePath missing",
+      "en-US": "runtime basePath missing",
+    },
+    noProcessableUrl: {
+      "zh-CN": "未找到可处理的 URL",
+      "en-US": "No processable URL found",
+    },
+    noSuccessfulResult: {
+      "zh-CN": "web_to_data 没有成功结果",
+      "en-US": "web_to_data no successful result",
+    },
+    fetchFailedWithErrors: {
+      "zh-CN": `网页提取失败：${String(params.errors || "").trim()}`,
+      "en-US": `Web extraction failed: ${String(params.errors || "").trim()}`,
+    },
+    fetchFailedNoResult: {
+      "zh-CN": "网页提取失败：没有可用结果",
+      "en-US": "Web extraction failed: no usable result",
+    },
+  };
+  return pickToolText({ locale, dict, key, params });
 }
 
 function normalizeText(value = "") {
@@ -107,10 +155,10 @@ function toModelText(content) {
   return typeof content === "string" ? content : JSON.stringify(content || "");
 }
 
-function truncateText(input = "", maxChars = MAX_TEXT_CHARS) {
+function truncateText(input = "", maxChars = MAX_TEXT_CHARS, runtime = {}) {
   const text = String(input || "");
   if (text.length <= maxChars) return text;
-  return `${text.slice(0, maxChars)}\n\n[文本过长，已截断]`;
+  return `${text.slice(0, maxChars)}\n\n${tWeb(runtime, "truncated")}`;
 }
 
 function uniqueUrls(urls = []) {
@@ -319,7 +367,10 @@ async function runBrowserSimulateExtract(
         }
         if (!success || !loaded) {
           throw new Error(
-            loaded?.error || `访问被拦截或服务不可用(status=${loaded?.status || 0})`,
+            loaded?.error ||
+              tWeb(runtimeContext || {}, "blockedOrUnavailable", {
+                status: loaded?.status || 0,
+              }),
           );
         }
         const pageTitle = normalizeText(loaded.title || "");
@@ -361,6 +412,7 @@ async function summarizeByModel({
   prompt = "",
   globalConfig = {},
   userConfig = {},
+  runtime = {},
 }) {
   const okRecords = records.filter((recordItem) => recordItem?.status === "ok");
   const usefulTextParts = okRecords.map(
@@ -390,8 +442,8 @@ async function summarizeByModel({
   });
   const userPrompt =
     prompt ||
-    "请基于截图与文本提取网页核心信息：主题、关键事实、数据点、结论、代码片段（若有），并按清晰结构输出。";
-  const sharedText = truncateText(usefulTextParts.join("\n\n"));
+    tWeb(runtime, "summarizePrompt");
+  const sharedText = truncateText(usefulTextParts.join("\n\n"), MAX_TEXT_CHARS, runtime);
 
   const batchResults = [];
   if (imagePaths.length > 0) {
@@ -403,7 +455,10 @@ async function summarizeByModel({
           content: [
             {
               type: "text",
-              text: `${userPrompt}\n\n这是第 ${batchIndex + 1} 批网页截图。\n\n网页文本参考：\n${sharedText}`,
+              text: `${userPrompt}\n\n${tWeb(runtime, "screenshotBatch", {
+                batchIndex: batchIndex + 1,
+                sharedText,
+              })}`,
             },
             ...batch.map((imageItem) => ({
               type: "image_url",
@@ -423,7 +478,7 @@ async function summarizeByModel({
   } else {
     const modelResponse = await llm.invoke([
       new HumanMessage({
-        content: `${userPrompt}\n\n网页文本参考：\n${sharedText}`,
+        content: `${userPrompt}\n\n${tWeb(runtime, "textReference", { sharedText })}`,
       }),
     ]);
     batchResults.push({
@@ -460,12 +515,12 @@ export async function runWebToDataPipeline({
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
   if (!basePath) {
-    return { ok: false, message: "runtime basePath missing" };
+    return { ok: false, message: tWeb(runtime, "runtimeBasePathMissing") };
   }
 
   const resolvedUrls = await resolveInputUrls({ input, urls, agentContext });
   if (!resolvedUrls.length) {
-    return { ok: false, message: "未找到可处理的 URL", urls: [] };
+    return { ok: false, message: tWeb(runtime, "noProcessableUrl"), urls: [] };
   }
 
   const mode = normalizeProcessMode(processMode);
@@ -500,7 +555,7 @@ export async function runWebToDataPipeline({
       return {
         ok: false,
         mode,
-        message: "web_to_data no successful result",
+        message: tWeb(runtime, "noSuccessfulResult"),
         input,
         urls: resolvedUrls,
         outputRoot,
@@ -536,6 +591,7 @@ export async function runWebToDataPipeline({
       prompt,
       globalConfig,
       userConfig,
+      runtime,
     });
     return {
       ok: true,
@@ -583,8 +639,8 @@ export async function runWebToDataPipeline({
       text: "",
       model: {},
       message: errorMessages.length
-        ? `网页提取失败：${errorMessages.join(" | ")}`
-        : "网页提取失败：没有可用结果",
+        ? tWeb(runtime, "fetchFailedWithErrors", { errors: errorMessages.join(" | ") })
+        : tWeb(runtime, "fetchFailedNoResult"),
       records,
     };
   }
@@ -594,6 +650,7 @@ export async function runWebToDataPipeline({
     prompt,
     globalConfig,
     userConfig,
+    runtime,
   });
   return {
     ok: successCount > 0,
@@ -626,19 +683,18 @@ export function createWeb2DataTool({ agentContext }) {
 
   const webToDataTool = new DynamicStructuredTool({
     name: "web_to_data",
-    description:
-      "根据提供url进行网页解析并提取内容。支持单 URL 或批量 URLs。",
+    description: tTool(runtime, "tools.web2data.description"),
     schema: z.object({
       input: z
         .string()
         .optional()
-        .describe("URL 或工作区内 txt 列表文件路径（可包含多行 URL）"),
-      urls: z.array(z.string()).optional().describe("批量 URL 列表"),
-      prompt: z.string().optional().describe("默认提取网页核心事实并按条目输出"),
+        .describe(tTool(runtime, "tools.web2data.fieldInput")),
+      urls: z.array(z.string()).optional().describe(tTool(runtime, "tools.web2data.fieldUrls")),
+      prompt: z.string().optional().describe(tTool(runtime, "tools.web2data.fieldPrompt")),
       useTrafilatura: z
         .boolean()
         .optional()
-        .describe("仅 multimodal 模式生效：是否优先使用 Readability 提取正文，默认 true"),
+        .describe(tTool(runtime, "tools.web2data.fieldUseTrafilatura")),
     }),
     func: async ({ input = "", urls = [], prompt, useTrafilatura }) => {
       const payload = await runWebToDataPipeline({

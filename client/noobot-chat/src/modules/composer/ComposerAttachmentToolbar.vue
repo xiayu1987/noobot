@@ -6,6 +6,7 @@
 <script setup>
 import { computed, ref } from "vue";
 import { Paperclip } from "@element-plus/icons-vue";
+import { useLocale } from "../../shared/i18n/useLocale";
 
 const props = defineProps({
   uploadFiles: { type: Array, default: () => [] },
@@ -14,6 +15,7 @@ const props = defineProps({
 const emit = defineEmits(["upload-change", "clear-uploads"]);
 
 const uploadRef = ref();
+const { t } = useLocale();
 const attachmentCount = computed(() => (props.uploadFiles || []).length);
 
 function onUploadChange(file, fileList) {
@@ -46,7 +48,7 @@ defineExpose({
     >
       <el-button size="small" class="poe-upload-btn noobot-action-btn noobot-flat-soft-btn">
         <el-icon class="btn-icon"><Paperclip /></el-icon>
-        附件
+        {{ t("composer.attachments") }}
       </el-button>
     </el-upload>
     <div class="attachment-tags" v-if="attachmentCount">
@@ -58,7 +60,7 @@ defineExpose({
         <span class="attachment-name">{{ uploadFile.name }}</span>
       </div>
       <el-button size="small" text class="clear-files-btn noobot-action-btn" @click="onClearUploads">
-        清空
+        {{ t("composer.clear") }}
       </el-button>
     </div>
   </div>

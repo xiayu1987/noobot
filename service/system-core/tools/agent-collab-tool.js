@@ -25,9 +25,34 @@ import {
   assertValidParentSessionId,
 } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
+}
+
+function tAgentCollab(runtime = {}, key = "") {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    noResult: { "zh-CN": "(无结果)", "en-US": "(no result)" },
+    runtimeMissingBotManagerUserId: {
+      "zh-CN": "运行时缺少 bot manager/user id",
+      "en-US": "runtime missing bot manager/user id",
+    },
+    taskNameTaskContentRequired: {
+      "zh-CN": "taskName/taskContent required",
+      "en-US": "taskName/taskContent required",
+    },
+    parentSessionIdRequired: {
+      "zh-CN": "parentSessionId required",
+      "en-US": "parentSessionId required",
+    },
+    taskRequired: {
+      "zh-CN": "task required",
+      "en-US": "task required",
+    },
+  };
+  return pickToolText({ locale, dict, key });
 }
 
 function isPlainObject(value) {
@@ -287,7 +312,7 @@ export function createAgentCollabTool({ agentContext }) {
   const buildWaitTaskInvalidResult = ({
     index = 0,
     request = {},
-    error = "sessionId/taskName/taskContent required",
+    error = tAgentCollab(runtime, "taskNameTaskContentRequired"),
   } = {}) => ({
     ok: false,
     index,
@@ -361,7 +386,7 @@ export function createAgentCollabTool({ agentContext }) {
     }
     const fallbackError = String(taskResultItem?.error || "").trim();
     if (fallbackError) return fallbackError;
-    return String(taskResultItem?.status || "").trim() || "(无结果)";
+    return String(taskResultItem?.status || "").trim() || tAgentCollab(runtime, "noResult");
   };
   const persistCompletedTaskResultsAsAttachments = async ({
     container = {},
@@ -405,7 +430,7 @@ export function createAgentCollabTool({ agentContext }) {
         __sessionId: sessionId,
         name: `subtask-${fileLabel}-${status}.md`,
         mimeType: "text/markdown",
-        contentBase64: Buffer.from(markdownText || "(无结果)", "utf8").toString("base64"),
+        contentBase64: Buffer.from(markdownText || tAgentCollab(runtime, "noResult"), "utf8").toString("base64"),
       };
     });
     let attachmentMetas = [];
@@ -459,22 +484,21 @@ export function createAgentCollabTool({ agentContext }) {
   };
 
   const delegateTaskItemSchema = z.object({
-    taskName: z.string().describe("子任务名称"),
-    taskContent: z.string().describe("子任务内容"),
+    taskName: z.string().describe(tTool(runtime, "tools.agent_collab.fieldTaskName")),
+    taskContent: z.string().describe(tTool(runtime, "tools.agent_collab.fieldTaskContent")),
   });
 
   const delegateTaskAsync = new DynamicStructuredTool({
     name: "delegate_task_async",
-    description:
-      "多agent协助：异步并发执行多个子任务。自动使用当前会话ID与当前对话轮ID作为父级上下文。",
+    description: tTool(runtime, "tools.agent_collab.delegateDescription"),
     schema: z.object({
-      tasks: z.array(delegateTaskItemSchema).min(1).describe("并发子任务列表"),
+      tasks: z.array(delegateTaskItemSchema).min(1).describe(tTool(runtime, "tools.agent_collab.fieldTasks")),
     }),
     func: async ({ tasks }) => {
       if (!botManager || !userId)
         return toToolJsonResult("delegate_task_async", {
           ok: false,
-          error: "runtime missing bot manager/user id",
+          error: tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
         });
       const resolveValidatedParent = async () => {
         const normalizedParentSessionId = normalizeString(sourceSessionId);
@@ -533,13 +557,13 @@ export function createAgentCollabTool({ agentContext }) {
               sessionId: generatedSessionId,
               patch: {
                 status: "failed",
-                error: "taskName/taskContent required",
+                error: tAgentCollab(runtime, "taskNameTaskContentRequired"),
                 endedAt: nowIso(),
               },
             });
             return buildDelegateTaskFailureResult({
               index,
-              error: "taskName/taskContent required",
+              error: tAgentCollab(runtime, "taskNameTaskContentRequired"),
               parentAsyncResultContainer: childContainer,
               request,
             });
@@ -616,20 +640,19 @@ export function createAgentCollabTool({ agentContext }) {
 
   const waitAsyncTaskResult = new DynamicStructuredTool({
     name: "wait_async_task_result",
-    description:
-      "并发等待当前上下文中 childAsyncResultContainers 的全部异步子任务结果。可选 timeoutMs。",
+    description: tTool(runtime, "tools.agent_collab.waitDescription"),
     schema: z.object({
-      timeoutMs: z.number().optional().describe("最大等待毫秒数（可选）"),
+      timeoutMs: z.number().optional().describe(tTool(runtime, "tools.agent_collab.fieldTimeoutMs")),
       pollIntervalMs: z
         .number()
         .optional()
-        .describe("轮询间隔毫秒数（可选，默认 5000ms）"),
+        .describe(tTool(runtime, "tools.agent_collab.fieldPollIntervalMs")),
     }),
     func: async ({ timeoutMs, pollIntervalMs }) => {
       if (!botManager || !userId)
         return toToolJsonResult("wait_async_task_result", {
           ok: false,
-          error: "runtime missing bot manager/user id",
+          error: tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
         });
       const containers = (
         Array.isArray(runtime.childAsyncResultContainers)
@@ -666,7 +689,7 @@ export function createAgentCollabTool({ agentContext }) {
               id: containerId,
               ok: false,
               status: "invalid_request",
-              error: "parentSessionId required",
+              error: tAgentCollab(runtime, "parentSessionIdRequired"),
               tasks: [],
             };
           }
@@ -826,16 +849,16 @@ export function createAgentCollabTool({ agentContext }) {
 
   const planMultiTaskCollaboration = new DynamicStructuredTool({
     name: "plan_multi_task_collaboration",
-    description: "多任务协作规划",
+    description: tTool(runtime, "tools.agent_collab.planDescription"),
     schema: z.object({
-      task: z.string().describe("需要拆分流程的任务文本"),
+      task: z.string().describe(tTool(runtime, "tools.agent_collab.fieldPlanTask")),
     }),
     func: async ({ task }) => {
       const taskText = String(task || "").trim();
       if (!taskText)
         return toToolJsonResult("plan_multi_task_collaboration", {
           ok: false,
-          error: "task required",
+          error: tAgentCollab(runtime, "taskRequired"),
         });
 
       const runtimeModel = String(runtime?.runtimeModel || "").trim();
@@ -864,14 +887,14 @@ export function createAgentCollabTool({ agentContext }) {
       const res = await llm.invoke([
         new SystemMessage(
           [
-            "多任务协作规划。",
-            "请输出规划内容与任务调用链。",
-            "输出必须是 JSON，不要使用 markdown 代码块。",
-            "JSON 格式：",
-            '{ "tasks":[{ "taskName":"任务a", "taskContent":"任务目标、内容","subTasks":[] }] }',
+            tTool(runtime, "tools.agent_collab.planPrompt1"),
+            tTool(runtime, "tools.agent_collab.planPrompt2"),
+            tTool(runtime, "tools.agent_collab.planPrompt3"),
+            tTool(runtime, "tools.agent_collab.planPrompt4"),
+            tTool(runtime, "tools.agent_collab.planPrompt5"),
           ].join("\n"),
         ),
-        new HumanMessage(`任务文本：\n${taskText}`),
+        new HumanMessage(`${tTool(runtime, "tools.agent_collab.humanTaskPrefix")}\n${taskText}`),
       ]);
       const content =
         typeof res?.content === "string"

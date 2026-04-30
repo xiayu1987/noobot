@@ -198,5 +198,23 @@ export const enUSMessages = {
     "depthLabel": "Level#{depth}",
     "mainTaskGroup": "Main#{sessionId} · Turn#{dialogId} · {level}",
     "subTaskGroup": "Sub#{sessionId} · Turn#{dialogId} · {level}"
+  },
+  "composer": {
+    "stop": "Stop",
+    "inputPlaceholder": "Type a message. Shift+Enter for newline, Enter to send...",
+    "allowInteraction": "Allow Interaction",
+    "disallowInteraction": "Disallow Interaction",
+    "sending": "Sending",
+    "send": "Send",
+    "attachments": "Attachments",
+    "clear": "Clear",
+    "fieldRequired": "{label} is required",
+    "pendingConfirm": "Pending",
+    "confirmOrSupplement": "Confirmation / additional info required",
+    "inputField": "Please enter {field}",
+    "connectors": "Connectors",
+    "noConnectorSelected": "No connector selected",
+    "expand": "Expand",
+    "noAvailableConnections": "No available connections"
   }
 };

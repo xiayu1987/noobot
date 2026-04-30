@@ -6,9 +6,29 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { pickToolText, resolveToolLocale } from "./tool-i18n.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
+}
+
+function tUserInteraction(runtime = {}, key = "", params = {}) {
+  const locale = resolveToolLocale(runtime);
+  const dict = {
+    contentRequired: {
+      "zh-CN": "交互内容/content required",
+      "en-US": "interaction content/content required",
+    },
+    invalidFieldsPayload: {
+      "zh-CN": `字段 payload 无效: ${String(params.reason || "").trim()}`,
+      "en-US": `invalid fields payload: ${String(params.reason || "").trim()}`,
+    },
+    sensitiveFieldsBlocked: {
+      "zh-CN": "存在敏感字段，如果是数据库或者终端请用 process_connector_tool 连接器连接",
+      "en-US": "Sensitive fields detected. For database or terminal access, use process_connector_tool connectors.",
+    },
+  };
+  return pickToolText({ locale, dict, key, params });
 }
 
 const SENSITIVE_FIELD_KEYWORDS = [
@@ -145,7 +165,7 @@ export function createUserInteractionTool({ agentContext }) {
       if (!interactionContent) {
         return toToolJsonResult("user_interaction", {
           ok: false,
-          error: "交互内容/content required",
+          error: tUserInteraction(runtime, "contentRequired"),
         });
       }
 
@@ -159,7 +179,9 @@ export function createUserInteractionTool({ agentContext }) {
       } catch (error) {
         return toToolJsonResult("user_interaction", {
           ok: false,
-          error: `invalid 字段 payload: ${error?.message || String(error)}`,
+          error: tUserInteraction(runtime, "invalidFieldsPayload", {
+            reason: error?.message || String(error),
+          }),
         });
       }
 
@@ -169,7 +191,7 @@ export function createUserInteractionTool({ agentContext }) {
       if (hasSensitiveFields) {
         return toToolJsonResult("user_interaction", {
           ok: false,
-          error: "存在敏感字段，如果是数据库或者终端请用process_connector_tool连接器连接",
+          error: tUserInteraction(runtime, "sensitiveFieldsBlocked"),
         });
       }
 

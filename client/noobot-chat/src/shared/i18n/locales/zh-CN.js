@@ -198,5 +198,23 @@ export const zhCNMessages = {
     "depthLabel": "层级#{depth}",
     "mainTaskGroup": "主任务#{sessionId} · 轮次#{dialogId} · {level}",
     "subTaskGroup": "子任务#{sessionId} · 轮次#{dialogId} · {level}"
+  },
+  "composer": {
+    "stop": "停止",
+    "inputPlaceholder": "输入消息，Shift + Enter 换行，Enter 发送...",
+    "allowInteraction": "允许交互",
+    "disallowInteraction": "禁止交互",
+    "sending": "发送中",
+    "send": "发送",
+    "attachments": "附件",
+    "clear": "清空",
+    "fieldRequired": "{label} 为必填项",
+    "pendingConfirm": "待确认",
+    "confirmOrSupplement": "需要确认/补充信息",
+    "inputField": "请输入{field}",
+    "connectors": "连接器",
+    "noConnectorSelected": "未选择连接器",
+    "expand": "展开",
+    "noAvailableConnections": "暂无可用连接"
   }
 };

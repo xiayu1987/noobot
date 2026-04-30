@@ -6,6 +6,70 @@
 import { mergeConfig } from "../../config/index.js";
 import { toToolJsonResult } from "../tool-json-result.js";
 import { cleanConnectorOutputForLLM } from "../../utils/text-cleaner.js";
+import { pickToolText, resolveToolLocale } from "../tool-i18n.js";
+
+function resolveRuntimeLocale(runtime = {}) {
+  return resolveToolLocale(runtime);
+}
+
+function tConnector(runtime = {}, key = "", params = {}) {
+  const locale = resolveRuntimeLocale(runtime);
+  const dict = {
+    selectedMissing: {
+      "zh-CN": `当前上下文未勾选${String(params.connectorType || "")}连接器，无法执行 access_connector`,
+      "en-US": `No ${String(params.connectorType || "")} connector is selected in current context, cannot execute access_connector`,
+    },
+    selectedOnly: {
+      "zh-CN": `当前上下文仅允许使用已勾选连接器：${String(params.connectorName || "")}`,
+      "en-US": `Current context only allows selected connector: ${String(params.connectorName || "")}`,
+    },
+    reconnectNeeded: {
+      "zh-CN": `当前已勾选连接器「${String(params.connectorName || "")}」未连接，请使用连接器工具重新连接后再执行命令`,
+      "en-US": `Selected connector "${String(params.connectorName || "")}" is not connected. Reconnect with connector tools before executing commands.`,
+    },
+    execCompleted: {
+      "zh-CN": "执行完成",
+      "en-US": "Execution completed",
+    },
+    execFailed: {
+      "zh-CN": `执行失败${String(params.reason || "").trim() ? `: ${String(params.reason || "").trim()}` : ""}`,
+      "en-US": `Execution failed${String(params.reason || "").trim() ? `: ${String(params.reason || "").trim()}` : ""}`,
+    },
+    noConnectorsFound: {
+      "zh-CN": "没有连接器，可以通过 connect_connector 工具创建",
+      "en-US": "No connectors found. You can create one with connect_connector.",
+    },
+    alreadyConnected: {
+      "zh-CN": "连接器已连接，请通过 access_connector 执行命令",
+      "en-US": "Connector is already connected. Use access_connector to execute commands.",
+    },
+    missingConnectionInfoNoInteraction: {
+      "zh-CN": "缺少连接信息，且当前会话已禁用用户交互",
+      "en-US": "Missing connection info, and user interaction is disabled for this session.",
+    },
+    fillDatabaseConnectionInfo: {
+      "zh-CN": `请补全数据库连接信息（${String(params.databaseType || "")}）`,
+      "en-US": `Please complete database connection info (${String(params.databaseType || "")}).`,
+    },
+    fillTerminalConnectionInfo: {
+      "zh-CN": `请补全终端连接信息（${String(params.terminalType || "")}）`,
+      "en-US": `Please complete terminal connection info (${String(params.terminalType || "")}).`,
+    },
+    fillEmailConnectionInfo: {
+      "zh-CN": "请补全邮件连接信息（SMTP/IMAP）",
+      "en-US": "Please complete email connection info (SMTP/IMAP).",
+    },
+    userCancelledAction: {
+      "zh-CN": "用户取消了操作",
+      "en-US": "User cancelled the operation.",
+    },
+    connectorNameLabel: {
+      "zh-CN": "连接器名称",
+      "en-US": "Connector Name",
+    },
+  };
+  return pickToolText({ locale, dict, key, params });
+}
 
 function pickObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -66,38 +130,47 @@ function normalizeConnectorType(input = "") {
   return "";
 }
 
-function databaseFields(databaseType = "") {
+function databaseFields(databaseType = "", locale = "zh-CN") {
+  const isEnglish = String(locale || "").toLowerCase().startsWith("en");
   if (databaseType === "sqlite") {
-    return [{ name: "file_path", displayName: "SQLite 文件路径", required: true }];
+    return [
+      {
+        name: "file_path",
+        displayName: isEnglish ? "SQLite File Path" : "SQLite 文件路径",
+        required: true,
+      },
+    ];
   }
   return [
-    { name: "host", displayName: "主机地址", required: true },
-    { name: "port", displayName: "端口", required: false },
-    { name: "username", displayName: "用户名", required: true },
-    { name: "password", displayName: "密码", required: true },
-    { name: "database", displayName: "数据库名", required: true },
+    { name: "host", displayName: isEnglish ? "Host" : "主机地址", required: true },
+    { name: "port", displayName: isEnglish ? "Port" : "端口", required: false },
+    { name: "username", displayName: isEnglish ? "Username" : "用户名", required: true },
+    { name: "password", displayName: isEnglish ? "Password" : "密码", required: true },
+    { name: "database", displayName: isEnglish ? "Database" : "数据库名", required: true },
   ];
 }
 
-function terminalFields(terminalType = "") {
+function terminalFields(terminalType = "", locale = "zh-CN") {
+  const isEnglish = String(locale || "").toLowerCase().startsWith("en");
   if (terminalType !== "ssh") return [];
   return [
-    { name: "host", displayName: "服务器IP/域名", required: true },
-    { name: "port", displayName: "端口(默认22)", required: false },
-    { name: "username", displayName: "用户名", required: true },
-    { name: "password", displayName: "密码", required: true },
+    { name: "host", displayName: isEnglish ? "Server IP/Domain" : "服务器IP/域名", required: true },
+    { name: "port", displayName: isEnglish ? "Port (default 22)" : "端口(默认22)", required: false },
+    { name: "username", displayName: isEnglish ? "Username" : "用户名", required: true },
+    { name: "password", displayName: isEnglish ? "Password" : "密码", required: true },
   ];
 }
 
-function emailFields() {
+function emailFields(locale = "zh-CN") {
+  const isEnglish = String(locale || "").toLowerCase().startsWith("en");
   return [
-    { name: "smtp_host", displayName: "SMTP 主机", required: true },
-    { name: "smtp_port", displayName: "SMTP 端口", required: false },
-    { name: "imap_host", displayName: "IMAP 主机", required: true },
-    { name: "imap_port", displayName: "IMAP 端口", required: false },
-    { name: "username", displayName: "邮箱账号", required: true },
-    { name: "password", displayName: "邮箱密码/授权码", required: true },
-    { name: "from_email", displayName: "发件地址", required: false },
+    { name: "smtp_host", displayName: isEnglish ? "SMTP Host" : "SMTP 主机", required: true },
+    { name: "smtp_port", displayName: isEnglish ? "SMTP Port" : "SMTP 端口", required: false },
+    { name: "imap_host", displayName: isEnglish ? "IMAP Host" : "IMAP 主机", required: true },
+    { name: "imap_port", displayName: isEnglish ? "IMAP Port" : "IMAP 端口", required: false },
+    { name: "username", displayName: isEnglish ? "Email Account" : "邮箱账号", required: true },
+    { name: "password", displayName: isEnglish ? "Password/App Password" : "邮箱密码/授权码", required: true },
+    { name: "from_email", displayName: isEnglish ? "From Address" : "发件地址", required: false },
   ];
 }
 
@@ -386,12 +459,12 @@ function isUserCancelledInteraction(interactionResult = {}) {
   );
 }
 
-function buildAlreadyConnectedResponse(toolName = "", connector = {}) {
+function buildAlreadyConnectedResponse(toolName = "", connector = {}, runtime = {}) {
   return toToolJsonResult(toolName, {
     ok: true,
     status: "already_connected",
     connector,
-    message: "连接器已连接，请通过 access_connector 执行命令",
+    message: tConnector(runtime, "alreadyConnected"),
   });
 }
 
@@ -634,7 +707,7 @@ function buildAccessConnectorTool(context = {}) {
       if (!selectedConnectorName) {
         return toToolJsonResult("access_connector", {
           ok: false,
-          error: `当前上下文未勾选${connectorType}连接器，无法执行 access_connector`,
+          error: tConnector(runtime, "selectedMissing", { connectorType }),
         });
       }
       const requestedConnectorName = String(connector_name || "").trim();
@@ -644,7 +717,9 @@ function buildAccessConnectorTool(context = {}) {
       ) {
         return toToolJsonResult("access_connector", {
           ok: false,
-          error: `当前上下文仅允许使用已勾选连接器：${selectedConnectorName}`,
+          error: tConnector(runtime, "selectedOnly", {
+            connectorName: selectedConnectorName,
+          }),
         });
       }
       const connectorName = selectedConnectorName;
@@ -672,7 +747,9 @@ function buildAccessConnectorTool(context = {}) {
           ...rememberedConnectionInfo,
         };
         const reconnectToolName = resolveReconnectToolName(connectorType);
-        const reconnectMessage = `当前已勾选连接器「${connectorName}」未连接，请使用连接器工具重新连接后再执行命令`;
+        const reconnectMessage = tConnector(runtime, "reconnectNeeded", {
+          connectorName,
+        });
         await connectorEventListener?.notifyReconnectRequired?.({
           connectorType,
           connectorName,
@@ -725,8 +802,10 @@ function buildAccessConnectorTool(context = {}) {
             ok: result?.ok === true,
             status: result?.ok ? "completed" : "failed",
             message: result?.ok
-              ? "执行完成"
-              : `执行失败${executionFailedMessage ? `: ${executionFailedMessage}` : ""}`,
+              ? tConnector(runtime, "execCompleted")
+              : tConnector(runtime, "execFailed", {
+                  reason: executionFailedMessage,
+                }),
             connector: result?.connector || {},
             output: cleanConnectorOutputForLLM(
               {
@@ -777,4 +856,6 @@ export {
   resolveRememberedConnectorInfo,
   buildAccessConnectorTool,
   upsertRuntimeSelectedConnector,
+  resolveRuntimeLocale,
+  tConnector,
 };

@@ -8,12 +8,60 @@ import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
 import { invokeServiceHandler } from "../services/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 function getServices(agentContext) {
   const globalConfig = agentContext?.runtime?.globalConfig || {};
   const userConfig = agentContext?.runtime?.userConfig || {};
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   return effectiveConfig?.services || {};
+}
+
+function tService(agentContext = {}, key = "", params = {}) {
+  const locale = resolveToolLocale(agentContext);
+  const dict = {
+    serviceNameRequired: {
+      "zh-CN": "serviceName required",
+      "en-US": "serviceName required",
+    },
+    endpointNameRequired: {
+      "zh-CN": "endpointName required",
+      "en-US": "endpointName required",
+    },
+    queryStringMustBeObject: {
+      "zh-CN": "queryString must be an object",
+      "en-US": "queryString must be an object",
+    },
+    customParamMustBeString: {
+      "zh-CN": "custom_param must be a string",
+      "en-US": "custom_param must be a string",
+    },
+    customParamMustNotBeEmpty: {
+      "zh-CN": "custom_param must not be empty",
+      "en-US": "custom_param must not be empty",
+    },
+    userIdMissing: {
+      "zh-CN": "上下文缺少 userId",
+      "en-US": "userId missing in context",
+    },
+    serviceNotFound: {
+      "zh-CN": `服务不存在: ${String(params.serviceName || "").trim()}`,
+      "en-US": `service not found: ${String(params.serviceName || "").trim()}`,
+    },
+    serviceDisabled: {
+      "zh-CN": `服务已禁用: ${String(params.serviceName || "").trim()}`,
+      "en-US": `service disabled: ${String(params.serviceName || "").trim()}`,
+    },
+    endpointNotFound: {
+      "zh-CN": `端点不存在: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
+      "en-US": `endpoint not found: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
+    },
+    endpointUrlMissing: {
+      "zh-CN": `端点 URL 缺失: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
+      "en-US": `endpoint url missing: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
+    },
+  };
+  return pickToolText({ locale, dict, key, params });
 }
 
 function isServiceEnabled(serviceCfg) {
@@ -28,45 +76,46 @@ function jsonError(payload = {}) {
   return toToolJsonResult("call_service", { ok: false, ...payload });
 }
 
-function validateInput({ serviceName, endpointName, queryString }) {
+function validateInput({ serviceName, endpointName, queryString, agentContext }) {
   const normalizedServiceName = normalizeName(serviceName);
   const normalizedEndpointName = normalizeName(endpointName);
-  if (!normalizedServiceName) return "serviceName required";
-  if (!normalizedEndpointName) return "endpointName required";
+  if (!normalizedServiceName) return tService(agentContext, "serviceNameRequired");
+  if (!normalizedEndpointName) return tService(agentContext, "endpointNameRequired");
   if (
     queryString !== undefined &&
     (typeof queryString !== "object" || Array.isArray(queryString))
   ) {
-    return "queryString must be an object";
+    return tService(agentContext, "queryStringMustBeObject");
   }
   return "";
 }
 
-function validateCustomParam(customParam) {
+function validateCustomParam(customParam, agentContext) {
   if (customParam === undefined || customParam === null) return "";
-  if (typeof customParam !== "string") return "custom_param must be a string";
-  if (!String(customParam).trim()) return "custom_param must not be empty";
+  if (typeof customParam !== "string") {
+    return tService(agentContext, "customParamMustBeString");
+  }
+  if (!String(customParam).trim()) return tService(agentContext, "customParamMustNotBeEmpty");
   return "";
 }
 
 export function createServiceTool({ agentContext }) {
   const callServiceTool = new DynamicStructuredTool({
     name: "call_service",
-    description:
-      "调用外部服务。必须传 serviceName 和 endpointName，可传 queryString/body/custom_param。",
+    description: tTool(agentContext, "tools.service.description"),
     schema: z.object({
-      serviceName: z.string().describe("服务名称，对应 services 下的 key"),
-      endpointName: z.string().describe("端点名称，对应 services.<name>.endpoints 下的 key"),
+      serviceName: z.string().describe(tTool(agentContext, "tools.service.fieldServiceName")),
+      endpointName: z.string().describe(tTool(agentContext, "tools.service.fieldEndpointName")),
       custom_param: z
         .string()
         .optional()
-        .describe("额外自定义参数"),
+        .describe(tTool(agentContext, "tools.service.fieldCustomParam")),
       queryString: z
         .object({})
         .loose()
         .optional()
-        .describe("查询参数对象，将拼接到 URL"),
-      body: z.unknown().optional().describe("请求体内容"),
+        .describe(tTool(agentContext, "tools.service.fieldQueryString")),
+      body: z.unknown().optional().describe(tTool(agentContext, "tools.service.fieldBody")),
     }),
     func: async ({ serviceName, endpointName, custom_param, queryString = {}, body }) => {
       const globalConfig = agentContext?.runtime?.globalConfig || {};
@@ -76,32 +125,51 @@ export function createServiceTool({ agentContext }) {
           agentContext?.runtime?.systemRuntime?.userId ||
           "",
       ).trim();
-      const inputErr = validateInput({ serviceName, endpointName, queryString });
+      const inputErr = validateInput({
+        serviceName,
+        endpointName,
+        queryString,
+        agentContext,
+      });
       if (inputErr) return jsonError({ error: inputErr });
-      const customParamErr = validateCustomParam(custom_param);
+      const customParamErr = validateCustomParam(custom_param, agentContext);
       if (customParamErr) return jsonError({ error: customParamErr });
-      if (!userId) return jsonError({ error: "userId missing in context" });
+      if (!userId) return jsonError({ error: tService(agentContext, "userIdMissing") });
 
       const normalizedServiceName = normalizeName(serviceName);
       const normalizedEndpointName = normalizeName(endpointName);
       const services = getServices(agentContext);
       const serviceCfg = services?.[normalizedServiceName];
       if (!serviceCfg) {
-        return jsonError({ error: `service not found: ${normalizedServiceName}` });
+        return jsonError({
+          error: tService(agentContext, "serviceNotFound", {
+            serviceName: normalizedServiceName,
+          }),
+        });
       }
       if (!isServiceEnabled(serviceCfg)) {
-        return jsonError({ error: `service disabled: ${normalizedServiceName}` });
+        return jsonError({
+          error: tService(agentContext, "serviceDisabled", {
+            serviceName: normalizedServiceName,
+          }),
+        });
       }
       const endpointCfg = serviceCfg?.endpoints?.[normalizedEndpointName];
       if (!endpointCfg) {
         return jsonError({
-          error: `endpoint not found: ${normalizedServiceName}.${normalizedEndpointName}`,
+          error: tService(agentContext, "endpointNotFound", {
+            serviceName: normalizedServiceName,
+            endpointName: normalizedEndpointName,
+          }),
         });
       }
       const endpointUrl = String(endpointCfg.url || "").trim();
       if (!endpointUrl) {
         return jsonError({
-          error: `endpoint url missing: ${normalizedServiceName}.${normalizedEndpointName}`,
+          error: tService(agentContext, "endpointUrlMissing", {
+            serviceName: normalizedServiceName,
+            endpointName: normalizedEndpointName,
+          }),
         });
       }
 

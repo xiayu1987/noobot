@@ -9,6 +9,7 @@ import { toToolJsonResult } from "../tool-json-result.js";
 import {
   buildAccessConnectorTool,
   createConnectorToolContext,
+  tConnector,
 } from "./connector-toolkit.js";
 import { createDatabaseConnectorTools } from "./database-connector-tools.js";
 import { createTerminalConnectorTools } from "./terminal-connector-tools.js";
@@ -83,13 +84,14 @@ export function createConnectorChannelTools({ agentContext }) {
         connectorEventListener.syncRuntimeConnectorChannels();
       }
       if (totalCount <= 0) {
+        const noConnectorMessage = tConnector(runtime, "noConnectorsFound");
         return toToolJsonResult(
           "inspect_connectors",
           {
             ok: false,
             status: "no_connectors",
-            error: "没有连接器，可以通过connect_connector工具创建",
-            message: "没有连接器，可以通过connect_connector工具创建",
+            error: noConnectorMessage,
+            message: noConnectorMessage,
             connectors: {
               databases,
               terminals,
