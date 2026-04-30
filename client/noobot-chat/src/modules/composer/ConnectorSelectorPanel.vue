@@ -25,12 +25,14 @@ const CONNECTOR_GROUP_KEYS = new Set(
 
 const props = defineProps({
   connectorPanelState: { type: Object, default: () => ({}) },
+  embedded: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["connector-selected"]);
 
 const connectorPanelExpanded = ref(false);
 const { t } = useLocale();
+const panelExpanded = computed(() => (props.embedded ? true : connectorPanelExpanded.value));
 
 const connectorGroups = computed(() => {
   const sourceGroups =
@@ -100,15 +102,15 @@ function toggleConnectorPanelExpanded() {
 <template>
   <div
     class="connector-panel-shell noobot-flat-card"
-    :class="{ 'is-expanded': connectorPanelExpanded }"
+    :class="{ 'is-expanded': panelExpanded, 'is-embedded': props.embedded }"
   >
-    <div class="connector-panel-header" @click="toggleConnectorPanelExpanded">
+    <div v-if="!props.embedded" class="connector-panel-header" @click="toggleConnectorPanelExpanded">
       <div class="connector-panel-title">
         <el-icon class="title-icon"><Connection /></el-icon>
         <span>{{ t("composer.connectors") }}</span>
       </div>
 
-      <div class="connector-collapsed-summary" v-show="!connectorPanelExpanded">
+      <div class="connector-collapsed-summary" v-show="!panelExpanded">
         <span
           v-for="summaryItem in collapsedConnectorSummaryItems"
           :key="summaryItem"
@@ -125,15 +127,15 @@ function toggleConnectorPanelExpanded() {
       </div>
 
       <div class="connector-toggle-btn noobot-flat-soft-btn">
-        <span class="toggle-text">{{ connectorPanelExpanded ? t("message.collapse") : t("composer.expand") }}</span>
-        <el-icon class="connector-toggle-icon" :class="{ 'is-rotated': connectorPanelExpanded }">
+        <span class="toggle-text">{{ panelExpanded ? t("message.collapse") : t("composer.expand") }}</span>
+        <el-icon class="connector-toggle-icon" :class="{ 'is-rotated': panelExpanded }">
           <ArrowDown />
         </el-icon>
       </div>
     </div>
 
     <el-collapse-transition>
-      <div v-show="connectorPanelExpanded" class="connector-panel">
+      <div v-show="panelExpanded" class="connector-panel">
         <div class="connector-categories-grid">
           <div
             v-for="groupDefinition in CONNECTOR_GROUP_DEFINITIONS"
@@ -186,6 +188,10 @@ function toggleConnectorPanelExpanded() {
 .connector-panel-shell.is-expanded {
   background: var(--noobot-panel-bg);
   box-shadow: none;
+}
+
+.connector-panel-shell.is-embedded {
+  border: 1px dashed var(--noobot-divider);
 }
 
 .connector-panel-header {
@@ -270,6 +276,11 @@ function toggleConnectorPanelExpanded() {
 .connector-panel {
   padding: 0 12px 12px 12px;
   border-top: 1px solid var(--noobot-divider);
+}
+
+.connector-panel-shell.is-embedded .connector-panel {
+  border-top: none;
+  padding-top: 10px;
 }
 
 .connector-categories-grid {
