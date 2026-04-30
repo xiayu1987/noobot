@@ -1,16 +1,20 @@
 # Security Policy
 
-如果你发现安全问题，请不要公开提 issue。
+[中文](./SECURITY.zh-CN.md) | English
 
-请通过私下方式联系维护者，并附上：
+If you discover a security vulnerability, **please do not open a public issue**.
 
-- 问题描述
-- 复现步骤
-- 影响范围
-- 建议修复方案（可选）
+Please report it privately to the maintainer with:
 
-联系方式（请替换为你的真实邮箱）：
+- Vulnerability description
+- Reproduction steps
+- Impact scope
+- Suggested fix (optional)
+
+## Contact
 
 - 126240622+xiayu1987@users.noreply.github.com
 
-我们会尽快确认并处理。修复完成后，再公开披露细节。
+We will review and handle it as soon as possible.  
+After a fix is available, details can be disclosed responsibly.
+

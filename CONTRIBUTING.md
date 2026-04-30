@@ -1,27 +1,44 @@
 # Contributing
 
-感谢贡献！
+[中文](./CONTRIBUTING.zh-CN.md) | English
 
-## 提交流程
+Thanks for contributing to Noobot 🎉
 
-1. Fork 并新建分支（`feat/...`、`fix/...`）
-2. 本地运行并确保能正常启动：
+## Workflow
+
+1. Fork this repository and create a branch:
+   - `feat/...`
+   - `fix/...`
+   - `docs/...`
+2. Run locally and verify:
    ```bash
    ./start.sh
    ```
-3. 提交 PR，描述清楚变更动机、影响范围、验证方式
+3. Open a PR with:
+   - motivation
+   - scope/impact
+   - test or verification steps
 
-## 代码建议
+## Code Guidelines
 
-- 保持改动小而清晰
-- 不提交构建产物和运行时文件（见 `.gitignore`）
-- 涉及配置项时，同步更新文档与 `.env.example`
+- Keep changes small and focused.
+- Do not commit runtime/build artifacts (follow `.gitignore`).
+- If config/env behavior changes, update:
+  - docs
+  - examples (`*.example.*`)
 
-## Commit 建议
-
-推荐使用：
+## Commit Message (recommended)
 
 - `feat: ...`
 - `fix: ...`
 - `docs: ...`
 - `refactor: ...`
+- `chore: ...`
+
+## Before Opening PR
+
+- [ ] App starts successfully
+- [ ] Frontend build passes
+- [ ] Related docs are updated
+- [ ] No sensitive information is committed
+
