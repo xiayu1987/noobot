@@ -17,7 +17,7 @@
   --noobot-text-strong: var(--noobot-base-slate-900);
   --noobot-text-main: var(--noobot-base-slate-800);
   --noobot-text-secondary: var(--noobot-base-slate-600);
-  --noobot-text-muted: var(--noobot-base-slate-500);
+  --noobot-text-muted: var(--noobot-base-slate-600);
   --noobot-text-accent: var(--noobot-base-blue-700);
 
   /* Component · Message / Thinking */
@@ -35,7 +35,7 @@
   --noobot-msg-inline-code-text: var(--noobot-base-blue-700);
   --noobot-msg-code-block-bg: var(--noobot-base-slate-900);
   --noobot-msg-code-block-text: var(--noobot-base-slate-200);
-  --noobot-thinking-bg: var(--noobot-base-indigo-50);
+  --noobot-thinking-bg: color-mix(in srgb, var(--noobot-base-blue-500) 8%, var(--noobot-base-white));
   --noobot-thinking-header: var(--noobot-base-slate-700);
   --noobot-thinking-text: var(--noobot-base-slate-700);
   --noobot-thinking-muted: var(--noobot-base-slate-500);
@@ -48,7 +48,6 @@
   --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
   --noobot-divider: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
   --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-slate-900) 24%, transparent);
-  --noobot-accent-soft: color-mix(in srgb, var(--noobot-base-blue-500) 16%, transparent);
   --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 12%, transparent);
   --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
   --noobot-accent-soft: color-mix(in srgb, var(--noobot-base-blue-700) 14%, transparent);

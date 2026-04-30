@@ -348,7 +348,7 @@ watch(
 <template>
   <el-tabs v-model="activeTab" class="settings-tabs">
     <el-tab-pane :label="t('settings.userSettings')" name="users">
-      <div class="workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
+      <div class="workspace-layout noobot-workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
         <div class="workspace-panel noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
             <span class="panel-title noobot-workspace-title">{{ t("settings.users") }}</span>
@@ -424,7 +424,7 @@ watch(
     </el-tab-pane>
 
     <el-tab-pane :label="t('settings.defaultUserSettings')" name="template">
-      <div class="workspace-layout">
+      <div class="workspace-layout noobot-workspace-layout">
         <div class="workspace-panel workspace-tree noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
             <span class="panel-title noobot-workspace-title">{{ t("settings.defaultUserDir") }}</span>
@@ -529,16 +529,6 @@ watch(
   height: 100%;
 }
 
-/* 整体布局 */
-.workspace-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
-  height: 100%; /* 在 Tab 内部使用 100% */
-  padding: 0 4px 16px 4px;
-  box-sizing: border-box;
-}
-
 /* 面板通用样式 */
 .workspace-panel {
   display: flex;
@@ -546,158 +536,7 @@ watch(
   overflow: hidden;
 }
 
-.panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.panel-title {
-  font-weight: 600;
-}
-
-.panel-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 左侧按钮组 */
-.tree-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-/* 按钮样式适配主界面 */
-.icon-btn {
-  color: var(--noobot-text-secondary);
-  font-size: 16px;
-  padding: 4px 8px;
-}
-
-.icon-btn:hover {
-  color: var(--noobot-text-main);
-  background: var(--noobot-panel-muted);
-}
-
-.icon-btn.danger-text:hover {
-  color: var(--noobot-status-error);
-  background: var(--noobot-danger-soft);
-}
-
-.refresh-btn:not(:disabled):hover {
-  background: var(--noobot-btn-soft-bg-hover);
-  color: var(--noobot-text-strong);
-}
-
-.dark-btn {
-  color: var(--noobot-text-main);
-}
-
-.dark-btn:hover:not(:disabled) {
-  color: var(--noobot-text-strong);
-}
-
-.primary-btn {
-  background: var(--noobot-btn-primary-bg);
-  border: none;
-}
-
-.primary-btn:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-
-.primary-btn:disabled,
-.dark-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.danger-btn {
-  background: color-mix(in srgb, var(--noobot-danger-soft) 65%, transparent);
-  border: 1px solid color-mix(in srgb, var(--noobot-status-error) 45%, transparent);
-  color: color-mix(in srgb, var(--noobot-status-error) 80%, var(--noobot-text-strong));
-}
-
-.danger-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--noobot-status-error) 22%, transparent);
-  border-color: color-mix(in srgb, var(--noobot-status-error) 65%, transparent);
-  color: var(--noobot-text-strong);
-}
-
-/* 左侧目录树 & 列表 */
-.tree-scroll {
-  height: 100%;
-}
-
-.custom-tree {
-  background: transparent;
-  padding: 8px;
-  color: var(--noobot-text-main);
-  --el-tree-node-hover-bg-color: var(--noobot-panel-muted);
-  --el-tree-text-color: var(--noobot-text-main);
-  --el-tree-expand-icon-color: var(--noobot-text-muted);
-}
-
-.custom-tree :deep(.el-tree-node__content) {
-  height: 32px;
-  border-radius: 6px;
-  margin-bottom: 2px;
-}
-
-.custom-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
-  background-color: var(--noobot-accent-soft);
-  color: var(--noobot-text-accent);
-}
-
-.tree-node {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.node-icon {
-  font-size: 14px;
-  opacity: 0.9;
-}
-
-.node-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* 用户列表特有样式 */
-.users-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-}
-
-.user-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.row-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2px;
-}
-
-.user-idx {
-  font-size: 12px;
-  color: var(--noobot-text-secondary);
-  font-weight: 600;
-}
-
 .code-row {
   display: flex;
   gap: 8px;
@@ -707,58 +546,8 @@ watch(
   flex: 1;
 }
 
-.row-input :deep(.el-input__wrapper) {
-  background: transparent;
-  border-color: var(--noobot-panel-border);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--noobot-panel-border) 80%, transparent) inset;
-}
-
-.row-input :deep(.el-input__inner) {
-  color: var(--noobot-text-main);
-  font-size: 13px;
-}
-
 .action-btn {
   padding: 8px 12px;
-}
-
-/* 右侧编辑器 */
-.file-info {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  flex: 1;
-  margin-right: 16px;
-}
-
-.active-file {
-  font-size: 13px;
-  color: var(--noobot-text-secondary);
-  padding: 4px 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.editor-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.desktop-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mobile-actions {
-  display: none;
-}
-
-.editor-body {
-  position: relative;
 }
 
 .json-error {
@@ -769,55 +558,12 @@ watch(
   border-bottom: 1px solid color-mix(in srgb, var(--noobot-status-error) 40%, transparent);
 }
 
-/* 空状态 */
-.empty-tip {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--noobot-text-muted);
-  text-align: center;
-  line-height: 1.6;
-  font-size: 14px;
-}
-
 .list-empty-tip {
   position: static;
   padding: 40px 0;
 }
 
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
-
 /* 响应式适配 */
 @media (max-width: 768px) {
-  .workspace-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 40% 60%;
-    height: 100%;
-    gap: 12px;
-    padding: 0;
-  }
-
-  .panel-head {
-    padding: 0 12px;
-  }
-
-  .active-file {
-    max-width: 180px;
-  }
-
-  .desktop-actions {
-    display: none;
-  }
-
-  .mobile-actions {
-    display: inline-flex;
-  }
 }
 </style>

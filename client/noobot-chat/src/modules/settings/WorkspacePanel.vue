@@ -59,7 +59,6 @@ const userParamCatalog = ref([]);
 const loadingSystemParamCatalog = ref(false);
 const loadingUserParamCatalog = ref(false);
 const activeResourceSection = ref("directory");
-const lastActiveResourceSection = ref("directory");
 const resetDialogVisible = ref(false);
 const resetDialogMode = ref("user");
 const resetDialogSections = ref([]);
@@ -429,18 +428,6 @@ function handleEditorAction(command = "") {
 }
 
 watch(
-  () => activeResourceSection.value,
-  (value) => {
-    const normalized = String(value || "").trim();
-    if (normalized) {
-      lastActiveResourceSection.value = normalized;
-      return;
-    }
-    activeResourceSection.value = lastActiveResourceSection.value || "directory";
-  },
-);
-
-watch(
   () => props.active,
   (isActive) => {
     if (isActive) refreshAll();
@@ -480,7 +467,7 @@ watch(
 </script>
 
 <template>
-  <div class="workspace-layout">
+  <div class="workspace-layout noobot-workspace-layout">
     <!-- 左侧目录树 -->
     <div class="workspace-panel workspace-tree noobot-flat-card noobot-workspace-panel">
       <div class="panel-head noobot-workspace-head">
@@ -743,14 +730,7 @@ watch(
 <style scoped>
 /* 整体布局 */
 .workspace-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
-  height: 100%;
-  min-height: 0;
   overflow: hidden;
-  padding: 0 4px 16px 4px;
-  box-sizing: border-box;
 }
 
 /* 面板通用样式 */
@@ -758,19 +738,6 @@ watch(
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.panel-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .dir-inner-actions {
@@ -840,115 +807,13 @@ watch(
   margin-top: auto;
 }
 
-/* 左侧目录树按钮组 */
-.tree-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: flex-end;
-  /* 增加按钮之间的间距 */
-}
-
-/* 按钮样式适配主界面 */
-.icon-btn {
-  color: var(--noobot-text-secondary);
-  font-size: 16px;
-  padding: 4px 8px;
-}
-
-.icon-btn:hover {
-  color: var(--noobot-text-main);
-  background: var(--noobot-panel-muted);
-}
-
-.panel-title {
-  font-weight: 600;
-}
-
-.refresh-btn:not(:disabled):hover {
-  background: var(--noobot-btn-soft-bg-hover);
-  color: var(--noobot-text-strong);
-}
-
-.dark-btn {
-  color: var(--noobot-text-main);
-}
-
-.dark-btn:hover:not(:disabled) {
-  color: var(--noobot-text-strong);
-}
-
-.primary-btn {
-  background: var(--noobot-btn-primary-bg);
-  border: none;
-}
-
-.primary-btn:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-
-.primary-btn:disabled,
-.dark-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.danger-btn {
-  background: color-mix(in srgb, var(--noobot-danger-soft) 65%, transparent);
-  border: 1px solid color-mix(in srgb, var(--noobot-status-error) 45%, transparent);
-  color: color-mix(in srgb, var(--noobot-status-error) 80%, var(--noobot-text-strong));
-}
-
-.danger-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--noobot-status-error) 22%, transparent);
-  border-color: color-mix(in srgb, var(--noobot-status-error) 65%, transparent);
-  color: var(--noobot-text-strong);
-}
-
-/* 左侧目录树 */
-.tree-scroll {
-  height: 100%;
-}
-
-.custom-tree {
-  background: transparent;
-  padding: 8px;
-  color: var(--noobot-text-main);
-  --el-tree-node-hover-bg-color: var(--noobot-panel-muted);
-  --el-tree-text-color: var(--noobot-text-main);
-  --el-tree-expand-icon-color: var(--noobot-text-muted);
-}
-
-.custom-tree :deep(.el-tree-node__content) {
-  height: 32px;
-  border-radius: 6px;
-  margin-bottom: 2px;
-}
-
-.custom-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
-  background-color: var(--noobot-accent-soft);
-  color: var(--noobot-text-accent);
-}
-
 .tree-node {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
   width: 100%;
   min-width: 0;
 }
 
 .node-icon {
-  font-size: 14px;
-  opacity: 0.9;
   color: var(--noobot-text-secondary);
-}
-
-.node-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .param-row {
@@ -963,41 +828,6 @@ watch(
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 120px;
-}
-
-/* 右侧编辑器 */
-.file-info {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  flex: 1;
-  margin-right: 16px;
-}
-
-.active-file {
-  font-size: 13px;
-  color: var(--noobot-text-secondary);
-  padding: 4px 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.editor-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.desktop-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mobile-actions {
-  display: none;
 }
 
 .left-empty {
@@ -1083,56 +913,12 @@ watch(
 }
 
 /* 空状态/二进制文件提示 */
-.empty-tip {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--noobot-text-muted);
-  text-align: center;
-  line-height: 1.6;
-  font-size: 14px;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
-
 .empty-tip :deep(.el-empty__description p) {
   color: var(--noobot-text-muted);
 }
 
 /* 响应式适配 */
 @media (max-width: 768px) {
-  .workspace-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 42% 58%;
-    height: 100%;
-    min-height: 0;
-    gap: 12px;
-    padding: 0;
-  }
-
-  .panel-head {
-    padding: 0 12px;
-  }
-
-  .active-file {
-    max-width: 180px;
-  }
-
-  .desktop-actions {
-    display: none;
-  }
-
-  .mobile-actions {
-    display: inline-flex;
-  }
-
   .reset-section-group {
     grid-template-columns: 1fr;
     gap: 8px;

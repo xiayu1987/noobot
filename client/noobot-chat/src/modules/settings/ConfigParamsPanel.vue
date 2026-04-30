@@ -237,7 +237,7 @@ watch(
 <template>
   <el-tabs v-model="activeScope" class="settings-tabs" @tab-change="onScopeChanged">
     <el-tab-pane :label="t('settings.userParams')" name="user">
-      <div class="workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
+      <div class="workspace-layout noobot-workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
         <div class="workspace-panel noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
             <span class="panel-title noobot-workspace-title">{{ t("settings.paramsList", { label: activeScopeLabel }) }}</span>
@@ -312,7 +312,7 @@ watch(
       </div>
     </el-tab-pane>
     <el-tab-pane v-if="isSuperAdmin" :label="t('settings.systemParams')" name="system">
-      <div class="workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
+      <div class="workspace-layout noobot-workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
         <div class="workspace-panel noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
             <span class="panel-title noobot-workspace-title">{{ t("settings.paramsList", { label: activeScopeLabel }) }}</span>
@@ -397,63 +397,11 @@ watch(
   height: 100%;
 }
 
-/* 整体布局 */
-.workspace-layout {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
-  height: 100%;
-  padding: 0 4px 16px 4px;
-  box-sizing: border-box;
-}
-
 /* 面板通用样式 */
 .workspace-panel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.panel-title {
-  font-weight: 600;
-}
-
-.panel-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 左侧按钮组 */
-.tree-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-/* 按钮样式适配主界面 */
-.icon-btn {
-  color: var(--noobot-text-secondary);
-  font-size: 16px;
-  padding: 4px 8px;
-}
-
-.icon-btn:hover {
-  color: var(--noobot-text-main);
-  background: var(--noobot-panel-muted);
-}
-
-.icon-btn.danger-text:hover {
-  color: var(--noobot-status-error);
-  background: var(--noobot-danger-soft);
 }
 
 .dark-btn {
@@ -468,102 +416,6 @@ watch(
   color: var(--noobot-text-strong);
 }
 
-.primary-btn {
-  background: var(--noobot-btn-primary-bg);
-  border: none;
-}
-
-.primary-btn:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-
-.primary-btn:disabled,
-.dark-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 左侧列表 */
-.tree-scroll {
-  height: 100%;
-}
-
-.users-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-}
-
-.user-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.row-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2px;
-}
-
-.user-idx {
-  font-size: 12px;
-  color: var(--noobot-text-secondary);
-  font-weight: 600;
-}
-
-.row-input :deep(.el-input__wrapper) {
-  background: transparent;
-  border-color: var(--noobot-panel-border);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--noobot-panel-border) 80%, transparent) inset;
-}
-
-.row-input :deep(.el-input__inner) {
-  color: var(--noobot-text-main);
-  font-size: 13px;
-}
-
-/* 右侧编辑器 */
-.file-info {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  flex: 1;
-  margin-right: 16px;
-}
-
-.active-file {
-  font-size: 13px;
-  color: var(--noobot-text-secondary);
-  padding: 4px 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.editor-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.desktop-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mobile-actions {
-  display: none;
-}
-
-.editor-body {
-  position: relative;
-}
-
 .json-error {
   background: var(--noobot-danger-soft);
   color: var(--noobot-status-error);
@@ -572,55 +424,12 @@ watch(
   border-bottom: 1px solid color-mix(in srgb, var(--noobot-status-error) 40%, transparent);
 }
 
-/* 空状态 */
-.empty-tip {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--noobot-text-muted);
-  text-align: center;
-  line-height: 1.6;
-  font-size: 14px;
-}
-
 .list-empty-tip {
   position: static;
   padding: 40px 0;
 }
 
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
-
 /* 响应式适配 */
 @media (max-width: 768px) {
-  .workspace-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 40% 60%;
-    height: calc(100vh - 60px);
-    gap: 12px;
-    padding: 0;
-  }
-
-  .panel-head {
-    padding: 0 12px;
-  }
-
-  .active-file {
-    max-width: 180px;
-  }
-
-  .desktop-actions {
-    display: none;
-  }
-
-  .mobile-actions {
-    display: inline-flex;
-  }
 }
 </style>
