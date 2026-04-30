@@ -21,7 +21,7 @@
 
   --noobot-btn-secondary-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 90%, var(--noobot-base-blue-500));
   --noobot-btn-secondary-bg-hover: color-mix(in srgb, var(--noobot-surface-sidebar) 82%, var(--noobot-base-blue-500));
-  --noobot-btn-secondary-border: color-mix(in srgb, var(--noobot-base-slate-400) 20%, var(--noobot-base-blue-500));
+  --noobot-btn-secondary-border: color-mix(in srgb, var(--noobot-base-slate-500) 20%, var(--noobot-base-blue-500));
   --noobot-btn-secondary-text: var(--noobot-text-strong);
 
   /* ========== Semantic Tokens · Surface / Text / Status ========== */
@@ -36,10 +36,10 @@
   --noobot-border-primary: color-mix(in srgb, var(--noobot-base-blue-500) 50%, transparent);
   --noobot-text-strong: var(--noobot-base-slate-50);
   --noobot-text-main: var(--noobot-base-slate-200);
-  --noobot-text-secondary: var(--noobot-base-slate-400);
+  --noobot-text-secondary: var(--noobot-base-slate-500);
   --noobot-text-muted: var(--noobot-base-slate-500);
   --noobot-text-accent: var(--noobot-base-blue-400);
-  --noobot-status-idle: var(--noobot-base-slate-600);
+  --noobot-status-idle: var(--noobot-base-slate-500);
   --noobot-status-success: var(--noobot-base-emerald-500);
   --noobot-status-running: var(--noobot-base-blue-400);
   --noobot-status-done: var(--noobot-base-emerald-400);
@@ -81,7 +81,7 @@
   --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-slate-900) 52%, transparent);
   --noobot-accent-soft: color-mix(in srgb, var(--noobot-base-blue-400) 26%, transparent);
   --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 16%, transparent);
-  --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-400) 8%, transparent);
+  --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-500) 8%, transparent);
 
   /* Semantic · Preview */
   --noobot-preview-bg: var(--noobot-base-white);

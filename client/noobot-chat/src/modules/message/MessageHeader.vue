@@ -59,13 +59,10 @@ const { t } = useLocale();
   width: 80%;
   height: 80%;
   object-fit: cover;
-  background: var(--noobot-msg-assistant-avatar);
+  background: var(--noobot-msg-avatar-bg);
 }
-.msg-header:not(.user) .avatar {
-  background: var(--noobot-msg-assistant-avatar);
-}
-.msg-header.user .avatar {
-  background: var(--noobot-msg-user-avatar);
+.msg-header .avatar {
+  background: var(--noobot-msg-avatar-bg);
 }
 .meta {
   display: flex;

@@ -6,8 +6,10 @@
 
 :root {
   /* ========== Component Tokens · Message ========== */
-  --noobot-msg-assistant-avatar: var(--noobot-base-blue-500);
-  --noobot-msg-user-avatar: var(--noobot-base-slate-500);
+  /* 头像色收敛：统一天蓝色系 */
+  --noobot-msg-avatar-bg: var(--noobot-base-blue-400);
+  --noobot-msg-assistant-avatar: var(--noobot-msg-avatar-bg);
+  --noobot-msg-user-avatar: var(--noobot-msg-avatar-bg);
   --noobot-msg-meta: var(--noobot-text-secondary);
   --noobot-msg-assistant-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-base-black));
   --noobot-msg-assistant-border: var(--noobot-panel-border);

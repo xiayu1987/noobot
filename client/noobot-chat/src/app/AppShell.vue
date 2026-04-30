@@ -541,8 +541,7 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
 
 :deep(.workspace-drawer .el-drawer__body) {
   background: var(--noobot-panel-bg);
-  padding: 0px;
-  margin: 8px;
+  padding: 8px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -569,10 +568,6 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
 
   :deep(.workspace-drawer) {
     width: 100% !important;
-  }
-
-  :deep(.workspace-drawer .el-drawer__body) {
-    margin: 0 !important;
   }
 
   .app-shell-root { min-height: 100dvh; }

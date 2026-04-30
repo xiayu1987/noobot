@@ -215,6 +215,233 @@ body {
   margin: 0 !important;
 }
 
+/* 工作区类页面通用布局 */
+.noobot-workspace-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 0 4px 16px 4px;
+  box-sizing: border-box;
+}
+
+.noobot-workspace-layout .panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.noobot-workspace-layout .panel-title {
+  font-weight: 600;
+}
+
+.noobot-workspace-layout .panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.noobot-workspace-layout .tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.noobot-workspace-layout .tree-scroll {
+  height: 100%;
+}
+
+.noobot-workspace-layout .file-info {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  margin-right: 16px;
+}
+
+.noobot-workspace-layout .active-file {
+  font-size: 13px;
+  color: var(--noobot-text-secondary);
+  padding: 4px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.noobot-workspace-layout .editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.noobot-workspace-layout .desktop-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.noobot-workspace-layout .mobile-actions {
+  display: none;
+}
+
+.noobot-workspace-layout .editor-body {
+  position: relative;
+}
+
+.noobot-workspace-layout .empty-tip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--noobot-text-muted);
+  text-align: center;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.noobot-workspace-layout .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.noobot-workspace-layout .icon-btn {
+  color: var(--noobot-text-secondary);
+  font-size: 16px;
+  padding: 4px 8px;
+}
+
+.noobot-workspace-layout .icon-btn:hover {
+  color: var(--noobot-text-main);
+  background: var(--noobot-panel-muted);
+}
+
+.noobot-workspace-layout .icon-btn.danger-text:hover {
+  color: var(--noobot-status-error);
+  background: var(--noobot-danger-soft);
+}
+
+.noobot-workspace-layout .refresh-btn:not(:disabled):hover {
+  background: var(--noobot-btn-soft-bg-hover);
+  color: var(--noobot-text-strong);
+}
+
+.noobot-workspace-layout .dark-btn {
+  color: var(--noobot-text-main);
+}
+
+.noobot-workspace-layout .dark-btn:hover:not(:disabled) {
+  color: var(--noobot-text-strong);
+}
+
+.noobot-workspace-layout .primary-btn {
+  background: var(--noobot-btn-primary-bg);
+  border: none;
+}
+
+.noobot-workspace-layout .primary-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.noobot-workspace-layout .danger-btn {
+  background: color-mix(in srgb, var(--noobot-danger-soft) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-status-error) 45%, transparent);
+  color: color-mix(in srgb, var(--noobot-status-error) 80%, var(--noobot-text-strong));
+}
+
+.noobot-workspace-layout .danger-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--noobot-status-error) 22%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-status-error) 65%, transparent);
+  color: var(--noobot-text-strong);
+}
+
+.noobot-workspace-layout .primary-btn:disabled,
+.noobot-workspace-layout .dark-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.noobot-workspace-layout .custom-tree {
+  background: transparent;
+  padding: 8px;
+  color: var(--noobot-text-main);
+  --el-tree-node-hover-bg-color: var(--noobot-panel-muted);
+  --el-tree-text-color: var(--noobot-text-main);
+  --el-tree-expand-icon-color: var(--noobot-text-muted);
+}
+
+.noobot-workspace-layout .custom-tree .el-tree-node__content {
+  height: 32px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+}
+
+.noobot-workspace-layout .custom-tree .el-tree-node.is-current > .el-tree-node__content {
+  background-color: var(--noobot-accent-soft);
+  color: var(--noobot-text-accent);
+}
+
+.noobot-workspace-layout .tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.noobot-workspace-layout .node-icon {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.noobot-workspace-layout .node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noobot-workspace-layout .users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.noobot-workspace-layout .user-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.noobot-workspace-layout .row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.noobot-workspace-layout .user-idx {
+  font-size: 12px;
+  color: var(--noobot-text-secondary);
+  font-weight: 600;
+}
+
+.noobot-workspace-layout .row-input .el-input__wrapper {
+  background: transparent;
+  border-color: var(--noobot-panel-border);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--noobot-panel-border) 80%, transparent) inset;
+}
+
+.noobot-workspace-layout .row-input .el-input__inner {
+  color: var(--noobot-text-main);
+  font-size: 13px;
+}
+
 /* 工作区/配置类页面的统一面板语义类 */
 .noobot-workspace-panel {
   display: flex;
@@ -464,7 +691,10 @@ body {
 }
 
 /* 第三轮收敛：覆盖组件内硬编码色，亮暗主题一致 */
-.chat-header,
+.chat-header {
+  background: var(--noobot-surface-sidebar) !important;
+}
+
 .workspace-drawer .el-drawer__header,
 .noobot-workspace-head {
   background: var(--noobot-panel-head-bg) !important;
@@ -568,6 +798,30 @@ body {
 
 /* 移动端全面适配 */
 @media (max-width: 768px) {
+  .noobot-workspace-layout {
+    grid-template-columns: 1fr;
+    height: 100%;
+    min-height: 0;
+    gap: 12px;
+    padding: 0;
+  }
+
+  .noobot-workspace-layout .panel-head {
+    padding: 0 12px;
+  }
+
+  .noobot-workspace-layout .active-file {
+    max-width: 180px;
+  }
+
+  .noobot-workspace-layout .desktop-actions {
+    display: none;
+  }
+
+  .noobot-workspace-layout .mobile-actions {
+    display: inline-flex;
+  }
+
   html,
   body,
   #app {
