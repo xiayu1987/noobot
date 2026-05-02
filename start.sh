@@ -217,17 +217,27 @@ main() {
   npm --prefix "$CLIENT_DIR" run build
 
   log "$(msg step_rebuild)"
+  local has_service_app=0
+  local has_client_app=0
   if pm2_has_app "$SERVICE_APP_NAME"; then
-    run_pm2 delete "$SERVICE_APP_NAME"
+    has_service_app=1
   fi
   if pm2_has_app "$CLIENT_APP_NAME"; then
-    run_pm2 delete "$CLIENT_APP_NAME"
+    has_client_app=1
   fi
 
   log "$(msg step_start)"
   export CADDY_ADDR API_UPSTREAM
-  start_pm2 "$SERVICE_APP_NAME" npm --name "$SERVICE_APP_NAME" --cwd "$SERVICE_DIR" -- start
-  start_pm2 "$CLIENT_APP_NAME" npm --name "$CLIENT_APP_NAME" --cwd "$CLIENT_DIR" -- run serve:caddy
+  if [[ "$has_service_app" -eq 1 ]]; then
+    run_pm2 restart "$SERVICE_APP_NAME" --update-env
+  else
+    start_pm2 "$SERVICE_APP_NAME" npm --name "$SERVICE_APP_NAME" --cwd "$SERVICE_DIR" -- start
+  fi
+  if [[ "$has_client_app" -eq 1 ]]; then
+    run_pm2 restart "$CLIENT_APP_NAME" --update-env
+  else
+    start_pm2 "$CLIENT_APP_NAME" npm --name "$CLIENT_APP_NAME" --cwd "$CLIENT_DIR" -- run serve:caddy
+  fi
 
   log "$(msg done_list)"
   run_pm2 ls
