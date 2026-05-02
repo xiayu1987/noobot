@@ -11,6 +11,7 @@ export const enUSMessages = {
     "inputConnectCode": "Enter Connection Code",
     "connecting": "Connecting...",
     "connect": "Connect",
+    "cancel": "Cancel",
     "connected": "Connected",
     "disconnected": "Disconnected",
     "newSession": "New Session",

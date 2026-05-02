@@ -11,6 +11,7 @@ export const zhCNMessages = {
     "inputConnectCode": "输入连接码",
     "connecting": "连接中...",
     "connect": "建立连接",
+    "cancel": "取消",
     "connected": "已连接",
     "disconnected": "未连接",
     "newSession": "新建会话",
