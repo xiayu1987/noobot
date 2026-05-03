@@ -57,7 +57,7 @@ chmod +x start.sh
 
 - 核心配置文档：[`CONFIGURATION.zh-CN.md`](./CONFIGURATION.zh-CN.md)
 - 贡献指南：[`CONTRIBUTING.zh-CN.md`](./CONTRIBUTING.zh-CN.md)
-- 后端说明：[`service/README.md`](./service/README.md)
+- 后端说明：[`service/README.zh-CN.md`](./service/README.zh-CN.md)
 
 `start.sh` 可用环境变量：
 
