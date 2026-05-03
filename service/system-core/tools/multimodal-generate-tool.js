@@ -13,45 +13,10 @@ import {
   resolveModelSpecByName,
 } from "../model/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    imagesApiNotEnabledError: {
-      "zh-CN": "当前账号未开通图片生成能力（403 Images API is not enabled）。",
-      "en-US": "Current account does not have image generation enabled (403 Images API is not enabled).",
-    },
-    imagesApiNotEnabledMessage: {
-      "zh-CN": "请在对应平台开通 Images API 权限，或切换到已开通图片生成能力的模型/密钥。",
-      "en-US": "Enable Images API on your platform, or switch to a model/key with image generation enabled.",
-    },
-    multimodalUnsupportedError: {
-      "zh-CN": `当前模型不支持多模态生成（图片）：${String(params.model || "").trim()}`,
-      "en-US": `Current model does not support multimodal image generation: ${String(params.model || "").trim()}`,
-    },
-    multimodalUnsupportedMessage: {
-      "zh-CN": "请切换到支持图片生成的模型，或通过 model_name 指定支持生成的模型。",
-      "en-US": "Switch to a model that supports image generation, or specify one via model_name.",
-    },
-    generationContentRequired: {
-      "zh-CN": "generation_content 必填",
-      "en-US": "generation_content required",
-    },
-    modelApiKeyMissing: {
-      "zh-CN": "模型 API Key 缺失",
-      "en-US": "model api key missing",
-    },
-    generateFailed: {
-      "zh-CN": "多模态生成失败",
-      "en-US": "multimodal generate failed",
-    },
-    fetchGeneratedImageUrlFailed: {
-      "zh-CN": "拉取生成图片 URL 失败",
-      "en-US": "fetch generated image url failed",
-    },
-  };
-  return pickToolText({ locale, dict, key, params });
+  return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
 }
 
 function resolveModelApiKey(modelSpec = {}) {

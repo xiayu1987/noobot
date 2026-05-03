@@ -580,7 +580,7 @@ export async function executeMcpTask({
 }) {
   const normalizedTask = String(task || "").trim();
   if (!normalizedTask) {
-    throw recoverableToolError(tSystem("mcp.taskRequired"));
+    throw recoverableToolError(tSystem("common.taskRequired"));
   }
   const server = getMcpServerByName({ globalConfig, userConfig, mcpName });
   if (!server) {

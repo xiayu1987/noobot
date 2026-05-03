@@ -6,6 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "../tool-json-result.js";
+import { tToolDescription } from "../tool-schema-i18n.js";
 import { tTool } from "../tool-i18n.js";
 import {
   buildAccessConnectorTool,
@@ -45,19 +46,19 @@ export function createConnectorChannelTools({ agentContext }) {
 
   const inspectConnectorsTool = new DynamicStructuredTool({
     name: "inspect_connectors",
-    description: tTool(runtime, "tools.inspect_connectors.description"),
+    description: tToolDescription(runtime, "inspect_connectors"),
     schema: z.object({}),
     func: async () => {
       if (!store || typeof store.inspectSessionConnectors !== "function") {
         return toToolJsonResult("inspect_connectors", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
+          error: tTool(runtime, "connectors.storeMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("inspect_connectors", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
+          error: tTool(runtime, "connectors.rootSessionMissing"),
         });
       }
       const inspected = await store.inspectSessionConnectors({

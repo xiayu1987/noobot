@@ -95,7 +95,7 @@ export function createContentProcessTool({ agentContext }) {
     func: async ({ task, modelName = "" }) => {
       const normalizedTask = String(task || "").trim();
       if (!normalizedTask) {
-        return jsonError({ error: tTool(runtime, "tools.content_process.errorTaskRequired") });
+        return jsonError({ error: tTool(runtime, "common.taskRequired") });
       }
 
       const systemRuntime = runtime?.systemRuntime || {};
@@ -114,7 +114,7 @@ export function createContentProcessTool({ agentContext }) {
         systemRuntime?.config?.allowUserInteraction !== false;
       if (!botManager || !userId || !sessionId) {
         return jsonError({
-          error: tTool(runtime, "tools.content_process.errorRuntimeMissing"),
+          error: tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
         });
       }
       if (!contentProcessTools.length) {

@@ -6,45 +6,14 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
 
 function tUserInteraction(runtime = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    contentRequired: {
-      "zh-CN": "交互内容/content required",
-      "en-US": "interaction content/content required",
-    },
-    invalidFieldsPayload: {
-      "zh-CN": `字段 payload 无效: ${String(params.reason || "").trim()}`,
-      "en-US": `invalid fields payload: ${String(params.reason || "").trim()}`,
-    },
-    sensitiveFieldsBlocked: {
-      "zh-CN": "存在敏感字段，如果是数据库或者终端请用 process_connector_tool 连接器连接",
-      "en-US": "Sensitive fields detected. For database or terminal access, use process_connector_tool connectors.",
-    },
-    bridgeMissing: {
-      "zh-CN": "用户交互桥接不可用",
-      "en-US": "user interaction bridge missing",
-    },
-    cancelled: {
-      "zh-CN": "已取消",
-      "en-US": "cancelled",
-    },
-    invalidResponseObject: {
-      "zh-CN": "交互返回对象无效",
-      "en-US": "invalid interaction response object",
-    },
-    missingRequiredField: {
-      "zh-CN": `缺少必填字段: ${String(params.key || "").trim()}`,
-      "en-US": `missing required field: ${String(params.key || "").trim()}`,
-    },
-  };
-  return pickToolText({ locale, dict, key, params });
+  return tTool(runtime, `tools.user_interaction.${String(key || "").trim()}`, params);
 }
 
 const SENSITIVE_FIELD_KEYWORDS = [

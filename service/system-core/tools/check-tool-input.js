@@ -6,57 +6,23 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { recoverableToolError } from "../error/index.js";
-import { pickToolText, resolveToolLocale } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function tCheckInput(agentContext = {}, key = "") {
-  const locale = resolveToolLocale(agentContext);
-  const dict = {
-    runtimeBasePathMissing: {
-      "zh-CN": "运行时缺少 basePath",
-      "en-US": "runtime basePath missing",
-    },
-    fieldRequired: {
-      "zh-CN": "必填",
-      "en-US": "required",
-    },
-    pathSeparatorsNotAllowed: {
-      "zh-CN": "不能包含路径分隔符",
-      "en-US": "must not contain path separators",
-    },
-    controlCharsNotAllowed: {
-      "zh-CN": "不能包含控制字符",
-      "en-US": "must not contain control characters",
-    },
-    fileNameIncludedRequired: {
-      "zh-CN": "必须包含文件名",
-      "en-US": "must include file name",
-    },
-    invalidUuidFormat: {
-      "zh-CN": "格式无效（必须是 UUID）",
-      "en-US": "invalid format (UUID required)",
-    },
-    sessionContextMissing: {
-      "zh-CN": "会话上下文缺失",
-      "en-US": "session context missing",
-    },
-    parentSessionNotFound: {
-      "zh-CN": "未找到父会话",
-      "en-US": "parent session not found",
-    },
-    notFoundInParentSessionMessages: {
-      "zh-CN": "在父会话消息中未找到",
-      "en-US": "not found in parent session messages",
-    },
-    pathOutOfScope: {
-      "zh-CN": "路径超出允许范围",
-      "en-US": "path out of scope",
-    },
-    fileNotFound: {
-      "zh-CN": "文件不存在",
-      "en-US": "file not found",
-    },
+  const keyMap = {
+    runtimeBasePathMissing: "common.runtimeBasePathMissing",
+    fieldRequired: "common.fieldRequired",
+    pathSeparatorsNotAllowed: "common.pathSeparatorsNotAllowed",
+    controlCharsNotAllowed: "common.controlCharsNotAllowed",
+    fileNameIncludedRequired: "common.fileNameIncludedRequired",
+    invalidUuidFormat: "common.invalidUuidFormat",
+    sessionContextMissing: "common.sessionContextMissing",
+    parentSessionNotFound: "common.parentSessionNotFound",
+    notFoundInParentSessionMessages: "common.notFoundInParentSessionMessages",
+    pathOutOfScope: "common.pathOutOfScope",
+    fileNotFound: "common.fileNotFound",
   };
-  return pickToolText({ locale, dict, key });
+  return tTool(agentContext, keyMap[String(key || "").trim()] || "");
 }
 
 function isUuid(value = "") {

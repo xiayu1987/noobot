@@ -68,7 +68,7 @@ class ConnectorChannelStore {
 
   _ensureSessionBucket(sessionId = "") {
     const sid = String(sessionId || "").trim();
-    if (!sid) throw new Error(tSystem("connectors.sessionIdRequired"));
+    if (!sid) throw new Error(tSystem("common.sessionIdRequired"));
     if (!this.sessionBuckets.has(sid)) {
       this.sessionBuckets.set(sid, {
         databases: new Map(),
@@ -468,7 +468,7 @@ class ConnectorChannelStore {
         connector_type: normalizedConnectorType,
         status: "unknown",
         status_code: 400,
-        status_message: tSystem("connectors.statusSessionIdRequired"),
+        status_message: tSystem("common.sessionIdRequired"),
       };
     }
     if (!normalizedConnectorName || !normalizedConnectorType) {

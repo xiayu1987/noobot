@@ -4,79 +4,28 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig } from "../../config/index.js";
+import { BACKEND_I18N } from "../../i18n/backend-messages.js";
 import { toToolJsonResult } from "../tool-json-result.js";
+import {
+  tToolDescription,
+  tToolParamDescription,
+} from "../tool-schema-i18n.js";
 import { cleanConnectorOutputForLLM } from "../../utils/text-cleaner.js";
-import { pickToolText, resolveToolLocale, tTool } from "../tool-i18n.js";
-
-function resolveRuntimeLocale(runtime = {}) {
-  return resolveToolLocale(runtime);
-}
+import { pickToolText, tTool } from "../tool-i18n.js";
 
 function tConnector(runtime = {}, key = "", params = {}) {
-  const locale = resolveRuntimeLocale(runtime);
-  const dict = {
-    selectedMissing: {
-      "zh-CN": `当前上下文未勾选${String(params.connectorType || "")}连接器，无法执行 access_connector`,
-      "en-US": `No ${String(params.connectorType || "")} connector is selected in current context, cannot execute access_connector`,
-    },
-    selectedOnly: {
-      "zh-CN": `当前上下文仅允许使用已勾选连接器：${String(params.connectorName || "")}`,
-      "en-US": `Current context only allows selected connector: ${String(params.connectorName || "")}`,
-    },
-    reconnectNeeded: {
-      "zh-CN": `当前已勾选连接器「${String(params.connectorName || "")}」未连接，请使用连接器工具重新连接后再执行命令`,
-      "en-US": `Selected connector "${String(params.connectorName || "")}" is not connected. Reconnect with connector tools before executing commands.`,
-    },
-    execCompleted: {
-      "zh-CN": "执行完成",
-      "en-US": "Execution completed",
-    },
-    execFailed: {
-      "zh-CN": `执行失败${String(params.reason || "").trim() ? `: ${String(params.reason || "").trim()}` : ""}`,
-      "en-US": `Execution failed${String(params.reason || "").trim() ? `: ${String(params.reason || "").trim()}` : ""}`,
-    },
-    noConnectorsFound: {
-      "zh-CN": "没有连接器，可以通过 connect_connector 工具创建",
-      "en-US": "No connectors found. You can create one with connect_connector.",
-    },
-    alreadyConnected: {
-      "zh-CN": "连接器已连接，请通过 access_connector 执行命令",
-      "en-US": "Connector is already connected. Use access_connector to execute commands.",
-    },
-    missingConnectionInfoNoInteraction: {
-      "zh-CN": "缺少连接信息，且当前会话已禁用用户交互",
-      "en-US": "Missing connection info, and user interaction is disabled for this session.",
-    },
-    fillDatabaseConnectionInfo: {
-      "zh-CN": `请补全数据库连接信息（${String(params.databaseType || "")}）`,
-      "en-US": `Please complete database connection info (${String(params.databaseType || "")}).`,
-    },
-    fillTerminalConnectionInfo: {
-      "zh-CN": `请补全终端连接信息（${String(params.terminalType || "")}）`,
-      "en-US": `Please complete terminal connection info (${String(params.terminalType || "")}).`,
-    },
-    fillEmailConnectionInfo: {
-      "zh-CN": "请补全邮件连接信息（SMTP/IMAP）",
-      "en-US": "Please complete email connection info (SMTP/IMAP).",
-    },
-    userCancelledAction: {
-      "zh-CN": "用户取消了操作",
-      "en-US": "User cancelled the operation.",
-    },
-    connectorNameLabel: {
-      "zh-CN": "连接器名称",
-      "en-US": "Connector Name",
-    },
-    selectedConnectorNotConnected: {
-      "zh-CN": `当前勾选连接器未连接: ${String(params.connectorType || "").trim()}/${String(params.connectorName || "").trim()}`,
-      "en-US": `selected connector not connected: ${String(params.connectorType || "").trim()}/${String(params.connectorName || "").trim()}`,
-    },
-    statusInspectorUnavailable: {
-      "zh-CN": "连接器运行状态检查器不可用",
-      "en-US": "connector runtime status inspector unavailable",
-    },
-  };
-  return pickToolText({ locale, dict, key, params });
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) return "";
+  return tTool(runtime, `connectors.access.${normalizedKey}`, params);
+}
+
+function tConnectorField(locale = "zh-CN", key = "", params = {}) {
+  return pickToolText({
+    locale,
+    dict: BACKEND_I18N,
+    key: `connectors.fields.${String(key || "").trim()}`,
+    params,
+  });
 }
 
 function pickObject(value) {
@@ -139,46 +88,99 @@ function normalizeConnectorType(input = "") {
 }
 
 function databaseFields(databaseType = "", locale = "zh-CN") {
-  const isEnglish = String(locale || "").toLowerCase().startsWith("en");
   if (databaseType === "sqlite") {
     return [
       {
         name: "file_path",
-        displayName: isEnglish ? "SQLite File Path" : "SQLite 文件路径",
+        displayName: tConnectorField(locale, "sqliteFilePath"),
         required: true,
       },
     ];
   }
   return [
-    { name: "host", displayName: isEnglish ? "Host" : "主机地址", required: true },
-    { name: "port", displayName: isEnglish ? "Port" : "端口", required: false },
-    { name: "username", displayName: isEnglish ? "Username" : "用户名", required: true },
-    { name: "password", displayName: isEnglish ? "Password" : "密码", required: true },
-    { name: "database", displayName: isEnglish ? "Database" : "数据库名", required: true },
+    { name: "host", displayName: tConnectorField(locale, "host"), required: true },
+    { name: "port", displayName: tConnectorField(locale, "port"), required: false },
+    {
+      name: "username",
+      displayName: tConnectorField(locale, "username"),
+      required: true,
+    },
+    {
+      name: "password",
+      displayName: tConnectorField(locale, "password"),
+      required: true,
+    },
+    {
+      name: "database",
+      displayName: tConnectorField(locale, "database"),
+      required: true,
+    },
   ];
 }
 
 function terminalFields(terminalType = "", locale = "zh-CN") {
-  const isEnglish = String(locale || "").toLowerCase().startsWith("en");
   if (terminalType !== "ssh") return [];
   return [
-    { name: "host", displayName: isEnglish ? "Server IP/Domain" : "服务器IP/域名", required: true },
-    { name: "port", displayName: isEnglish ? "Port (default 22)" : "端口(默认22)", required: false },
-    { name: "username", displayName: isEnglish ? "Username" : "用户名", required: true },
-    { name: "password", displayName: isEnglish ? "Password" : "密码", required: true },
+    {
+      name: "host",
+      displayName: tConnectorField(locale, "serverIpOrDomain"),
+      required: true,
+    },
+    {
+      name: "port",
+      displayName: tConnectorField(locale, "portDefault22"),
+      required: false,
+    },
+    {
+      name: "username",
+      displayName: tConnectorField(locale, "username"),
+      required: true,
+    },
+    {
+      name: "password",
+      displayName: tConnectorField(locale, "password"),
+      required: true,
+    },
   ];
 }
 
 function emailFields(locale = "zh-CN") {
-  const isEnglish = String(locale || "").toLowerCase().startsWith("en");
   return [
-    { name: "smtp_host", displayName: isEnglish ? "SMTP Host" : "SMTP 主机", required: true },
-    { name: "smtp_port", displayName: isEnglish ? "SMTP Port" : "SMTP 端口", required: false },
-    { name: "imap_host", displayName: isEnglish ? "IMAP Host" : "IMAP 主机", required: true },
-    { name: "imap_port", displayName: isEnglish ? "IMAP Port" : "IMAP 端口", required: false },
-    { name: "username", displayName: isEnglish ? "Email Account" : "邮箱账号", required: true },
-    { name: "password", displayName: isEnglish ? "Password/App Password" : "邮箱密码/授权码", required: true },
-    { name: "from_email", displayName: isEnglish ? "From Address" : "发件地址", required: false },
+    {
+      name: "smtp_host",
+      displayName: tConnectorField(locale, "smtpHost"),
+      required: true,
+    },
+    {
+      name: "smtp_port",
+      displayName: tConnectorField(locale, "smtpPort"),
+      required: false,
+    },
+    {
+      name: "imap_host",
+      displayName: tConnectorField(locale, "imapHost"),
+      required: true,
+    },
+    {
+      name: "imap_port",
+      displayName: tConnectorField(locale, "imapPort"),
+      required: false,
+    },
+    {
+      name: "username",
+      displayName: tConnectorField(locale, "emailAccount"),
+      required: true,
+    },
+    {
+      name: "password",
+      displayName: tConnectorField(locale, "passwordOrAppPassword"),
+      required: true,
+    },
+    {
+      name: "from_email",
+      displayName: tConnectorField(locale, "fromAddress"),
+      required: false,
+    },
   ];
 }
 
@@ -520,9 +522,7 @@ function createConnectorToolContext(agentContext = {}) {
   const historyStore = runtime?.sharedTools?.connectorHistoryStore || null;
   const connectorEventListener = runtime?.sharedTools?.connectorEventListener || null;
   const maxAccessOutputChars = Number(
-    effectiveConfig?.tools?.access_connector?.max_output_chars ??
-      effectiveConfig?.tools?.access_connector?.maxOutputChars ??
-      8000,
+    effectiveConfig?.tools?.access_connector?.maxOutputChars ?? 8000,
   );
   return {
     runtime,
@@ -667,29 +667,29 @@ function buildAccessConnectorTool(context = {}) {
   };
   return {
     name: "access_connector",
-    description: tTool(runtime, "tools.access_connector.description"),
+    description: tToolDescription(runtime, "access_connector"),
     schemaShape: {
       connector_name: {
-        description: tTool(runtime, "tools.access_connector.fieldConnectorName"),
+        description: tToolParamDescription(runtime, "access_connector", "connector_name"),
       },
       connector_type: {
-        description: tTool(runtime, "tools.access_connector.fieldConnectorType"),
+        description: tToolParamDescription(runtime, "access_connector", "connector_type"),
       },
       command: {
-        description: tTool(runtime, "tools.access_connector.fieldCommand"),
+        description: tToolParamDescription(runtime, "access_connector", "command"),
       },
     },
     async func({ connector_name, connector_type, command }) {
       if (!store || typeof store.executeConnectorCommand !== "function") {
         return toToolJsonResult("access_connector", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
+          error: tTool(runtime, "connectors.storeMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("access_connector", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
+          error: tTool(runtime, "connectors.rootSessionMissing"),
         });
       }
       const connectorType = normalizeConnectorType(connector_type);
@@ -860,6 +860,5 @@ export {
   resolveRememberedConnectorInfo,
   buildAccessConnectorTool,
   upsertRuntimeSelectedConnector,
-  resolveRuntimeLocale,
   tConnector,
 };

@@ -1512,7 +1512,7 @@ wsServer.on("connection", (ws, request) => {
       currentLocale = normalizeLocale(config?.locale || currentLocale);
 
       if (!userId || !sessionId || !message) {
-        throw new Error(bt("ws.userSessionMessageRequired", currentLocale));
+        throw new Error(bt("common.userSessionMessageRequired", currentLocale));
       }
       if (isForbiddenUserScope(authInfo, userId)) {
         throw new Error(bt("auth.forbiddenUserScope", currentLocale));
