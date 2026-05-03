@@ -52,8 +52,6 @@ const SNAKE_TO_CANONICAL_KEY_MAP = {
   user_id: "userId",
   connect_code: "connectCode",
   default_provider: "defaultProvider",
-  default_model: "defaultModel",
-  attachment_models: "attachmentModels",
   max_file_size_bytes: "maxFileSizeBytes",
   max_total_size_bytes: "maxTotalSizeBytes",
   max_file_count: "maxFileCount",
@@ -155,22 +153,18 @@ export function resolveConfigTemplates(input, variables = {}) {
 // 用户可覆盖策略（只允许这些键被 user config 覆盖）
 // - replace：整项替换（当前仅支持字符串值）
 // - deep：对象深度合并（用户配置覆盖同名子键，未提供的子键保留全局默认）
-// - 模型相关：defaultProvider/defaultModel/providers/attachments.attachmentModels（兼容旧的顶层 attachmentModels）
+// - 模型相关：defaultProvider/providers/attachments.attachmentModels
 // - 附件相关：attachments（上传大小、数量、类型白名单）
 // - 服务相关：services
 // - MCP相关：mcpServers
 // - 工具相关：tools（含 database_connect_connector/terminal_connect_connector 的 connectors 配置）
-// - 连接器相关：connectors（兼容旧结构）
 // - 偏好相关：preferences
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
-  defaultModel: "replace",
   providers: "deep",
-  attachmentModels: "deep",
   attachments: "deep",
   services: "deep",
   mcpServers: "deep",
-  connectors: "deep",
   tools: "deep",
   preferences: "deep",
 };

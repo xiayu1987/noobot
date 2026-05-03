@@ -198,6 +198,5 @@ Recommended format:
 | Item | Recommendation |
 |---|---|
 | Key naming | Use snake_case (latest example format) |
-| Legacy keys | Migrate camelCase gradually |
+| Legacy keys | Not supported. Use snake_case keys only. |
 | After changes | Restart with `./start.sh` |
-

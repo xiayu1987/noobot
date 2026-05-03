@@ -38,9 +38,7 @@ function pickAlias({ globalConfig, userConfig, skillConfig }) {
     skillConfig?.provider ||
     skillConfig?.model ||
     userConfig?.defaultProvider ||
-    userConfig?.defaultModel ||
     globalConfig?.defaultProvider ||
-    globalConfig?.defaultModel ||
     ""
   );
 }
@@ -57,7 +55,7 @@ function firstEnabledAlias(globalConfig = {}, userConfig = {}) {
   return keys.length ? keys[0] : "";
 }
 
-function normalizeLegacySpec(input, fallback = {}) {
+function normalizeModelSpecInput(input, fallback = {}) {
   if (!input) return { ...fallback };
   if (typeof input === "string") return { ...fallback, model: input };
   if (typeof input === "object") return { ...fallback, ...input };
@@ -75,13 +73,7 @@ export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
     userConfig,
   );
   if (fromFallbackAlias) return fromFallbackAlias;
-
-  return normalizeLegacySpec(userConfig?.defaultModel, {
-    alias: "legacy",
-    format: userConfig?.llm?.provider || "openai_compatible",
-    model: userConfig?.defaultModel || globalConfig?.defaultModel,
-    temperature: 0,
-  });
+  return null;
 }
 
 export function resolveModelSpecByAlias({
@@ -138,8 +130,8 @@ export function resolveSkillModelSpec({
   const fromAlias = byAliasWithUser(alias, globalConfig, userConfig);
   if (fromAlias) return fromAlias;
 
-  const base = resolveDefaultModelSpec({ globalConfig, userConfig });
-  return normalizeLegacySpec(skillConfig?.model, {
+  const base = resolveDefaultModelSpec({ globalConfig, userConfig }) || {};
+  return normalizeModelSpecInput(skillConfig?.model, {
     ...base,
     format: skillConfig?.provider || base.format,
   });
@@ -198,11 +190,7 @@ function createChatModelFromSpec(modelSpec, options = {}) {
     temperature: Number(modelSpec.temperature ?? 0),
     streaming: Boolean(options?.streaming),
     maxTokens:
-      modelSpec.max_tokens !== undefined
-        ? Number(modelSpec.max_tokens)
-        : modelSpec.maxTokens !== undefined
-          ? Number(modelSpec.maxTokens)
-          : undefined,
+      modelSpec.max_tokens !== undefined ? Number(modelSpec.max_tokens) : undefined,
     apiKey,
     ...(modelSpec.base_url
       ? { configuration: { baseURL: modelSpec.base_url } }

@@ -420,11 +420,7 @@ async function summarizeByModel({
   );
   const imageAlias =
     userConfig?.attachments?.attachmentModels?.image ||
-    userConfig?.attachments?.models?.image ||
-    userConfig?.attachmentModels?.image ||
     globalConfig?.attachments?.attachmentModels?.image ||
-    globalConfig?.attachments?.models?.image ||
-    globalConfig?.attachmentModels?.image ||
     "";
   const modelSpec =
     imagePaths.length > 0
