@@ -290,18 +290,8 @@ function collectConnectorMapsByType({
       ? effectiveConfig?.tools?.[connectorToolConfigKey]?.connectors
       : {},
   );
-  const globalConnectorMap = pickObject(effectiveConfig?.connectors);
-  const typedConnectorMap = pickObject(globalConnectorMap?.[normalizedType]);
-  const typedPluralConnectorMap = pickObject(
-    globalConnectorMap?.[`${normalizedType}s`],
-  );
-  const byNameConnectorMap = pickObject(globalConnectorMap?.by_name);
   return [
     { connectorMap: scopedConnectorMap, allowFallback: true },
-    { connectorMap: globalConnectorMap, allowFallback: false },
-    { connectorMap: typedConnectorMap, allowFallback: true },
-    { connectorMap: typedPluralConnectorMap, allowFallback: true },
-    { connectorMap: byNameConnectorMap, allowFallback: true },
   ];
 }
 
