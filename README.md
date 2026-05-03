@@ -57,7 +57,7 @@ Optional system deps:
 
 - Main config doc: [`CONFIGURATION.md`](./CONFIGURATION.md)
 - Contributing guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-- Backend doc: [`service/README.md`](./service/README.md)
+- Backend docs: [English](./service/README.md) | [中文](./service/README.zh-CN.md)
 
 Environment variables for `start.sh`:
 
