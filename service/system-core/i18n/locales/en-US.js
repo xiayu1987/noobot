@@ -10,7 +10,10 @@ export { TOOL_SCHEMA_BY_TOOL };
 
 export default {
   ...TOOL_SCHEMA_FLAT_GENERATED,
-  "agent.fetchGeneratedMediaFailed": "fetch generated media failed",
+  "agent.fetchGeneratedMediaFailed": (params = {}) =>
+    `fetch generated media failed: HTTP ${Number(params.status || 500)}`,
+  "agent.toolLoopLimitReached": (params = {}) =>
+    `Tool call turns reached the limit (${Number(params.maxTurns || 0)}), auto-stopped.`,
   "attach.countExceedsLimit": "attachments count exceeds limit",
   "attach.extensionNotAllowed": "attachment extension not allowed",
   "attach.fileTooLarge": "attachment too large",
@@ -36,6 +39,7 @@ export default {
   "common.downloadWorkspaceFileFailed": "download workspace file failed",
   "common.fieldRequired": "required",
   "common.fileNameIncludedRequired": "must include file name",
+  "common.fileNotFound": "file not found",
   "common.getConnectorsFailed": "get connectors failed",
   "common.inputOutputDirRequired": "input/outputDir required",
   "common.invalidUrl": "invalid url",
@@ -64,6 +68,7 @@ export default {
   "common.saveUsersFailed": "save users failed",
   "common.saveWorkspaceFileFailed": "save workspace file failed",
   "common.sessionContextMissing": "session context missing",
+  "common.sessionIdRequired": "sessionId required",
   "common.sessionIdRequiredForCrypto": "sessionId required for session crypto",
   "common.superAdminRequiredForSystemParams": "super admin required for system params",
   "common.syncAllWorkspaceFailed": "sync all workspace failed",
@@ -93,6 +98,7 @@ export default {
   "services.handlerRequired": "service handler required",
   "session.parentSessionNotFoundPossiblyDeleted": "parent session not found (possibly deleted)",
   "session.workspaceNotInitialized": "workspace not initialized",
+  "status.disconnectedFromHistory": "disconnected from history",
   "web2img.readabilityNotInstalledWarn": "@mozilla/readability/jsdom not installed; fallback to DOM extraction. Run: npm i @mozilla/readability jsdom",
   "web2img.resultIndex": "Result index",
   "web2img.sharpNotInstalledRawWarn": "sharp not installed, cannot post-process images; raw screenshot will be returned. Run: npm i sharp",

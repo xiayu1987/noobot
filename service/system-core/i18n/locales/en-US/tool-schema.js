@@ -66,9 +66,16 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "connectors.access.selectedOnly": (params = {}) =>
     `Current context only allows selected connector: ${String(params.connectorName || "").trim()}`,
       "connectors.access.statusInspectorUnavailable": "connector runtime status inspector unavailable",
+      "connectors.access.fillDatabaseConnectionInfo": (params = {}) =>
+    `Please provide database connection info (type: ${String(params.databaseType || "").trim() || "unknown"})`,
+      "connectors.access.fillTerminalConnectionInfo": (params = {}) =>
+    `Please provide terminal connection info (type: ${String(params.terminalType || "").trim() || "unknown"})`,
+      "connectors.access.fillEmailConnectionInfo": "Please provide email connection info",
+      "connectors.access.connectorNameLabel": "Connector name",
+      "connectors.access.missingConnectionInfoNoInteraction": "Missing connection info and user interaction is disabled",
+      "connectors.access.noConnectorsFound": "No connectors found",
+      "connectors.access.userCancelledAction": "User cancelled connection info input",
       "connectors.commandRequired": "command required",
-      "common.fileNotFound": "file not found",
-      "common.sessionIdRequired": "sessionId required",
       "connectors.connectorNameRequired": "connectorName required",
       "connectors.connectorNotConnectedInSession": "connector not connected in current session",
       "connectors.connectorTypeInvalid": "connectorType must be database|terminal|email",
@@ -107,7 +114,6 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "connectors.statusOk": "ok",
       "connectors.statusInvalidConnectorIdentity": "invalid connector identity",
       "connectors.statusUnavailable": "status unavailable",
-      "status.disconnectedFromHistory": "disconnected from history",
       "connectors.storeMissing": "connector channel store missing",
       "tools.access_connector.errorConnectorTypeRequired": "connector_type(database|terminal|email) required"
     }
