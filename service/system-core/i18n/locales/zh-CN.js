@@ -10,7 +10,10 @@ export { TOOL_SCHEMA_BY_TOOL };
 
 export default {
   ...TOOL_SCHEMA_FLAT_GENERATED,
-  "agent.fetchGeneratedMediaFailed": "拉取生成媒体失败",
+  "agent.fetchGeneratedMediaFailed": (params = {}) =>
+    `拉取生成媒体失败: HTTP ${Number(params.status || 500)}`,
+  "agent.toolLoopLimitReached": (params = {}) =>
+    `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,
   "attach.countExceedsLimit": "附件数量超出限制",
   "attach.extensionNotAllowed": "附件扩展名不允许",
   "attach.fileTooLarge": "附件文件过大",
@@ -36,6 +39,7 @@ export default {
   "common.downloadWorkspaceFileFailed": "下载工作区文件失败",
   "common.fieldRequired": "必填",
   "common.fileNameIncludedRequired": "必须包含文件名",
+  "common.fileNotFound": "文件不存在",
   "common.getConnectorsFailed": "获取连接器失败",
   "common.inputOutputDirRequired": "input 与 outputDir 必填",
   "common.invalidUrl": "无效 URL",
@@ -64,6 +68,7 @@ export default {
   "common.saveUsersFailed": "保存用户失败",
   "common.saveWorkspaceFileFailed": "保存工作区文件失败",
   "common.sessionContextMissing": "会话上下文缺失",
+  "common.sessionIdRequired": "sessionId 必填",
   "common.sessionIdRequiredForCrypto": "会话加密需要 sessionId",
   "common.superAdminRequiredForSystemParams": "系统参数需要超级管理员权限",
   "common.syncAllWorkspaceFailed": "同步全部工作区失败",
@@ -93,6 +98,7 @@ export default {
   "services.handlerRequired": "service handler 必填",
   "session.parentSessionNotFoundPossiblyDeleted": "未找到父会话（可能已删除）",
   "session.workspaceNotInitialized": "工作区未初始化",
+  "status.disconnectedFromHistory": "已断开历史连接",
   "web2img.readabilityNotInstalledWarn": "@mozilla/readability/jsdom 未安装，自动回退到 DOM 提取。可执行: npm i @mozilla/readability jsdom",
   "web2img.resultIndex": "结果索引",
   "web2img.sharpNotInstalledRawWarn": "sharp 未安装，无法做图片缩放/切分/转码，将返回原始截图。请执行: npm i sharp",

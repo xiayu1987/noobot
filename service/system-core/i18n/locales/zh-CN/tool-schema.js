@@ -66,9 +66,16 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "connectors.access.selectedOnly": (params = {}) =>
     `当前上下文仅允许使用已勾选连接器：${String(params.connectorName || "").trim()}`,
       "connectors.access.statusInspectorUnavailable": "连接器运行状态检查器不可用",
+      "connectors.access.fillDatabaseConnectionInfo": (params = {}) =>
+    `请补全数据库连接信息（类型：${String(params.databaseType || "").trim() || "unknown"}）`,
+      "connectors.access.fillTerminalConnectionInfo": (params = {}) =>
+    `请补全终端连接信息（类型：${String(params.terminalType || "").trim() || "unknown"}）`,
+      "connectors.access.fillEmailConnectionInfo": "请补全邮件连接信息",
+      "connectors.access.connectorNameLabel": "连接器名称",
+      "connectors.access.missingConnectionInfoNoInteraction": "缺少连接信息，且当前不允许用户交互补全",
+      "connectors.access.noConnectorsFound": "未找到可用连接器",
+      "connectors.access.userCancelledAction": "用户取消了连接信息填写",
       "connectors.commandRequired": "command 必填",
-      "common.fileNotFound": "文件不存在",
-      "common.sessionIdRequired": "sessionId 必填",
       "connectors.connectorNameRequired": "connectorName 必填",
       "connectors.connectorNotConnectedInSession": "当前会话连接器未连接",
       "connectors.connectorTypeInvalid": "connectorType 必须是 database|terminal|email",
@@ -107,7 +114,6 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "connectors.statusOk": "ok",
       "connectors.statusInvalidConnectorIdentity": "无效连接器标识",
       "connectors.statusUnavailable": "状态不可用",
-      "status.disconnectedFromHistory": "已断开历史连接",
       "connectors.storeMissing": "连接器通道存储不可用",
       "tools.access_connector.errorConnectorTypeRequired": "connector_type 必填，且只能是 database|terminal|email"
     }

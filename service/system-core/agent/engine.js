@@ -27,20 +27,16 @@ import {
   resolveTurnTasksStore,
 } from "../context/current-turn-store.js";
 import { pickLocaleText, resolveLocaleFromRuntime } from "../i18n/index.js";
+import { BACKEND_I18N } from "../i18n/backend-messages.js";
 
 function tEngine(runtime = {}, key = "", params = {}) {
   const locale = resolveLocaleFromRuntime(runtime);
-  const dict = {
-    toolLoopLimitReached: {
-      "zh-CN": `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,
-      "en-US": `Tool call turns reached the limit (${Number(params.maxTurns || 0)}), auto-stopped.`,
-    },
-    fetchGeneratedMediaFailed: {
-      "zh-CN": `拉取生成媒体失败: HTTP ${Number(params.status || 500)}`,
-      "en-US": `fetch generated media failed: HTTP ${Number(params.status || 500)}`,
-    },
+  const keyMap = {
+    toolLoopLimitReached: "agent.toolLoopLimitReached",
+    fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
   };
-  return pickLocaleText({ locale, dict, key, params });
+  const mappedKey = String(keyMap[String(key || "").trim()] || key || "").trim();
+  return pickLocaleText({ locale, dict: BACKEND_I18N, key: mappedKey, params });
 }
 
 function normalizeAiTextContent(aiContent) {

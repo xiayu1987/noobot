@@ -11,7 +11,7 @@ import {
   tToolParamDescription,
 } from "../tool-schema-i18n.js";
 import { cleanConnectorOutputForLLM } from "../../utils/text-cleaner.js";
-import { pickToolText, tTool } from "../tool-i18n.js";
+import { pickToolText, resolveToolLocale, tTool } from "../tool-i18n.js";
 
 function tConnector(runtime = {}, key = "", params = {}) {
   const normalizedKey = String(key || "").trim();
@@ -26,6 +26,10 @@ function tConnectorField(locale = "zh-CN", key = "", params = {}) {
     key: `connectors.fields.${String(key || "").trim()}`,
     params,
   });
+}
+
+function resolveRuntimeLocale(runtime = {}) {
+  return resolveToolLocale(runtime, "zh-CN");
 }
 
 function pickObject(value) {
@@ -860,5 +864,6 @@ export {
   resolveRememberedConnectorInfo,
   buildAccessConnectorTool,
   upsertRuntimeSelectedConnector,
+  resolveRuntimeLocale,
   tConnector,
 };
