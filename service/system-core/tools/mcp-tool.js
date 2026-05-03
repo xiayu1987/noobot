@@ -61,7 +61,7 @@ export function createMcpTool({ agentContext }) {
         return jsonError({ error: tTool(runtime, "tools.mcp.errorMcpNameRequired") });
       }
       if (!normalizedTask) {
-        return jsonError({ error: tTool(runtime, "tools.mcp.errorTaskRequired") });
+        return jsonError({ error: tTool(runtime, "common.taskRequired") });
       }
 
       const globalConfig = runtime?.globalConfig || {};
@@ -95,7 +95,7 @@ export function createMcpTool({ agentContext }) {
         if (!botManager || !userId || !sessionId) {
           return jsonError({
             mcpName: normalizedMcpName,
-            error: tTool(runtime, "tools.mcp.errorRuntimeMissing"),
+            error: tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
           });
         }
         const mcpToolset = await createMcpAgentTools({
@@ -114,12 +114,12 @@ export function createMcpTool({ agentContext }) {
             mcpName: normalizedMcpName,
             status: "completed",
             tools: [],
-            answer: tTool(runtime, "tools.mcp.noToolsAvailable"),
+            answer: tTool(runtime, "mcp.noToolsAvailable"),
           });
         }
         const subSessionId = randomUUID();
         const subTaskMessage = [
-          `${tTool(runtime, "tools.mcp.taskPrefix")}: ${normalizedTask}`,
+          `${tTool(runtime, "bot.taskPrefix")}: ${normalizedTask}`,
         ].join("\n");
         const subResult = await botManager.runSession({
           userId,

@@ -25,7 +25,7 @@ import {
 import { browserLikeFetch } from "../utils/web-fetch.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_TEXT_CHARS = 12000;
@@ -38,50 +38,14 @@ function getRuntime(agentContext) {
 }
 
 function tWeb(runtime = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    truncated: {
-      "zh-CN": "[文本过长，已截断]",
-      "en-US": "[Text too long, truncated]",
-    },
-    blockedOrUnavailable: {
-      "zh-CN": `访问被拦截或服务不可用(status=${Number(params.status || 0)})`,
-      "en-US": `Access blocked or service unavailable (status=${Number(params.status || 0)})`,
-    },
-    summarizePrompt: {
-      "zh-CN": "请基于截图与文本提取网页核心信息：主题、关键事实、数据点、结论、代码片段（若有），并按清晰结构输出。",
-      "en-US": "Based on screenshots and text, extract core webpage information: topic, key facts, data points, conclusions, and code snippets (if any), then output clearly.",
-    },
-    screenshotBatch: {
-      "zh-CN": `这是第 ${Number(params.batchIndex || 1)} 批网页截图。\n\n网页文本参考：\n${String(params.sharedText || "")}`,
-      "en-US": `This is batch ${Number(params.batchIndex || 1)} of webpage screenshots.\n\nWeb text reference:\n${String(params.sharedText || "")}`,
-    },
-    textReference: {
-      "zh-CN": `网页文本参考：\n${String(params.sharedText || "")}`,
-      "en-US": `Web text reference:\n${String(params.sharedText || "")}`,
-    },
-    runtimeBasePathMissing: {
-      "zh-CN": "运行时缺少 basePath",
-      "en-US": "runtime basePath missing",
-    },
-    noProcessableUrl: {
-      "zh-CN": "未找到可处理的 URL",
-      "en-US": "No processable URL found",
-    },
-    noSuccessfulResult: {
-      "zh-CN": "web_to_data 没有成功结果",
-      "en-US": "web_to_data no successful result",
-    },
-    fetchFailedWithErrors: {
-      "zh-CN": `网页提取失败：${String(params.errors || "").trim()}`,
-      "en-US": `Web extraction failed: ${String(params.errors || "").trim()}`,
-    },
-    fetchFailedNoResult: {
-      "zh-CN": "网页提取失败：没有可用结果",
-      "en-US": "Web extraction failed: no usable result",
-    },
+  const normalizedKey = String(key || "").trim();
+  const commonKeyMap = {
+    runtimeBasePathMissing: "common.runtimeBasePathMissing",
+    noProcessableUrl: "common.noProcessableUrl",
   };
-  return pickToolText({ locale, dict, key, params });
+  const i18nKey =
+    commonKeyMap[normalizedKey] || `tools.web2data.${normalizedKey}`;
+  return tTool(runtime, i18nKey, params);
 }
 
 function normalizeText(value = "") {

@@ -7,6 +7,10 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "../tool-json-result.js";
 import {
+  tToolDescription,
+  tToolParamDescription,
+} from "../tool-schema-i18n.js";
+import {
   addRuntimeConnectorChannel,
   alignFieldsWithConnectionInfo,
   attachDefaultValuesToFields,
@@ -44,35 +48,39 @@ export function createEmailConnectorTools(context = {}) {
 
   const emailConnectConnectorTool = new DynamicStructuredTool({
     name: "email_connect_connector",
-    description: tTool(runtime, "tools.email_connector.description"),
+    description: tToolDescription(runtime, "email_connect_connector"),
     schema: z.object({
       connector_name: z
         .string()
-        .describe(tTool(runtime, "tools.email_connector.fieldConnectorName")),
+        .describe(
+          tToolParamDescription(runtime, "email_connect_connector", "connector_name"),
+        ),
       default_values: z
         .union([z.string(), z.object({}).passthrough()])
         .optional()
-        .describe(tTool(runtime, "tools.email_connector.fieldDefaultValues")),
+        .describe(
+          tToolParamDescription(runtime, "email_connect_connector", "default_values"),
+        ),
     }),
     func: async ({ connector_name, default_values }) => {
       const runtimeLocale = resolveRuntimeLocale(runtime);
       if (!store || typeof store.connectConnector !== "function") {
         return toToolJsonResult("email_connect_connector", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
+          error: tTool(runtime, "connectors.storeMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("email_connect_connector", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
+          error: tTool(runtime, "connectors.rootSessionMissing"),
         });
       }
       const connectorName = String(connector_name || "").trim();
       if (!connectorName) {
         return toToolJsonResult("email_connect_connector", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorConnectorNameRequired"),
+          error: tTool(runtime, "connectors.connectorNameRequired"),
         });
       }
       const existingConnected = findConnectedConnector({

@@ -17,7 +17,7 @@ function normalizeHistoryConnectorItems(items = []) {
     status_code: Number(connectorItem?.status_code ?? 410),
     status_message:
       String(connectorItem?.status_message || "").trim() ||
-      tSystem("connectors.historyDisconnected"),
+      tSystem("status.disconnectedFromHistory"),
     checked_at:
       String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
     last_connected_at: String(connectorItem?.last_connected_at || "").trim(),

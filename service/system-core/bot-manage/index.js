@@ -96,7 +96,7 @@ export class BotManager {
     parentSessionId = "",
   }) {
     if (!userId || !sessionId) {
-      throw recoverableToolError(tSystem("bot.inputUserIdSessionIdRequired"), {
+      throw recoverableToolError(tSystem("common.userSessionRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
@@ -586,7 +586,7 @@ export class BotManager {
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     try {
       if (!message) {
-        throw recoverableToolError(tSystem("bot.inputUserIdSessionIdMessageRequired"), {
+        throw recoverableToolError(tSystem("common.userSessionMessageRequired"), {
           code: "RECOVERABLE_INPUT_MISSING",
         });
       }
@@ -838,7 +838,7 @@ export class BotManager {
     eventListener = null,
   }) {
     if (!sessionId) {
-      throw recoverableToolError(tSystem("bot.sessionIdRequired"), {
+      throw recoverableToolError(tSystem("common.sessionIdRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
@@ -861,7 +861,7 @@ export class BotManager {
     eventListener = null,
   }) {
     if (!sessionId) {
-      throw recoverableToolError(tSystem("bot.sessionIdRequired"), {
+      throw recoverableToolError(tSystem("common.sessionIdRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
@@ -893,7 +893,7 @@ export class BotManager {
     parentAsyncResultContainer = null,
   }) {
     if (!userId || !parentSessionId) {
-      throw recoverableToolError(tSystem("bot.inputUserIdParentSessionIdRequired"), {
+      throw recoverableToolError(tSystem("common.userParentSessionRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
@@ -1058,7 +1058,7 @@ export class BotManager {
     }) {
     try {
       if (!userId || !parentSessionId || !sessionId) {
-        throw recoverableToolError(tSystem("bot.inputUserIdParentSessionIdSessionIdRequired"), {
+        throw recoverableToolError(tSystem("common.userParentSessionSessionRequired"), {
           code: "RECOVERABLE_INPUT_MISSING",
         });
       }

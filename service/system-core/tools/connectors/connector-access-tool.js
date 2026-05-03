@@ -49,8 +49,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const allowUserInteraction =
     systemRuntime?.config?.allowUserInteraction !== false;
   const maxToolLoopTurns = Number(
-    effectiveConfig?.tools?.process_connector_tool?.max_tool_loop_turns ??
-      effectiveConfig?.tools?.process_connector_tool?.maxToolLoopTurns ??
+    effectiveConfig?.tools?.process_connector_tool?.maxToolLoopTurns ??
       6,
   );
 
@@ -68,12 +67,12 @@ export function createConnectorAccessTool({ agentContext }) {
       const normalizedTask = String(task || "").trim();
       if (!normalizedTask) {
         return jsonError({
-          error: tTool(runtime, "tools.process_connector.errorTaskRequired"),
+          error: tTool(runtime, "common.taskRequired"),
         });
       }
       if (!botManager || !userId || !sessionId) {
         return jsonError({
-          error: tTool(runtime, "tools.process_connector.errorRuntimeMissing"),
+          error: tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
         });
       }
       const subTools = [

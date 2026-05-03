@@ -25,58 +25,14 @@ import {
   assertValidParentSessionId,
 } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
 
-function tAgentCollab(runtime = {}, key = "") {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    noResult: { "zh-CN": "(无结果)", "en-US": "(no result)" },
-    runtimeMissingBotManagerUserId: {
-      "zh-CN": "运行时缺少 bot manager/user id",
-      "en-US": "runtime missing bot manager/user id",
-    },
-    taskNameTaskContentRequired: {
-      "zh-CN": "taskName 与 taskContent 必填",
-      "en-US": "taskName/taskContent required",
-    },
-    parentSessionIdRequired: {
-      "zh-CN": "parentSessionId 必填",
-      "en-US": "parentSessionId required",
-    },
-    taskRequired: {
-      "zh-CN": "task 必填",
-      "en-US": "task required",
-    },
-    runtimeSessionIdMissing: {
-      "zh-CN": "运行时缺少 sessionId",
-      "en-US": "runtime sessionId missing",
-    },
-    runtimeDialogProcessIdMissing: {
-      "zh-CN": "运行时缺少 dialogProcessId",
-      "en-US": "runtime dialogProcessId missing",
-    },
-    tasksRequired: {
-      "zh-CN": "tasks 必填",
-      "en-US": "tasks required",
-    },
-    childAsyncResultContainersRequired: {
-      "zh-CN": "childAsyncResultContainers 必填",
-      "en-US": "childAsyncResultContainers required",
-    },
-    sessionContextHint: {
-      "zh-CN": "delegate_task_async 需要当前会话上下文",
-      "en-US": "delegate_task_async requires current session context",
-    },
-    dialogContextHint: {
-      "zh-CN": "delegate_task_async 需要当前对话流程上下文",
-      "en-US": "delegate_task_async requires current dialog process context",
-    },
-  };
-  return pickToolText({ locale, dict, key });
+function tAgentCollab(runtime = {}, key = "", params = {}) {
+  return tTool(runtime, `tools.agent_collab.${String(key || "").trim()}`, params);
 }
 
 function isPlainObject(value) {
@@ -881,7 +837,7 @@ export function createAgentCollabTool({ agentContext }) {
       if (!taskText)
         return toToolJsonResult("plan_multi_task_collaboration", {
           ok: false,
-          error: tAgentCollab(runtime, "taskRequired"),
+          error: tTool(runtime, "common.taskRequired"),
         });
 
       const runtimeModel = String(runtime?.runtimeModel || "").trim();

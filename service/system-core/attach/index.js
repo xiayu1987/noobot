@@ -155,7 +155,7 @@ export class AttachmentService {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
-      throw fatalSystemError(tSystem("attach.workspaceRootUserIdRequired"), {
+      throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
         code: "FATAL_WORKSPACE_PATH_INVALID",
       });
     }

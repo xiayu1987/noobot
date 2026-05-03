@@ -6,33 +6,22 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
 
 function tModel(runtime = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    sessionContextMissing: {
-      "zh-CN": "会话上下文缺失",
-      "en-US": "session context missing",
-    },
-    modelNameRequired: {
-      "zh-CN": "modelName 必填",
-      "en-US": "modelName required",
-    },
-    modelNotFound: {
-      "zh-CN": `未找到可用模型或 provider: ${String(params.input || "").trim()}`,
-      "en-US": `enabled provider/model not found: ${String(params.input || "").trim()}`,
-    },
-    notConversationModel: {
-      "zh-CN": `该模型不支持会话切换: ${String(params.alias || "").trim()}`,
-      "en-US": `model is not available for conversation switch: ${String(params.alias || "").trim()}`,
-    },
+  const keyMap = {
+    sessionContextMissing: "common.sessionContextMissing",
+    modelNameRequired: "model.nameRequired",
+    notConversationModel: "model.notConversationModel",
   };
-  return pickToolText({ locale, dict, key, params });
+  if (String(key || "").trim() === "modelNotFound") {
+    return `${tTool(runtime, "model.enabledProviderModelNotFound")}: ${String(params.input || "").trim()}`;
+  }
+  return tTool(runtime, keyMap[String(key || "").trim()] || "", params);
 }
 
 function isConversationModel(providerSpec = {}) {

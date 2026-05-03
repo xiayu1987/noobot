@@ -236,7 +236,7 @@ class ConnectorHistoryStore {
         connector_type: normalizedConnectorType,
         status: "disconnected",
         status_code: 410,
-        status_message: tSystem("connectors.historyDisconnected"),
+        status_message: tSystem("status.disconnectedFromHistory"),
         checked_at: nowIso,
         last_connected_at: nowIso,
         connect_count: Number(existingItem?.connect_count || 0) + 1,

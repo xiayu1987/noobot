@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { safeJoin } from "../utils/fs-safe.js";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function getBasePath(agentContext) {
   return (
@@ -22,17 +22,6 @@ function getBasePath(agentContext) {
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
-}
-
-function tSkill(runtime = {}, key = "") {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    skillNameRequiredOnStart: {
-      "zh-CN": "action=start 时必须提供 skillName",
-      "en-US": "skillName is required when action=start",
-    },
-  };
-  return pickToolText({ locale, dict, key });
 }
 
 export function createSkillTool({ agentContext }) {
@@ -107,7 +96,7 @@ export function createSkillTool({ agentContext }) {
         if (!String(skillName || "").trim()) {
           return toToolJsonResult(
             "set_skill_task",
-            { ok: false, message: tSkill(runtime, "skillNameRequiredOnStart") },
+            { ok: false, message: tTool(runtime, "tools.skill.skillNameRequiredOnStart") },
           );
         }
         const createdTaskId = uuidv4();

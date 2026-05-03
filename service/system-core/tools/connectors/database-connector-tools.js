@@ -7,6 +7,10 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "../tool-json-result.js";
 import {
+  tToolDescription,
+  tToolParamDescription,
+} from "../tool-schema-i18n.js";
+import {
   addRuntimeConnectorChannel,
   alignFieldsWithConnectionInfo,
   attachDefaultValuesToFields,
@@ -45,31 +49,37 @@ export function createDatabaseConnectorTools(context = {}) {
 
   const databaseConnectConnectorTool = new DynamicStructuredTool({
     name: "database_connect_connector",
-    description: tTool(runtime, "tools.database_connector.description"),
+    description: tToolDescription(runtime, "database_connect_connector"),
     schema: z.object({
       connector_name: z
         .string()
-        .describe(tTool(runtime, "tools.database_connector.fieldConnectorName")),
+        .describe(
+          tToolParamDescription(runtime, "database_connect_connector", "connector_name"),
+        ),
       database_type: z
         .string()
-        .describe(tTool(runtime, "tools.database_connector.fieldDatabaseType")),
+        .describe(
+          tToolParamDescription(runtime, "database_connect_connector", "database_type"),
+        ),
       default_values: z
         .union([z.string(), z.object({}).passthrough()])
         .optional()
-        .describe(tTool(runtime, "tools.database_connector.fieldDefaultValues")),
+        .describe(
+          tToolParamDescription(runtime, "database_connect_connector", "default_values"),
+        ),
     }),
     func: async ({ connector_name, database_type, default_values }) => {
       const runtimeLocale = resolveRuntimeLocale(runtime);
       if (!store || typeof store.connectConnector !== "function") {
         return toToolJsonResult("database_connect_connector", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
+          error: tTool(runtime, "connectors.storeMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("database_connect_connector", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
+          error: tTool(runtime, "connectors.rootSessionMissing"),
         });
       }
       const connectorName = String(connector_name || "").trim();
@@ -77,7 +87,7 @@ export function createDatabaseConnectorTools(context = {}) {
       if (!connectorName) {
         return toToolJsonResult("database_connect_connector", {
           ok: false,
-          error: tTool(runtime, "tools.connectors.errorConnectorNameRequired"),
+          error: tTool(runtime, "connectors.connectorNameRequired"),
         });
       }
       if (!databaseType) {

@@ -8,7 +8,7 @@ import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
 import { invokeServiceHandler } from "../services/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function getServices(agentContext) {
   const globalConfig = agentContext?.runtime?.globalConfig || {};
@@ -18,50 +18,7 @@ function getServices(agentContext) {
 }
 
 function tService(agentContext = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(agentContext);
-  const dict = {
-    serviceNameRequired: {
-      "zh-CN": "serviceName 必填",
-      "en-US": "serviceName required",
-    },
-    endpointNameRequired: {
-      "zh-CN": "endpointName 必填",
-      "en-US": "endpointName required",
-    },
-    queryStringMustBeObject: {
-      "zh-CN": "queryString 必须是对象",
-      "en-US": "queryString must be an object",
-    },
-    customParamMustBeString: {
-      "zh-CN": "custom_param 必须是字符串",
-      "en-US": "custom_param must be a string",
-    },
-    customParamMustNotBeEmpty: {
-      "zh-CN": "custom_param 不能为空",
-      "en-US": "custom_param must not be empty",
-    },
-    userIdMissing: {
-      "zh-CN": "上下文缺少 userId",
-      "en-US": "userId missing in context",
-    },
-    serviceNotFound: {
-      "zh-CN": `服务不存在: ${String(params.serviceName || "").trim()}`,
-      "en-US": `service not found: ${String(params.serviceName || "").trim()}`,
-    },
-    serviceDisabled: {
-      "zh-CN": `服务已禁用: ${String(params.serviceName || "").trim()}`,
-      "en-US": `service disabled: ${String(params.serviceName || "").trim()}`,
-    },
-    endpointNotFound: {
-      "zh-CN": `端点不存在: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
-      "en-US": `endpoint not found: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
-    },
-    endpointUrlMissing: {
-      "zh-CN": `端点 URL 缺失: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
-      "en-US": `endpoint url missing: ${String(params.serviceName || "").trim()}.${String(params.endpointName || "").trim()}`,
-    },
-  };
-  return pickToolText({ locale, dict, key, params });
+  return tTool(agentContext, `tools.service.${String(key || "").trim()}`, params);
 }
 
 function isServiceEnabled(serviceCfg) {
