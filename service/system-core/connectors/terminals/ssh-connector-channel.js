@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { tSystem } from "../../i18n/system-text.js";
 
 function resolveSshConnection(connectionInfo = {}) {
   const source =
@@ -67,7 +68,7 @@ async function ensureSshShellState({
   connectionInfo = {},
 } = {}) {
   const key = buildChannelKey({ channelKey, sessionId, connectorName });
-  if (!key) throw new Error("ssh channel key required");
+  if (!key) throw new Error(tSystem("connectors.ssh.channelKeyRequired"));
   const cached = sshShellStates.get(key);
   if (cached?.ready === true && cached?.stream && cached?.client) {
     return cached;
@@ -78,13 +79,13 @@ async function ensureSshShellState({
 
   const conn = resolveSshConnection(connectionInfo);
   if (!conn.host || !conn.username || !conn.password) {
-    throw new Error("ssh host/username/password required");
+    throw new Error(tSystem("connectors.ssh.hostUserPassRequired"));
   }
 
   const ssh2 = await importSsh2();
   const Client = ssh2?.Client;
   if (typeof Client !== "function") {
-    throw new Error("ssh2 not installed, run: npm i ssh2");
+    throw new Error(tSystem("connectors.ssh.ssh2NotInstalled"));
   }
 
   const state = {

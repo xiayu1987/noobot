@@ -8,9 +8,7 @@ import { executeMysqlCommand } from "./mysql-connector-channel.js";
 import { executeSqliteCommand } from "./sqlite-connector-channel.js";
 
 function normalizeDatabaseType(connectionInfo = {}) {
-  const dbType = String(
-    connectionInfo?.database_type || connectionInfo?.databaseType || "",
-  )
+  const dbType = String(connectionInfo?.database_type || "")
     .trim()
     .toLowerCase();
   if (["postgres", "postgresql", "pg"].includes(dbType)) return "postgres";

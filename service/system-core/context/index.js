@@ -30,6 +30,7 @@ import {
 } from "./runtime-environment-builder.js";
 import { composeSystemInfoSections } from "./system-prompt-formatter.js";
 import { mapToAgentContextSchema } from "./agent-context-mapper.js";
+import { tSystem } from "../i18n/system-text.js";
 
 export class ContextBuilder {
   constructor(input = {}) {
@@ -40,9 +41,7 @@ export class ContextBuilder {
       input.serviceContainer &&
       input.sessionContext;
     if (!hasContainerShape) {
-      throw new Error(
-        "ContextBuilder requires container input: { config, serviceContainer, sessionContext }",
-      );
+      throw new Error(tSystem("context.builderContainerInputRequired"));
     }
     const normalized = {
       ...(input?.config || {}),

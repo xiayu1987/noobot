@@ -12,29 +12,10 @@ import { createChatModelByName, resolveModelSpecByAlias } from "../model/index.j
 import { convertDocumentToImages } from "../utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
-}
-
-function tDoc(runtime = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    noImagesProduced: {
-      "zh-CN": "未生成可用图片",
-      "en-US": "no images produced",
-    },
-    extractPrompt: {
-      "zh-CN": "请提取图片中的全部可读文字，按原有结构输出，不要编造内容。",
-      "en-US": "Extract all readable text from the images, keep original structure, and do not fabricate content.",
-    },
-    batchPrompt: {
-      "zh-CN": `这是第 ${Number(params.batchIndex || 1)} 批图片，页码范围 ${String(params.range || "")}。请按页码顺序输出。`,
-      "en-US": `This is image batch ${Number(params.batchIndex || 1)}, page range ${String(params.range || "")}. Output in page order.`,
-    },
-  };
-  return pickToolText({ locale, dict, key, params });
 }
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
@@ -150,7 +131,7 @@ export function createDoc2DataTool({ agentContext }) {
           "doc_to_data",
           {
             ok: false,
-            message: tDoc(runtime, "noImagesProduced"),
+            message: tTool(runtime, "tools.doc2data.noImagesProduced"),
             input: converted.input,
           },
           true,
@@ -173,7 +154,7 @@ export function createDoc2DataTool({ agentContext }) {
         streaming: false,
       });
       const userPrompt =
-        prompt || tDoc(runtime, "extractPrompt");
+        prompt || tTool(runtime, "tools.doc2data.extractPrompt");
 
       const imageBatches = await buildImageBatches(images);
       const batchResults = [];
@@ -185,7 +166,7 @@ export function createDoc2DataTool({ agentContext }) {
           content: [
             {
               type: "text",
-              text: `${userPrompt}\n\n${tDoc(runtime, "batchPrompt", {
+              text: `${userPrompt}\n\n${tTool(runtime, "tools.doc2data.batchPrompt", {
                 batchIndex: batchIndex + 1,
                 range,
               })}`,

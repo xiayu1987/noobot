@@ -7,6 +7,7 @@ import { executeDatabaseCommand } from "./databases/index.js";
 import { executeTerminalCommand } from "./terminals/index.js";
 import { releaseTerminalChannel } from "./terminals/index.js";
 import { executeEmailCommand } from "./emails/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 function normalizeConnectorType(input = "") {
   const value = String(input || "").trim().toLowerCase();
@@ -67,7 +68,7 @@ class ConnectorChannelStore {
 
   _ensureSessionBucket(sessionId = "") {
     const sid = String(sessionId || "").trim();
-    if (!sid) throw new Error("sessionId required");
+    if (!sid) throw new Error(tSystem("connectors.sessionIdRequired"));
     if (!this.sessionBuckets.has(sid)) {
       this.sessionBuckets.set(sid, {
         databases: new Map(),
@@ -105,8 +106,10 @@ class ConnectorChannelStore {
   } = {}) {
     const normalizedName = String(connectorName || "").trim();
     const normalizedType = normalizeConnectorType(connectorType);
-    if (!normalizedName) throw new Error("connectorName required");
-    if (!normalizedType) throw new Error("connectorType must be database|terminal|email");
+    if (!normalizedName) throw new Error(tSystem("connectors.connectorNameRequired"));
+    if (!normalizedType) {
+      throw new Error(tSystem("connectors.connectorTypeInvalid"));
+    }
     const bucket = this._ensureSessionBucket(sessionId);
     const connectedAt = new Date().toISOString();
     const info =
@@ -119,22 +122,20 @@ class ConnectorChannelStore {
       connectionMeta:
         normalizedType === "database"
           ? {
-              databaseType: String(info?.database_type || info?.databaseType || ""),
+              databaseType: String(info?.database_type || ""),
             }
           : normalizedType === "terminal"
             ? {
-              terminalType: String(
-                info?.terminal_type || info?.terminalType || "",
-              ),
-              host: String(info?.host || info?.ip || ""),
+              terminalType: String(info?.terminal_type || ""),
+              host: String(info?.host || ""),
               port: Number(info?.port || 22),
               username: String(info?.username || ""),
             }
             : {
-              smtpHost: String(info?.smtp_host || info?.smtpHost || ""),
-              smtpPort: Number(info?.smtp_port || info?.smtpPort || 587),
-              imapHost: String(info?.imap_host || info?.imapHost || ""),
-              imapPort: Number(info?.imap_port || info?.imapPort || 993),
+              smtpHost: String(info?.smtp_host || ""),
+              smtpPort: Number(info?.smtp_port || 587),
+              imapHost: String(info?.imap_host || ""),
+              imapPort: Number(info?.imap_port || 993),
               username: String(info?.username || ""),
             },
     };
@@ -232,8 +233,10 @@ class ConnectorChannelStore {
   _getChannel({ sessionId = "", connectorName = "", connectorType = "" } = {}) {
     const normalizedName = String(connectorName || "").trim();
     const normalizedType = normalizeConnectorType(connectorType);
-    if (!normalizedName) throw new Error("connectorName required");
-    if (!normalizedType) throw new Error("connectorType must be database|terminal|email");
+    if (!normalizedName) throw new Error(tSystem("connectors.connectorNameRequired"));
+    if (!normalizedType) {
+      throw new Error(tSystem("connectors.connectorTypeInvalid"));
+    }
     const bucket = this._ensureSessionBucket(sessionId);
     const sourceMap =
       normalizedType === "database"
@@ -243,7 +246,7 @@ class ConnectorChannelStore {
           : bucket.emails;
     const channel = sourceMap.get(normalizedName);
     if (!channel) {
-      throw new Error(`connector not connected in current session: ${normalizedName}`);
+      throw new Error(`${tSystem("connectors.connectorNotConnectedInSession")}: ${normalizedName}`);
     }
     return channel;
   }
@@ -259,7 +262,7 @@ class ConnectorChannelStore {
     const channel = this._getChannel({ sessionId, connectorName, connectorType });
     const normalizedType = normalizeConnectorType(connectorType);
     const cmd = String(command || "").trim();
-    if (!cmd) throw new Error("command required");
+    if (!cmd) throw new Error(tSystem("connectors.commandRequired"));
     if (normalizedType === "terminal") {
       const execution = await executeTerminalCommand({
         command: cmd,
@@ -372,7 +375,7 @@ class ConnectorChannelStore {
         connection_meta: sanitizeConnectorMeta(connectorItem?.connectionMeta || {}),
         status: "unknown",
         status_code: 503,
-        status_message: "status unavailable",
+        status_message: tSystem("connectors.statusUnavailable"),
       };
       if (!connectorName) return baseStatus;
       const healthCommand = this._buildHealthCommand(connectorType);
@@ -465,7 +468,7 @@ class ConnectorChannelStore {
         connector_type: normalizedConnectorType,
         status: "unknown",
         status_code: 400,
-        status_message: "sessionId required",
+        status_message: tSystem("connectors.statusSessionIdRequired"),
       };
     }
     if (!normalizedConnectorName || !normalizedConnectorType) {
@@ -474,7 +477,7 @@ class ConnectorChannelStore {
         connector_type: normalizedConnectorType,
         status: "invalid",
         status_code: 400,
-        status_message: "invalid connector identity",
+        status_message: tSystem("connectors.statusInvalidConnectorIdentity"),
       };
     }
     const inspected = await this.inspectSessionConnectors({
@@ -502,7 +505,7 @@ class ConnectorChannelStore {
       connector_type: normalizedConnectorType,
       status: "unknown",
       status_code: 404,
-      status_message: "connector not found in inspected result",
+      status_message: tSystem("connectors.statusConnectorNotFoundInInspected"),
     };
   }
 }

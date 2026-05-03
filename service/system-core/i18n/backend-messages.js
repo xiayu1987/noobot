@@ -13,9 +13,15 @@ function toBilingualDict(zhMap = {}, enMap = {}) {
   ]);
   const output = {};
   for (const key of keys) {
+    const zhValue = zhMap?.[key];
+    const enValue = enMap?.[key];
     output[key] = {
-      "zh-CN": String(zhMap?.[key] || "").trim(),
-      "en-US": String(enMap?.[key] || zhMap?.[key] || "").trim(),
+      "zh-CN":
+        typeof zhValue === "function" ? zhValue : String(zhValue || "").trim(),
+      "en-US":
+        typeof enValue === "function"
+          ? enValue
+          : String(enValue ?? zhValue ?? "").trim(),
     };
   }
   return output;

@@ -9,6 +9,7 @@ import {
   extractReadableLinesFromHtml,
   isReadabilityExtractorReady,
 } from "./web-text-cleaner.js";
+import { tSystem } from "../i18n/system-text.js";
 
 const require = createRequire(import.meta.url);
 const fsp = fs.promises;
@@ -141,7 +142,9 @@ async function loadUrls(inputValue) {
       .filter(lineText => lineText && !lineText.startsWith('#') && isUrl(lineText)));
   }
 
-  throw new Error(`无法识别输入：${inputValue}（不是 URL / 文件 / 目录）`);
+  throw new Error(
+    `${tSystem("common.unrecognizedInputUrlFileDir")}: ${inputValue}`,
+  );
 }
 
 async function statSafe(filePath) {
@@ -591,7 +594,7 @@ function clampInt(inputValue, min, max) {
 
 async function postprocessScreenshot(rawImagePath, outDir, stem, imageCfg) {
   if (!HAS_SHARP) {
-    console.warn('[WARN] sharp 未安装，无法做图片缩放/切分/转码，返回原始截图。请执行: npm i sharp');
+    console.warn(`[WARN] ${tSystem("web2img.sharpNotInstalledRawWarn")}`);
     return [rawImagePath];
   }
 
@@ -812,13 +815,13 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
   await fsp.mkdir(outputDir, { recursive: true });
 
   const urls = await loadUrls(inputValue);
-  if (!urls.length) throw new Error('未找到可处理的 URL');
+  if (!urls.length) throw new Error(tSystem("common.noProcessableUrl"));
 
   if (preferTrafilatura && !HAS_READABILITY) {
-    console.warn('[WARN] @mozilla/readability/jsdom 未安装，自动回退到 DOM 提取。可执行: npm i @mozilla/readability jsdom');
+    console.warn(`[WARN] ${tSystem("web2img.readabilityNotInstalledWarn")}`);
   }
   if (!HAS_SHARP) {
-    console.warn('[WARN] sharp 未安装，图片后处理/分切不可用。可执行: npm i sharp');
+    console.warn(`[WARN] ${tSystem("web2img.sharpNotInstalledSplitWarn")}`);
   }
 
   const cfg = config || { ...DEFAULT_CONFIG };
@@ -863,7 +866,7 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
     await browser.close();
   }
 
-  console.log(`\n结果索引: ${indexPath}`);
+  console.log(`\n${tSystem("web2img.resultIndex")}: ${indexPath}`);
   return { indexPath, results };
 }
 
@@ -876,7 +879,7 @@ export async function runWeb2Img({
   const normalizedInput = String(input || "").trim();
   const normalizedOutput = String(outputDir || "").trim();
   if (!normalizedInput || !normalizedOutput) {
-    throw new Error("input/outputDir required");
+    throw new Error(tSystem("common.inputOutputDirRequired"));
   }
   const cfg = deepMerge(DEFAULT_CONFIG, config || {});
   return web2multimodal(

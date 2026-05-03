@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { tSystem } from "../i18n/system-text.js";
 
 const HISTORY_FILE_NAME = "connector-history.json";
 const CONNECTOR_TYPES = ["database", "terminal", "email"];
@@ -106,7 +107,7 @@ class ConnectorHistoryStore {
   _userHistoryFilePath(userId = "") {
     const normalizedUserId = String(userId || "").trim();
     if (!normalizedUserId) {
-      throw new Error("userId required");
+      throw new Error(tSystem("connectors.historyUserIdRequired"));
     }
     return path.join(
       this.workspaceRoot,
@@ -139,7 +140,7 @@ class ConnectorHistoryStore {
 
   async _withUserLock(userId = "", executor = async () => {}) {
     const normalizedUserId = String(userId || "").trim();
-    if (!normalizedUserId) throw new Error("userId required");
+    if (!normalizedUserId) throw new Error(tSystem("connectors.historyUserIdRequired"));
     const previousTask = this.userLockMap.get(normalizedUserId) || Promise.resolve();
     let releaseLock = () => {};
     const currentTask = new Promise((resolve) => {
@@ -235,7 +236,7 @@ class ConnectorHistoryStore {
         connector_type: normalizedConnectorType,
         status: "disconnected",
         status_code: 410,
-        status_message: "未连接（历史记录）",
+        status_message: tSystem("connectors.historyDisconnected"),
         checked_at: nowIso,
         last_connected_at: nowIso,
         connect_count: Number(existingItem?.connect_count || 0) + 1,
@@ -332,4 +333,3 @@ export function initConnectorHistoryStore({ workspaceRoot = "" } = {}) {
 export function getConnectorHistoryStore() {
   return initConnectorHistoryStore({});
 }
-

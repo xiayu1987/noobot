@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { tSystem } from "../i18n/system-text.js";
 
 const DEFAULT_BROWSER_HEADERS = {
   "User-Agent":
@@ -83,7 +84,7 @@ export async function browserLikeFetch(url, options = {}) {
     const res = await doFetch(currentUrl, currentMethod, "manual");
     if (!REDIRECT_STATUS.has(Number(res.status || 0))) return res;
     if (hops >= Math.max(0, Number(maxRedirects) || 0)) {
-      throw new Error(`too many redirects: ${currentUrl}`);
+      throw new Error(`${tSystem("common.tooManyRedirects")}: ${currentUrl}`);
     }
     const location = String(res.headers.get("location") || "").trim();
     if (!location) return res;

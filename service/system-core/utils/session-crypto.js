@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { tSystem } from "../i18n/system-text.js";
 
 function toUtf8Bytes(input = "") {
   return Buffer.from(String(input || ""), "utf8");
@@ -21,7 +22,7 @@ function xorBytes(data = Buffer.alloc(0), key = Buffer.alloc(0)) {
 
 function normalizeSessionId(sessionId = "") {
   const normalized = String(sessionId || "").trim();
-  if (!normalized) throw new Error("sessionId required for session crypto");
+  if (!normalized) throw new Error(tSystem("common.sessionIdRequiredForCrypto"));
   return normalized;
 }
 

@@ -21,23 +21,23 @@ function tService(agentContext = {}, key = "", params = {}) {
   const locale = resolveToolLocale(agentContext);
   const dict = {
     serviceNameRequired: {
-      "zh-CN": "serviceName required",
+      "zh-CN": "serviceName 必填",
       "en-US": "serviceName required",
     },
     endpointNameRequired: {
-      "zh-CN": "endpointName required",
+      "zh-CN": "endpointName 必填",
       "en-US": "endpointName required",
     },
     queryStringMustBeObject: {
-      "zh-CN": "queryString must be an object",
+      "zh-CN": "queryString 必须是对象",
       "en-US": "queryString must be an object",
     },
     customParamMustBeString: {
-      "zh-CN": "custom_param must be a string",
+      "zh-CN": "custom_param 必须是字符串",
       "en-US": "custom_param must be a string",
     },
     customParamMustNotBeEmpty: {
-      "zh-CN": "custom_param must not be empty",
+      "zh-CN": "custom_param 不能为空",
       "en-US": "custom_param must not be empty",
     },
     userIdMissing: {

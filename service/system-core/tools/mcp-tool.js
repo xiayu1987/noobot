@@ -10,37 +10,10 @@ import { createMcpAgentTools } from "../mcp/index.js";
 import { mergeConfig } from "../config/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { appendMcpErrorLog } from "../tracking/index.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function jsonError(payload = {}) {
   return toToolJsonResult("call_mcp_task", { ok: false, ...payload });
-}
-
-function tMcp(runtime = {}, key = "", params = {}) {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    mcpNameRequired: {
-      "zh-CN": "mcpName required",
-      "en-US": "mcpName required",
-    },
-    taskRequired: {
-      "zh-CN": "task required",
-      "en-US": "task required",
-    },
-    runtimeMissing: {
-      "zh-CN": "运行时缺少 botManager/userId/sessionId",
-      "en-US": "runtime missing botManager/userId/sessionId",
-    },
-    noToolsAvailable: {
-      "zh-CN": "MCP服务器无可用工具。",
-      "en-US": "No available tools on MCP server.",
-    },
-    taskPrefix: {
-      "zh-CN": `任务: ${String(params.task || "").trim()}`,
-      "en-US": `Task: ${String(params.task || "").trim()}`,
-    },
-  };
-  return pickToolText({ locale, dict, key, params });
 }
 
 function isAbortError(error) {
@@ -84,8 +57,12 @@ export function createMcpTool({ agentContext }) {
     func: async ({ mcpName, task, modelName = "" }) => {
       const normalizedMcpName = String(mcpName || "").trim();
       const normalizedTask = String(task || "").trim();
-      if (!normalizedMcpName) return jsonError({ error: tMcp(runtime, "mcpNameRequired") });
-      if (!normalizedTask) return jsonError({ error: tMcp(runtime, "taskRequired") });
+      if (!normalizedMcpName) {
+        return jsonError({ error: tTool(runtime, "tools.mcp.errorMcpNameRequired") });
+      }
+      if (!normalizedTask) {
+        return jsonError({ error: tTool(runtime, "tools.mcp.errorTaskRequired") });
+      }
 
       const globalConfig = runtime?.globalConfig || {};
       const userConfig = runtime?.userConfig || {};
@@ -111,15 +88,14 @@ export function createMcpTool({ agentContext }) {
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
       const maxToolLoopTurns = Number(
-        effectiveConfig?.tools?.call_mcp_task?.max_tool_loop_turns ??
-          effectiveConfig?.tools?.call_mcp_task?.maxToolLoopTurns ??
+        effectiveConfig?.tools?.call_mcp_task?.maxToolLoopTurns ??
           6,
       );
       try {
         if (!botManager || !userId || !sessionId) {
           return jsonError({
             mcpName: normalizedMcpName,
-            error: tMcp(runtime, "runtimeMissing"),
+            error: tTool(runtime, "tools.mcp.errorRuntimeMissing"),
           });
         }
         const mcpToolset = await createMcpAgentTools({
@@ -138,11 +114,13 @@ export function createMcpTool({ agentContext }) {
             mcpName: normalizedMcpName,
             status: "completed",
             tools: [],
-            answer: tMcp(runtime, "noToolsAvailable"),
+            answer: tTool(runtime, "tools.mcp.noToolsAvailable"),
           });
         }
         const subSessionId = randomUUID();
-        const subTaskMessage = [tMcp(runtime, "taskPrefix", { task: normalizedTask })].join("\n");
+        const subTaskMessage = [
+          `${tTool(runtime, "tools.mcp.taskPrefix")}: ${normalizedTask}`,
+        ].join("\n");
         const subResult = await botManager.runSession({
           userId,
           sessionId: subSessionId,

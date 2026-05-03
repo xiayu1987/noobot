@@ -6,7 +6,7 @@
 import { mergeConfig } from "../../config/index.js";
 import { toToolJsonResult } from "../tool-json-result.js";
 import { cleanConnectorOutputForLLM } from "../../utils/text-cleaner.js";
-import { pickToolText, resolveToolLocale } from "../tool-i18n.js";
+import { pickToolText, resolveToolLocale, tTool } from "../tool-i18n.js";
 
 function resolveRuntimeLocale(runtime = {}) {
   return resolveToolLocale(runtime);
@@ -66,6 +66,14 @@ function tConnector(runtime = {}, key = "", params = {}) {
     connectorNameLabel: {
       "zh-CN": "连接器名称",
       "en-US": "Connector Name",
+    },
+    selectedConnectorNotConnected: {
+      "zh-CN": `当前勾选连接器未连接: ${String(params.connectorType || "").trim()}/${String(params.connectorName || "").trim()}`,
+      "en-US": `selected connector not connected: ${String(params.connectorType || "").trim()}/${String(params.connectorName || "").trim()}`,
+    },
+    statusInspectorUnavailable: {
+      "zh-CN": "连接器运行状态检查器不可用",
+      "en-US": "connector runtime status inspector unavailable",
     },
   };
   return pickToolText({ locale, dict, key, params });
@@ -475,6 +483,7 @@ function buildConnectionStatusPayload({
 }
 
 function buildRuntimeConnectorStatus({
+  runtime = {},
   store,
   rootSessionId,
   connectorName,
@@ -492,7 +501,7 @@ function buildRuntimeConnectorStatus({
         connector_type: connectorType,
         status: "unknown",
         status_code: 503,
-        status_message: "connector runtime status inspector unavailable",
+        status_message: tConnector(runtime, "statusInspectorUnavailable"),
       });
 }
 
@@ -658,34 +667,36 @@ function buildAccessConnectorTool(context = {}) {
   };
   return {
     name: "access_connector",
-    description:
-      "访问已连接连接器。输入连接器名称、类型和命令，返回执行结果。仅可访问当前 session 绑定的连接器。",
+    description: tTool(runtime, "tools.access_connector.description"),
     schemaShape: {
-      connector_name: { description: "连接器名称（可选，留空时使用当前上下文勾选连接器）" },
-      connector_type: { description: "连接器类型：database 或 terminal 或 email" },
+      connector_name: {
+        description: tTool(runtime, "tools.access_connector.fieldConnectorName"),
+      },
+      connector_type: {
+        description: tTool(runtime, "tools.access_connector.fieldConnectorType"),
+      },
       command: {
-        description:
-          "要执行的命令：database 为 SQL，terminal 为 shell，email 为 JSON（action=send|list|read）。",
+        description: tTool(runtime, "tools.access_connector.fieldCommand"),
       },
     },
     async func({ connector_name, connector_type, command }) {
       if (!store || typeof store.executeConnectorCommand !== "function") {
         return toToolJsonResult("access_connector", {
           ok: false,
-          error: "connector channel store missing",
+          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("access_connector", {
           ok: false,
-          error: "rootSessionId missing in systemRuntime",
+          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
         });
       }
       const connectorType = normalizeConnectorType(connector_type);
       if (!["database", "terminal", "email"].includes(connectorType)) {
         return toToolJsonResult("access_connector", {
           ok: false,
-          error: "connector_type(database|terminal|email) required",
+          error: tTool(runtime, "tools.access_connector.errorConnectorTypeRequired"),
         });
       }
       const selectedConnectors =
@@ -752,7 +763,10 @@ function buildAccessConnectorTool(context = {}) {
           {
             ok: false,
             status: "needs_reconnect",
-            error: `selected connector not connected: ${connectorType}/${connectorName}`,
+            error: tConnector(runtime, "selectedConnectorNotConnected", {
+              connectorType,
+              connectorName,
+            }),
             message: reconnectMessage,
             reconnect_required: true,
             reconnect_tool: reconnectToolName,

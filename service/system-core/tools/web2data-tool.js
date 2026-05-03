@@ -61,7 +61,7 @@ function tWeb(runtime = {}, key = "", params = {}) {
       "en-US": `Web text reference:\n${String(params.sharedText || "")}`,
     },
     runtimeBasePathMissing: {
-      "zh-CN": "runtime basePath missing",
+      "zh-CN": "运行时缺少 basePath",
       "en-US": "runtime basePath missing",
     },
     noProcessableUrl: {

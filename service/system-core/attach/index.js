@@ -8,6 +8,7 @@ import path from "node:path";
 import { Buffer } from "node:buffer";
 import { v4 as uuidv4 } from "uuid";
 import { fatalSystemError, recoverableToolError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 const DEFAULT_ATTACHMENT_SESSION_ID = "unknown_session";
 const DEFAULT_ATTACHMENT_SOURCE = "user";
@@ -137,10 +138,10 @@ export class AttachmentService {
   } = {}) {
     const normalizedSessionId = this._normalizeAttachmentSessionId(sessionId);
     if (requireSessionId && !normalizedSessionId) {
-      throw recoverableToolError("sessionId required for attachment persistence", {
+      throw recoverableToolError(tSystem("attach.sessionIdRequiredForPersistence"), {
         code: "RECOVERABLE_ATTACHMENT_SESSION_ID_REQUIRED",
         details: {
-          hint: "pass rootSessionId or sessionId when saving attachments",
+          hint: tSystem("attach.sessionIdPersistenceHint"),
         },
       });
     }
@@ -154,7 +155,7 @@ export class AttachmentService {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
-      throw fatalSystemError("workspaceRoot/userId required", {
+      throw fatalSystemError(tSystem("attach.workspaceRootUserIdRequired"), {
         code: "FATAL_WORKSPACE_PATH_INVALID",
       });
     }
@@ -398,25 +399,21 @@ export class AttachmentService {
         ? attachmentPolicy
         : {};
     const maxFileSizeBytes = Number(
-      policyConfig?.maxFileSizeBytes ?? policyConfig?.max_file_size_bytes ?? 0,
+      policyConfig?.maxFileSizeBytes ?? 0,
     );
     const maxTotalSizeBytes = Number(
-      policyConfig?.maxTotalSizeBytes ?? policyConfig?.max_total_size_bytes ?? 0,
+      policyConfig?.maxTotalSizeBytes ?? 0,
     );
     const maxFileCount = Number(
-      policyConfig?.maxFileCount ?? policyConfig?.max_file_count ?? 0,
+      policyConfig?.maxFileCount ?? 0,
     );
-    const allowedMimeTypes = Array.isArray(
-      policyConfig?.allowedMimeTypes ?? policyConfig?.allowed_mime_types,
-    )
-      ? (policyConfig?.allowedMimeTypes ?? policyConfig?.allowed_mime_types)
+    const allowedMimeTypes = Array.isArray(policyConfig?.allowedMimeTypes)
+      ? policyConfig.allowedMimeTypes
           .map((item) => String(item || "").trim().toLowerCase())
           .filter(Boolean)
       : [];
-    const allowedExtensions = Array.isArray(
-      policyConfig?.allowedExtensions ?? policyConfig?.allowed_extensions,
-    )
-      ? (policyConfig?.allowedExtensions ?? policyConfig?.allowed_extensions)
+    const allowedExtensions = Array.isArray(policyConfig?.allowedExtensions)
+      ? policyConfig.allowedExtensions
           .map((item) => {
             const normalized = String(item || "").trim().toLowerCase();
             if (!normalized) return "";
@@ -489,13 +486,13 @@ export class AttachmentService {
       attachments.length > resolvedPolicy.maxFileCount
     ) {
       throw recoverableToolError(
-        `attachments count exceeds limit: ${attachments.length} > ${resolvedPolicy.maxFileCount}`,
+        `${tSystem("attach.countExceedsLimit")}: ${attachments.length} > ${resolvedPolicy.maxFileCount}`,
         {
           code: "RECOVERABLE_ATTACHMENT_COUNT_LIMIT_EXCEEDED",
           details: {
             receivedCount: attachments.length,
             maxFileCount: resolvedPolicy.maxFileCount,
-            hint: "increase attachments.max_file_count or reduce uploaded files",
+            hint: tSystem("attach.hintIncreaseMaxFileCountOrReduceFiles"),
           },
         },
       );
@@ -516,19 +513,19 @@ export class AttachmentService {
           resolvedPolicy.allowedMimeTypes,
         )
       ) {
-        throw new Error(`attachment mime type not allowed: ${normalizedMimeType}`);
+        throw new Error(`${tSystem("attach.mimeTypeNotAllowed")}: ${normalizedMimeType}`);
       }
       if (
         !this._isExtensionAllowed(String(name || ""), resolvedPolicy.allowedExtensions)
       ) {
         throw recoverableToolError(
-          `attachment extension not allowed: ${String(name || "")}`,
+          `${tSystem("attach.extensionNotAllowed")}: ${String(name || "")}`,
           {
             code: "RECOVERABLE_ATTACHMENT_EXTENSION_NOT_ALLOWED",
             details: {
               fileName: String(name || ""),
               allowedExtensions: resolvedPolicy.allowedExtensions,
-              hint: "add extension to attachments.allowed_extensions",
+              hint: tSystem("attach.hintAddExtensionToAllowedExtensions"),
             },
           },
         );
@@ -539,14 +536,14 @@ export class AttachmentService {
         bytes.length > resolvedPolicy.maxFileSizeBytes
       ) {
         throw recoverableToolError(
-          `attachment too large: ${String(name || "")}, ${bytes.length} > ${resolvedPolicy.maxFileSizeBytes}`,
+          `${tSystem("attach.fileTooLarge")}: ${String(name || "")}, ${bytes.length} > ${resolvedPolicy.maxFileSizeBytes}`,
           {
             code: "RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED",
             details: {
               fileName: String(name || ""),
               fileSizeBytes: bytes.length,
               maxFileSizeBytes: resolvedPolicy.maxFileSizeBytes,
-              hint: "increase attachments.max_file_size_bytes or upload a smaller file",
+              hint: tSystem("attach.hintIncreaseMaxFileSizeOrUploadSmaller"),
             },
           },
         );
@@ -557,13 +554,13 @@ export class AttachmentService {
         totalUploadedBytes > resolvedPolicy.maxTotalSizeBytes
       ) {
         throw recoverableToolError(
-          `attachments total size exceeds limit: ${totalUploadedBytes} > ${resolvedPolicy.maxTotalSizeBytes}`,
+          `${tSystem("attach.totalSizeExceedsLimit")}: ${totalUploadedBytes} > ${resolvedPolicy.maxTotalSizeBytes}`,
           {
             code: "RECOVERABLE_ATTACHMENT_TOTAL_SIZE_LIMIT_EXCEEDED",
             details: {
               totalSizeBytes: totalUploadedBytes,
               maxTotalSizeBytes: resolvedPolicy.maxTotalSizeBytes,
-              hint: "increase attachments.max_total_size_bytes or reduce upload size",
+              hint: tSystem("attach.hintIncreaseMaxTotalSizeOrReduceUpload"),
             },
           },
         );

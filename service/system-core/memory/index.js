@@ -8,6 +8,7 @@ import path from "node:path";
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
 import { mergeConfig } from "../config/index.js";
 import { fatalSystemError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 export class MemoryService {
   constructor(globalConfig) {
@@ -18,7 +19,7 @@ export class MemoryService {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
-      throw fatalSystemError("workspaceRoot/userId required", {
+      throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
         code: "FATAL_WORKSPACE_PATH_INVALID",
       });
     }

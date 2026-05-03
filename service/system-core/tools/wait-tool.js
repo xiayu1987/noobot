@@ -6,13 +6,15 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { tTool } from "./tool-i18n.js";
 
-export function createWaitTool() {
+export function createWaitTool(ctx = {}) {
+  const runtime = ctx?.agentContext?.runtime || {};
   const waitTool = new DynamicStructuredTool({
     name: "wait",
-    description: "同步等待指定毫秒后返回（最大 1 分钟）",
+    description: tTool(runtime, "tools.wait.description"),
     schema: z.object({
-      waitMs: z.number().describe("等待时间（毫秒）"),
+      waitMs: z.number().describe(tTool(runtime, "tools.wait.fieldWaitMs")),
     }),
     func: async ({ waitMs }) => {
       const MAX_WAIT_MS = 1 * 60 * 1000;
@@ -30,4 +32,3 @@ export function createWaitTool() {
   });
   return [waitTool];
 }
-

@@ -35,16 +35,20 @@ function tMultimodal(runtime = {}, key = "", params = {}) {
       "en-US": "Switch to a model that supports image generation, or specify one via model_name.",
     },
     generationContentRequired: {
-      "zh-CN": "generation_content required",
+      "zh-CN": "generation_content 必填",
       "en-US": "generation_content required",
     },
     modelApiKeyMissing: {
-      "zh-CN": "model api key missing",
+      "zh-CN": "模型 API Key 缺失",
       "en-US": "model api key missing",
     },
     generateFailed: {
-      "zh-CN": "multimodal generate failed",
+      "zh-CN": "多模态生成失败",
       "en-US": "multimodal generate failed",
+    },
+    fetchGeneratedImageUrlFailed: {
+      "zh-CN": "拉取生成图片 URL 失败",
+      "en-US": "fetch generated image url failed",
     },
   };
   return pickToolText({ locale, dict, key, params });
@@ -58,13 +62,13 @@ function resolveModelBaseUrl(modelSpec = {}) {
   return String(modelSpec.base_url || "").trim();
 }
 
-async function imageUrlToBase64(url = "", fetchImpl = null) {
+async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
   const normalizedUrl = String(url || "").trim();
   if (!normalizedUrl || typeof fetchImpl !== "function") return "";
   const response = await fetchImpl(normalizedUrl);
   if (!response?.ok) {
     throw new Error(
-      `fetch generated image url failed: HTTP ${response?.status || 500}`,
+      `${tMultimodal(runtime, "fetchGeneratedImageUrlFailed")}: HTTP ${response?.status || 500}`,
     );
   }
   const imageBytes = Buffer.from(await response.arrayBuffer());
@@ -351,7 +355,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         for (const imageArtifact of imageArtifacts) {
           const resolvedBase64 =
             imageArtifact.b64Json ||
-            (await imageUrlToBase64(imageArtifact.url, sharedFetch));
+            (await imageUrlToBase64(imageArtifact.url, sharedFetch, runtime));
           if (!resolvedBase64) continue;
           generatedAttachments.push({
             name: imageArtifact.fileName,

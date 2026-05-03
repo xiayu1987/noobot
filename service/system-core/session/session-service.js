@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { fatalSystemError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 import { normalizeMessageEntity, normalizeSelectedConnectors } from "./entities.js";
 
 export class SessionService {
@@ -59,7 +60,7 @@ export class SessionService {
       if (normalizedParentSessionId) {
         if (!sessionTree.nodes[normalizedParentSessionId]) {
           throw fatalSystemError(
-            `parent session not found (possibly deleted): ${normalizedParentSessionId}`,
+            `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${normalizedParentSessionId}`,
             {
               code: "FATAL_PARENT_SESSION_MISSING",
               details: { normalizedParentSessionId },
@@ -378,7 +379,7 @@ export class SessionService {
   async deleteSessionBranch({ userId, sessionId }) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
-      throw fatalSystemError("sessionId required", {
+      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: "FATAL_SESSION_ID_REQUIRED",
       });
     }

@@ -6,6 +6,7 @@
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fatalSystemError } from "../../error/index.js";
+import { tSystem } from "../../i18n/system-text.js";
 
 export class FileSystemSessionRepository {
   constructor({
@@ -38,7 +39,7 @@ export class FileSystemSessionRepository {
       const tree = await this.treeRepository.getTree(userId);
       if (!tree?.nodes?.[hintedParentSessionId]) {
         throw fatalSystemError(
-          `parent session not found (possibly deleted): ${hintedParentSessionId}`,
+          `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${hintedParentSessionId}`,
           {
             code: "FATAL_PARENT_SESSION_MISSING",
             details: { hintedParentSessionId },
@@ -176,7 +177,7 @@ export class FileSystemSessionRepository {
   async save(userId, session = {}, parentSessionId = "") {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
-      throw fatalSystemError("sessionId required", {
+      throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: "FATAL_SESSION_ID_REQUIRED",
       });
     }

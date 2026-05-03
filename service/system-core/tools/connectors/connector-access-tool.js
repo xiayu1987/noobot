@@ -8,6 +8,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { mergeConfig } from "../../config/index.js";
 import { toToolJsonResult } from "../tool-json-result.js";
+import { tTool } from "../tool-i18n.js";
 import { createConnectorChannelTools } from "./connector-channel-tools.js";
 
 function jsonError(payload = {}) {
@@ -55,25 +56,33 @@ export function createConnectorAccessTool({ agentContext }) {
 
   const processConnectorTaskTool = new DynamicStructuredTool({
     name: "process_connector_tool",
-    description:
-      "连接器访问工具，可以创建连接并查看数据库、终端及邮件，通过调用连接器相关工具完成连接与命令执行。",
+    description: tTool(runtime, "tools.process_connector.description"),
     schema: z.object({
-      task: z.string().describe("资源相关任务描述"),
-      modelName: z.string().optional().describe("可选：指定模型"),
+      task: z.string().describe(tTool(runtime, "tools.process_connector.fieldTask")),
+      modelName: z
+        .string()
+        .optional()
+        .describe(tTool(runtime, "tools.process_connector.fieldModelName")),
     }),
     func: async ({ task, modelName = "" }) => {
       const normalizedTask = String(task || "").trim();
-      if (!normalizedTask) return jsonError({ error: "task required" });
+      if (!normalizedTask) {
+        return jsonError({
+          error: tTool(runtime, "tools.process_connector.errorTaskRequired"),
+        });
+      }
       if (!botManager || !userId || !sessionId) {
         return jsonError({
-          error: "runtime missing botManager/userId/sessionId",
+          error: tTool(runtime, "tools.process_connector.errorRuntimeMissing"),
         });
       }
       const subTools = [
         ...createConnectorChannelTools({ agentContext }),
       ];
       if (!subTools.length) {
-        return jsonError({ error: "connector tools unavailable" });
+        return jsonError({
+          error: tTool(runtime, "tools.process_connector.errorToolsUnavailable"),
+        });
       }
       try {
         const subSessionId = randomUUID();

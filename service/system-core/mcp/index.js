@@ -9,6 +9,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { mergeConfig, resolveConfigSecrets } from "../config/index.js";
 import { createChatModel, createChatModelByName } from "../model/index.js";
 import { recoverableToolError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 function toText(content) {
   if (typeof content === "string") return content;
@@ -36,7 +37,7 @@ function resolveHeaders(rawHeaders = {}, configParams = {}) {
 function resolveFetchImpl(fetchImpl = null) {
   if (typeof fetchImpl === "function") return fetchImpl;
   if (typeof globalThis.fetch === "function") return globalThis.fetch.bind(globalThis);
-  throw recoverableToolError("fetch unavailable for mcp client");
+  throw recoverableToolError(tSystem("mcp.fetchUnavailable"));
 }
 
 function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName = "" }) {
@@ -56,7 +57,7 @@ function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName = "" }
   const authHeader = String(resolvedHeaders?.Authorization || "").trim();
   if (/^Bearer\s*$/i.test(authHeader)) {
     throw recoverableToolError(
-      `mcp server auth header is empty after env resolve: ${name}`,
+      `${tSystem("mcp.authHeaderEmptyAfterResolve")}: ${name}`,
     );
   }
   return { name, ...server, type: serverType, headers: resolvedHeaders };
@@ -103,7 +104,7 @@ class StreamableHttpMcpClient {
           "",
       ).trim();
       throw recoverableToolError(
-        `mcp http error(${method}): ${response.status} ${response.statusText} ${text}`.trim(),
+        `${tSystem("mcp.httpError")}(${method}): ${response.status} ${response.statusText} ${text}`.trim(),
         {
           code: "RECOVERABLE_MCP_HTTP_ERROR",
           details: {
@@ -120,7 +121,7 @@ class StreamableHttpMcpClient {
     const payload = await response.json();
     if (payload?.error) {
       throw recoverableToolError(
-        `mcp rpc error(${method}): ${payload.error?.message || JSON.stringify(payload.error)}`,
+        `${tSystem("mcp.rpcError")}(${method}): ${payload.error?.message || JSON.stringify(payload.error)}`,
         {
           code: "RECOVERABLE_MCP_RPC_ERROR",
           details: {
@@ -298,7 +299,7 @@ class SseMcpClient {
     if (!response.ok) {
       const text = await response.text().catch(() => "");
       throw recoverableToolError(
-        `mcp sse connect error: ${response.status} ${response.statusText} ${text}`.trim(),
+        `${tSystem("mcp.sseConnectError")}: ${response.status} ${response.statusText} ${text}`.trim(),
         {
           code: "RECOVERABLE_MCP_SSE_CONNECT_ERROR",
           details: {
@@ -311,7 +312,7 @@ class SseMcpClient {
       );
     }
     if (!response.body) {
-      throw recoverableToolError("mcp sse body missing", {
+      throw recoverableToolError(tSystem("mcp.sseBodyMissing"), {
         code: "RECOVERABLE_MCP_SSE_BODY_MISSING",
         details: { baseUrl: this.baseUrl },
       });
@@ -335,7 +336,7 @@ class SseMcpClient {
         }
       }
       if (!this._endpointResolved) {
-        throw recoverableToolError("mcp sse stream ended before endpoint event", {
+        throw recoverableToolError(tSystem("mcp.sseEndpointMissing"), {
           code: "RECOVERABLE_MCP_SSE_ENDPOINT_MISSING",
           details: { baseUrl: this.baseUrl },
         });
@@ -375,7 +376,7 @@ class SseMcpClient {
       const timer = setTimeout(() => {
         this._pending.delete(requestId);
         reject(
-          recoverableToolError(`mcp sse request timeout: ${method}`, {
+          recoverableToolError(`${tSystem("mcp.sseRequestTimeout")}: ${method}`, {
             code: "RECOVERABLE_MCP_SSE_TIMEOUT",
             details: {
               method,
@@ -406,7 +407,7 @@ class SseMcpClient {
         this._pending.delete(requestId);
       }
       throw recoverableToolError(
-        `mcp sse post error(${method}): ${postResponse.status} ${postResponse.statusText} ${text}`.trim(),
+        `${tSystem("mcp.ssePostError")}(${method}): ${postResponse.status} ${postResponse.statusText} ${text}`.trim(),
         {
           code: "RECOVERABLE_MCP_SSE_POST_ERROR",
           details: {
@@ -423,7 +424,7 @@ class SseMcpClient {
     const payloadResponse = await responsePromise;
     if (payloadResponse?.error) {
       throw recoverableToolError(
-        `mcp rpc error(${method}): ${payloadResponse.error?.message || JSON.stringify(payloadResponse.error)}`,
+        `${tSystem("mcp.rpcError")}(${method}): ${payloadResponse.error?.message || JSON.stringify(payloadResponse.error)}`,
         {
           code: "RECOVERABLE_MCP_RPC_ERROR",
           details: {
@@ -503,8 +504,10 @@ function buildMcpToolDescription(toolSpec = {}) {
   const description = String(toolSpec?.description || "").trim();
   const inputSchema = toolSpec?.inputSchema || {};
   const schemaText = JSON.stringify(inputSchema || {}, null, 2);
-  if (!description) return `MCP工具\n输入参数schema:\n${schemaText}`;
-  return `${description}\n\n输入参数schema:\n${schemaText}`;
+  if (!description) {
+    return `${tSystem("mcp.toolDescriptionDefault")}\n${tSystem("mcp.inputSchemaTitle")}:\n${schemaText}`;
+  }
+  return `${description}\n\n${tSystem("mcp.inputSchemaTitle")}:\n${schemaText}`;
 }
 
 function normalizeMcpToolResult(result = {}) {
@@ -549,7 +552,7 @@ export async function createMcpAgentTools({
   const server = getMcpServerByName({ globalConfig, userConfig, mcpName });
   if (!server) {
     throw recoverableToolError(
-      `mcp server not found or inactive: ${String(mcpName || "")}`,
+      `${tSystem("mcp.serverNotFoundOrInactive")}: ${String(mcpName || "")}`,
     );
   }
   const client = createMcpClient({ server, signal, fetchImpl });
@@ -577,11 +580,13 @@ export async function executeMcpTask({
 }) {
   const normalizedTask = String(task || "").trim();
   if (!normalizedTask) {
-    throw recoverableToolError("task required");
+    throw recoverableToolError(tSystem("mcp.taskRequired"));
   }
   const server = getMcpServerByName({ globalConfig, userConfig, mcpName });
   if (!server) {
-    throw recoverableToolError(`mcp server not found or inactive: ${String(mcpName || "")}`);
+    throw recoverableToolError(
+      `${tSystem("mcp.serverNotFoundOrInactive")}: ${String(mcpName || "")}`,
+    );
   }
 
   const { tools: langchainTools, toolNames } = await createMcpAgentTools({
@@ -596,7 +601,7 @@ export async function executeMcpTask({
       ok: true,
       mcpName: server.name,
       tools: [],
-      answer: "MCP服务器无可用工具。",
+      answer: tSystem("mcp.noToolsAvailable"),
       traces: [],
     };
   }
@@ -609,9 +614,9 @@ export async function executeMcpTask({
   const messages = [
     new SystemMessage(
       [
-        "你是 MCP 工具执行助手。",
-        "你只能基于可用MCP工具完成任务，必要时可多次调用工具。",
-        "最后请输出简洁结论。",
+        tSystem("mcp.systemPromptLine1"),
+        tSystem("mcp.systemPromptLine2"),
+        tSystem("mcp.systemPromptLine3"),
       ].join("\n"),
     ),
     new HumanMessage(normalizedTask),
@@ -637,7 +642,7 @@ export async function executeMcpTask({
     for (const call of calls) {
       const tool = toolMap.get(String(call?.name || "").trim());
       if (!tool) {
-        const notFoundMsg = `mcp tool not found: ${String(call?.name || "")}`;
+        const notFoundMsg = `${tSystem("mcp.toolNotFound")}: ${String(call?.name || "")}`;
         traces.push({ tool: call?.name || "", args: call?.args || {}, result: notFoundMsg });
         messages.push(new ToolMessage({ tool_call_id: call?.id || "", content: notFoundMsg }));
         continue;
@@ -664,7 +669,7 @@ export async function executeMcpTask({
     ok: true,
     mcpName: server.name,
     tools: toolNames,
-    answer: "工具调用轮次达到上限，已停止。",
+    answer: tSystem("mcp.toolCallTurnLimitReached"),
     traces,
   };
 }

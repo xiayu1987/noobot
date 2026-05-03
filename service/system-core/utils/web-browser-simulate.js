@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { chromium } from "playwright";
+import { tSystem } from "../i18n/system-text.js";
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -107,7 +108,7 @@ export async function browseUrlHtml({
       title: "",
       html: "",
       text: "",
-      error: "invalid url",
+      error: tSystem("common.invalidUrl"),
     };
   }
   const browser = await initRuntimeSharedBrowser(runtimeContext);

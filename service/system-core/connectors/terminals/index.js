@@ -7,9 +7,7 @@ import { executeSshCommand } from "./ssh-connector-channel.js";
 import { closeSshChannel } from "./ssh-connector-channel.js";
 
 function normalizeTerminalType(connectionInfo = {}) {
-  const raw = String(
-    connectionInfo?.terminal_type || connectionInfo?.terminalType || "",
-  )
+  const raw = String(connectionInfo?.terminal_type || "")
     .trim()
     .toLowerCase();
   if (["ssh", "linux_ssh", "server_ssh"].includes(raw)) return "ssh";

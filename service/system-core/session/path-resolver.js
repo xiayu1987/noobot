@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import { fatalSystemError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 export class PathResolver {
   constructor(globalConfig = {}) {
@@ -15,7 +16,7 @@ export class PathResolver {
     const normalizedUserId = String(userId || "").trim();
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
-      throw fatalSystemError("workspaceRoot/userId required", {
+      throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
         code: "FATAL_WORKSPACE_PATH_INVALID",
         details: { userId: normalizedUserId, workspaceRoot },
       });
@@ -31,4 +32,3 @@ export class PathResolver {
     return path.join(this.sessionRoot(basePath), "session-tree.json");
   }
 }
-

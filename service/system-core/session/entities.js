@@ -23,25 +23,25 @@ export function normalizeMessageEntity(
 ) {
   const normalizedAttachmentMetas = Array.isArray(message?.attachmentMetas)
     ? message.attachmentMetas
-    : Array.isArray(message?.attachments)
-      ? message.attachments
-      : [];
+    : [];
   const normalizedMessage = {
-    ...message,
-    role: message?.role || "",
+    role: String(message?.role || "").trim(),
     content: message?.content || "",
-    type: message?.type || "",
-    dialogProcessId: message?.dialogProcessId || "",
-    parentDialogProcessId: message?.parentDialogProcessId || "",
-    taskId: message?.taskId || "",
-    taskStatus: message?.taskStatus || "",
+    type: String(message?.type || "").trim(),
+    dialogProcessId: String(message?.dialogProcessId || "").trim(),
+    parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
+    taskId: String(message?.taskId || "").trim(),
+    taskStatus: String(message?.taskStatus || "").trim(),
     modelAlias: String(message?.modelAlias || "").trim(),
     modelName: String(message?.modelName || "").trim(),
     attachmentMetas: normalizedAttachmentMetas,
-    ts: message?.ts || now(),
+    ts: String(message?.ts || "").trim() || now(),
   };
-  delete normalizedMessage.attachmentIds;
-  delete normalizedMessage.attachments;
+  const toolCallId = String(message?.tool_call_id || "").trim();
+  if (toolCallId) normalizedMessage.tool_call_id = toolCallId;
+  if (Array.isArray(message?.tool_calls)) {
+    normalizedMessage.tool_calls = message.tool_calls;
+  }
   if (
     normalizedMessage.type === "tool_call" &&
     !Array.isArray(normalizedMessage.tool_calls)
@@ -62,7 +62,7 @@ export function normalizeMessagesEntity(
 
 export function normalizeTaskEntity(task = {}) {
   const taskId = String(task?.taskId || "").trim();
-  const taskStatus = String(task?.taskStatus || task?.status || "").trim();
+  const taskStatus = String(task?.taskStatus || "").trim();
   return {
     taskId,
     skillName: String(task?.skillName || "").trim(),

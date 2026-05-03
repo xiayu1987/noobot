@@ -35,6 +35,10 @@ function tEngine(runtime = {}, key = "", params = {}) {
       "zh-CN": `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,
       "en-US": `Tool call turns reached the limit (${Number(params.maxTurns || 0)}), auto-stopped.`,
     },
+    fetchGeneratedMediaFailed: {
+      "zh-CN": `拉取生成媒体失败: HTTP ${Number(params.status || 500)}`,
+      "en-US": `fetch generated media failed: HTTP ${Number(params.status || 500)}`,
+    },
   };
   return pickLocaleText({ locale, dict, key, params });
 }
@@ -144,13 +148,22 @@ function extractGeneratedMediaCandidates(aiContent) {
   return mediaCandidates;
 }
 
-async function fetchRemoteMediaArtifact(url = "", fetchImpl = null, mediaIndex = 1) {
+async function fetchRemoteMediaArtifact(
+  url = "",
+  fetchImpl = null,
+  mediaIndex = 1,
+  runtime = {},
+) {
   const normalizedUrl = String(url || "").trim();
   if (!normalizedUrl || !/^https?:\/\//i.test(normalizedUrl)) return null;
   if (typeof fetchImpl !== "function") return null;
   const response = await fetchImpl(normalizedUrl);
   if (!response?.ok) {
-    throw new Error(`fetch generated media failed: HTTP ${response?.status || 500}`);
+    throw new Error(
+      tEngine(runtime, "fetchGeneratedMediaFailed", {
+        status: response?.status || 500,
+      }),
+    );
   }
   const responseArrayBuffer = await response.arrayBuffer();
   const responseBytes = Buffer.from(responseArrayBuffer);
@@ -203,6 +216,7 @@ async function persistModelGeneratedArtifacts({
         remoteUrl,
         fetchImpl,
         remoteMediaIndex,
+        runtime,
       );
       if (remoteArtifact) remoteMediaCandidates.push(remoteArtifact);
     }
@@ -277,7 +291,6 @@ function buildContextMessages(
 
   function resolveAttachmentMetas(msg = {}, fallbackAttachmentMetas = []) {
     if (Array.isArray(msg?.attachmentMetas)) return msg.attachmentMetas;
-    if (Array.isArray(msg?.attachments)) return msg.attachments;
     return Array.isArray(fallbackAttachmentMetas) ? fallbackAttachmentMetas : [];
   }
 

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { tSystem } from "../i18n/system-text.js";
 function normalizeHistoryConnectorItems(items = []) {
   return (Array.isArray(items) ? items : []).map((connectorItem) => ({
     connector_name: String(connectorItem?.connector_name || "").trim(),
@@ -15,7 +16,8 @@ function normalizeHistoryConnectorItems(items = []) {
     status: String(connectorItem?.status || "disconnected").trim() || "disconnected",
     status_code: Number(connectorItem?.status_code ?? 410),
     status_message:
-      String(connectorItem?.status_message || "").trim() || "未连接（历史记录）",
+      String(connectorItem?.status_message || "").trim() ||
+      tSystem("connectors.historyDisconnected"),
     checked_at:
       String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
     last_connected_at: String(connectorItem?.last_connected_at || "").trim(),
@@ -31,37 +33,21 @@ function normalizeHistoryConnectorItems(items = []) {
 function normalizeRuntimeConnectorItems(items = [], connectorType = "") {
   const normalizedConnectorType = String(connectorType || "").trim();
   return (Array.isArray(items) ? items : []).map((connectorItem) => ({
-    connector_name: String(
-      connectorItem?.connector_name || connectorItem?.connectorName || "",
-    ).trim(),
+    connector_name: String(connectorItem?.connectorName || "").trim(),
     connector_type:
-      String(
-        connectorItem?.connector_type ||
-          connectorItem?.connectorType ||
-          normalizedConnectorType,
-      ).trim() || normalizedConnectorType,
-    connected_at: String(
-      connectorItem?.connected_at || connectorItem?.connectedAt || "",
-    ).trim(),
+      String(connectorItem?.connectorType || normalizedConnectorType).trim() ||
+      normalizedConnectorType,
+    connected_at: String(connectorItem?.connectedAt || "").trim(),
     connection_meta:
-      connectorItem?.connection_meta && typeof connectorItem.connection_meta === "object"
-        ? connectorItem.connection_meta
-        : connectorItem?.connectionMeta && typeof connectorItem.connectionMeta === "object"
-          ? connectorItem.connectionMeta
-          : {},
+      connectorItem?.connectionMeta && typeof connectorItem.connectionMeta === "object"
+        ? connectorItem.connectionMeta
+        : {},
     status: String(connectorItem?.status || "connected").trim() || "connected",
-    status_code: Number(connectorItem?.status_code ?? connectorItem?.statusCode ?? 0),
+    status_code: Number(connectorItem?.statusCode ?? 0),
     status_message:
-      String(
-        connectorItem?.status_message || connectorItem?.statusMessage || "ok",
-      ).trim() || "ok",
-    checked_at: String(
-      connectorItem?.checked_at ||
-        connectorItem?.checkedAt ||
-        connectorItem?.connected_at ||
-        connectorItem?.connectedAt ||
-        "",
-    ).trim(),
+      String(connectorItem?.statusMessage || tSystem("connectors.statusOk")).trim() ||
+      tSystem("connectors.statusOk"),
+    checked_at: String(connectorItem?.checkedAt || connectorItem?.connectedAt || "").trim(),
   }));
 }
 
@@ -86,7 +72,7 @@ function mergeRuntimeAndHistoryConnectorGroup({
       ...runtimeItem,
       status: String(runtimeItem?.status || "connected").trim() || "connected",
       status_code: Number(runtimeItem?.status_code ?? 0),
-      status_message: String(runtimeItem?.status_message || "ok").trim(),
+      status_message: String(runtimeItem?.status_message || tSystem("connectors.statusOk")).trim(),
       checked_at:
         String(runtimeItem?.checked_at || runtimeItem?.connected_at || "").trim() ||
         String(previousItem?.checked_at || "").trim(),
@@ -113,13 +99,9 @@ function resolveConnectorSubType(connectorItem = {}) {
       : {};
   const subTypeCandidates = [
     connectionMeta?.databaseType,
-    connectionMeta?.database_type,
     connectionMeta?.terminalType,
-    connectionMeta?.terminal_type,
     connectionMeta?.emailType,
-    connectionMeta?.email_type,
     connectionMeta?.subType,
-    connectionMeta?.sub_type,
   ];
   for (const subTypeCandidate of subTypeCandidates) {
     const normalizedSubType = String(subTypeCandidate || "").trim();

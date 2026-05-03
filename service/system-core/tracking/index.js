@@ -6,6 +6,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fatalSystemError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -42,7 +43,7 @@ export async function appendSystemErrorLog({
   extra = {},
 }) {
   if (!basePath) {
-    throw fatalSystemError("basePath required", {
+    throw fatalSystemError(tSystem("common.basePathRequired"), {
       code: "FATAL_BASE_PATH_REQUIRED",
     });
   }
@@ -88,7 +89,7 @@ export async function appendMcpErrorLog({
   details = {},
 }) {
   if (!basePath) {
-    throw fatalSystemError("basePath required", {
+    throw fatalSystemError(tSystem("common.basePathRequired"), {
       code: "FATAL_BASE_PATH_REQUIRED",
     });
   }

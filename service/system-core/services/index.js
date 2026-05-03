@@ -7,6 +7,7 @@ import { access, stat } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { fatalSystemError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 const moduleCache = new Map();
 
@@ -18,7 +19,7 @@ function resolveBasePath({ globalConfig = {}, userId = "" }) {
   const normalizedUserId = normalizeName(userId);
   const workspaceRoot = normalizeName(globalConfig?.workspaceRoot || "");
   if (!normalizedUserId || !workspaceRoot) {
-    throw fatalSystemError("workspaceRoot/userId required", {
+    throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
       code: "FATAL_WORKSPACE_PATH_INVALID",
     });
   }
@@ -76,7 +77,7 @@ export async function invokeServiceHandler({
   const basePath = resolveBasePath({ globalConfig, userId });
   const handlerName = normalizeName(serviceCfg?.handler || "");
   if (!handlerName) {
-    throw fatalSystemError("service handler required", {
+    throw fatalSystemError(tSystem("services.handlerRequired"), {
       code: "FATAL_SERVICE_HANDLER_MISSING",
       details: { serviceName, endpointName },
     });
@@ -88,7 +89,7 @@ export async function invokeServiceHandler({
   });
   if (!userModule) {
     throw fatalSystemError(
-      `service handler module not found: services/${handlerName}.js`,
+      `${tSystem("services.handlerModuleNotFound")}: services/${handlerName}.js`,
       {
         code: "FATAL_SERVICE_HANDLER_MODULE_NOT_FOUND",
         details: { serviceName, endpointName, handlerName },
@@ -98,7 +99,7 @@ export async function invokeServiceHandler({
   const userHandler = resolveHandlerFromModule(userModule, handlerName);
   if (!userHandler) {
     throw fatalSystemError(
-      `service handler not found: ${serviceName}.${endpointName} -> ${handlerName}`,
+      `${tSystem("services.handlerNotFound")}: ${serviceName}.${endpointName} -> ${handlerName}`,
       {
         code: "FATAL_SERVICE_HANDLER_NOT_FOUND",
         details: { serviceName, endpointName, handlerName },
