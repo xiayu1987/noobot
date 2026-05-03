@@ -3,33 +3,34 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { tSystem } from "../../i18n/system-text.js";
 
 function parseEmailCommand(command = "") {
   const normalizedCommand = String(command || "").trim();
   if (!normalizedCommand) {
-    throw new Error("email command required");
+    throw new Error(tSystem("connectors.email.commandRequired"));
   }
   let parsedCommand = null;
   try {
     parsedCommand = JSON.parse(normalizedCommand);
   } catch {
     throw new Error(
-      "email command must be JSON string, e.g. {\"action\":\"send\",...}",
+      `${tSystem("connectors.email.commandJsonStringRequired")}, e.g. {"action":"send",...}`,
     );
   }
   if (!parsedCommand || typeof parsedCommand !== "object") {
-    throw new Error("email command JSON object required");
+    throw new Error(tSystem("connectors.email.commandJsonObjectRequired"));
   }
   const action = String(parsedCommand?.action || "").trim().toLowerCase();
   if (!["send", "list", "read", "list_folders"].includes(action)) {
-    throw new Error("email command action must be send|list|read|list_folders");
+    throw new Error(tSystem("connectors.email.commandActionInvalid"));
   }
   return { action, payload: parsedCommand };
 }
 
 function normalizeListPaging(payload = {}) {
   const page = Number(payload?.page || 1);
-  const pageSize = Number(payload?.page_size || payload?.pageSize || 10);
+  const pageSize = Number(payload?.page_size || 10);
   const normalizedPage =
     Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const normalizedPageSize =
@@ -46,10 +47,10 @@ function normalizeEmailConnectionInfo(connectionInfo = {}) {
   const info = connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
   const username = String(info?.username || "").trim();
   const password = String(info?.password || "").trim();
-  const smtpHost = String(info?.smtp_host || info?.smtpHost || "").trim();
-  const imapHost = String(info?.imap_host || info?.imapHost || "").trim();
-  const smtpPort = Number(info?.smtp_port || info?.smtpPort || 587);
-  const imapPort = Number(info?.imap_port || info?.imapPort || 993);
+  const smtpHost = String(info?.smtp_host || "").trim();
+  const imapHost = String(info?.imap_host || "").trim();
+  const smtpPort = Number(info?.smtp_port || 587);
+  const imapPort = Number(info?.imap_port || 993);
   const smtpSecure =
     String(info?.smtp_secure ?? "").trim() !== ""
       ? String(info?.smtp_secure).trim().toLowerCase() === "true" ||
@@ -60,14 +61,14 @@ function normalizeEmailConnectionInfo(connectionInfo = {}) {
       ? String(info?.imap_secure).trim().toLowerCase() === "true" ||
         Number(info?.imap_secure) === 1
       : imapPort === 993;
-  const fromEmail = String(info?.from_email || info?.fromEmail || username).trim();
-  const toEmail = String(info?.to_email || info?.toEmail || "").trim();
+  const fromEmail = String(info?.from_email || username).trim();
+  const toEmail = String(info?.to_email || "").trim();
 
   if (!username || !password) {
-    throw new Error("email connector username/password required");
+    throw new Error(tSystem("connectors.email.usernamePasswordRequired"));
   }
   if (!smtpHost || !imapHost) {
-    throw new Error("email connector smtp_host/imap_host required");
+    throw new Error(tSystem("connectors.email.smtpImapHostRequired"));
   }
 
   return {
@@ -94,7 +95,7 @@ async function executeSendEmail({ payload = {}, connectionInfo = {} } = {}) {
   const text = String(payload?.text || "").trim();
   const html = String(payload?.html || "").trim();
   if (!to) {
-    throw new Error("email send action requires 'to' (or configure to_email in connector)");
+    throw new Error(tSystem("connectors.email.sendToRequired"));
   }
   const transporter = createTransport({
     logger: false,
@@ -313,7 +314,7 @@ async function executeReadEmail({
         resolvedUid = Number(latestUid || 0);
       }
       if (!resolvedUid) {
-        throw new Error("email read action requires uid, and INBOX has no readable message");
+        throw new Error(tSystem("connectors.email.readUidRequired"));
       }
       let fetchedMessages = null;
       for await (const messageItem of imapClient.fetch([resolvedUid], {
@@ -335,7 +336,7 @@ async function executeReadEmail({
         });
       }
       if (!fetchedMessages) {
-        throw new Error(`email not found by uid: ${resolvedUid}`);
+        throw new Error(`${tSystem("connectors.email.notFoundByUid")}: ${resolvedUid}`);
       }
       const rawSourceBuffer = await (async () => {
         const sourceValue = fetchedMessages?.source;

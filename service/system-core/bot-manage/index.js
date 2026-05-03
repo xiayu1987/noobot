@@ -21,6 +21,7 @@ import {
 } from "../init/index.js";
 import { appendSystemErrorLog } from "../tracking/index.js";
 import { recoverableToolError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -95,22 +96,22 @@ export class BotManager {
     parentSessionId = "",
   }) {
     if (!userId || !sessionId) {
-      throw recoverableToolError("userId/sessionId required", {
+      throw recoverableToolError(tSystem("bot.inputUserIdSessionIdRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
     if (!isValidSessionId(sessionId)) {
-      throw recoverableToolError("invalid sessionId format (UUID required)", {
+      throw recoverableToolError(tSystem("bot.invalidSessionIdFormat"), {
         code: "RECOVERABLE_INVALID_SESSION_ID",
       });
     }
     if (!["user", "bot"].includes(String(caller || ""))) {
-      throw recoverableToolError("invalid caller", {
+      throw recoverableToolError(tSystem("bot.invalidCaller"), {
         code: "RECOVERABLE_INVALID_CALLER",
       });
     }
     if (parentSessionId && !isValidSessionId(parentSessionId)) {
-      throw recoverableToolError("invalid parentSessionId format", {
+      throw recoverableToolError(tSystem("bot.invalidParentSessionIdFormat"), {
         code: "RECOVERABLE_INVALID_PARENT_SESSION_ID",
       });
     }
@@ -585,7 +586,7 @@ export class BotManager {
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     try {
       if (!message) {
-        throw recoverableToolError("userId/sessionId/message required", {
+        throw recoverableToolError(tSystem("bot.inputUserIdSessionIdMessageRequired"), {
           code: "RECOVERABLE_INPUT_MISSING",
         });
       }
@@ -837,7 +838,7 @@ export class BotManager {
     eventListener = null,
   }) {
     if (!sessionId) {
-      throw recoverableToolError("sessionId required", {
+      throw recoverableToolError(tSystem("bot.sessionIdRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
@@ -860,7 +861,7 @@ export class BotManager {
     eventListener = null,
   }) {
     if (!sessionId) {
-      throw recoverableToolError("sessionId required", {
+      throw recoverableToolError(tSystem("bot.sessionIdRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
@@ -892,26 +893,26 @@ export class BotManager {
     parentAsyncResultContainer = null,
   }) {
     if (!userId || !parentSessionId) {
-      throw recoverableToolError("userId/parentSessionId required", {
+      throw recoverableToolError(tSystem("bot.inputUserIdParentSessionIdRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
     if (!isValidSessionId(parentSessionId)) {
-      throw recoverableToolError("invalid parentSessionId format", {
+      throw recoverableToolError(tSystem("bot.invalidParentSessionIdFormat"), {
         code: "RECOVERABLE_INVALID_PARENT_SESSION_ID",
       });
     }
 
     const usedSessionId = String(sessionId || "").trim() || uuidv4();
     if (!isValidSessionId(usedSessionId)) {
-      throw recoverableToolError("invalid sessionId format", {
+      throw recoverableToolError(tSystem("bot.invalidSessionIdFormat"), {
         code: "RECOVERABLE_INVALID_SESSION_ID",
       });
     }
 
     const message = [
-      `任务: ${task || ""}`,
-      `共享任务说明: ${sharedTaskSpec || ""}`,
+      `${tSystem("bot.taskPrefix")}: ${task || ""}`,
+      `${tSystem("bot.sharedTaskSpecPrefix")}: ${sharedTaskSpec || ""}`,
     ].join("\n");
 
     const key = this._asyncJobKey({
@@ -1057,7 +1058,7 @@ export class BotManager {
     }) {
     try {
       if (!userId || !parentSessionId || !sessionId) {
-        throw recoverableToolError("userId/parentSessionId/sessionId required", {
+        throw recoverableToolError(tSystem("bot.inputUserIdParentSessionIdSessionIdRequired"), {
           code: "RECOVERABLE_INPUT_MISSING",
         });
       }

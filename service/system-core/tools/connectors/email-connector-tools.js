@@ -26,6 +26,7 @@ import {
   resolveRuntimeLocale,
   tConnector,
 } from "./connector-toolkit.js";
+import { tTool } from "../tool-i18n.js";
 
 export function createEmailConnectorTools(context = {}) {
   const {
@@ -43,34 +44,35 @@ export function createEmailConnectorTools(context = {}) {
 
   const emailConnectConnectorTool = new DynamicStructuredTool({
     name: "email_connect_connector",
-    description:
-      "邮件连接器连接工具，可以创建并连接。用于配置 SMTP/IMAP 连接，可后续通过 access_connector 收发邮件。",
+    description: tTool(runtime, "tools.email_connector.description"),
     schema: z.object({
-      connector_name: z.string().describe("连接器名称"),
+      connector_name: z
+        .string()
+        .describe(tTool(runtime, "tools.email_connector.fieldConnectorName")),
       default_values: z
         .union([z.string(), z.object({}).passthrough()])
         .optional()
-        .describe("可选：邮件连接默认值（不含 password），可传 JSON 字符串或对象"),
+        .describe(tTool(runtime, "tools.email_connector.fieldDefaultValues")),
     }),
     func: async ({ connector_name, default_values }) => {
       const runtimeLocale = resolveRuntimeLocale(runtime);
       if (!store || typeof store.connectConnector !== "function") {
         return toToolJsonResult("email_connect_connector", {
           ok: false,
-          error: "connector channel store missing",
+          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("email_connect_connector", {
           ok: false,
-          error: "rootSessionId missing in systemRuntime",
+          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
         });
       }
       const connectorName = String(connector_name || "").trim();
       if (!connectorName) {
         return toToolJsonResult("email_connect_connector", {
           ok: false,
-          error: "connector_name required",
+          error: tTool(runtime, "tools.connectors.errorConnectorNameRequired"),
         });
       }
       const existingConnected = findConnectedConnector({
@@ -135,7 +137,7 @@ export function createEmailConnectorTools(context = {}) {
         if (!bridge?.requestUserInteraction) {
           return toToolJsonResult("email_connect_connector", {
             ok: false,
-            error: "user interaction bridge missing for connection info completion",
+            error: tTool(runtime, "tools.connectors.errorUserInteractionBridgeMissing"),
           });
         }
         const interactionResult = await bridge.requestUserInteraction({
@@ -166,6 +168,7 @@ export function createEmailConnectorTools(context = {}) {
         connectionInfo,
       });
       const runtimeStatus = await buildRuntimeConnectorStatus({
+        runtime,
         store,
         rootSessionId,
         connectorName,

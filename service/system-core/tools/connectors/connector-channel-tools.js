@@ -6,6 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "../tool-json-result.js";
+import { tTool } from "../tool-i18n.js";
 import {
   buildAccessConnectorTool,
   createConnectorToolContext,
@@ -44,19 +45,19 @@ export function createConnectorChannelTools({ agentContext }) {
 
   const inspectConnectorsTool = new DynamicStructuredTool({
     name: "inspect_connectors",
-    description: "查看当前 session 的全部连接器（仅返回脱敏后的连接信息）。",
+    description: tTool(runtime, "tools.inspect_connectors.description"),
     schema: z.object({}),
     func: async () => {
       if (!store || typeof store.inspectSessionConnectors !== "function") {
         return toToolJsonResult("inspect_connectors", {
           ok: false,
-          error: "connector channel store missing",
+          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("inspect_connectors", {
           ok: false,
-          error: "rootSessionId missing in systemRuntime",
+          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
         });
       }
       const inspected = await store.inspectSessionConnectors({

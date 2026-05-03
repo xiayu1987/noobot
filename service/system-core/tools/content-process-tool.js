@@ -10,26 +10,10 @@ import { toToolJsonResult } from "./tool-json-result.js";
 import { mergeConfig } from "../config/index.js";
 import { createDoc2DataTool } from "./doc2data-tool.js";
 import { createWeb2DataTool } from "./web2data-tool.js";
-import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
+import { tTool } from "./tool-i18n.js";
 
 function jsonError(payload = {}) {
   return toToolJsonResult("process_content_task", { ok: false, ...payload });
-}
-
-function tContent(runtime = {}, key = "") {
-  const locale = resolveToolLocale(runtime);
-  const dict = {
-    taskRequired: { "zh-CN": "task required", "en-US": "task required" },
-    runtimeMissing: {
-      "zh-CN": "运行时缺少 botManager/userId/sessionId",
-      "en-US": "runtime missing botManager/userId/sessionId",
-    },
-    toolsUnavailable: {
-      "zh-CN": "内容处理工具不可用",
-      "en-US": "content process tools not available",
-    },
-  };
-  return pickToolText({ locale, dict, key });
 }
 
 function isAbortError(error) {
@@ -110,7 +94,9 @@ export function createContentProcessTool({ agentContext }) {
     }),
     func: async ({ task, modelName = "" }) => {
       const normalizedTask = String(task || "").trim();
-      if (!normalizedTask) return jsonError({ error: tContent(runtime, "taskRequired") });
+      if (!normalizedTask) {
+        return jsonError({ error: tTool(runtime, "tools.content_process.errorTaskRequired") });
+      }
 
       const systemRuntime = runtime?.systemRuntime || {};
       const botManager = runtime?.botManager || null;
@@ -128,12 +114,12 @@ export function createContentProcessTool({ agentContext }) {
         systemRuntime?.config?.allowUserInteraction !== false;
       if (!botManager || !userId || !sessionId) {
         return jsonError({
-          error: tContent(runtime, "runtimeMissing"),
+          error: tTool(runtime, "tools.content_process.errorRuntimeMissing"),
         });
       }
       if (!contentProcessTools.length) {
         return jsonError({
-          error: tContent(runtime, "toolsUnavailable"),
+          error: tTool(runtime, "tools.content_process.errorToolsUnavailable"),
         });
       }
 

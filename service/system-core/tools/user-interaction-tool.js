@@ -6,7 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "./tool-json-result.js";
-import { pickToolText, resolveToolLocale } from "./tool-i18n.js";
+import { pickToolText, resolveToolLocale, tTool } from "./tool-i18n.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -26,6 +26,22 @@ function tUserInteraction(runtime = {}, key = "", params = {}) {
     sensitiveFieldsBlocked: {
       "zh-CN": "存在敏感字段，如果是数据库或者终端请用 process_connector_tool 连接器连接",
       "en-US": "Sensitive fields detected. For database or terminal access, use process_connector_tool connectors.",
+    },
+    bridgeMissing: {
+      "zh-CN": "用户交互桥接不可用",
+      "en-US": "user interaction bridge missing",
+    },
+    cancelled: {
+      "zh-CN": "已取消",
+      "en-US": "cancelled",
+    },
+    invalidResponseObject: {
+      "zh-CN": "交互返回对象无效",
+      "en-US": "invalid interaction response object",
+    },
+    missingRequiredField: {
+      "zh-CN": `缺少必填字段: ${String(params.key || "").trim()}`,
+      "en-US": `missing required field: ${String(params.key || "").trim()}`,
     },
   };
   return pickToolText({ locale, dict, key, params });
@@ -124,40 +140,51 @@ function isSensitiveField(field = {}) {
     }),
   );
 }
-const fieldSchema = z.object({
-  name: z.string().min(1).describe("字段名（返回对象的 key）"),
-  displayName: z.string().min(1).describe("字段显示名称"),
-  required: z.boolean().describe("是否必填"),
-  description: z.string().optional().default("").describe("字段说明"),
-});
-
-const fieldsPayloadSchema = z.object({
-  fields: z.array(fieldSchema).default([]).describe("字段定义列表"),
-});
-
 export function createUserInteractionTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const bridge = runtime.userInteractionBridge || null;
   const systemRuntime = runtime.systemRuntime || {};
   const dialogProcessId = String(systemRuntime.dialogProcessId || "").trim();
   const sessionId = String(systemRuntime.sessionId || "").trim();
+  const fieldSchema = z.object({
+    name: z.string().min(1).describe(tTool(runtime, "tools.user_interaction.fieldName")),
+    displayName: z
+      .string()
+      .min(1)
+      .describe(tTool(runtime, "tools.user_interaction.fieldDisplayName")),
+    required: z.boolean().describe(tTool(runtime, "tools.user_interaction.fieldRequired")),
+    description: z
+      .string()
+      .optional()
+      .default("")
+      .describe(tTool(runtime, "tools.user_interaction.fieldDescription")),
+  });
+
+  const fieldsPayloadSchema = z.object({
+    fields: z
+      .array(fieldSchema)
+      .default([])
+      .describe(tTool(runtime, "tools.user_interaction.fieldFields")),
+  });
 
   const userInteractionTool = new DynamicStructuredTool({
     name: "user_interaction",
-    description:
-      "当需要用户确认或补充信息时调用该工具。输入交互内容和字段定义，工具会等待前端用户填写并返回结果。连接器访问，数据库，终端，邮件等连接请求时禁止调用该工具",
+    description: tTool(runtime, "tools.user_interaction.description"),
     schema: z.object({
-      content: z.string().min(1).describe("交互内容"),
+      content: z
+        .string()
+        .min(1)
+        .describe(tTool(runtime, "tools.user_interaction.fieldContent")),
       fields: z
         .union([z.string(), fieldsPayloadSchema])
         .optional()
-        .describe("字段定义（对象或 JSON 字符串）"),
+        .describe(tTool(runtime, "tools.user_interaction.fieldFieldsPayload")),
     }),
     func: async ({ content, fields }) => {
       if (!bridge?.requestUserInteraction) {
         return toToolJsonResult("user_interaction", {
           ok: false,
-          error: "user interaction bridge missing",
+          error: tUserInteraction(runtime, "bridgeMissing"),
         });
       }
 
@@ -214,7 +241,7 @@ export function createUserInteractionTool({ agentContext }) {
           ok: true,
           confirmed: false,
           cancelled: true,
-          response: String(result?.response || "cancelled"),
+          response: String(result?.response || tUserInteraction(runtime, "cancelled")),
         });
       }
 
@@ -222,7 +249,7 @@ export function createUserInteractionTool({ agentContext }) {
         if (!result || typeof result !== "object" || Array.isArray(result)) {
           return toToolJsonResult("user_interaction", {
             ok: false,
-            error: "invalid interaction response object",
+            error: tUserInteraction(runtime, "invalidResponseObject"),
           });
         }
         const requiredFields = normalizedFieldsPayload.fields
@@ -233,7 +260,7 @@ export function createUserInteractionTool({ agentContext }) {
           if (!String(result?.[key] ?? "").trim()) {
             return toToolJsonResult("user_interaction", {
               ok: false,
-              error: `missing required field: ${key}`,
+              error: tUserInteraction(runtime, "missingRequiredField", { key }),
             });
           }
         }

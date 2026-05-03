@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { tSystem } from "../i18n/system-text.js";
 
 function normalizeConnectorType(input = "") {
   const value = String(input || "").trim().toLowerCase();
@@ -127,7 +128,7 @@ export class ConnectorEventListener {
     if (!normalizedType || !normalizedName) return;
     try {
       await this.bridge.requestUserInteraction({
-        content: `${normalizedType}连接器连接成功：${normalizedName}`,
+        content: `${normalizedType} ${tSystem("connectors.event.connected")}: ${normalizedName}`,
         fields: [],
         dialogProcessId: this.dialogProcessId,
         requireEncryption: false,
@@ -162,7 +163,7 @@ export class ConnectorEventListener {
       await this.bridge.requestUserInteraction({
         content:
           String(message || "").trim() ||
-          `当前已勾选连接器「${normalizedName}」未连接，请重新连接`,
+          `${tSystem("connectors.event.reconnectRequired")}: ${normalizedName}`,
         fields: [],
         dialogProcessId: this.dialogProcessId,
         requireEncryption: false,
@@ -215,4 +216,3 @@ export class ConnectorEventListener {
 export function createConnectorEventListener(options = {}) {
   return new ConnectorEventListener(options);
 }
-

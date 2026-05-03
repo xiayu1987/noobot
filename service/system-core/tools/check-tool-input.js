@@ -6,6 +6,58 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { recoverableToolError } from "../error/index.js";
+import { pickToolText, resolveToolLocale } from "./tool-i18n.js";
+
+function tCheckInput(agentContext = {}, key = "") {
+  const locale = resolveToolLocale(agentContext);
+  const dict = {
+    runtimeBasePathMissing: {
+      "zh-CN": "运行时缺少 basePath",
+      "en-US": "runtime basePath missing",
+    },
+    fieldRequired: {
+      "zh-CN": "必填",
+      "en-US": "required",
+    },
+    pathSeparatorsNotAllowed: {
+      "zh-CN": "不能包含路径分隔符",
+      "en-US": "must not contain path separators",
+    },
+    controlCharsNotAllowed: {
+      "zh-CN": "不能包含控制字符",
+      "en-US": "must not contain control characters",
+    },
+    fileNameIncludedRequired: {
+      "zh-CN": "必须包含文件名",
+      "en-US": "must include file name",
+    },
+    invalidUuidFormat: {
+      "zh-CN": "格式无效（必须是 UUID）",
+      "en-US": "invalid format (UUID required)",
+    },
+    sessionContextMissing: {
+      "zh-CN": "会话上下文缺失",
+      "en-US": "session context missing",
+    },
+    parentSessionNotFound: {
+      "zh-CN": "未找到父会话",
+      "en-US": "parent session not found",
+    },
+    notFoundInParentSessionMessages: {
+      "zh-CN": "在父会话消息中未找到",
+      "en-US": "not found in parent session messages",
+    },
+    pathOutOfScope: {
+      "zh-CN": "路径超出允许范围",
+      "en-US": "path out of scope",
+    },
+    fileNotFound: {
+      "zh-CN": "文件不存在",
+      "en-US": "file not found",
+    },
+  };
+  return pickToolText({ locale, dict, key });
+}
 
 function isUuid(value = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -25,7 +77,7 @@ function resolveRuntimeBasePath(agentContext = {}) {
     agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
   ).trim();
   if (!basePath) {
-    throw recoverableToolError("runtime basePath missing", {
+    throw recoverableToolError(tCheckInput(agentContext, "runtimeBasePathMissing"), {
       code: "RECOVERABLE_RUNTIME_BASEPATH_MISSING",
     });
   }
@@ -42,23 +94,29 @@ export function assertValidSimpleFileName({
 }) {
   const normalizedFileName = String(fileName || "").trim();
   if (!normalizedFileName) {
-    throw recoverableToolError(`${fieldName} required`, {
-      code: "RECOVERABLE_INPUT_MISSING",
-      details: { field: fieldName },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput({}, "fieldRequired")}`,
+      {
+        code: "RECOVERABLE_INPUT_MISSING",
+        details: { field: fieldName },
+      },
+    );
   }
   if (
     normalizedFileName.includes("/") ||
     normalizedFileName.includes("\\")
   ) {
-    throw recoverableToolError(`${fieldName} must not contain path separators`, {
-      code: "RECOVERABLE_INVALID_FILE_NAME",
-      details: { field: fieldName, value: normalizedFileName },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput({}, "pathSeparatorsNotAllowed")}`,
+      {
+        code: "RECOVERABLE_INVALID_FILE_NAME",
+        details: { field: fieldName, value: normalizedFileName },
+      },
+    );
   }
   if (/[\0-\x1F\x7F]/.test(normalizedFileName)) {
     throw recoverableToolError(
-      `${fieldName} must not contain control characters`,
+      `${fieldName} ${tCheckInput({}, "controlCharsNotAllowed")}`,
       {
         code: "RECOVERABLE_INVALID_FILE_NAME",
         details: { field: fieldName, value: normalizedFileName },
@@ -74,17 +132,23 @@ export function assertValidFileNameFromPath({
 }) {
   const normalizedPath = String(filePath || "").trim();
   if (!normalizedPath) {
-    throw recoverableToolError(`${fieldName} required`, {
-      code: "RECOVERABLE_INPUT_MISSING",
-      details: { field: fieldName },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput({}, "fieldRequired")}`,
+      {
+        code: "RECOVERABLE_INPUT_MISSING",
+        details: { field: fieldName },
+      },
+    );
   }
   const parsedName = path.basename(path.normalize(normalizedPath));
   if (!parsedName || parsedName === "." || parsedName === path.sep) {
-    throw recoverableToolError(`${fieldName} must include file name`, {
-      code: "RECOVERABLE_INVALID_FILE_NAME",
-      details: { field: fieldName, value: normalizedPath },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput({}, "fileNameIncludedRequired")}`,
+      {
+        code: "RECOVERABLE_INVALID_FILE_NAME",
+        details: { field: fieldName, value: normalizedPath },
+      },
+    );
   }
   return assertValidSimpleFileName({
     fileName: parsedName,
@@ -99,16 +163,22 @@ export async function assertValidParentSessionId({
 }) {
   const normalizedParentSessionId = String(parentSessionId || "").trim();
   if (!normalizedParentSessionId) {
-    throw recoverableToolError(`${fieldName} required`, {
-      code: "RECOVERABLE_INPUT_MISSING",
-      details: { field: fieldName },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
+      {
+        code: "RECOVERABLE_INPUT_MISSING",
+        details: { field: fieldName },
+      },
+    );
   }
   if (!isUuid(normalizedParentSessionId)) {
-    throw recoverableToolError(`invalid ${fieldName} format (UUID required)`, {
-      code: "RECOVERABLE_INVALID_PARENT_SESSION_ID",
-      details: { field: fieldName, value: normalizedParentSessionId },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput(agentContext, "invalidUuidFormat")}`,
+      {
+        code: "RECOVERABLE_INVALID_PARENT_SESSION_ID",
+        details: { field: fieldName, value: normalizedParentSessionId },
+      },
+    );
   }
 
   const runtime = agentContext?.runtime || {};
@@ -117,7 +187,7 @@ export async function assertValidParentSessionId({
     agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
   ).trim();
   if (!sessionManager || !userId) {
-    throw recoverableToolError("session context missing", {
+    throw recoverableToolError(tCheckInput(agentContext, "sessionContextMissing"), {
       code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
       details: { hasSessionManager: Boolean(sessionManager), hasUserId: Boolean(userId) },
     });
@@ -126,7 +196,7 @@ export async function assertValidParentSessionId({
   const sessionTree = await sessionManager.getSessionTree({ userId });
   if (!sessionTree?.nodes?.[normalizedParentSessionId]) {
     throw recoverableToolError(
-      `parent session not found: ${normalizedParentSessionId}`,
+      `${tCheckInput(agentContext, "parentSessionNotFound")}: ${normalizedParentSessionId}`,
       {
         code: "RECOVERABLE_PARENT_SESSION_NOT_FOUND",
         details: { parentSessionId: normalizedParentSessionId },
@@ -152,10 +222,13 @@ export async function assertValidParentDialogProcessId({
     parentDialogProcessId || "",
   ).trim();
   if (!normalizedParentDialogProcessId) {
-    throw recoverableToolError(`${dialogFieldName} required`, {
-      code: "RECOVERABLE_INPUT_MISSING",
-      details: { field: dialogFieldName },
-    });
+    throw recoverableToolError(
+      `${dialogFieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
+      {
+        code: "RECOVERABLE_INPUT_MISSING",
+        details: { field: dialogFieldName },
+      },
+    );
   }
 
   const runtime = agentContext?.runtime || {};
@@ -164,7 +237,7 @@ export async function assertValidParentDialogProcessId({
     agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
   ).trim();
   if (!sessionManager || !userId) {
-    throw recoverableToolError("session context missing", {
+    throw recoverableToolError(tCheckInput(agentContext, "sessionContextMissing"), {
       code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
       details: { hasSessionManager: Boolean(sessionManager), hasUserId: Boolean(userId) },
     });
@@ -177,7 +250,7 @@ export async function assertValidParentDialogProcessId({
   });
   if (!exists) {
     throw recoverableToolError(
-      `${dialogFieldName} not found in parent session messages: ${normalizedParentDialogProcessId}`,
+      `${dialogFieldName} ${tCheckInput(agentContext, "notFoundInParentSessionMessages")}: ${normalizedParentDialogProcessId}`,
       {
         code: "RECOVERABLE_PARENT_DIALOG_PROCESS_NOT_FOUND",
         details: {
@@ -202,10 +275,13 @@ export async function assertAndResolveUserWorkspaceFilePath({
 }) {
   const normalizedPath = String(filePath || "").trim();
   if (!normalizedPath) {
-    throw recoverableToolError(`${fieldName} required`, {
-      code: "RECOVERABLE_INPUT_MISSING",
-      details: { field: fieldName },
-    });
+    throw recoverableToolError(
+      `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
+      {
+        code: "RECOVERABLE_INPUT_MISSING",
+        details: { field: fieldName },
+      },
+    );
   }
 
   const workspacePath = resolveUserWorkspacePath(agentContext);
@@ -214,24 +290,30 @@ export async function assertAndResolveUserWorkspaceFilePath({
     : path.resolve(workspacePath, normalizedPath);
 
   if (!isWithinBasePath(workspacePath, resolvedTargetPath)) {
-    throw recoverableToolError(`Path out of scope: ${normalizedPath}`, {
-      code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
-      details: {
-        field: fieldName,
-        filePath: normalizedPath,
-        allowedRoot: workspacePath,
+    throw recoverableToolError(
+      `${tCheckInput(agentContext, "pathOutOfScope")}: ${normalizedPath}`,
+      {
+        code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
+        details: {
+          field: fieldName,
+          filePath: normalizedPath,
+          allowedRoot: workspacePath,
+        },
       },
-    });
+    );
   }
 
   if (mustExist) {
     try {
       await access(resolvedTargetPath);
     } catch {
-      throw recoverableToolError(`File not found: ${normalizedPath}`, {
-        code: "RECOVERABLE_FILE_NOT_FOUND",
-        details: { field: fieldName, filePath: normalizedPath },
-      });
+      throw recoverableToolError(
+        `${tCheckInput(agentContext, "fileNotFound")}: ${normalizedPath}`,
+        {
+          code: "RECOVERABLE_FILE_NOT_FOUND",
+          details: { field: fieldName, filePath: normalizedPath },
+        },
+      );
     }
   }
 

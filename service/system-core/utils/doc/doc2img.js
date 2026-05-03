@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { Poppler } from "node-poppler";
 import { recoverableToolError } from "../../error/index.js";
+import { tSystem } from "../../i18n/system-text.js";
 
 const require = createRequire(import.meta.url);
 
@@ -105,7 +106,7 @@ async function pdfToImagesViaNodePoppler({
   }
 
   if (!images.length) {
-    throw recoverableToolError(`No image output from PDF: ${pdfFile}`, {
+    throw recoverableToolError(`${tSystem("doc2img.noImageOutputFromPdf")}: ${pdfFile}`, {
       code: "RECOVERABLE_DOC_TO_IMAGE_EMPTY",
     });
   }
@@ -120,7 +121,7 @@ export async function convertDocumentToImages({
   popplerPath = null,
 }) {
   if (!inputFile) {
-    throw recoverableToolError("inputFile required", {
+    throw recoverableToolError(tSystem("doc2img.inputFileRequired"), {
       code: "RECOVERABLE_INPUT_MISSING",
     });
   }
@@ -128,7 +129,7 @@ export async function convertDocumentToImages({
   try {
     await access(resolvedInput);
   } catch {
-    throw recoverableToolError(`File not found: ${resolvedInput}`, {
+    throw recoverableToolError(`${tSystem("common.fileNotFound")}: ${resolvedInput}`, {
       code: "RECOVERABLE_FILE_NOT_FOUND",
     });
   }
@@ -161,7 +162,7 @@ export async function convertDocumentToImages({
 
   if (!isOfficeFile(resolvedInput)) {
     throw recoverableToolError(
-      `Unsupported file type: ${path.extname(resolvedInput)}`,
+      `${tSystem("doc2img.unsupportedFileType")}: ${path.extname(resolvedInput)}`,
       {
         code: "RECOVERABLE_UNSUPPORTED_FILE_TYPE",
       },

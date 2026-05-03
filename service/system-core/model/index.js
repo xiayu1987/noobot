@@ -5,6 +5,7 @@
  */
 import { ChatOpenAI } from "@langchain/openai";
 import { fatalSystemError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 function isProviderEnabled(provider = {}) {
   return provider?.enabled !== false;
@@ -170,14 +171,14 @@ function buildModelKwargs(modelSpec = {}) {
 
 function createChatModelFromSpec(modelSpec, options = {}) {
   if (!modelSpec?.model) {
-    throw fatalSystemError("Model name is required", {
+    throw fatalSystemError(tSystem("model.nameRequired"), {
       code: "FATAL_MODEL_NAME_REQUIRED",
     });
   }
   const apiKey = resolveApiKey(modelSpec);
   if (!apiKey)
     throw fatalSystemError(
-      `Missing api key for provider alias: ${modelSpec.alias || "unknown"}`,
+      `${tSystem("model.apiKeyMissingForProviderAlias")}: ${modelSpec.alias || "unknown"}`,
       {
         code: "FATAL_PROVIDER_API_KEY_MISSING",
         details: { alias: modelSpec.alias || "unknown" },
@@ -219,7 +220,7 @@ export function createChatModelByName(modelName, options = {}) {
   });
   if (!modelSpec) {
     throw fatalSystemError(
-      `enabled provider/model not found: ${String(modelName || "")}`,
+      `${tSystem("model.enabledProviderModelNotFound")}: ${String(modelName || "")}`,
       {
         code: "FATAL_MODEL_NOT_FOUND",
         details: { modelName: String(modelName || "") },

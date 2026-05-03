@@ -40,16 +40,40 @@ function tAgentCollab(runtime = {}, key = "") {
       "en-US": "runtime missing bot manager/user id",
     },
     taskNameTaskContentRequired: {
-      "zh-CN": "taskName/taskContent required",
+      "zh-CN": "taskName 与 taskContent 必填",
       "en-US": "taskName/taskContent required",
     },
     parentSessionIdRequired: {
-      "zh-CN": "parentSessionId required",
+      "zh-CN": "parentSessionId 必填",
       "en-US": "parentSessionId required",
     },
     taskRequired: {
-      "zh-CN": "task required",
+      "zh-CN": "task 必填",
       "en-US": "task required",
+    },
+    runtimeSessionIdMissing: {
+      "zh-CN": "运行时缺少 sessionId",
+      "en-US": "runtime sessionId missing",
+    },
+    runtimeDialogProcessIdMissing: {
+      "zh-CN": "运行时缺少 dialogProcessId",
+      "en-US": "runtime dialogProcessId missing",
+    },
+    tasksRequired: {
+      "zh-CN": "tasks 必填",
+      "en-US": "tasks required",
+    },
+    childAsyncResultContainersRequired: {
+      "zh-CN": "childAsyncResultContainers 必填",
+      "en-US": "childAsyncResultContainers required",
+    },
+    sessionContextHint: {
+      "zh-CN": "delegate_task_async 需要当前会话上下文",
+      "en-US": "delegate_task_async requires current session context",
+    },
+    dialogContextHint: {
+      "zh-CN": "delegate_task_async 需要当前对话流程上下文",
+      "en-US": "delegate_task_async requires current dialog process context",
     },
   };
   return pickToolText({ locale, dict, key });
@@ -121,18 +145,11 @@ export function createAgentCollabTool({ agentContext }) {
   const attachmentService = runtime.attachmentService || null;
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   const defaultWaitMs = Number(
-    effectiveConfig?.tools?.wait_async_task_result?.wait_timeout_ms ??
-      effectiveConfig?.tools?.wait_async_task_result?.waitTimeoutMs ??
-      effectiveConfig?.tools?.delegate_task_async?.wait_timeout_ms ??
-      effectiveConfig?.tools?.delegate_task_async?.waitTimeoutMs ??
-      effectiveConfig?.tools?.agent_collab?.wait_timeout_ms ??
-      effectiveConfig?.tools?.agent_collab?.waitTimeoutMs ??
+    effectiveConfig?.tools?.delegate_task_async?.waitTimeoutMs ??
       120000,
   );
   const defaultPollIntervalMs = Number(
-    effectiveConfig?.tools?.wait_async_task_result?.poll_interval_ms ??
-      effectiveConfig?.tools?.wait_async_task_result?.pollIntervalMs ??
-      effectiveConfig?.tools?.delegate_task_async?.poll_interval_ms ??
+    effectiveConfig?.tools?.wait_async_task_result?.pollIntervalMs ??
       effectiveConfig?.tools?.delegate_task_async?.pollIntervalMs ??
       5000,
   );
@@ -503,11 +520,11 @@ export function createAgentCollabTool({ agentContext }) {
       const resolveValidatedParent = async () => {
         const normalizedParentSessionId = normalizeString(sourceSessionId);
         if (!normalizedParentSessionId) {
-          throw recoverableToolError("runtime sessionId missing", {
+          throw recoverableToolError(tAgentCollab(runtime, "runtimeSessionIdMissing"), {
             code: "RECOVERABLE_INPUT_MISSING",
             details: {
               field: "runtime.systemRuntime.sessionId",
-              hint: "delegate_task_async requires current session context",
+              hint: tAgentCollab(runtime, "sessionContextHint"),
             },
           });
         }
@@ -515,13 +532,16 @@ export function createAgentCollabTool({ agentContext }) {
           sourceDialogProcessId,
         );
         if (!normalizedParentDialogProcessId) {
-          throw recoverableToolError("runtime dialogProcessId missing", {
+          throw recoverableToolError(
+            tAgentCollab(runtime, "runtimeDialogProcessIdMissing"),
+            {
             code: "RECOVERABLE_INPUT_MISSING",
             details: {
               field: "runtime.systemRuntime.dialogProcessId",
-              hint: "delegate_task_async requires current dialog process context",
+              hint: tAgentCollab(runtime, "dialogContextHint"),
             },
-          });
+            },
+          );
         }
         return assertValidParentDialogProcessId({
           parentSessionId: normalizedParentSessionId,
@@ -534,7 +554,7 @@ export function createAgentCollabTool({ agentContext }) {
       const normalizedParentDialogProcessId =
         validatedParent.parentDialogProcessId;
       if (!Array.isArray(tasks) || !tasks.length) {
-        throw recoverableToolError("tasks required", {
+        throw recoverableToolError(tAgentCollab(runtime, "tasksRequired"), {
           code: "RECOVERABLE_INPUT_MISSING",
           details: { field: "tasks" },
         });
@@ -660,10 +680,13 @@ export function createAgentCollabTool({ agentContext }) {
           : []
       ).filter((item) => isPlainObject(item) && Array.isArray(item?.tasks));
       if (!containers.length) {
-        throw recoverableToolError("childAsyncResultContainers required", {
+        throw recoverableToolError(
+          tAgentCollab(runtime, "childAsyncResultContainersRequired"),
+          {
           code: "RECOVERABLE_INPUT_MISSING",
           details: { field: "childAsyncResultContainers" },
-        });
+          },
+        );
       }
       const normalizedTimeoutMs = Number(timeoutMs);
       const resolvedTimeoutMs =

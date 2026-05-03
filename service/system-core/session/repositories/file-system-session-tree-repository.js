@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { fatalSystemError } from "../../error/index.js";
+import { tSystem } from "../../i18n/system-text.js";
 import { normalizeSessionTreeEntity } from "../entities.js";
 
 export class FileSystemSessionTreeRepository {
@@ -61,7 +62,7 @@ export class FileSystemSessionTreeRepository {
     const basePath = this._basePath(userId);
     const ensured = await this.storageService.ensureRuntimeDirsByBasePath(basePath);
     if (!ensured) {
-      throw fatalSystemError(`workspace not initialized: ${basePath}`, {
+      throw fatalSystemError(`${tSystem("session.workspaceNotInitialized")}: ${basePath}`, {
         code: "FATAL_WORKSPACE_NOT_INITIALIZED",
         details: { basePath },
       });

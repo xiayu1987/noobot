@@ -16,6 +16,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { fatalSystemError } from "../error/index.js";
+import { tSystem } from "../i18n/system-text.js";
 
 const RESET_SECTION_PATHS = {
   memory: ["memory"],
@@ -46,7 +47,7 @@ function deepMerge(base, override) {
 function resolveTemplateBase(workspaceTemplatePath = "") {
   const configuredTemplatePath = String(workspaceTemplatePath || "").trim();
   if (!configuredTemplatePath) {
-    throw fatalSystemError("workspaceTemplatePath required", {
+    throw fatalSystemError(tSystem("init.workspaceTemplatePathRequired"), {
       code: "FATAL_WORKSPACE_TEMPLATE_PATH_REQUIRED",
     });
   }
@@ -63,7 +64,7 @@ async function resolveWorkspaceInitPaths({
   try {
     await access(templateBase);
   } catch {
-    throw fatalSystemError(`workspace template missing: ${templateBase}`, {
+    throw fatalSystemError(`${tSystem("init.workspaceTemplateMissing")}: ${templateBase}`, {
       code: "FATAL_WORKSPACE_TEMPLATE_MISSING",
       details: { templateBase },
     });
@@ -84,7 +85,7 @@ function normalizeResetSections(inputSections) {
   );
   const invalid = normalized.filter((item) => !all.includes(item));
   if (invalid.length) {
-    throw fatalSystemError(`invalid reset sections: ${invalid.join(", ")}`, {
+    throw fatalSystemError(`${tSystem("init.invalidResetSections")}: ${invalid.join(", ")}`, {
       code: "FATAL_INVALID_RESET_SECTIONS",
       details: { invalid, allowed: all },
     });
@@ -122,7 +123,7 @@ export async function ensureUserWorkspaceInitialized({
   if (baseExists) {
     const baseStat = await stat(base);
     if (!baseStat.isDirectory()) {
-      throw fatalSystemError(`user workspace path is not a directory: ${base}`, {
+      throw fatalSystemError(`${tSystem("init.userWorkspacePathNotDirectory")}: ${base}`, {
         code: "FATAL_WORKSPACE_PATH_NOT_DIRECTORY",
         details: { base },
       });

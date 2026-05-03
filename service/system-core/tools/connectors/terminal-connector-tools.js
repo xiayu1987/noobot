@@ -27,6 +27,7 @@ import {
   resolveRuntimeLocale,
   tConnector,
 } from "./connector-toolkit.js";
+import { tTool } from "../tool-i18n.js";
 
 export function createTerminalConnectorTools(context = {}) {
   const {
@@ -44,28 +45,31 @@ export function createTerminalConnectorTools(context = {}) {
 
   const terminalConnectConnectorTool = new DynamicStructuredTool({
     name: "terminal_connect_connector",
-    description:
-      "终端连接器连接工具，可以创建并连接。输入连接器名称和终端类型。",
+    description: tTool(runtime, "tools.terminal_connector.description"),
     schema: z.object({
-      connector_name: z.string().describe("连接器名称"),
-      terminal_type: z.string().describe("终端类型：ssh"),
+      connector_name: z
+        .string()
+        .describe(tTool(runtime, "tools.terminal_connector.fieldConnectorName")),
+      terminal_type: z
+        .string()
+        .describe(tTool(runtime, "tools.terminal_connector.fieldTerminalType")),
       default_values: z
         .union([z.string(), z.object({}).passthrough()])
         .optional()
-        .describe("可选：终端连接默认值（不含 password），可传 JSON 字符串或对象"),
+        .describe(tTool(runtime, "tools.terminal_connector.fieldDefaultValues")),
     }),
     func: async ({ connector_name, terminal_type, default_values }) => {
       const runtimeLocale = resolveRuntimeLocale(runtime);
       if (!store || typeof store.connectConnector !== "function") {
         return toToolJsonResult("terminal_connect_connector", {
           ok: false,
-          error: "connector channel store missing",
+          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("terminal_connect_connector", {
           ok: false,
-          error: "rootSessionId missing in systemRuntime",
+          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
         });
       }
       const connectorName = String(connector_name || "").trim();
@@ -73,13 +77,13 @@ export function createTerminalConnectorTools(context = {}) {
       if (!connectorName) {
         return toToolJsonResult("terminal_connect_connector", {
           ok: false,
-          error: "connector_name required",
+          error: tTool(runtime, "tools.connectors.errorConnectorNameRequired"),
         });
       }
       if (!terminalType) {
         return toToolJsonResult("terminal_connect_connector", {
           ok: false,
-          error: "terminal_type currently only supports ssh",
+          error: tTool(runtime, "tools.terminal_connector.errorInvalidType"),
         });
       }
       const existingConnected = findConnectedConnector({
@@ -150,7 +154,7 @@ export function createTerminalConnectorTools(context = {}) {
         if (!bridge?.requestUserInteraction) {
           return toToolJsonResult("terminal_connect_connector", {
             ok: false,
-            error: "user interaction bridge missing for connection info completion",
+            error: tTool(runtime, "tools.connectors.errorUserInteractionBridgeMissing"),
           });
         }
         const interactionResult = await bridge.requestUserInteraction({
@@ -183,6 +187,7 @@ export function createTerminalConnectorTools(context = {}) {
         connectionInfo,
       });
       const runtimeStatus = await buildRuntimeConnectorStatus({
+        runtime,
         store,
         rootSessionId,
         connectorName,

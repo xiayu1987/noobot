@@ -27,6 +27,7 @@ import {
   resolveRuntimeLocale,
   tConnector,
 } from "./connector-toolkit.js";
+import { tTool } from "../tool-i18n.js";
 
 export function createDatabaseConnectorTools(context = {}) {
   const {
@@ -44,28 +45,31 @@ export function createDatabaseConnectorTools(context = {}) {
 
   const databaseConnectConnectorTool = new DynamicStructuredTool({
     name: "database_connect_connector",
-    description:
-      "数据库连接器连接工具，可以创建并连接。输入连接器名称和数据库类型。",
+    description: tTool(runtime, "tools.database_connector.description"),
     schema: z.object({
-      connector_name: z.string().describe("连接器名称"),
-      database_type: z.string().describe("数据库类型：mysql/postgres/sqlite"),
+      connector_name: z
+        .string()
+        .describe(tTool(runtime, "tools.database_connector.fieldConnectorName")),
+      database_type: z
+        .string()
+        .describe(tTool(runtime, "tools.database_connector.fieldDatabaseType")),
       default_values: z
         .union([z.string(), z.object({}).passthrough()])
         .optional()
-        .describe("可选：数据库连接默认值，可传 JSON 字符串或对象"),
+        .describe(tTool(runtime, "tools.database_connector.fieldDefaultValues")),
     }),
     func: async ({ connector_name, database_type, default_values }) => {
       const runtimeLocale = resolveRuntimeLocale(runtime);
       if (!store || typeof store.connectConnector !== "function") {
         return toToolJsonResult("database_connect_connector", {
           ok: false,
-          error: "connector channel store missing",
+          error: tTool(runtime, "tools.connectors.errorStoreMissing"),
         });
       }
       if (!rootSessionId) {
         return toToolJsonResult("database_connect_connector", {
           ok: false,
-          error: "rootSessionId missing in systemRuntime",
+          error: tTool(runtime, "tools.connectors.errorRootSessionMissing"),
         });
       }
       const connectorName = String(connector_name || "").trim();
@@ -73,13 +77,13 @@ export function createDatabaseConnectorTools(context = {}) {
       if (!connectorName) {
         return toToolJsonResult("database_connect_connector", {
           ok: false,
-          error: "connector_name required",
+          error: tTool(runtime, "tools.connectors.errorConnectorNameRequired"),
         });
       }
       if (!databaseType) {
         return toToolJsonResult("database_connect_connector", {
           ok: false,
-          error: "database_type must be mysql|postgres|sqlite",
+          error: tTool(runtime, "tools.database_connector.errorInvalidType"),
         });
       }
       const existingConnected = findConnectedConnector({
@@ -150,7 +154,7 @@ export function createDatabaseConnectorTools(context = {}) {
         if (!bridge?.requestUserInteraction) {
           return toToolJsonResult("database_connect_connector", {
             ok: false,
-            error: "user interaction bridge missing for connection info completion",
+            error: tTool(runtime, "tools.connectors.errorUserInteractionBridgeMissing"),
           });
         }
         const interactionResult = await bridge.requestUserInteraction({
@@ -183,6 +187,7 @@ export function createDatabaseConnectorTools(context = {}) {
         connectionInfo,
       });
       const runtimeStatus = await buildRuntimeConnectorStatus({
+        runtime,
         store,
         rootSessionId,
         connectorName,
