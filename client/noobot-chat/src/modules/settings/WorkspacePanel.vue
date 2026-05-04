@@ -176,30 +176,35 @@ async function refreshAll() {
 }
 
 async function openFile(node, source = "user") {
-  if (
-    !props.connected ||
-    !node ||
-    node.type !== "file" ||
-    !props.userId ||
-    !props.apiKey
-  )
+  if (!props.connected || !node || !props.userId || !props.apiKey)
     return;
+  const normalizedSource = source === "all" ? "all" : "user";
+  const nodePath = String(node.path || "").trim();
+  if (!nodePath) return;
+  if (node.type === "dir") {
+    activePath.value = nodePath;
+    activePathSource.value = normalizedSource;
+    isTextFile.value = false;
+    content.value = "";
+    return;
+  }
+  if (node.type !== "file") return;
   loadingFile.value = true;
   try {
     const res =
-      source === "all"
+      normalizedSource === "all"
         ? await getWorkspaceAllFileApi(
-            { path: node.path },
+            { path: nodePath },
             { fetcher: authFetch },
           )
         : await getWorkspaceFileApi(
-            { userId: props.userId, path: node.path },
+            { userId: props.userId, path: nodePath },
             { fetcher: authFetch },
           );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.readFileFailed"));
-    activePath.value = data.path || node.path;
-    activePathSource.value = source === "all" ? "all" : "user";
+    activePath.value = data.path || nodePath;
+    activePathSource.value = normalizedSource;
     isTextFile.value = data.isText !== false;
     content.value = data.content || "";
   } catch (error) {
