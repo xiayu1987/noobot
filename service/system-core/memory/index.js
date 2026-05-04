@@ -9,6 +9,21 @@ import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.j
 import { mergeConfig } from "../config/index.js";
 import { fatalSystemError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
+import { normalizeLocale } from "../i18n/index.js";
+import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptI18n } from "../i18n/locales/zh-CN/system-prompt.js";
+import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptI18n } from "../i18n/locales/en-US/system-prompt.js";
+
+const MEMORY_PROMPT_I18N = Object.freeze({
+  "zh-CN": Object.freeze(zhSystemPromptI18n?.memoryPrompt || {}),
+  "en-US": Object.freeze(enSystemPromptI18n?.memoryPrompt || {}),
+});
+
+function resolveMemoryPromptI18n(locale = "zh-CN") {
+  const normalizedLocale = normalizeLocale(locale, "zh-CN");
+  return normalizedLocale === "en-US"
+    ? MEMORY_PROMPT_I18N["en-US"]
+    : MEMORY_PROMPT_I18N["zh-CN"];
+}
 
 export class MemoryService {
   constructor(globalConfig) {
@@ -183,6 +198,9 @@ export class MemoryService {
   async maybeSummarize({ userId, userConfig }) {
     const basePath = this._resolveBasePath(userId);
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
+    const promptI18n = resolveMemoryPromptI18n(
+      effectiveConfig?.locale || this.globalConfig?.locale || "zh-CN",
+    );
     const short = await this._readShortMemory(basePath);
     const unextracted = this._flattenShortItems(short)
       .sort((a, b) => this._toTs(a.createdAt) - this._toTs(b.createdAt));
@@ -206,16 +224,14 @@ export class MemoryService {
       userConfig,
     });
     const longMemoryModel = await this._readLongMemoryModel(basePath);
-    const prompt = [
-      "你是长期记忆提炼器。",
-      longMemoryModel
-        ? `请严格遵守以下长期记忆建模规则（来自 long-memory-model.md）：\n${longMemoryModel}`
-        : "若未提供建模规则，请优先提炼稳定偏好、长期约束。",
-      "请基于“已有长期记忆”与“新短期记忆块”，产出最新的长期偏好。",
-      "你可以对已有长期偏好进行总结处理",
-      `已有长期偏好:\n${typeof existingLongMemory === "string" ? existingLongMemory : JSON.stringify(existingLongMemory, null, 2)}`,
-      `新短期记忆块:\n${JSON.stringify(promptPayload)}`,
-    ].join("\n\n");
+    const prompt = String(
+      promptI18n?.prompt?.({
+        longMemoryModel,
+        existingLongMemory,
+        promptPayload,
+      }) || "",
+    ).trim();
+    if (!prompt) return;
 
     let nextLongMemory = existingLongMemory;
     try {

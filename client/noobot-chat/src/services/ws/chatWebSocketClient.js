@@ -9,6 +9,7 @@ export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
   stopCloseDelayMs = 300,
   forceStopFinalizeMs = 5000,
+  t = (key = "") => String(key || ""),
 } = {}) {
   let activeSocket = null;
   let stopRequested = false;
@@ -74,7 +75,7 @@ export function createChatWebSocketClient({
           const event = String(parsed?.event || "message");
           const data = parsed?.data || {};
           if (event === StreamEventEnum.ERROR) {
-            throw new Error(data?.error || "websocket stream error");
+            throw new Error(data?.error || t("infra.websocketStreamError"));
           }
           onEvent({ event, data });
           if (event === StreamEventEnum.DONE) {
@@ -91,7 +92,7 @@ export function createChatWebSocketClient({
       };
 
       ws.onerror = () => {
-        finalize(() => reject(new Error("WebSocket 连接失败")));
+        finalize(() => reject(new Error(t("infra.websocketConnectFailed"))));
       };
 
       ws.onclose = () => {
@@ -99,7 +100,7 @@ export function createChatWebSocketClient({
           finalize(() => resolve());
           return;
         }
-        finalize(() => reject(new Error("WebSocket 连接已关闭")));
+        finalize(() => reject(new Error(t("infra.websocketClosed"))));
       };
     });
   }
@@ -159,7 +160,7 @@ export function createChatWebSocketClient({
   function sendJson(payload = {}) {
     const ws = activeSocket;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error("交互通道不可用");
+      throw new Error(t("infra.interactionChannelUnavailable"));
     }
     ws.send(JSON.stringify(payload || {}));
   }

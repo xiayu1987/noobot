@@ -327,8 +327,9 @@ function buildContextMessages(
     const contentMessage = new HumanMessage(
       buildHumanMessageContent(msg, fallbackMeta?.attachmentMetas || []),
     );
+    const userMetaTag = tEngine(runtime, "agent.userMetaTag");
     const metaMessage = new HumanMessage(
-      `[用户元信息]\n${buildUserMetaInfoContent(msg, fallbackMeta)}\n[/用户元信息]`,
+      `[${userMetaTag}]\n${buildUserMetaInfoContent(msg, fallbackMeta)}\n[/${userMetaTag}]`,
     );
     return [contentMessage, metaMessage];
   }

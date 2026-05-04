@@ -137,7 +137,11 @@ export const zhCNMessages = {
     "deleteSessionTitle": "删除会话",
     "confirm": "确定",
     "cancel": "取消",
-    "interactionChannelUnavailable": "交互通道不可用"
+    "interactionChannelUnavailable": "交互通道不可用",
+    "connectorStatusFetchFailed": "获取连接器状态失败",
+    "websocketStreamError": "WebSocket 流错误",
+    "websocketConnectFailed": "WebSocket 连接失败",
+    "websocketClosed": "WebSocket 连接已关闭"
   },
   "chat": {
     "newSession": "新会话",

@@ -14,6 +14,8 @@ import {
   copyMarkdownText,
 } from "../../shared/utils/markdown-copy";
 import { useLocale } from "../../shared/i18n/useLocale";
+import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
+import { enUSMessages } from "../../shared/i18n/locales/en-US";
 
 export function useMessagePreview({
   userId = "",
@@ -23,6 +25,22 @@ export function useMessagePreview({
   notify = () => {},
 } = {}) {
   const { t } = useLocale();
+  const noCopyableContentTexts = new Set([
+    "NO_COPYABLE_CONTENT",
+    String(zhCNMessages?.message?.noCopyableContent || "").trim(),
+    String(enUSMessages?.message?.noCopyableContent || "").trim(),
+    String(t("message.noCopyableContent") || "").trim(),
+  ]);
+  const noCopyableTextTexts = new Set([
+    "NO_COPYABLE_TEXT",
+    String(zhCNMessages?.message?.noCopyableText || "").trim(),
+    String(enUSMessages?.message?.noCopyableText || "").trim(),
+    String(t("message.noCopyableText") || "").trim(),
+  ]);
+  const matchesAnyText = (messageText = "", textSet = new Set()) =>
+    [...textSet].filter(Boolean).some((candidateText) =>
+      String(messageText || "").includes(candidateText),
+    );
   const previewVisible = ref(false);
   const previewLoading = ref(false);
   const previewError = ref("");
@@ -307,7 +325,7 @@ export function useMessagePreview({
       notify({ type: "success", message: t("message.copiedHtml") });
     } catch (error) {
       const errorMessage = String(error?.message || t("message.copyFormatFailed"));
-      if (errorMessage.includes("NO_COPYABLE_CONTENT") || errorMessage.includes("没有可复制") || errorMessage.includes(t("message.noCopyableContent"))) {
+      if (matchesAnyText(errorMessage, noCopyableContentTexts)) {
         notify({ type: "warning", message: errorMessage });
         return;
       }
@@ -321,7 +339,7 @@ export function useMessagePreview({
       notify({ type: "success", message: t("message.copiedMarkdown") });
     } catch (error) {
       const errorMessage = String(error?.message || t("message.copyTextFailed"));
-      if (errorMessage.includes("NO_COPYABLE_TEXT") || errorMessage.includes("没有可复制") || errorMessage.includes(t("message.noCopyableText"))) {
+      if (matchesAnyText(errorMessage, noCopyableTextTexts)) {
         notify({ type: "warning", message: errorMessage });
         return;
       }
@@ -338,7 +356,7 @@ export function useMessagePreview({
       notify({ type: "success", message: t("message.copiedHtml") });
     } catch (error) {
       const errorMessage = String(error?.message || t("message.copyFormatFailed"));
-      if (errorMessage.includes("NO_COPYABLE_CONTENT") || errorMessage.includes("没有可复制") || errorMessage.includes(t("message.noCopyableContent"))) {
+      if (matchesAnyText(errorMessage, noCopyableContentTexts)) {
         notify({ type: "warning", message: errorMessage });
         return;
       }
@@ -352,7 +370,7 @@ export function useMessagePreview({
       notify({ type: "success", message: t("message.copiedMarkdown") });
     } catch (error) {
       const errorMessage = String(error?.message || t("message.copyTextFailed"));
-      if (errorMessage.includes("NO_COPYABLE_TEXT") || errorMessage.includes("没有可复制") || errorMessage.includes(t("message.noCopyableText"))) {
+      if (matchesAnyText(errorMessage, noCopyableTextTexts)) {
         notify({ type: "warning", message: errorMessage });
         return;
       }

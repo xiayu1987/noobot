@@ -55,12 +55,13 @@ function resolveRequestLocale(req = {}, fallbackLocale = DEFAULT_LOCALE) {
   return normalizeLocale(fallbackLocale);
 }
 
-function bt(key = "", locale = DEFAULT_LOCALE) {
+function bt(key = "", locale = DEFAULT_LOCALE, params = {}) {
   return pickLocaleText({
     locale,
     dict: BACKEND_I18N,
     key,
     fallbackLocale: DEFAULT_LOCALE,
+    params,
   });
 }
 
@@ -95,7 +96,7 @@ function workspaceConfigParamsFilePath() {
 
 function userConfigParamsFilePath(userId = "") {
   const normalizedUserId = String(userId || "").trim();
-  if (!normalizedUserId) throw new Error("userId required");
+  if (!normalizedUserId) throw new Error(bt("common.userIdRequired"));
   return path.join(workspaceRootPath(), normalizedUserId, CONFIG_PARAMS_FILE_NAME);
 }
 
@@ -559,14 +560,18 @@ app.put("/internal/admin/users", requireSuperAdmin, async (req, res) => {
   try {
     const normalized = normalizeWorkspaceUsersConfig(req.body || {});
     if (!normalized.users.length) {
-      throw new Error("at least one user is required");
+      throw new Error(bt("common.atLeastOneUserRequired", req.locale));
     }
     const duplicateUserId = normalized.users.find(
       (item, index) =>
         normalized.users.findIndex((subItem) => subItem.userId === item.userId) !== index,
     );
     if (duplicateUserId) {
-      throw new Error(`duplicate userId: ${duplicateUserId.userId}`);
+      throw new Error(
+        bt("common.duplicateUserId", req.locale, {
+          userId: duplicateUserId.userId,
+        }),
+      );
     }
     const payload = await writeWorkspaceUsersConfig(normalized);
     res.json({ ok: true, ...payload });
@@ -589,7 +594,7 @@ async function readScopedConfigParams({ req, createIfMissing = true } = {}) {
     return { scope, userId: "", payload };
   }
   const userId = String(req?.auth?.userId || "").trim();
-  if (!userId) throw new Error("missing user auth");
+  if (!userId) throw new Error(bt("auth.missingUserAuth", req?.locale));
   const payload = await readUserConfigParams({ userId, createIfMissing });
   return { scope, userId, payload };
 }

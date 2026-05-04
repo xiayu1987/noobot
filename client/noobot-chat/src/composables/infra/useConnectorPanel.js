@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createConnectorService } from "../../services/connector/connectorService";
+import { useLocale } from "../../shared/i18n/useLocale";
 
 export function useConnectorPanel({
   ensureConnected,
@@ -13,11 +14,13 @@ export function useConnectorPanel({
   sessions,
   activeSession,
 } = {}) {
+  const { t } = useLocale();
   const connectorService = createConnectorService({
     ensureConnected,
     getSessionConnectorsApi,
     userId,
     authFetch,
+    t,
   });
 
   function applySessionConnectorPayload(sessionItem, payload = {}) {

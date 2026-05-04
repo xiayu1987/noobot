@@ -5,6 +5,11 @@
  */
 import { tSystem } from "../../i18n/system-text.js";
 
+const INLINE_ATTACHMENT_ITEM_PREFIX = "INLINE";
+const INLINE_ATTACHMENT_BLOCK_START = "[INLINE_ATTACHMENTS]";
+const INLINE_ATTACHMENT_BLOCK_END = "[/INLINE_ATTACHMENTS]";
+const INLINE_ATTACHMENT_TITLE_TEXT = "INLINE_ATTACHMENTS";
+
 function parseEmailCommand(command = "") {
   const normalizedCommand = String(command || "").trim();
   if (!normalizedCommand) {
@@ -386,7 +391,7 @@ async function executeReadEmail({
       );
       const inlineAttachmentTextLines = inlineAttachmentMetas.map(
         (attachmentItem, attachmentIndex) =>
-          `- [内嵌${attachmentIndex + 1}] name=${String(
+          `- [${INLINE_ATTACHMENT_ITEM_PREFIX}${attachmentIndex + 1}] name=${String(
             attachmentItem?.name || "unknown",
           ).trim()}, cid=${String(
             attachmentItem?.email_content_id || "none",
@@ -399,9 +404,9 @@ async function executeReadEmail({
         ? [
             baseText,
             "",
-            "[内嵌附件]",
+            INLINE_ATTACHMENT_BLOCK_START,
             ...inlineAttachmentTextLines,
-            "[/内嵌附件]",
+            INLINE_ATTACHMENT_BLOCK_END,
           ]
             .filter((lineItem) => lineItem !== "")
             .join("\n")
@@ -410,10 +415,10 @@ async function executeReadEmail({
       const htmlWithInlineAttachmentHint = inlineAttachmentTextLines.length
         ? `${baseHtml}${
             baseHtml ? "<hr/>" : ""
-          }<div><strong>内嵌附件</strong><ul>${inlineAttachmentMetas
+          }<div><strong>${INLINE_ATTACHMENT_TITLE_TEXT}</strong><ul>${inlineAttachmentMetas
             .map(
               (attachmentItem, attachmentIndex) =>
-                `<li>[内嵌${attachmentIndex + 1}] ${String(
+                `<li>[${INLINE_ATTACHMENT_ITEM_PREFIX}${attachmentIndex + 1}] ${String(
                   attachmentItem?.name || "unknown",
                 ).trim()} (cid=${String(
                   attachmentItem?.email_content_id || "none",

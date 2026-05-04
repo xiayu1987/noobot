@@ -43,6 +43,7 @@ export function createConnectorService({
   getSessionConnectorsApi,
   userId,
   authFetch,
+  t = (key = "") => String(key || ""),
 } = {}) {
   const connectorRefreshTasksBySessionId = new Map();
   const connectorTypeSet = new Set(CONNECTOR_TYPES);
@@ -173,7 +174,7 @@ export function createConnectorService({
       );
       const payload = await response.json();
       if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error || "获取连接器状态失败");
+        throw new Error(payload?.error || t("infra.connectorStatusFetchFailed"));
       }
       applySessionConnectorPayload(sessionItem, payload);
     } catch (error) {

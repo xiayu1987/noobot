@@ -524,7 +524,7 @@ function segmentsToMarkdown(segments, adPatterns, maxChars = 800000) {
     prevKey = key;
 
     if (total + chunk.length > maxChars) {
-      parts.push('\n[内容过长，已截断]\n');
+      parts.push(`\n[${tSystem("web2img.contentTruncated")}]\n`);
       break;
     }
 
@@ -698,14 +698,16 @@ async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = tr
 
   const usefulParts = [];
   if (title) usefulParts.push(`# ${title}`);
-  if (desc) usefulParts.push(`\n描述：${desc}`);
+  if (desc) usefulParts.push(`\n${tSystem("web2img.descriptionLabel")}：${desc}`);
 
-  usefulParts.push('\n## 正文');
-  usefulParts.push(orderedMd.trim() ? orderedMd : '[未提取到内容]');
+  usefulParts.push(`\n## ${tSystem("web2img.mainContentTitle")}`);
+  usefulParts.push(
+    orderedMd.trim() ? orderedMd : `[${tSystem("web2img.noContentExtracted")}]`,
+  );
 
-  usefulParts.push('\n## 文本清洗附录');
+  usefulParts.push(`\n## ${tSystem("web2img.textCleanAppendixTitle")}`);
   if (trafiLines.length) usefulParts.push(...trafiLines);
-  else usefulParts.push('[未提取到 trafilatura/readability 文本]');
+  else usefulParts.push(`[${tSystem("web2img.noReadableTextExtracted")}]`);
 
   let usefulText = `${usefulParts.join('\n').trim()}\n`;
 
@@ -724,8 +726,12 @@ async function extractUsefulAndFullText(page, adPatterns, preferTrafilatura = tr
     fullText += `\n\n[ORDERED_CONTENT]\n${orderedMd}`;
   }
 
-  if (usefulText.length > 800000) usefulText = `${usefulText.slice(0, 800000)}\n\n[内容过长，已截断]\n`;
-  if (fullText.length > 1200000) fullText = `${fullText.slice(0, 1200000)}\n\n[内容过长，已截断]\n`;
+  if (usefulText.length > 800000) {
+    usefulText = `${usefulText.slice(0, 800000)}\n\n[${tSystem("web2img.contentTruncated")}]\n`;
+  }
+  if (fullText.length > 1200000) {
+    fullText = `${fullText.slice(0, 1200000)}\n\n[${tSystem("web2img.contentTruncated")}]\n`;
+  }
 
   return [usefulText, fullText];
 }

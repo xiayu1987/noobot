@@ -546,7 +546,7 @@ export class BotManager {
     sourceDialogProcessId = "",
   }) {
     if (!upstream?.onEvent) return null;
-    const label = `子任务#${String(subSessionId || "").slice(0, 8)}`;
+    const label = `${tSystem("agent.subTaskLabelPrefix")}#${String(subSessionId || "").slice(0, 8)}`;
     return {
       onEvent: (eventPayload = {}) => {
         const event = String(eventPayload?.event || "");

@@ -32,6 +32,7 @@ import { useConnectorPanel } from "../infra/useConnectorPanel";
 import { useChatList } from "./useChatList";
 import { useChatEngine } from "./useChatEngine";
 import { useChatStore } from "../../shared/stores/useChatStore";
+import { useLocale } from "../../shared/i18n/useLocale";
 
 export function useChatSession({
   userId,
@@ -46,6 +47,7 @@ export function useChatSession({
   notify = () => {},
   clearUploadSelection = () => {},
 }) {
+  const { t } = useLocale();
   const chatStore = useChatStore();
   const {
     sending,
@@ -70,6 +72,7 @@ export function useChatSession({
   const chatWebSocketClient = createChatWebSocketClient({
     resolveWebSocketUrl: () =>
       buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
+    t,
   });
 
   const {

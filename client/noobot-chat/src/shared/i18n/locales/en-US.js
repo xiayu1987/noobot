@@ -137,7 +137,11 @@ export const enUSMessages = {
     "deleteSessionTitle": "Delete Session",
     "confirm": "Confirm",
     "cancel": "Cancel",
-    "interactionChannelUnavailable": "Interaction channel unavailable"
+    "interactionChannelUnavailable": "Interaction channel unavailable",
+    "connectorStatusFetchFailed": "Failed to fetch connector status",
+    "websocketStreamError": "WebSocket stream error",
+    "websocketConnectFailed": "WebSocket connection failed",
+    "websocketClosed": "WebSocket connection closed"
   },
   "chat": {
     "newSession": "New Session",
