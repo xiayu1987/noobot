@@ -150,6 +150,7 @@ export function useChatEngine({
     const botMsg = appendMessage(RoleEnum.ASSISTANT, "");
     botMsg.pending = true;
     botMsg.statusLabel = "";
+    botMsg.executionLogTotal = Number(botMsg.executionLogTotal || 0);
     scrollBottom();
 
     try {
@@ -177,6 +178,7 @@ export function useChatEngine({
           if (!item.subAgentCall && item.dialogProcessId) {
             botMsg.dialogProcessId = item.dialogProcessId;
           }
+          botMsg.executionLogTotal = Number(botMsg.executionLogTotal || 0) + 1;
           botMsg.realtimeLogs = [...(botMsg.realtimeLogs || []), item].slice(-10);
         } else if (event === StreamEventEnum.DELTA) {
           const chunkText = String(data.text || "");
@@ -301,6 +303,10 @@ export function useChatEngine({
       const doneSessionId = String(
         finalDoneEventData?.sessionId || activeSession.value.backendSessionId || "",
       );
+      const finalExecutionLogTotal = Number(botMsg.executionLogTotal || 0);
+      const finalDialogProcessId = String(
+        botMsg.dialogProcessId || finalDoneEventData?.dialogProcessId || "",
+      ).trim();
       if (doneSessionId) {
         try {
           const detail = await fetchSessionDetail(doneSessionId);
@@ -311,6 +317,25 @@ export function useChatEngine({
           applySessionDetail(detail, {
             preserveCurrentMessages: shouldPreserveCurrentMessages,
           });
+          if (finalExecutionLogTotal > 0 && finalDialogProcessId) {
+            const patchExecutionTotal = (messages = []) => {
+              for (const messageItem of Array.isArray(messages) ? messages : []) {
+                if (String(messageItem?.role || "").trim() !== RoleEnum.ASSISTANT) continue;
+                if (
+                  String(messageItem?.dialogProcessId || "").trim() !==
+                  finalDialogProcessId
+                ) {
+                  continue;
+                }
+                messageItem.executionLogTotal = Math.max(
+                  Number(messageItem?.executionLogTotal || 0),
+                  finalExecutionLogTotal,
+                );
+              }
+            };
+            patchExecutionTotal(activeSession.value?.messages || []);
+            patchExecutionTotal(activeSession.value?.rawMessages || []);
+          }
           refreshSessionConnectorsAsync(activeSession.value?.id || doneSessionId);
         } catch (loadDetailError) {
           console.warn("load session detail after done failed", loadDetailError);
