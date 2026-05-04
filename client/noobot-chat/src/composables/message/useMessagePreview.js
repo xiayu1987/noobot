@@ -135,10 +135,28 @@ export function useMessagePreview({
         throw new Error(errorText);
       }
       const blob = await res.blob();
+      const contentDisposition = String(
+        res.headers?.get("content-disposition") || "",
+      ).trim();
+      const fileNameFromHeader = (() => {
+        if (!contentDisposition) return "";
+        const utf8Match = contentDisposition.match(/filename\\*=UTF-8''([^;]+)/i);
+        if (utf8Match?.[1]) {
+          try {
+            return decodeURIComponent(String(utf8Match[1] || "").trim());
+          } catch {
+            return String(utf8Match[1] || "").trim();
+          }
+        }
+        const basicMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+        return String(basicMatch?.[1] || "").trim();
+      })();
       const downloadUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = downloadUrl;
-      anchor.download = String(fileItem?.fileName || "download");
+      anchor.download = String(
+        fileNameFromHeader || fileItem?.fileName || "download",
+      );
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
