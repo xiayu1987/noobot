@@ -114,11 +114,15 @@ watch(
 <style scoped>
 .interaction-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   margin: 0 max(24px, calc(50% - 400px)) 12px;
   padding: 14px 16px;
   border: 1px solid var(--noobot-panel-border);
   border-radius: 12px;
   background: var(--noobot-panel-bg);
+  max-height: min(72vh, 560px);
+  overflow: hidden;
 }
 
 .interaction-card::before {
@@ -135,9 +139,11 @@ watch(
 
 .interaction-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
+  flex: 0 0 auto;
 }
 
 .interaction-badge {
@@ -156,10 +162,19 @@ watch(
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 0;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .interaction-form :deep(.el-form-item__label) {
   color: var(--noobot-text-secondary);
+}
+
+.interaction-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .interaction-form :deep(.el-input__wrapper) {
@@ -173,13 +188,38 @@ watch(
 }
 
 .interaction-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--noobot-panel-border);
+  background: var(--noobot-panel-bg);
+}
+
+.interaction-actions :deep(.el-button) {
+  min-width: 88px;
 }
 
 @media (max-width: 768px) {
   .interaction-card {
-    margin: 0 16px 10px;
+    margin: 0 12px 10px;
+    padding: 12px;
+    max-height: 62vh;
+  }
+
+  .interaction-actions {
+    justify-content: stretch;
+  }
+
+  .interaction-actions :deep(.el-button) {
+    flex: 1 1 0;
+    min-width: 0;
   }
 }
 </style>

@@ -136,6 +136,7 @@ export function createDatabaseConnectorTools(context = {}) {
         alignFieldsWithConnectionInfo(
           databaseFields(databaseType, runtimeLocale),
           connectionInfo,
+          runtimeLocale,
         ),
         connectionInfo,
       );

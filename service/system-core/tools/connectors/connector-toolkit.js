@@ -348,9 +348,19 @@ function resolveConfiguredConnectorInfo({
   return resolvedInfo;
 }
 
-function alignFieldsWithConnectionInfo(fields = [], connectionInfo = {}) {
+function alignFieldsWithConnectionInfo(
+  fields = [],
+  connectionInfo = {},
+  locale = "zh-CN",
+) {
   const normalizedFields = Array.isArray(fields) ? fields : [];
   const normalizedConnectionInfo = pickObject(connectionInfo);
+  const fieldNameMap = {
+    database_type: "databaseType",
+    terminal_type: "terminalType",
+    smtp_secure: "smtpSecure",
+    imap_secure: "imapSecure",
+  };
   const existingFieldNames = new Set(
     normalizedFields
       .map((fieldItem) => String(fieldItem?.name || "").trim())
@@ -362,9 +372,13 @@ function alignFieldsWithConnectionInfo(fields = [], connectionInfo = {}) {
     if (!fieldName || existingFieldNames.has(fieldName)) continue;
     if (fieldName.toLowerCase() === "password") continue;
     if (rawValue === null || rawValue === undefined) continue;
+    const mappedFieldKey = String(fieldNameMap[fieldName] || "").trim();
+    const displayName = mappedFieldKey
+      ? tConnectorField(locale, mappedFieldKey)
+      : fieldName;
     appendedFields.push({
       name: fieldName,
-      displayName: fieldName,
+      displayName,
       required: false,
     });
   }
