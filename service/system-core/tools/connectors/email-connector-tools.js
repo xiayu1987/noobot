@@ -117,7 +117,11 @@ export function createEmailConnectorTools(context = {}) {
       connectionInfo = mergeConnectionInfo(connectionInfo, rememberedConnectionInfo);
       connectionInfo = mergeConnectionInfo(connectionInfo, providedDefaults);
       const baseFields = attachDefaultValuesToFields(
-        alignFieldsWithConnectionInfo(emailFields(runtimeLocale), connectionInfo),
+        alignFieldsWithConnectionInfo(
+          emailFields(runtimeLocale),
+          connectionInfo,
+          runtimeLocale,
+        ),
         connectionInfo,
       );
       const fields = [

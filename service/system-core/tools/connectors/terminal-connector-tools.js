@@ -136,6 +136,7 @@ export function createTerminalConnectorTools(context = {}) {
         alignFieldsWithConnectionInfo(
           terminalFields(terminalType, runtimeLocale),
           connectionInfo,
+          runtimeLocale,
         ),
         connectionInfo,
       );
