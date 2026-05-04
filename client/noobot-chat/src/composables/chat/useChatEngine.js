@@ -75,7 +75,7 @@ export function useChatEngine({
   ensureConnected,
   notify = () => {},
 } = {}) {
-  const { t, locale } = useLocale();
+  const { translate, locale } = useLocale();
   function markPendingAssistantMessageStopped() {
     const sessionItem = activeSession.value;
     const messageList = Array.isArray(sessionItem?.messages) ? sessionItem.messages : [];
@@ -84,9 +84,9 @@ export function useChatEngine({
       if (String(messageItem?.role || "") !== RoleEnum.ASSISTANT) continue;
       if (!messageItem?.pending) continue;
       messageItem.pending = false;
-      messageItem.statusLabel = t("chat.stopped");
+      messageItem.statusLabel = translate("chat.stopped");
       if (!String(messageItem.content || "").trim()) {
-        messageItem.content = t("chat.stoppedContent");
+        messageItem.content = translate("chat.stoppedContent");
       }
       break;
     }
@@ -94,11 +94,11 @@ export function useChatEngine({
 
   function markAssistantMessageStopped(botMessage) {
     botMessage.pending = false;
-    botMessage.statusLabel = t("chat.stopped");
+    botMessage.statusLabel = translate("chat.stopped");
     clearPendingInteraction();
     interactionSubmitting.value = false;
     if (!String(botMessage.content || "").trim()) {
-      botMessage.content = t("chat.stoppedContent");
+      botMessage.content = translate("chat.stoppedContent");
     }
   }
 
@@ -135,10 +135,10 @@ export function useChatEngine({
         ? URL.createObjectURL(fileItem.raw)
         : "",
     }));
-    appendMessage(RoleEnum.USER, text || t("chat.uploadOnly"), userAttachments);
+    appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), userAttachments);
     if (
       [
-        String(t("chat.newSession") || "").trim(),
+        String(translate("chat.newSession") || "").trim(),
         String(zhCNMessages?.chat?.newSession || "").trim(),
         String(enUSMessages?.chat?.newSession || "").trim(),
       ].includes(String(activeSession.value.title || "").trim()) &&
@@ -161,7 +161,7 @@ export function useChatEngine({
       const payload = {
         userId: userId.value,
         sessionId: activeSession.value.backendSessionId || activeSession.value.id,
-        message: text || t("chat.uploadHint"),
+        message: text || translate("chat.uploadHint"),
         attachments,
         config: {
           allowUserInteraction: allowUserInteraction?.value === false ? false : true,
@@ -245,7 +245,7 @@ export function useChatEngine({
           clearPendingInteraction();
           finalDoneEventData = data || {};
           botMsg.pending = false;
-          botMsg.statusLabel = t("chat.generated");
+          botMsg.statusLabel = translate("chat.generated");
           botMsg.dialogProcessId = data.dialogProcessId || botMsg.dialogProcessId || "";
           const returnedId = data.sessionId || activeSession.value.backendSessionId;
           if (activeSession.value.isLocal && returnedId) {
@@ -346,22 +346,22 @@ export function useChatEngine({
       if (chatWebSocketClient.isStopRequested()) {
         clearPendingInteraction();
         interactionSubmitting.value = false;
-        botMsg.statusLabel = t("chat.stopped");
+        botMsg.statusLabel = translate("chat.stopped");
         if (!String(botMsg.content || "").trim()) {
-          botMsg.content = t("chat.stoppedContent");
+          botMsg.content = translate("chat.stoppedContent");
         }
         return;
       }
       clearPendingInteraction();
-      botMsg.statusLabel = t("chat.failed");
-      const errorMessage = error.message || t("chat.unknownError");
+      botMsg.statusLabel = translate("chat.failed");
+      const errorMessage = error.message || translate("chat.unknownError");
       botMsg.error = errorMessage;
       if (!botMsg.content?.trim()) {
-        botMsg.content = `> ${t("chat.occurredError", { error: botMsg.error })}`;
+        botMsg.content = `> ${translate("chat.occurredError", { error: botMsg.error })}`;
       } else {
-        botMsg.content += `\n\n> ${t("chat.occurredError", { error: botMsg.error })}`;
+        botMsg.content += `\n\n> ${translate("chat.occurredError", { error: botMsg.error })}`;
       }
-      notify({ type: "error", message: error.message || t("chat.sendFailed") });
+      notify({ type: "error", message: error.message || translate("chat.sendFailed") });
     } finally {
       sending.value = false;
       chatWebSocketClient.clearStopRequested();

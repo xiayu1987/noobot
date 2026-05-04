@@ -20,7 +20,7 @@ export function useConnectorPanel({
     getSessionConnectorsApi,
     userId,
     authFetch,
-    t,
+    translateText: translate,
   });
 
   function applySessionConnectorPayload(sessionItem, payload = {}) {

@@ -72,7 +72,7 @@ export function useChatSession({
   const chatWebSocketClient = createChatWebSocketClient({
     resolveWebSocketUrl: () =>
       buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
-    t,
+    translateText: translate,
   });
 
   const {

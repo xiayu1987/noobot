@@ -9,7 +9,7 @@ export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
   stopCloseDelayMs = 300,
   forceStopFinalizeMs = 5000,
-  t = (key = "") => String(key || ""),
+  translateText = (key = "") => String(key || ""),
 } = {}) {
   let activeSocket = null;
   let stopRequested = false;
@@ -75,7 +75,9 @@ export function createChatWebSocketClient({
           const event = String(parsed?.event || "message");
           const data = parsed?.data || {};
           if (event === StreamEventEnum.ERROR) {
-            throw new Error(data?.error || t("infra.websocketStreamError"));
+            throw new Error(
+              data?.error || translateText("infra.websocketStreamError"),
+            );
           }
           onEvent({ event, data });
           if (event === StreamEventEnum.DONE) {
@@ -92,7 +94,9 @@ export function createChatWebSocketClient({
       };
 
       ws.onerror = () => {
-        finalize(() => reject(new Error(t("infra.websocketConnectFailed"))));
+        finalize(
+          () => reject(new Error(translateText("infra.websocketConnectFailed"))),
+        );
       };
 
       ws.onclose = () => {
@@ -100,7 +104,7 @@ export function createChatWebSocketClient({
           finalize(() => resolve());
           return;
         }
-        finalize(() => reject(new Error(t("infra.websocketClosed"))));
+        finalize(() => reject(new Error(translateText("infra.websocketClosed"))));
       };
     });
   }
@@ -160,7 +164,7 @@ export function createChatWebSocketClient({
   function sendJson(payload = {}) {
     const ws = activeSocket;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error(t("infra.interactionChannelUnavailable"));
+      throw new Error(translateText("infra.interactionChannelUnavailable"));
     }
     ws.send(JSON.stringify(payload || {}));
   }
