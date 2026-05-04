@@ -15,7 +15,7 @@ defineProps({
 });
 
 const emit = defineEmits(["toggle-sidebar", "open-workspace", "open-user-settings", "open-config-params"]);
-const { t, locale, setLocale } = useLocale();
+const { translate, locale, setLocale } = useLocale();
 const { theme, applyTheme } = useTheme();
 
 function handleHeaderAction(command = "") {
@@ -37,28 +37,28 @@ function handleHeaderAction(command = "") {
         class="mobile-menu-btn noobot-action-btn noobot-flat-soft-btn"
         type="button"
         @click="emit('toggle-sidebar')"
-        :title="t('common.openSidebar')"
+        :title="translate('common.openSidebar')"
       >
         <el-icon><Menu /></el-icon>
       </button>
       <div class="header-info">
-        <h2 class="head-title">{{ title || t("common.session") }}</h2>
-        <span class="head-sub">{{ t("common.currentUser", { userId }) }}</span>
+        <h2 class="head-title">{{ title || translate("common.session") }}</h2>
+        <span class="head-sub">{{ translate("common.currentUser", { userId }) }}</span>
       </div>
       <div class="header-spacer"></div>
       <div class="desktop-header-actions">
         <el-button class="workspace-btn noobot-action-btn noobot-flat-soft-btn" @click="emit('open-workspace')">
-          {{ t("common.workspace") }}
+          {{ translate("common.workspace") }}
         </el-button>
         <el-button
           v-if="isSuperAdmin"
           class="workspace-btn noobot-action-btn noobot-flat-soft-btn"
           @click="emit('open-user-settings')"
         >
-          {{ t("common.userSettings") }}
+          {{ translate("common.userSettings") }}
         </el-button>
         <el-button class="workspace-btn noobot-action-btn noobot-flat-soft-btn" @click="emit('open-config-params')">
-          {{ t("common.configParams") }}
+          {{ translate("common.configParams") }}
         </el-button>
       <el-dropdown
         class="settings-dropdown"
@@ -70,17 +70,17 @@ function handleHeaderAction(command = "") {
             class="workspace-btn settings-btn noobot-action-btn noobot-flat-soft-btn"
             native-type="button"
             :icon="Setting"
-            :title="t('common.moreActions')"
+            :title="translate('common.moreActions')"
           />
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item disabled>{{ t("common.english") }} / {{ t("common.chinese") }}</el-dropdown-item>
-              <el-dropdown-item :command="'lang_zh'" :class="{ 'is-selected': locale === 'zh-CN' }">{{ t("common.chinese") }}</el-dropdown-item>
-              <el-dropdown-item :command="'lang_en'" :class="{ 'is-selected': locale === 'en-US' }">{{ t("common.english") }}</el-dropdown-item>
-              <el-dropdown-item divided disabled>{{ t("common.themeSystem") }} / {{ t("common.themeDark") }} / {{ t("common.themeLight") }}</el-dropdown-item>
-              <el-dropdown-item :command="'theme_system'" :class="{ 'is-selected': theme === 'system' }">{{ t("common.themeSystem") }}</el-dropdown-item>
-              <el-dropdown-item :command="'theme_dark'" :class="{ 'is-selected': theme === 'dark' }">{{ t("common.themeDark") }}</el-dropdown-item>
-              <el-dropdown-item :command="'theme_light'" :class="{ 'is-selected': theme === 'light' }">{{ t("common.themeLight") }}</el-dropdown-item>
+              <el-dropdown-item disabled>{{ translate("common.english") }} / {{ translate("common.chinese") }}</el-dropdown-item>
+              <el-dropdown-item :command="'lang_zh'" :class="{ 'is-selected': locale === 'zh-CN' }">{{ translate("common.chinese") }}</el-dropdown-item>
+              <el-dropdown-item :command="'lang_en'" :class="{ 'is-selected': locale === 'en-US' }">{{ translate("common.english") }}</el-dropdown-item>
+              <el-dropdown-item divided disabled>{{ translate("common.themeSystem") }} / {{ translate("common.themeDark") }} / {{ translate("common.themeLight") }}</el-dropdown-item>
+              <el-dropdown-item :command="'theme_system'" :class="{ 'is-selected': theme === 'system' }">{{ translate("common.themeSystem") }}</el-dropdown-item>
+              <el-dropdown-item :command="'theme_dark'" :class="{ 'is-selected': theme === 'dark' }">{{ translate("common.themeDark") }}</el-dropdown-item>
+              <el-dropdown-item :command="'theme_light'" :class="{ 'is-selected': theme === 'light' }">{{ translate("common.themeLight") }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -95,18 +95,18 @@ function handleHeaderAction(command = "") {
           class="mobile-menu-btn noobot-action-btn noobot-flat-soft-btn"
           native-type="button"
           :icon="MoreFilled"
-          :title="t('common.moreActions')"
+          :title="translate('common.moreActions')"
         />
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="workspace">{{ t("common.workspace") }}</el-dropdown-item>
-            <el-dropdown-item v-if="isSuperAdmin" command="user-settings">{{ t("common.userSettings") }}</el-dropdown-item>
-            <el-dropdown-item command="config-params">{{ t("common.configParams") }}</el-dropdown-item>
-            <el-dropdown-item divided command="lang_zh">{{ t("common.chinese") }}</el-dropdown-item>
-            <el-dropdown-item command="lang_en">{{ t("common.english") }}</el-dropdown-item>
-            <el-dropdown-item divided command="theme_system">{{ t("common.themeSystem") }}</el-dropdown-item>
-            <el-dropdown-item command="theme_dark">{{ t("common.themeDark") }}</el-dropdown-item>
-            <el-dropdown-item command="theme_light">{{ t("common.themeLight") }}</el-dropdown-item>
+            <el-dropdown-item command="workspace">{{ translate("common.workspace") }}</el-dropdown-item>
+            <el-dropdown-item v-if="isSuperAdmin" command="user-settings">{{ translate("common.userSettings") }}</el-dropdown-item>
+            <el-dropdown-item command="config-params">{{ translate("common.configParams") }}</el-dropdown-item>
+            <el-dropdown-item divided command="lang_zh">{{ translate("common.chinese") }}</el-dropdown-item>
+            <el-dropdown-item command="lang_en">{{ translate("common.english") }}</el-dropdown-item>
+            <el-dropdown-item divided command="theme_system">{{ translate("common.themeSystem") }}</el-dropdown-item>
+            <el-dropdown-item command="theme_dark">{{ translate("common.themeDark") }}</el-dropdown-item>
+            <el-dropdown-item command="theme_light">{{ translate("common.themeLight") }}</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>

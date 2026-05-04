@@ -12,7 +12,7 @@ export function useApiConnection({
   onConnected = async () => {},
   notify = () => {},
 }) {
-  const { t, locale } = useLocale();
+  const { translate, locale } = useLocale();
   const connectCode = ref(localStorage.getItem("noobot_connect_code") || "");
   const apiKey = ref(localStorage.getItem("noobot_api_key") || "");
   const apiKeyUserId = ref(localStorage.getItem("noobot_api_user_id") || "");
@@ -65,7 +65,7 @@ export function useApiConnection({
 
   function ensureConnected() {
     if (connected.value) return true;
-    notify({ type: "warning", message: t("infra.inputUserAndCodeFirst") });
+    notify({ type: "warning", message: translate("infra.inputUserAndCodeFirst") });
     return false;
   }
 
@@ -90,11 +90,11 @@ export function useApiConnection({
   async function connectBackend({ silent = false } = {}) {
     if (connecting.value) return;
     if (!userId.value.trim()) {
-      if (!silent) notify({ type: "warning", message: t("infra.inputUserFirst") });
+      if (!silent) notify({ type: "warning", message: translate("infra.inputUserFirst") });
       return;
     }
     if (!connectCode.value.trim()) {
-      if (!silent) notify({ type: "warning", message: t("infra.inputConnectCodeFirst") });
+      if (!silent) notify({ type: "warning", message: translate("infra.inputConnectCodeFirst") });
       return;
     }
     connecting.value = true;
@@ -106,19 +106,19 @@ export function useApiConnection({
       });
       const data = await res.json();
       if (!res.ok || !data.ok || !data.apiKey) {
-        throw new Error(data.error || t("infra.connectFailed"));
+        throw new Error(data.error || translate("infra.connectFailed"));
       }
       apiKey.value = String(data.apiKey || "");
       apiKeyUserId.value = String(userId.value || "").trim();
       apiRole.value = String(data.role || "user");
       persistApiAuth();
       persistConnectProfile();
-      if (!silent) notify({ type: "success", message: t("infra.connectSuccess") });
+      if (!silent) notify({ type: "success", message: translate("infra.connectSuccess") });
       await onConnected();
       return true;
     } catch (error) {
       clearApiAuth();
-      if (!silent) notify({ type: "error", message: error.message || t("infra.connectFailed") });
+      if (!silent) notify({ type: "error", message: error.message || translate("infra.connectFailed") });
       return false;
     } finally {
       connecting.value = false;
