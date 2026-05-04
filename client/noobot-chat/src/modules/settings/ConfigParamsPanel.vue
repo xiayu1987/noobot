@@ -24,9 +24,9 @@ const saving = ref(false);
 const params = ref([]);
 const paramsJsonDraft = ref("");
 const jsonParseError = ref("");
-const { t } = useLocale();
+const { translate } = useLocale();
 const activeScopeLabel = computed(() =>
-  activeScope.value === "system" ? t("settings.systemParams") : t("settings.userParams"),
+  activeScope.value === "system" ? translate("settings.systemParams") : translate("settings.userParams"),
 );
 const activeScopeFilePath = computed(() =>
   activeScope.value === "system"
@@ -107,7 +107,7 @@ function syncParamsFromJsonDraft() {
     jsonParseError.value = "";
     return true;
   } catch (error) {
-    jsonParseError.value = error.message || t("settings.fixJsonError");
+    jsonParseError.value = error.message || translate("settings.fixJsonError");
     return false;
   }
 }
@@ -137,7 +137,7 @@ async function loadParams(scope = activeScope.value) {
   try {
     const res = await getConfigParamsApi({ scope, fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.loadParamsFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadParamsFailed"));
     params.value = paramsListFromApi({
       keys: data.keys || [],
       values: data.values || {},
@@ -145,7 +145,7 @@ async function loadParams(scope = activeScope.value) {
     paramsJsonDraft.value = buildParamsJsonText(params.value);
     jsonParseError.value = "";
   } catch (error) {
-    ElMessage.error(error.message || t("settings.loadParamsFailed"));
+    ElMessage.error(error.message || translate("settings.loadParamsFailed"));
   } finally {
     loading.value = false;
   }
@@ -154,13 +154,13 @@ async function loadParams(scope = activeScope.value) {
 async function saveParams() {
   if (!props.connected || !props.apiKey) return;
   if (activeScope.value === "system" && !props.isSuperAdmin) {
-    ElMessage.warning(t("settings.normalCannotSaveSystem"));
+    ElMessage.warning(translate("settings.normalCannotSaveSystem"));
     return;
   }
   saving.value = true;
   try {
     if (!syncParamsFromJsonDraft()) {
-      throw new Error(t("settings.fixJsonError"));
+      throw new Error(translate("settings.fixJsonError"));
     }
     const values = toValuesObject(params.value);
     const res = await putConfigParamsApi(
@@ -168,16 +168,16 @@ async function saveParams() {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.saveParamsFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveParamsFailed"));
     params.value = paramsListFromApi({
       keys: data.keys || [],
       values: data.values || values,
     });
     paramsJsonDraft.value = buildParamsJsonText(params.value);
     jsonParseError.value = "";
-    ElMessage.success(t("settings.paramsSaved"));
+    ElMessage.success(translate("settings.paramsSaved"));
   } catch (error) {
-    ElMessage.error(error.message || t("settings.saveParamsFailed"));
+    ElMessage.error(error.message || translate("settings.saveParamsFailed"));
   } finally {
     saving.value = false;
   }
@@ -236,13 +236,13 @@ watch(
 
 <template>
   <el-tabs v-model="activeScope" class="settings-tabs" @tab-change="onScopeChanged">
-    <el-tab-pane :label="t('settings.userParams')" name="user">
+    <el-tab-pane :label="translate('settings.userParams')" name="user">
       <div class="workspace-layout noobot-workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
         <div class="workspace-panel noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
-            <span class="panel-title noobot-workspace-title">{{ t("settings.paramsList", { label: activeScopeLabel }) }}</span>
+            <span class="panel-title noobot-workspace-title">{{ translate("settings.paramsList", { label: activeScopeLabel }) }}</span>
             <div class="tree-actions">
-              <el-button class="icon-btn" size="small" text @click="addParamRow" :title="t('settings.addParam')">
+              <el-button class="icon-btn" size="small" text @click="addParamRow" :title="translate('settings.addParam')">
                 <el-icon><Plus /></el-icon>
               </el-button>
             </div>
@@ -264,12 +264,12 @@ watch(
                       @click="removeParamRow(idx)"
                     >✕</el-button>
                   </div>
-                  <el-input v-model="item.key" :placeholder="t('settings.paramKey')" clearable class="row-input" />
-                  <el-input v-model="item.value" :placeholder="t('settings.paramValue')" clearable class="row-input" />
+                  <el-input v-model="item.key" :placeholder="translate('settings.paramKey')" clearable class="row-input" />
+                  <el-input v-model="item.value" :placeholder="translate('settings.paramValue')" clearable class="row-input" />
                 </div>
                 <div v-if="!params.length" class="empty-tip list-empty-tip">
                   <div class="empty-icon">🔐</div>
-                  <p>{{ t("settings.noParamsAdd") }}</p>
+                  <p>{{ translate("settings.noParamsAdd") }}</p>
                 </div>
               </div>
             </el-scrollbar>
@@ -284,14 +284,14 @@ watch(
             <div class="editor-actions">
               <div class="desktop-actions">
                 <el-button type="primary" class="primary-btn noobot-action-btn" size="small" @click="saveParams" :loading="saving">
-                  {{ t("settings.save") }}
+                  {{ translate("settings.save") }}
                 </el-button>
               </div>
               <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
                 <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="save">{{ t("settings.save") }}</el-dropdown-item>
+                    <el-dropdown-item command="save">{{ translate("settings.save") }}</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -311,13 +311,13 @@ watch(
         </div>
       </div>
     </el-tab-pane>
-    <el-tab-pane v-if="isSuperAdmin" :label="t('settings.systemParams')" name="system">
+    <el-tab-pane v-if="isSuperAdmin" :label="translate('settings.systemParams')" name="system">
       <div class="workspace-layout noobot-workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
         <div class="workspace-panel noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
-            <span class="panel-title noobot-workspace-title">{{ t("settings.paramsList", { label: activeScopeLabel }) }}</span>
+            <span class="panel-title noobot-workspace-title">{{ translate("settings.paramsList", { label: activeScopeLabel }) }}</span>
             <div class="tree-actions">
-              <el-button class="icon-btn" size="small" text @click="addParamRow" :title="t('settings.addParam')">
+              <el-button class="icon-btn" size="small" text @click="addParamRow" :title="translate('settings.addParam')">
                 <el-icon><Plus /></el-icon>
               </el-button>
             </div>
@@ -334,12 +334,12 @@ watch(
                     <span class="user-idx">Param {{ idx + 1 }}</span>
                     <el-button class="icon-btn danger-text" size="small" text @click="removeParamRow(idx)">✕</el-button>
                   </div>
-                  <el-input v-model="item.key" :placeholder="t('settings.paramKey')" clearable class="row-input" />
-                  <el-input v-model="item.value" :placeholder="t('settings.paramValue')" clearable class="row-input" />
+                  <el-input v-model="item.key" :placeholder="translate('settings.paramKey')" clearable class="row-input" />
+                  <el-input v-model="item.value" :placeholder="translate('settings.paramValue')" clearable class="row-input" />
                 </div>
                 <div v-if="!params.length" class="empty-tip list-empty-tip">
                   <div class="empty-icon">🔐</div>
-                  <p>{{ t("settings.noParamsAdd") }}</p>
+                  <p>{{ translate("settings.noParamsAdd") }}</p>
                 </div>
               </div>
             </el-scrollbar>
@@ -353,14 +353,14 @@ watch(
             <div class="editor-actions">
               <div class="desktop-actions">
                 <el-button type="primary" class="primary-btn noobot-action-btn" size="small" @click="saveParams" :loading="saving">
-                  {{ t("settings.save") }}
+                  {{ translate("settings.save") }}
                 </el-button>
               </div>
               <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
                 <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="save">{{ t("settings.save") }}</el-dropdown-item>
+                    <el-dropdown-item command="save">{{ translate("settings.save") }}</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>

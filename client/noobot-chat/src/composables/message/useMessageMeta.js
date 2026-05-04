@@ -9,7 +9,7 @@ import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
 import { enUSMessages } from "../../shared/i18n/locales/en-US";
 
 export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
-  const { t } = useLocale();
+  const { translate } = useLocale();
   const messageModelLabel = computed(() => {
     const messageItem = getMessageItem() || {};
     const modelRuns = Array.isArray(messageItem?.modelRuns)
@@ -42,17 +42,17 @@ export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
     const stoppedLabels = new Set([
       String(zhCNMessages?.chat?.stopped || "").trim(),
       String(enUSMessages?.chat?.stopped || "").trim(),
-      String(t("chat.stopped") || "").trim(),
+      String(translate("chat.stopped") || "").trim(),
     ]);
     const failedLabels = new Set([
       String(zhCNMessages?.chat?.failed || "").trim(),
       String(enUSMessages?.chat?.failed || "").trim(),
-      String(t("chat.failed") || "").trim(),
+      String(translate("chat.failed") || "").trim(),
     ]);
-    if (messageItem.pending) return t("message.subtaskProcessing");
-    if (stoppedLabels.has(statusLabel)) return t("message.subtaskStopped");
-    if (failedLabels.has(statusLabel)) return t("message.subtaskFailed");
-    return t("message.subtaskDone");
+    if (messageItem.pending) return translate("message.subtaskProcessing");
+    if (stoppedLabels.has(statusLabel)) return translate("message.subtaskStopped");
+    if (failedLabels.has(statusLabel)) return translate("message.subtaskFailed");
+    return translate("message.subtaskDone");
   });
 
   return {

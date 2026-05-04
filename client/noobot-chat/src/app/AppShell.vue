@@ -92,7 +92,7 @@ const workspaceVisible = ref(false);
 const userSettingsVisible = ref(false);
 const configParamsVisible = ref(false);
 const { notify: notifyUi, confirmDeleteSession } = useUiFeedback();
-const { t } = useLocale();
+const { translate } = useLocale();
 
 let fetchSessionsAfterConnect = async () => {};
 const {
@@ -193,7 +193,7 @@ function closeMobileSidebar() {
 function openWorkspace() {
   if (!ensureConnected()) return;
   if (!userId.value?.trim()) {
-    notifyUi({ type: "warning", message: t("common.userIdRequired") });
+    notifyUi({ type: "warning", message: translate("common.userIdRequired") });
     return;
   }
   workspaceVisible.value = true;
@@ -202,7 +202,7 @@ function openWorkspace() {
 function openUserSettings() {
   if (!ensureConnected()) return;
   if (!isSuperAdmin.value) {
-    notifyUi({ type: "warning", message: t("common.superAdminOnly") });
+    notifyUi({ type: "warning", message: translate("common.superAdminOnly") });
     return;
   }
   userSettingsVisible.value = true;
@@ -217,7 +217,7 @@ function handleInteractionConfirm(payload = {}) {
   try {
     submitInteractionResponse(payload || {});
   } catch (error) {
-    notifyUi({ type: "error", message: error.message || t("common.interactionSubmitFailed") });
+    notifyUi({ type: "error", message: error.message || translate("common.interactionSubmitFailed") });
   }
 }
 
@@ -229,7 +229,7 @@ function handleInteractionCancel() {
       response: "cancelled",
     });
   } catch (error) {
-    notifyUi({ type: "error", message: error.message || t("common.interactionCancelFailed") });
+    notifyUi({ type: "error", message: error.message || translate("common.interactionCancelFailed") });
   }
 }
 
@@ -306,10 +306,10 @@ async function handleDeleteSession(sessionId) {
   try {
     const deleted = await deleteSession(sessionId);
     if (deleted) {
-      notifyUi({ type: "success", message: t("common.deleteSessionSuccess") });
+      notifyUi({ type: "success", message: translate("common.deleteSessionSuccess") });
     }
   } catch (error) {
-    notifyUi({ type: "error", message: error.message || t("common.deleteSessionFailed") });
+    notifyUi({ type: "error", message: error.message || translate("common.deleteSessionFailed") });
   }
 }
 
@@ -350,7 +350,7 @@ async function onConnectorSelected({
   try {
     await updateSessionSelectedConnector({ connectorType, connectorName });
   } catch (error) {
-    notifyUi({ type: "error", message: error.message || t("common.updateConnectorFailed") });
+    notifyUi({ type: "error", message: error.message || translate("common.updateConnectorFailed") });
   }
 }
 
@@ -397,7 +397,7 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
     <!-- 右侧主聊天区 -->
     <main class="main-content">
       <ChatMainHeader
-        :title="activeSession?.title || t('common.session')"
+        :title="activeSession?.title || translate('common.session')"
         :user-id="userId"
         :is-super-admin="isSuperAdmin"
         @toggle-sidebar="toggleSidebar"
@@ -448,7 +448,7 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
     </main>
     <el-drawer
       v-model="workspaceVisible"
-      :title="t('common.workspace')"
+      :title="translate('common.workspace')"
       :size="drawerSize"
       destroy-on-close
       class="workspace-drawer"
@@ -464,7 +464,7 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
     </el-drawer>
     <el-drawer
       v-model="userSettingsVisible"
-      :title="t('common.userSettings')"
+      :title="translate('common.userSettings')"
       :size="drawerSize"
       destroy-on-close
       class="workspace-drawer"
@@ -477,7 +477,7 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
     </el-drawer>
     <el-drawer
       v-model="configParamsVisible"
-      :title="t('common.configParams')"
+      :title="translate('common.configParams')"
       :size="drawerSize"
       destroy-on-close
       class="workspace-drawer"

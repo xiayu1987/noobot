@@ -12,14 +12,14 @@ defineProps({
 });
 
 const emit = defineEmits(["preview", "download"]);
-const { t } = useLocale();
+const { translate } = useLocale();
 </script>
 
 <template>
   <div v-if="writtenFiles.length" class="written-files-container">
     <div class="written-files-header">
       <el-icon><Document /></el-icon>
-      <span>{{ t("message.generatedFiles", { count: writtenFiles.length }) }}</span>
+      <span>{{ translate("message.generatedFiles", { count: writtenFiles.length }) }}</span>
     </div>
     <div class="written-files-list">
       <template v-for="(fileItem, fileIndex) in writtenFiles" :key="`${fileItem.resolvedPath}-${fileIndex}`">
@@ -41,7 +41,7 @@ const { t } = useLocale();
           v-if="fileItem.relativePath"
           type="button"
           class="written-file-download-btn noobot-flat-inline-icon-btn"
-          :title="t('message.downloadFile', { name: fileItem.fileName })"
+          :title="translate('message.downloadFile', { name: fileItem.fileName })"
           @click="emit('download', fileItem)"
         >
           <el-icon><Download /></el-icon>

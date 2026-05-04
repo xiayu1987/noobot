@@ -22,7 +22,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["copy-markdown-rich", "copy-markdown-text"]);
-const { t } = useLocale();
+const { translate } = useLocale();
 const markdownContainerRef = ref(null);
 const isAttachment = computed(() => props.contentType === "attachment");
 const resolvedLoading = computed(() =>
@@ -78,8 +78,8 @@ watch(
 <template>
   <div class="preview-body" v-loading="resolvedLoading">
     <div v-if="showCopyActions" class="preview-copy-actions">
-      <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">{{ t("message.copyFormat") }}</el-button>
-      <el-button size="small" @click="emit('copy-markdown-text')">{{ t("message.copyText") }}</el-button>
+      <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">{{ translate("message.copyFormat") }}</el-button>
+      <el-button size="small" @click="emit('copy-markdown-text')">{{ translate("message.copyText") }}</el-button>
     </div>
     <div v-if="resolvedError" class="preview-error">{{ resolvedError }}</div>
     <img

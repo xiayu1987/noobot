@@ -16,7 +16,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["select-session", "delete-session"]);
-const { t } = useLocale();
+const { translate } = useLocale();
 
 const sessionListRef = ref(null);
 const lastSessionListScrollTop = ref(0);
@@ -81,14 +81,14 @@ watch(
             <div class="title">{{ sessionItem.title }}</div>
             <div class="sid">
               <span class="status-dot" :class="sessionItem.currentTaskStatus"></span>
-              #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : t("common.notStarted") }}
+              #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : translate("common.notStarted") }}
             </div>
           </div>
           <button
             type="button"
             class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
-            :title="t('common.deleteSession')"
-            :aria-label="t('common.deleteSession')"
+            :title="translate('common.deleteSession')"
+            :aria-label="translate('common.deleteSession')"
             :disabled="sending"
             @click.stop="emit('delete-session', sessionItem.id)"
           >

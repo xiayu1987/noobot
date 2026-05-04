@@ -31,7 +31,7 @@ const props = defineProps({
 const emit = defineEmits(["connector-selected"]);
 
 const connectorPanelExpanded = ref(false);
-const { t } = useLocale();
+const { translate } = useLocale();
 const panelExpanded = computed(() => (props.embedded ? true : connectorPanelExpanded.value));
 
 const connectorGroups = computed(() => {
@@ -66,7 +66,7 @@ const collapsedConnectorSummaryItems = computed(() =>
       selectedConnectors.value?.[groupDefinition.key] || "",
     ).trim();
     if (!selectedConnectorName) return null;
-    return `${t(groupDefinition.labelKey)}: ${selectedConnectorName}`;
+    return `${translate(groupDefinition.labelKey)}: ${selectedConnectorName}`;
   }).filter(Boolean),
 );
 
@@ -107,7 +107,7 @@ function toggleConnectorPanelExpanded() {
     <div v-if="!props.embedded" class="connector-panel-header" @click="toggleConnectorPanelExpanded">
       <div class="connector-panel-title">
         <el-icon class="title-icon"><Connection /></el-icon>
-        <span>{{ t("composer.connectors") }}</span>
+        <span>{{ translate("composer.connectors") }}</span>
       </div>
 
       <div class="connector-collapsed-summary" v-show="!panelExpanded">
@@ -122,12 +122,12 @@ function toggleConnectorPanelExpanded() {
           v-if="!collapsedConnectorSummaryItems.length"
           class="connector-summary-empty"
         >
-          {{ t("composer.noConnectorSelected") }}
+          {{ translate("composer.noConnectorSelected") }}
         </span>
       </div>
 
       <div class="connector-toggle-btn noobot-flat-soft-btn">
-        <span class="toggle-text">{{ panelExpanded ? t("message.collapse") : t("composer.expand") }}</span>
+        <span class="toggle-text">{{ panelExpanded ? translate("message.collapse") : translate("composer.expand") }}</span>
         <el-icon class="connector-toggle-icon" :class="{ 'is-rotated': panelExpanded }">
           <ArrowDown />
         </el-icon>
@@ -142,7 +142,7 @@ function toggleConnectorPanelExpanded() {
             :key="groupDefinition.key"
             class="connector-group noobot-flat-card"
           >
-            <div class="connector-group-title">{{ t(groupDefinition.labelKey) }}</div>
+            <div class="connector-group-title">{{ translate(groupDefinition.labelKey) }}</div>
             <el-radio-group
               class="vertical-radio-group"
               :model-value="selectedConnectors[groupDefinition.key]"
@@ -168,7 +168,7 @@ function toggleConnectorPanelExpanded() {
               </el-radio>
 
               <div v-if="!connectorGroups[groupDefinition.key]?.length" class="empty-group-tip">
-                {{ t("composer.noAvailableConnections") }}
+                {{ translate("composer.noAvailableConnections") }}
               </div>
             </el-radio-group>
           </div>

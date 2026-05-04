@@ -15,7 +15,7 @@ const props = defineProps({
 const emit = defineEmits(["upload-change", "clear-uploads"]);
 
 const uploadRef = ref();
-const { t } = useLocale();
+const { translate } = useLocale();
 const attachmentCount = computed(() => (props.uploadFiles || []).length);
 
 function onUploadChange(file, fileList) {
@@ -48,7 +48,7 @@ defineExpose({
     >
       <el-button size="small" class="poe-upload-btn noobot-action-btn noobot-flat-soft-btn">
         <el-icon class="btn-icon"><Paperclip /></el-icon>
-        {{ t("composer.attachments") }}
+        {{ translate("composer.attachments") }}
       </el-button>
     </el-upload>
     <div class="attachment-tags" v-if="attachmentCount">
@@ -60,7 +60,7 @@ defineExpose({
         <span class="attachment-name">{{ uploadFile.name }}</span>
       </div>
       <el-button size="small" text class="clear-files-btn noobot-action-btn" @click="onClearUploads">
-        {{ t("composer.clear") }}
+        {{ translate("composer.clear") }}
       </el-button>
     </div>
   </div>

@@ -12,14 +12,14 @@ defineProps({
   showSubTask: { type: Boolean, default: false },
   subTaskStatusText: { type: String, default: "" },
 });
-const { t } = useLocale();
+const { translate } = useLocale();
 </script>
 
 <template>
   <div class="message-status-row">
     <div class="message-pending noobot-flat-chip" :class="{ done: !pending }">
       <span class="pending-dot"></span>
-      {{ pending ? t("message.generating") : statusLabel }}
+      {{ pending ? translate("message.generating") : statusLabel }}
     </div>
     <div
       v-if="showSubTask"

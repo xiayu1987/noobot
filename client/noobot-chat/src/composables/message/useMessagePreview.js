@@ -24,18 +24,18 @@ export function useMessagePreview({
   renderMarkdown = () => "",
   notify = () => {},
 } = {}) {
-  const { t } = useLocale();
+  const { translate } = useLocale();
   const noCopyableContentTexts = new Set([
     "NO_COPYABLE_CONTENT",
     String(zhCNMessages?.message?.noCopyableContent || "").trim(),
     String(enUSMessages?.message?.noCopyableContent || "").trim(),
-    String(t("message.noCopyableContent") || "").trim(),
+    String(translate("message.noCopyableContent") || "").trim(),
   ]);
   const noCopyableTextTexts = new Set([
     "NO_COPYABLE_TEXT",
     String(zhCNMessages?.message?.noCopyableText || "").trim(),
     String(enUSMessages?.message?.noCopyableText || "").trim(),
-    String(t("message.noCopyableText") || "").trim(),
+    String(translate("message.noCopyableText") || "").trim(),
   ]);
   const matchesAnyText = (messageText = "", textSet = new Set()) =>
     [...textSet].filter(Boolean).some((candidateText) =>
@@ -127,7 +127,7 @@ export function useMessagePreview({
         { fetcher: authFetch || undefined },
       );
       if (!res.ok) {
-        let errorText = t("message.downloadFailedHttp", { status: res.status });
+        let errorText = translate("message.downloadFailedHttp", { status: res.status });
         try {
           const data = await res.json();
           if (data?.error) errorText = String(data.error);
@@ -144,7 +144,7 @@ export function useMessagePreview({
       anchor.remove();
       URL.revokeObjectURL(downloadUrl);
     } catch (error) {
-      notify({ type: "error", message: error?.message || t("message.downloadFailed") });
+      notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
   }
 
@@ -164,7 +164,7 @@ export function useMessagePreview({
       const runFetch = authFetch || fetch;
       const res = await runFetch(attachmentUrl);
       if (!res?.ok) {
-        throw new Error(t("message.downloadFailedHttp", { status: res?.status || 500 }));
+        throw new Error(translate("message.downloadFailedHttp", { status: res?.status || 500 }));
       }
       const blob = await res.blob();
       const downloadUrl = URL.createObjectURL(blob);
@@ -176,7 +176,7 @@ export function useMessagePreview({
       anchor.remove();
       URL.revokeObjectURL(downloadUrl);
     } catch (error) {
-      notify({ type: "error", message: error?.message || t("message.downloadFailed") });
+      notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
   }
 
@@ -231,11 +231,11 @@ export function useMessagePreview({
       const runFetch = authFetch || fetch;
       const response = await runFetch(attachmentPreviewSourceUrl);
       if (!response?.ok) {
-        throw new Error(t("message.previewFailedHttp", { status: response?.status || 500 }));
+        throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
       }
       attachmentPreviewTextContent.value = String(await response.text());
     } catch (error) {
-      attachmentPreviewError.value = error?.message || t("message.attachmentPreviewFailed");
+      attachmentPreviewError.value = error?.message || translate("message.attachmentPreviewFailed");
     } finally {
       attachmentPreviewLoading.value = false;
     }
@@ -273,7 +273,7 @@ export function useMessagePreview({
           { fetcher: authFetch || undefined },
         );
         if (!downloadRes.ok) {
-          let errorText = t("message.previewFailedHttp", { status: downloadRes.status });
+          let errorText = translate("message.previewFailedHttp", { status: downloadRes.status });
           try {
             const data = await downloadRes.json();
             if (data?.error) errorText = String(data.error);
@@ -292,15 +292,15 @@ export function useMessagePreview({
       );
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        throw new Error(data?.error || t("message.previewFailed"));
+        throw new Error(data?.error || translate("message.previewFailed"));
       }
       if (data.isText === false) {
-        throw new Error(t("message.fileTypeNotSupported"));
+        throw new Error(translate("message.fileTypeNotSupported"));
       }
       previewTextContent.value = String(data.content || "");
       previewMode.value = isMarkdownFile(fileName) ? "markdown" : "text";
     } catch (error) {
-      previewError.value = error?.message || t("message.previewFailed");
+      previewError.value = error?.message || translate("message.previewFailed");
     } finally {
       previewLoading.value = false;
     }
@@ -322,9 +322,9 @@ export function useMessagePreview({
         renderedPreviewHtml || renderMarkdown(previewTextContent.value) || "",
       ).trim();
       await copyMarkdownRichAsHtmlPage(rawHtmlContent);
-      notify({ type: "success", message: t("message.copiedHtml") });
+      notify({ type: "success", message: translate("message.copiedHtml") });
     } catch (error) {
-      const errorMessage = String(error?.message || t("message.copyFormatFailed"));
+      const errorMessage = String(error?.message || translate("message.copyFormatFailed"));
       if (matchesAnyText(errorMessage, noCopyableContentTexts)) {
         notify({ type: "warning", message: errorMessage });
         return;
@@ -336,9 +336,9 @@ export function useMessagePreview({
   async function onCopyMarkdownText() {
     try {
       await copyMarkdownText(String(previewTextContent.value || ""));
-      notify({ type: "success", message: t("message.copiedMarkdown") });
+      notify({ type: "success", message: translate("message.copiedMarkdown") });
     } catch (error) {
-      const errorMessage = String(error?.message || t("message.copyTextFailed"));
+      const errorMessage = String(error?.message || translate("message.copyTextFailed"));
       if (matchesAnyText(errorMessage, noCopyableTextTexts)) {
         notify({ type: "warning", message: errorMessage });
         return;
@@ -353,9 +353,9 @@ export function useMessagePreview({
         renderedPreviewHtml || renderMarkdown(attachmentPreviewTextContent.value) || "",
       ).trim();
       await copyMarkdownRichAsHtmlPage(rawHtmlContent);
-      notify({ type: "success", message: t("message.copiedHtml") });
+      notify({ type: "success", message: translate("message.copiedHtml") });
     } catch (error) {
-      const errorMessage = String(error?.message || t("message.copyFormatFailed"));
+      const errorMessage = String(error?.message || translate("message.copyFormatFailed"));
       if (matchesAnyText(errorMessage, noCopyableContentTexts)) {
         notify({ type: "warning", message: errorMessage });
         return;
@@ -367,9 +367,9 @@ export function useMessagePreview({
   async function onCopyAttachmentMarkdownText() {
     try {
       await copyMarkdownText(String(attachmentPreviewTextContent.value || ""));
-      notify({ type: "success", message: t("message.copiedMarkdown") });
+      notify({ type: "success", message: translate("message.copiedMarkdown") });
     } catch (error) {
-      const errorMessage = String(error?.message || t("message.copyTextFailed"));
+      const errorMessage = String(error?.message || translate("message.copyTextFailed"));
       if (matchesAnyText(errorMessage, noCopyableTextTexts)) {
         notify({ type: "warning", message: errorMessage });
         return;

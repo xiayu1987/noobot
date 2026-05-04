@@ -24,18 +24,18 @@ function parseArgs(argv = []) {
     live: false,
     model: "",
   };
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = String(argv[i] || "").trim();
+  for (let argIndex = 0; argIndex < argv.length; argIndex += 1) {
+    const arg = String(argv[argIndex] || "").trim();
     if (arg === "--live") {
       out.live = true;
       continue;
     }
     const hasValueFlag = ["--userId", "--model"].includes(arg);
     if (!hasValueFlag) continue;
-    const value = String(argv[i + 1] || "").trim();
+    const value = String(argv[argIndex + 1] || "").trim();
     if (arg === "--userId") out.userId = value || out.userId;
     else if (arg === "--model") out.model = value;
-    i += 1;
+    argIndex += 1;
   }
   return out;
 }

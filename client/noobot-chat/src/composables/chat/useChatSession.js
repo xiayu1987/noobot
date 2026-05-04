@@ -47,7 +47,7 @@ export function useChatSession({
   notify = () => {},
   clearUploadSelection = () => {},
 }) {
-  const { t } = useLocale();
+  const { translate } = useLocale();
   const chatStore = useChatStore();
   const {
     sending,

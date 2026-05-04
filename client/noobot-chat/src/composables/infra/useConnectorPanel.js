@@ -14,7 +14,7 @@ export function useConnectorPanel({
   sessions,
   activeSession,
 } = {}) {
-  const { t } = useLocale();
+  const { translate } = useLocale();
   const connectorService = createConnectorService({
     ensureConnected,
     getSessionConnectorsApi,
