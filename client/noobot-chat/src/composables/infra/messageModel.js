@@ -69,6 +69,11 @@ function createMessageModel(messageItem = {}) {
     modelRuns: normalizeArray(messageItem.modelRuns),
     attachmentMetas: normalizeArray(normalizedAttachmentMetas),
     realtimeLogs: normalizeArray(messageItem.realtimeLogs),
+    executionLogTotal: Number(
+      messageItem?.executionLogTotal ??
+        messageItem?.execution_log_total ??
+        normalizeArray(messageItem.realtimeLogs).length,
+    ),
     completedToolLogs: normalizeArray(messageItem.completedToolLogs),
     thinkingOpenNames: normalizeArray(messageItem.thinkingOpenNames),
     expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
@@ -160,6 +165,12 @@ function foldConversationMessages(messages = [], buildView) {
     const previousToolCalls = normalizeArray(previousMessage?.tool_calls);
     const currentToolCalls = normalizeArray(currentMessage?.tool_calls);
     previousMessage.tool_calls = [...previousToolCalls, ...currentToolCalls];
+    previousMessage.executionLogTotal = Math.max(
+      Number(previousMessage?.executionLogTotal || 0),
+      Number(currentMessage?.executionLogTotal || 0),
+      normalizeArray(previousMessage?.realtimeLogs).length,
+      normalizeArray(currentMessage?.realtimeLogs).length,
+    );
     const currentAttachmentMetas = normalizeArray(currentMessage?.attachmentMetas);
     const previousAttachmentMetas = normalizeArray(previousMessage?.attachmentMetas);
 

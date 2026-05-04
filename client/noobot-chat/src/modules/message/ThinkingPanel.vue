@@ -119,7 +119,10 @@ function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
 }
 
 function getExecutionLogCount(messageItem = {}) {
-  return getRealtimeLogs(messageItem).length;
+  return Math.max(
+    Number(messageItem?.executionLogTotal || 0),
+    getAllRealtimeLogs(messageItem).length,
+  );
 }
 
 function getExecutionLogs(messageItem = {}) {
