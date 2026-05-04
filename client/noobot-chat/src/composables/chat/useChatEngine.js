@@ -6,6 +6,8 @@
 import { normalizeSelectedConnectors } from "../../shared/models/sessionModel";
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
 import { useLocale } from "../../shared/i18n/useLocale";
+import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
+import { enUSMessages } from "../../shared/i18n/locales/en-US";
 
 function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialogProcessId = "" }) {
   const normalizedDialogProcessId = String(dialogProcessId || "").trim();
@@ -135,7 +137,11 @@ export function useChatEngine({
     }));
     appendMessage(RoleEnum.USER, text || t("chat.uploadOnly"), userAttachments);
     if (
-      [t("chat.newSession"), "新会话", "New Session"].includes(String(activeSession.value.title || "")) &&
+      [
+        String(t("chat.newSession") || "").trim(),
+        String(zhCNMessages?.chat?.newSession || "").trim(),
+        String(enUSMessages?.chat?.newSession || "").trim(),
+      ].includes(String(activeSession.value.title || "").trim()) &&
       text
     ) {
       activeSession.value.title = text.slice(0, 20);

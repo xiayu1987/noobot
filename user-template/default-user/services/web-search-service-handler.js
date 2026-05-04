@@ -1,6 +1,57 @@
-function formatHint(endpointCfg = {}) {
+function resolveLocale(agentContext = null) {
+  const localeText = String(
+    agentContext?.runtime?.systemRuntime?.config?.locale ||
+      agentContext?.runtime?.locale ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  return localeText.startsWith("en") ? "en-US" : "zh-CN";
+}
+
+const WEB_SEARCH_I18N = {
+  "fetchMissing": {
+    "zh-CN": "agentContext.runtime.sharedTools 中缺少 fetch",
+    "en-US": "fetch missing in agentContext.runtime.sharedTools",
+  },
+  "bodyFormatInvalid": {
+    "zh-CN": "body 格式错误：此服务不接受 body，请使用 queryString。",
+    "en-US": "Invalid body format: this service does not accept body, use queryString.",
+  },
+  "queryStringMissingSearch": {
+    "zh-CN": "queryString 格式错误：缺少 search（或 q）。",
+    "en-US": "Invalid queryString format: missing search (or q).",
+  },
+  "customParamInvalidUrl": {
+    "zh-CN": "custom_param 必须是有效的实例 URL",
+    "en-US": "custom_param must be a valid instance URL",
+  },
+  "customParamNotInInstances": {
+    "zh-CN": "custom_param 不在 SEARX 实例列表中",
+    "en-US": "custom_param is not in the SEARX instance list",
+  },
+  "searxInstanceSourceLabel": {
+    "zh-CN": "SEARX 实例来源地址",
+    "en-US": "SEARX instance source URL",
+  },
+  "hintKeyword": {
+    "zh-CN": "关键词",
+    "en-US": "keyword",
+  },
+};
+
+function tWebSearch(locale = "zh-CN", key = "") {
+  const row = WEB_SEARCH_I18N[String(key || "").trim()] || {};
+  return String(
+    row[locale] || row["zh-CN"] || row["en-US"] || String(key || "").trim(),
+  );
+}
+
+function formatHint(endpointCfg = {}, locale = "zh-CN") {
   return {
-    queryString: endpointCfg?.query_string_format || "search=关键词",
+    queryString:
+      endpointCfg?.query_string_format ||
+      `search=${tWebSearch(locale, "hintKeyword")}`,
     body: endpointCfg?.body_format || "{}",
   };
 }
@@ -99,6 +150,7 @@ async function requestWithFallback({
   query = "",
   customParam = "",
   fallbackInstances = [],
+  locale = "zh-CN",
 }) {
   const attemptedFallbackUrls = [];
   try {
@@ -146,7 +198,7 @@ async function requestWithFallback({
         ok: false,
         status: 0,
         statusText: "invalid_custom_param",
-        error: "custom_param 必须是有效的实例 URL",
+        error: tWebSearch(locale, "customParamInvalidUrl"),
         data: null,
         source: "fallback_failed",
         attemptedFallbackUrls,
@@ -157,7 +209,7 @@ async function requestWithFallback({
         ok: false,
         status: 0,
         statusText: "invalid_custom_param_instance",
-        error: "custom_param 不在 SEARX 实例列表中",
+        error: tWebSearch(locale, "customParamNotInInstances"),
         data: null,
         source: "fallback_failed",
         attemptedFallbackUrls,
@@ -211,19 +263,20 @@ export default async function webSearchServiceHandler({
   queryString = {},
   body,
 }) {
+  const locale = resolveLocale(agentContext);
   const fetcher = agentContext?.runtime?.sharedTools?.fetch;
   if (typeof fetcher !== "function") {
     return {
       ok: false,
-      error: "fetch missing in agentContext.runtime.sharedTools",
+      error: tWebSearch(locale, "fetchMissing"),
     };
   }
   const textCleaner = agentContext?.runtime?.sharedTools?.textCleaner || null;
-  const hint = formatHint(endpointCfg);
+  const hint = formatHint(endpointCfg, locale);
   if (body !== undefined && body !== null && String(body).trim() !== "") {
     return {
       ok: false,
-      error: "body 格式错误：此服务不接受 body，请使用 queryString。",
+      error: tWebSearch(locale, "bodyFormatInvalid"),
       expectedFormat: hint,
     };
   }
@@ -238,7 +291,7 @@ export default async function webSearchServiceHandler({
   if (!search) {
     return {
       ok: false,
-      error: "queryString 格式错误：缺少 search（或 q）。",
+      error: tWebSearch(locale, "queryStringMissingSearch"),
       expectedFormat: hint,
     };
   }
@@ -269,6 +322,7 @@ export default async function webSearchServiceHandler({
     query: search,
     customParam: custom_param,
     fallbackInstances,
+    locale,
   });
 
   return {
@@ -281,7 +335,7 @@ export default async function webSearchServiceHandler({
       ? {
           searx_instances_source: {
             type: "searx_instances_source_url",
-            label: "SEARX 实例来源地址",
+            label: tWebSearch(locale, "searxInstanceSourceLabel"),
             url: SEARX_INSTANCES_YAML_URL,
           },
           fallback_attempted_urls: result.attemptedFallbackUrls || [],

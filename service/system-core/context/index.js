@@ -312,6 +312,7 @@ export class ContextBuilder {
       rootSessionId: treeInfo.rootSessionId,
     });
     const systemContext = composeSystemInfoSections({
+      locale: this.runConfig?.locale || "zh-CN",
       systemPrompt,
       staticInfo,
       dynamicInfo,

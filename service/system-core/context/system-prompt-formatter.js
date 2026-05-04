@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeLocale } from "../i18n/index.js";
+import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "../i18n/locales/zh-CN/system-prompt.js";
+import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "../i18n/locales/en-US/system-prompt.js";
+
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
 }
@@ -15,45 +19,58 @@ function hasValue(value) {
   return true;
 }
 
-const WORKSPACE_DIRECTORY_DESCRIPTIONS = {
-  runtime: "运行时数据根目录",
-  "runtime/attach": "附件根目录（按 sessionId 与来源分目录存储）",
-  "runtime/attach/scoped": "附件分组目录：scoped/<sessionId>/<source>/attachments.json",
-  "runtime/connectors": "连接器运行与历史信息（如 connector-history.json）",
-  "runtime/session": "会话与执行记录",
-  "runtime/workspace": "脚本执行与中间产物工作区",
-  "runtime/memory": "短期/长期记忆数据",
-  skills: "技能目录",
-};
+const SYSTEM_PROMPT_FORMATTER_I18N = Object.freeze({
+  "zh-CN": Object.freeze(zhSystemPromptFormatterI18n || {}),
+  "en-US": Object.freeze(enSystemPromptFormatterI18n || {}),
+});
 
-function resolveWorkspaceDescription(dirPath = "") {
+function resolveSystemPromptFormatterI18n(locale = "zh-CN") {
+  const normalizedLocale = normalizeLocale(locale, "zh-CN");
+  return normalizedLocale === "en-US"
+    ? SYSTEM_PROMPT_FORMATTER_I18N["en-US"]
+    : SYSTEM_PROMPT_FORMATTER_I18N["zh-CN"];
+}
+
+function resolveWorkspaceDescription(
+  dirPath = "",
+  workspaceDirectoryDescriptions = {},
+  defaultWorkspaceDescription = "",
+) {
   const normalizedPath = String(dirPath || "").trim().replaceAll("\\", "/");
-  if (!normalizedPath) return "用户工作区目录";
-  if (WORKSPACE_DIRECTORY_DESCRIPTIONS[normalizedPath]) {
-    return WORKSPACE_DIRECTORY_DESCRIPTIONS[normalizedPath];
+  if (!normalizedPath) return String(defaultWorkspaceDescription || "").trim();
+  if (workspaceDirectoryDescriptions[normalizedPath]) {
+    return workspaceDirectoryDescriptions[normalizedPath];
   }
-  const suffixHit = Object.entries(WORKSPACE_DIRECTORY_DESCRIPTIONS).find(
+  const suffixHit = Object.entries(workspaceDirectoryDescriptions).find(
     ([key]) =>
       normalizedPath === key ||
       normalizedPath.endsWith(`/${key}`) ||
       normalizedPath.includes(`/${key}/`),
   );
-  return suffixHit?.[1] || "用户工作区目录";
+  return suffixHit?.[1] || String(defaultWorkspaceDescription || "").trim();
 }
 
-function buildWorkspaceDirectorySection(workspaceDirectories = []) {
+function buildWorkspaceDirectorySection({
+  workspaceDirectories = [],
+  workspaceDirectoryDescriptions = {},
+  defaultWorkspaceDescription = "",
+} = {}) {
   const directoryItems = (workspaceDirectories || []).map((dirPath) => ({
     path: dirPath,
-    description: resolveWorkspaceDescription(dirPath),
+    description: resolveWorkspaceDescription(
+      dirPath,
+      workspaceDirectoryDescriptions,
+      defaultWorkspaceDescription,
+    ),
   }));
   return JSON.stringify(directoryItems, null, 2);
 }
 
-function toJsonSection(title, value, { allowEmpty = false } = {}) {
+function toJsonSection(title, value, { allowEmpty = false, emptyValueText = "(none)" } = {}) {
   if (!allowEmpty && !hasValue(value)) return "";
   return toSystemSection(
     title,
-    hasValue(value) ? JSON.stringify(value, null, 2) : "(无)",
+    hasValue(value) ? JSON.stringify(value, null, 2) : String(emptyValueText || "(none)"),
   );
 }
 
@@ -86,6 +103,7 @@ function normalizeAttachmentMetas(attachmentMetas = []) {
 }
 
 export function composeSystemInfoSections({
+  locale = "zh-CN",
   systemPrompt = "",
   staticInfo = {},
   dynamicInfo = {},
@@ -98,34 +116,59 @@ export function composeSystemInfoSections({
   attachmentMetas = [],
   connectorStatusSection = {},
 }) {
+  const i18n = resolveSystemPromptFormatterI18n(locale);
+  const contextPromptI18n =
+    i18n?.contextPrompt && typeof i18n.contextPrompt === "object"
+      ? i18n.contextPrompt
+      : {};
+  const sections = contextPromptI18n?.sections || {};
+  const workspaceDirectoryDescriptions =
+    contextPromptI18n?.workspaceDirectoryDescriptions &&
+    typeof contextPromptI18n.workspaceDirectoryDescriptions === "object"
+      ? contextPromptI18n.workspaceDirectoryDescriptions
+      : {};
+  const defaultWorkspaceDescription = String(
+    contextPromptI18n?.defaultWorkspaceDescription || "",
+  ).trim();
+  const emptyValueText = String(contextPromptI18n?.emptyValueText || "(none)").trim();
   const normalizedSystemPrompt = String(systemPrompt || "").trim();
-  const normalizedWorkspaceSection = buildWorkspaceDirectorySection(
+  const normalizedWorkspaceSection = buildWorkspaceDirectorySection({
     workspaceDirectories,
-  );
+    workspaceDirectoryDescriptions,
+    defaultWorkspaceDescription,
+  });
   const normalizedAttachmentMetas = normalizeAttachmentMetas(attachmentMetas);
   return [
     normalizedSystemPrompt,
-    toJsonSection("系统运行环境", staticInfo),
-    toJsonSection("当前会话动态信息", dynamicInfo),
+    toJsonSection(String(sections?.staticInfo || "").trim(), staticInfo, { emptyValueText }),
+    toJsonSection(String(sections?.dynamicInfo || "").trim(), dynamicInfo, { emptyValueText }),
     hasValue(normalizedWorkspaceSection)
-      ? toSystemSection("工作区目录信息", normalizedWorkspaceSection)
+      ? toSystemSection(
+          String(sections?.workspaceDirectories || "").trim(),
+          normalizedWorkspaceSection,
+        )
       : "",
     hasValue(longMemory)
       ? toSystemSection(
-          "相关长期记忆",
+          String(sections?.longMemory || "").trim(),
           typeof longMemory === "string"
             ? longMemory
             : JSON.stringify(longMemory, null, 2),
         )
       : "",
-    toJsonSection("可用模型与当前模型", modelSection),
-    toJsonSection("技能清单（一级）", skills),
+    toJsonSection(String(sections?.models || "").trim(), modelSection, { emptyValueText }),
+    toJsonSection(String(sections?.skills || "").trim(), skills, { emptyValueText }),
     toJsonSection(
-      "可用外部服务端点（serviceName + endpointName + description）",
+      String(sections?.services || "").trim(),
       services,
+      { emptyValueText },
     ),
-    toJsonSection("可用 MCP Servers（name + type + description）", mcpServers),
-    toJsonSection("当前连接器信息", connectorStatusSection),
-    toJsonSection("当前附件元信息", normalizedAttachmentMetas),
+    toJsonSection(String(sections?.mcpServers || "").trim(), mcpServers, { emptyValueText }),
+    toJsonSection(String(sections?.connectors || "").trim(), connectorStatusSection, {
+      emptyValueText,
+    }),
+    toJsonSection(String(sections?.attachments || "").trim(), normalizedAttachmentMetas, {
+      emptyValueText,
+    }),
   ].filter(Boolean);
 }

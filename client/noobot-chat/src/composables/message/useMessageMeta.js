@@ -5,6 +5,8 @@
  */
 import { computed } from "vue";
 import { useLocale } from "../../shared/i18n/useLocale";
+import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
+import { enUSMessages } from "../../shared/i18n/locales/en-US";
 
 export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
   const { t } = useLocale();
@@ -37,9 +39,19 @@ export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
   const subTaskStatusText = computed(() => {
     const messageItem = getMessageItem() || {};
     const statusLabel = String(messageItem.statusLabel || "").trim();
+    const stoppedLabels = new Set([
+      String(zhCNMessages?.chat?.stopped || "").trim(),
+      String(enUSMessages?.chat?.stopped || "").trim(),
+      String(t("chat.stopped") || "").trim(),
+    ]);
+    const failedLabels = new Set([
+      String(zhCNMessages?.chat?.failed || "").trim(),
+      String(enUSMessages?.chat?.failed || "").trim(),
+      String(t("chat.failed") || "").trim(),
+    ]);
     if (messageItem.pending) return t("message.subtaskProcessing");
-    if (statusLabel === t("chat.stopped") || statusLabel === "已停止" || statusLabel === "Stopped") return t("message.subtaskStopped");
-    if (statusLabel === t("chat.failed") || statusLabel === "生成失败" || statusLabel === "Generation failed") return t("message.subtaskFailed");
+    if (stoppedLabels.has(statusLabel)) return t("message.subtaskStopped");
+    if (failedLabels.has(statusLabel)) return t("message.subtaskFailed");
     return t("message.subtaskDone");
   });
 
