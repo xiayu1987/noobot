@@ -62,7 +62,7 @@ const activeResourceSection = ref("directory");
 const resetDialogVisible = ref(false);
 const resetDialogMode = ref("user");
 const resetDialogSections = ref([]);
-const { t } = useLocale();
+const { translate } = useLocale();
 const RESET_SECTION_OPTIONS = [
   { value: "memory", label: "memory" },
   { value: "runtime", label: "runtime" },
@@ -72,7 +72,7 @@ const RESET_SECTION_OPTIONS = [
 ];
 const RESET_SECTION_DEFAULTS = ["service", "config"];
 const resetDialogTitle = computed(() =>
-  resetDialogMode.value === "all" ? t("settings.resetAllWorkspaceTitle") : t("settings.resetWorkspaceTitle"),
+  resetDialogMode.value === "all" ? translate("settings.resetAllWorkspaceTitle") : translate("settings.resetWorkspaceTitle"),
 );
 const resetDialogConfirmLoading = computed(
   () => resetting.value || resettingAll.value,
@@ -117,10 +117,10 @@ async function loadTree() {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.loadingWorkspaceFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadingWorkspaceFailed"));
     tree.value = data.tree || [];
   } catch (error) {
-    ElMessage.error(error.message || t("settings.loadingWorkspaceFailed"));
+    ElMessage.error(error.message || translate("settings.loadingWorkspaceFailed"));
   } finally {
     loadingTree.value = false;
   }
@@ -132,10 +132,10 @@ async function loadAllWorkspaceTree() {
   try {
     const res = await getWorkspaceAllTreeApi({ fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.loadingAllWorkspaceFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadingAllWorkspaceFailed"));
     allWorkspaceTree.value = data.tree || [];
   } catch (error) {
-    ElMessage.error(error.message || t("settings.loadingAllWorkspaceFailed"));
+    ElMessage.error(error.message || translate("settings.loadingAllWorkspaceFailed"));
   } finally {
     loadingAllTree.value = false;
   }
@@ -152,14 +152,14 @@ async function loadParamCatalog(scope = "system") {
       fetcher: authFetch,
     });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.loadingParamCatalogFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadingParamCatalogFailed"));
     if (normalizedScope === "system") {
       systemParamCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
     } else {
       userParamCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
     }
   } catch (error) {
-    ElMessage.error(error.message || t("settings.loadingParamCatalogFailed"));
+    ElMessage.error(error.message || translate("settings.loadingParamCatalogFailed"));
   } finally {
     if (normalizedScope === "system") loadingSystemParamCatalog.value = false;
     else loadingUserParamCatalog.value = false;
@@ -197,13 +197,13 @@ async function openFile(node, source = "user") {
             { fetcher: authFetch },
           );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.readFileFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.readFileFailed"));
     activePath.value = data.path || node.path;
     activePathSource.value = source === "all" ? "all" : "user";
     isTextFile.value = data.isText !== false;
     content.value = data.content || "";
   } catch (error) {
-    ElMessage.error(error.message || t("settings.readFileFailed"));
+    ElMessage.error(error.message || translate("settings.readFileFailed"));
   } finally {
     loadingFile.value = false;
   }
@@ -238,11 +238,11 @@ async function saveFile() {
             { fetcher: authFetch },
           );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.saveFileFailed"));
-    ElMessage.success(t("settings.saveSuccess"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveFileFailed"));
+    ElMessage.success(translate("settings.saveSuccess"));
     await refreshAll();
   } catch (error) {
-    ElMessage.error(error.message || t("settings.saveFileFailed"));
+    ElMessage.error(error.message || translate("settings.saveFileFailed"));
   } finally {
     saving.value = false;
   }
@@ -278,16 +278,16 @@ async function doResetWorkspace(sections = []) {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.resetWorkspaceFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.resetWorkspaceFailed"));
     activePath.value = "";
     activePathSource.value = "user";
     content.value = "";
     isTextFile.value = true;
     await refreshAll();
     emit("workspace-reset");
-    ElMessage.success(t("settings.workspaceReset"));
+    ElMessage.success(translate("settings.workspaceReset"));
   } catch (error) {
-    ElMessage.error(error.message || t("settings.resetWorkspaceFailed"));
+    ElMessage.error(error.message || translate("settings.resetWorkspaceFailed"));
   } finally {
     resetting.value = false;
   }
@@ -302,11 +302,11 @@ async function syncWorkspace() {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.syncConfigFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.syncConfigFailed"));
     await refreshAll();
-    ElMessage.success(t("settings.syncDone"));
+    ElMessage.success(translate("settings.syncDone"));
   } catch (error) {
-    ElMessage.error(error.message || t("settings.syncConfigFailed"));
+    ElMessage.error(error.message || translate("settings.syncConfigFailed"));
   } finally {
     syncing.value = false;
   }
@@ -318,11 +318,11 @@ async function syncAllWorkspace() {
   try {
     const res = await postSyncAllWorkspaceApi({ fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.syncAllFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.syncAllFailed"));
     await refreshAll();
-    ElMessage.success(t("settings.syncDoneWithCount", { success: Number(data.success || 0), total: Number(data.total || 0) }));
+    ElMessage.success(translate("settings.syncDoneWithCount", { success: Number(data.success || 0), total: Number(data.total || 0) }));
   } catch (error) {
-    ElMessage.error(error.message || t("settings.syncAllFailed"));
+    ElMessage.error(error.message || translate("settings.syncAllFailed"));
   } finally {
     syncingAll.value = false;
   }
@@ -341,15 +341,15 @@ async function doResetAllWorkspace(sections = []) {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.resetAllFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.resetAllFailed"));
     activePath.value = "";
     activePathSource.value = "user";
     content.value = "";
     isTextFile.value = true;
     await refreshAll();
-    ElMessage.success(t("settings.resetDoneWithCount", { success: Number(data.success || 0), total: Number(data.total || 0) }));
+    ElMessage.success(translate("settings.resetDoneWithCount", { success: Number(data.success || 0), total: Number(data.total || 0) }));
   } catch (error) {
-    ElMessage.error(error.message || t("settings.resetAllFailed"));
+    ElMessage.error(error.message || translate("settings.resetAllFailed"));
   } finally {
     resettingAll.value = false;
   }
@@ -371,7 +371,7 @@ function clearAllResetSections() {
 
 async function confirmResetDialog() {
   if (!Array.isArray(resetDialogSections.value) || !resetDialogSections.value.length) {
-    ElMessage.warning(t("settings.selectResetAtLeastOne"));
+    ElMessage.warning(translate("settings.selectResetAtLeastOne"));
     return;
   }
   const sections = [...resetDialogSections.value];
@@ -391,7 +391,7 @@ async function insertParamAtCursor(key = "") {
   const normalizedKey = String(key || "").trim();
   if (!normalizedKey) return;
   if (!activePath.value || !isTextFile.value) {
-    ElMessage.warning(t("settings.selectEditableTextFile"));
+    ElMessage.warning(translate("settings.selectEditableTextFile"));
     return;
   }
   const token = `\${${normalizedKey}}`;
@@ -471,20 +471,20 @@ watch(
     <!-- 左侧目录树 -->
     <div class="workspace-panel workspace-tree noobot-flat-card noobot-workspace-panel">
       <div class="panel-head noobot-workspace-head">
-        <span class="panel-title noobot-workspace-title">{{ t("settings.resources") }}</span>
+        <span class="panel-title noobot-workspace-title">{{ translate("settings.resources") }}</span>
         <!-- 将按钮包裹在 tree-actions 中，统一控制间距 -->
         <div class="tree-actions">
           <div class="desktop-actions">
             <el-button class="refresh-btn noobot-action-btn tail-btn noobot-tail-btn" size="small" :icon="Refresh" @click="refreshAll"
               :loading="loadingTree || loadingAllTree || loadingSystemParamCatalog || loadingUserParamCatalog || resetting || syncingAll"
-              :disabled="!connected || resetting || syncing || syncingAll" :title="t('settings.refreshDirsAndParams')"
-              :aria-label="t('settings.refreshDirsAndParams')" />
+              :disabled="!connected || resetting || syncing || syncingAll" :title="translate('settings.refreshDirsAndParams')"
+              :aria-label="translate('settings.refreshDirsAndParams')" />
           </div>
           <el-dropdown class="mobile-actions" trigger="click" @command="handleTreeAction">
             <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="refresh">{{ t("settings.refreshDirsAndParams") }}</el-dropdown-item>
+                <el-dropdown-item command="refresh">{{ translate("settings.refreshDirsAndParams") }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -494,7 +494,7 @@ watch(
         <el-collapse v-model="activeResourceSection" accordion class="resource-collapse">
           <el-collapse-item
             name="directory"
-            :title="t('settings.directory')"
+            :title="translate('settings.directory')"
             class="resource-collapse-item"
             :class="{
               'resource-collapse-item--active': activeResourceSection === 'directory',
@@ -504,12 +504,12 @@ watch(
           >
             <div class="dir-inner-actions">
               <el-button class="dark-btn noobot-action-btn noobot-flat-soft-btn" size="small" @click="syncWorkspace" :loading="syncing"
-                :disabled="loadingTree || loadingFile || saving || resetting" :title="t('settings.syncConfig')">
-                {{ t("settings.syncConfig") }}
+                :disabled="loadingTree || loadingFile || saving || resetting" :title="translate('settings.syncConfig')">
+                {{ translate("settings.syncConfig") }}
               </el-button>
               <el-button class="danger-btn noobot-action-btn" size="small" @click="resetWorkspace" :loading="resetting"
-                :disabled="loadingTree || loadingFile || saving || syncing" :title="t('settings.resetWorkspaceTitle')">
-                {{ t("settings.reset") }}
+                :disabled="loadingTree || loadingFile || saving || syncing" :title="translate('settings.resetWorkspaceTitle')">
+                {{ translate("settings.reset") }}
               </el-button>
             </div>
             <el-scrollbar class="tree-scroll">
@@ -530,7 +530,7 @@ watch(
           <el-collapse-item
             v-if="isSuperAdmin"
             name="all-workspace"
-            :title="t('settings.allWorkspace')"
+            :title="translate('settings.allWorkspace')"
             class="resource-collapse-item"
             :class="{
               'resource-collapse-item--active': activeResourceSection === 'all-workspace',
@@ -541,13 +541,13 @@ watch(
             <div class="dir-inner-actions">
               <el-button class="dark-btn noobot-action-btn noobot-flat-soft-btn" size="small" @click="syncAllWorkspace" :loading="syncingAll"
                 :disabled="loadingAllTree || loadingFile || saving || resetting || syncing || resettingAll"
-                :title="t('settings.syncAllConfig')">
-                {{ t("settings.syncConfig") }}
+                :title="translate('settings.syncAllConfig')">
+                {{ translate("settings.syncConfig") }}
               </el-button>
               <el-button class="danger-btn noobot-action-btn" size="small" @click="resetAllWorkspace" :loading="resettingAll"
                 :disabled="loadingAllTree || loadingFile || saving || resetting || syncing || syncingAll"
-                :title="t('settings.resetAllWorkspaceKeepRuntime')">
-                {{ t("settings.reset") }}
+                :title="translate('settings.resetAllWorkspaceKeepRuntime')">
+                {{ translate("settings.reset") }}
               </el-button>
             </div>
             <el-scrollbar
@@ -577,7 +577,7 @@ watch(
           </el-collapse-item>
           <el-collapse-item
             name="system-params"
-            :title="t('settings.systemParams')"
+            :title="translate('settings.systemParams')"
             class="resource-collapse-item"
             :class="{
               'resource-collapse-item--active': activeResourceSection === 'system-params',
@@ -593,18 +593,18 @@ watch(
                   <span class="tree-node param-row" @dblclick.stop="insertParamAtCursor(data.key)">
                     <el-icon class="node-icon"><Key /></el-icon>
                     <span class="node-label">{{ data.label }}</span>
-                    <span class="param-desc" :title="data.description">{{ data.description || t("settings.noDescription") }}</span>
+                    <span class="param-desc" :title="data.description">{{ data.description || translate("settings.noDescription") }}</span>
                   </span>
                 </template>
               </el-tree>
               <div v-if="!systemParamTreeData.length && !loadingSystemParamCatalog" class="empty-tip left-empty">
-                <p>{{ t("settings.noParams") }}</p>
+                <p>{{ translate("settings.noParams") }}</p>
               </div>
             </el-scrollbar>
           </el-collapse-item>
           <el-collapse-item
             name="user-params"
-            :title="t('settings.userParams')"
+            :title="translate('settings.userParams')"
             class="resource-collapse-item"
             :class="{
               'resource-collapse-item--active': activeResourceSection === 'user-params',
@@ -620,12 +620,12 @@ watch(
                   <span class="tree-node param-row" @dblclick.stop="insertParamAtCursor(data.key)">
                     <el-icon class="node-icon"><Key /></el-icon>
                     <span class="node-label">{{ data.label }}</span>
-                    <span class="param-desc" :title="data.description">{{ data.description || t("settings.noDescription") }}</span>
+                    <span class="param-desc" :title="data.description">{{ data.description || translate("settings.noDescription") }}</span>
                   </span>
                 </template>
               </el-tree>
               <div v-if="!userParamTreeData.length && !loadingUserParamCatalog" class="empty-tip left-empty">
-                <p>{{ t("settings.noParams") }}</p>
+                <p>{{ translate("settings.noParams") }}</p>
               </div>
             </el-scrollbar>
           </el-collapse-item>
@@ -639,26 +639,26 @@ watch(
         <div class="file-info">
               <span class="active-file noobot-flat-chip" :title="activePath">{{
             activePath
-              ? `${activePathSource === 'all' ? t('settings.allWorkspacePrefix') : ''}${activePath}`
-              : t("settings.noFileSelected")
+              ? `${activePathSource === 'all' ? translate('settings.allWorkspacePrefix') : ''}${activePath}`
+              : translate("settings.noFileSelected")
           }}</span>
         </div>
         <div class="editor-actions">
           <div class="desktop-actions">
             <el-button class="dark-btn noobot-action-btn noobot-flat-soft-btn" size="small" @click="downloadFile" :disabled="!activePath">
-              {{ t("settings.download") }}
+              {{ translate("settings.download") }}
             </el-button>
             <el-button type="primary" class="primary-btn noobot-action-btn" size="small" @click="saveFile"
               :disabled="!activePath || !isTextFile" :loading="saving">
-              {{ t("settings.save") }}
+              {{ translate("settings.save") }}
             </el-button>
           </div>
           <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
             <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="download">{{ t("settings.download") }}</el-dropdown-item>
-                <el-dropdown-item command="save">{{ t("settings.save") }}</el-dropdown-item>
+                <el-dropdown-item command="download">{{ translate("settings.download") }}</el-dropdown-item>
+                <el-dropdown-item command="save">{{ translate("settings.save") }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -668,17 +668,17 @@ watch(
       <div class="panel-body noobot-workspace-body editor-body" v-loading="loadingFile" element-loading-background="var(--noobot-mask-bg)">
         <template v-if="activePath">
           <el-input v-if="isTextFile" ref="editorInputRef" v-model="content" type="textarea" resize="none" class="editor-input noobot-editor-textarea"
-            :disabled="loadingFile" :placeholder="t('settings.startEdit')" />
+            :disabled="loadingFile" :placeholder="translate('settings.startEdit')" />
           <div v-else class="empty-tip">
             <el-empty
-              :description="t('settings.binaryNoPreview')"
+              :description="translate('settings.binaryNoPreview')"
               :image-size="72"
             />
           </div>
         </template>
         <div v-else class="empty-tip">
           <el-empty
-            :description="t('settings.chooseFileFromTree')"
+            :description="translate('settings.chooseFileFromTree')"
             :image-size="72"
           />
         </div>
@@ -693,12 +693,12 @@ watch(
       class="workspace-reset-dialog"
     >
       <div class="reset-dialog-tip noobot-flat-card">
-        {{ t("settings.resetDialogTipPrefix") }}
-        <code>default-user</code> {{ t("settings.resetDialogTipSuffix") }}
+        {{ translate("settings.resetDialogTipPrefix") }}
+        <code>default-user</code> {{ translate("settings.resetDialogTipSuffix") }}
       </div>
       <div class="reset-dialog-toolbar">
-        <el-button text size="small" @click="selectAllResetSections">{{ t("settings.selectAll") }}</el-button>
-        <el-button text size="small" @click="clearAllResetSections">{{ t("settings.clear") }}</el-button>
+        <el-button text size="small" @click="selectAllResetSections">{{ translate("settings.selectAll") }}</el-button>
+        <el-button text size="small" @click="clearAllResetSections">{{ translate("settings.clear") }}</el-button>
       </div>
       <el-checkbox-group v-model="resetDialogSections" class="reset-section-group">
         <el-checkbox
@@ -712,15 +712,15 @@ watch(
           {{ item.label }}
         </el-checkbox>
       </el-checkbox-group>
-      <div class="reset-dialog-note">{{ t("settings.resetDialogNote") }}</div>
+      <div class="reset-dialog-note">{{ translate("settings.resetDialogNote") }}</div>
       <template #footer>
-        <el-button @click="resetDialogVisible = false">{{ t("settings.cancel") }}</el-button>
+        <el-button @click="resetDialogVisible = false">{{ translate("settings.cancel") }}</el-button>
         <el-button
           type="danger"
           :loading="resetDialogConfirmLoading"
           @click="confirmResetDialog"
         >
-          {{ t("settings.confirmReset") }}
+          {{ translate("settings.confirmReset") }}
         </el-button>
       </template>
     </el-dialog>

@@ -11,12 +11,12 @@ defineProps({
   connectorStatusClass: { type: Function, required: true },
   connectorStatusIcon: { type: Function, required: true },
 });
-const { t } = useLocale();
+const { translate } = useLocale();
 </script>
 
 <template>
   <div class="connector-summary noobot-flat-card">
-    <div class="connector-summary-title">{{ t("common.selectedConnectors") }}</div>
+    <div class="connector-summary-title">{{ translate("common.selectedConnectors") }}</div>
     <div class="connector-summary-list">
       <div
         v-for="connectorGroup in connectorSummaryGroups"
@@ -36,7 +36,7 @@ const { t } = useLocale();
           </el-icon>
           <span class="connector-summary-name">{{ connectorGroup.selectedName }}</span>
         </span>
-        <span v-else class="connector-summary-empty">{{ t("common.unselected") }}</span>
+        <span v-else class="connector-summary-empty">{{ translate("common.unselected") }}</span>
       </div>
     </div>
   </div>

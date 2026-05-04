@@ -37,7 +37,7 @@ const emit = defineEmits([
 
 const attachmentToolbarRef = ref();
 const morePanelVisible = ref(false);
-const { t } = useLocale();
+const { translate } = useLocale();
 const selectedConnectorNames = computed(() => {
   const selectedSource =
     props?.connectorPanelState?.selectedConnectors &&
@@ -120,7 +120,7 @@ defineExpose({
         v-if="canStop"
         type="danger"
         class="stop-float-btn noobot-action-btn"
-        :title="t('composer.stop')"
+        :title="translate('composer.stop')"
         @click="onStop"
       >
         <el-icon :size="20"><VideoPause /></el-icon>
@@ -131,12 +131,12 @@ defineExpose({
         <div v-show="morePanelVisible" class="more-panel-overlay">
           <div class="more-panel">
             <div class="more-panel-head">
-              <span class="more-panel-title">{{ t("common.moreActions") }}</span>
+              <span class="more-panel-title">{{ translate("common.moreActions") }}</span>
               <el-button
                 class="more-collapse-btn noobot-action-btn noobot-flat-soft-btn"
                 @click="morePanelVisible = false"
               >
-                <span>{{ t("message.collapse") }}</span>
+                <span>{{ translate("message.collapse") }}</span>
                 <el-icon><ArrowDown /></el-icon>
               </el-button>
             </div>
@@ -151,8 +151,8 @@ defineExpose({
               <el-switch
                 :model-value="allowUserInteraction"
                 inline-prompt
-                :active-text="t('composer.allowInteraction')"
-                :inactive-text="t('composer.disallowInteraction')"
+                :active-text="translate('composer.allowInteraction')"
+                :inactive-text="translate('composer.disallowInteraction')"
                 @update:model-value="onAllowUserInteractionChange"
                 class="interaction-switch"
               />
@@ -171,7 +171,7 @@ defineExpose({
       <div class="composer-row">
         <el-button
           class="more-btn noobot-action-btn noobot-flat-soft-btn"
-          :title="t('common.moreActions')"
+          :title="translate('common.moreActions')"
           @click="toggleMorePanel"
         >
           <el-icon><MoreFilled /></el-icon>
@@ -182,7 +182,7 @@ defineExpose({
           type="textarea"
           :autosize="{ minRows: 1, maxRows: 8 }"
           resize="none"
-          :placeholder="t('composer.inputPlaceholder')"
+          :placeholder="translate('composer.inputPlaceholder')"
           class="chat-input"
           @update:model-value="onInputChange"
           @keydown.enter.exact.prevent="onSend"
@@ -195,7 +195,7 @@ defineExpose({
           :disabled="sendDisabled"
           @click="onSend"
         >
-          {{ sending ? t("composer.sending") : t("composer.send") }}
+          {{ sending ? translate("composer.sending") : translate("composer.send") }}
         </el-button>
       </div>
     </div>

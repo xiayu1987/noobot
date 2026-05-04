@@ -36,7 +36,7 @@ export function useChatList({
   clearUploads,
   notify = () => {},
 } = {}) {
-  const { t } = useLocale();
+  const { translate } = useLocale();
   function buildChildAttachmentMetasByParentDialogProcessId(
     sessionDocs = [],
     rootSessionId = "",
@@ -118,7 +118,7 @@ export function useChatList({
     const id = generateSessionId();
     const newSessionItem = {
       id,
-      title: t("chat.newSession"),
+      title: translate("chat.newSession"),
       isLocal: true,
       loaded: true,
       backendSessionId: id,
@@ -139,7 +139,7 @@ export function useChatList({
 
   function newSession() {
     if (sending.value) {
-      notify({ type: "warning", message: t("chat.cannotCreateWhileSending") });
+      notify({ type: "warning", message: translate("chat.cannotCreateWhileSending") });
       return;
     }
     createLocalSession();
@@ -252,9 +252,9 @@ export function useChatList({
       { userId: userId.value, sessionId },
       { fetcher: authFetch },
     );
-    if (!res.ok) throw new Error(t("chat.getSessionFailed", { status: res.status }));
+    if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
     const data = await res.json();
-    if (!data.ok || !data.exists) throw new Error(data.error || t("chat.sessionNotFound"));
+    if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
     return data;
   }
 
@@ -267,9 +267,9 @@ export function useChatList({
         { userId: userId.value },
         { fetcher: authFetch },
       );
-      if (!res.ok) throw new Error(t("chat.getSessionsHttpFailed", { status: res.status }));
+      if (!res.ok) throw new Error(translate("chat.getSessionsHttpFailed", { status: res.status }));
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || t("chat.getSessionsFailed"));
+      if (!data.ok) throw new Error(data.error || translate("chat.getSessionsFailed"));
 
       sessions.value = (data.sessions || [])
         .filter((sessionItem) => String(sessionItem?.caller || "") === RoleEnum.USER)
@@ -294,7 +294,7 @@ export function useChatList({
       const nextId = keepActive ? prevActiveId : sessions.value[0].id;
       await selectSession(nextId, { force: true });
     } catch (error) {
-      notify({ type: "error", message: error.message || t("chat.loadSessionsFailed") });
+      notify({ type: "error", message: error.message || translate("chat.loadSessionsFailed") });
       if (!sessions.value.length) createLocalSession();
     } finally {
       loadingSessions.value = false;
@@ -308,7 +308,7 @@ export function useChatList({
     if (!target) return;
     if (!force && sessionId === activeSessionId.value) return;
     if (sending.value && activeSessionId.value && sessionId !== activeSessionId.value) {
-      notify({ type: "warning", message: t("chat.keepCurrentWhenSending") });
+      notify({ type: "warning", message: translate("chat.keepCurrentWhenSending") });
       return;
     }
 
@@ -328,7 +328,7 @@ export function useChatList({
       applySessionDetail(detail);
       refreshSessionConnectorsAsync(sessionId);
     } catch (error) {
-      notify({ type: "error", message: error.message || t("chat.loadSessionDetailFailed") });
+      notify({ type: "error", message: error.message || translate("chat.loadSessionDetailFailed") });
     } finally {
       loadingSessionDetail.value = false;
     }
@@ -338,7 +338,7 @@ export function useChatList({
     const targetSessionId = String(sessionId || "").trim();
     if (!targetSessionId) return false;
     if (sending.value) {
-      notify({ type: "warning", message: t("chat.cannotDeleteWhileSending") });
+      notify({ type: "warning", message: translate("chat.cannotDeleteWhileSending") });
       return false;
     }
 
@@ -369,7 +369,7 @@ export function useChatList({
     );
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      throw new Error(data.error || t("chat.deleteSessionFailed"));
+      throw new Error(data.error || translate("chat.deleteSessionFailed"));
     }
 
     await fetchSessions(fallbackNextSessionId);

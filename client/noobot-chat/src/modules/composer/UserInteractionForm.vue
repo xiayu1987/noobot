@@ -17,7 +17,7 @@ const emit = defineEmits(["confirm", "cancel"]);
 
 const formData = reactive({});
 const firstInputRef = ref(null);
-const { t } = useLocale();
+const { translate } = useLocale();
 
 function setFirstInputRef(el) {
   firstInputRef.value = el || null;
@@ -48,7 +48,7 @@ function onConfirm() {
       const value = String(formData[key] || "");
       if (fieldItem?.required && !value.trim()) {
         const label = String(fieldItem?.displayName || fieldItem?.name || key);
-        ElMessage.warning(t("composer.fieldRequired", { label }));
+        ElMessage.warning(translate("composer.fieldRequired", { label }));
         return;
       }
       payload[key] = value;
@@ -77,8 +77,8 @@ watch(
 <template>
   <div v-if="request" class="interaction-card">
     <div class="interaction-head">
-      <span class="interaction-badge">{{ t("composer.pendingConfirm") }}</span>
-      <div class="interaction-title">{{ request.content || t("composer.confirmOrSupplement") }}</div>
+      <span class="interaction-badge">{{ translate("composer.pendingConfirm") }}</span>
+      <div class="interaction-title">{{ request.content || translate("composer.confirmOrSupplement") }}</div>
     </div>
 
     <el-form
@@ -95,17 +95,17 @@ watch(
         <el-input
           :ref="index === 0 ? setFirstInputRef : null"
           v-model="formData[fieldItem.name]"
-          :placeholder="fieldItem.description || t('composer.inputField', { field: fieldItem.displayName || fieldItem.name })"
+          :placeholder="fieldItem.description || translate('composer.inputField', { field: fieldItem.displayName || fieldItem.name })"
         />
       </el-form-item>
     </el-form>
 
     <div class="interaction-actions">
       <el-button :disabled="submitting" @click="onCancel">
-        {{ t("common.cancel") }}
+        {{ translate("common.cancel") }}
       </el-button>
       <el-button type="primary" :loading="submitting" @click="onConfirm">
-        {{ t("infra.confirm") }}
+        {{ translate("infra.confirm") }}
       </el-button>
     </div>
   </div>

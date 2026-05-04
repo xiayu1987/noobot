@@ -42,7 +42,7 @@ const emit = defineEmits([
   "refresh-sessions",
   "select-session",
 ]);
-const { t } = useLocale();
+const { translate } = useLocale();
 </script>
 
 <template>
@@ -65,8 +65,8 @@ const { t } = useLocale();
         class="collapse-btn noobot-action-btn noobot-flat-soft-btn"
         type="button"
         @click="emit('toggle-sidebar')"
-        :title="sidebarCollapsed ? t('common.expandSidebar') : t('common.collapseSidebar')"
-        :aria-label="sidebarCollapsed ? t('common.expandSidebar') : t('common.collapseSidebar')"
+        :title="sidebarCollapsed ? translate('common.expandSidebar') : translate('common.collapseSidebar')"
+        :aria-label="sidebarCollapsed ? translate('common.expandSidebar') : translate('common.collapseSidebar')"
       >
         <el-icon>
           <Expand v-if="sidebarCollapsed" />
@@ -79,7 +79,7 @@ const { t } = useLocale();
       <el-input
         :model-value="userId"
         size="large"
-        :placeholder="t('common.inputUserId')"
+        :placeholder="translate('common.inputUserId')"
         class="custom-input"
         @update:model-value="emit('update:user-id', $event)"
       >
@@ -92,7 +92,7 @@ const { t } = useLocale();
         <el-input
           :model-value="connectCode"
           size="large"
-          :placeholder="t('common.inputConnectCode')"
+          :placeholder="translate('common.inputConnectCode')"
           class="custom-input connect-input"
           show-password
           @update:model-value="emit('update:connect-code', $event)"
@@ -110,14 +110,14 @@ const { t } = useLocale();
           :loading="connecting"
           @click="emit('connect')"
         >
-          {{ connecting ? t("common.connecting") : t("common.connect") }}
+          {{ connecting ? translate("common.connecting") : translate("common.connect") }}
         </el-button>
         <button
           type="button"
           class="status-btn noobot-action-btn noobot-flat-soft-btn tail-btn"
           :class="{ connected }"
-          :title="connected ? t('common.connected') : t('common.disconnected')"
-          :aria-label="connected ? t('common.connected') : t('common.disconnected')"
+          :title="connected ? translate('common.connected') : translate('common.disconnected')"
+          :aria-label="connected ? translate('common.connected') : translate('common.disconnected')"
         >
           <el-icon class="status-icon">
             <CircleCheckFilled v-if="connected" />
@@ -134,7 +134,7 @@ const { t } = useLocale();
           @click="emit('new-session')"
           :disabled="sending || !connected"
         >
-          {{ t("common.newSession") }}
+          {{ translate("common.newSession") }}
         </el-button>
         
         <el-button
@@ -143,8 +143,8 @@ const { t } = useLocale();
           :loading="loadingSessions"
           @click="emit('refresh-sessions')"
           :disabled="!connected || sending"
-          :title="t('common.refresh')"
-          :aria-label="t('common.refreshSessionList')"
+          :title="translate('common.refresh')"
+          :aria-label="translate('common.refreshSessionList')"
         />
       </div>
     </div>

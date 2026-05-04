@@ -13,7 +13,7 @@ const props = defineProps({
 });
 
 const hasThinking = computed(() => hasThinkingLogs(props.messageItem));
-const { t } = useLocale();
+const { translate } = useLocale();
 const nowTick = ref(Date.now());
 let timer = null;
 
@@ -45,15 +45,15 @@ function formatSessionGroupLabel(
   const shortSessionId = String(sessionId || "").slice(0, 8) || "unknown";
   const shortDialogProcessId =
     String(dialogProcessId || "").slice(0, 8) || "unknown";
-  const levelText = t("message.depthLabel", { depth: Math.max(1, Number(depth || 1)) });
+  const levelText = translate("message.depthLabel", { depth: Math.max(1, Number(depth || 1)) });
   if (Number(depth || 0) <= 1) {
-    return t("message.mainTaskGroup", {
+    return translate("message.mainTaskGroup", {
       sessionId: shortSessionId,
       dialogId: shortDialogProcessId,
       level: levelText,
     });
   }
-  return t("message.subTaskGroup", {
+  return translate("message.subTaskGroup", {
     sessionId: shortSessionId,
     dialogId: shortDialogProcessId,
     level: levelText,
@@ -260,14 +260,14 @@ onBeforeUnmount(() => {
       <el-collapse-item name="thinking-panel">
         <template #title>
           <div class="thinking-title-row">
-            <span class="thinking-title-text noobot-flat-chip">{{ t("message.thinkingExpand") }}</span>
+            <span class="thinking-title-text noobot-flat-chip">{{ translate("message.thinkingExpand") }}</span>
             <span class="thinking-elapsed noobot-flat-chip">
-              {{ t("message.thinkingElapsed", { duration: getThinkingDurationLabel(messageItem) }) }}
+              {{ translate("message.thinkingElapsed", { duration: getThinkingDurationLabel(messageItem) }) }}
             </span>
           </div>
         </template>
         <el-tabs class="thinking-tabs">
-          <el-tab-pane :label="t('message.executionProcess', { count: getExecutionLogCount(messageItem) })">
+          <el-tab-pane :label="translate('message.executionProcess', { count: getExecutionLogCount(messageItem) })">
             <div class="thinking-body-scroll">
               <div
                 v-for="(logItem, logIndex) in getExecutionLogs(messageItem)"
@@ -281,17 +281,17 @@ onBeforeUnmount(() => {
                 v-if="!getExecutionLogCount(messageItem) && messageItem.pending"
                 class="thinking-empty"
               >
-                {{ t("message.waitingRealtimeLog") }}
+                {{ translate("message.waitingRealtimeLog") }}
               </div>
               <div
                 v-if="!getExecutionLogCount(messageItem) && !messageItem.pending"
                 class="thinking-empty"
               >
-                {{ t("message.noExecutionLogs") }}
+                {{ translate("message.noExecutionLogs") }}
               </div>
             </div>
           </el-tab-pane>
-          <el-tab-pane :label="t('message.thinkingDetails', { count: getThinkingDetailCount(messageItem) })">
+          <el-tab-pane :label="translate('message.thinkingDetails', { count: getThinkingDetailCount(messageItem) })">
             <div class="thinking-body-scroll">
               <template v-if="!messageItem.pending">
                 <div
@@ -341,10 +341,10 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
                 <div v-if="!(messageItem.completedToolLogs || []).length" class="thinking-empty">
-                  {{ t("message.noToolCalls") }}
+                  {{ translate("message.noToolCalls") }}
                 </div>
               </template>
-              <div v-else class="thinking-empty">{{ t("message.detailsAfterDone") }}</div>
+              <div v-else class="thinking-empty">{{ translate("message.detailsAfterDone") }}</div>
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -354,7 +354,7 @@ onBeforeUnmount(() => {
             class="thinking-footer-btn noobot-flat-chip"
             @click="collapseThinkingPanel(messageItem)"
           >
-            {{ t("message.collapse") }}
+            {{ translate("message.collapse") }}
           </button>
         </div>
       </el-collapse-item>

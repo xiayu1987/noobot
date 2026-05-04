@@ -12,13 +12,13 @@ const props = defineProps({
   formatTime: { type: Function, required: true },
   modelLabel: { type: String, default: "" },
 });
-const { t } = useLocale();
+const { translate } = useLocale();
 </script>
 
 <template>
   <div class="msg-header" :class="{ user: role === 'user' }">
     <div class="avatar">
-      <template v-if="role === 'user'">{{ t("message.me") }}</template>
+      <template v-if="role === 'user'">{{ translate("message.me") }}</template>
       <img v-else src="../../shared/assets/noobot.svg" alt="AI" class="ai-avatar-img" />
     </div>
     <div class="meta">

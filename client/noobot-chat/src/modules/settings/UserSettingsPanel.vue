@@ -35,7 +35,7 @@ const templateSaving = ref(false);
 const templateActivePath = ref("");
 const templateContent = ref("");
 const templateIsTextFile = ref(true);
-const { t } = useLocale();
+const { translate } = useLocale();
 
 function authHeaders(extra = {}) {
   return {
@@ -90,7 +90,7 @@ function syncUsersFromJsonDraft() {
     jsonParseError.value = "";
     return true;
   } catch (error) {
-    jsonParseError.value = error.message || t("settings.fixJsonError");
+    jsonParseError.value = error.message || translate("settings.fixJsonError");
     return false;
   }
 }
@@ -112,12 +112,12 @@ async function loadUsers() {
   try {
     const res = await getRegularUsersApi({ fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.loadUsersFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadUsersFailed"));
     users.value = normalizeUsers(data.users || []);
     usersJsonDraft.value = buildUsersJsonText(users.value);
     jsonParseError.value = "";
   } catch (error) {
-    ElMessage.error(error.message || t("settings.loadUsersFailed"));
+    ElMessage.error(error.message || translate("settings.loadUsersFailed"));
   } finally {
     loading.value = false;
   }
@@ -129,10 +129,10 @@ async function loadTemplateTree() {
   try {
     const res = await getTemplateTreeApi({ fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.loadTemplateDirFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadTemplateDirFailed"));
     templateTree.value = data.tree || [];
   } catch (error) {
-    ElMessage.error(error.message || t("settings.loadTemplateDirFailed"));
+    ElMessage.error(error.message || translate("settings.loadTemplateDirFailed"));
   } finally {
     templateLoadingTree.value = false;
   }
@@ -147,12 +147,12 @@ async function openTemplateFile(node) {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.readTemplateFileFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.readTemplateFileFailed"));
     templateActivePath.value = data.path || node.path;
     templateIsTextFile.value = data.isText !== false;
     templateContent.value = data.content || "";
   } catch (error) {
-    ElMessage.error(error.message || t("settings.readTemplateFileFailed"));
+    ElMessage.error(error.message || translate("settings.readTemplateFileFailed"));
   } finally {
     templateLoadingFile.value = false;
   }
@@ -168,11 +168,11 @@ async function saveTemplateFile() {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.saveTemplateFileFailed"));
-    ElMessage.success(t("settings.templateFileSaved"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveTemplateFileFailed"));
+    ElMessage.success(translate("settings.templateFileSaved"));
     await loadTemplateTree();
   } catch (error) {
-    ElMessage.error(error.message || t("settings.saveTemplateFileFailed"));
+    ElMessage.error(error.message || translate("settings.saveTemplateFileFailed"));
   } finally {
     templateSaving.value = false;
   }
@@ -209,17 +209,17 @@ function removeUserRow(index) {
 function regenerateSingleUserConnectCode(index) {
   if (!Number.isInteger(index) || index < 0 || index >= users.value.length) return;
   users.value[index].connectCode = generateUuid();
-  ElMessage.success(t("settings.regeneratedSingleCode"));
+  ElMessage.success(translate("settings.regeneratedSingleCode"));
 }
 
 function generateConnectCodesForEmptyOnly() {
   try {
     if (!syncUsersFromJsonDraft()) {
-      throw new Error(t("settings.fixJsonError"));
+      throw new Error(translate("settings.fixJsonError"));
     }
     const targetUsers = normalizeUsers(users.value);
     if (!targetUsers.length) {
-      throw new Error(t("settings.atLeastOneUser"));
+      throw new Error(translate("settings.atLeastOneUser"));
     }
     users.value = targetUsers.map((item) => {
       const currentCode = String(item.connectCode || "").trim();
@@ -230,20 +230,20 @@ function generateConnectCodesForEmptyOnly() {
     });
     usersJsonDraft.value = buildUsersJsonText(users.value);
     jsonParseError.value = "";
-    ElMessage.success(t("settings.generatedForEmptyDone"));
+    ElMessage.success(translate("settings.generatedForEmptyDone"));
   } catch (error) {
-    ElMessage.error(error.message || t("settings.generateCodeFailed"));
+    ElMessage.error(error.message || translate("settings.generateCodeFailed"));
   }
 }
 
 function forceRegenerateAllConnectCodes() {
   try {
     if (!syncUsersFromJsonDraft()) {
-      throw new Error(t("settings.fixJsonError"));
+      throw new Error(translate("settings.fixJsonError"));
     }
     const targetUsers = normalizeUsers(users.value);
     if (!targetUsers.length) {
-      throw new Error(t("settings.atLeastOneUser"));
+      throw new Error(translate("settings.atLeastOneUser"));
     }
     users.value = targetUsers.map((item) => ({
       userId: String(item.userId || "").trim(),
@@ -251,26 +251,26 @@ function forceRegenerateAllConnectCodes() {
     }));
     usersJsonDraft.value = buildUsersJsonText(users.value);
     jsonParseError.value = "";
-    ElMessage.success(t("settings.forceRegenerateDone"));
+    ElMessage.success(translate("settings.forceRegenerateDone"));
   } catch (error) {
-    ElMessage.error(error.message || t("settings.forceRegenerateFailed"));
+    ElMessage.error(error.message || translate("settings.forceRegenerateFailed"));
   }
 }
 
 function validateUsers(list = []) {
   const normalized = normalizeUsers(list);
   if (!normalized.length) {
-    throw new Error(t("settings.keepAtLeastOneUser"));
+    throw new Error(translate("settings.keepAtLeastOneUser"));
   }
   if (normalized.some((item) => !item.userId || !item.connectCode)) {
-    throw new Error(t("settings.userAndCodeRequired"));
+    throw new Error(translate("settings.userAndCodeRequired"));
   }
   const duplicate = normalized.find(
     (item, idx) =>
       normalized.findIndex((subItem) => subItem.userId === item.userId) !== idx,
   );
   if (duplicate) {
-    throw new Error(t("settings.duplicateUserId", { userId: duplicate.userId }));
+    throw new Error(translate("settings.duplicateUserId", { userId: duplicate.userId }));
   }
   return normalized;
 }
@@ -280,7 +280,7 @@ async function saveUsers() {
   saving.value = true;
   try {
     if (!syncUsersFromJsonDraft()) {
-      throw new Error(t("settings.fixJsonError"));
+      throw new Error(translate("settings.fixJsonError"));
     }
     const payloadUsers = validateUsers(users.value);
     const res = await putRegularUsersApi(
@@ -288,13 +288,13 @@ async function saveUsers() {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || t("settings.saveUsersFailed"));
+    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveUsersFailed"));
     users.value = normalizeUsers(data.users || payloadUsers);
     usersJsonDraft.value = buildUsersJsonText(users.value);
     jsonParseError.value = "";
-    ElMessage.success(t("settings.usersSaved"));
+    ElMessage.success(translate("settings.usersSaved"));
   } catch (error) {
-    ElMessage.error(error.message || t("settings.saveUsersFailed"));
+    ElMessage.error(error.message || translate("settings.saveUsersFailed"));
   } finally {
     saving.value = false;
   }
@@ -347,13 +347,13 @@ watch(
 
 <template>
   <el-tabs v-model="activeTab" class="settings-tabs">
-    <el-tab-pane :label="t('settings.userSettings')" name="users">
+    <el-tab-pane :label="translate('settings.userSettings')" name="users">
       <div class="workspace-layout noobot-workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
         <div class="workspace-panel noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
-            <span class="panel-title noobot-workspace-title">{{ t("settings.users") }}</span>
+            <span class="panel-title noobot-workspace-title">{{ translate("settings.users") }}</span>
             <div class="tree-actions">
-              <el-button class="icon-btn" size="small" text @click="addUserRow" :title="t('settings.addUser')">
+              <el-button class="icon-btn" size="small" text @click="addUserRow" :title="translate('settings.addUser')">
                 <el-icon><Plus /></el-icon>
               </el-button>
             </div>
@@ -368,17 +368,17 @@ watch(
                 >
                   <div class="row-header">
                     <span class="user-idx">User {{ idx + 1 }}</span>
-                    <el-button class="icon-btn danger-text" size="small" text @click="removeUserRow(idx)" :title="t('settings.delete')">✕</el-button>
+                    <el-button class="icon-btn danger-text" size="small" text @click="removeUserRow(idx)" :title="translate('settings.delete')">✕</el-button>
                   </div>
                   <el-input v-model="item.userId" placeholder="userId" clearable class="row-input" />
                   <div class="code-row">
                     <el-input v-model="item.connectCode" placeholder="connectCode" clearable class="row-input" />
-                    <el-button class="dark-btn action-btn noobot-action-btn noobot-flat-soft-btn" @click="regenerateSingleUserConnectCode(idx)" :title="t('settings.regenerateConnectCode')">↻</el-button>
+                    <el-button class="dark-btn action-btn noobot-action-btn noobot-flat-soft-btn" @click="regenerateSingleUserConnectCode(idx)" :title="translate('settings.regenerateConnectCode')">↻</el-button>
                   </div>
                 </div>
                 <div v-if="!users.length" class="empty-tip list-empty-tip">
                   <div class="empty-icon">👥</div>
-                  <p>{{ t("settings.noUsersAdd") }}</p>
+                  <p>{{ translate("settings.noUsersAdd") }}</p>
                 </div>
               </div>
             </el-scrollbar>
@@ -392,17 +392,17 @@ watch(
             </div>
             <div class="editor-actions">
               <div class="desktop-actions">
-                <el-button size="small" class="dark-btn noobot-action-btn noobot-flat-soft-btn" @click="generateConnectCodesForEmptyOnly">{{ t("settings.generateForEmpty") }}</el-button>
-                <el-button size="small" class="dark-btn noobot-action-btn noobot-flat-soft-btn" @click="forceRegenerateAllConnectCodes">{{ t("settings.forceRegenerateAll") }}</el-button>
-                <el-button type="primary" class="primary-btn noobot-action-btn" size="small" @click="saveUsers" :loading="saving">{{ t("settings.save") }}</el-button>
+                <el-button size="small" class="dark-btn noobot-action-btn noobot-flat-soft-btn" @click="generateConnectCodesForEmptyOnly">{{ translate("settings.generateForEmpty") }}</el-button>
+                <el-button size="small" class="dark-btn noobot-action-btn noobot-flat-soft-btn" @click="forceRegenerateAllConnectCodes">{{ translate("settings.forceRegenerateAll") }}</el-button>
+                <el-button type="primary" class="primary-btn noobot-action-btn" size="small" @click="saveUsers" :loading="saving">{{ translate("settings.save") }}</el-button>
               </div>
               <el-dropdown class="mobile-actions" trigger="click" @command="handleUsersEditorAction">
                 <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="generate-empty">{{ t("settings.generateForEmpty") }}</el-dropdown-item>
-                    <el-dropdown-item command="regenerate-all">{{ t("settings.forceRegenerateAll") }}</el-dropdown-item>
-                    <el-dropdown-item command="save">{{ t("settings.save") }}</el-dropdown-item>
+                    <el-dropdown-item command="generate-empty">{{ translate("settings.generateForEmpty") }}</el-dropdown-item>
+                    <el-dropdown-item command="regenerate-all">{{ translate("settings.forceRegenerateAll") }}</el-dropdown-item>
+                    <el-dropdown-item command="save">{{ translate("settings.save") }}</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -423,11 +423,11 @@ watch(
       </div>
     </el-tab-pane>
 
-    <el-tab-pane :label="t('settings.defaultUserSettings')" name="template">
+    <el-tab-pane :label="translate('settings.defaultUserSettings')" name="template">
       <div class="workspace-layout noobot-workspace-layout">
         <div class="workspace-panel workspace-tree noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
-            <span class="panel-title noobot-workspace-title">{{ t("settings.defaultUserDir") }}</span>
+            <span class="panel-title noobot-workspace-title">{{ translate("settings.defaultUserDir") }}</span>
             <div class="tree-actions">
               <el-button
                 class="refresh-btn noobot-action-btn tail-btn noobot-tail-btn"
@@ -435,7 +435,7 @@ watch(
                 :icon="Refresh"
                 @click="loadTemplateTree"
                 :loading="templateLoadingTree"
-                :title="t('settings.refreshDir')"
+                :title="translate('settings.refreshDir')"
               />
             </div>
           </div>
@@ -462,7 +462,7 @@ watch(
         <div class="workspace-panel workspace-editor noobot-flat-card noobot-workspace-panel">
           <div class="panel-head noobot-workspace-head">
             <div class="file-info">
-              <span class="active-file noobot-flat-chip" :title="templateActivePath">{{ templateActivePath || t("settings.noFileSelected") }}</span>
+              <span class="active-file noobot-flat-chip" :title="templateActivePath">{{ templateActivePath || translate("settings.noFileSelected") }}</span>
             </div>
             <div class="editor-actions">
               <div class="desktop-actions">
@@ -474,14 +474,14 @@ watch(
                   :disabled="!templateActivePath || !templateIsTextFile"
                   :loading="templateSaving"
                 >
-                  {{ t("settings.save") }}
+                  {{ translate("settings.save") }}
                 </el-button>
               </div>
               <el-dropdown class="mobile-actions" trigger="click" @command="handleTemplateEditorAction">
                 <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
                 <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item command="save">{{ t("settings.save") }}</el-dropdown-item>
+                    <el-dropdown-item command="save">{{ translate("settings.save") }}</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -499,16 +499,16 @@ watch(
                 type="textarea"
                 resize="none"
                 class="editor-input noobot-editor-textarea"
-                :placeholder="t('settings.startEdit')"
+                :placeholder="translate('settings.startEdit')"
               />
               <div v-else class="empty-tip">
                 <div class="empty-icon">📦</div>
-                <p>{{ t("settings.binaryNoEdit") }}</p>
+                <p>{{ translate("settings.binaryNoEdit") }}</p>
               </div>
             </template>
             <div v-else class="empty-tip">
               <div class="empty-icon">👈</div>
-              <p>{{ t("settings.chooseFileLeftTree") }}</p>
+              <p>{{ translate("settings.chooseFileLeftTree") }}</p>
             </div>
           </div>
         </div>

@@ -11,7 +11,7 @@ export function useAgentInteraction({
   encryptPayloadBySessionId,
   sendJson,
 } = {}) {
-  const { t } = useLocale();
+  const { translate } = useLocale();
   const chatStore = useChatStore();
   const { pendingInteractionRequest, interactionSubmitting } = storeToRefs(chatStore);
 
@@ -30,7 +30,7 @@ export function useAgentInteraction({
         ? requestOverride
         : pendingInteractionRequest.value;
     if (!request?.requestId) {
-      throw new Error(t("infra.interactionChannelUnavailable"));
+      throw new Error(translate("infra.interactionChannelUnavailable"));
     }
     interactionSubmitting.value = true;
     const requireEncryption = request?.requireEncryption === true;

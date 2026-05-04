@@ -15,7 +15,7 @@ defineProps({
 });
 
 const emit = defineEmits(["preview", "download"]);
-const { t } = useLocale();
+const { translate } = useLocale();
 </script>
 
 <template>
@@ -29,7 +29,7 @@ const { t } = useLocale();
         v-if="isImageMime(attachmentItem.mimeType || '') && attachmentItem.previewUrl"
         type="button"
         class="attachment-preview-btn"
-        :title="t('message.previewFile', { name: attachmentItem.name || '' })"
+        :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
         @click="emit('preview', attachmentItem)"
       >
         <img :src="attachmentItem.previewUrl" :alt="attachmentItem.name" class="file-thumb" />
@@ -38,7 +38,7 @@ const { t } = useLocale();
         v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && attachmentItem.previewUrl"
         type="button"
         class="attachment-preview-btn"
-        :title="t('message.previewFile', { name: attachmentItem.name || '' })"
+        :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
         @click="emit('preview', attachmentItem)"
       >
         <video class="file-thumb" :src="attachmentItem.previewUrl" muted preload="metadata" />
@@ -48,7 +48,7 @@ const { t } = useLocale();
           v-if="canPreviewAttachment(attachmentItem)"
           type="button"
           class="attachment-preview-btn file-icon-button"
-          :title="t('message.previewFile', { name: attachmentItem.name || '' })"
+          :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
           @click="emit('preview', attachmentItem)"
         >
           <el-icon><Document /></el-icon>
@@ -62,7 +62,7 @@ const { t } = useLocale();
       <button
         type="button"
         class="attachment-download-btn noobot-flat-icon-btn"
-        :title="t('message.downloadFile', { name: attachmentItem.name || '' })"
+        :title="translate('message.downloadFile', { name: attachmentItem.name || '' })"
         @click="emit('download', attachmentItem)"
       >
         <el-icon><Download /></el-icon>

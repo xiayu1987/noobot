@@ -81,7 +81,7 @@ const { messageModelLabel, showSubTaskActivity, subTaskStatusText } = useMessage
 });
 
 const { mermaidHostRef: messageMarkdownRef } = useMermaidRender();
-const { t } = useLocale();
+const { translate } = useLocale();
 
 </script>
 
@@ -141,7 +141,7 @@ const { t } = useLocale();
   <!-- 弹窗部分保持不变 -->
   <el-dialog
     v-model="attachmentPreviewVisible"
-    :title="t('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
+    :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
     width="72%"
     top="6vh"
     class="attachment-preview-dialog"
@@ -165,7 +165,7 @@ const { t } = useLocale();
 
   <el-dialog
     v-model="previewVisible"
-    :title="t('message.filePreviewTitle', { name: previewFileName || '' })"
+    :title="translate('message.filePreviewTitle', { name: previewFileName || '' })"
     width="72%"
     top="6vh"
     class="generated-file-preview-dialog"

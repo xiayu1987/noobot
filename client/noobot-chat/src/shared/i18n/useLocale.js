@@ -39,7 +39,7 @@ function applyParams(text = "", params = {}) {
 export function useLocale() {
   const isZh = computed(() => locale.value === "zh-CN");
 
-  function t(key = "", params = {}) {
+  function translate(key = "", params = {}) {
     const table = messages[locale.value] || messages[FALLBACK_LOCALE] || {};
     const fallbackTable = messages[FALLBACK_LOCALE] || {};
     const hit = translateKey(table, key);
@@ -52,6 +52,6 @@ export function useLocale() {
     locale,
     isZh,
     setLocale,
-    t,
+    translate,
   };
 }

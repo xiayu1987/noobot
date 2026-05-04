@@ -22,7 +22,7 @@ const props = defineProps({
 });
 
 const listRef = ref(null);
-const { t } = useLocale();
+const { translate } = useLocale();
 
 function setScrollTop(top = 0) {
   listRef.value?.setScrollTop?.(Number(top || 0));
@@ -56,7 +56,7 @@ defineExpose({
           <div class="empty-icon">
             <img :src="emptyLogoSrc" alt="Noobot Logo" class="empty-logo" />
           </div>
-          <p>{{ t("common.emptyChatHint") }}</p>
+          <p>{{ translate("common.emptyChatHint") }}</p>
         </div>
 
         <template
