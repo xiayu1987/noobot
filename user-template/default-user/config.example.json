@@ -114,7 +114,7 @@
     },
     "process_content_task": {
       "enabled": true,
-      "max_tool_loop_turns": 4
+      "max_tool_loop_turns": 20
     },
     "execute_script": {
       "enabled": true,

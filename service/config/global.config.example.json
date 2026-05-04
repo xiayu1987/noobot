@@ -3,7 +3,7 @@
   "workspace_template_path": "../user-template/default-user",
   "default_provider": "qwen3_6_plus_2026_04_02",
   "memory_max_items": 50,
-  "max_tool_loop_turns": 4,
+  "max_tool_loop_turns": 20,
   "session": {
     "recent_message_limit": 20,
     "use_last_running_task_range": true,
@@ -123,7 +123,7 @@
     },
     "process_content_task": {
       "enabled": true,
-      "max_tool_loop_turns": 4
+      "max_tool_loop_turns": 20
     },
     "execute_script": {
       "enabled": true,
@@ -142,7 +142,7 @@
     },
     "process_connector_tool": {
       "enabled": true,
-      "max_tool_loop_turns": 4
+      "max_tool_loop_turns": 20
     },
     "access_connector": {
       "enabled": true,
