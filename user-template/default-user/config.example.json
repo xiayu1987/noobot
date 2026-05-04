@@ -114,7 +114,7 @@
     },
     "process_content_task": {
       "enabled": true,
-      "max_tool_loop_turns": 20
+      "max_tool_loop_turns": 50
     },
     "execute_script": {
       "enabled": true,
@@ -133,7 +133,7 @@
     },
     "process_connector_tool": {
       "enabled": true,
-      "max_tool_loop_turns": 20
+      "max_tool_loop_turns": 50
     },
     "access_connector": {
       "enabled": true,
