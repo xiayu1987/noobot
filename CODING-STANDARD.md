@@ -20,17 +20,20 @@ For AI coding only. Keep changes small and strict.
 5. **Tool docs format**: “what it does + input + output”.  
    **工具描述格式**：做什么 + 输入什么 + 返回什么。
 
-6. **Param docs format**:  
+6. **Dispatcher tool descriptions** (except MCP) must use “can handle ... tasks”, not “orchestrate/schedule ...”.  
+   **调度器工具描述**（MCP 除外）必须使用“可处理...任务”，不要写“调度/编排...”。
+
+7. **Param docs format**:  
    - with options: `a|b|c + short note`  
    - no options: short note only  
    **参数描述格式**：  
    - 有可选项：`a|b|c + 简要说明`  
    - 无可选项：仅简要说明
 
-7. **Frontend must handle long content + mobile layout**.  
+8. **Frontend must handle long content + mobile layout**.  
    **前端必须适配长内容与移动端布局**。
 
-8. **Display limit != counter limit** (e.g. show last 10, count keeps increasing).  
+9. **Display limit != counter limit** (e.g. show last 10, count keeps increasing).  
    **展示条数限制不等于计数限制**（如只显示 10 条，但计数持续累加）。
 
 ## Pre-merge checklist / 提交前检查
