@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import {
   VideoPause,
@@ -54,6 +54,7 @@ const micDurationTimerRef = ref(null);
 const micAutoStopTimerRef = ref(null);
 const micPointerStartYRef = ref(0);
 const micSlideCancelReady = ref(false);
+const micCancelBySendingRef = ref(false);
 const iconButtonClassName = "composer-icon-btn";
 const MIC_MAX_DURATION_SECONDS = 60;
 const MIC_SLIDE_CANCEL_THRESHOLD = 44;
@@ -75,12 +76,23 @@ const sendDisabled = computed(
     !props.connected ||
     (props.interactionActive && props.sending),
 );
+const captureActionsDisabled = computed(() => Boolean(props.sending));
 const micStatusText = computed(() => {
   if (!micRecording.value) return "";
   if (micSlideCancelReady.value) return translate("composer.recordingWillCancel");
   return translate("composer.recordingReleaseToSend", {
     seconds: micDurationSeconds.value,
   });
+});
+const recordingTimeText = computed(() => {
+  const totalSeconds = Math.max(0, Number(micDurationSeconds.value || 0));
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+});
+const sendButtonText = computed(() => {
+  if (micRecording.value) return recordingTimeText.value;
+  return props.sending ? translate("composer.sending") : translate("composer.send");
 });
 
 function onInputChange(value) {
@@ -92,6 +104,7 @@ function onUploadChange(file, fileList) {
 }
 
 function emitAppendUploads(files = []) {
+  if (captureActionsDisabled.value) return;
   emit("append-uploads", Array.isArray(files) ? files : []);
 }
 
@@ -128,7 +141,20 @@ function toggleMorePanel() {
   morePanelVisible.value = !morePanelVisible.value;
 }
 
+function clearMicTimers() {
+  clearInterval(micDurationTimerRef.value);
+  clearTimeout(micAutoStopTimerRef.value);
+  micDurationTimerRef.value = null;
+  micAutoStopTimerRef.value = null;
+}
+
+function stopMicStreamTracks() {
+  micStreamRef.value?.getTracks?.().forEach((track) => track.stop());
+  micStreamRef.value = null;
+}
+
 async function startMicRecording() {
+  if (captureActionsDisabled.value) return;
   if (micRecording.value) return;
   if (!navigator?.mediaDevices?.getUserMedia) {
     ElMessage.error(translate("composer.micUnsupported"));
@@ -146,21 +172,26 @@ async function startMicRecording() {
     micChunksRef.value = [];
     micDurationSeconds.value = 0;
     micSlideCancelReady.value = false;
+    micCancelBySendingRef.value = false;
     mediaRecorder.ondataavailable = (event) => {
       if (event.data && event.data.size > 0) {
         micChunksRef.value.push(event.data);
       }
     };
     mediaRecorder.onstop = () => {
-      clearInterval(micDurationTimerRef.value);
-      micDurationTimerRef.value = null;
-      clearTimeout(micAutoStopTimerRef.value);
-      micAutoStopTimerRef.value = null;
+      clearMicTimers();
       const chunks = [...micChunksRef.value];
       micChunksRef.value = [];
-      if (micSlideCancelReady.value) {
+      if (
+        micCancelBySendingRef.value ||
+        micSlideCancelReady.value ||
+        captureActionsDisabled.value
+      ) {
+        micCancelBySendingRef.value = false;
         micSlideCancelReady.value = false;
-        ElMessage.info(translate("composer.recordingCanceled"));
+        if (!captureActionsDisabled.value) {
+          ElMessage.info(translate("composer.recordingCanceled"));
+        }
       } else if (chunks.length) {
         const recordingMimeType = mediaRecorder.mimeType || "audio/webm";
         const audioBlob = new Blob(chunks, { type: recordingMimeType });
@@ -174,8 +205,7 @@ async function startMicRecording() {
       }
       micDurationSeconds.value = 0;
       micPointerStartYRef.value = 0;
-      mediaStream.getTracks().forEach((track) => track.stop());
-      micStreamRef.value = null;
+      stopMicStreamTracks();
       micRecorderRef.value = null;
       micRecording.value = false;
     };
@@ -209,6 +239,7 @@ function stopMicRecording() {
 }
 
 function onMicPointerDown(event) {
+  if (captureActionsDisabled.value) return;
   event.preventDefault();
   micPointerStartYRef.value = Number(event.clientY || 0);
   micSlideCancelReady.value = false;
@@ -217,6 +248,7 @@ function onMicPointerDown(event) {
 }
 
 function onMicPointerMove(event) {
+  if (captureActionsDisabled.value) return;
   if (!micRecording.value) return;
   const currentPointerY = Number(event.clientY || 0);
   const deltaY = micPointerStartYRef.value - currentPointerY;
@@ -224,12 +256,14 @@ function onMicPointerMove(event) {
 }
 
 function onMicPointerUpOrCancel(event) {
+  if (captureActionsDisabled.value) return;
   event.preventDefault();
   event.currentTarget?.releasePointerCapture?.(event.pointerId);
   stopMicRecording();
 }
 
 function openCameraCapture() {
+  if (captureActionsDisabled.value) return;
   if (!navigator?.mediaDevices?.getUserMedia) {
     cameraInputRef.value?.click?.();
     return;
@@ -267,6 +301,7 @@ function stopCameraPreview() {
 }
 
 async function capturePhotoFromCamera() {
+  if (captureActionsDisabled.value) return;
   const videoElement = cameraVideoRef.value;
   if (!videoElement) return;
   const width = Number(videoElement.videoWidth || 0);
@@ -299,23 +334,34 @@ async function capturePhotoFromCamera() {
 }
 
 function onCameraCaptureChange(event) {
+  if (captureActionsDisabled.value) return;
   const inputElement = event?.target;
   const selectedFiles = Array.from(inputElement?.files || []);
   if (selectedFiles.length) emitAppendUploads(selectedFiles);
   if (inputElement) inputElement.value = "";
 }
 
+watch(
+  () => props.sending,
+  (sendingNow) => {
+    if (!sendingNow) return;
+    if (cameraDialogVisible.value) {
+      stopCameraPreview();
+    }
+    if (micRecording.value) {
+      micCancelBySendingRef.value = true;
+      stopMicRecording();
+    }
+  },
+);
+
 onBeforeUnmount(() => {
   stopCameraPreview();
   micSlideCancelReady.value = true;
   stopMicRecording();
-  micStreamRef.value?.getTracks?.().forEach((track) => track.stop());
-  micStreamRef.value = null;
+  stopMicStreamTracks();
   micChunksRef.value = [];
-  clearInterval(micDurationTimerRef.value);
-  clearTimeout(micAutoStopTimerRef.value);
-  micDurationTimerRef.value = null;
-  micAutoStopTimerRef.value = null;
+  clearMicTimers();
 });
 
 defineExpose({
@@ -421,6 +467,7 @@ defineExpose({
         <el-button
           :class="iconButtonClassName"
           :title="translate('composer.capturePhoto')"
+          :disabled="captureActionsDisabled"
           @click="openCameraCapture"
         >
           <el-icon><Camera /></el-icon>
@@ -428,6 +475,7 @@ defineExpose({
         <el-button
           :class="[iconButtonClassName, { 'is-recording': micRecording }]"
           :title="translate('composer.recordAudioHold')"
+          :disabled="captureActionsDisabled"
           @pointerdown="onMicPointerDown"
           @pointermove="onMicPointerMove"
           @pointerup="onMicPointerUpOrCancel"
@@ -437,17 +485,19 @@ defineExpose({
           <el-icon><Microphone /></el-icon>
         </el-button>
         
-        <el-button
-          type="primary"
-          class="send-btn"
-          :loading="sending"
-          :disabled="sendDisabled"
-          @click="onSend"
-        >
-          {{ sending ? translate("composer.sending") : translate("composer.send") }}
-        </el-button>
+        <div class="send-btn-wrap">
+          <el-button
+            type="primary"
+            class="send-btn"
+            :loading="sending"
+            :disabled="sendDisabled"
+            @click="onSend"
+          >
+            {{ sendButtonText }}
+          </el-button>
+        </div>
       </div>
-      <div v-if="micRecording" class="mic-status-row">
+      <div v-if="micSlideCancelReady" class="mic-status-row">
         <span class="mic-status-text">{{ micStatusText }}</span>
       </div>
     </div>
@@ -634,6 +684,10 @@ defineExpose({
   transition: filter 0.2s ease, opacity 0.2s ease;
 }
 
+.send-btn-wrap {
+  justify-self: end;
+}
+
 .send-btn:not(:disabled):hover {
   transform: none !important;
   filter: brightness(0.95);
@@ -770,11 +824,15 @@ defineExpose({
   .composer-row {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
   }
-  .composer-row .send-btn {
+  .composer-row .send-btn-wrap {
     grid-column: 1 / -1;
     width: 100%;
     margin-top: 4px;
     margin-left: 0px;
+    justify-self: stretch;
+  }
+  .composer-row .send-btn {
+    width: 100%;
   }
 }
 </style>

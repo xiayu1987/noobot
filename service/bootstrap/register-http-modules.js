@@ -50,6 +50,7 @@ export function registerHttpModules(
     readWorkspaceUsersConfig,
     writeWorkspaceUsersConfig,
     normalizeWorkspaceUsersConfig,
+    requireApiKey,
     requireSuperAdmin,
     translateText,
   });
@@ -63,6 +64,7 @@ export function registerHttpModules(
   });
 
   registerConfigAndTemplateRoutes(app, {
+    requireApiKey,
     requireSuperAdmin,
     resolveConfigParamScope,
     readScopedConfigParams,
@@ -91,6 +93,7 @@ export function registerHttpModules(
   registerWorkspaceRoutes(app, {
     bot,
     workspaceRootPath,
+    requireApiKey,
     requireSuperAdmin,
     globalConfig: globalConfigProvider(),
     translateText,

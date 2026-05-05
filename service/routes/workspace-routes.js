@@ -14,6 +14,7 @@ export function registerWorkspaceRoutes(
   {
     bot,
     workspaceRootPath,
+    requireApiKey,
     requireSuperAdmin,
     globalConfig,
     translateText,
@@ -66,7 +67,7 @@ export function registerWorkspaceRoutes(
     }
   });
 
-  app.post("/internal/admin/workspace-all/sync", requireSuperAdmin, async (req, res) => {
+  app.post("/internal/admin/workspace-all/sync", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const root = workspaceRootPath();
       await mkdir(root, { recursive: true });
@@ -104,7 +105,7 @@ export function registerWorkspaceRoutes(
     }
   });
 
-  app.post("/internal/admin/workspace-all/reset", requireSuperAdmin, async (req, res) => {
+  app.post("/internal/admin/workspace-all/reset", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
       const root = workspaceRootPath();
@@ -218,7 +219,7 @@ export function registerWorkspaceRoutes(
     }
   });
 
-  app.get("/internal/admin/workspace-all/tree", requireSuperAdmin, async (req, res) => {
+  app.get("/internal/admin/workspace-all/tree", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const root = workspaceRootPath();
       await mkdir(root, { recursive: true });
@@ -234,7 +235,7 @@ export function registerWorkspaceRoutes(
     }
   });
 
-  app.get("/internal/admin/workspace-all/file", requireSuperAdmin, async (req, res) => {
+  app.get("/internal/admin/workspace-all/file", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
@@ -257,7 +258,7 @@ export function registerWorkspaceRoutes(
     }
   });
 
-  app.put("/internal/admin/workspace-all/file", requireSuperAdmin, async (req, res) => {
+  app.put("/internal/admin/workspace-all/file", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const relativePath = String(req.body?.path || "");
       const content = String(req.body?.content || "");
@@ -277,7 +278,7 @@ export function registerWorkspaceRoutes(
     }
   });
 
-  app.get("/internal/admin/workspace-all/download", requireSuperAdmin, async (req, res) => {
+  app.get("/internal/admin/workspace-all/download", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));

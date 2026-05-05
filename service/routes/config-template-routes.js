@@ -10,6 +10,7 @@ import { safeJoin } from "../system-core/utils/fs-safe.js";
 export function registerConfigAndTemplateRoutes(
   app,
   {
+    requireApiKey,
     requireSuperAdmin,
     resolveConfigParamScope,
     readScopedConfigParams,
@@ -111,7 +112,7 @@ export function registerConfigAndTemplateRoutes(
     }
   });
 
-  app.get("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
+  app.get("/internal/admin/config-params", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       req.query = { ...(req.query || {}), scope: "system" };
       const { payload } = await readScopedConfigParams({ req, createIfMissing: true });
@@ -124,7 +125,7 @@ export function registerConfigAndTemplateRoutes(
     }
   });
 
-  app.put("/internal/admin/config-params", requireSuperAdmin, async (req, res) => {
+  app.put("/internal/admin/config-params", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       req.query = { ...(req.query || {}), scope: "system" };
       const incomingBody = req.body || {};
@@ -143,7 +144,7 @@ export function registerConfigAndTemplateRoutes(
     }
   });
 
-  app.get("/internal/admin/template/tree", requireSuperAdmin, async (req, res) => {
+  app.get("/internal/admin/template/tree", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const root = templateRootPath();
       await mkdir(root, { recursive: true });
@@ -157,7 +158,7 @@ export function registerConfigAndTemplateRoutes(
     }
   });
 
-  app.get("/internal/admin/template/file", requireSuperAdmin, async (req, res) => {
+  app.get("/internal/admin/template/file", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
@@ -178,7 +179,7 @@ export function registerConfigAndTemplateRoutes(
     }
   });
 
-  app.put("/internal/admin/template/file", requireSuperAdmin, async (req, res) => {
+  app.put("/internal/admin/template/file", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const relativePath = String(req.body?.path || "");
       const content = String(req.body?.content || "");
