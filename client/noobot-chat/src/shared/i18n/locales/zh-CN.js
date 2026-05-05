@@ -158,7 +158,7 @@ export const zhCNMessages = {
     "stopped": "已停止",
     "stoppedContent": "（已停止）",
     "uploadOnly": "[仅上传附件]",
-    "uploadHint": "请先读取我上传的附件并总结关键信息。",
+    "uploadHint": "解析附件内容",
     "generated": "生成完成",
     "failed": "生成失败",
     "unknownError": "未知错误",
