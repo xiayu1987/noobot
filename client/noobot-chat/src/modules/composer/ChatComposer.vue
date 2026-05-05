@@ -262,8 +262,19 @@ function onMicPointerUpOrCancel(event) {
   stopMicRecording();
 }
 
+function isLikelyMobileDevice() {
+  const uaText = String(navigator?.userAgent || "");
+  const mobilePattern = /iPhone|iPad|iPod|Android/i;
+  return mobilePattern.test(uaText);
+}
+
 function openCameraCapture() {
   if (captureActionsDisabled.value) return;
+  const mobileDevice = isLikelyMobileDevice();
+  if (mobileDevice) {
+    cameraInputRef.value?.click?.();
+    return;
+  }
   if (!navigator?.mediaDevices?.getUserMedia) {
     cameraInputRef.value?.click?.();
     return;
