@@ -457,7 +457,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "process_connector_tool": {
     "description": {
       "key": "tools.process_connector.description",
-      "text": "Orchestrate connector tools to complete a task. Input task (optional modelName). Returns connector processing result."
+      "text": "Can handle connector tasks (database/terminal/email). Input task (optional modelName). Returns processing result."
     },
     "params": {
       "modelName": {
@@ -477,7 +477,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "process_content_task": {
     "description": {
       "key": "tools.content_process.description",
-      "text": "Orchestrate content tools to complete a task. Input task (optional modelName). Returns content processing result."
+      "text": "Can handle document, audio, and video tasks. Input task (optional modelName). Returns processing result."
     },
     "params": {
       "modelName": {
