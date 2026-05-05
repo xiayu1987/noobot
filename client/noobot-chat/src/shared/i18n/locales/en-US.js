@@ -158,7 +158,7 @@ export const enUSMessages = {
     "stopped": "Stopped",
     "stoppedContent": "(Stopped)",
     "uploadOnly": "[Attachments only]",
-    "uploadHint": "Please read my uploaded attachments and summarize key points.",
+    "uploadHint": "Parse attachment content.",
     "generated": "Completed",
     "failed": "Generation failed",
     "unknownError": "Unknown error",
