@@ -15,6 +15,7 @@ import { createUserInteractionTool } from "./user-interaction-tool.js";
 import { createMcpTool } from "./mcp-tool.js";
 import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
 import { createMultimodalGenerateTool } from "./multimodal-generate-tool.js";
+import { createMedia2DataTool } from "./media2data-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 
@@ -57,6 +58,7 @@ const TOOL_CONFIG_ALIASES = {
   user_interaction: ["user_interaction"],
   web_to_data: ["web_to_data"],
   doc_to_data: ["doc_to_data"],
+  media_to_data: ["media_to_data"],
   process_content_task: ["process_content_task"],
   process_connector_tool: ["process_connector_tool"],
   database_connect_connector: ["database_connect_connector"],
@@ -147,6 +149,7 @@ export async function buildTools(ctx) {
     ...createContentProcessTool(ctx),
     ...createServiceTool(ctx),
     ...createMcpTool(ctx),
+    ...createMedia2DataTool(ctx),
     ...(enableMultimodalGenerateTool ? createMultimodalGenerateTool(ctx) : []),
     ...createConnectorAccessTool(ctx),
     ...createAgentCollabTool(ctx),

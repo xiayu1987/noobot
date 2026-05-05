@@ -19,23 +19,41 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   const chatStore = useChatStore();
   const { input, uploadFiles } = storeToRefs(chatStore);
 
+  function createUploadEntry(rawFile) {
+    const mimeType = rawFile.type || "application/octet-stream";
+    return {
+      raw: rawFile,
+      name: rawFile.name,
+      mimeType,
+      size: rawFile.size || 0,
+      previewUrl: isImageMime(mimeType) ? URL.createObjectURL(rawFile) : "",
+    };
+  }
+
+  function revokePreviewUrls(files = []) {
+    for (const uploadFile of Array.isArray(files) ? files : []) {
+      if (uploadFile.previewUrl) URL.revokeObjectURL(uploadFile.previewUrl);
+    }
+  }
+
   function onUploadChange(file, fileList) {
+    revokePreviewUrls(uploadFiles.value);
     uploadFiles.value = fileList
       .map((fileItem) => fileItem.raw)
       .filter(Boolean)
-      .map((raw) => ({
-        raw,
-        name: raw.name,
-        mimeType: raw.type || "application/octet-stream",
-        size: raw.size || 0,
-        previewUrl: isImageMime(raw.type || "") ? URL.createObjectURL(raw) : "",
-      }));
+      .map((rawFile) => createUploadEntry(rawFile));
+  }
+
+  function appendUploads(rawFiles = []) {
+    const nextFiles = (Array.isArray(rawFiles) ? rawFiles : [])
+      .filter(Boolean)
+      .map((rawFile) => createUploadEntry(rawFile));
+    if (!nextFiles.length) return;
+    uploadFiles.value = [...uploadFiles.value, ...nextFiles];
   }
 
   function clearUploads() {
-    for (const uploadFile of uploadFiles.value) {
-      if (uploadFile.previewUrl) URL.revokeObjectURL(uploadFile.previewUrl);
-    }
+    revokePreviewUrls(uploadFiles.value);
     uploadFiles.value = [];
     clearUploadSelection();
   }
@@ -56,6 +74,7 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
     input,
     uploadFiles,
     onUploadChange,
+    appendUploads,
     clearUploads,
     serializeAttachments,
   };

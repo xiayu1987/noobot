@@ -271,6 +271,7 @@ const {
   interactionSubmitting,
   submitInteractionResponse,
   onUploadChange,
+  appendUploads,
   clearUploads,
   shouldRenderMessageInChat,
   closeMobileSidebarOnSelect,
@@ -439,6 +440,7 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
         :allow-user-interaction="allowUserInteraction"
         :interaction-active="Boolean(pendingInteractionRequest)"
         @upload-change="onUploadChange"
+        @append-uploads="appendUploads"
         @update:allow-user-interaction="onAllowUserInteractionUpdate"
         @clear-uploads="clearUploads"
         @connector-selected="onConnectorSelected"

@@ -39,6 +39,22 @@ stop_and_delete_app() {
   fi
 }
 
+kill_pm2_daemon() {
+  log "关闭 PM2 守护进程..."
+  run_pm2 kill || true
+}
+
+cleanup_orphaned_client_processes() {
+  log "清理遗留前端进程..."
+  pkill -f "$ROOT_DIR/client/noobot-chat/deploy/bin/caddy run" || true
+  pkill -f "npm run serve:caddy" || true
+}
+
+cleanup_orphaned_service_processes() {
+  log "清理遗留后端进程..."
+  pkill -f "$ROOT_DIR/service/app.js" || true
+}
+
 main() {
   require_cmd npm
 
@@ -47,6 +63,9 @@ main() {
   log "关闭 noobot 服务..."
   stop_and_delete_app "$CLIENT_APP_NAME"
   stop_and_delete_app "$SERVICE_APP_NAME"
+  kill_pm2_daemon
+  cleanup_orphaned_client_processes
+  cleanup_orphaned_service_processes
 
   log "当前 PM2 进程列表:"
   run_pm2 ls || true

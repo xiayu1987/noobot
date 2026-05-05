@@ -304,6 +304,28 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.doc2data.noImagesProduced": "no images produced"
     }
   },
+  "media_to_data": {
+    "description": {
+      "key": "tools.media2data.description",
+      "text": "Extract media content into text data. Input filePath (optional prompt). Returns parsed media result."
+    },
+    "params": {
+      "filePath": {
+        "key": "tools.media2data.fieldFilePath",
+        "text": "Media file path."
+      },
+      "prompt": {
+        "key": "tools.media2data.fieldPrompt",
+        "text": "Extraction prompt (optional)."
+      }
+    },
+    "texts": {
+      "tools.media2data.extractAudioPrompt": "Extract key information and recognizable text from the audio, keep a clear structure, and do not fabricate content.",
+      "tools.media2data.extractImagePrompt": "Extract all readable text from the image, keep original structure, and do not fabricate content.",
+      "tools.media2data.extractVideoPrompt": "Extract key information and recognizable text from the video, organize by timeline or structure, and do not fabricate content.",
+      "tools.media2data.unsupportedMediaFileType": "unsupported media file type"
+    }
+  },
   "email_connect_connector": {
     "description": {
       "key": "tools.email_connector.description",
@@ -474,6 +496,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.content_process.errorToolsUnavailable": "content process tools not available",
       "tools.content_process.toolDescDoc": "Parse document content (extract text from office/pdf/images)",
       "tools.content_process.toolDescGeneric": "Generic content processing",
+      "tools.content_process.toolDescMedia": "Parse media content (extract text from audio/video/images)",
       "tools.content_process.toolDescWeb": "Parse webpage content (URL or URL list file)"
     }
   },

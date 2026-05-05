@@ -62,6 +62,7 @@ export function useChatSession({
     input,
     uploadFiles,
     onUploadChange,
+    appendUploads,
     clearUploads,
     serializeAttachments,
   } = useChatInput({
@@ -207,6 +208,7 @@ export function useChatSession({
     interactionSubmitting,
     submitInteractionResponse,
     onUploadChange,
+    appendUploads,
     clearUploads,
     shouldRenderMessageInChat,
     closeMobileSidebarOnSelect,

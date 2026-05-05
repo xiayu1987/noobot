@@ -102,6 +102,39 @@ function normalizeAttachmentMetas(attachmentMetas = []) {
     .filter(Boolean);
 }
 
+function hasConnectorData(connectorStatusSection = {}) {
+  const connectors =
+    connectorStatusSection && typeof connectorStatusSection === "object"
+      ? connectorStatusSection.connectors || {}
+      : {};
+  const hasConnectorList =
+    (Array.isArray(connectors?.databases) && connectors.databases.length > 0) ||
+    (Array.isArray(connectors?.terminals) && connectors.terminals.length > 0) ||
+    (Array.isArray(connectors?.emails) && connectors.emails.length > 0);
+  if (hasConnectorList) return true;
+  const currentConnectors =
+    connectorStatusSection && typeof connectorStatusSection === "object"
+      ? connectorStatusSection.current_connectors || {}
+      : {};
+  return Object.values(currentConnectors).some(
+    (connectorItem) =>
+      connectorItem &&
+      typeof connectorItem === "object" &&
+      hasValue(String(connectorItem.connector_name || "").trim()),
+  );
+}
+
+function hasMcpServerData(mcpServers = []) {
+  return Array.isArray(mcpServers) && mcpServers.length > 0;
+}
+
+function hasAttachmentData(normalizedAttachmentMetas = []) {
+  return (
+    Array.isArray(normalizedAttachmentMetas) &&
+    normalizedAttachmentMetas.length > 0
+  );
+}
+
 export function composeSystemInfoSections({
   locale = "zh-CN",
   systemPrompt = "",
@@ -163,12 +196,18 @@ export function composeSystemInfoSections({
       services,
       { emptyValueText },
     ),
-    toJsonSection(String(sections?.mcpServers || "").trim(), mcpServers, { emptyValueText }),
-    toJsonSection(String(sections?.connectors || "").trim(), connectorStatusSection, {
-      emptyValueText,
-    }),
-    toJsonSection(String(sections?.attachments || "").trim(), normalizedAttachmentMetas, {
-      emptyValueText,
-    }),
+    hasMcpServerData(mcpServers)
+      ? toJsonSection(String(sections?.mcpServers || "").trim(), mcpServers, { emptyValueText })
+      : "",
+    hasConnectorData(connectorStatusSection)
+      ? toJsonSection(String(sections?.connectors || "").trim(), connectorStatusSection, {
+          emptyValueText,
+        })
+      : "",
+    hasAttachmentData(normalizedAttachmentMetas)
+      ? toJsonSection(String(sections?.attachments || "").trim(), normalizedAttachmentMetas, {
+          emptyValueText,
+        })
+      : "",
   ].filter(Boolean);
 }

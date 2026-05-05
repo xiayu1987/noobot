@@ -220,6 +220,19 @@ export const zhCNMessages = {
     "connectors": "连接器",
     "noConnectorSelected": "未选择连接器",
     "expand": "展开",
-    "noAvailableConnections": "暂无可用连接"
+    "noAvailableConnections": "暂无可用连接",
+    "capturePhoto": "拍照",
+    "recordAudioHold": "按住录音，松开结束",
+    "micUnsupported": "当前浏览器不支持录音",
+    "micStartFailed": "启动录音失败",
+    "recordingWillCancel": "上滑松开将取消录音",
+    "recordingReleaseToSend": "录音中 {seconds}s，松开发送",
+    "recordingCanceled": "录音已取消",
+    "recordingMaxReached": "已达到最长录音时长（{max}s）",
+    "cameraDialogTitle": "拍照",
+    "cameraStartFailed": "打开摄像头失败",
+    "cameraFrameNotReady": "摄像头画面未就绪，请稍后重试",
+    "cameraCanvasUnavailable": "当前环境不支持拍照渲染",
+    "cameraCaptureFailed": "拍照失败"
   }
 };

@@ -220,6 +220,19 @@ export const enUSMessages = {
     "connectors": "Connectors",
     "noConnectorSelected": "No connector selected",
     "expand": "Expand",
-    "noAvailableConnections": "No available connections"
+    "noAvailableConnections": "No available connections",
+    "capturePhoto": "Take photo",
+    "recordAudioHold": "Hold to record, release to finish",
+    "micUnsupported": "Recording is not supported by this browser",
+    "micStartFailed": "Failed to start recording",
+    "recordingWillCancel": "Slide up and release to cancel",
+    "recordingReleaseToSend": "Recording {seconds}s, release to send",
+    "recordingCanceled": "Recording canceled",
+    "recordingMaxReached": "Maximum recording duration reached ({max}s)",
+    "cameraDialogTitle": "Take Photo",
+    "cameraStartFailed": "Failed to open camera",
+    "cameraFrameNotReady": "Camera frame is not ready, please try again",
+    "cameraCanvasUnavailable": "Camera rendering is not supported",
+    "cameraCaptureFailed": "Failed to capture photo"
   }
 };
