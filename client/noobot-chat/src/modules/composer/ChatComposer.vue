@@ -4,11 +4,14 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
+import { ElMessage } from "element-plus";
 import {
   VideoPause,
   MoreFilled,
   ArrowDown,
+  Microphone,
+  Camera,
 } from "@element-plus/icons-vue";
 import ConnectorSelectorPanel from "./ConnectorSelectorPanel.vue";
 import ComposerAttachmentToolbar from "./ComposerAttachmentToolbar.vue";
@@ -29,6 +32,7 @@ const emit = defineEmits([
   "update:modelValue",
   "update:allowUserInteraction",
   "upload-change",
+  "append-uploads",
   "clear-uploads",
   "connector-selected",
   "send",
@@ -37,6 +41,22 @@ const emit = defineEmits([
 
 const attachmentToolbarRef = ref();
 const morePanelVisible = ref(false);
+const cameraInputRef = ref(null);
+const cameraDialogVisible = ref(false);
+const cameraVideoRef = ref(null);
+const cameraStreamRef = ref(null);
+const micRecording = ref(false);
+const micRecorderRef = ref(null);
+const micStreamRef = ref(null);
+const micChunksRef = ref([]);
+const micDurationSeconds = ref(0);
+const micDurationTimerRef = ref(null);
+const micAutoStopTimerRef = ref(null);
+const micPointerStartYRef = ref(0);
+const micSlideCancelReady = ref(false);
+const iconButtonClassName = "composer-icon-btn";
+const MIC_MAX_DURATION_SECONDS = 60;
+const MIC_SLIDE_CANCEL_THRESHOLD = 44;
 const { translate } = useLocale();
 const selectedConnectorNames = computed(() => {
   const selectedSource =
@@ -55,6 +75,13 @@ const sendDisabled = computed(
     !props.connected ||
     (props.interactionActive && props.sending),
 );
+const micStatusText = computed(() => {
+  if (!micRecording.value) return "";
+  if (micSlideCancelReady.value) return translate("composer.recordingWillCancel");
+  return translate("composer.recordingReleaseToSend", {
+    seconds: micDurationSeconds.value,
+  });
+});
 
 function onInputChange(value) {
   emit("update:modelValue", value);
@@ -62,6 +89,10 @@ function onInputChange(value) {
 
 function onUploadChange(file, fileList) {
   emit("upload-change", file, fileList);
+}
+
+function emitAppendUploads(files = []) {
+  emit("append-uploads", Array.isArray(files) ? files : []);
 }
 
 function clearUploadSelection() {
@@ -97,6 +128,196 @@ function toggleMorePanel() {
   morePanelVisible.value = !morePanelVisible.value;
 }
 
+async function startMicRecording() {
+  if (micRecording.value) return;
+  if (!navigator?.mediaDevices?.getUserMedia) {
+    ElMessage.error(translate("composer.micUnsupported"));
+    return;
+  }
+  try {
+    const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStreamRef.value = mediaStream;
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+      ? "audio/webm"
+      : "";
+    const mediaRecorder = mimeType
+      ? new MediaRecorder(mediaStream, { mimeType })
+      : new MediaRecorder(mediaStream);
+    micChunksRef.value = [];
+    micDurationSeconds.value = 0;
+    micSlideCancelReady.value = false;
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        micChunksRef.value.push(event.data);
+      }
+    };
+    mediaRecorder.onstop = () => {
+      clearInterval(micDurationTimerRef.value);
+      micDurationTimerRef.value = null;
+      clearTimeout(micAutoStopTimerRef.value);
+      micAutoStopTimerRef.value = null;
+      const chunks = [...micChunksRef.value];
+      micChunksRef.value = [];
+      if (micSlideCancelReady.value) {
+        micSlideCancelReady.value = false;
+        ElMessage.info(translate("composer.recordingCanceled"));
+      } else if (chunks.length) {
+        const recordingMimeType = mediaRecorder.mimeType || "audio/webm";
+        const audioBlob = new Blob(chunks, { type: recordingMimeType });
+        const extension = recordingMimeType.includes("ogg") ? "ogg" : "webm";
+        const audioFile = new File(
+          [audioBlob],
+          `voice-${Date.now()}.${extension}`,
+          { type: recordingMimeType },
+        );
+        emitAppendUploads([audioFile]);
+      }
+      micDurationSeconds.value = 0;
+      micPointerStartYRef.value = 0;
+      mediaStream.getTracks().forEach((track) => track.stop());
+      micStreamRef.value = null;
+      micRecorderRef.value = null;
+      micRecording.value = false;
+    };
+    mediaRecorder.start();
+    micDurationTimerRef.value = setInterval(() => {
+      micDurationSeconds.value += 1;
+    }, 1000);
+    micAutoStopTimerRef.value = setTimeout(() => {
+      if (mediaRecorder.state !== "inactive") {
+        ElMessage.info(translate("composer.recordingMaxReached", { max: MIC_MAX_DURATION_SECONDS }));
+        mediaRecorder.stop();
+      }
+    }, MIC_MAX_DURATION_SECONDS * 1000);
+    micRecorderRef.value = mediaRecorder;
+    micRecording.value = true;
+  } catch (error) {
+    ElMessage.error(error?.message || translate("composer.micStartFailed"));
+    micRecording.value = false;
+  }
+}
+
+function stopMicRecording() {
+  if (!micRecording.value) return;
+  const mediaRecorder = micRecorderRef.value;
+  if (!mediaRecorder) return;
+  if (mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+    return;
+  }
+  micRecording.value = false;
+}
+
+function onMicPointerDown(event) {
+  event.preventDefault();
+  micPointerStartYRef.value = Number(event.clientY || 0);
+  micSlideCancelReady.value = false;
+  event.currentTarget?.setPointerCapture?.(event.pointerId);
+  startMicRecording();
+}
+
+function onMicPointerMove(event) {
+  if (!micRecording.value) return;
+  const currentPointerY = Number(event.clientY || 0);
+  const deltaY = micPointerStartYRef.value - currentPointerY;
+  micSlideCancelReady.value = deltaY >= MIC_SLIDE_CANCEL_THRESHOLD;
+}
+
+function onMicPointerUpOrCancel(event) {
+  event.preventDefault();
+  event.currentTarget?.releasePointerCapture?.(event.pointerId);
+  stopMicRecording();
+}
+
+function openCameraCapture() {
+  if (!navigator?.mediaDevices?.getUserMedia) {
+    cameraInputRef.value?.click?.();
+    return;
+  }
+  startCameraPreview();
+}
+
+async function startCameraPreview() {
+  try {
+    const mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+    });
+    cameraStreamRef.value = mediaStream;
+    cameraDialogVisible.value = true;
+    await Promise.resolve();
+    const videoElement = cameraVideoRef.value;
+    if (!videoElement) return;
+    videoElement.srcObject = mediaStream;
+    await videoElement.play();
+  } catch (error) {
+    ElMessage.error(error?.message || translate("composer.cameraStartFailed"));
+    cameraInputRef.value?.click?.();
+  }
+}
+
+function stopCameraPreview() {
+  const videoElement = cameraVideoRef.value;
+  if (videoElement) {
+    videoElement.pause?.();
+    videoElement.srcObject = null;
+  }
+  cameraStreamRef.value?.getTracks?.().forEach((track) => track.stop());
+  cameraStreamRef.value = null;
+  cameraDialogVisible.value = false;
+}
+
+async function capturePhotoFromCamera() {
+  const videoElement = cameraVideoRef.value;
+  if (!videoElement) return;
+  const width = Number(videoElement.videoWidth || 0);
+  const height = Number(videoElement.videoHeight || 0);
+  if (!width || !height) {
+    ElMessage.warning(translate("composer.cameraFrameNotReady"));
+    return;
+  }
+  const canvasElement = document.createElement("canvas");
+  canvasElement.width = width;
+  canvasElement.height = height;
+  const canvasContext = canvasElement.getContext("2d");
+  if (!canvasContext) {
+    ElMessage.error(translate("composer.cameraCanvasUnavailable"));
+    return;
+  }
+  canvasContext.drawImage(videoElement, 0, 0, width, height);
+  const photoBlob = await new Promise((resolve) => {
+    canvasElement.toBlob((blobData) => resolve(blobData), "image/jpeg", 0.92);
+  });
+  if (!photoBlob) {
+    ElMessage.error(translate("composer.cameraCaptureFailed"));
+    return;
+  }
+  const photoFile = new File([photoBlob], `camera-${Date.now()}.jpg`, {
+    type: "image/jpeg",
+  });
+  emitAppendUploads([photoFile]);
+  stopCameraPreview();
+}
+
+function onCameraCaptureChange(event) {
+  const inputElement = event?.target;
+  const selectedFiles = Array.from(inputElement?.files || []);
+  if (selectedFiles.length) emitAppendUploads(selectedFiles);
+  if (inputElement) inputElement.value = "";
+}
+
+onBeforeUnmount(() => {
+  stopCameraPreview();
+  micSlideCancelReady.value = true;
+  stopMicRecording();
+  micStreamRef.value?.getTracks?.().forEach((track) => track.stop());
+  micStreamRef.value = null;
+  micChunksRef.value = [];
+  clearInterval(micDurationTimerRef.value);
+  clearTimeout(micAutoStopTimerRef.value);
+  micDurationTimerRef.value = null;
+  micAutoStopTimerRef.value = null;
+});
+
 defineExpose({
   clearUploadSelection,
 });
@@ -104,22 +325,23 @@ defineExpose({
 
 <template>
   <div class="composer-wrapper">
-    <div v-if="selectedConnectorNames.length" class="selected-connectors-row noobot-flat-card">
+    <!-- 顶部选中标签 -->
+    <div v-if="selectedConnectorNames.length" class="selected-connectors-row">
       <span
-        v-for="(connectorName, idx) in selectedConnectorNames"
-        :key="`${connectorName}-${idx}`"
-        class="selected-connector-name noobot-flat-chip"
+        v-for="(connectorName, connectorIndex) in selectedConnectorNames"
+        :key="`${connectorName}-${connectorIndex}`"
+        class="selected-connector-name"
       >
         {{ connectorName }}
       </span>
     </div>
 
-    <div class="composer noobot-flat-card">
+    <div class="composer">
       <!-- 停止按钮 -->
       <el-button
         v-if="canStop"
         type="danger"
-        class="stop-float-btn noobot-action-btn"
+        class="stop-float-btn"
         :title="translate('composer.stop')"
         @click="onStop"
       >
@@ -130,53 +352,54 @@ defineExpose({
       <el-collapse-transition>
         <div v-show="morePanelVisible" class="more-panel-overlay">
           <div class="more-panel">
-            <div class="more-panel-head">
+            <div class="more-actions-row">
               <span class="more-panel-title">{{ translate("common.moreActions") }}</span>
               <el-button
-                class="more-collapse-btn noobot-action-btn noobot-flat-soft-btn"
+                class="more-collapse-btn"
                 @click="morePanelVisible = false"
               >
                 <span>{{ translate("message.collapse") }}</span>
                 <el-icon><ArrowDown /></el-icon>
               </el-button>
             </div>
+            
+            <div class="more-panel-content">
+              <ConnectorSelectorPanel
+                embedded
+                :connector-panel-state="connectorPanelState"
+                @connector-selected="onConnectorSelected"
+              />
 
-            <ConnectorSelectorPanel
-              embedded
-              :connector-panel-state="connectorPanelState"
-              @connector-selected="onConnectorSelected"
-            />
+              <div class="composer-options">
+                <el-switch
+                  :model-value="allowUserInteraction"
+                  inline-prompt
+                  :active-text="translate('composer.allowInteraction')"
+                  :inactive-text="translate('composer.disallowInteraction')"
+                  @update:model-value="onAllowUserInteractionChange"
+                  class="interaction-switch"
+                />
+              </div>
 
-            <div class="composer-options">
-              <el-switch
-                :model-value="allowUserInteraction"
-                inline-prompt
-                :active-text="translate('composer.allowInteraction')"
-                :inactive-text="translate('composer.disallowInteraction')"
-                @update:model-value="onAllowUserInteractionChange"
-                class="interaction-switch"
+              <ComposerAttachmentToolbar
+                ref="attachmentToolbarRef"
+                :upload-files="uploadFiles"
+                @upload-change="onUploadChange"
+                @clear-uploads="onClearUploads"
               />
             </div>
-
-            <ComposerAttachmentToolbar
-              ref="attachmentToolbarRef"
-              :upload-files="uploadFiles"
-              @upload-change="onUploadChange"
-              @clear-uploads="onClearUploads"
-            />
           </div>
         </div>
       </el-collapse-transition>
 
       <div class="composer-row">
         <el-button
-          class="more-btn noobot-action-btn noobot-flat-soft-btn"
+          :class="iconButtonClassName"
           :title="translate('common.moreActions')"
           @click="toggleMorePanel"
         >
           <el-icon><MoreFilled /></el-icon>
         </el-button>
-
         <el-input
           :model-value="modelValue"
           type="textarea"
@@ -187,10 +410,36 @@ defineExpose({
           @update:model-value="onInputChange"
           @keydown.enter.exact.prevent="onSend"
         />
+        <input
+          ref="cameraInputRef"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          class="hidden-camera-input"
+          @change="onCameraCaptureChange"
+        />
+        <el-button
+          :class="iconButtonClassName"
+          :title="translate('composer.capturePhoto')"
+          @click="openCameraCapture"
+        >
+          <el-icon><Camera /></el-icon>
+        </el-button>
+        <el-button
+          :class="[iconButtonClassName, { 'is-recording': micRecording }]"
+          :title="translate('composer.recordAudioHold')"
+          @pointerdown="onMicPointerDown"
+          @pointermove="onMicPointerMove"
+          @pointerup="onMicPointerUpOrCancel"
+          @pointerleave="onMicPointerUpOrCancel"
+          @pointercancel="onMicPointerUpOrCancel"
+        >
+          <el-icon><Microphone /></el-icon>
+        </el-button>
         
         <el-button
           type="primary"
-          class="send-btn noobot-action-btn"
+          class="send-btn"
           :loading="sending"
           :disabled="sendDisabled"
           @click="onSend"
@@ -198,14 +447,44 @@ defineExpose({
           {{ sending ? translate("composer.sending") : translate("composer.send") }}
         </el-button>
       </div>
+      <div v-if="micRecording" class="mic-status-row">
+        <span class="mic-status-text">{{ micStatusText }}</span>
+      </div>
     </div>
+
+    <!-- 相机弹窗 -->
+    <el-dialog
+      v-model="cameraDialogVisible"
+      :title="translate('composer.cameraDialogTitle')"
+      width="min(92vw, 520px)"
+      append-to-body
+      @closed="stopCameraPreview"
+      class="flat-dialog"
+    >
+      <div class="camera-preview-wrap">
+        <video ref="cameraVideoRef" class="camera-preview" autoplay playsinline muted />
+      </div>
+      <template #footer>
+        <el-button class="flat-btn" @click="stopCameraPreview">{{ translate("common.cancel") }}</el-button>
+        <el-button class="flat-btn" type="primary" @click="capturePhotoFromCamera">
+          {{ translate("composer.capturePhoto") }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
+/* ================= 扁平化全局变量与容器 ================= */
 .composer-wrapper {
+  --composer-row-gap: 8px;
+  --composer-icon-size: 36px;
+  --composer-icon-radius: 10px; /* 稍微圆润一点的图标按钮 */
+  --composer-send-height: 36px;
+  --composer-send-padding-x: 20px;
+  
   padding: 0 24px 24px;
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--noobot-panel-bg) 92%, transparent) 20%);
+  background: transparent;
   position: relative;
   width: 100%;
   box-sizing: border-box;
@@ -215,21 +494,30 @@ defineExpose({
   position: relative;
   max-width: 800px;
   margin: 0 auto;
-  background: var(--noobot-panel-bg);
-  border: 1px solid var(--noobot-panel-border);
+  background: var(--noobot-panel-bg, #ffffff);
+  border: 1px solid var(--noobot-panel-border, #e4e4e7);
+  border-radius: 16px; /* 更现代的大圆角 */
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  gap: 12px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
   width: 100%;
   box-sizing: border-box;
+  box-shadow: none;
 }
 
+.composer:focus-within {
+  border-color: var(--noobot-cyber-cyan, #0ea5e9);
+  /* 扁平化焦点：使用实色细边框投影替代模糊发光 */
+  box-shadow: 0 0 0 1px var(--noobot-cyber-cyan, #0ea5e9); 
+}
+
+/* ================= 顶部选中标签 (胶囊风格) ================= */
 .selected-connectors-row {
   max-width: 800px;
-  margin: 0 auto 8px;
-  padding: 8px 10px;
+  margin: 0 auto 12px;
+  padding: 0 4px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -241,58 +529,178 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: var(--noobot-fill-soft, #f4f4f5);
+  color: var(--noobot-text-secondary, #52525b);
+  border: 1px solid transparent;
+  border-radius: 20px; /* 胶囊圆角 */
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
 }
 
-.composer:focus-within {
-  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 52%, transparent);
-  box-shadow: var(--noobot-focus-ring);
+.selected-connector-name:hover {
+  background: var(--noobot-fill-hover, #e4e4e7);
 }
 
+/* ================= 悬浮停止按钮 ================= */
 .stop-float-btn {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: -60px;
+  top: -56px;
   z-index: 50;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0 !important;
   border-radius: 50% !important;
-  box-shadow: none;
+  border: none;
+  box-shadow: none !important;
   display: flex;
   justify-content: center;
   align-items: center;
   flex-shrink: 0;
-  transition: transform 0.2s;
+  transition: background-color 0.2s ease, filter 0.2s ease;
 }
 
-.stop-float-btn:hover {
-  transform: translateX(-50%);
+.stop-float-btn:hover,
+.stop-float-btn:focus-visible,
+.stop-float-btn:active {
+  transform: translateX(-50%) !important;
+  filter: brightness(0.9);
 }
 
 /* ================= 底部工具栏与输入区 ================= */
-
 .composer-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  gap: var(--composer-row-gap);
   align-items: end;
 }
 
-.chat-input { width: 100%; }
+.chat-input { 
+  width: 100%; 
+}
 
 .chat-input :deep(.el-textarea__inner) {
   border: none !important;
   box-shadow: none !important;
-  padding: 4px 0 6px;
+  padding: 6px 4px;
   background: transparent;
   font-size: 15px;
   line-height: 1.5;
-  color: var(--noobot-text-main);
+  color: var(--noobot-text-main, #18181b);
 }
 
 .chat-input :deep(.el-textarea__inner::placeholder) {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-muted, #a1a1aa);
+}
+
+/* ================= 图标按钮 ================= */
+.composer-icon-btn {
+  width: var(--composer-icon-size);
+  height: var(--composer-icon-size);
+  min-width: var(--composer-icon-size);
+  min-height: var(--composer-icon-size);
+  padding: 0 !important;
+  border-radius: var(--composer-icon-radius) !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--noobot-text-secondary, #52525b) !important;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  box-shadow: none !important;
+}
+
+.composer-icon-btn:hover {
+  background: var(--noobot-fill-soft, #f4f4f5) !important;
+  color: var(--noobot-text-main, #18181b) !important;
+}
+
+.composer-icon-btn.is-recording {
+  color: var(--noobot-status-error, #ef4444) !important;
+  background: color-mix(in srgb, var(--noobot-status-error, #ef4444) 10%, transparent) !important;
+}
+
+/* ================= 发送按钮 ================= */
+.send-btn {
+  padding: 0 var(--composer-send-padding-x);
+  height: var(--composer-send-height);
+  border-radius: var(--composer-icon-radius) !important;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  border: none !important;
+  box-shadow: none !important;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.send-btn:not(:disabled):hover {
+  transform: none !important;
+  filter: brightness(0.95);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+}
+
+/* ================= 更多面板 (扁平化) ================= */
+.more-panel-overlay {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(100% + 12px);
+  z-index: 80;
+}
+
+.more-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--noobot-panel-bg, #ffffff);
+  border: 1px solid var(--noobot-panel-border, #e4e4e7);
+  border-radius: 16px;
+  overflow: hidden; /* 确保内部元素不溢出圆角 */
+  box-shadow: none;
+}
+
+.more-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--noobot-panel-head-bg, #f3f4f6);
+  border-bottom: 1px solid var(--noobot-panel-border, #e4e4e7);
+}
+
+.more-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--noobot-text-strong, #18181b);
+}
+
+.more-collapse-btn {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--noobot-text-main, #18181b) !important;
+  box-shadow: none !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.more-collapse-btn:hover {
+  background: var(--noobot-surface-soft-hover, #e4e4e7) !important;
+  color: var(--noobot-text-strong, #18181b) !important;
+}
+
+.more-panel-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .composer-options {
@@ -300,74 +708,73 @@ defineExpose({
   align-items: center;
 }
 
-.more-panel-overlay {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: calc(100% + 8px);
-  z-index: 80;
-}
-
-.more-btn {
-  width: 36px;
-  height: 36px;
-  padding: 0 !important;
-  border-radius: 10px !important;
-}
-
-.more-panel {
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: var(--noobot-panel-bg);
-  border: 1px dashed var(--noobot-divider);
-  border-radius: 10px;
-}
-
-.more-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.more-panel-title {
-  font-size: 12px;
-  color: var(--noobot-text-secondary);
-}
-
-.more-collapse-btn {
-  height: 28px;
-  padding: 0 10px;
-  gap: 4px;
-}
-
 .interaction-switch {
-  --el-switch-on-color: color-mix(in srgb, var(--noobot-cyber-cyan) 35%, var(--noobot-text-accent));
-  --el-switch-off-color: color-mix(in srgb, var(--noobot-text-muted) 85%, var(--noobot-status-idle));
+  --el-switch-on-color: var(--noobot-cyber-cyan, #0ea5e9);
+  --el-switch-off-color: var(--noobot-status-idle, #d4d4d8);
 }
 
-.send-btn {
-  padding: 10px 24px;
-  height: auto;
-  border-radius: 12px !important;
-  font-weight: 500;
-  letter-spacing: 1px;
-  flex-shrink: 0;
-  transition: all 0.2s;
+/* ================= 隐藏元素与其他 ================= */
+.hidden-camera-input {
+  display: none;
 }
 
-.send-btn:not(:disabled):hover {
-  transform: none;
-  box-shadow: none;
+.camera-preview-wrap {
+  width: 100%;
+  border: 1px solid var(--noobot-panel-border, #e4e4e7);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
 }
 
+.camera-preview {
+  width: 100%;
+  display: block;
+  max-height: min(62vh, 420px);
+  object-fit: cover;
+}
+
+.mic-status-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 4px;
+}
+
+.mic-status-text {
+  font-size: 12px;
+  color: var(--noobot-text-secondary, #52525b);
+}
+
+/* ================= 响应式调整 ================= */
 @media (max-width: 768px) {
-  .composer-wrapper { padding: 0 12px calc(12px + env(safe-area-inset-bottom)); }
-  .composer { padding: 10px 12px; }
+  .composer-wrapper {
+    --composer-row-gap: 6px;
+    --composer-icon-size: 32px;
+    --composer-icon-radius: 8px;
+    --composer-send-height: 32px;
+    --composer-send-padding-x: 16px;
+    padding: 0 12px calc(12px + env(safe-area-inset-bottom));
+  }
+  .composer { 
+    padding: 10px 12px; 
+    border-radius: 12px; 
+  }
   .more-panel-overlay { left: 12px; right: 12px; }
-  .stop-float-btn { top: -56px; }
-  .more-btn { width: 34px; height: 34px; }
-  .send-btn { padding: 8px 14px; }
+  .stop-float-btn { top: -50px; width: 40px; height: 40px; }
+  .send-btn {
+    height: 32px;
+    justify-self: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .composer-row {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .composer-row .send-btn {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-top: 4px;
+    margin-left: 0px;
+  }
 }
 </style>

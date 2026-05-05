@@ -6,9 +6,11 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
-import { createChatModelByName, resolveModelSpecByAlias } from "../model/index.js";
+import {
+  invokeModelWithTextAndAttachments,
+  resolveModelSpecByAlias,
+} from "../model/index.js";
 import { convertDocumentToImages } from "../utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
@@ -19,37 +21,152 @@ function getRuntime(agentContext) {
 }
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
+const MAX_DIRECT_TEXT_BYTES = 8 * 1024 * 1024;
 
-async function toDataUrl(imagePath) {
-  const ext = path.extname(imagePath).toLowerCase();
-  const mime =
-    ext === ".png"
-      ? "image/png"
-      : ext === ".jpg" || ext === ".jpeg"
-        ? "image/jpeg"
-        : ext === ".webp"
-          ? "image/webp"
-          : "application/octet-stream";
-  const b64 = (await readFile(imagePath)).toString("base64");
-  return `data:${mime};base64,${b64}`;
+const DIRECT_TEXT_EXTENSIONS = new Set([
+  ".txt",
+  ".md",
+  ".markdown",
+  ".json",
+  ".jsonl",
+  ".csv",
+  ".tsv",
+  ".xml",
+  ".html",
+  ".htm",
+  ".yaml",
+  ".yml",
+  ".ini",
+  ".conf",
+  ".cfg",
+  ".log",
+  ".sql",
+  ".toml",
+  ".env",
+  ".properties",
+  ".sh",
+  ".bash",
+  ".zsh",
+  ".ps1",
+  ".bat",
+  ".cmd",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".ts",
+  ".tsx",
+  ".jsx",
+  ".py",
+  ".java",
+  ".go",
+  ".rs",
+  ".c",
+  ".cc",
+  ".cpp",
+  ".h",
+  ".hpp",
+]);
+
+const IMAGE_EXTENSION_TO_MIME = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+};
+
+function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
+  const extension = path.extname(String(filePath || "")).toLowerCase();
+  void preferredMediaType;
+  return (
+    IMAGE_EXTENSION_TO_MIME[extension] ||
+    "application/octet-stream"
+  );
 }
 
-function resolveAttachmentImageAlias({ globalConfig, userConfig }) {
+async function toDataUrl(filePath = "", preferredMediaType = "") {
+  const mimeType = resolveMimeTypeByPath(filePath, preferredMediaType);
+  const contentBase64 = (await readFile(filePath)).toString("base64");
+  return `data:${mimeType};base64,${contentBase64}`;
+}
+
+function resolveAttachmentAliasByType({
+  globalConfig,
+  userConfig,
+  mediaType = "image",
+}) {
+  const normalizedMediaType = String(mediaType || "image").trim() || "image";
   return (
-    userConfig?.attachments?.attachmentModels?.image ||
-    globalConfig?.attachments?.attachmentModels?.image ||
+    userConfig?.attachments?.attachment_models?.[normalizedMediaType] ||
+    globalConfig?.attachments?.attachment_models?.[normalizedMediaType] ||
     ""
   );
 }
 
+function isLikelyUtf8Text(contentBuffer) {
+  if (!Buffer.isBuffer(contentBuffer) || !contentBuffer.length) return false;
+  if (contentBuffer.includes(0x00)) return false;
+
+  const decodedText = contentBuffer.toString("utf8");
+  if (!decodedText.trim()) return false;
+
+  let readableCharCount = 0;
+  for (let charIndex = 0; charIndex < decodedText.length; charIndex += 1) {
+    const codePoint = decodedText.charCodeAt(charIndex);
+    const isWhitespace = codePoint === 9 || codePoint === 10 || codePoint === 13;
+    const isPrintableAscii = codePoint >= 32 && codePoint <= 126;
+    const isCommonUnicode = codePoint >= 0x4e00;
+    if (isWhitespace || isPrintableAscii || isCommonUnicode) {
+      readableCharCount += 1;
+    }
+  }
+
+  const readableRatio = readableCharCount / Math.max(decodedText.length, 1);
+  const replacementCharCount = (decodedText.match(/\uFFFD/g) || []).length;
+  return readableRatio >= 0.75 && replacementCharCount <= decodedText.length * 0.05;
+}
+
+async function readDirectTextDocumentIfAvailable(filePath = "") {
+  const normalizedFilePath = String(filePath || "").trim();
+  if (!normalizedFilePath) return null;
+
+  const fileStat = await stat(normalizedFilePath);
+  if (!fileStat.isFile()) return null;
+  if (Number(fileStat.size || 0) <= 0) {
+    return { text: "", bytes: 0 };
+  }
+  if (Number(fileStat.size || 0) > MAX_DIRECT_TEXT_BYTES) return null;
+
+  const extension = path.extname(normalizedFilePath).toLowerCase();
+  const contentBuffer = await readFile(normalizedFilePath);
+  const extensionMarkedAsText = DIRECT_TEXT_EXTENSIONS.has(extension);
+  const canReadAsText = extensionMarkedAsText || isLikelyUtf8Text(contentBuffer);
+  if (!canReadAsText) return null;
+
+  return {
+    text: contentBuffer.toString("utf8"),
+    bytes: Number(contentBuffer.length || 0),
+  };
+}
+
+function normalizeModelOutput(content) {
+  return typeof content === "string" ? content : JSON.stringify(content || "");
+}
+
+function resolveDoc2DataPrompt(runtime = {}, prompt = "") {
+  const customPrompt = String(prompt || "").trim();
+  if (customPrompt) return customPrompt;
+  return tTool(runtime, "tools.doc2data.extractPrompt");
+}
+
 async function buildImageBatches(imagePaths) {
   const inputs = await Promise.all(
-    imagePaths.map(async (imagePath, idx) => {
-      const st = await stat(imagePath);
+    imagePaths.map(async (imagePath, pageIndex) => {
+      const fileStat = await stat(imagePath);
       return {
-        page: idx + 1,
+        page: pageIndex + 1,
         imagePath,
-        sizeBytes: Number(st?.size || 0),
+        sizeBytes: Number(fileStat?.size || 0),
         dataUrl: await toDataUrl(imagePath),
       };
     }),
@@ -111,6 +228,26 @@ export function createDoc2DataTool({ agentContext }) {
         fieldName: "filePath",
         mustExist: true,
       });
+
+      const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
+      if (directTextDocument) {
+        return toToolJsonResult(
+          "doc_to_data",
+          {
+            ok: true,
+            status: "completed",
+            mode: "direct_text",
+            input: inputFile,
+            text: directTextDocument.text,
+            summary: {
+              bytes: Number(directTextDocument.bytes || 0),
+              text_length: directTextDocument.text.length,
+            },
+          },
+          true,
+        );
+      }
+
       const outputRoot = path.join(
         basePath,
         "runtime",
@@ -138,9 +275,10 @@ export function createDoc2DataTool({ agentContext }) {
         );
       }
 
-      const imageAlias = resolveAttachmentImageAlias({
+      const imageAlias = resolveAttachmentAliasByType({
         globalConfig,
         userConfig,
+        mediaType: "image",
       });
       const modelSpec = resolveModelSpecByAlias({
         alias: imageAlias,
@@ -148,43 +286,33 @@ export function createDoc2DataTool({ agentContext }) {
         userConfig,
         fallbackToDefault: true,
       });
-      const llm = createChatModelByName(modelSpec?.alias || modelSpec?.model, {
-        globalConfig,
-        userConfig,
-        streaming: false,
-      });
-      const userPrompt =
-        prompt || tTool(runtime, "tools.doc2data.extractPrompt");
+      const userPrompt = resolveDoc2DataPrompt(runtime, prompt);
 
       const imageBatches = await buildImageBatches(images);
       const batchResults = [];
       for (let batchIndex = 0; batchIndex < imageBatches.length; batchIndex += 1) {
         const batch = imageBatches[batchIndex];
-        const pageNums = batch.map((imageItem) => imageItem.page);
-        const range = `${pageNums[0]}-${pageNums[pageNums.length - 1]}`;
-        const message = new HumanMessage({
-          content: [
-            {
-              type: "text",
-              text: `${userPrompt}\n\n${tTool(runtime, "tools.doc2data.batchPrompt", {
-                batchIndex: batchIndex + 1,
-                range,
-              })}`,
-            },
-            ...batch.map((imageItem) => ({
-              type: "image_url",
-              image_url: { url: imageItem.dataUrl },
-            })),
-          ],
+        const pageNumbers = batch.map((imageItem) => imageItem.page);
+        const range = `${pageNumbers[0]}-${pageNumbers[pageNumbers.length - 1]}`;
+        const modelResult = await invokeModelWithTextAndAttachments({
+          modelName: modelSpec?.alias || modelSpec?.model,
+          text: `${userPrompt}\n\n${tTool(runtime, "tools.doc2data.batchPrompt", {
+            batchIndex: batchIndex + 1,
+            range,
+          })}`,
+          attachments: batch.map((imageItem) => ({
+            mediaType: "image",
+            mimeType: resolveMimeTypeByPath(imageItem.imagePath, "image"),
+            dataUrl: imageItem.dataUrl,
+          })),
+          globalConfig,
+          userConfig,
+          streaming: false,
         });
-        const res = await llm.invoke([message]);
-        const text =
-          typeof res?.content === "string"
-            ? res.content
-            : JSON.stringify(res?.content || "");
+        const text = normalizeModelOutput(modelResult?.response?.content);
         batchResults.push({
           batch: batchIndex + 1,
-          pages: pageNums,
+          pages: pageNumbers,
           totalBytes: batch.reduce((sum, item) => sum + item.sizeBytes, 0),
           text,
         });
@@ -199,6 +327,7 @@ export function createDoc2DataTool({ agentContext }) {
         {
           ok: true,
           status: "completed",
+          mode: "image_model",
           input: converted.input,
           pdfPath: converted.pdfPath,
           imageCount: images.length,

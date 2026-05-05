@@ -153,7 +153,7 @@ export function resolveConfigTemplates(input, variables = {}) {
 // 用户可覆盖策略（只允许这些键被 user config 覆盖）
 // - replace：整项替换（当前仅支持字符串值）
 // - deep：对象深度合并（用户配置覆盖同名子键，未提供的子键保留全局默认）
-// - 模型相关：defaultProvider/providers/attachments.attachmentModels
+// - 模型相关：defaultProvider/providers/attachments.attachment_models
 // - 附件相关：attachments（上传大小、数量、类型白名单）
 // - 服务相关：services
 // - MCP相关：mcpServers

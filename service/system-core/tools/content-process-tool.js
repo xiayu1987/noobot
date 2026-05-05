@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { mergeConfig } from "../config/index.js";
 import { createDoc2DataTool } from "./doc2data-tool.js";
+import { createMedia2DataTool } from "./media2data-tool.js";
 import { createWeb2DataTool } from "./web2data-tool.js";
 import { tTool } from "./tool-i18n.js";
 
@@ -55,6 +56,7 @@ export function createContentProcessTool({ agentContext }) {
       ? defaultEnabled
       : false;
   const docToDataEnabled = isToolEnabled("doc_to_data", true);
+  const mediaToDataEnabled = isToolEnabled("media_to_data", true);
   const webToDataEnabled = isToolEnabled("web_to_data", true);
   const configuredMaxToolLoopTurns = Number(
     effectiveConfig?.tools?.process_content_task?.maxToolLoopTurns,
@@ -66,6 +68,7 @@ export function createContentProcessTool({ agentContext }) {
       : 4;
   const contentProcessTools = [
     ...(docToDataEnabled ? createDoc2DataTool({ agentContext }) : []),
+    ...(mediaToDataEnabled ? createMedia2DataTool({ agentContext }) : []),
     ...(webToDataEnabled ? createWeb2DataTool({ agentContext }) : []),
   ];
   const contentProcessToolNames = contentProcessTools
@@ -73,6 +76,7 @@ export function createContentProcessTool({ agentContext }) {
     .filter(Boolean);
   const toolDescMap = {
     doc_to_data: tTool(runtime, "tools.content_process.toolDescDoc"),
+    media_to_data: tTool(runtime, "tools.content_process.toolDescMedia"),
     web_to_data: tTool(runtime, "tools.content_process.toolDescWeb"),
   };
   const enabledToolDescList = contentProcessToolNames.map((toolName) => {

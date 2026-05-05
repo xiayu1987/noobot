@@ -160,6 +160,96 @@ function normalizeBodyText(text, contentType = '') {
   return text;
 }
 
+function tryParseJson(text = '') {
+  try {
+    return JSON.parse(String(text || ''));
+  } catch {
+    return null;
+  }
+}
+
+function extractFinalTextFromJsonPayload(payloadObject = null) {
+  if (!payloadObject || typeof payloadObject !== 'object') return '';
+
+  const choices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
+  const firstChoice = choices[0] && typeof choices[0] === 'object' ? choices[0] : null;
+  const messageContent = String(firstChoice?.message?.content || '').trim();
+  if (messageContent) return messageContent;
+
+  const deltaContent = String(firstChoice?.delta?.content || '').trim();
+  if (deltaContent) return deltaContent;
+
+  const outputText = payloadObject?.output_text;
+  if (typeof outputText === 'string' && outputText.trim()) return outputText.trim();
+  if (Array.isArray(outputText)) {
+    const joinedOutputText = outputText
+      .map((itemValue) => String(itemValue || '').trim())
+      .filter(Boolean)
+      .join('\n');
+    if (joinedOutputText) return joinedOutputText;
+  }
+
+  return '';
+}
+
+function extractFinalTextFromSseBody(sseText = '') {
+  const lines = String(sseText || '').split(/\r?\n/);
+  const dataPayloads = lines
+    .map((lineValue) => String(lineValue || '').trim())
+    .filter((lineValue) => lineValue.startsWith('data:'))
+    .map((lineValue) => lineValue.slice(5).trim())
+    .filter((lineValue) => lineValue && lineValue !== '[DONE]');
+
+  if (!dataPayloads.length) return '';
+
+  let deltaTextBuffer = '';
+  let latestResolvedText = '';
+  for (const payloadText of dataPayloads) {
+    const payloadObject = tryParseJson(payloadText);
+    if (!payloadObject) {
+      latestResolvedText = payloadText;
+      continue;
+    }
+    const payloadResolvedText = extractFinalTextFromJsonPayload(payloadObject);
+    if (!payloadResolvedText) continue;
+
+    const payloadChoices = Array.isArray(payloadObject?.choices)
+      ? payloadObject.choices
+      : [];
+    const firstChoice = payloadChoices[0] && typeof payloadChoices[0] === 'object'
+      ? payloadChoices[0]
+      : null;
+    const hasDeltaContent = typeof firstChoice?.delta?.content === 'string';
+    if (hasDeltaContent) {
+      deltaTextBuffer += String(firstChoice?.delta?.content || '');
+      latestResolvedText = deltaTextBuffer;
+      continue;
+    }
+    latestResolvedText = payloadResolvedText;
+  }
+
+  return latestResolvedText || dataPayloads[dataPayloads.length - 1];
+}
+
+function resolveFinalResponseBodyText(bodyText = '', contentType = '') {
+  const normalizedContentType = String(contentType || '').toLowerCase();
+  const normalizedBodyText = String(bodyText || '');
+
+  if (normalizedContentType.includes('text/event-stream')) {
+    const finalSseText = extractFinalTextFromSseBody(normalizedBodyText);
+    return finalSseText || normalizedBodyText;
+  }
+
+  if (normalizedContentType.includes('application/json')) {
+    const payloadObject = tryParseJson(normalizedBodyText);
+    const finalJsonText = extractFinalTextFromJsonPayload(payloadObject);
+    if (finalJsonText) return finalJsonText;
+    return normalizeBodyText(normalizedBodyText, contentType);
+  }
+
+  return normalizedBodyText;
+}
+
 function logResponse(proxyRes, bodyText) {
   const logEntry = `
 --- ${new Date().toLocaleString()} ---
@@ -186,7 +276,10 @@ proxy.on('proxyRes', (proxyRes, req, res) => {
       const raw = Buffer.concat(chunks);
       const decoded = await decodeBodyByEncoding(raw, proxyRes.headers['content-encoding']);
       const text = decoded.toString('utf8');
-      const finalText = normalizeBodyText(text, proxyRes.headers['content-type']);
+      const finalText = resolveFinalResponseBodyText(
+        text,
+        proxyRes.headers['content-type'],
+      );
       logResponse(proxyRes, finalText);
     } catch (error) {
       appendLog(`\n[Response Log Error] ${new Date().toLocaleString()} ${error.stack || error}\n`);
