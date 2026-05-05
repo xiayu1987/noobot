@@ -98,6 +98,7 @@ let fetchSessionsAfterConnect = async () => {};
 const {
   connectCode,
   apiKey,
+  apiRole,
   isSuperAdmin,
   connecting,
   connected,
@@ -199,10 +200,24 @@ function openWorkspace() {
   workspaceVisible.value = true;
 }
 
-function openUserSettings() {
+async function openUserSettings() {
   if (!ensureConnected()) return;
+  if (!connecting.value) {
+    const refreshed = await connectBackend({ silent: true });
+    if (!refreshed) {
+      notifyUi({
+        type: "warning",
+        message: translate("infra.inputConnectCodeFirst"),
+      });
+      return;
+    }
+  }
   if (!isSuperAdmin.value) {
-    notifyUi({ type: "warning", message: translate("common.superAdminOnly") });
+    const currentRole = String(apiRole.value || "user").trim() || "user";
+    notifyUi({
+      type: "warning",
+      message: `${translate("common.superAdminOnly")} (role=${currentRole})`,
+    });
     return;
   }
   userSettingsVisible.value = true;

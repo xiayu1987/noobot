@@ -14,6 +14,7 @@ export function registerAuthRoutes(
     readWorkspaceUsersConfig,
     writeWorkspaceUsersConfig,
     normalizeWorkspaceUsersConfig,
+    requireApiKey,
     requireSuperAdmin,
     translateText,
   } = {},
@@ -42,6 +43,9 @@ export function registerAuthRoutes(
         res.json({ ok: true, role: "super_admin", userId, apiKey });
         return;
       }
+      if (superAdminUserId && userId === superAdminUserId) {
+        throw new Error(translateText("connect.codeVerifyFailed", req.locale));
+      }
 
       const users = await readWorkspaceUsers();
       const matchedUser = users.find(
@@ -59,7 +63,7 @@ export function registerAuthRoutes(
     }
   });
 
-  app.get("/internal/admin/users", requireSuperAdmin, async (req, res) => {
+  app.get("/internal/admin/users", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const payload = await readWorkspaceUsersConfig({ createIfMissing: true });
       res.json({ ok: true, ...payload });
@@ -71,7 +75,7 @@ export function registerAuthRoutes(
     }
   });
 
-  app.put("/internal/admin/users", requireSuperAdmin, async (req, res) => {
+  app.put("/internal/admin/users", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const normalized = normalizeWorkspaceUsersConfig(req.body || {});
       if (!normalized.users.length) {

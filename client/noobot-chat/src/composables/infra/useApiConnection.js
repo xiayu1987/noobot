@@ -113,7 +113,12 @@ export function useApiConnection({
       apiRole.value = String(data.role || "user");
       persistApiAuth();
       persistConnectProfile();
-      if (!silent) notify({ type: "success", message: translate("infra.connectSuccess") });
+      if (!silent) {
+        notify({
+          type: "success",
+          message: `${translate("infra.connectSuccess")} (role=${apiRole.value || "user"})`,
+        });
+      }
       await onConnected();
       return true;
     } catch (error) {

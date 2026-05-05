@@ -586,7 +586,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "user_interaction": {
     "description": {
       "key": "tools.user_interaction.description",
-      "text": "发起用户交互收集信息。输入 content、fields。返回用户填写结果。"
+      "text": "发起用户交互收集信息或确认操作。输入 content、fields。返回用户填写结果。"
     },
     "params": {
       "content": {

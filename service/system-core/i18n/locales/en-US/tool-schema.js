@@ -586,7 +586,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "user_interaction": {
     "description": {
       "key": "tools.user_interaction.description",
-      "text": "Request user interaction to collect input. Input content and fields. Returns user-submitted result."
+      "text": "Request user interaction to collect input or confirm actions. Input content and fields. Returns user-submitted result."
     },
     "params": {
       "content": {
