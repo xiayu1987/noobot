@@ -57,6 +57,13 @@ export function registerSessionRoutes(
         userId,
         sessionId,
       });
+      const deletedAttachments =
+        typeof bot.deleteScopedAttachmentsBySessionIds === "function"
+          ? await bot.deleteScopedAttachmentsBySessionIds({
+              userId,
+              sessionIds: result?.deletedSessionIds || [normalizedSessionId],
+            })
+          : { deletedSessionIds: [], deletedCount: 0 };
       let deletedConnectorHistory = false;
       if (shouldReleaseRootConnectors) {
         const connectorHistoryStore = getConnectorHistoryStore();
@@ -73,6 +80,7 @@ export function registerSessionRoutes(
       res.json({
         ok: true,
         ...result,
+        deletedAttachments,
         releasedConnectors,
         deletedConnectorHistory,
       });

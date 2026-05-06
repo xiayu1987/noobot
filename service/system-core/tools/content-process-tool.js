@@ -94,13 +94,25 @@ export function createContentProcessTool({ agentContext }) {
       task: z
         .string()
         .describe(tTool(runtime, "tools.content_process.fieldTask")),
+      contentPath: z
+        .string()
+        .describe(tTool(runtime, "tools.content_process.fieldContentPath")),
       modelName: z.string().optional().describe(tTool(runtime, "tools.content_process.fieldModelName")),
     }),
-    func: async ({ task, modelName = "" }) => {
+    func: async ({ task, contentPath, modelName = "" }) => {
       const normalizedTask = String(task || "").trim();
+      const normalizedContentPath = String(contentPath || "").trim();
       if (!normalizedTask) {
         return jsonError({ error: tTool(runtime, "common.taskRequired") });
       }
+      if (!normalizedContentPath) {
+        return jsonError({
+          error: tTool(runtime, "tools.content_process.errorContentPathRequired"),
+        });
+      }
+      const composedTask = normalizedContentPath
+        ? `${normalizedTask}\n\ncontent_path: ${normalizedContentPath}`
+        : normalizedTask;
 
       const systemRuntime = runtime?.systemRuntime || {};
       const botManager = runtime?.botManager || null;
@@ -132,7 +144,7 @@ export function createContentProcessTool({ agentContext }) {
         const subResult = await botManager.runSession({
           userId,
           sessionId: subSessionId,
-          message: normalizedTask,
+          message: composedTask,
           caller: "bot",
           parentSessionId,
           parentDialogProcessId,
@@ -183,6 +195,7 @@ export function createContentProcessTool({ agentContext }) {
               message_count: messages.length,
               used_tools: usedTools,
               dialog_process_id: String(subResult?.dialogProcessId || ""),
+              content_path: normalizedContentPath,
             },
             error: "",
           },
