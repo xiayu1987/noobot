@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Buffer } from "node:buffer";
 import { v4 as uuidv4 } from "uuid";
@@ -705,6 +705,38 @@ export class AttachmentService {
     return {
       ...record,
       content: await readFile(record.absolutePath),
+    };
+  }
+
+  async deleteScopedAttachmentsBySessionIds({
+    userId,
+    sessionIds = [],
+  } = {}) {
+    const basePath = this._resolveBasePath(userId);
+    const scopedRootPath = this._attachScopedRoot(basePath);
+    const normalizedSessionIds = Array.from(
+      new Set(
+        (Array.isArray(sessionIds) ? sessionIds : [])
+          .map((sessionIdItem) => String(sessionIdItem || "").trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedSessionIds.length) {
+      return { deletedSessionIds: [], deletedCount: 0 };
+    }
+    const deletedSessionIds = [];
+    for (const sessionId of normalizedSessionIds) {
+      const sessionScopedPath = path.join(scopedRootPath, sessionId);
+      try {
+        await rm(sessionScopedPath, { recursive: true, force: true });
+        deletedSessionIds.push(sessionId);
+      } catch {
+        // ignore per-session delete error and continue cleanup
+      }
+    }
+    return {
+      deletedSessionIds,
+      deletedCount: deletedSessionIds.length,
     };
   }
 }

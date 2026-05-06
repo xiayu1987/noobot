@@ -477,9 +477,13 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "process_content_task": {
     "description": {
       "key": "tools.content_process.description",
-      "text": "Can handle document, audio, and video tasks. Input task (optional modelName). Returns processing result."
+      "text": "Can handle document, audio, and video tasks. Input task and contentPath (optional modelName). contentPath is required. Returns processing result."
     },
     "params": {
+      "contentPath": {
+        "key": "tools.content_process.fieldContentPath",
+        "text": "Content path (required)."
+      },
       "modelName": {
         "key": "tools.content_process.fieldModelName",
         "text": "Model name (optional)."
@@ -493,6 +497,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.content_process.dynamicDescDisabled": "Content processing tool: no sub-tools are enabled currently.",
       "tools.content_process.dynamicDescEnabledPrefix": "Content processing tool: currently enabled sub-tools: ",
       "tools.content_process.dynamicDescEnabledSuffix": ". The sub-session can only call the enabled tools above.",
+      "tools.content_process.errorContentPathRequired": "contentPath is required",
       "tools.content_process.errorToolsUnavailable": "content process tools not available",
       "tools.content_process.toolDescDoc": "Parse document content (extract text from office/pdf/images)",
       "tools.content_process.toolDescGeneric": "Generic content processing",

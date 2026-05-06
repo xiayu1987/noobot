@@ -163,6 +163,16 @@ export class BotManager {
     });
   }
 
+  deleteScopedAttachmentsBySessionIds({
+    userId,
+    sessionIds = [],
+  } = {}) {
+    return this.attach.deleteScopedAttachmentsBySessionIds({
+      userId,
+      sessionIds,
+    });
+  }
+
   async loadUserConfig(basePath) {
     const [rawText, userConfigParamsRawText] = await Promise.all([
       readFile(path.join(basePath, "config.json"), "utf8"),

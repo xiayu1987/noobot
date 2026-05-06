@@ -477,9 +477,13 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "process_content_task": {
     "description": {
       "key": "tools.content_process.description",
-      "text": "可处理文档、音频、视频相关任务。输入 task（可选 modelName）。返回处理结果。"
+      "text": "可处理文档、音频、视频相关任务。输入 task、contentPath（可选 modelName）。contentPath 必填。返回处理结果。"
     },
     "params": {
+      "contentPath": {
+        "key": "tools.content_process.fieldContentPath",
+        "text": "内容路径（必填）。"
+      },
       "modelName": {
         "key": "tools.content_process.fieldModelName",
         "text": "模型名称（可选）。"
@@ -493,6 +497,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.content_process.dynamicDescDisabled": "内容处理工具：当前未启用任何子工具。",
       "tools.content_process.dynamicDescEnabledPrefix": "内容处理工具：当前启用子工具：",
       "tools.content_process.dynamicDescEnabledSuffix": "。子会话仅允许调用以上已启用工具。",
+      "tools.content_process.errorContentPathRequired": "contentPath 必填",
       "tools.content_process.errorToolsUnavailable": "内容处理工具不可用",
       "tools.content_process.toolDescDoc": "解析文档内容（office/pdf/图片提取文本）",
       "tools.content_process.toolDescGeneric": "通用内容处理",
