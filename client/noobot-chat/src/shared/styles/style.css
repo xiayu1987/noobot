@@ -804,6 +804,12 @@ body {
 
 /* 移动端全面适配 */
 @media (max-width: 768px) {
+  .noobot-editor-textarea .el-textarea__inner {
+    box-sizing: border-box;
+    overflow: hidden !important;
+    padding: 0 !important;
+  }
+
   .noobot-workspace-layout {
     grid-template-columns: 1fr;
     height: auto;
@@ -846,7 +852,6 @@ body {
   }
 
   .noobot-workspace-layout .noobot-editor-textarea .el-textarea__inner {
-    height: auto;
     min-height: 240px;
     max-height: none;
   }
@@ -878,8 +883,8 @@ body {
   body,
   #app {
     width: 100%;
-    height: 100dvh;
-    min-height: 100dvh;
+    height: 100svh;
+    min-height: 100svh;
   }
 
   .el-drawer {

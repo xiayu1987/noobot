@@ -588,11 +588,23 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
     width: 100% !important;
   }
 
+  :deep(.workspace-drawer .el-drawer) {
+    height: 100svh !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :deep(.workspace-drawer .el-drawer__header) {
+    flex: 0 0 auto;
+  }
+
   :deep(.workspace-drawer .el-drawer__body) {
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 0 !important;
   }
 
-  .app-shell-root { min-height: 100dvh; }
+  .app-shell-root { min-height: 100svh; }
 
 }
 </style>
