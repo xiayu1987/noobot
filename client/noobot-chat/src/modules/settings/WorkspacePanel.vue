@@ -672,8 +672,17 @@ watch(
 
       <div class="panel-body noobot-workspace-body editor-body" v-loading="loadingFile" element-loading-background="var(--noobot-mask-bg)">
         <template v-if="activePath">
-          <el-input v-if="isTextFile" ref="editorInputRef" v-model="content" type="textarea" resize="none" class="editor-input noobot-editor-textarea"
-            :disabled="loadingFile" :placeholder="translate('settings.startEdit')" />
+          <el-input
+            v-if="isTextFile"
+            ref="editorInputRef"
+            v-model="content"
+            type="textarea"
+            :autosize="{ minRows: 8 }"
+            resize="none"
+            class="editor-input noobot-editor-textarea"
+            :disabled="loadingFile"
+            :placeholder="translate('settings.startEdit')"
+          />
           <div v-else class="empty-tip">
             <el-empty
               :description="translate('settings.binaryNoPreview')"
@@ -924,6 +933,27 @@ watch(
 
 /* 响应式适配 */
 @media (max-width: 768px) {
+  .workspace-layout {
+    overflow: visible;
+  }
+
+  .workspace-panel,
+  .editor-body {
+    overflow: visible;
+  }
+
+  .resource-collapse {
+    height: auto;
+    min-height: auto;
+  }
+
+  .resource-collapse :deep(.resource-collapse-item--active .el-collapse-item__wrap),
+  .resource-collapse :deep(.resource-collapse-item--active .el-collapse-item__content) {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
   .reset-section-group {
     grid-template-columns: 1fr;
     gap: 8px;

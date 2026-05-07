@@ -488,8 +488,14 @@ body {
   flex-direction: column;
 }
 
+.noobot-editor-textarea .el-textarea {
+  height: 100%;
+}
+
 .noobot-editor-textarea .el-textarea__inner {
-  flex: 1;
+  height: 100%;
+  min-height: 180px;
+  overflow: auto !important;
   background: var(--noobot-panel-muted);
   color: var(--noobot-text-main);
   border: none !important;
@@ -800,10 +806,56 @@ body {
 @media (max-width: 768px) {
   .noobot-workspace-layout {
     grid-template-columns: 1fr;
-    height: 100%;
-    min-height: 0;
+    height: auto;
+    min-height: auto;
     gap: 12px;
     padding: 0;
+    overflow: visible;
+  }
+
+  .noobot-workspace-panel {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .noobot-workspace-layout .panel-body {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .noobot-workspace-layout .tree-scroll {
+    height: auto;
+    max-height: none;
+  }
+
+  .noobot-workspace-layout .editor-body {
+    min-height: 240px;
+    overflow: visible;
+  }
+
+  .noobot-workspace-layout .noobot-editor-textarea {
+    height: auto;
+    display: block;
+    min-height: 240px;
+  }
+
+  .noobot-workspace-layout .noobot-editor-textarea .el-textarea {
+    height: auto;
+  }
+
+  .noobot-workspace-layout .noobot-editor-textarea .el-textarea__inner {
+    height: auto;
+    min-height: 240px;
+    max-height: none;
+  }
+
+  .noobot-workspace-layout .empty-tip {
+    position: static;
+    inset: auto;
+    min-height: 96px;
+    padding: 16px 0;
   }
 
   .noobot-workspace-layout .panel-head {

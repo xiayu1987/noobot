@@ -413,6 +413,7 @@ watch(
             <el-input
               v-model="usersJsonText"
               type="textarea"
+              :autosize="{ minRows: 8 }"
               resize="none"
               class="editor-input noobot-editor-textarea"
               spellcheck="false"
@@ -497,6 +498,7 @@ watch(
                 v-if="templateIsTextFile"
                 v-model="templateContent"
                 type="textarea"
+                :autosize="{ minRows: 8 }"
                 resize="none"
                 class="editor-input noobot-editor-textarea"
                 :placeholder="translate('settings.startEdit')"
@@ -565,5 +567,16 @@ watch(
 
 /* 响应式适配 */
 @media (max-width: 768px) {
+  .settings-tabs {
+    height: auto;
+    overflow: visible;
+  }
+
+  .settings-tabs :deep(.el-tabs__content),
+  .settings-tabs :deep(.el-tab-pane) {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+  }
 }
 </style>
