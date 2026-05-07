@@ -1,0 +1,143 @@
+/* 统一功能性按钮基类 */
+.noobot-action-btn {
+  border-radius: var(--noobot-btn-radius) !important;
+  font-weight: var(--noobot-btn-font-weight) !important;
+  transition: var(--noobot-btn-transition);
+}
+
+.noobot-action-btn:disabled {
+  opacity: var(--noobot-btn-disabled-opacity);
+}
+
+.noobot-action-btn:not(:disabled):hover,
+.noobot-action-btn:not(:disabled):active {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* 聊天气泡相关通用语义类（统一收敛） */
+.noobot-flat-card {
+  background: var(--noobot-msg-file-card-bg);
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+  box-shadow: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.noobot-flat-card:hover {
+  border-color: var(--noobot-panel-border);
+  box-shadow: none;
+}
+
+.noobot-flat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--noobot-space-xs);
+  padding: 2px var(--noobot-space-xs);
+  border-radius: 999px;
+  font-size: var(--noobot-msg-meta-font-size);
+  color: var(--noobot-msg-tag-text);
+  background: var(--noobot-panel-muted);
+  border: 1px solid var(--noobot-panel-border);
+  box-shadow: none;
+}
+
+.noobot-flat-icon-btn,
+.noobot-flat-inline-icon-btn {
+  border-radius: var(--noobot-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 60%, transparent);
+  background: var(--noobot-panel-muted);
+  color: var(--noobot-text-main);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.noobot-flat-icon-btn {
+  width: var(--noobot-msg-icon-btn-size);
+  height: var(--noobot-msg-icon-btn-size);
+}
+
+.noobot-flat-inline-icon-btn {
+  width: var(--noobot-msg-inline-icon-btn-size);
+  height: var(--noobot-msg-inline-icon-btn-size);
+}
+
+.noobot-flat-icon-btn:hover,
+.noobot-flat-inline-icon-btn:hover {
+  background: var(--noobot-panel-muted);
+  color: var(--noobot-text-main);
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
+  box-shadow: none;
+}
+
+.noobot-flat-soft-btn {
+  border: 1px solid color-mix(in srgb, var(--noobot-btn-secondary-border) 58%, transparent);
+  background: var(--noobot-btn-secondary-bg);
+  color: var(--noobot-btn-secondary-text);
+}
+
+.noobot-flat-soft-btn:hover:not(:disabled) {
+  background: var(--noobot-btn-secondary-bg-hover);
+  border-color: color-mix(in srgb, var(--noobot-btn-secondary-border) 68%, transparent);
+  color: var(--noobot-text-strong);
+}
+
+/* 关键操作位（附件/展开/工作区/用户设置/参数管理/左侧收折）边框弱化 */
+.noobot-action-btn.noobot-flat-soft-btn,
+.noobot-action-btn.noobot-flat-icon-btn,
+.noobot-action-btn.noobot-flat-inline-icon-btn,
+.el-button.noobot-flat-soft-btn,
+.el-button.noobot-flat-icon-btn,
+.el-button.noobot-flat-inline-icon-btn {
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 42%, transparent) !important;
+}
+
+.attachment-download-btn.noobot-flat-icon-btn,
+.attachment-preview-btn.noobot-flat-icon-btn,
+.connector-toggle-btn.noobot-flat-soft-btn,
+.workspace-btn.noobot-flat-soft-btn,
+.dark-btn.noobot-flat-soft-btn,
+.collapse-btn.noobot-flat-soft-btn {
+  border-color: transparent !important;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent) !important;
+  color: var(--noobot-text-strong) !important;
+}
+
+.attachment-download-btn.noobot-flat-icon-btn:hover,
+.connector-toggle-btn.noobot-flat-soft-btn:hover,
+.workspace-btn.noobot-flat-soft-btn:hover,
+.dark-btn.noobot-flat-soft-btn:hover,
+.collapse-btn.noobot-flat-soft-btn:hover {
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 18%, transparent) !important;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 88%, transparent) !important;
+  color: var(--noobot-base-white) !important;
+}
+
+.attachment-download-btn.noobot-flat-icon-btn .el-icon,
+.workspace-btn.noobot-flat-soft-btn .el-icon,
+.dark-btn.noobot-flat-soft-btn .el-icon,
+.collapse-btn.noobot-flat-soft-btn .el-icon {
+  color: inherit !important;
+  opacity: 0.98;
+}
+
+.noobot-tail-btn {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  background: var(--noobot-btn-soft-bg);
+  border: 1px solid var(--noobot-btn-soft-border);
+  color: var(--noobot-btn-soft-text);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.noobot-tail-btn .el-icon {
+  margin: 0 !important;
+}
