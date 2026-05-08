@@ -14,13 +14,5 @@ export const ENGINE_I18N_KEY_MAP = {
 
 export const TOOL_CONSECUTIVE_FAILURE_LIMIT = 3;
 
-export const MIME_EXTENSION_MAP = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
-  "image/webp": ".webp",
-  "image/gif": ".gif",
-  "video/mp4": ".mp4",
-  "video/webm": ".webm",
-  "video/quicktime": ".mov",
-  "video/x-m4v": ".m4v",
-};
+// Re-export for backward compatibility
+export { getMimeExtensionMap as MIME_EXTENSION_MAP } from "./utils/mime-utils.js";

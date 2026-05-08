@@ -14,6 +14,7 @@ import {
 } from "../model/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
+import { parseDataUrl, sanitizeGeneratedArtifactName } from "../agent/engine/utils/mime-utils.js";
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
@@ -57,12 +58,15 @@ function checkImageGenerationSupport(modelSpec = {}) {
 }
 
 function parseDataUrlToImageArtifact(dataUrl = "", fileName = "generated_image_1.png") {
-  const normalizedDataUrl = String(dataUrl || "").trim();
-  const matchResult = normalizedDataUrl.match(/^data:image\/[^;]+;base64,([\s\S]+)$/i);
-  if (!matchResult) return null;
+  const parsed = parseDataUrl(dataUrl);
+  if (!parsed) return null;
+  // Use the detected mimeType to generate a proper filename if fileName is default
+  const finalFileName = fileName === "generated_image_1.png"
+    ? sanitizeGeneratedArtifactName("generated_image_1", parsed.mimeType, 1)
+    : fileName;
   return {
-    fileName,
-    b64Json: String(matchResult[1] || "").trim(),
+    fileName: finalFileName,
+    b64Json: parsed.contentBase64,
     url: "",
   };
 }

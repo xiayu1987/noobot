@@ -3,7 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MIME_EXTENSION_MAP } from "../constants.js";
+// Re-export from mime-utils for backward compatibility
+export {
+  parseDataUrl,
+  sanitizeGeneratedArtifactName,
+  getExtensionFromMime,
+  extendMimeMap,
+  getMimeExtensionMap,
+} from "./mime-utils.js";
 
 export function normalizeAiTextContent(aiContent) {
   if (typeof aiContent === "string") return String(aiContent || "");
@@ -17,33 +24,4 @@ export function normalizeAiTextContent(aiContent) {
     })
     .filter(Boolean);
   return textParts.join("\n");
-}
-
-export function sanitizeGeneratedArtifactName(baseName = "", mimeType = "", index = 1) {
-  const safeBaseName = String(baseName || "")
-    .replace(/[\\/:*?"<>|]+/g, "_")
-    .trim();
-  const normalizedBaseName = safeBaseName || `generated_media_${index}`;
-  const normalizedMimeType = String(mimeType || "").trim().toLowerCase();
-  const extension =
-    MIME_EXTENSION_MAP[normalizedMimeType] ||
-    (normalizedMimeType.startsWith("image/") ? ".png" : "") ||
-    (normalizedMimeType.startsWith("video/") ? ".mp4" : "");
-  if (!extension) return normalizedBaseName;
-  if (normalizedBaseName.toLowerCase().endsWith(extension)) {
-    return normalizedBaseName;
-  }
-  return `${normalizedBaseName}${extension}`;
-}
-
-export function parseDataUrl(dataUrl = "") {
-  const normalizedDataUrl = String(dataUrl || "").trim();
-  const matchResult = normalizedDataUrl.match(/^data:([^;,]+)?;base64,([\s\S]+)$/i);
-  if (!matchResult) return null;
-  return {
-    mimeType: String(matchResult[1] || "application/octet-stream")
-      .trim()
-      .toLowerCase(),
-    contentBase64: String(matchResult[2] || "").trim(),
-  };
 }
