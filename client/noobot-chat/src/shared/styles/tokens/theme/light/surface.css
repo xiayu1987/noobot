@@ -1,0 +1,18 @@
+:root[data-theme="light"] {
+  /* Semantic · Surface / Text */
+  --noobot-surface-sidebar: color-mix(in srgb, var(--noobot-base-slate-50) 84%, var(--noobot-base-white));
+  --noobot-surface-soft: color-mix(in srgb, var(--noobot-base-slate-900) 4%, transparent);
+  --noobot-surface-soft-hover: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-surface-item-hover: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
+  --noobot-surface-primary-soft: color-mix(in srgb, var(--noobot-base-blue-500) 12%, transparent);
+  --noobot-surface-primary-soft-strong: color-mix(in srgb, var(--noobot-base-blue-500) 28%, transparent);
+  --noobot-fill-soft: var(--noobot-surface-soft);
+  --noobot-fill-hover: var(--noobot-surface-soft-hover);
+  --noobot-border-weak: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
+  --noobot-border-soft: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-text-strong: var(--noobot-base-slate-900);
+  --noobot-text-main: var(--noobot-base-slate-800);
+  --noobot-text-secondary: var(--noobot-base-slate-600);
+  --noobot-text-muted: var(--noobot-base-slate-600);
+  --noobot-text-accent: var(--noobot-base-blue-700);
+}

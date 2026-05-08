@@ -371,8 +371,8 @@ const { translate } = useLocale();
 
 .status-btn.connected {
   color: var(--noobot-status-success);
-  background: color-mix(in srgb, var(--noobot-status-success) 15%, transparent);
-  border-color: color-mix(in srgb, var(--noobot-status-success) 30%, transparent);
+  background: color-mix(in srgb, var(--noobot-status-success) 16%, var(--noobot-panel-bg));
+  border-color: color-mix(in srgb, var(--noobot-status-success) 36%, transparent);
 }
 
 .status-icon {

@@ -1,0 +1,9 @@
+:root[data-theme="light"] {
+  /* Component · Thinking */
+  --noobot-thinking-bg: color-mix(in srgb, var(--noobot-base-blue-500) 8%, var(--noobot-base-white));
+  --noobot-thinking-header: var(--noobot-base-slate-700);
+  --noobot-thinking-text: var(--noobot-base-slate-700);
+  --noobot-thinking-muted: var(--noobot-base-slate-500);
+  --noobot-thinking-event: var(--noobot-base-slate-800);
+  --noobot-thinking-line-border: color-mix(in srgb, var(--noobot-base-slate-900) 10%, transparent);
+}

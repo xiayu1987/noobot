@@ -1,25 +1,21 @@
-.chat-header {
-  background: var(--noobot-surface-sidebar) !important;
-}
-
 .chat-input .el-textarea__inner {
-  color: var(--noobot-text-main) !important;
-  background: transparent !important;
-  border-color: var(--noobot-panel-border) !important;
+  color: var(--noobot-text-main);
+  background: transparent;
+  border-color: var(--noobot-panel-border);
 }
 
 .chat-input .el-textarea__inner::placeholder {
-  color: var(--noobot-text-muted) !important;
+  color: var(--noobot-text-muted);
 }
 
 .head-sub {
-  color: var(--noobot-text-secondary) !important;
+  color: var(--noobot-text-secondary);
 }
 
 .file-size {
-  color: var(--noobot-text-secondary) !important;
+  color: var(--noobot-text-secondary);
 }
 
 .file-name {
-  color: var(--noobot-text-main) !important;
+  color: var(--noobot-text-main);
 }

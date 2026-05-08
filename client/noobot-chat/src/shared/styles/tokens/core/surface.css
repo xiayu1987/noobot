@@ -6,6 +6,8 @@
   --noobot-surface-item-hover: color-mix(in srgb, var(--noobot-base-white) 4%, transparent);
   --noobot-surface-primary-soft: color-mix(in srgb, var(--noobot-base-blue-500) 14%, transparent);
   --noobot-surface-primary-soft-strong: color-mix(in srgb, var(--noobot-base-blue-500) 28%, transparent);
+  --noobot-fill-soft: var(--noobot-surface-soft);
+  --noobot-fill-hover: var(--noobot-surface-soft-hover);
   --noobot-border-weak: color-mix(in srgb, var(--noobot-base-white) 3%, transparent);
   --noobot-border-soft: color-mix(in srgb, var(--noobot-base-white) 6%, transparent);
   --noobot-border-primary: color-mix(in srgb, var(--noobot-base-blue-500) 50%, transparent);

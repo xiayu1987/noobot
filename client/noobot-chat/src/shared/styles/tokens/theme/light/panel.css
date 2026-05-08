@@ -1,0 +1,12 @@
+:root[data-theme="light"] {
+  /* Semantic · Panel / Overlay */
+  --noobot-app-bg: var(--noobot-base-slate-50);
+  --noobot-panel-bg: color-mix(in srgb, var(--noobot-base-white) 92%, transparent);
+  --noobot-panel-head-bg: color-mix(in srgb, var(--noobot-base-slate-50) 95%, transparent);
+  --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-divider: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-slate-900) 24%, transparent);
+  --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 12%, transparent);
+  --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-900) 6%, transparent);
+  --noobot-accent-soft: color-mix(in srgb, var(--noobot-base-blue-700) 14%, transparent);
+}

@@ -1,0 +1,9 @@
+:root[data-theme="light"] {
+  /* Semantic · Preview */
+  --noobot-preview-bg: var(--noobot-base-white);
+  --noobot-preview-text: var(--noobot-base-slate-800);
+  --noobot-preview-border: var(--noobot-base-slate-300);
+  --noobot-preview-danger-bg: var(--noobot-base-red-100);
+  --noobot-preview-danger-text: var(--noobot-base-red-500);
+  --noobot-preview-danger-border: var(--noobot-base-red-200);
+}

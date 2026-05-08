@@ -1,0 +1,17 @@
+:root[data-theme="light"] {
+  /* Component · Message */
+  --noobot-msg-assistant-bg: var(--noobot-base-white);
+  --noobot-msg-assistant-text: var(--noobot-base-slate-900);
+  --noobot-msg-user-bg: color-mix(in srgb, var(--noobot-base-blue-500) 16%, var(--noobot-base-white));
+  --noobot-msg-user-border: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-msg-user-text: var(--noobot-base-slate-900);
+  --noobot-msg-tag-bg: var(--noobot-base-slate-200);
+  --noobot-msg-tag-text: var(--noobot-base-slate-700);
+  --noobot-msg-file-card-bg: color-mix(in srgb, var(--noobot-base-white) 92%, transparent);
+  --noobot-msg-file-name: var(--noobot-base-slate-900);
+  --noobot-msg-file-size: var(--noobot-base-slate-500);
+  --noobot-msg-inline-code-bg: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-msg-inline-code-text: var(--noobot-base-blue-700);
+  --noobot-msg-code-block-bg: var(--noobot-base-slate-900);
+  --noobot-msg-code-block-text: var(--noobot-base-slate-200);
+}

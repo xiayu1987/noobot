@@ -1,16 +1,16 @@
 .session-item:hover {
-  background: var(--noobot-panel-muted) !important;
+  background: var(--noobot-panel-muted);
 }
 
 .connector-summary-empty {
-  color: var(--noobot-text-secondary) !important;
+  color: var(--noobot-text-secondary);
 }
 
 .session-delete-btn:hover {
-  background: var(--noobot-danger-soft) !important;
+  background: var(--noobot-danger-soft);
 }
 
 .status-btn.connected {
-  background: color-mix(in srgb, var(--noobot-status-success) 16%, var(--noobot-panel-bg)) !important;
-  border-color: color-mix(in srgb, var(--noobot-status-success) 36%, transparent) !important;
+  background: color-mix(in srgb, var(--noobot-status-success) 16%, var(--noobot-panel-bg));
+  border-color: color-mix(in srgb, var(--noobot-status-success) 36%, transparent);
 }
