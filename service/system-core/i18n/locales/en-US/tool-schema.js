@@ -366,6 +366,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.script.docker.scope.global": "one shared container for all users (default)",
       "tools.script.docker.scope.user": "one container per user",
       "tools.script.docker.title": "Docker notes:",
+      "tools.script.docker.mounts.title": "- Extra mounts:",
+      "tools.script.docker.mounts.none": "- No extra mounts configured (no mapping when docker_mounts is empty)",
+      "tools.script.docker.mounts.item": (params = {}) =>
+    `  - ${String(params.source || "").trim()} -> ${String(params.target || "").trim()}${String(params.description || "").trim() ? ` (${String(params.description || "").trim()})` : ""}`,
       "tools.script.fallbackOverlaySrc": "Current bubblewrap version does not support --overlay-src. Automatically fell back to docker.",
       "tools.script.fallbackUserxattr": "Current kernel/distribution does not support bubblewrap overlay(userxattr). Automatically fell back to docker.",
       "tools.script.firejail.line1": "- Use runtime/sandbox/firejail/home under user directory as persistent HOME",

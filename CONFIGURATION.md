@@ -84,6 +84,17 @@ Based on latest examples:
 | `tools.execute_script.sandbox_provider.docker.docker_container_scope` | enum | `global` / `user` |
 | `tools.execute_script.sandbox_provider.docker.docker_container_name` | string | Docker sandbox container base name |
 | `tools.execute_script.sandbox_provider.docker.docker_image` | string | Docker image for sandbox |
+| `tools.execute_script.sandbox_provider.docker.docker_mounts` | object[] | Extra host->container mount list (optional) |
+| `tools.execute_script.sandbox_provider.docker.docker_mounts[].source` | string(path) | Host path to mount |
+| `tools.execute_script.sandbox_provider.docker.docker_mounts[].target` | string(path) | Container target path (auto-normalized to `/xxx`) |
+| `tools.execute_script.sandbox_provider.docker.docker_mounts[].description` | string | Human-readable mapping note (optional) |
+
+Notes:
+- If `docker_mounts` is missing or empty, no extra mount is added.
+- A mount entry is applied only when both `source` and `target` are non-empty.
+- Current defaults in repo:
+  - `service/config/global.config.json`: mounts this project to `/project`
+  - `service/config/global.config.example.json`: no default project mount
 
 ### 3.5 Connector Presets
 

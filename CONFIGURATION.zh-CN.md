@@ -84,6 +84,17 @@
 | `tools.execute_script.sandbox_provider.docker.docker_container_scope` | enum | `global` / `user` |
 | `tools.execute_script.sandbox_provider.docker.docker_container_name` | string | Docker 沙箱容器名基础前缀 |
 | `tools.execute_script.sandbox_provider.docker.docker_image` | string | Docker 沙箱镜像 |
+| `tools.execute_script.sandbox_provider.docker.docker_mounts` | object[] | 额外目录映射列表（可选） |
+| `tools.execute_script.sandbox_provider.docker.docker_mounts[].source` | string(path) | 宿主机目录 |
+| `tools.execute_script.sandbox_provider.docker.docker_mounts[].target` | string(path) | 容器内目录（会自动规范成 `/xxx`） |
+| `tools.execute_script.sandbox_provider.docker.docker_mounts[].description` | string | 映射说明（可选） |
+
+说明：
+- `docker_mounts` 不配置或为空时，不添加额外挂载。
+- 单条映射仅在 `source` 与 `target` 同时非空时生效。
+- 当前仓库默认值：
+  - `service/config/global.config.json`：默认挂载本项目到 `/project`
+  - `service/config/global.config.example.json`：不默认挂载项目目录
 
 ### 3.5 连接器预置
 
