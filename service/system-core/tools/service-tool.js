@@ -6,7 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
-import { invokeServiceHandler } from "../services/index.js";
+import { invokeServiceHandler } from "../service-invoker/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
 
