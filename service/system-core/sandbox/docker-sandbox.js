@@ -23,6 +23,48 @@ export function resolveDockerContainerScope(scriptConfig = {}) {
   return "global";
 }
 
+function normalizeContainerMountTarget(target = "") {
+  const normalized = String(target || "").trim();
+  if (!normalized) return "";
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+export function normalizeDockerMounts(scriptConfig = {}) {
+  const configuredMounts = Array.isArray(scriptConfig?.dockerMounts)
+    ? scriptConfig.dockerMounts
+    : [];
+  const normalizedMounts = configuredMounts
+    .map((item) => (item && typeof item === "object" ? item : {}))
+    .map((item) => {
+      const source = String(item?.source || item?.mountSource || "").trim();
+      const target = normalizeContainerMountTarget(
+        item?.target || item?.mountTarget || "",
+      );
+      const description = String(
+        item?.description || item?.mountDescription || "",
+      ).trim();
+      return { source, target, description };
+    })
+    .filter((item) => Boolean(item.source && item.target));
+
+  if (normalizedMounts.length) return normalizedMounts;
+
+  const legacySource = String(scriptConfig?.dockerProjectMountSource || "").trim();
+  const legacyTarget = normalizeContainerMountTarget(
+    scriptConfig?.dockerProjectMountTarget || "",
+  );
+  if (legacySource && legacyTarget) {
+    return [
+      {
+        source: legacySource,
+        target: legacyTarget,
+        description: "",
+      },
+    ];
+  }
+  return [];
+}
+
 export function buildDockerCommand({
   userRoot,
   userId = "",
@@ -38,6 +80,12 @@ export function buildDockerCommand({
   const containerName =
     scope === "user" ? `${baseContainerName}-${userPart}` : baseContainerName;
   const mountSource = scope === "user" ? userRoot : path.dirname(userRoot);
+  const mountTarget = "/workspace";
+  const dockerMounts = normalizeDockerMounts(scriptConfig);
+  const dockerExtraMountArgs = dockerMounts.map(
+    (item) =>
+      `-v ${JSON.stringify(item.source)}:${JSON.stringify(item.target)}`,
+  );
   const workdir =
     scope === "user"
       ? "/workspace/runtime/workspace"
@@ -46,7 +94,7 @@ export function buildDockerCommand({
   const cmd = [
     `docker container inspect ${JSON.stringify(containerName)} >/dev/null 2>&1`,
     "||",
-    `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:/workspace ${JSON.stringify(image)} sleep infinity >/dev/null`,
+    `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity >/dev/null`,
     "&&",
     `docker start ${JSON.stringify(containerName)} >/dev/null`,
     "&&",
@@ -59,6 +107,8 @@ export function buildDockerCommand({
     scope,
     image,
     mountSource,
+    mountTarget,
+    dockerMounts,
     workdir,
   };
 }

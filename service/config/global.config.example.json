@@ -133,7 +133,14 @@
         "docker": {
           "docker_container_scope": "global",
           "docker_container_name": "noobot-script-sandbox",
-          "docker_image": "node:20"
+          "docker_image": "node:20",
+          "docker_mounts": [
+            {
+              "source": "",
+              "target": "/project",
+              "description": "目录映射配置示例：source 与 target 同时非空才会生效；不配置或留空 source 则不映射"
+            }
+          ]
         },
         "bubblewrap": {},
         "firejail": {}

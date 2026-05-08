@@ -366,6 +366,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.script.docker.scope.global": "所有用户共用同一容器（默认）",
       "tools.script.docker.scope.user": "按用户独立容器",
       "tools.script.docker.title": "Docker 说明：",
+      "tools.script.docker.mounts.title": "- 额外挂载目录：",
+      "tools.script.docker.mounts.none": "- 未配置额外挂载目录（docker_mounts 为空时不挂载）",
+      "tools.script.docker.mounts.item": (params = {}) =>
+    `  - ${String(params.source || "").trim()} -> ${String(params.target || "").trim()}${String(params.description || "").trim() ? `（${String(params.description || "").trim()}）` : ""}`,
       "tools.script.fallbackOverlaySrc": "当前 bubblewrap 版本不支持 --overlay-src，已自动回退到 docker。",
       "tools.script.fallbackUserxattr": "当前内核/发行版不支持 bubblewrap overlay(userxattr)，已自动回退到 docker。",
       "tools.script.firejail.line1": "- 使用用户目录下 runtime/sandbox/firejail/home 作为持久 HOME",

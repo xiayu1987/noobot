@@ -15,6 +15,7 @@ import {
 } from "../sandbox/bubblewrap-sandbox.js";
 import {
   buildDockerCommand,
+  normalizeDockerMounts,
   resolveDockerContainerScope,
 } from "../sandbox/docker-sandbox.js";
 import { buildFirejailCommand } from "../sandbox/firejail-sandbox.js";
@@ -84,6 +85,14 @@ function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
     dockerContainerName:
       providerDetail?.dockerContainerName || "noobot-script-sandbox",
     dockerImage: providerDetail?.dockerImage || "node:20",
+    dockerMounts: Array.isArray(providerDetail?.dockerMounts)
+      ? providerDetail.dockerMounts
+      : [],
+    dockerProjectMountSource: String(
+      providerDetail?.dockerProjectMountSource || "",
+    ).trim(),
+    dockerProjectMountTarget:
+      String(providerDetail?.dockerProjectMountTarget || "").trim() || "/project",
   };
 }
 
@@ -148,6 +157,18 @@ async function tryDockerFallback({
     containerScope: docker?.scope || "",
     containerImage: docker?.image || "",
     containerMountSource: docker?.mountSource || "",
+    containerMountTarget: docker?.mountTarget || "",
+    containerExtraMounts: Array.isArray(docker?.dockerMounts)
+      ? docker.dockerMounts
+      : [],
+    containerProjectMountSource:
+      Array.isArray(docker?.dockerMounts) && docker.dockerMounts[0]
+        ? String(docker.dockerMounts[0].source || "")
+        : "",
+    containerProjectMountTarget:
+      Array.isArray(docker?.dockerMounts) && docker.dockerMounts[0]
+        ? String(docker.dockerMounts[0].target || "")
+        : "",
     containerWorkdir: docker?.workdir || "",
     ...dr,
   });
@@ -169,6 +190,19 @@ function buildScriptToolDescription({
   }
 
   const dockerScope = resolveDockerContainerScope(dockerConfig);
+  const dockerMounts = normalizeDockerMounts(dockerConfig);
+  const dockerMountDescriptionLines = dockerMounts.length
+    ? [
+        tTool(runtime, "tools.script.docker.mounts.title"),
+        ...dockerMounts.map((item) =>
+          tTool(runtime, "tools.script.docker.mounts.item", {
+            source: item.source,
+            target: item.target,
+            description: item.description,
+          }),
+        ),
+      ]
+    : [tTool(runtime, "tools.script.docker.mounts.none")];
   const providerDescriptionMap = {
     bubblewrap: [
       tTool(runtime, "tools.script.bubblewrap.title"),
@@ -191,6 +225,7 @@ function buildScriptToolDescription({
           : tTool(runtime, "tools.script.docker.scope.global")
       }`,
       tTool(runtime, "tools.script.docker.reuse"),
+      ...dockerMountDescriptionLines,
     ],
   };
 
@@ -349,6 +384,18 @@ export function createScriptTool({ agentContext }) {
           containerScope: built.scope,
           containerImage: built.image,
           containerMountSource: built.mountSource,
+          containerMountTarget: built.mountTarget,
+          containerExtraMounts: Array.isArray(built?.dockerMounts)
+            ? built.dockerMounts
+            : [],
+          containerProjectMountSource:
+            Array.isArray(built?.dockerMounts) && built.dockerMounts[0]
+              ? String(built.dockerMounts[0].source || "")
+              : "",
+          containerProjectMountTarget:
+            Array.isArray(built?.dockerMounts) && built.dockerMounts[0]
+              ? String(built.dockerMounts[0].target || "")
+              : "",
           containerWorkdir: built.workdir,
         };
       }
