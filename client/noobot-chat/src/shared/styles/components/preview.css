@@ -1,0 +1,58 @@
+/* 预览弹框主色调（全局，适配 teleported el-dialog） */
+.attachment-preview-dialog,
+.generated-file-preview-dialog {
+  background: var(--noobot-panel-bg) !important;
+  border: 1px solid var(--noobot-panel-border) !important;
+}
+
+.attachment-preview-dialog .el-dialog__header,
+.generated-file-preview-dialog .el-dialog__header {
+  margin-right: 0 !important;
+  padding: 14px 18px !important;
+  background: var(--noobot-panel-head-bg) !important;
+  border-bottom: 1px solid var(--noobot-divider) !important;
+}
+
+.attachment-preview-dialog .el-dialog__title,
+.generated-file-preview-dialog .el-dialog__title {
+  color: var(--noobot-text-strong) !important;
+  font-weight: 600 !important;
+}
+
+.attachment-preview-dialog .el-dialog__headerbtn .el-dialog__close,
+.generated-file-preview-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.attachment-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close,
+.generated-file-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: var(--noobot-text-strong) !important;
+}
+
+/* 消息内容与 markdown 区视觉收敛 */
+.md pre,
+.preview-markdown pre {
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 88%, transparent);
+}
+
+.md table th,
+.preview-markdown table th {
+  background: color-mix(in srgb, var(--noobot-panel-border) 45%, transparent) !important;
+}
+
+.preview-body {
+  color: var(--noobot-preview-text) !important;
+  background: var(--noobot-preview-bg) !important;
+  border-color: var(--noobot-preview-border) !important;
+}
+
+.preview-error {
+  color: var(--noobot-preview-danger-text) !important;
+  background: var(--noobot-preview-danger-bg) !important;
+  border-color: var(--noobot-preview-danger-border) !important;
+}
+
+.preview-text,
+.preview-markdown {
+  color: var(--noobot-preview-text) !important;
+}

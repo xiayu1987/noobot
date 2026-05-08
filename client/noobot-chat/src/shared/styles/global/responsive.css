@@ -1,0 +1,10 @@
+/* 移动端全面适配 */
+@media (max-width: 768px) {
+  html,
+  body,
+  #app {
+    width: 100%;
+    height: 100svh;
+    min-height: 100svh;
+  }
+}
