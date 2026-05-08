@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { AsyncJobManager } from "./async-job-manager.js";
+import { AsyncJobManager } from "../../../system-core/bot-manage/async-job-manager.js";
 
 function createTestManager(overrides = {}) {
   const manager = Object.create(AsyncJobManager.prototype);

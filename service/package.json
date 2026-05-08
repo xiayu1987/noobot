@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "node --watch app.js",
-    "test:bot-manage": "node --test system-core/bot-manage/index.test.js",
+    "test:bot-manage": "node --test __tests__/system-core/bot-manage/index.test.js",
     "check:tool-schema:live:gemini:admin": "node scripts/check-openai-tool-schema.js --live --model gemini_3_flash --userId admin",
     "postinstall": "playwright install chromium",
     "init": "node scripts/init.js",
@@ -15,7 +15,10 @@
     "pm2:stop": "PM2_HOME=../.pm2 npx pm2 stop noobot-service",
     "pm2:delete": "PM2_HOME=../.pm2 npx pm2 delete noobot-service",
     "pm2:logs": "PM2_HOME=../.pm2 npx pm2 logs noobot-service",
-    "pm2:list": "PM2_HOME=../.pm2 npx pm2 list"
+    "pm2:list": "PM2_HOME=../.pm2 npx pm2 list",
+    "test": "node --test __tests__/**/*.test.js __tests__/system-core/bot-manage/index.test.js",
+    "test:utils": "node --test __tests__/utils/*.test.js",
+    "test:connectors": "node --test __tests__/connectors/**/*.test.js"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
