@@ -4,23 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+export { isAbortError } from "../utils/error-utils.js";
+
 export function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(sessionId || ""),
-  );
-}
-
-export function isAbortError(error) {
-  const normalizedName = String(error?.name || "").trim().toLowerCase();
-  const message = String(error?.message || "").trim().toLowerCase();
-  const code = String(error?.code || "").trim().toUpperCase();
-  return (
-    normalizedName === "aborterror" ||
-    code === "ABORT_ERR" ||
-    message === "aborterror" ||
-    message.includes("aborterror") ||
-    message.includes("stopped by user") ||
-    message.includes("aborted")
   );
 }
 
