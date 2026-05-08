@@ -76,30 +76,53 @@ export function buildDockerCommand({
   const baseContainerName = sanitizeDockerNamePart(
     scriptConfig?.dockerContainerName || "noobot-script-sandbox",
   );
+  const dockerMounts = normalizeDockerMounts(scriptConfig);
   const userPart = sanitizeDockerNamePart(userId || path.basename(userRoot) || "user");
   const containerName =
     scope === "user" ? `${baseContainerName}-${userPart}` : baseContainerName;
   const mountSource = scope === "user" ? userRoot : path.dirname(userRoot);
   const mountTarget = "/workspace";
-  const dockerMounts = normalizeDockerMounts(scriptConfig);
   const dockerExtraMountArgs = dockerMounts.map(
     (item) =>
       `-v ${JSON.stringify(item.source)}:${JSON.stringify(item.target)}`,
   );
+  const expectedMountPairs = [
+    { source: mountSource, target: mountTarget },
+    ...dockerMounts.map((item) => ({
+      source: item.source,
+      target: item.target,
+    })),
+  ];
+  const mountValidationExpr = expectedMountPairs
+    .map(
+      (item) =>
+        `echo "$_NOOBOT_MOUNT_LINES" | grep -Fqx ${JSON.stringify(
+          `${item.source} => ${item.target}`,
+        )}`,
+    )
+    .join(" && ");
   const workdir =
     scope === "user"
       ? "/workspace/runtime/workspace"
       : `/workspace/${userPart}/runtime/workspace`;
 
+  const createContainerCmd = `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity >/dev/null`;
+  const ensureContainerCmd = [
+    `if docker container inspect ${JSON.stringify(containerName)} >/dev/null 2>&1; then`,
+    `_NOOBOT_MOUNT_LINES="$(docker inspect --format '{{range .Mounts}}{{println .Source " => " .Destination}}{{end}}' ${JSON.stringify(containerName)} 2>/dev/null || true)"`,
+    `if ! { ${mountValidationExpr}; }; then`,
+    `docker rm -f ${JSON.stringify(containerName)} >/dev/null 2>&1 || true`,
+    createContainerCmd,
+    "fi",
+    "else",
+    createContainerCmd,
+    "fi",
+  ].join("\n");
   const cmd = [
-    `docker container inspect ${JSON.stringify(containerName)} >/dev/null 2>&1`,
-    "||",
-    `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity >/dev/null`,
-    "&&",
+    ensureContainerCmd,
     `docker start ${JSON.stringify(containerName)} >/dev/null`,
-    "&&",
     `docker exec -w ${JSON.stringify(workdir)} ${JSON.stringify(containerName)} bash -lc ${JSON.stringify(command)}`,
-  ].join(" ");
+  ].join(" &&\n");
 
   return {
     cmd,
