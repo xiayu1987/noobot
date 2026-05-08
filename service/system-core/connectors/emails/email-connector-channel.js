@@ -90,6 +90,46 @@ function normalizeEmailConnectionInfo(connectionInfo = {}) {
   };
 }
 
+function toEmailMessageTimestamp(dateValue = "") {
+  const timestamp = new Date(dateValue).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function normalizeEmailAddressList(addressList = []) {
+  return Array.isArray(addressList)
+    ? addressList.map((addressItem) =>
+        `${String(addressItem?.name || "").trim()} <${String(
+          addressItem?.address || "",
+        ).trim()}>`.trim(),
+      )
+    : [];
+}
+
+function normalizeEmailSummary(messageItem = {}) {
+  return {
+    uid: Number(messageItem?.uid || 0),
+    subject: String(messageItem?.envelope?.subject || "").trim(),
+    from: normalizeEmailAddressList(messageItem?.envelope?.from),
+    date: String(messageItem?.internalDate || ""),
+  };
+}
+
+function sortEmailSummariesByLatest(leftMessage = {}, rightMessage = {}) {
+  const rightTimestamp = toEmailMessageTimestamp(rightMessage?.date);
+  const leftTimestamp = toEmailMessageTimestamp(leftMessage?.date);
+  if (rightTimestamp !== leftTimestamp) return rightTimestamp - leftTimestamp;
+  return Number(rightMessage?.uid || 0) - Number(leftMessage?.uid || 0);
+}
+
+function buildRecentSequenceRange({ page = 1, pageSize = 10, exists = 0 } = {}) {
+  const normalizedExists = Number(exists || 0);
+  if (!Number.isFinite(normalizedExists) || normalizedExists <= 0) return "";
+  const endSeq = normalizedExists - (page - 1) * pageSize;
+  const startSeq = Math.max(endSeq - pageSize + 1, 1);
+  if (endSeq <= 0 || startSeq > endSeq) return "";
+  return `${startSeq}:${endSeq}`;
+}
+
 async function executeSendEmail({ payload = {}, connectionInfo = {} } = {}) {
   const { createTransport } = await import("nodemailer");
   const normalizedConnectionInfo = normalizeEmailConnectionInfo(connectionInfo);
@@ -181,17 +221,48 @@ async function executeListEmail({ payload = {}, connectionInfo = {} } = {}) {
   try {
     const mailboxLock = await imapClient.getMailboxLock(folder);
     try {
-      // 修复：将空对象 {} 替换为 { all: true } 以确保能正确匹配所有邮件
-      const allUids = await imapClient.search(unseenOnly ? { seen: false } : { all: true }, { uid: true });
-      const normalizedUids = (Array.isArray(allUids) ? allUids : [])
-        .map((uid) => Number(uid || 0))
-        .filter((uid) => Number.isFinite(uid) && uid > 0)
-        .sort((leftUid, rightUid) => rightUid - leftUid);
-      const totalCount = normalizedUids.length;
-      const startIndex = (page - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const pageUids = normalizedUids.slice(startIndex, endIndex);
-      if (!pageUids.length) {
+      const messageSummaries = [];
+      let totalCount = Number(imapClient?.mailbox?.exists || 0);
+      if (!Number.isFinite(totalCount) || totalCount < 0) totalCount = 0;
+
+      if (unseenOnly) {
+        const unseenUids = await imapClient.search({ seen: false }, { uid: true });
+        const normalizedUids = (Array.isArray(unseenUids) ? unseenUids : [])
+          .map((uidItem) => Number(uidItem || 0))
+          .filter((uidItem) => Number.isFinite(uidItem) && uidItem > 0);
+        totalCount = normalizedUids.length;
+        if (normalizedUids.length) {
+          for await (const messageItem of imapClient.fetch(normalizedUids, {
+            uid: true,
+            envelope: true,
+            internalDate: true,
+          }, { uid: true })) {
+            messageSummaries.push(normalizeEmailSummary(messageItem));
+          }
+        }
+      } else {
+        const sequenceRange = buildRecentSequenceRange({
+          page,
+          pageSize,
+          exists: totalCount,
+        });
+        if (sequenceRange) {
+          for await (const messageItem of imapClient.fetch(sequenceRange, {
+            uid: true,
+            envelope: true,
+            internalDate: true,
+          })) {
+            messageSummaries.push(normalizeEmailSummary(messageItem));
+          }
+        }
+      }
+
+      const latestMessages = messageSummaries.sort(sortEmailSummariesByLatest);
+      const pagedMessages = unseenOnly
+        ? latestMessages.slice((page - 1) * pageSize, page * pageSize)
+        : latestMessages;
+
+      if (!pagedMessages.length) {
         return {
           action: "list",
           folder,
@@ -202,30 +273,6 @@ async function executeListEmail({ payload = {}, connectionInfo = {} } = {}) {
           messages: [],
         };
       }
-
-      const messageSummaries = [];
-      for await (const messageItem of imapClient.fetch(pageUids, {
-        uid: true,
-        envelope: true,
-        internalDate: true,
-      }, { uid: true })) {
-        messageSummaries.push({
-          uid: Number(messageItem?.uid || 0),
-          subject: String(messageItem?.envelope?.subject || "").trim(),
-          from: Array.isArray(messageItem?.envelope?.from)
-            ? messageItem.envelope.from.map((addressItem) =>
-                `${String(addressItem?.name || "").trim()} <${String(
-                  addressItem?.address || "",
-                ).trim()}>`.trim(),
-              )
-            : [],
-          date: String(messageItem?.internalDate || ""),
-        });
-      }
-      const pagedMessages = messageSummaries.sort(
-        (leftMessage, rightMessage) =>
-          Number(rightMessage?.uid || 0) - Number(leftMessage?.uid || 0),
-      );
       return {
         action: "list",
         folder,
@@ -309,40 +356,47 @@ async function executeReadEmail({
     const mailboxLock = await imapClient.getMailboxLock(folder);
     try {
       let resolvedUid = Number.isFinite(uid) && uid > 0 ? Math.floor(uid) : 0;
-      if (!resolvedUid) {
-        // 修复：将空对象 {} 替换为 { all: true } 以确保能正确匹配所有邮件
-        const allUids = await imapClient.search({ all: true }, { uid: true });
-        const latestUid = (Array.isArray(allUids) ? allUids : [])
-          .map((uidItem) => Number(uidItem || 0))
-          .filter((uidItem) => Number.isFinite(uidItem) && uidItem > 0)
-          .sort((leftUid, rightUid) => rightUid - leftUid)?.[0];
-        resolvedUid = Number(latestUid || 0);
-      }
-      if (!resolvedUid) {
-        throw new Error(tSystem("connectors.email.readUidRequired"));
-      }
       let fetchedMessages = null;
-      for await (const messageItem of imapClient.fetch([resolvedUid], {
-        uid: true,
-        envelope: true,
-        source: true,
-        internalDate: true,
-      }, { uid: true })) {
-        fetchedMessages = messageItem;
-        break;
-      }
-      if (!fetchedMessages) {
-        // 兼容：有些客户端可能错误地传入了序号而非 UID，这里做一次兜底
-        fetchedMessages = await imapClient.fetchOne(resolvedUid, {
+
+      if (resolvedUid) {
+        for await (const messageItem of imapClient.fetch([resolvedUid], {
           uid: true,
           envelope: true,
           source: true,
           internalDate: true,
-        });
+        }, { uid: true })) {
+          fetchedMessages = messageItem;
+          break;
+        }
+        if (!fetchedMessages) {
+          // 兼容：有些客户端可能错误地传入了序号而非 UID，这里做一次兜底
+          fetchedMessages = await imapClient.fetchOne(resolvedUid, {
+            uid: true,
+            envelope: true,
+            source: true,
+            internalDate: true,
+          });
+        }
+      } else {
+        // 不传 uid 时直接读取当前邮箱最后一封序号邮件，比先 SEARCH 再取最大 UID
+        // 更贴近 IMAP 服务器当前可见的“最新邮件”。
+        const mailboxExists = Number(imapClient?.mailbox?.exists || 0);
+        if (Number.isFinite(mailboxExists) && mailboxExists > 0) {
+          fetchedMessages = await imapClient.fetchOne("*", {
+            uid: true,
+            envelope: true,
+            source: true,
+            internalDate: true,
+          });
+        }
       }
       if (!fetchedMessages) {
+        if (!resolvedUid) {
+          throw new Error(tSystem("connectors.email.readUidRequired"));
+        }
         throw new Error(`${tSystem("connectors.email.notFoundByUid")}: ${resolvedUid}`);
       }
+      resolvedUid = Number(fetchedMessages?.uid || resolvedUid);
       const rawSourceBuffer = await (async () => {
         const sourceValue = fetchedMessages?.source;
         if (!sourceValue) return Buffer.from("");
