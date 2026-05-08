@@ -1,0 +1,23 @@
+:root {
+  /* ========== Semantic Tokens · Surface / Text / Status ========== */
+  --noobot-surface-sidebar: color-mix(in srgb, var(--noobot-base-slate-900) 78%, var(--noobot-base-black));
+  --noobot-surface-soft: color-mix(in srgb, var(--noobot-base-white) 3%, transparent);
+  --noobot-surface-soft-hover: color-mix(in srgb, var(--noobot-base-white) 5%, transparent);
+  --noobot-surface-item-hover: color-mix(in srgb, var(--noobot-base-white) 4%, transparent);
+  --noobot-surface-primary-soft: color-mix(in srgb, var(--noobot-base-blue-500) 14%, transparent);
+  --noobot-surface-primary-soft-strong: color-mix(in srgb, var(--noobot-base-blue-500) 28%, transparent);
+  --noobot-border-weak: color-mix(in srgb, var(--noobot-base-white) 3%, transparent);
+  --noobot-border-soft: color-mix(in srgb, var(--noobot-base-white) 6%, transparent);
+  --noobot-border-primary: color-mix(in srgb, var(--noobot-base-blue-500) 50%, transparent);
+  --noobot-text-strong: var(--noobot-base-slate-50);
+  --noobot-text-main: var(--noobot-base-slate-200);
+  --noobot-text-secondary: var(--noobot-base-slate-500);
+  --noobot-text-muted: var(--noobot-base-slate-500);
+  --noobot-text-accent: var(--noobot-base-blue-400);
+  --noobot-status-idle: var(--noobot-base-slate-500);
+  --noobot-status-success: var(--noobot-base-emerald-500);
+  --noobot-status-running: var(--noobot-base-blue-400);
+  --noobot-status-done: var(--noobot-base-emerald-400);
+  --noobot-status-error: var(--noobot-base-red-500);
+  --noobot-status-warning: #f59e0b;
+}

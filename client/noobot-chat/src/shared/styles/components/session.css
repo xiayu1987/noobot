@@ -1,0 +1,16 @@
+.session-item:hover {
+  background: var(--noobot-panel-muted) !important;
+}
+
+.connector-summary-empty {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.session-delete-btn:hover {
+  background: var(--noobot-danger-soft) !important;
+}
+
+.status-btn.connected {
+  background: color-mix(in srgb, var(--noobot-status-success) 16%, var(--noobot-panel-bg)) !important;
+  border-color: color-mix(in srgb, var(--noobot-status-success) 36%, transparent) !important;
+}

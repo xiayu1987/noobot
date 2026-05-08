@@ -1,0 +1,12 @@
+:root {
+  /* ========== Semantic Tokens · Cyber Accent ========== */
+  --noobot-cyber-cyan: var(--noobot-base-blue-500);
+  --noobot-cyber-pink: var(--noobot-base-blue-500);
+  --noobot-cyber-cyan-soft: color-mix(in srgb, var(--noobot-base-blue-400) 18%, transparent);
+  --noobot-cyber-cyan-border: color-mix(in srgb, var(--noobot-base-blue-400) 52%, transparent);
+  --noobot-cyber-pink-soft: color-mix(in srgb, var(--noobot-base-blue-500) 12%, transparent);
+  --noobot-cyber-glow-sm: none;
+  --noobot-cyber-glow-md: none;
+  --noobot-cyber-glow-mix: none;
+  --noobot-cyber-gradient: var(--noobot-base-blue-400);
+}

@@ -1,0 +1,13 @@
+:root {
+  /* ========== Component Tokens · Thinking Panel ========== */
+  --noobot-thinking-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-base-black));
+  --noobot-thinking-header: var(--noobot-text-secondary);
+  --noobot-thinking-text: var(--noobot-text-main);
+  --noobot-thinking-muted: var(--noobot-text-muted);
+  --noobot-thinking-event: var(--noobot-text-main);
+  --noobot-thinking-line-border: var(--noobot-divider);
+  --noobot-thinking-tool-border: var(--noobot-divider);
+  --noobot-thinking-tab: var(--noobot-text-secondary);
+  --noobot-thinking-tab-active: var(--noobot-text-main);
+  --noobot-thinking-tab-bar: var(--noobot-border-primary);
+}

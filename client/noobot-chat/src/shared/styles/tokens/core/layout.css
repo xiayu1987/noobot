@@ -1,0 +1,13 @@
+:root {
+  /* ========== Layout Tokens · Radius / Space / Shadow ========== */
+  --noobot-radius-xs: 8px;
+  --noobot-radius-sm: 10px;
+  --noobot-radius-md: 12px;
+  --noobot-radius-lg: 16px;
+  --noobot-space-xs: 8px;
+  --noobot-space-sm: 10px;
+  --noobot-space-md: 12px;
+  --noobot-space-lg: 14px;
+  --noobot-msg-shadow-card: none;
+  --noobot-msg-shadow-card-hover: none;
+}

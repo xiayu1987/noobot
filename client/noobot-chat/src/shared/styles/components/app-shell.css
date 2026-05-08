@@ -1,0 +1,13 @@
+.main-content,
+.workspace-drawer .el-drawer__body,
+.skeleton-loading {
+  background: var(--noobot-panel-bg) !important;
+}
+
+.workspace-drawer .el-drawer__header {
+  background: var(--noobot-panel-head-bg) !important;
+}
+
+.mobile-mask {
+  background: var(--noobot-mask-bg) !important;
+}
