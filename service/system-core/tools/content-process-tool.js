@@ -12,23 +12,12 @@ import { createDoc2DataTool } from "./doc2data-tool.js";
 import { createMedia2DataTool } from "./media2data-tool.js";
 import { createWeb2DataTool } from "./web2data-tool.js";
 import { tTool } from "./tool-i18n.js";
+import { isAbortError } from "../utils/error-utils.js";
 
 function jsonError(payload = {}) {
   return toToolJsonResult("process_content_task", { ok: false, ...payload });
 }
 
-function isAbortError(error) {
-  const name = String(error?.name || "").trim().toLowerCase();
-  const code = String(error?.code || "").trim().toUpperCase();
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    name === "aborterror" ||
-    code === "ABORT_ERR" ||
-    message.includes("aborterror") ||
-    message.includes("stopped by user") ||
-    message.includes("aborted")
-  );
-}
 
 function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
