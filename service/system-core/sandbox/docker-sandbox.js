@@ -110,7 +110,8 @@ export function buildDockerCommand({
   );
   const containerExecCommand = `'printf "%s" "$NOOBOT_SCRIPT_B64" | base64 -d | bash'`;
 
-  const createContainerCmd = `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity >/dev/null`;
+  const createContainerCmdRaw = `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity`;
+  const createContainerCmd = `(${createContainerCmdRaw} >/dev/null 2>&1 || (docker rm -f ${JSON.stringify(containerName)} >/dev/null 2>&1 || true; ${createContainerCmdRaw} >/dev/null))`;
   const ensureContainerCmd = [
     `if docker container inspect ${JSON.stringify(containerName)} >/dev/null 2>&1; then`,
     `_NOOBOT_MOUNT_LINES="$(docker inspect --format '{{range .Mounts}}{{println .Source " => " .Destination}}{{end}}' ${JSON.stringify(containerName)} 2>/dev/null || true)"`,

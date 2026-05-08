@@ -9,6 +9,7 @@ export const ENGINE_I18N_KEY_MAP = {
   toolConsecutiveFailureLimitReached:
     "agent.toolConsecutiveFailureLimitReached",
   fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
+  fetchRemoteMediaArtifactFailed: "agent.fetchRemoteMediaArtifactFailed",
 };
 
 export const TOOL_CONSECUTIVE_FAILURE_LIMIT = 3;

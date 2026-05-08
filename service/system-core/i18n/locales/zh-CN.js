@@ -12,6 +12,8 @@ export default {
   ...TOOL_SCHEMA_FLAT_GENERATED,
   "agent.fetchGeneratedMediaFailed": (params = {}) =>
     `拉取生成媒体失败: HTTP ${Number(params.status || 500)}`,
+  "agent.fetchRemoteMediaArtifactFailed": (params = {}) =>
+    `拉取远程媒体失败: ${String(params.url || "").trim()}${String(params.reason || "").trim() ? `（${String(params.reason || "").trim()}）` : ""}`,
   "agent.subTaskLabelPrefix": "子任务",
   "agent.toolLoopLimitReached": (params = {}) =>
     `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,

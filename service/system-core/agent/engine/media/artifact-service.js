@@ -75,29 +75,41 @@ export async function fetchRemoteMediaArtifact(
   const normalizedUrl = String(url || "").trim();
   if (!normalizedUrl || !/^https?:\/\//i.test(normalizedUrl)) return null;
   if (typeof fetchImpl !== "function") return null;
-  const response = await fetchImpl(normalizedUrl);
-  if (!response?.ok) {
-    throw new Error(
-      tEngine(runtime, "fetchGeneratedMediaFailed", {
-        status: response?.status || 500,
+  
+  try {
+    const response = await fetchImpl(normalizedUrl);
+    if (!response?.ok) {
+      throw new Error(
+        tEngine(runtime, "fetchGeneratedMediaFailed", {
+          status: response?.status || 500,
+        }),
+      );
+    }
+    const responseArrayBuffer = await response.arrayBuffer();
+    const responseBytes = Buffer.from(responseArrayBuffer);
+    const contentTypeHeader = String(response.headers?.get?.("content-type") || "")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+    return {
+      mimeType: contentTypeHeader || "application/octet-stream",
+      contentBase64: responseBytes.toString("base64"),
+      fileName: sanitizeGeneratedArtifactName(
+        `generated_media_${mediaIndex}`,
+        contentTypeHeader,
+        mediaIndex,
+      ),
+    };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(
+      tEngine(runtime, "fetchRemoteMediaArtifactFailed", {
+        url: normalizedUrl,
+        reason: error?.message || String(error || ""),
       }),
     );
+    return null;
   }
-  const responseArrayBuffer = await response.arrayBuffer();
-  const responseBytes = Buffer.from(responseArrayBuffer);
-  const contentTypeHeader = String(response.headers?.get?.("content-type") || "")
-    .split(";")[0]
-    .trim()
-    .toLowerCase();
-  return {
-    mimeType: contentTypeHeader || "application/octet-stream",
-    contentBase64: responseBytes.toString("base64"),
-    fileName: sanitizeGeneratedArtifactName(
-      `generated_media_${mediaIndex}`,
-      contentTypeHeader,
-      mediaIndex,
-    ),
-  };
 }
 
 export async function persistModelGeneratedArtifacts({
@@ -120,6 +132,9 @@ export async function persistModelGeneratedArtifacts({
   const remoteMediaCandidates = [];
   if (Array.isArray(aiContent)) {
     let remoteMediaIndex = 0;
+    
+    // Use Promise.all to fetch remote media concurrently
+    const fetchPromises = [];
     for (const contentPart of aiContent) {
       if (!contentPart || typeof contentPart !== "object") continue;
       const partType = String(contentPart?.type || "").trim().toLowerCase();
@@ -130,13 +145,22 @@ export async function persistModelGeneratedArtifacts({
       const remoteUrl = imageUrl || videoUrl || directUrl;
       if (!/^https?:\/\//i.test(remoteUrl)) continue;
       remoteMediaIndex += 1;
-      const remoteArtifact = await fetchRemoteMediaArtifact(
-        remoteUrl,
-        fetchImpl,
-        remoteMediaIndex,
-        runtime,
+      
+      fetchPromises.push(
+        fetchRemoteMediaArtifact(
+          remoteUrl,
+          fetchImpl,
+          remoteMediaIndex,
+          runtime,
+        )
       );
-      if (remoteArtifact) remoteMediaCandidates.push(remoteArtifact);
+    }
+    
+    if (fetchPromises.length > 0) {
+      const results = await Promise.all(fetchPromises);
+      for (const remoteArtifact of results) {
+        if (remoteArtifact) remoteMediaCandidates.push(remoteArtifact);
+      }
     }
   }
   const allMediaCandidates = [...localMediaCandidates, ...remoteMediaCandidates];
