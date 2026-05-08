@@ -1,0 +1,15 @@
+:root {
+  /* Semantic · App / Panel / Overlay */
+  --noobot-app-bg: var(--noobot-surface-sidebar);
+  --noobot-glass-bg: var(--noobot-panel-bg);
+  --noobot-glass-border: var(--noobot-panel-border);
+  --noobot-focus-ring: 0 0 0 1px color-mix(in srgb, var(--noobot-base-blue-400) 55%, transparent);
+  --noobot-panel-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 84%, transparent);
+  --noobot-panel-head-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 66%, var(--noobot-base-black));
+  --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-400) 10%, transparent);
+  --noobot-divider: color-mix(in srgb, var(--noobot-base-slate-400) 10%, transparent);
+  --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-slate-900) 52%, transparent);
+  --noobot-accent-soft: color-mix(in srgb, var(--noobot-base-blue-400) 26%, transparent);
+  --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 16%, transparent);
+  --noobot-panel-muted: color-mix(in srgb, var(--noobot-base-slate-500) 8%, transparent);
+}

@@ -1,0 +1,38 @@
+.composer-wrapper,
+.composer,
+.connector-panel-shell,
+.connector-panel-shell.is-expanded,
+.interaction-card {
+  background: var(--noobot-panel-bg) !important;
+}
+
+.composer,
+.interaction-card {
+  border-color: var(--noobot-panel-border) !important;
+}
+
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--noobot-base-blue-500) 36%, transparent) !important;
+  box-shadow: var(--noobot-focus-ring) !important;
+}
+
+.interaction-form .el-input__wrapper {
+  color: var(--noobot-text-main) !important;
+  background: transparent !important;
+  border-color: var(--noobot-panel-border) !important;
+}
+
+.connector-panel-header:hover {
+  background: var(--noobot-panel-muted) !important;
+}
+
+.connector-group-title,
+.interaction-form .el-form-item__label,
+.connector-summary-empty {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.connector-name,
+.interaction-title {
+  color: var(--noobot-text-main) !important;
+}

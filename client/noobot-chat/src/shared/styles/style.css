@@ -7,9 +7,12 @@
 @import "./tokens/semantic.css";
 @import "./tokens/theme-light.css";
 @import "./global/base.css";
+@import "./components/app-shell.css";
 @import "./components/preview.css";
 @import "./components/buttons.css";
 @import "./components/workspace.css";
+@import "./components/chat.css";
+@import "./components/composer.css";
+@import "./components/session.css";
 @import "./integrations/element-plus.css";
-@import "./themes/component-overrides.css";
 @import "./global/responsive.css";

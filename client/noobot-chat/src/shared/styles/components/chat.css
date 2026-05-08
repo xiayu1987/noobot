@@ -1,0 +1,25 @@
+.chat-header {
+  background: var(--noobot-surface-sidebar) !important;
+}
+
+.chat-input .el-textarea__inner {
+  color: var(--noobot-text-main) !important;
+  background: transparent !important;
+  border-color: var(--noobot-panel-border) !important;
+}
+
+.chat-input .el-textarea__inner::placeholder {
+  color: var(--noobot-text-muted) !important;
+}
+
+.head-sub {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.file-size {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.file-name {
+  color: var(--noobot-text-main) !important;
+}
