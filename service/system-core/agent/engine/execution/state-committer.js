@@ -5,6 +5,7 @@
  */
 import { ToolMessage } from "@langchain/core/messages";
 import { appendAttachmentMetasToRuntimeAndTurn } from "../../../attach/index.js";
+import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants.js";
 
 export function createStateCommitter({
   messages = null,
@@ -37,7 +38,7 @@ export function createStateCommitter({
         traces.push({
           tool: call?.name,
           args: call?.args || {},
-          result: String(toolResultText || "").slice(0, 1000),
+          result: String(toolResultText || "").slice(0, TOOL_RESULT_TRACE_TRUNCATE_LENGTH),
         });
       }
       if (Array.isArray(messages)) {

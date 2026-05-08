@@ -25,7 +25,10 @@ import { assertNotAborted } from "./utils/error-utils.js";
 import { normalizeAiTextContent } from "./utils/text-utils.js";
 import { createStateCommitter } from "./execution/state-committer.js";
 import { executeToolCall } from "./execution/tool-runner.js";
-import { TOOL_CONSECUTIVE_FAILURE_LIMIT } from "./constants.js";
+import {
+  TOOL_CONSECUTIVE_FAILURE_LIMIT,
+  DEFAULT_MAX_TOOL_LOOP_TURNS,
+} from "./constants.js";
 
 async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   const {
@@ -207,7 +210,6 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     const call = toolCallResult?.call || {};
     const toolResultText = String(toolCallResult?.toolResultText || "");
     stateCommitter.pushToolResult({ call, toolResultText });
-    // Keep compatibility with previous behavior and ensure helper stays in flow.
     const fallbackExtractedAttachmentMetas = extractAttachmentMetasFromToolResult(
       call?.name || "",
       toolResultText,
@@ -288,7 +290,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     userConfig,
   });
   const runtimeMaxTurns = Number(sys?.config?.maxToolLoopTurns || 0);
-  const configMaxTurns = Number(effectiveConfig?.maxToolLoopTurns || 4);
+  const configMaxTurns = Number(effectiveConfig?.maxToolLoopTurns || DEFAULT_MAX_TOOL_LOOP_TURNS);
   const maxToolLoopTurns =
     Number.isFinite(runtimeMaxTurns) && runtimeMaxTurns > 0
       ? runtimeMaxTurns
@@ -333,7 +335,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
     maxTurns:
       Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
         ? maxToolLoopTurns
-        : 4,
+        : DEFAULT_MAX_TOOL_LOOP_TURNS,
     consecutiveToolFailures: {},
   };
   return await runFunctionCallLoop({ modelState, loopState, turn: 1 });
