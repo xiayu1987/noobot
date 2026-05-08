@@ -25,6 +25,7 @@ import { assertNotAborted } from "./utils/error-utils.js";
 import { normalizeAiTextContent } from "./utils/text-utils.js";
 import { createStateCommitter } from "./execution/state-committer.js";
 import { executeToolCall } from "./execution/tool-runner.js";
+import { TOOL_CONSECUTIVE_FAILURE_LIMIT } from "./constants.js";
 
 async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   const {
@@ -36,6 +37,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     currentTurnTasks,
     dialogProcessId,
     maxTurns,
+    consecutiveToolFailures,
   } = loopState;
   const {
     eventListener,
@@ -216,6 +218,51 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
         ? toolCallResult.extractedAttachmentMetas
         : fallbackExtractedAttachmentMetas;
     stateCommitter.appendAttachmentMetas(extractedAttachmentMetas);
+    const toolName = String(call?.name || "").trim();
+    if (!toolName) continue;
+    const currentConsecutiveFailures = Number(
+      consecutiveToolFailures?.[toolName] || 0,
+    );
+    const nextConsecutiveFailures = toolCallResult?.success
+      ? 0
+      : currentConsecutiveFailures + 1;
+    consecutiveToolFailures[toolName] = nextConsecutiveFailures;
+    if (nextConsecutiveFailures < TOOL_CONSECUTIVE_FAILURE_LIMIT) continue;
+    const limitMsg = tEngine(runtime, "toolConsecutiveFailureLimitReached", {
+      toolName,
+      maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
+    });
+    traces.push({
+      tool: "system",
+      args: {
+        turn,
+        toolName,
+        maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
+      },
+      result: limitMsg,
+    });
+    emitEvent(eventListener, "tool_consecutive_failure_limit_reached", {
+      turn,
+      tool: toolName,
+      failureCount: nextConsecutiveFailures,
+      maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
+      reason: String(toolCallResult?.failureReason || ""),
+    });
+    stateCommitter.pushAssistantMessage({
+      content: limitMsg,
+      type: "message",
+      toolCalls: [],
+      modelAlias: currentModelInfo.modelAlias,
+      modelName: currentModelInfo.modelName,
+    });
+    loopState.turnMessages = turnMessageStore.toArray();
+    loopState.turnTasks = turnTaskStore.toArray();
+    return {
+      output: limitMsg,
+      traces,
+      turnMessages: turnMessageStore.toArray(),
+      turnTasks: turnTaskStore.toArray(),
+    };
   }
 
   loopState.turnMessages = turnMessageStore.toArray();
@@ -287,6 +334,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
       Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
         ? maxToolLoopTurns
         : 4,
+    consecutiveToolFailures: {},
   };
   return await runFunctionCallLoop({ modelState, loopState, turn: 1 });
 }

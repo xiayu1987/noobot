@@ -15,6 +15,8 @@ export function buildContextMessages(
   agentContext,
   { currentUserMessage = "" } = {},
 ) {
+  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  
   function toLangChainToolCalls(toolCalls = []) {
     return (toolCalls || [])
       .map((tc) => {
@@ -98,7 +100,6 @@ export function buildContextMessages(
   }
 
   const out = [];
-  const runtime = agentContext?.execution?.controllers?.runtime || {};
   const systemRuntime = runtime?.systemRuntime || {};
   const fallbackUserMeta = {
     userName: String(runtime?.userId || "").trim(),

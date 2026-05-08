@@ -15,6 +15,8 @@ export default {
   "agent.subTaskLabelPrefix": "子任务",
   "agent.toolLoopLimitReached": (params = {}) =>
     `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,
+  "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
+    `工具「${String(params.toolName || "").trim() || "unknown"}」连续失败达到 ${Number(params.maxFails || 5)} 次，已自动停止循环。`,
   "agent.userMetaTag": "用户元信息",
   "attach.countExceedsLimit": "附件数量超出限制",
   "attach.extensionNotAllowed": "附件扩展名不允许",
