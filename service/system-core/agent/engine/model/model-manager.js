@@ -10,59 +10,60 @@ import {
   resolveModelSpecByName,
 } from "../../../model/index.js";
 
+function updateModelState(modelState, spec, shouldSwitch) {
+  modelState.activeModelName = String(spec.model || "").trim();
+  modelState.activeModelAlias = String(spec?.alias || "").trim();
+  if (shouldSwitch) {
+    emitEvent(modelState.eventListener, "model_switched", {
+      alias: spec?.alias || "",
+      model: spec?.model || "",
+    });
+  }
+}
+
 export function resolveLlmForTurn(modelState) {
   const { runtime, globalConfig, userConfig, defaultModelSpec, eventListener } =
     modelState;
   const runtimeModel = String(runtime?.runtimeModel || "").trim();
 
+  let targetSpec = null;
+  let shouldSwitch = false;
+
   if (runtimeModel) {
-    const runtimeSpec = resolveModelSpecByName({
+    targetSpec = resolveModelSpecByName({
       modelName: runtimeModel,
       globalConfig,
       userConfig,
       fallbackToDefault: false,
     });
-    if (
-      runtimeSpec?.model &&
-      runtimeSpec.model !== modelState.activeModelName
-    ) {
-      modelState.llm = createChatModelByName(runtimeModel, {
-        globalConfig,
-        userConfig,
-        streaming: Boolean(eventListener?.onEvent),
-      });
-      modelState.activeModelName = runtimeSpec.model;
-      modelState.activeModelAlias = String(runtimeSpec?.alias || "").trim();
-      emitEvent(eventListener, "model_switched", {
-        alias: runtimeSpec?.alias || "",
-        model: runtimeSpec?.model || "",
-      });
-    } else if (runtimeSpec?.model) {
-      modelState.activeModelName = String(runtimeSpec.model || "").trim();
-      modelState.activeModelAlias = String(runtimeSpec?.alias || "").trim();
+    if (targetSpec?.model && targetSpec.model !== modelState.activeModelName) {
+      shouldSwitch = true;
     }
-    return;
+  } else if (defaultModelSpec?.model && defaultModelSpec.model !== modelState.activeModelName) {
+    targetSpec = defaultModelSpec;
+    shouldSwitch = true;
+  } else if (defaultModelSpec?.model) {
+    targetSpec = defaultModelSpec;
+    shouldSwitch = false;
   }
 
-  if (
-    defaultModelSpec?.model &&
-    defaultModelSpec.model !== modelState.activeModelName
-  ) {
-    modelState.llm = createChatModel({
-      globalConfig,
-      userConfig,
-      streaming: Boolean(eventListener?.onEvent),
-    });
-    modelState.activeModelName = String(defaultModelSpec.model || "");
-    modelState.activeModelAlias = String(defaultModelSpec?.alias || "").trim();
-    emitEvent(eventListener, "model_switched", {
-      alias: defaultModelSpec?.alias || "",
-      model: defaultModelSpec?.model || "",
-    });
-  } else if (defaultModelSpec?.model) {
-    modelState.activeModelName = String(defaultModelSpec.model || "").trim();
-    modelState.activeModelAlias = String(defaultModelSpec?.alias || "").trim();
+  if (!targetSpec?.model) return;
+
+  if (shouldSwitch) {
+    modelState.llm = runtimeModel
+      ? createChatModelByName(runtimeModel, {
+          globalConfig,
+          userConfig,
+          streaming: Boolean(eventListener?.onEvent),
+        })
+      : createChatModel({
+          globalConfig,
+          userConfig,
+          streaming: Boolean(eventListener?.onEvent),
+        });
   }
+
+  updateModelState(modelState, targetSpec, shouldSwitch);
 }
 
 export function resolveCurrentModelInfo(modelState = {}) {
