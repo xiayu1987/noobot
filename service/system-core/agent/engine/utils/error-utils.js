@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { isAbortError } from "../../utils/error-utils.js";
+export { isAbortError } from "../../../utils/error-utils.js";
 
 export function assertNotAborted(signal = null) {
   if (!signal?.aborted) return;
