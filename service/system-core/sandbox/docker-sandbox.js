@@ -105,6 +105,10 @@ export function buildDockerCommand({
     scope === "user"
       ? "/workspace/runtime/workspace"
       : `/workspace/${userPart}/runtime/workspace`;
+  const encodedCommand = Buffer.from(String(command || ""), "utf8").toString(
+    "base64",
+  );
+  const containerExecCommand = `'printf "%s" "$NOOBOT_SCRIPT_B64" | base64 -d | bash'`;
 
   const createContainerCmd = `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity >/dev/null`;
   const ensureContainerCmd = [
@@ -121,7 +125,7 @@ export function buildDockerCommand({
   const cmd = [
     ensureContainerCmd,
     `docker start ${JSON.stringify(containerName)} >/dev/null`,
-    `docker exec -w ${JSON.stringify(workdir)} ${JSON.stringify(containerName)} bash -lc ${JSON.stringify(command)}`,
+    `docker exec -e NOOBOT_SCRIPT_B64=${JSON.stringify(encodedCommand)} -w ${JSON.stringify(workdir)} ${JSON.stringify(containerName)} sh -c ${containerExecCommand}`,
   ].join(" &&\n");
 
   return {

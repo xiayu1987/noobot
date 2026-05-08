@@ -6,8 +6,12 @@
 
 export const ENGINE_I18N_KEY_MAP = {
   toolLoopLimitReached: "agent.toolLoopLimitReached",
+  toolConsecutiveFailureLimitReached:
+    "agent.toolConsecutiveFailureLimitReached",
   fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
 };
+
+export const TOOL_CONSECUTIVE_FAILURE_LIMIT = 3;
 
 export const MIME_EXTENSION_MAP = {
   "image/png": ".png",
