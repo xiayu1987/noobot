@@ -12,6 +12,8 @@ export default {
   ...TOOL_SCHEMA_FLAT_GENERATED,
   "agent.fetchGeneratedMediaFailed": (params = {}) =>
     `fetch generated media failed: HTTP ${Number(params.status || 500)}`,
+  "agent.fetchRemoteMediaArtifactFailed": (params = {}) =>
+    `failed to fetch remote media artifact: ${String(params.url || "").trim()}${String(params.reason || "").trim() ? ` (${String(params.reason || "").trim()})` : ""}`,
   "agent.subTaskLabelPrefix": "Subtask",
   "agent.toolLoopLimitReached": (params = {}) =>
     `Tool call turns reached the limit (${Number(params.maxTurns || 0)}), auto-stopped.`,
