@@ -1,0 +1,146 @@
+/* Element Plus 全局收敛 */
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  background: transparent !important;
+  border: 1px solid var(--noobot-glass-border) !important;
+  box-shadow: none !important;
+  color: var(--noobot-text-main) !important;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused,
+.el-textarea__inner:focus {
+  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 72%, transparent) !important;
+  box-shadow: var(--noobot-focus-ring) !important;
+}
+
+.el-button {
+  border-radius: var(--noobot-btn-radius) !important;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease !important;
+}
+
+.el-button:not(:disabled):hover {
+  transform: none;
+  filter: none;
+}
+
+.el-button--primary {
+  border: none !important;
+  background: var(--noobot-btn-primary-bg) !important;
+  box-shadow: none;
+}
+
+.el-button--primary:not(:disabled):hover {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--noobot-btn-primary-bg) 90%, var(--noobot-base-white)) !important;
+}
+
+.el-card,
+.el-dropdown-menu,
+.el-popover {
+  background: color-mix(in srgb, var(--noobot-panel-bg) 94%, transparent) !important;
+  border: 1px solid var(--noobot-panel-border) !important;
+  backdrop-filter: none;
+}
+
+/* 头部设置下拉菜单（teleported）统一系统色调 */
+.noobot-settings-dropdown.el-popper {
+  border: 1px solid var(--noobot-panel-border) !important;
+}
+
+.noobot-settings-dropdown .el-dropdown-menu {
+  background: color-mix(in srgb, var(--noobot-panel-bg) 96%, transparent) !important;
+  border: 1px solid var(--noobot-panel-border) !important;
+  padding: 4px !important;
+}
+
+.noobot-settings-dropdown .el-dropdown-menu__item {
+  color: var(--noobot-text-main) !important;
+  border-radius: 8px;
+}
+
+.noobot-settings-dropdown .el-dropdown-menu__item:hover,
+.noobot-settings-dropdown .el-dropdown-menu__item:focus {
+  background: var(--noobot-panel-muted) !important;
+  color: var(--noobot-text-strong) !important;
+}
+
+.noobot-settings-dropdown .el-dropdown-menu__item.is-disabled {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.el-dialog {
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+
+/* Tabs / Drawer / Collapse 统一 */
+.el-tabs__header {
+  border-bottom: 1px solid var(--noobot-divider) !important;
+}
+
+.el-tabs__item {
+  color: var(--noobot-text-secondary) !important;
+}
+
+.el-tabs__item.is-active {
+  color: var(--noobot-text-main) !important;
+}
+
+.el-tabs__active-bar {
+  background: var(--noobot-text-accent) !important;
+}
+
+.el-drawer,
+.el-dialog {
+  background: var(--noobot-panel-bg) !important;
+  border: 1px solid var(--noobot-panel-border) !important;
+  box-shadow: none;
+}
+
+.el-drawer__header,
+.el-dialog__header {
+  background: var(--noobot-panel-head-bg) !important;
+  border-bottom: 1px solid var(--noobot-divider) !important;
+}
+
+.el-drawer__title,
+.el-dialog__title {
+  color: var(--noobot-text-strong) !important;
+  font-weight: 600 !important;
+}
+
+.el-collapse-item__header {
+  background: transparent !important;
+  color: var(--noobot-text-main) !important;
+}
+
+/* 空态与提示收敛 */
+.el-empty__description p,
+.el-alert__description {
+  color: var(--noobot-text-secondary) !important;
+}
+
+@media (max-width: 768px) {
+  .el-drawer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+
+  .el-dialog {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    margin-top: 5vh !important;
+  }
+
+  .el-button,
+  .noobot-action-btn {
+    min-height: 34px;
+  }
+
+  .el-input__wrapper,
+  .el-select__wrapper {
+    min-height: 34px !important;
+  }
+}

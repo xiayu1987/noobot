@@ -1,0 +1,64 @@
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+}
+
+body {
+  overflow: hidden;
+  background: var(--noobot-app-bg);
+  color: var(--noobot-text-main);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+*::selection {
+  background: color-mix(in srgb, var(--noobot-cyber-cyan) 28%, transparent);
+  color: var(--noobot-text-strong);
+}
+
+/* Mermaid tooltip 使用 absolute 定位时可能撑大页面滚动区域 */
+.mermaidTooltip {
+  position: fixed !important;
+  z-index: 4000;
+  max-width: min(360px, 80vw);
+  pointer-events: none;
+}
+
+/* 统一滚动条视觉 */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--noobot-text-muted) 45%, transparent);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--noobot-surface-soft);
+}
+
+/* 低动态偏好兼容 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

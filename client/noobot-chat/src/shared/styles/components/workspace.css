@@ -107,7 +107,7 @@
 
 .noobot-workspace-layout .icon-btn.danger-text:hover {
   color: var(--noobot-status-error);
-  background: var(--noobot-danger-soft);
+  background: var(--noobot-danger-soft) !important;
 }
 
 .noobot-workspace-layout .refresh-btn:not(:disabled):hover {
@@ -230,7 +230,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--noobot-panel-bg);
+  background: var(--noobot-panel-bg) !important;
+  border-color: var(--noobot-panel-border) !important;
 }
 
 .noobot-workspace-head {
@@ -239,8 +240,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 0 16px;
-  background: var(--noobot-panel-head-bg);
+  background: var(--noobot-panel-head-bg) !important;
   border-bottom: 1px solid var(--noobot-border-weak);
+  border-bottom-color: var(--noobot-divider) !important;
 }
 
 .noobot-workspace-title {
@@ -254,7 +256,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--noobot-panel-bg);
+  background: color-mix(in srgb, var(--noobot-panel-bg) 92%, var(--noobot-surface-sidebar)) !important;
 }
 
 .noobot-list-row {
@@ -262,7 +264,7 @@
   flex-direction: column;
   gap: var(--noobot-space-xs);
   padding: var(--noobot-space-md);
-  background: var(--noobot-panel-muted);
+  background: color-mix(in srgb, var(--noobot-panel-muted) 78%, var(--noobot-surface-sidebar)) !important;
 }
 
 /* 编辑器 textarea：桌面端填满面板，移动端在媒体查询里交给 autosize 自增高。 */
@@ -280,9 +282,10 @@
   height: 100%;
   min-height: 180px;
   overflow: auto !important;
-  background: var(--noobot-panel-muted);
-  color: var(--noobot-text-main);
+  background: transparent !important;
+  color: var(--noobot-text-main) !important;
   border: none !important;
+  border-color: var(--noobot-panel-border) !important;
   box-shadow: none !important;
   border-radius: 0;
   padding: 16px;
@@ -295,7 +298,7 @@
 }
 
 .noobot-editor-textarea .el-textarea__inner::placeholder {
-  color: var(--noobot-text-muted);
+  color: var(--noobot-text-muted) !important;
 }
 
 .noobot-editor-textarea .el-textarea__inner:focus {
