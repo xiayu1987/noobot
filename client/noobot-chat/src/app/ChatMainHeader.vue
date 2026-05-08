@@ -123,7 +123,7 @@ function handleHeaderAction(command = "") {
   flex-direction: column;
   justify-content: center;
   gap: 8px;
-  background: color-mix(in srgb, var(--noobot-panel-head-bg) 92%, transparent);
+  background: var(--noobot-surface-sidebar);
   border-bottom: 1px solid var(--noobot-border-weak);
   z-index: 10;
 }

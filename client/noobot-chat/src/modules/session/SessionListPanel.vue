@@ -130,7 +130,7 @@ watch(
 }
 
 .session-item:hover {
-  background: color-mix(in srgb, var(--noobot-panel-muted) 82%, transparent);
+  background: var(--noobot-panel-muted);
   transform: none;
   border-color: color-mix(in srgb, var(--noobot-panel-border) 28%, transparent);
 }

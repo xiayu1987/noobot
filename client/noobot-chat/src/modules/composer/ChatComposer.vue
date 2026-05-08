@@ -545,7 +545,7 @@ defineExpose({
   --composer-send-padding-x: 20px;
   
   padding: 0 24px 24px;
-  background: transparent;
+  background: var(--noobot-panel-bg);
   position: relative;
   width: 100%;
   box-sizing: border-box;
@@ -569,9 +569,8 @@ defineExpose({
 }
 
 .composer:focus-within {
-  border-color: var(--noobot-cyber-cyan, #0ea5e9);
-  /* 扁平化焦点：使用实色细边框投影替代模糊发光 */
-  box-shadow: 0 0 0 1px var(--noobot-cyber-cyan, #0ea5e9); 
+  border-color: color-mix(in srgb, var(--noobot-base-blue-500) 36%, transparent);
+  box-shadow: var(--noobot-focus-ring);
 }
 
 /* ================= 顶部选中标签 (胶囊风格) ================= */
