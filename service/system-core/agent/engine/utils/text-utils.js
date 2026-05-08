@@ -10,7 +10,7 @@ export {
   getExtensionFromMime,
   extendMimeMap,
   getMimeExtensionMap,
-} from "./mime-utils.js";
+} from "../../../utils/mime-utils.js";
 
 export function normalizeAiTextContent(aiContent) {
   if (typeof aiContent === "string") return String(aiContent || "");

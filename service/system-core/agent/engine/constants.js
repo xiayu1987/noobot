@@ -34,4 +34,4 @@ export const DEFAULT_MAX_TOOL_LOOP_TURNS = 4;
 export const TOOL_RESULT_TRACE_TRUNCATE_LENGTH = 1000;
 
 // Re-export for backward compatibility
-export { getMimeExtensionMap as MIME_EXTENSION_MAP } from "./utils/mime-utils.js";
+export { getMimeExtensionMap as MIME_EXTENSION_MAP } from "../../utils/mime-utils.js";

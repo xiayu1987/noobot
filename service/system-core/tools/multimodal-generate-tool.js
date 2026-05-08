@@ -14,7 +14,7 @@ import {
 } from "../model/index.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
-import { parseDataUrl, sanitizeGeneratedArtifactName } from "../agent/engine/utils/mime-utils.js";
+import { parseDataUrl, sanitizeGeneratedArtifactName } from "../utils/mime-utils.js";
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
