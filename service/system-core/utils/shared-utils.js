@@ -33,11 +33,17 @@ export function isString(value) {
   return typeof value === "string";
 }
 
-export function safeStr(value = "") {
-  return String(value || "").trim();
+/**
+ * 安全字符串化并清理
+ */
+export function safeStr(value, fallback = "") {
+  return String(value ?? fallback).trim();
 }
 
-export function safeNum(value = 0) {
+/**
+ * 安全数值转换
+ */
+export function safeNum(value, fallback = 0) {
   const n = Number(value);
-  return Number.isFinite(n) ? n : Number(value || 0);
+  return Number.isFinite(n) ? n : fallback;
 }

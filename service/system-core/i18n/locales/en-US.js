@@ -128,5 +128,6 @@ export default {
   "ws.socketClosed": "websocket closed",
   "ws.unauthorized": "Unauthorized",
   "ws.unknownError": "unknown error",
-  "ws.userInteractionTimeout": "user interaction timeout"
+  "ws.userInteractionTimeout": "user interaction timeout",
+  "agent.abortError": "dialog stopped by user"
 };

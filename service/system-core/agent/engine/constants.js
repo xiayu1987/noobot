@@ -13,6 +13,7 @@ export const ENGINE_I18N_KEY_MAP = {
     "agent.toolConsecutiveFailureLimitReached",
   fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
   fetchRemoteMediaArtifactFailed: "agent.fetchRemoteMediaArtifactFailed",
+  abortError: "agent.abortError",
 };
 
 /**

@@ -21,14 +21,27 @@ import {
   resolveCurrentModelInfo,
   resolveLlmForTurn,
 } from "./model/model-manager.js";
-import { assertNotAborted } from "./utils/error-utils.js";
-import { normalizeAiTextContent } from "./utils/text-utils.js";
 import { createStateCommitter } from "./execution/state-committer.js";
 import { executeToolCall } from "./execution/tool-runner.js";
 import {
   TOOL_CONSECUTIVE_FAILURE_LIMIT,
   DEFAULT_MAX_TOOL_LOOP_TURNS,
 } from "./constants.js";
+import { assertNotAborted } from "./utils/error-utils.js";
+
+function normalizeAiTextContent(aiContent) {
+  if (typeof aiContent === "string") return String(aiContent || "");
+  if (!Array.isArray(aiContent)) return String(aiContent || "");
+  const textParts = aiContent
+    .map((contentPart) => {
+      if (!contentPart || typeof contentPart !== "object") return "";
+      if (typeof contentPart?.text === "string") return contentPart.text;
+      if (typeof contentPart?.content === "string") return contentPart.content;
+      return "";
+    })
+    .filter(Boolean);
+  return textParts.join("\n");
+}
 
 async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   const {
@@ -50,7 +63,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     defaultModelSpec,
     abortSignal,
   } = modelState;
-  assertNotAborted(abortSignal);
+  assertNotAborted(abortSignal, runtime);
 
   if (turn > maxTurns) {
     const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
@@ -191,7 +204,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     count: calls.length,
   });
   const toolCallResults = await Promise.all(calls.map(async (call) => {
-    assertNotAborted(abortSignal);
+    assertNotAborted(abortSignal, runtime);
     emitEvent(eventListener, "tool_call_start", {
       turn,
       tool: call.name,
