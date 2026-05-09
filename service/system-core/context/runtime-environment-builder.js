@@ -15,9 +15,9 @@ import {
   decryptPayloadBySessionId,
   encryptPayloadBySessionId,
 } from "../utils/session-crypto.js";
-import { getConnectorChannelStore } from "../connectors/channel-store.js";
-import { getConnectorHistoryStore } from "../connectors/history-store.js";
-import { createConnectorEventListener } from "../connectors/connector-event-listener.js";
+import { getConnectorChannelStore } from "../connectors/index.js";
+import { getConnectorHistoryStore } from "../connectors/index.js";
+import { createConnectorEventListener } from "../connectors/index.js";
 import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,

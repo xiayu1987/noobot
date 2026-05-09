@@ -9,11 +9,11 @@ import { loadGlobalConfig } from "./system-core/config/index.js";
 import {
   getConnectorChannelStore,
   initConnectorChannelStore,
-} from "./system-core/connectors/channel-store.js";
+} from "./system-core/connectors/index.js";
 import {
   getConnectorHistoryStore,
   initConnectorHistoryStore,
-} from "./system-core/connectors/history-store.js";
+} from "./system-core/connectors/index.js";
 import { createAppDependencies } from "./bootstrap/create-app-dependencies.js";
 import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewares.js";
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";
