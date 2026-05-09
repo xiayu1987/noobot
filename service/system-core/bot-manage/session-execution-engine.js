@@ -6,7 +6,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { ContextBuilder } from "../context/index.js";
 import { mapAttachmentRecordsToMetas } from "../attach/index.js";
-import { runAgentTurn } from "../agent/engine.js";
+import { runAgentTurn } from "../agent/index.js";
 import { createExecutionEventListener, emitEvent } from "../event/index.js";
 import { recoverableToolError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
