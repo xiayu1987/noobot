@@ -21,13 +21,17 @@ export function createChatRunService({
   }
 
   function normalizeRunConfig(input = {}) {
+    const source = input && typeof input === "object" ? input : {};
     const allowUserInteractionRaw = input?.allowUserInteraction;
     const allowUserInteraction =
       allowUserInteractionRaw === undefined ? true : Boolean(allowUserInteractionRaw);
     const locale = normalizeLocale(input?.locale || defaultLocale);
+    const hasScenarioField = Object.prototype.hasOwnProperty.call(source, "scenario");
+    const scenario = hasScenarioField ? String(source?.scenario || "").trim() : undefined;
     return {
       allowUserInteraction,
       locale,
+      scenario,
       selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
     };
   }

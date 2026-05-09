@@ -17,6 +17,10 @@ export function useApiConnection({
   const apiKey = ref(localStorage.getItem("noobot_api_key") || "");
   const apiKeyUserId = ref(localStorage.getItem("noobot_api_user_id") || "");
   const apiRole = ref(localStorage.getItem("noobot_api_role") || "");
+  const scenarioConfig = ref({
+    default: "",
+    definitions: {},
+  });
   const connecting = ref(false);
 
   const connected = computed(
@@ -60,7 +64,47 @@ export function useApiConnection({
     apiKey.value = "";
     apiKeyUserId.value = "";
     apiRole.value = "";
+    scenarioConfig.value = {
+      default: "",
+      definitions: {},
+    };
     persistApiAuth();
+  }
+
+  function isPlainObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function normalizeScenarioConfig(input = {}) {
+    const source = isPlainObject(input) ? input : {};
+    const definitionsSource = isPlainObject(source?.definitions)
+      ? source.definitions
+      : {};
+    const normalizedDefinitions = {};
+    for (const [scenarioKey, definitionItem] of Object.entries(definitionsSource)) {
+      const normalizedScenarioKey = String(scenarioKey || "").trim();
+      if (!normalizedScenarioKey) continue;
+      const sourceDefinition = isPlainObject(definitionItem) ? definitionItem : {};
+      normalizedDefinitions[normalizedScenarioKey] = {
+        ...sourceDefinition,
+        name: String(sourceDefinition?.name || "").trim(),
+        model: String(sourceDefinition?.model || "").trim(),
+        tools: Array.isArray(sourceDefinition?.tools)
+          ? sourceDefinition.tools
+              .map((toolName) => String(toolName || "").trim())
+              .filter(Boolean)
+          : [],
+        context: Array.isArray(sourceDefinition?.context)
+          ? sourceDefinition.context
+              .map((contextKey) => String(contextKey || "").trim())
+              .filter(Boolean)
+          : [],
+      };
+    }
+    return {
+      default: String(source?.default || "").trim(),
+      definitions: normalizedDefinitions,
+    };
   }
 
   function ensureConnected() {
@@ -111,6 +155,7 @@ export function useApiConnection({
       apiKey.value = String(data.apiKey || "");
       apiKeyUserId.value = String(userId.value || "").trim();
       apiRole.value = String(data.role || "user");
+      scenarioConfig.value = normalizeScenarioConfig(data?.scenarios || {});
       persistApiAuth();
       persistConnectProfile();
       if (!silent) {
@@ -145,6 +190,7 @@ export function useApiConnection({
     connectCode,
     apiKey,
     apiRole,
+    scenarioConfig,
     connecting,
     connected,
     isSuperAdmin,

@@ -96,7 +96,21 @@ Notes:
   - `service/config/global.config.json`: mounts this project to `/project`
   - `service/config/global.config.example.json`: no default project mount
 
-### 3.5 Connector Presets
+### 3.5 Scenarios
+
+| Key | Type | Description |
+|---|---|---|
+| `scenarios.default` | string | Default scenario key (used when request does not set `config.scenario`) |
+| `scenarios.definitions.<name>.name` | string | Display name used by frontend scenario buttons |
+| `scenarios.definitions.<name>.model` | string | Runtime model alias/name for this scenario (applied when request does not set `runtimeModel`) |
+| `scenarios.definitions.<name>.tools` | string[] | Allowed tool names for this scenario |
+| `scenarios.definitions.<name>.context` | string[] | Allowed context sections (`system_runtime`, `base_prompt`, etc.) |
+
+Current defaults in repo:
+- `full` (default): tools/context are empty arrays, meaning no extra restriction
+- `programming`: model=`"qwen3_6_plus_2026_04_02"`, tools=`["execute_script"]`, context=`["system_runtime","base_prompt"]`
+
+### 3.6 Connector Presets
 
 #### Database preset (`tools.database_connect_connector.connectors.<name>`)
 
@@ -133,7 +147,7 @@ Notes:
 | `from_email` | string | Default sender |
 | `to_email` | string | Default recipient |
 
-### 3.6 Providers (`providers.<alias>`)
+### 3.7 Providers (`providers.<alias>`)
 
 | Key | Type | Description |
 |---|---|---|
@@ -153,7 +167,7 @@ Notes:
 | `multimodal_generation.support_generation.enabled` | boolean | Multi-modal generation enabled |
 | `multimodal_generation.support_generation.support_scope` | string[] | e.g. `["image"]` |
 
-### 3.7 MCP Servers (`mcp_servers.<name>`)
+### 3.8 MCP Servers (`mcp_servers.<name>`)
 
 | Key | Type | Description |
 |---|---|---|
@@ -164,7 +178,7 @@ Notes:
 | `baseUrl` | string(url) | MCP endpoint |
 | `headers` | object | Request headers (`${VAR_NAME}` supported) |
 
-### 3.8 Super Admin
+### 3.9 Super Admin
 
 | Key | Type | Description |
 |---|---|---|
@@ -182,6 +196,7 @@ User config can override global values.
 | `default_provider` | User default provider |
 | `attachments` | User attachment policy override |
 | `tools` | User tool enable/options override |
+| `scenarios` | User scenario definitions/default override |
 | `providers` | User provider override |
 | `mcp_servers` | User MCP override |
 | `streaming` | User streaming behavior |

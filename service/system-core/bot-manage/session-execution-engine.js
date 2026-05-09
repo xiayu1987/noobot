@@ -286,6 +286,94 @@ export class SessionExecutionEngine {
     };
   }
 
+  _resolveScenarioRunConfig(runConfig = {}) {
+    const normalizedRunConfig = isPlainObject(runConfig) ? runConfig : {};
+    const scenarioConfig = isPlainObject(this.globalConfig?.scenarios)
+      ? this.globalConfig.scenarios
+      : {};
+    const hasScenarioField = Object.prototype.hasOwnProperty.call(
+      normalizedRunConfig,
+      "scenario",
+    );
+    const resolvedScenarioKey = String(
+      hasScenarioField
+        ? normalizedRunConfig?.scenario || ""
+        : scenarioConfig?.default || "",
+    ).trim();
+    if (!resolvedScenarioKey) return normalizedRunConfig;
+    const scenarioDefinitions = isPlainObject(scenarioConfig?.definitions)
+      ? scenarioConfig.definitions
+      : {};
+    const scenarioDefinition = isPlainObject(
+      scenarioDefinitions?.[resolvedScenarioKey],
+    )
+      ? scenarioDefinitions[resolvedScenarioKey]
+      : null;
+    if (!scenarioDefinition) {
+      return {
+        ...normalizedRunConfig,
+        scenario: resolvedScenarioKey,
+      };
+    }
+    const scenarioToolNames = Array.isArray(scenarioDefinition?.tools)
+      ? scenarioDefinition.tools
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      : [];
+    const scenarioContextKeys = Array.isArray(scenarioDefinition?.context)
+      ? scenarioDefinition.context
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      : [];
+    const scenarioModelName = String(scenarioDefinition?.model || "").trim();
+    const resolvedRunConfig = {
+      ...normalizedRunConfig,
+      scenario: resolvedScenarioKey,
+    };
+    const requestedRuntimeModel = String(
+      normalizedRunConfig?.runtimeModel || "",
+    ).trim();
+    if (!requestedRuntimeModel && scenarioModelName) {
+      resolvedRunConfig.runtimeModel = scenarioModelName;
+    }
+    if (scenarioToolNames.length) {
+      const currentToolPolicy = isPlainObject(normalizedRunConfig?.toolPolicy)
+        ? normalizedRunConfig.toolPolicy
+        : {};
+      const currentAllowToolNames = Array.isArray(currentToolPolicy?.allowToolNames)
+        ? currentToolPolicy.allowToolNames
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+        : [];
+      const mergedAllowToolNames = currentAllowToolNames.length
+        ? scenarioToolNames.filter((name) => currentAllowToolNames.includes(name))
+        : scenarioToolNames;
+      resolvedRunConfig.toolPolicy = {
+        ...currentToolPolicy,
+        allowToolNames: mergedAllowToolNames,
+        forceIncludeUserInteraction: false,
+      };
+    }
+    if (scenarioContextKeys.length) {
+      const currentContextPolicy = isPlainObject(normalizedRunConfig?.contextPolicy)
+        ? normalizedRunConfig.contextPolicy
+        : {};
+      const currentContextKeys = Array.isArray(currentContextPolicy?.includeContextKeys)
+        ? currentContextPolicy.includeContextKeys
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+        : [];
+      const mergedContextKeys = currentContextKeys.length
+        ? scenarioContextKeys.filter((name) => currentContextKeys.includes(name))
+        : scenarioContextKeys;
+      resolvedRunConfig.contextPolicy = {
+        ...currentContextPolicy,
+        includeContextKeys: mergedContextKeys,
+      };
+    }
+    return resolvedRunConfig;
+  }
+
   async _buildAgentContext({
     mode,
     userId,
@@ -610,6 +698,7 @@ export class SessionExecutionEngine {
   }) {
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     try {
+      const resolvedRunConfig = this._resolveScenarioRunConfig(runConfig);
       const normalizedMessage = this._normalizeRunMessage(message);
       this._validateRunInput({ userId, sessionId, caller, parentSessionId });
       resolvedParentAsyncResultContainer = this._ensureParentAsyncResultContainer({
@@ -645,7 +734,7 @@ export class SessionExecutionEngine {
         eventListener: runtimeEventListener,
         dialogProcessId,
         userInteractionBridge,
-        runConfig,
+        runConfig: resolvedRunConfig,
         abortSignal,
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       });

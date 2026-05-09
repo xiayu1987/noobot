@@ -24,6 +24,8 @@ const props = defineProps({
   connected: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
+  botScenario: { type: String, default: "" },
+  scenarioOptions: { type: Array, default: () => [] },
   interactionActive: { type: Boolean, default: false },
   connectorPanelState: { type: Object, default: () => ({}) },
 });
@@ -31,6 +33,7 @@ const props = defineProps({
 const emit = defineEmits([
   "update:modelValue",
   "update:allowUserInteraction",
+  "update:botScenario",
   "upload-change",
   "append-uploads",
   "clear-uploads",
@@ -94,6 +97,17 @@ const sendButtonText = computed(() => {
   if (micRecording.value) return recordingTimeText.value;
   return props.sending ? translate("composer.sending") : translate("composer.send");
 });
+const normalizedScenarioOptions = computed(() => {
+  const sourceOptions = Array.isArray(props.scenarioOptions)
+    ? props.scenarioOptions
+    : [];
+  return sourceOptions
+    .map((scenarioItem) => ({
+      key: String(scenarioItem?.key || "").trim(),
+      label: String(scenarioItem?.label || "").trim(),
+    }))
+    .filter((scenarioItem) => Boolean(scenarioItem.key));
+});
 
 function onInputChange(value) {
   emit("update:modelValue", value);
@@ -128,6 +142,30 @@ function onStop() {
 
 function onAllowUserInteractionChange(value) {
   emit("update:allowUserInteraction", Boolean(value));
+}
+
+function onProgrammingScenarioToggle() {
+  const currentScenario = String(props.botScenario || "").trim();
+  emit("update:botScenario", currentScenario === "programming" ? "" : "programming");
+}
+
+function onScenarioSelect(scenarioKey = "") {
+  const normalizedScenarioKey = String(scenarioKey || "").trim();
+  if (!normalizedScenarioKey) return;
+  emit("update:botScenario", normalizedScenarioKey);
+}
+
+function resolveScenarioLabel(scenarioItem = {}) {
+  const scenarioKey = String(scenarioItem?.key || "").trim().toLowerCase();
+  const customLabel = String(scenarioItem?.label || "").trim();
+  if (customLabel) return customLabel;
+  if (scenarioKey === "programming") {
+    return translate("composer.scenarioProgramming");
+  }
+  if (scenarioKey === "full") {
+    return translate("composer.scenarioFull");
+  }
+  return String(scenarioItem?.key || "").trim();
 }
 
 function onConnectorSelected(connectorType = "", connectorName = "") {
@@ -436,6 +474,28 @@ defineExpose({
                   @update:model-value="onAllowUserInteractionChange"
                   class="interaction-switch"
                 />
+                <div class="scenario-selector">
+                  <span class="scenario-selector-label">{{ translate("composer.botScenario") }}</span>
+                  <template v-if="normalizedScenarioOptions.length">
+                    <el-button
+                      v-for="scenarioItem in normalizedScenarioOptions"
+                      :key="scenarioItem.key"
+                      size="small"
+                      :type="String(botScenario || '').trim() === scenarioItem.key ? 'primary' : 'default'"
+                      @click="onScenarioSelect(scenarioItem.key)"
+                    >
+                      {{ resolveScenarioLabel(scenarioItem) }}
+                    </el-button>
+                  </template>
+                  <el-button
+                    v-else
+                    size="small"
+                    :type="String(botScenario || '').trim().toLowerCase() === 'programming' ? 'primary' : 'default'"
+                    @click="onProgrammingScenarioToggle"
+                  >
+                    {{ translate("composer.scenarioProgramming") }}
+                  </el-button>
+                </div>
               </div>
 
               <ComposerAttachmentToolbar
@@ -770,11 +830,24 @@ defineExpose({
 .composer-options {
   display: flex;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .interaction-switch {
   --el-switch-on-color: var(--noobot-cyber-cyan, #0ea5e9);
   --el-switch-off-color: var(--noobot-status-idle, #d4d4d8);
+}
+
+.scenario-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scenario-selector-label {
+  font-size: 13px;
+  color: var(--noobot-text-secondary, #52525b);
 }
 
 /* ================= 隐藏元素与其他 ================= */

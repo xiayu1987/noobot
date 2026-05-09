@@ -48,6 +48,7 @@ function mergeAssistantContents(assistantMessages = []) {
 export function useChatEngine({
   userId,
   allowUserInteraction,
+  botScenario,
   isImageMime,
   classifyRealtimeLog,
   scrollBottom,
@@ -165,6 +166,9 @@ export function useChatEngine({
         attachments,
         config: {
           allowUserInteraction: allowUserInteraction?.value === false ? false : true,
+          ...(String(botScenario?.value || "").trim()
+            ? { scenario: String(botScenario?.value || "").trim() }
+            : {}),
           locale: String(locale.value || "").trim(),
           selectedConnectors: normalizeSelectedConnectors(
             activeSession.value?.connectorPanelState?.selectedConnectors || {},

@@ -186,6 +186,27 @@
       }
     }
   },
+  "scenarios": {
+    "default": "full",
+    "definitions": {
+      "full": {
+        "name": "全能",
+        "tools": [],
+        "context": []
+      },
+      "programming": {
+        "name": "编程",
+        "model": "qwen3_6_plus_2026_04_02",
+        "tools": [
+          "execute_script"
+        ],
+        "context": [
+          "system_runtime",
+          "base_prompt"
+        ]
+      }
+    }
+  },
   "providers": {
     "gemini_3_flash": {
       "enabled": false,

@@ -4,6 +4,56 @@
  * SPDX-License-Identifier: MIT
  */
 
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeScenarioDefinitions(definitionsInput = {}) {
+  const sourceDefinitions = isPlainObject(definitionsInput) ? definitionsInput : {};
+  const normalizedDefinitions = {};
+  for (const [scenarioKey, scenarioValue] of Object.entries(sourceDefinitions)) {
+    const normalizedScenarioKey = String(scenarioKey || "").trim();
+    if (!normalizedScenarioKey) continue;
+    const sourceScenario = isPlainObject(scenarioValue) ? scenarioValue : {};
+    const normalizedTools = Array.isArray(sourceScenario?.tools)
+      ? sourceScenario.tools
+          .map((toolName) => String(toolName || "").trim())
+          .filter(Boolean)
+      : [];
+    const normalizedContext = Array.isArray(sourceScenario?.context)
+      ? sourceScenario.context
+          .map((contextKey) => String(contextKey || "").trim())
+          .filter(Boolean)
+      : [];
+    normalizedDefinitions[normalizedScenarioKey] = {
+      ...sourceScenario,
+      name: String(sourceScenario?.name || "").trim(),
+      model: String(sourceScenario?.model || "").trim(),
+      tools: normalizedTools,
+      context: normalizedContext,
+    };
+  }
+  return normalizedDefinitions;
+}
+
+function resolveMergedScenarios(globalScenarios = {}, userScenarios = {}) {
+  const globalSource = isPlainObject(globalScenarios) ? globalScenarios : {};
+  const userSource = isPlainObject(userScenarios) ? userScenarios : {};
+  const globalDefinitions = normalizeScenarioDefinitions(globalSource?.definitions);
+  const userDefinitions = normalizeScenarioDefinitions(userSource?.definitions);
+  const mergedDefinitions = {
+    ...globalDefinitions,
+    ...userDefinitions,
+  };
+  const userDefaultScenario = String(userSource?.default || "").trim();
+  const globalDefaultScenario = String(globalSource?.default || "").trim();
+  const resolvedDefaultScenario = userDefaultScenario || globalDefaultScenario || "";
+  return {
+    default: resolvedDefaultScenario,
+    definitions: mergedDefinitions,
+  };
+}
+
 export function registerAuthRoutes(
   app,
   {
@@ -39,8 +89,15 @@ export function registerAuthRoutes(
         connectCode === superAdminCode
       ) {
         await bot.ensureUserWorkspace(userId);
+        const superAdminScenarios = resolveMergedScenarios(globalConfig?.scenarios, {});
         const apiKey = issueApiKey({ userId, role: "super_admin" });
-        res.json({ ok: true, role: "super_admin", userId, apiKey });
+        res.json({
+          ok: true,
+          role: "super_admin",
+          userId,
+          apiKey,
+          scenarios: superAdminScenarios,
+        });
         return;
       }
       if (superAdminUserId && userId === superAdminUserId) {
@@ -54,8 +111,35 @@ export function registerAuthRoutes(
       if (!matchedUser) throw new Error(translateText("connect.codeVerifyFailed", req.locale));
 
       await bot.ensureUserWorkspace(userId);
+      let userScenarios = {};
+      try {
+        const userWorkspacePath =
+          typeof bot.getWorkspacePath === "function"
+            ? bot.getWorkspacePath(userId)
+            : "";
+        const loadedUserConfig =
+          userWorkspacePath && typeof bot.loadUserConfig === "function"
+            ? await bot.loadUserConfig(userWorkspacePath)
+            : {};
+        userScenarios =
+          loadedUserConfig && typeof loadedUserConfig === "object"
+            ? loadedUserConfig.scenarios || {}
+            : {};
+      } catch {
+        userScenarios = {};
+      }
+      const mergedScenarios = resolveMergedScenarios(
+        globalConfig?.scenarios,
+        userScenarios,
+      );
       const apiKey = issueApiKey({ userId, role: "user" });
-      res.json({ ok: true, role: "user", userId, apiKey });
+      res.json({
+        ok: true,
+        role: "user",
+        userId,
+        apiKey,
+        scenarios: mergedScenarios,
+      });
     } catch (error) {
       res
         .status(400)
