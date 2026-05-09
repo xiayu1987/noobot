@@ -4,11 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { tEngine } from "../i18n-adapter.js";
+
 export { isAbortError } from "../../../utils/error-utils.js";
 
-export function assertNotAborted(signal = null) {
+export function assertNotAborted(signal = null, runtime = {}) {
   if (!signal?.aborted) return;
-  const error = new Error("dialog stopped by user");
+  const msg = tEngine(runtime, "abortError");
+  const error = new Error(msg);
   error.name = "AbortError";
   throw error;
 }

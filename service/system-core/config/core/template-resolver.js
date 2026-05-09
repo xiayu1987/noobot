@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject, isString } from "./object-utils.js";
+import { isPlainObject, isString } from "../../utils/shared-utils.js";
 
 export function createTemplateResolveContext({
   configParams = {},

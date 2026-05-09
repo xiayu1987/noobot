@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPlainObject } from "./object-utils.js";
+import { isPlainObject } from "../../utils/shared-utils.js";
 
 export const SNAKE_TO_CANONICAL_KEY_MAP = {
   workspace_root: "workspaceRoot",

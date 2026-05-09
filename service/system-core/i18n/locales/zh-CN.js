@@ -128,5 +128,6 @@ export default {
   "ws.socketClosed": "WebSocket 已关闭",
   "ws.unauthorized": "未授权",
   "ws.unknownError": "未知错误",
-  "ws.userInteractionTimeout": "用户交互超时"
+  "ws.userInteractionTimeout": "用户交互超时",
+  "agent.abortError": "对话已被用户停止"
 };

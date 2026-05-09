@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { deepMerge, isPlainObject } from "./object-utils.js";
+import { deepMerge, isPlainObject } from "../../utils/shared-utils.js";
 import { normalizeKnownConfigKeys } from "./key-normalizer.js";
 import { sanitizeUserConfig } from "./user-override-policy.js";
 

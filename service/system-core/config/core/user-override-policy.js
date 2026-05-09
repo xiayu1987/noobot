@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeKnownConfigKeys } from "./key-normalizer.js";
-import { isPlainObject } from "./object-utils.js";
+import { isPlainObject } from "../../utils/shared-utils.js";
 
 // 用户可覆盖策略（只允许这些键被 user config 覆盖）
 // - replace：整项替换（当前仅支持字符串值）

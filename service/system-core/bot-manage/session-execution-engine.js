@@ -10,7 +10,14 @@ import { runAgentTurn } from "../agent/engine.js";
 import { createExecutionEventListener, emitEvent } from "../event/index.js";
 import { recoverableToolError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
-import { isAbortError, isPlainObject, isValidSessionId } from "./utils.js";
+import { isAbortError } from "../utils/error-utils.js";
+import { isPlainObject } from "../utils/shared-utils.js";
+
+function isValidSessionId(sessionId = "") {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(sessionId || ""),
+  );
+}
 
 export class SessionExecutionEngine {
   constructor({
@@ -699,7 +706,7 @@ export class SessionExecutionEngine {
           status: isAbortError(error) ? "stopped" : "failed",
           endedAt: this._now(),
           error: isAbortError(error)
-            ? "dialog stopped by user"
+            ? tSystem("ws.dialogStoppedByUser")
             : error?.message || String(error),
           result: null,
         },

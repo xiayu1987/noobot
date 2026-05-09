@@ -5,21 +5,7 @@
  */
 
 import { DEFAULT_ATTACHMENT_SESSION_ID, DEFAULT_ATTACHMENT_SOURCE, DEFAULT_MIME_TYPE } from "./constants.js";
-
-/**
- * 安全字符串化并清理
- */
-export function safeStr(value, fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-/**
- * 安全数值转换
- */
-export function safeNum(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
+import { safeStr, safeNum } from "../utils/shared-utils.js";
 
 /**
  * 合并附件元数据（去重）
@@ -104,3 +90,5 @@ export function appendAttachmentMetasToRuntimeAndTurn({
     (msg) => safeStr(msg?.role) === "assistant",
   );
 }
+
+export { safeStr, safeNum };
