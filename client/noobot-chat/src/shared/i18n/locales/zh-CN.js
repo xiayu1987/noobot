@@ -141,7 +141,13 @@ export const zhCNMessages = {
     "connectorStatusFetchFailed": "获取连接器状态失败",
     "websocketStreamError": "WebSocket 流错误",
     "websocketConnectFailed": "WebSocket 连接失败",
-    "websocketClosed": "WebSocket 连接已关闭"
+    "websocketClosed": "WebSocket 连接已关闭",
+    "reconnectInProgress": "重连进行中",
+    "reconnectTimeout": "重连超时",
+    "reconnectError": "重连错误",
+    "reconnectConnectFailed": "重连连接失败",
+    "reconnectClosed": "重连连接已关闭",
+    "reconnectFailed": "断线重连失败，正在刷新会话"
   },
   "chat": {
     "newSession": "新会话",

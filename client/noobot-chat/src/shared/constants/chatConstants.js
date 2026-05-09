@@ -29,4 +29,6 @@ export const StreamEventEnum = Object.freeze({
   ERROR: "error",
   STOPPED: "stopped",
   INTERACTION_REQUEST: "interaction_request",
+  RECONNECT_DATA: "reconnect_data",
+  RECONNECT_COMPLETE: "reconnect_complete",
 });

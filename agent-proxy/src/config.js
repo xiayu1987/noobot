@@ -33,7 +33,8 @@ export const config = {
   maxBodySize: envNumber("AGENT_PROXY_MAX_BODY_SIZE", 10 * 1024 * 1024, 1024 * 1024),
   requestIdTtlMs: envNumber("AGENT_PROXY_REQUEST_ID_TTL_MS", 5 * 60 * 1000, 5_000),
   httpUpstreamTimeoutMs: envNumber("AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS", 30_000, 5_000),
-  replayOnReconnect: envBoolean("AGENT_PROXY_REPLAY_ON_RECONNECT", false),
+  replayOnReconnect: envBoolean("AGENT_PROXY_REPLAY_ON_RECONNECT", true),
+  maxReplayEvents: envNumber("AGENT_PROXY_MAX_REPLAY_EVENTS", 5000, 100),
   wsPaths: ["/chat/ws", "/api/chat/ws", "/agent-proxy/ws", "/api/agent-proxy/ws"],
   connectPaths: ["/internal/connect", "/api/internal/connect"],
 };

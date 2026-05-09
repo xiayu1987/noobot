@@ -98,6 +98,10 @@ const { notify: notifyUi, confirmDeleteSession } = useUiFeedback();
 const { translate } = useLocale();
 
 let fetchSessionsAfterConnect = async () => {};
+let reconnectActiveSessionIfNeeded = async () => {};
+let reconnectActiveSessionPromise = null;
+
+
 const {
   connectCode,
   apiKey,
@@ -115,6 +119,9 @@ const {
   notify: notifyUi,
   onConnected: async () => {
     await fetchSessionsAfterConnect();
+    // 建立连接时即建立 WebSocket，而非发送消息时才建立
+    chatWebSocketClient.connect();
+    reconnectActiveSessionIfNeeded();
   },
 });
 
@@ -335,6 +342,8 @@ const {
   closeMobileSidebarOnSelect,
   releaseAllPreviewUrls,
   initSessionsAfterMount,
+  chatWebSocketClient,
+  handleReconnect,
 } = useChatSession({
   userId,
   apiKey,
@@ -351,6 +360,11 @@ const {
 });
 
 fetchSessionsAfterConnect = fetchSessions;
+
+
+
+// ---- Reconnect handling ----
+
 
 function handleSelectSession(sessionId, options = {}) {
   closeMobileSidebarOnSelect(isMobile, mobileSidebarOpen);
@@ -376,6 +390,9 @@ async function handleDeleteSession(sessionId) {
 onMounted(async () => {
   updateViewportState();
   window.addEventListener("resize", updateViewportState);
+  window.addEventListener("online", handleBrowserReconnectSignal);
+  window.addEventListener("focus", handleBrowserReconnectSignal);
+  document.addEventListener("visibilitychange", handleBrowserReconnectSignal);
   const autoConnected = await tryAutoConnect();
   if (autoConnected) {
     return;
@@ -385,6 +402,9 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", updateViewportState);
+  window.removeEventListener("online", handleBrowserReconnectSignal);
+  window.removeEventListener("focus", handleBrowserReconnectSignal);
+  document.removeEventListener("visibilitychange", handleBrowserReconnectSignal);
   releaseAllPreviewUrls();
 });
 
@@ -408,12 +428,44 @@ function onBotScenarioUpdate(value = "") {
   localStorage.setItem("noobot_bot_scenario", botScenario.value);
 }
 
+function hasActiveSessionForReconnect() {
+  return Boolean(
+    String(activeSession.value?.backendSessionId || "").trim() ||
+      String(activeSession.value?.id || "").trim() ||
+      String(activeSessionId.value || "").trim(),
+  );
+}
+
+reconnectActiveSessionIfNeeded = async () => {
+  if (!connected.value) return;
+  if (!hasActiveSessionForReconnect()) return;
+  if (reconnectActiveSessionPromise) return;
+  reconnectActiveSessionPromise = handleReconnect();
+  try {
+    await reconnectActiveSessionPromise;
+  } finally {
+    reconnectActiveSessionPromise = null;
+  }
+};
+
+function handleBrowserReconnectSignal() {
+  reconnectActiveSessionIfNeeded();
+}
+
 watch(
   () => scenarioConfig.value,
   () => {
     syncBotScenarioWithConfig();
   },
   { deep: true, immediate: true },
+);
+
+watch(
+  () => connected.value,
+  (nextConnected, previousConnected) => {
+    if (!nextConnected || previousConnected) return;
+    reconnectActiveSessionIfNeeded();
+  },
 );
 
 async function handleWorkspaceReset() {

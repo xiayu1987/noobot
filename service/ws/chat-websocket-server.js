@@ -64,12 +64,21 @@ export function registerChatWebSocketServer(
     let currentLocale = normalizeLocale(request?.locale || defaultLocale);
     let isRunning = false;
     let currentAbortController = null;
+    let currentRunMeta = null;
     const pendingInteractionRequests = new Map();
 
+    let eventSequence = 0;
     const sendEvent = (eventName, data = {}) => {
       if (webSocket.readyState !== 1) return;
+      eventSequence += 1;
+      const enrichedData = {
+        ...(data && typeof data === "object" ? data : {}),
+        seq: eventSequence,
+        dialogProcessId: String(data?.dialogProcessId || "").trim(),
+        sessionId: String(data?.sessionId || "").trim(),
+      };
       try {
-        webSocket.send(JSON.stringify({ event: eventName, data }));
+        webSocket.send(JSON.stringify({ event: eventName, data: enrichedData }));
       } catch {
         // ignore socket send errors
       }
@@ -172,7 +181,25 @@ export function registerChatWebSocketServer(
             currentAbortController.abort();
           }
           rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", currentLocale)));
-          sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
+          try {
+            await bot?.persistStoppedAssistantMessage?.({
+              userId: currentRunMeta?.userId || "",
+              sessionId: currentRunMeta?.sessionId || "",
+              parentSessionId: currentRunMeta?.parentSessionId || "",
+              parentDialogProcessId: currentRunMeta?.parentDialogProcessId || "",
+              partialAssistant: payload?.partialAssistant || {},
+            });
+          } catch {
+            // Best-effort persistence; stopping the active run still takes precedence.
+          }
+          sendEvent("stopped", {
+            message: translateText("ws.dialogStoppedByUser", currentLocale),
+            sessionId: currentRunMeta?.sessionId || "",
+            dialogProcessId:
+              String(payload?.partialAssistant?.dialogProcessId || "").trim() ||
+              currentRunMeta?.dialogProcessId ||
+              "",
+          });
           webSocket.close(1000, "stopped");
           return;
         }
@@ -201,11 +228,22 @@ export function registerChatWebSocketServer(
         if (isForbiddenUserScope(authInfo, userId)) {
           throw new Error(translateText("auth.forbiddenUserScope", currentLocale));
         }
+        currentRunMeta = {
+          userId: String(userId || "").trim(),
+          sessionId: String(sessionId || "").trim(),
+          parentSessionId: String(parentSessionId || "").trim(),
+          parentDialogProcessId: String(parentDialogProcessId || "").trim(),
+          dialogProcessId: "",
+        };
 
         const eventListener = {
           onEvent: (eventPayload) => {
             const eventName = eventPayload?.event || "thinking";
             const eventData = eventPayload?.data || {};
+            const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();
+            if (eventDialogProcessId && currentRunMeta) {
+              currentRunMeta.dialogProcessId = eventDialogProcessId;
+            }
             if (eventName === "llm_delta") {
               const currentEventSessionId = String(eventData?.sessionId || "").trim();
               const currentSubAgentSessionId = String(
@@ -230,10 +268,14 @@ export function registerChatWebSocketServer(
                     text: String(eventData.text || ""),
                   },
                 });
-                sendEvent(normalizedEvent.event, normalizedEvent.data);
+                sendEvent(normalizedEvent.event, {
+                  ...normalizedEvent.data,
+                  dialogProcessId: String(eventData?.dialogProcessId || ""),
+                  sessionId: String(sessionId || ""),
+                });
                 return;
               }
-              sendEvent("delta", { text: String(eventData.text || "") });
+              sendEvent("delta", { text: String(eventData.text || ""), dialogProcessId: String(eventData?.dialogProcessId || ""), sessionId: String(sessionId || "") });
               return;
             }
             const normalizedEvent = normalizeSseLogEvent(eventPayload);
@@ -281,6 +323,7 @@ export function registerChatWebSocketServer(
       } finally {
         isRunning = false;
         currentAbortController = null;
+        currentRunMeta = null;
       }
     });
 
