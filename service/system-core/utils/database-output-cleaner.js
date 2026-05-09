@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { safeNum } from "./shared-utils.js";
 
 function normalizeDbText(input = "") {
   return String(input || "")
@@ -50,7 +51,7 @@ export function cleanDatabaseOutputForLLM(output = {}, { maxChars = 8000 } = {})
   const stdout = tailClip(compactDbStdout(source?.stdout || ""), maxChars);
   const stderr = tailClip(normalizeDbText(source?.stderr || ""), maxChars);
   return {
-    code: Number(source?.code || 0),
+    code: safeNum(source?.code),
     stdout: stdout.text,
     stderr: stderr.text,
     truncated: stdout.truncated || stderr.truncated,

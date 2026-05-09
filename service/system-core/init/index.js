@@ -16,6 +16,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { fatalSystemError } from "../error/index.js";
+import { deepMerge } from "../utils/shared-utils.js";
 import { tSystem } from "../i18n/system-text.js";
 
 const RESET_SECTION_PATHS = {
@@ -25,24 +26,7 @@ const RESET_SECTION_PATHS = {
   skill: ["skills"],
   config: ["config.json", "config.example.json"],
 };
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
-function deepMerge(base, override) {
-  if (!isPlainObject(base)) return isPlainObject(override) ? { ...override } : base;
-  if (!isPlainObject(override)) return { ...base };
-  const out = { ...base };
-  for (const [key, value] of Object.entries(override)) {
-    const current = out[key];
-    if (isPlainObject(current) && isPlainObject(value)) {
-      out[key] = deepMerge(current, value);
-      continue;
-    }
-    out[key] = value;
-  }
-  return out;
-}
 
 function resolveTemplateBase(workspaceTemplatePath = "") {
   const configuredTemplatePath = String(workspaceTemplatePath || "").trim();

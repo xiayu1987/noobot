@@ -5,13 +5,10 @@
  */
 
 export { isAbortError } from "../utils/error-utils.js";
+export { isPlainObject } from "../utils/shared-utils.js";
 
 export function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(sessionId || ""),
   );
-}
-
-export function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
