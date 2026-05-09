@@ -3,5 +3,4 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
-export { runAgentTurn } from "./engine/index.js";
+export { runAgentTurn } from "./core/engine.js";
