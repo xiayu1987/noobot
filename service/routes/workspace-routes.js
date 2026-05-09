@@ -9,6 +9,37 @@ import { safeJoin } from "../system-core/utils/fs-safe.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
 
+const RESERVED_WORKSPACE_ROOT_DIRS = new Set([
+  "memory",
+  "runtime",
+  "service",
+  "services",
+  "skill",
+  "skills",
+]);
+
+async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
+  await mkdir(root, { recursive: true });
+  const entries = await readdir(root, { withFileTypes: true });
+  const userDirs = [];
+  for (const entry of entries) {
+    const userId = String(entry?.name || "").trim();
+    if (!entry.isDirectory() || !userId || userId.startsWith(".")) continue;
+    if (RESERVED_WORKSPACE_ROOT_DIRS.has(userId)) continue;
+    try {
+      await access(path.join(root, userId, "config.json"));
+      userDirs.push(userId);
+    } catch {
+      // A user workspace must have config.json. Skip stray directories.
+    }
+  }
+  const superAdminUserId = String(globalConfig?.superAdmin?.userId || "").trim();
+  if (superAdminUserId && !userDirs.includes(superAdminUserId)) {
+    userDirs.push(superAdminUserId);
+  }
+  return userDirs;
+}
+
 export function registerWorkspaceRoutes(
   app,
   {
@@ -70,16 +101,7 @@ export function registerWorkspaceRoutes(
   app.post("/internal/admin/workspace-all/sync", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
       const root = workspaceRootPath();
-      await mkdir(root, { recursive: true });
-      const entries = await readdir(root, { withFileTypes: true });
-      const userDirs = entries
-        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-        .map((entry) => String(entry.name || "").trim())
-        .filter(Boolean);
-      const superAdminUserId = String(globalConfig?.superAdmin?.userId || "").trim();
-      if (superAdminUserId && !userDirs.includes(superAdminUserId)) {
-        userDirs.push(superAdminUserId);
-      }
+      const userDirs = await listWorkspaceUserDirs(root, globalConfig);
       const syncedUsers = [];
       for (const userId of userDirs) {
         try {
@@ -109,16 +131,7 @@ export function registerWorkspaceRoutes(
     try {
       const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
       const root = workspaceRootPath();
-      await mkdir(root, { recursive: true });
-      const entries = await readdir(root, { withFileTypes: true });
-      const userDirs = entries
-        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-        .map((entry) => String(entry.name || "").trim())
-        .filter(Boolean);
-      const superAdminUserId = String(globalConfig?.superAdmin?.userId || "").trim();
-      if (superAdminUserId && !userDirs.includes(superAdminUserId)) {
-        userDirs.push(superAdminUserId);
-      }
+      const userDirs = await listWorkspaceUserDirs(root, globalConfig);
       const resetUsers = [];
       for (const userId of userDirs) {
         try {
