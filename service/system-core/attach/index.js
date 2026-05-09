@@ -6,6 +6,7 @@
 
 export {
   mergeAttachmentMetas,
+  normalizeAttachmentMetas,
   mapAttachmentRecordsToMetas,
   appendAttachmentMetasToRuntimeAndTurn,
 } from "./utils.js";

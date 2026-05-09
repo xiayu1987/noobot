@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  *
  * Model provider resolution & ChatOpenAI creation.
- * Multimodal attachment logic is delegated to ./attachments.js
+ * Multimodal attachment logic is delegated to ./attachment-formatter.js
  */
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
@@ -14,7 +14,7 @@ import {
   normalizeProviderFormat,
   buildAttachmentContentBlock,
   normalizeModelOutputContent,
-} from "./attachments.js";
+} from "./attachment-formatter.js";
 
 function isProviderEnabled(provider = {}) {
   return provider?.enabled !== false;
@@ -239,7 +239,7 @@ export function createChatModelByName(modelName, options = {}) {
 }
 
 // Re-export attachment utilities for external consumers
-export { normalizeProviderFormat, buildAttachmentContentBlock, normalizeModelOutputContent } from "./attachments.js";
+export { normalizeProviderFormat, buildAttachmentContentBlock, normalizeModelOutputContent } from "./attachment-formatter.js";
 
 export async function invokeModelWithTextAndAttachments({
   modelName = "",

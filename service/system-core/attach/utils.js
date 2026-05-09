@@ -91,4 +91,36 @@ export function appendAttachmentMetasToRuntimeAndTurn({
   );
 }
 
+
+/**
+ * 规范化附件元数据（用于系统提示格式化显示）
+ * - 将字符串路径转为 { path } 对象
+ * - 清理对象字段，移除空值
+ */
+export function normalizeAttachmentMetas(attachmentMetas = []) {
+  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  return source
+    .map((attachmentItem) => {
+      if (typeof attachmentItem === "string") {
+        const p = String(attachmentItem || "").trim();
+        return p ? { path: p } : null;
+      }
+      if (!attachmentItem || typeof attachmentItem !== "object") return null;
+      const normalized = {
+        attachmentId: safeStr(attachmentItem?.attachmentId),
+        name: safeStr(attachmentItem?.name),
+        mimeType: safeStr(attachmentItem?.mimeType || attachmentItem?.type),
+        size: safeNum(attachmentItem?.size),
+        path: safeStr(attachmentItem?.path),
+      };
+      if (!normalized.attachmentId) delete normalized.attachmentId;
+      if (!normalized.name) delete normalized.name;
+      if (!normalized.mimeType) delete normalized.mimeType;
+      if (!normalized.size) delete normalized.size;
+      if (!normalized.path) delete normalized.path;
+      return Object.keys(normalized).length > 0 ? normalized : null;
+    })
+    .filter(Boolean);
+}
+
 export { safeStr, safeNum };
