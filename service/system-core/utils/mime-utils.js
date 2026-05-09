@@ -5,10 +5,9 @@
  */
 
 /**
- * 默认 MIME 类型到文件扩展名的映射
- * 可通过 extendMimeMap 扩展
+ * MIME 类型到文件扩展名的映射表
  */
-const DEFAULT_MIME_EXTENSION_MAP = {
+const MIME_EXTENSION_MAP = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
   "image/webp": ".webp",
@@ -37,23 +36,11 @@ const MIME_PREFIX_FALLBACKS = {
   "audio/": ".mp3",
 };
 
-let customMimeMap = {};
-
 /**
- * 扩展 MIME 映射表
- * @param {Record<string, string>} newEntries - 新的 MIME 到扩展名映射
- */
-export function extendMimeMap(newEntries = {}) {
-  if (typeof newEntries === "object" && newEntries !== null) {
-    customMimeMap = { ...customMimeMap, ...newEntries };
-  }
-}
-
-/**
- * 获取完整的 MIME 映射表（默认 + 自定义）
+ * 获取完整的 MIME 映射表
  */
 export function getMimeExtensionMap() {
-  return { ...DEFAULT_MIME_EXTENSION_MAP, ...customMimeMap };
+  return { ...MIME_EXTENSION_MAP };
 }
 
 /**
@@ -65,11 +52,9 @@ export function getExtensionFromMime(mimeType = "") {
   const normalizedMimeType = String(mimeType || "").trim().toLowerCase();
   if (!normalizedMimeType) return "";
 
-  const fullMap = getMimeExtensionMap();
-  
   // 1. 精确匹配
-  if (fullMap[normalizedMimeType]) {
-    return fullMap[normalizedMimeType];
+  if (MIME_EXTENSION_MAP[normalizedMimeType]) {
+    return MIME_EXTENSION_MAP[normalizedMimeType];
   }
 
   // 2. 前缀匹配 fallback
@@ -112,7 +97,7 @@ export function sanitizeGeneratedArtifactName(baseName = "", mimeType = "", inde
     .trim();
   const normalizedBaseName = safeBaseName || `generated_media_${index}`;
   const extension = getExtensionFromMime(mimeType);
-  
+
   if (!extension) return normalizedBaseName;
   if (normalizedBaseName.toLowerCase().endsWith(extension)) {
     return normalizedBaseName;

@@ -3,14 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-// Re-export from mime-utils for backward compatibility
-export {
-  parseDataUrl,
-  sanitizeGeneratedArtifactName,
-  getExtensionFromMime,
-  extendMimeMap,
-  getMimeExtensionMap,
-} from "../../../utils/mime-utils.js";
 
 export function normalizeAiTextContent(aiContent) {
   if (typeof aiContent === "string") return String(aiContent || "");

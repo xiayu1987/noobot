@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { safeNum } from "../utils/shared-utils.js";
 import { tSystem } from "../i18n/system-text.js";
 function normalizeHistoryConnectorItems(items = []) {
   return (Array.isArray(items) ? items : []).map((connectorItem) => ({
@@ -21,7 +22,7 @@ function normalizeHistoryConnectorItems(items = []) {
     checked_at:
       String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
     last_connected_at: String(connectorItem?.last_connected_at || "").trim(),
-    connect_count: Number(connectorItem?.connect_count || 0),
+    connect_count: safeNum(connectorItem?.connect_count),
     connection_defaults:
       connectorItem?.connection_defaults &&
       typeof connectorItem.connection_defaults === "object"

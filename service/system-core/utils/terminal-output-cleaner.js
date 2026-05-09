@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { safeNum } from "./shared-utils.js";
 
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 
@@ -36,7 +37,7 @@ export function cleanTerminalOutputForLLM(output = {}, { maxChars = 8000 } = {})
   const stdout = tailClip(normalizeTerminalText(source?.stdout || ""), maxChars);
   const stderr = tailClip(normalizeTerminalText(source?.stderr || ""), maxChars);
   return {
-    code: Number(source?.code || 0),
+    code: safeNum(source?.code),
     stdout: stdout.text,
     stderr: stderr.text,
     truncated: stdout.truncated || stderr.truncated,

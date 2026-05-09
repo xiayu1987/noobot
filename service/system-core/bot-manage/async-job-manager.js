@@ -13,6 +13,7 @@ import {
   MIN_WAIT_ASYNC_TIMEOUT_MS,
 } from "./constants.js";
 import { isAbortError, isPlainObject, isValidSessionId } from "./utils.js";
+import { safeNum } from "../utils/shared-utils.js";
 
 export class AsyncJobManager {
   constructor({
@@ -49,7 +50,7 @@ export class AsyncJobManager {
       const currentJob = this.asyncJobs.get(normalizedKey);
       if (!currentJob || currentJob.status === "running") return;
       this.asyncJobs.delete(normalizedKey);
-    }, Math.max(0, Number(delayMs || 0)));
+    }, Math.max(0, safeNum(delayMs)));
     if (typeof job.cleanupTimer?.unref === "function") {
       job.cleanupTimer.unref();
     }

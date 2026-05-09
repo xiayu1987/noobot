@@ -10,6 +10,7 @@ import {
   isReadabilityExtractorReady,
 } from "./web-text-cleaner.js";
 import { tSystem } from "../i18n/system-text.js";
+import { isPlainObject, deepMerge } from "./shared-utils.js";
 
 const require = createRequire(import.meta.url);
 const fsp = fs.promises;
@@ -56,25 +57,7 @@ const DEFAULT_CONFIG = {
 /* ---------------------------
  * 配置工具
  * --------------------------- */
-function deepMerge(base, override) {
-  const out = { ...(base || {}) };
-  for (const [k, v] of Object.entries(override || {})) {
-    if (
-      Object.prototype.hasOwnProperty.call(out, k) &&
-      isPlainObject(out[k]) &&
-      isPlainObject(v)
-    ) {
-      out[k] = deepMerge(out[k], v);
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
-}
 
-function isPlainObject(value) {
-  return value && typeof value === 'object' && !Array.isArray(value);
-}
 
 async function fileExists(filePath) {
   try {

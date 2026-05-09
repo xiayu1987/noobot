@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { safeNum } from "../utils/shared-utils.js";
 import { readFile } from "node:fs/promises";
 let systemPromptCachePromise = null;
 
@@ -81,7 +82,7 @@ export async function resolveAttachments({
       attachmentSource: String(attachmentItem?.attachmentSource || "user").trim(),
       name: String(attachmentItem?.name || ""),
       mimeType: String(attachmentItem?.mimeType || "application/octet-stream"),
-      size: Number(attachmentItem?.size || 0),
+      size: safeNum(attachmentItem?.size),
       path: String(attachmentItem?.path || ""),
       relativePath: String(attachmentItem?.relativePath || ""),
     }));

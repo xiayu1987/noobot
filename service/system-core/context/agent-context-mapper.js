@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { safeNum } from "../utils/shared-utils.js";
 function normalizeSelectedConnectors(source = {}) {
   const selectedConnectorsSource =
     source && typeof source === "object" ? source : {};
@@ -69,7 +70,7 @@ export function mapToAgentContextSchema({
       timestamp: String(systemRuntime?.now || now).trim(),
       flags: {
         allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
-        maxToolLoopTurns: Number(systemRuntime?.config?.maxToolLoopTurns || 0),
+        maxToolLoopTurns: safeNum(systemRuntime?.config?.maxToolLoopTurns),
       },
       models: {
         runtimeModel: String(runtime?.runtimeModel || "").trim(),

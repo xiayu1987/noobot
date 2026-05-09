@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveDefaultModelSpec } from "../model/index.js";
+import { isPlainObject } from "../utils/shared-utils.js";
 
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function normalizeModelMultimodalInfo(modelSpec = {}) {
   const multimodalGeneration = isPlainObject(modelSpec?.multimodal_generation)

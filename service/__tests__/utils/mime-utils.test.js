@@ -6,7 +6,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  extendMimeMap,
   getMimeExtensionMap,
   getExtensionFromMime,
   parseDataUrl,
@@ -37,13 +36,15 @@ test("getExtensionFromMime case insensitive", () => {
   assert.equal(getExtensionFromMime("  Video/Mp4  "), ".mp4");
 });
 
-test("extendMimeMap and getMimeExtensionMap", () => {
-  extendMimeMap({ "application/zip": ".zip", "text/csv": ".csv" });
+test("getMimeExtensionMap returns a copy of built-in map", () => {
   const map = getMimeExtensionMap();
-  assert.equal(map["application/zip"], ".zip");
-  assert.equal(map["text/csv"], ".csv");
-  // existing entries still present
+  // Verify built-in entries
   assert.equal(map["image/png"], ".png");
+  assert.equal(map["video/mp4"], ".mp4");
+  assert.equal(map["application/pdf"], ".pdf");
+  // Verify it's a copy (mutation doesn't affect original)
+  map["application/zip"] = ".zip";
+  assert.equal(getExtensionFromMime("application/zip"), "");
 });
 
 test("parseDataUrl valid", () => {

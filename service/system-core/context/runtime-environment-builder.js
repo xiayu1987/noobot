@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { initRuntimeSharedBrowser } from "../utils/web-browser-simulate.js";
+import { isPlainObject } from "../utils/shared-utils.js";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
@@ -22,9 +23,6 @@ import {
   createCurrentTurnTasksStore,
 } from "./current-turn-store.js";
 
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 async function defaultSharedFetch(url, init = {}) {
   return await globalThis.fetch(url, init);

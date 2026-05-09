@@ -12,7 +12,8 @@ import { tEngine } from "../i18n-adapter.js";
 import {
   parseDataUrl,
   sanitizeGeneratedArtifactName,
-} from "../utils/text-utils.js";
+} from "../../../utils/mime-utils.js";
+import { safeNum } from "../../../utils/shared-utils.js";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
@@ -210,7 +211,7 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
       mimeType: String(
         attachmentItem?.mimeType || "application/octet-stream",
       ).trim(),
-      size: Number(attachmentItem?.size || 0),
+      size: safeNum(attachmentItem?.size),
       sessionId: String(attachmentItem?.sessionId || "").trim(),
       attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
       generatedByModel: attachmentItem?.generatedByModel === true,

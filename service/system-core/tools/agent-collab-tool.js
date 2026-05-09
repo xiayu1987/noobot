@@ -26,6 +26,7 @@ import {
 } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
+import { isPlainObject } from "../utils/shared-utils.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -35,9 +36,6 @@ function tAgentCollab(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.agent_collab.${String(key || "").trim()}`, params);
 }
 
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function cloneData(value) {
   if (typeof globalThis.structuredClone === "function") {
