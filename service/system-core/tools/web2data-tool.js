@@ -15,14 +15,14 @@ import {
   resolveDefaultModelSpec,
   resolveModelSpecByAlias,
 } from "../model/index.js";
-import { runWeb2Img } from "../utils/web2img.js";
-import { browseUrlHtml } from "../utils/web-browser-simulate.js";
+import { runWeb2Img } from "../utils/web/web2img.js";
+import { browseUrlHtml } from "../utils/web/browser-simulate.js";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
   extractVisibleTextFromHtml,
-} from "../utils/web-text-cleaner.js";
-import { browserLikeFetch } from "../utils/web-fetch.js";
+} from "../utils/web/text-cleaner.js";
+import { browserLikeFetch } from "../utils/web/fetch.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
