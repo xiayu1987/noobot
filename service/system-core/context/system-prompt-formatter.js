@@ -7,6 +7,7 @@ import { safeNum } from "../utils/shared-utils.js";
 import { normalizeLocale } from "../i18n/index.js";
 import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "../i18n/locales/zh-CN/system-prompt.js";
 import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "../i18n/locales/en-US/system-prompt.js";
+import { normalizeAttachmentMetas } from "../attach/index.js";
 
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
@@ -75,33 +76,6 @@ function toJsonSection(title, value, { allowEmpty = false, emptyValueText = "(no
   );
 }
 
-function normalizeAttachmentMetas(attachmentMetas = []) {
-  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
-  return source
-    .map((attachmentItem) => {
-      if (typeof attachmentItem === "string") {
-        const path = String(attachmentItem || "").trim();
-        return path ? { path } : null;
-      }
-      if (!attachmentItem || typeof attachmentItem !== "object") return null;
-      const normalized = {
-        attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-        name: String(attachmentItem?.name || "").trim(),
-        mimeType: String(
-          attachmentItem?.mimeType || attachmentItem?.type || "",
-        ).trim(),
-        size: safeNum(attachmentItem?.size),
-        path: String(attachmentItem?.path || "").trim(),
-      };
-      if (!hasValue(normalized.attachmentId)) delete normalized.attachmentId;
-      if (!hasValue(normalized.name)) delete normalized.name;
-      if (!hasValue(normalized.mimeType)) delete normalized.mimeType;
-      if (!hasValue(normalized.size)) delete normalized.size;
-      if (!hasValue(normalized.path)) delete normalized.path;
-      return hasValue(normalized) ? normalized : null;
-    })
-    .filter(Boolean);
-}
 
 function hasConnectorData(connectorStatusSection = {}) {
   const connectors =
