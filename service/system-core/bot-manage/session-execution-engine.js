@@ -676,6 +676,7 @@ export class SessionExecutionEngine {
       });
 
       const agentResult = await runAgentTurn({
+        errorLogger: this.errorLogger,
         agentContext: this._buildRunTurnAgentContext(agentContext, abortSignal),
         userMessage: normalizedMessage,
       });

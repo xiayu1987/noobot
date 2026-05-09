@@ -41,6 +41,10 @@ export async function executeToolCall({
   abortSignal = null,
   eventListener = null,
   turn = 1,
+  errorLogger = null,
+  userId = "",
+  sessionId = "",
+  parentSessionId = "",
 } = {}) {
   let toolResultText = "";
   let invokeError = null;
@@ -71,6 +75,17 @@ export async function executeToolCall({
     if (isFatalError(error)) throw error;
     invokeError = error;
     toolResultText = `tool invoke error: ${error?.message || String(error)}`;
+    if (errorLogger && typeof errorLogger.log === "function") {
+      void errorLogger.log({
+        userId,
+        sessionId,
+        parentSessionId,
+        source: "tool-runner",
+        event: "tool_invoke_error",
+        error,
+        extra: { toolName: call?.name || "" },
+      });
+    }
   }
   const failureState = detectToolCallFailure({
     rawResult,

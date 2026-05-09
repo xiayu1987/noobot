@@ -2,6 +2,9 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
+ *
+ * Session entity normalization.
+ * Execution log entity moved to ../tracking/execution-log/execution-log-entities.js
  */
 
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
@@ -76,22 +79,8 @@ export function normalizeTaskEntity(task = {}) {
   };
 }
 
-export function normalizeExecutionLogEntity(
-  executionLog = {},
-  now = () => new Date().toISOString(),
-) {
-  return {
-    dialogProcessId: String(executionLog?.dialogProcessId || "").trim(),
-    event: String(executionLog?.event || "").trim(),
-    category: String(executionLog?.category || "").trim(),
-    type: String(executionLog?.type || "").trim(),
-    data:
-      executionLog?.data && typeof executionLog.data === "object"
-        ? executionLog.data
-        : {},
-    ts: String(executionLog?.ts || "").trim() || now(),
-  };
-}
+// Backward-compatible re-export from tracking module
+export { normalizeExecutionLogEntity } from "../tracking/execution-log/execution-log-entities.js";
 
 export function normalizeSessionTreeEntity(
   tree = {},
