@@ -10,11 +10,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import { fatalSystemError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
-import {
-  normalizeProviderFormat,
-  buildAttachmentContentBlock,
-  normalizeModelOutputContent,
-} from "./attachment-formatter.js";
+import { normalizeProviderFormat } from "../config/core/enums.js";
 
 function isProviderEnabled(provider = {}) {
   return provider?.enabled !== false;
@@ -239,7 +235,7 @@ export function createChatModelByName(modelName, options = {}) {
 }
 
 // Re-export attachment utilities for external consumers
-export { normalizeProviderFormat, buildAttachmentContentBlock, normalizeModelOutputContent } from "./attachment-formatter.js";
+export { buildAttachmentContentBlock, normalizeModelOutputContent } from "./attachment-formatter.js";
 
 export async function invokeModelWithTextAndAttachments({
   modelName = "",

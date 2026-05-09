@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import { normalizeDockerContainerScope as normalizeDockerContainerScopeEnum } from "../config/index.js";
 
 function sanitizeDockerNamePart(input = "") {
   return String(input || "")
@@ -13,20 +14,22 @@ function sanitizeDockerNamePart(input = "") {
     .replace(/-+$/, "");
 }
 
-export function resolveDockerContainerScope(scriptConfig = {}) {
-  const scope = String(scriptConfig?.dockerContainerScope || "")
-    .trim()
-    .toLowerCase();
-  if (scope === "user" || scope === "per_user" || scope === "per-user") {
-    return "user";
-  }
-  return "global";
-}
 
 function normalizeContainerMountTarget(target = "") {
   const normalized = String(target || "").trim();
   if (!normalized) return "";
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+export function normalizeDockerContainerScope(scriptConfig = {}) {
+  const sourceConfig =
+    scriptConfig && typeof scriptConfig === "object" && !Array.isArray(scriptConfig)
+      ? scriptConfig
+      : {};
+  const rawScope = String(
+    sourceConfig?.dockerContainerScope || sourceConfig?.scope || "global",
+  ).trim();
+  return normalizeDockerContainerScopeEnum(rawScope);
 }
 
 export function normalizeDockerMounts(scriptConfig = {}) {
@@ -71,7 +74,7 @@ export function buildDockerCommand({
   command,
   scriptConfig = {},
 }) {
-  const scope = resolveDockerContainerScope(scriptConfig);
+  const scope = normalizeDockerContainerScope(scriptConfig);
   const image = String(scriptConfig?.dockerImage || "node:20").trim() || "node:20";
   const baseContainerName = sanitizeDockerNamePart(
     scriptConfig?.dockerContainerName || "noobot-script-sandbox",

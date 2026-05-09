@@ -7,6 +7,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { normalizeDoc2DataFormat, DOC2DATA_FORMAT } from "../config/core/enums.js";
 import {
   invokeModelWithTextAndAttachments,
   resolveModelSpecByAlias,
@@ -212,11 +213,14 @@ export function createDoc2DataTool({ agentContext }) {
         .optional()
         .describe(tTool(runtime, "tools.doc2data.fieldDpi")),
       imageFormat: z
-        .enum(["png", "jpg", "jpeg"])
+        .string()
         .optional()
         .describe(tTool(runtime, "tools.doc2data.fieldImageFormat")),
     }),
-    func: async ({ filePath, prompt, dpi, imageFormat = "png" }) => {
+    func: async ({ filePath, prompt, dpi, imageFormat }) => {
+      const normalizedFormat = normalizeDoc2DataFormat(imageFormat);
+      const resolvedFormat = normalizedFormat || DOC2DATA_FORMAT.PNG;
+
       const normalizedDpi = Number(dpi);
       const resolvedDpi =
         Number.isFinite(normalizedDpi) && normalizedDpi > 0
@@ -258,7 +262,7 @@ export function createDoc2DataTool({ agentContext }) {
       const converted = await convertDocumentToImages({
         inputFile,
         outputRoot,
-        format: imageFormat,
+        format: resolvedFormat,
         dpi: resolvedDpi,
       });
 

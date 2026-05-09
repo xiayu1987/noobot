@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig, resolveConfigSecrets } from "../config/index.js";
+import { normalizeMcpServerType } from "../config/core/enums.js";
 import { recoverableToolError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
 import { StreamableHttpMcpClient } from "./clients/streamable-http.js";
@@ -16,8 +17,8 @@ export function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName
   const server = servers?.[name];
   if (!server) return null;
   if (server?.isActive === false) return null;
-  const serverType = String(server?.type || "").trim();
-  if (!["streamableHttp", "sse"].includes(serverType)) return null;
+  const serverType = normalizeMcpServerType(server?.type);
+  if (!serverType) return null;
   if (!String(server?.baseUrl || "").trim()) return null;
   const resolvedHeaders = resolveHeaders(
     server?.headers || {},
@@ -46,7 +47,7 @@ export function createMcpClient({ server = {}, signal = null, fetchImpl = null }
     signal,
     fetchImpl,
   };
-  if (String(server?.type || "").trim() === "sse") {
+  if (server?.type === "sse") {
     return new SseMcpClient(commonOptions);
   }
   return new StreamableHttpMcpClient(commonOptions);

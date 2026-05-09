@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig } from "../config/index.js";
+import { mergeConfig, CONTEXT_SECTION_ALIASES } from "../config/index.js";
 import { buildTools } from "../tools/index.js";
 import { getConnectorChannelStore } from "../connectors/index.js";
 import { getConnectorHistoryStore } from "../connectors/index.js";
@@ -130,17 +130,7 @@ export class ContextBuilder {
     if (!(includeSet instanceof Set) || includeSet.size === 0) return true;
     const normalizedSectionKey = String(sectionKey || "").trim().toLowerCase();
     if (!normalizedSectionKey) return false;
-    const aliasMap = {
-      base_prompt: ["base_prompt", "baseprompt", "system_prompt_base", "system_prompt"],
-      system_runtime: ["system_runtime", "runtime", "runtime_env", "runtime_environment"],
-      long_memory: ["long_memory", "memory"],
-      model: ["model", "models"],
-      skills: ["skills"],
-      services: ["services"],
-      mcp_servers: ["mcp_servers", "mcp", "mcpservers"],
-      connectors: ["connectors", "connector_status"],
-      attachments: ["attachments"],
-    };
+    const aliasMap = CONTEXT_SECTION_ALIASES;
     const aliasList = aliasMap[normalizedSectionKey] || [normalizedSectionKey];
     return aliasList.some((aliasItem) => includeSet.has(aliasItem));
   }

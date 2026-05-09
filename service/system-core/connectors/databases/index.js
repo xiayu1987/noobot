@@ -6,16 +6,7 @@
 import { executePostgresCommand } from "./postgres-connector-channel.js";
 import { executeMysqlCommand } from "./mysql-connector-channel.js";
 import { executeSqliteCommand } from "./sqlite-connector-channel.js";
-
-function normalizeDatabaseType(connectionInfo = {}) {
-  const dbType = String(connectionInfo?.database_type || "")
-    .trim()
-    .toLowerCase();
-  if (["postgres", "postgresql", "pg"].includes(dbType)) return "postgres";
-  if (["mysql", "mariadb"].includes(dbType)) return "mysql";
-  if (["sqlite", "sqlite3"].includes(dbType)) return "sqlite";
-  return "";
-}
+import { normalizeDatabaseType } from "../../config/index.js";
 
 function stripSqlCommentsAndStrings(sql = "") {
   return String(sql || "")
@@ -53,7 +44,7 @@ export async function executeDatabaseCommand({
         "unsafe sql blocked: SELECT/UPDATE/DELETE must include WHERE condition",
     };
   }
-  const databaseType = normalizeDatabaseType(connectionInfo);
+  const databaseType = normalizeDatabaseType(connectionInfo?.database_type || "");
   if (databaseType === "postgres") {
     return executePostgresCommand({ command, connectionInfo });
   }

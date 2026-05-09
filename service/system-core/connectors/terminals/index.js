@@ -3,16 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { executeSshCommand } from "./ssh-connector-channel.js";
-import { closeSshChannel } from "./ssh-connector-channel.js";
-
-function normalizeTerminalType(connectionInfo = {}) {
-  const raw = String(connectionInfo?.terminal_type || "")
-    .trim()
-    .toLowerCase();
-  if (["ssh", "linux_ssh", "server_ssh"].includes(raw)) return "ssh";
-  return "";
-}
+import { executeSshCommand, closeSshChannel } from "./ssh-connector-channel.js";
+import { normalizeTerminalType } from "../../config/index.js";
 
 export async function executeTerminalCommand({
   command = "",
@@ -21,7 +13,7 @@ export async function executeTerminalCommand({
   sessionId = "",
   connectorName = "",
 } = {}) {
-  const terminalType = normalizeTerminalType(connectionInfo);
+  const terminalType = normalizeTerminalType(connectionInfo?.terminal_type || "");
   if (terminalType === "ssh") {
     return executeSshCommand({
       command,
@@ -45,7 +37,7 @@ export function releaseTerminalChannel({
   sessionId = "",
   connectorName = "",
 } = {}) {
-  const terminalType = normalizeTerminalType(connectionInfo);
+  const terminalType = normalizeTerminalType(connectionInfo?.terminal_type || "");
   if (terminalType === "ssh") {
     return closeSshChannel({
       channelKey,
