@@ -5,8 +5,8 @@
  */
 import { mergeConfig } from "../config/index.js";
 import { buildTools } from "../tools/index.js";
-import { getConnectorChannelStore } from "../connectors/channel-store.js";
-import { getConnectorHistoryStore } from "../connectors/history-store.js";
+import { getConnectorChannelStore } from "../connectors/index.js";
+import { getConnectorHistoryStore } from "../connectors/index.js";
 import {
   buildDynamicInfo,
   buildStaticInfo,
