@@ -550,6 +550,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       }
     },
     "texts": {
+      "tools.skill.invalidAction": (params = {}) => `无效的操作类型: ${String(params.action || "").trim()}`,
       "tools.skill.skillNameRequiredOnStart": "action=start 时必须提供 skillName"
     }
   },

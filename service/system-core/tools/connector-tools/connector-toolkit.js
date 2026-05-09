@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig } from "../../config/index.js";
+import {
+  normalizeDatabaseType,
+  normalizeTerminalType,
+  normalizeConnectorType,
+} from "../../config/index.js";
 import { BACKEND_I18N } from "../../i18n/backend-messages.js";
 import { toToolJsonResult } from "../tool-json-result.js";
 import {
@@ -69,28 +74,6 @@ function normalizeProvidedDefaults(defaultValuesInput = {}, allowedKeys = []) {
   return normalizedDefaults;
 }
 
-function normalizeDatabaseType(input = "") {
-  const value = String(input || "").trim().toLowerCase();
-  if (["mysql", "mariadb"].includes(value)) return "mysql";
-  if (["postgres", "postgresql", "pg"].includes(value)) return "postgres";
-  if (["sqlite", "sqlite3"].includes(value)) return "sqlite";
-  return "";
-}
-
-function normalizeTerminalType(input = "") {
-  const value = String(input || "").trim().toLowerCase();
-  if (["ssh", "linux_ssh", "server_ssh"].includes(value)) return "ssh";
-  return "";
-}
-
-function normalizeConnectorType(input = "") {
-  const value = String(input || "").trim().toLowerCase();
-  if (["database", "db"].includes(value)) return "database";
-  if (["terminal", "server_terminal", "shell"].includes(value)) return "terminal";
-  if (["email", "mail", "smtp_imap"].includes(value)) return "email";
-  return "";
-}
-
 function databaseFields(databaseType = "", locale = "zh-CN") {
   if (databaseType === "sqlite") {
     return [
@@ -148,7 +131,7 @@ function terminalFields(terminalType = "", locale = "zh-CN") {
   ];
 }
 
-function emailFields(locale = "zh-CN") {
+function emailFields(emailType = "", locale = "zh-CN") {
   return [
     {
       name: "smtp_host",

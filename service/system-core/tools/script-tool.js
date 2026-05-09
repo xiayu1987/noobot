@@ -8,6 +8,7 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../config/index.js";
+import { normalizeSandboxProvider } from "../config/index.js";
 import {
   buildBubblewrapCommand,
   bwrapSupportsOption,
@@ -16,7 +17,7 @@ import {
 import {
   buildDockerCommand,
   normalizeDockerMounts,
-  resolveDockerContainerScope,
+  normalizeDockerContainerScope,
 } from "../sandbox/docker-sandbox.js";
 import { buildFirejailCommand } from "../sandbox/firejail-sandbox.js";
 import { toToolJsonResult } from "./tool-json-result.js";
@@ -53,14 +54,6 @@ function hasCommand(commandName = "") {
   });
 }
 
-function normalizeSandboxProvider(provider = "") {
-  const normalized = String(provider || "")
-    .trim()
-    .toLowerCase();
-  if (normalized === "firejail" || normalized === "fj") return "firejail";
-  if (normalized === "bubblewrap" || normalized === "bwrap") return "bubblewrap";
-  return "docker";
-}
 
 function resolveSandboxProviderConfig(scriptConfig = {}) {
   const providerConfig = scriptConfig?.sandboxProvider;
@@ -189,7 +182,7 @@ function buildScriptToolDescription({
     ].join("\n");
   }
 
-  const dockerScope = resolveDockerContainerScope(dockerConfig);
+  const dockerScope = normalizeDockerContainerScope(dockerConfig);
   const dockerMounts = normalizeDockerMounts(dockerConfig);
   const dockerMountDescriptionLines = dockerMounts.length
     ? [

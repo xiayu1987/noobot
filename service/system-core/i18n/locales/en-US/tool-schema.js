@@ -550,6 +550,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       }
     },
     "texts": {
+      "tools.skill.invalidAction": (params = {}) => `Invalid action type: ${String(params.action || "").trim()}`,
       "tools.skill.skillNameRequiredOnStart": "skillName is required when action=start"
     }
   },

@@ -8,6 +8,7 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
+import { normalizeSkillAction, SKILL_ACTION } from "../config/core/enums.js";
 import { safeJoin } from "../utils/fs-safe.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
@@ -85,14 +86,22 @@ export function createSkillTool({ agentContext }) {
     name: "set_skill_task",
     description: tTool(runtime, "tools.skill.setDescription"),
     schema: z.object({
-      action: z.enum(["start", "completed"]).describe(tTool(runtime, "tools.skill.fieldAction")),
+      action: z.string().describe(tTool(runtime, "tools.skill.fieldAction")),
       skillName: z.string().optional().describe(tTool(runtime, "tools.skill.fieldSkillName")),
       taskName: z.string().optional().describe(tTool(runtime, "tools.skill.fieldTaskName")),
       taskId: z.string().optional().describe(tTool(runtime, "tools.skill.fieldTaskId")),
       result: z.string().optional().describe(tTool(runtime, "tools.skill.fieldResult")),
     }),
     func: async ({ action, skillName, taskName, taskId, result }) => {
-      if (action === "start") {
+      const normalizedAction = normalizeSkillAction(action);
+      if (!normalizedAction) {
+        return toToolJsonResult(
+          "set_skill_task",
+          { ok: false, message: tTool(runtime, "tools.skill.invalidAction", { action }) },
+        );
+      }
+
+      if (normalizedAction === SKILL_ACTION.START) {
         if (!String(skillName || "").trim()) {
           return toToolJsonResult(
             "set_skill_task",
@@ -110,25 +119,25 @@ export function createSkillTool({ agentContext }) {
             taskId: createdTaskId,
             skillName: String(skillName || "").trim(),
             taskName: String(taskName || "").trim(),
-            taskStatus: "start",
+            taskStatus: SKILL_ACTION.START,
             startedAt: new Date().toISOString(),
             endedAt: "",
           });
           currentTurnMessages.updateLast({
             taskId: createdTaskId,
-            taskStatus: "start",
+            taskStatus: SKILL_ACTION.START,
           });
         }
         return toToolJsonResult(
           "set_skill_task",
           {
             ok: true,
-            action,
+            action: normalizedAction,
             task: {
               taskId: createdTaskId,
               skillName: skillName || "",
               taskName: taskName || "",
-              taskStatus: "start",
+              taskStatus: SKILL_ACTION.START,
             },
           },
           true,
@@ -145,7 +154,7 @@ export function createSkillTool({ agentContext }) {
         if (resolvedTaskId) {
           currentTurnTasks.updateLast({
             taskId: resolvedTaskId,
-            taskStatus: "completed",
+            taskStatus: SKILL_ACTION.COMPLETED,
             endedAt: new Date().toISOString(),
             result: result || "",
           });
@@ -155,7 +164,7 @@ export function createSkillTool({ agentContext }) {
           ) {
             currentTurnMessages.updateLast({
               taskId: resolvedTaskId,
-              taskStatus: "completed",
+              taskStatus: SKILL_ACTION.COMPLETED,
             });
           }
         }
@@ -164,10 +173,10 @@ export function createSkillTool({ agentContext }) {
         "set_skill_task",
         {
           ok: true,
-          action,
+          action: normalizedAction,
           task: {
             taskId: resolvedTaskId,
-            taskStatus: "completed",
+            taskStatus: SKILL_ACTION.COMPLETED,
             result: result || "",
           },
         },

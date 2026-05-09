@@ -6,13 +6,6 @@
  * Multimodal attachment handling for model providers.
  */
 
-function _normalizeProviderFormat(modelSpec = {}) {
-  const normalizedFormat = String(modelSpec?.format || "")
-    .trim()
-    .toLowerCase();
-  if (normalizedFormat === "dashscope") return "dashscope";
-  return "openai_compatible";
-}
 
 function _normalizeAudioFormatFromMimeType(mimeType = "", fallbackFormat = "") {
   const normalizedFallbackFormat = String(fallbackFormat || "")
@@ -127,9 +120,6 @@ function _buildAttachmentContentBlockForProvider({
   return null;
 }
 
-export function normalizeProviderFormat(modelSpec = {}) {
-  return _normalizeProviderFormat(modelSpec);
-}
 
 export function buildAttachmentContentBlock(attachment, providerFormat) {
   return _buildAttachmentContentBlockForProvider({
