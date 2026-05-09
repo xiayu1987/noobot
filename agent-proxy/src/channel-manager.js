@@ -446,6 +446,144 @@ export class ChannelManager {
     this.connectUpstreamChannel(channel, normalizedConnectionApiKey, String(connectionLocale || "").trim());
   }
 
+  // ---- Reconnect ----
+
+  handleReconnect(socket, payload = {}) {
+    const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
+    const currentSessionId = String(payload?.currentSessionId || "").trim();
+    const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId);
+    if (!reconnectChannelKeys.length) {
+      this.sendSocketEvent(socket, {
+        event: "reconnect_data",
+        data: {
+          currentSessionId,
+          sessions: [],
+          cacheExpired: false,
+          expiredDialogProcessIds: [],
+          suggestion: "",
+        },
+      });
+      this.sendSocketEvent(socket, {
+        event: "reconnect_complete",
+        data: {
+          totalSessions: 0,
+          cacheExpired: false,
+        },
+      });
+      return;
+    }
+
+    const sessionsMap = new Map();
+    const expiredDialogProcessIds = [];
+
+    for (const channelKey of reconnectChannelKeys) {
+      const channel = this.channelStore.get(channelKey);
+      if (!channel) continue;
+      this.attachSubscriber(channel, socket);
+
+      const channelSessionId = this._extractSessionIdFromChannelKey(channelKey);
+      if (!channelSessionId) continue;
+
+      if (!sessionsMap.has(channelSessionId)) {
+        sessionsMap.set(channelSessionId, {
+          sessionId: channelSessionId,
+          dialogProcesses: [],
+        });
+      }
+
+      const sessionEntry = sessionsMap.get(channelSessionId);
+
+      // Collect all dialogProcessIds from eventLog
+      const dialogProcessIdsInLog = new Set();
+      for (const envelope of channel.eventLog) {
+        const dpId = String(envelope?.data?.dialogProcessId || "").trim();
+        if (dpId) dialogProcessIdsInLog.add(dpId);
+      }
+
+      // Also add the channel key's dialogProcessId if available
+      const parts = channelKey.split("::");
+      if (parts.length >= 4 && parts[3]) {
+        dialogProcessIdsInLog.add(parts[3]);
+      }
+
+      for (const dpId of dialogProcessIdsInLog) {
+        const lastSeq = Number(lastReceivedSeqMap[dpId] || 0);
+
+        // Find events for this dialogProcessId with seq > lastSeq
+        const missingEvents = channel.eventLog.filter((envelope) => {
+          const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
+          const upstreamSeq = Number(envelope?.data?.seq || 0);
+          const proxySeq = Number(envelope?.sequence || 0);
+          const comparableSequence = upstreamSeq > 0 ? upstreamSeq : proxySeq;
+          return envDpId === dpId && comparableSequence > lastSeq;
+        });
+
+        if (missingEvents.length > 0) {
+          sessionEntry.dialogProcesses.push({
+            dialogProcessId: dpId,
+            parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
+            messages: missingEvents.slice(0, config.maxReplayEvents),
+          });
+        } else if (lastSeq > 0) {
+          // DialogProcessId was known but no events found - may be expired
+          expiredDialogProcessIds.push(dpId);
+        }
+      }
+    }
+
+    const sessions = Array.from(sessionsMap.values());
+    const cacheExpired = expiredDialogProcessIds.length > 0;
+
+    this.sendSocketEvent(socket, {
+      event: "reconnect_data",
+      data: {
+        currentSessionId,
+        sessions,
+        cacheExpired,
+        expiredDialogProcessIds,
+        suggestion: cacheExpired ? "reload_session_history" : "",
+      },
+    });
+
+    this.sendSocketEvent(socket, {
+      event: "reconnect_complete",
+      data: {
+        totalSessions: sessions.length,
+        cacheExpired,
+      },
+    });
+  }
+
+  _resolveReconnectChannelKeys(socket, currentSessionId = "") {
+    const currentSocketChannelKeys = Array.from(
+      socket?.__agentProxyChannelKeys instanceof Set ? socket.__agentProxyChannelKeys : [],
+    ).filter(Boolean);
+    if (currentSocketChannelKeys.length) {
+      return currentSocketChannelKeys;
+    }
+    const normalizedCurrentSessionId = String(currentSessionId || "").trim();
+    const requesterApiKey = String(socket?.__agentProxyApiKey || "").trim();
+    const requesterUserId = String(socket?.__agentProxyUserId || "").trim();
+    const resolvedChannelKeys = [];
+    for (const [channelKey, channel] of this.channelStore.entries()) {
+      if (!channel) continue;
+      if (
+        normalizedCurrentSessionId &&
+        this._extractSessionIdFromChannelKey(channelKey) !== normalizedCurrentSessionId
+      ) {
+        continue;
+      }
+      if (!this.hasChannelPermission(channel, requesterApiKey, requesterUserId)) continue;
+      resolvedChannelKeys.push(channelKey);
+    }
+    return resolvedChannelKeys;
+  }
+
+  _extractSessionIdFromChannelKey(channelKey = "") {
+    const parts = String(channelKey || "").split("::");
+    return parts.length >= 2 ? parts[1] : "";
+  }
+
   // ---- Cleanup ----
 
   cleanupExpiredChannels() {

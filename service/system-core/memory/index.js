@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, cp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
 import { mergeConfig } from "../config/index.js";
@@ -115,6 +115,35 @@ export class MemoryService {
       return JSON.parse(JSON.stringify(rawContent));
     } catch {
       return String(rawContent ?? "");
+    }
+  }
+
+  _stripMarkdownFence(input = "") {
+    const text = String(input || "").trim();
+    const matched = /^```[a-zA-Z0-9_-]*\s*([\s\S]*?)\s*```$/.exec(text);
+    return matched ? String(matched[1] || "").trim() : text;
+  }
+
+  _isBlankLongMemoryContent(value) {
+    if (value === null || value === undefined) return true;
+    if (Array.isArray(value)) return value.length === 0;
+    if (typeof value === "object") return Object.keys(value).length === 0;
+    const normalized = this._stripMarkdownFence(value).trim();
+    if (!normalized) return true;
+    return ["null", "undefined", "{}", "[]"].includes(normalized.toLowerCase());
+  }
+
+  async _backupLongMemoryIfNeeded(longMemoryPath, existingLongMemory) {
+    if (this._isBlankLongMemoryContent(existingLongMemory)) return;
+    try {
+      await access(longMemoryPath);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      await cp(longMemoryPath, `${longMemoryPath}.${timestamp}.bak`, {
+        force: false,
+        errorOnExist: false,
+      });
+    } catch {
+      // Best-effort backup only; do not block memory summarization.
     }
   }
 
@@ -241,9 +270,15 @@ export class MemoryService {
       nextLongMemory = existingLongMemory;
     }
 
+    if (this._isBlankLongMemoryContent(nextLongMemory)) {
+      return;
+    }
+
+    const longMemoryPath = this._longPath(basePath);
+    await this._backupLongMemoryIfNeeded(longMemoryPath, existingLongMemory);
     longMem.memory = nextLongMemory;
     longMem.updatedAt = new Date().toISOString();
-    await writeFile(this._longPath(basePath), JSON.stringify(longMem, null, 2));
+    await writeFile(longMemoryPath, JSON.stringify(longMem, null, 2));
 
     // 提取后短期记忆全部清空
     this._assignShortItems(short, []);

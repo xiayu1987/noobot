@@ -115,7 +115,24 @@ export function useChatEngine({
 
   function stopSending() {
     if (!sending.value) return false;
-    return chatWebSocketClient.requestStop(forceStopUiFinalize);
+    const pendingAssistantMessage = [...(activeSession.value?.messages || [])]
+      .reverse()
+      .find(
+        (messageItem) =>
+          String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
+          Boolean(messageItem?.pending),
+      );
+    return chatWebSocketClient.requestStop(
+      {
+        partialAssistant: {
+          content: String(pendingAssistantMessage?.content || ""),
+          dialogProcessId: String(pendingAssistantMessage?.dialogProcessId || ""),
+          modelAlias: String(pendingAssistantMessage?.modelAlias || ""),
+          modelName: String(pendingAssistantMessage?.modelName || ""),
+        },
+      },
+      forceStopUiFinalize,
+    );
   }
 
   async function send() {
@@ -186,6 +203,9 @@ export function useChatEngine({
           botMsg.realtimeLogs = [...(botMsg.realtimeLogs || []), item].slice(-10);
         } else if (event === StreamEventEnum.DELTA) {
           const chunkText = String(data.text || "");
+          if (data?.dialogProcessId && !String(botMsg.dialogProcessId || "").trim()) {
+            botMsg.dialogProcessId = String(data.dialogProcessId || "").trim();
+          }
           botMsg.content += chunkText;
           if (chunkText) {
             scrollBottom();

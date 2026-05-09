@@ -27,6 +27,8 @@ const RESET_SECTION_PATHS = {
   config: ["config.json", "config.example.json"],
 };
 
+const SYNC_PRESERVE_EXISTING_ROOTS = new Set(["memory"]);
+
 
 function resolveTemplateBase(workspaceTemplatePath = "") {
   const configuredTemplatePath = String(workspaceTemplatePath || "").trim();
@@ -167,14 +169,17 @@ export async function resetUserWorkspaceKeepRuntimeInitialized({
   return base;
 }
 
-async function syncDirectoryIncremental(templateDir, userDir) {
+async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "") {
   await mkdir(userDir, { recursive: true });
   const entries = await readdir(templateDir, { withFileTypes: true });
   for (const entry of entries) {
     const src = path.join(templateDir, entry.name);
     const dst = path.join(userDir, entry.name);
+    const relativePath = path.join(relativeRoot, entry.name);
+    const rootName = String(relativePath || "").split(path.sep)[0] || "";
+    const preserveExisting = SYNC_PRESERVE_EXISTING_ROOTS.has(rootName);
     if (entry.isDirectory()) {
-      await syncDirectoryIncremental(src, dst);
+      await syncDirectoryIncremental(src, dst, relativePath);
       continue;
     }
     if (!entry.isFile()) continue;
@@ -189,7 +194,7 @@ async function syncDirectoryIncremental(templateDir, userDir) {
       await writeFile(dst, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
       continue;
     }
-    await cp(src, dst, { force: true });
+    await cp(src, dst, { force: !preserveExisting, errorOnExist: false });
   }
 }
 

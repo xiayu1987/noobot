@@ -141,7 +141,13 @@ export const enUSMessages = {
     "connectorStatusFetchFailed": "Failed to fetch connector status",
     "websocketStreamError": "WebSocket stream error",
     "websocketConnectFailed": "WebSocket connection failed",
-    "websocketClosed": "WebSocket connection closed"
+    "websocketClosed": "WebSocket connection closed",
+    "reconnectInProgress": "Reconnect in progress",
+    "reconnectTimeout": "Reconnect timeout",
+    "reconnectError": "Reconnect error",
+    "reconnectConnectFailed": "Reconnect connection failed",
+    "reconnectClosed": "Reconnect connection closed",
+    "reconnectFailed": "Reconnect failed, refreshing sessions"
   },
   "chat": {
     "newSession": "New Session",

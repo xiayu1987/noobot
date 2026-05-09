@@ -493,6 +493,46 @@ export class SessionExecutionEngine {
     }
   }
 
+  async persistStoppedAssistantMessage({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    parentDialogProcessId = "",
+    partialAssistant = {},
+  } = {}) {
+    const content = String(partialAssistant?.content || "").trim();
+    const dialogProcessId = String(partialAssistant?.dialogProcessId || "").trim();
+    if (!userId || !sessionId || !content || !dialogProcessId) return false;
+    const sessionBundle = await this.session.getSessionBundle({
+      userId,
+      sessionId,
+      parentSessionId,
+    });
+    const messages = Array.isArray(sessionBundle?.session?.messages)
+      ? sessionBundle.session.messages
+      : [];
+    const alreadySaved = messages.some(
+      (messageItem) =>
+        String(messageItem?.role || "").trim() === "assistant" &&
+        String(messageItem?.dialogProcessId || "").trim() === dialogProcessId,
+    );
+    if (alreadySaved) return false;
+    await this._appendSessionTurn({
+      userId,
+      sessionId,
+      parentSessionId,
+      role: "assistant",
+      content,
+      type: "message",
+      dialogProcessId,
+      parentDialogProcessId,
+      modelAlias: String(partialAssistant?.modelAlias || "").trim(),
+      modelName: String(partialAssistant?.modelName || "").trim(),
+      eventListener: null,
+    });
+    return true;
+  }
+
   _buildRunTurnAgentContext(agentContext = {}, abortSignal = null) {
     return {
       ...agentContext,

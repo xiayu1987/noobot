@@ -17,6 +17,14 @@ export function createChatWebSocketClient({
   let forceStopFinalizeTimer = null;
   let resolveCurrentStream = null;
 
+  // Reconnect state
+  let lastReceivedSeqMap = {};
+  let reconnecting = false;
+  let reconnectResolve = null;
+  let reconnectReject = null;
+  let reconnectTimeout = null;
+  const RECONNECT_TIMEOUT_MS = 15000;
+
   function clearTimers() {
     if (stopCloseTimer) {
       clearTimeout(stopCloseTimer);
@@ -25,6 +33,10 @@ export function createChatWebSocketClient({
     if (forceStopFinalizeTimer) {
       clearTimeout(forceStopFinalizeTimer);
       forceStopFinalizeTimer = null;
+    }
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
     }
   }
 
@@ -46,28 +58,124 @@ export function createChatWebSocketClient({
     stopRequested = false;
   }
 
+  function getLastReceivedSeqMap() {
+    return { ...lastReceivedSeqMap };
+  }
+
+  function clearLastReceivedSeqMap() {
+    lastReceivedSeqMap = {};
+  }
+
+  function updateLastReceivedSeq(dialogProcessId, seq) {
+    const dpId = String(dialogProcessId || "").trim();
+    if (!dpId) return;
+    const currentSeq = Number(lastReceivedSeqMap[dpId] || 0);
+    if (Number(seq || 0) > currentSeq) {
+      lastReceivedSeqMap[dpId] = Number(seq);
+    }
+  }
+
+  function trackIncomingEvent(data = {}) {
+    const dialogProcessId = String(data?.dialogProcessId || "").trim();
+    const sequence = Number(data?.seq || 0);
+    if (dialogProcessId && sequence > 0) {
+      updateLastReceivedSeq(dialogProcessId, sequence);
+    }
+  }
+
+  function removeLastReceivedSeq(dialogProcessId) {
+    const dpId = String(dialogProcessId || "").trim();
+    if (dpId) delete lastReceivedSeqMap[dpId];
+  }
+
+  function connect() {
+    if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
+      return; // 已连接，不重复建立
+    }
+    if (activeSocket && activeSocket.readyState === WebSocket.CONNECTING) {
+      return; // 正在连接中
+    }
+    const wsUrl = resolveWebSocketUrl();
+    const ws = new WebSocket(wsUrl);
+    activeSocket = ws;
+    ws.onopen = () => {
+      // 连接建立后不发送任何消息，仅保持连接
+    };
+    ws.onmessage = (messageEvent) => {
+      try {
+        const parsed = JSON.parse(String(messageEvent?.data || "{}"));
+        const event = String(parsed?.event || "message");
+        const data = parsed?.data || {};
+        trackIncomingEvent(data);
+        if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
+          const dialogProcessId = String(data?.dialogProcessId || "");
+          if (dialogProcessId) {
+            removeLastReceivedSeq(dialogProcessId);
+          }
+        }
+      } catch (e) {
+        // 静默处理，不中断连接
+      }
+    };
+    ws.onerror = () => {
+      // 错误时清理引用，让下次 connect 重试
+      cleanupSocketRef(ws);
+    };
+    ws.onclose = () => {
+      cleanupSocketRef(ws);
+    };
+  }
+
   async function stream(payload = {}, onEvent = () => {}) {
     return new Promise((resolve, reject) => {
-      const wsUrl = resolveWebSocketUrl();
-      const ws = new WebSocket(wsUrl);
-      activeSocket = ws;
       stopRequested = false;
       let settled = false;
       let doneReceived = false;
-
       const finalize = (fn) => {
         if (settled) return;
         settled = true;
         clearTimers();
         resolveCurrentStream = null;
-        cleanupSocketRef(ws);
         fn();
       };
-      resolveCurrentStream = () => finalize(() => resolve());
 
-      ws.onopen = () => {
+      // 复用已有连接，如果没有则新建
+      let ws = getActiveSocket();
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        connect();
+        // 等待连接建立
+        const waitOpen = () => {
+          ws = getActiveSocket();
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            onSocketReady();
+          } else if (ws && ws.readyState === WebSocket.CONNECTING) {
+            // 监听 once
+            const origOnOpen = ws.onopen;
+            ws.onopen = (e) => {
+              if (typeof origOnOpen === "function") origOnOpen(e);
+              onSocketReady();
+            };
+          } else {
+            // 连接失败
+            reject(new Error(translateText("infra.websocketStreamError")));
+          }
+        };
+        setTimeout(waitOpen, 100);
+      } else {
+        onSocketReady();
+      }
+
+      function onSocketReady() {
+        ws = getActiveSocket();
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          reject(new Error(translateText("infra.websocketStreamError")));
+          return;
+        }
+        activeSocket = ws;
+        resolveCurrentStream = () => finalize(() => resolve());
+
         ws.send(JSON.stringify(payload || {}));
-      };
+      }
 
       ws.onmessage = (messageEvent) => {
         try {
@@ -79,13 +187,20 @@ export function createChatWebSocketClient({
               data?.error || translateText("infra.websocketStreamError"),
             );
           }
+          trackIncomingEvent(data);
+          // Clear seq on done/stopped
+          if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
+            if (data?.dialogProcessId) {
+              removeLastReceivedSeq(data.dialogProcessId);
+            }
+          }
           onEvent({ event, data });
           if (event === StreamEventEnum.DONE) {
             doneReceived = true;
-            ws.close(1000, "done");
+            finalize(() => resolve());
           } else if (event === StreamEventEnum.STOPPED) {
             doneReceived = true;
-            ws.close(1000, "stopped");
+            finalize(() => resolve());
           }
         } catch (error) {
           ws.close(1011, "invalid_event");
@@ -94,9 +209,8 @@ export function createChatWebSocketClient({
       };
 
       ws.onerror = () => {
-        finalize(
-          () => reject(new Error(translateText("infra.websocketConnectFailed"))),
-        );
+        // 错误时清理引用，不 reject（连接由 connect 管理）
+        cleanupSocketRef(ws);
       };
 
       ws.onclose = () => {
@@ -104,18 +218,130 @@ export function createChatWebSocketClient({
           finalize(() => resolve());
           return;
         }
-        finalize(() => reject(new Error(translateText("infra.websocketClosed"))));
+        // 连接关闭时清理引用，不 reject（连接由 connect 管理）
+        cleanupSocketRef(ws);
+        if (!settled) {
+          finalize(() => resolve());
+        }
       };
     });
   }
 
-  function requestStop(onForceFinalize = () => {}) {
+  async function reconnect({ currentSessionId = "", onReconnectData = () => {} } = {}) {
+    return new Promise((resolve, reject) => {
+      if (reconnecting) {
+        reject(new Error(translateText("infra.reconnectInProgress")));
+        return;
+      }
+      reconnecting = true;
+      reconnectResolve = resolve;
+      reconnectReject = reject;
+
+      const wsUrl = resolveWebSocketUrl();
+      const ws = new WebSocket(wsUrl);
+      activeSocket = ws;
+
+      reconnectTimeout = setTimeout(() => {
+        if (reconnecting) {
+          reconnecting = false;
+          cleanupSocketRef(ws);
+          try { ws.close(1000, "reconnect_timeout"); } catch {}
+          reconnectReject = null;
+          reject(new Error(translateText("infra.reconnectTimeout")));
+        }
+      }, RECONNECT_TIMEOUT_MS);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          action: "reconnect",
+          lastReceivedSeqMap: { ...lastReceivedSeqMap },
+          currentSessionId: String(currentSessionId || "").trim(),
+        }));
+      };
+
+      ws.onmessage = (messageEvent) => {
+        try {
+          const parsed = JSON.parse(String(messageEvent?.data || "{}"));
+          const event = String(parsed?.event || "message");
+          const data = parsed?.data || {};
+
+          if (event === StreamEventEnum.ERROR) {
+            throw new Error(data?.error || translateText("infra.reconnectError"));
+          }
+
+          if (event === StreamEventEnum.RECONNECT_DATA) {
+            onReconnectData(data);
+            return;
+          }
+
+          if (event === StreamEventEnum.RECONNECT_COMPLETE) {
+            reconnecting = false;
+            clearTimers();
+            const resolveFn = reconnectResolve;
+            reconnectResolve = null;
+            reconnectReject = null;
+            if (resolveFn) resolveFn(data);
+            return;
+          }
+
+          trackIncomingEvent(data);
+
+          onReconnectData({ event, data });
+        } catch (error) {
+          reconnecting = false;
+          clearTimers();
+          cleanupSocketRef(ws);
+          const rejectFn = reconnectReject;
+          reconnectReject = null;
+          reconnectResolve = null;
+          if (rejectFn) rejectFn(error);
+        }
+      };
+
+      ws.onerror = () => {
+        reconnecting = false;
+        clearTimers();
+        cleanupSocketRef(ws);
+        const rejectFn = reconnectReject;
+        reconnectReject = null;
+        reconnectResolve = null;
+        rejectFn?.(new Error(translateText("infra.reconnectConnectFailed")));
+      };
+
+      ws.onclose = () => {
+        if (reconnecting) {
+          reconnecting = false;
+          clearTimers();
+          cleanupSocketRef(ws);
+          const rejectFn = reconnectReject;
+          reconnectReject = null;
+          reconnectResolve = null;
+          rejectFn?.(new Error(translateText("infra.reconnectClosed")));
+        }
+      };
+    });
+  }
+
+  function requestStop(stopPayloadOrFinalize = {}, onForceFinalize = () => {}) {
     stopRequested = true;
     const ws = activeSocket;
+    const firstArgIsFinalize = typeof stopPayloadOrFinalize === "function";
+    const normalizedStopPayload =
+      !firstArgIsFinalize &&
+      stopPayloadOrFinalize &&
+      typeof stopPayloadOrFinalize === "object"
+        ? stopPayloadOrFinalize
+        : {};
+    const forceFinalize =
+      firstArgIsFinalize
+        ? stopPayloadOrFinalize
+        : typeof onForceFinalize === "function"
+        ? onForceFinalize
+        : () => {};
 
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
-        ws.send(JSON.stringify({ action: "stop" }));
+        ws.send(JSON.stringify({ action: "stop", ...normalizedStopPayload }));
       } catch {}
       clearTimers();
       stopCloseTimer = setTimeout(() => {
@@ -136,7 +362,7 @@ export function createChatWebSocketClient({
         if (typeof resolveStream === "function") {
           resolveStream();
         }
-        onForceFinalize();
+        forceFinalize();
       }, forceStopFinalizeMs);
       return true;
     }
@@ -149,13 +375,13 @@ export function createChatWebSocketClient({
         if (typeof resolveStream === "function") {
           resolveStream();
         }
-        onForceFinalize();
+        forceFinalize();
       }, forceStopFinalizeMs);
       return true;
     }
 
     if (stopRequested) {
-      onForceFinalize();
+      forceFinalize();
       return true;
     }
     return false;
@@ -180,15 +406,22 @@ export function createChatWebSocketClient({
     }
     resolveCurrentStream = null;
     stopRequested = false;
+    reconnecting = false;
+    reconnectResolve = null;
+    reconnectReject = null;
   }
 
   return {
+    connect,
     stream,
+    reconnect,
     requestStop,
     sendJson,
     getActiveSocket,
     isStopRequested,
     clearStopRequested,
+    getLastReceivedSeqMap,
+    clearLastReceivedSeqMap,
     dispose,
   };
 }

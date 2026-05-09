@@ -38,10 +38,7 @@ export class WsRouter {
       if (handler) {
         handler.call(this, socket, payload);
       } else {
-        this.channelManager.sendSocketEvent(socket, {
-          event: "error",
-          data: { error: `agentProxy unsupported action: ${action}` },
-        });
+        this.channelManager.sendSocketError(socket, `agentProxy unsupported action: ${action}`);
       }
     });
   }
@@ -131,6 +128,10 @@ export class WsRouter {
       } else {
         this.channelManager.syncSocketToChannelTail(targetChannel, socket);
       }
+    },
+
+    reconnect(socket, payload) {
+      this.channelManager.handleReconnect(socket, payload);
     },
   };
 }

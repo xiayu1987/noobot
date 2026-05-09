@@ -19,7 +19,7 @@ import {
   getSessionsApi,
 } from "../../services/api/chatApi";
 import { encryptPayloadBySessionId } from "../../shared/utils/sessionCrypto";
-import { RoleEnum } from "../../shared/constants/chatConstants";
+import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
 import {
   createConnectorPanelState,
   generateSessionId,
@@ -179,6 +179,191 @@ export function useChatSession({
     notify,
   });
 
+  async function handleReconnect() {
+    return chatWebSocketClient.reconnect({
+      currentSessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+      onReconnectData: (reconnectPayload) => {
+        if (reconnectPayload?.sessions) {
+          applyReconnectData(reconnectPayload);
+        }
+        if (reconnectPayload?.event && reconnectPayload?.data) {
+          applyReconnectEvent(reconnectPayload.event, reconnectPayload.data);
+        }
+      },
+    }).catch((error) => {
+      console.warn("Reconnect failed:", error);
+      notify({ type: "warning", message: translate("infra.reconnectFailed") });
+    });
+  }
+
+  const replayCache = {};
+  const appliedReconnectSeqByDialogProcessId = {};
+
+  function getActiveSessionIdCandidates() {
+    return new Set(
+      [
+        activeSession.value?.backendSessionId,
+        activeSession.value?.id,
+        activeSessionId.value,
+      ]
+        .map((sessionId) => String(sessionId || "").trim())
+        .filter(Boolean),
+    );
+  }
+
+  function isCurrentActiveSession(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return false;
+    return getActiveSessionIdCandidates().has(normalizedSessionId);
+  }
+
+  function applyReconnectData(reconnectData) {
+    const sessions = Array.isArray(reconnectData?.sessions) ? reconnectData.sessions : [];
+    for (const sessionEntry of sessions) {
+      const sessionId = String(sessionEntry?.sessionId || "").trim();
+      if (!sessionId) continue;
+      const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
+        ? sessionEntry.dialogProcesses
+        : [];
+      for (const dp of dialogProcesses) {
+        const dpId = String(dp?.dialogProcessId || "").trim();
+        const messages = Array.isArray(dp?.messages) ? dp.messages : [];
+        if (!dpId || !messages.length) continue;
+        if (!isCurrentActiveSession(sessionId)) {
+          if (!replayCache[sessionId]) replayCache[sessionId] = {};
+          replayCache[sessionId][dpId] = messages;
+        } else {
+          applyReconnectMessagesToActiveSession(messages, dpId);
+        }
+      }
+    }
+    if (reconnectData?.cacheExpired) {
+      chatList.fetchSessions(String(activeSessionId.value || ""));
+    }
+  }
+
+  function resolveReconnectTargetAssistantMessage(
+    dialogProcessId = "",
+    { allowCreate = true } = {},
+  ) {
+    if (!activeSession.value) return;
+    const normalizedDpId = String(dialogProcessId || "").trim();
+    const matchedAssistantMessage = (activeSession.value.messages || []).find(
+      (messageItem) =>
+        normalizedDpId &&
+        String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
+        String(messageItem?.dialogProcessId || "").trim() === normalizedDpId,
+    );
+    if (matchedAssistantMessage) {
+      return matchedAssistantMessage.pending ? matchedAssistantMessage : null;
+    }
+    const latestPendingAssistant = [...(activeSession.value.messages || [])]
+      .reverse()
+      .find(
+        (messageItem) =>
+          String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
+          Boolean(messageItem?.pending),
+      );
+    if (latestPendingAssistant) {
+      if (normalizedDpId && !String(latestPendingAssistant?.dialogProcessId || "").trim()) {
+        latestPendingAssistant.dialogProcessId = normalizedDpId;
+      }
+      return latestPendingAssistant;
+    }
+    if (!allowCreate) return null;
+    const appendedMessage = appendMessage(RoleEnum.ASSISTANT, "");
+    appendedMessage.pending = true;
+    appendedMessage.statusLabel = "";
+    if (normalizedDpId) {
+      appendedMessage.dialogProcessId = normalizedDpId;
+    }
+    return appendedMessage;
+  }
+
+  function finalizeReconnectTerminalState() {
+    sending.value = false;
+    clearPendingInteraction();
+    chatWebSocketClient.clearStopRequested();
+    interactionSubmitting.value = false;
+  }
+
+  function getReconnectEnvelopeSequence(envelope = {}) {
+    return Number(envelope?.data?.seq || envelope?.sequence || 0);
+  }
+
+  function isReconnectTerminalBatch(messages = []) {
+    return (Array.isArray(messages) ? messages : []).some((envelope) =>
+      [
+        StreamEventEnum.DONE,
+        StreamEventEnum.STOPPED,
+        StreamEventEnum.ERROR,
+      ].includes(String(envelope?.event || "").trim()),
+    );
+  }
+
+  function applyReconnectMessagesToActiveSession(messages, dialogProcessId) {
+    if (!activeSession.value) return;
+    const normalizedDpId = String(dialogProcessId || "").trim();
+    const lastAppliedSeq = Number(appliedReconnectSeqByDialogProcessId[normalizedDpId] || 0);
+    const nextMessages = (Array.isArray(messages) ? messages : []).filter((envelope) => {
+      const sequence = getReconnectEnvelopeSequence(envelope);
+      return !sequence || sequence > lastAppliedSeq;
+    });
+    if (!nextMessages.length) return;
+    const allowCreate = !isReconnectTerminalBatch(nextMessages);
+    const targetMessage = resolveReconnectTargetAssistantMessage(normalizedDpId, {
+      allowCreate,
+    });
+    if (!targetMessage) return;
+    let maxAppliedSeq = lastAppliedSeq;
+    for (const envelope of nextMessages) {
+      maxAppliedSeq = Math.max(maxAppliedSeq, getReconnectEnvelopeSequence(envelope));
+      const eventName = String(envelope?.event || "").trim();
+      const eventData = envelope?.data || {};
+      if (eventName === StreamEventEnum.DELTA) {
+        targetMessage.content += String(eventData?.text || "");
+      } else if (eventName === StreamEventEnum.THINKING) {
+        const logItem = classifyRealtimeLog(eventData);
+        if (logItem?.dialogProcessId && !String(targetMessage?.dialogProcessId || "").trim()) {
+          targetMessage.dialogProcessId = String(logItem.dialogProcessId || "").trim();
+        }
+        targetMessage.executionLogTotal = Number(targetMessage.executionLogTotal || 0) + 1;
+        targetMessage.realtimeLogs = [...(targetMessage.realtimeLogs || []), logItem].slice(-10);
+      } else if (eventName === StreamEventEnum.DONE) {
+        targetMessage.pending = false;
+        targetMessage.statusLabel = translate("chat.generated");
+        finalizeReconnectTerminalState();
+      } else if (eventName === StreamEventEnum.STOPPED) {
+        targetMessage.pending = false;
+        targetMessage.statusLabel = translate("chat.stopped");
+        finalizeReconnectTerminalState();
+      } else if (eventName === StreamEventEnum.ERROR) {
+        targetMessage.pending = false;
+        targetMessage.statusLabel = translate("chat.failed");
+        targetMessage.error = String(eventData?.error || targetMessage?.error || "");
+        finalizeReconnectTerminalState();
+      }
+    }
+    if (normalizedDpId && maxAppliedSeq > lastAppliedSeq) {
+      appliedReconnectSeqByDialogProcessId[normalizedDpId] = maxAppliedSeq;
+    }
+    scrollBottom();
+  }
+
+  function applyReconnectEvent(event, data) {
+    const dpId = String(data?.dialogProcessId || "").trim();
+    const sessionId = String(data?.sessionId || "").trim();
+    if (sessionId && isCurrentActiveSession(sessionId)) {
+      applyReconnectMessagesToActiveSession([{ event, data }], dpId);
+      return;
+    }
+    if (event === "delta" && sessionId && dpId) {
+      if (!replayCache[sessionId]) replayCache[sessionId] = {};
+      if (!replayCache[sessionId][dpId]) replayCache[sessionId][dpId] = [];
+      replayCache[sessionId][dpId].push({ event, data });
+    }
+  }
+
   function closeMobileSidebarOnSelect(isMobileRef, mobileSidebarOpenRef) {
     if (isMobileRef.value) mobileSidebarOpenRef.value = false;
   }
@@ -216,5 +401,7 @@ export function useChatSession({
     closeMobileSidebarOnSelect,
     releaseAllPreviewUrls: chatList.releaseAllPreviewUrls,
     initSessionsAfterMount: chatList.initSessionsAfterMount,
+    chatWebSocketClient,
+    handleReconnect,
   };
 }
