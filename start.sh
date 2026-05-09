@@ -7,11 +7,18 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLIENT_DIR="$ROOT_DIR/client/noobot-chat"
 SERVICE_DIR="$ROOT_DIR/service"
+AGENT_PROXY_DIR="$ROOT_DIR/agent-proxy"
 PM2_HOME_DIR="$ROOT_DIR/.pm2"
 CLIENT_APP_NAME="noobot-client"
 SERVICE_APP_NAME="noobot-service"
+AGENT_PROXY_APP_NAME="noobot-agent-proxy"
 CADDY_ADDR="${CADDY_ADDR:-:10060}"
+AGENT_PROXY_UPSTREAM="${AGENT_PROXY_UPSTREAM:-127.0.0.1:10062}"
 API_UPSTREAM="${API_UPSTREAM:-127.0.0.1:10061}"
+AGENT_PROXY_PORT="${AGENT_PROXY_PORT:-10062}"
+AGENT_PROXY_HOST="${AGENT_PROXY_HOST:-127.0.0.1}"
+AGENT_PROXY_UPSTREAM_WS_URL="${AGENT_PROXY_UPSTREAM_WS_URL:-ws://127.0.0.1:10061/chat/ws}"
+AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0.1:10061}"
 CLIENT_CADDY_BIN="$CLIENT_DIR/deploy/bin/caddy"
 CLIENT_CADDY_CONFIG="$CLIENT_DIR/deploy/Caddyfile"
 CLIENT_DIST_DIR="$CLIENT_DIR/dist"
@@ -47,6 +54,8 @@ msg() {
     client_dir_missing_en) echo "Frontend directory not found: $2" ;;
     service_dir_missing_zh) echo "后端目录不存在: $2" ;;
     service_dir_missing_en) echo "Backend directory not found: $2" ;;
+    agent_proxy_dir_missing_zh) echo "代理目录不存在: $2" ;;
+    agent_proxy_dir_missing_en) echo "Agent proxy directory not found: $2" ;;
     step_install_zh) echo "2/5 安装依赖" ;;
     step_install_en) echo "2/5 Install dependencies" ;;
     step_build_zh) echo "3/5 构建前端" ;;
@@ -202,6 +211,7 @@ main() {
 
   [[ -d "$CLIENT_DIR" ]] || { echo "$(msg client_dir_missing "$CLIENT_DIR")" >&2; exit 1; }
   [[ -d "$SERVICE_DIR" ]] || { echo "$(msg service_dir_missing "$SERVICE_DIR")" >&2; exit 1; }
+  [[ -d "$AGENT_PROXY_DIR" ]] || { echo "$(msg agent_proxy_dir_missing "$AGENT_PROXY_DIR")" >&2; exit 1; }
   mkdir -p "$PM2_HOME_DIR"
 
   # log "1/5 更新代码"
@@ -211,6 +221,7 @@ main() {
   unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD || true
   npm --prefix "$CLIENT_DIR" install
   npm --prefix "$SERVICE_DIR" install
+  npm --prefix "$AGENT_PROXY_DIR" install
   npm --prefix "$SERVICE_DIR" run postinstall --if-present
 
   log "$(msg step_build)"
@@ -219,19 +230,29 @@ main() {
   log "$(msg step_rebuild)"
   local has_service_app=0
   local has_client_app=0
+  local has_agent_proxy_app=0
   if pm2_has_app "$SERVICE_APP_NAME"; then
     has_service_app=1
   fi
   if pm2_has_app "$CLIENT_APP_NAME"; then
     has_client_app=1
   fi
+  if pm2_has_app "$AGENT_PROXY_APP_NAME"; then
+    has_agent_proxy_app=1
+  fi
 
   log "$(msg step_start)"
-  export CADDY_ADDR API_UPSTREAM
+  export CADDY_ADDR AGENT_PROXY_UPSTREAM
+  export AGENT_PROXY_PORT AGENT_PROXY_HOST AGENT_PROXY_UPSTREAM_WS_URL AGENT_PROXY_UPSTREAM_HTTP_BASE
   if [[ "$has_service_app" -eq 1 ]]; then
     run_pm2 restart "$SERVICE_APP_NAME" --update-env
   else
     start_pm2 "$SERVICE_APP_NAME" npm --name "$SERVICE_APP_NAME" --cwd "$SERVICE_DIR" -- start
+  fi
+  if [[ "$has_agent_proxy_app" -eq 1 ]]; then
+    run_pm2 restart "$AGENT_PROXY_APP_NAME" --update-env
+  else
+    start_pm2 "$AGENT_PROXY_APP_NAME" npm --name "$AGENT_PROXY_APP_NAME" --cwd "$AGENT_PROXY_DIR" -- start
   fi
   if [[ "$has_client_app" -eq 1 ]]; then
     run_pm2 restart "$CLIENT_APP_NAME" --update-env
@@ -246,12 +267,13 @@ main() {
   log "ROOT_DIR=$ROOT_DIR"
   log "CLIENT_DIR=$CLIENT_DIR"
   log "SERVICE_DIR=$SERVICE_DIR"
+  log "AGENT_PROXY_DIR=$AGENT_PROXY_DIR"
   log "PM2_HOME_DIR=$PM2_HOME_DIR"
   log "CLIENT_DIST_DIR=$CLIENT_DIST_DIR"
   log "CLIENT_CADDY_CONFIG=$CLIENT_CADDY_CONFIG"
   log "CLIENT_CADDY_BIN=$CLIENT_CADDY_BIN"
   log "$(msg frontend_url "${FRONTEND_URL_ADDR}")"
-  log "$(msg api_url "${API_UPSTREAM}")"
+  log "$(msg api_url "${AGENT_PROXY_UPSTREAM}")"
 
   print_missing_dependency_hints "${missing_deps[@]}"
 }

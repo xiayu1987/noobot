@@ -1,0 +1,21 @@
+{
+  "name": "noobot-agent-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Noobot agent proxy gateway for resilient websocket fanout/replay",
+  "main": "agent-proxy.js",
+  "scripts": {
+    "start": "node agent-proxy.js",
+    "dev": "node --watch agent-proxy.js",
+    "pm2:start": "PM2_HOME=../.pm2 npx pm2 start agent-proxy.js --name noobot-agent-proxy",
+    "pm2:restart": "PM2_HOME=../.pm2 npx pm2 restart noobot-agent-proxy",
+    "pm2:stop": "PM2_HOME=../.pm2 npx pm2 stop noobot-agent-proxy",
+    "pm2:delete": "PM2_HOME=../.pm2 npx pm2 delete noobot-agent-proxy",
+    "pm2:logs": "PM2_HOME=../.pm2 npx pm2 logs noobot-agent-proxy",
+    "pm2:list": "PM2_HOME=../.pm2 npx pm2 list"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
+  }
+}
