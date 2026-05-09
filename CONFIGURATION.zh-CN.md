@@ -96,7 +96,21 @@
   - `service/config/global.config.json`：默认挂载本项目到 `/project`
   - `service/config/global.config.example.json`：不默认挂载项目目录
 
-### 3.5 连接器预置
+### 3.5 情景配置
+
+| 键名 | 类型 | 说明 |
+|---|---|---|
+| `scenarios.default` | string | 默认情景键（请求未设置 `config.scenario` 时使用） |
+| `scenarios.definitions.<name>.name` | string | 前端显示名称（用于情景按钮文案） |
+| `scenarios.definitions.<name>.model` | string | 该情景默认运行模型别名/模型名（请求未设置 `runtimeModel` 时生效） |
+| `scenarios.definitions.<name>.tools` | string[] | 该情景允许的工具名称集合 |
+| `scenarios.definitions.<name>.context` | string[] | 该情景允许注入的上下文段（如 `system_runtime`、`base_prompt`） |
+
+当前仓库默认：
+- `full`（默认）：tools/context 为空数组，表示不额外限制
+- `programming`：model=`"qwen3_6_plus_2026_04_02"`，tools=`["execute_script"]`，context=`["system_runtime","base_prompt"]`
+
+### 3.6 连接器预置
 
 #### 数据库连接器（`tools.database_connect_connector.connectors.<name>`）
 
@@ -133,7 +147,7 @@
 | `from_email` | string | 默认发件人 |
 | `to_email` | string | 默认收件人 |
 
-### 3.6 模型提供方（`providers.<alias>`）
+### 3.7 模型提供方（`providers.<alias>`）
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
@@ -153,7 +167,7 @@
 | `multimodal_generation.support_generation.enabled` | boolean | 是否支持多模态生成 |
 | `multimodal_generation.support_generation.support_scope` | string[] | 生成范围（如 `["image"]`） |
 
-### 3.7 MCP 服务（`mcp_servers.<name>`）
+### 3.8 MCP 服务（`mcp_servers.<name>`）
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
@@ -164,7 +178,7 @@
 | `baseUrl` | string(url) | MCP 接口地址 |
 | `headers` | object | 请求头（支持 `${VAR_NAME}`） |
 
-### 3.8 超级管理员
+### 3.9 超级管理员
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
@@ -182,6 +196,7 @@
 | `default_provider` | 用户默认模型 |
 | `attachments` | 用户级附件策略覆盖 |
 | `tools` | 用户级工具开关/参数覆盖 |
+| `scenarios` | 用户级情景定义/默认值覆盖 |
 | `providers` | 用户级模型配置覆盖 |
 | `mcp_servers` | 用户级 MCP 配置覆盖 |
 | `streaming` | 用户级流式设置 |

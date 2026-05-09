@@ -115,6 +115,36 @@ export class ContextBuilder {
     return this._workspaceDirectoriesPromise;
   }
 
+  _resolveContextIncludeSet() {
+    const contextPolicy = this.runConfig?.contextPolicy;
+    const includeContextKeys = Array.isArray(contextPolicy?.includeContextKeys)
+      ? contextPolicy.includeContextKeys
+      : [];
+    const normalizedKeys = includeContextKeys
+      .map((item) => String(item || "").trim().toLowerCase())
+      .filter(Boolean);
+    return new Set(normalizedKeys);
+  }
+
+  _isContextSectionEnabled(includeSet, sectionKey = "") {
+    if (!(includeSet instanceof Set) || includeSet.size === 0) return true;
+    const normalizedSectionKey = String(sectionKey || "").trim().toLowerCase();
+    if (!normalizedSectionKey) return false;
+    const aliasMap = {
+      base_prompt: ["base_prompt", "baseprompt", "system_prompt_base", "system_prompt"],
+      system_runtime: ["system_runtime", "runtime", "runtime_env", "runtime_environment"],
+      long_memory: ["long_memory", "memory"],
+      model: ["model", "models"],
+      skills: ["skills"],
+      services: ["services"],
+      mcp_servers: ["mcp_servers", "mcp", "mcpservers"],
+      connectors: ["connectors", "connector_status"],
+      attachments: ["attachments"],
+    };
+    const aliasList = aliasMap[normalizedSectionKey] || [normalizedSectionKey];
+    return aliasList.some((aliasItem) => includeSet.has(aliasItem));
+  }
+
   async _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
     const staticInfo = buildStaticInfo({
       runtimeBasePath,
@@ -257,66 +287,99 @@ export class ContextBuilder {
   async _buildSystemContext({ dialogProcessId = "", longMemory = null } = {}) {
     const runtimeBasePath = this._resolveRuntimeBasePath();
     const effectiveConfig = this._getEffectiveConfig();
-    const [systemPrompt, skills, attachmentMetas, workspaceDirectories, treeInfo] =
-      await Promise.all([
-        loadSystemPrompt(),
-        resolveSkills({
-          skillService: this.skillService,
-          runtimeBasePath,
-          userId: this.userId,
-        }),
-        resolveAttachments({
-          attachmentService: this.attachmentService,
-          runtimeBasePath,
-          effectiveConfig,
-          attachmentMetas: this.attachmentMetas,
-          userId: this.userId,
-          sessionId: this.sessionId,
-        }),
-        this._resolveWorkspaceDirectoriesCached(runtimeBasePath),
-        resolveSessionTreeWithRootSessionId({
-          runtimeBasePath,
-          sessionManager: this.sessionManager,
-          userId: this.userId,
-          sessionId: this.sessionId,
-          now: this._now(),
-        }),
-      ]);
-    const services = resolveServices(effectiveConfig);
-    const mcpServers = resolveAvailableMcpServers(effectiveConfig);
-    const modelSection = resolveModelSection({
-      globalConfig: this.globalConfig,
-      userConfig: this.userConfig,
-      effectiveConfig,
-    });
-    const connectorStatusSection = await resolveConnectorStatusSection({
-      rootSessionId: treeInfo.rootSessionId,
+    const includeSet = this._resolveContextIncludeSet();
+    const includeBasePrompt = this._isContextSectionEnabled(includeSet, "base_prompt");
+    const includeSystemRuntime = this._isContextSectionEnabled(
+      includeSet,
+      "system_runtime",
+    );
+    const includeLongMemory = this._isContextSectionEnabled(includeSet, "long_memory");
+    const includeModel = this._isContextSectionEnabled(includeSet, "model");
+    const includeSkills = this._isContextSectionEnabled(includeSet, "skills");
+    const includeServices = this._isContextSectionEnabled(includeSet, "services");
+    const includeMcpServers = this._isContextSectionEnabled(includeSet, "mcp_servers");
+    const includeConnectors = this._isContextSectionEnabled(includeSet, "connectors");
+    const includeAttachments = this._isContextSectionEnabled(includeSet, "attachments");
+
+    const treeInfo = await resolveSessionTreeWithRootSessionId({
+      runtimeBasePath,
+      sessionManager: this.sessionManager,
       userId: this.userId,
-      selectedConnectors:
-        this.runConfig?.selectedConnectors &&
-        typeof this.runConfig.selectedConnectors === "object"
-          ? this.runConfig.selectedConnectors
-          : {},
-      connectorChannelStore: getConnectorChannelStore(),
-      connectorHistoryStore: getConnectorHistoryStore(),
+      sessionId: this.sessionId,
+      now: this._now(),
     });
 
-    const staticInfo = buildStaticInfo({
-      runtimeBasePath,
-      userId: this.userId,
-      globalConfig: this.globalConfig,
-    });
-    const dynamicInfo = this._buildSystemRuntime({
-      dialogProcessId,
-      sessionTree: treeInfo.sessionTree,
-      rootSessionId: treeInfo.rootSessionId,
-    });
+    const [systemPrompt, skills, attachmentMetas, workspaceDirectories] =
+      await Promise.all([
+        includeBasePrompt ? loadSystemPrompt() : "",
+        includeSkills
+          ? resolveSkills({
+              skillService: this.skillService,
+              runtimeBasePath,
+              userId: this.userId,
+            })
+          : [],
+        includeAttachments
+          ? resolveAttachments({
+              attachmentService: this.attachmentService,
+              runtimeBasePath,
+              effectiveConfig,
+              attachmentMetas: this.attachmentMetas,
+              userId: this.userId,
+              sessionId: this.sessionId,
+            })
+          : [],
+        includeSystemRuntime
+          ? this._resolveWorkspaceDirectoriesCached(runtimeBasePath)
+          : [],
+      ]);
+    const services = includeServices ? resolveServices(effectiveConfig) : [];
+    const mcpServers = includeMcpServers
+      ? resolveAvailableMcpServers(effectiveConfig)
+      : [];
+    const modelSection = includeModel
+      ? resolveModelSection({
+          globalConfig: this.globalConfig,
+          userConfig: this.userConfig,
+          effectiveConfig,
+        })
+      : {};
+    const connectorStatusSection = includeConnectors
+      ? await resolveConnectorStatusSection({
+          rootSessionId: treeInfo.rootSessionId,
+          userId: this.userId,
+          selectedConnectors:
+            this.runConfig?.selectedConnectors &&
+            typeof this.runConfig.selectedConnectors === "object"
+              ? this.runConfig.selectedConnectors
+              : {},
+          connectorChannelStore: getConnectorChannelStore(),
+          connectorHistoryStore: getConnectorHistoryStore(),
+        })
+      : {};
+
+    const staticInfo = includeSystemRuntime
+      ? buildStaticInfo({
+          runtimeBasePath,
+          userId: this.userId,
+          globalConfig: this.globalConfig,
+        })
+      : {};
+    const dynamicInfo = includeSystemRuntime
+      ? this._buildSystemRuntime({
+          dialogProcessId,
+          sessionTree: treeInfo.sessionTree,
+          rootSessionId: treeInfo.rootSessionId,
+        })
+      : {};
+    const normalizedLongMemory = includeLongMemory ? longMemory : null;
+
     const systemContext = composeSystemInfoSections({
       locale: this.runConfig?.locale || "zh-CN",
       systemPrompt,
       staticInfo,
       dynamicInfo,
-      longMemory,
+      longMemory: normalizedLongMemory,
       workspaceDirectories,
       modelSection,
       skills,

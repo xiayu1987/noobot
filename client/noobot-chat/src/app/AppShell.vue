@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import MarkdownIt from "markdown-it";
 import noobotLogo from "../shared/assets/noobot.svg";
 import WorkspacePanel from "../modules/settings/WorkspacePanel.vue";
@@ -83,6 +83,9 @@ const userId = ref(localStorage.getItem("noobot_user_id") || "user-001");
 const allowUserInteraction = ref(
   localStorage.getItem("noobot_allow_user_interaction") !== "false",
 );
+const botScenario = ref(
+  String(localStorage.getItem("noobot_bot_scenario") || "").trim(),
+);
 const composerRef = ref();
 const messageListPanelRef = ref();
 const isMobile = ref(false);
@@ -99,6 +102,7 @@ const {
   connectCode,
   apiKey,
   apiRole,
+  scenarioConfig,
   isSuperAdmin,
   connecting,
   connected,
@@ -115,6 +119,45 @@ const {
 });
 
 const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
+const availableBotScenarios = computed(() => {
+  const definitions =
+    scenarioConfig?.value?.definitions &&
+    typeof scenarioConfig.value.definitions === "object"
+      ? scenarioConfig.value.definitions
+      : {};
+  const scenarioKeys = Object.keys(definitions)
+    .map((scenarioKey) => String(scenarioKey || "").trim())
+    .filter(Boolean);
+  if (!scenarioKeys.length) return [];
+  return scenarioKeys.map((scenarioKey) => ({
+    key: scenarioKey,
+    label: String(definitions?.[scenarioKey]?.name || "").trim(),
+  }));
+});
+
+function syncBotScenarioWithConfig() {
+  const configuredDefaultScenario = String(
+    scenarioConfig?.value?.default || "",
+  ).trim();
+  const currentScenario = String(botScenario.value || "").trim();
+  const availableScenarioKeySet = new Set(
+    availableBotScenarios.value
+      .map((scenarioItem) => String(scenarioItem?.key || "").trim())
+      .filter(Boolean),
+  );
+  if (!availableScenarioKeySet.size) {
+    botScenario.value = "";
+    localStorage.setItem("noobot_bot_scenario", "");
+    return;
+  }
+  if (currentScenario && availableScenarioKeySet.has(currentScenario)) return;
+  const nextScenario =
+    (configuredDefaultScenario && availableScenarioKeySet.has(configuredDefaultScenario)
+      ? configuredDefaultScenario
+      : "") || "";
+  botScenario.value = nextScenario;
+  localStorage.setItem("noobot_bot_scenario", nextScenario);
+}
 
 function onUserIdUpdate(value = "") {
   userId.value = String(value || "");
@@ -296,6 +339,7 @@ const {
   userId,
   apiKey,
   allowUserInteraction,
+  botScenario,
   connected,
   ensureConnected,
   authFetch,
@@ -351,6 +395,26 @@ function onAllowUserInteractionUpdate(value) {
     allowUserInteraction.value ? "true" : "false",
   );
 }
+
+function onBotScenarioUpdate(value = "") {
+  const nextScenario = String(value || "").trim();
+  const availableScenarioKeySet = new Set(
+    availableBotScenarios.value
+      .map((scenarioItem) => String(scenarioItem?.key || "").trim())
+      .filter(Boolean),
+  );
+  botScenario.value =
+    nextScenario && availableScenarioKeySet.has(nextScenario) ? nextScenario : "";
+  localStorage.setItem("noobot_bot_scenario", botScenario.value);
+}
+
+watch(
+  () => scenarioConfig.value,
+  () => {
+    syncBotScenarioWithConfig();
+  },
+  { deep: true, immediate: true },
+);
 
 async function handleWorkspaceReset() {
   await fetchSessions();
@@ -453,10 +517,13 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
         :can-stop="sending"
         :connected="connected"
         :allow-user-interaction="allowUserInteraction"
+        :bot-scenario="botScenario"
+        :scenario-options="availableBotScenarios"
         :interaction-active="Boolean(pendingInteractionRequest)"
         @upload-change="onUploadChange"
         @append-uploads="appendUploads"
         @update:allow-user-interaction="onAllowUserInteractionUpdate"
+        @update:bot-scenario="onBotScenarioUpdate"
         @clear-uploads="clearUploads"
         @connector-selected="onConnectorSelected"
         @send="send"
