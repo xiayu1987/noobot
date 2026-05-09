@@ -6,7 +6,7 @@ http://{$CADDY_ADDR::10060} {
     @api path_regexp api ^/api(/.*)?$
     handle @api {
       uri strip_prefix /api
-      reverse_proxy {$API_UPSTREAM:127.0.0.1:10061}
+      reverse_proxy {$AGENT_PROXY_UPSTREAM:127.0.0.1:10062}
     }
 
     try_files {path} /index.html

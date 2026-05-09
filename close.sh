@@ -6,9 +6,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVICE_DIR="$ROOT_DIR/service"
+AGENT_PROXY_DIR="$ROOT_DIR/agent-proxy"
 PM2_HOME_DIR="$ROOT_DIR/.pm2"
 CLIENT_APP_NAME="noobot-client"
 SERVICE_APP_NAME="noobot-service"
+AGENT_PROXY_APP_NAME="noobot-agent-proxy"
 
 log() {
   echo "[$(date '+%F %T')] $*"
@@ -55,17 +57,25 @@ cleanup_orphaned_service_processes() {
   pkill -f "$ROOT_DIR/service/app.js" || true
 }
 
+cleanup_orphaned_agent_proxy_processes() {
+  log "清理遗留代理进程..."
+  pkill -f "$ROOT_DIR/agent-proxy/agent-proxy.js" || true
+}
+
 main() {
   require_cmd npm
 
   [[ -d "$SERVICE_DIR" ]] || { echo "后端目录不存在: $SERVICE_DIR" >&2; exit 1; }
+  [[ -d "$AGENT_PROXY_DIR" ]] || { echo "代理目录不存在: $AGENT_PROXY_DIR" >&2; exit 1; }
 
   log "关闭 noobot 服务..."
   stop_and_delete_app "$CLIENT_APP_NAME"
   stop_and_delete_app "$SERVICE_APP_NAME"
+  stop_and_delete_app "$AGENT_PROXY_APP_NAME"
   kill_pm2_daemon
   cleanup_orphaned_client_processes
   cleanup_orphaned_service_processes
+  cleanup_orphaned_agent_proxy_processes
 
   log "当前 PM2 进程列表:"
   run_pm2 ls || true

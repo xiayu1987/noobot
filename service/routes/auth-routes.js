@@ -54,6 +54,21 @@ function resolveMergedScenarios(globalScenarios = {}, userScenarios = {}) {
   };
 }
 
+function buildClientPermissions(role = "user") {
+  const normalizedRole = String(role || "user").trim() || "user";
+  const isSuperAdmin = normalizedRole === "super_admin";
+  return {
+    role: normalizedRole,
+    canChat: true,
+    canUseAgentProxy: true,
+    canAccessWorkspace: true,
+    canAccessAdmin: isSuperAdmin,
+    canManageUsers: isSuperAdmin,
+    canManageTemplate: isSuperAdmin,
+    canManageSystemConfigParams: isSuperAdmin,
+  };
+}
+
 export function registerAuthRoutes(
   app,
   {
@@ -96,6 +111,7 @@ export function registerAuthRoutes(
           role: "super_admin",
           userId,
           apiKey,
+          permissions: buildClientPermissions("super_admin"),
           scenarios: superAdminScenarios,
         });
         return;
@@ -138,6 +154,7 @@ export function registerAuthRoutes(
         role: "user",
         userId,
         apiKey,
+        permissions: buildClientPermissions("user"),
         scenarios: mergedScenarios,
       });
     } catch (error) {
