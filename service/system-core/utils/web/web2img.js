@@ -1,4 +1,9 @@
-/* eslint-disable no-console */
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { logger } from "../../tracking/index.js";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -577,7 +582,7 @@ function clampInt(inputValue, min, max) {
 
 async function postprocessScreenshot(rawImagePath, outDir, stem, imageCfg) {
   if (!HAS_SHARP) {
-    console.warn(`[WARN] ${tSystem("web2img.sharpNotInstalledRawWarn")}`);
+    logger.warn(tSystem("web2img.sharpNotInstalledRawWarn"));
     return [rawImagePath];
   }
 
@@ -807,10 +812,10 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
   if (!urls.length) throw new Error(tSystem("common.noProcessableUrl"));
 
   if (preferTrafilatura && !HAS_READABILITY) {
-    console.warn(`[WARN] ${tSystem("web2img.readabilityNotInstalledWarn")}`);
+    logger.warn(tSystem("web2img.readabilityNotInstalledWarn"));
   }
   if (!HAS_SHARP) {
-    console.warn(`[WARN] ${tSystem("web2img.sharpNotInstalledSplitWarn")}`);
+    logger.warn(tSystem("web2img.sharpNotInstalledSplitWarn"));
   }
 
   const cfg = config || { ...DEFAULT_CONFIG };
@@ -823,12 +828,7 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
       try {
         const res = await processOneUrl(url, outputDir, browser, preferTrafilatura, cfg);
         results.push(res);
-        console.log(
-          `[OK] ${url}\n` +
-          `  images: ${res.image_paths.length} files\n` +
-          `  useful: ${res.useful_text_path}\n` +
-          `  full  : ${res.full_text_path}`
-        );
+        logger.info(`[web2img][OK] ${url} images: ${res.image_paths.length} files useful: ${res.useful_text_path} full: ${res.full_text_path}`);
       } catch (error) {
         const err = {
           url,
@@ -846,7 +846,7 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
           error: String(error && error.message ? error.message : error)
         };
         results.push(err);
-        console.error(`[ERROR] ${url}\n  reason: ${err.error}`);
+        logger.error(`[web2img][ERROR] ${url} reason: ${err.error}`);
       }
 
       await fsp.writeFile(indexPath, JSON.stringify(results, null, 2), 'utf-8');
@@ -855,7 +855,7 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
     await browser.close();
   }
 
-  console.log(`\n${tSystem("web2img.resultIndex")}: ${indexPath}`);
+  logger.info(`[web2img] ${tSystem("web2img.resultIndex")}: ${indexPath}`);
   return { indexPath, results };
 }
 

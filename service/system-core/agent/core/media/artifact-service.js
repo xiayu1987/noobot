@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { logger } from "../../../tracking/index.js";
 import { emitEvent } from "../../../event/index.js";
 import {
   appendAttachmentMetasToRuntimeAndTurn,
@@ -102,13 +103,7 @@ export async function fetchRemoteMediaArtifact(
       ),
     };
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(
-      tEngine(runtime, "fetchRemoteMediaArtifactFailed", {
-        url: normalizedUrl,
-        reason: error?.message || String(error || ""),
-      }),
-    );
+    logger.error(tEngine(runtime, "fetchRemoteMediaArtifactFailed", { url: normalizedUrl, reason: error?.message || String(error || "") }));
     return null;
   }
 }

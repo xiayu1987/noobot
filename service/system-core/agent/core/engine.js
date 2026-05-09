@@ -54,6 +54,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     dialogProcessId,
     maxTurns,
     consecutiveToolFailures,
+    errorLogger,
   } = loopState;
   const {
     eventListener,
@@ -217,6 +218,10 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       abortSignal,
       eventListener,
       turn,
+      errorLogger,
+      userId: runtime?.systemRuntime?.userId || "",
+      sessionId: runtime?.systemRuntime?.sessionId || "",
+      parentSessionId: runtime?.systemRuntime?.parentSessionId || "",
     });
   }));
   for (const toolCallResult of toolCallResults) {
@@ -285,7 +290,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
 }
 
-export async function runAgentTurn({ agentContext, userMessage }) {
+export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
   const sys = runtime.systemRuntime || {};
   const globalConfig = runtime.globalConfig || {};
@@ -350,6 +355,7 @@ export async function runAgentTurn({ agentContext, userMessage }) {
         ? maxToolLoopTurns
         : DEFAULT_MAX_TOOL_LOOP_TURNS,
     consecutiveToolFailures: {},
+    errorLogger,
   };
   return await runFunctionCallLoop({ modelState, loopState, turn: 1 });
 }
