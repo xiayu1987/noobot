@@ -13,7 +13,7 @@ import { createAgentCollabTool } from "./agent-collab-tool.js";
 import { createModelTool } from "./model-tool.js";
 import { createUserInteractionTool } from "./user-interaction-tool.js";
 import { createMcpTool } from "./mcp-tool.js";
-import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
+import { createConnectorAccessTool } from "./connector-tools/connector-access-tool.js";
 import { createMultimodalGenerateTool } from "./multimodal-generate-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
