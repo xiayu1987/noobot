@@ -16,7 +16,11 @@ export class WorkspaceService {
   }
 
   getWorkspacePath(userId) {
-    return path.resolve(this.globalConfig.workspaceRoot, userId);
+    const normalizedUserId = String(userId || "").trim();
+    if (!normalizedUserId) {
+      throw new Error("workspaceRoot/userId required");
+    }
+    return path.resolve(this.globalConfig.workspaceRoot, normalizedUserId);
   }
 
   async ensureUserWorkspace(userId) {

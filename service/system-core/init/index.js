@@ -45,7 +45,15 @@ async function resolveWorkspaceInitPaths({
   workspaceTemplatePath = "",
   userId,
 }) {
-  const base = path.resolve(workspaceRoot, userId);
+  const normalizedUserId = String(userId || "").trim();
+  const normalizedWorkspaceRoot = String(workspaceRoot || "").trim();
+  if (!normalizedUserId || !normalizedWorkspaceRoot) {
+    throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
+      code: "FATAL_WORKSPACE_PATH_INVALID",
+      details: { userId: normalizedUserId, workspaceRoot: normalizedWorkspaceRoot },
+    });
+  }
+  const base = path.resolve(normalizedWorkspaceRoot, normalizedUserId);
   const templateBase = resolveTemplateBase(workspaceTemplatePath);
   try {
     await access(templateBase);
@@ -55,7 +63,7 @@ async function resolveWorkspaceInitPaths({
       details: { templateBase },
     });
   }
-  await mkdir(path.resolve(workspaceRoot), { recursive: true });
+  await mkdir(path.resolve(normalizedWorkspaceRoot), { recursive: true });
   return { base, templateBase };
 }
 
