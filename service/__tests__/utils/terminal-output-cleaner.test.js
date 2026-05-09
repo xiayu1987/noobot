@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cleanTerminalOutputForLLM } from "../../system-core/utils/terminal-output-cleaner.js";
+import { cleanTerminalOutputForLLM } from "../../system-core/utils/cleaners/terminal-cleaner.js";
 
 test("cleanTerminalOutputForLLM strips ANSI codes", () => {
   const result = cleanTerminalOutputForLLM({

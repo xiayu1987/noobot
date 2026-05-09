@@ -8,9 +8,9 @@ import { chromium } from "playwright";
 import {
   extractReadableLinesFromHtml,
   isReadabilityExtractorReady,
-} from "./web-text-cleaner.js";
-import { tSystem } from "../i18n/system-text.js";
-import { isPlainObject, deepMerge } from "./shared-utils.js";
+} from "./text-cleaner.js";
+import { tSystem } from "../../i18n/system-text.js";
+import { isPlainObject, deepMerge } from "../shared-utils.js";
 
 const require = createRequire(import.meta.url);
 const fsp = fs.promises;

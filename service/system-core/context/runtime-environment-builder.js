@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { initRuntimeSharedBrowser } from "../utils/web-browser-simulate.js";
+import { initRuntimeSharedBrowser } from "../utils/web/browser-simulate.js";
 import { isPlainObject } from "../utils/shared-utils.js";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
   extractVisibleTextFromHtml,
-} from "../utils/web-text-cleaner.js";
+} from "../utils/web/text-cleaner.js";
 import { cleanTextUniversal } from "../utils/text-cleaner.js";
 import {
   decryptPayloadBySessionId,

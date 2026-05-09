@@ -3,10 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { safeNum } from "./shared-utils.js";
+import { safeNum } from "../shared-utils.js";
 
-function normalizeDbText(input = "") {
+const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
+
+function normalizeTerminalText(input = "") {
   return String(input || "")
+    .replace(ANSI_PATTERN, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .replace(/\u0000/g, "")
@@ -28,28 +31,11 @@ function tailClip(input = "", maxChars = 8000) {
   };
 }
 
-function compactDbStdout(input = "") {
-  const text = String(input || "").trim();
-  if (!text) return "";
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) {
-      return JSON.stringify(parsed);
-    }
-    if (parsed && typeof parsed === "object") {
-      return JSON.stringify(parsed);
-    }
-  } catch {
-    // keep raw text
-  }
-  return normalizeDbText(text);
-}
-
-export function cleanDatabaseOutputForLLM(output = {}, { maxChars = 8000 } = {}) {
+export function cleanTerminalOutputForLLM(output = {}, { maxChars = 8000 } = {}) {
   const source =
     output && typeof output === "object" && !Array.isArray(output) ? output : {};
-  const stdout = tailClip(compactDbStdout(source?.stdout || ""), maxChars);
-  const stderr = tailClip(normalizeDbText(source?.stderr || ""), maxChars);
+  const stdout = tailClip(normalizeTerminalText(source?.stdout || ""), maxChars);
+  const stderr = tailClip(normalizeTerminalText(source?.stderr || ""), maxChars);
   return {
     code: safeNum(source?.code),
     stdout: stdout.text,
