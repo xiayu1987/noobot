@@ -230,7 +230,8 @@
         "description": "优先分析代码结构，再构建完整上下文后执行修改与验证。",
         "model": "qwen3_6_plus_2026_04_02",
         "tools": [
-          "execute_script"
+          "execute_script",
+          "task_summary"
         ],
         "context": [
           "scenario",
