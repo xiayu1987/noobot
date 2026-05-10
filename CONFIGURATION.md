@@ -71,13 +71,27 @@ Based on latest examples:
 
 | Key | Type | Description |
 |---|---|---|
+| `tools.read_file.enabled` | boolean | Enable file read tool |
+| `tools.write_file.enabled` | boolean | Enable file write tool |
+| `tools.list_skills.enabled` | boolean | Enable skill listing tool |
+| `tools.set_skill_task.enabled` | boolean | Enable skill task tool |
+| `tools.call_service.enabled` | boolean | Enable external service call tool |
+| `tools.call_mcp_task.enabled` | boolean | Enable MCP task tool |
+| `tools.delegate_task_async.enabled` | boolean | Enable async delegation tool |
 | `tools.delegate_task_async.wait_timeout_ms` | number | Async task wait timeout |
 | `tools.delegate_task_async.poll_interval_ms` | number | Async task poll interval |
 | `tools.delegate_task_async.max_sub_agent_depth` | number | Max sub-agent depth |
+| `tools.wait_async_task_result.enabled` | boolean | Enable wait async result tool |
 | `tools.wait_async_task_result.poll_interval_ms` | number | Poll interval for wait tool |
+| `tools.plan_multi_task_collaboration.enabled` | boolean | Enable task planning tool |
+| `tools.switch_model.enabled` | boolean | Enable model switch tool |
+| `tools.user_interaction.enabled` | boolean | Enable user interaction tool |
+| `tools.web_to_data.enabled` | boolean | Enable web content extraction tool |
+| `tools.web_to_data.switch_web_mode` | string | Web extraction mode (e.g. `browser_simulate`) |
+| `tools.doc_to_data.enabled` | boolean | Enable document parsing tool |
+| `tools.process_content_task.enabled` | boolean | Enable content processing tool |
 | `tools.process_content_task.max_tool_loop_turns` | number | Loop cap in content task |
-| `tools.process_connector_tool.max_tool_loop_turns` | number | Loop cap in connector task |
-| `tools.access_connector.max_output_chars` | number | Connector output truncation limit |
+| `tools.execute_script.enabled` | boolean | Enable script execution tool |
 | `tools.execute_script.sandbox_mode` | boolean | Enable script sandbox mode |
 | `tools.execute_script.script_timeout_ms` | number | Script timeout |
 | `tools.execute_script.sandbox_provider.default` | enum | `docker` / `bubblewrap` / `firejail` |
@@ -88,6 +102,15 @@ Based on latest examples:
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].source` | string(path) | Host path to mount |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].target` | string(path) | Container target path (auto-normalized to `/xxx`) |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].description` | string | Human-readable mapping note (optional) |
+| `tools.process_connector_tool.enabled` | boolean | Enable connector processing tool |
+| `tools.process_connector_tool.max_tool_loop_turns` | number | Loop cap in connector task |
+| `tools.access_connector.enabled` | boolean | Enable connector access tool |
+| `tools.access_connector.max_output_chars` | number | Connector output truncation limit |
+| `tools.database_connect_connector.enabled` | boolean | Enable database connector tool |
+| `tools.terminal_connect_connector.enabled` | boolean | Enable terminal connector tool |
+| `tools.inspect_connectors.enabled` | boolean | Enable connector inspection tool |
+| `tools.multimodal_generate.enabled` | boolean | Enable multimodal generation tool |
+| `tools.email_connect_connector.enabled` | boolean | Enable email connector tool |
 
 Notes:
 - If `docker_mounts` is missing or empty, no extra mount is added.
@@ -198,8 +221,29 @@ User config can override global values.
 | `tools` | User tool enable/options override |
 | `scenarios` | User scenario definitions/default override |
 | `providers` | User provider override |
+| `services` | User external service definitions (see §4.1) |
 | `mcp_servers` | User MCP override |
+| `preferences` | User preferences (e.g. `language`) |
 | `streaming` | User streaming behavior |
+
+### 4.1 External Services (`services.<name>`)
+
+User-level external service definitions for `call_service` tool.
+
+| Key | Type | Description |
+|---|---|---|
+| `services.<name>.enabled` | boolean | Enable this service |
+| `services.<name>.api_key` | string | Service API key (optional) |
+| `services.<name>.handler` | string | Handler name |
+| `services.<name>.endpoints.<epName>.description` | string | Endpoint description |
+| `services.<name>.endpoints.<epName>.url` | string(url) | Endpoint URL (`${VAR_NAME}` supported) |
+| `services.<name>.endpoints.<epName>.query_string_format` | string | Query string template |
+| `services.<name>.endpoints.<epName>.body_format` | string | Request body template |
+| `services.<name>.endpoints.<epName>.custom_param_format` | string | Custom param template |
+
+Current defaults in repo:
+- `web_search_service`: search endpoint using SearX instance
+- `weather_service`: weather query via `wttr.in`
 
 ---
 

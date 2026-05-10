@@ -11,16 +11,23 @@ Noobot is a full-stack AI chat system built with **Node.js + Vue**.
 
 - Multi-user isolated workspace/session
 - Agent tools + skill extension
-- SSE streaming output
+- SSE streaming output + WebSocket long connection
+- Agent proxy gateway for resilient WebSocket fanout/replay
 - One-command deployment via `start.sh` (PM2 + Caddy)
+- Connector support (database/terminal/email)
+- MCP server integration
+- Multi-model provider management with scenario-based routing
 
 ## Project Structure
 
 ```text
 noobot/
-├── service/                  # Node.js backend (Agent/session/tools/memory)
-├── client/noobot-chat/       # Vue frontend (Vite)
-│   └── deploy/               # Caddy config and scripts
+├── service/                  # Node.js backend (Express 5 + WebSocket + LangChain)
+├── agent-proxy/              # Agent proxy gateway (WebSocket fanout, replay, HTTP proxy)
+├── model-proxy/              # Model proxy layer
+├── client/noobot-chat/       # Vue 3 frontend (Vite)
+├── user-template/            # User workspace template
+├── workspace/                # Runtime user data (sessions, files, attachments, config params)
 ├── start.sh                  # one-command startup/deploy script
 └── README.md
 ```
@@ -41,6 +48,7 @@ Default endpoints:
 
 - Frontend: `http://127.0.0.1:10060`
 - Backend: `http://127.0.0.1:10061`
+- Agent Proxy: `http://127.0.0.1:10062`
 
 ## Requirements
 
@@ -50,13 +58,15 @@ Default endpoints:
 
 Optional system deps:
 
-- `libreoffice`
-- `ffmpeg`
+- `libreoffice` (Office document conversion)
+- `ffmpeg` (audio/video processing)
+- `docker` / `bubblewrap` / `firejail` (script sandbox)
 
 ## Config
 
 - Main config doc: [`CONFIGURATION.md`](./CONFIGURATION.md)
 - Contributing guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- Coding standard: [`CODING-STANDARD.md`](./CODING-STANDARD.md)
 - Backend docs: [English](./service/README.md) | [中文](./service/README.zh-CN.md)
 
 Environment variables for `start.sh`:
