@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createChatModel, resolveDefaultModelSpec } from "../../model/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { emitEvent } from "../../event/index.js";
@@ -185,7 +185,7 @@ function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] 
 
   systemRuntime.needsPhaseSummary = true;
   if (Array.isArray(loopState?.messages)) {
-    loopState.messages.push(new SystemMessage(tEngine(runtime, "phaseSummaryPrompt")));
+    loopState.messages.push(new HumanMessage(tEngine(runtime, "phaseSummaryPrompt")));
   }
   emitEvent(modelState?.eventListener || null, "phase_summary_required", {
     loopCount: nextCount,
