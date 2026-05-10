@@ -110,6 +110,8 @@ Based on latest examples:
 | `tools.terminal_connect_connector.enabled` | boolean | Enable terminal connector tool |
 | `tools.inspect_connectors.enabled` | boolean | Enable connector inspection tool |
 | `tools.multimodal_generate.enabled` | boolean | Enable multimodal generation tool |
+| `tools.task_summary.enabled` | boolean | Enable task summary tool |
+| `tools.task_summary.phase_summary_loop_turns` | number | Number of turns threshold to trigger phase summary |
 | `tools.email_connect_connector.enabled` | boolean | Enable email connector tool |
 
 Notes:
@@ -134,7 +136,7 @@ Notes:
 
 Current defaults in repo:
 - `full` (default): tools/context are empty arrays, meaning no extra restriction
-- `programming`: model=`"qwen3_6_plus_2026_04_02"`, description="analyze code structure first...", tools=`["execute_script"]`, services=`["web_search_service"]`, context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
+- `programming`: model=`"qwen3_6_plus_2026_04_02"`, description="analyze code structure first...", tools=`["execute_script", "task_summary"]`, services=`["web_search_service"]`, context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
 
 ### 3.6 Connector Presets
 

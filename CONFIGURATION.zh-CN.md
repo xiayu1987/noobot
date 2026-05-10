@@ -110,6 +110,8 @@
 | `tools.terminal_connect_connector.enabled` | boolean | 启用终端连接器工具 |
 | `tools.inspect_connectors.enabled` | boolean | 启用连接器检查工具 |
 | `tools.multimodal_generate.enabled` | boolean | 启用多模态生成工具 |
+| `tools.task_summary.enabled` | boolean | 启用阶段小结工具 |
+| `tools.task_summary.phase_summary_loop_turns` | number | 触发阶段小结的对话轮数阈值 |
 | `tools.email_connect_connector.enabled` | boolean | 启用邮件连接器工具 |
 
 说明：
@@ -134,7 +136,7 @@
 
 当前仓库默认：
 - `full`（默认）：tools/context 为空数组，表示不额外限制
-- `programming`：model=`"qwen3_6_plus_2026_04_02"`，description=“优先分析代码结构…”，tools=`["execute_script"]`，services=`["web_search_service"]`，context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
+- `programming`：model=`"qwen3_6_plus_2026_04_02"`，description=“优先分析代码结构…”，tools=`["execute_script", "task_summary"]`，services=`["web_search_service"]`，context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
 
 ### 3.6 连接器预置
 
