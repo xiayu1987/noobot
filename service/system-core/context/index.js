@@ -123,6 +123,7 @@ export class ContextBuilder {
     const normalizedKeys = includeContextKeys
       .map((item) => String(item || "").trim().toLowerCase())
       .filter(Boolean);
+    if (normalizedKeys.includes("*")) return new Set();
     return new Set(normalizedKeys);
   }
 
@@ -133,6 +134,60 @@ export class ContextBuilder {
     const aliasMap = CONTEXT_SECTION_ALIASES;
     const aliasList = aliasMap[normalizedSectionKey] || [normalizedSectionKey];
     return aliasList.some((aliasItem) => includeSet.has(aliasItem));
+  }
+
+  _resolveScenarioProfile(effectiveConfig = {}) {
+    const runConfigProfile =
+      this.runConfig?.scenarioProfile && typeof this.runConfig.scenarioProfile === "object"
+        ? this.runConfig.scenarioProfile
+        : {};
+    const runConfigScenarioKey = String(this.runConfig?.scenario || "").trim();
+    const scenarioConfig =
+      effectiveConfig?.scenarios && typeof effectiveConfig.scenarios === "object"
+        ? effectiveConfig.scenarios
+        : {};
+    const defaultScenarioKey = String(scenarioConfig?.default || "").trim();
+    const resolvedScenarioKey = runConfigScenarioKey || defaultScenarioKey;
+    const scenarioDefinitions =
+      scenarioConfig?.definitions && typeof scenarioConfig.definitions === "object"
+        ? scenarioConfig.definitions
+        : {};
+    const scenarioDefinition =
+      resolvedScenarioKey &&
+      scenarioDefinitions?.[resolvedScenarioKey] &&
+      typeof scenarioDefinitions[resolvedScenarioKey] === "object"
+        ? scenarioDefinitions[resolvedScenarioKey]
+        : {};
+    const normalizeStringArray = (input = []) =>
+      Array.isArray(input)
+        ? input
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+        : [];
+    return {
+      key: resolvedScenarioKey,
+      name: String(runConfigProfile?.name || scenarioDefinition?.name || "").trim(),
+      description: String(
+        runConfigProfile?.description || scenarioDefinition?.description || "",
+      ).trim(),
+      model: String(runConfigProfile?.model || scenarioDefinition?.model || "").trim(),
+      tools: normalizeStringArray(
+        runConfigProfile?.tools ?? scenarioDefinition?.tools ?? [],
+      ),
+      context: normalizeStringArray(
+        runConfigProfile?.context ?? scenarioDefinition?.context ?? [],
+      ),
+      services: normalizeStringArray(
+        runConfigProfile?.services ?? scenarioDefinition?.services ?? [],
+      ),
+      mcpServers: normalizeStringArray(
+        runConfigProfile?.mcpServers ??
+          runConfigProfile?.mcp_servers ??
+          scenarioDefinition?.mcpServers ??
+          scenarioDefinition?.mcp_servers ??
+          [],
+      ),
+    };
   }
 
   async _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
@@ -283,6 +338,7 @@ export class ContextBuilder {
       includeSet,
       "system_runtime",
     );
+    const includeScenario = this._isContextSectionEnabled(includeSet, "scenario");
     const includeLongMemory = this._isContextSectionEnabled(includeSet, "long_memory");
     const includeModel = this._isContextSectionEnabled(includeSet, "model");
     const includeSkills = this._isContextSectionEnabled(includeSet, "skills");
@@ -323,9 +379,16 @@ export class ContextBuilder {
           ? this._resolveWorkspaceDirectoriesCached(runtimeBasePath)
           : [],
       ]);
-    const services = includeServices ? resolveServices(effectiveConfig) : [];
+    const scenarioProfile = this._resolveScenarioProfile(effectiveConfig);
+    const services = includeServices
+      ? resolveServices(effectiveConfig, {
+          includeRefs: scenarioProfile?.services || [],
+        })
+      : [];
     const mcpServers = includeMcpServers
-      ? resolveAvailableMcpServers(effectiveConfig)
+      ? resolveAvailableMcpServers(effectiveConfig, {
+          includeNames: scenarioProfile?.mcpServers || [],
+        })
       : [];
     const modelSection = includeModel
       ? resolveModelSection({
@@ -369,6 +432,7 @@ export class ContextBuilder {
       systemPrompt,
       staticInfo,
       dynamicInfo,
+      scenarioSection: includeScenario ? scenarioProfile : {},
       longMemory: normalizedLongMemory,
       workspaceDirectories,
       modelSection,

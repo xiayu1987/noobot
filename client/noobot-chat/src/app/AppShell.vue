@@ -142,6 +142,7 @@ const availableBotScenarios = computed(() => {
   return scenarioKeys.map((scenarioKey) => ({
     key: scenarioKey,
     label: String(definitions?.[scenarioKey]?.name || "").trim(),
+    description: String(definitions?.[scenarioKey]?.description || "").trim(),
   }));
 });
 

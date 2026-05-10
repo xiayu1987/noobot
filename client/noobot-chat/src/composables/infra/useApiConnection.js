@@ -88,6 +88,7 @@ export function useApiConnection({
       normalizedDefinitions[normalizedScenarioKey] = {
         ...sourceDefinition,
         name: String(sourceDefinition?.name || "").trim(),
+        description: String(sourceDefinition?.description || "").trim(),
         model: String(sourceDefinition?.model || "").trim(),
         tools: Array.isArray(sourceDefinition?.tools)
           ? sourceDefinition.tools
@@ -99,6 +100,20 @@ export function useApiConnection({
               .map((contextKey) => String(contextKey || "").trim())
               .filter(Boolean)
           : [],
+        services: Array.isArray(sourceDefinition?.services)
+          ? sourceDefinition.services
+              .map((serviceItem) => String(serviceItem || "").trim())
+              .filter(Boolean)
+          : [],
+        mcpServers: Array.isArray(sourceDefinition?.mcpServers)
+          ? sourceDefinition.mcpServers
+              .map((serverItem) => String(serverItem || "").trim())
+              .filter(Boolean)
+          : Array.isArray(sourceDefinition?.mcp_servers)
+            ? sourceDefinition.mcp_servers
+                .map((serverItem) => String(serverItem || "").trim())
+                .filter(Boolean)
+            : [],
       };
     }
     return {

@@ -125,13 +125,16 @@
 |---|---|---|
 | `scenarios.default` | string | 默认情景键（请求未设置 `config.scenario` 时使用） |
 | `scenarios.definitions.<name>.name` | string | 前端显示名称（用于情景按钮文案） |
+| `scenarios.definitions.<name>.description` | string | 情景说明（会注入系统提示块并可在前端展示） |
 | `scenarios.definitions.<name>.model` | string | 该情景默认运行模型别名/模型名（请求未设置 `runtimeModel` 时生效） |
 | `scenarios.definitions.<name>.tools` | string[] | 该情景允许的工具名称集合 |
-| `scenarios.definitions.<name>.context` | string[] | 该情景允许注入的上下文段（如 `system_runtime`、`base_prompt`） |
+| `scenarios.definitions.<name>.context` | string[] | 该情景允许注入的上下文段（如 `scenario`、`system_runtime`、`base_prompt`、`services`、`mcp_servers`） |
+| `scenarios.definitions.<name>.services` | string[] | 情景绑定的 Service 集合（支持 `serviceName` 或 `serviceName.endpointName`） |
+| `scenarios.definitions.<name>.mcp_servers` / `mcpServers` | string[] | 情景绑定的 MCP Server 名称集合 |
 
 当前仓库默认：
 - `full`（默认）：tools/context 为空数组，表示不额外限制
-- `programming`：model=`"qwen3_6_plus_2026_04_02"`，tools=`["execute_script"]`，context=`["system_runtime","base_prompt"]`
+- `programming`：model=`"qwen3_6_plus_2026_04_02"`，description=“优先分析代码结构…”，tools=`["execute_script"]`，services=`["web_search_service"]`，context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
 
 ### 3.6 连接器预置
 
@@ -196,6 +199,7 @@
 |---|---|---|
 | `type` | enum | `sse` / `streamableHttp` |
 | `description` | string | 服务描述 |
+| `prompt` | string | MCP 提示词（注入系统提示块） |
 | `isActive` | boolean | 是否启用 |
 | `name` | string | 展示名称 |
 | `baseUrl` | string(url) | MCP 接口地址 |
@@ -235,7 +239,9 @@
 | `services.<name>.enabled` | boolean | 是否启用该服务 |
 | `services.<name>.api_key` | string | 服务 API 密钥（可选） |
 | `services.<name>.handler` | string | 处理器名称 |
+| `services.<name>.prompt` | string | 服务级提示词（注入系统提示块） |
 | `services.<name>.endpoints.<epName>.description` | string | 端点描述 |
+| `services.<name>.endpoints.<epName>.prompt` | string | 端点级提示词（注入系统提示块） |
 | `services.<name>.endpoints.<epName>.url` | string(url) | 端点 URL（支持 `${VAR_NAME}`） |
 | `services.<name>.endpoints.<epName>.query_string_format` | string | 查询参数模板 |
 | `services.<name>.endpoints.<epName>.body_format` | string | 请求体模板 |
