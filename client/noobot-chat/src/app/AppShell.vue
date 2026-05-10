@@ -150,17 +150,31 @@ function syncBotScenarioWithConfig() {
     scenarioConfig?.value?.default || "",
   ).trim();
   const currentScenario = String(botScenario.value || "").trim();
+  const savedScenario = String(localStorage.getItem("noobot_bot_scenario") || "").trim();
   const availableScenarioKeySet = new Set(
     availableBotScenarios.value
       .map((scenarioItem) => String(scenarioItem?.key || "").trim())
       .filter(Boolean),
   );
+
   if (!availableScenarioKeySet.size) {
-    botScenario.value = "";
-    localStorage.setItem("noobot_bot_scenario", "");
+    // 配置尚未返回时，不要覆盖用户本地已保存的情景，避免刷新后丢失选择
+    botScenario.value =
+      currentScenario || savedScenario || configuredDefaultScenario || "";
     return;
   }
-  if (currentScenario && availableScenarioKeySet.has(currentScenario)) return;
+
+  // 优先恢复用户上次保存的情景
+  if (savedScenario && availableScenarioKeySet.has(savedScenario)) {
+    botScenario.value = savedScenario;
+    return;
+  }
+
+  // 如果当前情景有效，则保持不变
+  if (currentScenario && availableScenarioKeySet.has(currentScenario)) {
+    return;
+  }
+
   const nextScenario =
     (configuredDefaultScenario && availableScenarioKeySet.has(configuredDefaultScenario)
       ? configuredDefaultScenario
