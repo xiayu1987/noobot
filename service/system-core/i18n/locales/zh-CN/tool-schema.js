@@ -343,6 +343,21 @@ export const TOOL_SCHEMA_BY_TOOL = {
     },
     "texts": {}
   },
+  "task_summary": {
+    "description": {
+      "key": "tools.task_summary.description",
+      "text": "提交当前任务阶段小结。仅在系统要求阶段小结时调用；summaryContent 需简要说明当前目标、已完成事项、关键结果/文件/状态、未完成事项和下一步。"
+    },
+    "params": {
+      "summaryContent": {
+        "key": "tools.task_summary.fieldSummaryContent",
+        "text": "阶段小结内容。请简明但覆盖当前任务状态、关键结果、遗留问题和下一步。"
+      }
+    },
+    "texts": {
+      "tools.task_summary.summaryContentRequired": "summaryContent 必填"
+    }
+  },
   "execute_script": {
     "description": {
       "key": "tools.script.description",

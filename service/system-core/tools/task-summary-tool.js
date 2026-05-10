@@ -5,7 +5,9 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { markCurrentTurnStoreSummarized } from "../context/summarized-message-policy.js";
 import { toToolJsonResult } from "./tool-json-result.js";
+import { tTool } from "./tool-i18n.js";
 
 export const TASK_SUMMARY_TOOL_NAME = "task_summary";
 
@@ -41,43 +43,9 @@ export function isTaskSummaryMessage(messageItem = {}) {
   return false;
 }
 
-function shouldMarkSummarized(messageItem = {}) {
-  const role = String(messageItem?.role || "").trim();
-  if (role === "system" || role === "user") return false;
-  if (isTaskSummaryMessage(messageItem)) return false;
-  return true;
-}
-
 function markCurrentTurnMessagesSummarized(currentTurnMessages = null) {
-  if (!currentTurnMessages) return 0;
-  if (typeof currentTurnMessages.updateWhere === "function") {
-    return currentTurnMessages.updateWhere(
-      { summarized: true },
-      (messageItem) => shouldMarkSummarized(messageItem),
-    );
-  }
-  return 0;
-}
-
-async function markPersistedMessagesSummarized({
-  sessionManager = null,
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-} = {}) {
-  if (
-    !sessionManager ||
-    typeof sessionManager.markSessionMessagesSummarized !== "function" ||
-    !userId ||
-    !sessionId
-  ) {
-    return 0;
-  }
-  return sessionManager.markSessionMessagesSummarized({
-    userId,
-    sessionId,
-    parentSessionId,
-    shouldMark: shouldMarkSummarized,
+  return markCurrentTurnStoreSummarized(currentTurnMessages, {
+    taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
   });
 }
 
@@ -85,40 +53,29 @@ export function createTaskSummaryTool(ctx = {}) {
   const runtime = ctx?.agentContext?.runtime || {};
   const currentTurnMessages = runtime?.currentTurnMessages || null;
   const systemRuntime = runtime?.systemRuntime || {};
-  const sessionManager = runtime?.sessionManager || null;
 
   const taskSummaryTool = new DynamicStructuredTool({
     name: TASK_SUMMARY_TOOL_NAME,
-    description:
-      "提交当前任务阶段小结。仅在系统要求阶段小结时调用；summaryContent 需简要说明当前目标、已完成事项、关键结果/文件/状态、未完成事项和下一步。",
+    description: tTool(runtime, "tools.task_summary.description"),
     schema: z.object({
       summaryContent: z
         .string()
-        .describe("阶段小结内容。请简明但覆盖当前任务状态、关键结果、遗留问题和下一步。"),
+        .describe(tTool(runtime, "tools.task_summary.fieldSummaryContent")),
     }),
     func: async ({ summaryContent }) => {
       const summaryText = String(summaryContent || "").trim();
       if (!summaryText) {
         return toToolJsonResult(TASK_SUMMARY_TOOL_NAME, {
           ok: false,
-          message: "summaryContent 必填",
+          message: tTool(runtime, "tools.task_summary.summaryContentRequired"),
         });
       }
 
       systemRuntime.needsPhaseSummary = false;
       systemRuntime.toolLoopExecutionCount = 0;
       systemRuntime.phaseSummaryLoopCount = 0;
-
       const currentTurnSummarizedCount =
         markCurrentTurnMessagesSummarized(currentTurnMessages);
-      const persistedSummarizedCount = await markPersistedMessagesSummarized({
-        sessionManager,
-        userId: String(runtime?.userId || systemRuntime?.userId || "").trim(),
-        sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-        parentSessionId: String(
-          systemRuntime?.parentSessionId || runtime?.parentSessionId || "",
-        ).trim(),
-      });
 
       return toToolJsonResult(
         TASK_SUMMARY_TOOL_NAME,
@@ -128,7 +85,6 @@ export function createTaskSummaryTool(ctx = {}) {
           phaseSummary: summaryText,
           summarizedMessages: {
             currentTurn: currentTurnSummarizedCount,
-            persisted: persistedSummarizedCount,
           },
         },
         true,
