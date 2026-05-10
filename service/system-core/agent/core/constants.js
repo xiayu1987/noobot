@@ -29,6 +29,12 @@ export const TOOL_CONSECUTIVE_FAILURE_LIMIT = 3;
 export const DEFAULT_MAX_TOOL_LOOP_TURNS = 4;
 
 /**
+ * 阶段小结默认触发工具循环轮数。
+ * 0 表示默认不强制触发；可通过 tools.task_summary.phase_summary_loop_turns 覆盖。
+ */
+export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS = 0;
+
+/**
  * 工具调用结果追踪截断长度（字符数）
  * 用于 traces 中 result 字段的长度限制
  */

@@ -105,6 +105,10 @@
     "user_interaction": {
       "enabled": true
     },
+    "task_summary": {
+      "enabled": true,
+      "phase_summary_loop_turns": 0
+    },
     "web_to_data": {
       "enabled": true,
       "switch_web_mode": "browser_simulate"

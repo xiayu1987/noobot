@@ -462,6 +462,8 @@ export class SessionExecutionEngine {
     attachmentMetas = [],
     modelAlias = "",
     modelName = "",
+    summarized = false,
+    toolName = "",
     dialogProcessId = "",
     parentDialogProcessId = "",
     parentSessionId = "",
@@ -483,6 +485,8 @@ export class SessionExecutionEngine {
       attachmentMetas,
       modelAlias,
       modelName,
+      summarized,
+      toolName,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -518,6 +522,8 @@ export class SessionExecutionEngine {
           : null,
         modelAlias: String(messageItem.modelAlias || "").trim(),
         modelName: String(messageItem.modelName || "").trim(),
+        summarized: messageItem.summarized === true,
+        toolName: String(messageItem.toolName || "").trim(),
         eventListener,
       });
     }

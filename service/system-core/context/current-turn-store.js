@@ -21,6 +21,16 @@ export function createCurrentTurnMessagesStore(messages = []) {
       }
       return null;
     },
+    updateWhere(patch = {}, matcher = null) {
+      let updatedCount = 0;
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index] || {};
+        if (typeof matcher === "function" && !matcher(item, index)) continue;
+        items[index] = { ...item, ...(patch || {}) };
+        updatedCount += 1;
+      }
+      return updatedCount;
+    },
     toArray() {
       return items.map((item) => ({ ...item }));
     },
@@ -74,4 +84,3 @@ export function resolveTurnTasksStore(currentTurnTasks, fallbackTasks = []) {
   if (isValidStore) return currentTurnTasks;
   return createCurrentTurnTasksStore(fallbackTasks);
 }
-

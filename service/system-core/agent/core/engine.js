@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { SystemMessage } from "@langchain/core/messages";
 import { createChatModel, resolveDefaultModelSpec } from "../../model/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { emitEvent } from "../../event/index.js";
@@ -26,8 +27,13 @@ import { executeToolCall } from "./execution/tool-runner.js";
 import {
   TOOL_CONSECUTIVE_FAILURE_LIMIT,
   DEFAULT_MAX_TOOL_LOOP_TURNS,
+  DEFAULT_PHASE_SUMMARY_LOOP_TURNS,
 } from "./constants.js";
 import { assertNotAborted } from "./utils/error-utils.js";
+
+const TASK_SUMMARY_TOOL_NAME = "task_summary";
+const PHASE_SUMMARY_PROMPT =
+  "需要阶段小结当前任务情况简要说明，阶段小结完后请继续";
 
 function normalizeAiTextContent(aiContent) {
   if (typeof aiContent === "string") return String(aiContent || "");
@@ -41,6 +47,88 @@ function normalizeAiTextContent(aiContent) {
     })
     .filter(Boolean);
   return textParts.join("\n");
+}
+
+function resolvePhaseSummaryLoopTurns(effectiveConfig = {}) {
+  const taskSummaryConfig =
+    effectiveConfig?.tools?.[TASK_SUMMARY_TOOL_NAME] &&
+    typeof effectiveConfig.tools[TASK_SUMMARY_TOOL_NAME] === "object"
+      ? effectiveConfig.tools[TASK_SUMMARY_TOOL_NAME]
+      : {};
+  const configuredValue = Number(
+    taskSummaryConfig.phase_summary_loop_turns ??
+      taskSummaryConfig.phaseSummaryLoopTurns ??
+      taskSummaryConfig.max_tool_loop_turns ??
+      taskSummaryConfig.maxToolLoopTurns ??
+      DEFAULT_PHASE_SUMMARY_LOOP_TURNS,
+  );
+  if (!Number.isFinite(configuredValue) || configuredValue <= 0) return 0;
+  return Math.floor(configuredValue);
+}
+
+function hasTaskSummaryTool(tools = []) {
+  return (Array.isArray(tools) ? tools : []).some(
+    (toolDefinition) =>
+      String(toolDefinition?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+  );
+}
+
+function removePhaseSummaryPromptMessages(messages = []) {
+  if (!Array.isArray(messages)) return 0;
+  let removedCount = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const content = String(message?.content || "").trim();
+    const type =
+      typeof message?._getType === "function"
+        ? String(message._getType() || "")
+        : String(message?.lc_kwargs?.type || message?.type || "");
+    if (type !== "system" && message?.constructor?.name !== "SystemMessage") {
+      continue;
+    }
+    if (content !== PHASE_SUMMARY_PROMPT) continue;
+    messages.splice(index, 1);
+    removedCount += 1;
+  }
+  return removedCount;
+}
+
+function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] }) {
+  const runtime = modelState?.runtime || {};
+  const systemRuntime =
+    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+      ? runtime.systemRuntime
+      : null;
+  if (!systemRuntime) return false;
+  const hasTaskSummaryCall = (Array.isArray(toolCallResults) ? toolCallResults : [])
+    .some(
+      (toolCallResult) =>
+        String(toolCallResult?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+    );
+  if (hasTaskSummaryCall) return false;
+
+  const currentCount = Number(systemRuntime.toolLoopExecutionCount || 0);
+  const nextCount = Number.isFinite(currentCount) && currentCount >= 0
+    ? currentCount + 1
+    : 1;
+  systemRuntime.toolLoopExecutionCount = nextCount;
+  systemRuntime.phaseSummaryLoopCount = nextCount;
+
+  const threshold = Number(loopState?.phaseSummaryLoopTurns || 0);
+  if (!Number.isFinite(threshold) || threshold <= 0) return false;
+  if (!hasTaskSummaryTool(loopState?.tools || [])) return false;
+  if (systemRuntime.needsPhaseSummary === true) return false;
+  if (nextCount < threshold) return false;
+
+  systemRuntime.needsPhaseSummary = true;
+  if (Array.isArray(loopState?.messages)) {
+    loopState.messages.push(new SystemMessage(PHASE_SUMMARY_PROMPT));
+  }
+  emitEvent(modelState?.eventListener || null, "phase_summary_required", {
+    loopCount: nextCount,
+    threshold,
+  });
+  return true;
 }
 
 async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
@@ -287,6 +375,16 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
 
   loopState.turnMessages = turnMessageStore.toArray();
   loopState.turnTasks = turnTaskStore.toArray();
+  if (
+    toolCallResults.some(
+      (toolCallResult) =>
+        String(toolCallResult?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+    )
+  ) {
+    removePhaseSummaryPromptMessages(messages);
+  }
+  maybeRequestPhaseSummary({ modelState, loopState, toolCallResults });
+  loopState.turnMessages = turnMessageStore.toArray();
   return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
 }
 
@@ -302,6 +400,15 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
   const tools = Array.isArray(agentContext?.payload?.tools?.registry)
     ? agentContext.payload.tools.registry
     : [];
+  if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
+    const loopCount = Number(runtime.systemRuntime.toolLoopExecutionCount || 0);
+    runtime.systemRuntime.toolLoopExecutionCount =
+      Number.isFinite(loopCount) && loopCount > 0 ? loopCount : 0;
+    runtime.systemRuntime.phaseSummaryLoopCount =
+      runtime.systemRuntime.toolLoopExecutionCount;
+    runtime.systemRuntime.needsPhaseSummary =
+      runtime.systemRuntime.needsPhaseSummary === true;
+  }
 
   const selectedModelSpec = resolveDefaultModelSpec({
     globalConfig,
@@ -313,6 +420,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
     Number.isFinite(runtimeMaxTurns) && runtimeMaxTurns > 0
       ? runtimeMaxTurns
       : configMaxTurns;
+  const phaseSummaryLoopTurns = resolvePhaseSummaryLoopTurns(effectiveConfig);
   const llm = createChatModel({
     globalConfig,
     userConfig,
@@ -354,6 +462,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
       Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
         ? maxToolLoopTurns
         : DEFAULT_MAX_TOOL_LOOP_TURNS,
+    phaseSummaryLoopTurns,
     consecutiveToolFailures: {},
     errorLogger,
   };

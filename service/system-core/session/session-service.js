@@ -175,6 +175,8 @@ export class SessionService {
     attachmentMetas = [],
     modelAlias = "",
     modelName = "",
+    summarized = false,
+    toolName = "",
     parentSessionId = "",
   }) {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
@@ -203,10 +205,12 @@ export class SessionService {
       taskStatus: resolvedTaskStatus,
       modelAlias: String(modelAlias || "").trim(),
       modelName: String(modelName || "").trim(),
+      summarized: summarized === true,
       ts: this.now(),
     }, this.now);
 
     if (tool_call_id) turn.tool_call_id = tool_call_id;
+    if (toolName) turn.toolName = String(toolName || "").trim();
     if (Array.isArray(tool_calls) && tool_calls.length) turn.tool_calls = tool_calls;
     if (Array.isArray(attachmentMetas) && attachmentMetas.length) {
       turn.attachmentMetas = attachmentMetas;
@@ -217,6 +221,34 @@ export class SessionService {
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+  }
+
+  async markSessionMessagesSummarized({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    shouldMark = null,
+  } = {}) {
+    if (!userId || !sessionId) return 0;
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    if (!session) return 0;
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    let updatedCount = 0;
+    session.messages = messages.map((messageItem) => {
+      const shouldUpdate =
+        typeof shouldMark === "function" ? shouldMark(messageItem) : true;
+      if (!shouldUpdate || messageItem?.summarized === true) return messageItem;
+      updatedCount += 1;
+      return { ...messageItem, summarized: true };
+    });
+    if (updatedCount > 0) {
+      await this.sessionRepo.save(userId, session, parentSessionId);
+    }
+    return updatedCount;
   }
 
   async getSessionTurns({ userId, sessionId }) {
