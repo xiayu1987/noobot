@@ -41,6 +41,7 @@ export class ChannelManager {
       startFingerprint: "",
       eventSequence: 0,
       eventLog: [],
+      pendingInteractionRequests: new Map(),
       cleanupAfterMs: 0,
       upstreamClosed: false,
       ownerApiKey: "",
@@ -89,6 +90,7 @@ export class ChannelManager {
       const requestId = String(envelope?.data?.requestId || "").trim();
       if (requestId) {
         this.requestChannelMap.set(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
+        channel.pendingInteractionRequests.set(requestId, envelope);
       }
     }
     return envelope;
@@ -243,6 +245,7 @@ export class ChannelManager {
     channel.status = String(terminalStatus || "done").trim();
     channel.updatedAtMs = nowMs();
     channel.cleanupAfterMs = nowMs() + config.channelRetentionMs;
+    channel.pendingInteractionRequests.clear();
   }
 
   connectUpstreamChannel(channel, apiKey = "", locale = "") {
@@ -372,6 +375,13 @@ export class ChannelManager {
     }
     try {
       channel.upstreamSocket.send(JSON.stringify(payload || {}));
+      if (String(payload?.action || "").trim().toLowerCase() === "interaction_response") {
+        const requestId = String(payload?.requestId || "").trim();
+        if (requestId) {
+          channel.pendingInteractionRequests.delete(requestId);
+          this.requestChannelMap.delete(requestId);
+        }
+      }
       return true;
     } catch {
       return false;
@@ -419,21 +429,18 @@ export class ChannelManager {
       return;
     }
 
-    this.attachSubscriber(channel, socket);
-    if (config.replayOnReconnect) {
-      const subscriberSequenceByChannel = socket.__agentProxyLastSequenceByChannel || {};
-      const lastKnownSequence = Number(subscriberSequenceByChannel[channel.key] || 0);
-      this.replayChannelEvents(channel, socket, lastKnownSequence);
-    } else {
-      this.syncSocketToChannelTail(channel, socket);
-    }
-
     const nextPayloadFingerprint = buildFingerprint(payload);
     const sameAsLastPayload = channel.startFingerprint === nextPayloadFingerprint;
     const keepExistingRun =
       channel.status === "running" || channel.status === "connecting";
+    const shouldStartNewRun =
+      !keepExistingRun && !(isTerminalStatus(channel.status) && sameAsLastPayload);
+
+    this.attachSubscriber(channel, socket);
+    this.syncSocketToChannelTail(channel, socket);
+
     if (keepExistingRun) return;
-    if (isTerminalStatus(channel.status) && sameAsLastPayload) return;
+    if (!shouldStartNewRun) return;
 
     channel.startPayload = { ...payload };
     channel.startFingerprint = nextPayloadFingerprint;
@@ -487,11 +494,15 @@ export class ChannelManager {
       if (!sessionsMap.has(channelSessionId)) {
         sessionsMap.set(channelSessionId, {
           sessionId: channelSessionId,
+          hasRunningTask: false,
           dialogProcesses: [],
         });
       }
 
       const sessionEntry = sessionsMap.get(channelSessionId);
+      if (channel.status === "running" || channel.status === "connecting") {
+        sessionEntry.hasRunningTask = true;
+      }
 
       // Collect all dialogProcessIds from eventLog
       const dialogProcessIdsInLog = new Set();
@@ -508,6 +519,9 @@ export class ChannelManager {
 
       for (const dpId of dialogProcessIdsInLog) {
         const lastSeq = Number(lastReceivedSeqMap[dpId] || 0);
+        if (lastSeq <= 0 && isTerminalStatus(channel.status)) {
+          continue;
+        }
 
         // Find events for this dialogProcessId with seq > lastSeq
         const missingEvents = channel.eventLog.filter((envelope) => {
@@ -517,12 +531,37 @@ export class ChannelManager {
           const comparableSequence = upstreamSeq > 0 ? upstreamSeq : proxySeq;
           return envDpId === dpId && comparableSequence > lastSeq;
         });
+        const missingRequestIds = new Set(
+          missingEvents
+            .map((envelope) => String(envelope?.data?.requestId || "").trim())
+            .filter(Boolean),
+        );
+        const pendingInteractionEvents = isTerminalStatus(channel.status)
+          ? []
+          : Array.from(channel.pendingInteractionRequests.values())
+              .filter((envelope) => {
+                const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
+                const requestId = String(envelope?.data?.requestId || "").trim();
+                return envDpId === dpId && requestId && !missingRequestIds.has(requestId);
+              })
+              .map((envelope) => ({
+                ...envelope,
+                data: {
+                  ...(envelope?.data || {}),
+                  __agentProxyPendingInteraction: true,
+                },
+              }));
+        const replayEvents = [...missingEvents, ...pendingInteractionEvents].sort((left, right) => {
+          const leftSeq = Number(left?.data?.seq || left?.sequence || 0);
+          const rightSeq = Number(right?.data?.seq || right?.sequence || 0);
+          return leftSeq - rightSeq;
+        });
 
-        if (missingEvents.length > 0) {
+        if (replayEvents.length > 0) {
           sessionEntry.dialogProcesses.push({
             dialogProcessId: dpId,
             parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
-            messages: missingEvents.slice(0, config.maxReplayEvents),
+            messages: replayEvents.slice(0, config.maxReplayEvents),
           });
         } else if (lastSeq > 0) {
           // DialogProcessId was known but no events found - may be expired
@@ -569,7 +608,10 @@ export class ChannelManager {
       if (!channel) continue;
       if (
         normalizedCurrentSessionId &&
-        this._extractSessionIdFromChannelKey(channelKey) !== normalizedCurrentSessionId
+        this._extractSessionIdFromChannelKey(channelKey) !== normalizedCurrentSessionId &&
+        channel.status !== "running" &&
+        channel.status !== "connecting" &&
+        !channel.pendingInteractionRequests?.size
       ) {
         continue;
       }
@@ -615,6 +657,11 @@ export class ChannelManager {
     }
     for (const [requestId, mappedEntry] of this.requestChannelMap.entries()) {
       const createdAtMs = typeof mappedEntry === "object" ? Number(mappedEntry.createdAtMs || 0) : 0;
+      const mappedChannelKey = typeof mappedEntry === "object" ? mappedEntry.channelKey : mappedEntry;
+      const mappedChannel = this.channelStore.get(mappedChannelKey);
+      if (mappedChannel?.pendingInteractionRequests?.has(requestId)) {
+        continue;
+      }
       if (!createdAtMs || currentMs - createdAtMs > config.requestIdTtlMs) {
         this.requestChannelMap.delete(requestId);
       }
