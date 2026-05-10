@@ -5,12 +5,10 @@
  */
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
+import { normalizeText } from '../shared-utils.js';
 
 const MIN_TAG_TEXT_LENGTH = 6;
 
-function normalizeText(value = "") {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
 
 export function cleanAndDedupTextLines(input = "", maxLines = 4000) {
   const out = [];
