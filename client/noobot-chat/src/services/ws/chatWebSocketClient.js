@@ -66,6 +66,10 @@ export function createChatWebSocketClient({
     lastReceivedSeqMap = {};
   }
 
+  function hasReconnectState() {
+    return Object.keys(lastReceivedSeqMap).length > 0;
+  }
+
   function updateLastReceivedSeq(dialogProcessId, seq) {
     const dpId = String(dialogProcessId || "").trim();
     if (!dpId) return;
@@ -80,6 +84,33 @@ export function createChatWebSocketClient({
     const sequence = Number(data?.seq || 0);
     if (dialogProcessId && sequence > 0) {
       updateLastReceivedSeq(dialogProcessId, sequence);
+    }
+  }
+
+  function trackReconnectData(data = {}) {
+    const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+    for (const sessionEntry of sessions) {
+      const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
+        ? sessionEntry.dialogProcesses
+        : [];
+      for (const dialogProcess of dialogProcesses) {
+        const dialogProcessId = String(dialogProcess?.dialogProcessId || "").trim();
+        const messages = Array.isArray(dialogProcess?.messages)
+          ? dialogProcess.messages
+          : [];
+        for (const envelope of messages) {
+          const event = String(envelope?.event || "").trim();
+          const eventData =
+            envelope?.data && typeof envelope.data === "object" ? envelope.data : {};
+          trackIncomingEvent({
+            ...eventData,
+            dialogProcessId: String(eventData?.dialogProcessId || dialogProcessId || "").trim(),
+          });
+          if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
+            removeLastReceivedSeq(dialogProcessId || eventData?.dialogProcessId || "");
+          }
+        }
+      }
     }
   }
 
@@ -270,6 +301,7 @@ export function createChatWebSocketClient({
           }
 
           if (event === StreamEventEnum.RECONNECT_DATA) {
+            trackReconnectData(data);
             onReconnectData(data);
             return;
           }
@@ -422,6 +454,7 @@ export function createChatWebSocketClient({
     clearStopRequested,
     getLastReceivedSeqMap,
     clearLastReceivedSeqMap,
+    hasReconnectState,
     dispose,
   };
 }

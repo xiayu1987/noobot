@@ -217,8 +217,79 @@ export function useChatSession({
     return getActiveSessionIdCandidates().has(normalizedSessionId);
   }
 
-  function applyReconnectData(reconnectData) {
+  function isReconnectTerminalEvent(eventName = "") {
+    return [
+      StreamEventEnum.DONE,
+      StreamEventEnum.STOPPED,
+      StreamEventEnum.ERROR,
+    ].includes(String(eventName || "").trim());
+  }
+
+  function hasRecoverableRunningEvents(messages = []) {
+    return (Array.isArray(messages) ? messages : []).some((envelope) => {
+      const eventName = String(envelope?.event || "").trim();
+      if (!eventName) return false;
+      if (isPendingInteractionReplay(envelope)) return true;
+      return !isReconnectTerminalEvent(eventName);
+    });
+  }
+
+  function findRecoverableReconnectSessionId(sessionsPayload = []) {
+    for (const sessionEntry of Array.isArray(sessionsPayload) ? sessionsPayload : []) {
+      const sessionId = String(sessionEntry?.sessionId || "").trim();
+      if (!sessionId) continue;
+      if (sessionEntry?.hasRunningTask === true) return sessionId;
+      const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
+        ? sessionEntry.dialogProcesses
+        : [];
+      const hasRunningEvents = dialogProcesses.some((dialogProcess) =>
+        hasRecoverableRunningEvents(dialogProcess?.messages || []),
+      );
+      if (hasRunningEvents) return sessionId;
+    }
+    return "";
+  }
+
+  async function ensureReconnectSessionActive(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId || isCurrentActiveSession(normalizedSessionId)) return true;
+    const targetSession = sessions.value.find(
+      (sessionItem) =>
+        String(sessionItem?.id || "").trim() === normalizedSessionId ||
+        String(sessionItem?.backendSessionId || "").trim() === normalizedSessionId,
+    );
+    if (!targetSession) {
+      await chatList.fetchSessions(normalizedSessionId);
+    }
+    const resolvedTargetSession = sessions.value.find(
+      (sessionItem) =>
+        String(sessionItem?.id || "").trim() === normalizedSessionId ||
+        String(sessionItem?.backendSessionId || "").trim() === normalizedSessionId,
+    );
+    if (!resolvedTargetSession) return false;
+    await chatList.selectSession(resolvedTargetSession.id, { force: true });
+    return isCurrentActiveSession(normalizedSessionId);
+  }
+
+  async function applyReconnectData(reconnectData) {
     const sessions = Array.isArray(reconnectData?.sessions) ? reconnectData.sessions : [];
+    const recoverableSessionId = findRecoverableReconnectSessionId(sessions);
+    if (recoverableSessionId) {
+      await ensureReconnectSessionActive(recoverableSessionId);
+      sending.value = true;
+      const recoverableSessionEntry = sessions.find(
+        (sessionEntry) => String(sessionEntry?.sessionId || "").trim() === recoverableSessionId,
+      );
+      const recoverableDialogProcesses = Array.isArray(recoverableSessionEntry?.dialogProcesses)
+        ? recoverableSessionEntry.dialogProcesses
+        : [];
+      const hasReconnectMessages = recoverableDialogProcesses.some(
+        (dialogProcess) => Array.isArray(dialogProcess?.messages) && dialogProcess.messages.length,
+      );
+      if (!hasReconnectMessages && isCurrentActiveSession(recoverableSessionId)) {
+        resolveReconnectTargetAssistantMessage("", { allowCreate: true });
+      }
+    }
     for (const sessionEntry of sessions) {
       const sessionId = String(sessionEntry?.sessionId || "").trim();
       if (!sessionId) continue;
@@ -291,6 +362,13 @@ export function useChatSession({
     return Number(envelope?.data?.seq || envelope?.sequence || 0);
   }
 
+  function isPendingInteractionReplay(envelope = {}) {
+    return (
+      String(envelope?.event || "").trim() === StreamEventEnum.INTERACTION_REQUEST &&
+      envelope?.data?.__agentProxyPendingInteraction === true
+    );
+  }
+
   function isReconnectTerminalBatch(messages = []) {
     return (Array.isArray(messages) ? messages : []).some((envelope) =>
       [
@@ -306,6 +384,7 @@ export function useChatSession({
     const normalizedDpId = String(dialogProcessId || "").trim();
     const lastAppliedSeq = Number(appliedReconnectSeqByDialogProcessId[normalizedDpId] || 0);
     const nextMessages = (Array.isArray(messages) ? messages : []).filter((envelope) => {
+      if (isPendingInteractionReplay(envelope)) return true;
       const sequence = getReconnectEnvelopeSequence(envelope);
       return !sequence || sequence > lastAppliedSeq;
     });
@@ -314,7 +393,12 @@ export function useChatSession({
     const targetMessage = resolveReconnectTargetAssistantMessage(normalizedDpId, {
       allowCreate,
     });
-    if (!targetMessage) return;
+    if (!targetMessage) {
+      if (!allowCreate) {
+        finalizeReconnectTerminalState();
+      }
+      return;
+    }
     let maxAppliedSeq = lastAppliedSeq;
     for (const envelope of nextMessages) {
       maxAppliedSeq = Math.max(maxAppliedSeq, getReconnectEnvelopeSequence(envelope));
@@ -329,6 +413,24 @@ export function useChatSession({
         }
         targetMessage.executionLogTotal = Number(targetMessage.executionLogTotal || 0) + 1;
         targetMessage.realtimeLogs = [...(targetMessage.realtimeLogs || []), logItem].slice(-10);
+      } else if (eventName === StreamEventEnum.INTERACTION_REQUEST) {
+        setPendingInteractionRequest({
+          requestId: String(eventData?.requestId || ""),
+          content: String(eventData?.content || ""),
+          fields: Array.isArray(eventData?.fields) ? eventData.fields : [],
+          dialogProcessId: String(eventData?.dialogProcessId || ""),
+          requireEncryption: eventData?.requireEncryption === true,
+          sessionId: String(eventData?.sessionId || ""),
+          toolName: String(eventData?.toolName || ""),
+          needConnectionInfo: eventData?.needConnectionInfo === true,
+          connectorName: String(eventData?.connectorName || ""),
+          connectorType: String(eventData?.connectorType || ""),
+          interactionType: String(eventData?.interactionType || "").trim(),
+          interactionData:
+            eventData?.interactionData && typeof eventData.interactionData === "object"
+              ? eventData.interactionData
+              : {},
+        });
       } else if (eventName === StreamEventEnum.DONE) {
         targetMessage.pending = false;
         targetMessage.statusLabel = translate("chat.generated");
@@ -350,14 +452,21 @@ export function useChatSession({
     scrollBottom();
   }
 
-  function applyReconnectEvent(event, data) {
+  async function applyReconnectEvent(event, data) {
     const dpId = String(data?.dialogProcessId || "").trim();
     const sessionId = String(data?.sessionId || "").trim();
+    const eventName = String(event || "").trim();
+    if (sessionId && !isCurrentActiveSession(sessionId) && !isReconnectTerminalEvent(eventName)) {
+      const switched = await ensureReconnectSessionActive(sessionId);
+      if (switched) {
+        sending.value = true;
+      }
+    }
     if (sessionId && isCurrentActiveSession(sessionId)) {
       applyReconnectMessagesToActiveSession([{ event, data }], dpId);
       return;
     }
-    if (event === "delta" && sessionId && dpId) {
+    if (sessionId && dpId) {
       if (!replayCache[sessionId]) replayCache[sessionId] = {};
       if (!replayCache[sessionId][dpId]) replayCache[sessionId][dpId] = [];
       replayCache[sessionId][dpId].push({ event, data });

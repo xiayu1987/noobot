@@ -63,7 +63,7 @@ export class WsRouter {
         );
         return;
       }
-      const forwarded = this.channelManager.forwardToUpstream(targetChannel, { action: "stop" });
+      const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
       if (!forwarded) {
         const stoppedEnvelope = this.channelManager.pushChannelEvent(targetChannel, "stopped", {
           message: "agentProxy upstream not running",

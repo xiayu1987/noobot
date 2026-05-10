@@ -109,6 +109,7 @@ export function useChatEngine({
     interactionSubmitting.value = false;
     markPendingAssistantMessageStopped();
     sending.value = false;
+    chatWebSocketClient.clearLastReceivedSeqMap();
     chatWebSocketClient.dispose();
     scrollBottom();
   }
