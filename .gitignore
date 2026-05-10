@@ -42,3 +42,6 @@ user-template/default-user/config.json
 *.swp
 *.swo
 *~
+
+# report output
+report/
