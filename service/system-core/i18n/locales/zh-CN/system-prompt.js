@@ -22,6 +22,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     sections: {
       staticInfo: "系统运行环境",
       dynamicInfo: "当前会话动态信息",
+      scenario: "当前情景配置（名称、说明与约束）",
       workspaceDirectories: "工作区目录信息",
       longMemory: "相关长期记忆",
       models: "可用模型与当前模型",

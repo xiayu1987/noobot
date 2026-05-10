@@ -159,6 +159,7 @@ export const MULTIMODAL_SCOPE = {
 export const CONTEXT_SECTION = {
   BASE_PROMPT: "base_prompt",
   SYSTEM_RUNTIME: "system_runtime",
+  SCENARIO: "scenario",
   LONG_MEMORY: "long_memory",
   MODEL: "model",
   SKILLS: "skills",
@@ -181,6 +182,7 @@ export const CONTEXT_SECTION_ALIASES = {
     "runtime_env",
     "runtime_environment",
   ],
+  [CONTEXT_SECTION.SCENARIO]: [CONTEXT_SECTION.SCENARIO, "scene", "scenario_info"],
   [CONTEXT_SECTION.LONG_MEMORY]: [CONTEXT_SECTION.LONG_MEMORY, "memory"],
   [CONTEXT_SECTION.MODEL]: [CONTEXT_SECTION.MODEL, "models"],
   [CONTEXT_SECTION.SKILLS]: [CONTEXT_SECTION.SKILLS],

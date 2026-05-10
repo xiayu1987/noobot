@@ -115,6 +115,7 @@ export function composeSystemInfoSections({
   systemPrompt = "",
   staticInfo = {},
   dynamicInfo = {},
+  scenarioSection = {},
   longMemory = null,
   workspaceDirectories = [],
   modelSection = {},
@@ -150,6 +151,7 @@ export function composeSystemInfoSections({
     normalizedSystemPrompt,
     toJsonSection(String(sections?.staticInfo || "").trim(), staticInfo, { emptyValueText }),
     toJsonSection(String(sections?.dynamicInfo || "").trim(), dynamicInfo, { emptyValueText }),
+    toJsonSection(String(sections?.scenario || "").trim(), scenarioSection, { emptyValueText }),
     hasValue(normalizedWorkspaceSection)
       ? toSystemSection(
           String(sections?.workspaceDirectories || "").trim(),

@@ -315,20 +315,48 @@ export class SessionExecutionEngine {
         scenario: resolvedScenarioKey,
       };
     }
-    const scenarioToolNames = Array.isArray(scenarioDefinition?.tools)
-      ? scenarioDefinition.tools
-          .map((item) => String(item || "").trim())
-          .filter(Boolean)
+    const normalizeStringArray = (input = []) =>
+      Array.isArray(input)
+        ? input
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
+        : [];
+    const scenarioToolNamesRaw = Array.isArray(scenarioDefinition?.tools)
+      ? normalizeStringArray(scenarioDefinition.tools)
       : [];
+    const scenarioServiceItems = normalizeStringArray(scenarioDefinition?.services);
+    const scenarioMcpServerItems = normalizeStringArray(
+      scenarioDefinition?.mcpServers ?? scenarioDefinition?.mcp_servers,
+    );
+    const scenarioToolNameSet = new Set(scenarioToolNamesRaw);
+    if (scenarioServiceItems.length) {
+      scenarioToolNameSet.add("call_service");
+    }
+    if (scenarioMcpServerItems.length) {
+      scenarioToolNameSet.add("call_mcp_task");
+    }
+    const scenarioToolNames = Array.from(scenarioToolNameSet);
     const scenarioContextKeys = Array.isArray(scenarioDefinition?.context)
-      ? scenarioDefinition.context
-          .map((item) => String(item || "").trim())
-          .filter(Boolean)
+      ? normalizeStringArray(scenarioDefinition.context)
       : [];
+    const hasAllTools = scenarioToolNames.includes("*");
+    const hasAllContext = scenarioContextKeys.includes("*");
+    const scenarioName = String(scenarioDefinition?.name || "").trim();
+    const scenarioDescription = String(scenarioDefinition?.description || "").trim();
     const scenarioModelName = String(scenarioDefinition?.model || "").trim();
     const resolvedRunConfig = {
       ...normalizedRunConfig,
       scenario: resolvedScenarioKey,
+      scenarioProfile: {
+        key: resolvedScenarioKey,
+        name: scenarioName,
+        description: scenarioDescription,
+        model: scenarioModelName,
+        tools: scenarioToolNames,
+        context: scenarioContextKeys,
+        services: scenarioServiceItems,
+        mcpServers: scenarioMcpServerItems,
+      },
     };
     const requestedRuntimeModel = String(
       normalizedRunConfig?.runtimeModel || "",
@@ -336,7 +364,7 @@ export class SessionExecutionEngine {
     if (!requestedRuntimeModel && scenarioModelName) {
       resolvedRunConfig.runtimeModel = scenarioModelName;
     }
-    if (scenarioToolNames.length) {
+    if (scenarioToolNames.length && !hasAllTools) {
       const currentToolPolicy = isPlainObject(normalizedRunConfig?.toolPolicy)
         ? normalizedRunConfig.toolPolicy
         : {};
@@ -363,9 +391,11 @@ export class SessionExecutionEngine {
             .map((item) => String(item || "").trim())
             .filter(Boolean)
         : [];
-      const mergedContextKeys = currentContextKeys.length
-        ? scenarioContextKeys.filter((name) => currentContextKeys.includes(name))
-        : scenarioContextKeys;
+      const mergedContextKeys = hasAllContext
+        ? []
+        : currentContextKeys.length
+          ? scenarioContextKeys.filter((name) => currentContextKeys.includes(name))
+          : scenarioContextKeys;
       resolvedRunConfig.contextPolicy = {
         ...currentContextPolicy,
         includeContextKeys: mergedContextKeys,

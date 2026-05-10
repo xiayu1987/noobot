@@ -11,26 +11,31 @@ function isPlainObject(value) {
 function normalizeScenarioDefinitions(definitionsInput = {}) {
   const sourceDefinitions = isPlainObject(definitionsInput) ? definitionsInput : {};
   const normalizedDefinitions = {};
+  const normalizeStringArray = (input = []) =>
+    Array.isArray(input)
+      ? input
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      : [];
   for (const [scenarioKey, scenarioValue] of Object.entries(sourceDefinitions)) {
     const normalizedScenarioKey = String(scenarioKey || "").trim();
     if (!normalizedScenarioKey) continue;
     const sourceScenario = isPlainObject(scenarioValue) ? scenarioValue : {};
-    const normalizedTools = Array.isArray(sourceScenario?.tools)
-      ? sourceScenario.tools
-          .map((toolName) => String(toolName || "").trim())
-          .filter(Boolean)
-      : [];
-    const normalizedContext = Array.isArray(sourceScenario?.context)
-      ? sourceScenario.context
-          .map((contextKey) => String(contextKey || "").trim())
-          .filter(Boolean)
-      : [];
+    const normalizedTools = normalizeStringArray(sourceScenario?.tools);
+    const normalizedContext = normalizeStringArray(sourceScenario?.context);
+    const normalizedServices = normalizeStringArray(sourceScenario?.services);
+    const normalizedMcpServers = normalizeStringArray(
+      sourceScenario?.mcpServers ?? sourceScenario?.mcp_servers,
+    );
     normalizedDefinitions[normalizedScenarioKey] = {
       ...sourceScenario,
       name: String(sourceScenario?.name || "").trim(),
+      description: String(sourceScenario?.description || "").trim(),
       model: String(sourceScenario?.model || "").trim(),
       tools: normalizedTools,
       context: normalizedContext,
+      services: normalizedServices,
+      mcpServers: normalizedMcpServers,
     };
   }
   return normalizedDefinitions;

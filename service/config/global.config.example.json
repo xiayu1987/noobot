@@ -207,19 +207,38 @@
     "definitions": {
       "full": {
         "name": "全能",
-        "tools": [],
-        "context": []
+        "description": "通用情景：不限制工具和上下文，按任务需要自主选择能力。",
+        "tools": [
+          "*"
+        ],
+        "context": [
+          "*"
+        ],
+        "services": [
+          "*"
+        ],
+        "mcp_servers": [
+          "*"
+        ]
       },
       "programming": {
         "name": "编程",
+        "description": "优先分析代码结构，再构建完整上下文后执行修改与验证。",
         "model": "qwen3_6_plus_2026_04_02",
         "tools": [
           "execute_script"
         ],
         "context": [
+          "scenario",
           "system_runtime",
-          "base_prompt"
-        ]
+          "base_prompt",
+          "services",
+          "mcp_servers"
+        ],
+        "services": [
+          "web_search_service"
+        ],
+        "mcp_servers": []
       }
     }
   },
@@ -305,10 +324,45 @@
       }
     }
   },
+  "services": {
+    "web_search_service": {
+      "enabled": true,
+      "api_key": "",
+      "handler": "web-search-service-handler",
+      "prompt": "优先用于补充实时或外部网页信息，先检索再回答。",
+      "endpoints": {
+        "search": {
+          "description": "搜索网页",
+          "prompt": "返回可引用的检索结果摘要与来源。",
+          "custom_param_format": "searx实例地址",
+          "url": "${web_search_service_search_address}",
+          "query_string_format": "q=搜索内容",
+          "body_format": "{}"
+        }
+      }
+    },
+    "weather_service": {
+      "enabled": true,
+      "api_key": "",
+      "handler": "weather-service-handler",
+      "prompt": "用于天气类查询，优先返回结构化天气信息。",
+      "endpoints": {
+        "get_weather": {
+          "description": "天气查询",
+          "prompt": "输入城市名，返回当前与未来天气。",
+          "custom_param_format": "j1",
+          "url": "https://wttr.in",
+          "query_string_format": "{\"city\":\"\",\"format\":\"j1\"}",
+          "body_format": "{}"
+        }
+      }
+    }
+  },
   "mcp_servers": {
     "china-railway": {
       "type": "sse",
       "description": "提供 12306购票信息查询等服务",
+      "prompt": "用于铁路票务查询场景，先说明查询条件再调用。",
       "isActive": true,
       "name": "AliyunBailianMCP_china-railway",
       "baseUrl": "https://dashscope.aliyuncs.com/api/v1/mcps/china-railway/sse",

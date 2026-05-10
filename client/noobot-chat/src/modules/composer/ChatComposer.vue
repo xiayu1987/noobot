@@ -105,8 +105,30 @@ const normalizedScenarioOptions = computed(() => {
     .map((scenarioItem) => ({
       key: String(scenarioItem?.key || "").trim(),
       label: String(scenarioItem?.label || "").trim(),
+      description: String(scenarioItem?.description || "").trim(),
     }))
     .filter((scenarioItem) => Boolean(scenarioItem.key));
+});
+const selectedScenarioLabel = computed(() => {
+  const currentScenario = String(props.botScenario || "").trim();
+  if (!currentScenario) return "";
+  const matchedScenario = normalizedScenarioOptions.value.find(
+    (scenarioItem) => scenarioItem.key === currentScenario,
+  );
+  if (matchedScenario) return resolveScenarioLabel(matchedScenario);
+  if (currentScenario.toLowerCase() === "programming") {
+    return translate("composer.scenarioProgramming");
+  }
+  return currentScenario;
+});
+
+const selectedScenarioDescription = computed(() => {
+  const currentScenario = String(props.botScenario || "").trim();
+  if (!currentScenario) return "";
+  const matchedScenario = normalizedScenarioOptions.value.find(
+    (scenarioItem) => scenarioItem.key === currentScenario,
+  );
+  return String(matchedScenario?.description || "").trim();
 });
 
 function onInputChange(value) {
@@ -421,7 +443,16 @@ defineExpose({
 <template>
   <div class="composer-wrapper">
     <!-- 顶部选中标签 -->
-    <div v-if="selectedConnectorNames.length" class="selected-connectors-row">
+    <div
+      v-if="selectedConnectorNames.length || selectedScenarioLabel"
+      class="selected-connectors-row"
+    >
+      <span
+        v-if="selectedScenarioLabel"
+        class="selected-connector-name selected-scenario-name"
+      >
+        {{ translate("composer.botScenario") }}: {{ selectedScenarioLabel }}
+      </span>
       <span
         v-for="(connectorName, connectorIndex) in selectedConnectorNames"
         :key="`${connectorName}-${connectorIndex}`"
@@ -482,6 +513,7 @@ defineExpose({
                       :key="scenarioItem.key"
                       size="small"
                       :type="String(botScenario || '').trim() === scenarioItem.key ? 'primary' : 'default'"
+                      :title="scenarioItem.description || resolveScenarioLabel(scenarioItem)"
                       @click="onScenarioSelect(scenarioItem.key)"
                     >
                       {{ resolveScenarioLabel(scenarioItem) }}
@@ -496,6 +528,9 @@ defineExpose({
                     {{ translate("composer.scenarioProgramming") }}
                   </el-button>
                 </div>
+                <p v-if="selectedScenarioDescription" class="scenario-description">
+                  {{ selectedScenarioDescription }}
+                </p>
               </div>
 
               <ComposerAttachmentToolbar
@@ -661,6 +696,10 @@ defineExpose({
 
 .selected-connector-name:hover {
   background: var(--noobot-fill-hover, #e4e4e7);
+}
+
+.selected-scenario-name {
+  border-color: rgba(59, 130, 246, 0.25);
 }
 
 /* ================= 悬浮停止按钮 ================= */
@@ -847,6 +886,13 @@ defineExpose({
 
 .scenario-selector-label {
   font-size: 13px;
+  color: var(--noobot-text-secondary, #52525b);
+}
+
+.scenario-description {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
   color: var(--noobot-text-secondary, #52525b);
 }
 

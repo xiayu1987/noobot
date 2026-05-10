@@ -125,13 +125,16 @@ Notes:
 |---|---|---|
 | `scenarios.default` | string | Default scenario key (used when request does not set `config.scenario`) |
 | `scenarios.definitions.<name>.name` | string | Display name used by frontend scenario buttons |
+| `scenarios.definitions.<name>.description` | string | Scenario description (injected into system prompt and can be shown in UI) |
 | `scenarios.definitions.<name>.model` | string | Runtime model alias/name for this scenario (applied when request does not set `runtimeModel`) |
 | `scenarios.definitions.<name>.tools` | string[] | Allowed tool names for this scenario |
-| `scenarios.definitions.<name>.context` | string[] | Allowed context sections (`system_runtime`, `base_prompt`, etc.) |
+| `scenarios.definitions.<name>.context` | string[] | Allowed context sections (`scenario`, `system_runtime`, `base_prompt`, `services`, `mcp_servers`, etc.) |
+| `scenarios.definitions.<name>.services` | string[] | Scenario-bound services (`serviceName` or `serviceName.endpointName`) |
+| `scenarios.definitions.<name>.mcp_servers` / `mcpServers` | string[] | Scenario-bound MCP server names |
 
 Current defaults in repo:
 - `full` (default): tools/context are empty arrays, meaning no extra restriction
-- `programming`: model=`"qwen3_6_plus_2026_04_02"`, tools=`["execute_script"]`, context=`["system_runtime","base_prompt"]`
+- `programming`: model=`"qwen3_6_plus_2026_04_02"`, description="analyze code structure first...", tools=`["execute_script"]`, services=`["web_search_service"]`, context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
 
 ### 3.6 Connector Presets
 
@@ -196,6 +199,7 @@ Current defaults in repo:
 |---|---|---|
 | `type` | enum | `sse` / `streamableHttp` |
 | `description` | string | Service description |
+| `prompt` | string | MCP prompt text (injected into system prompt) |
 | `isActive` | boolean | Enable this MCP service |
 | `name` | string | Display name |
 | `baseUrl` | string(url) | MCP endpoint |
@@ -235,7 +239,9 @@ User-level external service definitions for `call_service` tool.
 | `services.<name>.enabled` | boolean | Enable this service |
 | `services.<name>.api_key` | string | Service API key (optional) |
 | `services.<name>.handler` | string | Handler name |
+| `services.<name>.prompt` | string | Service-level prompt text (injected into system prompt) |
 | `services.<name>.endpoints.<epName>.description` | string | Endpoint description |
+| `services.<name>.endpoints.<epName>.prompt` | string | Endpoint-level prompt text (injected into system prompt) |
 | `services.<name>.endpoints.<epName>.url` | string(url) | Endpoint URL (`${VAR_NAME}` supported) |
 | `services.<name>.endpoints.<epName>.query_string_format` | string | Query string template |
 | `services.<name>.endpoints.<epName>.body_format` | string | Request body template |
