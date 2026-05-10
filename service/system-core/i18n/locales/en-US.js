@@ -129,5 +129,6 @@ export default {
   "ws.unauthorized": "Unauthorized",
   "ws.unknownError": "unknown error",
   "ws.userInteractionTimeout": "user interaction timeout",
+  "agent.phaseSummaryPrompt": "Please provide a brief phase summary of the current task status. After summarizing, please continue.",
   "agent.abortError": "dialog stopped by user"
 };

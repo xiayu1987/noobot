@@ -10,8 +10,11 @@ import { runAgentTurn } from "../agent/index.js";
 import { createExecutionEventListener, emitEvent } from "../event/index.js";
 import { recoverableToolError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
+import { mergeConfig } from "../config/index.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { isPlainObject } from "../utils/shared-utils.js";
+
+const ALWAYS_INCLUDED_SCENARIO_TOOL_NAMES = new Set(["task_summary"]);
 
 function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -286,10 +289,14 @@ export class SessionExecutionEngine {
     };
   }
 
-  _resolveScenarioRunConfig(runConfig = {}) {
+  _resolveScenarioRunConfig(runConfig = {}, userConfig = {}) {
     const normalizedRunConfig = isPlainObject(runConfig) ? runConfig : {};
-    const scenarioConfig = isPlainObject(this.globalConfig?.scenarios)
-      ? this.globalConfig.scenarios
+    const effectiveConfig = mergeConfig(
+      this.globalConfig || {},
+      isPlainObject(userConfig) ? userConfig : {},
+    );
+    const scenarioConfig = isPlainObject(effectiveConfig?.scenarios)
+      ? effectiveConfig.scenarios
       : {};
     const hasScenarioField = Object.prototype.hasOwnProperty.call(
       normalizedRunConfig,
@@ -334,6 +341,9 @@ export class SessionExecutionEngine {
     }
     if (scenarioMcpServerItems.length) {
       scenarioToolNameSet.add("call_mcp_task");
+    }
+    for (const toolName of ALWAYS_INCLUDED_SCENARIO_TOOL_NAMES) {
+      scenarioToolNameSet.add(toolName);
     }
     const scenarioToolNames = Array.from(scenarioToolNameSet);
     const scenarioContextKeys = Array.isArray(scenarioDefinition?.context)
@@ -774,7 +784,6 @@ export class SessionExecutionEngine {
   }) {
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
     try {
-      const resolvedRunConfig = this._resolveScenarioRunConfig(runConfig);
       const normalizedMessage = this._normalizeRunMessage(message);
       this._validateRunInput({ userId, sessionId, caller, parentSessionId });
       resolvedParentAsyncResultContainer = this._ensureParentAsyncResultContainer({
@@ -798,6 +807,10 @@ export class SessionExecutionEngine {
         caller,
         eventListener,
       });
+      const resolvedRunConfig = this._resolveScenarioRunConfig(
+        runConfig,
+        userConfig,
+      );
 
       const agentContext = await this._buildAgentContext({
         mode: isContinue ? "continue" : "initial",

@@ -32,8 +32,6 @@ import {
 import { assertNotAborted } from "./utils/error-utils.js";
 
 const TASK_SUMMARY_TOOL_NAME = "task_summary";
-const PHASE_SUMMARY_PROMPT =
-  "需要阶段小结当前任务情况简要说明，阶段小结完后请继续";
 
 function normalizeAiTextContent(aiContent) {
   if (typeof aiContent === "string") return String(aiContent || "");
@@ -73,7 +71,7 @@ function hasTaskSummaryTool(tools = []) {
   );
 }
 
-function removePhaseSummaryPromptMessages(messages = []) {
+function removePhaseSummaryPromptMessages(messages = [], runtime = {}) {
   if (!Array.isArray(messages)) return 0;
   let removedCount = 0;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -86,7 +84,7 @@ function removePhaseSummaryPromptMessages(messages = []) {
     if (type !== "system" && message?.constructor?.name !== "SystemMessage") {
       continue;
     }
-    if (content !== PHASE_SUMMARY_PROMPT) continue;
+    if (content !== tEngine(runtime, "phaseSummaryPrompt")) continue;
     messages.splice(index, 1);
     removedCount += 1;
   }
@@ -122,7 +120,7 @@ function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] 
 
   systemRuntime.needsPhaseSummary = true;
   if (Array.isArray(loopState?.messages)) {
-    loopState.messages.push(new SystemMessage(PHASE_SUMMARY_PROMPT));
+    loopState.messages.push(new SystemMessage(tEngine(runtime, "phaseSummaryPrompt")));
   }
   emitEvent(modelState?.eventListener || null, "phase_summary_required", {
     loopCount: nextCount,
@@ -381,7 +379,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
         String(toolCallResult?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
     )
   ) {
-    removePhaseSummaryPromptMessages(messages);
+    removePhaseSummaryPromptMessages(messages, runtime);
   }
   maybeRequestPhaseSummary({ modelState, loopState, toolCallResults });
   loopState.turnMessages = turnMessageStore.toArray();

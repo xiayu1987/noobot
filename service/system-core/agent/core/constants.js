@@ -14,6 +14,7 @@ export const ENGINE_I18N_KEY_MAP = {
   fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
   fetchRemoteMediaArtifactFailed: "agent.fetchRemoteMediaArtifactFailed",
   abortError: "agent.abortError",
+  phaseSummaryPrompt: "agent.phaseSummaryPrompt",
 };
 
 /**
