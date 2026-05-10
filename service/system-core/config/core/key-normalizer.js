@@ -30,6 +30,7 @@ export const SNAKE_TO_CANONICAL_KEY_MAP = {
   max_sub_agent_depth: "maxSubAgentDepth",
   script_timeout_ms: "scriptTimeoutMs",
   max_output_chars: "maxOutputChars",
+  phase_summary_loop_turns: "phaseSummaryLoopTurns",
   super_admin: "superAdmin",
   user_id: "userId",
   connect_code: "connectCode",

@@ -523,7 +523,7 @@ function createConnectorToolContext(agentContext = {}) {
   const historyStore = runtime?.sharedTools?.connectorHistoryStore || null;
   const connectorEventListener = runtime?.sharedTools?.connectorEventListener || null;
   const maxAccessOutputChars = Number(
-    effectiveConfig?.tools?.access_connector?.maxOutputChars ?? 8000,
+    effectiveConfig?.tools?.maxOutputChars ?? 8000,
   );
   return {
     runtime,
