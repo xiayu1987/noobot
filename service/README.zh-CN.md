@@ -100,7 +100,59 @@ npm run pm2:logs
 
 ## 6) 关键目录
 
-- `service/system-core/`：核心能力（会话、记忆、工具、MCP、连接器等）
-- `service/config/`：全局配置
+```
+service/
+├── app.js                      # 应用入口（Express 应用 + 服务启动）
+├── bootstrap/                  # 应用初始化
+│   ├── create-app-dependencies.js
+│   ├── register-global-middlewares.js
+│   ├── register-http-modules.js
+│   └── start-http-server.js
+├── config/                     # 全局配置文件
+├── routes/                     # HTTP 路由模块
+│   ├── auth-routes.js
+│   ├── config-template-routes.js
+│   ├── connectors-routes.js
+│   ├── session-routes.js
+│   └── workspace-routes.js
+├── services/                   # 业务服务
+│   ├── auth-service.js
+│   ├── chat-run-service.js
+│   ├── config-params-service.js
+│   ├── config-scope-service.js
+│   ├── request-context-service.js
+│   ├── runtime-config-service.js
+│   ├── workspace-path-service.js
+│   ├── workspace-tree-service.js
+│   ├── workspace-users-service.js
+│   └── zip-service.js
+├── system-core/                # 核心能力
+│   ├── agent/                  # Agent 引擎（核心、上下文、执行、模型、媒体）
+│   ├── attach/                 # 附件处理
+│   ├── bot-manage/             # Bot 生命周期管理
+│   ├── config/                 # 配置加载与解析
+│   ├── connectors/             # 连接器运行时（数据库、邮件、终端）
+│   ├── context/                # 上下文组装
+│   ├── error/                  # 错误处理
+│   ├── event/                  # 事件系统
+│   ├── i18n/                   # 国际化
+│   ├── init/                   # 初始化
+│   ├── mcp/                    # MCP 客户端
+│   ├── memory/                 # 短期/长期记忆
+│   ├── model/                  # 模型抽象层
+│   ├── sandbox/                # 脚本沙箱提供方
+│   ├── service-invoker/        # 外部服务调用
+│   ├── session/                # 会话管理
+│   ├── skill/                  # 技能系统
+│   ├── system-prompt/          # 系统提示词模板
+│   ├── tools/                  # Agent 工具
+│   ├── tracking/               # 日志与诊断
+│   └── utils/                  # 工具函数
+├── ws/                         # WebSocket 服务
+│   └── chat-websocket-server.js
+└── scripts/                    # 工具脚本
+    └── check-openai-tool-schema.js
+```
+
 - `workspace/`：运行时用户数据（会话、文件、附件、配置参数）
 - `user-template/default-user/`：新用户工作区模板

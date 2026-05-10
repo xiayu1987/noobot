@@ -100,7 +100,59 @@ npm run pm2:logs
 
 ## 6) Key Directories
 
-- `service/system-core/`: core capabilities (session, memory, tools, MCP, connectors)
-- `service/config/`: global config
+```
+service/
+├── app.js                      # Application entry (Express app + server start)
+├── bootstrap/                  # App initialization
+│   ├── create-app-dependencies.js
+│   ├── register-global-middlewares.js
+│   ├── register-http-modules.js
+│   └── start-http-server.js
+├── config/                     # Global configuration files
+├── routes/                     # HTTP route modules
+│   ├── auth-routes.js
+│   ├── config-template-routes.js
+│   ├── connectors-routes.js
+│   ├── session-routes.js
+│   └── workspace-routes.js
+├── services/                   # Business services
+│   ├── auth-service.js
+│   ├── chat-run-service.js
+│   ├── config-params-service.js
+│   ├── config-scope-service.js
+│   ├── request-context-service.js
+│   ├── runtime-config-service.js
+│   ├── workspace-path-service.js
+│   ├── workspace-tree-service.js
+│   ├── workspace-users-service.js
+│   └── zip-service.js
+├── system-core/                # Core capabilities
+│   ├── agent/                  # Agent engine (core, context, execution, model, media)
+│   ├── attach/                 # Attachment handling
+│   ├── bot-manage/             # Bot lifecycle management
+│   ├── config/                 # Config loading & resolution
+│   ├── connectors/             # Connector runtime (databases, emails, terminals)
+│   ├── context/                # Context assembly
+│   ├── error/                  # Error handling
+│   ├── event/                  # Event system
+│   ├── i18n/                   # Internationalization
+│   ├── init/                   # Initialization
+│   ├── mcp/                    # MCP client
+│   ├── memory/                 # Short/long-term memory
+│   ├── model/                  # Model abstraction
+│   ├── sandbox/                # Script sandbox providers
+│   ├── service-invoker/        # External service invocation
+│   ├── session/                # Session management
+│   ├── skill/                  # Skill system
+│   ├── system-prompt/          # System prompt templates
+│   ├── tools/                  # Agent tools
+│   ├── tracking/               # Logging & diagnostics
+│   └── utils/                  # Utilities
+├── ws/                         # WebSocket server
+│   └── chat-websocket-server.js
+└── scripts/                    # Utility scripts
+    └── check-openai-tool-schema.js
+```
+
 - `workspace/`: runtime user data (sessions, files, attachments, config params)
 - `user-template/default-user/`: template for new user workspace

@@ -71,13 +71,27 @@
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
+| `tools.read_file.enabled` | boolean | 启用文件读取工具 |
+| `tools.write_file.enabled` | boolean | 启用文件写入工具 |
+| `tools.list_skills.enabled` | boolean | 启用技能列表工具 |
+| `tools.set_skill_task.enabled` | boolean | 启用技能任务工具 |
+| `tools.call_service.enabled` | boolean | 启用外部服务调用工具 |
+| `tools.call_mcp_task.enabled` | boolean | 启用 MCP 任务工具 |
+| `tools.delegate_task_async.enabled` | boolean | 启用异步委派工具 |
 | `tools.delegate_task_async.wait_timeout_ms` | number | 异步委派等待超时 |
 | `tools.delegate_task_async.poll_interval_ms` | number | 异步委派轮询间隔 |
 | `tools.delegate_task_async.max_sub_agent_depth` | number | 子任务最大深度 |
+| `tools.wait_async_task_result.enabled` | boolean | 启用等待异步结果工具 |
 | `tools.wait_async_task_result.poll_interval_ms` | number | 等待工具轮询间隔 |
+| `tools.plan_multi_task_collaboration.enabled` | boolean | 启用任务规划工具 |
+| `tools.switch_model.enabled` | boolean | 启用模型切换工具 |
+| `tools.user_interaction.enabled` | boolean | 启用用户交互工具 |
+| `tools.web_to_data.enabled` | boolean | 启用网页内容提取工具 |
+| `tools.web_to_data.switch_web_mode` | string | 网页提取模式（如 `browser_simulate`） |
+| `tools.doc_to_data.enabled` | boolean | 启用文档解析工具 |
+| `tools.process_content_task.enabled` | boolean | 启用内容处理工具 |
 | `tools.process_content_task.max_tool_loop_turns` | number | 内容任务内部循环上限 |
-| `tools.process_connector_tool.max_tool_loop_turns` | number | 连接器任务内部循环上限 |
-| `tools.access_connector.max_output_chars` | number | 连接器输出最大字符数 |
+| `tools.execute_script.enabled` | boolean | 启用脚本执行工具 |
 | `tools.execute_script.sandbox_mode` | boolean | 是否启用脚本沙箱 |
 | `tools.execute_script.script_timeout_ms` | number | 脚本超时 |
 | `tools.execute_script.sandbox_provider.default` | enum | `docker` / `bubblewrap` / `firejail` |
@@ -88,6 +102,15 @@
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].source` | string(path) | 宿主机目录 |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].target` | string(path) | 容器内目录（会自动规范成 `/xxx`） |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].description` | string | 映射说明（可选） |
+| `tools.process_connector_tool.enabled` | boolean | 启用连接器处理工具 |
+| `tools.process_connector_tool.max_tool_loop_turns` | number | 连接器任务内部循环上限 |
+| `tools.access_connector.enabled` | boolean | 启用连接器访问工具 |
+| `tools.access_connector.max_output_chars` | number | 连接器输出最大字符数 |
+| `tools.database_connect_connector.enabled` | boolean | 启用数据库连接器工具 |
+| `tools.terminal_connect_connector.enabled` | boolean | 启用终端连接器工具 |
+| `tools.inspect_connectors.enabled` | boolean | 启用连接器检查工具 |
+| `tools.multimodal_generate.enabled` | boolean | 启用多模态生成工具 |
+| `tools.email_connect_connector.enabled` | boolean | 启用邮件连接器工具 |
 
 说明：
 - `docker_mounts` 不配置或为空时，不添加额外挂载。
@@ -198,8 +221,29 @@
 | `tools` | 用户级工具开关/参数覆盖 |
 | `scenarios` | 用户级情景定义/默认值覆盖 |
 | `providers` | 用户级模型配置覆盖 |
+| `services` | 用户级外部服务定义（见 §4.1） |
 | `mcp_servers` | 用户级 MCP 配置覆盖 |
+| `preferences` | 用户偏好设置（如 `language`） |
 | `streaming` | 用户级流式设置 |
+
+### 4.1 外部服务（`services.<name>`）
+
+用户级外部服务定义，供 `call_service` 工具使用。
+
+| 键名 | 类型 | 说明 |
+|---|---|---|
+| `services.<name>.enabled` | boolean | 是否启用该服务 |
+| `services.<name>.api_key` | string | 服务 API 密钥（可选） |
+| `services.<name>.handler` | string | 处理器名称 |
+| `services.<name>.endpoints.<epName>.description` | string | 端点描述 |
+| `services.<name>.endpoints.<epName>.url` | string(url) | 端点 URL（支持 `${VAR_NAME}`） |
+| `services.<name>.endpoints.<epName>.query_string_format` | string | 查询参数模板 |
+| `services.<name>.endpoints.<epName>.body_format` | string | 请求体模板 |
+| `services.<name>.endpoints.<epName>.custom_param_format` | string | 自定义参数模板 |
+
+当前仓库默认：
+- `web_search_service`：基于 SearX 实例的搜索端点
+- `weather_service`：通过 `wttr.in` 查询天气
 
 ---
 
