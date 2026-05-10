@@ -126,6 +126,37 @@ function finalizeTurnMessagesBeforeReturn({
   });
 }
 
+/**
+ * Centralized loop result builder.
+ * Eliminates duplicated finalizeTurnMessagesBeforeReturn calls and
+ * turnMessages/turnTasks assignments across all return paths.
+ */
+function buildLoopResult({
+  output,
+  traces,
+  loopState,
+  turnTaskStore = null,
+  turnMessageStore = null,
+  modelMessages = [],
+} = {}) {
+  const finalTurnMessages = finalizeTurnMessagesBeforeReturn({
+    modelMessages,
+    turnMessageStore,
+    fallbackMessages: Array.isArray(loopState?.turnMessages) ? loopState.turnMessages : [],
+  });
+  return {
+    output,
+    traces,
+    turnMessages: finalTurnMessages,
+    turnTasks: turnTaskStore
+      ? turnTaskStore.toArray()
+      : Array.isArray(loopState?.turnTasks)
+        ? loopState.turnTasks
+        : [],
+  };
+}
+
+
 function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] }) {
   const runtime = modelState?.runtime || {};
   const systemRuntime =
@@ -163,138 +194,78 @@ function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] 
   return true;
 }
 
-async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
-  const {
-    tools,
-    messages,
-    traces,
-    turnMessages,
-    currentTurnMessages,
-    currentTurnTasks,
-    dialogProcessId,
-    maxTurns,
-    consecutiveToolFailures,
-    errorLogger,
-  } = loopState;
-  const {
-    eventListener,
-    runtime,
-    globalConfig,
-    userConfig,
-    defaultModelSpec,
-    abortSignal,
-  } = modelState;
-  assertNotAborted(abortSignal, runtime);
+/**
+ * Handles the no-tools branch: invokes LLM without tools and returns result.
+ */
+async function _invokeNoTools({ modelState, loopState, turn }) {
+  const { messages, traces, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId, errorLogger } = loopState;
+  const { eventListener, runtime, abortSignal } = modelState;
 
-  if (turn > maxTurns) {
-    const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
-    traces.push({ tool: "system", args: { turn, maxTurns }, result: limitMsg });
-    emitEvent(eventListener, "tool_loop_limit_reached", { turn, maxTurns });
-    return {
-      output: limitMsg,
-      traces,
-      turnMessages: finalizeTurnMessagesBeforeReturn({
-        fallbackMessages: Array.isArray(turnMessages) ? turnMessages : [],
-      }),
-      turnTasks: Array.isArray(loopState?.turnTasks) ? loopState.turnTasks : [],
-    };
-  }
-
-  resolveLlmForTurn(modelState);
-
-  if (!Array.isArray(tools) || tools.length === 0) {
-    emitEvent(eventListener, "llm_call_start", {
-      turn,
-      mode: "no_tools",
-    });
-    const llmCallbacks = createStreamingCallbacks(eventListener);
-    const modelResponse = await modelState.llm.invoke(
-      filterSummarizedMessages(messages),
-      {
-      callbacks: llmCallbacks,
-      signal: abortSignal,
-      },
-    );
-    const responseContentText = normalizeAiTextContent(modelResponse?.content);
-    messages.push(modelResponse);
-    const turnMessageStore = resolveTurnMessagesStore(
-      currentTurnMessages,
-      turnMessages,
-    );
-    const currentModelInfo = resolveCurrentModelInfo(modelState);
-    const turnTaskStore = resolveTurnTasksStore(
-      currentTurnTasks,
-      loopState.turnTasks || [],
-    );
-    const stateCommitter = createStateCommitter({
-      messages,
-      traces,
-      turnMessageStore,
-      dialogProcessId,
-      runtime,
-    });
-    stateCommitter.pushAssistantMessage({
-      content: responseContentText,
-      type: "message",
-      toolCalls: [],
-      modelAlias: currentModelInfo.modelAlias,
-      modelName: currentModelInfo.modelName,
-    });
-    await persistModelGeneratedArtifacts({
-      aiContent: modelResponse?.content,
-      runtime,
-      eventListener,
-      dialogProcessId,
-      turnMessageStore,
-    });
-    emitEvent(eventListener, "llm_call_end", {
-      turn,
-      hasToolCalls: false,
-      mode: "no_tools",
-    });
-    return {
-      output: responseContentText,
-      traces,
-      turnMessages: finalizeTurnMessagesBeforeReturn({
-        modelMessages: messages,
-        turnMessageStore,
-      }),
-      turnTasks: turnTaskStore.toArray(),
-    };
-  }
-
-  const toolMap = new Map(
-    tools.map((toolDefinition) => [toolDefinition.name, toolDefinition]),
+  emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
+  const llmCallbacks = createStreamingCallbacks(eventListener);
+  const modelResponse = await modelState.llm.invoke(
+    filterSummarizedMessages(messages),
+    { callbacks: llmCallbacks, signal: abortSignal },
   );
+  const responseContentText = normalizeAiTextContent(modelResponse?.content);
+  messages.push(modelResponse);
+
+  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
+  const currentModelInfo = resolveCurrentModelInfo(modelState);
+  const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
+  const stateCommitter = createStateCommitter({ messages, traces, turnMessageStore, dialogProcessId, runtime });
+
+  stateCommitter.pushAssistantMessage({
+    content: responseContentText,
+    type: "message",
+    toolCalls: [],
+    modelAlias: currentModelInfo.modelAlias,
+    modelName: currentModelInfo.modelName,
+  });
+  await persistModelGeneratedArtifacts({
+    aiContent: modelResponse?.content,
+    runtime,
+    eventListener,
+    dialogProcessId,
+    turnMessageStore,
+  });
+  emitEvent(eventListener, "llm_call_end", { turn, hasToolCalls: false, mode: "no_tools" });
+
+  return buildLoopResult({
+    output: responseContentText,
+    traces,
+    loopState,
+    turnTaskStore,
+    turnMessageStore,
+    modelMessages: messages,
+  });
+}
+
+/**
+ * Invokes LLM with tools bound. Returns { ai, aiContentText, calls, turnMessageStore, turnTaskStore, stateCommitter, currentModelInfo }
+ * or null if no tool_calls were returned (in which case caller should return the result directly).
+ */
+async function _invokeWithTools({ modelState, loopState, turn }) {
+  const { messages, traces, tools, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
+  const { eventListener, runtime, abortSignal } = modelState;
+
+  const toolMap = new Map(tools.map((t) => [t.name, t]));
   emitEvent(eventListener, "llm_call_start", { turn });
   const llmCallbacks = createStreamingCallbacks(eventListener);
 
   const ai = await modelState.llm.bindTools(tools).invoke(
     filterSummarizedMessages(messages),
-    {
-    callbacks: llmCallbacks,
-    signal: abortSignal,
-    },
+    { callbacks: llmCallbacks, signal: abortSignal },
   );
   const aiContentText = normalizeAiTextContent(ai.content);
   messages.push(ai);
-  const turnMessageStore = resolveTurnMessagesStore(
-    currentTurnMessages,
-    turnMessages,
-  );
+
+  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
-  const turnTaskStore = resolveTurnTasksStore(
-    currentTurnTasks,
-    loopState.turnTasks || [],
-  );
+  const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
   const calls = ai.tool_calls || [];
-  const stateCommitter = createStateCommitter({
-    messages,
-    traces,
-    turnMessageStore,
-    dialogProcessId,
-    runtime,
-  });
+  const stateCommitter = createStateCommitter({ messages, traces, turnMessageStore, dialogProcessId, runtime });
+
   stateCommitter.pushAssistantMessage({
     content: aiContentText,
     type: calls.length ? "tool_call" : "message",
@@ -302,10 +273,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       ? calls.map((call) => ({
           id: call.id || "",
           type: "function",
-          function: {
-            name: call.name || "",
-            arguments: JSON.stringify(call.args || {}),
-          },
+          function: { name: call.name || "", arguments: JSON.stringify(call.args || {}) },
         }))
       : [],
     modelAlias: currentModelInfo.modelAlias,
@@ -318,57 +286,54 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     dialogProcessId,
     turnMessageStore,
   });
-  emitEvent(eventListener, "llm_call_end", {
-    turn,
-    hasToolCalls: Boolean(calls.length),
-  });
+  emitEvent(eventListener, "llm_call_end", { turn, hasToolCalls: Boolean(calls.length) });
 
-  if (!calls.length)
-    return {
-      output: aiContentText,
-      traces,
-      turnMessages: finalizeTurnMessagesBeforeReturn({
-        modelMessages: messages,
-        turnMessageStore,
-      }),
-      turnTasks: turnTaskStore.toArray(),
-    };
+  return { ai, aiContentText, calls, turnMessageStore, turnTaskStore, stateCommitter, currentModelInfo, toolMap };
+}
 
-  emitEvent(eventListener, "tool_calls_detected", {
-    turn,
-    count: calls.length,
-  });
+/**
+ * Executes tool calls, processes results, handles consecutive failures.
+ * Returns { toolCallResults, hasTaskSummaryCall, shouldTerminate, limitMsg }
+ * where shouldTerminate indicates if a consecutive failure limit was hit.
+ */
+async function _processToolResults({
+  modelState,
+  loopState,
+  turn,
+  calls,
+  toolMap,
+  stateCommitter,
+  currentModelInfo,
+}) {
+  const { traces, consecutiveToolFailures, errorLogger } = loopState;
+  const { eventListener, runtime, abortSignal } = modelState;
+
+  emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
+
   const toolCallResults = await Promise.all(calls.map(async (call) => {
     assertNotAborted(abortSignal, runtime);
-    emitEvent(eventListener, "tool_call_start", {
-      turn,
-      tool: call.name,
-      args: call.args || {},
-    });
+    emitEvent(eventListener, "tool_call_start", { turn, tool: call.name, args: call.args || {} });
     const tool = toolMap.get(call.name);
     return executeToolCall({
-      call,
-      tool,
-      abortSignal,
-      eventListener,
-      turn,
-      errorLogger,
+      call, tool, abortSignal, eventListener, turn, errorLogger,
       userId: runtime?.systemRuntime?.userId || "",
       sessionId: runtime?.systemRuntime?.sessionId || "",
       parentSessionId: runtime?.systemRuntime?.parentSessionId || "",
     });
   }));
+
   const hasTaskSummaryCall = toolCallResults.some(
-    (toolCallResult) =>
-      String(toolCallResult?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+    (r) => String(r?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
   );
   if (hasTaskSummaryCall) {
     loopState.taskSummaryTriggered = true;
   }
+
   for (const toolCallResult of toolCallResults) {
     const call = toolCallResult?.call || {};
     const toolResultText = String(toolCallResult?.toolResultText || "");
     stateCommitter.pushToolResult({ call, toolResultText });
+
     const fallbackExtractedAttachmentMetas = extractAttachmentMetasFromToolResult(
       call?.name || "",
       toolResultText,
@@ -379,77 +344,133 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
         ? toolCallResult.extractedAttachmentMetas
         : fallbackExtractedAttachmentMetas;
     stateCommitter.appendAttachmentMetas(extractedAttachmentMetas);
+
     const toolName = String(call?.name || "").trim();
     if (!toolName) continue;
-    const currentConsecutiveFailures = Number(
-      consecutiveToolFailures?.[toolName] || 0,
-    );
-    const nextConsecutiveFailures = toolCallResult?.success
-      ? 0
-      : currentConsecutiveFailures + 1;
+
+    const currentConsecutiveFailures = Number(consecutiveToolFailures?.[toolName] || 0);
+    const nextConsecutiveFailures = toolCallResult?.success ? 0 : currentConsecutiveFailures + 1;
     consecutiveToolFailures[toolName] = nextConsecutiveFailures;
-    if (nextConsecutiveFailures < TOOL_CONSECUTIVE_FAILURE_LIMIT) continue;
-    const limitMsg = tEngine(runtime, "toolConsecutiveFailureLimitReached", {
-      toolName,
-      maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
-    });
-    traces.push({
-      tool: "system",
-      args: {
-        turn,
+
+    if (nextConsecutiveFailures >= TOOL_CONSECUTIVE_FAILURE_LIMIT) {
+      const limitMsg = tEngine(runtime, "toolConsecutiveFailureLimitReached", {
         toolName,
         maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
-      },
-      result: limitMsg,
-    });
-    emitEvent(eventListener, "tool_consecutive_failure_limit_reached", {
-      turn,
-      tool: toolName,
-      failureCount: nextConsecutiveFailures,
-      maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
-      reason: String(toolCallResult?.failureReason || ""),
-    });
-    stateCommitter.pushAssistantMessage({
-      content: limitMsg,
-      type: "message",
-      toolCalls: [],
-      modelAlias: currentModelInfo.modelAlias,
-      modelName: currentModelInfo.modelName,
-    });
-    loopState.turnMessages = turnMessageStore.toArray();
-    loopState.turnTasks = turnTaskStore.toArray();
-    return {
-      output: limitMsg,
-      traces,
-      turnMessages: finalizeTurnMessagesBeforeReturn({
-        modelMessages: messages,
-        turnMessageStore,
-      }),
-      turnTasks: turnTaskStore.toArray(),
-    };
+      });
+      traces.push({
+        tool: "system",
+        args: { turn, toolName, maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT },
+        result: limitMsg,
+      });
+      emitEvent(eventListener, "tool_consecutive_failure_limit_reached", {
+        turn,
+        tool: toolName,
+        failureCount: nextConsecutiveFailures,
+        maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
+        reason: String(toolCallResult?.failureReason || ""),
+      });
+      stateCommitter.pushAssistantMessage({
+        content: limitMsg,
+        type: "message",
+        toolCalls: [],
+        modelAlias: currentModelInfo.modelAlias,
+        modelName: currentModelInfo.modelName,
+      });
+      return { toolCallResults, hasTaskSummaryCall, shouldTerminate: true, limitMsg };
+    }
   }
 
+  return { toolCallResults, hasTaskSummaryCall, shouldTerminate: false, limitMsg: null };
+}
+
+async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
+  const { tools, traces, maxTurns } = loopState;
+  const { abortSignal, runtime, eventListener } = modelState;
+
+  assertNotAborted(abortSignal, runtime);
+
+  // ── Turn limit check ──
+  if (turn > maxTurns) {
+    const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
+    traces.push({ tool: "system", args: { turn, maxTurns }, result: limitMsg });
+    emitEvent(eventListener, "tool_loop_limit_reached", { turn, maxTurns });
+    return buildLoopResult({ output: limitMsg, traces, loopState });
+  }
+
+  resolveLlmForTurn(modelState);
+
+  // ── No-tools branch ──
+  if (!Array.isArray(tools) || tools.length === 0) {
+    return _invokeNoTools({ modelState, loopState, turn });
+  }
+
+  // ── LLM call with tools ──
+  const { aiContentText, calls, turnMessageStore, turnTaskStore, stateCommitter, currentModelInfo, toolMap } =
+    await _invokeWithTools({ modelState, loopState, turn });
+
+  // No tool calls → return immediately
+  if (!calls.length) {
+    return buildLoopResult({
+      output: aiContentText,
+      traces,
+      loopState,
+      turnTaskStore,
+      turnMessageStore,
+      modelMessages: loopState.messages,
+    });
+  }
+
+  // ── Execute tools and process results ──
+  const { toolCallResults, hasTaskSummaryCall, shouldTerminate, limitMsg } =
+    await _processToolResults({
+      modelState,
+      loopState,
+      turn,
+      calls,
+      toolMap,
+      stateCommitter,
+      currentModelInfo,
+    });
+
+  if (shouldTerminate) {
+    return buildLoopResult({
+      output: limitMsg,
+      traces,
+      loopState,
+      turnTaskStore,
+      turnMessageStore,
+      modelMessages: loopState.messages,
+    });
+  }
+
+  // ── Sync turn state before recursive call ──
   loopState.turnMessages = turnMessageStore.toArray();
   loopState.turnTasks = turnTaskStore.toArray();
+
+  // ── Phase summary & recursive call ──
   if (hasTaskSummaryCall) {
-    removePhaseSummaryPromptMessages(messages, runtime);
+    removePhaseSummaryPromptMessages(loopState.messages, runtime);
   }
   maybeRequestPhaseSummary({ modelState, loopState, toolCallResults });
-  // 仅在显式调用 task_summary 时，才在 loop 中途即时同步 summarized 标记；
-  // 其他自动打标统一在完整对话结束返回时处理。
+
   if (hasTaskSummaryCall) {
-    markCurrentTurnModelMessagesSummarized(messages, {
+    markCurrentTurnModelMessagesSummarized(loopState.messages, {
       taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
     });
     markCurrentTurnStoreSummarized(turnMessageStore, {
       taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
     });
   }
-  loopState.turnMessages = turnMessageStore.toArray();
+
   return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
 }
 
-export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
+
+/**
+ * Resolves runtime config, creates LLM, builds messages, and assembles
+ * modelState + loopState for the function-call loop.
+ */
+function buildAgentState({ agentContext, userMessage, errorLogger }) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
   const sys = runtime.systemRuntime || {};
   const globalConfig = runtime.globalConfig || {};
@@ -461,6 +482,8 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
   const tools = Array.isArray(agentContext?.payload?.tools?.registry)
     ? agentContext.payload.tools.registry
     : [];
+
+  // Normalize phase-summary loop counters on systemRuntime
   if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
     const loopCount = Number(runtime.systemRuntime.toolLoopExecutionCount || 0);
     runtime.systemRuntime.toolLoopExecutionCount =
@@ -469,19 +492,16 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
       runtime.systemRuntime.toolLoopExecutionCount;
     runtime.systemRuntime.needsPhaseSummary =
       runtime.systemRuntime.needsPhaseSummary === true;
+    runtime.systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
   }
 
-  const selectedModelSpec = resolveDefaultModelSpec({
-    globalConfig,
-    userConfig,
-  });
+  const selectedModelSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
   const runtimeMaxTurns = Number(sys?.config?.maxToolLoopTurns || 0);
   const configMaxTurns = Number(effectiveConfig?.maxToolLoopTurns || DEFAULT_MAX_TOOL_LOOP_TURNS);
   const maxToolLoopTurns =
-    Number.isFinite(runtimeMaxTurns) && runtimeMaxTurns > 0
-      ? runtimeMaxTurns
-      : configMaxTurns;
+    Number.isFinite(runtimeMaxTurns) && runtimeMaxTurns > 0 ? runtimeMaxTurns : configMaxTurns;
   const phaseSummaryLoopTurns = resolvePhaseSummaryLoopTurns(effectiveConfig);
+
   const llm = createChatModel({
     globalConfig,
     userConfig,
@@ -492,12 +512,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
     model: selectedModelSpec?.model || "",
   });
 
-  const messages = buildContextMessages(agentContext, {
-    currentUserMessage: userMessage,
-  });
-  if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
-    runtime.systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
-  }
+  const messages = buildContextMessages(agentContext, { currentUserMessage: userMessage });
 
   const modelState = {
     llm,
@@ -510,6 +525,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
     defaultModelSpec: selectedModelSpec,
     abortSignal,
   };
+
   const loopState = {
     tools,
     messages,
@@ -528,5 +544,11 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
     consecutiveToolFailures: {},
     errorLogger,
   };
-  return await runFunctionCallLoop({ modelState, loopState, turn: 1 });
+
+  return { modelState, loopState };
+}
+
+export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
+  const { modelState, loopState } = buildAgentState({ agentContext, userMessage, errorLogger });
+  return runFunctionCallLoop({ modelState, loopState, turn: 1 });
 }
