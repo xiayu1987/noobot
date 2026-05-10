@@ -26,6 +26,7 @@ import { browserLikeFetch } from "../utils/web/fetch.js";
 import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
+import { normalizeText } from '../utils/shared-utils.js';
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_TEXT_CHARS = 12000;
@@ -48,9 +49,6 @@ function tWeb(runtime = {}, key = "", params = {}) {
   return tTool(runtime, i18nKey, params);
 }
 
-function normalizeText(value = "") {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
 
 function isUrl(input = "") {
   return /^https?:\/\//i.test(String(input || "").trim());

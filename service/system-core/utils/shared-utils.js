@@ -66,3 +66,10 @@ export function normalizeSelectedConnectors(selectedConnectors = {}) {
       .filter(([connectorType]) => Boolean(connectorType)),
   );
 }
+
+/**
+ * Normalize whitespace: collapse consecutive whitespace to single space, trim.
+ */
+export function normalizeText(value = "") {
+  return String(value).replace(/\s+/g, " ").trim();
+}
