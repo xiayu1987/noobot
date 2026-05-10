@@ -105,7 +105,7 @@ Based on latest examples:
 | `tools.process_connector_tool.enabled` | boolean | Enable connector processing tool |
 | `tools.process_connector_tool.max_tool_loop_turns` | number | Loop cap in connector task |
 | `tools.access_connector.enabled` | boolean | Enable connector access tool |
-| `tools.access_connector.max_output_chars` | number | Connector output truncation limit |
+| `tools.max_output_chars` | number | Unified tool output cleaning/truncation length limit |
 | `tools.database_connect_connector.enabled` | boolean | Enable database connector tool |
 | `tools.terminal_connect_connector.enabled` | boolean | Enable terminal connector tool |
 | `tools.inspect_connectors.enabled` | boolean | Enable connector inspection tool |

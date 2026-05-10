@@ -20,11 +20,13 @@ import {
   normalizeDockerContainerScope,
 } from "../sandbox/docker-sandbox.js";
 import { buildFirejailCommand } from "../sandbox/firejail-sandbox.js";
+import { cleanTerminalOutputForLLM } from "../utils/cleaners/output-cleaner.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
 
 const TOOL_NAME = "execute_script";
 const DEFAULT_TIMEOUT = 120000;
+const DEFAULT_MAX_OUTPUT_CHARS = 20000;
 
 function run(cmd, cwd, timeoutMs) {
   return new Promise((resolve) => {
@@ -89,12 +91,64 @@ function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
   };
 }
 
-function toolExecResult(mode, r = {}, extra = {}) {
+function toSafePositiveInt(value, fallback = 0, min = 1) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
+  return Math.max(min, Math.floor(parsed));
+}
+
+function resolveScriptOutputPolicy(toolsConfig = {}) {
+  const toolsCfg =
+    toolsConfig && typeof toolsConfig === "object" && !Array.isArray(toolsConfig)
+      ? toolsConfig
+      : {};
+  const maxOutputChars = toSafePositiveInt(
+    toolsCfg?.maxOutputChars,
+    DEFAULT_MAX_OUTPUT_CHARS,
+    256,
+  );
+  return {
+    maxOutputChars,
+  };
+}
+
+function shouldCleanScriptOutput(r = {}, policy = {}) {
+  const stdout = String(r?.stdout || "");
+  const stderr = String(r?.stderr || "");
+  const maxChars = toSafePositiveInt(
+    policy?.maxOutputChars,
+    DEFAULT_MAX_OUTPUT_CHARS,
+    256,
+  );
+  return stdout.length > maxChars || stderr.length > maxChars;
+}
+
+function normalizeScriptOutput(r = {}, policy = {}) {
+  if (!shouldCleanScriptOutput(r, policy)) return { normalized: r, cleaned: false };
+  const maxChars = toSafePositiveInt(
+    policy?.maxOutputChars,
+    DEFAULT_MAX_OUTPUT_CHARS,
+    256,
+  );
+  const cleanedResult = cleanTerminalOutputForLLM(r, { maxChars });
+  return {
+    normalized: {
+      ...r,
+      ...cleanedResult,
+    },
+    cleaned: true,
+  };
+}
+
+function toolExecResult(mode, r = {}, extra = {}, outputPolicy = {}) {
+  const { normalized, cleaned } = normalizeScriptOutput(r, outputPolicy);
   return toToolJsonResult(TOOL_NAME, {
-    ok: Number(r?.code || 0) === 0,
+    ok: Number(normalized?.code || 0) === 0,
     mode,
+    output_cleaned: cleaned,
+    __max_output_chars: outputPolicy?.maxOutputChars,
     ...extra,
-    ...r,
+    ...normalized,
   });
 }
 
@@ -128,6 +182,7 @@ async function tryDockerFallback({
   workspace,
   timeout,
   scriptConfig = {},
+  outputPolicy = {},
   fallbackFrom,
   warning,
 }) {
@@ -141,30 +196,32 @@ async function tryDockerFallback({
     timeout,
     scriptConfig,
   });
-  return toToolJsonResult(TOOL_NAME, {
-    ok: Number(dr?.code || 0) === 0,
-    mode: "docker",
-    fallbackFrom,
-    warning,
-    containerName: docker?.containerName || "",
-    containerScope: docker?.scope || "",
-    containerImage: docker?.image || "",
-    containerMountSource: docker?.mountSource || "",
-    containerMountTarget: docker?.mountTarget || "",
-    containerExtraMounts: Array.isArray(docker?.dockerMounts)
-      ? docker.dockerMounts
-      : [],
-    containerProjectMountSource:
-      Array.isArray(docker?.dockerMounts) && docker.dockerMounts[0]
-        ? String(docker.dockerMounts[0].source || "")
-        : "",
-    containerProjectMountTarget:
-      Array.isArray(docker?.dockerMounts) && docker.dockerMounts[0]
-        ? String(docker.dockerMounts[0].target || "")
-        : "",
-    containerWorkdir: docker?.workdir || "",
-    ...dr,
-  });
+  return toolExecResult(
+    "docker",
+    dr,
+    {
+      fallbackFrom,
+      warning,
+      containerName: docker?.containerName || "",
+      containerScope: docker?.scope || "",
+      containerImage: docker?.image || "",
+      containerMountSource: docker?.mountSource || "",
+      containerMountTarget: docker?.mountTarget || "",
+      containerExtraMounts: Array.isArray(docker?.dockerMounts)
+        ? docker.dockerMounts
+        : [],
+      containerProjectMountSource:
+        Array.isArray(docker?.dockerMounts) && docker.dockerMounts[0]
+          ? String(docker.dockerMounts[0].source || "")
+          : "",
+      containerProjectMountTarget:
+        Array.isArray(docker?.dockerMounts) && docker.dockerMounts[0]
+          ? String(docker.dockerMounts[0].target || "")
+          : "",
+      containerWorkdir: docker?.workdir || "",
+    },
+    outputPolicy,
+  );
 }
 
 function buildScriptToolDescription({
@@ -271,6 +328,7 @@ export function createScriptTool({ agentContext }) {
   const { provider: sandboxProvider, providerDetail } =
     resolveSandboxProviderConfig(scriptConfig);
   const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
+  const scriptOutputPolicy = resolveScriptOutputPolicy(effectiveConfig?.tools);
   const description = buildScriptToolDescription({
     runtime,
     sandboxEnabled,
@@ -290,7 +348,7 @@ export function createScriptTool({ agentContext }) {
 
       if (!sandboxEnabled) {
         const runResult = await run(command, workspace, timeout);
-        return toolExecResult("local", runResult);
+        return toolExecResult("local", runResult, {}, scriptOutputPolicy);
       }
 
       let sandboxCmd = "";
@@ -310,6 +368,7 @@ export function createScriptTool({ agentContext }) {
             workspace,
             timeout,
             scriptConfig: dockerConfig,
+            outputPolicy: scriptOutputPolicy,
             fallbackFrom: "bubblewrap",
             warning: tScript(runtime, "fallbackOverlaySrc"),
           });
@@ -408,6 +467,7 @@ export function createScriptTool({ agentContext }) {
           workspace,
           timeout,
           scriptConfig: dockerConfig,
+          outputPolicy: scriptOutputPolicy,
           fallbackFrom: "bubblewrap",
           warning: tScript(runtime, "fallbackUserxattr"),
         });
@@ -419,7 +479,7 @@ export function createScriptTool({ agentContext }) {
           }),
         };
       }
-      return toolExecResult(mode, runResult, extra);
+      return toolExecResult(mode, runResult, extra, scriptOutputPolicy);
     },
   });
 

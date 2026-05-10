@@ -105,7 +105,7 @@
 | `tools.process_connector_tool.enabled` | boolean | 启用连接器处理工具 |
 | `tools.process_connector_tool.max_tool_loop_turns` | number | 连接器任务内部循环上限 |
 | `tools.access_connector.enabled` | boolean | 启用连接器访问工具 |
-| `tools.access_connector.max_output_chars` | number | 连接器输出最大字符数 |
+| `tools.max_output_chars` | number | 工具输出清洗与截断的统一长度上限 |
 | `tools.database_connect_connector.enabled` | boolean | 启用数据库连接器工具 |
 | `tools.terminal_connect_connector.enabled` | boolean | 启用终端连接器工具 |
 | `tools.inspect_connectors.enabled` | boolean | 启用连接器检查工具 |
