@@ -355,7 +355,8 @@ export const TOOL_SCHEMA_BY_TOOL = {
       }
     },
     "texts": {
-      "tools.task_summary.summaryContentRequired": "summaryContent 必填"
+      "tools.task_summary.summaryContentRequired": "summaryContent 必填",
+      "tools.task_summary.summaryCompletedContinue": "小结完毕，请继续当前任务"
     }
   },
   "execute_script": {
