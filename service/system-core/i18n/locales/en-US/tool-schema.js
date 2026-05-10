@@ -355,7 +355,8 @@ export const TOOL_SCHEMA_BY_TOOL = {
       }
     },
     "texts": {
-      "tools.task_summary.summaryContentRequired": "summaryContent is required"
+      "tools.task_summary.summaryContentRequired": "summaryContent is required",
+      "tools.task_summary.summaryCompletedContinue": "Summary completed. Please continue the current task."
     }
   },
   "execute_script": {

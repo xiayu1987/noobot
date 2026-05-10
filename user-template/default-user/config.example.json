@@ -107,7 +107,7 @@
     },
     "task_summary": {
       "enabled": true,
-      "phase_summary_loop_turns": 0
+      "phase_summary_loop_turns": 10
     },
     "web_to_data": {
       "enabled": true,

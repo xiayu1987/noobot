@@ -129,6 +129,6 @@ export default {
   "ws.unauthorized": "未授权",
   "ws.unknownError": "未知错误",
   "ws.userInteractionTimeout": "用户交互超时",
-  "agent.phaseSummaryPrompt": "需要阶段小结当前任务情况简要说明，阶段小结完后请继续",
+  "agent.phaseSummaryPrompt": "在继续后续任务之前，请先对当前阶段的任务情况进行简要小结，总结完毕后再继续，以避免上下文累积过多导致信息混乱。",
   "agent.abortError": "对话已被用户停止"
 };

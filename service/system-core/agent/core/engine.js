@@ -150,7 +150,6 @@ function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] 
   const threshold = Number(loopState?.phaseSummaryLoopTurns || 0);
   if (!Number.isFinite(threshold) || threshold <= 0) return false;
   if (!hasTaskSummaryTool(loopState?.tools || [])) return false;
-  if (systemRuntime.needsPhaseSummary === true) return false;
   if (nextCount < threshold) return false;
 
   systemRuntime.needsPhaseSummary = true;
