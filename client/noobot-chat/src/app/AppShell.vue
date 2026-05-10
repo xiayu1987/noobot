@@ -19,6 +19,7 @@ import { useApiConnection } from "../composables/infra/useApiConnection";
 import { useChatSession } from "../composables/chat/useChatSession";
 import { useUiFeedback } from "../composables/infra/useUiFeedback";
 import { useLocale } from "../shared/i18n/useLocale";
+import { frontendConfig } from "../shared/config/frontendConfig";
 
 const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
 const defaultFenceRenderer =
@@ -100,6 +101,8 @@ const { translate } = useLocale();
 let fetchSessionsAfterConnect = async () => {};
 let reconnectActiveSessionIfNeeded = async () => {};
 let reconnectActiveSessionPromise = null;
+let lastReconnectAttemptAt = 0;
+const RECONNECT_SIGNAL_COOLDOWN_MS = frontendConfig.reconnect.signalCooldownMs;
 
 
 const {
@@ -121,7 +124,7 @@ const {
     await fetchSessionsAfterConnect();
     // 建立连接时即建立 WebSocket，而非发送消息时才建立
     chatWebSocketClient.connect();
-    reconnectActiveSessionIfNeeded();
+    reconnectActiveSessionIfNeeded({ force: true });
   },
 });
 
@@ -390,9 +393,15 @@ async function handleDeleteSession(sessionId) {
 onMounted(async () => {
   updateViewportState();
   window.addEventListener("resize", updateViewportState);
-  window.addEventListener("online", handleBrowserReconnectSignal);
-  window.addEventListener("focus", handleBrowserReconnectSignal);
-  document.addEventListener("visibilitychange", handleBrowserReconnectSignal);
+  if (frontendConfig.reconnect.listenOnline) {
+    window.addEventListener("online", handleBrowserReconnectSignal);
+  }
+  if (frontendConfig.reconnect.listenWindowFocus) {
+    window.addEventListener("focus", handleBrowserReconnectSignal);
+  }
+  if (frontendConfig.reconnect.listenVisibilityChange) {
+    document.addEventListener("visibilitychange", handleBrowserReconnectSignal);
+  }
   const autoConnected = await tryAutoConnect();
   if (autoConnected) {
     return;
@@ -402,9 +411,15 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", updateViewportState);
-  window.removeEventListener("online", handleBrowserReconnectSignal);
-  window.removeEventListener("focus", handleBrowserReconnectSignal);
-  document.removeEventListener("visibilitychange", handleBrowserReconnectSignal);
+  if (frontendConfig.reconnect.listenOnline) {
+    window.removeEventListener("online", handleBrowserReconnectSignal);
+  }
+  if (frontendConfig.reconnect.listenWindowFocus) {
+    window.removeEventListener("focus", handleBrowserReconnectSignal);
+  }
+  if (frontendConfig.reconnect.listenVisibilityChange) {
+    document.removeEventListener("visibilitychange", handleBrowserReconnectSignal);
+  }
   releaseAllPreviewUrls();
 });
 
@@ -436,10 +451,13 @@ function hasActiveSessionForReconnect() {
   );
 }
 
-reconnectActiveSessionIfNeeded = async () => {
+reconnectActiveSessionIfNeeded = async ({ force = false } = {}) => {
   if (!connected.value) return;
   if (!hasActiveSessionForReconnect()) return;
   if (reconnectActiveSessionPromise) return;
+  const now = Date.now();
+  if (!force && now - lastReconnectAttemptAt < RECONNECT_SIGNAL_COOLDOWN_MS) return;
+  lastReconnectAttemptAt = now;
   reconnectActiveSessionPromise = handleReconnect();
   try {
     await reconnectActiveSessionPromise;
@@ -449,6 +467,7 @@ reconnectActiveSessionIfNeeded = async () => {
 };
 
 function handleBrowserReconnectSignal() {
+  if (document.visibilityState && document.visibilityState !== "visible") return;
   reconnectActiveSessionIfNeeded();
 }
 
@@ -464,7 +483,7 @@ watch(
   () => connected.value,
   (nextConnected, previousConnected) => {
     if (!nextConnected || previousConnected) return;
-    reconnectActiveSessionIfNeeded();
+    reconnectActiveSessionIfNeeded({ force: true });
   },
 );
 
