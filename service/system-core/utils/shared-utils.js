@@ -47,3 +47,22 @@ export function safeNum(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
+
+/**
+ * Normalize selected connectors: trim keys/values, filter empty keys.
+ * Returns an object with the same shape but sanitized entries.
+ */
+export function normalizeSelectedConnectors(selectedConnectors = {}) {
+  const source =
+    selectedConnectors && typeof selectedConnectors === "object"
+      ? selectedConnectors
+      : {};
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([connectorType, connectorName]) => [
+        String(connectorType || "").trim(),
+        String(connectorName || "").trim(),
+      ])
+      .filter(([connectorType]) => Boolean(connectorType)),
+  );
+}

@@ -13,26 +13,13 @@ import { createMedia2DataTool } from "./media2data-tool.js";
 import { createWeb2DataTool } from "./web2data-tool.js";
 import { tTool } from "./tool-i18n.js";
 import { isAbortError } from "../utils/error-utils.js";
+import { normalizeSelectedConnectors } from "../utils/shared-utils.js";
 
 function jsonError(payload = {}) {
   return toToolJsonResult("process_content_task", { ok: false, ...payload });
 }
 
 
-function normalizeSelectedConnectors(selectedConnectors = {}) {
-  const source =
-    selectedConnectors && typeof selectedConnectors === "object"
-      ? selectedConnectors
-      : {};
-  return Object.fromEntries(
-    Object.entries(source)
-      .map(([connectorType, connectorName]) => [
-        String(connectorType || "").trim(),
-        String(connectorName || "").trim(),
-      ])
-      .filter(([connectorType]) => Boolean(connectorType)),
-  );
-}
 
 export function createContentProcessTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};

@@ -26,7 +26,7 @@ import {
 } from "./check-tool-input.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
-import { isPlainObject } from "../utils/shared-utils.js";
+import { isPlainObject, normalizeSelectedConnectors } from "../utils/shared-utils.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -54,20 +54,6 @@ function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
-function normalizeSelectedConnectors(selectedConnectors = {}) {
-  const source =
-    selectedConnectors && typeof selectedConnectors === "object"
-      ? selectedConnectors
-      : {};
-  return Object.fromEntries(
-    Object.entries(source)
-      .map(([connectorType, connectorName]) => [
-        String(connectorType || "").trim(),
-        String(connectorName || "").trim(),
-      ])
-      .filter(([connectorType]) => Boolean(connectorType)),
-  );
-}
 export function createAgentCollabTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const systemRuntime = runtime.systemRuntime || {};
