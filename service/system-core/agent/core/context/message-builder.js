@@ -125,7 +125,13 @@ export function buildContextMessages(
   }
 
   for (const msg of historyMessages) {
+    if (msg?.summarized === true) continue;
     const role = msg.role || "";
+    if (role === "system") {
+      out.push(new SystemMessage(msg.content || ""));
+      continue;
+    }
+
     if (role === "assistant") {
       const toolCalls = toLangChainToolCalls(msg.tool_calls || []);
       if (toolCalls.length) {

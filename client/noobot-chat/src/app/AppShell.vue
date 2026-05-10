@@ -4,8 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import MarkdownIt from "markdown-it";
+import { ref, watch, computed, nextTick } from "vue";
 import noobotLogo from "../shared/assets/noobot.svg";
 import WorkspacePanel from "../modules/settings/WorkspacePanel.vue";
 import UserSettingsPanel from "../modules/settings/UserSettingsPanel.vue";
@@ -19,67 +18,34 @@ import { useApiConnection } from "../composables/infra/useApiConnection";
 import { useChatSession } from "../composables/chat/useChatSession";
 import { useUiFeedback } from "../composables/infra/useUiFeedback";
 import { useLocale } from "../shared/i18n/useLocale";
-import { frontendConfig } from "../shared/config/frontendConfig";
+import { useMarkdownRenderer } from "../composables/infra/useMarkdownRenderer";
+import { useReconnect } from "../composables/infra/useReconnect";
+import { usePanelState } from "../composables/infra/usePanelState";
 
-const md = new MarkdownIt({ html: true, linkify: true, breaks: true });
-const defaultFenceRenderer =
-  md.renderer.rules.fence ||
-  ((tokens, idx, options, env, self) =>
-    self.renderToken(tokens, idx, options));
-md.renderer.rules.fence = (tokens, idx, options, env, self) => {
-  const token = tokens[idx] || {};
-  const info = String(token?.info || "").trim().toLowerCase();
-  if (info === "mermaid") {
-    const diagramCode = md.utils.escapeHtml(String(token?.content || ""));
-    return `<div class="mermaid">${diagramCode}</div>`;
-  }
-  return defaultFenceRenderer(tokens, idx, options, env, self);
-};
+// --- Markdown rendering (module-level singleton) ---
+const { renderMarkdown } = useMarkdownRenderer();
 
-function looksLikeMermaidLine(rawLine = "") {
-  const line = String(rawLine || "").trim();
-  if (!line) return false;
-  const mermaidPrefixes = [
-    "graph ",
-    "flowchart ",
-    "sequenceDiagram",
-    "classDiagram",
-    "stateDiagram",
-    "erDiagram",
-    "journey",
-    "gantt",
-    "pie ",
-    "mindmap",
-    "timeline",
-  ];
-  return mermaidPrefixes.some((prefix) => line.startsWith(prefix));
-}
+// --- UI feedback & locale ---
+const { notify: notifyUi, confirmDeleteSession } = useUiFeedback();
+const { translate } = useLocale();
 
-function normalizeMermaidMarkdown(inputText = "") {
-  const sourceText = String(inputText || "");
-  if (!sourceText.trim()) return sourceText;
-  const lines = sourceText.split(/\r?\n/);
-  const outputLines = [];
-  let inCodeFence = false;
+// --- Panel state (viewport, sidebar, drawers) ---
+const {
+  isMobile,
+  sidebarCollapsed,
+  mobileSidebarOpen,
+  workspaceVisible,
+  userSettingsVisible,
+  configParamsVisible,
+  drawerSize,
+  toggleSidebar,
+  closeMobileSidebar,
+  openWorkspace: openWorkspaceRaw,
+  openUserSettings: openUserSettingsRaw,
+  openConfigParams: openConfigParamsRaw,
+} = usePanelState();
 
-  for (const currentLine of lines) {
-    const trimmedLine = String(currentLine || "").trim();
-    if (trimmedLine.startsWith("```")) {
-      inCodeFence = !inCodeFence;
-      outputLines.push(currentLine);
-      continue;
-    }
-    if (!inCodeFence && looksLikeMermaidLine(currentLine)) {
-      outputLines.push("```mermaid");
-      outputLines.push(currentLine);
-      outputLines.push("```");
-      continue;
-    }
-    outputLines.push(currentLine);
-  }
-  return outputLines.join("\n");
-}
-
+// --- LocalStorage-backed refs ---
 const userId = ref(localStorage.getItem("noobot_user_id") || "user-001");
 const allowUserInteraction = ref(
   localStorage.getItem("noobot_allow_user_interaction") !== "false",
@@ -89,22 +55,8 @@ const botScenario = ref(
 );
 const composerRef = ref();
 const messageListPanelRef = ref();
-const isMobile = ref(false);
-const sidebarCollapsed = ref(false);
-const mobileSidebarOpen = ref(false);
-const workspaceVisible = ref(false);
-const userSettingsVisible = ref(false);
-const configParamsVisible = ref(false);
-const { notify: notifyUi, confirmDeleteSession } = useUiFeedback();
-const { translate } = useLocale();
 
-let fetchSessionsAfterConnect = async () => {};
-let reconnectActiveSessionIfNeeded = async () => {};
-let reconnectActiveSessionPromise = null;
-let lastReconnectAttemptAt = 0;
-const RECONNECT_SIGNAL_COOLDOWN_MS = frontendConfig.reconnect.signalCooldownMs;
-
-
+// --- API connection ---
 const {
   connectCode,
   apiKey,
@@ -121,14 +73,13 @@ const {
   userId,
   notify: notifyUi,
   onConnected: async () => {
-    await fetchSessionsAfterConnect();
-    // 建立连接时即建立 WebSocket，而非发送消息时才建立
+    await fetchSessions();
     chatWebSocketClient.connect();
-    reconnectActiveSessionIfNeeded({ force: true });
+    reconnectActiveSession({ force: true });
   },
 });
 
-const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
+// --- Bot scenario ---
 const availableBotScenarios = computed(() => {
   const definitions =
     scenarioConfig?.value?.definitions &&
@@ -159,19 +110,16 @@ function syncBotScenarioWithConfig() {
   );
 
   if (!availableScenarioKeySet.size) {
-    // 配置尚未返回时，不要覆盖用户本地已保存的情景，避免刷新后丢失选择
     botScenario.value =
       currentScenario || savedScenario || configuredDefaultScenario || "";
     return;
   }
 
-  // 优先恢复用户上次保存的情景
   if (savedScenario && availableScenarioKeySet.has(savedScenario)) {
     botScenario.value = savedScenario;
     return;
   }
 
-  // 如果当前情景有效，则保持不变
   if (currentScenario && availableScenarioKeySet.has(currentScenario)) {
     return;
   }
@@ -184,12 +132,33 @@ function syncBotScenarioWithConfig() {
   localStorage.setItem("noobot_bot_scenario", nextScenario);
 }
 
-function onUserIdUpdate(value = "") {
-  userId.value = String(value || "");
-}
+// --- Chat session ---
+const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
-function onConnectCodeUpdate(value = "") {
-  connectCode.value = String(value || "");
+function classifyRealtimeLog(data = {}) {
+  const eventName = String(data.event || "").trim();
+  const text = String(data.text || "").trim();
+  const category = String(data.category || "").trim();
+  const type = String(data.type || "").trim();
+  const isTool =
+    category === "tool" ||
+    TOOL_LOG_TYPES.has(type) ||
+    TOOL_LOG_TYPES.has(eventName) ||
+    eventName.startsWith("tool_") ||
+    text.startsWith("[tool]") ||
+    text.includes('"tool_call_id"');
+  return {
+    event: eventName || "system",
+    type: type || (isTool ? "tool_call" : "system"),
+    text: text || (eventName ? `[${eventName}]` : ""),
+    dialogProcessId: String(data.dialogProcessId || ""),
+    ts: String(data.ts || new Date().toISOString()),
+    category: isTool ? "tool" : "system",
+    subAgentCall: Boolean(data.subAgentCall),
+    subAgentSessionId: String(data.subAgentSessionId || ""),
+    subAgentLabel: String(data.subAgentLabel || ""),
+    subAgentTask: String(data.subAgentTask || ""),
+  };
 }
 
 function isImageMime(type = "") {
@@ -207,113 +176,6 @@ function formatTime(ts) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function classifyRealtimeLog(data = {}) {
-  const eventName = String(data.event || "").trim();
-  const text = String(data.text || "").trim();
-  const category = String(data.category || "").trim();
-  const type = String(data.type || "").trim();
-  const isTool =
-    category === "tool" ||
-    TOOL_LOG_TYPES.has(type) ||
-    TOOL_LOG_TYPES.has(eventName) ||
-    eventName.startsWith("tool_") ||
-    text.startsWith("[tool]") ||
-    text.includes('"tool_call_id"');
-  let displayText = text || (eventName ? `[${eventName}]` : "");
-  return {
-    event: eventName || "system",
-    type: type || (isTool ? "tool_call" : "system"),
-    text: displayText,
-    dialogProcessId: String(data.dialogProcessId || ""),
-    ts: String(data.ts || new Date().toISOString()),
-    category: isTool ? "tool" : "system",
-    subAgentCall: Boolean(data.subAgentCall),
-    subAgentSessionId: String(data.subAgentSessionId || ""),
-    subAgentLabel: String(data.subAgentLabel || ""),
-    subAgentTask: String(data.subAgentTask || ""),
-  };
-}
-
-function renderMarkdown(text) {
-  return md.render(normalizeMermaidMarkdown(text || ""));
-}
-
-function updateViewportState() {
-  isMobile.value = window.innerWidth <= 768;
-  if (!isMobile.value) {
-    mobileSidebarOpen.value = false;
-  }
-}
-
-function toggleSidebar() {
-  if (isMobile.value) {
-    mobileSidebarOpen.value = !mobileSidebarOpen.value;
-    return;
-  }
-  sidebarCollapsed.value = !sidebarCollapsed.value;
-}
-
-function closeMobileSidebar() {
-  if (isMobile.value) mobileSidebarOpen.value = false;
-}
-
-function openWorkspace() {
-  if (!ensureConnected()) return;
-  if (!userId.value?.trim()) {
-    notifyUi({ type: "warning", message: translate("common.userIdRequired") });
-    return;
-  }
-  workspaceVisible.value = true;
-}
-
-async function openUserSettings() {
-  if (!ensureConnected()) return;
-  if (!connecting.value) {
-    const refreshed = await connectBackend({ silent: true });
-    if (!refreshed) {
-      notifyUi({
-        type: "warning",
-        message: translate("infra.inputConnectCodeFirst"),
-      });
-      return;
-    }
-  }
-  if (!isSuperAdmin.value) {
-    const currentRole = String(apiRole.value || "user").trim() || "user";
-    notifyUi({
-      type: "warning",
-      message: `${translate("common.superAdminOnly")} (role=${currentRole})`,
-    });
-    return;
-  }
-  userSettingsVisible.value = true;
-}
-
-function openConfigParams() {
-  if (!ensureConnected()) return;
-  configParamsVisible.value = true;
-}
-
-function handleInteractionConfirm(payload = {}) {
-  try {
-    submitInteractionResponse(payload || {});
-  } catch (error) {
-    notifyUi({ type: "error", message: error.message || translate("common.interactionSubmitFailed") });
-  }
-}
-
-function handleInteractionCancel() {
-  try {
-    submitInteractionResponse({
-      confirmed: false,
-      cancelled: true,
-      response: "cancelled",
-    });
-  } catch (error) {
-    notifyUi({ type: "error", message: error.message || translate("common.interactionCancelFailed") });
-  }
 }
 
 function scrollBottom() {
@@ -377,13 +239,22 @@ const {
   clearUploadSelection: () => composerRef.value?.clearUploadSelection?.(),
 });
 
-fetchSessionsAfterConnect = fetchSessions;
+// --- Reconnect ---
+function hasActiveSessionForReconnect() {
+  return Boolean(
+    String(activeSession.value?.backendSessionId || "").trim() ||
+      String(activeSession.value?.id || "").trim() ||
+      String(activeSessionId.value || "").trim(),
+  );
+}
 
+const { reconnectActiveSession } = useReconnect({
+  connected,
+  hasActiveSession: hasActiveSessionForReconnect,
+  handleReconnect,
+});
 
-
-// ---- Reconnect handling ----
-
-
+// --- Session handlers ---
 function handleSelectSession(sessionId, options = {}) {
   closeMobileSidebarOnSelect(isMobile, mobileSidebarOpen);
   return selectSession(sessionId, options);
@@ -405,38 +276,89 @@ async function handleDeleteSession(sessionId) {
   }
 }
 
-onMounted(async () => {
-  updateViewportState();
-  window.addEventListener("resize", updateViewportState);
-  if (frontendConfig.reconnect.listenOnline) {
-    window.addEventListener("online", handleBrowserReconnectSignal);
+// --- Panel open handlers (with guard logic) ---
+function openWorkspace() {
+  if (!ensureConnected()) return;
+  if (!userId.value?.trim()) {
+    notifyUi({ type: "warning", message: translate("common.userIdRequired") });
+    return;
   }
-  if (frontendConfig.reconnect.listenWindowFocus) {
-    window.addEventListener("focus", handleBrowserReconnectSignal);
+  openWorkspaceRaw();
+}
+
+async function openUserSettings() {
+  if (!ensureConnected()) return;
+  if (!connecting.value) {
+    const refreshed = await connectBackend({ silent: true });
+    if (!refreshed) {
+      notifyUi({
+        type: "warning",
+        message: translate("infra.inputConnectCodeFirst"),
+      });
+      return;
+    }
   }
-  if (frontendConfig.reconnect.listenVisibilityChange) {
-    document.addEventListener("visibilitychange", handleBrowserReconnectSignal);
+  if (!isSuperAdmin.value) {
+    const currentRole = String(apiRole.value || "user").trim() || "user";
+    notifyUi({
+      type: "warning",
+      message: `${translate("common.superAdminOnly")} (role=${currentRole})`,
+    });
+    return;
   }
+  openUserSettingsRaw();
+}
+
+function openConfigParams() {
+  if (!ensureConnected()) return;
+  openConfigParamsRaw();
+}
+
+// --- Interaction handlers ---
+function handleInteractionConfirm(payload = {}) {
+  try {
+    submitInteractionResponse(payload || {});
+  } catch (error) {
+    notifyUi({ type: "error", message: error.message || translate("common.interactionSubmitFailed") });
+  }
+}
+
+function handleInteractionCancel() {
+  try {
+    submitInteractionResponse({
+      confirmed: false,
+      cancelled: true,
+      response: "cancelled",
+    });
+  } catch (error) {
+    notifyUi({ type: "error", message: error.message || translate("common.interactionCancelFailed") });
+  }
+}
+
+// --- Lifecycle ---
+async function onAppMounted() {
   const autoConnected = await tryAutoConnect();
   if (autoConnected) {
     return;
   }
   initSessionsAfterMount();
-});
+}
 
-onBeforeUnmount(() => {
-  window.removeEventListener("resize", updateViewportState);
-  if (frontendConfig.reconnect.listenOnline) {
-    window.removeEventListener("online", handleBrowserReconnectSignal);
-  }
-  if (frontendConfig.reconnect.listenWindowFocus) {
-    window.removeEventListener("focus", handleBrowserReconnectSignal);
-  }
-  if (frontendConfig.reconnect.listenVisibilityChange) {
-    document.removeEventListener("visibilitychange", handleBrowserReconnectSignal);
-  }
+function onAppUnmounted() {
   releaseAllPreviewUrls();
-});
+}
+
+onAppMounted();
+onAppUnmounted();
+
+// --- Watchers ---
+watch(
+  () => scenarioConfig.value,
+  () => {
+    syncBotScenarioWithConfig();
+  },
+  { deep: true, immediate: true },
+);
 
 function onAllowUserInteractionUpdate(value) {
   allowUserInteraction.value = Boolean(value);
@@ -458,49 +380,13 @@ function onBotScenarioUpdate(value = "") {
   localStorage.setItem("noobot_bot_scenario", botScenario.value);
 }
 
-function hasActiveSessionForReconnect() {
-  return Boolean(
-    String(activeSession.value?.backendSessionId || "").trim() ||
-      String(activeSession.value?.id || "").trim() ||
-      String(activeSessionId.value || "").trim(),
-  );
+function onUserIdUpdate(value = "") {
+  userId.value = String(value || "");
 }
 
-reconnectActiveSessionIfNeeded = async ({ force = false } = {}) => {
-  if (!connected.value) return;
-  if (!hasActiveSessionForReconnect()) return;
-  if (reconnectActiveSessionPromise) return;
-  const now = Date.now();
-  if (!force && now - lastReconnectAttemptAt < RECONNECT_SIGNAL_COOLDOWN_MS) return;
-  lastReconnectAttemptAt = now;
-  reconnectActiveSessionPromise = handleReconnect();
-  try {
-    await reconnectActiveSessionPromise;
-  } finally {
-    reconnectActiveSessionPromise = null;
-  }
-};
-
-function handleBrowserReconnectSignal() {
-  if (document.visibilityState && document.visibilityState !== "visible") return;
-  reconnectActiveSessionIfNeeded();
+function onConnectCodeUpdate(value = "") {
+  connectCode.value = String(value || "");
 }
-
-watch(
-  () => scenarioConfig.value,
-  () => {
-    syncBotScenarioWithConfig();
-  },
-  { deep: true, immediate: true },
-);
-
-watch(
-  () => connected.value,
-  (nextConnected, previousConnected) => {
-    if (!nextConnected || previousConnected) return;
-    reconnectActiveSessionIfNeeded({ force: true });
-  },
-);
 
 async function handleWorkspaceReset() {
   await fetchSessions();
@@ -519,9 +405,6 @@ async function onConnectorSelected({
     notifyUi({ type: "error", message: error.message || translate("common.updateConnectorFailed") });
   }
 }
-
-const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
-
 </script>
 
 <template>
@@ -677,7 +560,7 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
   display: flex;
   flex: 1;
   min-height: 0;
-  width: 100vw;
+  width: 100%;
   background-color: var(--noobot-surface-sidebar);
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
@@ -728,7 +611,7 @@ const drawerSize = computed(() => (isMobile.value ? "100%" : "72%"));
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 720px) {
   .mobile-mask {
     display: block;
     position: fixed;

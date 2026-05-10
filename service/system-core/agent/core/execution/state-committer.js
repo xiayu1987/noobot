@@ -56,6 +56,7 @@ export function createStateCommitter({
           type: "tool_result",
           dialogProcessId,
           tool_call_id: call?.id || "",
+          toolName: String(call?.name || "").trim(),
         });
       }
     },

@@ -160,6 +160,8 @@ export class SessionManager {
     attachmentMetas = [],
     modelAlias = "",
     modelName = "",
+    summarized = false,
+    toolName = "",
     parentSessionId = "",
   }) {
     return this.sessionService.appendTurn({
@@ -177,7 +179,23 @@ export class SessionManager {
       attachmentMetas,
       modelAlias,
       modelName,
+      summarized,
+      toolName,
       parentSessionId,
+    });
+  }
+
+  async markSessionMessagesSummarized({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    shouldMark = null,
+  } = {}) {
+    return this.sessionService.markSessionMessagesSummarized({
+      userId,
+      sessionId,
+      parentSessionId,
+      shouldMark,
     });
   }
 

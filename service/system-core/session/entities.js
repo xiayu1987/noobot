@@ -37,11 +37,14 @@ export function normalizeMessageEntity(
     taskStatus: String(message?.taskStatus || "").trim(),
     modelAlias: String(message?.modelAlias || "").trim(),
     modelName: String(message?.modelName || "").trim(),
+    summarized: message?.summarized === true,
     attachmentMetas: normalizedAttachmentMetas,
     ts: String(message?.ts || "").trim() || now(),
   };
   const toolCallId = String(message?.tool_call_id || "").trim();
+  const toolName = String(message?.toolName || message?.tool_name || "").trim();
   if (toolCallId) normalizedMessage.tool_call_id = toolCallId;
+  if (toolName) normalizedMessage.toolName = toolName;
   if (Array.isArray(message?.tool_calls)) {
     normalizedMessage.tool_calls = message.tool_calls;
   }
