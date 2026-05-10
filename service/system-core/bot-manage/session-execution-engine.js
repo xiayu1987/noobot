@@ -14,8 +14,6 @@ import { mergeConfig } from "../config/index.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { isPlainObject } from "../utils/shared-utils.js";
 
-const ALWAYS_INCLUDED_SCENARIO_TOOL_NAMES = new Set(["task_summary"]);
-
 function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(sessionId || ""),
@@ -341,9 +339,6 @@ export class SessionExecutionEngine {
     }
     if (scenarioMcpServerItems.length) {
       scenarioToolNameSet.add("call_mcp_task");
-    }
-    for (const toolName of ALWAYS_INCLUDED_SCENARIO_TOOL_NAMES) {
-      scenarioToolNameSet.add(toolName);
     }
     const scenarioToolNames = Array.from(scenarioToolNameSet);
     const scenarioContextKeys = Array.isArray(scenarioDefinition?.context)

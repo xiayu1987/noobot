@@ -343,6 +343,21 @@ export const TOOL_SCHEMA_BY_TOOL = {
     },
     "texts": {}
   },
+  "task_summary": {
+    "description": {
+      "key": "tools.task_summary.description",
+      "text": "Submit a phase summary of the current task. Only call when the system requests a phase summary; summaryContent should briefly describe current goals, completed items, key results/files/status, pending items, and next steps."
+    },
+    "params": {
+      "summaryContent": {
+        "key": "tools.task_summary.fieldSummaryContent",
+        "text": "Phase summary content. Briefly cover current task status, key results, remaining issues, and next steps."
+      }
+    },
+    "texts": {
+      "tools.task_summary.summaryContentRequired": "summaryContent is required"
+    }
+  },
   "execute_script": {
     "description": {
       "key": "tools.script.description",

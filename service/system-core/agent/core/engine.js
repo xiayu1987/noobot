@@ -11,6 +11,12 @@ import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
 } from "../../context/current-turn-store.js";
+import {
+  filterSummarizedMessages,
+  markCurrentTurnArraySummarized,
+  markCurrentTurnModelMessagesSummarized,
+  markCurrentTurnStoreSummarized,
+} from "../../context/summarized-message-policy.js";
 import { buildContextMessages } from "./context/message-builder.js";
 import { tEngine } from "./i18n-adapter.js";
 import {
@@ -91,6 +97,35 @@ function removePhaseSummaryPromptMessages(messages = [], runtime = {}) {
   return removedCount;
 }
 
+function autoMarkCurrentTurnSummarized({
+  turnMessageStore = null,
+  fallbackMessages = [],
+}) {
+  if (turnMessageStore) {
+    markCurrentTurnStoreSummarized(turnMessageStore, {
+      taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+    });
+    return turnMessageStore.toArray();
+  }
+  return markCurrentTurnArraySummarized(fallbackMessages, {
+    taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+  });
+}
+
+function finalizeTurnMessagesBeforeReturn({
+  modelMessages = [],
+  turnMessageStore = null,
+  fallbackMessages = [],
+} = {}) {
+  markCurrentTurnModelMessagesSummarized(modelMessages, {
+    taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+  });
+  return autoMarkCurrentTurnSummarized({
+    turnMessageStore,
+    fallbackMessages,
+  });
+}
+
 function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] }) {
   const runtime = modelState?.runtime || {};
   const systemRuntime =
@@ -159,7 +194,9 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     return {
       output: limitMsg,
       traces,
-      turnMessages: Array.isArray(turnMessages) ? turnMessages : [],
+      turnMessages: finalizeTurnMessagesBeforeReturn({
+        fallbackMessages: Array.isArray(turnMessages) ? turnMessages : [],
+      }),
       turnTasks: Array.isArray(loopState?.turnTasks) ? loopState.turnTasks : [],
     };
   }
@@ -172,10 +209,13 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       mode: "no_tools",
     });
     const llmCallbacks = createStreamingCallbacks(eventListener);
-    const modelResponse = await modelState.llm.invoke(messages, {
+    const modelResponse = await modelState.llm.invoke(
+      filterSummarizedMessages(messages),
+      {
       callbacks: llmCallbacks,
       signal: abortSignal,
-    });
+      },
+    );
     const responseContentText = normalizeAiTextContent(modelResponse?.content);
     messages.push(modelResponse);
     const turnMessageStore = resolveTurnMessagesStore(
@@ -216,7 +256,10 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     return {
       output: responseContentText,
       traces,
-      turnMessages: turnMessageStore.toArray(),
+      turnMessages: finalizeTurnMessagesBeforeReturn({
+        modelMessages: messages,
+        turnMessageStore,
+      }),
       turnTasks: turnTaskStore.toArray(),
     };
   }
@@ -227,10 +270,13 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   emitEvent(eventListener, "llm_call_start", { turn });
   const llmCallbacks = createStreamingCallbacks(eventListener);
 
-  const ai = await modelState.llm.bindTools(tools).invoke(messages, {
+  const ai = await modelState.llm.bindTools(tools).invoke(
+    filterSummarizedMessages(messages),
+    {
     callbacks: llmCallbacks,
     signal: abortSignal,
-  });
+    },
+  );
   const aiContentText = normalizeAiTextContent(ai.content);
   messages.push(ai);
   const turnMessageStore = resolveTurnMessagesStore(
@@ -282,7 +328,10 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     return {
       output: aiContentText,
       traces,
-      turnMessages: turnMessageStore.toArray(),
+      turnMessages: finalizeTurnMessagesBeforeReturn({
+        modelMessages: messages,
+        turnMessageStore,
+      }),
       turnTasks: turnTaskStore.toArray(),
     };
 
@@ -310,6 +359,13 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       parentSessionId: runtime?.systemRuntime?.parentSessionId || "",
     });
   }));
+  const hasTaskSummaryCall = toolCallResults.some(
+    (toolCallResult) =>
+      String(toolCallResult?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+  );
+  if (hasTaskSummaryCall) {
+    loopState.taskSummaryTriggered = true;
+  }
   for (const toolCallResult of toolCallResults) {
     const call = toolCallResult?.call || {};
     const toolResultText = String(toolCallResult?.toolResultText || "");
@@ -366,22 +422,30 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     return {
       output: limitMsg,
       traces,
-      turnMessages: turnMessageStore.toArray(),
+      turnMessages: finalizeTurnMessagesBeforeReturn({
+        modelMessages: messages,
+        turnMessageStore,
+      }),
       turnTasks: turnTaskStore.toArray(),
     };
   }
 
   loopState.turnMessages = turnMessageStore.toArray();
   loopState.turnTasks = turnTaskStore.toArray();
-  if (
-    toolCallResults.some(
-      (toolCallResult) =>
-        String(toolCallResult?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
-    )
-  ) {
+  if (hasTaskSummaryCall) {
     removePhaseSummaryPromptMessages(messages, runtime);
   }
   maybeRequestPhaseSummary({ modelState, loopState, toolCallResults });
+  // 仅在显式调用 task_summary 时，才在 loop 中途即时同步 summarized 标记；
+  // 其他自动打标统一在完整对话结束返回时处理。
+  if (hasTaskSummaryCall) {
+    markCurrentTurnModelMessagesSummarized(messages, {
+      taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+    });
+    markCurrentTurnStoreSummarized(turnMessageStore, {
+      taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+    });
+  }
   loopState.turnMessages = turnMessageStore.toArray();
   return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
 }
@@ -461,6 +525,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
         ? maxToolLoopTurns
         : DEFAULT_MAX_TOOL_LOOP_TURNS,
     phaseSummaryLoopTurns,
+    taskSummaryTriggered: false,
     consecutiveToolFailures: {},
     errorLogger,
   };

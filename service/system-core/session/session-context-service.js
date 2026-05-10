@@ -28,7 +28,10 @@ export class SessionContextService {
       limit || this._sessionContextConfig(userConfig).recentMessageLimit || 20,
     );
     if (resolvedLimit <= 0) return [];
-    return messages.slice(-resolvedLimit);
+    const filteredMessages = messages.filter(
+      (messageItem) => messageItem?.summarized !== true,
+    );
+    return filteredMessages.slice(-resolvedLimit);
   }
 
   async getMessagesSinceLastRunningTask({ userId, sessionId }) {
