@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { safeNum } from "../utils/shared-utils.js";
+import { safeNum, normalizeSelectedConnectors } from "../utils/shared-utils.js";
 import { tSystem } from "../i18n/system-text.js";
 function normalizeHistoryConnectorItems(items = []) {
   return (Array.isArray(items) ? items : []).map((connectorItem) => ({
@@ -141,20 +141,6 @@ function buildSelectedCompactConnector({
   };
 }
 
-function normalizeSelectedConnectors(selectedConnectors = {}) {
-  const source =
-    selectedConnectors && typeof selectedConnectors === "object"
-      ? selectedConnectors
-      : {};
-  return Object.fromEntries(
-    Object.entries(source)
-      .map(([connectorType, connectorName]) => [
-        String(connectorType || "").trim(),
-        String(connectorName || "").trim(),
-      ])
-      .filter(([connectorType]) => Boolean(connectorType)),
-  );
-}
 
 export async function resolveConnectorStatusSection({
   rootSessionId = "",

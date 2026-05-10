@@ -12,26 +12,13 @@ import { toToolJsonResult } from "./tool-json-result.js";
 import { appendMcpErrorLog } from "../tracking/index.js";
 import { tTool } from "./tool-i18n.js";
 import { isAbortError } from "../utils/error-utils.js";
+import { normalizeSelectedConnectors } from "../utils/shared-utils.js";
 
 function jsonError(payload = {}) {
   return toToolJsonResult("call_mcp_task", { ok: false, ...payload });
 }
 
 
-function normalizeSelectedConnectors(selectedConnectors = {}) {
-  const source =
-    selectedConnectors && typeof selectedConnectors === "object"
-      ? selectedConnectors
-      : {};
-  return Object.fromEntries(
-    Object.entries(source)
-      .map(([connectorType, connectorName]) => [
-        String(connectorType || "").trim(),
-        String(connectorName || "").trim(),
-      ])
-      .filter(([connectorType]) => Boolean(connectorType)),
-  );
-}
 
 export function createMcpTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};

@@ -3,19 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { safeNum } from "../utils/shared-utils.js";
-function normalizeSelectedConnectors(source = {}) {
-  const selectedConnectorsSource =
-    source && typeof source === "object" ? source : {};
-  return Object.fromEntries(
-    Object.entries(selectedConnectorsSource)
-      .map(([connectorType, connectorName]) => [
-        String(connectorType || "").trim(),
-        String(connectorName || "").trim(),
-      ])
-      .filter(([connectorType]) => Boolean(connectorType)),
-  );
-}
+import { safeNum, normalizeSelectedConnectors } from "../utils/shared-utils.js";
 
 export function mapToAgentContextSchema({
   staticAgentContext = {},
