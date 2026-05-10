@@ -7,8 +7,7 @@ import {
   extractReadableTextFromHtml,
   extractVisibleTextFromHtml,
 } from "./web/text-cleaner.js";
-import { cleanTerminalOutputForLLM } from "./cleaners/terminal-cleaner.js";
-import { cleanDatabaseOutputForLLM } from "./cleaners/database-cleaner.js";
+import { cleanTerminalOutputForLLM, cleanDatabaseOutputForLLM } from "./cleaners/output-cleaner.js";
 
 const NOISE_PATTERNS = [
   /^(广告|推广|赞助|相关推荐|猜你想看|猜你喜欢|热门推荐|热搜)$/i,
