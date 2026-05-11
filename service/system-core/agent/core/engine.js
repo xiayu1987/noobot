@@ -409,6 +409,7 @@ async function _invokeNoTools({ modelState, loopState, turn }) {
 async function _invokeWithTools({ modelState, loopState, turn }) {
   const { messages, traces, tools, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
+  const invokeLlm = resolveInvokeLlm(modelState, "with_tools");
 
   const adaptedBinding = adaptToolsForBinding(tools, modelState);
   const boundTools = Array.isArray(adaptedBinding?.tools)
@@ -755,4 +756,3 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
   const { modelState, loopState } = buildAgentState({ agentContext, userMessage, errorLogger });
   return runFunctionCallLoop({ modelState, loopState, turn: 1 });
 }
-  const invokeLlm = resolveInvokeLlm(modelState, "with_tools");
