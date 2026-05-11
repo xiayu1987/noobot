@@ -6,9 +6,17 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { MoreFilled, Plus } from "@element-plus/icons-vue";
+import { Plus } from "@element-plus/icons-vue";
 import { getConfigParamsApi, putConfigParamsApi } from "../../services/api/chatApi";
 import { useLocale } from "../../shared/i18n/useLocale";
+import {
+  SettingsActionGroup,
+  SettingsJsonEditor,
+  SettingsPanelHeader,
+  SettingsTreeActionButton,
+  SettingsWorkspaceLayout,
+  SettingsWorkspacePanel,
+} from "./components";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },
@@ -33,6 +41,15 @@ const activeScopeFilePath = computed(() =>
     ? "workspace/config-params.json"
     : `workspace/${String(props.userId || "").trim() || "<user>"}/config-params.json`,
 );
+const editorActions = computed(() => [
+  {
+    command: "save",
+    label: translate("settings.save"),
+    type: "primary",
+    className: "primary-btn",
+    loading: saving.value,
+  },
+]);
 
 function authHeaders(extra = {}) {
   return {
@@ -237,16 +254,18 @@ watch(
 <template>
   <el-tabs v-model="activeScope" class="settings-tabs" @tab-change="onScopeChanged">
     <el-tab-pane :label="translate('settings.userParams')" name="user">
-      <div class="workspace-layout noobot-workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
-        <div class="workspace-panel noobot-flat-card noobot-workspace-panel">
-          <div class="panel-head noobot-workspace-head">
-            <span class="panel-title noobot-workspace-title">{{ translate("settings.paramsList", { label: activeScopeLabel }) }}</span>
-            <div class="tree-actions">
-              <el-button class="icon-btn" size="small" text @click="addParamRow" :title="translate('settings.addParam')">
-                <el-icon><Plus /></el-icon>
-              </el-button>
-            </div>
-          </div>
+      <SettingsWorkspaceLayout :loading="loading">
+        <SettingsWorkspacePanel>
+          <SettingsPanelHeader :title="translate('settings.paramsList', { label: activeScopeLabel })">
+            <template #right>
+              <SettingsTreeActionButton
+                class-name="icon-btn"
+                :icon="Plus"
+                :title="translate('settings.addParam')"
+                @click="addParamRow"
+              />
+            </template>
+          </SettingsPanelHeader>
           <div class="panel-body noobot-workspace-body">
             <el-scrollbar class="tree-scroll">
               <div class="users-list">
@@ -274,55 +293,42 @@ watch(
               </div>
             </el-scrollbar>
           </div>
-        </div>
+        </SettingsWorkspacePanel>
 
-        <div class="workspace-panel workspace-editor noobot-flat-card noobot-workspace-panel">
-          <div class="panel-head noobot-workspace-head">
-            <div class="file-info">
-              <span class="active-file noobot-flat-chip" :title="activeScopeFilePath">{{ activeScopeFilePath }}</span>
-            </div>
-            <div class="editor-actions">
-              <div class="desktop-actions">
-                <el-button type="primary" class="primary-btn noobot-action-btn" size="small" @click="saveParams" :loading="saving">
-                  {{ translate("settings.save") }}
-                </el-button>
+        <SettingsWorkspacePanel panel-class="workspace-editor">
+          <SettingsPanelHeader>
+            <template #left>
+              <div class="file-info">
+                <span class="active-file noobot-flat-chip" :title="activeScopeFilePath">{{ activeScopeFilePath }}</span>
               </div>
-              <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
-                <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="save">{{ translate("settings.save") }}</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-          </div>
+            </template>
+            <template #right>
+              <SettingsActionGroup :actions="editorActions" @command="handleEditorAction" />
+            </template>
+          </SettingsPanelHeader>
           <div class="panel-body noobot-workspace-body editor-body">
-            <div v-if="jsonParseError" class="json-error">⚠️ {{ jsonParseError }}</div>
-            <el-input
+            <SettingsJsonEditor
               v-model="paramsJsonText"
-              type="textarea"
-              :autosize="{ minRows: 8 }"
-              resize="none"
-              class="editor-input noobot-editor-textarea"
-              spellcheck="false"
+              :parse-error="jsonParseError"
               placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
             />
           </div>
-        </div>
-      </div>
+        </SettingsWorkspacePanel>
+      </SettingsWorkspaceLayout>
     </el-tab-pane>
     <el-tab-pane v-if="isSuperAdmin" :label="translate('settings.systemParams')" name="system">
-      <div class="workspace-layout noobot-workspace-layout" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
-        <div class="workspace-panel noobot-flat-card noobot-workspace-panel">
-          <div class="panel-head noobot-workspace-head">
-            <span class="panel-title noobot-workspace-title">{{ translate("settings.paramsList", { label: activeScopeLabel }) }}</span>
-            <div class="tree-actions">
-              <el-button class="icon-btn" size="small" text @click="addParamRow" :title="translate('settings.addParam')">
-                <el-icon><Plus /></el-icon>
-              </el-button>
-            </div>
-          </div>
+      <SettingsWorkspaceLayout :loading="loading">
+        <SettingsWorkspacePanel>
+          <SettingsPanelHeader :title="translate('settings.paramsList', { label: activeScopeLabel })">
+            <template #right>
+              <SettingsTreeActionButton
+                class-name="icon-btn"
+                :icon="Plus"
+                :title="translate('settings.addParam')"
+                @click="addParamRow"
+              />
+            </template>
+          </SettingsPanelHeader>
           <div class="panel-body noobot-workspace-body">
             <el-scrollbar class="tree-scroll">
               <div class="users-list">
@@ -345,42 +351,27 @@ watch(
               </div>
             </el-scrollbar>
           </div>
-        </div>
-        <div class="workspace-panel workspace-editor noobot-flat-card noobot-workspace-panel">
-          <div class="panel-head noobot-workspace-head">
-            <div class="file-info">
-              <span class="active-file noobot-flat-chip" :title="activeScopeFilePath">{{ activeScopeFilePath }}</span>
-            </div>
-            <div class="editor-actions">
-              <div class="desktop-actions">
-                <el-button type="primary" class="primary-btn noobot-action-btn" size="small" @click="saveParams" :loading="saving">
-                  {{ translate("settings.save") }}
-                </el-button>
+        </SettingsWorkspacePanel>
+        <SettingsWorkspacePanel panel-class="workspace-editor">
+          <SettingsPanelHeader>
+            <template #left>
+              <div class="file-info">
+                <span class="active-file noobot-flat-chip" :title="activeScopeFilePath">{{ activeScopeFilePath }}</span>
               </div>
-              <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
-                <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="save">{{ translate("settings.save") }}</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-          </div>
+            </template>
+            <template #right>
+              <SettingsActionGroup :actions="editorActions" @command="handleEditorAction" />
+            </template>
+          </SettingsPanelHeader>
           <div class="panel-body noobot-workspace-body editor-body">
-            <div v-if="jsonParseError" class="json-error">⚠️ {{ jsonParseError }}</div>
-            <el-input
+            <SettingsJsonEditor
               v-model="paramsJsonText"
-              type="textarea"
-              :autosize="{ minRows: 8 }"
-              resize="none"
-              class="editor-input noobot-editor-textarea"
-              spellcheck="false"
+              :parse-error="jsonParseError"
               placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
             />
           </div>
-        </div>
-      </div>
+        </SettingsWorkspacePanel>
+      </SettingsWorkspaceLayout>
     </el-tab-pane>
   </el-tabs>
 </template>
@@ -416,14 +407,6 @@ watch(
   background: var(--noobot-panel-muted);
   border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 35%, var(--noobot-panel-border));
   color: var(--noobot-text-strong);
-}
-
-.json-error {
-  background: var(--noobot-danger-soft);
-  color: var(--noobot-status-error);
-  font-size: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--noobot-status-error) 40%, transparent);
 }
 
 .list-empty-tip {
