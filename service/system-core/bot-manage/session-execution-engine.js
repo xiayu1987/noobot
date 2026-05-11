@@ -16,6 +16,18 @@ import { isPlainObject } from "../utils/shared-utils.js";
 
 const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = 15000;
 
+function isAbortLikeError(error = {}) {
+  const name = String(error?.name || "").toLowerCase();
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    name.includes("abort") ||
+    code === "abort_err" ||
+    code === "aborted" ||
+    message.includes("abort")
+  );
+}
+
 function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(sessionId || ""),
@@ -50,7 +62,7 @@ export class SessionExecutionEngine {
   }
 
   _normalizeRunMessage(message = "") {
-    const normalizedMessage = (message ?? "" || "").trim();
+    const normalizedMessage = String(message ?? "").trim();
     if (!normalizedMessage) {
       throw recoverableToolError(tSystem("common.userSessionMessageRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
@@ -96,23 +108,23 @@ export class SessionExecutionEngine {
     patch = {},
   }) {
     if (!isPlainObject(parentAsyncResultContainer)) return null;
-    const normalizedSessionId = (sessionId || "" || "").trim();
+    const normalizedSessionId = (sessionId ?? "").trim();
     if (!normalizedSessionId) return null;
     if (!Array.isArray(parentAsyncResultContainer.tasks)) {
       parentAsyncResultContainer.tasks = [];
     }
     const taskList = parentAsyncResultContainer.tasks;
     const targetIndex = taskList.findIndex(
-      (item) => (item?.sessionId || "" || "").trim() === normalizedSessionId,
+      (item) => (item?.sessionId ?? "").trim() === normalizedSessionId,
     );
     const baseTask =
       targetIndex >= 0
         ? taskList[targetIndex] || {}
         : {
             sessionId: normalizedSessionId,
-            parentSessionId: (parentSessionId || "" || "").trim(),
-            task: (task || "" || "").trim(),
-            sharedTaskSpec: (sharedTaskSpec || "" || "").trim(),
+            parentSessionId: (parentSessionId ?? "").trim(),
+            task: (task ?? "").trim(),
+            sharedTaskSpec: (sharedTaskSpec ?? "").trim(),
             status: "running",
             startedAt: "",
             endedAt: "",
@@ -166,16 +178,16 @@ export class SessionExecutionEngine {
       if (String(caller || "user") !== "bot") return null;
       container = {};
     }
-    container.id = (container?.id || "" || "").trim() || uuidv4();
+    container.id = (container?.id ?? "").trim() || uuidv4();
     container.parentSessionId =
-      (container?.parentSessionId || "" || "").trim() ||
-      (parentSessionId || "" || "").trim();
+      (container?.parentSessionId ?? "").trim() ||
+      (parentSessionId ?? "").trim();
     container.parentDialogProcessId =
-      (container?.parentDialogProcessId || "" || "").trim() ||
-      (parentDialogProcessId || "" || "").trim();
+      (container?.parentDialogProcessId ?? "").trim() ||
+      (parentDialogProcessId ?? "").trim();
     container.status = (container?.status || "running" || "").trim() || "running";
     container.updatedAt =
-      (container?.updatedAt || "" || "").trim() || this._now();
+      (container?.updatedAt ?? "").trim() || this._now();
     container.tasks = Array.isArray(container?.tasks) ? container.tasks : [];
     return container;
   }
@@ -185,14 +197,14 @@ export class SessionExecutionEngine {
   _normalizeStringArray(input = []) {
     return Array.isArray(input)
       ? input
-          .map((item) => (item || "" || "").trim())
+          .map((item) => (item ?? "").trim())
           .filter(Boolean)
       : [];
   }
 
   _normalizeToolItems(input = []) {
     return Array.isArray(input)
-      ? input.filter((item) => isPlainObject(item) && (item?.name || "" || "").trim())
+      ? input.filter((item) => isPlainObject(item) && (item?.name ?? "").trim())
       : [];
   }
 
@@ -265,7 +277,7 @@ export class SessionExecutionEngine {
       : [];
     if (!sourceTools.length) return agentContext;
     const toolPolicy = runConfig?.toolPolicy || {};
-    const mode = (toolPolicy?.mode || "" || "").trim().toLowerCase();
+    const mode = (toolPolicy?.mode ?? "").trim().toLowerCase();
     const customTools = this._normalizeToolItems(toolPolicy?.customTools);
     const configuredIncludeToolNames = this._normalizeStringArray(
       toolPolicy?.includeToolNames,
@@ -303,7 +315,7 @@ export class SessionExecutionEngine {
     const dedupedTools = [];
     const seenNames = new Set();
     for (const toolItem of nextTools) {
-      const toolName = (toolItem?.name || "" || "").trim();
+      const toolName = (toolItem?.name ?? "").trim();
       if (!toolName || seenNames.has(toolName)) continue;
       seenNames.add(toolName);
       dedupedTools.push(toolItem);
@@ -380,9 +392,9 @@ export class SessionExecutionEngine {
     const scenarioContextKeys = normalizeStringArray(scenarioDefinition?.context);
     const hasAllTools = scenarioToolNames.includes("*");
     const hasAllContext = scenarioContextKeys.includes("*");
-    const scenarioName = (scenarioDefinition?.name || "" || "").trim();
-    const scenarioDescription = (scenarioDefinition?.description || "" || "").trim();
-    const scenarioModelName = (scenarioDefinition?.model || "" || "").trim();
+    const scenarioName = (scenarioDefinition?.name ?? "").trim();
+    const scenarioDescription = (scenarioDefinition?.description ?? "").trim();
+    const scenarioModelName = (scenarioDefinition?.model ?? "").trim();
     const resolvedRunConfig = {
       ...normalizedRunConfig,
       scenario: resolvedScenarioKey,
@@ -562,10 +574,10 @@ export class SessionExecutionEngine {
         attachmentMetas: Array.isArray(messageItem.attachmentMetas)
           ? messageItem.attachmentMetas
           : null,
-        modelAlias: (messageItem.modelAlias || "" || "").trim(),
-        modelName: (messageItem.modelName || "" || "").trim(),
+        modelAlias: (messageItem.modelAlias ?? "").trim(),
+        modelName: (messageItem.modelName ?? "").trim(),
         summarized: messageItem.summarized === true,
-        toolName: (messageItem.toolName || "" || "").trim(),
+        toolName: (messageItem.toolName ?? "").trim(),
         rawModelContent:
           typeof messageItem.rawModelContent === "string" ||
           Array.isArray(messageItem.rawModelContent)
@@ -595,8 +607,8 @@ export class SessionExecutionEngine {
     parentDialogProcessId = "",
     partialAssistant = {},
   } = {}) {
-    const content = (partialAssistant?.content || "" || "").trim();
-    const dialogProcessId = (partialAssistant?.dialogProcessId || "" || "").trim();
+    const content = (partialAssistant?.content ?? "").trim();
+    const dialogProcessId = (partialAssistant?.dialogProcessId ?? "").trim();
     if (!userId || !sessionId || !content || !dialogProcessId) return false;
     const sessionBundle = await this.session.getSessionBundle({
       userId,
@@ -608,8 +620,8 @@ export class SessionExecutionEngine {
       : [];
     const alreadySaved = messages.some(
       (messageItem) =>
-        (messageItem?.role || "" || "").trim() === "assistant" &&
-        (messageItem?.dialogProcessId || "" || "").trim() === dialogProcessId,
+        (messageItem?.role ?? "").trim() === "assistant" &&
+        (messageItem?.dialogProcessId ?? "").trim() === dialogProcessId,
     );
     if (alreadySaved) return false;
     await this._appendSessionTurn({
@@ -621,8 +633,8 @@ export class SessionExecutionEngine {
       type: "message",
       dialogProcessId,
       parentDialogProcessId,
-      modelAlias: (partialAssistant?.modelAlias || "" || "").trim(),
-      modelName: (partialAssistant?.modelName || "" || "").trim(),
+      modelAlias: (partialAssistant?.modelAlias ?? "").trim(),
+      modelName: (partialAssistant?.modelName ?? "").trim(),
       eventListener: null,
     });
     return true;
@@ -772,15 +784,24 @@ export class SessionExecutionEngine {
     });
     const memorySummaryTimeoutMs = this._resolveMemorySummaryTimeoutMs(userConfig);
     let memorySummaryTimedOut = false;
-    await Promise.race([
-      this.memory.maybeSummarize({ userId, userConfig }),
-      new Promise((resolve) => {
-        setTimeout(() => {
-          memorySummaryTimedOut = true;
-          resolve();
-        }, memorySummaryTimeoutMs);
-      }),
-    ]);
+    const memorySummaryAbortController = new AbortController();
+    const memorySummaryTimer = setTimeout(() => {
+      memorySummaryTimedOut = true;
+      memorySummaryAbortController.abort();
+    }, memorySummaryTimeoutMs);
+    try {
+      await this.memory.maybeSummarize({
+        userId,
+        userConfig,
+        abortSignal: memorySummaryAbortController.signal,
+      });
+    } catch (error) {
+      if (!isAbortLikeError(error) || !memorySummaryTimedOut) {
+        throw error;
+      }
+    } finally {
+      clearTimeout(memorySummaryTimer);
+    }
     if (memorySummaryTimedOut) {
       emitEvent(runtimeEventListener, "memory_summary_timeout", {
         sessionId,
@@ -977,7 +998,7 @@ export class SessionExecutionEngine {
     }
   }
 
-  async startNewSession({
+  async runSessionAsUser({
     userId,
     sessionId,
     message,
@@ -1000,26 +1021,13 @@ export class SessionExecutionEngine {
     });
   }
 
-  async continueSession({
-    userId,
-    sessionId,
-    message,
-    attachments = [],
-    eventListener = null,
-  }) {
-    if (!sessionId) {
-      throw recoverableToolError(tSystem("common.sessionIdRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
-      });
-    }
-    return this.runSession({
-      userId,
-      sessionId,
-      message,
-      attachments,
-      eventListener,
-      caller: "user",
-      parentSessionId: "",
-    });
+  /** @deprecated Use runSessionAsUser instead */
+  async startNewSession(params) {
+    return this.runSessionAsUser(params);
+  }
+
+  /** @deprecated Use runSessionAsUser instead */
+  async continueSession(params) {
+    return this.runSessionAsUser(params);
   }
 }
