@@ -134,16 +134,30 @@ export function buildContextMessages(
 
     if (role === "assistant") {
       const toolCalls = toLangChainToolCalls(msg.tool_calls || []);
-      if (toolCalls.length) {
-        out.push(
-          new AIMessage({
-            content: msg.content || "",
-            tool_calls: toolCalls,
-          }),
-        );
-      } else {
-        out.push(new AIMessage(msg.content || ""));
-      }
+      const resolvedAssistantContent =
+        typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
+          ? msg.rawModelContent
+          : msg.content || "";
+      const modelAdditionalKwargs =
+        msg?.modelAdditionalKwargs &&
+        typeof msg.modelAdditionalKwargs === "object" &&
+        !Array.isArray(msg.modelAdditionalKwargs)
+          ? msg.modelAdditionalKwargs
+          : {};
+      const modelResponseMetadata =
+        msg?.modelResponseMetadata &&
+        typeof msg.modelResponseMetadata === "object" &&
+        !Array.isArray(msg.modelResponseMetadata)
+          ? msg.modelResponseMetadata
+          : {};
+      out.push(
+        new AIMessage({
+          content: resolvedAssistantContent,
+          tool_calls: toolCalls,
+          additional_kwargs: modelAdditionalKwargs,
+          response_metadata: modelResponseMetadata,
+        }),
+      );
       continue;
     }
 
