@@ -28,6 +28,7 @@ export function buildStaticInfo({ runtimeBasePath = "", userId = "", globalConfi
 }
 
 export function buildDynamicInfo({
+  userId = "",
   sessionId = "",
   parentSessionId = "",
   rootSessionId = "",
@@ -50,6 +51,7 @@ export function buildDynamicInfo({
       .filter(([connectorType]) => Boolean(connectorType)),
   );
   return {
+    userId: String(userId || "").trim(),
     sessionId: String(sessionId || "").trim(),
     parentSessionId: String(parentSessionId || "").trim(),
     rootSessionId: String(rootSessionId || "").trim(),

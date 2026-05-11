@@ -7,6 +7,7 @@
  * Auto-resolves basePath via workspaceService.
  */
 import { appendSystemErrorLog } from "./system-error-log.js";
+import path from "node:path";
 
 export class SystemErrorLogger {
   constructor({ globalConfig = {}, workspaceService = null } = {}) {
@@ -24,11 +25,15 @@ export class SystemErrorLogger {
     extra = {},
   } = {}) {
     try {
-      const basePath = await this.workspaceService.ensureUserWorkspace(userId);
+      const normalizedUserId = String(userId || "").trim();
+      const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
+      const basePath = normalizedUserId
+        ? await this.workspaceService.ensureUserWorkspace(normalizedUserId)
+        : path.resolve(workspaceRoot || ".");
       await appendSystemErrorLog({
         basePath,
-        workspaceRoot: this.globalConfig?.workspaceRoot || "",
-        userId,
+        workspaceRoot,
+        userId: normalizedUserId,
         sessionId,
         parentSessionId,
         source,
