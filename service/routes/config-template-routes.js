@@ -3,9 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { safeJoin } from "../system-core/utils/fs-safe.js";
+import { registerFileCrudRoutes } from "./file-crud-routes.js";
 
 export function registerConfigAndTemplateRoutes(
   app,
@@ -28,6 +26,8 @@ export function registerConfigAndTemplateRoutes(
     translateText,
   } = {},
 ) {
+  // ── Config params routes (unchanged) ──
+
   app.get("/internal/config-params", async (req, res) => {
     try {
       const scope = resolveConfigParamScope(req);
@@ -144,56 +144,20 @@ export function registerConfigAndTemplateRoutes(
     }
   });
 
-  app.get("/internal/admin/template/tree", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
-      const root = templateRootPath();
-      await mkdir(root, { recursive: true });
-      const tree = await buildWorkspaceTree(root);
-      res.json({ ok: true, root, tree });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.loadTemplateTreeFailed", req.locale),
-      });
-    }
-  });
+  // ── Template file CRUD routes via factory ──
+  // Note: buildDirectoryArchiveFile is intentionally omitted so that
+  // the /download route is NOT registered (matches original behavior).
 
-  app.get("/internal/admin/template/file", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
-      const relativePath = String(req.query.path || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const root = templateRootPath();
-      const absolutePath = safeJoin(root, relativePath);
-      await access(absolutePath);
-      const fileStats = await stat(absolutePath);
-      if (!fileStats.isFile()) throw new Error(translateText("common.pathIsNotFile", req.locale));
-      const contentBuffer = await readFile(absolutePath);
-      const isText = !contentBuffer.includes(0);
-      const content = isText ? contentBuffer.toString("utf8") : "";
-      res.json({ ok: true, path: relativePath, isText, size: fileStats.size, content });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.readTemplateFileFailed", req.locale),
-      });
-    }
-  });
-
-  app.put("/internal/admin/template/file", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
-      const relativePath = String(req.body?.path || "");
-      const content = String(req.body?.content || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const root = templateRootPath();
-      const absolutePath = safeJoin(root, relativePath);
-      await mkdir(path.dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, content, "utf8");
-      res.json({ ok: true, path: relativePath });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.saveTemplateFileFailed", req.locale),
-      });
-    }
+  registerFileCrudRoutes(app, {
+    routePrefix: "/internal/admin/template",
+    resolveRootPath: templateRootPath,
+    middleware: [requireApiKey, requireSuperAdmin],
+    buildWorkspaceTree,
+    translateText,
+    i18nKeys: {
+      treeFailed: "common.loadTemplateTreeFailed",
+      readFailed: "common.readTemplateFileFailed",
+      saveFailed: "common.saveTemplateFileFailed",
+    },
   });
 }

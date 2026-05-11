@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
-import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { safeJoin } from "../system-core/utils/fs-safe.js";
+import { access, mkdir, readdir, rm } from "node:fs/promises";
+import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
 
@@ -51,6 +51,8 @@ export function registerWorkspaceRoutes(
     translateText,
   } = {},
 ) {
+  // ── User-level workspace routes (unchanged) ──
+
   app.get("/internal/workspace/tree/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
@@ -97,6 +99,89 @@ export function registerWorkspaceRoutes(
       });
     }
   });
+
+  app.get("/internal/workspace/file/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const relativePath = String(req.query.path || "");
+      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
+      const basePath = await bot.ensureUserWorkspace(userId);
+      const { safeJoin } = await import("../system-core/utils/fs-safe.js");
+      const absolutePath = safeJoin(basePath, relativePath);
+      try {
+        await access(absolutePath);
+      } catch {
+        throw new Error(translateText("common.fileNotFound", req.locale));
+      }
+      const { stat, readFile } = await import("node:fs/promises");
+      const fileStats = await stat(absolutePath);
+      if (!fileStats.isFile()) throw new Error(translateText("common.pathIsNotFile", req.locale));
+      const contentBuffer = await readFile(absolutePath);
+      const isText = !contentBuffer.includes(0);
+      const content = isText ? contentBuffer.toString("utf8") : "";
+      res.json({ ok: true, path: relativePath, isText, size: fileStats.size, content });
+    } catch (error) {
+      res.status(400).json({ ok: false, error: error.message });
+    }
+  });
+
+  app.put("/internal/workspace/file/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const relativePath = String(req.body?.path || "");
+      const content = String(req.body?.content || "");
+      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
+      const basePath = await bot.ensureUserWorkspace(userId);
+      const { safeJoin } = await import("../system-core/utils/fs-safe.js");
+      const absolutePath = safeJoin(basePath, relativePath);
+      const { mkdir, writeFile } = await import("node:fs/promises");
+      await mkdir(path.dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, content, "utf8");
+      res.json({ ok: true, path: relativePath });
+    } catch (error) {
+      res.status(400).json({ ok: false, error: error.message });
+    }
+  });
+
+  app.get("/internal/workspace/download/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const relativePath = String(req.query.path || "");
+      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
+      const basePath = await bot.ensureUserWorkspace(userId);
+      const { safeJoin } = await import("../system-core/utils/fs-safe.js");
+      const absolutePath = safeJoin(basePath, relativePath);
+      try {
+        await access(absolutePath);
+      } catch {
+        throw new Error(translateText("common.fileNotFound", req.locale));
+      }
+      const { stat } = await import("node:fs/promises");
+      const fileStats = await stat(absolutePath);
+      if (fileStats.isFile()) {
+        res.download(absolutePath, path.basename(relativePath));
+        return;
+      }
+      if (!fileStats.isDirectory()) throw new Error(translateText("common.pathIsNotFile", req.locale));
+      const archiveMeta = await buildDirectoryArchiveFile({
+        absoluteDirectoryPath: absolutePath,
+        archiveName: path.basename(relativePath),
+      });
+      const { rm } = await import("node:fs/promises");
+      const cleanupTemp = async () => {
+        await rm(archiveMeta.temporaryDirectory, { recursive: true, force: true }).catch(
+          () => {},
+        );
+      };
+      res.on("close", cleanupTemp);
+      res.on("finish", cleanupTemp);
+      res.download(archiveMeta.archiveFilePath, archiveMeta.archiveFileName);
+    } catch (error) {
+      res.status(400).json({ ok: false, error: error.message });
+    }
+  });
+
+  // ── Admin-level workspace-all routes (sync, reset, file CRUD) ──
 
   app.post("/internal/admin/workspace-all/sync", requireApiKey, requireSuperAdmin, async (req, res) => {
     try {
@@ -158,171 +243,14 @@ export function registerWorkspaceRoutes(
     }
   });
 
-  app.get("/internal/workspace/file/:userId", async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const relativePath = String(req.query.path || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await bot.ensureUserWorkspace(userId);
-      const absolutePath = safeJoin(basePath, relativePath);
-      try {
-        await access(absolutePath);
-      } catch {
-        throw new Error(translateText("common.fileNotFound", req.locale));
-      }
-      const fileStats = await stat(absolutePath);
-      if (!fileStats.isFile()) throw new Error(translateText("common.pathIsNotFile", req.locale));
-      const contentBuffer = await readFile(absolutePath);
-      const isText = !contentBuffer.includes(0);
-      const content = isText ? contentBuffer.toString("utf8") : "";
-      res.json({ ok: true, path: relativePath, isText, size: fileStats.size, content });
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
+  // ── Admin file CRUD routes via factory ──
 
-  app.put("/internal/workspace/file/:userId", async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const relativePath = String(req.body?.path || "");
-      const content = String(req.body?.content || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await bot.ensureUserWorkspace(userId);
-      const absolutePath = safeJoin(basePath, relativePath);
-      await mkdir(path.dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, content, "utf8");
-      res.json({ ok: true, path: relativePath });
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
-
-  app.get("/internal/workspace/download/:userId", async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const relativePath = String(req.query.path || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await bot.ensureUserWorkspace(userId);
-      const absolutePath = safeJoin(basePath, relativePath);
-      try {
-        await access(absolutePath);
-      } catch {
-        throw new Error(translateText("common.fileNotFound", req.locale));
-      }
-      const fileStats = await stat(absolutePath);
-      if (fileStats.isFile()) {
-        res.download(absolutePath, path.basename(relativePath));
-        return;
-      }
-      if (!fileStats.isDirectory()) throw new Error(translateText("common.pathIsNotFile", req.locale));
-      const archiveMeta = await buildDirectoryArchiveFile({
-        absoluteDirectoryPath: absolutePath,
-        archiveName: path.basename(relativePath),
-      });
-      const cleanupTemp = async () => {
-        await rm(archiveMeta.temporaryDirectory, { recursive: true, force: true }).catch(
-          () => {},
-        );
-      };
-      res.on("close", cleanupTemp);
-      res.on("finish", cleanupTemp);
-      res.download(archiveMeta.archiveFilePath, archiveMeta.archiveFileName);
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
-
-  app.get("/internal/admin/workspace-all/tree", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
-      const root = workspaceRootPath();
-      await mkdir(root, { recursive: true });
-      const tree = await buildWorkspaceTree(root);
-      res.json({ ok: true, root, tree });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.loadWorkspaceTreeFailed", req.locale),
-      });
-    }
-  });
-
-  app.get("/internal/admin/workspace-all/file", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
-      const relativePath = String(req.query.path || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const root = workspaceRootPath();
-      const absolutePath = safeJoin(root, relativePath);
-      await access(absolutePath);
-      const fileStats = await stat(absolutePath);
-      if (!fileStats.isFile()) throw new Error(translateText("common.pathIsNotFile", req.locale));
-      const contentBuffer = await readFile(absolutePath);
-      const isText = !contentBuffer.includes(0);
-      const content = isText ? contentBuffer.toString("utf8") : "";
-      res.json({ ok: true, path: relativePath, isText, size: fileStats.size, content });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.readWorkspaceFileFailed", req.locale),
-      });
-    }
-  });
-
-  app.put("/internal/admin/workspace-all/file", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
-      const relativePath = String(req.body?.path || "");
-      const content = String(req.body?.content || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const root = workspaceRootPath();
-      const absolutePath = safeJoin(root, relativePath);
-      await mkdir(path.dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, content, "utf8");
-      res.json({ ok: true, path: relativePath });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.saveWorkspaceFileFailed", req.locale),
-      });
-    }
-  });
-
-  app.get("/internal/admin/workspace-all/download", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
-      const relativePath = String(req.query.path || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const root = workspaceRootPath();
-      const absolutePath = safeJoin(root, relativePath);
-      await access(absolutePath);
-      const fileStats = await stat(absolutePath);
-      if (fileStats.isFile()) {
-        res.download(absolutePath, path.basename(relativePath));
-        return;
-      }
-      if (!fileStats.isDirectory()) throw new Error(translateText("common.pathIsNotFile", req.locale));
-      const archiveMeta = await buildDirectoryArchiveFile({
-        absoluteDirectoryPath: absolutePath,
-        archiveName: path.basename(relativePath),
-      });
-      const cleanupTemp = async () => {
-        await rm(archiveMeta.temporaryDirectory, { recursive: true, force: true }).catch(
-          () => {},
-        );
-      };
-      res.on("close", cleanupTemp);
-      res.on("finish", cleanupTemp);
-      res.download(archiveMeta.archiveFilePath, archiveMeta.archiveFileName);
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.downloadWorkspaceFileFailed", req.locale),
-      });
-    }
+  registerFileCrudRoutes(app, {
+    routePrefix: "/internal/admin/workspace-all",
+    resolveRootPath: workspaceRootPath,
+    middleware: [requireApiKey, requireSuperAdmin],
+    buildWorkspaceTree,
+    buildDirectoryArchiveFile,
+    translateText,
   });
 }
