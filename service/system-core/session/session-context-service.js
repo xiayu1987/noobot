@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig } from "../config/index.js";
+import {
+  filterSummarizedMessages,
+  normalizeContextWindow,
+  normalizeRecentWindow,
+} from "./context-window-normalizer.js";
 
 export class SessionContextService {
   constructor({ globalConfig = {}, sessionService } = {}) {
@@ -22,49 +27,68 @@ export class SessionContextService {
     };
   }
 
+  _normalizeContextWindow({
+    sourceMessages = [],
+    startIndex = 0,
+    limit = Number.POSITIVE_INFINITY,
+  } = {}) {
+    return normalizeContextWindow({
+      sourceMessages,
+      startIndex,
+      limit,
+    });
+  }
+
+  _normalizeRecentWindow(messages = [], limit = 20) {
+    return normalizeRecentWindow(messages, limit);
+  }
+
   async getRecentSessionMessages({ userId, sessionId, limit, userConfig = {} }) {
     const messages = await this.sessionService.getSessionTurns({ userId, sessionId });
     const resolvedLimit = Number(
       limit || this._sessionContextConfig(userConfig).recentMessageLimit || 20,
     );
     if (resolvedLimit <= 0) return [];
-    const filteredMessages = messages.filter(
-      (messageItem) => messageItem?.summarized !== true,
-    );
-    return filteredMessages.slice(-resolvedLimit);
+    const filteredMessages = filterSummarizedMessages(messages);
+    return this._normalizeRecentWindow(filteredMessages, resolvedLimit);
   }
 
   async getMessagesSinceLastRunningTask({ userId, sessionId }) {
     const messages = await this.sessionService.getSessionTurns({ userId, sessionId });
-    if (!messages.length) return [];
+    const filteredMessages = filterSummarizedMessages(messages);
+    if (!filteredMessages.length) return [];
 
     let startIndex = -1;
     for (
-      let messageIndex = messages.length - 1;
+      let messageIndex = filteredMessages.length - 1;
       messageIndex >= 0;
       messageIndex -= 1
     ) {
-      if ((messages[messageIndex]?.taskStatus || "") === "start") {
+      if ((filteredMessages[messageIndex]?.taskStatus || "") === "start") {
         startIndex = messageIndex;
         break;
       }
     }
 
     if (startIndex < 0) return [];
-    return messages.slice(startIndex);
+    return this._normalizeContextWindow({
+      sourceMessages: filteredMessages,
+      startIndex,
+    });
   }
 
   async getMessagesSinceLastCompletedTask({ userId, sessionId }) {
     const messages = await this.sessionService.getSessionTurns({ userId, sessionId });
-    if (!messages.length) return [];
+    const filteredMessages = filterSummarizedMessages(messages);
+    if (!filteredMessages.length) return [];
 
     let startIndex = -1;
     for (
-      let messageIndex = messages.length - 1;
+      let messageIndex = filteredMessages.length - 1;
       messageIndex >= 0;
       messageIndex -= 1
     ) {
-      const status = String(messages[messageIndex]?.taskStatus || "");
+      const status = String(filteredMessages[messageIndex]?.taskStatus || "");
       if (status === "completed") {
         startIndex = messageIndex;
         break;
@@ -72,7 +96,10 @@ export class SessionContextService {
     }
 
     if (startIndex < 0) return [];
-    return messages.slice(startIndex);
+    return this._normalizeContextWindow({
+      sourceMessages: filteredMessages,
+      startIndex,
+    });
   }
 
   async getContextRecords({ userId, sessionId, userConfig = {} }) {

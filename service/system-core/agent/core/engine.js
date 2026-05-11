@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { createChatModel, resolveDefaultModelSpec } from "../../model/index.js";
+import {
+  createChatModel,
+  createChatModelByName,
+  resolveDefaultModelSpec,
+} from "../../model/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { emitEvent } from "../../event/index.js";
 import {
@@ -38,6 +42,9 @@ import {
 import { assertNotAborted } from "./utils/error-utils.js";
 
 const TASK_SUMMARY_TOOL_NAME = "task_summary";
+const PHASE_SUMMARY_PROMPT_MARKER = "noobot.phase_summary_prompt";
+const TRANSIENT_LLM_MAX_ATTEMPTS = 3;
+const TRANSIENT_LLM_RETRY_BASE_DELAY_MS = 500;
 
 function normalizeAiTextContent(aiContent) {
   if (typeof aiContent === "string") return String(aiContent || "");
@@ -51,6 +58,154 @@ function normalizeAiTextContent(aiContent) {
     })
     .filter(Boolean);
   return textParts.join("\n");
+}
+
+function sleep(ms = 0) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getLlmErrorStatus(error = {}) {
+  const rawStatus =
+    error?.status ??
+    error?.statusCode ??
+    error?.response?.status ??
+    error?.cause?.status ??
+    error?.cause?.statusCode;
+  const status = Number(rawStatus);
+  return Number.isFinite(status) ? status : 0;
+}
+
+function isAbortLikeError(error = {}) {
+  const name = String(error?.name || error?.cause?.name || "").toLowerCase();
+  const code = String(error?.code || error?.cause?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    name.includes("abort") ||
+    code === "abort_err" ||
+    code === "aborted" ||
+    message.includes("abort")
+  );
+}
+
+function isTransientLlmError(error = {}) {
+  if (isAbortLikeError(error)) return false;
+  const status = getLlmErrorStatus(error);
+  if ([408, 409, 429, 500, 502, 503, 504].includes(status)) return true;
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("internal server error") ||
+    message.includes("server error") ||
+    message.includes("temporarily unavailable") ||
+    message.includes("timeout") ||
+    message.includes("rate limit")
+  );
+}
+
+function normalizeLlmError(error = {}, modelState = {}, { turn = 0, mode = "" } = {}) {
+  return {
+    turn,
+    mode,
+    modelAlias: String(modelState?.activeModelAlias || "").trim(),
+    modelName: String(modelState?.activeModelName || "").trim(),
+    message: String(error?.message || error || "").trim(),
+    name: String(error?.name || "").trim(),
+    status: getLlmErrorStatus(error) || undefined,
+    code: error?.code ?? error?.cause?.code ?? undefined,
+    type: error?.type ?? error?.cause?.type ?? undefined,
+    requestId:
+      error?.request_id ??
+      error?.requestId ??
+      error?.headers?.["x-request-id"] ??
+      error?.response?.headers?.["x-request-id"] ??
+      undefined,
+  };
+}
+
+function createTrackedStreamingCallbacks(eventListener = null) {
+  const callbacks = createStreamingCallbacks(eventListener);
+  let tokenCount = 0;
+  if (!Array.isArray(callbacks)) {
+    return {
+      callbacks,
+      getTokenCount: () => tokenCount,
+    };
+  }
+  return {
+    callbacks: callbacks.map((callback) => {
+      if (typeof callback?.handleLLMNewToken !== "function") return callback;
+      return {
+        ...callback,
+        handleLLMNewToken: async (...args) => {
+          tokenCount += 1;
+          return callback.handleLLMNewToken(...args);
+        },
+      };
+    }),
+    getTokenCount: () => tokenCount,
+  };
+}
+
+async function invokeLlmWithTransientRetry({
+  modelState,
+  turn,
+  mode = "",
+  invoke,
+}) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= TRANSIENT_LLM_MAX_ATTEMPTS; attempt += 1) {
+    const { callbacks, getTokenCount } = createTrackedStreamingCallbacks(
+      modelState?.eventListener,
+    );
+    try {
+      return await invoke({ callbacks });
+    } catch (error) {
+      lastError = error;
+      const errorData = normalizeLlmError(error, modelState, { turn, mode });
+      const canRetry =
+        attempt < TRANSIENT_LLM_MAX_ATTEMPTS &&
+        isTransientLlmError(error) &&
+        getTokenCount() === 0;
+      if (!canRetry) {
+        emitEvent(modelState?.eventListener, "llm_call_error", {
+          ...errorData,
+          attempt,
+          maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
+          transient: isTransientLlmError(error),
+          streamedTokens: getTokenCount(),
+        });
+        throw error;
+      }
+      const delayMs = TRANSIENT_LLM_RETRY_BASE_DELAY_MS * attempt;
+      emitEvent(modelState?.eventListener, "llm_call_retry", {
+        ...errorData,
+        attempt,
+        nextAttempt: attempt + 1,
+        maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
+        delayMs,
+      });
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
+function createNonStreamingLlmForActiveModel(modelState = {}) {
+  const { globalConfig, userConfig, activeModelAlias, activeModelName } = modelState;
+  const preferredModelName =
+    String(activeModelAlias || "").trim() ||
+    String(activeModelName || "").trim();
+  if (preferredModelName) {
+    return createChatModelByName(preferredModelName, {
+      globalConfig,
+      userConfig,
+      streaming: false,
+    });
+  }
+  return createChatModel({
+    globalConfig,
+    userConfig,
+    streaming: false,
+  });
 }
 
 function resolvePhaseSummaryLoopTurns(effectiveConfig = {}) {
@@ -80,17 +235,25 @@ function hasTaskSummaryTool(tools = []) {
 function removePhaseSummaryPromptMessages(messages = [], runtime = {}) {
   if (!Array.isArray(messages)) return 0;
   let removedCount = 0;
+  const phaseSummaryPrompt = tEngine(runtime, "phaseSummaryPrompt");
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    const content = String(message?.content || "").trim();
-    const type =
-      typeof message?._getType === "function"
-        ? String(message._getType() || "")
-        : String(message?.lc_kwargs?.type || message?.type || "");
-    if (type !== "system" && message?.constructor?.name !== "SystemMessage") {
+    const marker =
+      message?.additional_kwargs?.noobotInternalMessageType ||
+      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      message?.metadata?.noobotInternalMessageType ||
+      message?.lc_kwargs?.metadata?.noobotInternalMessageType ||
+      "";
+    if (marker === PHASE_SUMMARY_PROMPT_MARKER) {
+      messages.splice(index, 1);
+      removedCount += 1;
       continue;
     }
-    if (content !== tEngine(runtime, "phaseSummaryPrompt")) continue;
+
+    // Backward compatibility for phase-summary prompts created before the
+    // internal marker existed.
+    const content = String(message?.content || "").trim();
+    if (content !== phaseSummaryPrompt) continue;
     messages.splice(index, 1);
     removedCount += 1;
   }
@@ -185,7 +348,14 @@ function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] 
 
   systemRuntime.needsPhaseSummary = true;
   if (Array.isArray(loopState?.messages)) {
-    loopState.messages.push(new HumanMessage(tEngine(runtime, "phaseSummaryPrompt")));
+    loopState.messages.push(
+      new HumanMessage({
+        content: tEngine(runtime, "phaseSummaryPrompt"),
+        additional_kwargs: {
+          noobotInternalMessageType: PHASE_SUMMARY_PROMPT_MARKER,
+        },
+      }),
+    );
   }
   emitEvent(modelState?.eventListener || null, "phase_summary_required", {
     loopCount: nextCount,
@@ -202,11 +372,16 @@ async function _invokeNoTools({ modelState, loopState, turn }) {
   const { eventListener, runtime, abortSignal } = modelState;
 
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
-  const llmCallbacks = createStreamingCallbacks(eventListener);
-  const modelResponse = await modelState.llm.invoke(
-    filterSummarizedMessages(messages),
-    { callbacks: llmCallbacks, signal: abortSignal },
-  );
+  const modelResponse = await invokeLlmWithTransientRetry({
+    modelState,
+    turn,
+    mode: "no_tools",
+    invoke: ({ callbacks }) =>
+      modelState.llm.invoke(
+        filterSummarizedMessages(messages),
+        { callbacks, signal: abortSignal },
+      ),
+  });
   const responseContentText = normalizeAiTextContent(modelResponse?.content);
   messages.push(modelResponse);
 
@@ -250,13 +425,19 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
   const { eventListener, runtime, abortSignal } = modelState;
 
   const toolMap = new Map(tools.map((t) => [t.name, t]));
-  emitEvent(eventListener, "llm_call_start", { turn });
-  const llmCallbacks = createStreamingCallbacks(eventListener);
+  emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools", streaming: false });
+  const toolCallingLlm = createNonStreamingLlmForActiveModel(modelState);
 
-  const ai = await modelState.llm.bindTools(tools).invoke(
-    filterSummarizedMessages(messages),
-    { callbacks: llmCallbacks, signal: abortSignal },
-  );
+  const ai = await invokeLlmWithTransientRetry({
+    modelState,
+    turn,
+    mode: "with_tools",
+    invoke: ({ callbacks }) =>
+      toolCallingLlm.bindTools(tools).invoke(
+        filterSummarizedMessages(messages),
+        { callbacks, signal: abortSignal },
+      ),
+  });
   const aiContentText = normalizeAiTextContent(ai.content);
   messages.push(ai);
 

@@ -44,6 +44,40 @@ export function resolveToolNameFromMessage(messageItem = {}) {
   }
 }
 
+export function resolveToolNamesFromToolCalls(toolCalls = []) {
+  return (Array.isArray(toolCalls) ? toolCalls : [])
+    .map((toolCall) => {
+      if (!toolCall || typeof toolCall !== "object") return "";
+      if (toolCall.name) return String(toolCall.name || "").trim();
+      const fn =
+        toolCall.function && typeof toolCall.function === "object"
+          ? toolCall.function
+          : {};
+      return String(fn.name || "").trim();
+    })
+    .filter(Boolean);
+}
+
+function getMessageToolCalls(messageItem = {}) {
+  if (Array.isArray(messageItem?.tool_calls)) return messageItem.tool_calls;
+  if (Array.isArray(messageItem?.lc_kwargs?.tool_calls)) {
+    return messageItem.lc_kwargs.tool_calls;
+  }
+  if (Array.isArray(messageItem?.additional_kwargs?.tool_calls)) {
+    return messageItem.additional_kwargs.tool_calls;
+  }
+  return [];
+}
+
+export function hasTaskSummaryToolCall(
+  messageItem = {},
+  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
+) {
+  return resolveToolNamesFromToolCalls(getMessageToolCalls(messageItem)).includes(
+    taskSummaryToolName,
+  );
+}
+
 export function isTaskSummaryToolMessage(
   messageItem = {},
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
@@ -60,6 +94,9 @@ export function shouldMarkCurrentTurnSummarizedMessage(
     return !isTaskSummaryToolMessage(messageItem, { taskSummaryToolName });
   }
   if (role !== "assistant") return false;
+  if (hasTaskSummaryToolCall(messageItem, { taskSummaryToolName })) {
+    return false;
+  }
   return !String(messageItem?.content || "").trim();
 }
 
@@ -72,6 +109,9 @@ export function shouldMarkCurrentTurnSummarizedModelMessage(
     return !isTaskSummaryToolMessage(messageItem, { taskSummaryToolName });
   }
   if (type !== "ai") return false;
+  if (hasTaskSummaryToolCall(messageItem, { taskSummaryToolName })) {
+    return false;
+  }
   return !normalizeAiTextContent(messageItem?.content);
 }
 

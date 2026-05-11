@@ -21,8 +21,8 @@
     "test:connectors": "node --test __tests__/connectors/**/*.test.js"
   },
   "dependencies": {
-    "@langchain/core": "^1.1.39",
-    "@langchain/openai": "^1.4.4",
+    "@langchain/core": "^1.1.45",
+    "@langchain/openai": "^1.4.5",
     "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.1",
