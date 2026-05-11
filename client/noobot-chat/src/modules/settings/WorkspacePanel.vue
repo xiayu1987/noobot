@@ -29,6 +29,12 @@ import {
   putWorkspaceFileApi,
 } from "../../services/api/chatApi";
 import { useLocale } from "../../shared/i18n/useLocale";
+import {
+  SettingsWorkspaceLayout,
+  SettingsWorkspacePanel,
+  SettingsActionGroup,
+  SettingsPanelHeader,
+} from "./components";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -77,6 +83,22 @@ const resetDialogTitle = computed(() =>
 const resetDialogConfirmLoading = computed(
   () => resetting.value || resettingAll.value,
 );
+const editorActions = computed(() => [
+  {
+    command: "download",
+    label: translate("settings.download"),
+    className: "dark-btn noobot-flat-soft-btn",
+    disabled: !activePath.value,
+  },
+  {
+    command: "save",
+    label: translate("settings.save"),
+    type: "primary",
+    className: "primary-btn",
+    loading: saving.value,
+    disabled: !activePath.value || !isTextFile.value,
+  },
+]);
 const systemParamTreeData = computed(() =>
   (systemParamCatalog.value || []).map((item) => ({
     key: String(item?.key || "").trim(),
@@ -472,29 +494,30 @@ watch(
 </script>
 
 <template>
-  <div class="workspace-layout noobot-workspace-layout">
+  <SettingsWorkspaceLayout>
     <!-- 左侧目录树 -->
-    <div class="workspace-panel workspace-tree noobot-flat-card noobot-workspace-panel">
-      <div class="panel-head noobot-workspace-head">
-        <span class="panel-title noobot-workspace-title">{{ translate("settings.resources") }}</span>
-        <!-- 将按钮包裹在 tree-actions 中，统一控制间距 -->
-        <div class="tree-actions">
-          <div class="desktop-actions">
-            <el-button class="refresh-btn noobot-action-btn tail-btn noobot-tail-btn" size="small" :icon="Refresh" @click="refreshAll"
-              :loading="loadingTree || loadingAllTree || loadingSystemParamCatalog || loadingUserParamCatalog || resetting || syncingAll"
-              :disabled="!connected || resetting || syncing || syncingAll" :title="translate('settings.refreshDirsAndParams')"
-              :aria-label="translate('settings.refreshDirsAndParams')" />
+    <SettingsWorkspacePanel panel-class="workspace-tree">
+      <SettingsPanelHeader :title="translate('settings.resources')">
+        <template #right>
+          <!-- 将按钮包裹在 tree-actions 中，统一控制间距 -->
+          <div class="tree-actions">
+            <div class="desktop-actions">
+              <el-button class="refresh-btn noobot-action-btn tail-btn noobot-tail-btn" size="small" :icon="Refresh" @click="refreshAll"
+                :loading="loadingTree || loadingAllTree || loadingSystemParamCatalog || loadingUserParamCatalog || resetting || syncingAll"
+                :disabled="!connected || resetting || syncing || syncingAll" :title="translate('settings.refreshDirsAndParams')"
+                :aria-label="translate('settings.refreshDirsAndParams')" />
+            </div>
+            <el-dropdown class="mobile-actions" trigger="click" @command="handleTreeAction">
+              <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="refresh">{{ translate("settings.refreshDirsAndParams") }}</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
-          <el-dropdown class="mobile-actions" trigger="click" @command="handleTreeAction">
-            <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="refresh">{{ translate("settings.refreshDirsAndParams") }}</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </div>
+        </template>
+      </SettingsPanelHeader>
       <div class="panel-body noobot-workspace-body">
         <el-collapse v-model="activeResourceSection" accordion class="resource-collapse">
           <el-collapse-item
@@ -636,39 +659,24 @@ watch(
           </el-collapse-item>
         </el-collapse>
       </div>
-    </div>
+    </SettingsWorkspacePanel>
 
     <!-- 右侧编辑器 -->
-    <div class="workspace-panel workspace-editor noobot-flat-card noobot-workspace-panel">
-      <div class="panel-head noobot-workspace-head">
-        <div class="file-info">
-              <span class="active-file noobot-flat-chip" :title="activePath">{{
-            activePath
-              ? `${activePathSource === 'all' ? translate('settings.allWorkspacePrefix') : ''}${activePath}`
-              : translate("settings.noFileSelected")
-          }}</span>
-        </div>
-        <div class="editor-actions">
-          <div class="desktop-actions">
-            <el-button class="dark-btn noobot-action-btn noobot-flat-soft-btn" size="small" @click="downloadFile" :disabled="!activePath">
-              {{ translate("settings.download") }}
-            </el-button>
-            <el-button type="primary" class="primary-btn noobot-action-btn" size="small" @click="saveFile"
-              :disabled="!activePath || !isTextFile" :loading="saving">
-              {{ translate("settings.save") }}
-            </el-button>
+    <SettingsWorkspacePanel panel-class="workspace-editor">
+      <SettingsPanelHeader>
+        <template #left>
+          <div class="file-info">
+                <span class="active-file noobot-flat-chip" :title="activePath">{{
+              activePath
+                ? `${activePathSource === 'all' ? translate('settings.allWorkspacePrefix') : ''}${activePath}`
+                : translate("settings.noFileSelected")
+            }}</span>
           </div>
-          <el-dropdown class="mobile-actions" trigger="click" @command="handleEditorAction">
-            <el-button class="tail-btn noobot-action-btn noobot-tail-btn" :icon="MoreFilled" />
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="download">{{ translate("settings.download") }}</el-dropdown-item>
-                <el-dropdown-item command="save">{{ translate("settings.save") }}</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </div>
+        </template>
+        <template #right>
+          <SettingsActionGroup :actions="editorActions" @command="handleEditorAction" />
+        </template>
+      </SettingsPanelHeader>
 
       <div class="panel-body noobot-workspace-body editor-body" v-loading="loadingFile" element-loading-background="var(--noobot-mask-bg)">
         <template v-if="activePath">
@@ -697,7 +705,7 @@ watch(
           />
         </div>
       </div>
-    </div>
+    </SettingsWorkspacePanel>
 
     <el-dialog
       v-model="resetDialogVisible"
@@ -738,7 +746,7 @@ watch(
         </el-button>
       </template>
     </el-dialog>
-  </div>
+  </SettingsWorkspaceLayout>
 </template>
 
 <style scoped>
