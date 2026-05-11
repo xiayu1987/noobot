@@ -316,7 +316,7 @@ async function _processToolResults({
     const tool = toolMap.get(call.name);
     return executeToolCall({
       call, tool, abortSignal, eventListener, turn, errorLogger,
-      userId: runtime?.systemRuntime?.userId || "",
+      userId: runtime?.systemRuntime?.userId || runtime?.userId || "",
       sessionId: runtime?.systemRuntime?.sessionId || "",
       parentSessionId: runtime?.systemRuntime?.parentSessionId || "",
     });

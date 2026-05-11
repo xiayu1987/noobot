@@ -223,6 +223,7 @@ export class ContextBuilder {
     rootSessionId = "",
   } = {}) {
     return buildDynamicInfo({
+      userId: this.userId,
       sessionId: this.sessionId,
       caller: this.caller,
       dialogProcessId,
