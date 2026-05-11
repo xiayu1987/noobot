@@ -50,7 +50,7 @@ export class SessionExecutionEngine {
   }
 
   _normalizeRunMessage(message = "") {
-    const normalizedMessage = String(message ?? "").trim();
+    const normalizedMessage = (message ?? "" || "").trim();
     if (!normalizedMessage) {
       throw recoverableToolError(tSystem("common.userSessionMessageRequired"), {
         code: "RECOVERABLE_INPUT_MISSING",
@@ -96,23 +96,23 @@ export class SessionExecutionEngine {
     patch = {},
   }) {
     if (!isPlainObject(parentAsyncResultContainer)) return null;
-    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSessionId = (sessionId || "" || "").trim();
     if (!normalizedSessionId) return null;
     if (!Array.isArray(parentAsyncResultContainer.tasks)) {
       parentAsyncResultContainer.tasks = [];
     }
     const taskList = parentAsyncResultContainer.tasks;
     const targetIndex = taskList.findIndex(
-      (item) => String(item?.sessionId || "").trim() === normalizedSessionId,
+      (item) => (item?.sessionId || "" || "").trim() === normalizedSessionId,
     );
     const baseTask =
       targetIndex >= 0
         ? taskList[targetIndex] || {}
         : {
             sessionId: normalizedSessionId,
-            parentSessionId: String(parentSessionId || "").trim(),
-            task: String(task || "").trim(),
-            sharedTaskSpec: String(sharedTaskSpec || "").trim(),
+            parentSessionId: (parentSessionId || "" || "").trim(),
+            task: (task || "" || "").trim(),
+            sharedTaskSpec: (sharedTaskSpec || "" || "").trim(),
             status: "running",
             startedAt: "",
             endedAt: "",
@@ -135,7 +135,7 @@ export class SessionExecutionEngine {
     let hasStopped = false;
     let allCompleted = taskList.length > 0;
     for (const taskItem of taskList) {
-      const status = String(taskItem?.status || "running").trim().toLowerCase();
+      const status = (taskItem?.status || "running" || "").trim().toLowerCase();
       if (status === "failed") hasFailed = true;
       if (status === "running") hasRunning = true;
       if (status === "stopped") hasStopped = true;
@@ -166,16 +166,16 @@ export class SessionExecutionEngine {
       if (String(caller || "user") !== "bot") return null;
       container = {};
     }
-    container.id = String(container?.id || "").trim() || uuidv4();
+    container.id = (container?.id || "" || "").trim() || uuidv4();
     container.parentSessionId =
-      String(container?.parentSessionId || "").trim() ||
-      String(parentSessionId || "").trim();
+      (container?.parentSessionId || "" || "").trim() ||
+      (parentSessionId || "" || "").trim();
     container.parentDialogProcessId =
-      String(container?.parentDialogProcessId || "").trim() ||
-      String(parentDialogProcessId || "").trim();
-    container.status = String(container?.status || "running").trim() || "running";
+      (container?.parentDialogProcessId || "" || "").trim() ||
+      (parentDialogProcessId || "" || "").trim();
+    container.status = (container?.status || "running" || "").trim() || "running";
     container.updatedAt =
-      String(container?.updatedAt || "").trim() || this._now();
+      (container?.updatedAt || "" || "").trim() || this._now();
     container.tasks = Array.isArray(container?.tasks) ? container.tasks : [];
     return container;
   }
@@ -185,14 +185,14 @@ export class SessionExecutionEngine {
   _normalizeStringArray(input = []) {
     return Array.isArray(input)
       ? input
-          .map((item) => String(item || "").trim())
+          .map((item) => (item || "" || "").trim())
           .filter(Boolean)
       : [];
   }
 
   _normalizeToolItems(input = []) {
     return Array.isArray(input)
-      ? input.filter((item) => isPlainObject(item) && String(item?.name || "").trim())
+      ? input.filter((item) => isPlainObject(item) && (item?.name || "" || "").trim())
       : [];
   }
 
@@ -265,7 +265,7 @@ export class SessionExecutionEngine {
       : [];
     if (!sourceTools.length) return agentContext;
     const toolPolicy = runConfig?.toolPolicy || {};
-    const mode = String(toolPolicy?.mode || "").trim().toLowerCase();
+    const mode = (toolPolicy?.mode || "" || "").trim().toLowerCase();
     const customTools = this._normalizeToolItems(toolPolicy?.customTools);
     const configuredIncludeToolNames = this._normalizeStringArray(
       toolPolicy?.includeToolNames,
@@ -303,7 +303,7 @@ export class SessionExecutionEngine {
     const dedupedTools = [];
     const seenNames = new Set();
     for (const toolItem of nextTools) {
-      const toolName = String(toolItem?.name || "").trim();
+      const toolName = (toolItem?.name || "" || "").trim();
       if (!toolName || seenNames.has(toolName)) continue;
       seenNames.add(toolName);
       dedupedTools.push(toolItem);
@@ -380,9 +380,9 @@ export class SessionExecutionEngine {
     const scenarioContextKeys = normalizeStringArray(scenarioDefinition?.context);
     const hasAllTools = scenarioToolNames.includes("*");
     const hasAllContext = scenarioContextKeys.includes("*");
-    const scenarioName = String(scenarioDefinition?.name || "").trim();
-    const scenarioDescription = String(scenarioDefinition?.description || "").trim();
-    const scenarioModelName = String(scenarioDefinition?.model || "").trim();
+    const scenarioName = (scenarioDefinition?.name || "" || "").trim();
+    const scenarioDescription = (scenarioDefinition?.description || "" || "").trim();
+    const scenarioModelName = (scenarioDefinition?.model || "" || "").trim();
     const resolvedRunConfig = {
       ...normalizedRunConfig,
       scenario: resolvedScenarioKey,
@@ -562,10 +562,10 @@ export class SessionExecutionEngine {
         attachmentMetas: Array.isArray(messageItem.attachmentMetas)
           ? messageItem.attachmentMetas
           : null,
-        modelAlias: String(messageItem.modelAlias || "").trim(),
-        modelName: String(messageItem.modelName || "").trim(),
+        modelAlias: (messageItem.modelAlias || "" || "").trim(),
+        modelName: (messageItem.modelName || "" || "").trim(),
         summarized: messageItem.summarized === true,
-        toolName: String(messageItem.toolName || "").trim(),
+        toolName: (messageItem.toolName || "" || "").trim(),
         rawModelContent:
           typeof messageItem.rawModelContent === "string" ||
           Array.isArray(messageItem.rawModelContent)
@@ -595,8 +595,8 @@ export class SessionExecutionEngine {
     parentDialogProcessId = "",
     partialAssistant = {},
   } = {}) {
-    const content = String(partialAssistant?.content || "").trim();
-    const dialogProcessId = String(partialAssistant?.dialogProcessId || "").trim();
+    const content = (partialAssistant?.content || "" || "").trim();
+    const dialogProcessId = (partialAssistant?.dialogProcessId || "" || "").trim();
     if (!userId || !sessionId || !content || !dialogProcessId) return false;
     const sessionBundle = await this.session.getSessionBundle({
       userId,
@@ -608,8 +608,8 @@ export class SessionExecutionEngine {
       : [];
     const alreadySaved = messages.some(
       (messageItem) =>
-        String(messageItem?.role || "").trim() === "assistant" &&
-        String(messageItem?.dialogProcessId || "").trim() === dialogProcessId,
+        (messageItem?.role || "" || "").trim() === "assistant" &&
+        (messageItem?.dialogProcessId || "" || "").trim() === dialogProcessId,
     );
     if (alreadySaved) return false;
     await this._appendSessionTurn({
@@ -621,8 +621,8 @@ export class SessionExecutionEngine {
       type: "message",
       dialogProcessId,
       parentDialogProcessId,
-      modelAlias: String(partialAssistant?.modelAlias || "").trim(),
-      modelName: String(partialAssistant?.modelName || "").trim(),
+      modelAlias: (partialAssistant?.modelAlias || "" || "").trim(),
+      modelName: (partialAssistant?.modelName || "" || "").trim(),
       eventListener: null,
     });
     return true;
