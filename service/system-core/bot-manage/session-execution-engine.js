@@ -320,6 +320,16 @@ export class SessionExecutionEngine {
     };
   }
 
+  _mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
+    if (!Array.isArray(scenarioItems) || !scenarioItems.length) return [];
+    if (hasWildcard) return [];
+    if (!Array.isArray(currentItems) || !currentItems.length) {
+      return [...scenarioItems];
+    }
+    const currentSet = new Set(currentItems);
+    return scenarioItems.filter((name) => currentSet.has(name));
+  }
+
   _resolveScenarioRunConfig(runConfig = {}, userConfig = {}) {
     const normalizedRunConfig = isPlainObject(runConfig) ? runConfig : {};
     const effectiveConfig = mergeConfig(
@@ -354,9 +364,7 @@ export class SessionExecutionEngine {
       };
     }
     const normalizeStringArray = this._normalizeStringArray;
-    const scenarioToolNamesRaw = this._normalizeStringArray(
-      scenarioDefinition?.tools,
-    );
+    const scenarioToolNamesRaw = normalizeStringArray(scenarioDefinition?.tools);
     const scenarioServiceItems = normalizeStringArray(scenarioDefinition?.services);
     const scenarioMcpServerItems = normalizeStringArray(
       scenarioDefinition?.mcpServers ?? scenarioDefinition?.mcp_servers,
@@ -369,9 +377,7 @@ export class SessionExecutionEngine {
       scenarioToolNameSet.add("call_mcp_task");
     }
     const scenarioToolNames = Array.from(scenarioToolNameSet);
-    const scenarioContextKeys = this._normalizeStringArray(
-      scenarioDefinition?.context,
-    );
+    const scenarioContextKeys = normalizeStringArray(scenarioDefinition?.context);
     const hasAllTools = scenarioToolNames.includes("*");
     const hasAllContext = scenarioContextKeys.includes("*");
     const scenarioName = String(scenarioDefinition?.name || "").trim();
@@ -401,14 +407,13 @@ export class SessionExecutionEngine {
       const currentToolPolicy = isPlainObject(normalizedRunConfig?.toolPolicy)
         ? normalizedRunConfig.toolPolicy
         : {};
-      const currentAllowToolNames = Array.isArray(currentToolPolicy?.allowToolNames)
-        ? currentToolPolicy.allowToolNames
-            .map((item) => String(item || "").trim())
-            .filter(Boolean)
-        : [];
-      const mergedAllowToolNames = currentAllowToolNames.length
-        ? scenarioToolNames.filter((name) => currentAllowToolNames.includes(name))
-        : scenarioToolNames;
+      const currentAllowToolNames = normalizeStringArray(
+        currentToolPolicy?.allowToolNames,
+      );
+      const mergedAllowToolNames = this._mergeScenarioRestrictedList({
+        scenarioItems: scenarioToolNames,
+        currentItems: currentAllowToolNames,
+      });
       resolvedRunConfig.toolPolicy = {
         ...currentToolPolicy,
         allowToolNames: mergedAllowToolNames,
@@ -419,16 +424,14 @@ export class SessionExecutionEngine {
       const currentContextPolicy = isPlainObject(normalizedRunConfig?.contextPolicy)
         ? normalizedRunConfig.contextPolicy
         : {};
-      const currentContextKeys = Array.isArray(currentContextPolicy?.includeContextKeys)
-        ? currentContextPolicy.includeContextKeys
-            .map((item) => String(item || "").trim())
-            .filter(Boolean)
-        : [];
-      const mergedContextKeys = hasAllContext
-        ? []
-        : currentContextKeys.length
-          ? scenarioContextKeys.filter((name) => currentContextKeys.includes(name))
-          : scenarioContextKeys;
+      const currentContextKeys = normalizeStringArray(
+        currentContextPolicy?.includeContextKeys,
+      );
+      const mergedContextKeys = this._mergeScenarioRestrictedList({
+        scenarioItems: scenarioContextKeys,
+        currentItems: currentContextKeys,
+        hasWildcard: hasAllContext,
+      });
       resolvedRunConfig.contextPolicy = {
         ...currentContextPolicy,
         includeContextKeys: mergedContextKeys,
@@ -918,9 +921,13 @@ export class SessionExecutionEngine {
         eventListener: runtimeEventListener,
       });
 
+      const runtimeAgentContext = this._buildRunTurnAgentContext(
+        agentContext,
+        abortSignal,
+      );
       const agentResult = await runAgentTurn({
         errorLogger: this.errorLogger,
-        agentContext: this._buildRunTurnAgentContext(agentContext, abortSignal),
+        agentContext: runtimeAgentContext,
         userMessage: normalizedMessage,
       });
       emitEvent(runtimeEventListener, "agent_done", {
