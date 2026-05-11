@@ -34,6 +34,7 @@ import {
 import { createStateCommitter } from "./execution/state-committer.js";
 import { executeToolCall } from "./execution/tool-runner.js";
 import { adaptToolsForBinding } from "../../model/tool-binding-model-adapter.js";
+import { appendToolCompatibilityLog } from "../../model/tool-compatibility-log.js";
 import {
   TOOL_CONSECUTIVE_FAILURE_LIMIT,
   DEFAULT_MAX_TOOL_LOOP_TURNS,
@@ -419,6 +420,12 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
       turn,
       droppedTools: adaptedBinding.droppedToolNames,
     });
+    appendToolCompatibilityLog({
+      modelState,
+      runtime,
+      event: "tool_binding_adapter_dropped_tools",
+      tools: adaptedBinding.droppedToolNames,
+    }).catch(() => {});
   }
   if (
     Array.isArray(adaptedBinding?.strictDowngradedTools) &&
@@ -428,6 +435,12 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
       turn,
       incompatibleTools: adaptedBinding.strictDowngradedTools,
     });
+    appendToolCompatibilityLog({
+      modelState,
+      runtime,
+      event: "tool_binding_adapter_strict_downgraded",
+      tools: adaptedBinding.strictDowngradedTools,
+    }).catch(() => {});
   }
 
   emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools" });
