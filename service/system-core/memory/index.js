@@ -18,6 +18,19 @@ const MEMORY_PROMPT_I18N = Object.freeze({
   "en-US": Object.freeze(enSystemPromptI18n?.memoryPrompt || {}),
 });
 
+function isAbortLikeError(error = {}) {
+  const name = String(error?.name || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return name.includes("abort") || message.includes("abort");
+}
+
+function throwIfAborted(abortSignal = null) {
+  if (!abortSignal?.aborted) return;
+  const abortError = new Error("memory summarize aborted");
+  abortError.name = "AbortError";
+  throw abortError;
+}
+
 function resolveMemoryPromptI18n(locale = "zh-CN") {
   const normalizedLocale = normalizeLocale(locale, "zh-CN");
   return normalizedLocale === "en-US"
@@ -224,13 +237,15 @@ export class MemoryService {
     return true;
   }
 
-  async maybeSummarize({ userId, userConfig }) {
+  async maybeSummarize({ userId, userConfig, abortSignal = null }) {
+    throwIfAborted(abortSignal);
     const basePath = this._resolveBasePath(userId);
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
     const promptI18n = resolveMemoryPromptI18n(
       effectiveConfig?.locale || this.globalConfig?.locale || "zh-CN",
     );
     const short = await this._readShortMemory(basePath);
+    throwIfAborted(abortSignal);
     const unextracted = this._flattenShortItems(short)
       .sort((a, b) => this._toTs(a.createdAt) - this._toTs(b.createdAt));
     const memoryMaxItems = Number(effectiveConfig.memoryMaxItems || 100);
@@ -242,6 +257,7 @@ export class MemoryService {
       records: item.records,
     }));
     const longMem = await this._readJson(this._longPath(basePath), {});
+    throwIfAborted(abortSignal);
     const existingLongMemory = longMem.memory ?? "";
 
     const modelSpec = resolveDefaultModelSpec({
@@ -253,6 +269,7 @@ export class MemoryService {
       userConfig,
     });
     const longMemoryModel = await this._readLongMemoryModel(basePath);
+    throwIfAborted(abortSignal);
     const prompt = String(
       promptI18n?.prompt?.({
         longMemoryModel,
@@ -264,11 +281,13 @@ export class MemoryService {
 
     let nextLongMemory = existingLongMemory;
     try {
-      const res = await llm.invoke(prompt);
+      const res = await llm.invoke(prompt, { signal: abortSignal });
       nextLongMemory = this._normalizeModelContent(res?.content);
-    } catch {
+    } catch (error) {
+      if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
       nextLongMemory = existingLongMemory;
     }
+    throwIfAborted(abortSignal);
 
     if (this._isBlankLongMemoryContent(nextLongMemory)) {
       return;
@@ -276,6 +295,7 @@ export class MemoryService {
 
     const longMemoryPath = this._longPath(basePath);
     await this._backupLongMemoryIfNeeded(longMemoryPath, existingLongMemory);
+    throwIfAborted(abortSignal);
     longMem.memory = nextLongMemory;
     longMem.updatedAt = new Date().toISOString();
     await writeFile(longMemoryPath, JSON.stringify(longMem, null, 2));
