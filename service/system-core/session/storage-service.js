@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 
 export class StorageService {
   constructor({ pathResolver } = {}) {
@@ -46,7 +47,7 @@ export class StorageService {
   }
 
   async writeJsonAtomic(filePath, data) {
-    const tempFile = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+    const tempFile = `${filePath}.tmp-${process.pid}-${Date.now()}-${randomUUID()}`;
     await writeFile(tempFile, JSON.stringify(data, null, 2), "utf8");
     await rename(tempFile, filePath);
   }

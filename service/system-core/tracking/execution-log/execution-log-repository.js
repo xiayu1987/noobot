@@ -16,6 +16,32 @@ export class ExecutionLogRepository {
   } = {}) {
     this.sessionRepository = sessionRepository;
     this.now = now;
+    this.appendQueues = new Map();
+  }
+
+  _appendQueueKey(userId = "", sessionId = "", parentSessionId = "") {
+    return [
+      String(userId || "").trim(),
+      String(parentSessionId || "").trim(),
+      String(sessionId || "").trim(),
+    ].join("::");
+  }
+
+  async _withAppendQueue(queueKey = "", operation = async () => {}) {
+    const previous = this.appendQueues.get(queueKey) || Promise.resolve();
+    const current = previous
+      .catch(() => {
+        // Keep the queue moving even if a previous append failed.
+      })
+      .then(operation);
+    this.appendQueues.set(queueKey, current);
+    try {
+      return await current;
+    } finally {
+      if (this.appendQueues.get(queueKey) === current) {
+        this.appendQueues.delete(queueKey);
+      }
+    }
   }
 
   async getBundle(userId, sessionId, parentSessionId = "") {
@@ -39,19 +65,22 @@ export class ExecutionLogRepository {
         code: "FATAL_SESSION_ID_REQUIRED",
       });
     }
-    const bundle = await this.getBundle(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-    );
-    bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
-    bundle.logs.push(normalizeExecutionLogEntity(executionLog, this.now));
-    bundle.updatedAt = this.now();
-    await this.sessionRepository.saveExecutionBundle(
-      userId,
-      normalizedSessionId,
-      bundle,
-      parentSessionId,
-    );
+    const queueKey = this._appendQueueKey(userId, normalizedSessionId, parentSessionId);
+    return this._withAppendQueue(queueKey, async () => {
+      const bundle = await this.getBundle(
+        userId,
+        normalizedSessionId,
+        parentSessionId,
+      );
+      bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
+      bundle.logs.push(normalizeExecutionLogEntity(executionLog, this.now));
+      bundle.updatedAt = this.now();
+      await this.sessionRepository.saveExecutionBundle(
+        userId,
+        normalizedSessionId,
+        bundle,
+        parentSessionId,
+      );
+    });
   }
 }

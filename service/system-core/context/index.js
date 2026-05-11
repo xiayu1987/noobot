@@ -31,6 +31,10 @@ import {
 import { composeSystemInfoSections } from "./system-prompt-formatter.js";
 import { mapToAgentContextSchema } from "./agent-context-mapper.js";
 import { tSystem } from "../i18n/system-text.js";
+import {
+  filterSummarizedMessages,
+  normalizeContextWindow,
+} from "../session/context-window-normalizer.js";
 
 export class ContextBuilder {
   constructor(input = {}) {
@@ -330,6 +334,14 @@ export class ContextBuilder {
     });
   }
 
+  _normalizeSessionRecordsForConversation(sessionRecords = []) {
+    const filteredRecords = filterSummarizedMessages(sessionRecords);
+    return normalizeContextWindow({
+      sourceMessages: filteredRecords,
+      startIndex: 0,
+    });
+  }
+
   async _buildSystemContext({ dialogProcessId = "", longMemory = null } = {}) {
     const runtimeBasePath = this._resolveRuntimeBasePath();
     const effectiveConfig = this._getEffectiveConfig();
@@ -473,6 +485,8 @@ export class ContextBuilder {
     const sessionRecords = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
     });
+    const normalizedSessionRecords =
+      this._normalizeSessionRecordsForConversation(sessionRecords);
     const longMemory = await resolveLongMemory({
       memoryService: this.memoryService,
       runtimeBasePath: this._resolveRuntimeBasePath(),
@@ -487,7 +501,7 @@ export class ContextBuilder {
     } = await this._buildSystemContext({ dialogProcessId, longMemory });
     return this._buildAgentContext(
       systemContext,
-      toConversationMessages(sessionRecords),
+      toConversationMessages(normalizedSessionRecords),
       {
         runtimeBasePath,
         dialogProcessId,

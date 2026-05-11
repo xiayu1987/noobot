@@ -268,7 +268,7 @@ export class FileSystemSessionRepository {
       sessionId,
       parentSessionId,
     );
-    await this.storageService.writeJson(executionFile, {
+    await this.storageService.writeJsonAtomic(executionFile, {
       sessionId,
       logs: Array.isArray(executionBundle?.logs) ? executionBundle.logs : [],
       updatedAt: this.now(),
