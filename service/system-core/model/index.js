@@ -173,6 +173,19 @@ function buildModelKwargs(modelSpec = {}) {
   return out;
 }
 
+function resolveUseResponsesApi(modelSpec = {}) {
+  if (typeof modelSpec?.useResponsesApi === "boolean") {
+    return modelSpec.useResponsesApi;
+  }
+  if (typeof modelSpec?.use_responses_api === "boolean") {
+    return modelSpec.use_responses_api;
+  }
+  const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
+  const modelName = String(modelSpec?.model || "").trim().toLowerCase();
+  if (providerFormat !== "openai_compatible") return false;
+  return modelName.includes("codex") || modelName.includes("gpt-5.3-codex");
+}
+
 function createChatModelFromSpec(modelSpec, options = {}) {
   if (!modelSpec?.model) {
     throw fatalSystemError(tSystem("model.nameRequired"), {
@@ -200,6 +213,7 @@ function createChatModelFromSpec(modelSpec, options = {}) {
     ...(modelSpec.base_url
       ? { configuration: { baseURL: modelSpec.base_url } }
       : {}),
+    useResponsesApi: resolveUseResponsesApi(modelSpec),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });
 

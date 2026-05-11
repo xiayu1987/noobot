@@ -6,7 +6,6 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import {
   createChatModel,
-  createChatModelByName,
   resolveDefaultModelSpec,
 } from "../../model/index.js";
 import { mergeConfig } from "../../config/index.js";
@@ -34,6 +33,7 @@ import {
 } from "./model/model-manager.js";
 import { createStateCommitter } from "./execution/state-committer.js";
 import { executeToolCall } from "./execution/tool-runner.js";
+import { adaptToolsForBinding } from "../../model/tool-binding-model-adapter.js";
 import {
   TOOL_CONSECUTIVE_FAILURE_LIMIT,
   DEFAULT_MAX_TOOL_LOOP_TURNS,
@@ -187,25 +187,6 @@ async function invokeLlmWithTransientRetry({
     }
   }
   throw lastError;
-}
-
-function createNonStreamingLlmForActiveModel(modelState = {}) {
-  const { globalConfig, userConfig, activeModelAlias, activeModelName } = modelState;
-  const preferredModelName =
-    String(activeModelAlias || "").trim() ||
-    String(activeModelName || "").trim();
-  if (preferredModelName) {
-    return createChatModelByName(preferredModelName, {
-      globalConfig,
-      userConfig,
-      streaming: false,
-    });
-  }
-  return createChatModel({
-    globalConfig,
-    userConfig,
-    streaming: false,
-  });
 }
 
 function resolvePhaseSummaryLoopTurns(effectiveConfig = {}) {
@@ -392,6 +373,9 @@ async function _invokeNoTools({ modelState, loopState, turn }) {
 
   stateCommitter.pushAssistantMessage({
     content: responseContentText,
+    rawModelContent: modelResponse?.content ?? null,
+    modelAdditionalKwargs: modelResponse?.additional_kwargs ?? null,
+    modelResponseMetadata: modelResponse?.response_metadata ?? null,
     type: "message",
     toolCalls: [],
     modelAlias: currentModelInfo.modelAlias,
@@ -424,19 +408,34 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
   const { messages, traces, tools, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
 
-  const toolMap = new Map(tools.map((t) => [t.name, t]));
-  emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools", streaming: false });
-  const toolCallingLlm = createNonStreamingLlmForActiveModel(modelState);
+  const adaptedBinding = adaptToolsForBinding(tools, modelState);
+  const boundTools = Array.isArray(adaptedBinding?.tools)
+    ? adaptedBinding.tools
+    : [];
+  const toolMap = new Map(boundTools.map((t) => [t.name, t]));
+
+  if (Array.isArray(adaptedBinding?.droppedToolNames) && adaptedBinding.droppedToolNames.length) {
+    emitEvent(eventListener, "tool_binding_adapter_dropped_tools", {
+      turn,
+      droppedTools: adaptedBinding.droppedToolNames,
+    });
+  }
+
+  emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools" });
 
   const ai = await invokeLlmWithTransientRetry({
     modelState,
     turn,
     mode: "with_tools",
-    invoke: ({ callbacks }) =>
-      toolCallingLlm.bindTools(tools).invoke(
+    invoke: ({ callbacks }) => {
+      const boundLlm = Object.keys(adaptedBinding?.bindOptions || {}).length
+        ? modelState.llm.bindTools(boundTools, adaptedBinding.bindOptions)
+        : modelState.llm.bindTools(boundTools);
+      return boundLlm.invoke(
         filterSummarizedMessages(messages),
         { callbacks, signal: abortSignal },
-      ),
+      );
+    },
   });
   const aiContentText = normalizeAiTextContent(ai.content);
   messages.push(ai);
@@ -449,6 +448,9 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
 
   stateCommitter.pushAssistantMessage({
     content: aiContentText,
+    rawModelContent: ai?.content ?? null,
+    modelAdditionalKwargs: ai?.additional_kwargs ?? null,
+    modelResponseMetadata: ai?.response_metadata ?? null,
     type: calls.length ? "tool_call" : "message",
     toolCalls: calls.length
       ? calls.map((call) => ({
@@ -552,6 +554,9 @@ async function _processToolResults({
       });
       stateCommitter.pushAssistantMessage({
         content: limitMsg,
+        rawModelContent: null,
+        modelAdditionalKwargs: null,
+        modelResponseMetadata: null,
         type: "message",
         toolCalls: [],
         modelAlias: currentModelInfo.modelAlias,

@@ -177,6 +177,9 @@ export class SessionService {
     modelName = "",
     summarized = false,
     toolName = "",
+    rawModelContent = null,
+    modelAdditionalKwargs = null,
+    modelResponseMetadata = null,
     parentSessionId = "",
   }) {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
@@ -206,6 +209,9 @@ export class SessionService {
       modelAlias: String(modelAlias || "").trim(),
       modelName: String(modelName || "").trim(),
       summarized: summarized === true,
+      rawModelContent,
+      modelAdditionalKwargs,
+      modelResponseMetadata,
       ts: this.now(),
     }, this.now);
 

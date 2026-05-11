@@ -162,6 +162,9 @@ export class SessionManager {
     modelName = "",
     summarized = false,
     toolName = "",
+    rawModelContent = null,
+    modelAdditionalKwargs = null,
+    modelResponseMetadata = null,
     parentSessionId = "",
   }) {
     return this.sessionService.appendTurn({
@@ -181,6 +184,9 @@ export class SessionManager {
       modelName,
       summarized,
       toolName,
+      rawModelContent,
+      modelAdditionalKwargs,
+      modelResponseMetadata,
       parentSessionId,
     });
   }

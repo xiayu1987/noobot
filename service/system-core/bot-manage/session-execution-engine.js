@@ -469,6 +469,9 @@ export class SessionExecutionEngine {
     modelName = "",
     summarized = false,
     toolName = "",
+    rawModelContent = null,
+    modelAdditionalKwargs = null,
+    modelResponseMetadata = null,
     dialogProcessId = "",
     parentDialogProcessId = "",
     parentSessionId = "",
@@ -492,6 +495,9 @@ export class SessionExecutionEngine {
       modelName,
       summarized,
       toolName,
+      rawModelContent,
+      modelAdditionalKwargs,
+      modelResponseMetadata,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -529,6 +535,23 @@ export class SessionExecutionEngine {
         modelName: String(messageItem.modelName || "").trim(),
         summarized: messageItem.summarized === true,
         toolName: String(messageItem.toolName || "").trim(),
+        rawModelContent:
+          typeof messageItem.rawModelContent === "string" ||
+          Array.isArray(messageItem.rawModelContent)
+            ? messageItem.rawModelContent
+            : null,
+        modelAdditionalKwargs:
+          messageItem.modelAdditionalKwargs &&
+          typeof messageItem.modelAdditionalKwargs === "object" &&
+          !Array.isArray(messageItem.modelAdditionalKwargs)
+            ? messageItem.modelAdditionalKwargs
+            : null,
+        modelResponseMetadata:
+          messageItem.modelResponseMetadata &&
+          typeof messageItem.modelResponseMetadata === "object" &&
+          !Array.isArray(messageItem.modelResponseMetadata)
+            ? messageItem.modelResponseMetadata
+            : null,
         eventListener,
       });
     }

@@ -17,6 +17,9 @@ export function createStateCommitter({
   return {
     pushAssistantMessage({
       content = "",
+      rawModelContent = null,
+      modelAdditionalKwargs = null,
+      modelResponseMetadata = null,
       type = "message",
       toolCalls = [],
       modelAlias = "",
@@ -31,6 +34,22 @@ export function createStateCommitter({
         tool_calls: Array.isArray(toolCalls) ? toolCalls : [],
         modelAlias: String(modelAlias || "").trim(),
         modelName: String(modelName || "").trim(),
+        rawModelContent:
+          typeof rawModelContent === "string" || Array.isArray(rawModelContent)
+            ? rawModelContent
+            : null,
+        modelAdditionalKwargs:
+          modelAdditionalKwargs &&
+          typeof modelAdditionalKwargs === "object" &&
+          !Array.isArray(modelAdditionalKwargs)
+            ? modelAdditionalKwargs
+            : null,
+        modelResponseMetadata:
+          modelResponseMetadata &&
+          typeof modelResponseMetadata === "object" &&
+          !Array.isArray(modelResponseMetadata)
+            ? modelResponseMetadata
+            : null,
       });
     },
     pushToolResult({ call = {}, toolResultText = "" } = {}) {
