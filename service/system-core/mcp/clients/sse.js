@@ -5,12 +5,7 @@
  */
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
-
-function resolveFetchImpl(fetchImpl = null) {
-  if (typeof fetchImpl === "function") return fetchImpl;
-  if (typeof globalThis.fetch === "function") return globalThis.fetch.bind(globalThis);
-  throw recoverableToolError(tSystem("mcp.fetchUnavailable"));
-}
+import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 
 function parseSseEventBlock(rawBlock = "") {
   const normalized = String(rawBlock || "").replace(/\r/g, "");
@@ -42,13 +37,9 @@ function parseSseEventBlock(rawBlock = "") {
  * SSE MCP client.
  * Expects pre-resolved headers from caller.
  */
-export class SseMcpClient {
+export class SseMcpClient extends BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
-    this.baseUrl = String(baseUrl || "").trim();
-    this.headers = headers && typeof headers === "object" && !Array.isArray(headers) ? headers : {};
-    this.signal = signal || null;
-    this.fetch = resolveFetchImpl(fetchImpl);
-    this.id = 1;
+    super({ baseUrl, headers, signal, fetchImpl });
     this.messageUrl = "";
     this._streamAbortController = null;
     this._pending = new Map();
@@ -193,15 +184,10 @@ export class SseMcpClient {
     await this._endpointPromise;
   }
 
-  async _request({ method, params = {} }) {
+  async _doRequest({ method, params = {} }) {
     await this.connect();
     const requestId = this.id++;
-    const payload = {
-      jsonrpc: "2.0",
-      id: requestId,
-      method,
-      params,
-    };
+    const payload = buildJsonRpcRequest(requestId, method, params);
 
     const responsePromise = new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -222,11 +208,7 @@ export class SseMcpClient {
 
     const postResponse = await this.fetch(this.messageUrl, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json, text/event-stream",
-        ...this.headers,
-      },
+      headers: buildRequestHeaders(this.headers),
       body: JSON.stringify(payload),
       signal: this.signal || undefined,
     });
@@ -266,18 +248,14 @@ export class SseMcpClient {
         },
       );
     }
-    return payloadResponse?.result || {};
+    return payloadResponse;
   }
 
-  async _notify({ method, params = {} }) {
+  async _doNotify({ method, params = {} }) {
     await this.connect();
     await this.fetch(this.messageUrl, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json, text/event-stream",
-        ...this.headers,
-      },
+      headers: buildRequestHeaders(this.headers),
       body: JSON.stringify({
         jsonrpc: "2.0",
         method,
@@ -285,35 +263,5 @@ export class SseMcpClient {
       }),
       signal: this.signal || undefined,
     }).catch(() => {});
-  }
-
-  async initialize() {
-    await this._request({
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-03-26",
-        capabilities: {},
-        clientInfo: {
-          name: "noobot-mcp-client",
-          version: "1.0.0",
-        },
-      },
-    });
-    await this._notify({ method: "notifications/initialized", params: {} });
-  }
-
-  async listTools() {
-    const result = await this._request({ method: "tools/list", params: {} });
-    return Array.isArray(result?.tools) ? result.tools : [];
-  }
-
-  async callTool({ name, args = {} }) {
-    return this._request({
-      method: "tools/call",
-      params: {
-        name: String(name || "").trim(),
-        arguments: args && typeof args === "object" ? args : {},
-      },
-    });
   }
 }

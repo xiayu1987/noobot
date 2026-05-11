@@ -17,6 +17,95 @@ import { useLocale } from "../../shared/i18n/useLocale";
 import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
 import { enUSMessages } from "../../shared/i18n/locales/en-US";
 
+// --- 常量集合（避免每次调用 new Set） ---
+const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "avif"]);
+const MARKDOWN_MIMES = new Set(["text/markdown", "text/x-markdown", "application/markdown", "application/x-markdown"]);
+
+// --- 通用工具函数 ---
+
+function buildNoCopyableSet(translate, key) {
+  return new Set([
+    key,
+    String(zhCNMessages?.message?.[key] || "").trim(),
+    String(enUSMessages?.message?.[key] || "").trim(),
+    String(translate(`message.${key}`) || "").trim(),
+  ]);
+}
+
+function matchesAnyText(messageText = "", textSet) {
+  return [...textSet].filter(Boolean).some((candidateText) =>
+    String(messageText || "").includes(candidateText),
+  );
+}
+
+function getFileExtension(fileName = "") {
+  const normalized = String(fileName || "").trim().toLowerCase();
+  const idx = normalized.lastIndexOf(".");
+  return idx < 0 ? "" : normalized.slice(idx + 1);
+}
+
+function isMarkdownFile(fileName = "") {
+  return MARKDOWN_EXTS.has(getFileExtension(fileName));
+}
+
+function isImageFile(fileName = "") {
+  return IMAGE_EXTS.has(getFileExtension(fileName));
+}
+
+function isMarkdownMime(mimeType = "", fileName = "") {
+  const mime = String(mimeType || "").trim().toLowerCase();
+  const name = String(fileName || "").trim().toLowerCase();
+  return MARKDOWN_MIMES.has(mime) || name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".mdx");
+}
+
+function isTextPreviewMime(mimeType = "") {
+  const mime = String(mimeType || "").trim().toLowerCase();
+  return mime.startsWith("text/") || ["json", "xml", "yaml", "javascript"].some((kw) => mime.includes(kw));
+}
+
+function parseContentDisposition(contentDisposition = "") {
+  if (!contentDisposition) return "";
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try { return decodeURIComponent(String(utf8Match[1]).trim()); } catch { return String(utf8Match[1]).trim(); }
+  }
+  const basicMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  return String(basicMatch?.[1] || "").trim();
+}
+
+async function triggerBlobDownload(blob, fileName, translate, notify) {
+  const downloadUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = downloadUrl;
+  anchor.download = String(fileName || "download");
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(downloadUrl);
+}
+
+async function handleCopyMarkdown({ textContent, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich = true }) {
+  try {
+    if (rich) {
+      const rawHtmlContent = String(textContent || renderMarkdown(textContent) || "").trim();
+      await copyMarkdownRichAsHtmlPage(rawHtmlContent);
+      notify({ type: "success", message: translate("message.copiedHtml") });
+    } else {
+      await copyMarkdownText(String(textContent || ""));
+      notify({ type: "success", message: translate("message.copiedMarkdown") });
+    }
+  } catch (error) {
+    const errorMessage = String(error?.message || translate(rich ? "message.copyFormatFailed" : "message.copyTextFailed"));
+    const targetSet = rich ? noCopyableContentTexts : noCopyableTextTexts;
+    if (matchesAnyText(errorMessage, targetSet)) {
+      notify({ type: "warning", message: errorMessage });
+      return;
+    }
+    notify({ type: "error", message: errorMessage });
+  }
+}
+
 export function useMessagePreview({
   userId = "",
   authFetch = null,
@@ -25,97 +114,56 @@ export function useMessagePreview({
   notify = () => {},
 } = {}) {
   const { translate } = useLocale();
-  const noCopyableContentTexts = new Set([
-    "NO_COPYABLE_CONTENT",
-    String(zhCNMessages?.message?.noCopyableContent || "").trim(),
-    String(enUSMessages?.message?.noCopyableContent || "").trim(),
-    String(translate("message.noCopyableContent") || "").trim(),
-  ]);
-  const noCopyableTextTexts = new Set([
-    "NO_COPYABLE_TEXT",
-    String(zhCNMessages?.message?.noCopyableText || "").trim(),
-    String(enUSMessages?.message?.noCopyableText || "").trim(),
-    String(translate("message.noCopyableText") || "").trim(),
-  ]);
-  const matchesAnyText = (messageText = "", textSet = new Set()) =>
-    [...textSet].filter(Boolean).some((candidateText) =>
-      String(messageText || "").includes(candidateText),
-    );
-  const previewVisible = ref(false);
-  const previewLoading = ref(false);
-  const previewError = ref("");
-  const previewFileName = ref("");
-  const previewMode = ref("text");
-  const previewTextContent = ref("");
-  const previewImageUrl = ref("");
-  const attachmentPreviewVisible = ref(false);
-  const attachmentPreviewType = ref("");
-  const attachmentPreviewUrl = ref("");
-  const attachmentPreviewName = ref("");
-  const attachmentPreviewLoading = ref(false);
-  const attachmentPreviewError = ref("");
-  const attachmentPreviewTextContent = ref("");
+  const noCopyableContentTexts = buildNoCopyableSet(translate, "noCopyableContent");
+  const noCopyableTextTexts = buildNoCopyableSet(translate, "noCopyableText");
 
-  function getFileExtension(fileName = "") {
-    const normalized = String(fileName || "").trim().toLowerCase();
-    const idx = normalized.lastIndexOf(".");
-    if (idx < 0) return "";
-    return normalized.slice(idx + 1);
+  // --- 预览状态（统一结构） ---
+  const filePreview = {
+    visible: ref(false),
+    loading: ref(false),
+    error: ref(""),
+    fileName: ref(""),
+    mode: ref("text"),
+    textContent: ref(""),
+    imageUrl: ref(""),
+  };
+  const attachmentPreview = {
+    visible: ref(false),
+    type: ref(""),
+    url: ref(""),
+    name: ref(""),
+    loading: ref(false),
+    error: ref(""),
+    textContent: ref(""),
+  };
+
+  function cleanupPreviewImageUrl() {
+    if (!filePreview.imageUrl.value) return;
+    URL.revokeObjectURL(filePreview.imageUrl.value);
+    filePreview.imageUrl.value = "";
   }
 
-  function isMarkdownFile(fileName = "") {
-    return new Set(["md", "markdown", "mdx"]).has(getFileExtension(fileName));
+  function resetPreviewState() {
+    filePreview.visible.value = false;
+    filePreview.loading.value = false;
+    filePreview.error.value = "";
+    filePreview.fileName.value = "";
+    filePreview.mode.value = "text";
+    filePreview.textContent.value = "";
+    cleanupPreviewImageUrl();
   }
 
-  function isImageFile(fileName = "") {
-    return new Set([
-      "png",
-      "jpg",
-      "jpeg",
-      "gif",
-      "webp",
-      "bmp",
-      "svg",
-      "ico",
-      "avif",
-    ]).has(getFileExtension(fileName));
+  function resetAttachmentPreviewState() {
+    attachmentPreview.visible.value = false;
+    attachmentPreview.type.value = "";
+    attachmentPreview.url.value = "";
+    attachmentPreview.name.value = "";
+    attachmentPreview.loading.value = false;
+    attachmentPreview.error.value = "";
+    attachmentPreview.textContent.value = "";
   }
 
-  function isMarkdownMime(mimeType = "", fileName = "") {
-    const normalizedMimeType = String(mimeType || "").trim().toLowerCase();
-    const normalizedFileName = String(fileName || "").trim().toLowerCase();
-    return (
-      normalizedMimeType === "text/markdown" ||
-      normalizedMimeType === "text/x-markdown" ||
-      normalizedMimeType === "application/markdown" ||
-      normalizedMimeType === "application/x-markdown" ||
-      normalizedFileName.endsWith(".md") ||
-      normalizedFileName.endsWith(".markdown") ||
-      normalizedFileName.endsWith(".mdx")
-    );
-  }
-
-  function isTextPreviewMime(mimeType = "") {
-    const normalizedMimeType = String(mimeType || "").trim().toLowerCase();
-    return (
-      normalizedMimeType.startsWith("text/") ||
-      normalizedMimeType.includes("json") ||
-      normalizedMimeType.includes("xml") ||
-      normalizedMimeType.includes("yaml") ||
-      normalizedMimeType.includes("javascript")
-    );
-  }
-
-  function canPreviewAttachment(attachmentItem = {}) {
-    const attachmentMimeType = String(attachmentItem?.mimeType || "").trim();
-    const attachmentName = String(attachmentItem?.name || "").trim();
-    return (
-      isImageMime(attachmentMimeType) ||
-      attachmentMimeType.startsWith("video/") ||
-      isTextPreviewMime(attachmentMimeType) ||
-      isMarkdownMime(attachmentMimeType, attachmentName)
-    );
-  }
+  // --- 下载 ---
 
   async function onDownloadFile(fileItem = {}) {
     const normalizedUserId = String(userId || "").trim();
@@ -135,32 +183,8 @@ export function useMessagePreview({
         throw new Error(errorText);
       }
       const blob = await res.blob();
-      const contentDisposition = String(
-        res.headers?.get("content-disposition") || "",
-      ).trim();
-      const fileNameFromHeader = (() => {
-        if (!contentDisposition) return "";
-        const utf8Match = contentDisposition.match(/filename\\*=UTF-8''([^;]+)/i);
-        if (utf8Match?.[1]) {
-          try {
-            return decodeURIComponent(String(utf8Match[1] || "").trim());
-          } catch {
-            return String(utf8Match[1] || "").trim();
-          }
-        }
-        const basicMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
-        return String(basicMatch?.[1] || "").trim();
-      })();
-      const downloadUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = downloadUrl;
-      anchor.download = String(
-        fileNameFromHeader || fileItem?.fileName || "download",
-      );
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(downloadUrl);
+      const fileName = parseContentDisposition(res.headers?.get("content-disposition") || "") || fileItem?.fileName || "download";
+      await triggerBlobDownload(blob, fileName, translate, notify);
     } catch (error) {
       notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
@@ -174,8 +198,7 @@ export function useMessagePreview({
           attachmentId: String(attachmentItem?.attachmentId || "").trim(),
           sessionId: String(attachmentItem?.sessionId || "").trim(),
           attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
-        }) ||
-        "",
+        }) || "",
     ).trim();
     if (!attachmentUrl) return;
     try {
@@ -185,90 +208,13 @@ export function useMessagePreview({
         throw new Error(translate("message.downloadFailedHttp", { status: res?.status || 500 }));
       }
       const blob = await res.blob();
-      const downloadUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = downloadUrl;
-      anchor.download = String(attachmentItem?.name || "attachment");
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(downloadUrl);
+      await triggerBlobDownload(blob, attachmentItem?.name || "attachment", translate, notify);
     } catch (error) {
       notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
     }
   }
 
-  function cleanupPreviewImageUrl() {
-    if (!previewImageUrl.value) return;
-    URL.revokeObjectURL(previewImageUrl.value);
-    previewImageUrl.value = "";
-  }
-
-  async function openAttachmentPreview(attachmentItem = {}) {
-    const attachmentMimeType = String(attachmentItem?.mimeType || "").trim();
-    const attachmentName = String(attachmentItem?.name || "").trim();
-    const attachmentPreviewSourceUrl = String(
-      attachmentItem?.previewUrl ||
-        buildAttachmentUrl({
-          userId: String(userId || "").trim(),
-          attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-          sessionId: String(attachmentItem?.sessionId || "").trim(),
-          attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
-        }) ||
-        "",
-    ).trim();
-    if (!attachmentPreviewSourceUrl) return;
-    const isImageAttachment = isImageMime(attachmentMimeType);
-    const isVideoAttachment = attachmentMimeType.startsWith("video/");
-    if (isImageAttachment || isVideoAttachment) {
-      attachmentPreviewType.value = isImageAttachment ? "image" : "video";
-      attachmentPreviewUrl.value = attachmentPreviewSourceUrl;
-      attachmentPreviewName.value = attachmentName;
-      attachmentPreviewError.value = "";
-      attachmentPreviewTextContent.value = "";
-      attachmentPreviewLoading.value = false;
-      attachmentPreviewVisible.value = true;
-      return;
-    }
-    if (
-      !isTextPreviewMime(attachmentMimeType) &&
-      !isMarkdownMime(attachmentMimeType, attachmentName)
-    ) {
-      return;
-    }
-    attachmentPreviewVisible.value = true;
-    attachmentPreviewLoading.value = true;
-    attachmentPreviewError.value = "";
-    attachmentPreviewTextContent.value = "";
-    attachmentPreviewUrl.value = "";
-    attachmentPreviewName.value = attachmentName;
-    attachmentPreviewType.value = isMarkdownMime(attachmentMimeType, attachmentName)
-      ? "markdown"
-      : "text";
-    try {
-      const runFetch = authFetch || fetch;
-      const response = await runFetch(attachmentPreviewSourceUrl);
-      if (!response?.ok) {
-        throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
-      }
-      attachmentPreviewTextContent.value = String(await response.text());
-    } catch (error) {
-      attachmentPreviewError.value = error?.message || translate("message.attachmentPreviewFailed");
-    } finally {
-      attachmentPreviewLoading.value = false;
-    }
-    attachmentPreviewVisible.value = true;
-  }
-
-  function closeAttachmentPreview() {
-    attachmentPreviewVisible.value = false;
-    attachmentPreviewType.value = "";
-    attachmentPreviewUrl.value = "";
-    attachmentPreviewName.value = "";
-    attachmentPreviewLoading.value = false;
-    attachmentPreviewError.value = "";
-    attachmentPreviewTextContent.value = "";
-  }
+  // --- 文件预览 ---
 
   async function openFilePreview(fileItem = {}) {
     const normalizedUserId = String(userId || "").trim();
@@ -276,12 +222,12 @@ export function useMessagePreview({
     const fileName = String(fileItem?.fileName || "").trim();
     if (!normalizedUserId || !relativePath || !fileName) return;
 
-    previewVisible.value = true;
-    previewLoading.value = true;
-    previewError.value = "";
-    previewFileName.value = fileName;
-    previewMode.value = "text";
-    previewTextContent.value = "";
+    filePreview.visible.value = true;
+    filePreview.loading.value = true;
+    filePreview.error.value = "";
+    filePreview.fileName.value = fileName;
+    filePreview.mode.value = "text";
+    filePreview.textContent.value = "";
     cleanupPreviewImageUrl();
 
     try {
@@ -299,8 +245,8 @@ export function useMessagePreview({
           throw new Error(errorText);
         }
         const blob = await downloadRes.blob();
-        previewImageUrl.value = URL.createObjectURL(blob);
-        previewMode.value = "image";
+        filePreview.imageUrl.value = URL.createObjectURL(blob);
+        filePreview.mode.value = "image";
         return;
       }
 
@@ -315,107 +261,128 @@ export function useMessagePreview({
       if (data.isText === false) {
         throw new Error(translate("message.fileTypeNotSupported"));
       }
-      previewTextContent.value = String(data.content || "");
-      previewMode.value = isMarkdownFile(fileName) ? "markdown" : "text";
+      filePreview.textContent.value = String(data.content || "");
+      filePreview.mode.value = isMarkdownFile(fileName) ? "markdown" : "text";
     } catch (error) {
-      previewError.value = error?.message || translate("message.previewFailed");
+      filePreview.error.value = error?.message || translate("message.previewFailed");
     } finally {
-      previewLoading.value = false;
+      filePreview.loading.value = false;
     }
   }
 
   function closePreviewDialog() {
-    previewVisible.value = false;
-    previewLoading.value = false;
-    previewError.value = "";
-    previewFileName.value = "";
-    previewMode.value = "text";
-    previewTextContent.value = "";
-    cleanupPreviewImageUrl();
+    resetPreviewState();
   }
 
-  async function onCopyMarkdownRich(renderedPreviewHtml = "") {
-    try {
-      const rawHtmlContent = String(
-        renderedPreviewHtml || renderMarkdown(previewTextContent.value) || "",
-      ).trim();
-      await copyMarkdownRichAsHtmlPage(rawHtmlContent);
-      notify({ type: "success", message: translate("message.copiedHtml") });
-    } catch (error) {
-      const errorMessage = String(error?.message || translate("message.copyFormatFailed"));
-      if (matchesAnyText(errorMessage, noCopyableContentTexts)) {
-        notify({ type: "warning", message: errorMessage });
-        return;
-      }
-      notify({ type: "error", message: errorMessage });
+  // --- 附件预览 ---
+
+  function canPreviewAttachment(attachmentItem = {}) {
+    const mimeType = String(attachmentItem?.mimeType || "").trim();
+    const name = String(attachmentItem?.name || "").trim();
+    return (
+      isImageMime(mimeType) ||
+      mimeType.startsWith("video/") ||
+      isTextPreviewMime(mimeType) ||
+      isMarkdownMime(mimeType, name)
+    );
+  }
+
+  async function openAttachmentPreview(attachmentItem = {}) {
+    const mimeType = String(attachmentItem?.mimeType || "").trim();
+    const name = String(attachmentItem?.name || "").trim();
+    const sourceUrl = String(
+      attachmentItem?.previewUrl ||
+        buildAttachmentUrl({
+          userId: String(userId || "").trim(),
+          attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+          sessionId: String(attachmentItem?.sessionId || "").trim(),
+          attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+        }) || "",
+    ).trim();
+    if (!sourceUrl) return;
+
+    const isImage = isImageMime(mimeType);
+    const isVideo = mimeType.startsWith("video/");
+    if (isImage || isVideo) {
+      attachmentPreview.type.value = isImage ? "image" : "video";
+      attachmentPreview.url.value = sourceUrl;
+      attachmentPreview.name.value = name;
+      attachmentPreview.error.value = "";
+      attachmentPreview.textContent.value = "";
+      attachmentPreview.loading.value = false;
+      attachmentPreview.visible.value = true;
+      return;
     }
+    if (!isTextPreviewMime(mimeType) && !isMarkdownMime(mimeType, name)) return;
+
+    attachmentPreview.visible.value = true;
+    attachmentPreview.loading.value = true;
+    attachmentPreview.error.value = "";
+    attachmentPreview.textContent.value = "";
+    attachmentPreview.url.value = "";
+    attachmentPreview.name.value = name;
+    attachmentPreview.type.value = isMarkdownMime(mimeType, name) ? "markdown" : "text";
+    try {
+      const runFetch = authFetch || fetch;
+      const response = await runFetch(sourceUrl);
+      if (!response?.ok) {
+        throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
+      }
+      attachmentPreview.textContent.value = String(await response.text());
+    } catch (error) {
+      attachmentPreview.error.value = error?.message || translate("message.attachmentPreviewFailed");
+    } finally {
+      attachmentPreview.loading.value = false;
+    }
+  }
+
+  function closeAttachmentPreview() {
+    resetAttachmentPreviewState();
+  }
+
+  // --- 复制 ---
+
+  async function onCopyMarkdownRich(renderedPreviewHtml = "") {
+    const content = renderedPreviewHtml || renderMarkdown(filePreview.textContent.value);
+    await handleCopyMarkdown({ textContent: content, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich: true });
   }
 
   async function onCopyMarkdownText() {
-    try {
-      await copyMarkdownText(String(previewTextContent.value || ""));
-      notify({ type: "success", message: translate("message.copiedMarkdown") });
-    } catch (error) {
-      const errorMessage = String(error?.message || translate("message.copyTextFailed"));
-      if (matchesAnyText(errorMessage, noCopyableTextTexts)) {
-        notify({ type: "warning", message: errorMessage });
-        return;
-      }
-      notify({ type: "error", message: errorMessage });
-    }
+    await handleCopyMarkdown({ textContent: filePreview.textContent.value, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich: false });
   }
 
   async function onCopyAttachmentMarkdownRich(renderedPreviewHtml = "") {
-    try {
-      const rawHtmlContent = String(
-        renderedPreviewHtml || renderMarkdown(attachmentPreviewTextContent.value) || "",
-      ).trim();
-      await copyMarkdownRichAsHtmlPage(rawHtmlContent);
-      notify({ type: "success", message: translate("message.copiedHtml") });
-    } catch (error) {
-      const errorMessage = String(error?.message || translate("message.copyFormatFailed"));
-      if (matchesAnyText(errorMessage, noCopyableContentTexts)) {
-        notify({ type: "warning", message: errorMessage });
-        return;
-      }
-      notify({ type: "error", message: errorMessage });
-    }
+    const content = renderedPreviewHtml || renderMarkdown(attachmentPreview.textContent.value);
+    await handleCopyMarkdown({ textContent: content, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich: true });
   }
 
   async function onCopyAttachmentMarkdownText() {
-    try {
-      await copyMarkdownText(String(attachmentPreviewTextContent.value || ""));
-      notify({ type: "success", message: translate("message.copiedMarkdown") });
-    } catch (error) {
-      const errorMessage = String(error?.message || translate("message.copyTextFailed"));
-      if (matchesAnyText(errorMessage, noCopyableTextTexts)) {
-        notify({ type: "warning", message: errorMessage });
-        return;
-      }
-      notify({ type: "error", message: errorMessage });
-    }
+    await handleCopyMarkdown({ textContent: attachmentPreview.textContent.value, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich: false });
   }
 
   onBeforeUnmount(() => {
     cleanupPreviewImageUrl();
-    closeAttachmentPreview();
+    resetAttachmentPreviewState();
   });
 
   return {
-    previewVisible,
-    previewLoading,
-    previewError,
-    previewFileName,
-    previewMode,
-    previewTextContent,
-    previewImageUrl,
-    attachmentPreviewVisible,
-    attachmentPreviewType,
-    attachmentPreviewUrl,
-    attachmentPreviewName,
-    attachmentPreviewLoading,
-    attachmentPreviewError,
-    attachmentPreviewTextContent,
+    // 文件预览
+    previewVisible: filePreview.visible,
+    previewLoading: filePreview.loading,
+    previewError: filePreview.error,
+    previewFileName: filePreview.fileName,
+    previewMode: filePreview.mode,
+    previewTextContent: filePreview.textContent,
+    previewImageUrl: filePreview.imageUrl,
+    // 附件预览
+    attachmentPreviewVisible: attachmentPreview.visible,
+    attachmentPreviewType: attachmentPreview.type,
+    attachmentPreviewUrl: attachmentPreview.url,
+    attachmentPreviewName: attachmentPreview.name,
+    attachmentPreviewLoading: attachmentPreview.loading,
+    attachmentPreviewError: attachmentPreview.error,
+    attachmentPreviewTextContent: attachmentPreview.textContent,
+    // 方法
     canPreviewAttachment,
     openAttachmentPreview,
     closeAttachmentPreview,
