@@ -288,16 +288,6 @@ function openWorkspace() {
 
 async function openUserSettings() {
   if (!ensureConnected()) return;
-  if (!connecting.value) {
-    const refreshed = await connectBackend({ silent: true });
-    if (!refreshed) {
-      notifyUi({
-        type: "warning",
-        message: translate("infra.inputConnectCodeFirst"),
-      });
-      return;
-    }
-  }
   if (!isSuperAdmin.value) {
     const currentRole = String(apiRole.value || "user").trim() || "user";
     notifyUi({
