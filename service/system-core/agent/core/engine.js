@@ -435,12 +435,6 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
       turn,
       incompatibleTools: adaptedBinding.strictDowngradedTools,
     });
-    appendToolCompatibilityLog({
-      modelState,
-      runtime,
-      event: "tool_binding_adapter_strict_downgraded",
-      tools: adaptedBinding.strictDowngradedTools,
-    }).catch(() => {});
   }
 
   emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools" });

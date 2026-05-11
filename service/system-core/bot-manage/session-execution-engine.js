@@ -14,6 +14,8 @@ import { mergeConfig } from "../config/index.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { isPlainObject } from "../utils/shared-utils.js";
 
+const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = 15000;
+
 function isValidSessionId(sessionId = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(sessionId || ""),
@@ -178,6 +180,31 @@ export class SessionExecutionEngine {
     return container;
   }
 
+
+
+  _normalizeStringArray(input = []) {
+    return Array.isArray(input)
+      ? input
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  _normalizeToolItems(input = []) {
+    return Array.isArray(input)
+      ? input.filter((item) => isPlainObject(item) && String(item?.name || "").trim())
+      : [];
+  }
+
+  _buildDefaultAssistantTurn({ agentResult = {}, dialogProcessId = "" }) {
+    return {
+      role: "assistant",
+      content: String(agentResult?.output || ""),
+      type: "message",
+      dialogProcessId,
+    };
+  }
+
   _buildContextBuilder({
     userId,
     sessionId,
@@ -218,6 +245,20 @@ export class SessionExecutionEngine {
     });
   }
 
+  _resolveMemorySummaryTimeoutMs(userConfig = {}) {
+    const effectiveConfig = mergeConfig(this.globalConfig || {}, userConfig || {});
+    const configured = Number(
+      effectiveConfig?.memory?.summarize_timeout_ms ??
+        effectiveConfig?.memory?.summarizeTimeoutMs ??
+        effectiveConfig?.memorySummarizeTimeoutMs ??
+        DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS,
+    );
+    if (!Number.isFinite(configured) || configured <= 0) {
+      return DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS;
+    }
+    return Math.floor(configured);
+  }
+
   _applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
     const sourceTools = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
@@ -225,14 +266,10 @@ export class SessionExecutionEngine {
     if (!sourceTools.length) return agentContext;
     const toolPolicy = runConfig?.toolPolicy || {};
     const mode = String(toolPolicy?.mode || "").trim().toLowerCase();
-    const customTools = Array.isArray(toolPolicy?.customTools)
-      ? toolPolicy.customTools.filter(Boolean)
-      : [];
-    const configuredIncludeToolNames = Array.isArray(toolPolicy?.includeToolNames)
-      ? toolPolicy.includeToolNames
-          .map((name) => String(name || "").trim())
-          .filter(Boolean)
-      : [];
+    const customTools = this._normalizeToolItems(toolPolicy?.customTools);
+    const configuredIncludeToolNames = this._normalizeStringArray(
+      toolPolicy?.includeToolNames,
+    );
     const includeToolNames = Array.from(
       new Set([
         ...configuredIncludeToolNames,
@@ -255,11 +292,7 @@ export class SessionExecutionEngine {
       nextTools = [...sourceTools, ...customTools];
     }
 
-    const allowToolNames = Array.isArray(toolPolicy?.allowToolNames)
-      ? toolPolicy.allowToolNames
-          .map((name) => String(name || "").trim())
-          .filter(Boolean)
-      : [];
+    const allowToolNames = this._normalizeStringArray(toolPolicy?.allowToolNames);
     if (allowToolNames.length) {
       const allowSet = new Set(allowToolNames);
       nextTools = nextTools.filter((toolItem) =>
@@ -320,15 +353,10 @@ export class SessionExecutionEngine {
         scenario: resolvedScenarioKey,
       };
     }
-    const normalizeStringArray = (input = []) =>
-      Array.isArray(input)
-        ? input
-            .map((item) => String(item || "").trim())
-            .filter(Boolean)
-        : [];
-    const scenarioToolNamesRaw = Array.isArray(scenarioDefinition?.tools)
-      ? normalizeStringArray(scenarioDefinition.tools)
-      : [];
+    const normalizeStringArray = this._normalizeStringArray;
+    const scenarioToolNamesRaw = this._normalizeStringArray(
+      scenarioDefinition?.tools,
+    );
     const scenarioServiceItems = normalizeStringArray(scenarioDefinition?.services);
     const scenarioMcpServerItems = normalizeStringArray(
       scenarioDefinition?.mcpServers ?? scenarioDefinition?.mcp_servers,
@@ -341,9 +369,9 @@ export class SessionExecutionEngine {
       scenarioToolNameSet.add("call_mcp_task");
     }
     const scenarioToolNames = Array.from(scenarioToolNameSet);
-    const scenarioContextKeys = Array.isArray(scenarioDefinition?.context)
-      ? normalizeStringArray(scenarioDefinition.context)
-      : [];
+    const scenarioContextKeys = this._normalizeStringArray(
+      scenarioDefinition?.context,
+    );
     const hasAllTools = scenarioToolNames.includes("*");
     const hasAllContext = scenarioContextKeys.includes("*");
     const scenarioName = String(scenarioDefinition?.name || "").trim();
@@ -704,18 +732,21 @@ export class SessionExecutionEngine {
     userConfig = {},
     resolvedParentAsyncResultContainer = null,
   }) {
+    const turnMessages =
+      Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
+        ? agentResult.turnMessages
+        : [
+            this._buildDefaultAssistantTurn({
+              agentResult,
+              dialogProcessId,
+            }),
+          ];
+
     await this._appendAgentMessages({
       userId,
       sessionId,
       parentSessionId,
-      messages: agentResult?.turnMessages || [
-        {
-          role: "assistant",
-          content: agentResult.output || "",
-          type: "message",
-          dialogProcessId,
-        },
-      ],
+      messages: turnMessages,
       dialogProcessId,
       parentDialogProcessId,
       eventListener: runtimeEventListener,
@@ -736,7 +767,23 @@ export class SessionExecutionEngine {
     emitEvent(runtimeEventListener, "short_memory_captured", {
       sessionId,
     });
-    await this.memory.maybeSummarize({ userId, userConfig });
+    const memorySummaryTimeoutMs = this._resolveMemorySummaryTimeoutMs(userConfig);
+    let memorySummaryTimedOut = false;
+    await Promise.race([
+      this.memory.maybeSummarize({ userId, userConfig }),
+      new Promise((resolve) => {
+        setTimeout(() => {
+          memorySummaryTimedOut = true;
+          resolve();
+        }, memorySummaryTimeoutMs);
+      }),
+    ]);
+    if (memorySummaryTimedOut) {
+      emitEvent(runtimeEventListener, "memory_summary_timeout", {
+        sessionId,
+        timeoutMs: memorySummaryTimeoutMs,
+      });
+    }
     emitEvent(runtimeEventListener, "memory_summary_checked", {
       sessionId,
     });
@@ -761,7 +808,7 @@ export class SessionExecutionEngine {
           caller: String(caller || "user"),
           answer: agentResult.output,
           traces: agentResult.traces,
-          messages: agentResult?.turnMessages || [],
+          messages: turnMessages,
           turnTasks: agentResult?.turnTasks || [],
           executionLogs,
           dialogProcessId,
@@ -776,7 +823,7 @@ export class SessionExecutionEngine {
       caller: String(caller || "user"),
       answer: agentResult.output,
       traces: agentResult.traces,
-      messages: agentResult?.turnMessages || [],
+      messages: turnMessages,
       turnTasks: agentResult?.turnTasks || [],
       executionLogs,
       dialogProcessId,

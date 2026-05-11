@@ -8,6 +8,16 @@ import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "../system-core/event/index.js";
 import { decryptPayloadBySessionId } from "../system-core/utils/session-crypto.js";
 
+const DEFAULT_RUN_TIMEOUT_MS = 180000;
+const MIN_RUN_TIMEOUT_MS = 10000;
+const MAX_RUN_TIMEOUT_MS = 30 * 60 * 1000;
+
+function resolveRunTimeoutMs(rawValue) {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_RUN_TIMEOUT_MS;
+  return Math.min(MAX_RUN_TIMEOUT_MS, Math.max(MIN_RUN_TIMEOUT_MS, Math.floor(parsed)));
+}
+
 function sendUpgradeError(socket, statusCode = 401, message = "Unauthorized") {
   if (!socket.writable) return;
   socket.write(
@@ -65,6 +75,8 @@ export function registerChatWebSocketServer(
     let isRunning = false;
     let currentAbortController = null;
     let currentRunMeta = null;
+    let currentRunTimeoutTimer = null;
+    let currentRunTimedOut = false;
     const pendingInteractionRequests = new Map();
 
     let eventSequence = 0;
@@ -209,6 +221,7 @@ export function registerChatWebSocketServer(
         }
         isRunning = true;
         currentAbortController = new AbortController();
+        currentRunTimedOut = false;
         abortSignal = currentAbortController.signal;
 
         const {
@@ -221,6 +234,13 @@ export function registerChatWebSocketServer(
           config = {},
         } = payload || {};
         currentLocale = normalizeLocale(config?.locale || currentLocale);
+        const runTimeoutMs = resolveRunTimeoutMs(config?.runTimeoutMs ?? config?.run_timeout_ms);
+        currentRunTimeoutTimer = setTimeout(() => {
+          currentRunTimedOut = true;
+          if (currentAbortController) {
+            currentAbortController.abort();
+          }
+        }, runTimeoutMs);
 
         if (!userId || !sessionId || !message) {
           throw new Error(translateText("common.userSessionMessageRequired", currentLocale));
@@ -298,8 +318,13 @@ export function registerChatWebSocketServer(
         });
 
         if (abortSignal?.aborted) {
-          sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
-          webSocket.close(1000, "stopped");
+          if (currentRunTimedOut) {
+            sendEvent("error", { error: `run timeout after ${runTimeoutMs}ms` });
+            webSocket.close(1011, "timeout");
+          } else {
+            sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
+            webSocket.close(1000, "stopped");
+          }
           return;
         }
 
@@ -314,22 +339,36 @@ export function registerChatWebSocketServer(
         webSocket.close(1000, "done");
       } catch (error) {
         if (abortSignal?.aborted) {
-          sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
-          webSocket.close(1000, "stopped");
+          if (currentRunTimedOut) {
+            sendEvent("error", { error: error?.message || "run timeout" });
+            webSocket.close(1011, "timeout");
+          } else {
+            sendEvent("stopped", { message: translateText("ws.dialogStoppedByUser", currentLocale) });
+            webSocket.close(1000, "stopped");
+          }
           return;
         }
         sendEvent("error", { error: error.message || translateText("ws.unknownError", currentLocale) });
         webSocket.close(1011, "error");
       } finally {
+        if (currentRunTimeoutTimer) {
+          clearTimeout(currentRunTimeoutTimer);
+          currentRunTimeoutTimer = null;
+        }
         isRunning = false;
         currentAbortController = null;
         currentRunMeta = null;
+        currentRunTimedOut = false;
       }
     });
 
     webSocket.on("close", () => {
       if (currentAbortController) {
         currentAbortController.abort();
+      }
+      if (currentRunTimeoutTimer) {
+        clearTimeout(currentRunTimeoutTimer);
+        currentRunTimeoutTimer = null;
       }
       rejectAllPendingInteractions(new Error(translateText("ws.socketClosed", currentLocale)));
     });
