@@ -68,8 +68,10 @@ export function createServiceTool({ agentContext }) {
         .optional()
         .describe(tTool(agentContext, "tools.service.fieldCustomParam")),
       queryString: z
-        .object({})
-        .loose()
+        .record(
+          z.string(),
+          z.union([z.string(), z.number(), z.boolean(), z.null()]),
+        )
         .optional()
         .describe(tTool(agentContext, "tools.service.fieldQueryString")),
       body: z.unknown().optional().describe(tTool(agentContext, "tools.service.fieldBody")),

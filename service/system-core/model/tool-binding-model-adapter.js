@@ -6,6 +6,7 @@
 import { mergeConfig } from "../config/index.js";
 
 const OPENAI_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+const STRICT_INCOMPATIBLE_TOOL_NAMES = new Set(["call_service"]);
 
 function isCodexLikeModel(modelName = "", modelAlias = "") {
   const modelToken = `${String(modelName || "").toLowerCase()} ${String(modelAlias || "").toLowerCase()}`;
@@ -46,10 +47,15 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     validTools.push(toolItem);
   }
 
-  const strict = resolveStrictToolSchemaPolicy(modelState);
+  const strictByPolicy = resolveStrictToolSchemaPolicy(modelState);
+  const strictIncompatibleTools = validTools
+    .map((toolItem) => String(toolItem?.name || "").trim())
+    .filter((toolName) => STRICT_INCOMPATIBLE_TOOL_NAMES.has(toolName));
+  const strict = strictByPolicy && strictIncompatibleTools.length === 0;
   return {
     tools: validTools,
     droppedToolNames,
+    strictDowngradedTools: strictByPolicy && !strict ? strictIncompatibleTools : [],
     bindOptions: strict ? { strict: true } : {},
   };
 }

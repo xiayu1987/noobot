@@ -420,6 +420,15 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
       droppedTools: adaptedBinding.droppedToolNames,
     });
   }
+  if (
+    Array.isArray(adaptedBinding?.strictDowngradedTools) &&
+    adaptedBinding.strictDowngradedTools.length
+  ) {
+    emitEvent(eventListener, "tool_binding_adapter_strict_downgraded", {
+      turn,
+      incompatibleTools: adaptedBinding.strictDowngradedTools,
+    });
+  }
 
   emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools" });
 
