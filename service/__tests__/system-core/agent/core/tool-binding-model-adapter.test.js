@@ -45,3 +45,18 @@ test("adaptToolsForBinding respects explicit strict tool schema config", () => {
 
   assert.deepEqual(adapted.bindOptions, { strict: true });
 });
+
+test("adaptToolsForBinding downgrades strict when call_service is present", () => {
+  const adapted = adaptToolsForBinding(
+    [{ name: "call_service" }],
+    {
+      activeModelName: "gpt-5.3-codex",
+      activeModelAlias: "codex",
+      globalConfig: {},
+      userConfig: {},
+    },
+  );
+
+  assert.deepEqual(adapted.bindOptions, {});
+  assert.deepEqual(adapted.strictDowngradedTools, ["call_service"]);
+});
