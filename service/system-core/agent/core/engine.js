@@ -5,11 +5,11 @@
  */
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import {
-  createChatModel,
   resolveDefaultModelSpec,
 } from "../../model/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { emitEvent } from "../../event/index.js";
+import { resolveInvokeLlm } from "../../model/invoke-llm-adapter.js";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
@@ -353,13 +353,14 @@ async function _invokeNoTools({ modelState, loopState, turn }) {
   const { messages, traces, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId, errorLogger } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
 
+  const invokeLlm = resolveInvokeLlm(modelState, "no_tools");
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
   const modelResponse = await invokeLlmWithTransientRetry({
     modelState,
     turn,
     mode: "no_tools",
     invoke: ({ callbacks }) =>
-      modelState.llm.invoke(
+      invokeLlm.invoke(
         filterSummarizedMessages(messages),
         { callbacks, signal: abortSignal },
       ),
@@ -445,8 +446,8 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
     mode: "with_tools",
     invoke: ({ callbacks }) => {
       const boundLlm = Object.keys(adaptedBinding?.bindOptions || {}).length
-        ? modelState.llm.bindTools(boundTools, adaptedBinding.bindOptions)
-        : modelState.llm.bindTools(boundTools);
+        ? invokeLlm.bindTools(boundTools, adaptedBinding.bindOptions)
+        : invokeLlm.bindTools(boundTools);
       return boundLlm.invoke(
         filterSummarizedMessages(messages),
         { callbacks, signal: abortSignal },
@@ -754,3 +755,4 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
   const { modelState, loopState } = buildAgentState({ agentContext, userMessage, errorLogger });
   return runFunctionCallLoop({ modelState, loopState, turn: 1 });
 }
+  const invokeLlm = resolveInvokeLlm(modelState, "with_tools");
