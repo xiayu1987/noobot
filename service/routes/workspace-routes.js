@@ -43,7 +43,7 @@ async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
 export function registerWorkspaceRoutes(
   app,
   {
-    bot,
+    workspaceService,
     workspaceRootPath,
     requireApiKey,
     requireSuperAdmin,
@@ -56,7 +56,7 @@ export function registerWorkspaceRoutes(
   app.get("/internal/workspace/tree/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      const basePath = await bot.ensureUserWorkspace(userId);
+      const basePath = await workspaceService.ensureUserWorkspace(userId);
       const tree = await buildWorkspaceTree(basePath);
       res.json({ ok: true, userId, root: basePath, tree });
     } catch (error) {
@@ -68,7 +68,7 @@ export function registerWorkspaceRoutes(
     try {
       const { userId } = req.params;
       const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
-      const basePath = await bot.resetUserWorkspace(userId, { sections });
+      const basePath = await workspaceService.resetUserWorkspace(userId, { sections });
       res.json({
         ok: true,
         userId,
@@ -88,7 +88,7 @@ export function registerWorkspaceRoutes(
   app.post("/internal/workspace/sync/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      const basePath = await bot.syncUserWorkspace(userId);
+      const basePath = await workspaceService.syncUserWorkspace(userId);
       res.json({ ok: true, userId, root: basePath });
     } catch (error) {
       res.status(400).json({
@@ -105,7 +105,7 @@ export function registerWorkspaceRoutes(
       const { userId } = req.params;
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await bot.ensureUserWorkspace(userId);
+      const basePath = await workspaceService.ensureUserWorkspace(userId);
       const { safeJoin } = await import("../system-core/utils/fs-safe.js");
       const absolutePath = safeJoin(basePath, relativePath);
       try {
@@ -131,7 +131,7 @@ export function registerWorkspaceRoutes(
       const relativePath = String(req.body?.path || "");
       const content = String(req.body?.content || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await bot.ensureUserWorkspace(userId);
+      const basePath = await workspaceService.ensureUserWorkspace(userId);
       const { safeJoin } = await import("../system-core/utils/fs-safe.js");
       const absolutePath = safeJoin(basePath, relativePath);
       const { mkdir, writeFile } = await import("node:fs/promises");
@@ -148,7 +148,7 @@ export function registerWorkspaceRoutes(
       const { userId } = req.params;
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await bot.ensureUserWorkspace(userId);
+      const basePath = await workspaceService.ensureUserWorkspace(userId);
       const { safeJoin } = await import("../system-core/utils/fs-safe.js");
       const absolutePath = safeJoin(basePath, relativePath);
       try {
@@ -190,7 +190,7 @@ export function registerWorkspaceRoutes(
       const syncedUsers = [];
       for (const userId of userDirs) {
         try {
-          await bot.syncUserWorkspace(userId);
+          await workspaceService.syncUserWorkspace(userId);
           syncedUsers.push(userId);
         } catch {
           // ignore single-user sync error, continue syncing others
@@ -220,7 +220,7 @@ export function registerWorkspaceRoutes(
       const resetUsers = [];
       for (const userId of userDirs) {
         try {
-          await bot.resetUserWorkspace(userId, { sections });
+          await workspaceService.resetUserWorkspace(userId, { sections });
           resetUsers.push(userId);
         } catch {
           // ignore single-user failure and continue

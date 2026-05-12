@@ -3,7 +3,7 @@
   "workspace_template_path": "../user-template/default-user",
   "default_provider": "qwen3_6_plus_2026_04_02",
   "memory_max_items": 50,
-  "max_tool_loop_turns": 50,
+  "max_tool_loop_turns": 150,
   "session": {
     "recent_message_limit": 10,
     "use_last_running_task_range": true,

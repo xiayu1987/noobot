@@ -249,10 +249,12 @@ export function createChatWebSocketClient({
           finalize(() => resolve());
           return;
         }
-        // 连接关闭时清理引用，不 reject（连接由 connect 管理）
+        // 未收到 done/stopped 就断开，按异常处理，避免 UI 一直显示“等待实时日志”
         cleanupSocketRef(ws);
         if (!settled) {
-          finalize(() => resolve());
+          finalize(() =>
+            reject(new Error(translateText("infra.websocketStreamError"))),
+          );
         }
       };
     });
