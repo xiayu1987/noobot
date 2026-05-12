@@ -209,6 +209,8 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
       size: safeNum(attachmentItem?.size),
       sessionId: String(attachmentItem?.sessionId || "").trim(),
       attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+      path: String(attachmentItem?.path || "").trim(),
+      relativePath: String(attachmentItem?.relativePath || "").trim(),
       generatedByModel: attachmentItem?.generatedByModel === true,
       generationSource: String(attachmentItem?.generationSource || "").trim(),
     }));
