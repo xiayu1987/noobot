@@ -9,8 +9,9 @@
  */
 export const ENGINE_I18N_KEY_MAP = {
   toolLoopLimitReached: "agent.toolLoopLimitReached",
-  toolConsecutiveFailureLimitReached:
-    "agent.toolConsecutiveFailureLimitReached",
+  toolConsecutiveFailureHelpPrompt:
+    "agent.toolConsecutiveFailureHelpPrompt",
+  helpToolLoopPrompt: "agent.helpToolLoopPrompt",
   fetchGeneratedMediaFailed: "agent.fetchGeneratedMediaFailed",
   fetchRemoteMediaArtifactFailed: "agent.fetchRemoteMediaArtifactFailed",
   abortError: "agent.abortError",
@@ -18,10 +19,9 @@ export const ENGINE_I18N_KEY_MAP = {
 };
 
 /**
- * 工具调用连续失败次数上限
- * 达到此值后自动终止该工具后续调用
+ * 工具连续错误触发帮助提示默认阈值
  */
-export const TOOL_CONSECUTIVE_FAILURE_LIMIT = 3;
+export const DEFAULT_TOOL_FAILURE_HELP_COUNT = 3;
 
 /**
  * 工具调用循环默认最大轮数
@@ -34,6 +34,11 @@ export const DEFAULT_MAX_TOOL_LOOP_TURNS = 4;
  * 0 表示默认不强制触发；可通过 tools.task_summary.phase_summary_loop_turns 覆盖。
  */
 export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS = 0;
+
+/**
+ * 帮助提示默认循环轮数
+ */
+export const DEFAULT_HELP_PROMPT_LOOP_TURNS = 50;
 
 /**
  * 工具调用结果追踪截断长度（字符数）

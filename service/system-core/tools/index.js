@@ -16,6 +16,7 @@ import { createMcpTool } from "./mcp-tool.js";
 import { createConnectorAccessTool } from "./connector-tools/connector-access-tool.js";
 import { createMultimodalGenerateTool } from "./multimodal-generate-tool.js";
 import { createTaskSummaryTool } from "./task-summary-tool.js";
+import { createRequestHelpTool } from "./request-help-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 
@@ -67,6 +68,7 @@ const TOOL_CONFIG_ALIASES = {
   inspect_connectors: ["inspect_connectors"],
   multimodal_generate: ["multimodal_generate"],
   task_summary: ["task_summary"],
+  request_help: ["request_help"],
 };
 
 function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
@@ -154,6 +156,7 @@ export async function buildTools(ctx) {
     ...createAgentCollabTool(ctx),
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
+    ...createRequestHelpTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
   const enabledTools = filterToolsByConfigEnabled(baseTools, effectiveConfig);

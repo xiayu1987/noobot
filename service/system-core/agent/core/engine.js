@@ -37,14 +37,18 @@ import { executeToolCall } from "./execution/tool-runner.js";
 import { adaptToolsForBinding } from "../../model/tool-binding-model-adapter.js";
 import { appendToolCompatibilityLog } from "../../model/tool-compatibility-log.js";
 import {
-  TOOL_CONSECUTIVE_FAILURE_LIMIT,
   DEFAULT_MAX_TOOL_LOOP_TURNS,
   DEFAULT_PHASE_SUMMARY_LOOP_TURNS,
+  DEFAULT_HELP_PROMPT_LOOP_TURNS,
+  DEFAULT_TOOL_FAILURE_HELP_COUNT,
 } from "./constants.js";
 import { assertNotAborted } from "./utils/error-utils.js";
+import { REQUEST_HELP_TOOL_NAME } from "../../tools/request-help-tool.js";
 
 const TASK_SUMMARY_TOOL_NAME = "task_summary";
 const PHASE_SUMMARY_PROMPT_MARKER = "noobot.phase_summary_prompt";
+const HELP_TOOL_LOOP_PROMPT_MARKER = "noobot.help_tool_loop_prompt";
+const HELP_TOOL_FAILURE_PROMPT_MARKER = "noobot.help_tool_failure_prompt";
 const TRANSIENT_LLM_MAX_ATTEMPTS = 3;
 const TRANSIENT_LLM_RETRY_BASE_DELAY_MS = 500;
 
@@ -208,10 +212,47 @@ function resolvePhaseSummaryLoopTurns(effectiveConfig = {}) {
   return Math.floor(configuredValue);
 }
 
+function resolveHelpPromptLoopTurns(effectiveConfig = {}) {
+  const helpToolConfig =
+    effectiveConfig?.tools?.[REQUEST_HELP_TOOL_NAME] &&
+    typeof effectiveConfig.tools[REQUEST_HELP_TOOL_NAME] === "object"
+      ? effectiveConfig.tools[REQUEST_HELP_TOOL_NAME]
+      : {};
+  const configuredValue = Number(
+    helpToolConfig.help_prompt_loop_turns ??
+      helpToolConfig.helpPromptLoopTurns ??
+      DEFAULT_HELP_PROMPT_LOOP_TURNS,
+  );
+  if (!Number.isFinite(configuredValue) || configuredValue <= 0) return 0;
+  return Math.floor(configuredValue);
+}
+
+function resolveToolFailureHelpCount(effectiveConfig = {}) {
+  const helpToolConfig =
+    effectiveConfig?.tools?.[REQUEST_HELP_TOOL_NAME] &&
+    typeof effectiveConfig.tools[REQUEST_HELP_TOOL_NAME] === "object"
+      ? effectiveConfig.tools[REQUEST_HELP_TOOL_NAME]
+      : {};
+  const configuredValue = Number(
+    helpToolConfig.tool_failure_help_count ??
+      helpToolConfig.toolFailureHelpCount ??
+      DEFAULT_TOOL_FAILURE_HELP_COUNT,
+  );
+  if (!Number.isFinite(configuredValue) || configuredValue <= 0) return 0;
+  return Math.floor(configuredValue);
+}
+
 function hasTaskSummaryTool(tools = []) {
   return (Array.isArray(tools) ? tools : []).some(
     (toolDefinition) =>
       String(toolDefinition?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+  );
+}
+
+function hasRequestHelpTool(tools = []) {
+  return (Array.isArray(tools) ? tools : []).some(
+    (toolDefinition) =>
+      String(toolDefinition?.name || "").trim() === REQUEST_HELP_TOOL_NAME,
   );
 }
 
@@ -330,6 +371,7 @@ function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] 
   if (nextCount < threshold) return false;
 
   systemRuntime.needsPhaseSummary = true;
+  systemRuntime.phaseSummaryLoopCount = 0;
   if (Array.isArray(loopState?.messages)) {
     loopState.messages.push(
       new HumanMessage({
@@ -342,6 +384,83 @@ function maybeRequestPhaseSummary({ modelState, loopState, toolCallResults = [] 
   }
   emitEvent(modelState?.eventListener || null, "phase_summary_required", {
     loopCount: nextCount,
+    threshold,
+  });
+  return true;
+}
+
+function maybePromptHelpToolByLoop({ modelState, loopState }) {
+  const runtime = modelState?.runtime || {};
+  const systemRuntime =
+    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+      ? runtime.systemRuntime
+      : null;
+  if (!systemRuntime) return false;
+  const threshold = Number(loopState?.helpPromptLoopTurns || 0);
+  if (!Number.isFinite(threshold) || threshold <= 0) return false;
+  if (!hasRequestHelpTool(loopState?.tools || [])) return false;
+  const currentCount = Number(systemRuntime.helpPromptLoopCount || 0);
+  const nextCount =
+    Number.isFinite(currentCount) && currentCount >= 0 ? currentCount + 1 : 1;
+  systemRuntime.helpPromptLoopCount = nextCount;
+  if (nextCount < threshold) return false;
+  systemRuntime.helpPromptLoopCount = 0;
+  if (Array.isArray(loopState?.messages)) {
+    loopState.messages.push(
+      new SystemMessage({
+        content: tEngine(runtime, "helpToolLoopPrompt", {
+          loopCount: nextCount,
+          threshold,
+          helpToolName: REQUEST_HELP_TOOL_NAME,
+        }),
+        additional_kwargs: {
+          noobotInternalMessageType: HELP_TOOL_LOOP_PROMPT_MARKER,
+        },
+      }),
+    );
+  }
+  emitEvent(modelState?.eventListener || null, "help_tool_loop_prompted", {
+    loopCount: nextCount,
+    threshold,
+  });
+  return true;
+}
+
+function maybePromptHelpToolByFailure({
+  modelState,
+  loopState,
+  hasRequestHelpCall = false,
+}) {
+  const runtime = modelState?.runtime || {};
+  const systemRuntime =
+    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+      ? runtime.systemRuntime
+      : null;
+  const threshold = Number(loopState?.toolFailureHelpCount || 0);
+  if (!systemRuntime) return false;
+  if (!Number.isFinite(threshold) || threshold <= 0) return false;
+  if (!hasRequestHelpTool(loopState?.tools || [])) return false;
+  if (hasRequestHelpCall) return false;
+  const failureCount = Number(loopState?.toolConsecutiveFailureCount || 0);
+  if (!Number.isFinite(failureCount) || failureCount < threshold) return false;
+  if (Array.isArray(loopState?.messages)) {
+    loopState.messages.push(
+      new HumanMessage({
+        content: tEngine(runtime, "toolConsecutiveFailureHelpPrompt", {
+          failureCount,
+          threshold,
+          helpToolName: REQUEST_HELP_TOOL_NAME,
+        }),
+        additional_kwargs: {
+          noobotInternalMessageType: HELP_TOOL_FAILURE_PROMPT_MARKER,
+        },
+      }),
+    );
+  }
+  loopState.toolConsecutiveFailureCount = 0;
+  systemRuntime.toolConsecutiveFailureCount = 0;
+  emitEvent(modelState?.eventListener || null, "help_tool_failure_prompted", {
+    failureCount,
     threshold,
   });
   return true;
@@ -494,9 +613,8 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
 }
 
 /**
- * Executes tool calls, processes results, handles consecutive failures.
- * Returns { toolCallResults, hasTaskSummaryCall, shouldTerminate, limitMsg }
- * where shouldTerminate indicates if a consecutive failure limit was hit.
+ * Executes tool calls and processes results.
+ * Returns { toolCallResults, hasTaskSummaryCall, hasRequestHelpCall }.
  */
 async function _processToolResults({
   modelState,
@@ -505,9 +623,8 @@ async function _processToolResults({
   calls,
   toolMap,
   stateCommitter,
-  currentModelInfo,
 }) {
-  const { traces, consecutiveToolFailures, errorLogger } = loopState;
+  const { errorLogger } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
 
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
@@ -526,6 +643,9 @@ async function _processToolResults({
 
   const hasTaskSummaryCall = toolCallResults.some(
     (r) => String(r?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+  );
+  const hasRequestHelpCall = toolCallResults.some(
+    (r) => String(r?.call?.name || "").trim() === REQUEST_HELP_TOOL_NAME,
   );
   if (hasTaskSummaryCall) {
     loopState.taskSummaryTriggered = true;
@@ -549,43 +669,23 @@ async function _processToolResults({
 
     const toolName = String(call?.name || "").trim();
     if (!toolName) continue;
-
-    const currentConsecutiveFailures = Number(consecutiveToolFailures?.[toolName] || 0);
-    const nextConsecutiveFailures = toolCallResult?.success ? 0 : currentConsecutiveFailures + 1;
-    consecutiveToolFailures[toolName] = nextConsecutiveFailures;
-
-    if (nextConsecutiveFailures >= TOOL_CONSECUTIVE_FAILURE_LIMIT) {
-      const limitMsg = tEngine(runtime, "toolConsecutiveFailureLimitReached", {
-        toolName,
-        maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
-      });
-      traces.push({
-        tool: "system",
-        args: { turn, toolName, maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT },
-        result: limitMsg,
-      });
-      emitEvent(eventListener, "tool_consecutive_failure_limit_reached", {
-        turn,
-        tool: toolName,
-        failureCount: nextConsecutiveFailures,
-        maxFails: TOOL_CONSECUTIVE_FAILURE_LIMIT,
-        reason: String(toolCallResult?.failureReason || ""),
-      });
-      stateCommitter.pushAssistantMessage({
-        content: limitMsg,
-        rawModelContent: null,
-        modelAdditionalKwargs: null,
-        modelResponseMetadata: null,
-        type: "message",
-        toolCalls: [],
-        modelAlias: currentModelInfo.modelAlias,
-        modelName: currentModelInfo.modelName,
-      });
-      return { toolCallResults, hasTaskSummaryCall, shouldTerminate: true, limitMsg };
+    const nextFailureCount = toolCallResult?.success
+      ? 0
+      : Number(loopState.toolConsecutiveFailureCount || 0) + 1;
+    loopState.toolConsecutiveFailureCount = nextFailureCount;
+    if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
+      runtime.systemRuntime.toolConsecutiveFailureCount = nextFailureCount;
     }
   }
 
-  return { toolCallResults, hasTaskSummaryCall, shouldTerminate: false, limitMsg: null };
+  if (hasRequestHelpCall) {
+    loopState.toolConsecutiveFailureCount = 0;
+    if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
+      runtime.systemRuntime.toolConsecutiveFailureCount = 0;
+    }
+  }
+
+  return { toolCallResults, hasTaskSummaryCall, hasRequestHelpCall };
 }
 
 async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
@@ -610,7 +710,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   }
 
   // ── LLM call with tools ──
-  const { aiContentText, calls, turnMessageStore, turnTaskStore, stateCommitter, currentModelInfo, toolMap } =
+  const { aiContentText, calls, turnMessageStore, turnTaskStore, stateCommitter, toolMap } =
     await _invokeWithTools({ modelState, loopState, turn });
 
   // No tool calls → return immediately
@@ -626,7 +726,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   }
 
   // ── Execute tools and process results ──
-  const { toolCallResults, hasTaskSummaryCall, shouldTerminate, limitMsg } =
+  const { toolCallResults, hasTaskSummaryCall, hasRequestHelpCall } =
     await _processToolResults({
       modelState,
       loopState,
@@ -634,19 +734,7 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
       calls,
       toolMap,
       stateCommitter,
-      currentModelInfo,
     });
-
-  if (shouldTerminate) {
-    return buildLoopResult({
-      output: limitMsg,
-      traces,
-      loopState,
-      turnTaskStore,
-      turnMessageStore,
-      modelMessages: loopState.messages,
-    });
-  }
 
   // ── Sync turn state before recursive call ──
   loopState.turnMessages = turnMessageStore.toArray();
@@ -657,6 +745,12 @@ async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     removePhaseSummaryPromptMessages(loopState.messages, runtime);
   }
   maybeRequestPhaseSummary({ modelState, loopState, toolCallResults });
+  maybePromptHelpToolByLoop({ modelState, loopState });
+  maybePromptHelpToolByFailure({
+    modelState,
+    loopState,
+    hasRequestHelpCall,
+  });
 
   if (hasTaskSummaryCall) {
     markCurrentTurnModelMessagesSummarized(loopState.messages, {
@@ -693,10 +787,29 @@ function buildAgentState({ agentContext, userMessage, errorLogger }) {
     const loopCount = Number(runtime.systemRuntime.toolLoopExecutionCount || 0);
     runtime.systemRuntime.toolLoopExecutionCount =
       Number.isFinite(loopCount) && loopCount > 0 ? loopCount : 0;
+    const phaseSummaryLoopCount = Number(
+      runtime.systemRuntime.phaseSummaryLoopCount ??
+        runtime.systemRuntime.toolLoopExecutionCount ??
+        0,
+    );
     runtime.systemRuntime.phaseSummaryLoopCount =
-      runtime.systemRuntime.toolLoopExecutionCount;
+      Number.isFinite(phaseSummaryLoopCount) && phaseSummaryLoopCount > 0
+        ? phaseSummaryLoopCount
+        : 0;
+    const helpPromptLoopCount = Number(runtime.systemRuntime.helpPromptLoopCount || 0);
+    runtime.systemRuntime.helpPromptLoopCount =
+      Number.isFinite(helpPromptLoopCount) && helpPromptLoopCount > 0
+        ? helpPromptLoopCount
+        : 0;
     runtime.systemRuntime.needsPhaseSummary =
       runtime.systemRuntime.needsPhaseSummary === true;
+    const toolConsecutiveFailureCount = Number(
+      runtime.systemRuntime.toolConsecutiveFailureCount || 0,
+    );
+    runtime.systemRuntime.toolConsecutiveFailureCount =
+      Number.isFinite(toolConsecutiveFailureCount) && toolConsecutiveFailureCount > 0
+        ? toolConsecutiveFailureCount
+        : 0;
     runtime.systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
   }
 
@@ -706,6 +819,8 @@ function buildAgentState({ agentContext, userMessage, errorLogger }) {
   const maxToolLoopTurns =
     Number.isFinite(runtimeMaxTurns) && runtimeMaxTurns > 0 ? runtimeMaxTurns : configMaxTurns;
   const phaseSummaryLoopTurns = resolvePhaseSummaryLoopTurns(effectiveConfig);
+  const helpPromptLoopTurns = resolveHelpPromptLoopTurns(effectiveConfig);
+  const toolFailureHelpCount = resolveToolFailureHelpCount(effectiveConfig);
 
   const llm = createChatModel({
     globalConfig,
@@ -745,8 +860,12 @@ function buildAgentState({ agentContext, userMessage, errorLogger }) {
         ? maxToolLoopTurns
         : DEFAULT_MAX_TOOL_LOOP_TURNS,
     phaseSummaryLoopTurns,
+    helpPromptLoopTurns,
+    toolFailureHelpCount,
     taskSummaryTriggered: false,
-    consecutiveToolFailures: {},
+    toolConsecutiveFailureCount: Number(
+      runtime?.systemRuntime?.toolConsecutiveFailureCount || 0,
+    ),
     errorLogger,
   };
 

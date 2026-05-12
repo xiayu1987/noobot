@@ -112,6 +112,11 @@
 | `tools.multimodal_generate.enabled` | boolean | 启用多模态生成工具 |
 | `tools.task_summary.enabled` | boolean | 启用阶段小结工具 |
 | `tools.task_summary.phase_summary_loop_turns` | number | 触发阶段小结的对话轮数阈值 |
+| `tools.request_help.enabled` | boolean | 启用请求帮助工具 |
+| `tools.request_help.help_services` | string[]/object[] | 帮助服务列表（默认包含 `web_search_service`） |
+| `tools.request_help.help_model` | string | 帮助模型别名/名称（留空按当前/默认模型逻辑） |
+| `tools.request_help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
+| `tools.request_help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
 | `tools.email_connect_connector.enabled` | boolean | 启用邮件连接器工具 |
 
 说明：
@@ -136,7 +141,7 @@
 
 当前仓库默认：
 - `full`（默认）：tools/context 为空数组，表示不额外限制
-- `programming`：model=`"qwen3_6_plus_2026_04_02"`，description=“优先分析代码结构…”，tools=`["execute_script", "task_summary"]`，services=`["web_search_service"]`，context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
+- `programming`：model=`"qwen3_6_plus_2026_04_02"`，description=“优先分析代码结构…”，tools=`["execute_script", "task_summary", "request_help"]`，services=`["web_search_service"]`，context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
 
 ### 3.6 连接器预置
 
