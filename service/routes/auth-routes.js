@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { logError } from "../system-core/tracking/console/logger.js";
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -146,7 +147,11 @@ export function registerAuthRoutes(
           loadedUserConfig && typeof loadedUserConfig === "object"
             ? loadedUserConfig.scenarios || {}
             : {};
-      } catch {
+      } catch (error) {
+        logError("[auth-routes] loadUserConfig for scenarios failed", {
+          userId,
+          error: error?.message || String(error),
+        });
         userScenarios = {};
       }
       const mergedScenarios = resolveMergedScenarios(

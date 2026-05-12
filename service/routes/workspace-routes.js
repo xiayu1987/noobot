@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { logError } from "../system-core/tracking/console/logger.js";
 import path from "node:path";
 import { access, mkdir, readdir, rm } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
@@ -29,7 +30,12 @@ async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
     try {
       await access(path.join(root, userId, "config.json"));
       userDirs.push(userId);
-    } catch {
+    } catch (error) {
+      logError("[workspace-routes] listWorkspaceUserDirs config.json access failed", {
+        root,
+        userId,
+        error: error?.message || String(error),
+      });
       // A user workspace must have config.json. Skip stray directories.
     }
   }
@@ -110,7 +116,13 @@ export function registerWorkspaceRoutes(
       const absolutePath = safeJoin(basePath, relativePath);
       try {
         await access(absolutePath);
-      } catch {
+      } catch (error) {
+        logError("[workspace-routes] file download access check failed", {
+          workspaceId,
+          relativePath,
+          absolutePath,
+          error: error?.message || String(error),
+        });
         throw new Error(translateText("common.fileNotFound", req.locale));
       }
       const { stat, readFile } = await import("node:fs/promises");
@@ -153,7 +165,13 @@ export function registerWorkspaceRoutes(
       const absolutePath = safeJoin(basePath, relativePath);
       try {
         await access(absolutePath);
-      } catch {
+      } catch (error) {
+        logError("[workspace-routes] file download access check failed", {
+          workspaceId,
+          relativePath,
+          absolutePath,
+          error: error?.message || String(error),
+        });
         throw new Error(translateText("common.fileNotFound", req.locale));
       }
       const { stat } = await import("node:fs/promises");
@@ -192,7 +210,11 @@ export function registerWorkspaceRoutes(
         try {
           await workspaceService.syncUserWorkspace(userId);
           syncedUsers.push(userId);
-        } catch {
+        } catch (error) {
+          logError("[workspace-routes] syncUserWorkspace failed in sync-all loop", {
+            userId,
+            error: error?.message || String(error),
+          });
           // ignore single-user sync error, continue syncing others
         }
       }
@@ -222,7 +244,12 @@ export function registerWorkspaceRoutes(
         try {
           await workspaceService.resetUserWorkspace(userId, { sections });
           resetUsers.push(userId);
-        } catch {
+        } catch (error) {
+          logError("[workspace-routes] resetUserWorkspace failed in reset-all loop", {
+            userId,
+            sections: JSON.stringify(sections),
+            error: error?.message || String(error),
+          });
           // ignore single-user failure and continue
         }
       }
