@@ -314,13 +314,22 @@ export class ChannelManager {
       }
     });
 
-    upstreamSocket.on("close", () => {
+    upstreamSocket.on("close", (closeCode, closeReasonBuffer) => {
       channel.upstreamSocket = null;
       channel.upstreamClosed = true;
+      const closeReason =
+        typeof closeReasonBuffer === "string"
+          ? closeReasonBuffer
+          : Buffer.isBuffer(closeReasonBuffer)
+            ? closeReasonBuffer.toString("utf8")
+            : "";
+      const normalizedCloseCode = Number(closeCode || 0) || 0;
       if (!isTerminalStatus(channel.status)) {
         this.markChannelTerminal(channel, "stopped");
         const stoppedEnvelope = this.pushChannelEvent(channel, "stopped", {
           message: "upstream socket closed",
+          upstreamCloseCode: normalizedCloseCode,
+          upstreamCloseReason: closeReason || "upstream socket closed",
         });
         this.broadcastChannelEvent(channel, stoppedEnvelope);
       }

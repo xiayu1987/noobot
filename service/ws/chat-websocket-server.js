@@ -190,7 +190,7 @@ export function registerChatWebSocketServer(
         }
         if (action === "stop") {
           if (isRunning && currentAbortController) {
-            currentAbortController.abort();
+            currentAbortController.abort({ type: "user_stop", reason: "user stop action" });
           }
           rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", currentLocale)));
           try {
@@ -238,7 +238,11 @@ export function registerChatWebSocketServer(
         currentRunTimeoutTimer = setTimeout(() => {
           currentRunTimedOut = true;
           if (currentAbortController) {
-            currentAbortController.abort();
+            currentAbortController.abort({
+              type: "run_timeout",
+              reason: `run timeout after ${runTimeoutMs}ms`,
+              timeoutMs: runTimeoutMs,
+            });
           }
         }, runTimeoutMs);
 
@@ -362,9 +366,19 @@ export function registerChatWebSocketServer(
       }
     });
 
-    webSocket.on("close", () => {
+    webSocket.on("close", (code, reasonBuffer) => {
       if (currentAbortController) {
-        currentAbortController.abort();
+        const reasonText =
+          typeof reasonBuffer === "string"
+            ? reasonBuffer
+            : Buffer.isBuffer(reasonBuffer)
+              ? reasonBuffer.toString("utf8")
+              : "";
+        currentAbortController.abort({
+          type: "socket_close",
+          code: Number(code || 0) || undefined,
+          reason: reasonText || "websocket closed",
+        });
       }
       if (currentRunTimeoutTimer) {
         clearTimeout(currentRunTimeoutTimer);

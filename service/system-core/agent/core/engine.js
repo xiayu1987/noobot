@@ -43,6 +43,7 @@ import {
   DEFAULT_TOOL_FAILURE_HELP_COUNT,
 } from "./constants.js";
 import { assertNotAborted } from "./utils/error-utils.js";
+import { isAbortError as isSharedAbortError } from "../../utils/error-utils.js";
 import { REQUEST_HELP_TOOL_NAME } from "../../tools/request-help-tool.js";
 
 const TASK_SUMMARY_TOOL_NAME = "task_summary";
@@ -82,6 +83,7 @@ function getLlmErrorStatus(error = {}) {
 }
 
 function isAbortLikeError(error = {}) {
+  if (isSharedAbortError(error) || isSharedAbortError(error?.cause)) return true;
   const name = String(error?.name || error?.cause?.name || "").toLowerCase();
   const code = String(error?.code || error?.cause?.code || "").toLowerCase();
   const message = String(error?.message || "").toLowerCase();
@@ -108,6 +110,26 @@ function isTransientLlmError(error = {}) {
 }
 
 function normalizeLlmError(error = {}, modelState = {}, { turn = 0, mode = "" } = {}) {
+  const signalReason = modelState?.abortSignal?.reason;
+  const normalizedAbortCode =
+    signalReason && typeof signalReason === "object"
+      ? Number(signalReason?.code || 0) || undefined
+      : undefined;
+  const normalizedAbortSource =
+    signalReason && typeof signalReason === "object"
+      ? String(signalReason?.type || "").trim() || undefined
+      : undefined;
+  const normalizedAbortReason =
+    typeof signalReason === "string"
+      ? signalReason.trim()
+      : signalReason && typeof signalReason === "object"
+        ? String(
+            signalReason?.type ??
+              signalReason?.reason ??
+              signalReason?.message ??
+              "",
+          ).trim()
+        : "";
   return {
     turn,
     mode,
@@ -124,6 +146,9 @@ function normalizeLlmError(error = {}, modelState = {}, { turn = 0, mode = "" } 
       error?.headers?.["x-request-id"] ??
       error?.response?.headers?.["x-request-id"] ??
       undefined,
+    abortSource: normalizedAbortSource,
+    abortCode: normalizedAbortCode,
+    abortReason: normalizedAbortReason || undefined,
   };
 }
 
@@ -167,6 +192,16 @@ async function invokeLlmWithTransientRetry({
     } catch (error) {
       lastError = error;
       const errorData = normalizeLlmError(error, modelState, { turn, mode });
+      const abortLike = isAbortLikeError(error);
+      if (abortLike) {
+        emitEvent(modelState?.eventListener, "llm_call_aborted", {
+          ...errorData,
+          attempt,
+          maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
+          streamedTokens: getTokenCount(),
+        });
+        throw error;
+      }
       const canRetry =
         attempt < TRANSIENT_LLM_MAX_ATTEMPTS &&
         isTransientLlmError(error) &&
