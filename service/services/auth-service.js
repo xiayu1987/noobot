@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { logError } from "../system-core/tracking/console/logger.js";
 import { randomBytes } from "node:crypto";
 
 const DEFAULT_API_KEY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -38,7 +39,11 @@ export function createAuthService({
         queryApiKey = String(
           new URL(req.url, "http://localhost").searchParams.get("apikey") || "",
         ).trim();
-      } catch {
+      } catch (error) {
+        logError("[auth-service] extractApiKey query URL parse failed", {
+          url: String(req?.url || "").slice(0, 200),
+          error: error?.message || String(error),
+        });
         queryApiKey = "";
       }
     }

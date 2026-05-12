@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { logError } from "../../tracking/console/logger.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
@@ -85,7 +86,11 @@ export class SseMcpClient extends BaseMcpClient {
     let payload = null;
     try {
       payload = JSON.parse(data);
-    } catch {
+    } catch (error) {
+      logError("[mcp-sse-client] JSON.parse event data failed", {
+        data: String(data || "").slice(0, 200),
+        error: error?.message || String(error),
+      });
       return;
     }
     const responseId = payload?.id;

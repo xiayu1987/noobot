@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { logError } from "../system-core/tracking/console/logger.js";
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
@@ -64,7 +65,11 @@ export function createConfigParamsService({ workspaceRootPath, globalConfigRaw }
     try {
       const parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
       return normalizeConfigParams(parsedPayload);
-    } catch {
+    } catch (error) {
+      logError("[config-params-service] readWorkspaceConfigParams failed", {
+        filePath,
+        error: error?.message || String(error),
+      });
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
       await writeWorkspaceConfigParams(payload);
@@ -85,7 +90,11 @@ export function createConfigParamsService({ workspaceRootPath, globalConfigRaw }
     try {
       const parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
       return normalizeConfigParams(parsedPayload);
-    } catch {
+    } catch (error) {
+      logError("[config-params-service] readWorkspaceConfigParams failed", {
+        filePath,
+        error: error?.message || String(error),
+      });
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
       await writeUserConfigParams({ userId, input: payload });
@@ -104,7 +113,11 @@ export function createConfigParamsService({ workspaceRootPath, globalConfigRaw }
   async function readConfigJsonIfExists(filePath = "") {
     try {
       return JSON.parse(await readFile(filePath, "utf8"));
-    } catch {
+    } catch (error) {
+      logError("[config-params-service] readConfigJsonIfExists failed", {
+        filePath,
+        error: error?.message || String(error),
+      });
       return {};
     }
   }

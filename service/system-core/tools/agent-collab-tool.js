@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { logError } from "../tracking/console/logger.js";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { Buffer } from "node:buffer";
@@ -41,11 +42,18 @@ function cloneData(value) {
   if (typeof globalThis.structuredClone === "function") {
     try {
       return globalThis.structuredClone(value);
-    } catch {}
+    } catch (error) {
+      logError("[agent-collab-tool] structuredClone fallback failed", {
+        error: error?.message || String(error),
+      });
+    }
   }
   try {
     return JSON.parse(JSON.stringify(value));
-  } catch {
+  } catch (error) {
+    logError("[agent-collab-tool] JSON.stringify/parse clone fallback failed", {
+      error: error?.message || String(error),
+    });
     return value;
   }
 }
@@ -339,7 +347,11 @@ export function createAgentCollabTool({ agentContext }) {
     if (rawResult && typeof rawResult === "object") {
       try {
         return JSON.stringify(rawResult, null, 2);
-      } catch {}
+      } catch (error) {
+        logError("[agent-collab-tool] JSON.stringify task result failed", {
+          error: error?.message || String(error),
+        });
+      }
     }
     const fallbackError = String(taskResultItem?.error || "").trim();
     if (fallbackError) return fallbackError;
@@ -404,7 +416,11 @@ export function createAgentCollabTool({ agentContext }) {
         fallbackGenerationSource: "async_subtask_result",
         userId,
       });
-    } catch {
+    } catch (error) {
+      logError("[agent-collab-tool] persistCompletedTaskResultsAsAttachments failed", {
+        taskId: String(taskId || ""),
+        error: error?.message || String(error),
+      });
       return [];
     }
     for (let index = 0; index < attachmentMetas.length; index += 1) {
@@ -867,12 +883,19 @@ export function createAgentCollabTool({ agentContext }) {
       let parsedPlan = null;
       try {
         parsedPlan = JSON.parse(content);
-      } catch {
+      } catch (error) {
+        logError("[agent-collab-tool] JSON.parse plan response failed, trying markdown extraction", {
+          error: error?.message || String(error),
+        });
         const match = String(content).match(/```json\s*([\s\S]*?)\s*```/i);
         if (match?.[1]) {
           try {
             parsedPlan = JSON.parse(match[1]);
-          } catch {}
+          } catch (error) {
+            logError("[agent-collab-tool] JSON.parse markdown-extracted plan also failed", {
+              error: error?.message || String(error),
+            });
+          }
         }
       }
 

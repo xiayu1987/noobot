@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { tSystem } from "../i18n/system-text.js";
+import { logError } from "../tracking/console/logger.js";
 
 function normalizeConnectorType(input = "") {
   const value = String(input || "").trim().toLowerCase();
@@ -143,7 +144,13 @@ export class ConnectorEventListener {
           status: "connected",
         },
       });
-    } catch {}
+    } catch (error) {
+      logError("[connector-event-listener] notifyConnectorConnected requestUserInteraction failed", {
+        connectorType: normalizedType,
+        connectorName: normalizedName,
+        error: error?.message || String(error),
+      });
+    }
   }
 
   async notifyReconnectRequired({
@@ -179,7 +186,14 @@ export class ConnectorEventListener {
           defaultValues: collectNonSensitiveDefaults(defaultValues),
         },
       });
-    } catch {}
+    } catch (error) {
+      logError("[connector-event-listener] notifyReconnectRequired requestUserInteraction failed", {
+        connectorType: normalizedType,
+        connectorName: normalizedName,
+        reconnectToolName: normalizedReconnectToolName,
+        error: error?.message || String(error),
+      });
+    }
   }
 
   async onConnectorConnected({

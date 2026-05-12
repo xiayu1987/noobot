@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { logError } from "../system-core/tracking/console/logger.js";
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
@@ -34,7 +35,11 @@ export function createWorkspaceUsersService({
     let parsedPayload = null;
     try {
       parsedPayload = JSON.parse(await readFile(filePath, "utf8"));
-    } catch {
+    } catch (error) {
+      logError("[workspace-users-service] readWorkspaceUsersConfig failed", {
+        filePath,
+        error: error?.message || String(error),
+      });
       if (createIfMissing) {
         const payload = normalizeWorkspaceUsersConfig(defaultWorkspaceUsersConfig);
         await writeWorkspaceUsersConfig(payload);
