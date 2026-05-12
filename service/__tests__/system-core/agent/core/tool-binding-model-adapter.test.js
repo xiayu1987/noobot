@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { adaptToolsForBinding } from "../../../../system-core/model/tool-binding-model-adapter.js";
+import { adaptToolsForBinding } from "../../../../system-core/model/tool/binding-adapter.js";
 
 test("adaptToolsForBinding drops invalid names and deduplicates", () => {
   const adapted = adaptToolsForBinding([

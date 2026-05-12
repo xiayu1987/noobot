@@ -2,17 +2,28 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
+ *
+ * LLM adapter for invocation: Gemini non-streaming workaround with caching.
  */
-import { emitEvent } from "../event/index.js";
-import { createChatModel, createChatModelByName } from "./index.js";
+import { emitEvent } from "../../event/index.js";
+import { createChatModel, createChatModelByName } from "../factory/chat-model.js";
 
+/**
+ * Check if the active model is Gemini-like.
+ * @param {object} modelState
+ * @returns {boolean}
+ */
 function isGeminiLikeModel(modelState = {}) {
-  const modelAlias = String(modelState?.activeModelAlias || "").toLowerCase();
-  const modelName = String(modelState?.activeModelName || "").toLowerCase();
-  const token = `${modelAlias} ${modelName}`;
-  return token.includes("gemini");
+  const alias = String(modelState?.activeModelAlias || "").toLowerCase();
+  const name = String(modelState?.activeModelName || "").toLowerCase();
+  return `${alias} ${name}`.includes("gemini");
 }
 
+/**
+ * Get or create a cached non-streaming LLM instance.
+ * @param {object} modelState
+ * @returns {object}
+ */
 function getNonStreamingInvokeLlm(modelState = {}) {
   const preferredModel =
     String(modelState?.activeModelAlias || "").trim() ||
@@ -35,13 +46,17 @@ function getNonStreamingInvokeLlm(modelState = {}) {
         streaming: false,
       });
 
-  modelState.__invokeLlmNonStreamingCache = {
-    key: cacheKey,
-    llm,
-  };
+  modelState.__invokeLlmNonStreamingCache = { key: cacheKey, llm };
   return llm;
 }
 
+/**
+ * Resolve the LLM instance to use for invocation.
+ * For Gemini models, returns a non-streaming instance with a one-time event.
+ * @param {object} modelState
+ * @param {string} mode
+ * @returns {object}
+ */
 export function resolveInvokeLlm(modelState = {}, mode = "") {
   if (!isGeminiLikeModel(modelState)) return modelState.llm;
   const nonStreamingLlm = getNonStreamingInvokeLlm(modelState);
@@ -56,4 +71,3 @@ export function resolveInvokeLlm(modelState = {}, mode = "") {
   }
   return nonStreamingLlm;
 }
-
