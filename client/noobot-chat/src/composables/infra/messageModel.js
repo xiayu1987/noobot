@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildAttachmentUrl } from "../../services/api/chatApi";
+import { mergeAttachmentMetas } from "./dialogProcessChain";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -174,8 +175,11 @@ function foldConversationMessages(messages = [], buildView) {
     const currentAttachmentMetas = normalizeArray(currentMessage?.attachmentMetas);
     const previousAttachmentMetas = normalizeArray(previousMessage?.attachmentMetas);
 
-    if (currentAttachmentMetas.length && !previousAttachmentMetas.length) {
-      previousMessage.attachmentMetas = currentAttachmentMetas;
+    if (currentAttachmentMetas.length) {
+      previousMessage.attachmentMetas = mergeAttachmentMetas(
+        previousAttachmentMetas,
+        currentAttachmentMetas,
+      );
     }
     previousMessage.ts = currentMessage?.ts || previousMessage?.ts;
     if (String(currentMessage?.modelAlias || "").trim()) {
