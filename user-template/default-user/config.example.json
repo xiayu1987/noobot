@@ -110,6 +110,15 @@
       "enabled": true,
       "phase_summary_loop_turns": 20
     },
+    "request_help": {
+      "enabled": true,
+      "help_services": [
+        "web_search_service"
+      ],
+      "help_model": "",
+      "help_prompt_loop_turns": 50,
+      "tool_failure_help_count": 3
+    },
     "web_to_data": {
       "enabled": true,
       "switch_web_mode": "browser_simulate"
@@ -205,7 +214,8 @@
         "model": "qwen3_6_plus_2026_04_02",
         "tools": [
           "execute_script",
-          "task_summary"
+          "task_summary",
+          "request_help"
         ],
         "context": [
           "scenario",
