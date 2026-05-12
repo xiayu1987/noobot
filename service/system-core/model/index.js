@@ -78,6 +78,32 @@ function toFiniteNumber(value, fallback) {
   return parsed;
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeModelParamValue(fieldKey = "", value, fallback) {
+  const numericValue = toFiniteNumber(value, fallback);
+  if (!Number.isFinite(numericValue)) return fallback;
+  if (fieldKey === "temperature") {
+    return clampNumber(numericValue, 0, 2);
+  }
+  if (fieldKey === "top_p") {
+    // top_p must be in (0, 1], avoid provider 400 by forcing minimum > 0
+    return clampNumber(numericValue, 0.01, 1);
+  }
+  if (fieldKey === "frequency_penalty" || fieldKey === "presence_penalty") {
+    return clampNumber(numericValue, -2, 2);
+  }
+  if (fieldKey === "thinking_budget") {
+    const thinkingBudget = Math.floor(numericValue);
+    if (!Number.isFinite(thinkingBudget)) return fallback;
+    // DashScope constraint from runtime error: positive integer <= 131072
+    return clampNumber(thinkingBudget, 0, 131072);
+  }
+  return numericValue;
+}
+
 function hasOwnValue(spec = {}, key = "") {
   return Object.prototype.hasOwnProperty.call(spec || {}, key);
 }
@@ -87,10 +113,27 @@ function normalizeModelSpecWithDefaults(modelSpec = {}) {
   const defaultsByFormat = getModelDefaultFields(normalized);
   for (const [fieldKey, defaultValue] of Object.entries(defaultsByFormat)) {
     if (hasOwnValue(normalized, fieldKey)) {
-      normalized[fieldKey] = toFiniteNumber(normalized[fieldKey], defaultValue);
+      normalized[fieldKey] = normalizeModelParamValue(
+        fieldKey,
+        normalized[fieldKey],
+        defaultValue,
+      );
       continue;
     }
-    normalized[fieldKey] = defaultValue;
+    normalized[fieldKey] = normalizeModelParamValue(
+      fieldKey,
+      defaultValue,
+      defaultValue,
+    );
+  }
+
+  if (hasOwnValue(normalized, "max_tokens")) {
+    const maxTokens = Math.floor(Number(normalized.max_tokens));
+    if (Number.isFinite(maxTokens) && maxTokens > 0) {
+      normalized.max_tokens = maxTokens;
+    } else {
+      delete normalized.max_tokens;
+    }
   }
   return normalized;
 }
@@ -212,8 +255,12 @@ function buildModelKwargs(modelSpec = {}) {
   if (
     providerFormat === PROVIDER_FORMAT.DASHSCOPE &&
     normalizedSpec.thinking_budget !== undefined
-  )
-    out.thinking_budget = normalizedSpec.thinking_budget;
+  ) {
+    const thinkingBudget = Math.floor(Number(normalizedSpec.thinking_budget));
+    if (Number.isFinite(thinkingBudget) && thinkingBudget > 0) {
+      out.thinking_budget = thinkingBudget;
+    }
+  }
   return out;
 }
 
