@@ -390,5 +390,6 @@
   "super_admin": {
     "user_id": "admin",
     "connect_code": "change-your-connect-code"
-  }
+  },
+  "run_timeout_ms": 7200000
 }

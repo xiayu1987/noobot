@@ -28,10 +28,15 @@ export function createChatRunService({
     const locale = normalizeLocale(input?.locale || defaultLocale);
     const hasScenarioField = Object.prototype.hasOwnProperty.call(source, "scenario");
     const scenario = hasScenarioField ? String(source?.scenario || "").trim() : undefined;
+    const runTimeoutRaw = source?.runTimeoutMs ?? source?.run_timeout_ms;
+    const runTimeoutMs = Number(runTimeoutRaw);
     return {
       allowUserInteraction,
       locale,
       scenario,
+      ...(Number.isFinite(runTimeoutMs) && runTimeoutMs > 0
+        ? { runTimeoutMs: Math.floor(runTimeoutMs) }
+        : {}),
       selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
     };
   }

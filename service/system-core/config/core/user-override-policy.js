@@ -11,6 +11,7 @@ import { isPlainObject } from "../../utils/shared-utils.js";
 // - deep：对象深度合并（用户配置覆盖同名子键，未提供的子键保留全局默认）
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
+  runTimeoutMs: "replace_number",
   providers: "deep",
   attachments: "deep",
   services: "deep",
@@ -66,6 +67,12 @@ function cloneAllowedValue(key, value) {
   if (!mode) return undefined;
   if (mode === "replace") {
     return typeof value === "string" ? value : undefined;
+  }
+  if (mode === "replace_number") {
+    const normalizedNumber = Number(value);
+    return Number.isFinite(normalizedNumber) && normalizedNumber > 0
+      ? Math.floor(normalizedNumber)
+      : undefined;
   }
   return isPlainObject(value) ? stripDeniedPaths(key, { ...value }) : undefined;
 }
