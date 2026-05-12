@@ -29,6 +29,7 @@ export const SNAKE_TO_CANONICAL_KEY_MAP = {
   poll_interval_ms: "pollIntervalMs",
   max_sub_agent_depth: "maxSubAgentDepth",
   script_timeout_ms: "scriptTimeoutMs",
+  run_timeout_ms: "runTimeoutMs",
   max_output_chars: "maxOutputChars",
   phase_summary_loop_turns: "phaseSummaryLoopTurns",
   super_admin: "superAdmin",

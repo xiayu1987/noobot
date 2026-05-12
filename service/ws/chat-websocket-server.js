@@ -6,16 +6,49 @@
 import { randomBytes } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "../system-core/event/index.js";
+import { mergeConfig } from "../system-core/config/index.js";
 import { decryptPayloadBySessionId } from "../system-core/utils/session-crypto.js";
 
-const DEFAULT_RUN_TIMEOUT_MS = 180000;
+const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const MIN_RUN_TIMEOUT_MS = 10000;
-const MAX_RUN_TIMEOUT_MS = 30 * 60 * 1000;
+const MAX_RUN_TIMEOUT_MS = 12 * 60 * 60 * 1000;
 
 function resolveRunTimeoutMs(rawValue) {
   const parsed = Number(rawValue);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_RUN_TIMEOUT_MS;
   return Math.min(MAX_RUN_TIMEOUT_MS, Math.max(MIN_RUN_TIMEOUT_MS, Math.floor(parsed)));
+}
+
+function resolveConfigRunTimeoutMs(config = {}) {
+  return config?.runTimeoutMs ?? config?.run_timeout_ms;
+}
+
+async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} } = {}) {
+  const normalizedUserId = String(userId || "").trim();
+  const runConfigTimeoutMs = resolveConfigRunTimeoutMs(runConfig);
+  if (runConfigTimeoutMs !== undefined && runConfigTimeoutMs !== null) {
+    return resolveRunTimeoutMs(runConfigTimeoutMs);
+  }
+
+  const globalConfig =
+    bot?.globalConfig && typeof bot.globalConfig === "object" ? bot.globalConfig : {};
+  if (!normalizedUserId || typeof bot?.loadUserConfig !== "function") {
+    return resolveRunTimeoutMs(resolveConfigRunTimeoutMs(globalConfig));
+  }
+
+  let userConfig = {};
+  try {
+    const workspacePath =
+      typeof bot?.getWorkspacePath === "function" ? bot.getWorkspacePath(normalizedUserId) : "";
+    userConfig =
+      workspacePath && typeof workspacePath === "string"
+        ? (await bot.loadUserConfig(workspacePath)) || {}
+        : {};
+  } catch {
+    userConfig = {};
+  }
+  const effectiveConfig = mergeConfig(globalConfig, userConfig);
+  return resolveRunTimeoutMs(resolveConfigRunTimeoutMs(effectiveConfig));
 }
 
 function sendUpgradeError(socket, statusCode = 401, message = "Unauthorized") {
@@ -234,7 +267,19 @@ export function registerChatWebSocketServer(
           config = {},
         } = payload || {};
         currentLocale = normalizeLocale(config?.locale || currentLocale);
-        const runTimeoutMs = resolveRunTimeoutMs(config?.runTimeoutMs ?? config?.run_timeout_ms);
+
+        if (!userId || !sessionId || !message) {
+          throw new Error(translateText("common.userSessionMessageRequired", currentLocale));
+        }
+        if (isForbiddenUserScope(authInfo, userId)) {
+          throw new Error(translateText("auth.forbiddenUserScope", currentLocale));
+        }
+        const normalizedRunConfig = normalizeRunConfig(config);
+        const runTimeoutMs = await resolveEffectiveRunTimeoutMs({
+          bot,
+          userId,
+          runConfig: normalizedRunConfig,
+        });
         currentRunTimeoutTimer = setTimeout(() => {
           currentRunTimedOut = true;
           if (currentAbortController) {
@@ -245,13 +290,6 @@ export function registerChatWebSocketServer(
             });
           }
         }, runTimeoutMs);
-
-        if (!userId || !sessionId || !message) {
-          throw new Error(translateText("common.userSessionMessageRequired", currentLocale));
-        }
-        if (isForbiddenUserScope(authInfo, userId)) {
-          throw new Error(translateText("auth.forbiddenUserScope", currentLocale));
-        }
         currentRunMeta = {
           userId: String(userId || "").trim(),
           sessionId: String(sessionId || "").trim(),
@@ -318,7 +356,7 @@ export function registerChatWebSocketServer(
           eventListener,
           abortSignal,
           userInteractionBridge,
-          runConfig: normalizeRunConfig(config),
+          runConfig: normalizedRunConfig,
         });
 
         if (abortSignal?.aborted) {

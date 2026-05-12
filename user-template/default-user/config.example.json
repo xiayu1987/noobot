@@ -362,5 +362,6 @@
   },
   "preferences": {
     "language": "zh-CN"
-  }
+  },
+  "run_timeout_ms": 7200000
 }
