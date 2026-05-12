@@ -103,7 +103,8 @@ export function useMessageFiles({
     );
     let mergedAttachmentMetas = [...baseAttachmentMetas];
     for (const sessionMessage of candidateMessages) {
-      if (String(sessionMessage?.role || "").trim() !== "assistant") continue;
+      const messageRole = String(sessionMessage?.role || "").trim();
+      if (!["assistant", "tool"].includes(messageRole)) continue;
       const messageDialogProcessId = String(sessionMessage?.dialogProcessId || "").trim();
       const messageParentDialogProcessId = String(
         sessionMessage?.parentDialogProcessId || "",
@@ -131,4 +132,3 @@ export function useMessageFiles({
     displayedAttachmentMetas,
   };
 }
-

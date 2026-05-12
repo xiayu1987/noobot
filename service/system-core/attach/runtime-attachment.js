@@ -52,6 +52,36 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     mappedMetas,
   );
 
-  // 更新 turn
+  // 更新 turn（支持当前 turn store / 普通对象 / 数组）
+  const isTurnStore =
+    turn &&
+    typeof turn === "object" &&
+    typeof turn.updateLast === "function";
+  if (isTurnStore) {
+    let existingAttachmentMetas = [];
+    if (typeof turn.toArray === "function") {
+      const turnItems = turn.toArray();
+      const lastItem = Array.isArray(turnItems)
+        ? turnItems[turnItems.length - 1] || {}
+        : {};
+      existingAttachmentMetas = Array.isArray(lastItem?.attachmentMetas)
+        ? lastItem.attachmentMetas
+        : [];
+    }
+    turn.updateLast({
+      attachmentMetas: mergeAttachmentMetas(existingAttachmentMetas, mappedMetas),
+    });
+    return;
+  }
+  if (Array.isArray(turn)) {
+    if (!turn.length) return;
+    const lastIndex = turn.length - 1;
+    const lastItem = turn[lastIndex] || {};
+    turn[lastIndex] = {
+      ...lastItem,
+      attachmentMetas: mergeAttachmentMetas(lastItem?.attachmentMetas, mappedMetas),
+    };
+    return;
+  }
   turn.attachmentMetas = mergeAttachmentMetas(turn.attachmentMetas, mappedMetas);
 }
