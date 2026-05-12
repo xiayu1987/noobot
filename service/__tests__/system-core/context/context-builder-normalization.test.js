@@ -31,6 +31,43 @@ function createBuilderForNormalizationTest() {
   });
 }
 
+function createBuilderForAttachmentRuntimeTest({
+  attachmentMetas = [],
+  includeContextKeys = [],
+} = {}) {
+  return new ContextBuilder({
+    config: {
+      globalConfig: {
+        workspaceRoot: "/tmp/noobot-test-workspace",
+      },
+      userConfig: {},
+    },
+    serviceContainer: {
+      sessionManager: null,
+      memoryService: null,
+      attachmentService: {},
+      skillService: null,
+      eventListener: null,
+      botManager: null,
+      userInteractionBridge: null,
+    },
+    sessionContext: {
+      userId: "u1",
+      sessionId: "s1",
+      caller: "user",
+      parentSessionId: "",
+      attachmentMetas,
+      runConfig: {
+        contextPolicy: {
+          includeContextKeys,
+        },
+      },
+      abortSignal: null,
+      parentAsyncResultContainer: null,
+    },
+  });
+}
+
 test("_normalizeSessionRecordsForConversation filters summarized and orphan tool results", () => {
   const builder = createBuilderForNormalizationTest();
   const input = [
@@ -62,4 +99,28 @@ test("_normalizeSessionRecordsForConversation filters summarized and orphan tool
     ),
     false,
   );
+});
+
+test("buildInitialContext keeps runtime attachments even when attachments section is excluded", async () => {
+  const builder = createBuilderForAttachmentRuntimeTest({
+    attachmentMetas: [
+      {
+        attachmentId: "att_1",
+        sessionId: "s1",
+        name: "image.png",
+        mimeType: "image/png",
+        size: 123,
+        path: "/tmp/noobot-test-workspace/u1/runtime/attach/scoped/s1/user/att_1.png",
+      },
+    ],
+    includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
+  });
+
+  const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
+  const runtimeAttachmentMetas =
+    context?.execution?.controllers?.runtime?.attachmentMetas || [];
+
+  assert.equal(Array.isArray(runtimeAttachmentMetas), true);
+  assert.equal(runtimeAttachmentMetas.length, 1);
+  assert.equal(runtimeAttachmentMetas[0]?.attachmentId, "att_1");
 });

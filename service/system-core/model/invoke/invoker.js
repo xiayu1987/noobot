@@ -54,7 +54,10 @@ export async function invokeModelWithTextAndAttachments({
   const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
   const attachmentBlocks = normalizedAttachments
     .map((attachmentItem) =>
-      buildAttachmentContentBlock(attachmentItem, providerFormat),
+      buildAttachmentContentBlock({
+        attachment: attachmentItem,
+        providerFormat,
+      }),
     )
     .filter(Boolean);
   const messageContent = attachmentBlocks.length

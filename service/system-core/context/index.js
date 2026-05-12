@@ -378,16 +378,14 @@ export class ContextBuilder {
               userId: this.userId,
             })
           : [],
-        includeAttachments
-          ? resolveAttachments({
-              attachmentService: this.attachmentService,
-              runtimeBasePath,
-              effectiveConfig,
-              attachmentMetas: this.attachmentMetas,
-              userId: this.userId,
-              sessionId: this.sessionId,
-            })
-          : [],
+        resolveAttachments({
+          attachmentService: this.attachmentService,
+          runtimeBasePath,
+          effectiveConfig,
+          attachmentMetas: this.attachmentMetas,
+          userId: this.userId,
+          sessionId: this.sessionId,
+        }),
         includeSystemRuntime
           ? this._resolveWorkspaceDirectoriesCached(runtimeBasePath)
           : [],
@@ -452,7 +450,7 @@ export class ContextBuilder {
       skills,
       services,
       mcpServers,
-      attachmentMetas,
+      attachmentMetas: includeAttachments ? attachmentMetas : [],
       connectorStatusSection,
     });
     return {
