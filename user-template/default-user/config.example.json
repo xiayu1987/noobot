@@ -108,7 +108,7 @@
     },
     "task_summary": {
       "enabled": true,
-      "phase_summary_loop_turns": 20
+      "phase_summary_loop_turns": 15
     },
     "request_help": {
       "enabled": true,
@@ -205,8 +205,18 @@
       "full": {
         "name": "全能",
         "description": "通用情景：不限制工具和上下文，按任务需要自主选择能力。",
-        "tools": [],
-        "context": []
+        "tools": [
+          "*"
+        ],
+        "context": [
+          "*"
+        ],
+        "services": [
+          "*"
+        ],
+        "mcp_servers": [
+          "*"
+        ]
       },
       "programming": {
         "name": "编程",

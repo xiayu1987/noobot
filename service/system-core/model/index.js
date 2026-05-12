@@ -11,6 +11,10 @@ import { HumanMessage } from "@langchain/core/messages";
 import { fatalSystemError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
 import { normalizeProviderFormat } from "../config/core/enums.js";
+import {
+  buildAttachmentContentBlock,
+  normalizeModelOutputContent,
+} from "./attachment-formatter.js";
 
 function isProviderEnabled(provider = {}) {
   return provider?.enabled !== false;
@@ -249,7 +253,7 @@ export function createChatModelByName(modelName, options = {}) {
 }
 
 // Re-export attachment utilities for external consumers
-export { buildAttachmentContentBlock, normalizeModelOutputContent } from "./attachment-formatter.js";
+export { buildAttachmentContentBlock, normalizeModelOutputContent };
 
 export async function invokeModelWithTextAndAttachments({
   modelName = "",
