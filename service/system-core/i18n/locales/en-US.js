@@ -19,6 +19,10 @@ export default {
     `Tool call turns reached the limit (${Number(params.maxTurns || 0)}), auto-stopped.`,
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
     `Tool "${String(params.toolName || "").trim() || "unknown"}" failed ${Number(params.maxFails || 5)} times consecutively. Loop stopped automatically.`,
+  "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
+    `Tool calls have failed consecutively ${Number(params.failureCount || 0)} times. If needed, call ${String(params.helpToolName || "request_help")} with help content for assistance.`,
+  "agent.helpToolLoopPrompt": (params = {}) =>
+    `Tool loop has run ${Number(params.loopCount || 0)} turns. Consider calling ${String(params.helpToolName || "request_help")} for extra help.`,
   "agent.userMetaTag": "User Metadata",
   "attach.countExceedsLimit": "attachments count exceeds limit",
   "attach.extensionNotAllowed": "attachment extension not allowed",

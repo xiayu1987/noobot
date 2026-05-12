@@ -112,6 +112,11 @@ Based on latest examples:
 | `tools.multimodal_generate.enabled` | boolean | Enable multimodal generation tool |
 | `tools.task_summary.enabled` | boolean | Enable task summary tool |
 | `tools.task_summary.phase_summary_loop_turns` | number | Number of turns threshold to trigger phase summary |
+| `tools.request_help.enabled` | boolean | Enable request-help tool |
+| `tools.request_help.help_services` | string[]/object[] | Help service list (default includes `web_search_service`) |
+| `tools.request_help.help_model` | string | Help model alias/name (empty = current/default model logic) |
+| `tools.request_help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
+| `tools.request_help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
 | `tools.email_connect_connector.enabled` | boolean | Enable email connector tool |
 
 Notes:
@@ -136,7 +141,7 @@ Notes:
 
 Current defaults in repo:
 - `full` (default): tools/context are empty arrays, meaning no extra restriction
-- `programming`: model=`"qwen3_6_plus_2026_04_02"`, description="analyze code structure first...", tools=`["execute_script", "task_summary"]`, services=`["web_search_service"]`, context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
+- `programming`: model=`"qwen3_6_plus_2026_04_02"`, description="analyze code structure first...", tools=`["execute_script", "task_summary", "request_help"]`, services=`["web_search_service"]`, context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
 
 ### 3.6 Connector Presets
 

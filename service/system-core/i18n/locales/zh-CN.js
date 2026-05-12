@@ -19,6 +19,10 @@ export default {
     `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
     `工具「${String(params.toolName || "").trim() || "unknown"}」连续失败达到 ${Number(params.maxFails || 5)} 次，已自动停止循环。`,
+  "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>
+    `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若需要补充外部信息或排查方向，可调用 ${String(params.helpToolName || "request_help")} 工具并传入求助内容。`,
+  "agent.helpToolLoopPrompt": (params = {}) =>
+    `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "request_help")} 工具获取额外帮助。`,
   "agent.userMetaTag": "用户元信息",
   "attach.countExceedsLimit": "附件数量超出限制",
   "attach.extensionNotAllowed": "附件扩展名不允许",

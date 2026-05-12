@@ -359,6 +359,21 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.task_summary.summaryCompletedContinue": "小结完毕，请继续当前任务"
     }
   },
+  "request_help": {
+    "description": {
+      "key": "tools.request_help.description",
+      "text": "请求帮助工具。输入 helpContent。返回求助结果。"
+    },
+    "params": {
+      "helpContent": {
+        "key": "tools.request_help.fieldHelpContent",
+        "text": "请求帮助内容。"
+      }
+    },
+    "texts": {
+      "tools.request_help.helpContentRequired": "helpContent 必填"
+    }
+  },
   "execute_script": {
     "description": {
       "key": "tools.script.description",

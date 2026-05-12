@@ -359,6 +359,21 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.task_summary.summaryCompletedContinue": "Summary completed. Please continue the current task."
     }
   },
+  "request_help": {
+    "description": {
+      "key": "tools.request_help.description",
+      "text": "Request help tool. Input helpContent. It concurrently calls configured help services and help model, then returns assistance results."
+    },
+    "params": {
+      "helpContent": {
+        "key": "tools.request_help.fieldHelpContent",
+        "text": "Help request content."
+      }
+    },
+    "texts": {
+      "tools.request_help.helpContentRequired": "helpContent is required"
+    }
+  },
   "execute_script": {
     "description": {
       "key": "tools.script.description",
