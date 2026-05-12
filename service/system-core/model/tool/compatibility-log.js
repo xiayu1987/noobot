@@ -2,10 +2,17 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
+ *
+ * Tool compatibility logging: build log lines and append to file.
  */
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
+/**
+ * Resolve the workspace root from runtime or config.
+ * @param {object} params
+ * @returns {string}
+ */
 function resolveWorkspaceRoot({ runtime = {}, modelState = {} } = {}) {
   const runtimeBasePath = String(runtime?.basePath || "").trim();
   if (runtimeBasePath) {
@@ -19,6 +26,11 @@ function resolveWorkspaceRoot({ runtime = {}, modelState = {} } = {}) {
   return path.resolve(process.cwd(), "../workspace");
 }
 
+/**
+ * Build a JSON log line for tool compatibility events.
+ * @param {object} params
+ * @returns {string}
+ */
 export function buildToolCompatibilityLogLine({
   modelState = {},
   runtime = {},
@@ -34,11 +46,16 @@ export function buildToolCompatibilityLogLine({
     modelAlias: String(modelState?.activeModelAlias || "").trim(),
     modelName: String(modelState?.activeModelName || "").trim(),
     tools: Array.isArray(tools)
-      ? tools.map((toolName) => String(toolName || "").trim()).filter(Boolean)
+      ? tools.map((t) => String(t || "").trim()).filter(Boolean)
       : [],
   });
 }
 
+/**
+ * Append a tool compatibility log entry to the workspace log file.
+ * @param {object} params
+ * @returns {Promise<string>} The path of the log file.
+ */
 export async function appendToolCompatibilityLog({
   modelState = {},
   runtime = {},
@@ -48,13 +65,7 @@ export async function appendToolCompatibilityLog({
   const workspaceRoot = resolveWorkspaceRoot({ runtime, modelState });
   const targetPath = path.join(workspaceRoot, "tool-compatibility.log");
   await mkdir(path.dirname(targetPath), { recursive: true });
-  const line = buildToolCompatibilityLogLine({
-    modelState,
-    runtime,
-    event,
-    tools,
-  });
+  const line = buildToolCompatibilityLogLine({ modelState, runtime, event, tools });
   await appendFile(targetPath, `${line}\n`, "utf8");
   return targetPath;
 }
-

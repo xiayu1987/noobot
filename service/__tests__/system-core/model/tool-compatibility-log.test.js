@@ -7,7 +7,7 @@ import path from "node:path";
 import {
   appendToolCompatibilityLog,
   buildToolCompatibilityLogLine,
-} from "../../../system-core/model/tool-compatibility-log.js";
+} from "../../../system-core/model/tool/compatibility-log.js";
 
 test("buildToolCompatibilityLogLine includes model and tools", () => {
   const line = buildToolCompatibilityLogLine({

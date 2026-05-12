@@ -13,9 +13,11 @@ import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
 } from "../../context/current-turn-store.js";
-import { resolveInvokeLlm } from "../../model/invoke-llm-adapter.js";
-import { adaptToolsForBinding } from "../../model/tool-binding-model-adapter.js";
-import { appendToolCompatibilityLog } from "../../model/tool-compatibility-log.js";
+import {
+  resolveInvokeLlm,
+  adaptToolsForBinding,
+  appendToolCompatibilityLog,
+} from "../../model/index.js";
 import { emitEvent } from "../../event/index.js";
 import { tEngine } from "./i18n-adapter.js";
 import {

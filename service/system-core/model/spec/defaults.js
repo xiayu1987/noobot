@@ -2,8 +2,10 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
+ *
+ * Model default parameter profiles by provider format.
  */
-import { PROVIDER_FORMAT, normalizeProviderFormat } from "../config/core/enums.js";
+import { PROVIDER_FORMAT, normalizeProviderFormat } from "../../config/core/enums.js";
 
 export const MODEL_DEFAULT_FIELDS_BY_FORMAT = Object.freeze({
   [PROVIDER_FORMAT.OPENAI_COMPATIBLE]: Object.freeze({
@@ -86,32 +88,48 @@ export const MODEL_DEFAULT_FIELDS_BY_FORMAT = Object.freeze({
   }),
 });
 
+/**
+ * Rule-table for model profile resolution (replaces sequential includes).
+ * Order matters: more specific rules first.
+ */
+const PROFILE_RULES = [
+  { match: /gemini.*flash/, profile: "gemini_flash" },
+  { match: /gemini.*pro/, profile: "gemini_pro" },
+  { match: /gemini/, profile: "gemini" },
+  { match: /gpt-5|gpt5/, profile: "gpt_5" },
+  { match: /codex/, profile: "gpt_codex" },
+  { match: /gpt/, profile: "gpt" },
+  { match: /qianwen/, profile: "qwen" },
+  { match: /qwen.*coder/, profile: "qwen_coder" },
+  { match: /qwen.*omni/, profile: "qwen_omni" },
+  { match: /qwen.*flash/, profile: "qwen_flash" },
+  { match: /qwen/, profile: "qwen" },
+];
+
+/**
+ * Resolve model profiles from spec using rule-table matching.
+ * @param {object} modelSpec
+ * @returns {string[]}
+ */
 function resolveModelProfiles(modelSpec = {}) {
   const modelName = String(modelSpec?.model || "").trim().toLowerCase();
   const aliasName = String(modelSpec?.alias || "").trim().toLowerCase();
   const mergedName = `${aliasName} ${modelName}`;
+
   const profiles = [];
-  if (mergedName.includes("gemini")) {
-    profiles.push("gemini");
-    if (mergedName.includes("flash")) profiles.push("gemini_flash");
-    if (mergedName.includes("pro")) profiles.push("gemini_pro");
-  }
-  if (mergedName.includes("gpt")) {
-    profiles.push("gpt");
-    if (mergedName.includes("gpt-5") || mergedName.includes("gpt5")) {
-      profiles.push("gpt_5");
+  for (const { match, profile } of PROFILE_RULES) {
+    if (match.test(mergedName)) {
+      profiles.push(profile);
     }
-    if (mergedName.includes("codex")) profiles.push("gpt_codex");
-  }
-  if (mergedName.includes("qwen") || mergedName.includes("qianwen")) {
-    profiles.push("qwen");
-    if (mergedName.includes("coder")) profiles.push("qwen_coder");
-    if (mergedName.includes("omni")) profiles.push("qwen_omni");
-    if (mergedName.includes("flash")) profiles.push("qwen_flash");
   }
   return profiles;
 }
 
+/**
+ * Get merged default fields for a model spec based on format and profiles.
+ * @param {object} modelSpec
+ * @returns {object}
+ */
 export function getModelDefaultFields(modelSpec = {}) {
   const format = modelSpec?.format || "";
   const normalizedFormat = normalizeProviderFormat(format);
