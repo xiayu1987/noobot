@@ -11,7 +11,7 @@ import { tSystem } from "../../i18n/system-text.js";
 import { normalizeProviderFormat, PROVIDER_FORMAT } from "../../config/core/enums.js";
 import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 import { getModelDefaultFields } from "../spec/defaults.js";
-import { resolveModelSpecByName } from "../resolver/index.js";
+import { resolveDefaultModelSpec, resolveModelSpecByName } from "../resolver/index.js";
 
 /**
  * Resolve API key for a model spec from env or explicit config.
@@ -130,8 +130,24 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
  * @param {object} options
  * @returns {ChatOpenAI}
  */
-export function createChatModel(modelSpec, options = {}) {
-  return createChatModelFromSpec(modelSpec, options);
+export function createChatModel(specOrOptions = {}, maybeOptions = {}) {
+  const looksLikeOptions =
+    specOrOptions &&
+    typeof specOrOptions === "object" &&
+    (Object.prototype.hasOwnProperty.call(specOrOptions, "globalConfig") ||
+      Object.prototype.hasOwnProperty.call(specOrOptions, "userConfig") ||
+      Object.prototype.hasOwnProperty.call(specOrOptions, "streaming")) &&
+    !Object.prototype.hasOwnProperty.call(specOrOptions, "model");
+
+  if (looksLikeOptions) {
+    const options = specOrOptions || {};
+    const globalConfig = options?.globalConfig || {};
+    const userConfig = options?.userConfig || {};
+    const modelSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
+    return createChatModelFromSpec(modelSpec, options);
+  }
+
+  return createChatModelFromSpec(specOrOptions, maybeOptions);
 }
 
 /**
@@ -142,7 +158,28 @@ export function createChatModel(modelSpec, options = {}) {
  * @param {object} options
  * @returns {ChatOpenAI}
  */
-export function createChatModelByName(modelName, globalConfig, userConfig, options = {}) {
+export function createChatModelByName(modelName, arg2 = {}, arg3 = {}, arg4 = {}) {
+  let globalConfig = {};
+  let userConfig = {};
+  let options = {};
+
+  const secondArgLooksLikeOptions =
+    arg2 &&
+    typeof arg2 === "object" &&
+    (Object.prototype.hasOwnProperty.call(arg2, "globalConfig") ||
+      Object.prototype.hasOwnProperty.call(arg2, "userConfig") ||
+      Object.prototype.hasOwnProperty.call(arg2, "streaming"));
+
+  if (secondArgLooksLikeOptions) {
+    options = arg2 || {};
+    globalConfig = options?.globalConfig || {};
+    userConfig = options?.userConfig || {};
+  } else {
+    globalConfig = arg2 || {};
+    userConfig = arg3 || {};
+    options = arg4 || {};
+  }
+
   const spec = resolveModelSpecByName({ name: modelName, globalConfig, userConfig });
   if (!spec) {
     throw fatalSystemError(tSystem("model.notFoundByName"), {

@@ -211,7 +211,19 @@ async function _invokeWithTools({ modelState, loopState, turn }) {
   const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
   const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
-  const calls = ai.tool_calls || [];
+  const rawCalls = Array.isArray(ai?.tool_calls) ? ai.tool_calls : [];
+  const calls = rawCalls.map((call = {}) => ({
+    ...call,
+    id: String(
+      call?.id ??
+        call?.tool_call_id ??
+        call?.toolCallId ??
+        call?.call_id ??
+        "",
+    ).trim(),
+    name: String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim(),
+    args: call?.args && typeof call.args === "object" ? call.args : {},
+  }));
   const stateCommitter = createStateCommitter({ messages, traces, turnMessageStore, dialogProcessId, runtime });
 
   stateCommitter.pushAssistantMessage({

@@ -14,6 +14,18 @@ export function createStateCommitter({
   dialogProcessId = "",
   runtime = {},
 } = {}) {
+  const resolveCallId = (call = {}) =>
+    String(
+      call?.id ??
+        call?.tool_call_id ??
+        call?.toolCallId ??
+        call?.call_id ??
+        "",
+    ).trim();
+
+  const resolveCallName = (call = {}) =>
+    String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim();
+
   return {
     pushAssistantMessage({
       content = "",
@@ -53,9 +65,11 @@ export function createStateCommitter({
       });
     },
     pushToolResult({ call = {}, toolResultText = "" } = {}) {
+      const resolvedCallId = resolveCallId(call);
+      const resolvedCallName = resolveCallName(call);
       if (Array.isArray(traces)) {
         traces.push({
-          tool: call?.name,
+          tool: resolvedCallName,
           args: call?.args || {},
           result: String(toolResultText || "").slice(0, TOOL_RESULT_TRACE_TRUNCATE_LENGTH),
         });
@@ -63,7 +77,7 @@ export function createStateCommitter({
       if (Array.isArray(messages)) {
         messages.push(
           new ToolMessage({
-            tool_call_id: call?.id,
+            tool_call_id: resolvedCallId,
             content: String(toolResultText || ""),
           }),
         );
@@ -74,8 +88,8 @@ export function createStateCommitter({
           content: String(toolResultText || ""),
           type: "tool_result",
           dialogProcessId,
-          tool_call_id: call?.id || "",
-          toolName: String(call?.name || "").trim(),
+          tool_call_id: resolvedCallId,
+          toolName: resolvedCallName,
         });
       }
     },

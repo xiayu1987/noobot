@@ -20,7 +20,11 @@ import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
  */
 export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
   const alias = pickAlias({ globalConfig, userConfig, skillConfig: {} });
-  return byAliasWithUser(alias, globalConfig, userConfig);
+  const fromAlias = byAliasWithUser(alias, globalConfig, userConfig);
+  if (fromAlias) return fromAlias;
+  const fallbackAlias = firstEnabledAlias(globalConfig, userConfig);
+  if (!fallbackAlias) return null;
+  return byAliasWithUser(fallbackAlias, globalConfig, userConfig);
 }
 
 /**
@@ -32,8 +36,12 @@ export function resolveModelSpecByAlias({
   alias,
   globalConfig,
   userConfig,
+  fallbackToDefault = true,
 }) {
-  return byAliasWithUser(alias, globalConfig, userConfig);
+  const fromAlias = byAliasWithUser(alias, globalConfig, userConfig);
+  if (fromAlias) return fromAlias;
+  if (!fallbackToDefault) return null;
+  return resolveDefaultModelSpec({ globalConfig, userConfig });
 }
 
 /**
@@ -41,19 +49,39 @@ export function resolveModelSpecByAlias({
  * @param {object} params
  * @returns {object|null}
  */
-export function resolveModelSpecByName({ name, globalConfig, userConfig }) {
-  if (!name) return null;
+export function resolveModelSpecByName({
+  name,
+  modelName,
+  globalConfig,
+  userConfig,
+  fallbackToDefault = true,
+}) {
+  const targetName = String(modelName || name || "").trim();
+  if (!targetName) {
+    if (!fallbackToDefault) return null;
+    return resolveDefaultModelSpec({ globalConfig, userConfig });
+  }
+
+  const byAlias = resolveModelSpecByAlias({
+    alias: targetName,
+    globalConfig,
+    userConfig,
+    fallbackToDefault: false,
+  });
+  if (byAlias) return byAlias;
+
   const providers = getEnabledProviders(globalConfig, userConfig);
   for (const [alias, provider] of Object.entries(providers)) {
     const modelName = provider?.model || "";
     if (
-      modelName.toLowerCase() === name.toLowerCase() ||
-      alias.toLowerCase() === name.toLowerCase()
+      modelName.toLowerCase() === targetName.toLowerCase() ||
+      alias.toLowerCase() === targetName.toLowerCase()
     ) {
       return normalizeModelSpecWithDefaults({ alias, ...provider });
     }
   }
-  return null;
+  if (!fallbackToDefault) return null;
+  return resolveDefaultModelSpec({ globalConfig, userConfig });
 }
 
 /**

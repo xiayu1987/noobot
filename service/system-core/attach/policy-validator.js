@@ -5,7 +5,8 @@
  */
 
 import path from "node:path";
-import { safeStr } from "./utils.js";
+import { safeStr } from "../utils/shared-utils.js";
+import { MIME_TO_EXTENSION } from "./constants.js";
 
 /**
  * 解析并规范化附件策略
@@ -69,4 +70,28 @@ export function isExtensionAllowed(fileName = "", allowedExtensions = []) {
   const ext = safeStr(path.extname(safeStr(fileName))).toLowerCase();
   if (!ext) return false;
   return allowedExtensions.includes(ext);
+}
+
+// Backward-compatible aliases/helpers
+export function validateAttachmentPolicy(policy = {}) {
+  return resolveAttachmentPolicy(policy);
+}
+
+export function getMimeTypeFromExtension(fileNameOrExtension = "") {
+  const raw = safeStr(fileNameOrExtension).toLowerCase();
+  if (!raw) return "";
+  const ext = raw.startsWith(".")
+    ? raw
+    : safeStr(path.extname(raw)).toLowerCase();
+  const entries = Object.entries(MIME_TO_EXTENSION || {});
+  for (const [mimeType, extension] of entries) {
+    if (safeStr(extension).toLowerCase() === ext) {
+      return safeStr(mimeType);
+    }
+  }
+  return "";
+}
+
+export function isValidMimeType(mimeType = "") {
+  return Boolean(safeStr(mimeType).trim());
 }
