@@ -250,7 +250,7 @@
       "model": "gemini-3-flash",
       "format": "openai_compatible",
       "reasoning_effort": "low",
-      "temperature": 0.5,
+      "temperature": 0.7,
       "max_tokens": 10000,
       "description": "擅长通用对话、多模态推理",
       "multimodal_generation": {
@@ -259,7 +259,10 @@
           "enabled": false,
           "support_scope": []
         }
-      }
+      },
+      "top_p": 0.95,
+      "frequency_penalty": 0.1,
+      "presence_penalty": 0.1
     },
     "nano_banana": {
       "enabled": false,
@@ -289,10 +292,10 @@
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.6-plus-2026-04-02",
       "format": "dashscope",
-      "temperature": 0.5,
+      "temperature": 0.7,
       "max_tokens": 10000,
       "preserve_thinking": false,
-      "thinking_budget": 1,
+      "thinking_budget": 0,
       "description": "擅长通用对话、快速响应",
       "multimodal_generation": {
         "support_understanding": false,
@@ -300,7 +303,10 @@
           "enabled": false,
           "support_scope": []
         }
-      }
+      },
+      "top_p": 0.9,
+      "frequency_penalty": 0.3,
+      "presence_penalty": 0.2
     },
     "qwen3_5_omni_plus": {
       "enabled": false,
@@ -309,10 +315,10 @@
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.5-omni-plus",
       "format": "dashscope",
-      "temperature": 0.5,
+      "temperature": 0.7,
       "max_tokens": 10000,
       "preserve_thinking": false,
-      "thinking_budget": 1,
+      "thinking_budget": 0,
       "description": "多模态理解",
       "multimodal_generation": {
         "support_understanding": true,
@@ -320,7 +326,10 @@
           "enabled": false,
           "support_scope": []
         }
-      }
+      },
+      "top_p": 0.9,
+      "frequency_penalty": 0.3,
+      "presence_penalty": 0.2
     }
   },
   "services": {
