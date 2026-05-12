@@ -768,13 +768,17 @@ export function createAgentCollabTool({ agentContext }) {
         stopped: allTaskResults.filter(
           (item) => String(item?.status || "") === "stopped",
         ).length,
+        invalid_request: allTaskResults.filter(
+          (item) => String(item?.status || "") === "invalid_request",
+        ).length,
       };
       const attachmentMetas = containerResults.flatMap((item) =>
         Array.isArray(item?.attachmentMetas) ? item.attachmentMetas : [],
       );
-      const hasFailedTask = containerResults.some(
-        (item) => String(item?.status || "") === "failed",
-      );
+      const hasFailedTask = containerResults.some((item) => {
+        const status = String(item?.status || "").trim();
+        return status === "failed" || status === "invalid_request" || item?.ok === false;
+      });
       if (hasFailedTask) {
         return buildWaitAsyncTaskResultPayload({
           ok: false,
