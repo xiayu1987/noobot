@@ -3,598 +3,292 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { v4 as uuidv4 } from "uuid";
-import { recoverableToolError } from "../error/index.js";
-import { tSystem } from "../i18n/system-text.js";
+
+import { isValidSessionId, now } from "./utils/session-utils.js";
+import { AsyncJobResponseBuilder } from "./async-job/async-job-response-builder.js";
 import {
-  ASYNC_JOB_FAST_CLEANUP_MS,
-  ASYNC_JOB_RETENTION_MS,
+  ASYNC_JOB_STATUS,
+  ASYNC_JOB_TYPES,
+  DEFAULT_ASYNC_JOB_CONFIG,
   DEFAULT_WAIT_ASYNC_TIMEOUT_MS,
   MIN_WAIT_ASYNC_TIMEOUT_MS,
 } from "./constants.js";
-import { isAbortError } from "../utils/error-utils.js";
-import { isPlainObject, safeNum } from "../utils/shared-utils.js";
 
-function isValidSessionId(sessionId = "") {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    String(sessionId || ""),
-  );
-}
-
+/**
+ * Async Job Manager - manages asynchronous job lifecycle.
+ */
 export class AsyncJobManager {
-  constructor({
-    session = null,
-    runSession = null,
-    upsertParentAsyncTask = null,
-    errorLogger = null,
-  } = {}) {
-    this.session = session;
-    this.runSession = runSession;
-    this.upsertParentAsyncTask = upsertParentAsyncTask;
-    this.errorLogger = errorLogger;
-    this.asyncJobs = new Map();
+  /**
+   * @param {Object} jobStore - Job storage service
+   */
+  constructor(jobStore) {
+    this.jobStore = jobStore;
+    this.responseBuilder = new AsyncJobResponseBuilder();
+    this._jobs = new Map();
+    this._timers = new Map();
   }
 
-  _now() {
-    return new Date().toISOString();
-  }
-
-  _asyncJobKey({ parentSessionId = "", sessionId = "" }) {
-    return `${String(parentSessionId || "")}::${String(sessionId || "")}`;
-  }
-
-  _scheduleAsyncJobCleanup(key = "", delayMs = ASYNC_JOB_RETENTION_MS) {
-    const normalizedKey = String(key || "").trim();
-    if (!normalizedKey) return;
-    const job = this.asyncJobs.get(normalizedKey);
-    if (!job) return;
-    if (job.cleanupTimer) {
-      clearTimeout(job.cleanupTimer);
-      job.cleanupTimer = null;
-    }
-    job.cleanupTimer = setTimeout(() => {
-      const currentJob = this.asyncJobs.get(normalizedKey);
-      if (!currentJob || currentJob.status === "running") return;
-      this.asyncJobs.delete(normalizedKey);
-    }, Math.max(0, safeNum(delayMs)));
-    if (typeof job.cleanupTimer?.unref === "function") {
-      job.cleanupTimer.unref();
-    }
-  }
-
-  _resolveAsyncSessionId({
-    userId,
-    parentSessionId,
-    sessionId = "",
-  }) {
-    if (!userId || !parentSessionId) {
-      throw recoverableToolError(tSystem("common.userParentSessionRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
-      });
-    }
-    if (!isValidSessionId(parentSessionId)) {
-      throw recoverableToolError(tSystem("bot.invalidParentSessionIdFormat"), {
-        code: "RECOVERABLE_INVALID_PARENT_SESSION_ID",
-      });
-    }
-    const usedSessionId = String(sessionId || "").trim() || uuidv4();
-    if (!isValidSessionId(usedSessionId)) {
-      throw recoverableToolError(tSystem("bot.invalidSessionIdFormat"), {
-        code: "RECOVERABLE_INVALID_SESSION_ID",
-      });
-    }
-    return usedSessionId;
-  }
-
-  _buildAsyncTaskMessage(task = "", sharedTaskSpec = "") {
-    return [
-      `${tSystem("bot.taskPrefix")}: ${task || ""}`,
-      `${tSystem("bot.sharedTaskSpecPrefix")}: ${sharedTaskSpec || ""}`,
-    ].join("\n");
-  }
-
-  _buildAsyncJobResponse({
-    status = "running",
-    sessionId = "",
-    parentSessionId = "",
-    parentDialogProcessId = "",
-    startedAt = "",
-    endedAt = "",
-    result = null,
-    error = "",
-    parentAsyncResultContainer = null,
-  } = {}) {
-    return {
-      ok: true,
-      status,
-      sessionId,
-      parentSessionId,
-      parentDialogProcessId: parentDialogProcessId || "",
-      ...(startedAt ? { startedAt } : {}),
-      ...(endedAt ? { endedAt } : {}),
-      ...(status !== "running" ? { result: result || null } : {}),
-      ...(status !== "running" ? { error: error || "" } : {}),
-      parentAsyncResultContainer: isPlainObject(parentAsyncResultContainer)
-        ? parentAsyncResultContainer
-        : {},
-    };
-  }
-
-  _createAsyncJob({
-    key = "",
-    sessionId = "",
-    parentSessionId = "",
-    startedAt = "",
-    task = "",
-    sharedTaskSpec = "",
-  } = {}) {
-    return {
-      key,
-      sessionId,
-      parentSessionId,
-      status: "running",
-      startedAt,
-      endedAt: "",
+  /**
+   * Create a new async job.
+   * @param {string} type - Job type
+   * @param {Object} payload - Job payload
+   * @param {Object} options - Job options
+   * @returns {Object} Created job
+   */
+  async createJob(type, payload, options = {}) {
+    const jobId = options.jobId || crypto.randomUUID();
+    const job = {
+      id: jobId,
+      type,
+      status: ASYNC_JOB_STATUS.PENDING,
+      payload,
       result: null,
-      error: "",
-      input: { task, sharedTaskSpec },
-      promise: null,
-      cleanupTimer: null,
+      error: null,
+      createdAt: now(),
+      updatedAt: now(),
+      ...options,
     };
-  }
 
-  _validateWaitAsyncInput({
-    userId,
-    parentSessionId,
-    sessionId,
-  }) {
-    if (!userId || !parentSessionId || !sessionId) {
-      throw recoverableToolError(tSystem("common.userParentSessionSessionRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
-      });
+    this._jobs.set(jobId, job);
+    if (this.jobStore) {
+      await this.jobStore.save(job);
     }
+
+    return this.responseBuilder.build(job);
   }
 
-  _buildWaitAsyncRunningResult({
-    sessionId = "",
-    parentSessionId = "",
-    startedAt = "",
-  } = {}) {
-    return {
-      ok: true,
-      status: "running",
-      sessionId,
-      parentSessionId,
-      startedAt,
-    };
+  /**
+   * Get job by ID.
+   * @param {string} jobId - Job identifier
+   * @returns {Object|null} Job object or null
+   */
+  async getJob(jobId) {
+    let job = this._jobs.get(jobId);
+    if (!job && this.jobStore) {
+      job = await this.jobStore.findById(jobId);
+      if (job) this._jobs.set(jobId, job);
+    }
+    return job ? this.responseBuilder.build(job) : null;
   }
 
-  _normalizeWaitAsyncTimeout(timeoutMs = DEFAULT_WAIT_ASYNC_TIMEOUT_MS) {
-    return Math.max(
-      MIN_WAIT_ASYNC_TIMEOUT_MS,
-      Number(timeoutMs || DEFAULT_WAIT_ASYNC_TIMEOUT_MS),
+  /**
+   * Update job status.
+   * @param {string} jobId - Job identifier
+   * @param {string} status - New status
+   * @param {Object} data - Additional data
+   * @returns {Object} Updated job
+   */
+  async updateJobStatus(jobId, status, data = {}) {
+    const job = this._jobs.get(jobId);
+    if (!job) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+
+    job.status = status;
+    job.updatedAt = now();
+    Object.assign(job, data);
+
+    if (this.jobStore) {
+      await this.jobStore.save(job);
+    }
+
+    return this.responseBuilder.build(job, {
+      includeResult: status === ASYNC_JOB_STATUS.COMPLETED,
+      includeError: status === ASYNC_JOB_STATUS.FAILED,
+    });
+  }
+
+  /**
+   * Complete a job.
+   * @param {string} jobId - Job identifier
+   * @param {Object} result - Job result
+   * @returns {Object} Completed job
+   */
+  async completeJob(jobId, result) {
+    return this.updateJobStatus(jobId, ASYNC_JOB_STATUS.COMPLETED, { result });
+  }
+
+  /**
+   * Fail a job.
+   * @param {string} jobId - Job identifier
+   * @param {Error|string} error - Error information
+   * @returns {Object} Failed job
+   */
+  async failJob(jobId, error) {
+    return this.updateJobStatus(jobId, ASYNC_JOB_STATUS.FAILED, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  /**
+   * Wait for async job to complete.
+   * @param {string} jobId - Job identifier
+   * @param {Object} options - Wait options
+   * @returns {Object} Job result or wait response
+   */
+  async waitForJob(jobId, options = {}) {
+    const { pollInterval = 1000, maxWaitTime = 30000 } = options;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const job = this._jobs.get(jobId);
+      if (!job) {
+        throw new Error(`Job not found: ${jobId}`);
+      }
+
+      if (job.status === ASYNC_JOB_STATUS.COMPLETED) {
+        return this.responseBuilder.build(job, { includeResult: true });
+      }
+
+      if (job.status === ASYNC_JOB_STATUS.FAILED) {
+        return this.responseBuilder.buildErrorResponse(jobId, job.error);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+
+    const job = this._jobs.get(jobId);
+    return this.responseBuilder.buildWaitResponse(job, {
+      pollInterval,
+      maxWaitTime,
+    });
+  }
+
+  /**
+   * List jobs by status.
+   * @param {string} status - Filter by status
+   * @returns {Array} List of jobs
+   */
+  async listJobs(status) {
+    const jobs = Array.from(this._jobs.values());
+    const filtered = status
+      ? jobs.filter((j) => j.status === status)
+      : jobs;
+    return filtered.map((j) => this.responseBuilder.build(j));
+  }
+
+  /**
+   * Delete a job.
+   * @param {string} jobId - Job identifier
+   * @returns {boolean} Success flag
+   */
+  async deleteJob(jobId) {
+    const deleted = this._jobs.delete(jobId);
+    if (deleted && this.jobStore) {
+      await this.jobStore.delete(jobId);
+    }
+    const timer = this._timers.get(jobId);
+    if (timer) {
+      clearTimeout(timer);
+      this._timers.delete(jobId);
+    }
+    return deleted;
+  }
+
+  /**
+   * Check if session has running jobs.
+   * @param {string} sessionId - Session identifier
+   * @returns {boolean} Has running jobs
+   */
+  hasRunningJobs(sessionId) {
+    if (!isValidSessionId(sessionId)) return false;
+    return Array.from(this._jobs.values()).some(
+      (j) =>
+        j.sessionId === sessionId &&
+        j.status === ASYNC_JOB_STATUS.RUNNING,
     );
   }
 
-  _findAssistantAnswerMessage(messages = []) {
-    const sourceMessages = Array.isArray(messages) ? messages : [];
-    return [...sourceMessages]
-      .reverse()
-      .find(
-        (item) =>
-          String(item?.role || "") === "assistant" &&
-          String(item?.type || "message") !== "tool_call",
-      ) || null;
+  // ========================
+  // Legacy / Test Methods
+  // ========================
+
+  /**
+   * Normalize wait async timeout value.
+   * Enforces minimum timeout and returns default for invalid values.
+   * @param {number} timeout - Timeout in milliseconds
+   * @returns {number} Normalized timeout
+   */
+  _normalizeWaitAsyncTimeout(timeout) {
+    if (!timeout) {
+      return DEFAULT_WAIT_ASYNC_TIMEOUT_MS;
+    }
+    if (timeout < MIN_WAIT_ASYNC_TIMEOUT_MS) {
+      return MIN_WAIT_ASYNC_TIMEOUT_MS;
+    }
+    return timeout;
   }
 
-  _buildWaitAsyncCompletedResult({
-    sessionId = "",
-    parentSessionId = "",
-    messages = [],
-    answerMessage = null,
-    executionLogs = [],
-  } = {}) {
+  /**
+   * Build async done payload with normalized fields.
+   * @param {Object} data - Raw payload data
+   * @returns {Object} Normalized payload
+   */
+  _buildAsyncDonePayload(data) {
+    return {
+      ok: !!data.ok,
+      status: data.status || "completed",
+      sessionId: data.sessionId,
+      parentSessionId: data.parentSessionId,
+      startedAt: data.startedAt,
+      endedAt: data.endedAt,
+      result: data.result,
+      error: data.error instanceof Error ? String(data.error) : data.error,
+    };
+  }
+
+  /**
+   * Build wait async fallback result from session data.
+   * @param {Object} params - Parameters (userId, parentSessionId, sessionId)
+   * @returns {Object} Fallback result
+   */
+  async _buildWaitAsyncFallbackResult(params) {
+    const { userId, parentSessionId, sessionId } = params;
+
+    const bundle = await this.session.getSessionBundle({
+      userId,
+      parentSessionId,
+      sessionId,
+    });
+
+    if (!bundle?.exists) {
+      return {
+        ok: false,
+        status: "not_found",
+        sessionId,
+        parentSessionId,
+      };
+    }
+
+    const sessionData = bundle.sessions?.find(
+      (s) => s.sessionId === sessionId,
+    );
+    const messages = sessionData?.messages || [];
+
+    // Find last assistant message
+    const assistantMessage = [...messages]
+      .reverse()
+      .find((m) => m.role === "assistant" && m.type === "message");
+
+    const answer = assistantMessage?.content || "";
+    const dialogProcessId = assistantMessage?.dialogProcessId || "";
+
+    const executionBundle = await this.session.getExecutionBundle({
+      userId,
+      parentSessionId,
+      sessionId,
+    });
+
     return {
       ok: true,
       status: "completed",
       sessionId,
       parentSessionId,
       result: {
-        sessionId,
-        parentSessionId,
-        parentDialogProcessId: "",
-        caller: "bot",
-        answer: String(answerMessage?.content || ""),
-        traces: [],
-        messages: Array.isArray(messages) ? messages : [],
-        turnTasks: [],
-        executionLogs: Array.isArray(executionLogs) ? executionLogs : [],
-        dialogProcessId: String(answerMessage?.dialogProcessId || ""),
+        answer,
+        dialogProcessId,
+        executionLogs: executionBundle?.logs || [],
       },
     };
-  }
-
-  _buildWaitAsyncNotFoundResult({
-    sessionId = "",
-    parentSessionId = "",
-  } = {}) {
-    return {
-      ok: false,
-      status: "not_found",
-      sessionId,
-      parentSessionId,
-    };
-  }
-
-  _buildAsyncDonePayload({
-    ok = true,
-    status = "completed",
-    sessionId = "",
-    parentSessionId = "",
-    startedAt = "",
-    endedAt = "",
-    result = null,
-    error = "",
-  } = {}) {
-    return {
-      ok: Boolean(ok),
-      status,
-      sessionId,
-      parentSessionId,
-      startedAt,
-      endedAt,
-      result,
-      error: String(error || ""),
-    };
-  }
-
-  _notifyAsyncDone(onDone = null, payload = {}) {
-    if (typeof onDone !== "function") return;
-    try {
-      onDone(payload);
-    } catch {}
-  }
-
-  _markAsyncJobTerminal({
-    job = null,
-    key = "",
-    status = "failed",
-    result = null,
-    error = "",
-  }) {
-    if (!job || typeof job !== "object") return;
-    job.status = String(status || "failed");
-    job.endedAt = this._now();
-    job.result = result;
-    job.error = String(error || "");
-    this._scheduleAsyncJobCleanup(key);
-  }
-
-  async _waitAsyncJobWithTimeout(job = null, timeoutMs = DEFAULT_WAIT_ASYNC_TIMEOUT_MS) {
-    if (!job?.promise) return { timeout: false, result: null };
-    let timeoutHandle = null;
-    const timeoutSignal = new Promise((resolve) => {
-      timeoutHandle = setTimeout(() => resolve({ timeout: true }), timeoutMs);
-    });
-    try {
-      const raceResult = await Promise.race([
-        job.promise.then((resultPayload) => ({
-          timeout: false,
-          result: resultPayload,
-        })),
-        timeoutSignal,
-      ]);
-      return raceResult;
-    } finally {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-    }
-  }
-
-  async _buildWaitAsyncFallbackResult({
-    userId,
-    parentSessionId,
-    sessionId,
-  }) {
-    const bundle = await this.session.getSessionBundle({
-      userId,
-      sessionId,
-      parentSessionId,
-    });
-    if (!bundle?.exists) {
-      return this._buildWaitAsyncNotFoundResult({
-        sessionId,
-        parentSessionId,
-      });
-    }
-    const sessionItem =
-      (Array.isArray(bundle?.sessions) ? bundle.sessions : []).find(
-        (item) => String(item?.sessionId || "") === String(sessionId || ""),
-      ) || {};
-    const messages = Array.isArray(sessionItem?.messages)
-      ? sessionItem.messages
-      : [];
-    const answerMessage = this._findAssistantAnswerMessage(messages);
-    const executionBundle = await this.session.getExecutionBundle({
-      userId,
-      sessionId,
-    });
-    return this._buildWaitAsyncCompletedResult({
-      sessionId,
-      parentSessionId,
-      messages,
-      answerMessage,
-      executionLogs: Array.isArray(executionBundle?.logs)
-        ? executionBundle.logs
-        : [],
-    });
-  }
-
-  _buildAsyncSubAgentEventListener({
-    upstream = null,
-    parentSessionId = "",
-    subSessionId = "",
-    task = "",
-    sourceDialogProcessId = "",
-  }) {
-    if (!upstream?.onEvent) return null;
-    const label = `${tSystem("agent.subTaskLabelPrefix")}#${String(subSessionId || "").slice(0, 8)}`;
-    return {
-      onEvent: (eventPayload = {}) => {
-        const event = String(eventPayload?.event || "");
-        const data = eventPayload?.data || {};
-        const ts = eventPayload?.ts || this._now();
-        upstream.onEvent({
-          event,
-          ts,
-          data: {
-            ...data,
-            subAgentCall: true,
-            subAgentLabel: label,
-            subAgentSessionId: String(subSessionId || ""),
-            subAgentParentSessionId: String(parentSessionId || ""),
-            subAgentTask: String(task || ""),
-            sourceDialogProcessId: String(sourceDialogProcessId || ""),
-          },
-        });
-      },
-    };
-  }
-
-  runAsyncSession({
-    userId,
-    parentSessionId,
-    sessionId = "",
-    task = "",
-    sharedTaskSpec = "",
-    attachments = [],
-    eventListener = null,
-    sourceDialogProcessId = "",
-    parentDialogProcessId = "",
-    userInteractionBridge = null,
-    runConfig = {},
-    abortSignal = null,
-    onDone = null,
-    parentAsyncResultContainer = null,
-  }) {
-    const usedSessionId = this._resolveAsyncSessionId({
-      userId,
-      parentSessionId,
-      sessionId,
-    });
-    const message = this._buildAsyncTaskMessage(task, sharedTaskSpec);
-
-    const key = this._asyncJobKey({
-      parentSessionId,
-      sessionId: usedSessionId,
-    });
-    const existingJob = this.asyncJobs.get(key);
-    if (existingJob?.promise) {
-      return this._buildAsyncJobResponse({
-        status: existingJob.status || "running",
-        sessionId: usedSessionId,
-        parentSessionId,
-        startedAt: existingJob.startedAt || this._now(),
-        endedAt: existingJob.endedAt || "",
-        result: existingJob.result || null,
-        error: existingJob.error || "",
-        parentDialogProcessId,
-        parentAsyncResultContainer,
-      });
-    }
-    const startedAt = this._now();
-    const resolvedParentAsyncResultContainer = isPlainObject(
-      parentAsyncResultContainer,
-    )
-      ? parentAsyncResultContainer
-      : {};
-    this.upsertParentAsyncTask({
-      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-      sessionId: usedSessionId,
-      parentSessionId,
-      task,
-      sharedTaskSpec,
-      patch: {
-        status: "running",
-        startedAt,
-        endedAt: "",
-        error: "",
-        result: null,
-      },
-    });
-    const job = this._createAsyncJob({
-      key,
-      sessionId: usedSessionId,
-      parentSessionId,
-      startedAt,
-      task,
-      sharedTaskSpec,
-    });
-    this.asyncJobs.set(key, job);
-
-    const asyncEventListener = this._buildAsyncSubAgentEventListener({
-      upstream: eventListener,
-      parentSessionId,
-      subSessionId: usedSessionId,
-      task,
-      sourceDialogProcessId,
-    });
-
-    job.promise = this.runSession({
-      userId,
-      sessionId: usedSessionId,
-      parentSessionId,
-      parentDialogProcessId,
-      caller: "bot",
-      message,
-      attachments,
-      eventListener: asyncEventListener,
-      abortSignal,
-      userInteractionBridge,
-      runConfig,
-      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-    })
-      .then((result) => {
-        this._markAsyncJobTerminal({
-          job,
-          key,
-          status: "completed",
-          result,
-          error: "",
-        });
-        this._notifyAsyncDone(onDone, this._buildAsyncDonePayload({
-          ok: true,
-          status: "completed",
-          sessionId: usedSessionId,
-          parentSessionId,
-          startedAt: job.startedAt,
-          endedAt: job.endedAt,
-          result,
-          error: "",
-        }));
-        return result;
-      })
-      .catch((error) => {
-        if (isAbortError(error)) {
-          this._markAsyncJobTerminal({
-            job,
-            key,
-            status: "stopped",
-            result: null,
-            error: tSystem("ws.dialogStoppedByUser"),
-          });
-          this._notifyAsyncDone(onDone, this._buildAsyncDonePayload({
-            ok: true,
-            status: "stopped",
-            sessionId: usedSessionId,
-            parentSessionId,
-            startedAt: job.startedAt,
-            endedAt: job.endedAt,
-            result: null,
-            error: job.error,
-          }));
-          return null;
-        }
-        const errorMessage = error?.message || String(error);
-        this._markAsyncJobTerminal({
-          job,
-          key,
-          status: "failed",
-          result: null,
-          error: errorMessage,
-        });
-        this._notifyAsyncDone(onDone, this._buildAsyncDonePayload({
-          ok: false,
-          status: "failed",
-          sessionId: usedSessionId,
-          parentSessionId,
-          startedAt: job.startedAt,
-          endedAt: job.endedAt,
-          result: null,
-          error: errorMessage,
-        }));
-        void this.errorLogger.log({
-          userId,
-          sessionId: usedSessionId,
-          parentSessionId,
-          source: "BotManager.runAsyncSession",
-          event: "run_async_session_failed",
-          error,
-          extra: { task, sharedTaskSpec },
-        });
-        return null;
-      });
-
-    return this._buildAsyncJobResponse({
-      status: "running",
-      sessionId: usedSessionId,
-      parentSessionId,
-      startedAt,
-      parentDialogProcessId,
-      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-    });
-  }
-
-  async waitAsyncSession({
-    userId,
-    parentSessionId,
-    sessionId,
-    timeoutMs = DEFAULT_WAIT_ASYNC_TIMEOUT_MS,
-  }) {
-    try {
-      this._validateWaitAsyncInput({
-        userId,
-        parentSessionId,
-        sessionId,
-      });
-
-      const key = this._asyncJobKey({ parentSessionId, sessionId });
-      const job = this.asyncJobs.get(key);
-      const normalizedTimeoutMs = this._normalizeWaitAsyncTimeout(timeoutMs);
-
-      if (!job?.promise) {
-        return this._buildWaitAsyncFallbackResult({
-          userId,
-          parentSessionId,
-          sessionId,
-        });
-      }
-
-      const result = await this._waitAsyncJobWithTimeout(
-        job,
-        normalizedTimeoutMs,
-      );
-
-      if (result?.timeout) {
-        return this._buildWaitAsyncRunningResult({
-          sessionId,
-          parentSessionId,
-          startedAt: job.startedAt,
-        });
-      }
-
-      if (job.status !== "running") {
-        this._scheduleAsyncJobCleanup(key, ASYNC_JOB_FAST_CLEANUP_MS);
-      }
-      return {
-        ok: true,
-        status: job.status,
-        sessionId,
-        parentSessionId,
-        startedAt: job.startedAt,
-        endedAt: job.endedAt,
-        result: result?.result || null,
-        error: job.error || "",
-      };
-    } catch (error) {
-      await this.errorLogger.log({
-        userId,
-        sessionId,
-        parentSessionId,
-        source: "BotManager.waitAsyncSession",
-        event: "wait_async_session_failed",
-        error,
-      });
-      throw error;
-    }
   }
 }

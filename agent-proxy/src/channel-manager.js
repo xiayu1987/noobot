@@ -439,11 +439,9 @@ export class ChannelManager {
     }
 
     const nextPayloadFingerprint = buildFingerprint(payload);
-    const sameAsLastPayload = channel.startFingerprint === nextPayloadFingerprint;
     const keepExistingRun =
       channel.status === "running" || channel.status === "connecting";
-    const shouldStartNewRun =
-      !keepExistingRun && !(isTerminalStatus(channel.status) && sameAsLastPayload);
+    const shouldStartNewRun = !keepExistingRun;
 
     this.attachSubscriber(channel, socket);
     this.syncSocketToChannelTail(channel, socket);

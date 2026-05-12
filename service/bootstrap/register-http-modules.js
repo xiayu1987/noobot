@@ -43,7 +43,7 @@ export function registerHttpModules(
   } = {},
 ) {
   registerAuthRoutes(app, {
-    bot,
+    workspaceService: bot?.workspaceService,
     globalConfigProvider,
     issueApiKey,
     readWorkspaceUsers,
@@ -91,7 +91,7 @@ export function registerHttpModules(
   });
 
   registerWorkspaceRoutes(app, {
-    bot,
+    workspaceService: bot?.workspaceService,
     workspaceRootPath,
     requireApiKey,
     requireSuperAdmin,

@@ -3,62 +3,70 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  *
- * Unified console logger - replaces scattered console.* calls.
- * Provides structured logging with optional file output.
+ * Unified console logger powered by Pino.
  */
+import pino from "pino";
 
-const LOG_LEVELS = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
+const DEFAULT_LEVEL = String(
+  process.env.NOOBOT_LOG_LEVEL || process.env.NB_LOG_LEVEL || "error",
+)
+  .trim()
+  .toLowerCase();
 
-let _currentLevel = LOG_LEVELS.info;
+const pinoLogger = pino({
+  level: DEFAULT_LEVEL,
+  timestamp: pino.stdTimeFunctions.isoTime,
+  base: {
+    service: "noobot-service",
+  },
+});
 
 export function setLogLevel(level) {
-  _currentLevel = LOG_LEVELS[level] ?? LOG_LEVELS.info;
+  const normalized = String(level || "").trim().toLowerCase();
+  if (normalized) {
+    pinoLogger.level = normalized;
+  }
 }
 
-function formatMessage(level, message, ...args) {
-  const ts = new Date().toISOString();
-  const prefix = `[${level.toUpperCase()}][${ts}]`;
-  return [prefix, message, ...args];
+function writeLog(level, message, ...args) {
+  if (typeof message === "object" && message !== null) {
+    pinoLogger[level](message);
+    return;
+  }
+  if (!args.length) {
+    pinoLogger[level](String(message || ""));
+    return;
+  }
+  const firstArg = args[0];
+  if (args.length === 1 && firstArg && typeof firstArg === "object") {
+    pinoLogger[level](firstArg, String(message || ""));
+    return;
+  }
+  pinoLogger[level]({ args }, String(message || ""));
 }
 
 export function logDebug(message, ...args) {
-  if (_currentLevel <= LOG_LEVELS.debug) {
-    // eslint-disable-next-line no-console
-    console.debug(...formatMessage("debug", message, ...args));
-  }
+  writeLog("debug", message, ...args);
 }
 
 export function logInfo(message, ...args) {
-  if (_currentLevel <= LOG_LEVELS.info) {
-    // eslint-disable-next-line no-console
-    console.info(...formatMessage("info", message, ...args));
-  }
+  writeLog("info", message, ...args);
 }
 
 export function logWarn(message, ...args) {
-  if (_currentLevel <= LOG_LEVELS.warn) {
-    // eslint-disable-next-line no-console
-    console.warn(...formatMessage("warn", message, ...args));
-  }
+  writeLog("warn", message, ...args);
 }
 
 export function logError(message, ...args) {
-  if (_currentLevel <= LOG_LEVELS.error) {
-    // eslint-disable-next-line no-console
-    console.error(...formatMessage("error", message, ...args));
-  }
+  writeLog("error", message, ...args);
 }
 
-// Default export as a logger object
 export const logger = {
   debug: logDebug,
   info: logInfo,
   warn: logWarn,
   error: logError,
   setLogLevel,
+  raw: pinoLogger,
 };
+

@@ -8,6 +8,7 @@ import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "../system-core/event/index.js";
 import { mergeConfig } from "../system-core/config/index.js";
 import { decryptPayloadBySessionId } from "../system-core/utils/session-crypto.js";
+import { logError } from "../system-core/tracking/index.js";
 
 const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const MIN_RUN_TIMEOUT_MS = 10000;
@@ -44,7 +45,11 @@ async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} }
       workspacePath && typeof workspacePath === "string"
         ? (await bot.loadUserConfig(workspacePath)) || {}
         : {};
-  } catch {
+  } catch (error) {
+    logError("[ws][chat-websocket-server] load user config failed when resolving timeout", {
+      userId: normalizedUserId,
+      error: error?.message || String(error),
+    });
     userConfig = {};
   }
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
@@ -79,7 +84,11 @@ export function registerChatWebSocketServer(
     let requestPathname = "";
     try {
       requestPathname = new URL(request.url || "", "http://localhost").pathname;
-    } catch {
+    } catch (error) {
+      logError("[ws][chat-websocket-server] invalid websocket upgrade url", {
+        url: String(request?.url || ""),
+        error: error?.message || String(error),
+      });
       sendUpgradeError(socket, 400, translateText("ws.badRequest", requestLocale));
       return;
     }
@@ -124,8 +133,13 @@ export function registerChatWebSocketServer(
       };
       try {
         webSocket.send(JSON.stringify({ event: eventName, data: enrichedData }));
-      } catch {
-        // ignore socket send errors
+      } catch (error) {
+        logError("[ws][chat-websocket-server] websocket send event failed", {
+          eventName: String(eventName || ""),
+          dialogProcessId: enrichedData.dialogProcessId,
+          sessionId: enrichedData.sessionId,
+          error: error?.message || String(error),
+        });
       }
     };
 
@@ -133,8 +147,10 @@ export function registerChatWebSocketServer(
       for (const [, requestItem] of pendingInteractionRequests.entries()) {
         try {
           requestItem?.reject?.(error);
-        } catch {
-          // ignore reject failures
+        } catch (rejectError) {
+          logError("[ws][chat-websocket-server] reject pending interaction failed", {
+            error: rejectError?.message || String(rejectError),
+          });
         }
         clearTimeout(requestItem?.timer);
       }
@@ -234,8 +250,12 @@ export function registerChatWebSocketServer(
               parentDialogProcessId: currentRunMeta?.parentDialogProcessId || "",
               partialAssistant: payload?.partialAssistant || {},
             });
-          } catch {
-            // Best-effort persistence; stopping the active run still takes precedence.
+          } catch (error) {
+            logError("[ws][chat-websocket-server] persist stopped assistant message failed", {
+              userId: currentRunMeta?.userId || "",
+              sessionId: currentRunMeta?.sessionId || "",
+              error: error?.message || String(error),
+            });
           }
           sendEvent("stopped", {
             message: translateText("ws.dialogStoppedByUser", currentLocale),
@@ -390,6 +410,13 @@ export function registerChatWebSocketServer(
           }
           return;
         }
+        logError("[ws][chat-websocket-server] websocket run failed", {
+          userId: currentRunMeta?.userId || "",
+          sessionId: currentRunMeta?.sessionId || "",
+          parentSessionId: currentRunMeta?.parentSessionId || "",
+          dialogProcessId: currentRunMeta?.dialogProcessId || "",
+          error: error?.message || String(error),
+        });
         sendEvent("error", { error: error.message || translateText("ws.unknownError", currentLocale) });
         webSocket.close(1011, "error");
       } finally {

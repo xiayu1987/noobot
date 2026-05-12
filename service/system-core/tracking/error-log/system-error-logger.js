@@ -8,6 +8,7 @@
  */
 import { appendSystemErrorLog } from "./system-error-log.js";
 import path from "node:path";
+import { logError } from "../console/logger.js";
 
 export class SystemErrorLogger {
   constructor({ globalConfig = {}, workspaceService = null } = {}) {
@@ -42,9 +43,10 @@ export class SystemErrorLogger {
         stack: error?.stack || "",
         extra,
       });
-    } catch (logError) {
-      // eslint-disable-next-line no-console
-      console.error("[system_error][log_write_failed]", logError);
+    } catch (error) {
+      logError("[system_error][log_write_failed]", {
+        error: error?.message || String(error),
+      });
     }
   }
 }

@@ -77,7 +77,7 @@ function buildClientPermissions(role = "user") {
 export function registerAuthRoutes(
   app,
   {
-    bot,
+    workspaceService,
     globalConfigProvider,
     issueApiKey,
     readWorkspaceUsers,
@@ -108,7 +108,7 @@ export function registerAuthRoutes(
         userId === superAdminUserId &&
         connectCode === superAdminCode
       ) {
-        await bot.ensureUserWorkspace(userId);
+        await workspaceService.ensureUserWorkspace(userId);
         const superAdminScenarios = resolveMergedScenarios(globalConfig?.scenarios, {});
         const apiKey = issueApiKey({ userId, role: "super_admin" });
         res.json({
@@ -131,12 +131,12 @@ export function registerAuthRoutes(
       );
       if (!matchedUser) throw new Error(translateText("connect.codeVerifyFailed", req.locale));
 
-      await bot.ensureUserWorkspace(userId);
+      await workspaceService.ensureUserWorkspace(userId);
       let userScenarios = {};
       try {
         const userWorkspacePath =
-          typeof bot.getWorkspacePath === "function"
-            ? bot.getWorkspacePath(userId)
+          workspaceService && typeof workspaceService.getWorkspacePath === "function"
+            ? workspaceService.getWorkspacePath(userId)
             : "";
         const loadedUserConfig =
           userWorkspacePath && typeof bot.loadUserConfig === "function"
