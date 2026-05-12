@@ -10,11 +10,12 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import { fatalSystemError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
-import { normalizeProviderFormat } from "../config/core/enums.js";
+import { normalizeProviderFormat, PROVIDER_FORMAT } from "../config/core/enums.js";
 import {
   buildAttachmentContentBlock,
   normalizeModelOutputContent,
 } from "./attachment-formatter.js";
+import { getModelDefaultFields } from "./default-params.js";
 
 function isProviderEnabled(provider = {}) {
   return provider?.enabled !== false;
@@ -55,7 +56,7 @@ function pickAlias({ globalConfig, userConfig, skillConfig }) {
 function byAliasWithUser(alias, globalConfig = {}, userConfig = {}) {
   const providers = getEnabledProviders(globalConfig, userConfig);
   if (!alias || !providers[alias]) return null;
-  return { alias, ...providers[alias] };
+  return normalizeModelSpecWithDefaults({ alias, ...providers[alias] });
 }
 
 function firstEnabledAlias(globalConfig = {}, userConfig = {}) {
@@ -69,6 +70,29 @@ function normalizeModelSpecInput(input, fallback = {}) {
   if (typeof input === "string") return { ...fallback, model: input };
   if (typeof input === "object") return { ...fallback, ...input };
   return { ...fallback };
+}
+
+function toFiniteNumber(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return parsed;
+}
+
+function hasOwnValue(spec = {}, key = "") {
+  return Object.prototype.hasOwnProperty.call(spec || {}, key);
+}
+
+function normalizeModelSpecWithDefaults(modelSpec = {}) {
+  const normalized = { ...(modelSpec || {}) };
+  const defaultsByFormat = getModelDefaultFields(normalized);
+  for (const [fieldKey, defaultValue] of Object.entries(defaultsByFormat)) {
+    if (hasOwnValue(normalized, fieldKey)) {
+      normalized[fieldKey] = toFiniteNumber(normalized[fieldKey], defaultValue);
+      continue;
+    }
+    normalized[fieldKey] = defaultValue;
+  }
+  return normalized;
 }
 
 export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
@@ -121,7 +145,7 @@ export function resolveModelSpecByName({
   );
   if (byModel) {
     const [alias, spec] = byModel;
-    return { alias, ...spec };
+    return normalizeModelSpecWithDefaults({ alias, ...spec });
   }
   if (!fallbackToDefault) return null;
   return resolveDefaultModelSpec({ globalConfig, userConfig });
@@ -140,10 +164,12 @@ export function resolveSkillModelSpec({
   if (fromAlias) return fromAlias;
 
   const base = resolveDefaultModelSpec({ globalConfig, userConfig }) || {};
-  return normalizeModelSpecInput(skillConfig?.model, {
-    ...base,
-    format: skillConfig?.provider || base.format,
-  });
+  return normalizeModelSpecWithDefaults(
+    normalizeModelSpecInput(skillConfig?.model, {
+      ...base,
+      format: skillConfig?.provider || base.format,
+    }),
+  );
 }
 
 export function isSameModelSpec(leftModelSpec, rightModelSpec) {
@@ -167,13 +193,27 @@ function resolveApiKey(modelSpec = {}) {
 }
 
 function buildModelKwargs(modelSpec = {}) {
-  const out = { ...(modelSpec.extra_body || {}) };
-  if (modelSpec.reasoning_effort !== undefined)
-    out.reasoning_effort = modelSpec.reasoning_effort;
-  if (modelSpec.preserve_thinking !== undefined)
-    out.preserve_thinking = modelSpec.preserve_thinking;
-  if (modelSpec.thinking_budget !== undefined)
-    out.thinking_budget = modelSpec.thinking_budget;
+  const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
+  const out = { ...(normalizedSpec.extra_body || {}) };
+  const providerFormat = normalizeProviderFormat(normalizedSpec?.format || "");
+  if (normalizedSpec.reasoning_effort !== undefined)
+    out.reasoning_effort = normalizedSpec.reasoning_effort;
+  if (
+    providerFormat === PROVIDER_FORMAT.DASHSCOPE &&
+    normalizedSpec.preserve_thinking !== undefined
+  ) {
+    out.preserve_thinking = normalizedSpec.preserve_thinking;
+  }
+  if (normalizedSpec.top_p !== undefined) out.top_p = normalizedSpec.top_p;
+  if (normalizedSpec.frequency_penalty !== undefined)
+    out.frequency_penalty = normalizedSpec.frequency_penalty;
+  if (normalizedSpec.presence_penalty !== undefined)
+    out.presence_penalty = normalizedSpec.presence_penalty;
+  if (
+    providerFormat === PROVIDER_FORMAT.DASHSCOPE &&
+    normalizedSpec.thinking_budget !== undefined
+  )
+    out.thinking_budget = normalizedSpec.thinking_budget;
   return out;
 }
 
@@ -191,33 +231,35 @@ function resolveUseResponsesApi(modelSpec = {}) {
 }
 
 function createChatModelFromSpec(modelSpec, options = {}) {
-  if (!modelSpec?.model) {
+  const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
+  if (!normalizedSpec?.model) {
     throw fatalSystemError(tSystem("model.nameRequired"), {
       code: "FATAL_MODEL_NAME_REQUIRED",
     });
   }
-  const apiKey = resolveApiKey(modelSpec);
+  const apiKey = resolveApiKey(normalizedSpec);
   if (!apiKey)
     throw fatalSystemError(
-      `${tSystem("model.apiKeyMissingForProviderAlias")}: ${modelSpec.alias || "unknown"}`,
+      `${tSystem("model.apiKeyMissingForProviderAlias")}: ${normalizedSpec.alias || "unknown"}`,
       {
         code: "FATAL_PROVIDER_API_KEY_MISSING",
-        details: { alias: modelSpec.alias || "unknown" },
+        details: { alias: normalizedSpec.alias || "unknown" },
       },
     );
 
-  const modelKwargs = buildModelKwargs(modelSpec);
+  const modelKwargs = buildModelKwargs(normalizedSpec);
+  const defaultsByFormat = getModelDefaultFields(normalizedSpec);
   const chat = new ChatOpenAI({
-    model: modelSpec.model,
-    temperature: Number(modelSpec.temperature ?? 0),
+    model: normalizedSpec.model,
+    temperature: Number(normalizedSpec.temperature ?? defaultsByFormat.temperature ?? 0.7),
     streaming: Boolean(options?.streaming),
     maxTokens:
-      modelSpec.max_tokens !== undefined ? Number(modelSpec.max_tokens) : undefined,
+      normalizedSpec.max_tokens !== undefined ? Number(normalizedSpec.max_tokens) : undefined,
     apiKey,
-    ...(modelSpec.base_url
-      ? { configuration: { baseURL: modelSpec.base_url } }
+    ...(normalizedSpec.base_url
+      ? { configuration: { baseURL: normalizedSpec.base_url } }
       : {}),
-    useResponsesApi: resolveUseResponsesApi(modelSpec),
+    useResponsesApi: resolveUseResponsesApi(normalizedSpec),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });
 
@@ -296,6 +338,6 @@ export async function invokeModelWithTextAndAttachments({
   return {
     response: modelResponse,
     text: normalizeModelOutputContent(modelResponse?.content),
-    modelSpec: resolvedModelSpec,
+    modelSpec: normalizeModelSpecWithDefaults(resolvedModelSpec),
   };
 }
