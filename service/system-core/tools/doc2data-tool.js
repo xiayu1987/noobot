@@ -305,9 +305,9 @@ export function createDoc2DataTool({ agentContext }) {
             range,
           })}`,
           attachments: batch.map((imageItem) => ({
-            mediaType: "image",
+            type: resolveMimeTypeByPath(imageItem.imagePath, "image"),
             mimeType: resolveMimeTypeByPath(imageItem.imagePath, "image"),
-            dataUrl: imageItem.dataUrl,
+            data: imageItem.dataUrl,
           })),
           globalConfig,
           userConfig,

@@ -14,7 +14,7 @@
 export function buildAttachmentContentBlock({
   attachment,
   providerFormat = "openai",
-}) {
+} = {}) {
   const { type, mimeType, data } = attachment || {};
   if (!type || !data) return null;
 

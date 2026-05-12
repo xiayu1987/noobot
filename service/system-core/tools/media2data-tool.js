@@ -308,25 +308,26 @@ export function createMedia2DataTool({ agentContext }) {
         const contentBase64 = (
           await readFile(preparedAudioFile.filePath)
         ).toString("base64");
+        const audioMimeType =
+          preparedAudioFile.format === "wav" ? "audio/wav" : "audio/mpeg";
         attachmentPayload = {
-          mediaType: "audio",
-          mimeType:
-            preparedAudioFile.format === "wav" ? "audio/wav" : "audio/mpeg",
-          audioFormat: preparedAudioFile.format,
-          dataBase64: contentBase64,
+          type: audioMimeType,
+          mimeType: audioMimeType,
+          data: contentBase64,
         };
       } else if (mediaType === "video") {
         const preparedVideoFile = await ensureVideoFileForModel(inputFile, outputDirectory);
         attachmentPayload = {
-          mediaType: "video",
+          type: preparedVideoFile.mimeType,
           mimeType: preparedVideoFile.mimeType,
-          dataUrl: await toDataUrl(preparedVideoFile.filePath, "video"),
+          data: await toDataUrl(preparedVideoFile.filePath, "video"),
         };
       } else {
+        const imageMimeType = resolveMimeTypeByPath(inputFile, "image");
         attachmentPayload = {
-          mediaType: "image",
-          mimeType: resolveMimeTypeByPath(inputFile, "image"),
-          dataUrl: await toDataUrl(inputFile, "image"),
+          type: imageMimeType,
+          mimeType: imageMimeType,
+          data: await toDataUrl(inputFile, "image"),
         };
       }
 
