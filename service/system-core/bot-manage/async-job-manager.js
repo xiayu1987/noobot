@@ -21,11 +21,31 @@ export class AsyncJobManager {
   /**
    * @param {Object} jobStore - Job storage service
    */
-  constructor(jobStore) {
-    this.jobStore = jobStore;
+  constructor(jobStore = null) {
+    const input = jobStore && typeof jobStore === "object" ? jobStore : {};
+    const looksLikeLegacyDeps =
+      typeof input?.runSession === "function" ||
+      typeof input?.upsertParentAsyncTask === "function" ||
+      input?.session;
+    const looksLikeJobStore =
+      typeof input?.save === "function" ||
+      typeof input?.findById === "function" ||
+      typeof input?.delete === "function";
+
+    this.jobStore = looksLikeJobStore && !looksLikeLegacyDeps ? input : null;
+    this.session = input?.session || null;
+    this.runSession =
+      typeof input?.runSession === "function" ? input.runSession : null;
+    this.upsertParentAsyncTask =
+      typeof input?.upsertParentAsyncTask === "function"
+        ? input.upsertParentAsyncTask
+        : null;
+    this.errorLogger = input?.errorLogger || null;
     this.responseBuilder = new AsyncJobResponseBuilder();
     this._jobs = new Map();
     this._timers = new Map();
+    // Backward compatibility field
+    this.asyncJobs = this._jobs;
   }
 
   /**
@@ -289,6 +309,239 @@ export class AsyncJobManager {
         dialogProcessId,
         executionLogs: executionBundle?.logs || [],
       },
+    };
+  }
+
+  _asyncJobKey({ parentSessionId = "", sessionId = "" } = {}) {
+    return `${String(parentSessionId || "").trim()}::${String(sessionId || "").trim()}`;
+  }
+
+  // ========================
+  // Legacy Public API
+  // ========================
+
+  runAsyncSession(payload = {}) {
+    if (typeof this.runSession !== "function") {
+      throw new TypeError("this.asyncJobManager.runAsyncSession is not a function");
+    }
+    const {
+      userId,
+      sessionId = "",
+      parentSessionId = "",
+      task = "",
+      sharedTaskSpec = "",
+      deliverable = "",
+      attachments = [],
+      eventListener = null,
+      sourceDialogProcessId = "",
+      parentDialogProcessId = "",
+      userInteractionBridge = null,
+      runConfig = {},
+      abortSignal = null,
+      parentAsyncResultContainer = null,
+    } = payload || {};
+
+    const normalizedUserId = String(userId || "").trim();
+    const normalizedParentSessionId = String(parentSessionId || "").trim();
+    if (!normalizedUserId || !normalizedParentSessionId) {
+      throw new Error("userId/parentSessionId required");
+    }
+    if (!isValidSessionId(normalizedParentSessionId)) {
+      throw new Error("invalid parentSessionId format");
+    }
+
+    const normalizedSessionId = String(sessionId || "").trim() || crypto.randomUUID();
+    if (!isValidSessionId(normalizedSessionId)) {
+      throw new Error("invalid sessionId format");
+    }
+
+    const message = [
+      `任务: ${String(task || "")}`,
+      `共享任务说明: ${String(sharedTaskSpec || "")}`,
+      `规定最终交付物（文件及说明）: ${String(deliverable || "")}`,
+    ].join("\n");
+
+    const key = this._asyncJobKey({
+      parentSessionId: normalizedParentSessionId,
+      sessionId: normalizedSessionId,
+    });
+    const startedAt = now();
+    const baseJob = {
+      key,
+      sessionId: normalizedSessionId,
+      parentSessionId: normalizedParentSessionId,
+      status: "running",
+      startedAt,
+      endedAt: "",
+      result: null,
+      error: "",
+      task: String(task || ""),
+      sharedTaskSpec: String(sharedTaskSpec || ""),
+      parentSessionId: String(parentSessionId || ""),
+      parentDialogProcessId: String(parentDialogProcessId || ""),
+      sourceDialogProcessId: String(sourceDialogProcessId || ""),
+      parentAsyncResultContainer,
+    };
+    this._jobs.set(key, baseJob);
+
+    if (typeof this.upsertParentAsyncTask === "function") {
+      this.upsertParentAsyncTask({
+        parentAsyncResultContainer,
+        sessionId: normalizedSessionId,
+        parentSessionId: normalizedParentSessionId,
+        task,
+        sharedTaskSpec,
+        patch: {
+          status: "running",
+          startedAt,
+          endedAt: "",
+          error: "",
+          result: null,
+        },
+      });
+    }
+
+    const runPromise = this.runSession({
+      userId: normalizedUserId,
+      sessionId: normalizedSessionId,
+      message,
+      caller: "bot",
+      parentSessionId: normalizedParentSessionId,
+      parentDialogProcessId,
+      attachments: Array.isArray(attachments) ? attachments : [],
+      eventListener,
+      userInteractionBridge,
+      runConfig,
+      abortSignal,
+      parentAsyncResultContainer,
+    });
+
+    baseJob.promise = Promise.resolve(runPromise)
+      .then((result) => {
+        const current = this._jobs.get(key) || {};
+        const endedAt = now();
+        this._jobs.set(key, {
+          ...current,
+          status: "completed",
+          endedAt,
+          result,
+          error: "",
+        });
+        return result;
+      })
+      .catch(async (error) => {
+        const current = this._jobs.get(key) || {};
+        const endedAt = now();
+        const message = error?.message || String(error);
+        const status = /abort|stopped/i.test(message) ? "stopped" : "failed";
+        this._jobs.set(key, {
+          ...current,
+          status,
+          endedAt,
+          result: null,
+          error: message,
+        });
+        if (this.errorLogger?.log) {
+          await this.errorLogger.log({
+            userId: normalizedUserId,
+            sessionId: normalizedSessionId,
+            parentSessionId: normalizedParentSessionId,
+            source: "AsyncJobManager.runAsyncSession",
+            event: "run_async_session_failed",
+            error,
+          });
+        }
+        throw error;
+      });
+
+    return {
+      ok: true,
+      status: "running",
+      sessionId: normalizedSessionId,
+      parentSessionId: normalizedParentSessionId,
+      startedAt,
+      endedAt: "",
+      result: null,
+      error: "",
+      parentAsyncResultContainer,
+    };
+  }
+
+  async waitAsyncSession(payload = {}) {
+    const {
+      userId = "",
+      sessionId = "",
+      parentSessionId = "",
+      timeoutMs = DEFAULT_WAIT_ASYNC_TIMEOUT_MS,
+    } = payload || {};
+
+    const normalizedUserId = String(userId || "").trim();
+    const normalizedParentSessionId = String(parentSessionId || "").trim();
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedUserId || !normalizedParentSessionId || !normalizedSessionId) {
+      throw new Error("userId/parentSessionId/sessionId required");
+    }
+
+    const waitTimeoutMs = this._normalizeWaitAsyncTimeout(Number(timeoutMs));
+    const startedAtMs = Date.now();
+    const key = this._asyncJobKey({
+      parentSessionId: normalizedParentSessionId,
+      sessionId: normalizedSessionId,
+    });
+
+    const resolveDone = (job = {}) =>
+      this._buildAsyncDonePayload({
+        ok: job?.status === "completed",
+        status: job?.status || "running",
+        sessionId: normalizedSessionId,
+        parentSessionId: normalizedParentSessionId,
+        startedAt: job?.startedAt || "",
+        endedAt: job?.endedAt || "",
+        result: job?.result ?? null,
+        error: job?.error || "",
+      });
+
+    const job = this._jobs.get(key);
+    if (!job?.promise) {
+      const bundle = await this.session?.getSessionBundle?.({
+        userId: normalizedUserId,
+        sessionId: normalizedSessionId,
+        parentSessionId: normalizedParentSessionId,
+      });
+      return {
+        ok: !!bundle?.exists,
+        status: bundle?.exists ? "completed" : "not_found",
+        sessionId: normalizedSessionId,
+        parentSessionId: normalizedParentSessionId,
+      };
+    }
+
+    while (Date.now() - startedAtMs < waitTimeoutMs) {
+      const job = this._jobs.get(key);
+      if (!job) break;
+      if (["completed", "failed", "stopped"].includes(String(job?.status || ""))) {
+        return resolveDone(job);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+
+    const latest = this._jobs.get(key);
+    if (!latest) {
+      return this._buildWaitAsyncFallbackResult({
+        userId: normalizedUserId,
+        parentSessionId: normalizedParentSessionId,
+        sessionId: normalizedSessionId,
+      });
+    }
+    if (["completed", "failed", "stopped"].includes(String(latest?.status || ""))) {
+      return resolveDone(latest);
+    }
+    return {
+      ok: true,
+      status: "running",
+      sessionId: normalizedSessionId,
+      parentSessionId: normalizedParentSessionId,
+      startedAt: latest?.startedAt || "",
     };
   }
 }
