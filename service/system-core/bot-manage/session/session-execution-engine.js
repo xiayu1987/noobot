@@ -14,7 +14,8 @@ import { mergeConfig } from "../../config/index.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { isPlainObject } from "../../utils/shared-utils.js";
 
-const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = 15000;
+const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = 300000;
+const DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS = 5000;
 
 function isAbortLikeError(error = {}) {
   const name = String(error?.name || "").toLowerCase();
@@ -267,6 +268,19 @@ export class SessionExecutionEngine {
     );
     if (!Number.isFinite(configured) || configured <= 0) {
       return DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS;
+    }
+    return Math.floor(configured);
+  }
+
+  _resolveExecutionBundleTimeoutMs(userConfig = {}) {
+    const effectiveConfig = mergeConfig(this.globalConfig || {}, userConfig || {});
+    const configured = Number(
+      effectiveConfig?.session?.execution_bundle_timeout_ms ??
+        effectiveConfig?.session?.executionBundleTimeoutMs ??
+        DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS,
+    );
+    if (!Number.isFinite(configured) || configured <= 0) {
+      return DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS;
     }
     return Math.floor(configured);
   }
@@ -812,11 +826,35 @@ export class SessionExecutionEngine {
       sessionId,
     });
 
-    const execution = await this.session.getExecutionBundle({
-      userId,
-      sessionId,
-    });
-    const executionLogs = (execution?.logs || []).slice(executionStartIndex);
+    const executionBundleTimeoutMs = this._resolveExecutionBundleTimeoutMs(userConfig);
+    let executionLogs = [];
+    try {
+      const execution = await Promise.race([
+        this.session.getExecutionBundle({
+          userId,
+          sessionId,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `execution bundle timeout after ${executionBundleTimeoutMs}ms`,
+                ),
+              ),
+            executionBundleTimeoutMs,
+          ),
+        ),
+      ]);
+      executionLogs = (execution?.logs || []).slice(executionStartIndex);
+    } catch (error) {
+      emitEvent(runtimeEventListener, "execution_bundle_unavailable", {
+        sessionId,
+        timeoutMs: executionBundleTimeoutMs,
+        error: error?.message || String(error),
+      });
+      executionLogs = [];
+    }
     this._upsertParentAsyncTask({
       parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       sessionId,

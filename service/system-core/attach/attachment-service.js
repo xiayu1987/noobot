@@ -17,7 +17,7 @@ import {
   MIME_TO_EXTENSION,
   MAX_EXTENSION_LENGTH,
 } from "./constants.js";
-import { safeStr, safeNum } from "./utils.js";
+import { safeStr, safeNum } from "../utils/shared-utils.js";
 import { readAttachIndex, writeAttachIndex } from "./index-manager.js";
 import {
   resolveAttachmentPolicy,

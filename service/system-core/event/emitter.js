@@ -10,6 +10,6 @@ export function emitEvent(eventListener, event, data = {}) {
   try {
     eventListener?.onEvent?.({ event, data, ts: new Date().toISOString() });
   } catch {
-    // ignore listener errors
+    // Listener errors should not interrupt the main execution flow.
   }
 }

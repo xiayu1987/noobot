@@ -168,10 +168,45 @@ export function markCurrentTurnModelMessagesSummarized(
 
 export function filterSummarizedMessages(messages = []) {
   if (!Array.isArray(messages)) return [];
-  return messages.filter((messageItem) => {
+  const baseFiltered = messages.filter((messageItem) => {
     if (!messageItem || typeof messageItem !== "object") return true;
     if (messageItem?.summarized === true) return false;
     if (messageItem?.lc_kwargs?.summarized === true) return false;
     return true;
+  });
+
+  const remainingToolResultIds = new Set();
+  for (const messageItem of baseFiltered) {
+    const modelType = getModelMessageType(messageItem);
+    const role = getMessageRole(messageItem);
+    const isToolMessage = modelType === "tool" || role === "tool";
+    if (!isToolMessage) continue;
+    const toolCallId = String(
+      messageItem?.tool_call_id ??
+        messageItem?.toolCallId ??
+        messageItem?.lc_kwargs?.tool_call_id ??
+        "",
+    ).trim();
+    if (toolCallId) remainingToolResultIds.add(toolCallId);
+  }
+
+  return baseFiltered.filter((messageItem) => {
+    if (!messageItem || typeof messageItem !== "object") return true;
+    const toolCalls = getMessageToolCalls(messageItem);
+    if (!Array.isArray(toolCalls) || !toolCalls.length) return true;
+    const toolCallIds = toolCalls
+      .map((toolCall) =>
+        String(
+          toolCall?.id ??
+            toolCall?.tool_call_id ??
+            toolCall?.toolCallId ??
+            "",
+        ).trim(),
+      )
+      .filter(Boolean);
+    if (!toolCallIds.length) return true;
+    return toolCallIds.every((toolCallId) =>
+      remainingToolResultIds.has(toolCallId),
+    );
   });
 }

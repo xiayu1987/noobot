@@ -49,6 +49,15 @@ export async function writeAttachIndex(basePath, indexData, scope) {
   await writeFile(indexFile, JSON.stringify(payload, null, 2), "utf8");
 }
 
+// Backward-compatible aliases
+export async function loadAttachmentIndex(basePath, scope) {
+  return readAttachIndex(basePath, scope);
+}
+
+export async function saveAttachmentIndex(basePath, indexData, scope) {
+  return writeAttachIndex(basePath, indexData, scope);
+}
+
 function resolveIndexFile(basePath, scope) {
   return path.join(
     basePath,
