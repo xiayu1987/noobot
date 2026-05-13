@@ -601,6 +601,21 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.model.switchApplied": "模型已切换，将在本轮后续调用生效"
     }
   },
+  "final_answer": {
+    "description": {
+      "key": "tools.final_answer.description",
+      "text": "输出最终的文本回复。"
+    },
+    "params": {
+      "reason": {
+        "key": "tools.final_answer.fieldReason",
+        "text": "原因"
+      }
+    },
+    "texts": {
+      "tools.final_answer.finalizeMessage": "对话结束请总结"
+    }
+  },
   "terminal_connect_connector": {
     "description": {
       "key": "tools.terminal_connector.description",

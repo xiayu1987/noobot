@@ -9,6 +9,7 @@ import { executeToolCall } from "../execution/tool-runner.js";
 import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
 import { assertNotAborted } from "../utils/error-utils.js";
 import { normalizeToolResultAttachmentMetas } from "./turn-executor.js";
+import { FINAL_ANSWER_TOOL_NAME } from "../../../tools/final-answer-tool.js";
 
 export async function processToolResults({
   modelState,
@@ -52,6 +53,9 @@ export async function processToolResults({
   const hasRequestHelpCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === REQUEST_HELP_TOOL_NAME,
   );
+  const hasFinalAnswerCall = toolCallResults.some(
+    (result) => String(result?.call?.name || "").trim() === FINAL_ANSWER_TOOL_NAME,
+  );
 
   if (hasTaskSummaryCall) {
     loopState.taskSummaryTriggered = true;
@@ -84,5 +88,10 @@ export async function processToolResults({
     }
   }
 
-  return { toolCallResults, hasTaskSummaryCall, hasRequestHelpCall };
+  return {
+    toolCallResults,
+    hasTaskSummaryCall,
+    hasRequestHelpCall,
+    hasFinalAnswerCall,
+  };
 }

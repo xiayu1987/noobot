@@ -25,6 +25,8 @@ export default {
     `工具调用已连续失败 ${Number(params.failureCount || 0)} 次。若需要补充外部信息或排查方向，可调用 ${String(params.helpToolName || "request_help")} 工具并传入求助内容。`,
   "agent.helpToolLoopPrompt": (params = {}) =>
     `工具循环已执行 ${Number(params.loopCount || 0)} 轮。你可以考虑调用 ${String(params.helpToolName || "request_help")} 工具获取额外帮助。`,
+  "agent.toolChoiceRequiredRetryPrompt":
+    "请使用工具执行任务，如没有任务或者任务结束或需要主动结束请调用 final_answer 工具",
   "agent.userMetaTag": "用户元信息",
   "attach.countExceedsLimit": "附件数量超出限制",
   "attach.extensionNotAllowed": "附件扩展名不允许",

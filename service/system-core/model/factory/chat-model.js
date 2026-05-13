@@ -13,6 +13,15 @@ import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 import { getModelDefaultFields } from "../spec/defaults.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "../resolver/index.js";
 
+function supportsTopP(modelSpec = {}) {
+  const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
+  const modelName = String(modelSpec?.model || "").trim().toLowerCase();
+  if (providerFormat === PROVIDER_FORMAT.OPENAI_COMPATIBLE && modelName.includes("gpt-5")) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Resolve API key for a model spec from env or explicit config.
  * @param {object} modelSpec
@@ -46,7 +55,11 @@ export function buildModelKwargs(modelSpec = {}) {
   ) {
     out.preserve_thinking = normalizedSpec.preserve_thinking;
   }
-  if (normalizedSpec.top_p !== undefined) out.top_p = normalizedSpec.top_p;
+  if (normalizedSpec.top_p !== undefined && supportsTopP(normalizedSpec)) {
+    out.top_p = normalizedSpec.top_p;
+  } else if (!supportsTopP(normalizedSpec) && "top_p" in out) {
+    delete out.top_p;
+  }
   if (normalizedSpec.frequency_penalty !== undefined)
     out.frequency_penalty = normalizedSpec.frequency_penalty;
   if (normalizedSpec.presence_penalty !== undefined)

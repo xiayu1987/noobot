@@ -11,6 +11,7 @@ import {
 import {
   adaptToolsForBinding,
   appendToolCompatibilityLog,
+  createChatModelFromSpec,
   resolveInvokeLlm,
 } from "../../../model/index.js";
 import { emitEvent } from "../../../event/index.js";
@@ -22,7 +23,70 @@ import {
 import { invokeLlmWithTransientRetry, normalizeAiTextContent } from "../llm-invoker.js";
 import { resolveCurrentModelInfo } from "../model/model-manager.js";
 
-export async function invokeNoToolsTurn({ modelState, loopState, turn }) {
+function isRequiredToolChoiceUnsupportedError(error = null) {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("tool_choice parameter does not support being set to required") ||
+    (message.includes("tool_choice") &&
+      message.includes("thinking mode") &&
+      message.includes("required"))
+  );
+}
+
+function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "") {
+  const normalizedToolChoice = String(toolChoice || "").trim().toLowerCase();
+  if (normalizedToolChoice === "required") {
+    return {
+      enable_thinking: false,
+      preserve_thinking: false,
+      thinking_budget: 0,
+    };
+  }
+  const systemRuntime =
+    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+      ? runtime.systemRuntime
+      : null;
+  if (!systemRuntime || systemRuntime.forceNonThinkingMode !== true) {
+    return {};
+  }
+  return {
+    enable_thinking: false,
+    preserve_thinking: false,
+    thinking_budget: 0,
+  };
+}
+
+function resolveLlmForRequiredToolChoice({ modelState, eventListener, turn }) {
+  try {
+    return createChatModelFromSpec(
+      {
+        ...(modelState?.defaultModelSpec || {}),
+        ...(modelState?.activeModelName
+          ? { model: String(modelState.activeModelName || "").trim() }
+          : {}),
+        ...(modelState?.activeModelAlias
+          ? { alias: String(modelState.activeModelAlias || "").trim() }
+          : {}),
+      },
+      {
+        streaming: Boolean(eventListener?.onEvent),
+      },
+    );
+  } catch {
+    emitEvent(eventListener, "tool_choice_required_non_thinking_model_fallback_skipped", {
+      turn,
+      reason: "model_create_failed_fallback_to_current",
+    });
+    return resolveInvokeLlm(modelState, "with_tools");
+  }
+}
+
+export async function invokeNoToolsTurn({
+  modelState,
+  loopState,
+  turn,
+  forceToolChoiceNone = false,
+}) {
   const {
     messages,
     traces,
@@ -43,6 +107,7 @@ export async function invokeNoToolsTurn({ modelState, loopState, turn }) {
       invokeLlm.invoke(filterSummarizedMessages(messages), {
         callbacks,
         signal: abortSignal,
+        ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
       }),
   });
   const responseContentText = normalizeAiTextContent(modelResponse?.content);
@@ -97,9 +162,18 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     dialogProcessId,
   } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
-  const invokeLlm = resolveInvokeLlm(modelState, "with_tools");
 
   const adaptedBinding = adaptToolsForBinding(tools, modelState);
+  const configuredToolChoice = String(adaptedBinding?.bindOptions?.tool_choice || "").trim();
+  const invokeLlm =
+    configuredToolChoice === "required"
+      ? resolveLlmForRequiredToolChoice({ modelState, eventListener, turn })
+      : resolveInvokeLlm(modelState, "with_tools");
+  if (configuredToolChoice === "required") {
+    emitEvent(eventListener, "tool_choice_required_forced_non_thinking_model", {
+      turn,
+    });
+  }
   const boundTools = Array.isArray(adaptedBinding?.tools) ? adaptedBinding.tools : [];
   const toolMap = new Map(boundTools.map((tool) => [tool.name, tool]));
 
@@ -126,22 +200,79 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     });
   }
 
+  emitEvent(eventListener, "tool_binding_ready", {
+    turn,
+    toolCount: boundTools.length,
+    toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
+    bindOptions: adaptedBinding?.bindOptions || {},
+  });
+
   emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools" });
 
-  const ai = await invokeLlmWithTransientRetry({
-    modelState,
-    turn,
-    mode: "with_tools",
-    invoke: ({ callbacks }) => {
-      const boundLlm = Object.keys(adaptedBinding?.bindOptions || {}).length
-        ? invokeLlm.bindTools(boundTools, adaptedBinding.bindOptions)
-        : invokeLlm.bindTools(boundTools);
-      return boundLlm.invoke(filterSummarizedMessages(messages), {
-        callbacks,
-        signal: abortSignal,
+  const invokeBoundLlmWithToolChoice = async (toolChoiceOverride = "") =>
+    invokeLlmWithTransientRetry({
+      modelState,
+      turn,
+      mode: "with_tools",
+      invoke: ({ callbacks }) => {
+        const baseBindOptions =
+          adaptedBinding?.bindOptions && typeof adaptedBinding.bindOptions === "object"
+            ? adaptedBinding.bindOptions
+            : {};
+        const effectiveToolChoice = String(
+          toolChoiceOverride || baseBindOptions?.tool_choice || "",
+        ).trim();
+        const effectiveBindOptions = {
+          ...baseBindOptions,
+          ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
+        };
+        const boundLlm = Object.keys(effectiveBindOptions).length
+          ? invokeLlm.bindTools(boundTools, effectiveBindOptions)
+          : invokeLlm.bindTools(boundTools);
+        const nonThinkingOverrides = resolveNonThinkingCallOverrides(
+          runtime,
+          effectiveToolChoice,
+        );
+        return boundLlm.invoke(filterSummarizedMessages(messages), {
+          callbacks,
+          signal: abortSignal,
+          ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
+          ...nonThinkingOverrides,
+        });
+      },
+    });
+
+  let ai = null;
+  try {
+    ai = await invokeBoundLlmWithToolChoice();
+  } catch (error) {
+    if (configuredToolChoice === "required" && isRequiredToolChoiceUnsupportedError(error)) {
+      if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
+        runtime.systemRuntime.toolChoiceRequiredUnsupported = true;
+        runtime.systemRuntime.forceNonThinkingMode = true;
+      }
+      const currentModelInfo = resolveCurrentModelInfo(modelState);
+      emitEvent(eventListener, "tool_choice_downgraded_to_auto", {
+        turn,
+        reason: "required_invalid_in_thinking_mode_no_retry",
+        modelAlias: currentModelInfo.modelAlias,
+        modelName: currentModelInfo.modelName,
       });
-    },
-  });
+      ai = {
+        content: "",
+        tool_calls: [],
+        additional_kwargs: {},
+        response_metadata: {
+          noobot: {
+            toolChoiceDowngradedToAuto: true,
+            downgradedAtTurn: turn,
+          },
+        },
+      };
+    } else {
+      throw error;
+    }
+  }
 
   const aiContentText = normalizeAiTextContent(ai.content);
   messages.push(ai);
@@ -204,6 +335,23 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     turn,
     hasToolCalls: Boolean(calls.length),
   });
+  if (!rawCalls.length && String(adaptedBinding?.bindOptions?.tool_choice || "") === "required") {
+    if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
+      runtime.systemRuntime.toolChoiceRequiredUnsupported = true;
+    }
+    emitEvent(eventListener, "llm_tool_choice_required_not_followed", {
+      turn,
+      toolChoice: "required",
+      modelAlias: currentModelInfo.modelAlias,
+      modelName: currentModelInfo.modelName,
+    });
+    emitEvent(eventListener, "tool_choice_downgraded_to_auto", {
+      turn,
+      reason: "required_not_followed",
+      modelAlias: currentModelInfo.modelAlias,
+      modelName: currentModelInfo.modelName,
+    });
+  }
 
   return {
     ai,

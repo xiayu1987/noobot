@@ -71,12 +71,19 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     .map((t) => String(t?.name || "").trim())
     .filter((n) => STRICT_INCOMPATIBLE_TOOL_NAMES.has(n));
   const strict = strictByPolicy && strictIncompatibleTools.length === 0;
+  const toolChoice = "auto";
+  const bindOptions = validTools.length
+    ? {
+        tool_choice: toolChoice,
+        ...(strict ? { strict: true } : {}),
+      }
+    : {};
 
   return {
     tools: validTools,
     droppedToolNames,
     strictDowngradedTools:
       strictByPolicy && !strict ? strictIncompatibleTools : [],
-    bindOptions: strict ? { strict: true } : {},
+    bindOptions,
   };
 }

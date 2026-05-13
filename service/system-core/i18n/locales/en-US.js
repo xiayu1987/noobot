@@ -25,6 +25,8 @@ export default {
     `Tool calls have failed consecutively ${Number(params.failureCount || 0)} times. If needed, call ${String(params.helpToolName || "request_help")} with help content for assistance.`,
   "agent.helpToolLoopPrompt": (params = {}) =>
     `Tool loop has run ${Number(params.loopCount || 0)} turns. Consider calling ${String(params.helpToolName || "request_help")} for extra help.`,
+  "agent.toolChoiceRequiredRetryPrompt":
+    "Please use tools to execute tasks. If there is no task, the task is finished, or you need to end proactively, call the final_answer tool.",
   "agent.userMetaTag": "User Metadata",
   "attach.countExceedsLimit": "attachments count exceeds limit",
   "attach.extensionNotAllowed": "attachment extension not allowed",
