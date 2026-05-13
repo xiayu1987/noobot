@@ -17,6 +17,8 @@ export default {
   "agent.subTaskLabelPrefix": "Subtask",
   "agent.toolLoopLimitReached": (params = {}) =>
     `Tool call turns reached the limit (${Number(params.maxTurns || 0)}), auto-stopped.`,
+  "agent.toolLoopLimitFinalizePrompt": (params = {}) =>
+    `Tool-call turns reached the limit (${Number(params.maxTurns || 0)}). Stop calling tools and provide a final summary with actionable next steps.`,
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
     `Tool "${String(params.toolName || "").trim() || "unknown"}" failed ${Number(params.maxFails || 5)} times consecutively. Loop stopped automatically.`,
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>

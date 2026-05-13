@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HumanMessage } from "@langchain/core/messages";
 import {
   filterSummarizedMessages,
   markCurrentTurnModelMessagesSummarized,
@@ -333,15 +334,33 @@ async function _processToolResults({
 export async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   const { tools, traces, maxTurns } = loopState;
   const { abortSignal, runtime, eventListener } = modelState;
+  const isOverMaxTurns = turn > maxTurns;
 
   assertNotAborted(abortSignal, runtime);
 
   // ── Turn limit check ──
-  if (turn > maxTurns) {
+  if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted === true) {
     const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
     traces.push({ tool: "system", args: { turn, maxTurns }, result: limitMsg });
     emitEvent(eventListener, "tool_loop_limit_reached", { turn, maxTurns });
     return buildLoopResult({ output: limitMsg, traces, loopState });
+  }
+  if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted !== true) {
+    if (Array.isArray(loopState?.messages)) {
+      loopState.messages.push(
+        new HumanMessage({
+          content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
+          additional_kwargs: {
+            noobotInternalMessageType: "tool_loop_limit_finalize_prompt",
+          },
+        }),
+      );
+    }
+    loopState.loopLimitFinalizePrompted = true;
+    emitEvent(eventListener, "tool_loop_limit_finalize_prompted", {
+      turn,
+      maxTurns,
+    });
   }
 
   resolveLlmForTurn(modelState);
@@ -359,6 +378,28 @@ export async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
   if (!calls.length) {
     return buildLoopResult({
       output: aiContentText,
+      traces,
+      loopState,
+      turnTaskStore,
+      turnMessageStore,
+      modelMessages: loopState.messages,
+    });
+  }
+  if (isOverMaxTurns) {
+    const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
+    traces.push({
+      tool: "system",
+      args: { turn, maxTurns, toolCallCount: calls.length },
+      result: limitMsg,
+    });
+    emitEvent(eventListener, "tool_loop_limit_reached", {
+      turn,
+      maxTurns,
+      toolCallCount: calls.length,
+      afterFinalizePrompt: true,
+    });
+    return buildLoopResult({
+      output: limitMsg,
       traces,
       loopState,
       turnTaskStore,
