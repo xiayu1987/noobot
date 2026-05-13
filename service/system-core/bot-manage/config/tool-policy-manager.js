@@ -4,17 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { DEFAULT_TOOL_POLICY } from "../constants.js";
+import { DEFAULT_TOOL_POLICY } from "./constants.js";
 
 /**
  * Build tool policies for session execution.
  */
 export class ToolPolicyManager {
-  /**
-   * Build tool policy from scenario configuration.
-   * @param {Object} scenario - Resolved scenario configuration
-   * @returns {Object} Tool policy object
-   */
   build(scenario) {
     const policy = { ...DEFAULT_TOOL_POLICY };
 
@@ -25,11 +20,6 @@ export class ToolPolicyManager {
     return policy;
   }
 
-  /**
-   * Build tool policy for specific scenario.
-   * @param {Array|Object} tools - Tools configuration
-   * @returns {Object} Normalized tool policy
-   */
   _buildToolPolicyForScenario(tools) {
     if (Array.isArray(tools)) {
       return {

@@ -11,7 +11,7 @@ import { ConfigService } from "../config/index.js";
 import { SystemErrorLogger } from "../tracking/index.js";
 import { AsyncJobManager } from "./async-job-manager.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
-import { WorkspaceService } from "./workspace-service.js";
+import { WorkspaceService } from "./workspace-infra/workspace-service.js";
 
 export class BotManager {
   constructor(globalConfig) {

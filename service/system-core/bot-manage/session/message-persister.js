@@ -27,7 +27,6 @@ export class MessagePersister {
   async persist(sessionId, input, options = {}) {
     const messages = [];
 
-    // Persist user message
     const userMessage = await this._persistMessage(sessionId, {
       role: "user",
       content: input.content || input.contentText,
@@ -39,6 +38,22 @@ export class MessagePersister {
     return messages;
   }
 
+  async appendExecutionLog(payload = {}) {
+    if (typeof this.messageService?.appendExecutionLog === "function") {
+      await this.messageService.appendExecutionLog(payload);
+      return true;
+    }
+    return false;
+  }
+
+  async appendTurn(payload = {}) {
+    if (typeof this.messageService?.appendTurn === "function") {
+      await this.messageService.appendTurn(payload);
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Persist a single message.
    * @param {string} sessionId - Session identifier
@@ -46,7 +61,7 @@ export class MessagePersister {
    * @returns {Object} Persisted message
    */
   async _persistMessage(sessionId, message) {
-    if (this.messageService) {
+    if (this.messageService?.save) {
       return await this.messageService.save(sessionId, message);
     }
     return { ...message, id: `msg_${Date.now()}` };

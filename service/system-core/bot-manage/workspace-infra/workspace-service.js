@@ -8,7 +8,7 @@ import {
   ensureUserWorkspaceInitialized,
   resetUserWorkspaceKeepRuntimeInitialized,
   syncUserWorkspaceFromTemplate,
-} from "../init/index.js";
+} from "../../init/index.js";
 
 export class WorkspaceService {
   constructor({ globalConfig = {} } = {}) {
