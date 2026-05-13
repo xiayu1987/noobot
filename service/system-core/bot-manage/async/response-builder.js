@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { ASYNC_JOB_STATUS } from "../constants.js";
+import { ASYNC_JOB_STATUS } from "./constants.js";
 
 /**
  * Build standardized async job responses.
