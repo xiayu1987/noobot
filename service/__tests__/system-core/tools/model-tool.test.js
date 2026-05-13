@@ -18,10 +18,18 @@ function getSwitchModelTool({ runtime = {}, sessionId = "session-1" } = {}) {
 }
 
 test("switch_model: 应能通过 alias 切换模型", async () => {
+  let persistedPayload = null;
   const runtime = {
     allEnabledProviders: {
       openai: { model: "gpt-4o" },
       anthropic: { model: "claude-3-7-sonnet" },
+    },
+    userId: "u1",
+    systemRuntime: { sessionId: "s-1" },
+    sessionManager: {
+      async setSessionModelAlias(payload = {}) {
+        persistedPayload = payload;
+      },
     },
     runtimeModel: "",
   };
@@ -33,6 +41,11 @@ test("switch_model: 应能通过 alias 切换模型", async () => {
   assert.equal(result.sessionId, "s-1");
   assert.equal(result.modelAlias, "openai");
   assert.equal(runtime.runtimeModel, "openai");
+  assert.deepEqual(persistedPayload, {
+    userId: "u1",
+    sessionId: "s-1",
+    modelAlias: "openai",
+  });
 });
 
 test("switch_model: 应能通过 modelName 映射到 alias 并切换", async () => {

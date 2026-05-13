@@ -75,6 +75,25 @@ export function createModelTool({
         });
       }
       runtime.runtimeModel = alias;
+      try {
+        const resolvedSessionId = String(
+          runtime?.systemRuntime?.sessionId || sessionId || "",
+        ).trim();
+        if (
+          runtime?.sessionManager &&
+          typeof runtime.sessionManager.setSessionModelAlias === "function" &&
+          String(runtime?.userId || "").trim() &&
+          resolvedSessionId
+        ) {
+          await runtime.sessionManager.setSessionModelAlias({
+            userId: String(runtime.userId || "").trim(),
+            sessionId: resolvedSessionId,
+            modelAlias: alias,
+          });
+        }
+      } catch {
+        // ignore persistence failures; runtime switch still applies to current turn
+      }
       return toToolJsonResult("switch_model", {
         ok: true,
         sessionId,

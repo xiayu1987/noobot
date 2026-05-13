@@ -156,20 +156,32 @@ describe('2. 字段对齐测试', () => {
       assert.equal(normalized.summarized, false, 'summarized 默认应为 false');
     });
 
-    it('rawModelContent 仅在为 string 或 array 时保留', () => {
+    it('rawModelContent 不落盘（由 execution 日志保留完整信息）', () => {
       const raw1 = { role: 'user', content: 'test', rawModelContent: 'raw text' };
       const n1 = normalizeMessageEntity(raw1);
-      assert.ok('rawModelContent' in n1, 'string rawModelContent 应保留');
+      assert.ok(!('rawModelContent' in n1), 'string rawModelContent 默认不落盘');
+
+      const rawSig = {
+        role: 'assistant',
+        content: 'test',
+        rawModelContent: [{ type: 'text', text: 'x', thought_signature: 'sig-1' }],
+      };
+      const nSig = normalizeMessageEntity(rawSig);
+      assert.ok(!('rawModelContent' in nSig), 'thought_signature array 也不落盘');
 
       const raw2 = { role: 'user', content: 'test', rawModelContent: 123 };
       const n2 = normalizeMessageEntity(raw2);
       assert.ok(!('rawModelContent' in n2), '非 string/array rawModelContent 不应保留');
     });
 
-    it('modelAdditionalKwargs 仅在为 object 且非 array 时保留', () => {
-      const raw1 = { role: 'user', content: 'test', modelAdditionalKwargs: { key: 'val' } };
+    it('modelAdditionalKwargs 不落盘', () => {
+      const raw1 = {
+        role: 'user',
+        content: 'test',
+        modelAdditionalKwargs: { key: 'val', tool_calls: [{ id: 'c1' }] },
+      };
       const n1 = normalizeMessageEntity(raw1);
-      assert.ok('modelAdditionalKwargs' in n1, 'object modelAdditionalKwargs 应保留');
+      assert.ok(!('modelAdditionalKwargs' in n1), 'modelAdditionalKwargs 不落盘');
 
       const raw2 = { role: 'user', content: 'test', modelAdditionalKwargs: [1, 2] };
       const n2 = normalizeMessageEntity(raw2);

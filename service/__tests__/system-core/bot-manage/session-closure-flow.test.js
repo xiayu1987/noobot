@@ -258,6 +258,12 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(result.messages.length, 3);
   assert.equal(Array.isArray(result.executionLogs), true);
   assert.equal(result.executionLogs.length > 0, true, "应返回执行日志闭环");
+  const fullTurnLog = appendedExecutionLogs.find(
+    (logItem) => String(logItem?.event || "") === "session_turn_full",
+  );
+  assert.ok(fullTurnLog, "完整 turn 记录应写入 execution 日志");
+  assert.equal(typeof fullTurnLog?.data?.role, "string");
+  assert.equal("content" in (fullTurnLog?.data || {}), true);
   assert.equal(upstreamEvents.length > 0, true, "应向上游持续回传事件");
   assert.ok(capturedAgentContext, "agent 应收到构建后的完整上下文");
 });
@@ -266,6 +272,7 @@ test("continue mode closed-loop: should build continue context and persist paren
   const persistedTurns = [];
   const upstreamEvents = [];
   let continueContextBuilt = false;
+  let capturedRunConfig = null;
 
   const session = {
     async upsertSessionTree() {},
@@ -273,6 +280,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       return {
         exists: true,
         session: {
+          modelAlias: "anthropic",
           messages: [{ role: "user", content: "history" }],
         },
       };
@@ -347,6 +355,7 @@ test("continue mode closed-loop: should build continue context and persist paren
     },
     async buildContinueContext({ dialogProcessId = "" } = {}) {
       continueContextBuilt = true;
+      capturedRunConfig = { ...runConfig };
       return {
         execution: {
           controllers: {
@@ -389,6 +398,11 @@ test("continue mode closed-loop: should build continue context and persist paren
   });
 
   assert.equal(continueContextBuilt, true, "continue 模式应走 buildContinueContext");
+  assert.equal(
+    capturedRunConfig?.runtimeModel,
+    "anthropic",
+    "未显式传 runConfig.runtimeModel 时应回退到 session.modelAlias",
+  );
   const userTurn = persistedTurns.find((turn) => turn.role === "user");
   const assistantTurn = persistedTurns.find((turn) => turn.role === "assistant");
   assert.ok(userTurn);

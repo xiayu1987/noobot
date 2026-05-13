@@ -5,7 +5,7 @@ import { AIMessage } from "@langchain/core/messages";
 import { toConversationMessages } from "../../../../system-core/context/data-providers.js";
 import { buildContextMessages } from "../../../../system-core/agent/core/context/message-builder.js";
 
-test("buildContextMessages preserves assistant raw model payload for tool-call resume", () => {
+test("buildContextMessages preserves thought-signature payload/tool_calls and omits non-required kwargs", () => {
   const thoughtPayload = [
     {
       type: "text",
@@ -57,10 +57,6 @@ test("buildContextMessages preserves assistant raw model payload for tool-call r
   assert.deepEqual(aiMessage.content, thoughtPayload);
   assert.equal(aiMessage.tool_calls?.[0]?.id, "call_task_summary");
   assert.equal(aiMessage.tool_calls?.[0]?.name, "task_summary");
-  assert.deepEqual(aiMessage.additional_kwargs, {
-    providerState: "opaque-signature-carrier",
-  });
-  assert.deepEqual(aiMessage.response_metadata, {
-    finish_reason: "tool_calls",
-  });
+  assert.deepEqual(aiMessage.additional_kwargs || {}, {});
+  assert.deepEqual(aiMessage.response_metadata || {}, {});
 });
