@@ -46,6 +46,7 @@ export class SessionExecutionEngine {
     workspaceService = null,
     errorLogger = null,
     botManager = null,
+    agentRunner = runAgentTurn,
   } = {}) {
     this.globalConfig = globalConfig;
     this.session = session;
@@ -56,6 +57,7 @@ export class SessionExecutionEngine {
     this.workspaceService = workspaceService;
     this.errorLogger = errorLogger;
     this.botManager = botManager;
+    this.agentRunner = typeof agentRunner === "function" ? agentRunner : runAgentTurn;
   }
 
   _now() {
@@ -984,7 +986,7 @@ export class SessionExecutionEngine {
         agentContext,
         abortSignal,
       );
-      const agentResult = await runAgentTurn({
+      const agentResult = await this.agentRunner({
         errorLogger: this.errorLogger,
         agentContext: runtimeAgentContext,
         userMessage: normalizedMessage,

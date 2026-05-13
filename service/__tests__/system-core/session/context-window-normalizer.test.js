@@ -52,3 +52,57 @@ test("normalizeRecentWindow prepends a user anchor when sliced window has no use
   const result = normalizeRecentWindow(input, 2);
   assert.equal(result[0]?.role, "user");
 });
+
+test("normalizeRecentWindow should keep latest assistant-tool pair integrity after truncation", () => {
+  const input = [
+    { role: "user", content: "u0" },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_1", function: { name: "execute_script", arguments: "{}" } }],
+    },
+    {
+      role: "tool",
+      content: "{\"toolName\":\"execute_script\",\"ok\":true}",
+      tool_call_id: "call_1",
+    },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_2", function: { name: "task_summary", arguments: "{}" } }],
+    },
+    {
+      role: "tool",
+      content: "{\"toolName\":\"task_summary\",\"ok\":true}",
+      tool_call_id: "call_2",
+    },
+  ];
+  const result = normalizeRecentWindow(input, 3);
+  assert.deepEqual(
+    result.map((item) => item.role),
+    ["user", "assistant", "tool"],
+  );
+  assert.equal(result[1]?.tool_calls?.[0]?.id, "call_2");
+  assert.equal(result[2]?.tool_call_id, "call_2");
+});
+
+test("normalizeRecentWindow should not leave orphan tool after truncation shrink", () => {
+  const input = [
+    { role: "user", content: "u0" },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_2", function: { name: "task_summary", arguments: "{}" } }],
+    },
+    {
+      role: "tool",
+      content: "{\"toolName\":\"task_summary\",\"ok\":true}",
+      tool_call_id: "call_2",
+    },
+  ];
+  const result = normalizeRecentWindow(input, 2);
+  assert.deepEqual(
+    result.map((item) => item.role),
+    ["user"],
+  );
+});

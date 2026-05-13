@@ -533,10 +533,21 @@ export class ChannelManager {
         // Find events for this dialogProcessId with seq > lastSeq
         const missingEvents = channel.eventLog.filter((envelope) => {
           const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
+          if (envDpId !== dpId) return false;
+
+          // Reconnect replay should only include unresolved interaction requests.
+          // Resolved requests are historical records and would reopen stale UI prompts.
+          if (String(envelope?.event || "").trim() === "interaction_request") {
+            const requestId = String(envelope?.data?.requestId || "").trim();
+            if (!requestId || !channel.pendingInteractionRequests.has(requestId)) {
+              return false;
+            }
+          }
+
           const upstreamSeq = Number(envelope?.data?.seq || 0);
           const proxySeq = Number(envelope?.sequence || 0);
           const comparableSequence = upstreamSeq > 0 ? upstreamSeq : proxySeq;
-          return envDpId === dpId && comparableSequence > lastSeq;
+          return comparableSequence > lastSeq;
         });
         const missingRequestIds = new Set(
           missingEvents
