@@ -261,17 +261,31 @@ export class SessionExecutionEngine {
   }
 
   _resolveMemorySummaryTimeoutMs(userConfig = {}) {
-    const effectiveConfig = mergeConfig(this.globalConfig || {}, userConfig || {});
     const configured = Number(
-      effectiveConfig?.memory?.summarize_timeout_ms ??
-        effectiveConfig?.memory?.summarizeTimeoutMs ??
-        effectiveConfig?.memorySummarizeTimeoutMs ??
+      userConfig?.memory?.summarize_timeout_ms ??
+        userConfig?.memory?.summarizeTimeoutMs ??
+        userConfig?.memorySummarizeTimeoutMs ??
+        this.globalConfig?.memory?.summarize_timeout_ms ??
+        this.globalConfig?.memory?.summarizeTimeoutMs ??
+        this.globalConfig?.memorySummarizeTimeoutMs ??
         DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS,
     );
     if (!Number.isFinite(configured) || configured <= 0) {
       return DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS;
     }
     return Math.floor(configured);
+  }
+
+  _resolveMemorySummaryAsyncEnabled(userConfig = {}) {
+    const configured =
+      userConfig?.memory?.summarize_async ??
+      userConfig?.memory?.summarizeAsync ??
+      userConfig?.memorySummarizeAsync ??
+      this.globalConfig?.memory?.summarize_async ??
+      this.globalConfig?.memory?.summarizeAsync ??
+      this.globalConfig?.memorySummarizeAsync;
+    if (configured === undefined || configured === null) return true;
+    return configured !== false;
   }
 
   _resolveExecutionBundleTimeoutMs(userConfig = {}) {
@@ -285,6 +299,60 @@ export class SessionExecutionEngine {
       return DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS;
     }
     return Math.floor(configured);
+  }
+
+  async _runMemorySummarizeFlow({
+    userId,
+    sessionId,
+    userConfig = {},
+    runtimeEventListener = null,
+    mode = "sync",
+  } = {}) {
+    const memorySummaryTimeoutMs = this._resolveMemorySummaryTimeoutMs(userConfig);
+    let memorySummaryTimedOut = false;
+    const memorySummaryAbortController = new AbortController();
+    const memorySummaryTimer = setTimeout(() => {
+      memorySummaryTimedOut = true;
+      memorySummaryAbortController.abort();
+    }, memorySummaryTimeoutMs);
+    try {
+      await this.memory.maybeSummarize({
+        userId,
+        userConfig,
+        abortSignal: memorySummaryAbortController.signal,
+      });
+    } catch (error) {
+      if (!isAbortLikeError(error) || !memorySummaryTimedOut) {
+        emitEvent(runtimeEventListener, "memory_summary_failed", {
+          sessionId,
+          mode,
+          error: error?.message || String(error),
+        });
+        if (this.errorLogger?.log) {
+          await this.errorLogger.log({
+            userId,
+            sessionId,
+            source: "SessionExecutionEngine._runMemorySummarizeFlow",
+            event: "memory_summary_failed",
+            error,
+          });
+        }
+        throw error;
+      }
+    } finally {
+      clearTimeout(memorySummaryTimer);
+    }
+    if (memorySummaryTimedOut) {
+      emitEvent(runtimeEventListener, "memory_summary_timeout", {
+        sessionId,
+        mode,
+        timeoutMs: memorySummaryTimeoutMs,
+      });
+    }
+    emitEvent(runtimeEventListener, "memory_summary_checked", {
+      sessionId,
+      mode,
+    });
   }
 
   _applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
@@ -850,35 +918,35 @@ export class SessionExecutionEngine {
     emitEvent(runtimeEventListener, "short_memory_captured", {
       sessionId,
     });
-    const memorySummaryTimeoutMs = this._resolveMemorySummaryTimeoutMs(userConfig);
-    let memorySummaryTimedOut = false;
-    const memorySummaryAbortController = new AbortController();
-    const memorySummaryTimer = setTimeout(() => {
-      memorySummaryTimedOut = true;
-      memorySummaryAbortController.abort();
-    }, memorySummaryTimeoutMs);
-    try {
-      await this.memory.maybeSummarize({
-        userId,
-        userConfig,
-        abortSignal: memorySummaryAbortController.signal,
-      });
-    } catch (error) {
-      if (!isAbortLikeError(error) || !memorySummaryTimedOut) {
-        throw error;
-      }
-    } finally {
-      clearTimeout(memorySummaryTimer);
-    }
-    if (memorySummaryTimedOut) {
-      emitEvent(runtimeEventListener, "memory_summary_timeout", {
+    const memorySummaryAsyncEnabled =
+      this._resolveMemorySummaryAsyncEnabled(userConfig);
+    if (memorySummaryAsyncEnabled) {
+      emitEvent(runtimeEventListener, "memory_summary_scheduled", {
         sessionId,
-        timeoutMs: memorySummaryTimeoutMs,
+        mode: "async",
+      });
+      Promise.resolve()
+        .then(() =>
+          this._runMemorySummarizeFlow({
+            userId,
+            sessionId,
+            userConfig,
+            runtimeEventListener,
+            mode: "async",
+          }),
+        )
+        .catch(() => {
+          // error already handled in _runMemorySummarizeFlow
+        });
+    } else {
+      await this._runMemorySummarizeFlow({
+        userId,
+        sessionId,
+        userConfig,
+        runtimeEventListener,
+        mode: "sync",
       });
     }
-    emitEvent(runtimeEventListener, "memory_summary_checked", {
-      sessionId,
-    });
 
     const executionBundleTimeoutMs = this._resolveExecutionBundleTimeoutMs(userConfig);
     let executionLogs = [];

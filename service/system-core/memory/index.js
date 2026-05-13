@@ -3,8 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, cp, readFile, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
 import { mergeConfig } from "../config/index.js";
 import { fatalSystemError } from "../error/index.js";
@@ -60,6 +61,18 @@ export class MemoryService {
 
   _longPath(basePath) {
     return path.join(basePath, "memory/long-memory.json");
+  }
+
+  _experienceLessonsDir(basePath) {
+    return path.join(basePath, "memory/experience-lessons");
+  }
+
+  _experienceLessonsMetadataPath(basePath) {
+    return path.join(this._experienceLessonsDir(basePath), "metadata.json");
+  }
+
+  _experienceLessonsDailyPath(basePath, dateKey = "") {
+    return path.join(this._experienceLessonsDir(basePath), `${dateKey}.json`);
   }
 
   _sessionFile(basePath, sessionId, parentSessionId = "") {
@@ -189,9 +202,163 @@ export class MemoryService {
     this._assignShortItems(short, pending);
   }
 
+  _toDateKey(value = "") {
+    const d = new Date(value || Date.now());
+    if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async _readExperienceLessonsMetadata(basePath) {
+    const metadata = await this._readJson(this._experienceLessonsMetadataPath(basePath), {
+      batches: [],
+      updatedAt: "",
+    });
+    return {
+      batches: Array.isArray(metadata?.batches) ? metadata.batches : [],
+      updatedAt: String(metadata?.updatedAt || "").trim(),
+    };
+  }
+
+  _extractJsonCandidate(input = "") {
+    const text = this._stripMarkdownFence(input).trim();
+    if (!text) return "";
+    const firstBrace = text.indexOf("{");
+    const firstBracket = text.indexOf("[");
+    const startIndex =
+      firstBrace < 0
+        ? firstBracket
+        : firstBracket < 0
+          ? firstBrace
+          : Math.min(firstBrace, firstBracket);
+    if (startIndex < 0) return text;
+    return text.slice(startIndex).trim();
+  }
+
+  _normalizeExperienceLessonItems(rawItems = [], { batchId = "", createdAt = "" } = {}) {
+    const out = [];
+    for (const item of Array.isArray(rawItems) ? rawItems : []) {
+      const summary = String(item?.summary || item?.lesson || item?.content || "").trim();
+      if (!summary) continue;
+      const rawTags = Array.isArray(item?.tags)
+        ? item.tags
+        : typeof item?.tag === "string"
+          ? [item.tag]
+          : [];
+      const tags = Array.from(
+        new Set(
+          rawTags
+            .map((tagItem) => String(tagItem || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const category = String(item?.category || "").trim();
+      out.push({
+        id: randomUUID(),
+        batchId,
+        createdAt,
+        category,
+        tags,
+        summary,
+      });
+    }
+    return out;
+  }
+
+  _parseExperienceLessonOutput(rawContent, { batchId = "", createdAt = "" } = {}) {
+    const content = this._normalizeModelContent(rawContent);
+    if (Array.isArray(content)) {
+      return this._normalizeExperienceLessonItems(content, { batchId, createdAt });
+    }
+    const text = typeof content === "string" ? content : String(content || "");
+    const candidate = this._extractJsonCandidate(text);
+    if (!candidate) return [];
+    try {
+      const parsed = JSON.parse(candidate);
+      const items = Array.isArray(parsed?.lessons)
+        ? parsed.lessons
+        : Array.isArray(parsed)
+          ? parsed
+          : [];
+      return this._normalizeExperienceLessonItems(items, { batchId, createdAt });
+    } catch {
+      return [];
+    }
+  }
+
+  _buildExperienceLessonPrompt({ promptPayload = [] } = {}) {
+    return [
+      "你是经验复盘助手。请从下面对话记录中提炼“经验教训”，并打标签分类。",
+      "输出必须是 JSON，结构如下：",
+      '{"lessons":[{"category":"", "tags":[""], "summary":""}]}',
+      "要求：",
+      "1) 只输出 JSON，不要解释；2) tags 为简短中文标签；3) summary 要可复用。",
+      "对话记录：",
+      JSON.stringify(promptPayload, null, 2),
+    ].join("\n");
+  }
+
+  async _appendExperienceLessons({
+    basePath = "",
+    lessons = [],
+    batchId = "",
+    createdAt = "",
+    sourceShortItems = [],
+  } = {}) {
+    const normalizedLessons = Array.isArray(lessons) ? lessons : [];
+    if (!basePath || !normalizedLessons.length) return false;
+    const dateKey = this._toDateKey(createdAt);
+    const lessonsDir = this._experienceLessonsDir(basePath);
+    const filePath = this._experienceLessonsDailyPath(basePath, dateKey);
+    await mkdir(lessonsDir, { recursive: true });
+
+    const existingDaily = await this._readJson(filePath, { date: dateKey, items: [] });
+    const existingItems = Array.isArray(existingDaily?.items) ? existingDaily.items : [];
+    const nextDaily = {
+      date: dateKey,
+      items: [...existingItems, ...normalizedLessons],
+      updatedAt: new Date().toISOString(),
+    };
+    await writeFile(filePath, JSON.stringify(nextDaily, null, 2));
+
+    const metadataPath = this._experienceLessonsMetadataPath(basePath);
+    const metadata = await this._readExperienceLessonsMetadata(basePath);
+    const uniqueTags = Array.from(
+      new Set(
+        normalizedLessons
+          .flatMap((item) => (Array.isArray(item?.tags) ? item.tags : []))
+          .map((tagItem) => String(tagItem || "").trim())
+          .filter(Boolean),
+      ),
+    );
+    const sourceCreatedAtValues = (Array.isArray(sourceShortItems) ? sourceShortItems : [])
+      .map((item) => String(item?.createdAt || "").trim())
+      .filter(Boolean)
+      .sort();
+    metadata.batches.push({
+      batchId,
+      createdAt,
+      date: dateKey,
+      file: path.relative(basePath, filePath).replaceAll("\\", "/"),
+      fileDir: path.relative(basePath, lessonsDir).replaceAll("\\", "/"),
+      tags: uniqueTags,
+      lessonCount: normalizedLessons.length,
+      sourceShortMemoryCount: Array.isArray(sourceShortItems) ? sourceShortItems.length : 0,
+      sourceCreatedAtRange: {
+        from: sourceCreatedAtValues[0] || "",
+        to: sourceCreatedAtValues[sourceCreatedAtValues.length - 1] || "",
+      },
+    });
+    metadata.updatedAt = new Date().toISOString();
+    await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+    return true;
+  }
+
   async readLongMemory({ userId }) {
     const basePath = this._resolveBasePath(userId);
     const longMem = await this._readJson(this._longPath(basePath), {});
+    if (typeof longMem?.staticMemory === "string") {
+      return longMem.staticMemory;
+    }
     return longMem.memory ?? "";
   }
 
@@ -280,6 +447,8 @@ export class MemoryService {
     if (!prompt) return;
 
     let nextLongMemory = existingLongMemory;
+    const summaryBatchId = randomUUID();
+    const summaryCreatedAt = new Date().toISOString();
     try {
       const res = await llm.invoke(prompt, { signal: abortSignal });
       nextLongMemory = this._normalizeModelContent(res?.content);
@@ -289,16 +458,41 @@ export class MemoryService {
     }
     throwIfAborted(abortSignal);
 
-    if (this._isBlankLongMemoryContent(nextLongMemory)) {
-      return;
+    let hasUpdatedLongMemory = false;
+    if (!this._isBlankLongMemoryContent(nextLongMemory)) {
+      const longMemoryPath = this._longPath(basePath);
+      await this._backupLongMemoryIfNeeded(longMemoryPath, existingLongMemory);
+      throwIfAborted(abortSignal);
+      longMem.memory = nextLongMemory;
+      longMem.staticMemory = nextLongMemory;
+      longMem.updatedAt = new Date().toISOString();
+      await writeFile(longMemoryPath, JSON.stringify(longMem, null, 2));
+      hasUpdatedLongMemory = true;
     }
 
-    const longMemoryPath = this._longPath(basePath);
-    await this._backupLongMemoryIfNeeded(longMemoryPath, existingLongMemory);
-    throwIfAborted(abortSignal);
-    longMem.memory = nextLongMemory;
-    longMem.updatedAt = new Date().toISOString();
-    await writeFile(longMemoryPath, JSON.stringify(longMem, null, 2));
+    let hasAppendedExperienceLessons = false;
+    try {
+      const lessonPrompt = this._buildExperienceLessonPrompt({
+        promptPayload,
+      });
+      const lessonRes = await llm.invoke(lessonPrompt, { signal: abortSignal });
+      const normalizedLessons = this._parseExperienceLessonOutput(lessonRes?.content, {
+        batchId: summaryBatchId,
+        createdAt: summaryCreatedAt,
+      });
+      hasAppendedExperienceLessons = await this._appendExperienceLessons({
+        basePath,
+        lessons: normalizedLessons,
+        batchId: summaryBatchId,
+        createdAt: summaryCreatedAt,
+        sourceShortItems: target,
+      });
+    } catch (error) {
+      if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
+      hasAppendedExperienceLessons = false;
+    }
+
+    if (!hasUpdatedLongMemory && !hasAppendedExperienceLessons) return;
 
     // 提取后短期记忆全部清空
     this._assignShortItems(short, []);

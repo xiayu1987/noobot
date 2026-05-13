@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   resolveSessionTreeWithRootSessionId,
   resolveAttachments,
+  resolveLongMemory,
   toConversationMessages,
 } from "../../../system-core/context/data-providers.js";
 
@@ -112,4 +113,17 @@ test("toConversationMessages preserves model payload fields and attachment fallb
   assert.deepEqual(output[0].modelAdditionalKwargs, { k: 1 });
   assert.deepEqual(output[0].modelResponseMetadata, { finish_reason: "tool_calls" });
   assert.deepEqual(output[0].attachmentMetas, [{ attachmentId: "a1" }]);
+});
+
+test("resolveLongMemory only reads static long memory payload from memoryService", async () => {
+  const longMemory = await resolveLongMemory({
+    memoryService: {
+      async readLongMemory() {
+        return "static-long-memory-only";
+      },
+    },
+    runtimeBasePath: "/workspace/u1",
+    userId: "u1",
+  });
+  assert.equal(longMemory, "static-long-memory-only");
 });
