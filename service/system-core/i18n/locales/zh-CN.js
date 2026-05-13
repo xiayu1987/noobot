@@ -17,6 +17,8 @@ export default {
   "agent.subTaskLabelPrefix": "子任务",
   "agent.toolLoopLimitReached": (params = {}) =>
     `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})，自动结束。`,
+  "agent.toolLoopLimitFinalizePrompt": (params = {}) =>
+    `工具调用轮次已达到上限(${Number(params.maxTurns || 0)})。请停止继续调用工具，直接给出最终总结与可执行建议。`,
   "agent.toolConsecutiveFailureLimitReached": (params = {}) =>
     `工具「${String(params.toolName || "").trim() || "unknown"}」连续失败达到 ${Number(params.maxFails || 5)} 次，已自动停止循环。`,
   "agent.toolConsecutiveFailureHelpPrompt": (params = {}) =>

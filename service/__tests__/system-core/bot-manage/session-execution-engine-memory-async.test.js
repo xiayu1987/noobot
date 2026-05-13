@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionEngine } from "../../../system-core/bot-manage/session/session-execution-engine.js";
 
-function createEngine({ maybeSummarize } = {}) {
+function createEngine({ captureSessionToShortMemory, maybeSummarize } = {}) {
   const session = {
     async appendExecutionLog() {},
     async appendTurn() {},
@@ -13,7 +13,12 @@ function createEngine({ maybeSummarize } = {}) {
     },
   };
   const memory = {
-    async captureSessionToShortMemory() {},
+    async captureSessionToShortMemory(...args) {
+      if (typeof captureSessionToShortMemory === "function") {
+        return captureSessionToShortMemory(...args);
+      }
+      return undefined;
+    },
     async maybeSummarize(...args) {
       if (typeof maybeSummarize === "function") {
         return maybeSummarize(...args);
@@ -65,48 +70,56 @@ async function waitFor(predicate, timeoutMs = 500) {
   }
 }
 
-test("_finalizeRunSession does not block on memory summarize when async enabled", async () => {
-  let resolveSummarize = null;
+test("_finalizeRunSession does not block on memory postprocess when async enabled", async () => {
+  let resolveCapture = null;
+  let captureStarted = false;
   let summarizeStarted = false;
   const engine = createEngine({
+    captureSessionToShortMemory: async () => {
+      captureStarted = true;
+      await new Promise((resolve) => {
+        resolveCapture = resolve;
+      });
+    },
     maybeSummarize: async () => {
       summarizeStarted = true;
-      await new Promise((resolve) => {
-        resolveSummarize = resolve;
-      });
     },
   });
 
   const finalizePromise = engine._finalizeRunSession(
     buildFinalizeInput({
-      memory: { summarize_async: true },
+      memory: { postprocess_async: true, summarize_async: true },
     }),
   );
 
   const result = await finalizePromise;
   assert.ok(result);
-  assert.equal(summarizeStarted, true);
-  await waitFor(() => typeof resolveSummarize === "function");
+  assert.equal(captureStarted, true);
+  assert.equal(summarizeStarted, false);
+  await waitFor(() => typeof resolveCapture === "function");
 
-  resolveSummarize?.();
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  resolveCapture?.();
+  await waitFor(() => summarizeStarted === true);
 });
 
-test("_finalizeRunSession blocks on memory summarize when async disabled", async () => {
+test("_finalizeRunSession blocks on memory postprocess when postprocess async disabled", async () => {
   let finalizeCompleted = false;
-  let resolveSummarize = null;
+  let resolveCapture = null;
   const engine = createEngine({
-    maybeSummarize: async () => {
+    captureSessionToShortMemory: async () => {
       await new Promise((resolve) => {
-        resolveSummarize = resolve;
+        resolveCapture = resolve;
       });
+    },
+    maybeSummarize: async () => {
+      return undefined;
     },
   });
 
   const finalizePromise = engine
     ._finalizeRunSession(
       buildFinalizeInput({
-        memory: { summarize_async: false },
+        memory: { postprocess_async: false, summarize_async: true },
       }),
     )
     .then(() => {
@@ -115,9 +128,9 @@ test("_finalizeRunSession blocks on memory summarize when async disabled", async
 
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(finalizeCompleted, false);
-  await waitFor(() => typeof resolveSummarize === "function");
+  await waitFor(() => typeof resolveCapture === "function");
 
-  resolveSummarize?.();
+  resolveCapture?.();
   await finalizePromise;
   assert.equal(finalizeCompleted, true);
 });

@@ -288,6 +288,18 @@ export class SessionExecutionEngine {
     return configured !== false;
   }
 
+  _resolveMemoryPostProcessAsyncEnabled(userConfig = {}) {
+    const configured =
+      userConfig?.memory?.postprocess_async ??
+      userConfig?.memory?.postprocessAsync ??
+      userConfig?.memoryPostprocessAsync ??
+      this.globalConfig?.memory?.postprocess_async ??
+      this.globalConfig?.memory?.postprocessAsync ??
+      this.globalConfig?.memoryPostprocessAsync;
+    if (configured === undefined || configured === null) return true;
+    return configured !== false;
+  }
+
   _resolveExecutionBundleTimeoutMs(userConfig = {}) {
     const effectiveConfig = mergeConfig(this.globalConfig || {}, userConfig || {});
     const configured = Number(
@@ -353,6 +365,60 @@ export class SessionExecutionEngine {
       sessionId,
       mode,
     });
+  }
+
+  async _runMemoryPostProcessFlow({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    userConfig = {},
+    runtimeEventListener = null,
+    mode = "sync",
+  } = {}) {
+    try {
+      await this.memory.captureSessionToShortMemory({
+        userId,
+        sessionId,
+        parentSessionId,
+        userConfig,
+      });
+      emitEvent(runtimeEventListener, "short_memory_captured", {
+        sessionId,
+        mode,
+      });
+      const memorySummaryAsyncEnabled =
+        this._resolveMemorySummaryAsyncEnabled(userConfig);
+      if (memorySummaryAsyncEnabled) {
+        emitEvent(runtimeEventListener, "memory_summary_scheduled", {
+          sessionId,
+          mode: "async",
+        });
+      }
+      await this._runMemorySummarizeFlow({
+        userId,
+        sessionId,
+        userConfig,
+        runtimeEventListener,
+        mode: memorySummaryAsyncEnabled ? "async" : "sync",
+      });
+    } catch (error) {
+      emitEvent(runtimeEventListener, "memory_postprocess_failed", {
+        sessionId,
+        mode,
+        error: error?.message || String(error),
+      });
+      if (this.errorLogger?.log) {
+        await this.errorLogger.log({
+          userId,
+          sessionId,
+          parentSessionId,
+          source: "SessionExecutionEngine._runMemoryPostProcessFlow",
+          event: "memory_postprocess_failed",
+          error,
+        });
+      }
+      throw error;
+    }
   }
 
   _applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
@@ -909,39 +975,32 @@ export class SessionExecutionEngine {
       currentTurnTasks: agentResult?.turnTasks || [],
     });
 
-    await this.memory.captureSessionToShortMemory({
-      userId,
-      sessionId,
-      parentSessionId,
-      userConfig,
-    });
-    emitEvent(runtimeEventListener, "short_memory_captured", {
-      sessionId,
-    });
-    const memorySummaryAsyncEnabled =
-      this._resolveMemorySummaryAsyncEnabled(userConfig);
-    if (memorySummaryAsyncEnabled) {
-      emitEvent(runtimeEventListener, "memory_summary_scheduled", {
+    const memoryPostProcessAsyncEnabled =
+      this._resolveMemoryPostProcessAsyncEnabled(userConfig);
+    if (memoryPostProcessAsyncEnabled) {
+      emitEvent(runtimeEventListener, "memory_postprocess_scheduled", {
         sessionId,
         mode: "async",
       });
       Promise.resolve()
         .then(() =>
-          this._runMemorySummarizeFlow({
+          this._runMemoryPostProcessFlow({
             userId,
             sessionId,
+            parentSessionId,
             userConfig,
             runtimeEventListener,
             mode: "async",
           }),
         )
         .catch(() => {
-          // error already handled in _runMemorySummarizeFlow
+          // error already handled in _runMemorySummarizeFlow or error logger
         });
     } else {
-      await this._runMemorySummarizeFlow({
+      await this._runMemoryPostProcessFlow({
         userId,
         sessionId,
+        parentSessionId,
         userConfig,
         runtimeEventListener,
         mode: "sync",
