@@ -7,12 +7,60 @@
  */
 
 const TOOL_EVENT_TYPES = new Set(["tool_call", "tool_result"]);
+const ERROR_EVENT_SUFFIX_RE = /(_error|_aborted)$/i;
+
+function resolveErrorType(rawEvent = "") {
+  const normalized = String(rawEvent || "").toLowerCase();
+  if (normalized.includes("llm")) return "llm_error";
+  if (normalized.includes("tool")) return "tool_error";
+  if (normalized.includes("orchestrator")) return "orchestrator_error";
+  return "error";
+}
+
+function normalizeErrorEvent(rawEvent = "", data = {}, ts = "") {
+  const errorInfo =
+    data?.error && typeof data.error === "object" ? data.error : {};
+  const classification = String(
+    errorInfo?.classification || data?.classification || "fatal",
+  ).trim();
+  const message = String(
+    errorInfo?.message || data?.message || rawEvent || "error",
+  ).trim();
+
+  return {
+    event: "thinking",
+    data: {
+      category: "error",
+      type: resolveErrorType(rawEvent),
+      event: "error",
+      rawEvent: rawEvent || "error",
+      ts,
+      ...data,
+      classification,
+      retryable:
+        typeof errorInfo?.retryable === "boolean"
+          ? errorInfo.retryable
+          : classification === "retryable",
+      fatal:
+        typeof errorInfo?.fatal === "boolean"
+          ? errorInfo.fatal
+          : classification === "fatal",
+      abort:
+        typeof errorInfo?.abort === "boolean"
+          ? errorInfo.abort
+          : classification === "abort",
+      text: `${rawEvent || "error"} ${message}`,
+    },
+  };
+}
 
 export function classifyExecutionEvent(event = "") {
   if (event === "tool_call_start")
     return { category: "tool", type: "tool_call" };
   if (event === "tool_call_end")
     return { category: "tool", type: "tool_result" };
+  if (ERROR_EVENT_SUFFIX_RE.test(event))
+    return { category: "error", type: resolveErrorType(event) };
   return { category: "system", type: "system" };
 }
 
@@ -20,6 +68,10 @@ export function normalizeSseLogEvent(evt = {}) {
   const rawEvent = String(evt?.event || "");
   const data = evt?.data || {};
   const ts = evt?.ts || new Date().toISOString();
+
+  if (ERROR_EVENT_SUFFIX_RE.test(rawEvent)) {
+    return normalizeErrorEvent(rawEvent, data, ts);
+  }
 
   if (rawEvent === "tool_call_start") {
     return {

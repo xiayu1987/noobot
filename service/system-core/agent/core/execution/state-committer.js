@@ -5,7 +5,7 @@
  */
 import { ToolMessage } from "@langchain/core/messages";
 import { appendAttachmentMetasToRuntimeAndTurn } from "../../../attach/index.js";
-import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants.js";
+import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
 
 export function createStateCommitter({
   messages = null,

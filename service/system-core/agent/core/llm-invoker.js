@@ -9,9 +9,14 @@ import {
 } from "./model/model-manager.js";
 import { isAbortError as isSharedAbortError } from "../../utils/error-utils.js";
 import {
+  buildEngineErrorPayload,
+  classifyEngineError,
+  handleEngineError,
+} from "./error/index.js";
+import {
   TRANSIENT_LLM_MAX_ATTEMPTS,
   TRANSIENT_LLM_RETRY_BASE_DELAY_MS,
-} from "./constants.js";
+} from "./constants/index.js";
 
 // ── Helpers ──
 
@@ -124,6 +129,16 @@ function createTrackedStreamingCallbacks(eventListener = null) {
   };
 }
 
+function resolveRuntimeErrorContext(modelState = {}) {
+  const runtime = modelState?.runtime || {};
+  const systemRuntime = runtime?.systemRuntime || {};
+  return {
+    sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
+    parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
+    dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+  };
+}
+
 // ── Public API ──
 
 /**
@@ -147,38 +162,62 @@ export async function invokeLlmWithTransientRetry({
     } catch (error) {
       lastError = error;
       const errorData = normalizeLlmError(error, modelState, { turn, mode });
+      const runtimeContext = resolveRuntimeErrorContext(modelState);
       const abortLike = isAbortLikeError(error);
       if (abortLike) {
-        emitEvent(modelState?.eventListener, "llm_call_aborted", {
-          ...errorData,
-          attempt,
-          maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
-          streamedTokens: getTokenCount(),
+        handleEngineError({
+          error,
+          eventListener: modelState?.eventListener,
+          event: "llm_call_aborted",
+          metadata: {
+            ...errorData,
+            ...runtimeContext,
+            source: "llm-invoker",
+            attempt,
+            maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
+            streamedTokens: getTokenCount(),
+          },
         });
         throw error;
       }
+      const errorClassification = classifyEngineError(error);
       const canRetry =
         attempt < TRANSIENT_LLM_MAX_ATTEMPTS &&
         isTransientLlmError(error) &&
-        getTokenCount() === 0;
+        getTokenCount() === 0 &&
+        errorClassification === "retryable";
       if (!canRetry) {
-        emitEvent(modelState?.eventListener, "llm_call_error", {
-          ...errorData,
-          attempt,
-          maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
-          transient: isTransientLlmError(error),
-          streamedTokens: getTokenCount(),
+        handleEngineError({
+          error,
+          eventListener: modelState?.eventListener,
+          event: "llm_call_error",
+          metadata: {
+            ...errorData,
+            ...runtimeContext,
+            source: "llm-invoker",
+            attempt,
+            maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
+            transient: isTransientLlmError(error),
+            streamedTokens: getTokenCount(),
+          },
         });
         throw error;
       }
       const delayMs = TRANSIENT_LLM_RETRY_BASE_DELAY_MS * attempt;
-      emitEvent(modelState?.eventListener, "llm_call_retry", {
-        ...errorData,
-        attempt,
-        nextAttempt: attempt + 1,
-        maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
-        delayMs,
+      const retryPayload = buildEngineErrorPayload({
+        error,
+        classification: errorClassification,
+        metadata: {
+          ...errorData,
+          ...runtimeContext,
+          source: "llm-invoker",
+          attempt,
+          nextAttempt: attempt + 1,
+          maxAttempts: TRANSIENT_LLM_MAX_ATTEMPTS,
+          delayMs,
+        },
       });
+      emitEvent(modelState?.eventListener, "llm_call_retry", retryPayload);
       await sleep(delayMs);
     }
   }
