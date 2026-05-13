@@ -28,12 +28,6 @@ test("BotManager should delegate workspace/config/session calls", async () => {
       async runSession(payload = {}) {
         return { type: "run", payload };
       },
-      async startNewSession(payload = {}) {
-        return { type: "start", payload };
-      },
-      async continueSession(payload = {}) {
-        return { type: "continue", payload };
-      },
       async persistStoppedAssistantMessage(payload = {}) {
         return { type: "persist", payload };
       },
@@ -47,9 +41,9 @@ test("BotManager should delegate workspace/config/session calls", async () => {
     basePath: "/workspace/u1",
   });
   assert.equal((await manager.runSession({ x: 1 })).type, "run");
-  assert.equal((await manager.startNewSession({ x: 2 })).type, "start");
-  assert.equal((await manager.continueSession({ x: 3 })).type, "continue");
-  assert.equal((await manager.persistStoppedAssistantMessage({ x: 4 })).type, "persist");
+  assert.equal(typeof manager.startNewSession, "undefined");
+  assert.equal(typeof manager.continueSession, "undefined");
+  assert.equal((await manager.persistStoppedAssistantMessage({ x: 2 })).type, "persist");
 });
 
 test("BotManager should delegate async-job and attachment operations", async () => {
