@@ -119,6 +119,17 @@ export function buildContextMessages(
   const historyMessages = Array.isArray(agentContext?.payload?.messages?.history)
     ? agentContext.payload.messages.history
     : [];
+  const knownHistoryToolCallIds = new Set();
+
+  for (const msg of historyMessages) {
+    if (msg?.summarized === true) continue;
+    if ((msg?.role || "") !== "assistant") continue;
+    const normalizedToolCalls = toLangChainToolCalls(msg.tool_calls || []);
+    for (const toolCall of normalizedToolCalls) {
+      const toolCallId = String(toolCall?.id || "").trim();
+      if (toolCallId) knownHistoryToolCallIds.add(toolCallId);
+    }
+  }
 
   for (const content of systemMessages) {
     out.push(new SystemMessage(content));
@@ -148,9 +159,13 @@ export function buildContextMessages(
     }
 
     if (role === "tool") {
+      const toolCallId = String(msg?.tool_call_id || "").trim();
+      if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
+        continue;
+      }
       out.push(
         new ToolMessage({
-          tool_call_id: msg.tool_call_id || "",
+          tool_call_id: toolCallId,
           content: msg.content || "",
         }),
       );

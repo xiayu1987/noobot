@@ -72,8 +72,26 @@ export class ExecutionLogRepository {
         normalizedSessionId,
         parentSessionId,
       );
+      const normalizedLog = normalizeExecutionLogEntity(executionLog, this.now);
       bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
-      bundle.logs.push(normalizeExecutionLogEntity(executionLog, this.now));
+      const incomingDialogProcessId = String(normalizedLog?.dialogProcessId || "").trim();
+      const existingLatestDialogProcessId = [...bundle.logs]
+        .reverse()
+        .map((logItem) => String(logItem?.dialogProcessId || "").trim())
+        .find(Boolean);
+      const targetDialogProcessId = incomingDialogProcessId || existingLatestDialogProcessId;
+      if (!incomingDialogProcessId && targetDialogProcessId) {
+        normalizedLog.dialogProcessId = targetDialogProcessId;
+      }
+      if (targetDialogProcessId) {
+        bundle.logs = bundle.logs.filter(
+          (logItem) =>
+            String(logItem?.dialogProcessId || "").trim() === targetDialogProcessId,
+        );
+      } else {
+        bundle.logs = [];
+      }
+      bundle.logs.push(normalizedLog);
       bundle.updatedAt = this.now();
       await this.sessionRepository.saveExecutionBundle(
         userId,
