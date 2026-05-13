@@ -7,6 +7,8 @@
 import { mergeConfig } from "../../config/index.js";
 import { isPlainObject } from "../../utils/shared-utils.js";
 
+const ALWAYS_INCLUDED_TOOL_NAMES = new Set(["final_answer"]);
+
 /**
  * Resolve scenario-based runtime config and apply tool policy scopes.
  */
@@ -78,6 +80,15 @@ export class RunConfigResolver {
       seenNames.add(toolName);
       dedupedTools.push(toolItem);
     }
+
+    for (const sourceTool of sourceTools) {
+      const sourceToolName = String(sourceTool?.name || "").trim();
+      if (!ALWAYS_INCLUDED_TOOL_NAMES.has(sourceToolName)) continue;
+      if (seenNames.has(sourceToolName)) continue;
+      seenNames.add(sourceToolName);
+      dedupedTools.push(sourceTool);
+    }
+
     return {
       ...agentContext,
       payload: {

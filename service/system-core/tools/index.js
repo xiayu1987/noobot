@@ -17,6 +17,10 @@ import { createConnectorAccessTool } from "./connector-tools/connector-access-to
 import { createMultimodalGenerateTool } from "./multimodal-generate-tool.js";
 import { createTaskSummaryTool } from "./task-summary-tool.js";
 import { createRequestHelpTool } from "./request-help-tool.js";
+import {
+  FINAL_ANSWER_TOOL_NAME,
+  createFinalAnswerTool,
+} from "./final-answer-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 
@@ -75,6 +79,7 @@ function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
   const source = Array.isArray(tools) ? tools : [];
   return source.filter((toolDefinition) => {
     const name = normalizeToolName(toolDefinition);
+    if (name === FINAL_ANSWER_TOOL_NAME) return true;
     const candidates =
       Array.isArray(TOOL_CONFIG_ALIASES[name]) && TOOL_CONFIG_ALIASES[name].length
         ? TOOL_CONFIG_ALIASES[name]
@@ -157,6 +162,7 @@ export async function buildTools(ctx) {
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
     ...createRequestHelpTool(ctx),
+    ...createFinalAnswerTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
   const enabledTools = filterToolsByConfigEnabled(baseTools, effectiveConfig);

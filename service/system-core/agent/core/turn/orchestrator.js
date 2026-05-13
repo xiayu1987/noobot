@@ -37,6 +37,24 @@ export function createTurnOrchestrator({
   maybePromptHelpToolByFailureFn = maybePromptHelpToolByFailure,
   handleEngineErrorFn = handleEngineError,
 } = {}) {
+  function removeToolChoiceRequiredRetryPrompts(messages = []) {
+    if (!Array.isArray(messages)) return 0;
+    let removedCount = 0;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      const marker =
+        message?.additional_kwargs?.noobotInternalMessageType ||
+        message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+        message?.metadata?.noobotInternalMessageType ||
+        message?.lc_kwargs?.metadata?.noobotInternalMessageType ||
+        "";
+      if (marker !== "tool_choice_required_retry_prompt") continue;
+      messages.splice(index, 1);
+      removedCount += 1;
+    }
+    return removedCount;
+  }
+
   async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     const { tools, traces, maxTurns } = loopState;
     const { abortSignal, runtime, eventListener } = modelState;
@@ -94,15 +112,33 @@ export function createTurnOrchestrator({
       } = withToolsResult;
 
       if (!calls.length) {
-        return buildLoopResultFn({
-          output: aiContentText,
-          traces,
-          loopState,
-          turnTaskStore,
-          turnMessageStore,
-          modelMessages: loopState.messages,
-        });
+        if (loopState?.toolChoiceRetryPrompted === true) {
+          loopState.toolChoiceRetryPrompted = false;
+          return buildLoopResultFn({
+            output: aiContentText,
+            traces,
+            loopState,
+            turnTaskStore,
+            turnMessageStore,
+            modelMessages: loopState.messages,
+          });
+        }
+        if (Array.isArray(loopState?.messages)) {
+          removeToolChoiceRequiredRetryPrompts(loopState.messages);
+          loopState.messages.push(
+            new HumanMessage({
+              content: tEngine(runtime, "toolChoiceRequiredRetryPrompt"),
+              additional_kwargs: {
+                noobotInternalMessageType: "tool_choice_required_retry_prompt",
+              },
+            }),
+          );
+        }
+        loopState.toolChoiceRetryPrompted = true;
+        emitEvent(eventListener, "tool_choice_required_retry_prompted", { turn });
+        return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
       }
+      loopState.toolChoiceRetryPrompted = false;
 
       if (isOverMaxTurns) {
         const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
@@ -127,7 +163,12 @@ export function createTurnOrchestrator({
         });
       }
 
-      const { toolCallResults, hasTaskSummaryCall, hasRequestHelpCall } =
+      const {
+        toolCallResults,
+        hasTaskSummaryCall,
+        hasRequestHelpCall,
+        hasFinalAnswerCall,
+      } =
         await processToolResultsFn({
           modelState,
           loopState,
@@ -158,6 +199,23 @@ export function createTurnOrchestrator({
         });
         markCurrentTurnStoreSummarized(turnMessageStore, {
           taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+        });
+      }
+
+      if (hasFinalAnswerCall) {
+        const finalResult = await invokeNoToolsTurnFn({
+          modelState,
+          loopState,
+          turn: turn + 1,
+          forceToolChoiceNone: true,
+        });
+        return buildLoopResultFn({
+          output: finalResult.output,
+          traces,
+          loopState,
+          turnTaskStore: finalResult.turnTaskStore,
+          turnMessageStore: finalResult.turnMessageStore,
+          modelMessages: finalResult.modelMessages,
         });
       }
 

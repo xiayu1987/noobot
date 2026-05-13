@@ -29,7 +29,7 @@ test("adaptToolsForBinding enables strict by default for codex-like model", () =
     },
   );
 
-  assert.deepEqual(adapted.bindOptions, { strict: true });
+  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: true });
 });
 
 test("adaptToolsForBinding respects explicit strict tool schema config", () => {
@@ -43,7 +43,7 @@ test("adaptToolsForBinding respects explicit strict tool schema config", () => {
     },
   );
 
-  assert.deepEqual(adapted.bindOptions, { strict: true });
+  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: true });
 });
 
 test("adaptToolsForBinding downgrades strict when call_service is present", () => {
@@ -57,6 +57,33 @@ test("adaptToolsForBinding downgrades strict when call_service is present", () =
     },
   );
 
-  assert.deepEqual(adapted.bindOptions, {});
+  assert.deepEqual(adapted.bindOptions, { tool_choice: "auto" });
   assert.deepEqual(adapted.strictDowngradedTools, ["call_service"]);
+});
+
+test("adaptToolsForBinding defaults tool_choice to auto when tools exist", () => {
+  const adapted = adaptToolsForBinding([{ name: "wait" }], {
+    activeModelName: "gpt-4o-mini",
+    activeModelAlias: "default",
+    globalConfig: {},
+    userConfig: {},
+  });
+
+  assert.equal(adapted.bindOptions.tool_choice, "auto");
+});
+
+test("adaptToolsForBinding keeps tool_choice as auto even when runtime marks required unsupported", () => {
+  const adapted = adaptToolsForBinding([{ name: "wait" }], {
+    activeModelName: "gpt-4o-mini",
+    activeModelAlias: "default",
+    runtime: {
+      systemRuntime: {
+        toolChoiceRequiredUnsupported: true,
+      },
+    },
+    globalConfig: {},
+    userConfig: {},
+  });
+
+  assert.equal(adapted.bindOptions.tool_choice, "auto");
 });
