@@ -103,14 +103,6 @@ export class BotManager {
     return this.sessionRunner.runSession(payload);
   }
 
-  async startNewSession(payload = {}) {
-    return this.sessionRunner.startNewSession(payload);
-  }
-
-  async continueSession(payload = {}) {
-    return this.sessionRunner.continueSession(payload);
-  }
-
   async persistStoppedAssistantMessage(payload = {}) {
     return this.sessionRunner.persistStoppedAssistantMessage(payload);
   }

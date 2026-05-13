@@ -1246,14 +1246,4 @@ export class SessionExecutionEngine {
       parentSessionId: "",
     });
   }
-
-  /** @deprecated Use runSessionAsUser instead */
-  async startNewSession(params) {
-    return this.runSessionAsUser(params);
-  }
-
-  /** @deprecated Use runSessionAsUser instead */
-  async continueSession(params) {
-    return this.runSessionAsUser(params);
-  }
 }
