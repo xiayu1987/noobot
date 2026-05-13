@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node agent-proxy.js",
     "dev": "node --watch agent-proxy.js",
+    "test": "node --test __tests__/**/*.test.js",
     "pm2:start": "PM2_HOME=../.pm2 npx pm2 start agent-proxy.js --name noobot-agent-proxy",
     "pm2:restart": "PM2_HOME=../.pm2 npx pm2 restart noobot-agent-proxy",
     "pm2:stop": "PM2_HOME=../.pm2 npx pm2 stop noobot-agent-proxy",
