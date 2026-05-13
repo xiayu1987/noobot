@@ -41,26 +41,6 @@ export function normalizeMessageEntity(
     attachmentMetas: normalizedAttachmentMetas,
     ts: String(message?.ts || "").trim() || now(),
   };
-  if (
-    typeof message?.rawModelContent === "string" ||
-    Array.isArray(message?.rawModelContent)
-  ) {
-    normalizedMessage.rawModelContent = message.rawModelContent;
-  }
-  if (
-    message?.modelAdditionalKwargs &&
-    typeof message.modelAdditionalKwargs === "object" &&
-    !Array.isArray(message.modelAdditionalKwargs)
-  ) {
-    normalizedMessage.modelAdditionalKwargs = message.modelAdditionalKwargs;
-  }
-  if (
-    message?.modelResponseMetadata &&
-    typeof message.modelResponseMetadata === "object" &&
-    !Array.isArray(message.modelResponseMetadata)
-  ) {
-    normalizedMessage.modelResponseMetadata = message.modelResponseMetadata;
-  }
   const toolCallId = String(message?.tool_call_id || "").trim();
   const toolName = String(message?.toolName || message?.tool_name || "").trim();
   if (toolCallId) normalizedMessage.tool_call_id = toolCallId;

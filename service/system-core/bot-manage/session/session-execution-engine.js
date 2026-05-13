@@ -536,6 +536,54 @@ export class SessionExecutionEngine {
     parentSessionId = "",
     eventListener,
   }) {
+    const fullTurnPayload = {
+      role,
+      content,
+      type: type || "",
+      taskId: taskId ?? "",
+      taskStatus: taskStatus ?? "",
+      dialogProcessId: dialogProcessId || "",
+      parentDialogProcessId: parentDialogProcessId || "",
+      tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
+      tool_call_id: tool_call_id || "",
+      attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+      modelAlias: String(modelAlias || "").trim(),
+      modelName: String(modelName || "").trim(),
+      summarized: summarized === true,
+      toolName: String(toolName || "").trim(),
+      rawModelContent:
+        typeof rawModelContent === "string" || Array.isArray(rawModelContent)
+          ? rawModelContent
+          : null,
+      modelAdditionalKwargs:
+        modelAdditionalKwargs &&
+        typeof modelAdditionalKwargs === "object" &&
+        !Array.isArray(modelAdditionalKwargs)
+          ? modelAdditionalKwargs
+          : null,
+      modelResponseMetadata:
+        modelResponseMetadata &&
+        typeof modelResponseMetadata === "object" &&
+        !Array.isArray(modelResponseMetadata)
+          ? modelResponseMetadata
+          : null,
+    };
+    try {
+      if (typeof this.session?.appendExecutionLog === "function") {
+        await this.session.appendExecutionLog({
+          userId,
+          sessionId,
+          parentSessionId,
+          dialogProcessId: String(dialogProcessId || "").trim(),
+          event: "session_turn_full",
+          category: "system",
+          type: "session_turn_full",
+          data: fullTurnPayload,
+        });
+      }
+    } catch {
+      // ignore execution-log failures to avoid blocking the main turn flow
+    }
     await this.session.appendTurn({
       userId,
       sessionId,
@@ -657,16 +705,19 @@ export class SessionExecutionEngine {
   }
 
   _buildRunTurnAgentContext(agentContext = {}, abortSignal = null) {
+    const runtimeRef =
+      agentContext?.execution?.controllers?.runtime &&
+      typeof agentContext.execution.controllers.runtime === "object"
+        ? agentContext.execution.controllers.runtime
+        : {};
+    runtimeRef.abortSignal = abortSignal;
     return {
       ...agentContext,
       execution: {
         ...(agentContext?.execution || {}),
         controllers: {
           ...(agentContext?.execution?.controllers || {}),
-          runtime: {
-            ...(agentContext?.execution?.controllers?.runtime || {}),
-            abortSignal,
-          },
+          runtime: runtimeRef,
         },
       },
       payload: {
@@ -745,6 +796,7 @@ export class SessionExecutionEngine {
       dialogProcessId,
       isContinue,
       userConfig,
+      currentSessionModelAlias: String(sessionBundle?.session?.modelAlias || "").trim(),
       executionStartIndex,
       runtimeEventListener,
     };
@@ -927,6 +979,7 @@ export class SessionExecutionEngine {
         dialogProcessId,
         isContinue,
         userConfig,
+        currentSessionModelAlias,
         executionStartIndex,
         runtimeEventListener,
       } = await this._initializeRunSessionRuntime({
@@ -940,6 +993,12 @@ export class SessionExecutionEngine {
         runConfig,
         userConfig,
       );
+      if (
+        !String(resolvedRunConfig?.runtimeModel || "").trim() &&
+        String(currentSessionModelAlias || "").trim()
+      ) {
+        resolvedRunConfig.runtimeModel = String(currentSessionModelAlias || "").trim();
+      }
 
       const agentContext = await this._buildAgentContext({
         mode: isContinue ? "continue" : "initial",
