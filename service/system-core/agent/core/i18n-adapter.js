@@ -5,7 +5,7 @@
  */
 import { pickLocaleText, resolveLocaleFromRuntime } from "../../i18n/index.js";
 import { BACKEND_I18N } from "../../i18n/backend-messages.js";
-import { ENGINE_I18N_KEY_MAP } from "./constants.js";
+import { ENGINE_I18N_KEY_MAP } from "./constants/index.js";
 
 export function tEngine(runtime = {}, key = "", params = {}) {
   const locale = resolveLocaleFromRuntime(runtime);

@@ -7,18 +7,8 @@ import { emitEvent } from "../../../event/index.js";
 import { isFatalError } from "../../../error/index.js";
 import { extractAttachmentMetasFromToolResult } from "../media/artifact-service.js";
 import { isAbortError } from "../utils/error-utils.js";
-
-function parseJsonObjectSafely(input = "") {
-  const text = String(input || "").trim();
-  if (!text) return null;
-  try {
-    const parsed = JSON.parse(text);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed;
-    }
-  } catch {}
-  return null;
-}
+import { parseJsonObjectSafely } from "../utils/json-utils.js";
+import { handleEngineError } from "../error/index.js";
 
 function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
   if (invokeError) {
@@ -71,8 +61,21 @@ export async function executeToolCall({
     toolResultText =
       typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
   } catch (error) {
-    if (isAbortError(error)) throw error;
-    if (isFatalError(error)) throw error;
+    const isAbort = isAbortError(error);
+    const isFatal = isFatalError(error);
+    handleEngineError({
+      error,
+      eventListener,
+      event: "tool_call_error",
+      metadata: {
+        source: "tool-runner",
+        turn,
+        tool: String(call?.name || "").trim(),
+        sessionId: String(sessionId || "").trim(),
+        parentSessionId: String(parentSessionId || "").trim(),
+      },
+    });
+    if (isAbort || isFatal) throw error;
     invokeError = error;
     toolResultText = `tool invoke error: ${error?.message || String(error)}`;
     if (errorLogger && typeof errorLogger.log === "function") {

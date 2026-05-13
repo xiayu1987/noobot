@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
 
-import { runFunctionCallLoop } from "../../../../system-core/agent/core/turn-orchestrator.js";
+import { runFunctionCallLoop } from "../../../../system-core/agent/core/turn/orchestrator.js";
 
 function createToolCallingLlm(responses = []) {
   const capturedInvocations = [];

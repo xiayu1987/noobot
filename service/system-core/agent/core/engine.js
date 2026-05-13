@@ -21,7 +21,7 @@
  */
 
 import { buildAgentState } from "./state-builder.js";
-import { runFunctionCallLoop } from "./turn-orchestrator.js";
+import { runFunctionCallLoop } from "./turn/orchestrator.js";
 
 export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
   const { modelState, loopState } = buildAgentState({ agentContext, userMessage, errorLogger });

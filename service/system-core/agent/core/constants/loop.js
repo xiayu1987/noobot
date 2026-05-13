@@ -41,15 +41,6 @@ export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS = 0;
 export const DEFAULT_HELP_PROMPT_LOOP_TURNS = 50;
 
 /**
- * 工具调用结果追踪截断长度（字符数）
- * 用于 traces 中 result 字段的长度限制
- */
-export const TOOL_RESULT_TRACE_TRUNCATE_LENGTH = 1000;
-
-// Re-export for backward compatibility
-export { getMimeExtensionMap as MIME_EXTENSION_MAP } from "../../utils/mime-utils.js";
-
-/**
  * Internal message type markers for system-injected prompts.
  */
 export const PHASE_SUMMARY_PROMPT_MARKER = "noobot.phase_summary_prompt";
@@ -60,9 +51,3 @@ export const HELP_TOOL_FAILURE_PROMPT_MARKER = "noobot.help_tool_failure_prompt"
  * Tool names used internally by the engine.
  */
 export const TASK_SUMMARY_TOOL_NAME = "task_summary";
-
-/**
- * LLM transient retry configuration.
- */
-export const TRANSIENT_LLM_MAX_ATTEMPTS = 3;
-export const TRANSIENT_LLM_RETRY_BASE_DELAY_MS = 500;
