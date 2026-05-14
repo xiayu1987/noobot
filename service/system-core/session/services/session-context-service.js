@@ -3,17 +3,21 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig } from "../config/index.js";
+import { mergeConfig } from "../../config/index.js";
 import {
   filterSummarizedMessages,
   normalizeContextWindow,
   normalizeRecentWindow,
-} from "./context-window-normalizer.js";
+} from "../utils/context-window-normalizer.js";
 
 export class SessionContextService {
-  constructor({ globalConfig = {}, sessionService } = {}) {
+  constructor({
+    globalConfig = {},
+    sessionService = null,
+    sessionMessageService = null,
+  } = {}) {
     this.globalConfig = globalConfig;
-    this.sessionService = sessionService;
+    this.sessionMessageService = sessionMessageService || sessionService;
   }
 
   _sessionContextConfig(userConfig = {}) {
@@ -43,8 +47,12 @@ export class SessionContextService {
     return normalizeRecentWindow(messages, limit);
   }
 
+  async _getSessionTurns({ userId, sessionId }) {
+    return this.sessionMessageService.getSessionTurns({ userId, sessionId });
+  }
+
   async getRecentSessionMessages({ userId, sessionId, limit, userConfig = {} }) {
-    const messages = await this.sessionService.getSessionTurns({ userId, sessionId });
+    const messages = await this._getSessionTurns({ userId, sessionId });
     const resolvedLimit = Number(
       limit || this._sessionContextConfig(userConfig).recentMessageLimit || 20,
     );
@@ -54,7 +62,7 @@ export class SessionContextService {
   }
 
   async getMessagesSinceLastRunningTask({ userId, sessionId }) {
-    const messages = await this.sessionService.getSessionTurns({ userId, sessionId });
+    const messages = await this._getSessionTurns({ userId, sessionId });
     const filteredMessages = filterSummarizedMessages(messages);
     if (!filteredMessages.length) return [];
 
@@ -78,7 +86,7 @@ export class SessionContextService {
   }
 
   async getMessagesSinceLastCompletedTask({ userId, sessionId }) {
-    const messages = await this.sessionService.getSessionTurns({ userId, sessionId });
+    const messages = await this._getSessionTurns({ userId, sessionId });
     const filteredMessages = filterSummarizedMessages(messages);
     if (!filteredMessages.length) return [];
 

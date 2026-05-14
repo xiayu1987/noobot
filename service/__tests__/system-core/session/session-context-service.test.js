@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { SessionContextService } from "../../../system-core/session/session-context-service.js";
+import { SessionContextService } from "../../../system-core/session/services/session-context-service.js";
 
 function createSessionContextService(messages = [], { globalConfig = {} } = {}) {
   return new SessionContextService({

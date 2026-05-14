@@ -37,7 +37,7 @@ import { tSystem } from "../i18n/system-text.js";
 import {
   filterSummarizedMessages,
   normalizeContextWindow,
-} from "../session/context-window-normalizer.js";
+} from "../session/utils/context-window-normalizer.js";
 
 export class ContextBuilder {
   constructor(input = {}) {

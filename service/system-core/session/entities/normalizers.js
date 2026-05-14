@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Backward-compatible exports.
  */
 
 export {
@@ -11,6 +9,6 @@ export {
   normalizeMessagesEntity,
   normalizeSelectedConnectors,
   normalizeSessionTreeEntity,
-  normalizeTaskEntity,
-  normalizeExecutionLogEntity,
-} from "./entities/normalizers.js";
+} from "./session-entity.js";
+export { normalizeTaskEntity } from "./task-entity.js";
+export { normalizeExecutionLogEntity } from "../../tracking/execution-log/execution-log-entities.js";

@@ -5,7 +5,7 @@
  */
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
-import { normalizeSessionTreeEntity } from "../entities.js";
+import { normalizeSessionTreeEntity } from "../entities/session-entity.js";
 
 export class FileSystemSessionTreeRepository {
   constructor({ pathResolver, storageService, now = () => new Date().toISOString() } = {}) {

@@ -4,22 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readdir, rm } from "node:fs/promises";
-import path from "node:path";
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 
 export class FileSystemSessionRepository {
   constructor({
     pathResolver,
+    sessionPathResolver,
     storageService,
-    treeRepository,
     normalizeMessages,
     normalizeSelectedConnectors,
     now = () => new Date().toISOString(),
   } = {}) {
     this.pathResolver = pathResolver;
+    this.sessionPathResolver = sessionPathResolver;
     this.storageService = storageService;
-    this.treeRepository = treeRepository;
     this.normalizeMessages = normalizeMessages;
     this.normalizeSelectedConnectors = normalizeSelectedConnectors;
     this.now = now;
@@ -34,67 +33,27 @@ export class FileSystemSessionRepository {
   }
 
   async resolveParentSessionId(userId, sessionId, parentSessionId = "") {
-    const hintedParentSessionId = String(parentSessionId || "").trim();
-    if (hintedParentSessionId) {
-      const tree = await this.treeRepository.getTree(userId);
-      if (!tree?.nodes?.[hintedParentSessionId]) {
-        throw fatalSystemError(
-          `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${hintedParentSessionId}`,
-          {
-            code: "FATAL_PARENT_SESSION_MISSING",
-            details: { hintedParentSessionId },
-          },
-        );
-      }
-      return hintedParentSessionId;
-    }
-
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return "";
-
-    const tree = await this.treeRepository.getTree(userId);
-    return String(tree?.nodes?.[normalizedSessionId]?.parentSessionId || "").trim();
-  }
-
-  async resolveSessionDir(userId, sessionId, parentSessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return this._sessionRoot(userId);
-
-    const normalizedParentSessionId = String(parentSessionId || "").trim();
-    if (
-      normalizedParentSessionId &&
-      normalizedParentSessionId !== normalizedSessionId
-    ) {
-      const parentDir = await this.resolveSessionDir(
-        userId,
-        normalizedParentSessionId,
-      );
-      return path.join(parentDir, normalizedSessionId);
-    }
-
-    const tree = await this.treeRepository.getTree(userId);
-    const chain = this.treeRepository.loopSession(normalizedSessionId, tree, []);
-    return path.join(this._sessionRoot(userId), ...chain.reverse());
-  }
-
-  async resolveSessionScope(userId, sessionId, parentSessionId = "") {
-    const resolvedParentSessionId = await this.resolveParentSessionId(
+    return this.sessionPathResolver.resolveParentSessionId(
       userId,
       sessionId,
       parentSessionId,
     );
-    const sessionDir = await this.resolveSessionDir(
+  }
+
+  async resolveSessionDir(userId, sessionId, parentSessionId = "") {
+    return this.sessionPathResolver.resolveSessionDir(
       userId,
       sessionId,
-      resolvedParentSessionId,
+      parentSessionId,
     );
-    return {
-      resolvedParentSessionId,
-      sessionDir,
-      sessionFile: path.join(sessionDir, "session.json"),
-      taskFile: path.join(sessionDir, "task.json"),
-      executionFile: path.join(sessionDir, "execution.json"),
-    };
+  }
+
+  async resolveSessionScope(userId, sessionId, parentSessionId = "") {
+    return this.sessionPathResolver.resolveSessionScope(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
   }
 
   async listSessionIds(userId) {
@@ -114,7 +73,7 @@ export class FileSystemSessionRepository {
   async ensureSession({ userId, sessionId, parentSessionId = "", meta = {} }) {
     const basePath = this._basePath(userId);
     await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-    const { resolvedParentSessionId, sessionDir, sessionFile, taskFile, executionFile } =
+    const { resolvedParentSessionId, sessionDir, sessionFile } =
       await this.resolveSessionScope(userId, sessionId, parentSessionId);
 
     await mkdir(sessionDir, { recursive: true });
@@ -130,23 +89,6 @@ export class FileSystemSessionRepository {
         messages: [],
         selectedConnectors: {},
         createdAt: this.now(),
-        updatedAt: this.now(),
-      });
-    }
-
-    if (!(await this.storageService.exists(taskFile))) {
-      await this.storageService.writeJson(taskFile, {
-        sessionId,
-        currentTaskId: "",
-        tasks: [],
-        updatedAt: this.now(),
-      });
-    }
-
-    if (!(await this.storageService.exists(executionFile))) {
-      await this.storageService.writeJson(executionFile, {
-        sessionId,
-        logs: [],
         updatedAt: this.now(),
       });
     }
@@ -209,69 +151,5 @@ export class FileSystemSessionRepository {
     );
     await rm(sessionDir, { recursive: true, force: true });
     return true;
-  }
-
-  async getTaskBundle(userId, sessionId, parentSessionId = "") {
-    const { taskFile } = await this.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-    );
-    return this.storageService.readJson(taskFile, {
-      sessionId,
-      currentTaskId: "",
-      tasks: [],
-      updatedAt: this.now(),
-    });
-  }
-
-  async saveTaskBundle(userId, sessionId, taskBundle = {}, parentSessionId = "") {
-    const { taskFile } = await this.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-    );
-    await this.storageService.writeJson(taskFile, {
-      sessionId,
-      currentTaskId: String(taskBundle?.currentTaskId || "").trim(),
-      tasks: Array.isArray(taskBundle?.tasks) ? taskBundle.tasks : [],
-      updatedAt: this.now(),
-    });
-  }
-
-  async getExecutionBundle(userId, sessionId, parentSessionId = "") {
-    const { executionFile } = await this.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-    );
-    const bundle = await this.storageService.readJson(executionFile, {
-      sessionId,
-      logs: [],
-      updatedAt: this.now(),
-    });
-    return {
-      sessionId: String(bundle?.sessionId || sessionId || "").trim(),
-      logs: Array.isArray(bundle?.logs) ? bundle.logs : [],
-      updatedAt: bundle?.updatedAt || this.now(),
-    };
-  }
-
-  async saveExecutionBundle(
-    userId,
-    sessionId,
-    executionBundle = {},
-    parentSessionId = "",
-  ) {
-    const { executionFile } = await this.resolveSessionScope(
-      userId,
-      sessionId,
-      parentSessionId,
-    );
-    await this.storageService.writeJsonAtomic(executionFile, {
-      sessionId,
-      logs: Array.isArray(executionBundle?.logs) ? executionBundle.logs : [],
-      updatedAt: this.now(),
-    });
   }
 }

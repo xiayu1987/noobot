@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  *
- * Execution log repository - persists execution logs via session repository.
+ * Execution log repository - persists execution logs.
  */
 import { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 import { fatalSystemError } from "../../error/index.js";
@@ -11,9 +11,11 @@ import { tSystem } from "../../i18n/system-text.js";
 
 export class ExecutionLogRepository {
   constructor({
-    sessionRepository,
+    executionRepository = null,
+    sessionRepository = null,
     now = () => new Date().toISOString(),
   } = {}) {
+    this.executionRepository = executionRepository;
     this.sessionRepository = sessionRepository;
     this.now = now;
     this.appendQueues = new Map();
@@ -44,6 +46,34 @@ export class ExecutionLogRepository {
     }
   }
 
+  async _getBundleStore(userId, sessionId, parentSessionId = "") {
+    if (this.executionRepository?.getBundle) {
+      return this.executionRepository.getBundle(userId, sessionId, parentSessionId);
+    }
+    return this.sessionRepository.getExecutionBundle(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+  }
+
+  async _saveBundleStore(userId, sessionId, bundle = {}, parentSessionId = "") {
+    if (this.executionRepository?.saveBundle) {
+      return this.executionRepository.saveBundle(
+        userId,
+        sessionId,
+        bundle,
+        parentSessionId,
+      );
+    }
+    return this.sessionRepository.saveExecutionBundle(
+      userId,
+      sessionId,
+      bundle,
+      parentSessionId,
+    );
+  }
+
   async getBundle(userId, sessionId, parentSessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
@@ -51,11 +81,7 @@ export class ExecutionLogRepository {
         code: "FATAL_SESSION_ID_REQUIRED",
       });
     }
-    return this.sessionRepository.getExecutionBundle(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-    );
+    return this._getBundleStore(userId, normalizedSessionId, parentSessionId);
   }
 
   async appendLog(userId, sessionId, executionLog = {}, parentSessionId = "") {
@@ -93,7 +119,7 @@ export class ExecutionLogRepository {
       }
       bundle.logs.push(normalizedLog);
       bundle.updatedAt = this.now();
-      await this.sessionRepository.saveExecutionBundle(
+      await this._saveBundleStore(
         userId,
         normalizedSessionId,
         bundle,

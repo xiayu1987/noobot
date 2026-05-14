@@ -3,12 +3,36 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { mkdir } from "node:fs/promises";
 
 export class FileSystemTaskRepository {
-  constructor({ sessionRepository, normalizeTask, now = () => new Date().toISOString() } = {}) {
-    this.sessionRepository = sessionRepository;
+  constructor({
+    pathResolver,
+    sessionPathResolver,
+    storageService,
+    normalizeTask,
+    now = () => new Date().toISOString(),
+  } = {}) {
+    this.pathResolver = pathResolver;
+    this.sessionPathResolver = sessionPathResolver;
+    this.storageService = storageService;
     this.normalizeTask = normalizeTask;
     this.now = now;
+  }
+
+  _basePath(userId = "") {
+    return this.pathResolver.resolveBasePath(userId);
+  }
+
+  async _resolveTaskScope(userId, sessionId, parentSessionId = "") {
+    const basePath = this._basePath(userId);
+    await this.storageService.ensureRuntimeDirsByBasePath(basePath);
+    const { sessionDir, taskFile } = await this.sessionPathResolver.resolveSessionScope(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    return { sessionDir, taskFile };
   }
 
   async findBySessionId(userId, sessionId, parentSessionId = "") {
@@ -17,11 +41,13 @@ export class FileSystemTaskRepository {
   }
 
   async getBundle(userId, sessionId, parentSessionId = "") {
-    const bundle = await this.sessionRepository.getTaskBundle(
-      userId,
+    const { taskFile } = await this._resolveTaskScope(userId, sessionId, parentSessionId);
+    const bundle = await this.storageService.readJson(taskFile, {
       sessionId,
-      parentSessionId,
-    );
+      currentTaskId: "",
+      tasks: [],
+      updatedAt: this.now(),
+    });
     return {
       sessionId: String(bundle?.sessionId || sessionId || "").trim(),
       currentTaskId: String(bundle?.currentTaskId || "").trim(),
@@ -33,6 +59,13 @@ export class FileSystemTaskRepository {
   }
 
   async save(userId, sessionId, task, parentSessionId = "") {
+    const { sessionDir, taskFile } = await this._resolveTaskScope(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    await mkdir(sessionDir, { recursive: true });
+
     const bundle = await this.getBundle(userId, sessionId, parentSessionId);
     const normalizedTask = this.normalizeTask(task);
     const existingIndex = bundle.tasks.findIndex(
@@ -48,12 +81,13 @@ export class FileSystemTaskRepository {
     }
     bundle.currentTaskId = String(normalizedTask.taskId || "").trim();
     bundle.updatedAt = this.now();
-    await this.sessionRepository.saveTaskBundle(
-      userId,
+
+    await this.storageService.writeJson(taskFile, {
       sessionId,
-      bundle,
-      parentSessionId,
-    );
+      currentTaskId: bundle.currentTaskId,
+      tasks: bundle.tasks,
+      updatedAt: bundle.updatedAt,
+    });
   }
 
   async saveBatch(
@@ -63,6 +97,13 @@ export class FileSystemTaskRepository {
     parentSessionId = "",
     currentTaskId = "",
   ) {
+    const { sessionDir, taskFile } = await this._resolveTaskScope(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    await mkdir(sessionDir, { recursive: true });
+
     const bundle = await this.getBundle(userId, sessionId, parentSessionId);
     const existingTasks = Array.isArray(bundle.tasks) ? bundle.tasks : [];
     const taskIndexMap = new Map(
@@ -87,11 +128,11 @@ export class FileSystemTaskRepository {
     bundle.tasks = existingTasks;
     bundle.currentTaskId = String(currentTaskId || "").trim();
     bundle.updatedAt = this.now();
-    await this.sessionRepository.saveTaskBundle(
-      userId,
+    await this.storageService.writeJson(taskFile, {
       sessionId,
-      bundle,
-      parentSessionId,
-    );
+      currentTaskId: bundle.currentTaskId,
+      tasks: bundle.tasks,
+      updatedAt: bundle.updatedAt,
+    });
   }
 }
