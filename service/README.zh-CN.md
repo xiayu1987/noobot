@@ -113,6 +113,7 @@ service/
 │   ├── auth-routes.js
 │   ├── config-template-routes.js
 │   ├── connectors-routes.js
+│   ├── file-crud-routes.js           # 通用文件 CRUD 路由工厂（tree/read/write/download）
 │   ├── session-routes.js
 │   └── workspace-routes.js
 ├── services/                   # 业务服务
