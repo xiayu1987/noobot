@@ -166,32 +166,16 @@ export function createChatModel(specOrOptions = {}, maybeOptions = {}) {
 /**
  * Create a ChatOpenAI instance by looking up model name in config.
  * @param {string} modelName
- * @param {object} globalConfig
- * @param {object} userConfig
- * @param {object} options
+ * @param {object} config
+ * @param {object} [config.globalConfig]
+ * @param {object} [config.userConfig]
+ * @param {boolean} [config.streaming]
  * @returns {ChatOpenAI}
  */
-export function createChatModelByName(modelName, arg2 = {}, arg3 = {}, arg4 = {}) {
-  let globalConfig = {};
-  let userConfig = {};
-  let options = {};
-
-  const secondArgLooksLikeOptions =
-    arg2 &&
-    typeof arg2 === "object" &&
-    (Object.prototype.hasOwnProperty.call(arg2, "globalConfig") ||
-      Object.prototype.hasOwnProperty.call(arg2, "userConfig") ||
-      Object.prototype.hasOwnProperty.call(arg2, "streaming"));
-
-  if (secondArgLooksLikeOptions) {
-    options = arg2 || {};
-    globalConfig = options?.globalConfig || {};
-    userConfig = options?.userConfig || {};
-  } else {
-    globalConfig = arg2 || {};
-    userConfig = arg3 || {};
-    options = arg4 || {};
-  }
+export function createChatModelByName(modelName, config = {}) {
+  const options = config && typeof config === "object" ? config : {};
+  const globalConfig = options?.globalConfig || {};
+  const userConfig = options?.userConfig || {};
 
   const spec = resolveModelSpecByName({ name: modelName, globalConfig, userConfig });
   if (!spec) {
