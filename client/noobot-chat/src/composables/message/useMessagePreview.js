@@ -163,6 +163,58 @@ export function useMessagePreview({
     attachmentPreview.textContent.value = "";
   }
 
+  function resolveAttachmentUrl(attachmentItem = {}) {
+    return String(
+      attachmentItem?.previewUrl ||
+        buildAttachmentUrl({
+          userId: String(userId || "").trim(),
+          attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+          sessionId: String(attachmentItem?.sessionId || "").trim(),
+          attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+        }) || "",
+    ).trim();
+  }
+
+  async function runDownloadFromUrl({
+    url = "",
+    fileName = "download",
+    errorI18nKey = "message.downloadFailed",
+  } = {}) {
+    if (!url) return;
+    try {
+      const runFetch = authFetch || fetch;
+      const response = await runFetch(url);
+      if (!response?.ok) {
+        throw new Error(
+          translate("message.downloadFailedHttp", { status: response?.status || 500 }),
+        );
+      }
+      const blob = await response.blob();
+      await triggerBlobDownload(blob, fileName, translate, notify);
+    } catch (error) {
+      notify({ type: "error", message: error?.message || translate(errorI18nKey) });
+    }
+  }
+
+  async function copyMarkdownFromText({
+    textContent = "",
+    renderedPreviewHtml = "",
+    rich = false,
+  } = {}) {
+    const content = rich
+      ? renderedPreviewHtml || renderMarkdown(String(textContent || ""))
+      : String(textContent || "");
+    await handleCopyMarkdown({
+      textContent: content,
+      renderMarkdown,
+      translate,
+      notify,
+      noCopyableContentTexts,
+      noCopyableTextTexts,
+      rich,
+    });
+  }
+
   // --- 下载 ---
 
   async function onDownloadFile(fileItem = {}) {
@@ -191,27 +243,11 @@ export function useMessagePreview({
   }
 
   async function onDownloadAttachment(attachmentItem = {}) {
-    const attachmentUrl = String(
-      attachmentItem?.previewUrl ||
-        buildAttachmentUrl({
-          userId: String(userId || "").trim(),
-          attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-          sessionId: String(attachmentItem?.sessionId || "").trim(),
-          attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
-        }) || "",
-    ).trim();
-    if (!attachmentUrl) return;
-    try {
-      const runFetch = authFetch || fetch;
-      const res = await runFetch(attachmentUrl);
-      if (!res?.ok) {
-        throw new Error(translate("message.downloadFailedHttp", { status: res?.status || 500 }));
-      }
-      const blob = await res.blob();
-      await triggerBlobDownload(blob, attachmentItem?.name || "attachment", translate, notify);
-    } catch (error) {
-      notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
-    }
+    await runDownloadFromUrl({
+      url: resolveAttachmentUrl(attachmentItem),
+      fileName: attachmentItem?.name || "attachment",
+      errorI18nKey: "message.downloadFailed",
+    });
   }
 
   // --- 文件预览 ---
@@ -290,15 +326,7 @@ export function useMessagePreview({
   async function openAttachmentPreview(attachmentItem = {}) {
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
-    const sourceUrl = String(
-      attachmentItem?.previewUrl ||
-        buildAttachmentUrl({
-          userId: String(userId || "").trim(),
-          attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-          sessionId: String(attachmentItem?.sessionId || "").trim(),
-          attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
-        }) || "",
-    ).trim();
+    const sourceUrl = resolveAttachmentUrl(attachmentItem);
     if (!sourceUrl) return;
 
     const isImage = isImageMime(mimeType);
@@ -343,21 +371,33 @@ export function useMessagePreview({
   // --- 复制 ---
 
   async function onCopyMarkdownRich(renderedPreviewHtml = "") {
-    const content = renderedPreviewHtml || renderMarkdown(filePreview.textContent.value);
-    await handleCopyMarkdown({ textContent: content, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich: true });
+    await copyMarkdownFromText({
+      textContent: filePreview.textContent.value,
+      renderedPreviewHtml,
+      rich: true,
+    });
   }
 
   async function onCopyMarkdownText() {
-    await handleCopyMarkdown({ textContent: filePreview.textContent.value, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich: false });
+    await copyMarkdownFromText({
+      textContent: filePreview.textContent.value,
+      rich: false,
+    });
   }
 
   async function onCopyAttachmentMarkdownRich(renderedPreviewHtml = "") {
-    const content = renderedPreviewHtml || renderMarkdown(attachmentPreview.textContent.value);
-    await handleCopyMarkdown({ textContent: content, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich: true });
+    await copyMarkdownFromText({
+      textContent: attachmentPreview.textContent.value,
+      renderedPreviewHtml,
+      rich: true,
+    });
   }
 
   async function onCopyAttachmentMarkdownText() {
-    await handleCopyMarkdown({ textContent: attachmentPreview.textContent.value, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich: false });
+    await copyMarkdownFromText({
+      textContent: attachmentPreview.textContent.value,
+      rich: false,
+    });
   }
 
   onBeforeUnmount(() => {

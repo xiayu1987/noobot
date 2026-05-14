@@ -8,6 +8,10 @@ import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants"
 import { useLocale } from "../../shared/i18n/useLocale";
 import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
 import { enUSMessages } from "../../shared/i18n/locales/en-US";
+import {
+  normalizeInteractionRequestPayload,
+  resolveConnectorConnectedPayload,
+} from "./interactionPayload";
 
 function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialogProcessId = "" }) {
   const normalizedDialogProcessId = String(dialogProcessId || "").trim();
@@ -216,17 +220,11 @@ export function useChatEngine({
         } else if (event === StreamEventEnum.INTERACTION_REQUEST) {
           const interactionType = String(data?.interactionType || "").trim();
           if (interactionType === "connector_connected") {
-            const interactionData =
-              data?.interactionData && typeof data.interactionData === "object"
-                ? data.interactionData
-                : {};
-            const connectedType = String(
-              data?.connectorType || interactionData?.connectorType || "",
-            ).trim();
-            const connectedName = String(
-              data?.connectorName || interactionData?.connectorName || "",
-            ).trim();
-            const connectedStatus = String(interactionData?.status || "connected").trim();
+            const { connectorType, connectorName, status } =
+              resolveConnectorConnectedPayload(data);
+            const connectedType = connectorType;
+            const connectedName = connectorName;
+            const connectedStatus = status;
             if (connectorTypeSet.has(connectedType) && connectedName) {
               upsertConnectedConnectorInPanelState(activeSession.value, {
                 connectorType: connectedType,
@@ -251,23 +249,12 @@ export function useChatEngine({
             return;
           }
 
-          setPendingInteractionRequest({
-            requestId: String(data?.requestId || ""),
-            content: String(data?.content || ""),
-            fields: Array.isArray(data?.fields) ? data.fields : [],
-            dialogProcessId: String(data?.dialogProcessId || ""),
-            requireEncryption: data?.requireEncryption === true,
-            sessionId: String(data?.sessionId || ""),
-            toolName: String(data?.toolName || ""),
-            needConnectionInfo: data?.needConnectionInfo === true,
-            connectorName: String(data?.connectorName || ""),
-            connectorType: String(data?.connectorType || ""),
-            interactionType,
-            interactionData:
-              data?.interactionData && typeof data.interactionData === "object"
-                ? data.interactionData
-                : {},
-          });
+          setPendingInteractionRequest(
+            normalizeInteractionRequestPayload({
+              ...data,
+              interactionType,
+            }),
+          );
         } else if (event === StreamEventEnum.DONE) {
           clearPendingInteraction();
           finalDoneEventData = data || {};
