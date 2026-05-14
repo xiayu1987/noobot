@@ -14,14 +14,64 @@ export function useAgentInteraction({
   const { translate } = useLocale();
   const chatStore = useChatStore();
   const { pendingInteractionRequest, interactionSubmitting } = storeToRefs(chatStore);
+  const handledInteractionRequestIds = new Set();
+  const handledInteractionRequestSignatures = new Set();
+
+  function normalizeRequestId(requestId = "") {
+    return String(requestId || "").trim();
+  }
+
+  function buildInteractionRequestSignature(request = {}) {
+    if (!request || typeof request !== "object") return "";
+    return [
+      request?.sessionId,
+      request?.dialogProcessId,
+      request?.interactionType,
+      request?.toolName,
+      request?.connectorType,
+      request?.connectorName,
+      request?.content,
+    ]
+      .map((item) => String(item || "").trim())
+      .join("|");
+  }
+
+  function markInteractionRequestHandled(requestOrId = "") {
+    if (requestOrId && typeof requestOrId === "object") {
+      const normalizedRequestId = normalizeRequestId(requestOrId?.requestId || "");
+      if (normalizedRequestId) handledInteractionRequestIds.add(normalizedRequestId);
+      const signature = buildInteractionRequestSignature(requestOrId);
+      if (signature.replaceAll("|", "")) {
+        handledInteractionRequestSignatures.add(signature);
+      }
+      return;
+    }
+    const normalizedRequestId = normalizeRequestId(requestOrId);
+    if (normalizedRequestId) handledInteractionRequestIds.add(normalizedRequestId);
+  }
+
+  function isInteractionRequestHandled(requestOrId = "") {
+    if (requestOrId && typeof requestOrId === "object") {
+      const normalizedRequestId = normalizeRequestId(requestOrId?.requestId || "");
+      if (normalizedRequestId && handledInteractionRequestIds.has(normalizedRequestId)) return true;
+      const signature = buildInteractionRequestSignature(requestOrId);
+      return Boolean(signature.replaceAll("|", "") && handledInteractionRequestSignatures.has(signature));
+    }
+    const normalizedRequestId = normalizeRequestId(requestOrId);
+    return Boolean(normalizedRequestId && handledInteractionRequestIds.has(normalizedRequestId));
+  }
 
   function clearPendingInteraction() {
     pendingInteractionRequest.value = null;
   }
 
   function setPendingInteractionRequest(request = {}) {
-    pendingInteractionRequest.value =
-      request && typeof request === "object" ? request : null;
+    if (!request || typeof request !== "object") {
+      pendingInteractionRequest.value = null;
+      return;
+    }
+    if (isInteractionRequestHandled(request)) return;
+    pendingInteractionRequest.value = request;
   }
 
   function submitInteractionResponse(response = {}, requestOverride = null) {
@@ -47,6 +97,7 @@ export function useAgentInteraction({
       requestId: request.requestId,
       response: responsePayload,
     });
+    markInteractionRequestHandled(request);
     if (!requestOverride) {
       pendingInteractionRequest.value = null;
     }
@@ -59,5 +110,7 @@ export function useAgentInteraction({
     clearPendingInteraction,
     setPendingInteractionRequest,
     submitInteractionResponse,
+    markInteractionRequestHandled,
+    isInteractionRequestHandled,
   };
 }

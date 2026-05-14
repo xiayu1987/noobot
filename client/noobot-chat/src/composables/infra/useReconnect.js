@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { frontendConfig } from "../../shared/config/frontendConfig";
 
 export function useReconnect({
@@ -67,14 +67,6 @@ export function useReconnect({
     removeListeners();
   });
 
-  // Auto-reconnect when connection is (re-)established
-  watch(
-    () => connected?.value,
-    (nextConnected, previousConnected) => {
-      if (!nextConnected || previousConnected) return;
-      reconnectActiveSession({ force: true });
-    },
-  );
 
   return {
     reconnectActiveSession,

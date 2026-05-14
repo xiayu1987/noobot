@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { ref, watch, computed, nextTick } from "vue";
+import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
 import noobotLogo from "../shared/assets/noobot.svg";
 import WorkspacePanel from "../modules/settings/WorkspacePanel.vue";
 import UserSettingsPanel from "../modules/settings/UserSettingsPanel.vue";
@@ -340,8 +340,8 @@ function onAppUnmounted() {
   releaseAllPreviewUrls();
 }
 
-onAppMounted();
-onAppUnmounted();
+onMounted(onAppMounted);
+onBeforeUnmount(onAppUnmounted);
 
 // --- Watchers ---
 watch(
