@@ -18,8 +18,8 @@ export function resolveAttachmentPolicy(policy = {}) {
   const config = policy && typeof policy === "object" ? policy : {};
 
   const toPositiveInt = (val) => {
-    const n = Number(val ?? 0);
-    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    const num = Number(val ?? 0);
+    return Number.isFinite(num) && num > 0 ? Math.floor(num) : 0;
   };
 
   return {

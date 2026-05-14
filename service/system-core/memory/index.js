@@ -203,9 +203,9 @@ export class MemoryService {
   }
 
   _toDateKey(value = "") {
-    const d = new Date(value || Date.now());
-    if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
-    return d.toISOString().slice(0, 10);
+    const dateObj = new Date(value || Date.now());
+    if (Number.isNaN(dateObj.getTime())) return new Date().toISOString().slice(0, 10);
+    return dateObj.toISOString().slice(0, 10);
   }
 
   async _readExperienceLessonsMetadata(basePath) {
