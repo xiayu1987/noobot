@@ -113,6 +113,7 @@ service/
 │   ├── auth-routes.js
 │   ├── config-template-routes.js
 │   ├── connectors-routes.js
+│   ├── file-crud-routes.js           # Generic file CRUD route factory (tree/read/write/download)
 │   ├── session-routes.js
 │   └── workspace-routes.js
 ├── services/                   # Business services
