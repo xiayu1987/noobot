@@ -215,6 +215,8 @@ export const enUSMessages = {
     "inputPlaceholder": "Shift+Enter for newline",
     "allowInteraction": "Allow Interaction",
     "disallowInteraction": "Disallow Interaction",
+    "forceTool": "Force Tools",
+    "notForceTool": "Optional Tools",
     "botScenario": "Bot Scenario",
     "scenarioFull": "Full",
     "scenarioProgramming": "Programming",

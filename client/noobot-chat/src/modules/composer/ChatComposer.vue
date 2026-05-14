@@ -24,6 +24,7 @@ const props = defineProps({
   connected: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
+  forceTool: { type: Boolean, default: false },
   botScenario: { type: String, default: "" },
   scenarioOptions: { type: Array, default: () => [] },
   interactionActive: { type: Boolean, default: false },
@@ -33,6 +34,7 @@ const props = defineProps({
 const emit = defineEmits([
   "update:modelValue",
   "update:allowUserInteraction",
+  "update:forceTool",
   "update:botScenario",
   "upload-change",
   "append-uploads",
@@ -164,6 +166,10 @@ function onStop() {
 
 function onAllowUserInteractionChange(value) {
   emit("update:allowUserInteraction", Boolean(value));
+}
+
+function onForceToolChange(value) {
+  emit("update:forceTool", Boolean(value));
 }
 
 function onProgrammingScenarioToggle() {
@@ -503,6 +509,14 @@ defineExpose({
                   :active-text="translate('composer.allowInteraction')"
                   :inactive-text="translate('composer.disallowInteraction')"
                   @update:model-value="onAllowUserInteractionChange"
+                  class="interaction-switch"
+                />
+                <el-switch
+                  :model-value="forceTool"
+                  inline-prompt
+                  :active-text="translate('composer.forceTool')"
+                  :inactive-text="translate('composer.notForceTool')"
+                  @update:model-value="onForceToolChange"
                   class="interaction-switch"
                 />
                 <div class="scenario-selector">

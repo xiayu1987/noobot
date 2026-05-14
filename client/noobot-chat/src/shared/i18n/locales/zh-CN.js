@@ -215,6 +215,8 @@ export const zhCNMessages = {
     "inputPlaceholder": "Shift + Enter 换行",
     "allowInteraction": "允许交互",
     "disallowInteraction": "禁止交互",
+    "forceTool": "强制工具",
+    "notForceTool": "非强制工具",
     "botScenario": "Bot情景",
     "scenarioFull": "全能",
     "scenarioProgramming": "编程",

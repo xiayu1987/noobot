@@ -48,6 +48,7 @@ function mergeAssistantContents(assistantMessages = []) {
 export function useChatEngine({
   userId,
   allowUserInteraction,
+  forceTool,
   botScenario,
   isImageMime,
   classifyRealtimeLog,
@@ -184,6 +185,7 @@ export function useChatEngine({
         attachments,
         config: {
           allowUserInteraction: allowUserInteraction?.value === false ? false : true,
+          forceTool: forceTool?.value === true,
           ...(String(botScenario?.value || "").trim()
             ? { scenario: String(botScenario?.value || "").trim() }
             : {}),

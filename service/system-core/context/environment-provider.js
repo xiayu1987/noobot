@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import { resolveForceToolCall } from "../utils/shared-utils.js";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -61,6 +62,7 @@ export function buildDynamicInfo({
     now,
     config: {
       allowUserInteraction: runConfig?.allowUserInteraction !== false,
+      forceTool: resolveForceToolCall(runConfig),
       selectedConnectors,
       ...(Number.isFinite(Number(runConfig?.maxToolLoopTurns)) &&
       Number(runConfig?.maxToolLoopTurns) > 0

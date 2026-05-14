@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { safeNum, normalizeSelectedConnectors } from "../utils/shared-utils.js";
+import {
+  safeNum,
+  normalizeSelectedConnectors,
+  resolveForceToolCall,
+} from "../utils/shared-utils.js";
 
 export function mapToAgentContextSchema({
   staticAgentContext = {},
@@ -58,6 +62,7 @@ export function mapToAgentContextSchema({
       timestamp: String(systemRuntime?.now || now).trim(),
       flags: {
         allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
+        forceTool: resolveForceToolCall(systemRuntime?.config || {}),
         maxToolLoopTurns: safeNum(systemRuntime?.config?.maxToolLoopTurns),
       },
       models: {
@@ -108,4 +113,3 @@ export function mapToAgentContextSchema({
     },
   };
 }
-

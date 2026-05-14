@@ -62,7 +62,9 @@ function createModelState(llm) {
     activeModelAlias: "test_alias",
     eventListener: null,
     runtime: {
-      systemRuntime: {},
+      systemRuntime: {
+        config: { forceTool: true },
+      },
     },
     globalConfig: {},
     userConfig: {},
@@ -157,6 +159,44 @@ test("when model returns no tool calls, add a user prompt to use tools and retry
   assert.ok(
     events.some((item) => item?.event === "tool_choice_required_retry_prompted"),
     "should emit retry prompt event when model does not call tools",
+  );
+});
+
+test("when forceTool is disabled, no-tool response should return directly without retry prompt", async () => {
+  const tool = {
+    name: "execute_script",
+    async invoke() {
+      return "{\"ok\":true}";
+    },
+  };
+  const { llm, capturedInvocations } = createToolCallingLlm([
+    {
+      content: "直接回复即可",
+      tool_calls: [],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+
+  const events = [];
+  const modelState = createModelState(llm);
+  modelState.runtime.systemRuntime.config = { forceTool: false };
+  modelState.eventListener = {
+    onEvent(payload = {}) {
+      events.push(payload);
+    },
+  };
+  const result = await runFunctionCallLoop({
+    modelState,
+    loopState: createLoopState({ maxTurns: 3, tool }),
+    turn: 1,
+  });
+
+  assert.equal(result.output, "直接回复即可");
+  assert.equal(capturedInvocations.length, 1);
+  assert.equal(
+    events.some((item) => item?.event === "tool_choice_required_retry_prompted"),
+    false,
   );
 });
 

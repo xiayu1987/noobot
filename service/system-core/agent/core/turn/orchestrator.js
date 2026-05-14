@@ -23,6 +23,7 @@ import { assertNotAborted } from "../utils/error-utils.js";
 import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
+import { resolveForceToolCall } from "../../../utils/shared-utils.js";
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
@@ -112,6 +113,19 @@ export function createTurnOrchestrator({
       } = withToolsResult;
 
       if (!calls.length) {
+        const forceTool = resolveForceToolCall(runtime?.systemRuntime?.config || {});
+        if (!forceTool) {
+          loopState.toolChoiceRetryPrompted = false;
+          removeToolChoiceRequiredRetryPrompts(loopState.messages);
+          return buildLoopResultFn({
+            output: aiContentText,
+            traces,
+            loopState,
+            turnTaskStore,
+            turnMessageStore,
+            modelMessages: loopState.messages,
+          });
+        }
         if (loopState?.toolChoiceRetryPrompted === true) {
           loopState.toolChoiceRetryPrompted = false;
           return buildLoopResultFn({
