@@ -1,0 +1,130 @@
+import { describe, expect, it } from "vitest";
+import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import {
+  findLatestPendingAssistantAfterLastUser,
+  findReconnectDoneEnvelopeWithMessages,
+  findReusableMessageObject,
+  isDialogProcessRecoverable,
+  isReconnectTerminalBatch,
+  mergeCurrentUserMessagesIntoFoldedMessages,
+  patchMessageObjectPreservingUiState,
+  splitReconnectMessagesByDialogProcessId,
+} from "../../../../src/composables/infra/reconnectReplayModel";
+
+describe("reconnectReplayModel", () => {
+  it("isDialogProcessRecoverable respects running/pending interaction only", () => {
+    expect(
+      isDialogProcessRecoverable(
+        { hasRunningTask: true },
+        [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
+      ),
+    ).toBe(true);
+
+    expect(
+      isDialogProcessRecoverable(
+        { hasRunningTask: false },
+        [
+          { event: StreamEventEnum.THINKING, data: {} },
+          { event: StreamEventEnum.DELTA, data: { text: "history" } },
+        ],
+      ),
+    ).toBe(false);
+
+    expect(
+      isDialogProcessRecoverable(
+        { hasRunningTask: false },
+        [
+          {
+            event: StreamEventEnum.INTERACTION_REQUEST,
+            data: { __agentProxyPendingInteraction: true },
+          },
+        ],
+      ),
+    ).toBe(true);
+  });
+
+  it("splitReconnectMessagesByDialogProcessId splits mixed batches", () => {
+    const groups = splitReconnectMessagesByDialogProcessId([
+      { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-1", text: "a" } },
+      { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-2", text: "b" } },
+      { event: StreamEventEnum.THINKING, data: { dialogProcessId: "dp-1" } },
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups.find((item) => item.dialogProcessId === "dp-1")?.messages).toHaveLength(2);
+    expect(groups.find((item) => item.dialogProcessId === "dp-2")?.messages).toHaveLength(1);
+  });
+
+  it("findLatestPendingAssistantAfterLastUser only searches after latest user", () => {
+    const messages = [
+      { role: RoleEnum.USER, content: "q1" },
+      { role: RoleEnum.ASSISTANT, pending: true, content: "old pending" },
+      { role: RoleEnum.USER, content: "q2" },
+      { role: RoleEnum.ASSISTANT, pending: false, content: "done" },
+      { role: RoleEnum.ASSISTANT, pending: true, content: "new pending" },
+    ];
+    expect(findLatestPendingAssistantAfterLastUser(messages)?.content).toBe("new pending");
+  });
+
+  it("detects terminal batch and finds DONE with messages", () => {
+    const envelopes = [
+      { event: StreamEventEnum.DELTA, data: { seq: 1 } },
+      { event: StreamEventEnum.DONE, data: { messages: [{ role: RoleEnum.USER }] } },
+    ];
+    expect(isReconnectTerminalBatch(envelopes)).toBe(true);
+    expect(findReconnectDoneEnvelopeWithMessages(envelopes)?.event).toBe(StreamEventEnum.DONE);
+  });
+
+  it("patchMessageObjectPreservingUiState keeps non-degrading fields and UI state", () => {
+    const target = {
+      content: "existing content",
+      attachmentMetas: [{ name: "a.txt" }],
+      modelRuns: [{ id: 1 }],
+      completedToolLogs: [{ id: 1 }],
+      realtimeLogs: [{ id: 1 }],
+      thinkingOpenNames: ["thinking-panel"],
+      expandedDetailLogKeys: ["k1"],
+      statusLabel: "pending",
+    };
+
+    patchMessageObjectPreservingUiState(target, {
+      content: "   ",
+      attachmentMetas: [],
+      modelRuns: [],
+      completedToolLogs: [],
+      realtimeLogs: [],
+      statusLabel: "generated",
+    });
+
+    expect(target.content).toBe("existing content");
+    expect(target.attachmentMetas).toHaveLength(1);
+    expect(target.modelRuns).toHaveLength(1);
+    expect(target.completedToolLogs).toHaveLength(1);
+    expect(target.realtimeLogs).toHaveLength(1);
+    expect(target.thinkingOpenNames).toEqual(["thinking-panel"]);
+    expect(target.expandedDetailLogKeys).toEqual(["k1"]);
+    expect(target.statusLabel).toBe("generated");
+  });
+
+  it("findReusableMessageObject prefers assistant reuse by dialogProcessId", () => {
+    const existing = [
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "old" },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", content: "other" },
+    ];
+    const reusable = findReusableMessageObject(
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", content: "new" },
+      existing,
+    );
+    expect(reusable).toBe(existing[1]);
+  });
+
+  it("mergeCurrentUserMessagesIntoFoldedMessages keeps missing user messages", () => {
+    const currentUser = { role: RoleEnum.USER, content: "local user", ts: 2000 };
+    const merged = mergeCurrentUserMessagesIntoFoldedMessages({
+      foldedMessages: [{ role: RoleEnum.ASSISTANT, content: "server", ts: 3000 }],
+      existingMessages: [currentUser],
+    });
+    expect(merged.some((message) => message === currentUser)).toBe(true);
+    expect(merged.map((message) => message.role)).toEqual([RoleEnum.USER, RoleEnum.ASSISTANT]);
+  });
+});
