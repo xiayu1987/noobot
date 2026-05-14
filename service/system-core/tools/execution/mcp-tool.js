@@ -8,17 +8,12 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createMcpAgentTools } from "../../mcp/index.js";
 import { mergeConfig } from "../../config/index.js";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { appendMcpErrorLog } from "../../tracking/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
-
-function jsonError(payload = {}) {
-  return toToolJsonResult("call_mcp_task", { ok: false, ...payload });
-}
-
-
 
 export function createMcpTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
@@ -34,10 +29,15 @@ export function createMcpTool({ agentContext }) {
       const normalizedMcpName = String(mcpName || "").trim();
       const normalizedTask = String(task || "").trim();
       if (!normalizedMcpName) {
-        return jsonError({ error: tTool(runtime, "tools.mcp.errorMcpNameRequired") });
+        throw recoverableToolError(
+          tTool(runtime, "tools.mcp.errorMcpNameRequired"),
+          { code: "RECOVERABLE_INPUT_MISSING" },
+        );
       }
       if (!normalizedTask) {
-        return jsonError({ error: tTool(runtime, "common.taskRequired") });
+        throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
+          code: "RECOVERABLE_INPUT_MISSING",
+        });
       }
 
       const globalConfig = runtime?.globalConfig || {};
@@ -69,10 +69,12 @@ export function createMcpTool({ agentContext }) {
       );
       try {
         if (!botManager || !userId || !sessionId) {
-          return jsonError({
-            mcpName: normalizedMcpName,
-            error: tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
-          });
+          throw recoverableToolError(
+            tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
+            {
+              code: "RECOVERABLE_RUNTIME_CONTEXT_MISSING",
+            },
+          );
         }
         const mcpToolset = await createMcpAgentTools({
           globalConfig,
@@ -85,12 +87,8 @@ export function createMcpTool({ agentContext }) {
               : null,
         });
         if (!Array.isArray(mcpToolset?.tools) || !mcpToolset.tools.length) {
-          return toToolJsonResult("call_mcp_task", {
-            ok: true,
-            mcpName: normalizedMcpName,
-            status: "completed",
-            tools: [],
-            answer: tTool(runtime, "mcp.noToolsAvailable"),
+          throw recoverableToolError(tTool(runtime, "mcp.noToolsAvailable"), {
+            code: "RECOVERABLE_TOOLS_UNAVAILABLE",
           });
         }
         const subSessionId = randomUUID();
@@ -182,9 +180,8 @@ export function createMcpTool({ agentContext }) {
                 : {},
           }).catch(() => {});
         }
-        return jsonError({
-          mcpName: normalizedMcpName,
-          error: error?.message || String(error),
+        throw recoverableToolError(error?.message || String(error), {
+          code: String(error?.code || "RECOVERABLE_CALL_MCP_TASK_FAILED"),
         });
       }
     },

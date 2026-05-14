@@ -8,6 +8,7 @@ import { executeTerminalCommand } from "./terminals/index.js";
 import { releaseTerminalChannel } from "./terminals/index.js";
 import { executeEmailCommand } from "./emails/index.js";
 import { tSystem } from "../i18n/system-text.js";
+import { recoverableToolError } from "../error/index.js";
 
 function normalizeConnectorType(input = "") {
   const value = String(input || "").trim().toLowerCase();
@@ -68,7 +69,11 @@ class ConnectorChannelStore {
 
   _ensureSessionBucket(sessionId = "") {
     const sid = String(sessionId || "").trim();
-    if (!sid) throw new Error(tSystem("common.sessionIdRequired"));
+    if (!sid) {
+      throw recoverableToolError(tSystem("common.sessionIdRequired"), {
+        code: "RECOVERABLE_INPUT_MISSING",
+      });
+    }
     if (!this.sessionBuckets.has(sid)) {
       this.sessionBuckets.set(sid, {
         databases: new Map(),
@@ -81,6 +86,49 @@ class ConnectorChannelStore {
       bucket.emails = new Map();
     }
     return bucket;
+  }
+
+  _resolveBucketMap(bucket = {}, connectorType = "") {
+    const normalizedType = normalizeConnectorType(connectorType);
+    if (normalizedType === "database") return bucket.databases;
+    if (normalizedType === "terminal") return bucket.terminals;
+    if (normalizedType === "email") return bucket.emails;
+    return null;
+  }
+
+  _registerConnectorChannel(bucket = {}, channel = {}) {
+    const sourceMap = this._resolveBucketMap(bucket, channel?.connectorType || "");
+    const normalizedName = String(channel?.connectorName || "").trim();
+    if (!(sourceMap instanceof Map) || !normalizedName) return false;
+    sourceMap.set(normalizedName, channel);
+    return true;
+  }
+
+  _unregisterConnectorChannel({
+    bucket = {},
+    connectorType = "",
+    connectorName = "",
+    sessionId = "",
+  } = {}) {
+    const sourceMap = this._resolveBucketMap(bucket, connectorType);
+    const normalizedName = String(connectorName || "").trim();
+    if (!(sourceMap instanceof Map) || !normalizedName) {
+      return { deleted: false, channel: null };
+    }
+    const existingChannel = sourceMap.get(normalizedName) || null;
+    const deleted = sourceMap.delete(normalizedName);
+    if (deleted && normalizeConnectorType(connectorType) === "terminal") {
+      releaseTerminalChannel({
+        connectionInfo:
+          existingChannel?.connectionInfo &&
+          typeof existingChannel.connectionInfo === "object"
+            ? existingChannel.connectionInfo
+            : {},
+        sessionId: String(sessionId || "").trim(),
+        connectorName: normalizedName,
+      });
+    }
+    return { deleted, channel: existingChannel };
   }
 
   getSessionConnectors(sessionId = "") {
@@ -106,9 +154,15 @@ class ConnectorChannelStore {
   } = {}) {
     const normalizedName = String(connectorName || "").trim();
     const normalizedType = normalizeConnectorType(connectorType);
-    if (!normalizedName) throw new Error(tSystem("connectors.connectorNameRequired"));
+    if (!normalizedName) {
+      throw recoverableToolError(tSystem("connectors.connectorNameRequired"), {
+        code: "RECOVERABLE_INPUT_MISSING",
+      });
+    }
     if (!normalizedType) {
-      throw new Error(tSystem("connectors.connectorTypeInvalid"));
+      throw recoverableToolError(tSystem("connectors.connectorTypeInvalid"), {
+        code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
+      });
     }
     const bucket = this._ensureSessionBucket(sessionId);
     const connectedAt = new Date().toISOString();
@@ -139,13 +193,7 @@ class ConnectorChannelStore {
               username: String(info?.username || ""),
             },
     };
-    if (normalizedType === "database") {
-      bucket.databases.set(normalizedName, channel);
-    } else if (normalizedType === "terminal") {
-      bucket.terminals.set(normalizedName, channel);
-    } else {
-      bucket.emails.set(normalizedName, channel);
-    }
+    this._registerConnectorChannel(bucket, channel);
     return toSerializableConnector(channel);
   }
 
@@ -158,25 +206,12 @@ class ConnectorChannelStore {
     const normalizedType = normalizeConnectorType(connectorType);
     if (!normalizedName || !normalizedType) return false;
     const bucket = this._ensureSessionBucket(sessionId);
-    const sourceMap =
-      normalizedType === "database"
-        ? bucket.databases
-        : normalizedType === "terminal"
-          ? bucket.terminals
-          : bucket.emails;
-    const existingChannel = sourceMap.get(normalizedName) || null;
-    const deleted = sourceMap.delete(normalizedName);
-    if (deleted && normalizedType === "terminal") {
-      releaseTerminalChannel({
-        connectionInfo:
-          existingChannel?.connectionInfo &&
-          typeof existingChannel.connectionInfo === "object"
-            ? existingChannel.connectionInfo
-            : {},
-        sessionId: String(sessionId || "").trim(),
-        connectorName: normalizedName,
-      });
-    }
+    const { deleted } = this._unregisterConnectorChannel({
+      bucket,
+      connectorType: normalizedType,
+      connectorName: normalizedName,
+      sessionId,
+    });
     return deleted;
   }
 
@@ -233,20 +268,24 @@ class ConnectorChannelStore {
   _getChannel({ sessionId = "", connectorName = "", connectorType = "" } = {}) {
     const normalizedName = String(connectorName || "").trim();
     const normalizedType = normalizeConnectorType(connectorType);
-    if (!normalizedName) throw new Error(tSystem("connectors.connectorNameRequired"));
+    if (!normalizedName) {
+      throw recoverableToolError(tSystem("connectors.connectorNameRequired"), {
+        code: "RECOVERABLE_INPUT_MISSING",
+      });
+    }
     if (!normalizedType) {
-      throw new Error(tSystem("connectors.connectorTypeInvalid"));
+      throw recoverableToolError(tSystem("connectors.connectorTypeInvalid"), {
+        code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
+      });
     }
     const bucket = this._ensureSessionBucket(sessionId);
-    const sourceMap =
-      normalizedType === "database"
-        ? bucket.databases
-        : normalizedType === "terminal"
-          ? bucket.terminals
-          : bucket.emails;
+    const sourceMap = this._resolveBucketMap(bucket, normalizedType);
     const channel = sourceMap.get(normalizedName);
     if (!channel) {
-      throw new Error(`${tSystem("connectors.connectorNotConnectedInSession")}: ${normalizedName}`);
+      throw recoverableToolError(
+        `${tSystem("connectors.connectorNotConnectedInSession")}: ${normalizedName}`,
+        { code: "RECOVERABLE_CONNECTOR_NOT_CONNECTED" },
+      );
     }
     return channel;
   }
@@ -262,7 +301,11 @@ class ConnectorChannelStore {
     const channel = this._getChannel({ sessionId, connectorName, connectorType });
     const normalizedType = normalizeConnectorType(connectorType);
     const cmd = String(command || "").trim();
-    if (!cmd) throw new Error(tSystem("connectors.commandRequired"));
+    if (!cmd) {
+      throw recoverableToolError(tSystem("connectors.commandRequired"), {
+        code: "RECOVERABLE_INPUT_MISSING",
+      });
+    }
     if (normalizedType === "terminal") {
       const execution = await executeTerminalCommand({
         command: cmd,

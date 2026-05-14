@@ -440,7 +440,7 @@ export function createAgentCollabTool({ agentContext }) {
       });
     } catch (error) {
       logError("[agent-collab-tool] persistCompletedTaskResultsAsAttachments failed", {
-        taskId: String(taskId || ""),
+        containerId: String(container?.id || ""),
         error: error?.message || String(error),
       });
       return [];
@@ -490,11 +490,18 @@ export function createAgentCollabTool({ agentContext }) {
       tasks: z.array(delegateTaskItemSchema).min(1).describe(tTool(runtime, "tools.agent_collab.fieldTasks")),
     }),
     func: async ({ tasks }) => {
-      if (!botManager || !userId)
-        return toToolJsonResult("delegate_task_async", {
-          ok: false,
-          error: tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
-        });
+      if (!botManager || !userId) {
+        throw recoverableToolError(
+          tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
+          {
+            code: "RECOVERABLE_RUNTIME_MISSING",
+            details: {
+              botManagerReady: Boolean(botManager),
+              userIdReady: Boolean(userId),
+            },
+          },
+        );
+      }
       emitEvent(runtimeEventListener, "subagent_runconfig_passthrough_applied", {
         sourceTool: "delegate_task_async",
         passthrough: {
@@ -664,11 +671,18 @@ export function createAgentCollabTool({ agentContext }) {
         .describe(tTool(runtime, "tools.agent_collab.fieldPollIntervalMs")),
     }),
     func: async ({ timeoutMs, pollIntervalMs }) => {
-      if (!botManager || !userId)
-        return toToolJsonResult("wait_async_task_result", {
-          ok: false,
-          error: tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
-        });
+      if (!botManager || !userId) {
+        throw recoverableToolError(
+          tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
+          {
+            code: "RECOVERABLE_RUNTIME_MISSING",
+            details: {
+              botManagerReady: Boolean(botManager),
+              userIdReady: Boolean(userId),
+            },
+          },
+        );
+      }
       const containers = (
         Array.isArray(runtime.childAsyncResultContainers)
           ? runtime.childAsyncResultContainers
@@ -877,11 +891,12 @@ export function createAgentCollabTool({ agentContext }) {
     }),
     func: async ({ task }) => {
       const taskText = String(task || "").trim();
-      if (!taskText)
-        return toToolJsonResult("plan_multi_task_collaboration", {
-          ok: false,
-          error: tTool(runtime, "common.taskRequired"),
+      if (!taskText) {
+        throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
+          code: "RECOVERABLE_INPUT_MISSING",
+          details: { field: "task" },
         });
+      }
 
       const runtimeModel = String(runtime?.runtimeModel || "").trim();
       let llm;

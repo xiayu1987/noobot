@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { recoverableToolError } from "../../error/index.js";
 import {
   invokeModelWithTextAndAttachments,
   resolveModelSpecByAlias,
@@ -267,14 +268,12 @@ export function createMedia2DataTool({ agentContext }) {
       });
       const mediaType = await resolveMediaTypeByPathWithProbe(inputFile);
       if (!mediaType) {
-        return toToolJsonResult(
-          "media_to_data",
+        throw recoverableToolError(
+          tTool(runtime, "tools.media2data.unsupportedMediaFileType"),
           {
-            ok: false,
-            message: tTool(runtime, "tools.media2data.unsupportedMediaFileType"),
-            input: inputFile,
+            code: "RECOVERABLE_UNSUPPORTED_MEDIA_FILE_TYPE",
+            details: { input: inputFile },
           },
-          true,
         );
       }
 

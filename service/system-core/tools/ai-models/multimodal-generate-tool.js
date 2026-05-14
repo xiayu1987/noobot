@@ -15,6 +15,7 @@ import {
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../utils/mime-utils.js";
+import { recoverableToolError } from "../../error/index.js";
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
@@ -33,8 +34,9 @@ async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
   if (!normalizedUrl || typeof fetchImpl !== "function") return "";
   const response = await fetchImpl(normalizedUrl);
   if (!response?.ok) {
-    throw new Error(
+    throw recoverableToolError(
       `${tMultimodal(runtime, "fetchGeneratedImageUrlFailed")}: HTTP ${response?.status || 500}`,
+      { code: "RECOVERABLE_FETCH_GENERATED_IMAGE_URL_FAILED" },
     );
   }
   const imageBytes = Buffer.from(await response.arrayBuffer());
@@ -182,37 +184,6 @@ async function generateWithOpenaiResponsesApi({
 }
 
 
-function buildImageGenerationErrorResult({ error, resolvedModelSpec = {}, runtime = {} }) {
-  const errorStatusCode = Number(error?.status || error?.statusCode || 0);
-  const errorMessage = String(error?.message || String(error || "")).trim();
-  const normalizedMessage = errorMessage.toLowerCase();
-  const modelAlias = String(resolvedModelSpec?.alias || "").trim();
-  const modelName = String(resolvedModelSpec?.model || "").trim();
-
-  if (
-    errorStatusCode === 403 &&
-    normalizedMessage.includes("images api is not enabled")
-  ) {
-    return {
-      ok: false,
-      status: "failed",
-      code: "RECOVERABLE_IMAGES_API_NOT_ENABLED",
-      error: tMultimodal(runtime, "imagesApiNotEnabledError"),
-      message: tMultimodal(runtime, "imagesApiNotEnabledMessage"),
-      modelAlias,
-      model: modelName,
-    };
-  }
-
-  return {
-    ok: false,
-    status: "failed",
-    error: errorMessage || tMultimodal(runtime, "generateFailed"),
-    modelAlias,
-    model: modelName,
-  };
-}
-
 export function createMultimodalGenerateTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
   const effectiveConfig = mergeConfig(
@@ -254,9 +225,8 @@ export function createMultimodalGenerateTool({ agentContext }) {
       const generationContent = String(generation_content || "").trim();
       let resolvedModelSpec = null;
       if (!generationContent) {
-        return toToolJsonResult("multimodal_generate", {
-          ok: false,
-          error: tMultimodal(runtime, "generationContentRequired"),
+        throw recoverableToolError(tMultimodal(runtime, "generationContentRequired"), {
+          code: "RECOVERABLE_INPUT_MISSING",
         });
       }
       try {
@@ -281,28 +251,31 @@ export function createMultimodalGenerateTool({ agentContext }) {
             resolvedModelSpec?.alias || resolvedModelName || "",
           ).trim();
           const currentModelName = String(resolvedModelSpec?.model || "").trim();
-          return toToolJsonResult("multimodal_generate", {
-            ok: false,
-            status: "failed",
-            code: "RECOVERABLE_MODEL_MULTIMODAL_GENERATION_UNSUPPORTED",
-            error: tMultimodal(runtime, "multimodalUnsupportedError", {
+          throw recoverableToolError(
+            tMultimodal(runtime, "multimodalUnsupportedError", {
               model: currentModelAlias || currentModelName || "unknown_model",
             }),
-            message: tMultimodal(runtime, "multimodalUnsupportedMessage"),
-            modelAlias: currentModelAlias,
-            model: currentModelName,
-          });
+            {
+              code: "RECOVERABLE_MODEL_MULTIMODAL_GENERATION_UNSUPPORTED",
+              details: {
+                message: tMultimodal(runtime, "multimodalUnsupportedMessage"),
+                modelAlias: currentModelAlias,
+                model: currentModelName,
+              },
+            },
+          );
         }
         const modelNameForGeneration = String(
           resolvedModelSpec?.model || resolvedModelName || "",
         ).trim();
         const modelApiKey = resolveModelApiKey(resolvedModelSpec || {});
         if (!modelApiKey) {
-          return toToolJsonResult("multimodal_generate", {
-            ok: false,
-            status: "failed",
+          throw recoverableToolError(tMultimodal(runtime, "modelApiKeyMissing"), {
             code: "RECOVERABLE_MODEL_API_KEY_MISSING",
-            error: tMultimodal(runtime, "modelApiKeyMissing"),
+            details: {
+              modelAlias: String(resolvedModelSpec?.alias || "").trim(),
+              model: String(resolvedModelSpec?.model || "").trim(),
+            },
           });
         }
         const openaiClient = new OpenAI({
@@ -373,16 +346,34 @@ export function createMultimodalGenerateTool({ agentContext }) {
           true,
         );
       } catch (error) {
-        return toToolJsonResult(
-          "multimodal_generate",
-          buildImageGenerationErrorResult({
-            error,
-            resolvedModelSpec:
-              typeof resolvedModelSpec === "object" && resolvedModelSpec
-                ? resolvedModelSpec
-                : {},
-            runtime,
-          }),
+        const errorStatusCode = Number(error?.status || error?.statusCode || 0);
+        const errorMessage = String(error?.message || String(error || "")).trim();
+        const normalizedMessage = errorMessage.toLowerCase();
+        const modelAlias = String(resolvedModelSpec?.alias || "").trim();
+        const modelName = String(resolvedModelSpec?.model || "").trim();
+
+        if (
+          errorStatusCode === 403 &&
+          normalizedMessage.includes("images api is not enabled")
+        ) {
+          throw recoverableToolError(tMultimodal(runtime, "imagesApiNotEnabledError"), {
+            code: "RECOVERABLE_IMAGES_API_NOT_ENABLED",
+            details: {
+              message: tMultimodal(runtime, "imagesApiNotEnabledMessage"),
+              modelAlias,
+              model: modelName,
+            },
+          });
+        }
+        throw recoverableToolError(
+          errorMessage || tMultimodal(runtime, "generateFailed"),
+          {
+            code: String(error?.code || "RECOVERABLE_MULTIMODAL_GENERATE_FAILED"),
+            details: {
+              modelAlias,
+              model: modelName,
+            },
+          },
         );
       }
     },

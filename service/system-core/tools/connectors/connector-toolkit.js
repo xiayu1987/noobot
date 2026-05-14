@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig } from "../../config/index.js";
+import { recoverableToolError } from "../../error/index.js";
 import {
   normalizeDatabaseType,
   normalizeTerminalType,
@@ -682,23 +683,23 @@ function buildAccessConnectorTool(context = {}) {
     },
     async func({ connector_name, connector_type, command }) {
       if (!store || typeof store.executeConnectorCommand !== "function") {
-        return toToolJsonResult("access_connector", {
-          ok: false,
-          error: tTool(runtime, "connectors.storeMissing"),
+        throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
+          code: "RECOVERABLE_CONNECTOR_STORE_MISSING",
         });
       }
       if (!rootSessionId) {
-        return toToolJsonResult("access_connector", {
-          ok: false,
-          error: tTool(runtime, "connectors.rootSessionMissing"),
+        throw recoverableToolError(tTool(runtime, "connectors.rootSessionMissing"), {
+          code: "RECOVERABLE_ROOT_SESSION_MISSING",
         });
       }
       const connectorType = normalizeConnectorType(connector_type);
       if (!["database", "terminal", "email"].includes(connectorType)) {
-        return toToolJsonResult("access_connector", {
-          ok: false,
-          error: tTool(runtime, "tools.access_connector.errorConnectorTypeRequired"),
-        });
+        throw recoverableToolError(
+          tTool(runtime, "tools.access_connector.errorConnectorTypeRequired"),
+          {
+            code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
+          },
+        );
       }
       const selectedConnectors =
         runtime?.systemRuntime?.config?.selectedConnectors &&
@@ -707,22 +708,26 @@ function buildAccessConnectorTool(context = {}) {
           : {};
       const selectedConnectorName = String(selectedConnectors?.[connectorType] || "").trim();
       if (!selectedConnectorName) {
-        return toToolJsonResult("access_connector", {
-          ok: false,
-          error: tConnector(runtime, "selectedMissing", { connectorType }),
-        });
+        throw recoverableToolError(
+          tConnector(runtime, "selectedMissing", { connectorType }),
+          {
+            code: "RECOVERABLE_SELECTED_CONNECTOR_MISSING",
+          },
+        );
       }
       const requestedConnectorName = String(connector_name || "").trim();
       if (
         requestedConnectorName &&
         requestedConnectorName !== selectedConnectorName
       ) {
-        return toToolJsonResult("access_connector", {
-          ok: false,
-          error: tConnector(runtime, "selectedOnly", {
+        throw recoverableToolError(
+          tConnector(runtime, "selectedOnly", {
             connectorName: selectedConnectorName,
           }),
-        });
+          {
+            code: "RECOVERABLE_SELECTED_CONNECTOR_MISMATCH",
+          },
+        );
       }
       const connectorName = selectedConnectorName;
       const connectedConnector = findConnectedConnector({
@@ -759,25 +764,25 @@ function buildAccessConnectorTool(context = {}) {
           defaultValues: connectionDefaults,
           message: reconnectMessage,
         });
-        return toToolJsonResult(
-          "access_connector",
+        throw recoverableToolError(
+          tConnector(runtime, "selectedConnectorNotConnected", {
+            connectorType,
+            connectorName,
+          }),
           {
-            ok: false,
-            status: "needs_reconnect",
-            error: tConnector(runtime, "selectedConnectorNotConnected", {
-              connectorType,
-              connectorName,
-            }),
-            message: reconnectMessage,
-            reconnect_required: true,
-            reconnect_tool: reconnectToolName,
-            connector: {
-              connector_name: connectorName,
-              connector_type: connectorType,
+            code: "RECOVERABLE_CONNECTOR_NEEDS_RECONNECT",
+            details: {
+              status: "needs_reconnect",
+              reconnect_required: true,
+              reconnect_tool: reconnectToolName,
+              connector: {
+                connector_name: connectorName,
+                connector_type: connectorType,
+              },
+              default_values: connectionDefaults,
+              message: reconnectMessage,
             },
-            default_values: connectionDefaults,
-          },
-          true,
+          }
         );
       }
       try {
@@ -823,9 +828,12 @@ function buildAccessConnectorTool(context = {}) {
           true,
         );
       } catch (error) {
-        return toToolJsonResult("access_connector", {
-          ok: false,
-          error: error?.message || String(error),
+        throw recoverableToolError(error?.message || String(error), {
+          code: String(error?.code || "RECOVERABLE_ACCESS_CONNECTOR_FAILED"),
+          details:
+            error?.details && typeof error.details === "object"
+              ? error.details
+              : undefined,
         });
       }
     },

@@ -6,6 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { mergeConfig } from "../../config/index.js";
 import { createDoc2DataTool } from "./doc2data-tool.js";
@@ -14,12 +15,6 @@ import { createWeb2DataTool } from "./web2data-tool.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
-
-function jsonError(payload = {}) {
-  return toToolJsonResult("process_content_task", { ok: false, ...payload });
-}
-
-
 
 export function createContentProcessTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
@@ -79,12 +74,17 @@ export function createContentProcessTool({ agentContext }) {
       const normalizedTask = String(task || "").trim();
       const normalizedContentPath = String(contentPath || "").trim();
       if (!normalizedTask) {
-        return jsonError({ error: tTool(runtime, "common.taskRequired") });
+        throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
+          code: "RECOVERABLE_INPUT_MISSING",
+        });
       }
       if (!normalizedContentPath) {
-        return jsonError({
-          error: tTool(runtime, "tools.content_process.errorContentPathRequired"),
-        });
+        throw recoverableToolError(
+          tTool(runtime, "tools.content_process.errorContentPathRequired"),
+          {
+            code: "RECOVERABLE_INPUT_MISSING",
+          },
+        );
       }
       const composedTask = normalizedContentPath
         ? `${normalizedTask}\n\ncontent_path: ${normalizedContentPath}`
@@ -105,14 +105,20 @@ export function createContentProcessTool({ agentContext }) {
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
       if (!botManager || !userId || !sessionId) {
-        return jsonError({
-          error: tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
-        });
+        throw recoverableToolError(
+          tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
+          {
+            code: "RECOVERABLE_RUNTIME_CONTEXT_MISSING",
+          },
+        );
       }
       if (!contentProcessTools.length) {
-        return jsonError({
-          error: tTool(runtime, "tools.content_process.errorToolsUnavailable"),
-        });
+        throw recoverableToolError(
+          tTool(runtime, "tools.content_process.errorToolsUnavailable"),
+          {
+            code: "RECOVERABLE_TOOLS_UNAVAILABLE",
+          },
+        );
       }
 
       try {
@@ -179,8 +185,8 @@ export function createContentProcessTool({ agentContext }) {
         );
       } catch (error) {
         if (isAbortError(error)) throw error;
-        return jsonError({
-          error: error?.message || String(error),
+        throw recoverableToolError(error?.message || String(error), {
+          code: String(error?.code || "RECOVERABLE_PROCESS_CONTENT_FAILED"),
         });
       }
     },

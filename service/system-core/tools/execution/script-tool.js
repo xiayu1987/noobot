@@ -9,6 +9,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import { normalizeSandboxProvider } from "../../config/index.js";
+import { recoverableToolError } from "../../error/index.js";
 import {
   buildBubblewrapCommand,
   bwrapSupportsOption,
@@ -152,13 +153,27 @@ function toolExecResult(mode, r = {}, extra = {}, outputPolicy = {}) {
   });
 }
 
-function missingCommandResult(mode, commandName = "", runtime = {}) {
-  return toToolJsonResult(TOOL_NAME, {
-    ok: false,
-    mode,
-    code: 127,
-    stdout: "",
-    stderr: tScript(runtime, "commandNotInstalled", { commandName }),
+function missingCommandError(mode, commandName = "", runtime = {}) {
+  return recoverableToolError(
+    tScript(runtime, "commandNotInstalled", { commandName }),
+    {
+      code: "RECOVERABLE_COMMAND_NOT_INSTALLED",
+      details: {
+        mode,
+        commandName,
+        code: 127,
+      },
+    },
+  );
+}
+
+function scriptRuntimeError(message = "", options = {}) {
+  return recoverableToolError(String(message || "").trim(), {
+    code: String(options?.code || "RECOVERABLE_SCRIPT_RUNTIME_ERROR"),
+    details:
+      options?.details && typeof options.details === "object"
+        ? options.details
+        : {},
   });
 }
 
@@ -357,7 +372,9 @@ export function createScriptTool({ agentContext }) {
 
       if (sandboxProvider === "bubblewrap") {
         const bwrapInstalled = await hasCommand("bwrap");
-        if (!bwrapInstalled) return missingCommandResult("bubblewrap", "bwrap", runtime);
+        if (!bwrapInstalled) {
+          throw missingCommandError("bubblewrap", "bwrap", runtime);
+        }
 
         const supportsOverlaySrc = await bwrapSupportsOption("--overlay-src");
         if (!supportsOverlaySrc) {
@@ -373,12 +390,12 @@ export function createScriptTool({ agentContext }) {
             warning: tScript(runtime, "fallbackOverlaySrc"),
           });
           if (fallbackResult) return fallbackResult;
-          return toToolJsonResult(TOOL_NAME, {
-            ok: false,
-            mode: "bubblewrap",
-            code: 2,
-            stdout: "",
-            stderr: tScript(runtime, "overlaySrcUnsupported"),
+          throw scriptRuntimeError(tScript(runtime, "overlaySrcUnsupported"), {
+            code: "RECOVERABLE_BWRAP_OVERLAY_SRC_UNSUPPORTED",
+            details: {
+              mode: "bubblewrap",
+              code: 2,
+            },
           });
         }
 
@@ -389,19 +406,22 @@ export function createScriptTool({ agentContext }) {
             overlayWork: built.overlayWork,
           });
         } catch (err) {
-          return toToolJsonResult(TOOL_NAME, {
-            ok: false,
-            mode: "bubblewrap",
-            code: 13,
-            stdout: "",
-            sandboxRoot: built.sandboxRoot,
-            overlayUpper: built.overlayUpper,
-            overlayWork: built.overlayWork,
-            stderr: tScript(runtime, "overlayDirNotWritable", {
+          throw scriptRuntimeError(
+            tScript(runtime, "overlayDirNotWritable", {
               sandboxRoot: built.sandboxRoot,
               reason: err?.message || String(err),
             }),
-          });
+            {
+              code: "RECOVERABLE_BWRAP_OVERLAY_NOT_WRITABLE",
+              details: {
+                mode: "bubblewrap",
+                code: 13,
+                sandboxRoot: built.sandboxRoot,
+                overlayUpper: built.overlayUpper,
+                overlayWork: built.overlayWork,
+              },
+            },
+          );
         }
         sandboxCmd = built.cmd;
         mode = "bubblewrap";
@@ -414,7 +434,7 @@ export function createScriptTool({ agentContext }) {
       } else if (sandboxProvider === "firejail") {
         const firejailInstalled = await hasCommand("firejail");
         if (!firejailInstalled) {
-          return missingCommandResult("firejail", "firejail", runtime);
+          throw missingCommandError("firejail", "firejail", runtime);
         }
 
         const built = buildFirejailCommand({ userRoot, command });
@@ -423,7 +443,9 @@ export function createScriptTool({ agentContext }) {
         extra = { sandboxHome: built.homeDir, persistDir: built.persistDir };
       } else {
         const dockerInstalled = await hasCommand("docker");
-        if (!dockerInstalled) return missingCommandResult("docker", "docker", runtime);
+        if (!dockerInstalled) {
+          throw missingCommandError("docker", "docker", runtime);
+        }
         const built = buildDockerCommand({
           userRoot,
           userId,

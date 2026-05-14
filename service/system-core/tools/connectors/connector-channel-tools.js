@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tToolDescription } from "../core/tool-schema-i18n.js";
 import { tTool } from "../core/tool-i18n.js";
@@ -50,15 +51,13 @@ export function createConnectorChannelTools({ agentContext }) {
     schema: z.object({}),
     func: async () => {
       if (!store || typeof store.inspectSessionConnectors !== "function") {
-        return toToolJsonResult("inspect_connectors", {
-          ok: false,
-          error: tTool(runtime, "connectors.storeMissing"),
+        throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
+          code: "RECOVERABLE_CONNECTOR_STORE_MISSING",
         });
       }
       if (!rootSessionId) {
-        return toToolJsonResult("inspect_connectors", {
-          ok: false,
-          error: tTool(runtime, "connectors.rootSessionMissing"),
+        throw recoverableToolError(tTool(runtime, "connectors.rootSessionMissing"), {
+          code: "RECOVERABLE_ROOT_SESSION_MISSING",
         });
       }
       const inspected = await store.inspectSessionConnectors({
@@ -87,13 +86,10 @@ export function createConnectorChannelTools({ agentContext }) {
       }
       if (totalCount <= 0) {
         const noConnectorMessage = tConnector(runtime, "noConnectorsFound");
-        return toToolJsonResult(
-          "inspect_connectors",
-          {
-            ok: false,
+        throw recoverableToolError(noConnectorMessage, {
+          code: "RECOVERABLE_NO_CONNECTORS_FOUND",
+          details: {
             status: "no_connectors",
-            error: noConnectorMessage,
-            message: noConnectorMessage,
             connectors: {
               databases,
               terminals,
@@ -106,8 +102,7 @@ export function createConnectorChannelTools({ agentContext }) {
               total_count: 0,
             },
           },
-          true,
-        );
+        });
       }
       return toToolJsonResult(
         "inspect_connectors",

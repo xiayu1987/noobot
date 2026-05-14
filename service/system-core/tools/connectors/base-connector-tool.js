@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import {
   tToolDescription,
@@ -104,23 +105,20 @@ export function createConnectConnectorTool(opts) {
 
     // --- pre-checks ---
     if (!store || typeof store.connectConnector !== "function") {
-      return toToolJsonResult(toolName, {
-        ok: false,
-        error: tTool(runtime, "connectors.storeMissing"),
+      throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
+        code: "RECOVERABLE_CONNECTOR_STORE_MISSING",
       });
     }
     if (!rootSessionId) {
-      return toToolJsonResult(toolName, {
-        ok: false,
-        error: tTool(runtime, "connectors.rootSessionMissing"),
+      throw recoverableToolError(tTool(runtime, "connectors.rootSessionMissing"), {
+        code: "RECOVERABLE_ROOT_SESSION_MISSING",
       });
     }
 
     const connectorName = String(inputParams.connector_name || "").trim();
     if (!connectorName) {
-      return toToolJsonResult(toolName, {
-        ok: false,
-        error: tTool(runtime, "connectors.connectorNameRequired"),
+      throw recoverableToolError(tTool(runtime, "connectors.connectorNameRequired"), {
+        code: "RECOVERABLE_INPUT_MISSING",
       });
     }
 
@@ -133,7 +131,9 @@ export function createConnectConnectorTool(opts) {
     if (validateType) {
       const typeError = validateType(typeValue);
       if (typeError) {
-        return toToolJsonResult(toolName, { ok: false, error: typeError });
+        throw recoverableToolError(typeError, {
+          code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
+        });
       }
     }
 
@@ -203,19 +203,23 @@ export function createConnectConnectorTool(opts) {
     // --- user interaction ---
     if (needConnectionInfo) {
       if (!allowUserInteraction) {
-        return toToolJsonResult(toolName, {
-          ok: false,
-          error: tConnector(runtime, "missingConnectionInfoNoInteraction"),
-        });
+        throw recoverableToolError(
+          tConnector(runtime, "missingConnectionInfoNoInteraction"),
+          {
+            code: "RECOVERABLE_MISSING_CONNECTION_INFO",
+          },
+        );
       }
       if (!bridge?.requestUserInteraction) {
-        return toToolJsonResult(toolName, {
-          ok: false,
-          error: tTool(
+        throw recoverableToolError(
+          tTool(
             runtime,
             "tools.connectors.errorUserInteractionBridgeMissing",
           ),
-        });
+          {
+            code: "RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING",
+          },
+        );
       }
 
       // i18n key: fillEmailConnectionInfo / fillDatabaseConnectionInfo / fillTerminalConnectionInfo
@@ -233,10 +237,13 @@ export function createConnectConnectorTool(opts) {
         connectorType,
       });
       if (isUserCancelledInteraction(interactionResult)) {
-        return toToolJsonResult(toolName, {
-          ok: false,
-          cancelled: true,
-          error: tConnector(runtime, "userCancelledAction"),
+        throw recoverableToolError(tConnector(runtime, "userCancelledAction"), {
+          code: "RECOVERABLE_USER_CANCELLED",
+          details: {
+            cancelled: true,
+            connectorName,
+            connectorType,
+          },
         });
       }
       connectionInfo = mergeConnectionInfo(connectionInfo, interactionResult);
@@ -276,14 +283,16 @@ export function createConnectConnectorTool(opts) {
           connectorType,
         });
       }
-      return toToolJsonResult(
-        toolName,
-        buildConnectionStatusPayload({
-          runtimeStatus,
-          connector: connected,
-          extra: extraPayload,
-        }),
-        true,
+      throw recoverableToolError(
+        String(runtimeStatus?.status_message || tConnector(runtime, "statusUnavailable")),
+        {
+          code: "RECOVERABLE_CONNECTOR_CONNECT_FAILED",
+          details: buildConnectionStatusPayload({
+            runtimeStatus,
+            connector: connected,
+            extra: extraPayload,
+          }),
+        },
       );
     }
 

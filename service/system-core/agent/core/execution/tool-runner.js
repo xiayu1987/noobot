@@ -5,6 +5,7 @@
  */
 import { emitEvent } from "../../../event/index.js";
 import { isFatalError } from "../../../error/index.js";
+import { toToolJsonResult } from "../../../tools/core/tool-json-result.js";
 import { extractAttachmentMetasFromToolResult } from "../media/artifact-service.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
@@ -39,7 +40,12 @@ export async function executeToolCall({
   let toolResultText = "";
   let invokeError = null;
   if (!tool) {
-    toolResultText = `tool not found: ${call?.name}`;
+    toolResultText = toToolJsonResult(call?.name, {
+      ok: false,
+      status: "failed",
+      code: "RECOVERABLE_TOOL_NOT_FOUND",
+      error: `tool not found: ${call?.name}`,
+    });
     emitEvent(eventListener, "tool_call_end", {
       turn,
       tool: call?.name,
@@ -77,7 +83,15 @@ export async function executeToolCall({
     });
     if (isAbort || isFatal) throw error;
     invokeError = error;
-    toolResultText = `tool invoke error: ${error?.message || String(error)}`;
+    const errorDetails =
+      error?.details && typeof error.details === "object" ? error.details : null;
+    toolResultText = toToolJsonResult(call?.name, {
+      ok: false,
+      status: "failed",
+      code: String(error?.code || "RECOVERABLE_TOOL_INVOKE_ERROR"),
+      error: error?.message || String(error),
+      ...(errorDetails ? { details: errorDetails } : {}),
+    });
     if (errorLogger && typeof errorLogger.log === "function") {
       void errorLogger.log({
         userId,

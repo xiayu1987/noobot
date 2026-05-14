@@ -8,6 +8,7 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { normalizeDoc2DataFormat, DOC2DATA_FORMAT } from "../../config/core/enums.js";
+import { recoverableToolError } from "../../error/index.js";
 import {
   invokeModelWithTextAndAttachments,
   resolveModelSpecByAlias,
@@ -268,17 +269,11 @@ export function createDoc2DataTool({ agentContext }) {
 
       const images = converted.imagePaths || [];
       if (!images.length) {
-        return toToolJsonResult(
-          "doc_to_data",
-          {
-            ok: false,
-            message: tTool(runtime, "tools.doc2data.noImagesProduced"),
-            input: converted.input,
-          },
-          true,
-        );
+        throw recoverableToolError(tTool(runtime, "tools.doc2data.noImagesProduced"), {
+          code: "RECOVERABLE_DOC2DATA_NO_IMAGES_PRODUCED",
+          details: { input: converted.input },
+        });
       }
-
       const imageAlias = resolveAttachmentAliasByType({
         globalConfig,
         userConfig,

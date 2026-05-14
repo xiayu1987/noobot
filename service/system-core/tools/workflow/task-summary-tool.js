@@ -6,6 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { markCurrentTurnStoreSummarized } from "../../context/session/summarized-message-policy.js";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 
@@ -65,10 +66,10 @@ export function createTaskSummaryTool(ctx = {}) {
     func: async ({ summaryContent }) => {
       const summaryText = String(summaryContent || "").trim();
       if (!summaryText) {
-        return toToolJsonResult(TASK_SUMMARY_TOOL_NAME, {
-          ok: false,
-          message: tTool(runtime, "tools.task_summary.summaryContentRequired"),
-        });
+        throw recoverableToolError(
+          tTool(runtime, "tools.task_summary.summaryContentRequired"),
+          { code: "RECOVERABLE_INPUT_MISSING" },
+        );
       }
 
       systemRuntime.needsPhaseSummary = false;

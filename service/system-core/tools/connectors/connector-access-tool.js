@@ -7,14 +7,11 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { mergeConfig } from "../../config/index.js";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { createConnectorChannelTools } from "./connector-channel-tools.js";
-
-function jsonError(payload = {}) {
-  return toToolJsonResult("process_connector_tool", { ok: false, ...payload });
-}
 
 
 export function createConnectorAccessTool({ agentContext }) {
@@ -55,22 +52,28 @@ export function createConnectorAccessTool({ agentContext }) {
     func: async ({ task, modelName = "" }) => {
       const normalizedTask = String(task || "").trim();
       if (!normalizedTask) {
-        return jsonError({
-          error: tTool(runtime, "common.taskRequired"),
+        throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
+          code: "RECOVERABLE_INPUT_MISSING",
         });
       }
       if (!botManager || !userId || !sessionId) {
-        return jsonError({
-          error: tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
-        });
+        throw recoverableToolError(
+          tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
+          {
+            code: "RECOVERABLE_RUNTIME_CONTEXT_MISSING",
+          },
+        );
       }
       const subTools = [
         ...createConnectorChannelTools({ agentContext }),
       ];
       if (!subTools.length) {
-        return jsonError({
-          error: tTool(runtime, "tools.process_connector.errorToolsUnavailable"),
-        });
+        throw recoverableToolError(
+          tTool(runtime, "tools.process_connector.errorToolsUnavailable"),
+          {
+            code: "RECOVERABLE_TOOLS_UNAVAILABLE",
+          },
+        );
       }
       try {
         const subSessionId = randomUUID();
@@ -136,8 +139,8 @@ export function createConnectorAccessTool({ agentContext }) {
         );
       } catch (error) {
         if (isAbortError(error)) throw error;
-        return jsonError({
-          error: error?.message || String(error),
+        throw recoverableToolError(error?.message || String(error), {
+          code: String(error?.code || "RECOVERABLE_PROCESS_CONNECTOR_FAILED"),
         });
       }
     },

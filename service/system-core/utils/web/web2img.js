@@ -15,6 +15,7 @@ import {
   isReadabilityExtractorReady,
 } from "./text-cleaner.js";
 import { tSystem } from "../../i18n/system-text.js";
+import { recoverableToolError } from "../../error/index.js";
 import { isPlainObject, deepMerge } from "../shared-utils.js";
 
 const require = createRequire(import.meta.url);
@@ -57,6 +58,33 @@ const DEFAULT_CONFIG = {
     split_overlap: 0,
     keep_raw_screenshot: true
   }
+};
+
+const WEB2IMG_RUNTIME_DEFAULTS = {
+  page: {
+    loadTimeoutMs: 45000,
+    readyStateTimeoutMs: 20000,
+    networkIdleTimeoutMs: 12000,
+    readyPostWaitMs: 800,
+    gotoTimeoutMs: 45000,
+  },
+  expand: {
+    maxMatchCount: 20,
+    visibleTimeoutMs: 500,
+    clickTimeoutMs: 800,
+    postClickWaitMs: 150,
+  },
+  scroll: {
+    maxSteps: 35,
+    stepPx: 1400,
+    waitMs: 450,
+    finalTopWaitMs: 300,
+  },
+  textStable: {
+    rounds: 10,
+    intervalMs: 700,
+    stableThreshold: 3,
+  },
 };
 
 /* ---------------------------
@@ -130,8 +158,9 @@ async function loadUrls(inputValue) {
       .filter(lineText => lineText && !lineText.startsWith('#') && isUrl(lineText)));
   }
 
-  throw new Error(
+  throw recoverableToolError(
     `${tSystem("common.unrecognizedInputUrlFileDir")}: ${inputValue}`,
+    { code: "RECOVERABLE_INVALID_INPUT" },
   );
 }
 
@@ -158,25 +187,40 @@ function escapeRegex(textValue) {
  * 页面加载与展开
  * --------------------------- */
 async function waitPageReady(page) {
-  await page.waitForLoadState('load', { timeout: 45000 });
-  await page.waitForFunction(() => document.readyState === 'complete', null, { timeout: 20000 });
+  await page.waitForLoadState('load', {
+    timeout: WEB2IMG_RUNTIME_DEFAULTS.page.loadTimeoutMs,
+  });
+  await page.waitForFunction(
+    () => document.readyState === 'complete',
+    null,
+    { timeout: WEB2IMG_RUNTIME_DEFAULTS.page.readyStateTimeoutMs },
+  );
   try {
-    await page.waitForLoadState('networkidle', { timeout: 12000 });
+    await page.waitForLoadState('networkidle', {
+      timeout: WEB2IMG_RUNTIME_DEFAULTS.page.networkIdleTimeoutMs,
+    });
   } catch (_) {}
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(WEB2IMG_RUNTIME_DEFAULTS.page.readyPostWaitMs);
 }
 
 async function tryExpandContent(page, patterns) {
   for (const kw of patterns || []) {
     try {
       const loc = page.locator(`text=/${escapeRegex(kw)}/i`);
-      const itemCount = Math.min(await loc.count(), 20);
+      const itemCount = Math.min(
+        await loc.count(),
+        WEB2IMG_RUNTIME_DEFAULTS.expand.maxMatchCount,
+      );
       for (let itemIndex = 0; itemIndex < itemCount; itemIndex++) {
         try {
           const targetElement = loc.nth(itemIndex);
-          if (await targetElement.isVisible({ timeout: 500 })) {
-            await targetElement.click({ timeout: 800 });
-            await page.waitForTimeout(150);
+          if (await targetElement.isVisible({
+            timeout: WEB2IMG_RUNTIME_DEFAULTS.expand.visibleTimeoutMs,
+          })) {
+            await targetElement.click({
+              timeout: WEB2IMG_RUNTIME_DEFAULTS.expand.clickTimeoutMs,
+            });
+            await page.waitForTimeout(WEB2IMG_RUNTIME_DEFAULTS.expand.postClickWaitMs);
           }
         } catch (_) {}
       }
@@ -184,7 +228,12 @@ async function tryExpandContent(page, patterns) {
   }
 }
 
-async function autoScroll(page, maxSteps = 35, stepPx = 1400, waitMs = 450) {
+async function autoScroll(
+  page,
+  maxSteps = WEB2IMG_RUNTIME_DEFAULTS.scroll.maxSteps,
+  stepPx = WEB2IMG_RUNTIME_DEFAULTS.scroll.stepPx,
+  waitMs = WEB2IMG_RUNTIME_DEFAULTS.scroll.waitMs,
+) {
   let lastH = 0;
   for (let stepIndex = 0; stepIndex < maxSteps; stepIndex++) {
     await page.evaluate((sp) => window.scrollBy(0, sp), stepPx);
@@ -199,17 +248,21 @@ async function autoScroll(page, maxSteps = 35, stepPx = 1400, waitMs = 450) {
     lastH = scrollHeight;
   }
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(WEB2IMG_RUNTIME_DEFAULTS.scroll.finalTopWaitMs);
 }
 
-async function waitTextStable(page, rounds = 10, intervalMs = 700) {
+async function waitTextStable(
+  page,
+  rounds = WEB2IMG_RUNTIME_DEFAULTS.textStable.rounds,
+  intervalMs = WEB2IMG_RUNTIME_DEFAULTS.textStable.intervalMs,
+) {
   let stable = 0;
   let lastLen = -1;
   for (let roundIndex = 0; roundIndex < rounds; roundIndex++) {
     const curLen = await page.evaluate(() => (document.body?.innerText || '').length);
     if (curLen === lastLen) {
       stable++;
-      if (stable >= 3) break;
+      if (stable >= WEB2IMG_RUNTIME_DEFAULTS.textStable.stableThreshold) break;
     } else {
       stable = 0;
       lastLen = curLen;
@@ -749,12 +802,15 @@ async function processOneUrl(url, outputDir, browser, preferTrafilatura, config)
   const page = await context.newPage();
 
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: WEB2IMG_RUNTIME_DEFAULTS.page.gotoTimeoutMs,
+    });
 
     await waitPageReady(page);
     await tryExpandContent(page, expandPatterns);
     await autoScroll(page);
-    await waitTextStable(page, 10, 700);
+    await waitTextStable(page);
 
     await page.screenshot({ path: rawImagePath, fullPage: true });
 
@@ -809,7 +865,11 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
   await fsp.mkdir(outputDir, { recursive: true });
 
   const urls = await loadUrls(inputValue);
-  if (!urls.length) throw new Error(tSystem("common.noProcessableUrl"));
+  if (!urls.length) {
+    throw recoverableToolError(tSystem("common.noProcessableUrl"), {
+      code: "RECOVERABLE_NO_PROCESSABLE_URL",
+    });
+  }
 
   if (preferTrafilatura && !HAS_READABILITY) {
     logger.warn(tSystem("web2img.readabilityNotInstalledWarn"));
@@ -868,7 +928,9 @@ export async function runWeb2Img({
   const normalizedInput = String(input || "").trim();
   const normalizedOutput = String(outputDir || "").trim();
   if (!normalizedInput || !normalizedOutput) {
-    throw new Error(tSystem("common.inputOutputDirRequired"));
+    throw recoverableToolError(tSystem("common.inputOutputDirRequired"), {
+      code: "RECOVERABLE_INPUT_MISSING",
+    });
   }
   const cfg = deepMerge(DEFAULT_CONFIG, config || {});
   return web2multimodal(

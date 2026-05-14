@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { extractAttachmentMetasFromToolResult } from "../../../../system-core/agent/core/media/artifact-service.js";
+import {
+  extractAttachmentMetasFromToolResult,
+  fetchRemoteMediaArtifact,
+} from "../../../../system-core/agent/core/media/artifact-service.js";
 
 test("extractAttachmentMetasFromToolResult preserves relativePath/path", () => {
   const toolResultText = JSON.stringify({
@@ -35,3 +38,29 @@ test("extractAttachmentMetasFromToolResult preserves relativePath/path", () => {
   );
 });
 
+test("fetchRemoteMediaArtifact returns null when remote response is not ok", async () => {
+  const artifact = await fetchRemoteMediaArtifact(
+    "https://example.com/a.png",
+    async () => ({
+      ok: false,
+      status: 404,
+      headers: { get: () => "image/png" },
+      arrayBuffer: async () => new ArrayBuffer(0),
+    }),
+    1,
+    {},
+  );
+  assert.equal(artifact, null);
+});
+
+test("fetchRemoteMediaArtifact returns null when fetch throws", async () => {
+  const artifact = await fetchRemoteMediaArtifact(
+    "https://example.com/a.png",
+    async () => {
+      throw new Error("network failed");
+    },
+    2,
+    {},
+  );
+  assert.equal(artifact, null);
+});
