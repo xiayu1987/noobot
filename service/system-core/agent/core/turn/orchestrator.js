@@ -7,7 +7,7 @@ import { HumanMessage } from "@langchain/core/messages";
 import {
   markCurrentTurnModelMessagesSummarized,
   markCurrentTurnStoreSummarized,
-} from "../../../context/summarized-message-policy.js";
+} from "../../../context/session/summarized-message-policy.js";
 import { emitEvent } from "../../../event/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";

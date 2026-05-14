@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { safeNum } from "../utils/shared-utils.js";
-import { normalizeLocale } from "../i18n/index.js";
-import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "../i18n/locales/zh-CN/system-prompt.js";
-import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "../i18n/locales/en-US/system-prompt.js";
-import { normalizeAttachmentMetas } from "../attach/index.js";
+import { safeNum } from "../../utils/shared-utils.js";
+import { normalizeLocale } from "../../i18n/index.js";
+import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "../../i18n/locales/zh-CN/system-prompt.js";
+import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "../../i18n/locales/en-US/system-prompt.js";
+import { normalizeAttachmentMetas } from "../../attach/index.js";
 
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;

@@ -8,28 +8,31 @@ import { buildTools } from "../tools/index.js";
 import { getConnectorChannelStore } from "../connectors/index.js";
 import { getConnectorHistoryStore } from "../connectors/index.js";
 import {
-  buildDynamicInfo,
-  buildStaticInfo,
-  loadSystemPrompt,
-  resolveAllEnabledProviders,
-  resolveAttachments,
-  resolveAvailableMcpServers,
-  resolveConnectorStatusSection,
-  resolveLongMemory,
-  resolveModelSection,
   resolveRuntimeBasePath,
-  resolveServices,
-  resolveSessionTreeWithRootSessionId,
-  resolveSkills,
-  resolveWorkspaceDirectories,
-  toConversationMessages,
-} from "./data-providers.js";
+  buildStaticInfo,
+  buildDynamicInfo,
+} from "./providers/environment-provider.js";
+import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
+import { resolveConnectorStatusSection } from "./providers/connector-status-provider.js";
+import { resolveServices } from "./providers/service-provider.js";
+import { resolveAvailableMcpServers } from "./providers/mcp-provider.js";
+import {
+  resolveModelSection,
+  resolveAllEnabledProviders,
+} from "./providers/model-provider.js";
+import { loadSystemPrompt } from "./providers/system-prompt-loader.js";
+import { resolveSessionTreeWithRootSessionId } from "./providers/session-tree-resolver.js";
+import { resolveAttachments } from "./providers/attachment-resolver.js";
+import { resolveSkills } from "./providers/skills-resolver.js";
+import { resolveLongMemory } from "./providers/memory-resolver.js";
+import { toConversationMessages } from "./session/message-converter.js";
 import {
   buildRuntimeContext,
   initializeRuntimeEnvironment,
-} from "./runtime-environment-builder.js";
-import { composeSystemInfoSections } from "./system-prompt-formatter.js";
-import { mapToAgentContextSchema } from "./agent-context-mapper.js";
+} from "./builders/runtime-environment-builder.js";
+import { resolveScenarioProfile } from "./builders/scenario-resolver.js";
+import { composeSystemInfoSections } from "./formatters/system-prompt-formatter.js";
+import { mapToAgentContextSchema } from "./formatters/agent-context-mapper.js";
 import { tSystem } from "../i18n/system-text.js";
 import {
   filterSummarizedMessages,
@@ -138,60 +141,6 @@ export class ContextBuilder {
     const aliasMap = CONTEXT_SECTION_ALIASES;
     const aliasList = aliasMap[normalizedSectionKey] || [normalizedSectionKey];
     return aliasList.some((aliasItem) => includeSet.has(aliasItem));
-  }
-
-  _resolveScenarioProfile(effectiveConfig = {}) {
-    const runConfigProfile =
-      this.runConfig?.scenarioProfile && typeof this.runConfig.scenarioProfile === "object"
-        ? this.runConfig.scenarioProfile
-        : {};
-    const runConfigScenarioKey = String(this.runConfig?.scenario || "").trim();
-    const scenarioConfig =
-      effectiveConfig?.scenarios && typeof effectiveConfig.scenarios === "object"
-        ? effectiveConfig.scenarios
-        : {};
-    const defaultScenarioKey = String(scenarioConfig?.default || "").trim();
-    const resolvedScenarioKey = runConfigScenarioKey || defaultScenarioKey;
-    const scenarioDefinitions =
-      scenarioConfig?.definitions && typeof scenarioConfig.definitions === "object"
-        ? scenarioConfig.definitions
-        : {};
-    const scenarioDefinition =
-      resolvedScenarioKey &&
-      scenarioDefinitions?.[resolvedScenarioKey] &&
-      typeof scenarioDefinitions[resolvedScenarioKey] === "object"
-        ? scenarioDefinitions[resolvedScenarioKey]
-        : {};
-    const normalizeStringArray = (input = []) =>
-      Array.isArray(input)
-        ? input
-            .map((item) => String(item || "").trim())
-            .filter(Boolean)
-        : [];
-    return {
-      key: resolvedScenarioKey,
-      name: String(runConfigProfile?.name || scenarioDefinition?.name || "").trim(),
-      description: String(
-        runConfigProfile?.description || scenarioDefinition?.description || "",
-      ).trim(),
-      model: String(runConfigProfile?.model || scenarioDefinition?.model || "").trim(),
-      tools: normalizeStringArray(
-        runConfigProfile?.tools ?? scenarioDefinition?.tools ?? [],
-      ),
-      context: normalizeStringArray(
-        runConfigProfile?.context ?? scenarioDefinition?.context ?? [],
-      ),
-      services: normalizeStringArray(
-        runConfigProfile?.services ?? scenarioDefinition?.services ?? [],
-      ),
-      mcpServers: normalizeStringArray(
-        runConfigProfile?.mcpServers ??
-          runConfigProfile?.mcp_servers ??
-          scenarioDefinition?.mcpServers ??
-          scenarioDefinition?.mcp_servers ??
-          [],
-      ),
-    };
   }
 
   async _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
@@ -390,7 +339,10 @@ export class ContextBuilder {
           ? this._resolveWorkspaceDirectoriesCached(runtimeBasePath)
           : [],
       ]);
-    const scenarioProfile = this._resolveScenarioProfile(effectiveConfig);
+    const scenarioProfile = resolveScenarioProfile({
+      runConfig: this.runConfig,
+      effectiveConfig,
+    });
     const services = includeServices
       ? resolveServices(effectiveConfig, {
           includeRefs: scenarioProfile?.services || [],

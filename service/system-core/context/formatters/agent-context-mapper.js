@@ -7,7 +7,7 @@ import {
   safeNum,
   normalizeSelectedConnectors,
   resolveForceToolCall,
-} from "../utils/shared-utils.js";
+} from "../../utils/shared-utils.js";
 
 export function mapToAgentContextSchema({
   staticAgentContext = {},
@@ -33,16 +33,13 @@ export function mapToAgentContextSchema({
   return {
     environment: {
       os: {
-        platform: staticAgentContext.platform || process.platform,
-        arch: staticAgentContext.arch || process.arch,
-        timezone:
-          staticAgentContext.timezone ||
-          Intl.DateTimeFormat().resolvedOptions().timeZone ||
-          "",
-        nodeVersion: staticAgentContext.nodeVersion || process.version,
+        platform: staticAgentContext.platform || "",
+        arch: staticAgentContext.arch || "",
+        timezone: staticAgentContext.timezone || "",
+        nodeVersion: staticAgentContext.nodeVersion || "",
       },
       workspace: {
-        cwd: staticAgentContext.cwd || process.cwd(),
+        cwd: staticAgentContext.cwd || "",
         basePath: staticAgentContext.basePath || "",
         workspaceDirectories: Array.isArray(staticAgentContext.workspaceDirectories)
           ? staticAgentContext.workspaceDirectories

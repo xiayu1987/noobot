@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
-import { resolveForceToolCall } from "../utils/shared-utils.js";
+import { resolveForceToolCall } from "../../utils/shared-utils.js";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";

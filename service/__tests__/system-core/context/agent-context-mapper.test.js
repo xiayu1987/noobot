@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { mapToAgentContextSchema } from "../../../system-core/context/agent-context-mapper.js";
+import { mapToAgentContextSchema } from "../../../system-core/context/formatters/agent-context-mapper.js";
 
 test("mapToAgentContextSchema maps runtime/session/payload fields correctly", () => {
   const context = mapToAgentContextSchema({
@@ -53,4 +53,20 @@ test("mapToAgentContextSchema maps runtime/session/payload fields correctly", ()
   assert.deepEqual(context.payload.messages.system, ["sys"]);
   assert.equal(context.payload.messages.history.length, 1);
   assert.deepEqual(context.payload.tools.shared, { x: true });
+});
+
+test("mapToAgentContextSchema keeps empty os/workspace fields when static context is missing", () => {
+  const context = mapToAgentContextSchema({
+    staticAgentContext: {},
+    runtime: {
+      systemRuntime: {},
+    },
+    globalConfig: {},
+  });
+
+  assert.equal(context.environment.os.platform, "");
+  assert.equal(context.environment.os.arch, "");
+  assert.equal(context.environment.os.timezone, "");
+  assert.equal(context.environment.os.nodeVersion, "");
+  assert.equal(context.environment.workspace.cwd, "");
 });

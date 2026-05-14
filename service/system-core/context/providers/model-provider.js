@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveDefaultModelSpec } from "../model/index.js";
-import { isPlainObject } from "../utils/shared-utils.js";
+import { resolveDefaultModelSpec } from "../../model/index.js";
+import { isPlainObject } from "../../utils/shared-utils.js";
 
 
 function normalizeModelMultimodalInfo(modelSpec = {}) {
