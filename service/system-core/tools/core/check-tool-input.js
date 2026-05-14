@@ -54,6 +54,21 @@ function resolveUserWorkspacePath(agentContext = {}) {
   return resolveRuntimeBasePath(agentContext);
 }
 
+function resolveSessionContext(agentContext = {}) {
+  const runtime = agentContext?.runtime || {};
+  const sessionManager = runtime?.sessionManager || null;
+  const userId = String(
+    agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
+  ).trim();
+  if (!sessionManager || !userId) {
+    throw recoverableToolError(tCheckInput(agentContext, "sessionContextMissing"), {
+      code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
+      details: { hasSessionManager: Boolean(sessionManager), hasUserId: Boolean(userId) },
+    });
+  }
+  return { sessionManager, userId };
+}
+
 export function assertValidSimpleFileName({
   fileName = "",
   fieldName = "fileName",
@@ -147,17 +162,7 @@ export async function assertValidParentSessionId({
     );
   }
 
-  const runtime = agentContext?.runtime || {};
-  const sessionManager = runtime?.sessionManager || null;
-  const userId = String(
-    agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
-  ).trim();
-  if (!sessionManager || !userId) {
-    throw recoverableToolError(tCheckInput(agentContext, "sessionContextMissing"), {
-      code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
-      details: { hasSessionManager: Boolean(sessionManager), hasUserId: Boolean(userId) },
-    });
-  }
+  const { sessionManager, userId } = resolveSessionContext(agentContext);
 
   const sessionTree = await sessionManager.getSessionTree({ userId });
   if (!sessionTree?.nodes?.[normalizedParentSessionId]) {
@@ -197,17 +202,7 @@ export async function assertValidParentDialogProcessId({
     );
   }
 
-  const runtime = agentContext?.runtime || {};
-  const sessionManager = runtime?.sessionManager || null;
-  const userId = String(
-    agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
-  ).trim();
-  if (!sessionManager || !userId) {
-    throw recoverableToolError(tCheckInput(agentContext, "sessionContextMissing"), {
-      code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
-      details: { hasSessionManager: Boolean(sessionManager), hasUserId: Boolean(userId) },
-    });
-  }
+  const { sessionManager, userId } = resolveSessionContext(agentContext);
 
   const exists = await sessionManager.hasDialogProcessIdInSession({
     userId,

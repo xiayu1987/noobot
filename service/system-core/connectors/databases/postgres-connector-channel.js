@@ -3,56 +3,34 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  importDefaultOrModule,
+  normalizeConnectionSource,
+  normalizeTimeoutMs,
+  resolveHostPortUserPasswordDatabase,
+} from "./common-db-connector-channel.js";
 
 function resolvePostgresConnection(connectionInfo = {}) {
-  const source =
-    connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
-  const connectionString = String(
-    source?.connection_string || source?.connectionString || "",
-  ).trim();
-
-  let host = String(source?.host || source?.ip || "").trim();
-  let port = Number(source?.port || 5432);
-  let user = String(source?.username || source?.user || "").trim();
-  let password = String(source?.password || "").trim();
-  let database = String(source?.database || source?.db || "").trim();
-
-  if (connectionString) {
-    try {
-      const url = new URL(connectionString);
-      host = host || String(url.hostname || "").trim();
-      port = Number.isFinite(port) && port > 0 ? port : Number(url.port || 5432);
-      user = user || decodeURIComponent(String(url.username || ""));
-      password = password || decodeURIComponent(String(url.password || ""));
-      database = database || String(url.pathname || "").replace(/^\/+/, "").trim();
-    } catch {
-      // keep plain fields
-    }
-  }
-
-  const timeoutMs = Math.max(
-    1000,
-    Number(source?.timeout_ms || source?.timeoutMs || 30000),
-  );
+  const source = normalizeConnectionSource(connectionInfo);
+  const resolved = resolveHostPortUserPasswordDatabase({
+    source,
+    defaultPort: 5432,
+    fallbackHost: "127.0.0.1",
+  });
 
   return {
-    connectionString,
-    host: host || "127.0.0.1",
-    port: Number.isFinite(port) && port > 0 ? Math.floor(port) : 5432,
-    user,
-    password,
-    database,
-    timeoutMs,
+    connectionString: resolved.connectionString,
+    host: resolved.host,
+    port: resolved.port,
+    user: resolved.user,
+    password: resolved.password,
+    database: resolved.database,
+    timeoutMs: normalizeTimeoutMs(source, 30000),
   };
 }
 
 async function importPg() {
-  try {
-    const mod = await import("pg");
-    return mod?.default || mod;
-  } catch {
-    return null;
-  }
+  return importDefaultOrModule("pg");
 }
 
 const postgresPools = new Map();

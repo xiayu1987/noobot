@@ -6,6 +6,7 @@
 import path from "node:path";
 import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { safeJoin } from "../system-core/utils/fs-safe.js";
+import { withJsonError } from "./route-wrapper.js";
 
 /**
  * @typedef {Object} FileCrudRouteOptions
@@ -54,23 +55,26 @@ export function registerFileCrudRoutes(
   const middlewares = middleware ? (Array.isArray(middleware) ? middleware : [middleware]) : [];
 
   // GET tree
-  app.get(`${routePrefix}/tree`, ...middlewares, async (req, res) => {
-    try {
+  app.get(
+    `${routePrefix}/tree`,
+    ...middlewares,
+    withJsonError(
+      async (req, res) => {
       const root = resolveRootPath();
       await mkdir(root, { recursive: true });
       const tree = await buildWorkspaceTree(root);
       res.json({ ok: true, root, tree });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText(keys.treeFailed, req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: keys.treeFailed, translateText },
+    ),
+  );
 
   // GET file
-  app.get(`${routePrefix}/file`, ...middlewares, async (req, res) => {
-    try {
+  app.get(
+    `${routePrefix}/file`,
+    ...middlewares,
+    withJsonError(
+      async (req, res) => {
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
       const root = resolveRootPath();
@@ -82,17 +86,17 @@ export function registerFileCrudRoutes(
       const isText = !contentBuffer.includes(0);
       const content = isText ? contentBuffer.toString("utf8") : "";
       res.json({ ok: true, path: relativePath, isText, size: fileStats.size, content });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText(keys.readFailed, req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: keys.readFailed, translateText },
+    ),
+  );
 
   // PUT file
-  app.put(`${routePrefix}/file`, ...middlewares, async (req, res) => {
-    try {
+  app.put(
+    `${routePrefix}/file`,
+    ...middlewares,
+    withJsonError(
+      async (req, res) => {
       const relativePath = String(req.body?.path || "");
       const content = String(req.body?.content || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
@@ -101,18 +105,18 @@ export function registerFileCrudRoutes(
       await mkdir(path.dirname(absolutePath), { recursive: true });
       await writeFile(absolutePath, content, "utf8");
       res.json({ ok: true, path: relativePath });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText(keys.saveFailed, req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: keys.saveFailed, translateText },
+    ),
+  );
 
   // GET download (only registered when buildDirectoryArchiveFile is provided)
   if (typeof buildDirectoryArchiveFile === "function") {
-    app.get(`${routePrefix}/download`, ...middlewares, async (req, res) => {
-      try {
+    app.get(
+      `${routePrefix}/download`,
+      ...middlewares,
+      withJsonError(
+        async (req, res) => {
         const relativePath = String(req.query.path || "");
         if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
         const root = resolveRootPath();
@@ -136,12 +140,9 @@ export function registerFileCrudRoutes(
         res.on("close", cleanupTemp);
         res.on("finish", cleanupTemp);
         res.download(archiveMeta.archiveFilePath, archiveMeta.archiveFileName);
-      } catch (error) {
-        res.status(400).json({
-          ok: false,
-          error: error.message || translateText(keys.downloadFailed, req.locale),
-        });
-      }
-    });
+        },
+        { fallbackErrorKey: keys.downloadFailed, translateText },
+      ),
+    );
   }
 }

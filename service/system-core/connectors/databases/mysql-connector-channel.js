@@ -3,43 +3,28 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  importDefaultOrModule,
+  normalizeConnectionSource,
+  normalizeTimeoutMs,
+  resolveHostPortUserPasswordDatabase,
+} from "./common-db-connector-channel.js";
 
 function resolveMysqlConnection(connectionInfo = {}) {
-  const source =
-    connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
-  const connectionString = String(
-    source?.connection_string || source?.connectionString || "",
-  ).trim();
-
-  let host = String(source?.host || source?.ip || "").trim();
-  let port = Number(source?.port || 3306);
-  let user = String(source?.username || source?.user || "").trim();
-  let password = String(source?.password || "").trim();
-  let database = String(source?.database || source?.db || "").trim();
-
-  if (connectionString) {
-    try {
-      const url = new URL(connectionString);
-      host = host || String(url.hostname || "").trim();
-      port = Number.isFinite(port) && port > 0 ? port : Number(url.port || 3306);
-      user = user || decodeURIComponent(String(url.username || ""));
-      password = password || decodeURIComponent(String(url.password || ""));
-      database = database || String(url.pathname || "").replace(/^\/+/, "").trim();
-    } catch {
-      // keep plain fields
-    }
-  }
+  const source = normalizeConnectionSource(connectionInfo);
+  const resolved = resolveHostPortUserPasswordDatabase({
+    source,
+    defaultPort: 3306,
+    fallbackHost: "127.0.0.1",
+  });
 
   return {
-    host: host || "127.0.0.1",
-    port: Number.isFinite(port) && port > 0 ? Math.floor(port) : 3306,
-    user,
-    password,
-    database,
-    timeoutMs: Math.max(
-      1000,
-      Number(source?.timeout_ms || source?.timeoutMs || 30000),
-    ),
+    host: resolved.host,
+    port: resolved.port,
+    user: resolved.user,
+    password: resolved.password,
+    database: resolved.database,
+    timeoutMs: normalizeTimeoutMs(source, 30000),
     poolLimit: Math.max(
       1,
       Number(source?.pool_limit || source?.poolLimit || 4),
@@ -48,12 +33,7 @@ function resolveMysqlConnection(connectionInfo = {}) {
 }
 
 async function importMysqlPromise() {
-  try {
-    const mod = await import("mysql2/promise");
-    return mod?.default || mod;
-  } catch {
-    return null;
-  }
+  return importDefaultOrModule("mysql2/promise");
 }
 
 const mysqlPools = new Map();

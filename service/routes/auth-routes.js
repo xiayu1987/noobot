@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { logError } from "../system-core/tracking/console/logger.js";
+import { withJsonError } from "./route-wrapper.js";
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -90,8 +91,10 @@ export function registerAuthRoutes(
     translateText,
   } = {},
 ) {
-  app.post("/internal/connect", async (req, res) => {
-    try {
+  app.post(
+    "/internal/connect",
+    withJsonError(
+      async (req, res) => {
       const userId = String(req.body?.userId || "").trim();
       const connectCode = String(req.body?.connectCode || "").trim();
       if (!userId || !connectCode) {
@@ -167,27 +170,30 @@ export function registerAuthRoutes(
         permissions: buildClientPermissions("user"),
         scenarios: mergedScenarios,
       });
-    } catch (error) {
-      res
-        .status(400)
-        .json({ ok: false, error: error.message || translateText("connect.failed", req.locale) });
-    }
-  });
+      },
+      { fallbackErrorKey: "connect.failed", translateText },
+    ),
+  );
 
-  app.get("/internal/admin/users", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
+  app.get(
+    "/internal/admin/users",
+    requireApiKey,
+    requireSuperAdmin,
+    withJsonError(
+      async (req, res) => {
       const payload = await readWorkspaceUsersConfig({ createIfMissing: true });
       res.json({ ok: true, ...payload });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.readUsersFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.readUsersFailed", translateText },
+    ),
+  );
 
-  app.put("/internal/admin/users", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
+  app.put(
+    "/internal/admin/users",
+    requireApiKey,
+    requireSuperAdmin,
+    withJsonError(
+      async (req, res) => {
       const normalized = normalizeWorkspaceUsersConfig(req.body || {});
       if (!normalized.users.length) {
         throw new Error(translateText("common.atLeastOneUserRequired", req.locale));
@@ -207,11 +213,8 @@ export function registerAuthRoutes(
       }
       const payload = await writeWorkspaceUsersConfig(normalized);
       res.json({ ok: true, ...payload });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.saveUsersFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.saveUsersFailed", translateText },
+    ),
+  );
 }

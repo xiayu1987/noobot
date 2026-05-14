@@ -9,6 +9,7 @@ import { access, mkdir, readdir, rm } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
+import { withJsonError } from "./route-wrapper.js";
 
 const RESERVED_WORKSPACE_ROOT_DIRS = new Set([
   "memory",
@@ -59,19 +60,20 @@ export function registerWorkspaceRoutes(
 ) {
   // ── User-level workspace routes (unchanged) ──
 
-  app.get("/internal/workspace/tree/:userId", async (req, res) => {
-    try {
+  app.get(
+    "/internal/workspace/tree/:userId",
+    withJsonError(async (req, res) => {
       const { userId } = req.params;
       const basePath = await workspaceService.ensureUserWorkspace(userId);
       const tree = await buildWorkspaceTree(basePath);
       res.json({ ok: true, userId, root: basePath, tree });
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
+    }, { translateText }),
+  );
 
-  app.post("/internal/workspace/reset/:userId", async (req, res) => {
-    try {
+  app.post(
+    "/internal/workspace/reset/:userId",
+    withJsonError(
+      async (req, res) => {
       const { userId } = req.params;
       const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
       const basePath = await workspaceService.resetUserWorkspace(userId, { sections });
@@ -81,33 +83,26 @@ export function registerWorkspaceRoutes(
         root: basePath,
         sections,
       });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.resetWorkspaceFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.resetWorkspaceFailed", translateText },
+    ),
+  );
 
-  app.post("/internal/workspace/sync/:userId", async (req, res) => {
-    try {
+  app.post(
+    "/internal/workspace/sync/:userId",
+    withJsonError(
+      async (req, res) => {
       const { userId } = req.params;
       const basePath = await workspaceService.syncUserWorkspace(userId);
       res.json({ ok: true, userId, root: basePath });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.syncWorkspaceFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.syncWorkspaceFailed", translateText },
+    ),
+  );
 
-  app.get("/internal/workspace/file/:userId", async (req, res) => {
-    try {
+  app.get(
+    "/internal/workspace/file/:userId",
+    withJsonError(async (req, res) => {
       const { userId } = req.params;
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
@@ -132,13 +127,12 @@ export function registerWorkspaceRoutes(
       const isText = !contentBuffer.includes(0);
       const content = isText ? contentBuffer.toString("utf8") : "";
       res.json({ ok: true, path: relativePath, isText, size: fileStats.size, content });
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
+    }, { translateText }),
+  );
 
-  app.put("/internal/workspace/file/:userId", async (req, res) => {
-    try {
+  app.put(
+    "/internal/workspace/file/:userId",
+    withJsonError(async (req, res) => {
       const { userId } = req.params;
       const relativePath = String(req.body?.path || "");
       const content = String(req.body?.content || "");
@@ -150,13 +144,12 @@ export function registerWorkspaceRoutes(
       await mkdir(path.dirname(absolutePath), { recursive: true });
       await writeFile(absolutePath, content, "utf8");
       res.json({ ok: true, path: relativePath });
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
+    }, { translateText }),
+  );
 
-  app.get("/internal/workspace/download/:userId", async (req, res) => {
-    try {
+  app.get(
+    "/internal/workspace/download/:userId",
+    withJsonError(async (req, res) => {
       const { userId } = req.params;
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
@@ -194,15 +187,17 @@ export function registerWorkspaceRoutes(
       res.on("close", cleanupTemp);
       res.on("finish", cleanupTemp);
       res.download(archiveMeta.archiveFilePath, archiveMeta.archiveFileName);
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
+    }, { translateText }),
+  );
 
   // ── Admin-level workspace-all routes (sync, reset, file CRUD) ──
 
-  app.post("/internal/admin/workspace-all/sync", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
+  app.post(
+    "/internal/admin/workspace-all/sync",
+    requireApiKey,
+    requireSuperAdmin,
+    withJsonError(
+      async (req, res) => {
       const root = workspaceRootPath();
       const userDirs = await listWorkspaceUserDirs(root, globalConfig);
       const syncedUsers = [];
@@ -224,18 +219,17 @@ export function registerWorkspaceRoutes(
         total: userDirs.length,
         success: syncedUsers.length,
       });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.syncAllWorkspaceFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.syncAllWorkspaceFailed", translateText },
+    ),
+  );
 
-  app.post("/internal/admin/workspace-all/reset", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
+  app.post(
+    "/internal/admin/workspace-all/reset",
+    requireApiKey,
+    requireSuperAdmin,
+    withJsonError(
+      async (req, res) => {
       const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
       const root = workspaceRootPath();
       const userDirs = await listWorkspaceUserDirs(root, globalConfig);
@@ -260,15 +254,10 @@ export function registerWorkspaceRoutes(
         success: resetUsers.length,
         sections,
       });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.resetAllWorkspaceFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.resetAllWorkspaceFailed", translateText },
+    ),
+  );
 
   // ── Admin file CRUD routes via factory ──
 

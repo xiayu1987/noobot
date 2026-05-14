@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
+import { withJsonError } from "./route-wrapper.js";
 
 export function registerConfigAndTemplateRoutes(
   app,
@@ -28,8 +29,10 @@ export function registerConfigAndTemplateRoutes(
 ) {
   // ── Config params routes (unchanged) ──
 
-  app.get("/internal/config-params", async (req, res) => {
-    try {
+  app.get(
+    "/internal/config-params",
+    withJsonError(
+      async (req, res) => {
       const scope = resolveConfigParamScope(req);
       if (scope === "system" && String(req?.auth?.role || "") !== "super_admin") {
         res.status(403).json({
@@ -43,16 +46,15 @@ export function registerConfigAndTemplateRoutes(
         createIfMissing: true,
       });
       res.json(await buildScopedConfigParamsResponse({ req, payload, userId }));
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.readConfigParamsFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.readConfigParamsFailed", translateText },
+    ),
+  );
 
-  app.put("/internal/config-params", async (req, res) => {
-    try {
+  app.put(
+    "/internal/config-params",
+    withJsonError(
+      async (req, res) => {
       const scope = resolveConfigParamScope(req);
       if (scope === "system" && String(req?.auth?.role || "") !== "super_admin") {
         res.status(403).json({
@@ -75,16 +77,15 @@ export function registerConfigAndTemplateRoutes(
       });
       if (scope === "system") await rebuildRuntimeConfig();
       res.json(await buildScopedConfigParamsResponse({ req, payload, userId }));
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.saveConfigParamsFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.saveConfigParamsFailed", translateText },
+    ),
+  );
 
-  app.get("/internal/config-params/catalog", async (req, res) => {
-    try {
+  app.get(
+    "/internal/config-params/catalog",
+    withJsonError(
+      async (req, res) => {
       const scope = resolveConfigParamScope(req);
       let payload = normalizeConfigParams({});
       if (scope === "system") {
@@ -103,30 +104,34 @@ export function registerConfigAndTemplateRoutes(
         values: payload?.values || {},
       });
       res.json({ ok: true, scope, catalog });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message || translateText("common.loadConfigParamsCatalogFailed", req.locale),
-      });
-    }
-  });
+      },
+      {
+        fallbackErrorKey: "common.loadConfigParamsCatalogFailed",
+        translateText,
+      },
+    ),
+  );
 
-  app.get("/internal/admin/config-params", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
+  app.get(
+    "/internal/admin/config-params",
+    requireApiKey,
+    requireSuperAdmin,
+    withJsonError(
+      async (req, res) => {
       req.query = { ...(req.query || {}), scope: "system" };
       const { payload } = await readScopedConfigParams({ req, createIfMissing: true });
       res.json(await buildScopedConfigParamsResponse({ req, payload }));
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.readConfigParamsFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.readConfigParamsFailed", translateText },
+    ),
+  );
 
-  app.put("/internal/admin/config-params", requireApiKey, requireSuperAdmin, async (req, res) => {
-    try {
+  app.put(
+    "/internal/admin/config-params",
+    requireApiKey,
+    requireSuperAdmin,
+    withJsonError(
+      async (req, res) => {
       req.query = { ...(req.query || {}), scope: "system" };
       const incomingBody = req.body || {};
       const { payload } = await writeScopedConfigParams({
@@ -136,13 +141,10 @@ export function registerConfigAndTemplateRoutes(
       });
       await rebuildRuntimeConfig();
       res.json(await buildScopedConfigParamsResponse({ req, payload }));
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.saveConfigParamsFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.saveConfigParamsFailed", translateText },
+    ),
+  );
 
   // ── Template file CRUD routes via factory ──
   // Note: buildDirectoryArchiveFile is intentionally omitted so that

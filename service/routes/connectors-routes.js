@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { withJsonError } from "./route-wrapper.js";
 
 const DEFAULT_LOCALE = "zh-CN";
 
@@ -93,8 +94,10 @@ export function registerConnectorRoutes(
     translateText,
   } = {},
 ) {
-  app.get("/internal/connectors/:userId/:sessionId", async (req, res) => {
-    try {
+  app.get(
+    "/internal/connectors/:userId/:sessionId",
+    withJsonError(
+      async (req, res) => {
       const { userId, sessionId } = req.params;
       const rootSessionId = await bot.session.getRootSessionId({ userId, sessionId });
       const connectorChannelStore = getConnectorChannelStore();
@@ -162,18 +165,15 @@ export function registerConnectorRoutes(
         },
         selectedConnectors,
       });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.getConnectorsFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.getConnectorsFailed", translateText },
+    ),
+  );
 
-  app.put("/internal/connectors/:userId/:sessionId/selection", async (req, res) => {
-    try {
+  app.put(
+    "/internal/connectors/:userId/:sessionId/selection",
+    withJsonError(
+      async (req, res) => {
       const { userId, sessionId } = req.params;
       const selectedConnectors = normalizeSelectedConnectors(
         req.body?.selectedConnectors,
@@ -191,14 +191,8 @@ export function registerConnectorRoutes(
         rootSessionId,
         selectedConnectors: savedSelectedConnectors,
       });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error:
-          error.message ||
-          translateText("common.saveSelectedConnectorsFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.saveSelectedConnectorsFailed", translateText },
+    ),
+  );
 }
-

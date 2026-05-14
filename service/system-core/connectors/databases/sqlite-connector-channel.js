@@ -3,13 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  importDefaultOrModule,
+  normalizeConnectionSource,
+  normalizeConnectionString,
+  normalizeTimeoutMs,
+} from "./common-db-connector-channel.js";
 
 function resolveSqliteConnection(connectionInfo = {}) {
-  const source =
-    connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
-  const connectionString = String(
-    source?.connection_string || source?.connectionString || "",
-  ).trim();
+  const source = normalizeConnectionSource(connectionInfo);
+  const connectionString = normalizeConnectionString(source);
   let filePath = String(
     source?.file_path || source?.filePath || source?.database || source?.db || "",
   ).trim();
@@ -24,20 +27,11 @@ function resolveSqliteConnection(connectionInfo = {}) {
     }
   }
 
-  const timeoutMs = Math.max(
-    1000,
-    Number(source?.timeout_ms || source?.timeoutMs || 30000),
-  );
-  return { filePath, timeoutMs };
+  return { filePath, timeoutMs: normalizeTimeoutMs(source, 30000) };
 }
 
 async function importBetterSqlite3() {
-  try {
-    const mod = await import("better-sqlite3");
-    return mod?.default || mod;
-  } catch {
-    return null;
-  }
+  return importDefaultOrModule("better-sqlite3");
 }
 
 const sqliteDatabases = new Map();

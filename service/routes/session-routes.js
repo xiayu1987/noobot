@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { withJsonError } from "./route-wrapper.js";
 
 export function registerSessionRoutes(
   app,
@@ -14,21 +15,22 @@ export function registerSessionRoutes(
     translateText,
   } = {},
 ) {
-  app.get("/internal/session/:userId/:sessionId", async (req, res) => {
-    try {
+  app.get(
+    "/internal/session/:userId/:sessionId",
+    withJsonError(async (req, res) => {
       const { userId, sessionId } = req.params;
       const result = await bot.session.getSessionData({
         userId,
         sessionId,
       });
       res.json({ ok: true, ...result });
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
+    }, { translateText }),
+  );
 
-  app.delete("/internal/session/:userId/:sessionId", async (req, res) => {
-    try {
+  app.delete(
+    "/internal/session/:userId/:sessionId",
+    withJsonError(
+      async (req, res) => {
       const { userId, sessionId } = req.params;
       const normalizedSessionId = String(sessionId || "").trim();
       const rootSessionId = await bot.session.getRootSessionId({
@@ -84,26 +86,24 @@ export function registerSessionRoutes(
         releasedConnectors,
         deletedConnectorHistory,
       });
-    } catch (error) {
-      res.status(400).json({
-        ok: false,
-        error: error.message || translateText("common.deleteSessionFailed", req.locale),
-      });
-    }
-  });
+      },
+      { fallbackErrorKey: "common.deleteSessionFailed", translateText },
+    ),
+  );
 
-  app.get("/internal/sessions/:userId", async (req, res) => {
-    try {
+  app.get(
+    "/internal/sessions/:userId",
+    withJsonError(async (req, res) => {
       const { userId } = req.params;
       const sessions = await bot.session.getAllSessionsData({ userId });
       res.json({ ok: true, userId, sessions });
-    } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
-    }
-  });
+    }, { translateText }),
+  );
 
-  app.get("/internal/attachment/:userId/:attachmentId", async (req, res) => {
-    try {
+  app.get(
+    "/internal/attachment/:userId/:attachmentId",
+    withJsonError(
+      async (req, res) => {
       const { userId, attachmentId } = req.params;
       const sessionId = String(req.query?.sessionId || "").trim();
       const attachmentSource = String(req.query?.attachmentSource || "").trim();
@@ -124,13 +124,14 @@ export function registerSessionRoutes(
         `inline; filename="${encodeURIComponent(attachment.name || attachmentId)}"`,
       );
       res.sendFile(attachment.absolutePath);
-    } catch (error) {
-      res.status(404).json({
-        ok: false,
-        error: error.message || translateText("common.notFound", req.locale),
-      });
-    }
-  });
+      },
+      {
+        statusCode: 404,
+        fallbackErrorKey: "common.notFound",
+        translateText,
+      },
+    ),
+  );
 
   app.post("/chat", handleChat);
 }
