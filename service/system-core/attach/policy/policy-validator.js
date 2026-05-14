@@ -5,11 +5,14 @@
  */
 
 import path from "node:path";
-import { safeStr } from "../utils/shared-utils.js";
-import { MIME_TO_EXTENSION } from "./constants.js";
+
+import { safeStr } from "../../utils/shared-utils.js";
 
 /**
- * 解析并规范化附件策略
+ * 解析并规范化附件策略。
+ *
+ * @param {object} [policy] - 用户策略。
+ * @returns {{maxFileSizeBytes: number, maxTotalSizeBytes: number, maxFileCount: number, allowedMimeTypes: string[], allowedExtensions: string[]}}
  */
 export function resolveAttachmentPolicy(policy = {}) {
   const config = policy && typeof policy === "object" ? policy : {};
@@ -45,7 +48,11 @@ function normalizeExtensions(arr) {
 }
 
 /**
- * 校验 MIME 类型是否在白名单中
+ * 校验 MIME 类型是否在白名单中。
+ *
+ * @param {string} [mimeType] - MIME 类型。
+ * @param {string[]} [allowedMimeTypes] - 白名单。
+ * @returns {boolean}
  */
 export function isMimeTypeAllowed(mimeType = "", allowedMimeTypes = []) {
   const normalized = safeStr(mimeType).toLowerCase();
@@ -62,7 +69,11 @@ export function isMimeTypeAllowed(mimeType = "", allowedMimeTypes = []) {
 }
 
 /**
- * 校验文件扩展名是否在白名单中
+ * 校验文件扩展名是否在白名单中。
+ *
+ * @param {string} [fileName] - 文件名。
+ * @param {string[]} [allowedExtensions] - 白名单。
+ * @returns {boolean}
  */
 export function isExtensionAllowed(fileName = "", allowedExtensions = []) {
   if (!Array.isArray(allowedExtensions) || !allowedExtensions.length) return true;
@@ -72,26 +83,12 @@ export function isExtensionAllowed(fileName = "", allowedExtensions = []) {
   return allowedExtensions.includes(ext);
 }
 
-// Backward-compatible aliases/helpers
+/**
+ * 向后兼容别名。
+ *
+ * @param {object} [policy] - 用户策略。
+ * @returns {ReturnType<typeof resolveAttachmentPolicy>}
+ */
 export function validateAttachmentPolicy(policy = {}) {
   return resolveAttachmentPolicy(policy);
-}
-
-export function getMimeTypeFromExtension(fileNameOrExtension = "") {
-  const raw = safeStr(fileNameOrExtension).toLowerCase();
-  if (!raw) return "";
-  const ext = raw.startsWith(".")
-    ? raw
-    : safeStr(path.extname(raw)).toLowerCase();
-  const entries = Object.entries(MIME_TO_EXTENSION || {});
-  for (const [mimeType, extension] of entries) {
-    if (safeStr(extension).toLowerCase() === ext) {
-      return safeStr(mimeType);
-    }
-  }
-  return "";
-}
-
-export function isValidMimeType(mimeType = "") {
-  return Boolean(safeStr(mimeType).trim());
 }
