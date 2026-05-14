@@ -50,6 +50,7 @@ const userId = ref(localStorage.getItem("noobot_user_id") || "user-001");
 const allowUserInteraction = ref(
   localStorage.getItem("noobot_allow_user_interaction") !== "false",
 );
+const forceTool = ref(localStorage.getItem("noobot_force_tool") === "true");
 const botScenario = ref(
   String(localStorage.getItem("noobot_bot_scenario") || "").trim(),
 );
@@ -228,6 +229,7 @@ const {
   userId,
   apiKey,
   allowUserInteraction,
+  forceTool,
   botScenario,
   connected,
   ensureConnected,
@@ -358,6 +360,11 @@ function onAllowUserInteractionUpdate(value) {
   );
 }
 
+function onForceToolUpdate(value) {
+  forceTool.value = Boolean(value);
+  localStorage.setItem("noobot_force_tool", forceTool.value ? "true" : "false");
+}
+
 function onBotScenarioUpdate(value = "") {
   const nextScenario = String(value || "").trim();
   const availableScenarioKeySet = new Set(
@@ -476,12 +483,14 @@ async function onConnectorSelected({
         :can-stop="sending"
         :connected="connected"
         :allow-user-interaction="allowUserInteraction"
+        :force-tool="forceTool"
         :bot-scenario="botScenario"
         :scenario-options="availableBotScenarios"
         :interaction-active="Boolean(pendingInteractionRequest)"
         @upload-change="onUploadChange"
         @append-uploads="appendUploads"
         @update:allow-user-interaction="onAllowUserInteractionUpdate"
+        @update:force-tool="onForceToolUpdate"
         @update:bot-scenario="onBotScenarioUpdate"
         @clear-uploads="clearUploads"
         @connector-selected="onConnectorSelected"

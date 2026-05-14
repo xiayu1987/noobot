@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveForceToolCall } from "../system-core/utils/shared-utils.js";
 
 export function createChatRunService({
   getBot,
@@ -25,6 +26,7 @@ export function createChatRunService({
     const allowUserInteractionRaw = input?.allowUserInteraction;
     const allowUserInteraction =
       allowUserInteractionRaw === undefined ? true : Boolean(allowUserInteractionRaw);
+    const forceTool = resolveForceToolCall(source);
     const locale = normalizeLocale(input?.locale || defaultLocale);
     const hasScenarioField = Object.prototype.hasOwnProperty.call(source, "scenario");
     const scenario = hasScenarioField ? String(source?.scenario || "").trim() : undefined;
@@ -32,6 +34,7 @@ export function createChatRunService({
     const runTimeoutMs = Number(runTimeoutRaw);
     return {
       allowUserInteraction,
+      forceTool,
       locale,
       scenario,
       ...(Number.isFinite(runTimeoutMs) && runTimeoutMs > 0

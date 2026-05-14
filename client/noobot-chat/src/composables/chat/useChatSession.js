@@ -38,6 +38,7 @@ export function useChatSession({
   userId,
   apiKey,
   allowUserInteraction,
+  forceTool,
   botScenario,
   connected,
   ensureConnected,
@@ -149,6 +150,7 @@ export function useChatSession({
   const chatEngine = useChatEngine({
     userId,
     allowUserInteraction,
+    forceTool,
     botScenario,
     isImageMime,
     classifyRealtimeLog,

@@ -23,6 +23,7 @@ import {
 } from "./final-answer-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
+import { resolveForceToolCall } from "../utils/shared-utils.js";
 
 const DEFAULT_MAX_SUB_AGENT_DEPTH = 1;
 const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
@@ -145,6 +146,9 @@ export async function buildTools(ctx) {
   const allowUserInteraction =
     ctx?.agentContext?.runtime?.systemRuntime?.config?.allowUserInteraction !==
     false;
+  const forceTool = resolveForceToolCall(
+    ctx?.agentContext?.runtime?.systemRuntime?.config || {},
+  );
   const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(
     effectiveConfig,
   );
@@ -162,7 +166,7 @@ export async function buildTools(ctx) {
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
     ...createRequestHelpTool(ctx),
-    ...createFinalAnswerTool(ctx),
+    ...(forceTool ? createFinalAnswerTool(ctx) : []),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
   const enabledTools = filterToolsByConfigEnabled(baseTools, effectiveConfig);
