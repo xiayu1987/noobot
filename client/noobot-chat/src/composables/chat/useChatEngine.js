@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSelectedConnectors } from "../../shared/models/sessionModel";
+import { promoteSessionIdentityToBackendId } from "../infra/sessionIdentity";
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
 import { useLocale } from "../../shared/i18n/useLocale";
 import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
@@ -263,18 +264,13 @@ export function useChatEngine({
           botMsg.dialogProcessId = data.dialogProcessId || botMsg.dialogProcessId || "";
           const returnedId = data.sessionId || activeSession.value.backendSessionId;
           if (returnedId) {
-            activeSession.value.backendSessionId = returnedId;
-            activeSession.value.isLocal = false;
             activeSession.value.loaded = true;
-            // The optimistic local session id must be promoted to the backend
-            // id as soon as DONE returns. Otherwise the next fetchSessions()
-            // cannot reconcile the server summary with the current object; it
-            // removes the local object, switches activeSessionId, and the chat
-            // looks like it refreshed/replayed older messages.
-            if (String(activeSession.value.id || "").trim() !== String(returnedId || "").trim()) {
-              activeSession.value.id = returnedId;
-              activeSessionId.value = returnedId;
-            }
+            const promotionResult = promoteSessionIdentityToBackendId({
+              sessionItem: activeSession.value,
+              backendSessionId: returnedId,
+              activeSessionId: activeSessionId.value,
+            });
+            activeSessionId.value = promotionResult.nextActiveSessionId;
           }
           if (Array.isArray(data.messages) && data.messages.length) {
             activeSession.value.rawMessages = data.messages.map((messageItem) =>
