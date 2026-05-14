@@ -5,10 +5,36 @@
  */
 import { config } from "./config.js";
 import { buildClientPermissions } from "./utils.js";
-import { collectRequestBody, writeProxyError } from "./http-proxy.js";
+import {
+  collectRequestBody,
+  writeProxyError,
+  decorateProxyResponseHeaders,
+} from "./http-proxy.js";
+import { isLoopbackAddress, resolveHeaderValue, secureEquals } from "./security.js";
+
+function isConnectTokenAuthorized(request = null) {
+  const expectedToken = String(config.connectToken || "").trim();
+  if (!expectedToken) return true;
+  const providedToken = resolveHeaderValue(request, config.connectTokenHeader);
+  if (secureEquals(providedToken, expectedToken)) return true;
+  if (config.connectTokenAllowLoopback && isLoopbackAddress(request?.socket?.remoteAddress)) {
+    return true;
+  }
+  return false;
+}
 
 export async function interceptConnectRequest(request, response, channelManager) {
   const method = String(request?.method || "POST").trim().toUpperCase() || "POST";
+  if (!isConnectTokenAuthorized(request)) {
+    response.writeHead(
+      401,
+      decorateProxyResponseHeaders({
+        "content-type": "application/json; charset=utf-8",
+      }),
+    );
+    response.end(JSON.stringify({ ok: false, error: "Unauthorized" }));
+    return;
+  }
   let requestBodyBuffer;
   try {
     requestBodyBuffer = await collectRequestBody(request);
@@ -43,7 +69,6 @@ export async function interceptConnectRequest(request, response, channelManager)
   const statusCode = Number(upstreamResponse.status || 502);
   const rawText = await upstreamResponse.text();
   const headers = {
-    "x-agent-proxy": "noobot-agent-proxy",
     "x-agent-proxy-intercept": "connect",
   };
 
@@ -71,14 +96,14 @@ export async function interceptConnectRequest(request, response, channelManager)
         role: responsePayload?.role || "",
       });
       response.writeHead(statusCode, {
-        ...headers,
+        ...decorateProxyResponseHeaders(headers),
         "content-type": "application/json; charset=utf-8",
       });
       response.end(JSON.stringify(responsePayload));
       return;
     } catch {
       response.writeHead(statusCode, {
-        ...headers,
+        ...decorateProxyResponseHeaders(headers),
         "content-type": contentType || "application/json; charset=utf-8",
       });
       response.end(rawText);
@@ -87,7 +112,7 @@ export async function interceptConnectRequest(request, response, channelManager)
   }
 
   response.writeHead(statusCode, {
-    ...headers,
+    ...decorateProxyResponseHeaders(headers),
     "content-type": contentType || "text/plain; charset=utf-8",
   });
   response.end(rawText);

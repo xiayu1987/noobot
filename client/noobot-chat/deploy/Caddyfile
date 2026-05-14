@@ -1,12 +1,29 @@
-http://{$CADDY_ADDR::10060} {
-  root * {$SITE_ROOT:./dist}
+http://:10060 {
+  root * ./dist
   encode gzip zstd
 
   route {
+    @connect_api path /api/internal/connect
+    handle @connect_api {
+      uri strip_prefix /api
+      reverse_proxy 127.0.0.1:10062 {
+        header_up -x-proxy-token
+        header_up x-proxy-token 5fd50423-d915-49d7-8e9a-62d93f33777b
+      }
+    }
+
+    @connect_direct path /internal/connect
+    handle @connect_direct {
+      reverse_proxy 127.0.0.1:10062 {
+        header_up -x-proxy-token
+        header_up x-proxy-token 5fd50423-d915-49d7-8e9a-62d93f33777b
+      }
+    }
+
     @api path_regexp api ^/api(/.*)?$
     handle @api {
       uri strip_prefix /api
-      reverse_proxy {$AGENT_PROXY_UPSTREAM:127.0.0.1:10062}
+      reverse_proxy 127.0.0.1:10062
     }
 
     try_files {path} /index.html
