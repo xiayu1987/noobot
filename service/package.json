@@ -19,7 +19,8 @@
     "test": "node --test __tests__/**/*.test.js __tests__/system-core/bot-manage/index.test.js",
     "test:utils": "node --test __tests__/utils/*.test.js",
     "test:connectors": "node --test __tests__/connectors/**/*.test.js",
-    "test:tools": "node --test __tests__/system-core/tools/*.test.js"
+    "test:tools": "node --test __tests__/system-core/tools/*.test.js",
+    "test:routes": "node --test __tests__/routes/*.test.js"
   },
   "dependencies": {
     "@langchain/core": "^1.1.45",
