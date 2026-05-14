@@ -5,7 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { markCurrentTurnStoreSummarized } from "../context/summarized-message-policy.js";
+import { markCurrentTurnStoreSummarized } from "../context/session/summarized-message-policy.js";
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
 

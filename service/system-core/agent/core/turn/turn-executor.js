@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filterSummarizedMessages } from "../../../context/summarized-message-policy.js";
+import { filterSummarizedMessages } from "../../../context/session/summarized-message-policy.js";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
-} from "../../../context/current-turn-store.js";
+} from "../../../context/session/current-turn-store.js";
 import {
   adaptToolsForBinding,
   appendToolCompatibilityLog,

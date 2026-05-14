@@ -3,25 +3,25 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { initRuntimeSharedBrowser } from "../utils/web/browser-simulate.js";
-import { isPlainObject } from "../utils/shared-utils.js";
+import { initRuntimeSharedBrowser } from "../../utils/web/browser-simulate.js";
+import { isPlainObject } from "../../utils/shared-utils.js";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
   extractVisibleTextFromHtml,
-} from "../utils/web/text-cleaner.js";
-import { cleanTextUniversal } from "../utils/text-cleaner.js";
+} from "../../utils/web/text-cleaner.js";
+import { cleanTextUniversal } from "../../utils/text-cleaner.js";
 import {
   decryptPayloadBySessionId,
   encryptPayloadBySessionId,
-} from "../utils/session-crypto.js";
-import { getConnectorChannelStore } from "../connectors/index.js";
-import { getConnectorHistoryStore } from "../connectors/index.js";
-import { createConnectorEventListener } from "../connectors/index.js";
+} from "../../utils/session-crypto.js";
+import { getConnectorChannelStore } from "../../connectors/index.js";
+import { getConnectorHistoryStore } from "../../connectors/index.js";
+import { createConnectorEventListener } from "../../connectors/index.js";
 import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
-} from "./current-turn-store.js";
+} from "../session/current-turn-store.js";
 
 
 async function defaultSharedFetch(url, init = {}) {
@@ -109,22 +109,22 @@ export function buildRuntimeContext({
   };
 }
 
-export async function initializeRuntimeEnvironment(runtimeContext = {}) {
-  if (!isPlainObject(runtimeContext)) return;
+function ensureSharedTools(runtimeContext = {}) {
   const sharedTools = isPlainObject(runtimeContext.sharedTools)
     ? runtimeContext.sharedTools
     : {};
   runtimeContext.sharedTools = sharedTools;
-  const sessionId = String(runtimeContext?.systemRuntime?.sessionId || "").trim();
-  const rootSessionId = String(
-    runtimeContext?.systemRuntime?.rootSessionId || sessionId || "",
-  ).trim();
+  return sharedTools;
+}
 
+function initializeSharedFetch(sharedTools = {}) {
   if (typeof sharedTools.fetch !== "function") {
     sharedTools.fetch =
       typeof globalThis.fetch === "function" ? defaultSharedFetch : null;
   }
+}
 
+function initializeTextCleaner(sharedTools = {}) {
   const defaultTextCleaner = createDefaultTextCleaner();
   const currentTextCleaner = isPlainObject(sharedTools.textCleaner)
     ? sharedTools.textCleaner
@@ -133,6 +133,9 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
     ...defaultTextCleaner,
     ...currentTextCleaner,
   };
+}
+
+function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
   sharedTools.sessionCrypto = {
     encryptBySessionId(payload = {}, sid = sessionId) {
       return encryptPayloadBySessionId(payload, String(sid || sessionId || ""));
@@ -144,7 +147,13 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
       );
     },
   };
+}
 
+function initializeConnectorRuntime(
+  runtimeContext = {},
+  sharedTools = {},
+  { rootSessionId = "", sessionId = "" } = {},
+) {
   const connectorChannelStore = getConnectorChannelStore();
   const connectorHistoryStore = getConnectorHistoryStore();
   sharedTools.connectorChannelStore = connectorChannelStore;
@@ -162,11 +171,28 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   runtimeContext.connectorChannels = rootSessionId
     ? connectorChannelStore.getSessionConnectors(rootSessionId)
     : { databases: [], terminals: [], emails: [] };
+}
 
+async function initializeBrowserRuntime(runtimeContext = {}, sharedTools = {}) {
   try {
     await initRuntimeSharedBrowser(runtimeContext);
   } catch (error) {
     sharedTools.browser = null;
     sharedTools.browserInitError = error?.message || String(error);
   }
+}
+
+export async function initializeRuntimeEnvironment(runtimeContext = {}) {
+  if (!isPlainObject(runtimeContext)) return;
+  const sharedTools = ensureSharedTools(runtimeContext);
+  const sessionId = String(runtimeContext?.systemRuntime?.sessionId || "").trim();
+  const rootSessionId = String(
+    runtimeContext?.systemRuntime?.rootSessionId || sessionId || "",
+  ).trim();
+
+  initializeSharedFetch(sharedTools);
+  initializeTextCleaner(sharedTools);
+  initializeSessionCrypto(sharedTools, { sessionId });
+  initializeConnectorRuntime(runtimeContext, sharedTools, { rootSessionId, sessionId });
+  await initializeBrowserRuntime(runtimeContext, sharedTools);
 }

@@ -7,7 +7,7 @@ import {
   markCurrentTurnArraySummarized,
   markCurrentTurnModelMessagesSummarized,
   markCurrentTurnStoreSummarized,
-} from "../../../context/summarized-message-policy.js";
+} from "../../../context/session/summarized-message-policy.js";
 import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
 
 function autoMarkCurrentTurnSummarized({

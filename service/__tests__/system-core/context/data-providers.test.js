@@ -1,12 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  resolveSessionTreeWithRootSessionId,
-  resolveAttachments,
-  resolveLongMemory,
-  toConversationMessages,
-} from "../../../system-core/context/data-providers.js";
+import { resolveSessionTreeWithRootSessionId } from "../../../system-core/context/providers/session-tree-resolver.js";
+import { resolveAttachments } from "../../../system-core/context/providers/attachment-resolver.js";
+import { resolveLongMemory } from "../../../system-core/context/providers/memory-resolver.js";
+import { toConversationMessages } from "../../../system-core/context/session/message-converter.js";
 
 test("resolveSessionTreeWithRootSessionId falls back when runtime/sessionManager missing", async () => {
   const now = "2026-05-13T00:00:00.000Z";

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { appendAttachmentMetasToRuntimeAndTurn } from "../../../system-core/attach/runtime-attachment.js";
-import { createCurrentTurnMessagesStore } from "../../../system-core/context/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../../system-core/context/session/current-turn-store.js";
 
 test("appendAttachmentMetasToRuntimeAndTurn appends metas to last message in turn store", () => {
   const runtime = { attachmentMetas: [] };

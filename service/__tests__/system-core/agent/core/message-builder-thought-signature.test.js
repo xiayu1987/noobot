@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { AIMessage } from "@langchain/core/messages";
 
-import { toConversationMessages } from "../../../../system-core/context/data-providers.js";
+import { toConversationMessages } from "../../../../system-core/context/session/message-converter.js";
 import { buildContextMessages } from "../../../../system-core/agent/core/context/message-builder.js";
 
 test("buildContextMessages preserves thought-signature payload/tool_calls and omits non-required kwargs", () => {

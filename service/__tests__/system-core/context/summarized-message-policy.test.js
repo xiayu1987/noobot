@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   shouldMarkCurrentTurnSummarizedMessage,
   shouldMarkCurrentTurnSummarizedModelMessage,
-} from "../../../system-core/context/summarized-message-policy.js";
+} from "../../../system-core/context/session/summarized-message-policy.js";
 
 test("task_summary assistant tool_call is kept with its tool result", () => {
   const assistantMessage = {
