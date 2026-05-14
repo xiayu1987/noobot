@@ -1,0 +1,114 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { z } from "zod";
+import { logError } from "../../../tracking/console/logger.js";
+import {
+  createChatModel,
+  createChatModelByName,
+  resolveDefaultModelSpec,
+  resolveModelSpecByName,
+} from "../../../model/index.js";
+import { recoverableToolError } from "../../../error/index.js";
+import { toToolJsonResult } from "../../core/tool-json-result.js";
+import { tTool } from "../../core/tool-i18n.js";
+
+export function createPlanMultiTaskCollaborationTool({
+  runtime,
+  globalConfig,
+  userConfig,
+}) {
+  return new DynamicStructuredTool({
+    name: "plan_multi_task_collaboration",
+    description: tTool(runtime, "tools.agent_collab.planDescription"),
+    schema: z.object({
+      task: z.string().describe(tTool(runtime, "tools.agent_collab.fieldPlanTask")),
+    }),
+    func: async ({ task }) => {
+      const taskText = String(task || "").trim();
+      if (!taskText) {
+        throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
+          code: "RECOVERABLE_INPUT_MISSING",
+          details: { field: "task" },
+        });
+      }
+
+      const runtimeModel = String(runtime?.runtimeModel || "").trim();
+      let llm;
+      let modelSpec = null;
+      if (runtimeModel) {
+        modelSpec = resolveModelSpecByName({
+          modelName: runtimeModel,
+          globalConfig,
+          userConfig,
+          fallbackToDefault: false,
+        });
+        if (modelSpec) {
+          llm = createChatModelByName(runtimeModel, {
+            globalConfig,
+            userConfig,
+            streaming: false,
+          });
+        }
+      }
+      if (!llm) {
+        modelSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
+        llm = createChatModel({ globalConfig, userConfig, streaming: false });
+      }
+
+      const res = await llm.invoke([
+        new SystemMessage(
+          [
+            tTool(runtime, "tools.agent_collab.planPrompt1"),
+            tTool(runtime, "tools.agent_collab.planPrompt2"),
+            tTool(runtime, "tools.agent_collab.planPrompt3"),
+            tTool(runtime, "tools.agent_collab.planPrompt4"),
+            tTool(runtime, "tools.agent_collab.planPrompt5"),
+          ].join("\n"),
+        ),
+        new HumanMessage(`${tTool(runtime, "tools.agent_collab.humanTaskPrefix")}\n${taskText}`),
+      ]);
+      const content =
+        typeof res?.content === "string"
+          ? res.content
+          : JSON.stringify(res?.content || "");
+
+      let parsedPlan = null;
+      try {
+        parsedPlan = JSON.parse(content);
+      } catch (error) {
+        logError("[agent-collab-tool] JSON.parse plan response failed, trying markdown extraction", {
+          error: error?.message || String(error),
+        });
+        const match = String(content).match(/```json\s*([\s\S]*?)\s*```/i);
+        if (match?.[1]) {
+          try {
+            parsedPlan = JSON.parse(match[1]);
+          } catch (error) {
+            logError("[agent-collab-tool] JSON.parse markdown-extracted plan also failed", {
+              error: error?.message || String(error),
+            });
+          }
+        }
+      }
+
+      return toToolJsonResult(
+        "plan_multi_task_collaboration",
+        {
+          ok: true,
+          task: taskText,
+          model: {
+            alias: modelSpec?.alias || "",
+            name: modelSpec?.model || "",
+          },
+          ...(parsedPlan ? { plan: parsedPlan } : { planText: content }),
+        },
+        true,
+      );
+    },
+  });
+}
