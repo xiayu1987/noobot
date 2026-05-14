@@ -155,7 +155,9 @@ export async function browseUrlHtml({
           await page.waitForLoadState("networkidle", {
             timeout: networkIdleTimeout,
           });
-        } catch {}
+        } catch {
+          // Some pages never reach networkidle; continue with current DOM snapshot.
+        }
         await page.waitForTimeout(300);
         return {
           ok: true,

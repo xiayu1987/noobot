@@ -12,6 +12,8 @@ export function parseJsonObjectSafely(input = "") {
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return parsed;
     }
-  } catch {}
+  } catch {
+    // Invalid JSON is expected for free-form model output; return null for caller fallback.
+  }
   return null;
 }
