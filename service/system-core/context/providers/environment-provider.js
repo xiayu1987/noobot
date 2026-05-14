@@ -39,6 +39,11 @@ export function buildDynamicInfo({
   runConfig = {},
   now = new Date().toISOString(),
 } = {}) {
+  const forceToolCall = resolveForceToolCall(runConfig);
+  const toolPolicy =
+    runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
+      ? { ...runConfig.toolPolicy }
+      : null;
   const selectedConnectorsSource =
     runConfig?.selectedConnectors && typeof runConfig.selectedConnectors === "object"
       ? runConfig.selectedConnectors
@@ -62,7 +67,9 @@ export function buildDynamicInfo({
     now,
     config: {
       allowUserInteraction: runConfig?.allowUserInteraction !== false,
-      forceTool: resolveForceToolCall(runConfig),
+      forceTool: forceToolCall,
+      forceToolCall,
+      ...(toolPolicy ? { toolPolicy } : {}),
       selectedConnectors,
       ...(Number.isFinite(Number(runConfig?.maxToolLoopTurns)) &&
       Number(runConfig?.maxToolLoopTurns) > 0
