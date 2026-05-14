@@ -28,6 +28,7 @@ import {
 import { toToolJsonResult } from "./tool-json-result.js";
 import { tTool } from "./tool-i18n.js";
 import { isPlainObject, normalizeSelectedConnectors } from "../utils/shared-utils.js";
+import { emitEvent } from "../event/index.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -65,6 +66,26 @@ function normalizeString(value = "") {
 export function createAgentCollabTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const systemRuntime = runtime.systemRuntime || {};
+  const effectiveConfig = mergeConfig(runtime.globalConfig || {}, runtime.userConfig || {});
+  const delegateTaskAsyncConfig =
+    effectiveConfig?.tools?.delegate_task_async &&
+    typeof effectiveConfig.tools.delegate_task_async === "object"
+      ? effectiveConfig.tools.delegate_task_async
+      : {};
+  const runConfigPassthrough =
+    delegateTaskAsyncConfig?.runConfigPassthrough &&
+    typeof delegateTaskAsyncConfig.runConfigPassthrough === "object"
+      ? delegateTaskAsyncConfig.runConfigPassthrough
+      : {};
+  const passthroughForceToolCall =
+    runConfigPassthrough?.forceToolCall === true || runConfigPassthrough?.forceTool === true;
+  const passthroughToolPolicy = runConfigPassthrough?.toolPolicy === true;
+  const parentForceToolCall =
+    systemRuntime?.config?.forceToolCall === true || systemRuntime?.config?.forceTool === true;
+  const parentToolPolicy =
+    systemRuntime?.config?.toolPolicy && typeof systemRuntime.config.toolPolicy === "object"
+      ? cloneData(systemRuntime.config.toolPolicy)
+      : null;
   const runConfig = {
     allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
     selectedConnectors: normalizeSelectedConnectors(
@@ -77,8 +98,10 @@ export function createAgentCollabTool({ agentContext }) {
       : {}),
     sharedTools:
       runtime?.sharedTools && typeof runtime.sharedTools === "object"
-        ? runtime.sharedTools
-        : {},
+      ? runtime.sharedTools
+      : {},
+    ...(passthroughForceToolCall ? { forceToolCall: parentForceToolCall } : {}),
+    ...(passthroughToolPolicy && parentToolPolicy ? { toolPolicy: parentToolPolicy } : {}),
   };
   const botManager = runtime.botManager || null;
   const userId = agentContext?.userId || runtime.userId || "";
@@ -91,7 +114,6 @@ export function createAgentCollabTool({ agentContext }) {
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
   const attachmentService = runtime.attachmentService || null;
-  const effectiveConfig = mergeConfig(globalConfig, userConfig);
   const defaultWaitMs = Number(
     effectiveConfig?.tools?.delegate_task_async?.waitTimeoutMs ??
       120000,
@@ -473,6 +495,23 @@ export function createAgentCollabTool({ agentContext }) {
           ok: false,
           error: tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
         });
+      emitEvent(runtimeEventListener, "subagent_runconfig_passthrough_applied", {
+        sourceTool: "delegate_task_async",
+        passthrough: {
+          forceToolCall: passthroughForceToolCall,
+          toolPolicy: passthroughToolPolicy,
+        },
+        effectiveRunConfig: {
+          forceToolCall: runConfig?.forceToolCall === true,
+          hasToolPolicy:
+            runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object",
+          toolPolicyKeys:
+            runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
+              ? Object.keys(runConfig.toolPolicy)
+              : [],
+        },
+        taskCount: Array.isArray(tasks) ? tasks.length : 0,
+      });
       const resolveValidatedParent = async () => {
         const normalizedParentSessionId = normalizeString(sourceSessionId);
         if (!normalizedParentSessionId) {
