@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { logError } from "../system-core/tracking/console/logger.js";
-import path from "node:path";
-import { access, mkdir, readdir, rm } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
-import { withJsonError } from "./route-wrapper.js";
+import { createJsonRouteWrapper } from "./route-wrapper.js";
 
 const RESERVED_WORKSPACE_ROOT_DIRS = new Set([
   "memory",
@@ -58,21 +57,13 @@ export function registerWorkspaceRoutes(
     translateText,
   } = {},
 ) {
-  // ── User-level workspace routes (unchanged) ──
+  const jsonRoute = createJsonRouteWrapper({ translateText });
 
-  app.get(
-    "/internal/workspace/tree/:userId",
-    withJsonError(async (req, res) => {
-      const { userId } = req.params;
-      const basePath = await workspaceService.ensureUserWorkspace(userId);
-      const tree = await buildWorkspaceTree(basePath);
-      res.json({ ok: true, userId, root: basePath, tree });
-    }, { translateText }),
-  );
+  // ── User-level workspace routes (unchanged) ──
 
   app.post(
     "/internal/workspace/reset/:userId",
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
       const { userId } = req.params;
       const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
@@ -84,111 +75,44 @@ export function registerWorkspaceRoutes(
         sections,
       });
       },
-      { fallbackErrorKey: "common.resetWorkspaceFailed", translateText },
+      { fallbackErrorKey: "common.resetWorkspaceFailed" },
     ),
   );
 
   app.post(
     "/internal/workspace/sync/:userId",
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
       const { userId } = req.params;
       const basePath = await workspaceService.syncUserWorkspace(userId);
       res.json({ ok: true, userId, root: basePath });
       },
-      { fallbackErrorKey: "common.syncWorkspaceFailed", translateText },
+      { fallbackErrorKey: "common.syncWorkspaceFailed" },
     ),
   );
 
-  app.get(
-    "/internal/workspace/file/:userId",
-    withJsonError(async (req, res) => {
-      const { userId } = req.params;
-      const relativePath = String(req.query.path || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await workspaceService.ensureUserWorkspace(userId);
-      const { safeJoin } = await import("../system-core/utils/fs-safe.js");
-      const absolutePath = safeJoin(basePath, relativePath);
-      try {
-        await access(absolutePath);
-      } catch (error) {
-        logError("[workspace-routes] file download access check failed", {
-          workspaceId,
-          relativePath,
-          absolutePath,
-          error: error?.message || String(error),
-        });
-        throw new Error(translateText("common.fileNotFound", req.locale));
-      }
-      const { stat, readFile } = await import("node:fs/promises");
-      const fileStats = await stat(absolutePath);
-      if (!fileStats.isFile()) throw new Error(translateText("common.pathIsNotFile", req.locale));
-      const contentBuffer = await readFile(absolutePath);
-      const isText = !contentBuffer.includes(0);
-      const content = isText ? contentBuffer.toString("utf8") : "";
-      res.json({ ok: true, path: relativePath, isText, size: fileStats.size, content });
-    }, { translateText }),
-  );
-
-  app.put(
-    "/internal/workspace/file/:userId",
-    withJsonError(async (req, res) => {
-      const { userId } = req.params;
-      const relativePath = String(req.body?.path || "");
-      const content = String(req.body?.content || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await workspaceService.ensureUserWorkspace(userId);
-      const { safeJoin } = await import("../system-core/utils/fs-safe.js");
-      const absolutePath = safeJoin(basePath, relativePath);
-      const { mkdir, writeFile } = await import("node:fs/promises");
-      await mkdir(path.dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, content, "utf8");
-      res.json({ ok: true, path: relativePath });
-    }, { translateText }),
-  );
-
-  app.get(
-    "/internal/workspace/download/:userId",
-    withJsonError(async (req, res) => {
-      const { userId } = req.params;
-      const relativePath = String(req.query.path || "");
-      if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const basePath = await workspaceService.ensureUserWorkspace(userId);
-      const { safeJoin } = await import("../system-core/utils/fs-safe.js");
-      const absolutePath = safeJoin(basePath, relativePath);
-      try {
-        await access(absolutePath);
-      } catch (error) {
-        logError("[workspace-routes] file download access check failed", {
-          workspaceId,
-          relativePath,
-          absolutePath,
-          error: error?.message || String(error),
-        });
-        throw new Error(translateText("common.fileNotFound", req.locale));
-      }
-      const { stat } = await import("node:fs/promises");
-      const fileStats = await stat(absolutePath);
-      if (fileStats.isFile()) {
-        res.download(absolutePath, path.basename(relativePath));
-        return;
-      }
-      if (!fileStats.isDirectory()) throw new Error(translateText("common.pathIsNotFile", req.locale));
-      const archiveMeta = await buildDirectoryArchiveFile({
-        absoluteDirectoryPath: absolutePath,
-        archiveName: path.basename(relativePath),
-      });
-      const { rm } = await import("node:fs/promises");
-      const cleanupTemp = async () => {
-        await rm(archiveMeta.temporaryDirectory, { recursive: true, force: true }).catch(
-          () => {},
-        );
-      };
-      res.on("close", cleanupTemp);
-      res.on("finish", cleanupTemp);
-      res.download(archiveMeta.archiveFilePath, archiveMeta.archiveFileName);
-    }, { translateText }),
-  );
+  registerFileCrudRoutes(app, {
+    routePrefix: "/internal/workspace/:userId",
+    resolveRootPath: (req) =>
+      workspaceService.ensureUserWorkspace(String(req?.params?.userId || "").trim()),
+    buildWorkspaceTree,
+    buildDirectoryArchiveFile,
+    translateText,
+    i18nKeys: {
+      treeFailed: "",
+      readFailed: "",
+      saveFailed: "",
+      downloadFailed: "",
+    },
+    responseBuilders: {
+      tree: ({ req, root, tree }) => ({
+        ok: true,
+        userId: String(req?.params?.userId || "").trim(),
+        root,
+        tree,
+      }),
+    },
+  });
 
   // ── Admin-level workspace-all routes (sync, reset, file CRUD) ──
 
@@ -196,7 +120,7 @@ export function registerWorkspaceRoutes(
     "/internal/admin/workspace-all/sync",
     requireApiKey,
     requireSuperAdmin,
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
       const root = workspaceRootPath();
       const userDirs = await listWorkspaceUserDirs(root, globalConfig);
@@ -220,7 +144,7 @@ export function registerWorkspaceRoutes(
         success: syncedUsers.length,
       });
       },
-      { fallbackErrorKey: "common.syncAllWorkspaceFailed", translateText },
+      { fallbackErrorKey: "common.syncAllWorkspaceFailed" },
     ),
   );
 
@@ -228,7 +152,7 @@ export function registerWorkspaceRoutes(
     "/internal/admin/workspace-all/reset",
     requireApiKey,
     requireSuperAdmin,
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
       const sections = Array.isArray(req.body?.sections) ? req.body.sections : [];
       const root = workspaceRootPath();
@@ -255,7 +179,7 @@ export function registerWorkspaceRoutes(
         sections,
       });
       },
-      { fallbackErrorKey: "common.resetAllWorkspaceFailed", translateText },
+      { fallbackErrorKey: "common.resetAllWorkspaceFailed" },
     ),
   );
 

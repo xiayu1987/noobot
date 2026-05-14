@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import { withJsonError } from "../../routes/route-wrapper.js";
+import { createJsonRouteWrapper, withJsonError } from "../../routes/route-wrapper.js";
 
 async function withTestServer(app, run) {
   const server = await new Promise((resolve) => {
@@ -52,6 +52,26 @@ test("withJsonError: 可使用 fallbackErrorKey + 自定义状态码", async () 
   );
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/fallback`);
+    const payload = await response.json();
+    assert.equal(response.status, 404);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error, "Not Found");
+  });
+});
+
+test("createJsonRouteWrapper: 可复用默认 translate/fallback 配置", async () => {
+  const app = express();
+  const jsonRoute = createJsonRouteWrapper({
+    translateText: (key) => (key === "common.notFound" ? "Not Found" : ""),
+  });
+  app.get(
+    "/wrapper",
+    jsonRoute(async () => {
+      throw { message: "" };
+    }, { statusCode: 404, fallbackErrorKey: "common.notFound" }),
+  );
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/wrapper`);
     const payload = await response.json();
     assert.equal(response.status, 404);
     assert.equal(payload.ok, false);

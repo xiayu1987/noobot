@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionEngine } from "../../../system-core/bot-manage/session/session-execution-engine.js";
 
+const TEST_SHORT_DELAY_MS = 5;
+const TEST_MEDIUM_DELAY_MS = 20;
+
 function createEngine({ captureSessionToShortMemory, maybeSummarize } = {}) {
   const session = {
     async appendExecutionLog() {},
@@ -66,7 +69,7 @@ async function waitFor(predicate, timeoutMs = 500) {
     if (Date.now() - startedAt > timeoutMs) {
       throw new Error("waitFor timeout");
     }
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, TEST_SHORT_DELAY_MS));
   }
 }
 
@@ -126,7 +129,7 @@ test("_finalizeRunSession blocks on memory postprocess when postprocess async di
       finalizeCompleted = true;
     });
 
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await new Promise((resolve) => setTimeout(resolve, TEST_MEDIUM_DELAY_MS));
   assert.equal(finalizeCompleted, false);
   await waitFor(() => typeof resolveCapture === "function");
 
