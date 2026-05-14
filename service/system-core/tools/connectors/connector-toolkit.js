@@ -3,686 +3,89 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig } from "../../config/index.js";
-import { recoverableToolError } from "../../error/index.js";
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { z } from "zod";
 import {
   normalizeDatabaseType,
   normalizeTerminalType,
   normalizeConnectorType,
 } from "../../config/index.js";
-import { BACKEND_I18N } from "../../i18n/backend-messages.js";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
+import { tToolDescription } from "../core/tool-schema-i18n.js";
+import { tTool } from "../core/tool-i18n.js";
 import {
-  tToolDescription,
-  tToolParamDescription,
-} from "../core/tool-schema-i18n.js";
-import { cleanConnectorOutputForLLM } from "../../utils/text-cleaner.js";
-import { pickToolText, resolveToolLocale, tTool } from "../core/tool-i18n.js";
+  pickObject,
+  parseOptionalObjectInput,
+  databaseFields,
+  terminalFields,
+  emailFields,
+  attachDefaultValuesToFields,
+  collectNonSensitiveDefaults,
+  normalizeProvidedDatabaseDefaults,
+  normalizeProvidedTerminalDefaults,
+  normalizeProvidedEmailDefaults,
+  getMissingFieldNames,
+  alignFieldsWithConnectionInfo,
+} from "./connector-toolkit/connector-fields.js";
+import {
+  mergeConnectionInfo,
+  resolveConfiguredConnectorInfo,
+} from "./connector-toolkit/connector-resolver.js";
+import {
+  tConnector,
+  maskConnectionInfo,
+  addRuntimeConnectorChannel,
+  findConnectedConnector,
+  isUserCancelledInteraction,
+  buildAlreadyConnectedResponse,
+  buildConnectionStatusPayload,
+  buildRuntimeConnectorStatus,
+  upsertRuntimeSelectedConnector,
+} from "./connector-toolkit/connector-runtime.js";
+import {
+  createConnectorToolContext,
+  resolveRememberedConnectorInfo,
+  resolveRuntimeLocale,
+} from "./connector-toolkit/connector-context.js";
+import { buildAccessConnectorTool } from "./connector-toolkit/tool-access-connector.js";
+import { createDatabaseConnectorTools } from "./connector-toolkit/tool-connect-database.js";
+import { createTerminalConnectorTools } from "./connector-toolkit/tool-connect-terminal.js";
+import { createEmailConnectorTools } from "./connector-toolkit/tool-connect-email.js";
 
-function tConnector(runtime = {}, key = "", params = {}) {
-  const normalizedKey = String(key || "").trim();
-  if (!normalizedKey) return "";
-  return tTool(runtime, `connectors.access.${normalizedKey}`, params);
-}
-
-function tConnectorField(locale = "zh-CN", key = "", params = {}) {
-  return pickToolText({
-    locale,
-    dict: BACKEND_I18N,
-    key: `connectors.fields.${String(key || "").trim()}`,
-    params,
-  });
-}
-
-function resolveRuntimeLocale(runtime = {}) {
-  return resolveToolLocale(runtime, "zh-CN");
-}
-
-function pickObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function parseOptionalObjectInput(inputValue = {}) {
-  const source =
-    typeof inputValue === "string"
-      ? (() => {
-          try {
-            return JSON.parse(inputValue || "{}");
-          } catch {
-            return {};
-          }
-        })()
-      : pickObject(inputValue);
-  return pickObject(source);
-}
-
-function normalizeProvidedDefaults(defaultValuesInput = {}, allowedKeys = []) {
-  const source = parseOptionalObjectInput(defaultValuesInput);
-  const allowedKeySet = new Set(
-    (Array.isArray(allowedKeys) ? allowedKeys : [])
-      .map((key) => String(key || "").trim())
-      .filter(Boolean),
-  );
-  const normalizedDefaults = {};
-  for (const [rawKey, rawValue] of Object.entries(source)) {
-    const key = String(rawKey || "").trim();
-    if (!key || !allowedKeySet.has(key)) continue;
-    if (key.toLowerCase() === "password") continue;
-    const value = String(rawValue ?? "").trim();
-    if (!value) continue;
-    normalizedDefaults[key] = value;
-  }
-  return normalizedDefaults;
-}
-
-function databaseFields(databaseType = "", locale = "zh-CN") {
-  if (databaseType === "sqlite") {
-    return [
-      {
-        name: "file_path",
-        displayName: tConnectorField(locale, "sqliteFilePath"),
-        required: true,
-      },
-    ];
-  }
-  return [
-    { name: "host", displayName: tConnectorField(locale, "host"), required: true },
-    { name: "port", displayName: tConnectorField(locale, "port"), required: false },
-    {
-      name: "username",
-      displayName: tConnectorField(locale, "username"),
-      required: true,
-    },
-    {
-      name: "password",
-      displayName: tConnectorField(locale, "password"),
-      required: true,
-    },
-    {
-      name: "database",
-      displayName: tConnectorField(locale, "database"),
-      required: true,
-    },
-  ];
-}
-
-function terminalFields(terminalType = "", locale = "zh-CN") {
-  if (terminalType !== "ssh") return [];
-  return [
-    {
-      name: "host",
-      displayName: tConnectorField(locale, "serverIpOrDomain"),
-      required: true,
-    },
-    {
-      name: "port",
-      displayName: tConnectorField(locale, "portDefault22"),
-      required: false,
-    },
-    {
-      name: "username",
-      displayName: tConnectorField(locale, "username"),
-      required: true,
-    },
-    {
-      name: "password",
-      displayName: tConnectorField(locale, "password"),
-      required: true,
-    },
-  ];
-}
-
-function emailFields(emailType = "", locale = "zh-CN") {
-  return [
-    {
-      name: "smtp_host",
-      displayName: tConnectorField(locale, "smtpHost"),
-      required: true,
-    },
-    {
-      name: "smtp_port",
-      displayName: tConnectorField(locale, "smtpPort"),
-      required: false,
-    },
-    {
-      name: "imap_host",
-      displayName: tConnectorField(locale, "imapHost"),
-      required: true,
-    },
-    {
-      name: "imap_port",
-      displayName: tConnectorField(locale, "imapPort"),
-      required: false,
-    },
-    {
-      name: "username",
-      displayName: tConnectorField(locale, "emailAccount"),
-      required: true,
-    },
-    {
-      name: "password",
-      displayName: tConnectorField(locale, "passwordOrAppPassword"),
-      required: true,
-    },
-    {
-      name: "from_email",
-      displayName: tConnectorField(locale, "fromAddress"),
-      required: false,
-    },
-  ];
-}
-
-function attachDefaultValuesToFields(fields = [], connectionInfo = {}) {
-  const normalizedFields = Array.isArray(fields) ? fields : [];
-  const normalizedConnectionInfo = pickObject(connectionInfo);
-  return normalizedFields.map((fieldItem) => {
-    const fieldName = String(fieldItem?.name || "").trim();
-    if (!fieldName || fieldName === "password") return { ...fieldItem };
-    const rawDefaultValue = normalizedConnectionInfo?.[fieldName];
-    const defaultValue = String(rawDefaultValue ?? "").trim();
-    if (!defaultValue) return { ...fieldItem };
-    return {
-      ...fieldItem,
-      default_value: defaultValue,
-      defaultValue,
-    };
-  });
-}
-
-function collectNonSensitiveDefaults(connectionInfo = {}) {
-  const normalizedConnectionInfo = pickObject(connectionInfo);
-  const defaults = {};
-  for (const [key, value] of Object.entries(normalizedConnectionInfo)) {
-    const normalizedKey = String(key || "").trim();
-    if (!normalizedKey || normalizedKey.toLowerCase() === "password") continue;
-    const normalizedValue = String(value ?? "").trim();
-    if (!normalizedValue) continue;
-    defaults[normalizedKey] = normalizedValue;
-  }
-  return defaults;
-}
-
-function normalizeProvidedDatabaseDefaults(defaultValuesInput = {}) {
-  return normalizeProvidedDefaults(defaultValuesInput, [
-    "host",
-    "port",
-    "username",
-    "database",
-    "file_path",
-    "database_type",
-  ]);
-}
-
-function normalizeProvidedTerminalDefaults(defaultValuesInput = {}) {
-  return normalizeProvidedDefaults(defaultValuesInput, [
-    "host",
-    "port",
-    "username",
-    "terminal_type",
-  ]);
-}
-
-function normalizeProvidedEmailDefaults(defaultValuesInput = {}) {
-  return normalizeProvidedDefaults(defaultValuesInput, [
-    "smtp_host",
-    "smtp_port",
-    "smtp_secure",
-    "imap_host",
-    "imap_port",
-    "imap_secure",
-    "username",
-    "from_email",
-  ]);
-}
-
-function normalizeLookupKey(input = "") {
-  return String(input || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s\-]+/g, "_");
-}
-
-function resolveConnectorFromMapByName(connectorMap = {}, connectorName = "") {
-  const normalizedMap = pickObject(connectorMap);
-  const targetName = String(connectorName || "").trim();
-  if (!targetName) return {};
-  const exactValue = pickObject(normalizedMap[targetName]);
-  if (Object.keys(exactValue).length) return exactValue;
-  const normalizedTargetName = normalizeLookupKey(targetName);
-  for (const [mapKey, mapValue] of Object.entries(normalizedMap)) {
-    if (normalizeLookupKey(mapKey) !== normalizedTargetName) continue;
-    const candidate = pickObject(mapValue);
-    if (Object.keys(candidate).length) return candidate;
-  }
-  return {};
-}
-
-function resolveConnectorFallbackFromMap(connectorMap = {}) {
-  const normalizedMap = pickObject(connectorMap);
-  const defaultKeys = ["default", "默认", "connector_default"];
-  for (const defaultKey of defaultKeys) {
-    const value = resolveConnectorFromMapByName(normalizedMap, defaultKey);
-    if (Object.keys(value).length) return value;
-  }
-  const entries = Object.entries(normalizedMap).filter(([, mapValue]) =>
-    Object.keys(pickObject(mapValue)).length > 0,
-  );
-  return entries.length === 1 ? pickObject(entries[0][1]) : {};
-}
-
-function collectConnectorMapsByType({
-  effectiveConfig = {},
-  connectorType = "",
-} = {}) {
-  const normalizedType = String(connectorType || "").trim().toLowerCase();
-  const connectorToolConfigKey =
-    normalizedType === "database"
-      ? "database_connect_connector"
-      : normalizedType === "terminal"
-        ? "terminal_connect_connector"
-        : normalizedType === "email"
-          ? "email_connect_connector"
-          : "";
-  const scopedConnectorMap = pickObject(
-    connectorToolConfigKey
-      ? effectiveConfig?.tools?.[connectorToolConfigKey]?.connectors
-      : {},
-  );
-  return [
-    { connectorMap: scopedConnectorMap, allowFallback: true },
-  ];
-}
-
-function mergeConnectionInfo(base = {}, patch = {}) {
-  return { ...pickObject(base), ...pickObject(patch) };
-}
-
-function getMissingFieldNames(fields = [], connectionInfo = {}) {
-  const info = pickObject(connectionInfo);
-  return fields
-    .filter((item) => item?.required)
-    .map((item) => String(item?.name || "").trim())
-    .filter(Boolean)
-    .filter((key) => !String(info?.[key] ?? "").trim());
-}
-
-function resolveConfiguredConnectorInfo({
-  effectiveConfig = {},
-  connectorName = "",
-  connectorType = "",
-} = {}) {
-  const connectorMaps = collectConnectorMapsByType({
-    effectiveConfig,
-    connectorType,
-  });
-  let resolvedInfo = {};
-  for (const connectorMapItem of connectorMaps) {
-    const connectorMap = pickObject(connectorMapItem?.connectorMap);
-    const exactInfo = resolveConnectorFromMapByName(connectorMap, connectorName);
-    if (Object.keys(exactInfo).length) {
-      resolvedInfo = mergeConnectionInfo(resolvedInfo, exactInfo);
-      continue;
-    }
-    if (connectorMapItem?.allowFallback !== true) continue;
-    const fallbackInfo = resolveConnectorFallbackFromMap(connectorMap);
-    if (Object.keys(fallbackInfo).length) {
-      resolvedInfo = mergeConnectionInfo(resolvedInfo, fallbackInfo);
-    }
-  }
-  return resolvedInfo;
-}
-
-function alignFieldsWithConnectionInfo(
-  fields = [],
-  connectionInfo = {},
-  locale = "zh-CN",
-) {
-  const normalizedFields = Array.isArray(fields) ? fields : [];
-  const normalizedConnectionInfo = pickObject(connectionInfo);
-  const fieldNameMap = {
-    database_type: "databaseType",
-    terminal_type: "terminalType",
-    smtp_secure: "smtpSecure",
-    imap_secure: "imapSecure",
-  };
-  const existingFieldNames = new Set(
-    normalizedFields
-      .map((fieldItem) => String(fieldItem?.name || "").trim())
-      .filter(Boolean),
-  );
-  const appendedFields = [];
-  for (const [rawKey, rawValue] of Object.entries(normalizedConnectionInfo)) {
-    const fieldName = String(rawKey || "").trim();
-    if (!fieldName || existingFieldNames.has(fieldName)) continue;
-    if (fieldName.toLowerCase() === "password") continue;
-    if (rawValue === null || rawValue === undefined) continue;
-    const mappedFieldKey = String(fieldNameMap[fieldName] || "").trim();
-    const displayName = mappedFieldKey
-      ? tConnectorField(locale, mappedFieldKey)
-      : fieldName;
-    appendedFields.push({
-      name: fieldName,
-      displayName,
-      required: false,
-    });
-  }
-  return [...normalizedFields, ...appendedFields];
-}
-
-function maskConnectionInfo(info = {}) {
-  const out = { ...pickObject(info) };
-  for (const key of ["password", "connection_string", "connectionString"]) {
-    if (out[key]) out[key] = "***";
-  }
-  return out;
-}
-
-function addRuntimeConnectorChannel(runtime = {}, connector = {}) {
-  const normalizedType = String(connector?.connectorType || "")
-    .trim()
-    .toLowerCase();
-  if (!["database", "terminal", "email"].includes(normalizedType)) return;
-  const bucketKey =
-    normalizedType === "database"
-      ? "databases"
-      : normalizedType === "terminal"
-        ? "terminals"
-        : "emails";
-  const current = pickObject(runtime?.connectorChannels);
-  const next = {
-    databases: Array.isArray(current?.databases) ? [...current.databases] : [],
-    terminals: Array.isArray(current?.terminals) ? [...current.terminals] : [],
-    emails: Array.isArray(current?.emails) ? [...current.emails] : [],
-  };
-  const list = next[bucketKey];
-  const targetName = String(connector?.connectorName || "").trim();
-  const hitIndex = list.findIndex(
-    (item) => String(item?.connectorName || "").trim() === targetName,
-  );
-  if (hitIndex >= 0) list[hitIndex] = connector;
-  else list.push(connector);
-  runtime.connectorChannels = next;
-}
-
-function upsertRuntimeSelectedConnector(
-  runtime = {},
-  { connectorType = "", connectorName = "" } = {},
-) {
-  const normalizedType = normalizeConnectorType(connectorType);
-  const normalizedName = String(connectorName || "").trim();
-  if (!["database", "terminal", "email"].includes(normalizedType)) return;
-  if (!normalizedName) return;
-  if (!runtime.systemRuntime || typeof runtime.systemRuntime !== "object") {
-    runtime.systemRuntime = {};
-  }
-  if (!runtime.systemRuntime.config || typeof runtime.systemRuntime.config !== "object") {
-    runtime.systemRuntime.config = {};
-  }
-  const currentSelected =
-    runtime.systemRuntime.config.selectedConnectors &&
-    typeof runtime.systemRuntime.config.selectedConnectors === "object"
-      ? runtime.systemRuntime.config.selectedConnectors
-      : {};
-  runtime.systemRuntime.config.selectedConnectors = {
-    ...currentSelected,
-    [normalizedType]: normalizedName,
-  };
-}
-
-function findConnectedConnector({
-  store = null,
-  rootSessionId = "",
-  connectorName = "",
-  connectorType = "",
-} = {}) {
-  if (!store || typeof store.getSessionConnectors !== "function") return null;
-  const allConnectors = store.getSessionConnectors(String(rootSessionId || "").trim());
-  const bucket =
-    String(connectorType || "").trim() === "database"
-      ? "databases"
-      : String(connectorType || "").trim() === "terminal"
-        ? "terminals"
-        : "emails";
-  const sourceList = Array.isArray(allConnectors?.[bucket]) ? allConnectors[bucket] : [];
-  const normalizedName = String(connectorName || "").trim();
-  return (
-    sourceList.find(
-      (item) => String(item?.connectorName || "").trim() === normalizedName,
-    ) || null
-  );
-}
-
-function isUserCancelledInteraction(interactionResult = {}) {
-  return Boolean(
-    interactionResult &&
-      typeof interactionResult === "object" &&
-      !Array.isArray(interactionResult) &&
-      interactionResult.confirmed === false,
-  );
-}
-
-function buildAlreadyConnectedResponse(toolName = "", connector = {}, runtime = {}) {
-  return toToolJsonResult(toolName, {
-    ok: true,
-    status: "already_connected",
-    connector,
-    message: tConnector(runtime, "alreadyConnected"),
-  });
-}
-
-function buildConnectionStatusPayload({
-  runtimeStatus = {},
-  connector = {},
-  extra = {},
-} = {}) {
-  return {
-    ok: runtimeStatus?.status === "connected",
-    status: runtimeStatus?.status || "unknown",
-    status_code: Number(runtimeStatus?.status_code ?? 0),
-    status_message: String(runtimeStatus?.status_message || ""),
-    checked_at: String(runtimeStatus?.checked_at || ""),
-    connector,
-    ...(pickObject(extra) || {}),
-  };
-}
-
-function buildRuntimeConnectorStatus({
-  runtime = {},
-  store,
-  rootSessionId,
-  connectorName,
-  connectorType,
-}) {
-  return typeof store?.inspectConnectorRuntimeStatus === "function"
-    ? store.inspectConnectorRuntimeStatus({
-        sessionId: rootSessionId,
-        connectorName,
-        connectorType,
-        timeoutMs: 8000,
-      })
-    : Promise.resolve({
-        connector_name: connectorName,
-        connector_type: connectorType,
-        status: "unknown",
-        status_code: 503,
-        status_message: tConnector(runtime, "statusInspectorUnavailable"),
-      });
-}
-
-function createConnectorToolContext(agentContext = {}) {
-  const runtime = agentContext?.runtime || {};
-  const globalConfig = runtime?.globalConfig || {};
-  const userConfig = runtime?.userConfig || {};
-  const effectiveConfig = mergeConfig(globalConfig, userConfig);
-  const systemRuntime = runtime?.systemRuntime || {};
-  const sessionId = String(systemRuntime?.sessionId || "").trim();
-  const rootSessionId = String(systemRuntime?.rootSessionId || "").trim();
-  const dialogProcessId = String(systemRuntime?.dialogProcessId || "").trim();
-  const allowUserInteraction = systemRuntime?.config?.allowUserInteraction !== false;
-  const bridge = runtime?.userInteractionBridge || null;
-  const store = runtime?.sharedTools?.connectorChannelStore || null;
-  const historyStore = runtime?.sharedTools?.connectorHistoryStore || null;
-  const connectorEventListener = runtime?.sharedTools?.connectorEventListener || null;
-  const maxAccessOutputChars = Number(
-    effectiveConfig?.tools?.maxOutputChars ?? 8000,
-  );
-  return {
-    runtime,
-    effectiveConfig,
-    sessionId,
-    rootSessionId,
-    dialogProcessId,
-    allowUserInteraction,
-    bridge,
-    store,
-    historyStore,
-    connectorEventListener,
-    maxAccessOutputChars,
-  };
-}
-
-async function resolveRememberedConnectorInfo({
-  historyStore = null,
-  userId = "",
-  rootSessionId = "",
-  connectorType = "",
-  connectorName = "",
-} = {}) {
-  if (
-    !historyStore ||
-    typeof historyStore.listSessionConnectors !== "function"
-  ) {
-    return {};
-  }
-  const normalizedUserId = String(userId || "").trim();
-  const normalizedRootSessionId = String(rootSessionId || "").trim();
-  const normalizedConnectorType = normalizeConnectorType(connectorType);
-  const normalizedConnectorName = String(connectorName || "").trim();
-  if (
-    !normalizedUserId ||
-    !normalizedRootSessionId ||
-    !normalizedConnectorType ||
-    !normalizedConnectorName
-  ) {
-    return {};
-  }
-  const groupedHistory = await historyStore.listSessionConnectors({
-    userId: normalizedUserId,
-    sessionId: normalizedRootSessionId,
-  });
-  const historyList = Array.isArray(groupedHistory?.[normalizedConnectorType])
-    ? groupedHistory[normalizedConnectorType]
-    : [];
-  const hitConnector =
-    historyList.find(
-      (connectorItem) =>
-        String(connectorItem?.connector_name || "").trim() ===
-        normalizedConnectorName,
-    ) || null;
-  const defaults =
-    hitConnector?.connection_defaults &&
-    typeof hitConnector.connection_defaults === "object"
-      ? hitConnector.connection_defaults
-      : {};
-  return collectNonSensitiveDefaults(defaults);
-}
-
-function buildAccessConnectorTool(context = {}) {
+function createConnectorTools({ agentContext } = {}) {
+  const connectorToolContext = createConnectorToolContext(agentContext);
   const {
-    runtime,
-    effectiveConfig,
     store,
-    historyStore,
-    connectorEventListener,
     rootSessionId,
-    allowUserInteraction,
-    bridge,
-    dialogProcessId,
-    sessionId,
-    maxAccessOutputChars,
-  } = context;
-  const resolveReconnectToolName = (connectorType = "") =>
-    connectorType === "database"
-      ? "database_connect_connector"
-      : connectorType === "terminal"
-        ? "terminal_connect_connector"
-        : "email_connect_connector";
-  const buildEmailAttachmentHandler = () => {
-    const userId = String(runtime?.userId || "").trim();
-    const attachmentService = runtime?.attachmentService || null;
-    if (!userId || !attachmentService) return null;
-    return async (artifacts = [], options = {}) => {
-      const sourceArtifacts = Array.isArray(artifacts) ? artifacts : [];
-      if (!sourceArtifacts.length) return [];
-      const runtimeSessionId = String(
-        runtime?.systemRuntime?.sessionId ||
-          runtime?.systemRuntime?.rootSessionId ||
-          "",
-      ).trim();
-      const generationSource = String(
-        options?.generationSource || "email_connector_read",
-      ).trim();
-      const savedRecords =
-        generationSource === "email_connector_read" &&
-        typeof attachmentService.ingestEmailArtifacts === "function"
-          ? await attachmentService.ingestEmailArtifacts({
-              userId,
-              sessionId: runtimeSessionId,
-              artifacts: sourceArtifacts,
-            })
-          : await attachmentService.ingestGeneratedArtifacts({
-              userId,
-              sessionId: runtimeSessionId,
-              attachmentSource:
-                generationSource === "email_connector_read" ? "email" : "model",
-              artifacts: sourceArtifacts,
-              generationSource,
-            });
-      return (Array.isArray(savedRecords) ? savedRecords : []).map(
-        (attachmentItem, attachmentIndex) => ({
-          attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-          sessionId: String(attachmentItem?.sessionId || runtimeSessionId).trim(),
-          attachmentSource: String(
-            attachmentItem?.attachmentSource ||
-              (generationSource === "email_connector_read" ? "email" : "model"),
-          ).trim(),
-          name: String(attachmentItem?.name || "").trim(),
-          mimeType: String(
-            attachmentItem?.mimeType || "application/octet-stream",
-          ).trim(),
-          size: Number(attachmentItem?.size || 0),
-          generatedByModel: attachmentItem?.generatedByModel === true,
-          generationSource: String(
-            attachmentItem?.generationSource || generationSource,
-          ).trim(),
-          email_attachment_type: String(
-            sourceArtifacts?.[attachmentIndex]?.email_attachment_type || "",
-          ).trim(),
-          email_content_id: String(
-            sourceArtifacts?.[attachmentIndex]?.email_content_id || "",
-          ).trim(),
-          email_is_inline:
-            sourceArtifacts?.[attachmentIndex]?.email_is_inline === true,
-        }),
-      );
-    };
-  };
-  return {
-    name: "access_connector",
-    description: tToolDescription(runtime, "access_connector"),
-    schemaShape: {
-      connector_name: {
-        description: tToolParamDescription(runtime, "access_connector", "connector_name"),
-      },
-      connector_type: {
-        description: tToolParamDescription(runtime, "access_connector", "connector_type"),
-      },
-      command: {
-        description: tToolParamDescription(runtime, "access_connector", "command"),
-      },
-    },
-    async func({ connector_name, connector_type, command }) {
-      if (!store || typeof store.executeConnectorCommand !== "function") {
+    runtime,
+    connectorEventListener,
+  } = connectorToolContext;
+
+  const accessConnectorDescriptor = buildAccessConnectorTool(connectorToolContext);
+  const accessConnectorTool = new DynamicStructuredTool({
+    name: accessConnectorDescriptor.name,
+    description: accessConnectorDescriptor.description,
+    schema: z.object({
+      connector_name: z.string().optional().describe(
+        accessConnectorDescriptor.schemaShape.connector_name.description,
+      ),
+      connector_type: z.string().describe(
+        accessConnectorDescriptor.schemaShape.connector_type.description,
+      ),
+      command: z.string().describe(
+        accessConnectorDescriptor.schemaShape.command.description,
+      ),
+    }),
+    func: accessConnectorDescriptor.func,
+  });
+
+  const inspectConnectorsTool = new DynamicStructuredTool({
+    name: "inspect_connectors",
+    description: tToolDescription(runtime, "inspect_connectors"),
+    schema: z.object({}),
+    func: async () => {
+      if (!store || typeof store.inspectSessionConnectors !== "function") {
         throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
           code: "RECOVERABLE_CONNECTOR_STORE_MISSING",
         });
@@ -692,155 +95,83 @@ function buildAccessConnectorTool(context = {}) {
           code: "RECOVERABLE_ROOT_SESSION_MISSING",
         });
       }
-      const connectorType = normalizeConnectorType(connector_type);
-      if (!["database", "terminal", "email"].includes(connectorType)) {
-        throw recoverableToolError(
-          tTool(runtime, "tools.access_connector.errorConnectorTypeRequired"),
-          {
-            code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
-          },
-        );
-      }
-      const selectedConnectors =
-        runtime?.systemRuntime?.config?.selectedConnectors &&
-        typeof runtime.systemRuntime.config.selectedConnectors === "object"
-          ? runtime.systemRuntime.config.selectedConnectors
-          : {};
-      const selectedConnectorName = String(selectedConnectors?.[connectorType] || "").trim();
-      if (!selectedConnectorName) {
-        throw recoverableToolError(
-          tConnector(runtime, "selectedMissing", { connectorType }),
-          {
-            code: "RECOVERABLE_SELECTED_CONNECTOR_MISSING",
-          },
-        );
-      }
-      const requestedConnectorName = String(connector_name || "").trim();
-      if (
-        requestedConnectorName &&
-        requestedConnectorName !== selectedConnectorName
-      ) {
-        throw recoverableToolError(
-          tConnector(runtime, "selectedOnly", {
-            connectorName: selectedConnectorName,
-          }),
-          {
-            code: "RECOVERABLE_SELECTED_CONNECTOR_MISMATCH",
-          },
-        );
-      }
-      const connectorName = selectedConnectorName;
-      const connectedConnector = findConnectedConnector({
-        store,
-        rootSessionId,
-        connectorName,
-        connectorType,
+      const inspected = await store.inspectSessionConnectors({
+        sessionId: rootSessionId,
+        timeoutMs: 8000,
       });
-      if (!connectedConnector) {
-        const configuredConnectionInfo = resolveConfiguredConnectorInfo({
-          effectiveConfig,
-          connectorName,
-          connectorType,
-        });
-        const rememberedConnectionInfo = await resolveRememberedConnectorInfo({
-          historyStore,
-          userId: runtime?.userId || "",
-          rootSessionId,
-          connectorType,
-          connectorName,
-        });
-        const connectionDefaults = {
-          ...collectNonSensitiveDefaults(configuredConnectionInfo),
-          ...rememberedConnectionInfo,
-        };
-        const reconnectToolName = resolveReconnectToolName(connectorType);
-        const reconnectMessage = tConnector(runtime, "reconnectNeeded", {
-          connectorName,
-        });
-        await connectorEventListener?.notifyReconnectRequired?.({
-          connectorType,
-          connectorName,
-          reconnectToolName,
-          defaultValues: connectionDefaults,
-          message: reconnectMessage,
-        });
-        throw recoverableToolError(
-          tConnector(runtime, "selectedConnectorNotConnected", {
-            connectorType,
-            connectorName,
-          }),
-          {
-            code: "RECOVERABLE_CONNECTOR_NEEDS_RECONNECT",
-            details: {
-              status: "needs_reconnect",
-              reconnect_required: true,
-              reconnect_tool: reconnectToolName,
-              connector: {
-                connector_name: connectorName,
-                connector_type: connectorType,
-              },
-              default_values: connectionDefaults,
-              message: reconnectMessage,
+      const databases = Array.isArray(inspected?.connectors?.databases)
+        ? inspected.connectors.databases
+        : [];
+      const terminals = Array.isArray(inspected?.connectors?.terminals)
+        ? inspected.connectors.terminals
+        : [];
+      const emails = Array.isArray(inspected?.connectors?.emails)
+        ? inspected.connectors.emails
+        : [];
+      const totalCount = Number(
+        inspected?.summary?.total_count ??
+          databases.length + terminals.length + emails.length,
+      );
+      runtime.connectorChannels = store.getSessionConnectors(rootSessionId);
+      if (
+        connectorEventListener &&
+        typeof connectorEventListener.syncRuntimeConnectorChannels === "function"
+      ) {
+        connectorEventListener.syncRuntimeConnectorChannels();
+      }
+      if (totalCount <= 0) {
+        const noConnectorMessage = tConnector(runtime, "noConnectorsFound");
+        throw recoverableToolError(noConnectorMessage, {
+          code: "RECOVERABLE_NO_CONNECTORS_FOUND",
+          details: {
+            status: "no_connectors",
+            connectors: {
+              databases,
+              terminals,
+              emails,
             },
-          }
-        );
-      }
-      try {
-        const result = await store.executeConnectorCommand({
-          sessionId: rootSessionId,
-          connectorName,
-          connectorType,
-          command: String(command || "").trim(),
-          emailAttachmentHandler: buildEmailAttachmentHandler(),
-        });
-        runtime.connectorChannels = store.getSessionConnectors(rootSessionId);
-        if (
-          connectorEventListener &&
-          typeof connectorEventListener.onConnectorAccessed === "function"
-        ) {
-          connectorEventListener.onConnectorAccessed({
-            connectorType,
-            connectorName,
-          });
-        }
-        const executionFailedMessage = String(
-          result?.output?.stderr || result?.output?.stdout || "",
-        ).trim();
-        return toToolJsonResult(
-          "access_connector",
-          {
-            ok: result?.ok === true,
-            status: result?.ok ? "completed" : "failed",
-            message: result?.ok
-              ? tConnector(runtime, "execCompleted")
-              : tConnector(runtime, "execFailed", {
-                  reason: executionFailedMessage,
-                }),
-            connector: result?.connector || {},
-            output: cleanConnectorOutputForLLM(
-              {
-                connectorType,
-                output: result?.output || {},
-              },
-              { maxChars: maxAccessOutputChars },
-            ),
+            summary: {
+              database_count: 0,
+              terminal_count: 0,
+              email_count: 0,
+              total_count: 0,
+            },
           },
-          true,
-        );
-      } catch (error) {
-        throw recoverableToolError(error?.message || String(error), {
-          code: String(error?.code || "RECOVERABLE_ACCESS_CONNECTOR_FAILED"),
-          details:
-            error?.details && typeof error.details === "object"
-              ? error.details
-              : undefined,
         });
       }
+      return toToolJsonResult(
+        "inspect_connectors",
+        {
+          ok: true,
+          status: "completed",
+          connectors: {
+            databases,
+            terminals,
+            emails,
+          },
+          summary: {
+            database_count: databases.length,
+            terminal_count: terminals.length,
+            email_count: emails.length,
+            total_count: totalCount,
+          },
+        },
+        true,
+      );
     },
-  };
+  });
+
+  return [
+    ...createDatabaseConnectorTools(connectorToolContext),
+    ...createTerminalConnectorTools(connectorToolContext),
+    ...createEmailConnectorTools(connectorToolContext),
+    accessConnectorTool,
+    inspectConnectorsTool,
+  ];
 }
 
 export {
+  createConnectorTools,
   pickObject,
   parseOptionalObjectInput,
   normalizeDatabaseType,

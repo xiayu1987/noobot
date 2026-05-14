@@ -10,7 +10,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { buildTools } from "../system-core/tools/index.js";
-import { createConnectorChannelTools } from "../system-core/tools/connectors/connector-channel-tools.js";
+import { createConnectorTools } from "../system-core/tools/connectors/connector-toolkit.js";
 import {
   loadGlobalConfig,
   resolveConfigSecrets,
@@ -244,7 +244,7 @@ async function main() {
     userConfig,
   });
   const tools = await buildTools({ agentContext });
-  const extraConnectorTools = createConnectorChannelTools({ agentContext });
+  const extraConnectorTools = createConnectorTools({ agentContext });
   const mergedTools = dedupeToolsByName([...tools, ...extraConnectorTools]);
   const targetTools = await selectToolsInteractive(mergedTools);
 
