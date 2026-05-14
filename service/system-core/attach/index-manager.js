@@ -8,7 +8,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * 读取附件索引文件
+ * 读取附件索引文件。
+ *
+ * @param {string} basePath - 用户根路径。
+ * @param {{sessionId: string, attachmentSource: string}} scope - 附件 scope。
+ * @returns {Promise<{updatedAt: string, sessionId: string, attachmentSource: string, attachments: Record<string, any>}>}
  */
 export async function readAttachIndex(basePath, scope) {
   const indexFile = resolveIndexFile(basePath, scope);
@@ -34,7 +38,12 @@ export async function readAttachIndex(basePath, scope) {
 }
 
 /**
- * 写入附件索引文件
+ * 写入附件索引文件。
+ *
+ * @param {string} basePath - 用户根路径。
+ * @param {{attachments?: Record<string, any>}} indexData - 附件索引对象。
+ * @param {{sessionId: string, attachmentSource: string}} scope - 附件 scope。
+ * @returns {Promise<void>}
  */
 export async function writeAttachIndex(basePath, indexData, scope) {
   const indexFile = resolveIndexFile(basePath, scope);
@@ -47,15 +56,6 @@ export async function writeAttachIndex(basePath, indexData, scope) {
     attachments: isObject(indexData?.attachments) ? indexData.attachments : {},
   };
   await writeFile(indexFile, JSON.stringify(payload, null, 2), "utf8");
-}
-
-// Backward-compatible aliases
-export async function loadAttachmentIndex(basePath, scope) {
-  return readAttachIndex(basePath, scope);
-}
-
-export async function saveAttachmentIndex(basePath, indexData, scope) {
-  return writeAttachIndex(basePath, indexData, scope);
 }
 
 function resolveIndexFile(basePath, scope) {
