@@ -402,6 +402,47 @@ async function onConnectorSelected({
     notifyUi({ type: "error", message: error.message || translate("common.updateConnectorFailed") });
   }
 }
+
+const drawerPanels = computed(() => [
+  {
+    key: "workspace",
+    model: workspaceVisible,
+    title: translate("common.workspace"),
+    component: WorkspacePanel,
+    props: {
+      userId: userId.value,
+      apiKey: apiKey.value,
+      connected: connected.value,
+      active: workspaceVisible.value,
+      isSuperAdmin: isSuperAdmin.value,
+    },
+    onWorkspaceReset: handleWorkspaceReset,
+  },
+  {
+    key: "user-settings",
+    model: userSettingsVisible,
+    title: translate("common.userSettings"),
+    component: UserSettingsPanel,
+    props: {
+      apiKey: apiKey.value,
+      connected: connected.value,
+      active: userSettingsVisible.value,
+    },
+  },
+  {
+    key: "config-params",
+    model: configParamsVisible,
+    title: translate("common.configParams"),
+    component: ConfigParamsPanel,
+    props: {
+      userId: userId.value,
+      isSuperAdmin: isSuperAdmin.value,
+      apiKey: apiKey.value,
+      connected: connected.value,
+      active: configParamsVisible.value,
+    },
+  },
+]);
 </script>
 
 <template>
@@ -413,32 +454,32 @@ async function onConnectorSelected({
         'mobile-sidebar-open': mobileSidebarOpen,
       }"
     >
-    <div
-      v-if="mobileSidebarOpen && isMobile"
-      class="mobile-mask"
-      @click="closeMobileSidebar"
-    ></div>
-    <SessionSidebar
-      :sidebar-collapsed="sidebarCollapsed"
-      :is-mobile="isMobile"
-      :mobile-sidebar-open="mobileSidebarOpen"
-      :user-id="userId"
-      :connect-code="connectCode"
-      :connecting="connecting"
-      :connected="connected"
-      :sending="sending"
-      :loading-sessions="loadingSessions"
-      :sessions="sessions"
-      :active-session-id="activeSessionId"
-      @toggle-sidebar="toggleSidebar"
-      @update:user-id="onUserIdUpdate"
-      @update:connect-code="onConnectCodeUpdate"
-      @connect="connectBackend"
-      @new-session="newSession"
-      @delete-session="handleDeleteSession"
-      @refresh-sessions="fetchSessions"
-      @select-session="handleSelectSession"
-    />
+      <div
+        v-if="mobileSidebarOpen && isMobile"
+        class="mobile-mask"
+        @click="closeMobileSidebar"
+      ></div>
+      <SessionSidebar
+        :sidebar-collapsed="sidebarCollapsed"
+        :is-mobile="isMobile"
+        :mobile-sidebar-open="mobileSidebarOpen"
+        :user-id="userId"
+        :connect-code="connectCode"
+        :connecting="connecting"
+        :connected="connected"
+        :sending="sending"
+        :loading-sessions="loadingSessions"
+        :sessions="sessions"
+        :active-session-id="activeSessionId"
+        @toggle-sidebar="toggleSidebar"
+        @update:user-id="onUserIdUpdate"
+        @update:connect-code="onConnectCodeUpdate"
+        @connect="connectBackend"
+        @new-session="newSession"
+        @delete-session="handleDeleteSession"
+        @refresh-sessions="fetchSessions"
+        @select-session="handleSelectSession"
+      />
 
     <!-- 右侧主聊天区 -->
     <main class="main-content">
@@ -497,51 +538,22 @@ async function onConnectorSelected({
         @send="send"
         @stop="stopSending"
       />
-    </main>
-    <el-drawer
-      v-model="workspaceVisible"
-      :title="translate('common.workspace')"
-      :size="drawerSize"
-      destroy-on-close
-      class="workspace-drawer"
-    >
-      <WorkspacePanel
-        :user-id="userId"
-        :api-key="apiKey"
-        :connected="connected"
-        :active="workspaceVisible"
-        :is-super-admin="isSuperAdmin"
-        @workspace-reset="handleWorkspaceReset"
-      />
-    </el-drawer>
-    <el-drawer
-      v-model="userSettingsVisible"
-      :title="translate('common.userSettings')"
-      :size="drawerSize"
-      destroy-on-close
-      class="workspace-drawer"
-    >
-      <UserSettingsPanel
-        :api-key="apiKey"
-        :connected="connected"
-        :active="userSettingsVisible"
-      />
-    </el-drawer>
-    <el-drawer
-      v-model="configParamsVisible"
-      :title="translate('common.configParams')"
-      :size="drawerSize"
-      destroy-on-close
-      class="workspace-drawer"
-    >
-      <ConfigParamsPanel
-        :user-id="userId"
-        :is-super-admin="isSuperAdmin"
-        :api-key="apiKey"
-        :connected="connected"
-        :active="configParamsVisible"
-      />
-    </el-drawer>
+      </main>
+      <el-drawer
+        v-for="drawer in drawerPanels"
+        :key="drawer.key"
+        v-model="drawer.model.value"
+        :title="drawer.title"
+        :size="drawerSize"
+        destroy-on-close
+        class="workspace-drawer"
+      >
+        <component
+          :is="drawer.component"
+          v-bind="drawer.props"
+          @workspace-reset="drawer.onWorkspaceReset?.()"
+        />
+      </el-drawer>
     </div>
   </div>
 </template>

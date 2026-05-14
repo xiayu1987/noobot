@@ -31,6 +31,7 @@ import { useAgentInteraction } from "./useAgentInteraction";
 import { useConnectorPanel } from "../infra/useConnectorPanel";
 import { useChatList } from "./useChatList";
 import { useChatEngine } from "./useChatEngine";
+import { normalizeInteractionRequestPayload } from "./interactionPayload";
 import { useChatStore } from "../../shared/stores/useChatStore";
 import { useLocale } from "../../shared/i18n/useLocale";
 
@@ -416,23 +417,7 @@ export function useChatSession({
         targetMessage.executionLogTotal = Number(targetMessage.executionLogTotal || 0) + 1;
         targetMessage.realtimeLogs = [...(targetMessage.realtimeLogs || []), logItem].slice(-10);
       } else if (eventName === StreamEventEnum.INTERACTION_REQUEST) {
-        setPendingInteractionRequest({
-          requestId: String(eventData?.requestId || ""),
-          content: String(eventData?.content || ""),
-          fields: Array.isArray(eventData?.fields) ? eventData.fields : [],
-          dialogProcessId: String(eventData?.dialogProcessId || ""),
-          requireEncryption: eventData?.requireEncryption === true,
-          sessionId: String(eventData?.sessionId || ""),
-          toolName: String(eventData?.toolName || ""),
-          needConnectionInfo: eventData?.needConnectionInfo === true,
-          connectorName: String(eventData?.connectorName || ""),
-          connectorType: String(eventData?.connectorType || ""),
-          interactionType: String(eventData?.interactionType || "").trim(),
-          interactionData:
-            eventData?.interactionData && typeof eventData.interactionData === "object"
-              ? eventData.interactionData
-              : {},
-        });
+        setPendingInteractionRequest(normalizeInteractionRequestPayload(eventData));
       } else if (eventName === StreamEventEnum.DONE) {
         targetMessage.pending = false;
         targetMessage.statusLabel = translate("chat.generated");

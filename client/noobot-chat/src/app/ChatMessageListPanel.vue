@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
 import { useLocale } from "../shared/i18n/useLocale";
 
@@ -23,6 +23,16 @@ const props = defineProps({
 
 const listRef = ref(null);
 const { translate } = useLocale();
+const messageItemSharedProps = computed(() => ({
+  allMessages: props.activeSession?.rawMessages || props.activeSession?.messages || [],
+  sessionDocs: props.activeSession?.sessionDocs || [],
+  userId: props.userId,
+  authFetch: props.authFetch,
+  renderMarkdown: props.renderMarkdown,
+  formatTime: props.formatTime,
+  formatFileSize: props.formatFileSize,
+  isImageMime: props.isImageMime,
+}));
 
 function setScrollTop(top = 0) {
   listRef.value?.setScrollTop?.(Number(top || 0));
@@ -65,15 +75,8 @@ defineExpose({
         >
           <ChatMessageItem
             v-if="shouldRenderMessageInChat(messageItem)"
+            v-bind="messageItemSharedProps"
             :message-item="messageItem"
-            :all-messages="activeSession?.rawMessages || activeSession?.messages || []"
-            :session-docs="activeSession?.sessionDocs || []"
-            :user-id="userId"
-            :auth-fetch="authFetch"
-            :render-markdown="renderMarkdown"
-            :format-time="formatTime"
-            :format-file-size="formatFileSize"
-            :is-image-mime="isImageMime"
           />
         </template>
       </div>
