@@ -10,7 +10,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { buildTools } from "../system-core/tools/index.js";
-import { createConnectorChannelTools } from "../system-core/tools/connector-tools/connector-channel-tools.js";
+import { createConnectorChannelTools } from "../system-core/tools/connectors/connector-channel-tools.js";
 import {
   loadGlobalConfig,
   resolveConfigSecrets,

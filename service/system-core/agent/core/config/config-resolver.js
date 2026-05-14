@@ -11,7 +11,7 @@ import {
   DEFAULT_TOOL_FAILURE_HELP_COUNT,
   TASK_SUMMARY_TOOL_NAME,
 } from "../constants/index.js";
-import { REQUEST_HELP_TOOL_NAME } from "../../../tools/request-help-tool.js";
+import { REQUEST_HELP_TOOL_NAME } from "../../../tools/workflow/request-help-tool.js";
 
 function resolvePositiveInteger(value, fallback = 0) {
   const normalized = Number(value);

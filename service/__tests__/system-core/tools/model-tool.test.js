@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createModelTool } from "../../../system-core/tools/model-tool.js";
+import { createModelTool } from "../../../system-core/tools/ai-models/model-tool.js";
 
 function parseToolJson(raw = "") {
   return JSON.parse(String(raw || "{}"));
