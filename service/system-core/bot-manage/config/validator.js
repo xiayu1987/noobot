@@ -52,16 +52,16 @@ export class BotManageValidator {
 
   validateScenarioConfig(scenarioConfig) {
     if (!scenarioConfig || typeof scenarioConfig !== "object") {
-      throw new Error("Scenario config must be a valid object");
+      throw new Error(tSystem("bot.scenarioConfigObjectRequired"));
     }
     if (scenarioConfig.tools && !Array.isArray(scenarioConfig.tools)) {
-      throw new Error("Scenario config 'tools' must be an array");
+      throw new Error(tSystem("bot.scenarioConfigToolsArrayRequired"));
     }
     if (
       scenarioConfig.context &&
       typeof scenarioConfig.context !== "object"
     ) {
-      throw new Error("Scenario config 'context' must be an object");
+      throw new Error(tSystem("bot.scenarioConfigContextObjectRequired"));
     }
   }
 }

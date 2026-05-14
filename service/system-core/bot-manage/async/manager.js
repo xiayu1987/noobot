@@ -7,6 +7,7 @@
 import { isValidSessionId, now } from "../utils/session-utils.js";
 import { AsyncJobResponseBuilder } from "./response-builder.js";
 import { ASYNC_JOB_STATUS } from "./constants.js";
+import { tSystem } from "../../i18n/system-text.js";
 
 /**
  * Generic async job lifecycle manager.
@@ -58,7 +59,7 @@ export class AsyncJobLifecycleManager {
   async updateJobStatus(jobId, status, data = {}) {
     const job = this.jobs.get(jobId);
     if (!job) {
-      throw new Error(`Job not found: ${jobId}`);
+      throw new Error(`${tSystem("async.jobNotFound")}: ${jobId}`);
     }
 
     job.status = status;
@@ -92,7 +93,7 @@ export class AsyncJobLifecycleManager {
     while (Date.now() - startTime < maxWaitTime) {
       const job = this.jobs.get(jobId);
       if (!job) {
-        throw new Error(`Job not found: ${jobId}`);
+        throw new Error(`${tSystem("async.jobNotFound")}: ${jobId}`);
       }
 
       if (job.status === ASYNC_JOB_STATUS.COMPLETED) {
