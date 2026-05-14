@@ -6,14 +6,36 @@
 import http from "node:http";
 import https from "node:https";
 import { config } from "./config.js";
+import { buildSecurityHeaders } from "./security.js";
+
+function resolveSafeErrorMessage(statusCode = 502, message = "Bad Gateway") {
+  if (Number(statusCode || 500) < 500) {
+    return String(message || "Bad Gateway");
+  }
+  if (config.exposeUpstreamErrorDetail) {
+    return String(message || "Bad Gateway");
+  }
+  return "Bad Gateway";
+}
+
+export function decorateProxyResponseHeaders(headers = {}) {
+  return {
+    ...headers,
+    "x-agent-proxy": "noobot-agent-proxy",
+    ...buildSecurityHeaders(),
+  };
+}
 
 export function writeProxyError(response, statusCode = 502, message = "Bad Gateway") {
   if (!response || response.headersSent) return;
-  response.writeHead(statusCode, { "Content-Type": "application/json" });
+  response.writeHead(
+    statusCode,
+    decorateProxyResponseHeaders({ "Content-Type": "application/json" }),
+  );
   response.end(
     JSON.stringify({
       ok: false,
-      error: String(message || "Bad Gateway"),
+      error: resolveSafeErrorMessage(statusCode, message),
     }),
   );
 }
@@ -67,8 +89,9 @@ export function proxyHttpRequest(request, response) {
     },
     (upstreamResponse) => {
       const statusCode = Number(upstreamResponse?.statusCode || 502);
-      const responseHeaders = { ...(upstreamResponse?.headers || {}) };
-      responseHeaders["x-agent-proxy"] = "noobot-agent-proxy";
+      const responseHeaders = decorateProxyResponseHeaders({
+        ...(upstreamResponse?.headers || {}),
+      });
       response.writeHead(statusCode, responseHeaders);
       upstreamResponse.pipe(response);
     },

@@ -8,9 +8,19 @@ import { randomUUID } from "node:crypto";
 import { config } from "./src/config.js";
 import { ChannelManager } from "./src/channel-manager.js";
 import { WsRouter } from "./src/ws-router.js";
-import { proxyHttpRequest, writeProxyError } from "./src/http-proxy.js";
+import {
+  proxyHttpRequest,
+  writeProxyError,
+  decorateProxyResponseHeaders,
+} from "./src/http-proxy.js";
 import { interceptConnectRequest } from "./src/connect-interceptor.js";
 import { parseRequestPathname, parseRequestQuery, normalizeApiKey } from "./src/utils.js";
+import {
+  createFixedWindowRateLimiter,
+  getClientIp,
+  isIpTrusted,
+  isOriginTrusted,
+} from "./src/security.js";
 
 async function loadWebSocketLibrary() {
   try {
@@ -28,13 +38,49 @@ const WebSocketServer = websocketLibrary.WebSocketServer;
 const channelManager = new ChannelManager(WebSocket);
 const wsRouter = new WsRouter(channelManager);
 let activeConnectionCount = 0;
+const httpRateLimiter = createFixedWindowRateLimiter({
+  windowMs: config.httpRateLimitWindowMs,
+  maxRequests: config.httpRateLimitMaxRequests,
+});
+const wsRateLimiter = createFixedWindowRateLimiter({
+  windowMs: config.wsRateLimitWindowMs,
+  maxRequests: config.wsRateLimitMaxUpgrades,
+});
 
 // ---- HTTP Server ----
 const httpServer = http.createServer((request, response) => {
   const pathname = parseRequestPathname(request);
+  const clientIp = getClientIp(request);
+  const requestOrigin = String(request?.headers?.origin || "").trim();
+
+  if (!isIpTrusted(clientIp, config.trustedIps)) {
+    writeProxyError(response, 403, "agentProxy client ip not allowed");
+    return;
+  }
+  if (requestOrigin && !isOriginTrusted(requestOrigin, config.trustedOrigins)) {
+    writeProxyError(response, 403, "agentProxy origin not allowed");
+    return;
+  }
+  if (config.httpRateLimitEnabled) {
+    const rateLimited = httpRateLimiter.check(clientIp || "unknown-ip");
+    if (!rateLimited.ok) {
+      response.writeHead(
+        429,
+        decorateProxyResponseHeaders({
+          "content-type": "application/json; charset=utf-8",
+          "retry-after": String(rateLimited.retryAfterSec || 1),
+        }),
+      );
+      response.end(JSON.stringify({ ok: false, error: "Too Many Requests" }));
+      return;
+    }
+  }
 
   if (pathname === "/health") {
-    response.writeHead(200, { "Content-Type": "application/json" });
+    response.writeHead(
+      200,
+      decorateProxyResponseHeaders({ "Content-Type": "application/json" }),
+    );
     response.end(
       JSON.stringify({
         ok: true,
@@ -61,9 +107,26 @@ const websocketServer = new WebSocketServer({ noServer: true });
 
 httpServer.on("upgrade", (request, socket, head) => {
   const { pathname } = parseRequestQuery(request);
+  const clientIp = getClientIp(request);
+  const requestOrigin = String(request?.headers?.origin || "").trim();
   if (!config.wsPaths.includes(pathname)) {
     socket.destroy();
     return;
+  }
+  if (!isIpTrusted(clientIp, config.trustedIps)) {
+    socket.destroy();
+    return;
+  }
+  if (requestOrigin && !isOriginTrusted(requestOrigin, config.trustedOrigins)) {
+    socket.destroy();
+    return;
+  }
+  if (config.wsRateLimitEnabled) {
+    const rateLimited = wsRateLimiter.check(clientIp || "unknown-ip");
+    if (!rateLimited.ok) {
+      socket.destroy();
+      return;
+    }
   }
   if (activeConnectionCount >= config.maxConnections) {
     socket.destroy();
@@ -114,6 +177,8 @@ websocketServer.on("connection", (socket, request) => {
 // ---- Cleanup Timer ----
 const cleanupTimer = setInterval(() => {
   channelManager.cleanupExpiredChannels();
+  httpRateLimiter.cleanup(config.httpRateLimitWindowMs * 3);
+  wsRateLimiter.cleanup(config.wsRateLimitWindowMs * 3);
 }, config.cleanupIntervalMs);
 
 cleanupTimer.unref?.();
