@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum } from "../../shared/constants/chatConstants";
+import {
+  buildSessionIdentityMap,
+  findSessionByAnyId as findSessionByAnyIdInList,
+  promoteSessionIdentityToBackendId,
+  resolveSessionPrimaryId as resolveSessionPrimaryIdInList,
+} from "../infra/sessionIdentity";
 import { useLocale } from "../../shared/i18n/useLocale";
 import {
   buildDialogProcessParentMap,
@@ -169,32 +175,6 @@ export function useChatList({
     };
   }
 
-  function buildSessionIdentityMap(sessionItems = []) {
-    const output = new Map();
-    for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
-      const ids = [sessionItem?.id, sessionItem?.backendSessionId]
-        .map((item) => String(item || "").trim())
-        .filter(Boolean);
-      for (const id of ids) output.set(id, sessionItem);
-    }
-    return output;
-  }
-
-  function findSessionByAnyId(sessionId = "") {
-    const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId) return null;
-    return (sessions.value || []).find(
-      (sessionItem) =>
-        String(sessionItem?.id || "").trim() === normalizedSessionId ||
-        String(sessionItem?.backendSessionId || "").trim() === normalizedSessionId,
-    ) || null;
-  }
-
-  function resolveSessionPrimaryId(sessionId = "") {
-    const targetSession = findSessionByAnyId(sessionId);
-    return String(targetSession?.id || sessionId || "").trim();
-  }
-
   function mergeExistingSessionState(mappedSession = {}, existingSession = null) {
     if (!existingSession) return mappedSession;
     const existingMessages = Array.isArray(existingSession?.messages)
@@ -251,7 +231,7 @@ export function useChatList({
 
   function applySessionDetail(detail, options = {}) {
     const preserveCurrentMessages = Boolean(options.preserveCurrentMessages);
-    const sessionItem = findSessionByAnyId(detail.sessionId);
+    const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
     if (!sessionItem) return;
     const openThinkingDialogProcessIds = new Set(
       (sessionItem.messages || [])
@@ -268,20 +248,14 @@ export function useChatList({
       revokeMessagePreviewUrls(sessionItem.messages || []);
     }
 
-    const previousSessionId = String(sessionItem.id || "").trim();
     const detailSessionId = String(detail.sessionId || "").trim();
-    const wasActive = [previousSessionId, sessionItem.backendSessionId]
-      .map((item) => String(item || "").trim())
-      .filter(Boolean)
-      .includes(String(activeSessionId.value || "").trim());
-
     sessionItem.loaded = true;
-    sessionItem.isLocal = false;
-    sessionItem.backendSessionId = detailSessionId;
-    if (detailSessionId && previousSessionId !== detailSessionId) {
-      sessionItem.id = detailSessionId;
-      if (wasActive) activeSessionId.value = detailSessionId;
-    }
+    const promotionResult = promoteSessionIdentityToBackendId({
+      sessionItem,
+      backendSessionId: detailSessionId,
+      activeSessionId: activeSessionId.value,
+    });
+    activeSessionId.value = promotionResult.nextActiveSessionId;
     const sessionDocs = Array.isArray(detail.sessions) ? detail.sessions : [];
     sessionItem.sessionDocs = sessionDocs;
     const mainSessionDoc =
@@ -384,8 +358,8 @@ export function useChatList({
         createLocalSession();
         return;
       }
-      const keepActive = Boolean(prevActiveId && findSessionByAnyId(prevActiveId));
-      const nextId = keepActive ? resolveSessionPrimaryId(prevActiveId) : sessions.value[0].id;
+      const keepActive = Boolean(prevActiveId && findSessionByAnyIdInList(sessions.value, prevActiveId));
+      const nextId = keepActive ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId) : sessions.value[0].id;
       const existingNextSession = existingSessionsById.get(String(prevActiveId || "")) || existingSessionsById.get(String(nextId || ""));
       await selectSession(nextId, {
         force: true,
@@ -407,7 +381,7 @@ export function useChatList({
   async function selectSession(sessionId, options = {}) {
     const { force = false, preserveCurrentMessages = false, silent = false } = options;
     if (!sessionId) return;
-    const target = findSessionByAnyId(sessionId);
+    const target = findSessionByAnyIdInList(sessions.value, sessionId);
     if (!target) return;
     const targetPrimaryId = String(target.id || sessionId || "").trim();
     if (!force && targetPrimaryId === activeSessionId.value) return;

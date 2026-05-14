@@ -28,6 +28,10 @@ npm run build
 
 构建产物输出到 `dist/` 目录。
 
+## 开发文档
+
+- [Chat Session / Replay 状态与流程说明](./docs/chat-session-replay.md)
+
 ## 部署
 
 部署配置位于 `deploy/` 目录，包含 Caddy 配置与脚本。配合项目根目录 `start.sh` 一键部署。
