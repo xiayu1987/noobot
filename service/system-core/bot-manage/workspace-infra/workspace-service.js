@@ -9,6 +9,7 @@ import {
   resetUserWorkspaceKeepRuntimeInitialized,
   syncUserWorkspaceFromTemplate,
 } from "../../init/index.js";
+import { tSystem } from "../../i18n/system-text.js";
 
 export class WorkspaceService {
   constructor({ globalConfig = {} } = {}) {
@@ -18,7 +19,7 @@ export class WorkspaceService {
   getWorkspacePath(userId) {
     const normalizedUserId = String(userId || "").trim();
     if (!normalizedUserId) {
-      throw new Error("workspaceRoot/userId required");
+      throw new Error(tSystem("common.workspaceRootUserIdRequired"));
     }
     return path.resolve(this.globalConfig.workspaceRoot, normalizedUserId);
   }

@@ -6,6 +6,7 @@
 
 import { ContextBuilder } from "../../context/index.js";
 import { emitEvent } from "../../event/index.js";
+import { tSystem } from "../../i18n/system-text.js";
 
 /**
  * Build and normalize agent runtime context.
@@ -116,7 +117,7 @@ export class AgentContextFactory {
     contextBuilder = null,
   } = {}) {
     if (!contextBuilder) {
-      throw new Error("contextBuilder is required");
+      throw new Error(tSystem("context.contextBuilderRequired"));
     }
     emitEvent(eventListener, "context_building", { sessionId, mode });
     const agentContext =

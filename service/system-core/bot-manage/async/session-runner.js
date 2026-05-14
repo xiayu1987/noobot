@@ -5,6 +5,7 @@
  */
 
 import { isValidSessionId, now } from "../utils/session-utils.js";
+import { tSystem } from "../../i18n/system-text.js";
 import {
   DEFAULT_WAIT_ASYNC_TIMEOUT_MS,
   MIN_WAIT_ASYNC_TIMEOUT_MS,
@@ -131,15 +132,15 @@ export class AsyncSessionRunner {
     const normalizedUserId = String(userId || "").trim();
     const normalizedParentSessionId = String(parentSessionId || "").trim();
     if (!normalizedUserId || !normalizedParentSessionId) {
-      throw new Error("userId/parentSessionId required");
+      throw new Error(tSystem("common.userParentSessionRequired"));
     }
     if (!isValidSessionId(normalizedParentSessionId)) {
-      throw new Error("invalid parentSessionId format");
+      throw new Error(tSystem("bot.invalidParentSessionIdFormat"));
     }
 
     const normalizedSessionId = String(sessionId || "").trim() || crypto.randomUUID();
     if (!isValidSessionId(normalizedSessionId)) {
-      throw new Error("invalid sessionId format");
+      throw new Error(tSystem("bot.invalidSessionIdFormat"));
     }
 
     const message = [
@@ -269,7 +270,7 @@ export class AsyncSessionRunner {
     const normalizedParentSessionId = String(parentSessionId || "").trim();
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedUserId || !normalizedParentSessionId || !normalizedSessionId) {
-      throw new Error("userId/parentSessionId/sessionId required");
+      throw new Error(tSystem("common.userParentSessionSessionRequired"));
     }
 
     const waitTimeoutMs = this._normalizeWaitAsyncTimeout(Number(timeoutMs));
