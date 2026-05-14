@@ -169,6 +169,77 @@ export function useChatList({
     };
   }
 
+  function buildSessionIdentityMap(sessionItems = []) {
+    const output = new Map();
+    for (const sessionItem of Array.isArray(sessionItems) ? sessionItems : []) {
+      const ids = [sessionItem?.id, sessionItem?.backendSessionId]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+      for (const id of ids) output.set(id, sessionItem);
+    }
+    return output;
+  }
+
+  function findSessionByAnyId(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return null;
+    return (sessions.value || []).find(
+      (sessionItem) =>
+        String(sessionItem?.id || "").trim() === normalizedSessionId ||
+        String(sessionItem?.backendSessionId || "").trim() === normalizedSessionId,
+    ) || null;
+  }
+
+  function resolveSessionPrimaryId(sessionId = "") {
+    const targetSession = findSessionByAnyId(sessionId);
+    return String(targetSession?.id || sessionId || "").trim();
+  }
+
+  function mergeExistingSessionState(mappedSession = {}, existingSession = null) {
+    if (!existingSession) return mappedSession;
+    const existingMessages = Array.isArray(existingSession?.messages)
+      ? existingSession.messages
+      : [];
+    const existingRawMessages = Array.isArray(existingSession?.rawMessages)
+      ? existingSession.rawMessages
+      : [];
+    const existingSessionDocs = Array.isArray(existingSession?.sessionDocs)
+      ? existingSession.sessionDocs
+      : [];
+    return {
+      ...mappedSession,
+      loaded: existingSession.loaded === true || mappedSession.loaded === true,
+      // A server summary means this is no longer a purely local draft. Do not
+      // keep isLocal=true from the optimistic object, otherwise later refreshes
+      // treat the backend session as local and skip detail/replay reconciliation.
+      isLocal: mappedSession.isLocal === false ? false : existingSession.isLocal === true,
+      backendSessionId: mappedSession.backendSessionId || existingSession.backendSessionId,
+      currentTaskId: mappedSession.currentTaskId || existingSession.currentTaskId || "",
+      currentTaskStatus: mappedSession.currentTaskStatus || existingSession.currentTaskStatus || "idle",
+      messages: existingMessages.length ? existingMessages : mappedSession.messages,
+      rawMessages: existingRawMessages.length ? existingRawMessages : mappedSession.rawMessages,
+      sessionDocs: existingSessionDocs.length ? existingSessionDocs : mappedSession.sessionDocs,
+      connectorPanelState: existingSession.connectorPanelState || mappedSession.connectorPanelState,
+      messageCount: existingMessages.length || mappedSession.messageCount || 0,
+      lastMessage: existingMessages.length
+        ? existingMessages[existingMessages.length - 1]
+        : mappedSession.lastMessage,
+      title: existingMessages.length
+        ? sessionTitleFromMessages(existingMessages, existingSession.title || mappedSession.title)
+        : mappedSession.title,
+    };
+  }
+
+  function reconcileSessionObject(mappedSession = {}, existingSession = null) {
+    const mergedSession = mergeExistingSessionState(mappedSession, existingSession);
+    if (!existingSession) return mergedSession;
+    // Keep the same object reference for activeSession and child props.
+    // Replacing the object during replay/background refresh remounts large parts
+    // of the chat UI and looks like the whole page refreshed.
+    Object.assign(existingSession, mergedSession);
+    return existingSession;
+  }
+
   function revokeMessagePreviewUrls(messages = []) {
     for (const messageItem of messages) {
       const attachmentMetas = messageItem.attachmentMetas || [];
@@ -180,9 +251,7 @@ export function useChatList({
 
   function applySessionDetail(detail, options = {}) {
     const preserveCurrentMessages = Boolean(options.preserveCurrentMessages);
-    const sessionItem = sessions.value.find(
-      (candidateSession) => candidateSession.id === detail.sessionId,
-    );
+    const sessionItem = findSessionByAnyId(detail.sessionId);
     if (!sessionItem) return;
     const openThinkingDialogProcessIds = new Set(
       (sessionItem.messages || [])
@@ -199,9 +268,20 @@ export function useChatList({
       revokeMessagePreviewUrls(sessionItem.messages || []);
     }
 
+    const previousSessionId = String(sessionItem.id || "").trim();
+    const detailSessionId = String(detail.sessionId || "").trim();
+    const wasActive = [previousSessionId, sessionItem.backendSessionId]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .includes(String(activeSessionId.value || "").trim());
+
     sessionItem.loaded = true;
     sessionItem.isLocal = false;
-    sessionItem.backendSessionId = detail.sessionId;
+    sessionItem.backendSessionId = detailSessionId;
+    if (detailSessionId && previousSessionId !== detailSessionId) {
+      sessionItem.id = detailSessionId;
+      if (wasActive) activeSessionId.value = detailSessionId;
+    }
     const sessionDocs = Array.isArray(detail.sessions) ? detail.sessions : [];
     sessionItem.sessionDocs = sessionDocs;
     const mainSessionDoc =
@@ -258,9 +338,10 @@ export function useChatList({
     return data;
   }
 
-  async function fetchSessions(preferredActiveId = "") {
+  async function fetchSessions(preferredActiveId = "", options = {}) {
+    const { silent = false, preserveCurrentMessages = true } = options;
     if (!ensureConnected()) return;
-    loadingSessions.value = true;
+    if (!silent) loadingSessions.value = true;
     try {
       const prevActiveId = String(preferredActiveId || activeSessionId.value || "");
       const res = await getSessionsApi(
@@ -271,16 +352,31 @@ export function useChatList({
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || translate("chat.getSessionsFailed"));
 
-      sessions.value = (data.sessions || [])
+      const existingSessionsById = buildSessionIdentityMap(sessions.value);
+      const nextSessions = (data.sessions || [])
         .filter((sessionItem) => String(sessionItem?.caller || "") === RoleEnum.USER)
         .sort(
           (leftSession, rightSession) =>
             new Date(rightSession.updatedAt || 0).getTime() -
             new Date(leftSession.updatedAt || 0).getTime(),
         )
-        .map(mapSummaryToSession);
+        .map((sessionItem) => {
+          const mappedSession = mapSummaryToSession(sessionItem);
+          return reconcileSessionObject(
+            mappedSession,
+            existingSessionsById.get(String(mappedSession.id || "")) || null,
+          );
+        });
+
+      // Keep the sessions array reference stable. Replacing the whole array
+      // during reconnect/background refresh can make the app shell feel like it
+      // refreshed. Splice updates the list in place while preserving existing
+      // session object references from reconcileSessionObject().
+      sessions.value.splice(0, sessions.value.length, ...nextSessions);
 
       for (const session of sessions.value) {
+        const existingSession = existingSessionsById.get(String(session?.id || ""));
+        if (existingSession && existingSession.messages === session.messages) continue;
         revokeMessagePreviewUrls(session.messages || []);
       }
 
@@ -288,49 +384,63 @@ export function useChatList({
         createLocalSession();
         return;
       }
-      const keepActive =
-        prevActiveId &&
-        sessions.value.some((sessionItem) => sessionItem.id === prevActiveId);
-      const nextId = keepActive ? prevActiveId : sessions.value[0].id;
-      await selectSession(nextId, { force: true });
+      const keepActive = Boolean(prevActiveId && findSessionByAnyId(prevActiveId));
+      const nextId = keepActive ? resolveSessionPrimaryId(prevActiveId) : sessions.value[0].id;
+      const existingNextSession = existingSessionsById.get(String(prevActiveId || "")) || existingSessionsById.get(String(nextId || ""));
+      await selectSession(nextId, {
+        force: true,
+        silent,
+        preserveCurrentMessages:
+          preserveCurrentMessages &&
+          Boolean(existingNextSession) &&
+          Array.isArray(existingNextSession?.messages) &&
+          existingNextSession.messages.length > 0,
+      });
     } catch (error) {
       notify({ type: "error", message: error.message || translate("chat.loadSessionsFailed") });
       if (!sessions.value.length) createLocalSession();
     } finally {
-      loadingSessions.value = false;
+      if (!silent) loadingSessions.value = false;
     }
   }
 
   async function selectSession(sessionId, options = {}) {
-    const { force = false } = options;
+    const { force = false, preserveCurrentMessages = false, silent = false } = options;
     if (!sessionId) return;
-    const target = sessions.value.find((sessionItem) => sessionItem.id === sessionId);
+    const target = findSessionByAnyId(sessionId);
     if (!target) return;
-    if (!force && sessionId === activeSessionId.value) return;
-    if (sending.value && activeSessionId.value && sessionId !== activeSessionId.value) {
+    const targetPrimaryId = String(target.id || sessionId || "").trim();
+    if (!force && targetPrimaryId === activeSessionId.value) return;
+    if (sending.value && activeSessionId.value && targetPrimaryId !== activeSessionId.value) {
       notify({ type: "warning", message: translate("chat.keepCurrentWhenSending") });
       return;
     }
 
-    activeSessionId.value = sessionId;
+    activeSessionId.value = targetPrimaryId;
     if (target.isLocal) {
-      refreshSessionConnectorsAsync(sessionId);
+      refreshSessionConnectorsAsync(targetPrimaryId);
       return;
     }
     if (target.loaded && !force) {
-      refreshSessionConnectorsAsync(sessionId);
+      refreshSessionConnectorsAsync(targetPrimaryId);
       return;
     }
 
-    loadingSessionDetail.value = true;
+    if (!silent) loadingSessionDetail.value = true;
     try {
-      const detail = await fetchSessionDetail(sessionId);
-      applySessionDetail(detail);
-      refreshSessionConnectorsAsync(sessionId);
+      const detailSessionId = String(target.backendSessionId || target.id || sessionId || "").trim();
+      const detail = await fetchSessionDetail(detailSessionId);
+      applySessionDetail(detail, {
+        preserveCurrentMessages:
+          Boolean(preserveCurrentMessages) &&
+          Array.isArray(target?.messages) &&
+          target.messages.length > 0,
+      });
+      refreshSessionConnectorsAsync(targetPrimaryId);
     } catch (error) {
       notify({ type: "error", message: error.message || translate("chat.loadSessionDetailFailed") });
     } finally {
-      loadingSessionDetail.value = false;
+      if (!silent) loadingSessionDetail.value = false;
     }
   }
 

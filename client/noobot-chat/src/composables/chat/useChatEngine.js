@@ -262,10 +262,19 @@ export function useChatEngine({
           botMsg.statusLabel = translate("chat.generated");
           botMsg.dialogProcessId = data.dialogProcessId || botMsg.dialogProcessId || "";
           const returnedId = data.sessionId || activeSession.value.backendSessionId;
-          if (activeSession.value.isLocal && returnedId) {
+          if (returnedId) {
             activeSession.value.backendSessionId = returnedId;
             activeSession.value.isLocal = false;
             activeSession.value.loaded = true;
+            // The optimistic local session id must be promoted to the backend
+            // id as soon as DONE returns. Otherwise the next fetchSessions()
+            // cannot reconcile the server summary with the current object; it
+            // removes the local object, switches activeSessionId, and the chat
+            // looks like it refreshed/replayed older messages.
+            if (String(activeSession.value.id || "").trim() !== String(returnedId || "").trim()) {
+              activeSession.value.id = returnedId;
+              activeSessionId.value = returnedId;
+            }
           }
           if (Array.isArray(data.messages) && data.messages.length) {
             activeSession.value.rawMessages = data.messages.map((messageItem) =>

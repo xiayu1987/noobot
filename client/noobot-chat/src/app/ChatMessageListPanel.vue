@@ -42,6 +42,21 @@ function getWrapRef() {
   return listRef.value?.wrapRef || null;
 }
 
+function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
+  const role = String(messageItem?.role || "").trim();
+  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const taskId = String(messageItem?.taskId || "").trim();
+  const toolCallId = String(messageItem?.tool_call_id || "").trim();
+  // Do not include content or ts in the key: both can change when backend
+  // snapshots/replay patch an existing message. If the key changes Vue remounts
+  // the message component, which looks like the AI message flashes and can also
+  // make the previous message blink when a DONE snapshot is folded back.
+  const stablePrimaryId = dialogProcessId || taskId || toolCallId || String(messageIndex);
+  return [role, stablePrimaryId, messageIndex]
+    .map((item) => String(item || "").replaceAll("|", "/"))
+    .join("|");
+}
+
 defineExpose({
   setScrollTop,
   getWrapRef,
@@ -53,7 +68,7 @@ defineExpose({
     <el-scrollbar ref="listRef" class="msg-list">
       <div class="msg-list-inner">
         <el-skeleton
-          v-if="loadingSessionDetail"
+          v-if="loadingSessionDetail && !activeSession?.messages?.length"
           :rows="6"
           animated
           class="skeleton-loading noobot-flat-card"
@@ -71,7 +86,7 @@ defineExpose({
 
         <template
           v-for="(messageItem, messageIndex) in activeSession?.messages || []"
-          :key="messageIndex"
+          :key="getMessageRenderKey(messageItem, messageIndex)"
         >
           <ChatMessageItem
             v-if="shouldRenderMessageInChat(messageItem)"
