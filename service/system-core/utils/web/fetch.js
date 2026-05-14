@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { tSystem } from "../../i18n/system-text.js";
+import { recoverableToolError } from "../../error/index.js";
 
 const DEFAULT_BROWSER_HEADERS = {
   "User-Agent":
@@ -84,7 +85,10 @@ export async function browserLikeFetch(url, options = {}) {
     const res = await doFetch(currentUrl, currentMethod, "manual");
     if (!REDIRECT_STATUS.has(Number(res.status || 0))) return res;
     if (hops >= Math.max(0, Number(maxRedirects) || 0)) {
-      throw new Error(`${tSystem("common.tooManyRedirects")}: ${currentUrl}`);
+      throw recoverableToolError(
+        `${tSystem("common.tooManyRedirects")}: ${currentUrl}`,
+        { code: "RECOVERABLE_TOO_MANY_REDIRECTS" },
+      );
     }
     const location = String(res.headers.get("location") || "").trim();
     if (!location) return res;

@@ -46,3 +46,62 @@ test("executeToolCall extracts attachmentMetas from multimodal tool result", asy
   );
 });
 
+test("executeToolCall returns toToolJsonResult when tool is missing", async () => {
+  const result = await executeToolCall({
+    call: { id: "call_missing", name: "unknown_tool", args: {} },
+    tool: null,
+    turn: 1,
+  });
+
+  assert.equal(result.success, false);
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.code, "RECOVERABLE_TOOL_NOT_FOUND");
+  assert.equal(payload.toolName, "unknown_tool");
+});
+
+test("executeToolCall returns toToolJsonResult when tool invoke throws recoverable error", async () => {
+  const tool = {
+    invoke: async () => {
+      const error = new Error("invalid tool args");
+      error.code = "RECOVERABLE_INVALID_TOOL_ARGS";
+      throw error;
+    },
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_bad", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+  });
+
+  assert.equal(result.success, false);
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.code, "RECOVERABLE_INVALID_TOOL_ARGS");
+  assert.equal(payload.error, "invalid tool args");
+  assert.equal(payload.toolName, "demo_tool");
+});
+
+test("executeToolCall includes error details from recoverable error", async () => {
+  const tool = {
+    invoke: async () => {
+      const error = new Error("service unavailable");
+      error.code = "RECOVERABLE_SERVICE_UNAVAILABLE";
+      error.details = { serviceName: "weather", endpointName: "forecast" };
+      throw error;
+    },
+  };
+  const result = await executeToolCall({
+    call: { id: "call_detail", name: "call_service", args: {} },
+    tool,
+    turn: 1,
+  });
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.code, "RECOVERABLE_SERVICE_UNAVAILABLE");
+  assert.deepEqual(payload.details, {
+    serviceName: "weather",
+    endpointName: "forecast",
+  });
+});

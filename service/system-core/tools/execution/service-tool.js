@@ -7,6 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import { invokeServiceHandler } from "../../service-invoker/index.js";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 
@@ -27,10 +28,6 @@ function isServiceEnabled(serviceCfg) {
 
 function normalizeName(value = "") {
   return String(value || "").trim();
-}
-
-function jsonError(payload = {}) {
-  return toToolJsonResult("call_service", { ok: false, ...payload });
 }
 
 function validateInput({ serviceName, endpointName, queryString, agentContext }) {
@@ -90,80 +87,87 @@ export function createServiceTool({ agentContext }) {
         queryString,
         agentContext,
       });
-      if (inputErr) return jsonError({ error: inputErr });
+      if (inputErr) {
+        throw recoverableToolError(inputErr, {
+          code: "RECOVERABLE_INVALID_TOOL_INPUT",
+        });
+      }
       const customParamErr = validateCustomParam(custom_param, agentContext);
-      if (customParamErr) return jsonError({ error: customParamErr });
-      if (!userId) return jsonError({ error: tService(agentContext, "userIdMissing") });
+      if (customParamErr) {
+        throw recoverableToolError(customParamErr, {
+          code: "RECOVERABLE_INVALID_TOOL_INPUT",
+        });
+      }
+      if (!userId) {
+        throw recoverableToolError(tService(agentContext, "userIdMissing"), {
+          code: "RECOVERABLE_RUNTIME_CONTEXT_MISSING",
+        });
+      }
 
       const normalizedServiceName = normalizeName(serviceName);
       const normalizedEndpointName = normalizeName(endpointName);
       const services = getServices(agentContext);
       const serviceCfg = services?.[normalizedServiceName];
       if (!serviceCfg) {
-        return jsonError({
-          error: tService(agentContext, "serviceNotFound", {
+        throw recoverableToolError(
+          tService(agentContext, "serviceNotFound", {
             serviceName: normalizedServiceName,
           }),
-        });
+          { code: "RECOVERABLE_SERVICE_NOT_FOUND" },
+        );
       }
       if (!isServiceEnabled(serviceCfg)) {
-        return jsonError({
-          error: tService(agentContext, "serviceDisabled", {
+        throw recoverableToolError(
+          tService(agentContext, "serviceDisabled", {
             serviceName: normalizedServiceName,
           }),
-        });
+          { code: "RECOVERABLE_SERVICE_DISABLED" },
+        );
       }
       const endpointCfg = serviceCfg?.endpoints?.[normalizedEndpointName];
       if (!endpointCfg) {
-        return jsonError({
-          error: tService(agentContext, "endpointNotFound", {
+        throw recoverableToolError(
+          tService(agentContext, "endpointNotFound", {
             serviceName: normalizedServiceName,
             endpointName: normalizedEndpointName,
           }),
-        });
+          { code: "RECOVERABLE_ENDPOINT_NOT_FOUND" },
+        );
       }
       const endpointUrl = String(endpointCfg.url || "").trim();
       if (!endpointUrl) {
-        return jsonError({
-          error: tService(agentContext, "endpointUrlMissing", {
+        throw recoverableToolError(
+          tService(agentContext, "endpointUrlMissing", {
             serviceName: normalizedServiceName,
             endpointName: normalizedEndpointName,
           }),
-        });
-      }
-
-      try {
-        const result = await invokeServiceHandler({
-          agentContext,
-          globalConfig,
-          userId,
-          serviceName: normalizedServiceName,
-          endpointName: normalizedEndpointName,
-          serviceCfg,
-          endpointCfg,
-          customParam: String(custom_param || "").trim(),
-          queryString,
-          body,
-        });
-        const normalizedResult =
-          result && typeof result === "object" && !Array.isArray(result)
-            ? result
-            : { data: result };
-        return toToolJsonResult(
-          "call_service",
-          {
-            ok: normalizedResult?.ok !== false,
-            ...normalizedResult,
-          },
-          true,
+          { code: "RECOVERABLE_ENDPOINT_URL_MISSING" },
         );
-      } catch (error) {
-        return jsonError({
-          serviceName: normalizedServiceName,
-          endpointName: normalizedEndpointName,
-          error: error?.message || String(error),
-        });
       }
+      const result = await invokeServiceHandler({
+        agentContext,
+        globalConfig,
+        userId,
+        serviceName: normalizedServiceName,
+        endpointName: normalizedEndpointName,
+        serviceCfg,
+        endpointCfg,
+        customParam: String(custom_param || "").trim(),
+        queryString,
+        body,
+      });
+      const normalizedResult =
+        result && typeof result === "object" && !Array.isArray(result)
+          ? result
+          : { data: result };
+      return toToolJsonResult(
+        "call_service",
+        {
+          ok: normalizedResult?.ok !== false,
+          ...normalizedResult,
+        },
+        true,
+      );
     },
   });
 

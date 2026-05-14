@@ -81,11 +81,15 @@ export async function fetchRemoteMediaArtifact(
   try {
     const response = await fetchImpl(normalizedUrl);
     if (!response?.ok) {
-      throw new Error(
-        tEngine(runtime, "fetchGeneratedMediaFailed", {
-          status: response?.status || 500,
+      logger.error(
+        tEngine(runtime, "fetchRemoteMediaArtifactFailed", {
+          url: normalizedUrl,
+          reason: tEngine(runtime, "fetchGeneratedMediaFailed", {
+            status: response?.status || 500,
+          }),
         }),
       );
+      return null;
     }
     const responseArrayBuffer = await response.arrayBuffer();
     const responseBytes = Buffer.from(responseArrayBuffer);
@@ -103,7 +107,12 @@ export async function fetchRemoteMediaArtifact(
       ),
     };
   } catch (error) {
-    logger.error(tEngine(runtime, "fetchRemoteMediaArtifactFailed", { url: normalizedUrl, reason: error?.message || String(error || "") }));
+    logger.error(
+      tEngine(runtime, "fetchRemoteMediaArtifactFailed", {
+        url: normalizedUrl,
+        reason: error?.message || String(error || ""),
+      }),
+    );
     return null;
   }
 }

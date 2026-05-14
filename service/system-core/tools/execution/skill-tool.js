@@ -9,6 +9,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { normalizeSkillAction, SKILL_ACTION } from "../../config/core/enums.js";
+import { recoverableToolError } from "../../error/index.js";
 import { safeJoin } from "../../utils/fs-safe.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
@@ -95,17 +96,17 @@ export function createSkillTool({ agentContext }) {
     func: async ({ action, skillName, taskName, taskId, result }) => {
       const normalizedAction = normalizeSkillAction(action);
       if (!normalizedAction) {
-        return toToolJsonResult(
-          "set_skill_task",
-          { ok: false, message: tTool(runtime, "tools.skill.invalidAction", { action }) },
+        throw recoverableToolError(
+          tTool(runtime, "tools.skill.invalidAction", { action }),
+          { code: "RECOVERABLE_INVALID_TOOL_INPUT" },
         );
       }
 
       if (normalizedAction === SKILL_ACTION.START) {
         if (!String(skillName || "").trim()) {
-          return toToolJsonResult(
-            "set_skill_task",
-            { ok: false, message: tTool(runtime, "tools.skill.skillNameRequiredOnStart") },
+          throw recoverableToolError(
+            tTool(runtime, "tools.skill.skillNameRequiredOnStart"),
+            { code: "RECOVERABLE_INPUT_MISSING" },
           );
         }
         const createdTaskId = uuidv4();

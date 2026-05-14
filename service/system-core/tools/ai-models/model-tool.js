@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 
@@ -44,17 +45,17 @@ export function createModelTool({
       modelName: z.string().describe(tTool(runtime, "tools.model.fieldModelName")),
     }),
     func: async ({ modelName }) => {
-      if (!runtime || !sessionId)
-        return toToolJsonResult("switch_model", {
-          ok: false,
-          error: tModel(runtime, "sessionContextMissing"),
+      if (!runtime || !sessionId) {
+        throw recoverableToolError(tModel(runtime, "sessionContextMissing"), {
+          code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
         });
+      }
       const input = String(modelName || "").trim();
-      if (!input)
-        return toToolJsonResult("switch_model", {
-          ok: false,
-          error: tModel(runtime, "modelNameRequired"),
+      if (!input) {
+        throw recoverableToolError(tModel(runtime, "modelNameRequired"), {
+          code: "RECOVERABLE_INPUT_MISSING",
         });
+      }
       let alias = input;
       if (!allEnabledProviders[alias]) {
         const byModelName = Object.entries(allEnabledProviders).find(
@@ -63,16 +64,20 @@ export function createModelTool({
         if (byModelName) alias = byModelName[0];
       }
       if (!allEnabledProviders[alias]) {
-        return toToolJsonResult("switch_model", {
-          ok: false,
-          error: tModel(runtime, "modelNotFound", { input }),
-        });
+        throw recoverableToolError(
+          tModel(runtime, "modelNotFound", { input }),
+          {
+            code: "RECOVERABLE_MODEL_NOT_FOUND",
+          },
+        );
       }
       if (!isConversationModel(allEnabledProviders[alias])) {
-        return toToolJsonResult("switch_model", {
-          ok: false,
-          error: tModel(runtime, "notConversationModel", { alias }),
-        });
+        throw recoverableToolError(
+          tModel(runtime, "notConversationModel", { alias }),
+          {
+            code: "RECOVERABLE_MODEL_NOT_CONVERSATION",
+          },
+        );
       }
       runtime.runtimeModel = alias;
       try {

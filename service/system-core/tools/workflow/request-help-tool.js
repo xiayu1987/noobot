@@ -13,6 +13,7 @@ import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
 } from "../../model/index.js";
+import { recoverableToolError } from "../../error/index.js";
 import { invokeServiceHandler } from "../../service-invoker/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
@@ -236,10 +237,10 @@ export function createRequestHelpTool({ agentContext } = {}) {
     func: async ({ helpContent }) => {
       const normalizedHelpContent = String(helpContent || "").trim();
       if (!normalizedHelpContent) {
-        return toToolJsonResult(REQUEST_HELP_TOOL_NAME, {
-          ok: false,
-          error: tTool(runtime, "tools.request_help.helpContentRequired"),
-        });
+        throw recoverableToolError(
+          tTool(runtime, "tools.request_help.helpContentRequired"),
+          { code: "RECOVERABLE_INPUT_MISSING" },
+        );
       }
 
       const { effectiveConfig, toolConfig } = resolveHelpConfig(agentContext);
@@ -307,10 +308,28 @@ export function createRequestHelpTool({ agentContext } = {}) {
         runtime.systemRuntime.toolConsecutiveFailureCount = 0;
       }
 
+      if (status === "failed") {
+        throw recoverableToolError(
+          modelResult?.error ||
+            serviceError ||
+            tTool(runtime, "tools.request_help.helpContentRequired"),
+          {
+            code: "RECOVERABLE_REQUEST_HELP_FAILED",
+            details: {
+              status,
+              helpContent: normalizedHelpContent,
+              serviceResults,
+              modelResult,
+              ...(serviceError ? { serviceError } : {}),
+            },
+          },
+        );
+      }
+
       return toToolJsonResult(
         REQUEST_HELP_TOOL_NAME,
         {
-          ok: status !== "failed",
+          ok: true,
           status,
           helpContent: normalizedHelpContent,
           serviceResults,

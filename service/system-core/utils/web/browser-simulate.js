@@ -5,6 +5,7 @@
  */
 import { chromium } from "playwright";
 import { tSystem } from "../../i18n/system-text.js";
+import { logger } from "../../tracking/index.js";
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -172,6 +173,9 @@ export async function browseUrlHtml({
       await context.close().catch(() => {});
     }
   } catch (error) {
+    logger.error(
+      `[browseUrlHtml] ${targetUrl} failed: ${error?.message || String(error)}`,
+    );
     return {
       ok: false,
       status: 0,

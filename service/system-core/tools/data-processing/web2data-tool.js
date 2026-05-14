@@ -10,6 +10,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
+import { recoverableToolError } from "../../error/index.js";
 import {
   createChatModelByName,
   resolveDefaultModelSpec,
@@ -328,11 +329,12 @@ async function runBrowserSimulateExtract(
           }
         }
         if (!success || !loaded) {
-          throw new Error(
+          throw recoverableToolError(
             loaded?.error ||
               tWeb(runtimeContext || {}, "blockedOrUnavailable", {
                 status: loaded?.status || 0,
               }),
+            { code: "RECOVERABLE_WEB_FETCH_BLOCKED_OR_UNAVAILABLE" },
           );
         }
         const pageTitle = normalizeText(loaded.title || "");
@@ -663,14 +665,32 @@ export function createWeb2DataTool({ agentContext }) {
         useTrafilatura: useTrafilatura !== false,
         processMode,
       });
+      if (payload?.ok !== true) {
+        throw recoverableToolError(
+          String(payload?.message || tWeb(runtime, "fetchFailedNoResult")),
+          {
+            code: "RECOVERABLE_WEB_TO_DATA_FAILED",
+            details: {
+              mode: payload?.mode || processMode,
+              input: payload?.input || input || "",
+              urls: Array.isArray(payload?.urls) ? payload.urls : [],
+              successCount: Number(payload?.successCount || 0),
+              resultCount: Number(payload?.resultCount || 0),
+              imageCount: Number(payload?.imageCount || 0),
+              batchCount: Number(payload?.batchCount || 0),
+              model: payload?.model || {},
+            },
+          },
+        );
+      }
       const text = String(payload?.text || "").trim();
       return toToolJsonResult(
         "web_to_data",
         {
-          ok: payload?.ok === true,
-          status: payload?.ok === true ? "completed" : "failed",
+          ok: true,
+          status: "completed",
           mode: payload?.mode || processMode,
-          message: String(payload?.message || ""),
+          message: "",
           input: payload?.input || input || "",
           urls: Array.isArray(payload?.urls) ? payload.urls : [],
           successCount: Number(payload?.successCount || 0),

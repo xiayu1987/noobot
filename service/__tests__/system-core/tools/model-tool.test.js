@@ -74,10 +74,10 @@ test("switch_model: 不存在的模型应返回失败", async () => {
   };
   const switchModelTool = getSwitchModelTool({ runtime, sessionId: "s-3" });
 
-  const result = parseToolJson(await switchModelTool.invoke({ modelName: "not-exists" }));
-
-  assert.equal(result.ok, false);
-  assert.ok(String(result.error || "").length > 0);
+  await assert.rejects(
+    switchModelTool.invoke({ modelName: "not-exists" }),
+    (error) => error?.code === "RECOVERABLE_MODEL_NOT_FOUND",
+  );
   assert.equal(runtime.runtimeModel, "openai");
 });
 
@@ -91,10 +91,10 @@ test("switch_model: 非会话模型（used_for_conversation=false）应拒绝切
   };
   const switchModelTool = getSwitchModelTool({ runtime, sessionId: "s-4" });
 
-  const result = parseToolJson(await switchModelTool.invoke({ modelName: "image_only" }));
-
-  assert.equal(result.ok, false);
-  assert.ok(String(result.error || "").length > 0);
+  await assert.rejects(
+    switchModelTool.invoke({ modelName: "image_only" }),
+    (error) => error?.code === "RECOVERABLE_MODEL_NOT_CONVERSATION",
+  );
   assert.equal(runtime.runtimeModel, "openai");
 });
 
@@ -107,9 +107,9 @@ test("switch_model: 缺少 sessionId 时应返回 session context missing", asyn
   };
   const switchModelTool = getSwitchModelTool({ runtime, sessionId: "" });
 
-  const result = parseToolJson(await switchModelTool.invoke({ modelName: "openai" }));
-
-  assert.equal(result.ok, false);
-  assert.ok(String(result.error || "").length > 0);
+  await assert.rejects(
+    switchModelTool.invoke({ modelName: "openai" }),
+    (error) => error?.code === "RECOVERABLE_SESSION_CONTEXT_MISSING",
+  );
   assert.equal(runtime.runtimeModel, "");
 });

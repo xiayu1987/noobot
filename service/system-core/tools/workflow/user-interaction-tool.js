@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 
@@ -151,17 +152,15 @@ export function createUserInteractionTool({ agentContext }) {
     }),
     func: async ({ content, fields }) => {
       if (!bridge?.requestUserInteraction) {
-        return toToolJsonResult("user_interaction", {
-          ok: false,
-          error: tUserInteraction(runtime, "bridgeMissing"),
+        throw recoverableToolError(tUserInteraction(runtime, "bridgeMissing"), {
+          code: "RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING",
         });
       }
 
       const interactionContent = String(content || "").trim();
       if (!interactionContent) {
-        return toToolJsonResult("user_interaction", {
-          ok: false,
-          error: tUserInteraction(runtime, "contentRequired"),
+        throw recoverableToolError(tUserInteraction(runtime, "contentRequired"), {
+          code: "RECOVERABLE_INPUT_MISSING",
         });
       }
 
@@ -173,22 +172,22 @@ export function createUserInteractionTool({ agentContext }) {
             : fields || {};
         normalizedFieldsPayload = fieldsPayloadSchema.parse(parsedFields || {});
       } catch (error) {
-        return toToolJsonResult("user_interaction", {
-          ok: false,
-          error: tUserInteraction(runtime, "invalidFieldsPayload", {
+        throw recoverableToolError(
+          tUserInteraction(runtime, "invalidFieldsPayload", {
             reason: error?.message || String(error),
           }),
-        });
+          { code: "RECOVERABLE_INVALID_TOOL_INPUT" },
+        );
       }
 
       const hasSensitiveFields = (normalizedFieldsPayload.fields || []).some(
         isSensitiveField,
       );
       if (hasSensitiveFields) {
-        return toToolJsonResult("user_interaction", {
-          ok: false,
-          error: tUserInteraction(runtime, "sensitiveFieldsBlocked"),
-        });
+        throw recoverableToolError(
+          tUserInteraction(runtime, "sensitiveFieldsBlocked"),
+          { code: "RECOVERABLE_SENSITIVE_FIELDS_BLOCKED" },
+        );
       }
 
       const result = await bridge.requestUserInteraction({
@@ -206,20 +205,22 @@ export function createUserInteractionTool({ agentContext }) {
         !Array.isArray(result) &&
         result.confirmed === false
       ) {
-        return toToolJsonResult("user_interaction", {
-          ok: true,
-          confirmed: false,
-          cancelled: true,
-          response: String(result?.response || tUserInteraction(runtime, "cancelled")),
+        throw recoverableToolError(tUserInteraction(runtime, "cancelled"), {
+          code: "RECOVERABLE_USER_CANCELLED",
+          details: {
+            confirmed: false,
+            cancelled: true,
+            response: String(result?.response || tUserInteraction(runtime, "cancelled")),
+          },
         });
       }
 
       if (normalizedFieldsPayload.fields?.length) {
         if (!result || typeof result !== "object" || Array.isArray(result)) {
-          return toToolJsonResult("user_interaction", {
-            ok: false,
-            error: tUserInteraction(runtime, "invalidResponseObject"),
-          });
+          throw recoverableToolError(
+            tUserInteraction(runtime, "invalidResponseObject"),
+            { code: "RECOVERABLE_INVALID_RESPONSE_OBJECT" },
+          );
         }
         const requiredFields = normalizedFieldsPayload.fields
           .filter((item) => Boolean(item?.required))
@@ -227,10 +228,13 @@ export function createUserInteractionTool({ agentContext }) {
           .filter(Boolean);
         for (const key of requiredFields) {
           if (!String(result?.[key] ?? "").trim()) {
-            return toToolJsonResult("user_interaction", {
-              ok: false,
-              error: tUserInteraction(runtime, "missingRequiredField", { key }),
-            });
+            throw recoverableToolError(
+              tUserInteraction(runtime, "missingRequiredField", { key }),
+              {
+                code: "RECOVERABLE_MISSING_REQUIRED_FIELD",
+                details: { key },
+              },
+            );
           }
         }
         return toToolJsonResult("user_interaction", {
