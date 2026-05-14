@@ -35,7 +35,27 @@ npm run pm2:restart
 npm run pm2:logs
 ```
 
-## 3) 环境与配置
+## 3) 测试
+
+```bash
+cd service
+npm test
+```
+
+仅运行 tools 层测试：
+
+```bash
+npm run test:tools
+```
+
+`test:tools` 会覆盖 `__tests__/system-core/tools/*.test.js`，包含 agent-collab 拆分后的测试，例如：
+
+- `agent-collab-passthrough.test.js`
+- `agent-collab-wait.test.js`
+- `agent-collab-container-store.test.js`
+- `agent-collab-delegate-wait-flow.test.js`
+
+## 4) 环境与配置
 
 - `.env`：当前仅示例 `PORT=10061`
 - 全局配置：`service/config/global.config.json`
@@ -46,7 +66,7 @@ npm run pm2:logs
   - 用户级：`workspace/<userId>/config-params.json`
   - 优先级：`process.env` > `config-params.json`
 
-## 4) 认证与权限
+## 5) 认证与权限
 
 - 免鉴权：`GET /health`、`POST /internal/connect`
 - 其他接口默认要求 `apiKey`
@@ -57,7 +77,7 @@ npm run pm2:logs
   - Query `?apikey=...`
 - `/internal/admin/*` 需要超管权限（`superAdmin`）
 
-## 5) API 概览（当前代码）
+## 6) API 概览（当前代码）
 
 - 公共
   - `GET /health`
@@ -98,7 +118,7 @@ npm run pm2:logs
   - `POST /internal/admin/workspace-all/sync`
   - `POST /internal/admin/workspace-all/reset`
 
-## 6) 关键目录
+## 7) 关键目录
 
 ```
 service/

@@ -35,7 +35,27 @@ npm run pm2:restart
 npm run pm2:logs
 ```
 
-## 3) Env & Config
+## 3) Tests
+
+```bash
+cd service
+npm test
+```
+
+Tool-layer tests only:
+
+```bash
+npm run test:tools
+```
+
+`test:tools` includes `__tests__/system-core/tools/*.test.js`, including agent-collab split tests such as:
+
+- `agent-collab-passthrough.test.js`
+- `agent-collab-wait.test.js`
+- `agent-collab-container-store.test.js`
+- `agent-collab-delegate-wait-flow.test.js`
+
+## 4) Env & Config
 
 - `.env`: example includes `PORT=10061`
 - Global config: `service/config/global.config.json`
@@ -46,7 +66,7 @@ npm run pm2:logs
   - user-level: `workspace/<userId>/config-params.json`
   - priority: `process.env` > `config-params.json`
 
-## 4) Auth & Permission
+## 5) Auth & Permission
 
 - No auth required for: `GET /health`, `POST /internal/connect`
 - All other endpoints require `apiKey`
@@ -57,7 +77,7 @@ npm run pm2:logs
   - Query `?apikey=...`
 - `/internal/admin/*` requires `superAdmin`
 
-## 5) API Overview (current code)
+## 6) API Overview (current code)
 
 - Public
   - `GET /health`
@@ -98,7 +118,7 @@ npm run pm2:logs
   - `POST /internal/admin/workspace-all/sync`
   - `POST /internal/admin/workspace-all/reset`
 
-## 6) Key Directories
+## 7) Key Directories
 
 ```
 service/
