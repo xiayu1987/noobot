@@ -228,16 +228,43 @@ export async function invokeLlmWithTransientRetry({
  * Normalizes AI model response content to plain text.
  * Handles string content, array of content parts, and edge cases.
  */
-export function normalizeAiTextContent(aiContent) {
+function normalizeReasoningContent(reasoningContent = null) {
+  if (typeof reasoningContent === "string") return String(reasoningContent || "");
+  if (Array.isArray(reasoningContent)) {
+    return reasoningContent
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (!item || typeof item !== "object") return "";
+        if (typeof item?.text === "string") return item.text;
+        if (typeof item?.content === "string") return item.content;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (reasoningContent && typeof reasoningContent === "object") {
+    if (typeof reasoningContent?.text === "string") return reasoningContent.text;
+    if (typeof reasoningContent?.content === "string") return reasoningContent.content;
+  }
+  return "";
+}
+
+export function normalizeAiTextContent(aiContent, options = {}) {
+  const { additionalKwargs = null, allowReasoningFallback = false } =
+    options && typeof options === "object" ? options : {};
   if (typeof aiContent === "string") return String(aiContent || "");
-  if (!Array.isArray(aiContent)) return String(aiContent || "");
-  const textParts = aiContent
+  const normalizedRaw = !Array.isArray(aiContent)
+    ? String(aiContent || "")
+    : aiContent
     .map((contentPart) => {
       if (!contentPart || typeof contentPart !== "object") return "";
       if (typeof contentPart?.text === "string") return contentPart.text;
       if (typeof contentPart?.content === "string") return contentPart.content;
       return "";
     })
-    .filter(Boolean);
-  return textParts.join("\n");
+    .filter(Boolean)
+    .join("\n");
+  if (normalizedRaw) return normalizedRaw;
+  if (!allowReasoningFallback) return normalizedRaw;
+  return normalizeReasoningContent(additionalKwargs?.reasoning_content);
 }

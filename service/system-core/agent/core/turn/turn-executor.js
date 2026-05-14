@@ -110,7 +110,10 @@ export async function invokeNoToolsTurn({
         ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
       }),
   });
-  const responseContentText = normalizeAiTextContent(modelResponse?.content);
+  const responseContentText = normalizeAiTextContent(modelResponse?.content, {
+    additionalKwargs: modelResponse?.additional_kwargs ?? null,
+    allowReasoningFallback: true,
+  });
   messages.push(modelResponse);
 
   const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
@@ -274,13 +277,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }
   }
 
-  const aiContentText = normalizeAiTextContent(ai.content);
-  messages.push(ai);
-
-  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
-  const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
-  const currentModelInfo = resolveCurrentModelInfo(modelState);
-
   const rawCalls = Array.isArray(ai?.tool_calls) ? ai.tool_calls : [];
   const calls = rawCalls.map((call = {}) => ({
     ...call,
@@ -294,6 +290,15 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     name: String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim(),
     args: call?.args && typeof call.args === "object" ? call.args : {},
   }));
+  const aiContentText = normalizeAiTextContent(ai.content, {
+    additionalKwargs: ai?.additional_kwargs ?? null,
+    allowReasoningFallback: calls.length === 0,
+  });
+  messages.push(ai);
+
+  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
+  const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
+  const currentModelInfo = resolveCurrentModelInfo(modelState);
 
   const stateCommitter = createStateCommitter({
     messages,
