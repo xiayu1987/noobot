@@ -5,7 +5,7 @@ import {
   filterSummarizedMessages,
   normalizeContextWindow,
   normalizeRecentWindow,
-} from "../../../system-core/session/context-window-normalizer.js";
+} from "../../../system-core/session/utils/context-window-normalizer.js";
 
 test("filterSummarizedMessages removes summarized messages", () => {
   const input = [

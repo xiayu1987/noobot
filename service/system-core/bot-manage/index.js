@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { SessionManager } from "../session/index.js";
+import { createSessionFacade, createSessionServices } from "../session/index.js";
 import { MemoryService } from "../memory/index.js";
 import { AttachmentService } from "../attach/index.js";
 import { SkillService } from "../skill/index.js";
@@ -17,7 +17,8 @@ export class BotManager {
   constructor(globalConfig) {
     this.globalConfig = globalConfig;
 
-    this.session = new SessionManager(globalConfig);
+    this.sessionRuntime = createSessionServices(globalConfig);
+    this.session = createSessionFacade(this.sessionRuntime);
     this.memory = new MemoryService(globalConfig);
     this.attach = new AttachmentService(globalConfig);
     this.skill = new SkillService(globalConfig);

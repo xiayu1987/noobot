@@ -4,357 +4,292 @@
  * SPDX-License-Identifier: MIT
  */
 import { PathResolver } from "./path-resolver.js";
+import { SessionPathResolver } from "./session-path-resolver.js";
 import { StorageService } from "./storage-service.js";
 import {
   normalizeMessagesEntity,
   normalizeSelectedConnectors,
   normalizeTaskEntity,
-} from "./entities.js";
+} from "./entities/normalizers.js";
 import { FileSystemSessionTreeRepository } from "./repositories/file-system-session-tree-repository.js";
 import { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
 import { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
 import { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
-import { SessionService } from "./session-service.js";
-import { SessionContextService } from "./session-context-service.js";
-import { TaskService } from "./task-service.js";
-import { ExecutionService } from "./execution-service.js";
+import { SessionTreeService } from "./services/session-tree-service.js";
+import { SessionCrudService } from "./services/session-crud-service.js";
+import { SessionMessageService } from "./services/session-message-service.js";
+import { SessionContextService } from "./services/session-context-service.js";
+import { TaskService } from "./services/task-service.js";
+import { ExecutionLogRepository } from "../tracking/execution-log/execution-log-repository.js";
+import { ExecutionLogService } from "../tracking/execution-log/execution-log-service.js";
 
-export class SessionManager {
-  constructor(globalConfig) {
-    this.globalConfig = globalConfig;
-
-    this.pathResolver = new PathResolver(globalConfig || {});
-    this.storageService = new StorageService({
-      pathResolver: this.pathResolver,
-    });
-
-    this.sessionTreeRepository = new FileSystemSessionTreeRepository({
-      pathResolver: this.pathResolver,
-      storageService: this.storageService,
-      now: () => this._now(),
-    });
-    this.sessionRepository = new FileSystemSessionRepository({
-      pathResolver: this.pathResolver,
-      storageService: this.storageService,
-      treeRepository: this.sessionTreeRepository,
-      normalizeMessages: (messages) =>
-        normalizeMessagesEntity(messages, () => this._now()),
-      normalizeSelectedConnectors,
-      now: () => this._now(),
-    });
-    this.taskRepository = new FileSystemTaskRepository({
-      sessionRepository: this.sessionRepository,
-      normalizeTask: normalizeTaskEntity,
-      now: () => this._now(),
-    });
-    this.executionRepository = new FileSystemExecutionRepository({
-      sessionRepository: this.sessionRepository,
-      now: () => this._now(),
-    });
-
-    this.sessionService = new SessionService({
-      sessionRepo: this.sessionRepository,
-      treeRepo: this.sessionTreeRepository,
-      now: () => this._now(),
-    });
-    this.sessionContextService = new SessionContextService({
-      globalConfig: this.globalConfig,
-      sessionService: this.sessionService,
-    });
-    this.taskService = new TaskService({
-      taskRepo: this.taskRepository,
-      sessionRepo: this.sessionRepository,
-      now: () => this._now(),
-    });
-    this.executionService = new ExecutionService({
-      executionRepo: this.executionRepository,
-      sessionRepo: this.sessionRepository,
-    });
-  }
-
-  _now() {
-    return new Date().toISOString();
-  }
-
-  async ensureRuntimeDirs(userId) {
-    return this.sessionService.ensureRuntimeDirs(userId);
-  }
-
-  async upsertSessionTree({ userId, sessionId, parentSessionId = "" }) {
-    return this.sessionService.upsertSessionTree({
-      userId,
-      sessionId,
-      parentSessionId,
-    });
-  }
-
-  async getSessionTree({ userId }) {
-    return this.sessionService.getSessionTree({ userId });
-  }
-
-  async getRootSessionId({ userId, sessionId, sessionTree = null }) {
-    return this.sessionService.getRootSessionId({ userId, sessionId, sessionTree });
-  }
-
-  async getSessionDepth({ userId, sessionId }) {
-    return this.sessionService.getSessionDepth({ userId, sessionId });
-  }
-
-  async getSessionData({ userId, sessionId }) {
-    return this.sessionService.getSessionData({ userId, sessionId });
-  }
-
-  async getAllSessionsData({ userId }) {
-    return this.sessionService.getAllSessionsData({ userId });
-  }
-
-  async listSessionIds({ userId }) {
-    return this.sessionService.listSessionIds({ userId });
-  }
-
-  async ensureSession(userId, sessionId, parentSessionId = "", meta = {}) {
-    return this.sessionService.ensureSession(
-      userId,
-      sessionId,
-      parentSessionId,
-      meta,
-    );
-  }
-
-  async createSession({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    caller = "user",
-    modelAlias = "",
-  }) {
-    return this.sessionService.createSession({
-      userId,
-      sessionId,
-      parentSessionId,
-      caller,
-      modelAlias,
-    });
-  }
-
-  async getSessionBundle({ userId, sessionId, parentSessionId = "" }) {
-    return this.sessionService.getSessionBundle({
-      userId,
-      sessionId,
-      parentSessionId,
-    });
-  }
-
-  async appendTurn({
-    userId,
-    sessionId,
-    role,
-    content,
-    type = "",
-    taskId = null,
-    taskStatus = null,
-    dialogProcessId = "",
-    parentDialogProcessId = "",
-    tool_calls = null,
-    tool_call_id = "",
-    attachmentMetas = [],
-    modelAlias = "",
-    modelName = "",
-    summarized = false,
-    toolName = "",
-    rawModelContent = null,
-    modelAdditionalKwargs = null,
-    modelResponseMetadata = null,
-    parentSessionId = "",
-  }) {
-    return this.sessionService.appendTurn({
-      userId,
-      sessionId,
-      role,
-      content,
-      type,
-      taskId,
-      taskStatus,
-      dialogProcessId,
-      parentDialogProcessId,
-      tool_calls,
-      tool_call_id,
-      attachmentMetas,
-      modelAlias,
-      modelName,
-      summarized,
-      toolName,
-      rawModelContent,
-      modelAdditionalKwargs,
-      modelResponseMetadata,
-      parentSessionId,
-    });
-  }
-
-  async markSessionMessagesSummarized({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    shouldMark = null,
-  } = {}) {
-    return this.sessionService.markSessionMessagesSummarized({
-      userId,
-      sessionId,
-      parentSessionId,
-      shouldMark,
-    });
-  }
-
-  async getSessionTurns({ userId, sessionId }) {
-    return this.sessionService.getSessionTurns({ userId, sessionId });
-  }
-
-  async hasDialogProcessIdInSession({
-    userId,
-    sessionId,
-    dialogProcessId = "",
-    parentSessionId = "",
-  }) {
-    return this.sessionService.hasDialogProcessIdInSession({
-      userId,
-      sessionId,
-      dialogProcessId,
-      parentSessionId,
-    });
-  }
-
-  async getExecutionBundle({ userId, sessionId }) {
-    return this.executionService.getExecutionBundle({ userId, sessionId });
-  }
-
-  async appendExecutionLog({
-    userId,
-    sessionId,
-    dialogProcessId = "",
-    event = "",
-    category = "",
-    type = "",
-    data = {},
-    ts = "",
-    parentSessionId = "",
-  }) {
-    return this.executionService.appendExecutionLog({
-      userId,
-      sessionId,
-      dialogProcessId,
-      event,
-      category,
-      type,
-      data,
-      ts,
-      parentSessionId,
-    });
-  }
-
-  async getRecentSessionMessages({ userId, sessionId, limit, userConfig = {} }) {
-    return this.sessionContextService.getRecentSessionMessages({
-      userId,
-      sessionId,
-      limit,
-      userConfig,
-    });
-  }
-
-  async getMessagesSinceLastRunningTask({ userId, sessionId }) {
-    return this.sessionContextService.getMessagesSinceLastRunningTask({
-      userId,
-      sessionId,
-    });
-  }
-
-  async getMessagesSinceLastCompletedTask({ userId, sessionId }) {
-    return this.sessionContextService.getMessagesSinceLastCompletedTask({
-      userId,
-      sessionId,
-    });
-  }
-
-  async getContextRecords({ userId, sessionId, userConfig = {} }) {
-    return this.sessionContextService.getContextRecords({
-      userId,
-      sessionId,
-      userConfig,
-    });
-  }
-
-  async startSkillTask({
-    userId,
-    sessionId,
-    skillName,
-    taskName = "",
-    meta = {},
-    parentSessionId = "",
-  }) {
-    return this.taskService.startSkillTask({
-      userId,
-      sessionId,
-      skillName,
-      taskName,
-      meta,
-      parentSessionId,
-    });
-  }
-
-  async finishSkillTask({
-    userId,
-    sessionId,
-    taskId,
-    result = "",
-    parentSessionId = "",
-  }) {
-    return this.taskService.finishSkillTask({
-      userId,
-      sessionId,
-      taskId,
-      result,
-      parentSessionId,
-    });
-  }
-
-  async saveCurrentTurnTasks({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    currentTurnTasks = [],
-  }) {
-    return this.taskService.saveCurrentTurnTasks({
-      userId,
-      sessionId,
-      parentSessionId,
-      currentTurnTasks,
-    });
-  }
-
-  async setSessionModelAlias({ userId, sessionId, modelAlias }) {
-    return this.sessionService.setSessionModelAlias({
-      userId,
-      sessionId,
-      modelAlias,
-    });
-  }
-
-  async getRootSessionSelectedConnectors({ userId, sessionId }) {
-    return this.sessionService.getRootSessionSelectedConnectors({ userId, sessionId });
-  }
-
-  async setRootSessionSelectedConnectors({
-    userId,
-    sessionId,
-    selectedConnectors = {},
-  }) {
-    return this.sessionService.setRootSessionSelectedConnectors({
-      userId,
-      sessionId,
-      selectedConnectors,
-    });
-  }
-
-  async deleteSessionBranch({ userId, sessionId }) {
-    return this.sessionService.deleteSessionBranch({ userId, sessionId });
-  }
+function createNow(now = null) {
+  if (typeof now === "function") return now;
+  return () => new Date().toISOString();
 }
+
+export function createSessionServices(globalConfig = {}, { now = null } = {}) {
+  const nowFn = createNow(now);
+  const pathResolver = new PathResolver(globalConfig || {});
+  const storageService = new StorageService({ pathResolver });
+
+  const sessionTreeRepository = new FileSystemSessionTreeRepository({
+    pathResolver,
+    storageService,
+    now: nowFn,
+  });
+
+  const sessionPathResolver = new SessionPathResolver({
+    pathResolver,
+    treeRepository: sessionTreeRepository,
+  });
+
+  const sessionRepository = new FileSystemSessionRepository({
+    pathResolver,
+    sessionPathResolver,
+    storageService,
+    normalizeMessages: (messages) => normalizeMessagesEntity(messages, nowFn),
+    normalizeSelectedConnectors,
+    now: nowFn,
+  });
+
+  const taskRepository = new FileSystemTaskRepository({
+    pathResolver,
+    sessionPathResolver,
+    storageService,
+    normalizeTask: normalizeTaskEntity,
+    now: nowFn,
+  });
+
+  const fileSystemExecutionRepository = new FileSystemExecutionRepository({
+    pathResolver,
+    sessionPathResolver,
+    storageService,
+    now: nowFn,
+  });
+
+  const executionRepository = new ExecutionLogRepository({
+    executionRepository: fileSystemExecutionRepository,
+    now: nowFn,
+  });
+
+  const sessionTreeService = new SessionTreeService({
+    sessionRepo: sessionRepository,
+    treeRepo: sessionTreeRepository,
+    now: nowFn,
+  });
+
+  const sessionCrudService = new SessionCrudService({
+    sessionRepo: sessionRepository,
+    taskRepo: taskRepository,
+    treeRepo: sessionTreeRepository,
+    sessionTreeService,
+    now: nowFn,
+  });
+
+  const sessionMessageService = new SessionMessageService({
+    sessionRepo: sessionRepository,
+    sessionCrudService,
+    now: nowFn,
+  });
+
+  const sessionContextService = new SessionContextService({
+    globalConfig,
+    sessionMessageService,
+  });
+
+  const taskService = new TaskService({
+    taskRepo: taskRepository,
+    sessionRepo: sessionRepository,
+    now: nowFn,
+  });
+
+  const executionLogService = new ExecutionLogService({
+    executionRepo: executionRepository,
+    sessionRepo: sessionRepository,
+  });
+
+  return {
+    pathResolver,
+    sessionPathResolver,
+    storageService,
+    sessionTreeService,
+    sessionCrudService,
+    sessionMessageService,
+    sessionContextService,
+    taskService,
+    executionLogService,
+    repositories: {
+      sessionTreeRepository,
+      sessionRepository,
+      taskRepository,
+      fileSystemExecutionRepository,
+      executionRepository,
+    },
+    services: {
+      sessionTreeService,
+      sessionCrudService,
+      sessionMessageService,
+      sessionContextService,
+      taskService,
+      executionLogService,
+    },
+  };
+}
+
+export function createSessionFacade(runtime = {}) {
+  const services = runtime.services || runtime;
+  const {
+    sessionTreeService,
+    sessionCrudService,
+    sessionMessageService,
+    sessionContextService,
+    taskService,
+    executionLogService,
+  } = services;
+
+  return {
+    async ensureRuntimeDirs(userId) {
+      return sessionTreeService.ensureRuntimeDirs(userId);
+    },
+
+    async upsertSessionTree({ userId, sessionId, parentSessionId = "" }) {
+      return sessionTreeService.upsertSessionTree({ userId, sessionId, parentSessionId });
+    },
+
+    async getSessionTree({ userId }) {
+      return sessionTreeService.getSessionTree({ userId });
+    },
+
+    async getRootSessionId({ userId, sessionId, sessionTree = null }) {
+      return sessionTreeService.getRootSessionId({ userId, sessionId, sessionTree });
+    },
+
+    async getSessionDepth({ userId, sessionId }) {
+      return sessionTreeService.getSessionDepth({ userId, sessionId });
+    },
+
+    async getSessionData({ userId, sessionId }) {
+      return sessionCrudService.getSessionData({ userId, sessionId });
+    },
+
+    async getAllSessionsData({ userId }) {
+      return sessionCrudService.getAllSessionsData({ userId });
+    },
+
+    async listSessionIds({ userId }) {
+      return sessionCrudService.listSessionIds({ userId });
+    },
+
+    async ensureSession(userId, sessionId, parentSessionId = "", meta = {}) {
+      return sessionCrudService.ensureSession(userId, sessionId, parentSessionId, meta);
+    },
+
+    async createSession(payload = {}) {
+      return sessionCrudService.createSession(payload);
+    },
+
+    async getSessionBundle(payload = {}) {
+      return sessionCrudService.getSessionBundle(payload);
+    },
+
+    async appendTurn(payload = {}) {
+      return sessionMessageService.appendTurn(payload);
+    },
+
+    async markSessionMessagesSummarized(payload = {}) {
+      return sessionMessageService.markSessionMessagesSummarized(payload);
+    },
+
+    async getSessionTurns({ userId, sessionId }) {
+      return sessionMessageService.getSessionTurns({ userId, sessionId });
+    },
+
+    async hasDialogProcessIdInSession(payload = {}) {
+      return sessionMessageService.hasDialogProcessIdInSession(payload);
+    },
+
+    async getExecutionBundle({ userId, sessionId }) {
+      return executionLogService.getExecutionBundle({ userId, sessionId });
+    },
+
+    async appendExecutionLog(payload = {}) {
+      return executionLogService.appendExecutionLog(payload);
+    },
+
+    async getRecentSessionMessages({ userId, sessionId, limit, userConfig = {} }) {
+      return sessionContextService.getRecentSessionMessages({
+        userId,
+        sessionId,
+        limit,
+        userConfig,
+      });
+    },
+
+    async getMessagesSinceLastRunningTask({ userId, sessionId }) {
+      return sessionContextService.getMessagesSinceLastRunningTask({ userId, sessionId });
+    },
+
+    async getMessagesSinceLastCompletedTask({ userId, sessionId }) {
+      return sessionContextService.getMessagesSinceLastCompletedTask({ userId, sessionId });
+    },
+
+    async getContextRecords({ userId, sessionId, userConfig = {} }) {
+      return sessionContextService.getContextRecords({ userId, sessionId, userConfig });
+    },
+
+    async startSkillTask(payload = {}) {
+      return taskService.startSkillTask(payload);
+    },
+
+    async finishSkillTask(payload = {}) {
+      return taskService.finishSkillTask(payload);
+    },
+
+    async saveCurrentTurnTasks(payload = {}) {
+      return taskService.saveCurrentTurnTasks(payload);
+    },
+
+    async setSessionModelAlias({ userId, sessionId, modelAlias }) {
+      return sessionCrudService.setSessionModelAlias({ userId, sessionId, modelAlias });
+    },
+
+    async getRootSessionSelectedConnectors({ userId, sessionId }) {
+      return sessionCrudService.getRootSessionSelectedConnectors({ userId, sessionId });
+    },
+
+    async setRootSessionSelectedConnectors({ userId, sessionId, selectedConnectors = {} }) {
+      return sessionCrudService.setRootSessionSelectedConnectors({
+        userId,
+        sessionId,
+        selectedConnectors,
+      });
+    },
+
+    async deleteSessionBranch({ userId, sessionId }) {
+      return sessionTreeService.deleteSessionBranch({ userId, sessionId });
+    },
+  };
+}
+
+export { SessionTreeService } from "./services/session-tree-service.js";
+export { SessionCrudService } from "./services/session-crud-service.js";
+export { SessionMessageService } from "./services/session-message-service.js";
+export { SessionContextService } from "./services/session-context-service.js";
+export { TaskService } from "./services/task-service.js";
+export { ExecutionLogService } from "../tracking/execution-log/execution-log-service.js";
+export { PathResolver } from "./path-resolver.js";
+export { SessionPathResolver } from "./session-path-resolver.js";
+export { StorageService } from "./storage-service.js";
+export { FileSystemSessionTreeRepository } from "./repositories/file-system-session-tree-repository.js";
+export { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
+export { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
+export { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
+export {
+  normalizeMessageEntity,
+  normalizeMessagesEntity,
+  normalizeSelectedConnectors,
+  normalizeSessionTreeEntity,
+  normalizeTaskEntity,
+  normalizeExecutionLogEntity,
+} from "./entities/normalizers.js";
