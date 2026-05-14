@@ -3,24 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createFileTool } from "./file-tool.js";
-import { createWaitTool } from "./wait-tool.js";
-import { createScriptTool } from "./script-tool.js";
-import { createSkillTool } from "./skill-tool.js";
-import { createContentProcessTool } from "./content-process-tool.js";
-import { createServiceTool } from "./service-tool.js";
-import { createAgentCollabTool } from "./agent-collab-tool.js";
-import { createModelTool } from "./model-tool.js";
-import { createUserInteractionTool } from "./user-interaction-tool.js";
-import { createMcpTool } from "./mcp-tool.js";
-import { createConnectorAccessTool } from "./connector-tools/connector-access-tool.js";
-import { createMultimodalGenerateTool } from "./multimodal-generate-tool.js";
-import { createTaskSummaryTool } from "./task-summary-tool.js";
-import { createRequestHelpTool } from "./request-help-tool.js";
+import { createFileTool } from "./execution/file-tool.js";
+import { createWaitTool } from "./workflow/wait-tool.js";
+import { createScriptTool } from "./execution/script-tool.js";
+import { createSkillTool } from "./execution/skill-tool.js";
+import { createContentProcessTool } from "./data-processing/content-process-tool.js";
+import { createServiceTool } from "./execution/service-tool.js";
+import { createAgentCollabTool } from "./workflow/agent-collab-tool.js";
+import { createModelTool } from "./ai-models/model-tool.js";
+import { createUserInteractionTool } from "./workflow/user-interaction-tool.js";
+import { createMcpTool } from "./execution/mcp-tool.js";
+import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
+import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-tool.js";
+import { createTaskSummaryTool } from "./workflow/task-summary-tool.js";
+import { createRequestHelpTool } from "./workflow/request-help-tool.js";
 import {
   FINAL_ANSWER_TOOL_NAME,
   createFinalAnswerTool,
-} from "./final-answer-tool.js";
+} from "./workflow/final-answer-tool.js";
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 import { resolveForceToolCall } from "../utils/shared-utils.js";

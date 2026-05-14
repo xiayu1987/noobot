@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgentCollabTool } from "../../../system-core/tools/agent-collab-tool.js";
+import { createAgentCollabTool } from "../../../system-core/tools/workflow/agent-collab-tool.js";
 
 function parseToolJson(text = "") {
   return JSON.parse(String(text || "{}"));

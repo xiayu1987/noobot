@@ -12,7 +12,7 @@ import {
   HELP_TOOL_FAILURE_PROMPT_MARKER,
   TASK_SUMMARY_TOOL_NAME,
 } from "./constants/index.js";
-import { REQUEST_HELP_TOOL_NAME } from "../../tools/request-help-tool.js";
+import { REQUEST_HELP_TOOL_NAME } from "../../tools/workflow/request-help-tool.js";
 
 // ── Helpers ──
 
