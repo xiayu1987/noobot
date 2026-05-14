@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createConnectorChannelTools } from "../../../system-core/tools/connectors/connector-channel-tools.js";
+import { createConnectorTools } from "../../../system-core/tools/connectors/connector-toolkit.js";
 
 function parseToolJson(raw = "") {
   return JSON.parse(String(raw || "{}"));
 }
 
-test("inspect_connectors: 应返回连接器汇总", async () => {
+test("connector-toolkit/inspect_connectors: 应返回连接器汇总", async () => {
   const runtime = {
     systemRuntime: {
       sessionId: "s-child",
@@ -42,7 +42,7 @@ test("inspect_connectors: 应返回连接器汇总", async () => {
     userConfig: {},
   };
 
-  const tools = createConnectorChannelTools({
+  const tools = createConnectorTools({
     agentContext: { runtime },
   });
   const inspectTool = tools.find((tool) => tool?.name === "inspect_connectors");

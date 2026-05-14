@@ -11,7 +11,7 @@ import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
-import { createConnectorChannelTools } from "./connector-channel-tools.js";
+import { createConnectorTools } from "./connector-toolkit.js";
 
 
 export function createConnectorAccessTool({ agentContext }) {
@@ -65,7 +65,7 @@ export function createConnectorAccessTool({ agentContext }) {
         );
       }
       const subTools = [
-        ...createConnectorChannelTools({ agentContext }),
+        ...createConnectorTools({ agentContext }),
       ];
       if (!subTools.length) {
         throw recoverableToolError(

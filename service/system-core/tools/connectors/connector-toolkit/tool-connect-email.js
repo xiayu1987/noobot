@@ -3,15 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createConnectConnectorTool } from "./base-connector-tool.js";
+import { createConnectConnectorTool } from "../base-connector-tool.js";
 import {
   emailFields,
   normalizeProvidedEmailDefaults,
-} from "./connector-toolkit.js";
+} from "./connector-fields.js";
 
-/**
- * Create the email connector connect tool.
- */
 export function createEmailConnectorTools(context = {}) {
   return [
     createConnectConnectorTool({

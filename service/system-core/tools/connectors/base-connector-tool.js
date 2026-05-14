@@ -12,23 +12,29 @@ import {
   tToolParamDescription,
 } from "../core/tool-schema-i18n.js";
 import {
-  addRuntimeConnectorChannel,
   alignFieldsWithConnectionInfo,
   attachDefaultValuesToFields,
+  collectNonSensitiveDefaults,
+  getMissingFieldNames,
+} from "./connector-toolkit/connector-fields.js";
+import {
+  mergeConnectionInfo,
+  resolveConfiguredConnectorInfo,
+} from "./connector-toolkit/connector-resolver.js";
+import {
+  addRuntimeConnectorChannel,
   buildAlreadyConnectedResponse,
   buildConnectionStatusPayload,
   buildRuntimeConnectorStatus,
-  collectNonSensitiveDefaults,
   findConnectedConnector,
-  getMissingFieldNames,
   isUserCancelledInteraction,
   maskConnectionInfo,
-  mergeConnectionInfo,
-  resolveRememberedConnectorInfo,
-  resolveConfiguredConnectorInfo,
-  resolveRuntimeLocale,
   tConnector,
-} from "./connector-toolkit.js";
+} from "./connector-toolkit/connector-runtime.js";
+import {
+  resolveRememberedConnectorInfo,
+  resolveRuntimeLocale,
+} from "./connector-toolkit/connector-context.js";
 import { tTool } from "../core/tool-i18n.js";
 
 /**
