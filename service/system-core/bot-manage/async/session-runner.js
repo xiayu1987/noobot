@@ -11,6 +11,8 @@ import {
   MIN_WAIT_ASYNC_TIMEOUT_MS,
 } from "./constants.js";
 
+const POLL_INTERVAL_MS = 300;
+
 /**
  * Session-specific async wrappers (legacy API compatibility).
  */
@@ -313,7 +315,7 @@ export class AsyncSessionRunner {
       if (["completed", "failed", "stopped"].includes(String(job?.status || ""))) {
         return resolveDone(job);
       }
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }
 
     const latest = this.jobs.get(key);

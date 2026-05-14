@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { withJsonError } from "./route-wrapper.js";
+import { createJsonRouteWrapper } from "./route-wrapper.js";
 
 export function registerSessionRoutes(
   app,
@@ -15,21 +15,23 @@ export function registerSessionRoutes(
     translateText,
   } = {},
 ) {
+  const jsonRoute = createJsonRouteWrapper({ translateText });
+
   app.get(
     "/internal/session/:userId/:sessionId",
-    withJsonError(async (req, res) => {
+    jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
       const result = await bot.session.getSessionData({
         userId,
         sessionId,
       });
       res.json({ ok: true, ...result });
-    }, { translateText }),
+    }),
   );
 
   app.delete(
     "/internal/session/:userId/:sessionId",
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
       const { userId, sessionId } = req.params;
       const normalizedSessionId = String(sessionId || "").trim();
@@ -87,22 +89,22 @@ export function registerSessionRoutes(
         deletedConnectorHistory,
       });
       },
-      { fallbackErrorKey: "common.deleteSessionFailed", translateText },
+      { fallbackErrorKey: "common.deleteSessionFailed" },
     ),
   );
 
   app.get(
     "/internal/sessions/:userId",
-    withJsonError(async (req, res) => {
+    jsonRoute(async (req, res) => {
       const { userId } = req.params;
       const sessions = await bot.session.getAllSessionsData({ userId });
       res.json({ ok: true, userId, sessions });
-    }, { translateText }),
+    }),
   );
 
   app.get(
     "/internal/attachment/:userId/:attachmentId",
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
       const { userId, attachmentId } = req.params;
       const sessionId = String(req.query?.sessionId || "").trim();
@@ -128,7 +130,6 @@ export function registerSessionRoutes(
       {
         statusCode: 404,
         fallbackErrorKey: "common.notFound",
-        translateText,
       },
     ),
   );

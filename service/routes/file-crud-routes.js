@@ -6,12 +6,12 @@
 import path from "node:path";
 import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { safeJoin } from "../system-core/utils/fs-safe.js";
-import { withJsonError } from "./route-wrapper.js";
+import { createJsonRouteWrapper } from "./route-wrapper.js";
 
 /**
  * @typedef {Object} FileCrudRouteOptions
  * @property {string} routePrefix - URL prefix for the routes (e.g. "/internal/admin/workspace-all")
- * @property {() => string} resolveRootPath - Function that returns the absolute root directory
+ * @property {(req?: import("express").Request) => (string | Promise<string>)} resolveRootPath - Function that returns the absolute root directory
  * @property {Function} [middleware] - Optional Express middleware(s) to apply to all routes (e.g. requireApiKey, requireSuperAdmin)
  * @property {Function} buildWorkspaceTree - Function to build directory tree
  * @property {Function} [buildDirectoryArchiveFile] - Function to create a zip archive of a directory. If omitted, the /download route is not registered.
@@ -21,6 +21,10 @@ import { withJsonError } from "./route-wrapper.js";
  * @property {string} [i18nKeys.readFailed] - Default: "common.readWorkspaceFileFailed"
  * @property {string} [i18nKeys.saveFailed] - Default: "common.saveWorkspaceFileFailed"
  * @property {string} [i18nKeys.downloadFailed] - Default: "common.downloadWorkspaceFileFailed"
+ * @property {Object} [responseBuilders] - Optional response payload builders
+ * @property {(ctx: {req: import("express").Request, root: string, tree: any}) => object} [responseBuilders.tree] - Build response for /tree
+ * @property {(ctx: {req: import("express").Request, path: string, isText: boolean, size: number, content: string}) => object} [responseBuilders.file] - Build response for /file GET
+ * @property {(ctx: {req: import("express").Request, path: string}) => object} [responseBuilders.save] - Build response for /file PUT
  */
 
 const DEFAULT_I18N_KEYS = {
@@ -49,23 +53,43 @@ export function registerFileCrudRoutes(
     buildDirectoryArchiveFile,
     translateText,
     i18nKeys = {},
+    responseBuilders = {},
   } = {},
 ) {
   const keys = { ...DEFAULT_I18N_KEYS, ...i18nKeys };
   const middlewares = middleware ? (Array.isArray(middleware) ? middleware : [middleware]) : [];
+  const jsonRoute = createJsonRouteWrapper({ translateText });
+  const buildTreeResponse =
+    typeof responseBuilders?.tree === "function"
+      ? responseBuilders.tree
+      : ({ root, tree }) => ({ ok: true, root, tree });
+  const buildFileResponse =
+    typeof responseBuilders?.file === "function"
+      ? responseBuilders.file
+      : ({ path, isText, size, content }) => ({
+          ok: true,
+          path,
+          isText,
+          size,
+          content,
+        });
+  const buildSaveResponse =
+    typeof responseBuilders?.save === "function"
+      ? responseBuilders.save
+      : ({ path }) => ({ ok: true, path });
 
   // GET tree
   app.get(
     `${routePrefix}/tree`,
     ...middlewares,
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
-      const root = resolveRootPath();
+      const root = await resolveRootPath(req);
       await mkdir(root, { recursive: true });
       const tree = await buildWorkspaceTree(root);
-      res.json({ ok: true, root, tree });
+      res.json(buildTreeResponse({ req, root, tree }));
       },
-      { fallbackErrorKey: keys.treeFailed, translateText },
+      { fallbackErrorKey: keys.treeFailed },
     ),
   );
 
@@ -73,11 +97,11 @@ export function registerFileCrudRoutes(
   app.get(
     `${routePrefix}/file`,
     ...middlewares,
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
       const relativePath = String(req.query.path || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const root = resolveRootPath();
+      const root = await resolveRootPath(req);
       const absolutePath = safeJoin(root, relativePath);
       await access(absolutePath);
       const fileStats = await stat(absolutePath);
@@ -85,9 +109,17 @@ export function registerFileCrudRoutes(
       const contentBuffer = await readFile(absolutePath);
       const isText = !contentBuffer.includes(0);
       const content = isText ? contentBuffer.toString("utf8") : "";
-      res.json({ ok: true, path: relativePath, isText, size: fileStats.size, content });
+      res.json(
+        buildFileResponse({
+          req,
+          path: relativePath,
+          isText,
+          size: fileStats.size,
+          content,
+        }),
+      );
       },
-      { fallbackErrorKey: keys.readFailed, translateText },
+      { fallbackErrorKey: keys.readFailed },
     ),
   );
 
@@ -95,18 +127,18 @@ export function registerFileCrudRoutes(
   app.put(
     `${routePrefix}/file`,
     ...middlewares,
-    withJsonError(
+    jsonRoute(
       async (req, res) => {
       const relativePath = String(req.body?.path || "");
       const content = String(req.body?.content || "");
       if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-      const root = resolveRootPath();
+      const root = await resolveRootPath(req);
       const absolutePath = safeJoin(root, relativePath);
       await mkdir(path.dirname(absolutePath), { recursive: true });
       await writeFile(absolutePath, content, "utf8");
-      res.json({ ok: true, path: relativePath });
+      res.json(buildSaveResponse({ req, path: relativePath }));
       },
-      { fallbackErrorKey: keys.saveFailed, translateText },
+      { fallbackErrorKey: keys.saveFailed },
     ),
   );
 
@@ -115,11 +147,11 @@ export function registerFileCrudRoutes(
     app.get(
       `${routePrefix}/download`,
       ...middlewares,
-      withJsonError(
+      jsonRoute(
         async (req, res) => {
         const relativePath = String(req.query.path || "");
         if (!relativePath) throw new Error(translateText("common.pathRequired", req.locale));
-        const root = resolveRootPath();
+        const root = await resolveRootPath(req);
         const absolutePath = safeJoin(root, relativePath);
         await access(absolutePath);
         const fileStats = await stat(absolutePath);
@@ -141,7 +173,7 @@ export function registerFileCrudRoutes(
         res.on("finish", cleanupTemp);
         res.download(archiveMeta.archiveFilePath, archiveMeta.archiveFileName);
         },
-        { fallbackErrorKey: keys.downloadFailed, translateText },
+        { fallbackErrorKey: keys.downloadFailed },
       ),
     );
   }

@@ -27,3 +27,21 @@ export function withJsonError(
     return undefined;
   };
 }
+
+export function createJsonRouteWrapper(
+  {
+    statusCode = 400,
+    fallbackErrorKey = "",
+    translateText = () => "",
+  } = {},
+) {
+  return (handler, overrideOptions = {}) =>
+    withJsonError(handler, {
+      statusCode,
+      fallbackErrorKey,
+      translateText,
+      ...(overrideOptions && typeof overrideOptions === "object"
+        ? overrideOptions
+        : {}),
+    });
+}
