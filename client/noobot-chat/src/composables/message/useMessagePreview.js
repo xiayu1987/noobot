@@ -290,7 +290,18 @@ export function useMessagePreview({
         { userId: normalizedUserId, path: relativePath },
         { fetcher: authFetch || undefined },
       );
-      const data = await res.json();
+      const contentType = String(res.headers?.get("content-type") || "").toLowerCase();
+      let data = null;
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const rawText = await res.text();
+        try {
+          data = JSON.parse(String(rawText || "{}"));
+        } catch {
+          throw new Error(translate("message.previewFailedHttp", { status: res.status || 500 }));
+        }
+      }
       if (!res.ok || !data.ok) {
         throw new Error(data?.error || translate("message.previewFailed"));
       }

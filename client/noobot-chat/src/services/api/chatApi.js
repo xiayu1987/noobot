@@ -110,7 +110,7 @@ export function buildChatWebSocketUrl({ apiKey = "" } = {}) {
 
 export async function getWorkspaceTreeApi({ userId = "" }, { fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
-  return runFetch(`/api/internal/workspace/tree/${encodeURIComponent(userId)}`);
+  return runFetch(`/api/internal/workspace/${encodeURIComponent(userId)}/tree`);
 }
 
 export async function getWorkspaceAllTreeApi({ fetcher } = {}) {
@@ -186,7 +186,7 @@ export async function getWorkspaceFileApi(
 ) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch(
-    `/api/internal/workspace/file/${encodeURIComponent(userId)}?path=${encodeURIComponent(path)}`,
+    `/api/internal/workspace/${encodeURIComponent(userId)}/file?path=${encodeURIComponent(path)}`,
   );
 }
 
@@ -196,7 +196,7 @@ export async function downloadWorkspaceFileApi(
 ) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch(
-    `/api/internal/workspace/download/${encodeURIComponent(userId)}?path=${encodeURIComponent(path)}`,
+    `/api/internal/workspace/${encodeURIComponent(userId)}/download?path=${encodeURIComponent(path)}`,
   );
 }
 
@@ -205,7 +205,7 @@ export async function putWorkspaceFileApi(
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
-  return runFetch(`/api/internal/workspace/file/${encodeURIComponent(userId)}`, {
+  return runFetch(`/api/internal/workspace/${encodeURIComponent(userId)}/file`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, content }),
@@ -279,7 +279,7 @@ export function buildWorkspaceDownloadUrl({
   path = "",
   apiKey = "",
 }) {
-  const baseUrl = `/api/internal/workspace/download/${encodeURIComponent(userId)}?path=${encodeURIComponent(path)}`;
+  const baseUrl = `/api/internal/workspace/${encodeURIComponent(userId)}/download?path=${encodeURIComponent(path)}`;
   return apiKey
     ? `${baseUrl}&apikey=${encodeURIComponent(apiKey)}`
     : baseUrl;
