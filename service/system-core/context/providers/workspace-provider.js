@@ -38,9 +38,10 @@ export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
       if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
       directories.add(path.posix.join("runtime", entry.name));
     }
-  } catch {}
+  } catch {
+    // runtime/ is optional; ignore when missing or inaccessible.
+  }
   return Array.from(directories).sort((leftDir, rightDir) =>
     leftDir.localeCompare(rightDir),
   );
 }
-

@@ -46,7 +46,9 @@ function hostDirName(url) {
   let host = "unknown_host";
   try {
     host = new URL(url).host || host;
-  } catch {}
+  } catch {
+    // URL parse failure should not block capture; fallback to unknown host.
+  }
   return `web_${safeName(host)}`;
 }
 
@@ -139,7 +141,9 @@ async function processOneUrl(url, outputDir, browser, preferTrafilatura, config)
         if (processedImages.length > 0 && path.resolve(processedImages[0]) !== rawImagePath) {
           await fsp.unlink(rawImagePath);
         }
-      } catch {}
+      } catch {
+        // Best-effort cleanup: keep raw screenshot when unlink fails.
+      }
     }
 
     const [usefulText, fullText] = await extractUsefulAndFullText(page, adPatterns, preferTrafilatura);

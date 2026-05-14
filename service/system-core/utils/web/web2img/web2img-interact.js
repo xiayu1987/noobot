@@ -22,7 +22,9 @@ async function waitPageReady(page, runtimeDefaults) {
     await page.waitForLoadState("networkidle", {
       timeout: pageCfg.networkIdleTimeoutMs,
     });
-  } catch {}
+  } catch {
+    // Some sites keep long-polling connections; timeout is acceptable here.
+  }
   await page.waitForTimeout(pageCfg.readyPostWaitMs);
 }
 
@@ -39,9 +41,13 @@ async function tryExpandContent(page, patterns, runtimeDefaults) {
             await targetElement.click({ timeout: expandCfg.clickTimeoutMs });
             await page.waitForTimeout(expandCfg.postClickWaitMs);
           }
-        } catch {}
+        } catch {
+          // Ignore per-element click failures and continue expanding other candidates.
+        }
       }
-    } catch {}
+    } catch {
+      // Ignore selector/query failures for this keyword; continue with next keyword.
+    }
   }
 }
 

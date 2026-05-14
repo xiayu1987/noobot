@@ -102,7 +102,9 @@ async function pdfToImagesViaNodePoppler({
     try {
       await access(single);
       images = [single];
-    } catch {}
+    } catch {
+      // Single-output fallback file is optional; keep searching by pattern result.
+    }
   }
 
   if (!images.length) {
