@@ -39,8 +39,8 @@ export function normalizeAttachmentMetas(attachmentMetas = []) {
   return source
     .map((attachmentItem) => {
       if (typeof attachmentItem === "string") {
-        const p = String(attachmentItem || "").trim();
-        return p ? { path: p } : null;
+        const pathStr = String(attachmentItem || "").trim();
+        return pathStr ? { path: pathStr } : null;
       }
       if (!attachmentItem || typeof attachmentItem !== "object") return null;
       const normalized = {

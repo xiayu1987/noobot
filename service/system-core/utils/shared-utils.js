@@ -44,8 +44,8 @@ export function safeStr(value, fallback = "") {
  * 安全数值转换
  */
 export function safeNum(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
 }
 
 /**
