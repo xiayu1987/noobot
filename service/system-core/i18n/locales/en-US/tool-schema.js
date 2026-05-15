@@ -274,7 +274,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "doc_to_data": {
     "description": {
       "key": "tools.doc2data.description",
-      "text": "Extract document content into text data. Input filePath (optional prompt, dpi, imageFormat). Returns document parsing result."
+      "text": "Extract document or image content into text data. Input filePath (optional prompt, dpi, imageFormat). Returns document parsing result."
     },
     "params": {
       "dpi": {
@@ -307,7 +307,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "media_to_data": {
     "description": {
       "key": "tools.media2data.description",
-      "text": "Extract media content into text data. Input filePath (optional prompt). Returns parsed media result."
+      "text": "Extract audio or video content into text data. Input filePath (optional prompt). Returns parsed media result."
     },
     "params": {
       "filePath": {

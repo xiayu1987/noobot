@@ -274,7 +274,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "doc_to_data": {
     "description": {
       "key": "tools.doc2data.description",
-      "text": "提取文档内容为文本数据。输入 filePath（可选 prompt、dpi、imageFormat）。返回文档解析结果。"
+      "text": "提取文档或图片内容为文本数据。输入 filePath（可选 prompt、dpi、imageFormat）。返回文档解析结果。"
     },
     "params": {
       "dpi": {
@@ -307,7 +307,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "media_to_data": {
     "description": {
       "key": "tools.media2data.description",
-      "text": "提取媒体内容为文本数据。输入 filePath（可选 prompt）。返回媒体解析结果。"
+      "text": "提取音频或视频内容为文本数据。输入 filePath（可选 prompt）。返回媒体解析结果。"
     },
     "params": {
       "filePath": {
