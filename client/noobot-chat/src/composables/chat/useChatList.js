@@ -386,8 +386,12 @@ export function useChatList({
     const targetPrimaryId = String(target.id || sessionId || "").trim();
     if (!force && targetPrimaryId === activeSessionId.value) return;
     if (sending.value && activeSessionId.value && targetPrimaryId !== activeSessionId.value) {
-      notify({ type: "warning", message: translate("chat.keepCurrentWhenSending") });
-      return;
+      // User-triggered switch should be blocked while sending; internal reconnect
+      // recovery uses silent mode and must be allowed to avoid replay/session drift.
+      if (!silent) {
+        notify({ type: "warning", message: translate("chat.keepCurrentWhenSending") });
+        return;
+      }
     }
 
     activeSessionId.value = targetPrimaryId;
