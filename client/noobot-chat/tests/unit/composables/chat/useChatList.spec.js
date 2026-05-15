@@ -18,6 +18,7 @@ function createUseChatListFixture(overrides = {}) {
   const loadingSessions = ref(false);
   const loadingSessionDetail = ref(false);
   const sending = ref(false);
+  const notify = vi.fn();
 
   const getSessionsApi = overrides.getSessionsApi || vi.fn();
   const getSessionDetailApi = overrides.getSessionDetailApi || vi.fn();
@@ -45,7 +46,7 @@ function createUseChatListFixture(overrides = {}) {
     scrollBottom: vi.fn(),
     refreshSessionConnectorsAsync: vi.fn(),
     clearUploads: vi.fn(),
-    notify: vi.fn(),
+    notify,
   });
 
   return {
@@ -55,8 +56,9 @@ function createUseChatListFixture(overrides = {}) {
       activeSessionId,
       loadingSessions,
       loadingSessionDetail,
+      sending,
     },
-    mocks: { getSessionsApi, getSessionDetailApi },
+    mocks: { getSessionsApi, getSessionDetailApi, notify },
   };
 }
 
@@ -203,5 +205,45 @@ describe("useChatList", () => {
     expect(refs.activeSessionId.value).toBe("backend-3");
     expect(session.messages).toBe(originalMessages);
     expect(session.messages[0].content).toBe("pending local");
+  });
+
+  it("selectSession blocks noisy user switch while sending but allows silent internal switch", async () => {
+    const { api, refs, mocks } = createUseChatListFixture();
+    refs.sessions.value = [
+      {
+        id: "s-1",
+        backendSessionId: "s-1",
+        title: "A",
+        isLocal: true,
+        loaded: true,
+        messages: [],
+        rawMessages: [],
+        sessionDocs: [],
+        connectorPanelState: { selectedConnectors: {} },
+      },
+      {
+        id: "s-2",
+        backendSessionId: "s-2",
+        title: "B",
+        isLocal: true,
+        loaded: true,
+        messages: [],
+        rawMessages: [],
+        sessionDocs: [],
+        connectorPanelState: { selectedConnectors: {} },
+      },
+    ];
+    refs.activeSessionId.value = "s-1";
+    refs.sending.value = true;
+
+    await api.selectSession("s-2", { silent: false });
+    expect(refs.activeSessionId.value).toBe("s-1");
+    expect(mocks.notify).toHaveBeenCalledWith({
+      type: "warning",
+      message: "chat.keepCurrentWhenSending",
+    });
+
+    await api.selectSession("s-2", { silent: true });
+    expect(refs.activeSessionId.value).toBe("s-2");
   });
 });
