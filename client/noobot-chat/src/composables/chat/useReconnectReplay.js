@@ -8,6 +8,7 @@ import {
   isCurrentActiveSessionId,
   promoteSessionIdentityToBackendId,
 } from "../infra/sessionIdentity";
+import { getCurrentScope, onScopeDispose } from "vue";
 import {
   collectReconnectDeltaText,
   findLatestPendingAssistantAfterLastUser,
@@ -50,6 +51,7 @@ export function useReconnectReplay({
 } = {}) {
   const replayCache = {};
   const appliedReconnectSeqByDialogProcessId = {};
+  const terminalDialogProcessIdSet = new Set();
   let cacheExpiredRefreshTimer = null;
 
   function isCurrentActiveSession(sessionId = "") {
@@ -200,11 +202,36 @@ export function useReconnectReplay({
     if (cacheExpiredRefreshTimer) clearTimeout(cacheExpiredRefreshTimer);
     cacheExpiredRefreshTimer = setTimeout(() => {
       cacheExpiredRefreshTimer = null;
+      Object.keys(replayCache).forEach((sessionKey) => {
+        delete replayCache[sessionKey];
+      });
       chatList.fetchSessions(String(activeSessionId.value || ""), {
         silent: true,
         preserveCurrentMessages: true,
       });
     }, 1200);
+  }
+
+  function normalizeReplayCacheKey(dialogProcessId = "", sessionId = "") {
+    const normalizedDpId = String(dialogProcessId || "").trim();
+    if (normalizedDpId) return normalizedDpId;
+    const normalizedSessionId = String(sessionId || "").trim();
+    return normalizedSessionId ? `__session__${normalizedSessionId}` : "__session__unknown";
+  }
+
+  function consumeReplayCacheForSession(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return;
+    const sessionReplayCache = replayCache[normalizedSessionId];
+    if (!sessionReplayCache) return;
+    const replayGroups = Object.entries(sessionReplayCache);
+    delete replayCache[normalizedSessionId];
+    replayGroups.forEach(([replayKey, replayMessages]) => {
+      const dialogProcessId = String(replayKey || "").startsWith("__session__")
+        ? ""
+        : String(replayKey || "");
+      applyReconnectMessagesToActiveSession(replayMessages, dialogProcessId);
+    });
   }
 
   function markReconnectSequenceApplied(dialogProcessId = "", sequence = 0) {
@@ -401,10 +428,16 @@ export function useReconnectReplay({
       return !sequence || sequence > lastAppliedSeq;
     });
     if (!nextMessages.length) return;
+    const maxSequence = getReconnectMaxSequence(nextMessages, lastAppliedSeq);
+    if (normalizedDpId && terminalDialogProcessIdSet.has(normalizedDpId)) {
+      if (!isReconnectTerminalBatch(nextMessages)) {
+        markReconnectSequenceApplied(normalizedDpId, maxSequence);
+        return;
+      }
+    }
     const batchHasTerminalEvent = isReconnectTerminalBatch(nextMessages);
     const shouldCreateTarget = Boolean(allowCreate) && !batchHasTerminalEvent;
     const doneEnvelopeWithMessages = findReconnectDoneEnvelopeWithMessages(nextMessages);
-    const maxSequence = getReconnectMaxSequence(nextMessages, lastAppliedSeq);
     if (doneEnvelopeWithMessages) {
       applyDoneMessagesFromReconnect(doneEnvelopeWithMessages.data || {});
       finalizeReconnectTerminalState();
@@ -430,6 +463,12 @@ export function useReconnectReplay({
       maxAppliedSeq = Math.max(maxAppliedSeq, getReconnectEnvelopeSequence(envelope));
       const eventName = String(envelope?.event || "").trim();
       const eventData = envelope?.data || {};
+      if (
+        terminalDialogProcessIdSet.has(normalizedDpId) &&
+        !isReconnectTerminalEvent(eventName)
+      ) {
+        continue;
+      }
       if (eventName === StreamEventEnum.DELTA) {
         targetMessage.content += String(eventData?.text || "");
       } else if (eventName === StreamEventEnum.THINKING) {
@@ -447,6 +486,7 @@ export function useReconnectReplay({
       } else if (eventName === StreamEventEnum.DONE) {
         targetMessage.pending = false;
         targetMessage.statusLabel = translate("chat.generated");
+        terminalDialogProcessIdSet.add(normalizedDpId);
         if (Array.isArray(eventData?.messages) && eventData.messages.length) {
           applyDoneMessagesFromReconnect(eventData);
         }
@@ -454,11 +494,13 @@ export function useReconnectReplay({
       } else if (eventName === StreamEventEnum.STOPPED) {
         targetMessage.pending = false;
         targetMessage.statusLabel = translate("chat.stopped");
+        terminalDialogProcessIdSet.add(normalizedDpId);
         finalizeReconnectTerminalState();
       } else if (eventName === StreamEventEnum.ERROR) {
         targetMessage.pending = false;
         targetMessage.statusLabel = translate("chat.failed");
         targetMessage.error = String(eventData?.error || targetMessage?.error || "");
+        terminalDialogProcessIdSet.add(normalizedDpId);
         finalizeReconnectTerminalState();
       }
     }
@@ -469,26 +511,38 @@ export function useReconnectReplay({
   async function applyReconnectEvent(event, data) {
     const dpId = String(data?.dialogProcessId || "").trim();
     const sessionId = String(data?.sessionId || "").trim();
-    const eventName = String(event || "").trim();
-    if (sessionId && !isCurrentActiveSession(sessionId) && !isReconnectTerminalEvent(eventName)) {
-      const switched = await ensureReconnectSessionActive(sessionId);
-      if (switched) {
-        sending.value = true;
-      }
-    }
     if (sessionId && isCurrentActiveSession(sessionId)) {
+      consumeReplayCacheForSession(sessionId);
       applyReconnectMessagesToActiveSession([{ event, data }], dpId);
       return;
     }
-    if (sessionId && dpId) {
+    if (sessionId) {
+      const replayKey = normalizeReplayCacheKey(dpId, sessionId);
       if (!replayCache[sessionId]) replayCache[sessionId] = {};
-      if (!replayCache[sessionId][dpId]) replayCache[sessionId][dpId] = [];
-      replayCache[sessionId][dpId].push({ event, data });
+      if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
+      replayCache[sessionId][replayKey].push({ event, data });
     }
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (cacheExpiredRefreshTimer) {
+        clearTimeout(cacheExpiredRefreshTimer);
+        cacheExpiredRefreshTimer = null;
+      }
+    });
   }
 
   return {
     applyReconnectData,
     applyReconnectEvent,
+    __test:
+      import.meta.env.MODE === "test"
+        ? {
+            replayCache,
+            appliedReconnectSeqByDialogProcessId,
+            terminalDialogProcessIdSet,
+          }
+        : undefined,
   };
 }
