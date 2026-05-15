@@ -314,7 +314,7 @@ export function useChatList({
 
   async function fetchSessions(preferredActiveId = "", options = {}) {
     const { silent = false, preserveCurrentMessages = true } = options;
-    if (!ensureConnected()) return;
+    if (!ensureConnected()) return false;
     if (!silent) loadingSessions.value = true;
     try {
       const prevActiveId = String(preferredActiveId || activeSessionId.value || "");
@@ -356,7 +356,7 @@ export function useChatList({
 
       if (!sessions.value.length) {
         createLocalSession();
-        return;
+        return true;
       }
       const keepActive = Boolean(prevActiveId && findSessionByAnyIdInList(sessions.value, prevActiveId));
       const nextId = keepActive ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId) : sessions.value[0].id;
@@ -370,9 +370,11 @@ export function useChatList({
           Array.isArray(existingNextSession?.messages) &&
           existingNextSession.messages.length > 0,
       });
+      return true;
     } catch (error) {
       notify({ type: "error", message: error.message || translate("chat.loadSessionsFailed") });
       if (!sessions.value.length) createLocalSession();
+      return false;
     } finally {
       if (!silent) loadingSessions.value = false;
     }

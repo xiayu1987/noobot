@@ -100,6 +100,15 @@ describe("useChatSession reconnect replay", () => {
           ],
         },
       });
+      onReconnectData({
+        event: StreamEventEnum.CHANNEL_STATE,
+        data: {
+          sessionId: "s-1",
+          dialogProcessId: "dp-new",
+          state: "completed",
+          seq: 9,
+        },
+      });
     });
 
     const session = useChatSession({

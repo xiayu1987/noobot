@@ -105,7 +105,7 @@ export function buildChatWebSocketUrl({ apiKey = "" } = {}) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
   const query = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
-  return `${protocol}//${host}/api/chat/ws${query}`;
+  return `${protocol}//${host}/api/agent-proxy/ws${query}`;
 }
 
 export async function getWorkspaceTreeApi({ userId = "" }, { fetcher } = {}) {

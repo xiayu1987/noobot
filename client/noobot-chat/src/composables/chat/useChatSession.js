@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { reactive } from "vue";
+import { reactive, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { applyCompletedToolLogsToMessages } from "../infra/sessionToolLogs";
 import {
@@ -60,6 +60,42 @@ export function useChatSession({
     loadingSessions,
     loadingSessionDetail,
   } = storeToRefs(chatStore);
+  const conversationStateSnapshot = ref({});
+  const conversationStateTimeline = ref([]);
+
+  function trackConversationState(stateEntry = {}) {
+    const state = String(stateEntry?.state || "").trim();
+    if (!state) return;
+    const sessionId = String(stateEntry?.sessionId || "").trim();
+    const dialogProcessId = String(stateEntry?.dialogProcessId || "").trim();
+    const stateKey = `${sessionId || "__session__"}::${dialogProcessId || "__session__"}`;
+    conversationStateSnapshot.value = {
+      ...conversationStateSnapshot.value,
+      [stateKey]: {
+        source: String(stateEntry?.source || "").trim(),
+        sourceEvent: String(stateEntry?.sourceEvent || "").trim(),
+        state,
+        sessionId,
+        dialogProcessId,
+        seq: Number(stateEntry?.seq || 0),
+        applied: stateEntry?.applied !== false,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    conversationStateTimeline.value = [
+      ...conversationStateTimeline.value,
+      {
+        source: String(stateEntry?.source || "").trim(),
+        sourceEvent: String(stateEntry?.sourceEvent || "").trim(),
+        state,
+        sessionId,
+        dialogProcessId,
+        seq: Number(stateEntry?.seq || 0),
+        applied: stateEntry?.applied !== false,
+        ts: new Date().toISOString(),
+      },
+    ].slice(-80);
+  }
 
   const {
     input,
@@ -83,6 +119,7 @@ export function useChatSession({
     pendingInteractionRequest,
     interactionSubmitting,
     clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     submitInteractionResponse,
     markInteractionRequestHandled,
@@ -177,8 +214,11 @@ export function useChatSession({
     pendingInteractionRequest,
     interactionSubmitting,
     clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     submitInteractionResponse,
+    refreshSessionsAsync: chatList.fetchSessions,
+    onConversationState: trackConversationState,
     chatWebSocketClient,
     ensureConnected,
     notify,
@@ -198,11 +238,14 @@ export function useChatSession({
     applyCompletedToolLogsToMessages,
     sessionTitleFromMessages,
     clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     isInteractionRequestHandled,
     classifyRealtimeLog,
     scrollBottom,
     translate,
+    onConversationState: trackConversationState,
+    notify,
   });
 
   async function handleReconnect() {
@@ -261,5 +304,7 @@ export function useChatSession({
     initSessionsAfterMount: chatList.initSessionsAfterMount,
     chatWebSocketClient,
     handleReconnect,
+    conversationStateSnapshot,
+    conversationStateTimeline,
   };
 }

@@ -47,11 +47,19 @@ export class ChannelManager {
       ownerApiKey: "",
       ownerUserId: "",
       _errorHandled: false,
+      conversationStateByDialogProcessId: new Map(),
     };
     if (startPayload && typeof startPayload === "object") {
       nextChannel.startPayload = { ...startPayload };
     }
     this.channelStore.set(normalizedChannelKey, nextChannel);
+    this.updateConversationState(nextChannel, {
+      dialogProcessId: "",
+      state: "no_conversation",
+      sourceEvent: "init",
+      seq: 0,
+      broadcast: false,
+    });
     return nextChannel;
   }
 
@@ -93,7 +101,78 @@ export class ChannelManager {
         channel.pendingInteractionRequests.set(requestId, envelope);
       }
     }
+    this._applyConversationStateFromEnvelope(channel, envelope);
     return envelope;
+  }
+
+  updateConversationState(
+    channel,
+    {
+      dialogProcessId = "",
+      state = "",
+      sourceEvent = "",
+      seq = 0,
+      broadcast = true,
+      sessionId = "",
+    } = {},
+  ) {
+    if (!channel) return null;
+    const normalizedState = String(state || "").trim();
+    if (!normalizedState) return null;
+    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    const stateKey = normalizedDialogProcessId || "__session__";
+    const normalizedSessionId =
+      String(sessionId || "").trim() || this._extractSessionIdFromChannelKey(channel.key);
+    const previousStateItem = channel.conversationStateByDialogProcessId.get(stateKey) || null;
+    if (
+      previousStateItem &&
+      previousStateItem.state === normalizedState &&
+      Number(previousStateItem.seq || 0) === Number(seq || 0)
+    ) {
+      return previousStateItem;
+    }
+    const stateItem = {
+      sessionId: normalizedSessionId,
+      dialogProcessId: normalizedDialogProcessId,
+      state: normalizedState,
+      sourceEvent: String(sourceEvent || "").trim(),
+      seq: Number(seq || 0),
+      updatedAtMs: nowMs(),
+    };
+    channel.conversationStateByDialogProcessId.set(stateKey, stateItem);
+    if (broadcast) {
+      this.broadcastChannelState(channel, stateItem);
+    }
+    return stateItem;
+  }
+
+  _applyConversationStateFromEnvelope(channel, envelope = {}) {
+    if (!channel || !envelope) return;
+    const eventName = String(envelope?.event || "").trim();
+    const eventData = envelope?.data || {};
+    const dialogProcessId = String(eventData?.dialogProcessId || "").trim();
+    const sessionId = String(eventData?.sessionId || "").trim();
+    const seq = Number(eventData?.seq || envelope?.sequence || 0);
+    let nextState = "";
+    if (eventName === "thinking" || eventName === "delta") {
+      nextState = "sending";
+    } else if (eventName === "interaction_request") {
+      nextState = "interaction_pending";
+    } else if (eventName === "done") {
+      nextState = "completed";
+    } else if (eventName === "stopped") {
+      nextState = "stopped";
+    } else if (eventName === "error") {
+      nextState = "error";
+    }
+    if (!nextState) return;
+    this.updateConversationState(channel, {
+      dialogProcessId,
+      state: nextState,
+      sourceEvent: eventName,
+      seq,
+      sessionId,
+    });
   }
 
   // ---- Request ID Mapping ----
@@ -149,6 +228,7 @@ export class ChannelManager {
     socket.__agentProxyChannelKeys = socket.__agentProxyChannelKeys || new Set();
     socket.__agentProxyChannelKeys.add(channel.key);
     socket.__agentProxyActiveChannelKey = channel.key;
+    this.sendChannelStateSnapshot(channel, socket);
   }
 
   detachSocketFromAllChannels(socket) {
@@ -203,6 +283,74 @@ export class ChannelManager {
         envelope?.sequence || 0,
       );
     }
+  }
+
+  broadcastChannelState(channel, stateItem = {}) {
+    if (!channel || !stateItem) return;
+    const pendingInteraction = this._findLatestPendingInteractionByDialogProcessId(
+      channel,
+      String(stateItem?.dialogProcessId || "").trim(),
+    );
+    this.broadcastChannelEvent(channel, {
+      sequence: Number(channel?.eventSequence || 0),
+      event: "channel_state",
+      data: {
+        sessionId: String(stateItem?.sessionId || ""),
+        dialogProcessId: String(stateItem?.dialogProcessId || ""),
+        state: String(stateItem?.state || ""),
+        sourceEvent: String(stateItem?.sourceEvent || ""),
+        seq: Number(stateItem?.seq || 0),
+        updatedAtMs: Number(stateItem?.updatedAtMs || nowMs()),
+        ...(pendingInteraction ? { pendingInteraction } : {}),
+      },
+    });
+  }
+
+  sendChannelStateSnapshot(channel, targetSocket) {
+    if (!channel || !targetSocket) return;
+    const stateList = Array.from(channel.conversationStateByDialogProcessId.values()).sort(
+      (left, right) =>
+        Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
+    );
+    for (const stateItem of stateList) {
+      const pendingInteraction = this._findLatestPendingInteractionByDialogProcessId(
+        channel,
+        String(stateItem?.dialogProcessId || "").trim(),
+      );
+      this.sendSocketEvent(targetSocket, {
+        event: "channel_state",
+        data: {
+          sessionId: String(stateItem?.sessionId || ""),
+          dialogProcessId: String(stateItem?.dialogProcessId || ""),
+          state: String(stateItem?.state || ""),
+          sourceEvent: String(stateItem?.sourceEvent || ""),
+          seq: Number(stateItem?.seq || 0),
+          updatedAtMs: Number(stateItem?.updatedAtMs || 0),
+          ...(pendingInteraction ? { pendingInteraction } : {}),
+        },
+      });
+    }
+  }
+
+  _findLatestPendingInteractionByDialogProcessId(channel, dialogProcessId = "") {
+    if (!channel?.pendingInteractionRequests?.size) return null;
+    const normalizedDpId = String(dialogProcessId || "").trim();
+    if (!normalizedDpId) return null;
+    let latestEnvelope = null;
+    let latestSequence = 0;
+    for (const envelope of channel.pendingInteractionRequests.values()) {
+      const envelopeDpId = String(envelope?.data?.dialogProcessId || "").trim();
+      if (!envelopeDpId || envelopeDpId !== normalizedDpId) continue;
+      const sequence = Number(envelope?.data?.seq || envelope?.sequence || 0);
+      if (!latestEnvelope || sequence >= latestSequence) {
+        latestEnvelope = envelope;
+        latestSequence = sequence;
+      }
+    }
+    if (!latestEnvelope?.data || typeof latestEnvelope.data !== "object") return null;
+    return {
+      ...latestEnvelope.data,
+    };
   }
 
   sendSocketEvent(targetSocket, envelope) {
@@ -387,8 +535,16 @@ export class ChannelManager {
       if (String(payload?.action || "").trim().toLowerCase() === "interaction_response") {
         const requestId = String(payload?.requestId || "").trim();
         if (requestId) {
+          const requestEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
           channel.pendingInteractionRequests.delete(requestId);
           this.requestChannelMap.delete(requestId);
+          this.updateConversationState(channel, {
+            dialogProcessId: String(requestEnvelope?.data?.dialogProcessId || "").trim(),
+            sessionId: String(requestEnvelope?.data?.sessionId || "").trim(),
+            state: "sending",
+            sourceEvent: "interaction_response",
+            seq: Number(requestEnvelope?.data?.seq || channel?.eventSequence || 0),
+          });
         }
       }
       return true;
@@ -453,6 +609,13 @@ export class ChannelManager {
     channel.startFingerprint = nextPayloadFingerprint;
     channel.eventLog = [];
     channel.eventSequence = 0;
+    channel.conversationStateByDialogProcessId = new Map();
+    this.updateConversationState(channel, {
+      dialogProcessId: "",
+      state: "no_conversation",
+      sourceEvent: "restart",
+      seq: 0,
+    });
     channel.cleanupAfterMs = 0;
     channel.upstreamClosed = false;
     channel._errorHandled = false;
@@ -503,12 +666,67 @@ export class ChannelManager {
           sessionId: channelSessionId,
           hasRunningTask: false,
           dialogProcesses: [],
+          conversationStates: [],
         });
       }
 
       const sessionEntry = sessionsMap.get(channelSessionId);
       if (channel.status === "running" || channel.status === "connecting") {
         sessionEntry.hasRunningTask = true;
+      }
+      const stateByDialogProcessId = new Map(
+        (Array.isArray(sessionEntry?.conversationStates) ? sessionEntry.conversationStates : []).map(
+          (item) => [String(item?.dialogProcessId || "").trim() || "__session__", item],
+        ),
+      );
+      for (const stateItem of channel.conversationStateByDialogProcessId.values()) {
+        const stateKey = String(stateItem?.dialogProcessId || "").trim() || "__session__";
+        const existingStateItem = stateByDialogProcessId.get(stateKey);
+        const pendingInteraction = this._findLatestPendingInteractionByDialogProcessId(
+          channel,
+          String(stateItem?.dialogProcessId || "").trim(),
+        );
+        if (
+          !existingStateItem ||
+          Number(stateItem?.updatedAtMs || 0) >= Number(existingStateItem?.updatedAtMs || 0)
+        ) {
+          stateByDialogProcessId.set(stateKey, {
+            sessionId: channelSessionId,
+            dialogProcessId: String(stateItem?.dialogProcessId || "").trim(),
+            state: String(stateItem?.state || "").trim(),
+            sourceEvent: String(stateItem?.sourceEvent || "").trim(),
+            seq: Number(stateItem?.seq || 0),
+            updatedAtMs: Number(stateItem?.updatedAtMs || 0),
+            ...(pendingInteraction ? { pendingInteraction } : {}),
+          });
+        }
+      }
+      sessionEntry.conversationStates = Array.from(stateByDialogProcessId.values()).sort(
+        (left, right) => Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
+      );
+      const derivedSessionState =
+        channel.status === "connecting"
+          ? "reconnecting"
+          : channel.status === "idle"
+          ? "no_conversation"
+          : "";
+      if (derivedSessionState) {
+        const existingSessionScopeStateIndex = sessionEntry.conversationStates.findIndex(
+          (stateItem) => !String(stateItem?.dialogProcessId || "").trim(),
+        );
+        const nextSessionScopeState = {
+          sessionId: channelSessionId,
+          dialogProcessId: "",
+          state: derivedSessionState,
+          sourceEvent: "channel_status",
+          seq: Number(channel?.eventSequence || 0),
+          updatedAtMs: Number(channel?.updatedAtMs || nowMs()),
+        };
+        if (existingSessionScopeStateIndex < 0) {
+          sessionEntry.conversationStates.push(nextSessionScopeState);
+        } else {
+          sessionEntry.conversationStates[existingSessionScopeStateIndex] = nextSessionScopeState;
+        }
       }
 
       // Collect all dialogProcessIds from eventLog
@@ -584,6 +802,14 @@ export class ChannelManager {
         } else if (lastSeq > 0) {
           // DialogProcessId was known but no events found - may be expired
           expiredDialogProcessIds.push(dpId);
+          sessionEntry.conversationStates.push({
+            sessionId: channelSessionId,
+            dialogProcessId: dpId,
+            state: "expired",
+            sourceEvent: "reconnect_cache_expired",
+            seq: Number(lastSeq || 0),
+            updatedAtMs: nowMs(),
+          });
         }
       }
     }

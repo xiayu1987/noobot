@@ -25,4 +25,10 @@ export const frontendConfig = Object.freeze({
     listenWindowFocus: envBoolean("VITE_NOOBOT_RECONNECT_ON_FOCUS", false),
     signalCooldownMs: envNumber("VITE_NOOBOT_RECONNECT_SIGNAL_COOLDOWN_MS", 2000, 0),
   }),
+  debug: Object.freeze({
+    showConversationStatePanel: envBoolean(
+      "VITE_NOOBOT_DEBUG_CONVERSATION_STATE_PANEL",
+      Boolean(import.meta.env?.DEV),
+    ),
+  }),
 });

@@ -65,6 +65,31 @@ export function useAgentInteraction({
     pendingInteractionRequest.value = null;
   }
 
+  function clearPendingInteractionIfObsolete({
+    sessionId = "",
+    dialogProcessId = "",
+  } = {}) {
+    const pendingRequest = pendingInteractionRequest.value;
+    if (!pendingRequest || typeof pendingRequest !== "object") return false;
+    const pendingSessionId = String(pendingRequest?.sessionId || "").trim();
+    const pendingDialogProcessId = String(pendingRequest?.dialogProcessId || "").trim();
+    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    if (pendingSessionId && normalizedSessionId && pendingSessionId !== normalizedSessionId) {
+      return false;
+    }
+    if (
+      pendingDialogProcessId &&
+      normalizedDialogProcessId &&
+      pendingDialogProcessId !== normalizedDialogProcessId
+    ) {
+      return false;
+    }
+    pendingInteractionRequest.value = null;
+    interactionSubmitting.value = false;
+    return true;
+  }
+
   function setPendingInteractionRequest(request = {}) {
     if (!request || typeof request !== "object") {
       pendingInteractionRequest.value = null;
@@ -108,6 +133,7 @@ export function useAgentInteraction({
     pendingInteractionRequest,
     interactionSubmitting,
     clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     submitInteractionResponse,
     markInteractionRequestHandled,

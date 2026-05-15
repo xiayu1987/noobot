@@ -63,6 +63,13 @@ export class WsRouter {
         );
         return;
       }
+      this.channelManager.updateConversationState(targetChannel, {
+        sessionId: String(payload?.sessionId || "").trim(),
+        dialogProcessId: String(payload?.dialogProcessId || "").trim(),
+        state: "stopping",
+        sourceEvent: "stop",
+        seq: Number(targetChannel?.eventSequence || 0),
+      });
       const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
       if (!forwarded) {
         const stoppedEnvelope = this.channelManager.pushChannelEvent(targetChannel, "stopped", {
