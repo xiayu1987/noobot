@@ -35,15 +35,33 @@ export function buildAttachmentContentBlock({
 
   if (mediaType === "audio") {
     const base64 = data.startsWith("data:") ? data.split(",")[1] || "" : data;
+    const normalizedAudioFormat = (() => {
+      const subtype = String(mimeType || "")
+        .split("/")[1]
+        ?.trim()
+        .toLowerCase();
+      if (!subtype) return "mp3";
+      if (subtype === "wav" || subtype === "x-wav") return "wav";
+      if (subtype === "mp3" || subtype === "mpeg" || subtype === "x-mpeg") {
+        return "mp3";
+      }
+      return "mp3";
+    })();
+    const normalizedDataUrl = String(data || "").startsWith("data:")
+      ? String(data || "")
+      : `data:${mimeType};base64,${base64}`;
     if (isDashscope) {
+      // DashScope OpenAI-compatible endpoint may reject `type: "audio"` in chat
+      // content blocks; keep using input_audio and provide Data URL payload to
+      // avoid URL-parsing failures on raw base64.
       return {
-        type: "audio",
-        audio: `data:${mimeType};base64,${base64}`,
+        type: "input_audio",
+        input_audio: { data: normalizedDataUrl, format: normalizedAudioFormat },
       };
     }
     return {
       type: "input_audio",
-      input_audio: { data: base64, format: mimeType.split("/")[1] || "wav" },
+      input_audio: { data: base64, format: normalizedAudioFormat },
     };
   }
 

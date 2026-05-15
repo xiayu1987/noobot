@@ -7,6 +7,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { recoverableToolError } from "../../error/index.js";
@@ -49,6 +50,39 @@ const FFPROBE_AMBIGUOUS_EXTENSIONS = new Set([".webm", ".ogg", ".mkv"]);
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
+}
+
+function normalizeMediaInputPath(rawFilePath = "") {
+  const normalized = String(rawFilePath || "").trim();
+  if (!normalized) return "";
+  if (!normalized.startsWith("file://")) return normalized;
+  try {
+    return fileURLToPath(normalized);
+  } catch {
+    return normalized;
+  }
+}
+
+function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = {}) {
+  const normalizedInputPath = normalizeMediaInputPath(filePath);
+  const runtimeAttachmentMetas = Array.isArray(agentContext?.runtime?.attachmentMetas)
+    ? agentContext.runtime.attachmentMetas
+    : [];
+  if (!normalizedInputPath || !runtimeAttachmentMetas.length) return normalizedInputPath;
+  const inputBaseName = path.basename(normalizedInputPath);
+  const inputAttachmentId = String(inputBaseName || "").split(".")[0];
+  const matchedMeta = runtimeAttachmentMetas.find((attachmentItem) => {
+    const metaPath = normalizeMediaInputPath(String(attachmentItem?.path || ""));
+    if (!metaPath) return false;
+    const metaBaseName = path.basename(metaPath);
+    const metaAttachmentId = String(attachmentItem?.attachmentId || "").trim();
+    return (
+      (inputBaseName && metaBaseName === inputBaseName) ||
+      (inputAttachmentId && metaAttachmentId && inputAttachmentId === metaAttachmentId)
+    );
+  });
+  const matchedMetaPath = normalizeMediaInputPath(String(matchedMeta?.path || ""));
+  return matchedMetaPath || normalizedInputPath;
 }
 
 function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
@@ -260,8 +294,12 @@ export function createMedia2DataTool({ agentContext }) {
         .describe(tTool(runtime, "tools.media2data.fieldPrompt")),
     }),
     func: async ({ filePath, prompt }) => {
-      const inputFile = await assertAndResolveUserWorkspaceFilePath({
+      const resolvedInputHintPath = resolveMediaInputPathFromAttachmentMetas(
         filePath,
+        agentContext,
+      );
+      const inputFile = await assertAndResolveUserWorkspaceFilePath({
+        filePath: resolvedInputHintPath,
         agentContext,
         fieldName: "filePath",
         mustExist: true,
