@@ -29,7 +29,21 @@
 
 ---
 
-## 3. User-Facing Text / 用户可见文案
+## 3. Model Adapter Rules / 模型适配规范
+
+### EN
+- **Provider adapter logic must stay separated** (`dashscope`, `openai_compatible`, etc.).
+- Do NOT force provider branches into one unified implementation just because the current payload appears similar.
+- Keep independent adapter functions/classes per provider to avoid refactor regressions in multimodal fields.
+
+### 中文
+- **模型/供应商适配逻辑必须分开维护**（如 `dashscope`、`openai_compatible` 等）。
+- 即使当前请求结构看起来一致，也**禁止强行归一实现**。
+- 每个 provider 保持独立适配函数/类，避免多模态字段在重构中回归。
+
+---
+
+## 4. User-Facing Text / 用户可见文案
 
 ### EN
 - **All user-facing text must be bilingual** (`zh-CN`, `en-US`).
@@ -41,7 +55,7 @@
 
 ---
 
-## 4. Tool Documentation / 工具文档
+## 5. Tool Documentation / 工具文档
 
 ### EN
 - **Tool docs format**: "what it does + input + output".
@@ -59,7 +73,7 @@
 
 ---
 
-## 5. Frontend / 前端规范
+## 6. Frontend / 前端规范
 
 ### EN
 - **Frontend must handle long content + mobile layout**.
@@ -71,7 +85,7 @@
 
 ---
 
-## 6. Logging Standard / 日志规范
+## 7. Logging Standard / 日志规范
 
 ### 6.1 No `console.*` in Core Business Code / 核心业务代码禁止使用 `console.*`
 
@@ -212,16 +226,18 @@ function myFunction({ ..., errorLogger = null }) {
 
 ---
 
-## 7. Pre-Merge Checklist / 提交前检查
+## 8. Pre-Merge Checklist / 提交前检查
 
 ### EN
 - [ ] Build/syntax checks pass.
 - [ ] zh/en keys are aligned.
 - [ ] No single-letter names added.
 - [ ] No new hardcoded user text.
+- [ ] Provider adapter branches are not over-unified.
 
 ### 中文
 - [ ] 构建与语法检查通过。
 - [ ] 中英文 key 对齐。
 - [ ] 未新增单字母命名。
 - [ ] 未新增硬编码用户文案。
+- [ ] 未将 provider 适配分支强行归一。

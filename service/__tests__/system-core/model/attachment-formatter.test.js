@@ -12,7 +12,8 @@ test("buildAttachmentContentBlock supports container call style", () => {
     },
     providerFormat: "dashscope",
   });
-  assert.equal(block?.type, "image");
+  assert.equal(block?.type, "image_url");
+  assert.equal(block?.image_url?.url, "data:image/png;base64,abc");
 });
 
 test("buildAttachmentContentBlock uses input_audio data-url for dashscope", () => {
