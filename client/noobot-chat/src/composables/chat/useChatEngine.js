@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { getCurrentScope, onScopeDispose } from "vue";
 import { normalizeSelectedConnectors } from "../../shared/models/sessionModel";
 import { promoteSessionIdentityToBackendId } from "../infra/sessionIdentity";
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
@@ -76,44 +77,280 @@ export function useChatEngine({
   pendingInteractionRequest,
   interactionSubmitting,
   clearPendingInteraction,
+  clearPendingInteractionIfObsolete,
   setPendingInteractionRequest,
   submitInteractionResponse,
+  refreshSessionsAsync,
+  onConversationState,
   chatWebSocketClient,
   ensureConnected,
   notify = () => {},
 } = {}) {
   const { translate, locale } = useLocale();
-  function markPendingAssistantMessageStopped() {
-    const sessionItem = activeSession.value;
-    const messageList = Array.isArray(sessionItem?.messages) ? sessionItem.messages : [];
-    for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
-      const messageItem = messageList[messageIndex];
-      if (String(messageItem?.role || "") !== RoleEnum.ASSISTANT) continue;
-      if (!messageItem?.pending) continue;
-      messageItem.pending = false;
-      messageItem.statusLabel = translate("chat.stopped");
-      if (!String(messageItem.content || "").trim()) {
-        messageItem.content = translate("chat.stoppedContent");
-      }
-      break;
+  let cacheExpiredRefreshTimer = null;
+
+  function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
+    if (!targetAssistantMessage) return;
+    targetAssistantMessage.pending = false;
+    targetAssistantMessage.statusLabel = translate("chat.failed");
+    targetAssistantMessage.error = String(errorMessage || "").trim();
+    if (!String(targetAssistantMessage.content || "").trim()) {
+      targetAssistantMessage.content = `> ${translate("chat.occurredError", {
+        error: targetAssistantMessage.error || translate("chat.unknownError"),
+      })}`;
     }
   }
 
-  function markAssistantMessageStopped(botMessage) {
-    botMessage.pending = false;
-    botMessage.statusLabel = translate("chat.stopped");
-    clearPendingInteraction();
-    interactionSubmitting.value = false;
-    if (!String(botMessage.content || "").trim()) {
-      botMessage.content = translate("chat.stoppedContent");
+  function emitSyntheticErrorConversationState({
+    sessionId = "",
+    dialogProcessId = "",
+    sourceEvent = "",
+  } = {}) {
+    if (typeof onConversationState !== "function") return;
+    onConversationState({
+      source: "stream",
+      state: "error",
+      sessionId: String(sessionId || "").trim(),
+      dialogProcessId: String(dialogProcessId || "").trim(),
+      sourceEvent: String(sourceEvent || "").trim(),
+      seq: 0,
+      applied: true,
+    });
+  }
+
+  function scheduleCacheExpiredSessionRefresh({
+    sessionId = "",
+    dialogProcessId = "",
+    targetAssistantMessage = null,
+  } = {}) {
+    if (cacheExpiredRefreshTimer) clearTimeout(cacheExpiredRefreshTimer);
+    cacheExpiredRefreshTimer = setTimeout(() => {
+      cacheExpiredRefreshTimer = null;
+      if (typeof refreshSessionsAsync !== "function") return;
+      Promise.resolve(
+        refreshSessionsAsync(String(activeSessionId.value || ""), {
+          silent: true,
+          preserveCurrentMessages: true,
+        }),
+      )
+        .then((ok) => {
+          if (ok !== false) return;
+          sending.value = false;
+          interactionSubmitting.value = false;
+          clearPendingInteraction();
+          const expiredErrorMessage = translate("chat.expiredRefreshFailed");
+          applyAssistantFailureState(targetAssistantMessage, expiredErrorMessage);
+          emitSyntheticErrorConversationState({
+            sessionId: String(sessionId || activeSession.value?.id || "").trim(),
+            dialogProcessId,
+            sourceEvent: "expired_refresh_failed",
+          });
+          notify({ type: "error", message: expiredErrorMessage });
+        })
+        .catch(() => {
+          sending.value = false;
+          interactionSubmitting.value = false;
+          clearPendingInteraction();
+          const expiredErrorMessage = translate("chat.expiredRefreshFailed");
+          applyAssistantFailureState(targetAssistantMessage, expiredErrorMessage);
+          emitSyntheticErrorConversationState({
+            sessionId: String(sessionId || activeSession.value?.id || "").trim(),
+            dialogProcessId,
+            sourceEvent: "expired_refresh_failed",
+          });
+          notify({ type: "error", message: expiredErrorMessage });
+        });
+    }, 1200);
+  }
+  function isInFlightConversationState(state = "") {
+    return ["sending", "interaction_pending", "stopping", "reconnecting"].includes(
+      String(state || "").trim(),
+    );
+  }
+
+  function isTerminalConversationState(state = "") {
+    return ["stopped", "completed", "error", "no_conversation", "expired"].includes(
+      String(state || "").trim(),
+    );
+  }
+
+  function isStateForActiveSession(sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return true;
+    return (
+      normalizedSessionId === String(activeSession.value?.id || "").trim() ||
+      normalizedSessionId === String(activeSession.value?.backendSessionId || "").trim()
+    );
+  }
+
+  function findTargetAssistantMessage({ botMessage = null, dialogProcessId = "" } = {}) {
+    if (botMessage && String(botMessage?.role || "").trim() === RoleEnum.ASSISTANT) {
+      return botMessage;
     }
+    const messageList = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    const normalizedDpId = String(dialogProcessId || "").trim();
+    for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
+      const messageItem = messageList[messageIndex];
+      if (String(messageItem?.role || "").trim() !== RoleEnum.ASSISTANT) continue;
+      if (
+        normalizedDpId &&
+        String(messageItem?.dialogProcessId || "").trim() &&
+        String(messageItem?.dialogProcessId || "").trim() !== normalizedDpId
+      ) {
+        continue;
+      }
+      return messageItem;
+    }
+    return null;
+  }
+
+  function applyConversationState(
+    statePayload = {},
+    { botMessage = null, fallbackDialogProcessId = "" } = {},
+  ) {
+    const state = String(statePayload?.state || "").trim();
+    if (!state) return;
+    const sessionId = String(statePayload?.sessionId || "").trim();
+    const messageList = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    const botMessageInActiveSession = Boolean(
+      botMessage &&
+      String(botMessage?.role || "").trim() === RoleEnum.ASSISTANT &&
+      messageList.includes(botMessage),
+    );
+    const forActiveSession = isStateForActiveSession(sessionId) || botMessageInActiveSession;
+    if (typeof onConversationState === "function") {
+      onConversationState({
+        source: "stream",
+        state,
+        sessionId,
+        dialogProcessId: String(
+          statePayload?.dialogProcessId || fallbackDialogProcessId || "",
+        ).trim(),
+        sourceEvent: String(statePayload?.sourceEvent || "").trim(),
+        seq: Number(statePayload?.seq || 0),
+        applied: forActiveSession,
+      });
+    }
+    if (!forActiveSession) return;
+    const dialogProcessId = String(
+      statePayload?.dialogProcessId || fallbackDialogProcessId || "",
+    ).trim();
+    const targetAssistantMessage = findTargetAssistantMessage({
+      botMessage,
+      dialogProcessId,
+    });
+    if (
+      dialogProcessId &&
+      targetAssistantMessage &&
+      !String(targetAssistantMessage?.dialogProcessId || "").trim()
+    ) {
+      targetAssistantMessage.dialogProcessId = dialogProcessId;
+    }
+    if (isInFlightConversationState(state)) {
+      sending.value = true;
+      if (state === "sending" && typeof clearPendingInteractionIfObsolete === "function") {
+        clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
+      }
+      if (state === "interaction_pending") {
+        interactionSubmitting.value = false;
+        const pendingInteractionPayload =
+          statePayload?.pendingInteraction &&
+          typeof statePayload.pendingInteraction === "object"
+            ? statePayload.pendingInteraction
+            : null;
+        if (pendingInteractionPayload) {
+          setPendingInteractionRequest(
+            normalizeInteractionRequestPayload({
+              ...pendingInteractionPayload,
+              interactionType: String(
+                pendingInteractionPayload?.interactionType || "",
+              ).trim(),
+            }),
+          );
+        } else {
+          sending.value = false;
+          clearPendingInteraction();
+          const missingInteractionError = translate("chat.interactionPayloadMissing");
+          applyAssistantFailureState(targetAssistantMessage, missingInteractionError);
+          emitSyntheticErrorConversationState({
+            sessionId,
+            dialogProcessId,
+            sourceEvent: "interaction_payload_missing",
+          });
+          notify({ type: "error", message: missingInteractionError });
+          return;
+        }
+      }
+      if (targetAssistantMessage) {
+        targetAssistantMessage.pending = true;
+        if (state === "stopping") {
+          targetAssistantMessage.statusLabel = translate("chat.stopping");
+        } else if (state === "reconnecting") {
+          targetAssistantMessage.statusLabel = translate("chat.reconnecting");
+        } else if (state === "sending") {
+          targetAssistantMessage.statusLabel = "";
+        }
+      }
+      return;
+    }
+    if (!isTerminalConversationState(state)) return;
+    sending.value = false;
+    if (typeof clearPendingInteractionIfObsolete === "function") {
+      clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
+    }
+    if (!pendingInteractionRequest.value) {
+      interactionSubmitting.value = false;
+    }
+    if (state === "expired") {
+      scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
+    }
+    if (state === "no_conversation" || state === "expired") {
+      clearPendingInteraction();
+      return;
+    }
+    if (!targetAssistantMessage) return;
+    targetAssistantMessage.pending = false;
+    if (state === "completed") {
+      targetAssistantMessage.statusLabel = translate("chat.generated");
+      return;
+    }
+    if (state === "stopped") {
+      targetAssistantMessage.statusLabel = translate("chat.stopped");
+      if (!String(targetAssistantMessage.content || "").trim()) {
+        targetAssistantMessage.content = translate("chat.stoppedContent");
+      }
+      return;
+    }
+    if (state === "error") {
+      targetAssistantMessage.statusLabel = translate("chat.failed");
+    }
+  }
+
+  function applyConversationStateFromEvent(
+    eventName = "",
+    eventData = {},
+    { botMessage = null, fallbackDialogProcessId = "" } = {},
+  ) {
+    const normalizedEvent = String(eventName || "").trim();
+    if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return;
+    applyConversationState(eventData, { botMessage, fallbackDialogProcessId });
   }
 
   function forceStopUiFinalize() {
     if (!sending.value) return;
-    clearPendingInteraction();
-    interactionSubmitting.value = false;
-    markPendingAssistantMessageStopped();
+    const pendingAssistantMessage = findTargetAssistantMessage();
+    applyConversationState(
+      {
+        state: "stopped",
+        sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || ""),
+        dialogProcessId: String(pendingAssistantMessage?.dialogProcessId || ""),
+      },
+      { botMessage: pendingAssistantMessage },
+    );
     sending.value = false;
     chatWebSocketClient.clearLastReceivedSeqMap();
     chatWebSocketClient.dispose();
@@ -176,6 +413,13 @@ export function useChatEngine({
     botMsg.pending = true;
     botMsg.statusLabel = "";
     botMsg.executionLogTotal = Number(botMsg.executionLogTotal || 0);
+    applyConversationState(
+      {
+        state: "sending",
+        sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || ""),
+      },
+      { botMessage: botMsg },
+    );
     scrollBottom();
 
     try {
@@ -202,6 +446,13 @@ export function useChatEngine({
       };
 
       await chatWebSocketClient.stream(payload, ({ event, data }) => {
+        applyConversationStateFromEvent(event, data || {}, {
+          botMessage: botMsg,
+          fallbackDialogProcessId: String(botMsg.dialogProcessId || "").trim(),
+        });
+        if (event === StreamEventEnum.CHANNEL_STATE) {
+          return;
+        }
         if (event === StreamEventEnum.THINKING) {
           const item = classifyRealtimeLog(data);
           if (!item.subAgentCall && item.dialogProcessId) {
@@ -259,8 +510,6 @@ export function useChatEngine({
         } else if (event === StreamEventEnum.DONE) {
           clearPendingInteraction();
           finalDoneEventData = data || {};
-          botMsg.pending = false;
-          botMsg.statusLabel = translate("chat.generated");
           botMsg.dialogProcessId = data.dialogProcessId || botMsg.dialogProcessId || "";
           const returnedId = data.sessionId || activeSession.value.backendSessionId;
           if (returnedId) {
@@ -308,13 +557,43 @@ export function useChatEngine({
           }
           scrollBottom();
         } else if (event === StreamEventEnum.STOPPED) {
-          markAssistantMessageStopped(botMsg);
           scrollBottom();
         }
       });
 
+      if (sending.value && finalDoneEventData) {
+        // Safety net: if terminal channel_state is delayed/lost, avoid sticky "stop" UI.
+        // Primary source of truth remains channel_state; this fallback only runs when
+        // stream is already ended and UI is still in-flight.
+        applyConversationState(
+          {
+            state: "completed",
+            sessionId: String(
+              finalDoneEventData?.sessionId ||
+                activeSession.value?.backendSessionId ||
+                activeSession.value?.id ||
+                "",
+            ),
+            dialogProcessId: String(
+              botMsg?.dialogProcessId || finalDoneEventData?.dialogProcessId || "",
+            ),
+            sourceEvent: "stream_finalize_fallback",
+          },
+          { botMessage: botMsg },
+        );
+      }
+
       if (chatWebSocketClient.isStopRequested()) {
-        markAssistantMessageStopped(botMsg);
+        applyConversationState(
+          {
+            state: "stopped",
+            sessionId: String(
+              activeSession.value?.backendSessionId || activeSession.value?.id || "",
+            ),
+            dialogProcessId: String(botMsg?.dialogProcessId || ""),
+          },
+          { botMessage: botMsg },
+        );
         scrollBottom();
         return;
       }
@@ -361,18 +640,28 @@ export function useChatEngine({
         }
       }
     } catch (error) {
-      botMsg.pending = false;
       if (chatWebSocketClient.isStopRequested()) {
-        clearPendingInteraction();
-        interactionSubmitting.value = false;
-        botMsg.statusLabel = translate("chat.stopped");
-        if (!String(botMsg.content || "").trim()) {
-          botMsg.content = translate("chat.stoppedContent");
-        }
+        applyConversationState(
+          {
+            state: "stopped",
+            sessionId: String(
+              activeSession.value?.backendSessionId || activeSession.value?.id || "",
+            ),
+            dialogProcessId: String(botMsg?.dialogProcessId || ""),
+          },
+          { botMessage: botMsg },
+        );
         return;
       }
+      applyConversationState(
+        {
+          state: "error",
+          sessionId: String(activeSession.value?.backendSessionId || activeSession.value?.id || ""),
+          dialogProcessId: String(botMsg?.dialogProcessId || ""),
+        },
+        { botMessage: botMsg },
+      );
       clearPendingInteraction();
-      botMsg.statusLabel = translate("chat.failed");
       const errorMessage = error.message || translate("chat.unknownError");
       botMsg.error = errorMessage;
       if (!botMsg.content?.trim()) {
@@ -382,12 +671,20 @@ export function useChatEngine({
       }
       notify({ type: "error", message: error.message || translate("chat.sendFailed") });
     } finally {
-      sending.value = false;
       chatWebSocketClient.clearStopRequested();
       if (!pendingInteractionRequest.value) {
         interactionSubmitting.value = false;
       }
     }
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      if (cacheExpiredRefreshTimer) {
+        clearTimeout(cacheExpiredRefreshTimer);
+        cacheExpiredRefreshTimer = null;
+      }
+    });
   }
 
   return {

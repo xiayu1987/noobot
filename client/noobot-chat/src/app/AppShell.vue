@@ -11,6 +11,7 @@ import UserSettingsPanel from "../modules/settings/UserSettingsPanel.vue";
 import ConfigParamsPanel from "../modules/settings/ConfigParamsPanel.vue";
 import UserInteractionForm from "../modules/composer/UserInteractionForm.vue";
 import ChatComposer from "../modules/composer/ChatComposer.vue";
+import ConversationStateDebugPanel from "../modules/debug/ConversationStateDebugPanel.vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageListPanel from "./ChatMessageListPanel.vue";
 import SessionSidebar from "../modules/session/SessionSidebar.vue";
@@ -21,6 +22,7 @@ import { useLocale } from "../shared/i18n/useLocale";
 import { useMarkdownRenderer } from "../composables/infra/useMarkdownRenderer";
 import { useReconnect } from "../composables/infra/useReconnect";
 import { usePanelState } from "../composables/infra/usePanelState";
+import { frontendConfig } from "../shared/config/frontendConfig";
 
 // --- Markdown rendering (module-level singleton) ---
 const { renderMarkdown } = useMarkdownRenderer();
@@ -225,6 +227,8 @@ const {
   initSessionsAfterMount,
   chatWebSocketClient,
   handleReconnect,
+  conversationStateSnapshot,
+  conversationStateTimeline,
 } = useChatSession({
   userId,
   apiKey,
@@ -240,6 +244,10 @@ const {
   notify: notifyUi,
   clearUploadSelection: () => composerRef.value?.clearUploadSelection?.(),
 });
+
+const showConversationStateDebugPanel = computed(
+  () => frontendConfig.debug.showConversationStatePanel,
+);
 
 // --- Reconnect ---
 function hasActiveSessionForReconnect() {
@@ -537,6 +545,14 @@ const drawerPanels = computed(() => [
         @connector-selected="onConnectorSelected"
         @send="send"
         @stop="stopSending"
+      />
+      <ConversationStateDebugPanel
+        v-if="showConversationStateDebugPanel"
+        :sending="sending"
+        :interaction-submitting="interactionSubmitting"
+        :pending-interaction-request="pendingInteractionRequest"
+        :conversation-state-snapshot="conversationStateSnapshot"
+        :conversation-state-timeline="conversationStateTimeline"
       />
       </main>
       <el-drawer

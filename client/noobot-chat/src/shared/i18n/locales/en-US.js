@@ -161,15 +161,19 @@ export const enUSMessages = {
     "loadSessionDetailFailed": "Failed to load session detail",
     "cannotDeleteWhileSending": "Cannot delete while sending",
     "deleteSessionFailed": "Failed to delete session",
+    "stopping": "Stopping",
+    "reconnecting": "Reconnecting",
     "stopped": "Stopped",
     "stoppedContent": "(Stopped)",
     "uploadOnly": "[Attachments only]",
     "uploadHint": "Parse attachment content.",
     "generated": "Completed",
     "failed": "Generation failed",
+    "interactionPayloadMissing": "Interaction data is missing. Please retry.",
     "unknownError": "Unknown error",
     "occurredError": "Error: {error}",
-    "sendFailed": "Send failed"
+    "sendFailed": "Send failed",
+    "expiredRefreshFailed": "Session expired. Please create a new conversation."
   },
   "message": {
     "subtaskProcessing": "Subtask processing...",

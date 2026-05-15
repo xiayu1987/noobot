@@ -161,15 +161,19 @@ export const zhCNMessages = {
     "loadSessionDetailFailed": "加载会话详情失败",
     "cannotDeleteWhileSending": "发送中，暂不能删除会话",
     "deleteSessionFailed": "删除会话失败",
+    "stopping": "停止中",
+    "reconnecting": "重连中",
     "stopped": "已停止",
     "stoppedContent": "（已停止）",
     "uploadOnly": "[仅上传附件]",
     "uploadHint": "解析附件内容",
     "generated": "生成完成",
     "failed": "生成失败",
+    "interactionPayloadMissing": "交互数据丢失，请重试",
     "unknownError": "未知错误",
     "occurredError": "发生错误：{error}",
-    "sendFailed": "发送失败"
+    "sendFailed": "发送失败",
+    "expiredRefreshFailed": "会话已过期，请新建对话"
   },
   "message": {
     "subtaskProcessing": "子任务处理中...",

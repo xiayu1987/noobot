@@ -28,9 +28,11 @@ function createFixture({ activeId = "s-1" } = {}) {
   const interactionSubmitting = ref(true);
 
   const clearPendingInteraction = vi.fn();
+  const clearPendingInteractionIfObsolete = vi.fn();
   const setPendingInteractionRequest = vi.fn();
   const applyCompletedToolLogsToMessages = vi.fn();
   const scrollBottom = vi.fn();
+  const notify = vi.fn();
 
   const chatList = {
     fetchSessions: vi.fn(async () => {}),
@@ -68,11 +70,13 @@ function createFixture({ activeId = "s-1" } = {}) {
     applyCompletedToolLogsToMessages,
     sessionTitleFromMessages: () => "session",
     clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     isInteractionRequestHandled: vi.fn(() => false),
     classifyRealtimeLog: (item) => item,
     scrollBottom,
     translate: (key) => key,
+    notify,
   });
 
   return {
@@ -81,9 +85,11 @@ function createFixture({ activeId = "s-1" } = {}) {
     mocks: {
       appendMessage,
       clearPendingInteraction,
+      clearPendingInteractionIfObsolete,
       setPendingInteractionRequest,
       applyCompletedToolLogsToMessages,
       scrollBottom,
+      notify,
       chatList,
       chatWebSocketClient,
     },
@@ -189,6 +195,57 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.content).toBe("AB");
     expect(api.__test.replayCache["s-2"]).toBeUndefined();
+  });
+
+  it("RT-05: reconnect conversationStates can restore sending=true", async () => {
+    const { api, refs } = createFixture();
+    refs.sending.value = false;
+
+    await api.applyReconnectData({
+      sessions: [
+        {
+          sessionId: "s-1",
+          conversationStates: [
+            {
+              sessionId: "s-1",
+              dialogProcessId: "dp-state",
+              state: "sending",
+              seq: 9,
+            },
+          ],
+          dialogProcesses: [],
+        },
+      ],
+    });
+
+    expect(refs.sending.value).toBe(true);
+  });
+
+  it("RT-06: expired state clears pending interaction and stops sending", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.sending.value = true;
+    refs.interactionSubmitting.value = true;
+
+    await api.applyReconnectData({
+      sessions: [
+        {
+          sessionId: "s-1",
+          conversationStates: [
+            {
+              sessionId: "s-1",
+              dialogProcessId: "dp-expired",
+              state: "expired",
+              seq: 11,
+            },
+          ],
+          dialogProcesses: [],
+        },
+      ],
+    });
+
+    expect(refs.sending.value).toBe(false);
+    expect(refs.interactionSubmitting.value).toBe(false);
+    expect(mocks.clearPendingInteraction).toHaveBeenCalled();
   });
 
   it("SQ-02/SQ-03: out-of-order and duplicate sequence are deduplicated", async () => {
@@ -339,8 +396,139 @@ describe("useReconnectReplay", () => {
     expect(assistant?.pending).toBe(true);
   });
 
+  it("EV-01c: replay in-flight DELTA does not restore sending without channel_state", async () => {
+    const { api, refs } = createFixture();
+    refs.sending.value = false;
+    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+
+    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-sending",
+      seq: 1,
+      text: "A",
+    });
+
+    expect(refs.sending.value).toBe(false);
+  });
+
+  it("EV-01d: channel_state sending event restores sending=true", async () => {
+    const { api, refs } = createFixture();
+    refs.sending.value = false;
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-cs",
+      state: "sending",
+      seq: 11,
+    });
+
+    expect(refs.sending.value).toBe(true);
+  });
+
+  it("EV-01e: channel_state reconnecting keeps sending=true", async () => {
+    const { api, refs } = createFixture();
+    refs.sending.value = false;
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "",
+      state: "reconnecting",
+      seq: 12,
+    });
+
+    expect(refs.sending.value).toBe(true);
+  });
+
+  it("EV-01f: channel_state stopping keeps sending=true and marks assistant status", async () => {
+    const { api, refs } = createFixture();
+    refs.sending.value = false;
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-stop", content: "", pending: true },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-stop",
+      state: "stopping",
+      seq: 12,
+    });
+
+    const assistant = refs.activeSession.value.messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stop",
+    );
+    expect(refs.sending.value).toBe(true);
+    expect(assistant?.statusLabel).toBe("chat.stopping");
+    expect(assistant?.pending).toBe(true);
+  });
+
+  it("EV-02b: replay in-flight THINKING does not restore sending without channel_state", async () => {
+    const { api, refs } = createFixture();
+    refs.sending.value = false;
+    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+
+    await api.applyReconnectEvent(StreamEventEnum.THINKING, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-thinking",
+      seq: 1,
+      text: "thinking",
+    });
+
+    expect(refs.sending.value).toBe(false);
+  });
+
+  it("EV-01b: when current turn has no user, render session first then replay", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "old-q", ts: 1 },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old-a", ts: 2, pending: false },
+    ];
+    refs.activeSession.value.rawMessages = [...refs.activeSession.value.messages];
+
+    mocks.chatList.fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "s-1",
+      sessions: [
+        {
+          sessionId: "s-1",
+          messages: [
+            { role: RoleEnum.USER, content: "old-q", ts: 1 },
+            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old-a", ts: 2 },
+            { role: RoleEnum.USER, content: "new-q", ts: 3 },
+          ],
+        },
+      ],
+    }));
+    mocks.chatList.applySessionDetail = vi.fn((detail) => {
+      const main = (detail?.sessions || [])[0] || {};
+      refs.activeSession.value.messages = (main.messages || []).map((message) => ({ ...message }));
+      refs.activeSession.value.rawMessages = [...refs.activeSession.value.messages];
+    });
+
+    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-new",
+      seq: 1,
+      text: "A",
+    });
+
+    const userIdx = refs.activeSession.value.messages.findIndex(
+      (message) => message.role === RoleEnum.USER && message.content === "new-q",
+    );
+    const assistantIdx = refs.activeSession.value.messages.findIndex(
+      (message) =>
+        message.role === RoleEnum.ASSISTANT &&
+        message.dialogProcessId === "dp-new" &&
+        message.content === "A",
+    );
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
+    expect(userIdx).toBeGreaterThan(-1);
+    expect(assistantIdx).toBeGreaterThan(userIdx);
+  });
+
   it("EV-03: INTERACTION_REQUEST sets pending interaction without terminal cleanup", async () => {
     const { api, refs, mocks } = createFixture();
+    refs.interactionSubmitting.value = false;
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-int", content: "", pending: true },
@@ -356,10 +544,80 @@ describe("useReconnectReplay", () => {
 
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledTimes(1);
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
-    expect(refs.interactionSubmitting.value).toBe(true);
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
+    expect(refs.interactionSubmitting.value).toBe(false);
   });
 
-  it("EV-06/FN-01: ERROR finalizes terminal state", async () => {
+  it("EV-03b: non-interaction replay event does not clear interaction without channel_state", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-int2", content: "", pending: true },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-int2",
+      seq: 1,
+      requestId: "req-2",
+      interactionType: "confirm",
+    });
+    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-int2",
+      seq: 2,
+      text: "resume",
+    });
+
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
+  });
+
+  it("EV-03c: channel_state completed clears obsolete interaction for same turn", async () => {
+    const { api, mocks } = createFixture();
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-int3",
+      state: "completed",
+      seq: 12,
+    });
+
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      dialogProcessId: "dp-int3",
+    });
+  });
+
+  it("EV-03d: channel_state interaction_pending restores pending interaction payload", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.interactionSubmitting.value = false;
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-int4",
+      state: "interaction_pending",
+      seq: 13,
+      pendingInteraction: {
+        requestId: "req-4",
+        sessionId: "s-1",
+        dialogProcessId: "dp-int4",
+        interactionType: "confirm",
+        content: "need confirm",
+      },
+    });
+
+    expect(refs.interactionSubmitting.value).toBe(false);
+    expect(mocks.setPendingInteractionRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.setPendingInteractionRequest.mock.calls[0][0]).toMatchObject({
+      requestId: "req-4",
+      sessionId: "s-1",
+      dialogProcessId: "dp-int4",
+      interactionType: "confirm",
+      content: "need confirm",
+    });
+  });
+
+  it("EV-06/FN-01: channel_state error finalizes terminal state", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -372,6 +630,12 @@ describe("useReconnectReplay", () => {
       seq: 2,
       error: "boom",
     });
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-e",
+      state: "error",
+      seq: 3,
+    });
 
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-e",
@@ -381,11 +645,14 @@ describe("useReconnectReplay", () => {
     expect(assistant?.error).toBe("boom");
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteraction).toHaveBeenCalledTimes(1);
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      dialogProcessId: "dp-e",
+    });
     expect(mocks.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
   });
 
-  it("EV-04: DONE sets terminal ui fields and finalizes state", async () => {
+  it("EV-04: channel_state completed sets terminal ui fields", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -397,6 +664,12 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-done",
       seq: 2,
     });
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-done",
+      state: "completed",
+      seq: 3,
+    });
 
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-done",
@@ -405,10 +678,13 @@ describe("useReconnectReplay", () => {
     expect(assistant?.statusLabel).toBe("chat.generated");
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteraction).toHaveBeenCalledTimes(1);
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      dialogProcessId: "dp-done",
+    });
   });
 
-  it("EV-05: STOPPED sets stopped status and finalizes state", async () => {
+  it("EV-05: channel_state stopped sets stopped status", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -420,6 +696,12 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-stopped",
       seq: 2,
     });
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-stopped",
+      state: "stopped",
+      seq: 3,
+    });
 
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stopped",
@@ -428,7 +710,10 @@ describe("useReconnectReplay", () => {
     expect(assistant?.statusLabel).toBe("chat.stopped");
     expect(refs.sending.value).toBe(false);
     expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteraction).toHaveBeenCalledTimes(1);
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      dialogProcessId: "dp-stopped",
+    });
   });
 
   it("RC-04: terminal event blocks subsequent DELTA mutation", async () => {
@@ -485,6 +770,42 @@ describe("useReconnectReplay", () => {
     expect(api.__test.replayCache["s-2"]).toBeUndefined();
   });
 
+  it("FN-02b: channel_state expired triggers silent refresh timer", async () => {
+    vi.useFakeTimers();
+    const { api, mocks } = createFixture();
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-exp",
+      state: "expired",
+      seq: 15,
+    });
+
+    vi.advanceTimersByTime(1200);
+    await Promise.resolve();
+
+    expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", {
+      silent: true,
+      preserveCurrentMessages: true,
+    });
+  });
+
+  it("FN-02c: channel_state no_conversation clears pending interaction", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.sending.value = true;
+    refs.interactionSubmitting.value = true;
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-none",
+      state: "no_conversation",
+      seq: 16,
+    });
+
+    expect(refs.sending.value).toBe(false);
+    expect(refs.interactionSubmitting.value).toBe(false);
+    expect(mocks.clearPendingInteraction).toHaveBeenCalled();
+  });
+
   it("FN-03: timer is cleaned on scope dispose", async () => {
     vi.useFakeTimers();
     let api;
@@ -508,7 +829,7 @@ describe("useReconnectReplay", () => {
     StreamEventEnum.DONE,
     StreamEventEnum.STOPPED,
     StreamEventEnum.ERROR,
-  ])("FN-01: %s duplicate replay finalizes only once", async (terminalEvent) => {
+  ])("FN-01: %s duplicate replay does not trigger terminal cleanup without channel_state", async (terminalEvent) => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -528,8 +849,8 @@ describe("useReconnectReplay", () => {
       ...(terminalEvent === StreamEventEnum.ERROR ? { error: "boom" } : {}),
     });
 
-    expect(mocks.clearPendingInteraction).toHaveBeenCalledTimes(1);
-    expect(mocks.chatWebSocketClient.clearStopRequested).toHaveBeenCalledTimes(1);
+    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
+    expect(mocks.chatWebSocketClient.clearStopRequested).not.toHaveBeenCalled();
   });
 
   it("RC-05: missing dialogProcessId does not throw and uses safe cache key", async () => {
@@ -665,7 +986,7 @@ describe("useReconnectReplay", () => {
     expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-big"]).toBe(1200);
   });
 
-  it("副作用顺序: appendMessage -> finalize hooks -> scrollBottom", async () => {
+  it("副作用顺序: appendMessage -> scrollBottom; terminal cleanup由channel_state触发", async () => {
     const { api, mocks } = createFixture();
     await api.applyReconnectData({
       sessions: [
@@ -680,18 +1001,92 @@ describe("useReconnectReplay", () => {
               ],
             },
           ],
+          conversationStates: [
+            { sessionId: "s-1", dialogProcessId: "dp-order", state: "error", seq: 3 },
+          ],
         },
       ],
     });
 
     expect(mocks.appendMessage).toHaveBeenCalled();
-    expect(mocks.clearPendingInteraction).toHaveBeenCalled();
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalled();
     expect(mocks.scrollBottom).toHaveBeenCalled();
+  });
 
-    const appendOrder = mocks.appendMessage.mock.invocationCallOrder[0];
-    const finalizeOrder = mocks.clearPendingInteraction.mock.invocationCallOrder[0];
-    const scrollOrder = mocks.scrollBottom.mock.invocationCallOrder[0];
-    expect(appendOrder).toBeLessThan(finalizeOrder);
-    expect(finalizeOrder).toBeLessThan(scrollOrder);
+  it("interaction_pending without pendingInteraction falls back to error state", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "" },
+    ];
+
+    await api.applyReconnectData({
+      sessions: [
+        {
+          sessionId: "s-1",
+          conversationStates: [
+            {
+              sessionId: "s-1",
+              dialogProcessId: "dp-missing",
+              state: "interaction_pending",
+              seq: 10,
+            },
+          ],
+          dialogProcesses: [],
+        },
+      ],
+    });
+
+    const assistant = refs.activeSession.value.messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT,
+    );
+    expect(refs.sending.value).toBe(false);
+    expect(assistant?.statusLabel).toBe("chat.failed");
+    expect(assistant?.error).toBe("chat.interactionPayloadMissing");
+    expect(mocks.notify).toHaveBeenCalledWith({
+      type: "error",
+      message: "chat.interactionPayloadMissing",
+    });
+  });
+
+  it("expired refresh failure falls back to error state", async () => {
+    vi.useFakeTimers();
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "" },
+    ];
+    mocks.chatList.fetchSessions.mockResolvedValue(false);
+
+    await api.applyReconnectData({
+      sessions: [
+        {
+          sessionId: "s-1",
+          conversationStates: [
+            {
+              sessionId: "s-1",
+              dialogProcessId: "dp-expired",
+              state: "expired",
+              seq: 11,
+            },
+          ],
+          dialogProcesses: [],
+        },
+      ],
+    });
+
+    await vi.advanceTimersByTimeAsync(1300);
+
+    const assistant = refs.activeSession.value.messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT,
+    );
+    expect(refs.sending.value).toBe(false);
+    expect(assistant?.statusLabel).toBe("chat.failed");
+    expect(assistant?.error).toBe("chat.expiredRefreshFailed");
+    expect(mocks.notify).toHaveBeenCalledWith({
+      type: "error",
+      message: "chat.expiredRefreshFailed",
+    });
+    vi.useRealTimers();
   });
 });
