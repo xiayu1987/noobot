@@ -29,7 +29,21 @@
 
 ---
 
-## 3. Model Adapter Rules / 模型适配规范
+## 3. Magic Strings / 魔法字符串
+
+### EN
+- **No magic strings in business logic**.
+- Repeated or semantic strings (event names, statuses, tool IDs, provider names, etc.) must be extracted to constants/enums.
+- Inline string literals are only allowed for one-off local values with clear meaning.
+
+### 中文
+- **业务逻辑中禁止使用魔法字符串**。
+- 对于有业务语义或会复用的字符串（事件名、状态值、工具 ID、provider 名称等），必须提取为常量或枚举。
+- 仅一次性、语义清晰的局部值允许内联字符串字面量。
+
+---
+
+## 4. Model Adapter Rules / 模型适配规范
 
 ### EN
 - **Provider adapter logic must stay separated** (`dashscope`, `openai_compatible`, etc.).
@@ -43,7 +57,7 @@
 
 ---
 
-## 4. User-Facing Text / 用户可见文案
+## 5. User-Facing Text / 用户可见文案
 
 ### EN
 - **All user-facing text must be bilingual** (`zh-CN`, `en-US`).
@@ -55,7 +69,7 @@
 
 ---
 
-## 5. Tool Documentation / 工具文档
+## 6. Tool Documentation / 工具文档
 
 ### EN
 - **Tool docs format**: "what it does + input + output".
@@ -73,7 +87,7 @@
 
 ---
 
-## 6. Frontend / 前端规范
+## 7. Frontend / 前端规范
 
 ### EN
 - **Frontend must handle long content + mobile layout**.
@@ -85,7 +99,7 @@
 
 ---
 
-## 7. Logging Standard / 日志规范
+## 8. Logging Standard / 日志规范
 
 ### 6.1 No `console.*` in Core Business Code / 核心业务代码禁止使用 `console.*`
 
@@ -226,12 +240,13 @@ function myFunction({ ..., errorLogger = null }) {
 
 ---
 
-## 8. Pre-Merge Checklist / 提交前检查
+## 9. Pre-Merge Checklist / 提交前检查
 
 ### EN
 - [ ] Build/syntax checks pass.
 - [ ] zh/en keys are aligned.
 - [ ] No single-letter names added.
+- [ ] No magic strings added in business logic.
 - [ ] No new hardcoded user text.
 - [ ] Provider adapter branches are not over-unified.
 
@@ -239,5 +254,6 @@ function myFunction({ ..., errorLogger = null }) {
 - [ ] 构建与语法检查通过。
 - [ ] 中英文 key 对齐。
 - [ ] 未新增单字母命名。
+- [ ] 业务逻辑中未新增魔法字符串。
 - [ ] 未新增硬编码用户文案。
 - [ ] 未将 provider 适配分支强行归一。
