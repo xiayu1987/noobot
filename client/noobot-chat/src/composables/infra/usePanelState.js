@@ -46,15 +46,28 @@ export function usePanelState() {
     if (isMobile.value) mobileSidebarOpen.value = false;
   }
 
+  function openMobileSidebar() {
+    if (isMobile.value) mobileSidebarOpen.value = true;
+  }
+
+  function closeAllDrawers() {
+    workspaceVisible.value = false;
+    userSettingsVisible.value = false;
+    configParamsVisible.value = false;
+  }
+
   function openWorkspace() {
+    closeAllDrawers();
     workspaceVisible.value = true;
   }
 
   function openUserSettings() {
+    closeAllDrawers();
     userSettingsVisible.value = true;
   }
 
   function openConfigParams() {
+    closeAllDrawers();
     configParamsVisible.value = true;
   }
 
@@ -81,6 +94,8 @@ export function usePanelState() {
     drawerSize,
     toggleSidebar,
     closeMobileSidebar,
+    openMobileSidebar,
+    closeAllDrawers,
     openWorkspace,
     openUserSettings,
     openConfigParams,
