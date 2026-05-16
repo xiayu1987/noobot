@@ -205,6 +205,16 @@ export function registerChatWebSocketServer(
                 : {},
           });
         }),
+      emitNotification: ({ eventName = "notification", data = {} } = {}) => {
+        const normalizedEventName =
+          String(eventName || "").trim().toLowerCase() || "notification";
+        const payload = data && typeof data === "object" ? data : {};
+        sendEvent(normalizedEventName, payload);
+        return Promise.resolve({
+          ok: true,
+          event: normalizedEventName,
+        });
+      },
     };
 
     webSocket.on("message", async (rawMessage) => {

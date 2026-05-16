@@ -123,11 +123,32 @@ export class ConnectorEventListener {
   }
 
   async notifyConnectorConnected({ connectorType = "", connectorName = "" } = {}) {
-    if (!this.allowUserInteraction || !this.bridge?.requestUserInteraction) return;
+    if (!this.allowUserInteraction || !this.bridge) return;
     const normalizedType = normalizeConnectorType(connectorType);
     const normalizedName = String(connectorName || "").trim();
     if (!normalizedType || !normalizedName) return;
     try {
+      if (typeof this.bridge.emitNotification === "function") {
+        await this.bridge.emitNotification({
+          eventName: "connector_status",
+          data: {
+            content: `${normalizedType} ${tSystem("connectors.event.connected")}: ${normalizedName}`,
+            dialogProcessId: this.dialogProcessId,
+            sessionId: this.sessionId,
+            connectorName: normalizedName,
+            connectorType: normalizedType,
+            status: "connected",
+            interactionType: "connector_connected",
+            interactionData: {
+              connectorName: normalizedName,
+              connectorType: normalizedType,
+              status: "connected",
+            },
+          },
+        });
+        return;
+      }
+      if (!this.bridge?.requestUserInteraction) return;
       await this.bridge.requestUserInteraction({
         content: `${normalizedType} ${tSystem("connectors.event.connected")}: ${normalizedName}`,
         fields: [],

@@ -27,7 +27,10 @@ import {
   splitReconnectMessagesByDialogProcessId,
 } from "../infra/reconnectReplayModel";
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
-import { normalizeInteractionRequestPayload } from "./interactionPayload";
+import {
+  normalizeInteractionRequestPayload,
+  resolveConnectorStatusPayload,
+} from "./interactionPayload";
 
 export function useReconnectReplay({
   sessions,
@@ -46,6 +49,9 @@ export function useReconnectReplay({
   clearPendingInteractionIfObsolete,
   setPendingInteractionRequest,
   isInteractionRequestHandled,
+  connectorTypeSet,
+  upsertConnectedConnectorInPanelState,
+  refreshSessionConnectorsAsync,
   classifyRealtimeLog,
   scrollBottom,
   translate,
@@ -719,6 +725,23 @@ export function useReconnectReplay({
         const interactionRequest = normalizeInteractionRequestPayload(eventData);
         if (!isInteractionRequestHandled(interactionRequest)) {
           setPendingInteractionRequest(interactionRequest);
+        }
+      } else if (eventName === StreamEventEnum.CONNECTOR_STATUS) {
+        const { connectorType, connectorName, status } =
+          resolveConnectorStatusPayload(eventData);
+        if (
+          connectorTypeSet?.has?.(connectorType) &&
+          connectorName &&
+          typeof upsertConnectedConnectorInPanelState === "function"
+        ) {
+          upsertConnectedConnectorInPanelState(activeSession.value, {
+            connectorType,
+            connectorName,
+            status,
+          });
+          if (typeof refreshSessionConnectorsAsync === "function") {
+            refreshSessionConnectorsAsync(activeSession.value?.id || "");
+          }
         }
       } else if (eventName === StreamEventEnum.DONE) {
         terminalDialogProcessIdSet.add(normalizedDpId);

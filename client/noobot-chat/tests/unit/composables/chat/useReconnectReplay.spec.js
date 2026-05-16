@@ -30,6 +30,8 @@ function createFixture({ activeId = "s-1" } = {}) {
   const clearPendingInteraction = vi.fn();
   const clearPendingInteractionIfObsolete = vi.fn();
   const setPendingInteractionRequest = vi.fn();
+  const upsertConnectedConnectorInPanelState = vi.fn();
+  const refreshSessionConnectorsAsync = vi.fn();
   const applyCompletedToolLogsToMessages = vi.fn();
   const scrollBottom = vi.fn();
   const notify = vi.fn();
@@ -73,6 +75,9 @@ function createFixture({ activeId = "s-1" } = {}) {
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     isInteractionRequestHandled: vi.fn(() => false),
+    connectorTypeSet: new Set(["email"]),
+    upsertConnectedConnectorInPanelState,
+    refreshSessionConnectorsAsync,
     classifyRealtimeLog: (item) => item,
     scrollBottom,
     translate: (key) => key,
@@ -87,6 +92,8 @@ function createFixture({ activeId = "s-1" } = {}) {
       clearPendingInteraction,
       clearPendingInteractionIfObsolete,
       setPendingInteractionRequest,
+      upsertConnectedConnectorInPanelState,
+      refreshSessionConnectorsAsync,
       applyCompletedToolLogsToMessages,
       scrollBottom,
       notify,
@@ -219,6 +226,29 @@ describe("useReconnectReplay", () => {
     });
 
     expect(refs.sending.value).toBe(true);
+  });
+
+  it("EV-03e: connector_status is informational and should not create pending interaction", async () => {
+    const { api, refs, mocks } = createFixture();
+
+    await api.applyReconnectEvent(StreamEventEnum.CONNECTOR_STATUS, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-connector-status",
+      connectorType: "email",
+      connectorName: "example_email",
+      status: "connected",
+    });
+
+    expect(mocks.upsertConnectedConnectorInPanelState).toHaveBeenCalledWith(
+      refs.activeSession.value,
+      {
+        connectorType: "email",
+        connectorName: "example_email",
+        status: "connected",
+      },
+    );
+    expect(mocks.refreshSessionConnectorsAsync).toHaveBeenCalledWith("s-1");
+    expect(mocks.setPendingInteractionRequest).not.toHaveBeenCalled();
   });
 
   it("RT-06: expired state clears pending interaction and stops sending", async () => {
