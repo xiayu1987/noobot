@@ -42,6 +42,8 @@ const {
   drawerSize,
   toggleSidebar,
   closeMobileSidebar,
+  openMobileSidebar,
+  closeAllDrawers,
   openWorkspace: openWorkspaceRaw,
   openUserSettings: openUserSettingsRaw,
   openConfigParams: openConfigParamsRaw,
@@ -76,7 +78,9 @@ const {
   userId,
   notify: notifyUi,
   onConnected: async () => {
-    await fetchSessions();
+    const route = parsePseudoRouteFromLocation();
+    await fetchSessions(route.sessionId || "");
+    await applyPseudoRoute(route);
     chatWebSocketClient.connect();
     reconnectActiveSession({ force: true });
   },
@@ -181,6 +185,117 @@ function formatTime(ts) {
   });
 }
 
+const PSEUDO_ROUTE_SESSION_KEY = "session";
+const PSEUDO_ROUTE_PANEL_KEY = "panel";
+const PANEL_WORKSPACE = "workspace";
+const PANEL_USER_SETTINGS = "user-settings";
+const PANEL_CONFIG_PARAMS = "config-params";
+const PANEL_SIDEBAR = "sidebar";
+
+const applyingPseudoHistory = ref(false);
+const initialPseudoRouteApplied = ref(false);
+
+function normalizePanel(panel = "") {
+  const value = String(panel || "").trim();
+  if (
+    value === PANEL_WORKSPACE ||
+    value === PANEL_USER_SETTINGS ||
+    value === PANEL_CONFIG_PARAMS ||
+    value === PANEL_SIDEBAR
+  ) {
+    return value;
+  }
+  return "";
+}
+
+function parsePseudoRouteFromLocation() {
+  const params = new URLSearchParams(window.location.search || "");
+  return {
+    sessionId: String(params.get(PSEUDO_ROUTE_SESSION_KEY) || "").trim(),
+    panel: normalizePanel(params.get(PSEUDO_ROUTE_PANEL_KEY) || ""),
+  };
+}
+
+function resolveActivePseudoPanel() {
+  if (workspaceVisible.value) return PANEL_WORKSPACE;
+  if (userSettingsVisible.value) return PANEL_USER_SETTINGS;
+  if (configParamsVisible.value) return PANEL_CONFIG_PARAMS;
+  if (mobileSidebarOpen.value && isMobile.value) return PANEL_SIDEBAR;
+  return "";
+}
+
+function buildPseudoRouteFromCurrentState(patch = {}) {
+  const currentSessionId = String(activeSessionId.value || "").trim();
+  const currentPanel = resolveActivePseudoPanel();
+  const nextSessionId = Object.prototype.hasOwnProperty.call(patch, "sessionId")
+    ? String(patch.sessionId || "").trim()
+    : currentSessionId;
+  const nextPanel = Object.prototype.hasOwnProperty.call(patch, "panel")
+    ? normalizePanel(patch.panel)
+    : currentPanel;
+  return { sessionId: nextSessionId, panel: nextPanel };
+}
+
+function writePseudoRouteHistory(route = {}, { mode = "replace" } = {}) {
+  const nextRoute = buildPseudoRouteFromCurrentState(route);
+  const params = new URLSearchParams(window.location.search || "");
+  if (nextRoute.sessionId) {
+    params.set(PSEUDO_ROUTE_SESSION_KEY, nextRoute.sessionId);
+  } else {
+    params.delete(PSEUDO_ROUTE_SESSION_KEY);
+  }
+  if (nextRoute.panel) {
+    params.set(PSEUDO_ROUTE_PANEL_KEY, nextRoute.panel);
+  } else {
+    params.delete(PSEUDO_ROUTE_PANEL_KEY);
+  }
+  const query = params.toString();
+  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash || ""}`;
+  const nextState = {
+    ...(history.state && typeof history.state === "object" ? history.state : {}),
+    noobotPseudoRoute: nextRoute,
+  };
+  if (mode === "push") {
+    history.pushState(nextState, "", nextUrl);
+    return;
+  }
+  history.replaceState(nextState, "", nextUrl);
+}
+
+async function applyPseudoRoute(route = {}) {
+  const targetSessionId = String(route.sessionId || "").trim();
+  const targetPanel = normalizePanel(route.panel || "");
+  applyingPseudoHistory.value = true;
+  try {
+    closeAllDrawers();
+    closeMobileSidebar();
+    if (targetSessionId) {
+      await handleSelectSession(targetSessionId, {
+        fromHistory: true,
+        force: true,
+        preserveCurrentMessages: true,
+        silent: true,
+      });
+    }
+    if (targetPanel === PANEL_WORKSPACE) openWorkspaceRaw();
+    if (targetPanel === PANEL_USER_SETTINGS && isSuperAdmin.value) openUserSettingsRaw();
+    if (targetPanel === PANEL_CONFIG_PARAMS) openConfigParamsRaw();
+    if (targetPanel === PANEL_SIDEBAR) openMobileSidebar();
+  } finally {
+    applyingPseudoHistory.value = false;
+  }
+}
+
+function pushPseudoRoute(route = {}) {
+  if (applyingPseudoHistory.value) return;
+  writePseudoRouteHistory(route, { mode: "push" });
+}
+
+function replacePseudoRoute(route = {}) {
+  if (applyingPseudoHistory.value) return;
+  writePseudoRouteHistory(route, { mode: "replace" });
+}
+
 function scrollBottom() {
   nextTick(() => {
     const messageListPanel = messageListPanelRef.value;
@@ -265,9 +380,23 @@ const { reconnectActiveSession } = useReconnect({
 });
 
 // --- Session handlers ---
-function handleSelectSession(sessionId, options = {}) {
+async function handleSelectSession(sessionId, options = {}) {
+  const { fromHistory = false, ...selectOptions } = options || {};
+  const previousSessionId = String(activeSessionId.value || "").trim();
   closeMobileSidebarOnSelect(isMobile, mobileSidebarOpen);
-  return selectSession(sessionId, options);
+  await selectSession(sessionId, selectOptions);
+  const nextSessionId = String(activeSessionId.value || "").trim();
+  if (
+    !fromHistory &&
+    !selectOptions.silent &&
+    nextSessionId &&
+    nextSessionId !== previousSessionId
+  ) {
+    pushPseudoRoute({
+      sessionId: nextSessionId,
+      panel: "",
+    });
+  }
 }
 
 async function handleDeleteSession(sessionId) {
@@ -294,6 +423,10 @@ function openWorkspace() {
     return;
   }
   openWorkspaceRaw();
+  pushPseudoRoute({
+    sessionId: activeSessionId.value,
+    panel: PANEL_WORKSPACE,
+  });
 }
 
 async function openUserSettings() {
@@ -307,11 +440,34 @@ async function openUserSettings() {
     return;
   }
   openUserSettingsRaw();
+  pushPseudoRoute({
+    sessionId: activeSessionId.value,
+    panel: PANEL_USER_SETTINGS,
+  });
 }
 
 function openConfigParams() {
   if (!ensureConnected()) return;
   openConfigParamsRaw();
+  pushPseudoRoute({
+    sessionId: activeSessionId.value,
+    panel: PANEL_CONFIG_PARAMS,
+  });
+}
+
+function handleToggleSidebar() {
+  toggleSidebar();
+  if (isMobile.value) {
+    pushPseudoRoute({
+      sessionId: activeSessionId.value,
+      panel: mobileSidebarOpen.value ? PANEL_SIDEBAR : "",
+    });
+  }
+}
+
+function handleCloseMobileSidebar() {
+  closeMobileSidebar();
+  replacePseudoRoute({ panel: "" });
 }
 
 // --- Interaction handlers ---
@@ -336,15 +492,28 @@ function handleInteractionCancel() {
 }
 
 // --- Lifecycle ---
+async function handlePseudoRoutePopState(event) {
+  const routeFromState =
+    event?.state && typeof event.state === "object" ? event.state.noobotPseudoRoute : null;
+  const route = routeFromState && typeof routeFromState === "object"
+    ? routeFromState
+    : parsePseudoRouteFromLocation();
+  await applyPseudoRoute(route);
+}
+
 async function onAppMounted() {
+  window.addEventListener("popstate", handlePseudoRoutePopState);
   const autoConnected = await tryAutoConnect();
   if (autoConnected) {
+    replacePseudoRoute();
     return;
   }
   initSessionsAfterMount();
+  replacePseudoRoute();
 }
 
 function onAppUnmounted() {
+  window.removeEventListener("popstate", handlePseudoRoutePopState);
   releaseAllPreviewUrls();
 }
 
@@ -358,6 +527,31 @@ watch(
     syncBotScenarioWithConfig();
   },
   { deep: true, immediate: true },
+);
+
+watch(
+  [activeSessionId, workspaceVisible, userSettingsVisible, configParamsVisible, mobileSidebarOpen, isMobile],
+  () => {
+    replacePseudoRoute();
+  },
+);
+
+watch(
+  () => activeSessionId.value,
+  async (nextSessionId) => {
+    if (!nextSessionId || initialPseudoRouteApplied.value) return;
+    const route = parsePseudoRouteFromLocation();
+    const hasPseudoRoute = Boolean(route.sessionId || route.panel);
+    if (!hasPseudoRoute) {
+      initialPseudoRouteApplied.value = true;
+      replacePseudoRoute();
+      return;
+    }
+    initialPseudoRouteApplied.value = true;
+    await applyPseudoRoute(route);
+    replacePseudoRoute();
+  },
+  { immediate: true },
 );
 
 function onAllowUserInteractionUpdate(value) {
@@ -465,7 +659,7 @@ const drawerPanels = computed(() => [
       <div
         v-if="mobileSidebarOpen && isMobile"
         class="mobile-mask"
-        @click="closeMobileSidebar"
+        @click="handleCloseMobileSidebar"
       ></div>
       <SessionSidebar
         :sidebar-collapsed="sidebarCollapsed"
@@ -479,7 +673,7 @@ const drawerPanels = computed(() => [
         :loading-sessions="loadingSessions"
         :sessions="sessions"
         :active-session-id="activeSessionId"
-        @toggle-sidebar="toggleSidebar"
+        @toggle-sidebar="handleToggleSidebar"
         @update:user-id="onUserIdUpdate"
         @update:connect-code="onConnectCodeUpdate"
         @connect="connectBackend"
@@ -495,7 +689,7 @@ const drawerPanels = computed(() => [
         :title="activeSession?.title || translate('common.session')"
         :user-id="userId"
         :is-super-admin="isSuperAdmin"
-        @toggle-sidebar="toggleSidebar"
+        @toggle-sidebar="handleToggleSidebar"
         @open-workspace="openWorkspace"
         @open-user-settings="openUserSettings"
         @open-config-params="openConfigParams"
