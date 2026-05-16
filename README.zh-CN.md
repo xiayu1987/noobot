@@ -38,11 +38,24 @@ noobot/
 git clone https://github.com/xiayu1987/noobot.git
 cd noobot
 
-cp service/config/global.config.example.json service/config/global.config.json
-cp user-template/default-user/config.example.json user-template/default-user/config.json
 chmod +x start.sh
 ./start.sh
 ```
+
+说明：
+- `start.sh` 会先执行项目启动引导（`service/scripts/project-launcher.js`）。
+- 若 `service/config/global.config.json` 不存在，会进入交互式配置并自动生成配置文件。
+- 在非交互环境可用环境变量初始化（示例）：
+
+```bash
+NOOBOT_MODEL_FORMAT=openai_compatible \
+NOOBOT_MODEL_NAME=gemini-3-flash \
+NOOBOT_MODEL_API_KEY=xxx \
+NOOBOT_MODEL_BASE_URL=https://example.com/v1 \
+./start.sh
+```
+
+可选：`NOOBOT_SETUP_LANG=zh|en`（初始化引导语言，并同步 `preferences.language` 与配置内置文案的中英文文本）。
 
 默认地址：
 
@@ -81,6 +94,9 @@ CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
 ```
 
 ## PM2（项目内）
+
+> 注意：`npm run pm2:start` 仅启动后端服务，不包含项目初始化引导。  
+> 首次部署或需要自动配置同步时，请优先使用 `./start.sh`。
 
 ```bash
 cd service
