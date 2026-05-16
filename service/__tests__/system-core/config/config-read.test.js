@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 
 import { loadGlobalConfig } from "../../../system-core/config/core/global-config-loader.js";
 import { ConfigService } from "../../../system-core/config/core/config-service.js";
@@ -122,6 +122,108 @@ test("ConfigService.loadUserConfig: 缺少 config-params.json 时应使用全局
     assert.deepEqual(loaded.configParams, { API_KEY: "global-only-key" });
   } finally {
     await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("ConfigService.loadUserConfig: user 为空时应回退读取 workspace/config-params.json", async () => {
+  const workspaceRoot = await createTempDir();
+  const userDir = path.join(workspaceRoot, "admin");
+  try {
+    await mkdir(userDir, { recursive: true });
+    await writeFile(
+      path.join(userDir, "config.json"),
+      JSON.stringify({
+        default_provider: "openai",
+        providers: {
+          openai: { model: "gpt-4o", api_key: "${API_KEY}" },
+        },
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(workspaceRoot, "config-params.json"),
+      JSON.stringify({
+        values: {
+          API_KEY: "workspace-new-key",
+        },
+      }),
+      "utf8",
+    );
+
+    const service = new ConfigService({
+      globalConfig: {
+        configParams: {
+          API_KEY: "stale-global-key",
+        },
+      },
+    });
+
+    const loaded = await service.loadUserConfig(userDir);
+    assert.equal(loaded.providers?.openai?.api_key, "workspace-new-key");
+    assert.deepEqual(loaded.configParams, { API_KEY: "workspace-new-key" });
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test("ConfigService.loadUserConfig: user 非空应优先于 workspace，user 空值应回退 workspace", async () => {
+  const workspaceRoot = await createTempDir();
+  const userDir = path.join(workspaceRoot, "admin");
+  try {
+    await mkdir(userDir, { recursive: true });
+    await writeFile(
+      path.join(userDir, "config.json"),
+      JSON.stringify({
+        default_provider: "openai",
+        providers: {
+          openai: {
+            model: "gpt-4o",
+            api_key: "${API_KEY}",
+            base_url: "${BASE_URL}",
+          },
+        },
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(workspaceRoot, "config-params.json"),
+      JSON.stringify({
+        values: {
+          API_KEY: "workspace-key",
+          BASE_URL: "https://workspace.example.com",
+        },
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(userDir, "config-params.json"),
+      JSON.stringify({
+        values: {
+          API_KEY: "user-key",
+          BASE_URL: "   ",
+        },
+      }),
+      "utf8",
+    );
+
+    const service = new ConfigService({
+      globalConfig: {
+        configParams: {
+          API_KEY: "global-key",
+          BASE_URL: "https://global.example.com",
+        },
+      },
+    });
+
+    const loaded = await service.loadUserConfig(userDir);
+    assert.equal(loaded.providers?.openai?.api_key, "user-key");
+    assert.equal(loaded.providers?.openai?.base_url, "https://workspace.example.com");
+    assert.deepEqual(loaded.configParams, {
+      API_KEY: "user-key",
+      BASE_URL: "https://workspace.example.com",
+    });
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
   }
 });
 
