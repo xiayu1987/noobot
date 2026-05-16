@@ -6,6 +6,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { createExecutionEventListener, emitEvent } from "../../event/index.js";
+import { CALLER_ROLE } from "../config/constants.js";
 
 /**
  * Session runtime initializer.
@@ -25,7 +26,7 @@ export class SessionExecutionInitializer {
     userId,
     sessionId,
     parentSessionId = "",
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     eventListener = null,
   }) {
     const usedSessionId = sessionId;

@@ -4,6 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { config } from "./config.js";
+import {
+  AGENT_PROXY_ERROR,
+  CHANNEL_EVENT,
+  CHANNEL_STATUS,
+  CONVERSATION_STATE,
+  CONVERSATION_SOURCE_EVENT,
+  WS_ACTION,
+} from "./constants.js";
 
 export class WsRouter {
   constructor(channelManager) {
@@ -11,15 +19,15 @@ export class WsRouter {
   }
 
   handle(socket, connectionApiKey, connectionLocale) {
-    socket.on("message", (rawData) => {
+    socket.on(CHANNEL_EVENT.MESSAGE, (rawData) => {
       let payload = {};
       try {
         payload = JSON.parse(String(rawData || "{}"));
       } catch {
-        this.channelManager.sendSocketEvent(socket, {
-          event: "error",
-          data: { error: "agentProxy invalid json payload" },
-        });
+        this.channelManager.sendSocketError(
+          socket,
+          AGENT_PROXY_ERROR.INVALID_JSON_PAYLOAD,
+        );
         return;
       }
 
@@ -38,16 +46,22 @@ export class WsRouter {
       if (handler) {
         handler.call(this, socket, payload);
       } else {
-        this.channelManager.sendSocketError(socket, `agentProxy unsupported action: ${action}`);
+        this.channelManager.sendSocketError(
+          socket,
+          AGENT_PROXY_ERROR.UNSUPPORTED_ACTION(action),
+        );
       }
     });
   }
 
   _handlers = {
-    stop(socket, payload) {
+    [WS_ACTION.STOP](socket, payload) {
       const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
       if (!targetChannel) {
-        this.channelManager.sendSocketError(socket, "agentProxy channel not found for stop");
+        this.channelManager.sendSocketError(
+          socket,
+          AGENT_PROXY_ERROR.CHANNEL_NOT_FOUND_FOR_STOP,
+        );
         return;
       }
       if (
@@ -59,31 +73,38 @@ export class WsRouter {
       ) {
         this.channelManager.sendSocketError(
           socket,
-          "agentProxy permission denied for action: stop",
+          AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(WS_ACTION.STOP),
         );
         return;
       }
       this.channelManager.updateConversationState(targetChannel, {
         sessionId: String(payload?.sessionId || "").trim(),
         dialogProcessId: String(payload?.dialogProcessId || "").trim(),
-        state: "stopping",
-        sourceEvent: "stop",
+        state: CONVERSATION_STATE.STOPPING,
+        sourceEvent: CONVERSATION_SOURCE_EVENT.STOP,
         seq: Number(targetChannel?.eventSequence || 0),
       });
       const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
       if (!forwarded) {
-        const stoppedEnvelope = this.channelManager.pushChannelEvent(targetChannel, "stopped", {
-          message: "agentProxy upstream not running",
-        });
-        this.channelManager.markChannelTerminal(targetChannel, "stopped");
+        const stoppedEnvelope = this.channelManager.pushChannelEvent(
+          targetChannel,
+          CHANNEL_EVENT.STOPPED,
+          {
+            message: AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
+          },
+        );
+        this.channelManager.markChannelTerminal(targetChannel, CHANNEL_STATUS.STOPPED);
         this.channelManager.broadcastChannelEvent(targetChannel, stoppedEnvelope);
       }
     },
 
-    interaction_response(socket, payload) {
+    [WS_ACTION.INTERACTION_RESPONSE](socket, payload) {
       const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
       if (!targetChannel) {
-        this.channelManager.sendSocketError(socket, "agentProxy channel not found for interaction");
+        this.channelManager.sendSocketError(
+          socket,
+          AGENT_PROXY_ERROR.CHANNEL_NOT_FOUND_FOR_INTERACTION,
+        );
         return;
       }
       if (
@@ -95,20 +116,28 @@ export class WsRouter {
       ) {
         this.channelManager.sendSocketError(
           socket,
-          "agentProxy permission denied for action: interaction_response",
+          AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(
+            WS_ACTION.INTERACTION_RESPONSE,
+          ),
         );
         return;
       }
       const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
       if (!forwarded) {
-        this.channelManager.sendSocketError(socket, "agentProxy upstream is unavailable");
+        this.channelManager.sendSocketError(
+          socket,
+          AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE,
+        );
       }
     },
 
-    join(socket, payload) {
+    [WS_ACTION.JOIN](socket, payload) {
       const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
       if (!targetChannel) {
-        this.channelManager.sendSocketError(socket, "agentProxy channel not found for join");
+        this.channelManager.sendSocketError(
+          socket,
+          AGENT_PROXY_ERROR.CHANNEL_NOT_FOUND_FOR_JOIN,
+        );
         return;
       }
       if (
@@ -120,7 +149,7 @@ export class WsRouter {
       ) {
         this.channelManager.sendSocketError(
           socket,
-          "agentProxy permission denied for action: join",
+          AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(WS_ACTION.JOIN),
         );
         return;
       }
@@ -137,7 +166,7 @@ export class WsRouter {
       }
     },
 
-    reconnect(socket, payload) {
+    [WS_ACTION.RECONNECT](socket, payload) {
       this.channelManager.handleReconnect(socket, payload);
     },
   };

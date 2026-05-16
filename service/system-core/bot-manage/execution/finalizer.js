@@ -5,6 +5,10 @@
  */
 
 import { emitEvent } from "../../event/index.js";
+import {
+  CALLER_ROLE,
+  SESSION_ASYNC_STATUS,
+} from "../config/constants.js";
 
 /**
  * Session execution finalizer.
@@ -33,7 +37,7 @@ export class SessionExecutionFinalizer {
     sessionId,
     parentSessionId = "",
     parentDialogProcessId = "",
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     dialogProcessId = "",
     agentResult = {},
     executionStartIndex = 0,
@@ -133,14 +137,14 @@ export class SessionExecutionFinalizer {
       sessionId,
       parentSessionId,
       patch: {
-        status: "completed",
+        status: SESSION_ASYNC_STATUS.COMPLETED,
         endedAt: this.now(),
         error: "",
         result: {
           sessionId,
           parentSessionId: parentSessionId || "",
           parentDialogProcessId: parentDialogProcessId || "",
-          caller: String(caller || "user"),
+          caller: String(caller || CALLER_ROLE.USER),
           answer: agentResult.output,
           traces: agentResult.traces,
           messages: turnMessages,
@@ -155,7 +159,7 @@ export class SessionExecutionFinalizer {
       sessionId,
       parentSessionId: parentSessionId || "",
       parentDialogProcessId: parentDialogProcessId || "",
-      caller: String(caller || "user"),
+      caller: String(caller || CALLER_ROLE.USER),
       answer: agentResult.output,
       traces: agentResult.traces,
       messages: turnMessages,

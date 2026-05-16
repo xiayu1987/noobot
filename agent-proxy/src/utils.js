@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { CHANNEL_TERMINAL_STATUSES, CLIENT_ROLE } from "./constants.js";
+
 export function normalizeApiKey(input = "") {
   return String(input || "").trim();
 }
@@ -44,9 +46,10 @@ export function parseRequestPathname(request = null) {
   }
 }
 
-export function buildClientPermissions(role = "user") {
-  const normalizedRole = String(role || "user").trim() || "user";
-  const isSuperAdmin = normalizedRole === "super_admin";
+export function buildClientPermissions(role = CLIENT_ROLE.USER) {
+  const normalizedRole =
+    String(role || CLIENT_ROLE.USER).trim() || CLIENT_ROLE.USER;
+  const isSuperAdmin = normalizedRole === CLIENT_ROLE.SUPER_ADMIN;
   return {
     role: normalizedRole,
     canChat: true,
@@ -64,7 +67,7 @@ export function nowMs() {
 }
 
 export function isTerminalStatus(status = "") {
-  return ["done", "stopped", "error"].includes(String(status || "").trim());
+  return CHANNEL_TERMINAL_STATUSES.includes(String(status || "").trim());
 }
 
 export function buildFingerprint(payload = {}) {

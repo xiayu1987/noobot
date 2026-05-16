@@ -9,18 +9,15 @@ import { releaseTerminalChannel } from "./terminals/index.js";
 import { executeEmailCommand } from "./emails/index.js";
 import { tSystem } from "../i18n/system-text.js";
 import { recoverableToolError } from "../error/index.js";
-
-function normalizeConnectorType(input = "") {
-  const value = String(input || "").trim().toLowerCase();
-  if (value === "database" || value === "db") return "database";
-  if (value === "terminal" || value === "server_terminal" || value === "shell") {
-    return "terminal";
-  }
-  if (value === "email" || value === "mail" || value === "smtp_imap") {
-    return "email";
-  }
-  return "";
-}
+import {
+  CONNECTOR_TYPE,
+  normalizeConnectorType,
+} from "../config/core/enums.js";
+import {
+  CONNECTOR_RUNTIME_STATUS,
+  CONNECTOR_STATUS_CODE,
+  CONNECTOR_RUNTIME_STATUS_TEXT,
+} from "./constants.js";
 
 function hasSensitiveKeyName(keyName = "") {
   const normalizedKeyName = String(keyName || "").trim().toLowerCase();
@@ -90,9 +87,9 @@ class ConnectorChannelStore {
 
   _resolveBucketMap(bucket = {}, connectorType = "") {
     const normalizedType = normalizeConnectorType(connectorType);
-    if (normalizedType === "database") return bucket.databases;
-    if (normalizedType === "terminal") return bucket.terminals;
-    if (normalizedType === "email") return bucket.emails;
+    if (normalizedType === CONNECTOR_TYPE.DATABASE) return bucket.databases;
+    if (normalizedType === CONNECTOR_TYPE.TERMINAL) return bucket.terminals;
+    if (normalizedType === CONNECTOR_TYPE.EMAIL) return bucket.emails;
     return null;
   }
 
@@ -117,7 +114,7 @@ class ConnectorChannelStore {
     }
     const existingChannel = sourceMap.get(normalizedName) || null;
     const deleted = sourceMap.delete(normalizedName);
-    if (deleted && normalizeConnectorType(connectorType) === "terminal") {
+    if (deleted && normalizeConnectorType(connectorType) === CONNECTOR_TYPE.TERMINAL) {
       releaseTerminalChannel({
         connectionInfo:
           existingChannel?.connectionInfo &&
@@ -174,11 +171,11 @@ class ConnectorChannelStore {
       connectedAt,
       connectionInfo: { ...info },
       connectionMeta:
-        normalizedType === "database"
+        normalizedType === CONNECTOR_TYPE.DATABASE
           ? {
               databaseType: String(info?.database_type || ""),
             }
-          : normalizedType === "terminal"
+          : normalizedType === CONNECTOR_TYPE.TERMINAL
             ? {
               terminalType: String(info?.terminal_type || ""),
               host: String(info?.host || ""),
@@ -306,7 +303,7 @@ class ConnectorChannelStore {
         code: "RECOVERABLE_INPUT_MISSING",
       });
     }
-    if (normalizedType === "terminal") {
+    if (normalizedType === CONNECTOR_TYPE.TERMINAL) {
       const execution = await executeTerminalCommand({
         command: cmd,
         channelKey: `${String(sessionId || "").trim()}::${String(
@@ -329,7 +326,7 @@ class ConnectorChannelStore {
         },
       };
     }
-    if (normalizedType === "email") {
+    if (normalizedType === CONNECTOR_TYPE.EMAIL) {
       const execution = await executeEmailCommand({
         command: cmd,
         attachmentHandler:
@@ -371,10 +368,10 @@ class ConnectorChannelStore {
 
   _buildHealthCommand(connectorType = "") {
     const normalizedConnectorType = normalizeConnectorType(connectorType);
-    if (normalizedConnectorType === "database") return "SELECT 1 WHERE 1=1";
-    if (normalizedConnectorType === "terminal")
+    if (normalizedConnectorType === CONNECTOR_TYPE.DATABASE) return "SELECT 1 WHERE 1=1";
+    if (normalizedConnectorType === CONNECTOR_TYPE.TERMINAL)
       return "printf __NOOBOT_CONNECTOR_HEALTH__";
-    if (normalizedConnectorType === "email")
+    if (normalizedConnectorType === CONNECTOR_TYPE.EMAIL)
       return JSON.stringify({ action: "list", folder: "INBOX", page: 1, page_size: 1 });
     return "";
   }
@@ -416,8 +413,8 @@ class ConnectorChannelStore {
         connector_type: connectorType,
         connected_at: String(connectorItem?.connectedAt || "").trim(),
         connection_meta: sanitizeConnectorMeta(connectorItem?.connectionMeta || {}),
-        status: "unknown",
-        status_code: 503,
+        status: CONNECTOR_RUNTIME_STATUS.UNKNOWN,
+        status_code: CONNECTOR_STATUS_CODE.UNAVAILABLE,
         status_message: tSystem("connectors.statusUnavailable"),
       };
       if (!connectorName) return baseStatus;
@@ -435,24 +432,28 @@ class ConnectorChannelStore {
         const executionOk = executionResult?.ok === true;
         return {
           ...baseStatus,
-          status: executionOk ? "connected" : "error",
+          status: executionOk
+            ? CONNECTOR_RUNTIME_STATUS.CONNECTED
+            : CONNECTOR_RUNTIME_STATUS.ERROR,
           status_code: Number.isFinite(executionCode)
             ? executionCode
             : executionOk
-              ? 0
-              : 1,
+              ? CONNECTOR_STATUS_CODE.OK
+              : CONNECTOR_STATUS_CODE.ERROR_DEFAULT,
           status_message: executionOk
-            ? "ok"
+            ? CONNECTOR_RUNTIME_STATUS_TEXT.OK
             : String(executionResult?.output?.stderr || "").trim(),
           checked_at: new Date().toISOString(),
         };
       } catch (error) {
         return {
           ...baseStatus,
-          status: "error",
-          status_code: 500,
+          status: CONNECTOR_RUNTIME_STATUS.ERROR,
+          status_code: CONNECTOR_STATUS_CODE.INTERNAL_ERROR,
           status_message: String(
-            error?.message || error || "health check failed",
+            error?.message ||
+              error ||
+              CONNECTOR_RUNTIME_STATUS_TEXT.HEALTH_CHECK_FAILED,
           ),
           checked_at: new Date().toISOString(),
         };
@@ -460,17 +461,17 @@ class ConnectorChannelStore {
     };
     const databases = await Promise.all(
       databaseSourceList.map((connectorItem) =>
-        resolveConnectorStatus(connectorItem, "database"),
+        resolveConnectorStatus(connectorItem, CONNECTOR_TYPE.DATABASE),
       ),
     );
     const terminals = await Promise.all(
       terminalSourceList.map((connectorItem) =>
-        resolveConnectorStatus(connectorItem, "terminal"),
+        resolveConnectorStatus(connectorItem, CONNECTOR_TYPE.TERMINAL),
       ),
     );
     const emails = await Promise.all(
       emailSourceList.map((connectorItem) =>
-        resolveConnectorStatus(connectorItem, "email"),
+        resolveConnectorStatus(connectorItem, CONNECTOR_TYPE.EMAIL),
       ),
     );
     const allConnectors = [...databases, ...terminals, ...emails];
@@ -484,13 +485,19 @@ class ConnectorChannelStore {
       summary: {
         total_count: allConnectors.length,
         connected_count: allConnectors.filter(
-          (connectorItem) => String(connectorItem?.status || "") === "connected",
+          (connectorItem) =>
+            String(connectorItem?.status || "") ===
+            CONNECTOR_RUNTIME_STATUS.CONNECTED,
         ).length,
         error_count: allConnectors.filter(
-          (connectorItem) => String(connectorItem?.status || "") === "error",
+          (connectorItem) =>
+            String(connectorItem?.status || "") ===
+            CONNECTOR_RUNTIME_STATUS.ERROR,
         ).length,
         unknown_count: allConnectors.filter(
-          (connectorItem) => String(connectorItem?.status || "") === "unknown",
+          (connectorItem) =>
+            String(connectorItem?.status || "") ===
+            CONNECTOR_RUNTIME_STATUS.UNKNOWN,
         ).length,
       },
     };
@@ -509,8 +516,8 @@ class ConnectorChannelStore {
       return {
         connector_name: normalizedConnectorName,
         connector_type: normalizedConnectorType,
-        status: "unknown",
-        status_code: 400,
+        status: CONNECTOR_RUNTIME_STATUS.UNKNOWN,
+        status_code: CONNECTOR_STATUS_CODE.BAD_REQUEST,
         status_message: tSystem("common.sessionIdRequired"),
       };
     }
@@ -518,8 +525,8 @@ class ConnectorChannelStore {
       return {
         connector_name: normalizedConnectorName,
         connector_type: normalizedConnectorType,
-        status: "invalid",
-        status_code: 400,
+        status: CONNECTOR_RUNTIME_STATUS.INVALID,
+        status_code: CONNECTOR_STATUS_CODE.BAD_REQUEST,
         status_message: tSystem("connectors.statusInvalidConnectorIdentity"),
       };
     }
@@ -528,9 +535,9 @@ class ConnectorChannelStore {
       timeoutMs,
     });
     const bucketName =
-      normalizedConnectorType === "database"
+      normalizedConnectorType === CONNECTOR_TYPE.DATABASE
         ? "databases"
-        : normalizedConnectorType === "terminal"
+        : normalizedConnectorType === CONNECTOR_TYPE.TERMINAL
           ? "terminals"
           : "emails";
     const sourceList = Array.isArray(inspected?.connectors?.[bucketName])
@@ -546,8 +553,8 @@ class ConnectorChannelStore {
     return {
       connector_name: normalizedConnectorName,
       connector_type: normalizedConnectorType,
-      status: "unknown",
-      status_code: 404,
+      status: CONNECTOR_RUNTIME_STATUS.UNKNOWN,
+      status_code: CONNECTOR_STATUS_CODE.NOT_FOUND,
       status_message: tSystem("connectors.statusConnectorNotFoundInInspected"),
     };
   }

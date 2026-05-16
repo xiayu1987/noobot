@@ -6,6 +6,11 @@
 
 import { emitEvent } from "../../event/index.js";
 import { MessagePersister } from "../session/message-persister.js";
+import {
+  EXECUTION_LOG_EVENT,
+  MESSAGE_ROLE,
+  MESSAGE_TYPE,
+} from "../config/constants.js";
 
 /**
  * Persist session turns and agent messages.
@@ -18,9 +23,9 @@ export class SessionTurnPersister {
 
   buildDefaultAssistantTurn({ agentResult = {}, dialogProcessId = "" }) {
     return {
-      role: "assistant",
+      role: MESSAGE_ROLE.ASSISTANT,
       content: String(agentResult?.output || ""),
-      type: "message",
+      type: MESSAGE_TYPE.MESSAGE,
       dialogProcessId,
     };
   }
@@ -86,9 +91,9 @@ export class SessionTurnPersister {
         sessionId,
         parentSessionId,
         dialogProcessId: String(dialogProcessId || "").trim(),
-        event: "session_turn_full",
-        category: "system",
-        type: "session_turn_full",
+        event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
+        category: MESSAGE_ROLE.SYSTEM,
+        type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
         data: fullTurnPayload,
       });
     } catch {
@@ -132,7 +137,7 @@ export class SessionTurnPersister {
       await this.appendSessionTurn({
         userId,
         sessionId,
-        role: messageItem.role || "assistant",
+        role: messageItem.role || MESSAGE_ROLE.ASSISTANT,
         content: messageItem.content || "",
         type: messageItem.type || "",
         parentSessionId,
@@ -194,7 +199,7 @@ export class SessionTurnPersister {
       : [];
     const alreadySaved = messages.some(
       (messageItem) =>
-        (messageItem?.role ?? "").trim() === "assistant" &&
+        (messageItem?.role ?? "").trim() === MESSAGE_ROLE.ASSISTANT &&
         (messageItem?.dialogProcessId ?? "").trim() === dialogProcessId,
     );
     if (alreadySaved) return false;
@@ -202,9 +207,9 @@ export class SessionTurnPersister {
       userId,
       sessionId,
       parentSessionId,
-      role: "assistant",
+      role: MESSAGE_ROLE.ASSISTANT,
       content,
-      type: "message",
+      type: MESSAGE_TYPE.MESSAGE,
       dialogProcessId,
       parentDialogProcessId,
       modelAlias: (partialAssistant?.modelAlias ?? "").trim(),

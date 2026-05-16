@@ -7,6 +7,7 @@
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { isValidSessionId } from "../utils/session-utils.js";
+import { CALLER_ROLE, VALID_CALLER_ROLES } from "./constants.js";
 
 /**
  * Centralized validator for bot-manage runtime input/config.
@@ -25,7 +26,7 @@ export class BotManageValidator {
   validateRunInput({
     userId,
     sessionId,
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     parentSessionId = "",
   }) {
     if (!userId || !sessionId) {
@@ -38,7 +39,7 @@ export class BotManageValidator {
         code: "RECOVERABLE_INVALID_SESSION_ID",
       });
     }
-    if (!["user", "bot"].includes(String(caller || ""))) {
+    if (!VALID_CALLER_ROLES.includes(String(caller || ""))) {
       throw recoverableToolError(tSystem("bot.invalidCaller"), {
         code: "RECOVERABLE_INVALID_CALLER",
       });

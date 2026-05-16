@@ -5,6 +5,7 @@
  */
 import { logError } from "../../../tracking/console/logger.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
+import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
 
 export function cloneData(value) {
   if (typeof globalThis.structuredClone === "function") {
@@ -40,17 +41,21 @@ export function toTaskRequest(taskItem = {}, sessionId = "") {
 
 export function summarizeTaskResultsStatus(taskResults = []) {
   const failed = taskResults.some(
-    (item) => String(item?.status || "") === "failed" || item?.ok === false,
+    (item) =>
+      String(item?.status || "") === SESSION_ASYNC_STATUS.FAILED ||
+      item?.ok === false,
   );
-  if (failed) return "failed";
+  if (failed) return SESSION_ASYNC_STATUS.FAILED;
   const stopped = taskResults.some(
-    (item) => String(item?.status || "") === "stopped",
+    (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.STOPPED,
   );
-  if (stopped) return "stopped";
+  if (stopped) return SESSION_ASYNC_STATUS.STOPPED;
   const completed = taskResults.every(
-    (item) => String(item?.status || "") === "completed",
+    (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.COMPLETED,
   );
-  return completed ? "completed" : "running";
+  return completed
+    ? SESSION_ASYNC_STATUS.COMPLETED
+    : SESSION_ASYNC_STATUS.RUNNING;
 }
 
 export function buildWaitTaskRequest({
@@ -90,7 +95,7 @@ export function buildWaitTaskInvalidResult({
   return {
     ok: false,
     index,
-    status: "invalid_request",
+    status: SESSION_ASYNC_STATUS.INVALID_REQUEST,
     error: normalizeString(error),
     request,
   };
@@ -104,7 +109,7 @@ export function buildWaitTaskFailedResult({
   return {
     ok: false,
     index,
-    status: "failed",
+    status: SESSION_ASYNC_STATUS.FAILED,
     error: normalizeString(error),
     request,
   };
@@ -112,7 +117,7 @@ export function buildWaitTaskFailedResult({
 
 export function buildWaitAsyncTaskResultPayload({
   ok = true,
-  status = "running",
+  status = SESSION_ASYNC_STATUS.RUNNING,
   nextPollInMs = 0,
   containers = [],
   containerStatuses = [],

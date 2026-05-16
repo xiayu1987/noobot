@@ -5,6 +5,18 @@
  */
 import { config } from "./config.js";
 import {
+  AGENT_PROXY_ERROR,
+  CHANNEL_EVENT,
+  CHANNEL_STATUS,
+  CLIENT_ROLE,
+  CONVERSATION_SCOPE_KEY,
+  CONVERSATION_STATE,
+  CONVERSATION_SOURCE_EVENT,
+  RECONNECT_SUGGESTION,
+  UPSTREAM_CLOSE_REASON,
+  WS_ACTION,
+} from "./constants.js";
+import {
   normalizeApiKey,
   createChannelKey,
   nowMs,
@@ -12,6 +24,7 @@ import {
   buildFingerprint,
   buildUpstreamUrl,
 } from "./utils.js";
+import { localizeAgentProxyMessage } from "./i18n.js";
 
 export class ChannelManager {
   constructor(WebSocket) {
@@ -30,7 +43,7 @@ export class ChannelManager {
     if (existingChannel) return existingChannel;
     const nextChannel = {
       key: normalizedChannelKey,
-      status: "idle",
+      status: CHANNEL_STATUS.IDLE,
       createdAtMs: nowMs(),
       updatedAtMs: nowMs(),
       subscribers: new Set(),
@@ -55,8 +68,8 @@ export class ChannelManager {
     this.channelStore.set(normalizedChannelKey, nextChannel);
     this.updateConversationState(nextChannel, {
       dialogProcessId: "",
-      state: "no_conversation",
-      sourceEvent: "init",
+      state: CONVERSATION_STATE.NO_CONVERSATION,
+      sourceEvent: CONVERSATION_SOURCE_EVENT.INIT,
       seq: 0,
       broadcast: false,
     });
@@ -87,14 +100,14 @@ export class ChannelManager {
     channel.updatedAtMs = nowMs();
     const envelope = {
       sequence: channel.eventSequence,
-      event: String(eventName || "message").trim() || "message",
+      event: String(eventName || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE,
       data: data && typeof data === "object" ? data : {},
     };
     channel.eventLog.push(envelope);
     if (channel.eventLog.length > config.maxChannelEvents) {
       channel.eventLog = channel.eventLog.slice(-config.maxChannelEvents);
     }
-    if (String(envelope.event || "") === "interaction_request") {
+    if (String(envelope.event || "") === CHANNEL_EVENT.INTERACTION_REQUEST) {
       const requestId = String(envelope?.data?.requestId || "").trim();
       if (requestId) {
         this.requestChannelMap.set(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
@@ -120,7 +133,7 @@ export class ChannelManager {
     const normalizedState = String(state || "").trim();
     if (!normalizedState) return null;
     const normalizedDialogProcessId = String(dialogProcessId || "").trim();
-    const stateKey = normalizedDialogProcessId || "__session__";
+    const stateKey = normalizedDialogProcessId || CONVERSATION_SCOPE_KEY;
     const normalizedSessionId =
       String(sessionId || "").trim() || this._extractSessionIdFromChannelKey(channel.key);
     const previousStateItem = channel.conversationStateByDialogProcessId.get(stateKey) || null;
@@ -154,16 +167,16 @@ export class ChannelManager {
     const sessionId = String(eventData?.sessionId || "").trim();
     const seq = Number(eventData?.seq || envelope?.sequence || 0);
     let nextState = "";
-    if (eventName === "thinking" || eventName === "delta") {
-      nextState = "sending";
-    } else if (eventName === "interaction_request") {
-      nextState = "interaction_pending";
-    } else if (eventName === "done") {
-      nextState = "completed";
-    } else if (eventName === "stopped") {
-      nextState = "stopped";
-    } else if (eventName === "error") {
-      nextState = "error";
+    if (eventName === CHANNEL_EVENT.THINKING || eventName === CHANNEL_EVENT.DELTA) {
+      nextState = CONVERSATION_STATE.SENDING;
+    } else if (eventName === CHANNEL_EVENT.INTERACTION_REQUEST) {
+      nextState = CONVERSATION_STATE.INTERACTION_PENDING;
+    } else if (eventName === CHANNEL_EVENT.DONE) {
+      nextState = CONVERSATION_STATE.COMPLETED;
+    } else if (eventName === CHANNEL_EVENT.STOPPED) {
+      nextState = CONVERSATION_STATE.STOPPED;
+    } else if (eventName === CHANNEL_EVENT.ERROR) {
+      nextState = CONVERSATION_STATE.ERROR;
     }
     if (!nextState) return;
     this.updateConversationState(channel, {
@@ -194,7 +207,7 @@ export class ChannelManager {
     this.apiKeyIdentityStore.set(normalizedApiKey, {
       apiKey: normalizedApiKey,
       userId: normalizedUserId,
-      role: String(role || "").trim() || "user",
+      role: String(role || "").trim() || CLIENT_ROLE.USER,
       updatedAtMs: nowMs(),
     });
   }
@@ -293,7 +306,7 @@ export class ChannelManager {
     );
     this.broadcastChannelEvent(channel, {
       sequence: Number(channel?.eventSequence || 0),
-      event: "channel_state",
+      event: CHANNEL_EVENT.CHANNEL_STATE,
       data: {
         sessionId: String(stateItem?.sessionId || ""),
         dialogProcessId: String(stateItem?.dialogProcessId || ""),
@@ -318,7 +331,7 @@ export class ChannelManager {
         String(stateItem?.dialogProcessId || "").trim(),
       );
       this.sendSocketEvent(targetSocket, {
-        event: "channel_state",
+        event: CHANNEL_EVENT.CHANNEL_STATE,
         data: {
           sessionId: String(stateItem?.sessionId || ""),
           dialogProcessId: String(stateItem?.dialogProcessId || ""),
@@ -368,17 +381,26 @@ export class ChannelManager {
   }
 
   sendSocketError(targetSocket, errorMessage = "") {
+    const localizedError = localizeAgentProxyMessage(
+      String(errorMessage || ""),
+      String(targetSocket?.__agentProxyLocale || "").trim(),
+    );
     this.sendSocketEvent(targetSocket, {
-      event: "error",
+      event: CHANNEL_EVENT.ERROR,
       data: {
-        error: String(errorMessage || "agentProxy error").trim() || "agentProxy error",
+        error: String(localizedError || AGENT_PROXY_ERROR.DEFAULT).trim() ||
+          AGENT_PROXY_ERROR.DEFAULT,
       },
     });
   }
 
   // ---- Upstream Connection ----
 
-  closeUpstreamChannel(channel, closeCode = 1000, reasonText = "closed") {
+  closeUpstreamChannel(
+    channel,
+    closeCode = 1000,
+    reasonText = UPSTREAM_CLOSE_REASON.CLOSED,
+  ) {
     if (!channel?.upstreamSocket) return;
     try {
       channel.upstreamSocket.close(closeCode, reasonText);
@@ -388,9 +410,9 @@ export class ChannelManager {
     channel.upstreamSocket = null;
   }
 
-  markChannelTerminal(channel, terminalStatus = "done") {
+  markChannelTerminal(channel, terminalStatus = CHANNEL_STATUS.DONE) {
     if (!channel) return;
-    channel.status = String(terminalStatus || "done").trim();
+    channel.status = String(terminalStatus || CHANNEL_STATUS.DONE).trim();
     channel.updatedAtMs = nowMs();
     channel.cleanupAfterMs = nowMs() + config.channelRetentionMs;
     channel.pendingInteractionRequests.clear();
@@ -401,22 +423,22 @@ export class ChannelManager {
     channel._errorHandled = false;
     const upstreamUrl = buildUpstreamUrl(config.upstreamWsUrl, apiKey);
     if (!upstreamUrl) {
-      const errorEnvelope = this.pushChannelEvent(channel, "error", {
-        error: "agentProxy upstream url is empty",
+      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
+        error: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY,
       });
-      this.markChannelTerminal(channel, "error");
+      this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
       this.broadcastChannelEvent(channel, errorEnvelope);
       return;
     }
     const upstreamSocket = new this.WebSocket(upstreamUrl);
     channel.upstreamSocket = upstreamSocket;
-    channel.status = "connecting";
+    channel.status = CHANNEL_STATUS.CONNECTING;
     channel.apiKey = String(apiKey || "").trim();
     channel.locale = String(locale || "").trim();
     channel.updatedAtMs = nowMs();
 
     upstreamSocket.on("open", () => {
-      channel.status = "running";
+      channel.status = CHANNEL_STATUS.RUNNING;
       channel.updatedAtMs = nowMs();
       const payloadToSend =
         channel.startPayload && typeof channel.startPayload === "object"
@@ -426,39 +448,43 @@ export class ChannelManager {
       try {
         upstreamSocket.send(JSON.stringify(payloadToSend));
       } catch (error) {
-        const errorEnvelope = this.pushChannelEvent(channel, "error", {
-          error: String(error?.message || "agentProxy failed to send payload"),
+        const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
+          error: String(error?.message || AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD),
         });
-        this.markChannelTerminal(channel, "error");
+        this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
         this.broadcastChannelEvent(channel, errorEnvelope);
-        this.closeUpstreamChannel(channel, 1011, "send_failed");
+        this.closeUpstreamChannel(channel, 1011, UPSTREAM_CLOSE_REASON.SEND_FAILED);
       }
     });
 
-    upstreamSocket.on("message", (rawData) => {
+    upstreamSocket.on(CHANNEL_EVENT.MESSAGE, (rawData) => {
       try {
         const parsed = JSON.parse(String(rawData || "{}"));
-        const eventName = String(parsed?.event || "message").trim() || "message";
+        const eventName = String(parsed?.event || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE;
         const eventData =
           parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
         const eventEnvelope = this.pushChannelEvent(channel, eventName, eventData);
         this.broadcastChannelEvent(channel, eventEnvelope);
-        if (eventName === "done") {
-          this.markChannelTerminal(channel, "done");
-        } else if (eventName === "stopped") {
-          this.markChannelTerminal(channel, "stopped");
-        } else if (eventName === "error") {
-          this.markChannelTerminal(channel, "error");
+        if (eventName === CHANNEL_EVENT.DONE) {
+          this.markChannelTerminal(channel, CHANNEL_STATUS.DONE);
+        } else if (eventName === CHANNEL_EVENT.STOPPED) {
+          this.markChannelTerminal(channel, CHANNEL_STATUS.STOPPED);
+        } else if (eventName === CHANNEL_EVENT.ERROR) {
+          this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
         } else {
-          channel.status = "running";
+          channel.status = CHANNEL_STATUS.RUNNING;
         }
       } catch (error) {
-        const errorEnvelope = this.pushChannelEvent(channel, "error", {
-          error: String(error?.message || "agentProxy invalid upstream event"),
+        const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
+          error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT),
         });
-        this.markChannelTerminal(channel, "error");
+        this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
         this.broadcastChannelEvent(channel, errorEnvelope);
-        this.closeUpstreamChannel(channel, 1011, "invalid_upstream_event");
+        this.closeUpstreamChannel(
+          channel,
+          1011,
+          UPSTREAM_CLOSE_REASON.INVALID_UPSTREAM_EVENT,
+        );
       }
     });
 
@@ -473,8 +499,8 @@ export class ChannelManager {
             : "";
       const normalizedCloseCode = Number(closeCode || 0) || 0;
       if (!isTerminalStatus(channel.status)) {
-        this.markChannelTerminal(channel, "stopped");
-        const stoppedEnvelope = this.pushChannelEvent(channel, "stopped", {
+        this.markChannelTerminal(channel, CHANNEL_STATUS.STOPPED);
+        const stoppedEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.STOPPED, {
           message: "upstream socket closed",
           upstreamCloseCode: normalizedCloseCode,
           upstreamCloseReason: closeReason || "upstream socket closed",
@@ -483,13 +509,13 @@ export class ChannelManager {
       }
     });
 
-    upstreamSocket.on("error", (error) => {
+    upstreamSocket.on(CHANNEL_EVENT.ERROR, (error) => {
       if (channel._errorHandled) return;
       channel._errorHandled = true;
-      const errorEnvelope = this.pushChannelEvent(channel, "error", {
+      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.ERROR, {
         error: String(error?.message || "upstream websocket error"),
       });
-      this.markChannelTerminal(channel, "error");
+      this.markChannelTerminal(channel, CHANNEL_STATUS.ERROR);
       this.broadcastChannelEvent(channel, errorEnvelope);
     });
   }
@@ -498,7 +524,7 @@ export class ChannelManager {
 
   resolveChannelFromSocketMessage(socket, payload = {}) {
     const action = String(payload?.action || "").trim().toLowerCase();
-    if (action === "interaction_response") {
+    if (action === WS_ACTION.INTERACTION_RESPONSE) {
       const channel = this.getChannelByRequestId(payload?.requestId);
       if (channel) return channel;
     }
@@ -532,7 +558,10 @@ export class ChannelManager {
     }
     try {
       channel.upstreamSocket.send(JSON.stringify(payload || {}));
-      if (String(payload?.action || "").trim().toLowerCase() === "interaction_response") {
+      if (
+        String(payload?.action || "").trim().toLowerCase() ===
+        WS_ACTION.INTERACTION_RESPONSE
+      ) {
         const requestId = String(payload?.requestId || "").trim();
         if (requestId) {
           const requestEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
@@ -541,8 +570,8 @@ export class ChannelManager {
           this.updateConversationState(channel, {
             dialogProcessId: String(requestEnvelope?.data?.dialogProcessId || "").trim(),
             sessionId: String(requestEnvelope?.data?.sessionId || "").trim(),
-            state: "sending",
-            sourceEvent: "interaction_response",
+            state: CONVERSATION_STATE.SENDING,
+            sourceEvent: CONVERSATION_SOURCE_EVENT.INTERACTION_RESPONSE,
             seq: Number(requestEnvelope?.data?.seq || channel?.eventSequence || 0),
           });
         }
@@ -558,13 +587,13 @@ export class ChannelManager {
   startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
     const normalizedConnectionApiKey = normalizeApiKey(connectionApiKey);
     if (!normalizedConnectionApiKey) {
-      this.sendSocketError(socket, "agentProxy requires apikey");
+      this.sendSocketError(socket, AGENT_PROXY_ERROR.REQUIRES_APIKEY);
       return;
     }
     const userId = String(payload?.userId || "").trim();
     const sessionId = String(payload?.sessionId || "").trim();
     if (!userId || !sessionId) {
-      this.sendSocketError(socket, "agentProxy requires userId and sessionId");
+      this.sendSocketError(socket, AGENT_PROXY_ERROR.REQUIRES_USERID_SESSIONID);
       return;
     }
     const channelKey = createChannelKey({
@@ -587,16 +616,14 @@ export class ChannelManager {
       channel.ownerUserId = requesterUserId;
     }
     if (!this.hasChannelPermission(channel, normalizedConnectionApiKey, requesterUserId)) {
-      this.sendSocketError(
-        socket,
-        `agentProxy permission denied for action: start_or_join`,
-      );
+      this.sendSocketError(socket, AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION("start_or_join"));
       return;
     }
 
     const nextPayloadFingerprint = buildFingerprint(payload);
     const keepExistingRun =
-      channel.status === "running" || channel.status === "connecting";
+      channel.status === CHANNEL_STATUS.RUNNING ||
+      channel.status === CHANNEL_STATUS.CONNECTING;
     const shouldStartNewRun = !keepExistingRun;
 
     this.attachSubscriber(channel, socket);
@@ -612,14 +639,14 @@ export class ChannelManager {
     channel.conversationStateByDialogProcessId = new Map();
     this.updateConversationState(channel, {
       dialogProcessId: "",
-      state: "no_conversation",
-      sourceEvent: "restart",
+      state: CONVERSATION_STATE.NO_CONVERSATION,
+      sourceEvent: CONVERSATION_SOURCE_EVENT.RESTART,
       seq: 0,
     });
     channel.cleanupAfterMs = 0;
     channel.upstreamClosed = false;
     channel._errorHandled = false;
-    this.closeUpstreamChannel(channel, 1000, "restart");
+    this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.RESTART);
     this.connectUpstreamChannel(channel, normalizedConnectionApiKey, String(connectionLocale || "").trim());
   }
 
@@ -631,17 +658,17 @@ export class ChannelManager {
     const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId);
     if (!reconnectChannelKeys.length) {
       this.sendSocketEvent(socket, {
-        event: "reconnect_data",
+        event: CHANNEL_EVENT.RECONNECT_DATA,
         data: {
           currentSessionId,
           sessions: [],
           cacheExpired: false,
           expiredDialogProcessIds: [],
-          suggestion: "",
+          suggestion: RECONNECT_SUGGESTION.NONE,
         },
       });
       this.sendSocketEvent(socket, {
-        event: "reconnect_complete",
+        event: CHANNEL_EVENT.RECONNECT_COMPLETE,
         data: {
           totalSessions: 0,
           cacheExpired: false,
@@ -671,16 +698,23 @@ export class ChannelManager {
       }
 
       const sessionEntry = sessionsMap.get(channelSessionId);
-      if (channel.status === "running" || channel.status === "connecting") {
+      if (
+        channel.status === CHANNEL_STATUS.RUNNING ||
+        channel.status === CHANNEL_STATUS.CONNECTING
+      ) {
         sessionEntry.hasRunningTask = true;
       }
       const stateByDialogProcessId = new Map(
         (Array.isArray(sessionEntry?.conversationStates) ? sessionEntry.conversationStates : []).map(
-          (item) => [String(item?.dialogProcessId || "").trim() || "__session__", item],
+          (item) => [
+            String(item?.dialogProcessId || "").trim() || CONVERSATION_SCOPE_KEY,
+            item,
+          ],
         ),
       );
       for (const stateItem of channel.conversationStateByDialogProcessId.values()) {
-        const stateKey = String(stateItem?.dialogProcessId || "").trim() || "__session__";
+        const stateKey =
+          String(stateItem?.dialogProcessId || "").trim() || CONVERSATION_SCOPE_KEY;
         const existingStateItem = stateByDialogProcessId.get(stateKey);
         const pendingInteraction = this._findLatestPendingInteractionByDialogProcessId(
           channel,
@@ -705,10 +739,10 @@ export class ChannelManager {
         (left, right) => Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
       );
       const derivedSessionState =
-        channel.status === "connecting"
-          ? "reconnecting"
-          : channel.status === "idle"
-          ? "no_conversation"
+        channel.status === CHANNEL_STATUS.CONNECTING
+          ? CONVERSATION_STATE.RECONNECTING
+          : channel.status === CHANNEL_STATUS.IDLE
+          ? CONVERSATION_STATE.NO_CONVERSATION
           : "";
       if (derivedSessionState) {
         const existingSessionScopeStateIndex = sessionEntry.conversationStates.findIndex(
@@ -718,7 +752,7 @@ export class ChannelManager {
           sessionId: channelSessionId,
           dialogProcessId: "",
           state: derivedSessionState,
-          sourceEvent: "channel_status",
+          sourceEvent: CONVERSATION_SOURCE_EVENT.CHANNEL_STATUS,
           seq: Number(channel?.eventSequence || 0),
           updatedAtMs: Number(channel?.updatedAtMs || nowMs()),
         };
@@ -755,7 +789,10 @@ export class ChannelManager {
 
           // Reconnect replay should only include unresolved interaction requests.
           // Resolved requests are historical records and would reopen stale UI prompts.
-          if (String(envelope?.event || "").trim() === "interaction_request") {
+          if (
+            String(envelope?.event || "").trim() ===
+            CHANNEL_EVENT.INTERACTION_REQUEST
+          ) {
             const requestId = String(envelope?.data?.requestId || "").trim();
             if (!requestId || !channel.pendingInteractionRequests.has(requestId)) {
               return false;
@@ -805,8 +842,8 @@ export class ChannelManager {
           sessionEntry.conversationStates.push({
             sessionId: channelSessionId,
             dialogProcessId: dpId,
-            state: "expired",
-            sourceEvent: "reconnect_cache_expired",
+            state: CONVERSATION_STATE.EXPIRED,
+            sourceEvent: CONVERSATION_SOURCE_EVENT.RECONNECT_CACHE_EXPIRED,
             seq: Number(lastSeq || 0),
             updatedAtMs: nowMs(),
           });
@@ -818,18 +855,20 @@ export class ChannelManager {
     const cacheExpired = expiredDialogProcessIds.length > 0;
 
     this.sendSocketEvent(socket, {
-      event: "reconnect_data",
+      event: CHANNEL_EVENT.RECONNECT_DATA,
       data: {
         currentSessionId,
         sessions,
         cacheExpired,
         expiredDialogProcessIds,
-        suggestion: cacheExpired ? "reload_session_history" : "",
+        suggestion: cacheExpired
+          ? RECONNECT_SUGGESTION.RELOAD_SESSION_HISTORY
+          : RECONNECT_SUGGESTION.NONE,
       },
     });
 
     this.sendSocketEvent(socket, {
-      event: "reconnect_complete",
+      event: CHANNEL_EVENT.RECONNECT_COMPLETE,
       data: {
         totalSessions: sessions.length,
         cacheExpired,
@@ -853,8 +892,8 @@ export class ChannelManager {
       if (
         normalizedCurrentSessionId &&
         this._extractSessionIdFromChannelKey(channelKey) !== normalizedCurrentSessionId &&
-        channel.status !== "running" &&
-        channel.status !== "connecting" &&
+        channel.status !== CHANNEL_STATUS.RUNNING &&
+        channel.status !== CHANNEL_STATUS.CONNECTING &&
         !channel.pendingInteractionRequests?.size
       ) {
         continue;
@@ -880,11 +919,11 @@ export class ChannelManager {
         Number(channel.cleanupAfterMs || 0) > 0 &&
         currentMs >= Number(channel.cleanupAfterMs || 0);
       const canCleanupIdle =
-        channel.status === "idle" &&
+        channel.status === CHANNEL_STATUS.IDLE &&
         !channel.subscribers.size &&
         currentMs - Number(channel.updatedAtMs || currentMs) > config.channelRetentionMs;
       if (!canCleanupTerminal && !canCleanupIdle) continue;
-      this.closeUpstreamChannel(channel, 1000, "cleanup");
+      this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLEANUP);
       for (const [requestId, mappedEntry] of this.requestChannelMap.entries()) {
         const mappedChannelKey = typeof mappedEntry === "object" ? mappedEntry.channelKey : mappedEntry;
         if (mappedChannelKey === channelKey) {

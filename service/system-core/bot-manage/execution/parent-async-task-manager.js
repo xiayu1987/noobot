@@ -6,6 +6,10 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { isPlainObject } from "../../utils/shared-utils.js";
+import {
+  CALLER_ROLE,
+  SESSION_ASYNC_STATUS,
+} from "../config/constants.js";
 
 /**
  * Parent async result container and task state manager.
@@ -41,7 +45,7 @@ export class ParentAsyncTaskManager {
             parentSessionId: (parentSessionId ?? "").trim(),
             task: (task ?? "").trim(),
             sharedTaskSpec: (sharedTaskSpec ?? "").trim(),
-            status: "running",
+            status: SESSION_ASYNC_STATUS.RUNNING,
             startedAt: "",
             endedAt: "",
             error: "",
@@ -63,35 +67,37 @@ export class ParentAsyncTaskManager {
     let hasStopped = false;
     let allCompleted = taskList.length > 0;
     for (const taskItem of taskList) {
-      const status = (taskItem?.status || "running" || "").trim().toLowerCase();
-      if (status === "failed") hasFailed = true;
-      if (status === "running") hasRunning = true;
-      if (status === "stopped") hasStopped = true;
-      if (status !== "completed") allCompleted = false;
+      const status = (taskItem?.status || SESSION_ASYNC_STATUS.RUNNING || "")
+        .trim()
+        .toLowerCase();
+      if (status === SESSION_ASYNC_STATUS.FAILED) hasFailed = true;
+      if (status === SESSION_ASYNC_STATUS.RUNNING) hasRunning = true;
+      if (status === SESSION_ASYNC_STATUS.STOPPED) hasStopped = true;
+      if (status !== SESSION_ASYNC_STATUS.COMPLETED) allCompleted = false;
     }
     if (hasFailed) {
-      parentAsyncResultContainer.status = "failed";
+      parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.FAILED;
     } else if (hasRunning) {
-      parentAsyncResultContainer.status = "running";
+      parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.RUNNING;
     } else if (allCompleted) {
-      parentAsyncResultContainer.status = "completed";
+      parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.COMPLETED;
     } else if (hasStopped) {
-      parentAsyncResultContainer.status = "stopped";
+      parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.STOPPED;
     } else {
-      parentAsyncResultContainer.status = "running";
+      parentAsyncResultContainer.status = SESSION_ASYNC_STATUS.RUNNING;
     }
     return mergedTask;
   }
 
   ensureParentAsyncResultContainer({
     parentAsyncResultContainer = null,
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     parentSessionId = "",
     parentDialogProcessId = "",
   }) {
     let container = parentAsyncResultContainer;
     if (!isPlainObject(container)) {
-      if (String(caller || "user") !== "bot") return null;
+      if (String(caller || CALLER_ROLE.USER) !== CALLER_ROLE.BOT) return null;
       container = {};
     }
     container.id = (container?.id ?? "").trim() || uuidv4();
@@ -101,7 +107,9 @@ export class ParentAsyncTaskManager {
     container.parentDialogProcessId =
       (container?.parentDialogProcessId ?? "").trim() ||
       (parentDialogProcessId ?? "").trim();
-    container.status = (container?.status || "running" || "").trim() || "running";
+    container.status =
+      (container?.status || SESSION_ASYNC_STATUS.RUNNING || "").trim() ||
+      SESSION_ASYNC_STATUS.RUNNING;
     container.updatedAt =
       (container?.updatedAt ?? "").trim() || this.now();
     container.tasks = Array.isArray(container?.tasks) ? container.tasks : [];

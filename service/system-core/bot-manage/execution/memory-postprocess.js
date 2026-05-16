@@ -6,6 +6,10 @@
 
 import { emitEvent } from "../../event/index.js";
 import { mergeConfig } from "../../config/index.js";
+import {
+  BOT_MANAGE_LOG_EVENT,
+  BOT_MANAGE_LOG_SOURCE,
+} from "../config/constants.js";
 
 const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = 300000;
 const DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS = 5000;
@@ -120,8 +124,8 @@ export class MemoryPostProcessService {
           await this.errorLogger.log({
             userId,
             sessionId,
-            source: "SessionExecutionEngine._runMemorySummarizeFlow",
-            event: "memory_summary_failed",
+            source: BOT_MANAGE_LOG_SOURCE.MEMORY_SUMMARIZE,
+            event: BOT_MANAGE_LOG_EVENT.MEMORY_SUMMARY_FAILED,
             error,
           });
         }
@@ -188,8 +192,8 @@ export class MemoryPostProcessService {
           userId,
           sessionId,
           parentSessionId,
-          source: "SessionExecutionEngine._runMemoryPostProcessFlow",
-          event: "memory_postprocess_failed",
+          source: BOT_MANAGE_LOG_SOURCE.MEMORY_POSTPROCESS,
+          event: BOT_MANAGE_LOG_EVENT.MEMORY_POSTPROCESS_FAILED,
           error,
         });
       }
