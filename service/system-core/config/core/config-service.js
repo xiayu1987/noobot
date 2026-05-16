@@ -21,12 +21,13 @@ function normalizeConfigParams(input = {}) {
   );
 }
 
-function mergeConfigParamsWithFallback(systemParams = {}, userParams = {}) {
+function mergeConfigParamsWithFallback(systemParams = {}, overrideParams = {}) {
   const base = {
     ...(systemParams && typeof systemParams === "object" ? systemParams : {}),
   };
-  const userSource = userParams && typeof userParams === "object" ? userParams : {};
-  for (const [paramKey, rawValue] of Object.entries(userSource)) {
+  const overrideSource =
+    overrideParams && typeof overrideParams === "object" ? overrideParams : {};
+  for (const [paramKey, rawValue] of Object.entries(overrideSource)) {
     const normalizedKey = String(paramKey || "").trim();
     if (!normalizedKey) continue;
     const normalizedValue = String(rawValue ?? "").trim();
@@ -42,8 +43,9 @@ export class ConfigService {
   }
 
   async loadUserConfig(basePath) {
-    const [rawText, userConfigParamsRawText] = await Promise.all([
+    const [rawText, workspaceConfigParamsRawText, userConfigParamsRawText] = await Promise.all([
       readFile(path.join(basePath, "config.json"), "utf8"),
+      readFile(path.join(basePath, "..", "config-params.json"), "utf8").catch(() => "{}"),
       readFile(path.join(basePath, "config-params.json"), "utf8").catch(() => "{}"),
     ]);
     let raw = {};
@@ -58,6 +60,14 @@ export class ConfigService {
       );
     }
 
+    let workspaceConfigParamsJson = {};
+    try {
+      workspaceConfigParamsJson = JSON.parse(String(workspaceConfigParamsRawText || "{}"));
+    } catch {
+      workspaceConfigParamsJson = {};
+    }
+    const workspaceConfigParams = normalizeConfigParams(workspaceConfigParamsJson);
+
     let userConfigParamsJson = {};
     try {
       userConfigParamsJson = JSON.parse(String(userConfigParamsRawText || "{}"));
@@ -69,10 +79,16 @@ export class ConfigService {
       this.globalConfig?.configParams && typeof this.globalConfig.configParams === "object"
         ? this.globalConfig.configParams
         : {};
-    const mergedConfigParams = mergeConfigParamsWithFallback(
+    // precedence:
+    // 1) process.env (resolved at template stage, highest)
+    // 2) user config-params (only non-empty value overrides)
+    // 3) workspace config-params
+    // 4) global resolved configParams snapshot
+    const mergedWorkspaceConfigParams = mergeConfigParamsWithFallback(
       systemConfigParams,
-      userConfigParams,
+      workspaceConfigParams,
     );
+    const mergedConfigParams = mergeConfigParamsWithFallback(mergedWorkspaceConfigParams, userConfigParams);
     const resolvedRaw = resolveConfigSecrets(raw, {
       configParams: mergedConfigParams,
     });
