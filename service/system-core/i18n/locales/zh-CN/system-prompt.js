@@ -5,36 +5,35 @@
  */
 
 const DAILY_EXPERIENCE_JSON_SCHEMA_EXAMPLE =
-  '{"results":[{"domain_name":"领域名","is_new_domain":true,"experiences":["经验1"],"lessons":["教训1"]}]}';
+  '{"results":[{"domain_name":"领域名称","is_new_domain":true,"experiences":["经验1"],"lessons":["教训1"]}]}';
 
 const WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
-  '{"domain_name":"当前领域名","categories":[{"category_name":"大类名","experiences":["经验1"],"lessons":["教训1"]}]}';
+  '{"domain_name":"当前领域", "categories":[{"category_name":"分类", "experiences":["经验1"], "lessons":["教训1"]}]}';
 
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
   contextPrompt: {
-    emptyValueText: "(无)",
+    emptyValueText: "（无）",
     defaultWorkspaceDescription: "用户工作区目录",
     workspaceDirectoryDescriptions: {
       runtime: "运行时数据根目录",
-      "runtime/attach": "附件根目录（按 sessionId 与来源分目录存储）",
-      "runtime/attach/scoped":
-        "附件分组目录：scoped/<sessionId>/<source>/attachments.json",
+      "runtime/attach": "附件根目录（按 sessionId/source 分组）",
+      "runtime/attach/scoped": "附件作用域目录：scoped/<sessionId>/<source>/attachments.json",
       "runtime/connectors": "连接器运行与历史信息（如 connector-history.json）",
       "runtime/session": "会话与执行记录",
-      "runtime/workspace": "脚本执行与中间产物工作区",
+      "runtime/workspace": "脚本执行与中间工作区",
       "runtime/memory": "短期/长期记忆数据",
       skills: "技能目录",
     },
     sections: {
       staticInfo: "系统运行环境",
-      dynamicInfo: "当前会话动态信息",
-      scenario: "当前情景配置（名称、说明与约束）",
-      workspaceDirectories: "工作区目录信息",
+      dynamicInfo: "当前会话动态上下文",
+      scenario: "当前场景配置（名称、描述、约束）",
+      workspaceDirectories: "工作区目录",
       longMemory: "相关长期记忆",
       models: "可用模型与当前模型",
-      skills: "技能清单（一级）",
+      skills: "技能列表（顶层）",
       services: "可用外部服务端点（serviceName + endpointName + description）",
-      mcpServers: "可用 MCP Servers（name + type + description）",
+      mcpServers: "可用 MCP 服务器（name + type + description）",
       connectors: "当前连接器信息",
       attachments: "当前附件元信息",
     },
@@ -48,15 +47,15 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
           : JSON.stringify(params.existingLongMemory ?? "", null, 2);
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
       const modelRuleText = longMemoryModel
-        ? `请严格遵守以下长期记忆建模规则（来自 long-memory-model.md）：\n${longMemoryModel}`
-        : "若未提供建模规则，请优先提炼稳定偏好、长期约束。";
+        ? `请严格遵循以下长期记忆建模规则（来自 long-memory-model.md）：\n${longMemoryModel}`
+        : "若未提供记忆模型规则，请优先保留稳定偏好与长期约束。";
       return [
-        "你是长期记忆提炼器。",
+        "你是长期记忆整理助手。",
         modelRuleText,
-        "请基于“已有长期记忆”与“新短期记忆块”，产出最新的长期偏好。",
-        "你可以对已有长期偏好进行总结处理",
-        `已有长期偏好:\n${existingLongMemory}`,
-        `新短期记忆块:\n${promptPayload}`,
+        "请基于“已有长期记忆”和“新的短期记忆片段”产出更新后的长期偏好。",
+        "必要时可对已有长期偏好进行合并与总结。",
+        `已有长期偏好：\n${existingLongMemory}`,
+        `新的短期记忆片段：\n${promptPayload}`,
       ].join("\n\n");
     },
     dailyExperiencePrompt: (params = {}) => {
@@ -64,15 +63,17 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
       return [
         "系统指令：",
-        "分析以下短期记忆，将其归入已知领域或创建新领域。",
-        `已知领域列表：${knownDomainText || "无"}`,
+        "请分析以下短期记忆，归类到已知领域，或在必要时创建新领域。",
+        `已知领域：${knownDomainText || "无"}`,
         "",
         "任务要求：",
-        "1. 提取每个涉及领域的经验和教训（各1-3条，宁缺毋滥，无则留空）。",
-        "2. 仅输出严格的JSON，不要任何Markdown标记或解释。格式如下：",
+        "1. 为每个涉及领域提炼 experiences 与 lessons（各 1-3 条，优先质量；无则留空）。",
+        "2. 领域应保持高层抽象，避免过细碎（如：编程、项目管理、测试、产品）。",
+        "3. domain_name 保持简洁，尽量复用已知领域。",
+        "4. 仅输出严格 JSON，不要输出 markdown 或解释，格式如下：",
         DAILY_EXPERIENCE_JSON_SCHEMA_EXAMPLE,
         "",
-        "输入内容：",
+        "输入：",
         shortMemoryItems,
       ].join("\n");
     },
@@ -81,15 +82,16 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const mergedText = String(params.mergedText || "");
       return [
         "系统指令：",
-        `对以下【${domainName}】领域过去7天的记录进行体系化总结。`,
+        `请对领域 [${domainName}] 最近 7 天的记录进行结构化周总结。`,
         "",
         "任务要求：",
-        "1. 划分大类：根据内容相关性划分子类别（如：性能优化、架构设计）。",
-        "2. 提炼总结：合并重复项，提取每个大类最核心的经验与教训（各1-3条）。",
-        "3. 仅输出严格的JSON，不要任何Markdown标记或解释。格式如下：",
+        "1. 领域与分类保持高层抽象，不要过细（如：编程、项目管理、测试、产品；分类可用性能优化、架构设计等）。",
+        "2. 分类归组：按语义相关性拆分子类，并尽量合并近义项，避免碎片化。",
+        "3. 归纳提炼：去重合并后，提炼每类最关键的 experiences 与 lessons（各 1-3 条）。",
+        "4. 仅输出严格 JSON，不要输出 markdown 或解释，格式如下：",
         WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
         "",
-        "输入内容：",
+        "输入：",
         mergedText,
       ].join("\n");
     },
