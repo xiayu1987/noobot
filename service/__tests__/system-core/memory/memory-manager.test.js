@@ -4,7 +4,7 @@ import path from "node:path";
 import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-import { MemoryService } from "../../../system-core/memory/index.js";
+import { MemoryManager } from "../../../system-core/memory/index.js";
 
 async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
   let lastError = null;
@@ -37,7 +37,7 @@ test("readLongMemory only returns static long memory content", async () => {
     ),
   );
 
-  const service = new MemoryService({ workspaceRoot });
+  const service = new MemoryManager({ workspaceRoot });
   const content = await service.readLongMemory({ userId });
   assert.equal(content, "static long memory");
 });
@@ -48,8 +48,8 @@ test("append daily domain results writes per-domain txt and metadata", async () 
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
 
-  const service = new MemoryService({ workspaceRoot });
-  const ok = await service._appendDailyDomainResults({
+  const service = new MemoryManager({ workspaceRoot });
+  const ok = await service.experience.appendDailyDomainResults({
     basePath: userRoot,
     results: [
       {
@@ -82,8 +82,8 @@ test("append daily domain results writes per-domain txt and metadata", async () 
 });
 
 test("parse daily experience output supports markdown fenced json", () => {
-  const service = new MemoryService({ workspaceRoot: "/tmp/workspace" });
-  const items = service._parseDailyExperienceOutput(
+  const service = new MemoryManager({ workspaceRoot: "/tmp/workspace" });
+  const items = service.experience.parseDaily(
     [
       "以下是结果：",
       "```json",
@@ -104,8 +104,8 @@ test("logs raw model output when daily json parse fails", async () => {
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
 
-  const service = new MemoryService({ workspaceRoot });
-  const items = service._parseDailyExperienceOutput(
+  const service = new MemoryManager({ workspaceRoot });
+  const items = service.experience.parseDaily(
     "```json\n{\"results\":[{\"domain_name\":\"测试域\"}\n```",
     { basePath: userRoot },
   );

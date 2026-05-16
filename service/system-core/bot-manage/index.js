@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionFacade, createSessionServices } from "../session/index.js";
-import { MemoryService } from "../memory/index.js";
+import { MemoryManager } from "../memory/index.js";
 import { AttachmentService } from "../attach/index.js";
 import { SkillService } from "../skill/index.js";
 import { ConfigService } from "../config/index.js";
@@ -19,7 +19,7 @@ export class BotManager {
 
     this.sessionRuntime = createSessionServices(globalConfig);
     this.session = createSessionFacade(this.sessionRuntime);
-    this.memory = new MemoryService(globalConfig);
+    this.memory = new MemoryManager(globalConfig);
     this.attach = new AttachmentService(globalConfig);
     this.skill = new SkillService(globalConfig);
 
