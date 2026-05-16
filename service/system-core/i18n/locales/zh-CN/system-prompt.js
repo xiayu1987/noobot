@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+const DAILY_EXPERIENCE_JSON_SCHEMA_EXAMPLE =
+  '{"results":[{"domain_name":"领域名","is_new_domain":true,"experiences":["经验1"],"lessons":["教训1"]}]}';
+
+const WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
+  '{"domain_name":"当前领域名","categories":[{"category_name":"大类名","experiences":["经验1"],"lessons":["教训1"]}]}';
+
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
   contextPrompt: {
     emptyValueText: "(无)",
@@ -52,6 +58,40 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         `已有长期偏好:\n${existingLongMemory}`,
         `新短期记忆块:\n${promptPayload}`,
       ].join("\n\n");
+    },
+    dailyExperiencePrompt: (params = {}) => {
+      const knownDomainText = String(params.knownDomainText || "").trim();
+      const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
+      return [
+        "系统指令：",
+        "分析以下短期记忆，将其归入已知领域或创建新领域。",
+        `已知领域列表：${knownDomainText || "无"}`,
+        "",
+        "任务要求：",
+        "1. 提取每个涉及领域的经验和教训（各1-3条，宁缺毋滥，无则留空）。",
+        "2. 仅输出严格的JSON，不要任何Markdown标记或解释。格式如下：",
+        DAILY_EXPERIENCE_JSON_SCHEMA_EXAMPLE,
+        "",
+        "输入内容：",
+        shortMemoryItems,
+      ].join("\n");
+    },
+    weeklySummaryPrompt: (params = {}) => {
+      const domainName = String(params.domainName || "").trim();
+      const mergedText = String(params.mergedText || "");
+      return [
+        "系统指令：",
+        `对以下【${domainName}】领域过去7天的记录进行体系化总结。`,
+        "",
+        "任务要求：",
+        "1. 划分大类：根据内容相关性划分子类别（如：性能优化、架构设计）。",
+        "2. 提炼总结：合并重复项，提取每个大类最核心的经验与教训（各1-3条）。",
+        "3. 仅输出严格的JSON，不要任何Markdown标记或解释。格式如下：",
+        WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
+        "",
+        "输入内容：",
+        mergedText,
+      ].join("\n");
     },
   },
 };

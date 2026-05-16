@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+const DAILY_EXPERIENCE_JSON_SCHEMA_EXAMPLE =
+  '{"results":[{"domain_name":"Domain Name","is_new_domain":true,"experiences":["Experience 1"],"lessons":["Lesson 1"]}]}';
+
+const WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
+  '{"domain_name":"Current Domain", "categories":[{"category_name":"Category", "experiences":["Experience 1"], "lessons":["Lesson 1"]}]}';
+
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
   contextPrompt: {
     emptyValueText: "(none)",
@@ -54,6 +60,40 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         `Existing long-term preferences:\n${existingLongMemory}`,
         `New short-term memory chunks:\n${promptPayload}`,
       ].join("\n\n");
+    },
+    dailyExperiencePrompt: (params = {}) => {
+      const knownDomainText = String(params.knownDomainText || "").trim();
+      const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
+      return [
+        "System Instruction:",
+        "Analyze the following short-term memories, classify them into known domains, or create new domains.",
+        `Known domains: ${knownDomainText || "None"}`,
+        "",
+        "Task Requirements:",
+        "1. Extract experiences and lessons for each involved domain (1-3 each, prioritize quality; leave empty if none).",
+        "2. Output strict JSON only. Do not include markdown or explanations. Format:",
+        DAILY_EXPERIENCE_JSON_SCHEMA_EXAMPLE,
+        "",
+        "Input:",
+        shortMemoryItems,
+      ].join("\n");
+    },
+    weeklySummaryPrompt: (params = {}) => {
+      const domainName = String(params.domainName || "").trim();
+      const mergedText = String(params.mergedText || "");
+      return [
+        "System Instruction:",
+        `Create a structured weekly synthesis for the past 7 days of records in domain [${domainName}].`,
+        "",
+        "Task Requirements:",
+        "1. Group into categories: split into sub-categories by semantic relevance (e.g., performance optimization, architecture design).",
+        "2. Synthesize: merge duplicates and extract the most essential experiences and lessons for each category (1-3 each).",
+        "3. Output strict JSON only. Do not include markdown or explanations. Format:",
+        WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
+        "",
+        "Input:",
+        mergedText,
+      ].join("\n");
     },
   },
 };
