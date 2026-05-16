@@ -672,16 +672,7 @@ async function syncJsonFileIncremental({ templateFilePath, targetFilePath, skipT
 
 async function collectWorkspaceUserIds({ workspaceRootAbsolutePath, superAdminUserId = "" } = {}) {
   const userIds = new Set();
-  const normalizedSuperAdminUserId = String(superAdminUserId || "").trim();
-  if (normalizedSuperAdminUserId) userIds.add(normalizedSuperAdminUserId);
-
-  const usersFilePath = path.join(workspaceRootAbsolutePath, "user.json");
-  const usersPayload = await readJsonRelaxed(usersFilePath, {});
-  const users = Array.isArray(usersPayload?.users) ? usersPayload.users : [];
-  for (const userItem of users) {
-    const userId = String(userItem?.userId || "").trim();
-    if (userId) userIds.add(userId);
-  }
+  const workspaceDirUserIds = new Set();
 
   try {
     const entries = await readdir(workspaceRootAbsolutePath, { withFileTypes: true });
@@ -689,10 +680,30 @@ async function collectWorkspaceUserIds({ workspaceRootAbsolutePath, superAdminUs
       if (!entry.isDirectory()) continue;
       const userId = String(entry.name || "").trim();
       if (!userId) continue;
-      userIds.add(userId);
+      workspaceDirUserIds.add(userId);
     }
   } catch {
     // ignore
+  }
+
+  // 仅同步已经初始化（目录已存在）的用户，不主动创建新用户目录
+  for (const userId of workspaceDirUserIds) {
+    userIds.add(userId);
+  }
+
+  const normalizedSuperAdminUserId = String(superAdminUserId || "").trim();
+  if (normalizedSuperAdminUserId && workspaceDirUserIds.has(normalizedSuperAdminUserId)) {
+    userIds.add(normalizedSuperAdminUserId);
+  }
+
+  const usersFilePath = path.join(workspaceRootAbsolutePath, "user.json");
+  const usersPayload = await readJsonRelaxed(usersFilePath, {});
+  const users = Array.isArray(usersPayload?.users) ? usersPayload.users : [];
+  for (const userItem of users) {
+    const userId = String(userItem?.userId || "").trim();
+    if (userId && workspaceDirUserIds.has(userId)) {
+      userIds.add(userId);
+    }
   }
 
   return Array.from(userIds).sort((leftUserId, rightUserId) => leftUserId.localeCompare(rightUserId));
