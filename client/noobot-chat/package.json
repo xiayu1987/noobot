@@ -1,7 +1,7 @@
 {
   "name": "noobot",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -26,5 +26,8 @@
     "jsdom": "^29.1.1",
     "vite": "^8.0.4",
     "vitest": "^4.1.6"
+  },
+  "overrides": {
+    "glob": "^13.0.6"
   }
 }
