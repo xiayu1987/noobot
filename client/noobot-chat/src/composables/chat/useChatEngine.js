@@ -13,6 +13,7 @@ import { enUSMessages } from "../../shared/i18n/locales/en-US";
 import {
   normalizeInteractionRequestPayload,
   resolveConnectorConnectedPayload,
+  resolveConnectorStatusPayload,
 } from "./interactionPayload";
 
 function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialogProcessId = "" }) {
@@ -88,6 +89,7 @@ export function useChatEngine({
 } = {}) {
   const { translate, locale } = useLocale();
   let cacheExpiredRefreshTimer = null;
+  const connectorConnectedAckedRequestIds = new Set();
 
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
     if (!targetAssistantMessage) return;
@@ -99,6 +101,44 @@ export function useChatEngine({
         error: targetAssistantMessage.error || translate("chat.unknownError"),
       })}`;
     }
+  }
+
+  function tryAutoHandleConnectorConnectedInteraction(rawRequest = {}) {
+    const request = normalizeInteractionRequestPayload(rawRequest || {});
+    if (String(request?.interactionType || "").trim() !== "connector_connected") {
+      return false;
+    }
+    const requestId = String(request?.requestId || "").trim();
+    if (requestId && connectorConnectedAckedRequestIds.has(requestId)) {
+      return true;
+    }
+    const { connectorType, connectorName, status } = resolveConnectorConnectedPayload(request);
+    if (connectorTypeSet.has(connectorType) && connectorName) {
+      upsertConnectedConnectorInPanelState(activeSession.value, {
+        connectorType,
+        connectorName,
+        status,
+      });
+      refreshSessionConnectorsAsync(activeSession.value?.id || "");
+    }
+    try {
+      if (request?.requestId) {
+        submitInteractionResponse(
+          {
+            confirmed: true,
+            response: "connector_connected_ack",
+          },
+          {
+            requestId: request.requestId,
+            requireEncryption: request.requireEncryption === true,
+            sessionId: String(request.sessionId || ""),
+          },
+        );
+      }
+    } catch {}
+    if (requestId) connectorConnectedAckedRequestIds.add(requestId);
+    clearPendingInteraction();
+    return true;
   }
 
   function emitSyntheticErrorConversationState({
@@ -263,14 +303,15 @@ export function useChatEngine({
             ? statePayload.pendingInteraction
             : null;
         if (pendingInteractionPayload) {
-          setPendingInteractionRequest(
-            normalizeInteractionRequestPayload({
-              ...pendingInteractionPayload,
-              interactionType: String(
-                pendingInteractionPayload?.interactionType || "",
-              ).trim(),
-            }),
-          );
+          const normalizedPendingInteractionRequest = normalizeInteractionRequestPayload({
+            ...pendingInteractionPayload,
+            interactionType: String(
+              pendingInteractionPayload?.interactionType || "",
+            ).trim(),
+          });
+          if (!tryAutoHandleConnectorConnectedInteraction(normalizedPendingInteractionRequest)) {
+            setPendingInteractionRequest(normalizedPendingInteractionRequest);
+          }
         } else {
           sending.value = false;
           clearPendingInteraction();
@@ -470,43 +511,25 @@ export function useChatEngine({
             scrollBottom();
           }
         } else if (event === StreamEventEnum.INTERACTION_REQUEST) {
-          const interactionType = String(data?.interactionType || "").trim();
-          if (interactionType === "connector_connected") {
-            const { connectorType, connectorName, status } =
-              resolveConnectorConnectedPayload(data);
-            const connectedType = connectorType;
-            const connectedName = connectorName;
-            const connectedStatus = status;
-            if (connectorTypeSet.has(connectedType) && connectedName) {
-              upsertConnectedConnectorInPanelState(activeSession.value, {
-                connectorType: connectedType,
-                connectorName: connectedName,
-                status: connectedStatus,
-              });
-              refreshSessionConnectorsAsync(activeSession.value.id);
-            }
-            try {
-              submitInteractionResponse(
-                {
-                  confirmed: true,
-                  response: "connector_connected_ack",
-                },
-                {
-                  requestId: String(data?.requestId || ""),
-                  requireEncryption: data?.requireEncryption === true,
-                  sessionId: String(data?.sessionId || ""),
-                },
-              );
-            } catch {}
+          const normalizedInteractionRequest = normalizeInteractionRequestPayload({
+            ...(data || {}),
+            interactionType: String(data?.interactionType || "").trim(),
+          });
+          if (tryAutoHandleConnectorConnectedInteraction(normalizedInteractionRequest)) {
             return;
           }
-
-          setPendingInteractionRequest(
-            normalizeInteractionRequestPayload({
-              ...data,
-              interactionType,
-            }),
-          );
+          setPendingInteractionRequest(normalizedInteractionRequest);
+        } else if (event === StreamEventEnum.CONNECTOR_STATUS) {
+          const { connectorType, connectorName, status } =
+            resolveConnectorStatusPayload(data);
+          if (connectorTypeSet.has(connectorType) && connectorName) {
+            upsertConnectedConnectorInPanelState(activeSession.value, {
+              connectorType,
+              connectorName,
+              status,
+            });
+            refreshSessionConnectorsAsync(activeSession.value?.id || "");
+          }
         } else if (event === StreamEventEnum.DONE) {
           clearPendingInteraction();
           finalDoneEventData = data || {};

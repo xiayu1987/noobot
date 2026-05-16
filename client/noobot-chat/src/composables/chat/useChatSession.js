@@ -241,6 +241,10 @@ export function useChatSession({
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     isInteractionRequestHandled,
+    connectorTypeSet: connectorPanel.connectorTypeSet,
+    upsertConnectedConnectorInPanelState:
+      connectorPanel.upsertConnectedConnectorInPanelState,
+    refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     classifyRealtimeLog,
     scrollBottom,
     translate,

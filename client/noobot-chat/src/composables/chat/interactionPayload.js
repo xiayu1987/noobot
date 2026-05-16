@@ -22,6 +22,22 @@ export function resolveConnectorConnectedPayload(payload = {}) {
   };
 }
 
+export function resolveConnectorStatusPayload(payload = {}) {
+  const interactionData = normalizeInteractionData(payload?.interactionData);
+  return {
+    interactionData,
+    connectorType: String(
+      payload?.connectorType || interactionData?.connectorType || "",
+    ).trim(),
+    connectorName: String(
+      payload?.connectorName || interactionData?.connectorName || "",
+    ).trim(),
+    status: String(
+      payload?.status || interactionData?.status || "connected",
+    ).trim() || "connected",
+  };
+}
+
 export function normalizeInteractionRequestPayload(payload = {}) {
   const interactionData = normalizeInteractionData(payload?.interactionData);
   return {

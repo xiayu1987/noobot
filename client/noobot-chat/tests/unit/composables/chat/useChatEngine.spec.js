@@ -980,4 +980,117 @@ describe("useChatEngine", () => {
     });
     vi.useRealTimers();
   });
+
+  it("connector_status is informational: updates connector panel without interaction pending", async () => {
+    const activeSessionId = ref("local-connector-status");
+    const activeSession = ref({
+      id: "local-connector-status",
+      backendSessionId: "local-connector-status",
+      title: "chat.newSession",
+      loaded: false,
+      messages: [],
+      rawMessages: [],
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+      messageCount: 0,
+      lastMessage: null,
+      updatedAt: "",
+    });
+    const sending = ref(false);
+    const input = ref("hello");
+    const uploadFiles = ref([]);
+    const pendingInteractionRequest = ref(null);
+    const interactionSubmitting = ref(false);
+    const setPendingInteractionRequest = vi.fn();
+    const submitInteractionResponse = vi.fn();
+    const refreshSessionConnectorsAsync = vi.fn();
+    const upsertConnectedConnectorInPanelState = vi.fn();
+
+    const appendMessage = (role, content = "", attachmentMetas = []) => {
+      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
+      activeSession.value.messages.push(message);
+      activeSession.value.rawMessages.push(message);
+      return message;
+    };
+
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({
+        event: StreamEventEnum.CONNECTOR_STATUS,
+        data: {
+          sessionId: "local-connector-status",
+          dialogProcessId: "dp-connector-status",
+          connectorType: "email",
+          connectorName: "example_email",
+          status: "connected",
+        },
+      });
+      onEvent({
+        event: StreamEventEnum.DONE,
+        data: {
+          sessionId: "local-connector-status",
+          dialogProcessId: "dp-connector-status",
+          messages: [
+            { role: RoleEnum.USER, content: "hello" },
+            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-connector-status", content: "ok" },
+          ],
+        },
+      });
+    });
+
+    const engine = useChatEngine({
+      userId: ref("u-1"),
+      allowUserInteraction: ref(true),
+      forceTool: ref(false),
+      botScenario: ref(""),
+      isImageMime: () => false,
+      classifyRealtimeLog: (d) => d,
+      scrollBottom: vi.fn(),
+      activeSession,
+      activeSessionId,
+      sending,
+      input,
+      uploadFiles,
+      clearUploads: vi.fn(),
+      serializeAttachments: vi.fn(async () => []),
+      appendMessage,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => [...messages],
+      fetchSessionDetail: vi.fn(async () => ({})),
+      applySessionDetail: vi.fn(),
+      refreshSessionConnectorsAsync,
+      connectorTypeSet: new Set(["email"]),
+      upsertConnectedConnectorInPanelState,
+      pendingInteractionRequest,
+      interactionSubmitting,
+      clearPendingInteraction: vi.fn(),
+      clearPendingInteractionIfObsolete: vi.fn(),
+      setPendingInteractionRequest,
+      submitInteractionResponse,
+      refreshSessionsAsync: vi.fn(),
+      chatWebSocketClient: {
+        stream,
+        requestStop: vi.fn(),
+        clearLastReceivedSeqMap: vi.fn(),
+        dispose: vi.fn(),
+        clearStopRequested: vi.fn(),
+        isStopRequested: vi.fn(() => false),
+      },
+      ensureConnected: vi.fn(() => true),
+      notify: vi.fn(),
+    });
+
+    await engine.send();
+
+    expect(upsertConnectedConnectorInPanelState).toHaveBeenCalledWith(
+      activeSession.value,
+      {
+        connectorType: "email",
+        connectorName: "example_email",
+        status: "connected",
+      },
+    );
+    expect(refreshSessionConnectorsAsync).toHaveBeenCalledWith("local-connector-status");
+    expect(setPendingInteractionRequest).not.toHaveBeenCalled();
+    expect(submitInteractionResponse).not.toHaveBeenCalled();
+  });
 });
