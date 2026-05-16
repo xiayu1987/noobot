@@ -8,6 +8,14 @@ import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { emitEvent } from "../../event/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { isAbortError } from "../../utils/error-utils.js";
+import {
+  BOT_MANAGE_LOG_EVENT,
+  BOT_MANAGE_LOG_SOURCE,
+  CALLER_ROLE,
+  MESSAGE_ROLE,
+  MESSAGE_TYPE,
+  SESSION_ASYNC_STATUS,
+} from "../config/constants.js";
 
 /**
  * Main execution runner (pipeline orchestration).
@@ -49,7 +57,7 @@ export class SessionExecutionRunner {
     message,
     attachments = [],
     eventListener = null,
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     parentSessionId = "",
     parentDialogProcessId = "",
     abortSignal = null,
@@ -126,9 +134,9 @@ export class SessionExecutionRunner {
         userId,
         sessionId: usedSessionId,
         parentSessionId,
-        role: "user",
+        role: MESSAGE_ROLE.USER,
         content: normalizedMessage,
-        type: "message",
+        type: MESSAGE_TYPE.MESSAGE,
         attachmentMetas: userMessageAttachmentMetas,
         dialogProcessId,
         parentDialogProcessId,
@@ -168,7 +176,9 @@ export class SessionExecutionRunner {
         sessionId,
         parentSessionId,
         patch: {
-          status: isAbortError(error) ? "stopped" : "failed",
+          status: isAbortError(error)
+            ? SESSION_ASYNC_STATUS.STOPPED
+            : SESSION_ASYNC_STATUS.FAILED,
           endedAt: this.now(),
           error: isAbortError(error)
             ? tSystem("ws.dialogStoppedByUser")
@@ -183,8 +193,8 @@ export class SessionExecutionRunner {
         userId,
         sessionId,
         parentSessionId,
-        source: "BotManager.runSession",
-        event: "run_session_failed",
+        source: BOT_MANAGE_LOG_SOURCE.RUN_SESSION,
+        event: BOT_MANAGE_LOG_EVENT.RUN_SESSION_FAILED,
         error,
       });
       throw error;

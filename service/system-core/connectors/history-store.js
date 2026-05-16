@@ -6,21 +6,16 @@
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tSystem } from "../i18n/system-text.js";
+import {
+  CONNECTOR_TYPE,
+  normalizeConnectorType,
+} from "../config/core/enums.js";
+import {
+  CONNECTOR_RUNTIME_STATUS,
+  CONNECTOR_STATUS_CODE,
+} from "./constants.js";
 
 const HISTORY_FILE_NAME = "connector-history.json";
-const CONNECTOR_TYPES = ["database", "terminal", "email"];
-
-function normalizeConnectorType(connectorType = "") {
-  const normalizedConnectorType = String(connectorType || "")
-    .trim()
-    .toLowerCase();
-  if (normalizedConnectorType === "db") return "database";
-  if (normalizedConnectorType === "shell") return "terminal";
-  if (normalizedConnectorType === "mail") return "email";
-  return CONNECTOR_TYPES.includes(normalizedConnectorType)
-    ? normalizedConnectorType
-    : "";
-}
 
 function isSensitiveKeyName(keyName = "") {
   const normalizedKeyName = String(keyName || "").trim().toLowerCase();
@@ -72,14 +67,20 @@ function normalizeHistoryPayload(inputValue = {}) {
         ? sessionValue.connectors
         : {};
     const normalizedConnectors = {
-      database: Array.isArray(sourceConnectors?.database)
-        ? sourceConnectors.database
+      [CONNECTOR_TYPE.DATABASE]: Array.isArray(
+        sourceConnectors?.[CONNECTOR_TYPE.DATABASE],
+      )
+        ? sourceConnectors[CONNECTOR_TYPE.DATABASE]
         : [],
-      terminal: Array.isArray(sourceConnectors?.terminal)
-        ? sourceConnectors.terminal
+      [CONNECTOR_TYPE.TERMINAL]: Array.isArray(
+        sourceConnectors?.[CONNECTOR_TYPE.TERMINAL],
+      )
+        ? sourceConnectors[CONNECTOR_TYPE.TERMINAL]
         : [],
-      email: Array.isArray(sourceConnectors?.email)
-        ? sourceConnectors.email
+      [CONNECTOR_TYPE.EMAIL]: Array.isArray(
+        sourceConnectors?.[CONNECTOR_TYPE.EMAIL],
+      )
+        ? sourceConnectors[CONNECTOR_TYPE.EMAIL]
         : [],
     };
     normalizedSessions[normalizedSessionId] = {
@@ -163,7 +164,11 @@ class ConnectorHistoryStore {
     const normalizedUserId = String(userId || "").trim();
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedUserId || !normalizedSessionId) {
-      return { database: [], terminal: [], email: [] };
+      return {
+        [CONNECTOR_TYPE.DATABASE]: [],
+        [CONNECTOR_TYPE.TERMINAL]: [],
+        [CONNECTOR_TYPE.EMAIL]: [],
+      };
     }
     const historyPayload = await this._readHistory(normalizedUserId);
     const sessionHistory = historyPayload?.sessions?.[normalizedSessionId] || {};
@@ -172,13 +177,21 @@ class ConnectorHistoryStore {
         ? sessionHistory.connectors
         : {};
     return {
-      database: Array.isArray(sessionConnectors?.database)
-        ? sessionConnectors.database
+      [CONNECTOR_TYPE.DATABASE]: Array.isArray(
+        sessionConnectors?.[CONNECTOR_TYPE.DATABASE],
+      )
+        ? sessionConnectors[CONNECTOR_TYPE.DATABASE]
         : [],
-      terminal: Array.isArray(sessionConnectors?.terminal)
-        ? sessionConnectors.terminal
+      [CONNECTOR_TYPE.TERMINAL]: Array.isArray(
+        sessionConnectors?.[CONNECTOR_TYPE.TERMINAL],
+      )
+        ? sessionConnectors[CONNECTOR_TYPE.TERMINAL]
         : [],
-      email: Array.isArray(sessionConnectors?.email) ? sessionConnectors.email : [],
+      [CONNECTOR_TYPE.EMAIL]: Array.isArray(
+        sessionConnectors?.[CONNECTOR_TYPE.EMAIL],
+      )
+        ? sessionConnectors[CONNECTOR_TYPE.EMAIL]
+        : [],
     };
   }
 
@@ -234,8 +247,8 @@ class ConnectorHistoryStore {
       const nextItem = {
         connector_name: normalizedConnectorName,
         connector_type: normalizedConnectorType,
-        status: "disconnected",
-        status_code: 410,
+        status: CONNECTOR_RUNTIME_STATUS.DISCONNECTED,
+        status_code: CONNECTOR_STATUS_CODE.DISCONNECTED_HISTORY,
         status_message: tSystem("status.disconnectedFromHistory"),
         checked_at: nowIso,
         last_connected_at: nowIso,
@@ -270,14 +283,20 @@ class ConnectorHistoryStore {
         sessionId: normalizedSessionId,
         updatedAt: nowIso,
         connectors: {
-          database: Array.isArray(currentConnectors?.database)
-            ? currentConnectors.database
+          [CONNECTOR_TYPE.DATABASE]: Array.isArray(
+            currentConnectors?.[CONNECTOR_TYPE.DATABASE],
+          )
+            ? currentConnectors[CONNECTOR_TYPE.DATABASE]
             : [],
-          terminal: Array.isArray(currentConnectors?.terminal)
-            ? currentConnectors.terminal
+          [CONNECTOR_TYPE.TERMINAL]: Array.isArray(
+            currentConnectors?.[CONNECTOR_TYPE.TERMINAL],
+          )
+            ? currentConnectors[CONNECTOR_TYPE.TERMINAL]
             : [],
-          email: Array.isArray(currentConnectors?.email)
-            ? currentConnectors.email
+          [CONNECTOR_TYPE.EMAIL]: Array.isArray(
+            currentConnectors?.[CONNECTOR_TYPE.EMAIL],
+          )
+            ? currentConnectors[CONNECTOR_TYPE.EMAIL]
             : [],
           [normalizedConnectorType]: connectorList,
         },

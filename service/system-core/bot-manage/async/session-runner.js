@@ -7,8 +7,15 @@
 import { isValidSessionId, now } from "../utils/session-utils.js";
 import { tSystem } from "../../i18n/system-text.js";
 import {
+  BOT_MANAGE_LOG_EVENT,
+  BOT_MANAGE_LOG_SOURCE,
+  CALLER_ROLE,
   DEFAULT_WAIT_ASYNC_TIMEOUT_MS,
+  MESSAGE_TYPE,
+  MESSAGE_ROLE,
   MIN_WAIT_ASYNC_TIMEOUT_MS,
+  SESSION_ASYNC_STATUS,
+  SESSION_ASYNC_TERMINAL_STATUSES,
 } from "./constants.js";
 
 const POLL_INTERVAL_MS = 300;
@@ -44,7 +51,7 @@ export class AsyncSessionRunner {
   _buildAsyncDonePayload(data) {
     return {
       ok: !!data.ok,
-      status: data.status || "completed",
+      status: data.status || SESSION_ASYNC_STATUS.COMPLETED,
       sessionId: data.sessionId,
       parentSessionId: data.parentSessionId,
       startedAt: data.startedAt,
@@ -66,7 +73,7 @@ export class AsyncSessionRunner {
     if (!bundle?.exists) {
       return {
         ok: false,
-        status: "not_found",
+        status: SESSION_ASYNC_STATUS.NOT_FOUND,
         sessionId,
         parentSessionId,
       };
@@ -79,7 +86,11 @@ export class AsyncSessionRunner {
 
     const assistantMessage = [...messages]
       .reverse()
-      .find((m) => m.role === "assistant" && m.type === "message");
+      .find(
+        (m) =>
+          m.role === MESSAGE_ROLE.ASSISTANT &&
+          m.type === MESSAGE_TYPE.MESSAGE,
+      );
 
     const answer = assistantMessage?.content || "";
     const dialogProcessId = assistantMessage?.dialogProcessId || "";
@@ -92,7 +103,7 @@ export class AsyncSessionRunner {
 
     return {
       ok: true,
-      status: "completed",
+      status: SESSION_ASYNC_STATUS.COMPLETED,
       sessionId,
       parentSessionId,
       result: {
@@ -160,7 +171,7 @@ export class AsyncSessionRunner {
       key,
       sessionId: normalizedSessionId,
       parentSessionId: normalizedParentSessionId,
-      status: "running",
+      status: SESSION_ASYNC_STATUS.RUNNING,
       startedAt,
       endedAt: "",
       result: null,
@@ -182,7 +193,7 @@ export class AsyncSessionRunner {
         task,
         sharedTaskSpec,
         patch: {
-          status: "running",
+          status: SESSION_ASYNC_STATUS.RUNNING,
           startedAt,
           endedAt: "",
           error: "",
@@ -195,7 +206,7 @@ export class AsyncSessionRunner {
       userId: normalizedUserId,
       sessionId: normalizedSessionId,
       message,
-      caller: "bot",
+      caller: CALLER_ROLE.BOT,
       parentSessionId: normalizedParentSessionId,
       parentDialogProcessId,
       attachments: Array.isArray(attachments) ? attachments : [],
@@ -212,7 +223,7 @@ export class AsyncSessionRunner {
         const endedAt = now();
         this.jobs.set(key, {
           ...current,
-          status: "completed",
+          status: SESSION_ASYNC_STATUS.COMPLETED,
           endedAt,
           result,
           error: "",
@@ -223,7 +234,9 @@ export class AsyncSessionRunner {
         const current = this.jobs.get(key) || {};
         const endedAt = now();
         const message = error?.message || String(error);
-        const status = /abort|stopped/i.test(message) ? "stopped" : "failed";
+        const status = /abort|stopped/i.test(message)
+          ? SESSION_ASYNC_STATUS.STOPPED
+          : SESSION_ASYNC_STATUS.FAILED;
         this.jobs.set(key, {
           ...current,
           status,
@@ -236,8 +249,8 @@ export class AsyncSessionRunner {
             userId: normalizedUserId,
             sessionId: normalizedSessionId,
             parentSessionId: normalizedParentSessionId,
-            source: "AsyncSessionRunner.runAsyncSession",
-            event: "run_async_session_failed",
+            source: BOT_MANAGE_LOG_SOURCE.ASYNC_RUN_SESSION,
+            event: BOT_MANAGE_LOG_EVENT.RUN_ASYNC_SESSION_FAILED,
             error,
           });
         }
@@ -246,7 +259,7 @@ export class AsyncSessionRunner {
 
     return {
       ok: true,
-      status: "running",
+      status: SESSION_ASYNC_STATUS.RUNNING,
       sessionId: normalizedSessionId,
       parentSessionId: normalizedParentSessionId,
       startedAt,
@@ -284,8 +297,8 @@ export class AsyncSessionRunner {
 
     const resolveDone = (job = {}) =>
       this._buildAsyncDonePayload({
-        ok: job?.status === "completed",
-        status: job?.status || "running",
+        ok: job?.status === SESSION_ASYNC_STATUS.COMPLETED,
+        status: job?.status || SESSION_ASYNC_STATUS.RUNNING,
         sessionId: normalizedSessionId,
         parentSessionId: normalizedParentSessionId,
         startedAt: job?.startedAt || "",
@@ -303,7 +316,9 @@ export class AsyncSessionRunner {
       });
       return {
         ok: !!bundle?.exists,
-        status: bundle?.exists ? "completed" : "not_found",
+        status: bundle?.exists
+          ? SESSION_ASYNC_STATUS.COMPLETED
+          : SESSION_ASYNC_STATUS.NOT_FOUND,
         sessionId: normalizedSessionId,
         parentSessionId: normalizedParentSessionId,
       };
@@ -312,7 +327,11 @@ export class AsyncSessionRunner {
     while (Date.now() - startedAtMs < waitTimeoutMs) {
       const job = this.jobs.get(key);
       if (!job) break;
-      if (["completed", "failed", "stopped"].includes(String(job?.status || ""))) {
+      if (
+        SESSION_ASYNC_TERMINAL_STATUSES.includes(
+          String(job?.status || ""),
+        )
+      ) {
         return resolveDone(job);
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -326,12 +345,16 @@ export class AsyncSessionRunner {
         sessionId: normalizedSessionId,
       });
     }
-    if (["completed", "failed", "stopped"].includes(String(latest?.status || ""))) {
+    if (
+      SESSION_ASYNC_TERMINAL_STATUSES.includes(
+        String(latest?.status || ""),
+      )
+    ) {
       return resolveDone(latest);
     }
     return {
       ok: true,
-      status: "running",
+      status: SESSION_ASYNC_STATUS.RUNNING,
       sessionId: normalizedSessionId,
       parentSessionId: normalizedParentSessionId,
       startedAt: latest?.startedAt || "",

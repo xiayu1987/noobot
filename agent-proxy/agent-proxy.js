@@ -9,6 +9,10 @@ import { config } from "./src/config.js";
 import { ChannelManager } from "./src/channel-manager.js";
 import { WsRouter } from "./src/ws-router.js";
 import {
+  AGENT_PROXY_CLOSE_REASON,
+  AGENT_PROXY_ERROR,
+} from "./src/constants.js";
+import {
   proxyHttpRequest,
   writeProxyError,
   decorateProxyResponseHeaders,
@@ -21,6 +25,7 @@ import {
   isIpTrusted,
   isOriginTrusted,
 } from "./src/security.js";
+import { resolveLocaleFromRequest } from "./src/i18n.js";
 
 async function loadWebSocketLibrary() {
   try {
@@ -49,16 +54,17 @@ const wsRateLimiter = createFixedWindowRateLimiter({
 
 // ---- HTTP Server ----
 const httpServer = http.createServer((request, response) => {
+  const locale = resolveLocaleFromRequest(request);
   const pathname = parseRequestPathname(request);
   const clientIp = getClientIp(request);
   const requestOrigin = String(request?.headers?.origin || "").trim();
 
   if (!isIpTrusted(clientIp, config.trustedIps)) {
-    writeProxyError(response, 403, "agentProxy client ip not allowed");
+    writeProxyError(response, 403, AGENT_PROXY_ERROR.CLIENT_IP_NOT_ALLOWED, locale);
     return;
   }
   if (requestOrigin && !isOriginTrusted(requestOrigin, config.trustedOrigins)) {
-    writeProxyError(response, 403, "agentProxy origin not allowed");
+    writeProxyError(response, 403, AGENT_PROXY_ERROR.ORIGIN_NOT_ALLOWED, locale);
     return;
   }
   if (config.httpRateLimitEnabled) {
@@ -94,7 +100,12 @@ const httpServer = http.createServer((request, response) => {
 
   if (config.connectPaths.includes(pathname)) {
     interceptConnectRequest(request, response, channelManager).catch((error) => {
-      writeProxyError(response, 500, error?.message || "agentProxy connect intercept error");
+      writeProxyError(
+        response,
+        500,
+        error?.message || AGENT_PROXY_ERROR.CONNECT_INTERCEPT_ERROR,
+        locale,
+      );
     });
     return;
   }
@@ -146,13 +157,14 @@ websocketServer.on("connection", (socket, request) => {
   const connectionApiKey = normalizeApiKey(requestInfo.apiKey);
   const connectionLocale = requestInfo.locale;
   socket.__agentProxyApiKey = connectionApiKey;
+  socket.__agentProxyLocale = connectionLocale;
   const socketIdentity = channelManager.resolveApiKeyIdentity(connectionApiKey);
   socket.__agentProxyUserId = String(socketIdentity?.userId || "").trim();
 
   if (!connectionApiKey) {
-    channelManager.sendSocketError(socket, "agentProxy missing apikey");
+    channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.MISSING_APIKEY);
     try {
-      socket.close(1008, "missing_apikey");
+      socket.close(1008, AGENT_PROXY_CLOSE_REASON.MISSING_APIKEY);
     } catch {
       // ignore close errors
     }

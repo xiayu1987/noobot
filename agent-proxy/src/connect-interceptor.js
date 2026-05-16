@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { config } from "./config.js";
+import { AGENT_PROXY_ERROR } from "./constants.js";
+import { resolveLocaleFromRequest } from "./i18n.js";
 import { buildClientPermissions } from "./utils.js";
 import {
   collectRequestBody,
@@ -24,6 +26,7 @@ function isConnectTokenAuthorized(request = null) {
 }
 
 export async function interceptConnectRequest(request, response, channelManager) {
+  const locale = resolveLocaleFromRequest(request);
   const method = String(request?.method || "POST").trim().toUpperCase() || "POST";
   if (!isConnectTokenAuthorized(request)) {
     response.writeHead(
@@ -39,7 +42,12 @@ export async function interceptConnectRequest(request, response, channelManager)
   try {
     requestBodyBuffer = await collectRequestBody(request);
   } catch (error) {
-    writeProxyError(response, 413, error?.message || "agentProxy request body too large");
+    writeProxyError(
+      response,
+      413,
+      error?.message || AGENT_PROXY_ERROR.REQUEST_BODY_TOO_LARGE,
+      locale,
+    );
     return;
   }
   const forwardedHeaders = { ...(request?.headers || {}) };
@@ -49,7 +57,12 @@ export async function interceptConnectRequest(request, response, channelManager)
   try {
     upstreamConnectUrl = new URL("/internal/connect", config.upstreamHttpBase).toString();
   } catch {
-    writeProxyError(response, 500, "agentProxy invalid upstream base url");
+    writeProxyError(
+      response,
+      500,
+      AGENT_PROXY_ERROR.INVALID_UPSTREAM_BASE_URL,
+      locale,
+    );
     return;
   }
   let upstreamResponse = null;
@@ -61,7 +74,12 @@ export async function interceptConnectRequest(request, response, channelManager)
       signal: AbortSignal.timeout(config.httpUpstreamTimeoutMs),
     });
   } catch (error) {
-    writeProxyError(response, 502, error?.message || "agentProxy connect intercept failed");
+    writeProxyError(
+      response,
+      502,
+      error?.message || AGENT_PROXY_ERROR.CONNECT_INTERCEPT_FAILED,
+      locale,
+    );
     return;
   }
 

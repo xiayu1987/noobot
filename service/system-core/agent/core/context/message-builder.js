@@ -10,6 +10,7 @@ import {
   ToolMessage,
 } from "@langchain/core/messages";
 import { tEngine } from "../i18n-adapter.js";
+import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
 
 export function buildContextMessages(
   agentContext,
@@ -123,7 +124,7 @@ export function buildContextMessages(
 
   for (const msg of historyMessages) {
     if (msg?.summarized === true) continue;
-    if ((msg?.role || "") !== "assistant") continue;
+    if ((msg?.role || "") !== MESSAGE_ROLE.ASSISTANT) continue;
     const normalizedToolCalls = toLangChainToolCalls(msg.tool_calls || []);
     for (const toolCall of normalizedToolCalls) {
       const toolCallId = String(toolCall?.id || "").trim();
@@ -138,12 +139,12 @@ export function buildContextMessages(
   for (const msg of historyMessages) {
     if (msg?.summarized === true) continue;
     const role = msg.role || "";
-    if (role === "system") {
+    if (role === MESSAGE_ROLE.SYSTEM) {
       out.push(new SystemMessage(msg.content || ""));
       continue;
     }
 
-    if (role === "assistant") {
+    if (role === MESSAGE_ROLE.ASSISTANT) {
       const toolCalls = toLangChainToolCalls(msg.tool_calls || []);
       const resolvedAssistantContent =
         typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
@@ -158,7 +159,7 @@ export function buildContextMessages(
       continue;
     }
 
-    if (role === "tool") {
+    if (role === MESSAGE_ROLE.TOOL) {
       const toolCallId = String(msg?.tool_call_id || "").trim();
       if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
         continue;
@@ -179,7 +180,7 @@ export function buildContextMessages(
     out.push(
       ...buildHumanMessagesForUser(
         {
-          role: "user",
+          role: MESSAGE_ROLE.USER,
           content: normalizedCurrentUserMessage,
           userName: fallbackUserMeta.userName,
           attachmentMetas: fallbackUserMeta.attachmentMetas,

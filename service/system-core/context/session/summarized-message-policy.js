@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { MESSAGE_ROLE } from "../../bot-manage/config/constants.js";
+
 export const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
 
 function normalizeAiTextContent(aiContent) {
@@ -90,10 +92,10 @@ export function shouldMarkCurrentTurnSummarizedMessage(
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
   const role = getMessageRole(messageItem);
-  if (role === "tool") {
+  if (role === MESSAGE_ROLE.TOOL) {
     return !isTaskSummaryToolMessage(messageItem, { taskSummaryToolName });
   }
-  if (role !== "assistant") return false;
+  if (role !== MESSAGE_ROLE.ASSISTANT) return false;
   if (hasTaskSummaryToolCall(messageItem, { taskSummaryToolName })) {
     return false;
   }
@@ -105,7 +107,7 @@ export function shouldMarkCurrentTurnSummarizedModelMessage(
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
   const type = getModelMessageType(messageItem);
-  if (type === "tool") {
+  if (type === MESSAGE_ROLE.TOOL) {
     return !isTaskSummaryToolMessage(messageItem, { taskSummaryToolName });
   }
   if (type !== "ai") return false;
@@ -179,7 +181,8 @@ export function filterSummarizedMessages(messages = []) {
   for (const messageItem of baseFiltered) {
     const modelType = getModelMessageType(messageItem);
     const role = getMessageRole(messageItem);
-    const isToolMessage = modelType === "tool" || role === "tool";
+    const isToolMessage =
+      modelType === MESSAGE_ROLE.TOOL || role === MESSAGE_ROLE.TOOL;
     if (!isToolMessage) continue;
     const toolCallId = String(
       messageItem?.tool_call_id ??

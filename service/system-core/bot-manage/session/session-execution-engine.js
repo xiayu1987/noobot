@@ -15,6 +15,7 @@ import { ParentAsyncTaskManager } from "../execution/parent-async-task-manager.j
 import { RunConfigResolver } from "../config/run-config-resolver.js";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { AgentContextFactory } from "../execution/agent-context-factory.js";
+import { CALLER_ROLE } from "../config/constants.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -113,7 +114,7 @@ export class SessionExecutionEngine {
   _validateRunInput({
     userId,
     sessionId,
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     parentSessionId = "",
   }) {
     this.validator.validateRunInput({
@@ -144,7 +145,7 @@ export class SessionExecutionEngine {
 
   _ensureParentAsyncResultContainer({
     parentAsyncResultContainer = null,
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     parentSessionId = "",
     parentDialogProcessId = "",
   }) {
@@ -176,7 +177,7 @@ export class SessionExecutionEngine {
   _buildContextBuilder({
     userId,
     sessionId,
-    caller,
+    caller = CALLER_ROLE.USER,
     parentSessionId,
     userConfig,
     attachmentMetas,
@@ -400,7 +401,7 @@ export class SessionExecutionEngine {
     userId,
     sessionId,
     parentSessionId = "",
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     eventListener = null,
   }) {
     return this.initializer.initializeRunSessionRuntime({
@@ -417,7 +418,7 @@ export class SessionExecutionEngine {
     sessionId,
     parentSessionId = "",
     parentDialogProcessId = "",
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     dialogProcessId = "",
     agentResult = {},
     executionStartIndex = 0,
@@ -446,7 +447,7 @@ export class SessionExecutionEngine {
     message,
     attachments = [],
     eventListener = null,
-    caller = "user",
+    caller = CALLER_ROLE.USER,
     parentSessionId = "",
     parentDialogProcessId = "",
     abortSignal = null,
@@ -488,7 +489,7 @@ export class SessionExecutionEngine {
       message,
       attachments,
       eventListener,
-      caller: "user",
+      caller: CALLER_ROLE.USER,
       parentSessionId: "",
     });
   }

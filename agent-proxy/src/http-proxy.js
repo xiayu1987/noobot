@@ -6,6 +6,11 @@
 import http from "node:http";
 import https from "node:https";
 import { config } from "./config.js";
+import { AGENT_PROXY_ERROR } from "./constants.js";
+import {
+  localizeAgentProxyMessage,
+  resolveLocaleFromRequest,
+} from "./i18n.js";
 import { buildSecurityHeaders } from "./security.js";
 
 function resolveSafeErrorMessage(statusCode = 502, message = "Bad Gateway") {
@@ -26,8 +31,14 @@ export function decorateProxyResponseHeaders(headers = {}) {
   };
 }
 
-export function writeProxyError(response, statusCode = 502, message = "Bad Gateway") {
+export function writeProxyError(
+  response,
+  statusCode = 502,
+  message = "Bad Gateway",
+  locale = "",
+) {
   if (!response || response.headersSent) return;
+  const localizedMessage = localizeAgentProxyMessage(message, locale) || message;
   response.writeHead(
     statusCode,
     decorateProxyResponseHeaders({ "Content-Type": "application/json" }),
@@ -35,7 +46,7 @@ export function writeProxyError(response, statusCode = 502, message = "Bad Gatew
   response.end(
     JSON.stringify({
       ok: false,
-      error: resolveSafeErrorMessage(statusCode, message),
+      error: resolveSafeErrorMessage(statusCode, localizedMessage),
     }),
   );
 }
@@ -65,12 +76,13 @@ export function collectRequestBody(request) {
 }
 
 export function proxyHttpRequest(request, response) {
+  const locale = resolveLocaleFromRequest(request);
   const method = String(request?.method || "GET").trim().toUpperCase() || "GET";
   let targetUrl = null;
   try {
     targetUrl = new URL(request?.url || "/", config.upstreamHttpBase);
   } catch {
-    writeProxyError(response, 400, "agentProxy invalid request url");
+    writeProxyError(response, 400, AGENT_PROXY_ERROR.INVALID_REQUEST_URL, locale);
     return;
   }
   const isHttps = targetUrl.protocol === "https:";
@@ -100,7 +112,12 @@ export function proxyHttpRequest(request, response) {
     upstreamRequest.destroy(new Error("upstream timeout"));
   });
   upstreamRequest.on("error", (error) => {
-    writeProxyError(response, 502, error?.message || "agentProxy upstream http error");
+    writeProxyError(
+      response,
+      502,
+      error?.message || AGENT_PROXY_ERROR.UPSTREAM_HTTP_ERROR,
+      locale,
+    );
   });
   request.pipe(upstreamRequest);
 }

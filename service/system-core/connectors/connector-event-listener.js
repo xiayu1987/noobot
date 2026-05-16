@@ -5,18 +5,16 @@
  */
 import { tSystem } from "../i18n/system-text.js";
 import { logError } from "../tracking/console/logger.js";
-
-function normalizeConnectorType(input = "") {
-  const value = String(input || "").trim().toLowerCase();
-  if (value === "database" || value === "db") return "database";
-  if (value === "terminal" || value === "server_terminal" || value === "shell") {
-    return "terminal";
-  }
-  if (value === "email" || value === "mail" || value === "smtp_imap") {
-    return "email";
-  }
-  return "";
-}
+import {
+  CONNECTOR_TYPE,
+  normalizeConnectorType,
+} from "../config/core/enums.js";
+import {
+  CONNECTOR_INTERACTION_EVENT,
+  CONNECTOR_INTERACTION_TYPE,
+  CONNECTOR_RUNTIME_STATUS,
+  CONNECTOR_TOOL_NAME,
+} from "./constants.js";
 
 function pickObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -37,9 +35,13 @@ function collectNonSensitiveDefaults(connectionInfo = {}) {
 
 function resolveConnectToolName(connectorType = "") {
   const normalizedType = normalizeConnectorType(connectorType);
-  if (normalizedType === "database") return "database_connect_connector";
-  if (normalizedType === "terminal") return "terminal_connect_connector";
-  return "email_connect_connector";
+  if (normalizedType === CONNECTOR_TYPE.DATABASE) {
+    return CONNECTOR_TOOL_NAME.CONNECT_DATABASE;
+  }
+  if (normalizedType === CONNECTOR_TYPE.TERMINAL) {
+    return CONNECTOR_TOOL_NAME.CONNECT_TERMINAL;
+  }
+  return CONNECTOR_TOOL_NAME.CONNECT_EMAIL;
 }
 
 export class ConnectorEventListener {
@@ -85,7 +87,15 @@ export class ConnectorEventListener {
   upsertSelectedConnector({ connectorType = "", connectorName = "" } = {}) {
     const normalizedType = normalizeConnectorType(connectorType);
     const normalizedName = String(connectorName || "").trim();
-    if (!["database", "terminal", "email"].includes(normalizedType)) return;
+    if (
+      ![
+        CONNECTOR_TYPE.DATABASE,
+        CONNECTOR_TYPE.TERMINAL,
+        CONNECTOR_TYPE.EMAIL,
+      ].includes(normalizedType)
+    ) {
+      return;
+    }
     if (!normalizedName) return;
     const selectedConnectors = this._ensureRuntimeSelectedConnectors();
     this.runtime.systemRuntime.config.selectedConnectors = {
@@ -130,19 +140,19 @@ export class ConnectorEventListener {
     try {
       if (typeof this.bridge.emitNotification === "function") {
         await this.bridge.emitNotification({
-          eventName: "connector_status",
+          eventName: CONNECTOR_INTERACTION_EVENT.STATUS,
           data: {
             content: `${normalizedType} ${tSystem("connectors.event.connected")}: ${normalizedName}`,
             dialogProcessId: this.dialogProcessId,
             sessionId: this.sessionId,
             connectorName: normalizedName,
             connectorType: normalizedType,
-            status: "connected",
-            interactionType: "connector_connected",
+            status: CONNECTOR_RUNTIME_STATUS.CONNECTED,
+            interactionType: CONNECTOR_INTERACTION_TYPE.CONNECTED,
             interactionData: {
               connectorName: normalizedName,
               connectorType: normalizedType,
-              status: "connected",
+              status: CONNECTOR_RUNTIME_STATUS.CONNECTED,
             },
           },
         });
@@ -158,11 +168,11 @@ export class ConnectorEventListener {
         toolName: resolveConnectToolName(normalizedType),
         connectorName: normalizedName,
         connectorType: normalizedType,
-        interactionType: "connector_connected",
+        interactionType: CONNECTOR_INTERACTION_TYPE.CONNECTED,
         interactionData: {
           connectorName: normalizedName,
           connectorType: normalizedType,
-          status: "connected",
+          status: CONNECTOR_RUNTIME_STATUS.CONNECTED,
         },
       });
     } catch (error) {
@@ -199,7 +209,7 @@ export class ConnectorEventListener {
         toolName: normalizedReconnectToolName,
         connectorName: normalizedName,
         connectorType: normalizedType,
-        interactionType: "connector_reconnect_required",
+        interactionType: CONNECTOR_INTERACTION_TYPE.RECONNECT_REQUIRED,
         interactionData: {
           connectorName: normalizedName,
           connectorType: normalizedType,

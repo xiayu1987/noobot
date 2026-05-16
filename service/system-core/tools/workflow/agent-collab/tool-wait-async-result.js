@@ -9,6 +9,7 @@ import { isFatalError, recoverableToolError } from "../../../error/index.js";
 import { assertValidParentSessionId } from "../../core/check-tool-input.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { isPlainObject } from "../../../utils/shared-utils.js";
+import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
 import {
   buildWaitAsyncTaskResultPayload,
   buildWaitTaskFailedResult,
@@ -92,7 +93,7 @@ export function createWaitAsyncTaskResultTool({
             return {
               id: containerId,
               ok: false,
-              status: "invalid_request",
+              status: SESSION_ASYNC_STATUS.INVALID_REQUEST,
               error: tAgentCollab(runtime, "parentSessionIdRequired"),
               tasks: [],
             };
@@ -149,7 +150,7 @@ export function createWaitAsyncTaskResultTool({
               container: containerItem,
               sessionId: String(item?.request?.sessionId || ""),
               patch: {
-                status: String(item?.status || "running"),
+                status: String(item?.status || SESSION_ASYNC_STATUS.RUNNING),
                 startedAt: String(item?.startedAt || "").trim(),
                 endedAt: String(item?.endedAt || "").trim(),
                 error: String(item?.error || "").trim(),
@@ -167,7 +168,7 @@ export function createWaitAsyncTaskResultTool({
           return {
             id: containerId,
             parentSessionId: normalizedParentSessionId,
-            ok: status !== "failed",
+            ok: status !== SESSION_ASYNC_STATUS.FAILED,
             status,
             tasks: taskResults,
             attachmentMetas,
@@ -187,19 +188,20 @@ export function createWaitAsyncTaskResultTool({
       const taskStats = {
         total: allTaskResults.length,
         completed: allTaskResults.filter(
-          (item) => String(item?.status || "") === "completed",
+          (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.COMPLETED,
         ).length,
         running: allTaskResults.filter(
-          (item) => String(item?.status || "") === "running",
+          (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.RUNNING,
         ).length,
         failed: allTaskResults.filter(
-          (item) => String(item?.status || "") === "failed",
+          (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.FAILED,
         ).length,
         stopped: allTaskResults.filter(
-          (item) => String(item?.status || "") === "stopped",
+          (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.STOPPED,
         ).length,
         invalid_request: allTaskResults.filter(
-          (item) => String(item?.status || "") === "invalid_request",
+          (item) =>
+            String(item?.status || "") === SESSION_ASYNC_STATUS.INVALID_REQUEST,
         ).length,
       };
       const attachmentMetas = containerResults.flatMap((item) =>
@@ -208,12 +210,16 @@ export function createWaitAsyncTaskResultTool({
 
       const hasFailedTask = containerResults.some((item) => {
         const status = String(item?.status || "").trim();
-        return status === "failed" || status === "invalid_request" || item?.ok === false;
+        return (
+          status === SESSION_ASYNC_STATUS.FAILED ||
+          status === SESSION_ASYNC_STATUS.INVALID_REQUEST ||
+          item?.ok === false
+        );
       });
       if (hasFailedTask) {
         return buildWaitAsyncTaskResultPayload({
           ok: false,
-          status: "failed",
+          status: SESSION_ASYNC_STATUS.FAILED,
           nextPollInMs: resolvedPollIntervalMs,
           containers,
           containerStatuses,
@@ -223,12 +229,12 @@ export function createWaitAsyncTaskResultTool({
       }
 
       const hasStoppedTask = containerResults.some(
-        (item) => String(item?.status || "") === "stopped",
+        (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.STOPPED,
       );
       if (hasStoppedTask) {
         return buildWaitAsyncTaskResultPayload({
           ok: true,
-          status: "stopped",
+          status: SESSION_ASYNC_STATUS.STOPPED,
           nextPollInMs: resolvedPollIntervalMs,
           containers,
           containerStatuses,
@@ -238,12 +244,12 @@ export function createWaitAsyncTaskResultTool({
       }
 
       const allCompleted = containerResults.every(
-        (item) => String(item?.status || "") === "completed",
+        (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.COMPLETED,
       );
       if (!allCompleted) {
         return buildWaitAsyncTaskResultPayload({
           ok: true,
-          status: "running",
+          status: SESSION_ASYNC_STATUS.RUNNING,
           nextPollInMs: resolvedPollIntervalMs,
           containers,
           containerStatuses,
@@ -254,7 +260,7 @@ export function createWaitAsyncTaskResultTool({
 
       return buildWaitAsyncTaskResultPayload({
         ok: true,
-        status: "completed",
+        status: SESSION_ASYNC_STATUS.COMPLETED,
         nextPollInMs: 0,
         containers,
         containerStatuses,

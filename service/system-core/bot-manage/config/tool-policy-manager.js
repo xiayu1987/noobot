@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { DEFAULT_TOOL_POLICY } from "./constants.js";
+import {
+  DEFAULT_TOOL_POLICY,
+  TOOL_POLICY_MODE,
+  VALID_TOOL_POLICY_MODES,
+} from "./constants.js";
 
 /**
  * Build tool policies for session execution.
@@ -25,22 +29,27 @@ export class ToolPolicyManager {
       return {
         allowed: tools,
         denied: [],
-        mode: "whitelist",
+        mode: TOOL_POLICY_MODE.WHITELIST,
       };
     }
 
     if (typeof tools === "object") {
+      const resolvedMode = VALID_TOOL_POLICY_MODES.includes(
+        String(tools.mode || "").trim(),
+      )
+        ? String(tools.mode || "").trim()
+        : TOOL_POLICY_MODE.WHITELIST;
       return {
         allowed: tools.allowed || [],
         denied: tools.denied || [],
-        mode: tools.mode || "whitelist",
+        mode: resolvedMode,
       };
     }
 
     return {
       allowed: [],
       denied: [],
-      mode: "none",
+      mode: TOOL_POLICY_MODE.NONE,
     };
   }
 }
