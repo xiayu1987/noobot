@@ -22,6 +22,7 @@ AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0
 CLIENT_CADDY_BIN="$CLIENT_DIR/deploy/bin/caddy"
 CLIENT_CADDY_CONFIG="$CLIENT_DIR/deploy/Caddyfile"
 CLIENT_DIST_DIR="$CLIENT_DIR/dist"
+PROJECT_LAUNCHER_SCRIPT="$SERVICE_DIR/scripts/project-launcher.js"
 FRONTEND_URL_ADDR="$CADDY_ADDR"
 if [[ "$FRONTEND_URL_ADDR" == :* ]]; then
   FRONTEND_URL_ADDR="127.0.0.1$FRONTEND_URL_ADDR"
@@ -56,6 +57,8 @@ msg() {
     service_dir_missing_en) echo "Backend directory not found: $2" ;;
     agent_proxy_dir_missing_zh) echo "代理目录不存在: $2" ;;
     agent_proxy_dir_missing_en) echo "Agent proxy directory not found: $2" ;;
+    step_launcher_zh) echo "1/5 执行项目启动引导" ;;
+    step_launcher_en) echo "1/5 Run project launcher" ;;
     step_install_zh) echo "2/5 安装依赖" ;;
     step_install_en) echo "2/5 Install dependencies" ;;
     step_build_zh) echo "3/5 构建前端" ;;
@@ -201,6 +204,7 @@ start_pm2() {
 }
 
 main() {
+  require_cmd node
   require_cmd npm
   local missing_deps=()
   command -v libreoffice >/dev/null 2>&1 || missing_deps+=("libreoffice")
@@ -212,10 +216,14 @@ main() {
   [[ -d "$CLIENT_DIR" ]] || { echo "$(msg client_dir_missing "$CLIENT_DIR")" >&2; exit 1; }
   [[ -d "$SERVICE_DIR" ]] || { echo "$(msg service_dir_missing "$SERVICE_DIR")" >&2; exit 1; }
   [[ -d "$AGENT_PROXY_DIR" ]] || { echo "$(msg agent_proxy_dir_missing "$AGENT_PROXY_DIR")" >&2; exit 1; }
+  [[ -f "$PROJECT_LAUNCHER_SCRIPT" ]] || { echo "Project launcher script not found: $PROJECT_LAUNCHER_SCRIPT" >&2; exit 1; }
   mkdir -p "$PM2_HOME_DIR"
 
   # log "1/5 更新代码"
   # update_code
+
+  log "$(msg step_launcher)"
+  (cd "$SERVICE_DIR" && node "./scripts/project-launcher.js")
 
   log "$(msg step_install)"
   unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD || true

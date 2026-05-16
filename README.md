@@ -38,11 +38,24 @@ noobot/
 git clone https://github.com/xiayu1987/noobot.git
 cd noobot
 
-cp service/config/global.config.example.json service/config/global.config.json
-cp user-template/default-user/config.example.json user-template/default-user/config.json
 chmod +x start.sh
 ./start.sh
 ```
+
+Notes:
+- `start.sh` runs the project launcher first (`service/scripts/project-launcher.js`).
+- If `service/config/global.config.json` does not exist, an interactive setup wizard will create it.
+- For non-interactive environments, initialize with env vars (example):
+
+```bash
+NOOBOT_MODEL_FORMAT=openai_compatible \
+NOOBOT_MODEL_NAME=gemini-3-flash \
+NOOBOT_MODEL_API_KEY=xxx \
+NOOBOT_MODEL_BASE_URL=https://example.com/v1 \
+./start.sh
+```
+
+Optional: `NOOBOT_SETUP_LANG=zh|en` (controls setup wizard language and synchronizes `preferences.language` plus built-in config copy text localization).
 
 Default endpoints:
 
@@ -81,6 +94,9 @@ CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
 ```
 
 ## PM2 (local)
+
+> Note: `npm run pm2:start` only starts the backend service and does not run the project initialization launcher.  
+> For first-time deployment or config auto-sync, use `./start.sh` first.
 
 ```bash
 cd service
