@@ -73,7 +73,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "connectors.access.fillEmailConnectionInfo": "Please provide email connection info",
       "connectors.access.connectorNameLabel": "Connector name",
       "connectors.access.missingConnectionInfoNoInteraction": "Missing connection info and user interaction is disabled",
-      "connectors.access.noConnectorsFound": "No connectors found",
+      "connectors.access.noConnectorsFound": "No available connectors found. If needed, create one via connect_connector",
       "connectors.access.userCancelledAction": "User cancelled connection info input",
       "connectors.commandRequired": "command required",
       "connectors.connectorNameRequired": "connectorName required",
