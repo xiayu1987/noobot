@@ -73,7 +73,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "connectors.access.fillEmailConnectionInfo": "请补全邮件连接信息",
       "connectors.access.connectorNameLabel": "连接器名称",
       "connectors.access.missingConnectionInfoNoInteraction": "缺少连接信息，且当前不允许用户交互补全",
-      "connectors.access.noConnectorsFound": "未找到可用连接器",
+      "connectors.access.noConnectorsFound": "未找到可用连接器，如有需要请通过 connect_connector 创建",
       "connectors.access.userCancelledAction": "用户取消了连接信息填写",
       "connectors.commandRequired": "command 必填",
       "connectors.connectorNameRequired": "connectorName 必填",
