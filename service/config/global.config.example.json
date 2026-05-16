@@ -257,6 +257,9 @@
       }
     }
   },
+  "preferences": {
+    "language": "zh-CN"
+  },
   "providers": {
     "gemini_3_flash": {
       "enabled": false,
