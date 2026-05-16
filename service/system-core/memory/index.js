@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
@@ -157,20 +157,6 @@ export class MemoryService {
     const normalized = this._stripMarkdownFence(value).trim();
     if (!normalized) return true;
     return ["null", "undefined", "{}", "[]"].includes(normalized.toLowerCase());
-  }
-
-  async _backupLongMemoryIfNeeded(longMemoryPath, existingLongMemory) {
-    if (this._isBlankLongMemoryContent(existingLongMemory)) return;
-    try {
-      await access(longMemoryPath);
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      await cp(longMemoryPath, `${longMemoryPath}.${timestamp}.bak`, {
-        force: false,
-        errorOnExist: false,
-      });
-    } catch {
-      // Best-effort backup only; do not block memory summarization.
-    }
   }
 
   _sanitizeDialogRecordsForMemory(messages = []) {
@@ -461,7 +447,6 @@ export class MemoryService {
     let hasUpdatedLongMemory = false;
     if (!this._isBlankLongMemoryContent(nextLongMemory)) {
       const longMemoryPath = this._longPath(basePath);
-      await this._backupLongMemoryIfNeeded(longMemoryPath, existingLongMemory);
       throwIfAborted(abortSignal);
       longMem.memory = nextLongMemory;
       longMem.staticMemory = nextLongMemory;
