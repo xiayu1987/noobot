@@ -3,37 +3,59 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  AUDIO_EXTENSIONS,
+  IMAGE_EXTENSIONS,
+  TEXT_EXTENSIONS,
+} from "../constants/file-extensions.js";
+
+function pickPreferredExtension(extensionSet, candidates = [], fallback = "") {
+  for (const extension of candidates) {
+    if (extensionSet.has(extension)) return extension;
+  }
+  return fallback;
+}
+
+const PNG_EXTENSION = pickPreferredExtension(IMAGE_EXTENSIONS, [".png"], ".png");
+const JPG_EXTENSION = pickPreferredExtension(IMAGE_EXTENSIONS, [".jpg", ".jpeg"], ".jpg");
+const WEBP_EXTENSION = pickPreferredExtension(IMAGE_EXTENSIONS, [".webp"], ".webp");
+const BMP_EXTENSION = pickPreferredExtension(IMAGE_EXTENSIONS, [".bmp"], ".bmp");
+const MP3_EXTENSION = pickPreferredExtension(AUDIO_EXTENSIONS, [".mp3"], ".mp3");
+const WAV_EXTENSION = pickPreferredExtension(AUDIO_EXTENSIONS, [".wav"], ".wav");
+const OGG_EXTENSION = pickPreferredExtension(AUDIO_EXTENSIONS, [".ogg"], ".ogg");
+const AUDIO_WEBM_EXTENSION = pickPreferredExtension(AUDIO_EXTENSIONS, [".webm"], ".webm");
+const TXT_EXTENSION = pickPreferredExtension(TEXT_EXTENSIONS, [".txt"], ".txt");
 
 /**
  * MIME 类型到文件扩展名的映射表
  */
 const MIME_EXTENSION_MAP = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
-  "image/webp": ".webp",
+  "image/png": PNG_EXTENSION,
+  "image/jpeg": JPG_EXTENSION,
+  "image/webp": WEBP_EXTENSION,
   "image/gif": ".gif",
-  "image/bmp": ".bmp",
+  "image/bmp": BMP_EXTENSION,
   "image/tiff": ".tiff",
   "video/mp4": ".mp4",
   "video/webm": ".webm",
   "video/quicktime": ".mov",
   "video/x-m4v": ".m4v",
-  "audio/mpeg": ".mp3",
-  "audio/wav": ".wav",
-  "audio/ogg": ".ogg",
-  "audio/webm": ".webm",
+  "audio/mpeg": MP3_EXTENSION,
+  "audio/wav": WAV_EXTENSION,
+  "audio/ogg": OGG_EXTENSION,
+  "audio/webm": AUDIO_WEBM_EXTENSION,
   "application/pdf": ".pdf",
   "application/json": ".json",
-  "text/plain": ".txt",
+  "text/plain": TXT_EXTENSION,
 };
 
 /**
  * 根据 MIME 类型前缀推断默认扩展名
  */
 const MIME_PREFIX_FALLBACKS = {
-  "image/": ".png",
+  "image/": PNG_EXTENSION,
   "video/": ".mp4",
-  "audio/": ".mp3",
+  "audio/": MP3_EXTENSION,
 };
 
 /**

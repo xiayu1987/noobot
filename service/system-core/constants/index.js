@@ -4,8 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export {
-  TEXT_EXTENSIONS,
-  IMAGE_EXTENSIONS,
-  AUDIO_EXTENSIONS,
-} from "../../constants/file-extensions.js";
+export * from "./file-extensions.js";

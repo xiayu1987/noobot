@@ -11,6 +11,7 @@ import { Poppler } from "node-poppler";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { IMAGE_EXTENSIONS } from "../../constants/file-extensions.js";
 
 const require = createRequire(import.meta.url);
 
@@ -40,8 +41,6 @@ const OFFICE_EXTS = new Set([
   ".dps",
 ]);
 
-const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".bmp"]);
-
 function sanitizeName(inputName) {
   return inputName.replace(/[^\w.-]+/g, "_");
 }
@@ -55,7 +54,7 @@ function isOfficeFile(filePath) {
 }
 
 function isImageFile(filePath) {
-  return IMAGE_EXTS.has(path.extname(filePath).toLowerCase());
+  return IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
 async function officeToPdfViaLibre({ inputFile, outputPdfPath }) {

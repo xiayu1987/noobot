@@ -22,6 +22,7 @@ import { navigateAndCapture } from "./web2img/web2img-capture.js";
 import { fileExists, postprocessScreenshot } from "./web2img/web2img-process.js";
 import { extractUsefulAndFullText } from "./web2img/web2img-extract.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { TEXT_EXTENSIONS } from "../../constants/file-extensions.js";
 
 const fsp = fs.promises;
 
@@ -87,7 +88,9 @@ async function loadUrls(inputValue) {
 
   if (statResult && statResult.isDirectory()) {
     const files = (await fsp.readdir(resolvedPath))
-      .filter((fileName) => fileName.toLowerCase().endsWith(".txt"))
+      .filter((fileName) =>
+        TEXT_EXTENSIONS.has(path.extname(String(fileName || "")).toLowerCase()),
+      )
       .sort((leftName, rightName) => leftName.localeCompare(rightName));
     const fileContents = await Promise.all(
       files.map((fileName) => fsp.readFile(path.join(resolvedPath, fileName), "utf-8")),
