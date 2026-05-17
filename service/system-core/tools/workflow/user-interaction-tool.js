@@ -14,6 +14,7 @@ import {
   normalizeSensitiveFieldText,
   canonicalSensitiveFieldText,
 } from "../core/sensitive-field-patterns.js";
+import { ToolName } from "../constants/index.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -125,7 +126,7 @@ export function createUserInteractionTool({ agentContext }) {
   });
 
   const userInteractionTool = new DynamicStructuredTool({
-    name: "user_interaction",
+    name: ToolName.USER_INTERACTION,
     description: tTool(runtime, "tools.user_interaction.description"),
     schema: z.object({
       content: z
@@ -183,7 +184,7 @@ export function createUserInteractionTool({ agentContext }) {
         dialogProcessId,
         requireEncryption: false,
         sessionId,
-        toolName: "user_interaction",
+        toolName: ToolName.USER_INTERACTION,
         lifecycle: "pending",
         ackMode: "manual",
         resolvedBy: "",
@@ -227,14 +228,14 @@ export function createUserInteractionTool({ agentContext }) {
             );
           }
         }
-        return toToolJsonResult("user_interaction", {
+        return toToolJsonResult(ToolName.USER_INTERACTION, {
           ok: true,
           confirmed: true,
           ...(result || {}),
         });
       }
 
-      return toToolJsonResult("user_interaction", {
+      return toToolJsonResult(ToolName.USER_INTERACTION, {
         ok: true,
         confirmed: true,
         response: String(result?.response || ""),

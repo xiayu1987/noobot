@@ -16,7 +16,12 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { SandboxConfig } from "../constants/index.js";
+import {
+  SandboxConfig,
+  ToolCaller,
+  ToolName,
+  ToolResultStatus,
+} from "../constants/index.js";
 
 export function createContentProcessTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
@@ -28,11 +33,11 @@ export function createContentProcessTool({ agentContext }) {
     effectiveConfig?.tools?.[toolKey]?.enabled !== false
       ? defaultEnabled
       : false;
-  const docToDataEnabled = isToolEnabled("doc_to_data", true);
-  const mediaToDataEnabled = isToolEnabled("media_to_data", true);
-  const webToDataEnabled = isToolEnabled("web_to_data", true);
+  const docToDataEnabled = isToolEnabled(ToolName.DOC_TO_DATA, true);
+  const mediaToDataEnabled = isToolEnabled(ToolName.MEDIA_TO_DATA, true);
+  const webToDataEnabled = isToolEnabled(ToolName.WEB_TO_DATA, true);
   const configuredMaxToolLoopTurns = Number(
-    effectiveConfig?.tools?.process_content_task?.maxToolLoopTurns,
+    effectiveConfig?.tools?.[ToolName.PROCESS_CONTENT_TASK]?.maxToolLoopTurns,
   );
   const resolvedMaxToolLoopTurns =
     Number.isFinite(configuredMaxToolLoopTurns) &&
@@ -48,9 +53,9 @@ export function createContentProcessTool({ agentContext }) {
     .map((tool) => String(tool?.name || "").trim())
     .filter(Boolean);
   const toolDescMap = {
-    doc_to_data: tTool(runtime, "tools.content_process.toolDescDoc"),
-    media_to_data: tTool(runtime, "tools.content_process.toolDescMedia"),
-    web_to_data: tTool(runtime, "tools.content_process.toolDescWeb"),
+    [ToolName.DOC_TO_DATA]: tTool(runtime, "tools.content_process.toolDescDoc"),
+    [ToolName.MEDIA_TO_DATA]: tTool(runtime, "tools.content_process.toolDescMedia"),
+    [ToolName.WEB_TO_DATA]: tTool(runtime, "tools.content_process.toolDescWeb"),
   };
   const enabledToolDescList = contentProcessToolNames.map((toolName) => {
     const desc = toolDescMap[toolName] || tTool(runtime, "tools.content_process.toolDescGeneric");
@@ -61,7 +66,7 @@ export function createContentProcessTool({ agentContext }) {
     : tTool(runtime, "tools.content_process.dynamicDescDisabled");
 
   const processContentTaskTool = new DynamicStructuredTool({
-    name: "process_content_task",
+    name: ToolName.PROCESS_CONTENT_TASK,
     description: dynamicDescription,
     schema: z.object({
       task: z
@@ -129,7 +134,7 @@ export function createContentProcessTool({ agentContext }) {
           userId,
           sessionId: subSessionId,
           message: composedTask,
-          caller: "bot",
+          caller: ToolCaller.BOT,
           parentSessionId,
           parentDialogProcessId,
           eventListener,
@@ -164,10 +169,10 @@ export function createContentProcessTool({ agentContext }) {
         );
 
         return toToolJsonResult(
-          "process_content_task",
+          ToolName.PROCESS_CONTENT_TASK,
           {
             ok: true,
-            status: "completed",
+            status: ToolResultStatus.COMPLETED,
             sessionId: subSessionId,
             parentSessionId,
             tools: contentProcessToolNames,

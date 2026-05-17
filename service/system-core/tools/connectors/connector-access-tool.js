@@ -13,7 +13,12 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { createConnectorTools } from "./connector-toolkit.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { SandboxConfig } from "../constants/index.js";
+import {
+  SandboxConfig,
+  ToolCaller,
+  ToolName,
+  ToolResultStatus,
+} from "../constants/index.js";
 
 
 export function createConnectorAccessTool({ agentContext }) {
@@ -23,7 +28,7 @@ export function createConnectorAccessTool({ agentContext }) {
     runtime?.userConfig || {},
   );
   const processConnectorTaskEnabled =
-    effectiveConfig?.tools?.process_connector_tool?.enabled !== false;
+    effectiveConfig?.tools?.[ToolName.PROCESS_CONNECTOR_TOOL]?.enabled !== false;
   if (!processConnectorTaskEnabled) return [];
 
   const botManager = runtime?.botManager || null;
@@ -37,12 +42,12 @@ export function createConnectorAccessTool({ agentContext }) {
   const allowUserInteraction =
     systemRuntime?.config?.allowUserInteraction !== false;
   const maxToolLoopTurns = Number(
-    effectiveConfig?.tools?.process_connector_tool?.maxToolLoopTurns ??
+    effectiveConfig?.tools?.[ToolName.PROCESS_CONNECTOR_TOOL]?.maxToolLoopTurns ??
       6,
   );
 
   const processConnectorTaskTool = new DynamicStructuredTool({
-    name: "process_connector_tool",
+    name: ToolName.PROCESS_CONNECTOR_TOOL,
     description: tTool(runtime, "tools.process_connector.description"),
     schema: z.object({
       task: z.string().describe(tTool(runtime, "tools.process_connector.fieldTask")),
@@ -83,7 +88,7 @@ export function createConnectorAccessTool({ agentContext }) {
           userId,
           sessionId: subSessionId,
           message: normalizedTask,
-          caller: "bot",
+          caller: ToolCaller.BOT,
           parentSessionId: sessionId,
           parentDialogProcessId,
           eventListener,
@@ -122,10 +127,10 @@ export function createConnectorAccessTool({ agentContext }) {
           ),
         );
         return toToolJsonResult(
-          "process_connector_tool",
+          ToolName.PROCESS_CONNECTOR_TOOL,
           {
             ok: true,
-            status: "completed",
+            status: ToolResultStatus.COMPLETED,
             sessionId: subSessionId,
             parentSessionId: sessionId,
             answer,

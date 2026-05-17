@@ -12,6 +12,7 @@ import { assertValidParentDialogProcessId } from "../../core/check-tool-input.js
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { ERROR_CODE } from "../../../error/constants.js";
+import { ToolName, ToolResultStatus } from "../../constants/index.js";
 import {
   buildDelegateTaskFailureResult,
   cloneData,
@@ -43,7 +44,7 @@ export function createDelegateTaskTool({
   });
 
   return new DynamicStructuredTool({
-    name: "delegate_task_async",
+    name: ToolName.DELEGATE_TASK_ASYNC,
     description: tTool(runtime, "tools.agent_collab.delegateDescription"),
     schema: z.object({
       tasks: z.array(delegateTaskItemSchema).min(1).describe(tTool(runtime, "tools.agent_collab.fieldTasks")),
@@ -63,7 +64,7 @@ export function createDelegateTaskTool({
       }
 
       emitEvent(runtimeEventListener, "subagent_runconfig_passthrough_applied", {
-        sourceTool: "delegate_task_async",
+        sourceTool: ToolName.DELEGATE_TASK_ASYNC,
         passthrough: {
           forceToolCall: passthroughForceToolCall,
           toolPolicy: passthroughToolPolicy,
@@ -139,7 +140,7 @@ export function createDelegateTaskTool({
               container: childContainer,
               sessionId: generatedSessionId,
               patch: {
-                status: "failed",
+                status: ToolResultStatus.FAILED,
                 error: tAgentCollab(runtime, "taskNameTaskContentRequired"),
                 endedAt: nowIso(),
               },
@@ -186,7 +187,7 @@ export function createDelegateTaskTool({
               container: childContainer,
               sessionId: generatedSessionId,
               patch: {
-                status: "failed",
+                status: ToolResultStatus.FAILED,
                 error: error?.message || String(error),
                 endedAt: nowIso(),
               },
@@ -206,7 +207,7 @@ export function createDelegateTaskTool({
         .filter(Boolean);
       const allOk = resultList.every((item) => item?.ok);
       return toToolJsonResult(
-        "delegate_task_async",
+        ToolName.DELEGATE_TASK_ASYNC,
         {
           ok: allOk,
           status: allOk ? "running" : "partial_failed",

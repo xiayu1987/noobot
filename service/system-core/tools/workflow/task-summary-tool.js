@@ -11,8 +11,9 @@ import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { ToolName } from "../constants/index.js";
 
-export const TASK_SUMMARY_TOOL_NAME = "task_summary";
+export const TASK_SUMMARY_TOOL_NAME = ToolName.TASK_SUMMARY;
 
 function normalizeToolNameFromToolCall(toolCall = {}) {
   if (!toolCall || typeof toolCall !== "object") return "";

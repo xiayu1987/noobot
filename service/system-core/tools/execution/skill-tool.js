@@ -14,6 +14,7 @@ import { safeJoin } from "../../utils/fs-safe.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { ToolName } from "../constants/index.js";
 
 function getBasePath(agentContext) {
   return (
@@ -36,7 +37,7 @@ export function createSkillTool({ agentContext }) {
   const skillRoot = path.join(basePath, "skills");
 
   const listSkillTool = new DynamicStructuredTool({
-    name: "list_skills",
+    name: ToolName.LIST_SKILLS,
     description: tTool(runtime, "tools.skill.listDescription"),
     schema: z.object({
       parentSkill: z.string().optional().describe(tTool(runtime, "tools.skill.fieldParentSkill")),
@@ -45,7 +46,7 @@ export function createSkillTool({ agentContext }) {
       try {
         await access(skillRoot);
       } catch {
-        return toToolJsonResult("list_skills", { ok: true, items: [] }, true);
+        return toToolJsonResult(ToolName.LIST_SKILLS, { ok: true, items: [] }, true);
       }
 
       const rootDir = parentSkill
@@ -54,7 +55,7 @@ export function createSkillTool({ agentContext }) {
       try {
         await access(rootDir);
       } catch {
-        return toToolJsonResult("list_skills", { ok: true, items: [] }, true);
+        return toToolJsonResult(ToolName.LIST_SKILLS, { ok: true, items: [] }, true);
       }
 
       const items = [];
@@ -80,12 +81,12 @@ export function createSkillTool({ agentContext }) {
         }
       }
 
-      return toToolJsonResult("list_skills", { ok: true, items }, true);
+      return toToolJsonResult(ToolName.LIST_SKILLS, { ok: true, items }, true);
     },
   });
 
   const manageSkillTaskTool = new DynamicStructuredTool({
-    name: "set_skill_task",
+    name: ToolName.SET_SKILL_TASK,
     description: tTool(runtime, "tools.skill.setDescription"),
     schema: z.object({
       action: z.string().describe(tTool(runtime, "tools.skill.fieldAction")),
@@ -131,7 +132,7 @@ export function createSkillTool({ agentContext }) {
           });
         }
         return toToolJsonResult(
-          "set_skill_task",
+          ToolName.SET_SKILL_TASK,
           {
             ok: true,
             action: normalizedAction,
@@ -172,7 +173,7 @@ export function createSkillTool({ agentContext }) {
         }
       }
       return toToolJsonResult(
-        "set_skill_task",
+        ToolName.SET_SKILL_TASK,
         {
           ok: true,
           action: normalizedAction,

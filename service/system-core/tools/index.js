@@ -24,11 +24,12 @@ import {
 import { emitEvent } from "../event/index.js";
 import { mergeConfig } from "../config/index.js";
 import { resolveForceToolCall } from "../utils/shared-utils.js";
+import { ConnectorType, ToolConfigAliasKey, ToolName } from "./constants/index.js";
 
 const DEFAULT_MAX_SUB_AGENT_DEPTH = 1;
 const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
-  "delegate_task_async",
-  "wait_async_task_result",
+  ToolName.DELEGATE_TASK_ASYNC,
+  ToolName.WAIT_ASYNC_TASK_RESULT,
   "delegateTaskAsync",
   "waitAsyncTaskResult",
 ]);
@@ -46,34 +47,40 @@ function normalizeToolName(toolDefinition = {}) {
 }
 
 const TOOL_CONFIG_ALIASES = {
-  read_file: ["read_file", "file"],
-  write_file: ["write_file", "file"],
-  wait: ["wait"],
-  execute_script: ["execute_script"],
-  list_skills: ["list_skills", "skill"],
-  set_skill_task: ["set_skill_task", "skill"],
-  call_service: ["call_service", "service"],
-  call_mcp_task: ["call_mcp_task", "mcp"],
-  delegate_task_async: ["delegate_task_async", "agent_collab"],
-  wait_async_task_result: ["wait_async_task_result", "agent_collab"],
-  plan_multi_task_collaboration: [
-    "plan_multi_task_collaboration",
-    "agent_collab",
+  [ToolName.READ_FILE]: [ToolName.READ_FILE, ToolConfigAliasKey.FILE],
+  [ToolName.WRITE_FILE]: [ToolName.WRITE_FILE, ToolConfigAliasKey.FILE],
+  [ToolName.WAIT]: [ToolName.WAIT],
+  [ToolName.EXECUTE_SCRIPT]: [ToolName.EXECUTE_SCRIPT],
+  [ToolName.LIST_SKILLS]: [ToolName.LIST_SKILLS, ToolConfigAliasKey.SKILL],
+  [ToolName.SET_SKILL_TASK]: [ToolName.SET_SKILL_TASK, ToolConfigAliasKey.SKILL],
+  [ToolName.CALL_SERVICE]: [ToolName.CALL_SERVICE, ToolConfigAliasKey.SERVICE],
+  [ToolName.CALL_MCP_TASK]: [ToolName.CALL_MCP_TASK, ToolConfigAliasKey.MCP],
+  [ToolName.DELEGATE_TASK_ASYNC]: [
+    ToolName.DELEGATE_TASK_ASYNC,
+    ToolConfigAliasKey.AGENT_COLLAB,
   ],
-  switch_model: ["switch_model", "model"],
-  user_interaction: ["user_interaction"],
-  web_to_data: ["web_to_data"],
-  doc_to_data: ["doc_to_data"],
-  process_content_task: ["process_content_task"],
-  process_connector_tool: ["process_connector_tool"],
-  database_connect_connector: ["database_connect_connector"],
-  terminal_connect_connector: ["terminal_connect_connector"],
-  email_connect_connector: ["email_connect_connector"],
-  access_connector: ["access_connector"],
-  inspect_connectors: ["inspect_connectors"],
-  multimodal_generate: ["multimodal_generate"],
-  task_summary: ["task_summary"],
-  request_help: ["request_help"],
+  [ToolName.WAIT_ASYNC_TASK_RESULT]: [
+    ToolName.WAIT_ASYNC_TASK_RESULT,
+    ToolConfigAliasKey.AGENT_COLLAB,
+  ],
+  [ToolName.PLAN_MULTI_TASK_COLLABORATION]: [
+    ToolName.PLAN_MULTI_TASK_COLLABORATION,
+    ToolConfigAliasKey.AGENT_COLLAB,
+  ],
+  [ToolName.SWITCH_MODEL]: [ToolName.SWITCH_MODEL, ToolConfigAliasKey.MODEL],
+  [ToolName.USER_INTERACTION]: [ToolName.USER_INTERACTION],
+  [ToolName.WEB_TO_DATA]: [ToolName.WEB_TO_DATA],
+  [ToolName.DOC_TO_DATA]: [ToolName.DOC_TO_DATA],
+  [ToolName.PROCESS_CONTENT_TASK]: [ToolName.PROCESS_CONTENT_TASK],
+  [ToolName.PROCESS_CONNECTOR_TOOL]: [ToolName.PROCESS_CONNECTOR_TOOL],
+  [ToolName.DATABASE_CONNECT_CONNECTOR]: [ConnectorType.CONNECT_TOOL_NAME.DATABASE],
+  [ToolName.TERMINAL_CONNECT_CONNECTOR]: [ConnectorType.CONNECT_TOOL_NAME.TERMINAL],
+  [ToolName.EMAIL_CONNECT_CONNECTOR]: [ConnectorType.CONNECT_TOOL_NAME.EMAIL],
+  [ToolName.ACCESS_CONNECTOR]: [ToolName.ACCESS_CONNECTOR],
+  [ToolName.INSPECT_CONNECTORS]: [ToolName.INSPECT_CONNECTORS],
+  [ToolName.MULTIMODAL_GENERATE]: [ToolName.MULTIMODAL_GENERATE],
+  [ToolName.TASK_SUMMARY]: [ToolName.TASK_SUMMARY],
+  [ToolName.REQUEST_HELP]: [ToolName.REQUEST_HELP],
 };
 
 function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
@@ -120,12 +127,12 @@ function hasEnabledMultimodalGenerationProvider(effectiveConfig = {}) {
 
 function resolveMaxSubAgentDepth(effectiveConfig = {}) {
   const configuredValue = Number(
-    effectiveConfig?.tools?.delegate_task_async?.max_sub_agent_depth ??
-      effectiveConfig?.tools?.delegate_task_async?.maxSubAgentDepth ??
-      effectiveConfig?.tools?.delegate_task_async?.delegate_tool_parent_max_depth ??
-      effectiveConfig?.tools?.delegate_task_async?.delegateToolParentMaxDepth ??
-      effectiveConfig?.tools?.agent_collab?.max_sub_agent_depth ??
-      effectiveConfig?.tools?.agent_collab?.maxSubAgentDepth ??
+    effectiveConfig?.tools?.[ToolName.DELEGATE_TASK_ASYNC]?.max_sub_agent_depth ??
+      effectiveConfig?.tools?.[ToolName.DELEGATE_TASK_ASYNC]?.maxSubAgentDepth ??
+      effectiveConfig?.tools?.[ToolName.DELEGATE_TASK_ASYNC]?.delegate_tool_parent_max_depth ??
+      effectiveConfig?.tools?.[ToolName.DELEGATE_TASK_ASYNC]?.delegateToolParentMaxDepth ??
+      effectiveConfig?.tools?.[ToolConfigAliasKey.AGENT_COLLAB]?.max_sub_agent_depth ??
+      effectiveConfig?.tools?.[ToolConfigAliasKey.AGENT_COLLAB]?.maxSubAgentDepth ??
       0,
   );
   if (!Number.isFinite(configuredValue) || configuredValue <= 0) {

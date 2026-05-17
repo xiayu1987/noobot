@@ -17,6 +17,13 @@ import { tTool } from "../core/tool-i18n.js";
 import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../utils/mime-utils.js";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import {
+  ArtifactGenerationSource,
+  AttachmentSource,
+  ToolCallMode,
+  ToolName,
+  ToolResultStatus,
+} from "../constants/index.js";
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
@@ -192,7 +199,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
     runtime?.userConfig || {},
   );
   const toolEnabled =
-    effectiveConfig?.tools?.multimodal_generate?.enabled !== false;
+    effectiveConfig?.tools?.[ToolName.MULTIMODAL_GENERATE]?.enabled !== false;
   if (!toolEnabled) return [];
 
   const globalConfig = runtime?.globalConfig || {};
@@ -207,7 +214,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         : null;
 
   const multimodalGenerateTool = new DynamicStructuredTool({
-    name: "multimodal_generate",
+    name: ToolName.MULTIMODAL_GENERATE,
     description: tTool(runtime, "tools.multimodal.description"),
     schema: z.object({
       generation_content: z
@@ -315,25 +322,26 @@ export function createMultimodalGenerateTool({ agentContext }) {
                     runtime?.systemRuntime?.rootSessionId ||
                     "",
                 ).trim(),
-                attachmentSource: "model",
+                attachmentSource: AttachmentSource.MODEL,
                 artifacts: generatedAttachments,
-                generationSource: "multimodal_generate_tool",
+                generationSource: ArtifactGenerationSource.MULTIMODAL_GENERATE_TOOL,
               })
             : [];
         const attachmentMetas = mapAttachmentRecordsToMetas(
           savedAttachmentRecords,
           {
             fallbackMimeType: "image/png",
-            fallbackGenerationSource: "multimodal_generate_tool",
+            fallbackGenerationSource:
+              ArtifactGenerationSource.MULTIMODAL_GENERATE_TOOL,
             userId,
           },
         );
         return toToolJsonResult(
-          "multimodal_generate",
+          ToolName.MULTIMODAL_GENERATE,
           {
             ok: true,
-            status: "completed",
-            callMode: "openai_responses_api",
+            status: ToolResultStatus.COMPLETED,
+            callMode: ToolCallMode.OPENAI_RESPONSES_API,
             modelAlias: String(resolvedModelSpec?.alias || "").trim(),
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),

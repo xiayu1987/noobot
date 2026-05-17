@@ -6,6 +6,7 @@
 import { logError } from "../../../tracking/console/logger.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
+import { ToolName } from "../../constants/index.js";
 
 export function cloneData(value) {
   if (typeof globalThis.structuredClone === "function") {
@@ -125,7 +126,7 @@ export function buildWaitAsyncTaskResultPayload({
   attachmentMetas = [],
 } = {}) {
   return toToolJsonResult(
-    "wait_async_task_result",
+    ToolName.WAIT_ASYNC_TASK_RESULT,
     {
       ok,
       status,

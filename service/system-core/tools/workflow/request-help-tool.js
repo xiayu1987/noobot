@@ -20,8 +20,9 @@ import { invokeServiceHandler } from "../../service-invoker/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { ToolName } from "../constants/index.js";
 
-export const REQUEST_HELP_TOOL_NAME = "request_help";
+export const REQUEST_HELP_TOOL_NAME = ToolName.REQUEST_HELP;
 const DEFAULT_HELP_SERVICES = ["web_search_service"];
 const DEFAULT_QUERY_KEY = "q";
 const DEFAULT_SEARCH_ENDPOINT = "search";
