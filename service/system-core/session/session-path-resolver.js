@@ -6,6 +6,7 @@
 import path from "node:path";
 import { fatalSystemError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
+import { ERROR_CODE } from "../error/constants.js";
 
 export class SessionPathResolver {
   constructor({ pathResolver, treeRepository } = {}) {
@@ -29,7 +30,7 @@ export class SessionPathResolver {
         throw fatalSystemError(
           `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${hintedParentSessionId}`,
           {
-            code: "FATAL_PARENT_SESSION_MISSING",
+            code: ERROR_CODE.FATAL_PARENT_SESSION_MISSING,
             details: { hintedParentSessionId },
           },
         );

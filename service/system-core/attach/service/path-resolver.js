@@ -16,6 +16,7 @@ import { safeStr } from "../../utils/shared-utils.js";
 import { fatalSystemError, recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { readAttachIndex } from "../index-manager.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 /**
  * 解析用户工作区根路径。
@@ -29,7 +30,7 @@ export function resolveBasePath(globalConfig, userId) {
   const root = safeStr(globalConfig?.workspaceRoot);
   if (!uid || !root) {
     throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
-      code: "FATAL_WORKSPACE_PATH_INVALID",
+      code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,
     });
   }
   return path.resolve(root, uid);
@@ -59,7 +60,7 @@ export function resolveAttachmentScope({ sessionId = "", attachmentSource = "", 
   const normalizedSessionId = safeStr(sessionId) === DEFAULT_ATTACHMENT_SESSION_ID ? "" : safeStr(sessionId);
   if (requireSessionId && !normalizedSessionId) {
     throw recoverableToolError(tSystem("attach.sessionIdRequiredForPersistence"), {
-      code: "RECOVERABLE_ATTACHMENT_SESSION_ID_REQUIRED",
+      code: ERROR_CODE.RECOVERABLE_ATTACHMENT_SESSION_ID_REQUIRED,
       details: { hint: tSystem("attach.sessionIdPersistenceHint") },
     });
   }

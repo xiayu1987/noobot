@@ -36,6 +36,7 @@ import {
   resolveRuntimeLocale,
 } from "./connector-toolkit/connector-context.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 /**
  * Build the Zod schema for a connector connect tool.
@@ -112,19 +113,19 @@ export function createConnectConnectorTool(opts) {
     // --- pre-checks ---
     if (!store || typeof store.connectConnector !== "function") {
       throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
-        code: "RECOVERABLE_CONNECTOR_STORE_MISSING",
+        code: ERROR_CODE.RECOVERABLE_CONNECTOR_STORE_MISSING,
       });
     }
     if (!rootSessionId) {
       throw recoverableToolError(tTool(runtime, "connectors.rootSessionMissing"), {
-        code: "RECOVERABLE_ROOT_SESSION_MISSING",
+        code: ERROR_CODE.RECOVERABLE_ROOT_SESSION_MISSING,
       });
     }
 
     const connectorName = String(inputParams.connector_name || "").trim();
     if (!connectorName) {
       throw recoverableToolError(tTool(runtime, "connectors.connectorNameRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
       });
     }
 
@@ -138,7 +139,7 @@ export function createConnectConnectorTool(opts) {
       const typeError = validateType(typeValue);
       if (typeError) {
         throw recoverableToolError(typeError, {
-          code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
+          code: ERROR_CODE.RECOVERABLE_INVALID_CONNECTOR_TYPE,
         });
       }
     }
@@ -212,7 +213,7 @@ export function createConnectConnectorTool(opts) {
         throw recoverableToolError(
           tConnector(runtime, "missingConnectionInfoNoInteraction"),
           {
-            code: "RECOVERABLE_MISSING_CONNECTION_INFO",
+            code: ERROR_CODE.RECOVERABLE_MISSING_CONNECTION_INFO,
           },
         );
       }
@@ -223,7 +224,7 @@ export function createConnectConnectorTool(opts) {
             "tools.connectors.errorUserInteractionBridgeMissing",
           ),
           {
-            code: "RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING",
+            code: ERROR_CODE.RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING,
           },
         );
       }
@@ -244,7 +245,7 @@ export function createConnectConnectorTool(opts) {
       });
       if (isUserCancelledInteraction(interactionResult)) {
         throw recoverableToolError(tConnector(runtime, "userCancelledAction"), {
-          code: "RECOVERABLE_USER_CANCELLED",
+          code: ERROR_CODE.RECOVERABLE_USER_CANCELLED,
           details: {
             cancelled: true,
             connectorName,
@@ -292,7 +293,7 @@ export function createConnectConnectorTool(opts) {
       throw recoverableToolError(
         String(runtimeStatus?.status_message || tConnector(runtime, "statusUnavailable")),
         {
-          code: "RECOVERABLE_CONNECTOR_CONNECT_FAILED",
+          code: ERROR_CODE.RECOVERABLE_CONNECTOR_CONNECT_FAILED,
           details: buildConnectionStatusPayload({
             runtimeStatus,
             connector: connected,

@@ -28,6 +28,7 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { normalizeText } from '../../utils/shared-utils.js';
+import { ERROR_CODE } from "../../error/constants.js";
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_TEXT_CHARS = 12000;
@@ -334,7 +335,7 @@ async function runBrowserSimulateExtract(
               tWeb(runtimeContext || {}, "blockedOrUnavailable", {
                 status: loaded?.status || 0,
               }),
-            { code: "RECOVERABLE_WEB_FETCH_BLOCKED_OR_UNAVAILABLE" },
+            { code: ERROR_CODE.RECOVERABLE_WEB_FETCH_BLOCKED_OR_UNAVAILABLE },
           );
         }
         const pageTitle = normalizeText(loaded.title || "");
@@ -673,7 +674,7 @@ export function createWeb2DataTool({ agentContext }) {
         throw recoverableToolError(
           String(payload?.message || tWeb(runtime, "fetchFailedNoResult")),
           {
-            code: "RECOVERABLE_WEB_TO_DATA_FAILED",
+            code: ERROR_CODE.RECOVERABLE_WEB_TO_DATA_FAILED,
             details: {
               mode: payload?.mode || processMode,
               input: payload?.input || input || "",

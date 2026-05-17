@@ -13,6 +13,7 @@ import { recoverableToolError } from "../../error/index.js";
 import { safeJoin } from "../../utils/fs-safe.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function getBasePath(agentContext) {
   return (
@@ -98,7 +99,7 @@ export function createSkillTool({ agentContext }) {
       if (!normalizedAction) {
         throw recoverableToolError(
           tTool(runtime, "tools.skill.invalidAction", { action }),
-          { code: "RECOVERABLE_INVALID_TOOL_INPUT" },
+          { code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT },
         );
       }
 
@@ -106,7 +107,7 @@ export function createSkillTool({ agentContext }) {
         if (!String(skillName || "").trim()) {
           throw recoverableToolError(
             tTool(runtime, "tools.skill.skillNameRequiredOnStart"),
-            { code: "RECOVERABLE_INPUT_MISSING" },
+            { code: ERROR_CODE.RECOVERABLE_INPUT_MISSING },
           );
         }
         const createdTaskId = uuidv4();

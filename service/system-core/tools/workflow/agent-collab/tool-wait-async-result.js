@@ -10,6 +10,7 @@ import { assertValidParentSessionId } from "../../core/check-tool-input.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { isPlainObject } from "../../../utils/shared-utils.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
+import { ERROR_CODE } from "../../../error/constants.js";
 import {
   buildWaitAsyncTaskResultPayload,
   buildWaitTaskFailedResult,
@@ -46,7 +47,7 @@ export function createWaitAsyncTaskResultTool({
         throw recoverableToolError(
           tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
           {
-            code: "RECOVERABLE_RUNTIME_MISSING",
+            code: ERROR_CODE.RECOVERABLE_RUNTIME_MISSING,
             details: {
               botManagerReady: Boolean(botManager),
               userIdReady: Boolean(userId),
@@ -64,7 +65,7 @@ export function createWaitAsyncTaskResultTool({
         throw recoverableToolError(
           tAgentCollab(runtime, "childAsyncResultContainersRequired"),
           {
-            code: "RECOVERABLE_INPUT_MISSING",
+            code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
             details: { field: "childAsyncResultContainers" },
           },
         );

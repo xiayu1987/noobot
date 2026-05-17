@@ -16,6 +16,7 @@ import { collectNonSensitiveDefaults } from "./connector-fields.js";
 import { resolveRememberedConnectorInfo } from "./connector-context.js";
 import { resolveConfiguredConnectorInfo } from "./connector-resolver.js";
 import { findConnectedConnector, tConnector } from "./connector-runtime.js";
+import { ERROR_CODE } from "../../../error/constants.js";
 
 function buildAccessConnectorTool(context = {}) {
   const {
@@ -110,12 +111,12 @@ function buildAccessConnectorTool(context = {}) {
     async func({ connector_name, connector_type, command }) {
       if (!store || typeof store.executeConnectorCommand !== "function") {
         throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
-          code: "RECOVERABLE_CONNECTOR_STORE_MISSING",
+          code: ERROR_CODE.RECOVERABLE_CONNECTOR_STORE_MISSING,
         });
       }
       if (!rootSessionId) {
         throw recoverableToolError(tTool(runtime, "connectors.rootSessionMissing"), {
-          code: "RECOVERABLE_ROOT_SESSION_MISSING",
+          code: ERROR_CODE.RECOVERABLE_ROOT_SESSION_MISSING,
         });
       }
       const connectorType = normalizeConnectorType(connector_type);
@@ -123,7 +124,7 @@ function buildAccessConnectorTool(context = {}) {
         throw recoverableToolError(
           tTool(runtime, "tools.access_connector.errorConnectorTypeRequired"),
           {
-            code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
+            code: ERROR_CODE.RECOVERABLE_INVALID_CONNECTOR_TYPE,
           },
         );
       }
@@ -137,7 +138,7 @@ function buildAccessConnectorTool(context = {}) {
         throw recoverableToolError(
           tConnector(runtime, "selectedMissing", { connectorType }),
           {
-            code: "RECOVERABLE_SELECTED_CONNECTOR_MISSING",
+            code: ERROR_CODE.RECOVERABLE_SELECTED_CONNECTOR_MISSING,
           },
         );
       }
@@ -151,7 +152,7 @@ function buildAccessConnectorTool(context = {}) {
             connectorName: selectedConnectorName,
           }),
           {
-            code: "RECOVERABLE_SELECTED_CONNECTOR_MISMATCH",
+            code: ERROR_CODE.RECOVERABLE_SELECTED_CONNECTOR_MISMATCH,
           },
         );
       }
@@ -196,7 +197,7 @@ function buildAccessConnectorTool(context = {}) {
             connectorName,
           }),
           {
-            code: "RECOVERABLE_CONNECTOR_NEEDS_RECONNECT",
+            code: ERROR_CODE.RECOVERABLE_CONNECTOR_NEEDS_RECONNECT,
             details: {
               status: "needs_reconnect",
               reconnect_required: true,
@@ -255,7 +256,7 @@ function buildAccessConnectorTool(context = {}) {
         );
       } catch (error) {
         throw recoverableToolError(error?.message || String(error), {
-          code: String(error?.code || "RECOVERABLE_ACCESS_CONNECTOR_FAILED"),
+          code: String(error?.code || ERROR_CODE.RECOVERABLE_ACCESS_CONNECTOR_FAILED),
           details:
             error?.details && typeof error.details === "object"
               ? error.details

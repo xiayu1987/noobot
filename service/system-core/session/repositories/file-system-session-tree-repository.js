@@ -6,6 +6,7 @@
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { normalizeSessionTreeEntity } from "../entities/session-entity.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export class FileSystemSessionTreeRepository {
   constructor({ pathResolver, storageService, now = () => new Date().toISOString() } = {}) {
@@ -63,7 +64,7 @@ export class FileSystemSessionTreeRepository {
     const ensured = await this.storageService.ensureRuntimeDirsByBasePath(basePath);
     if (!ensured) {
       throw fatalSystemError(`${tSystem("session.workspaceNotInitialized")}: ${basePath}`, {
-        code: "FATAL_WORKSPACE_NOT_INITIALIZED",
+        code: ERROR_CODE.FATAL_WORKSPACE_NOT_INITIALIZED,
         details: { basePath },
       });
     }

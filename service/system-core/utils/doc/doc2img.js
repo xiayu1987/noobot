@@ -10,6 +10,7 @@ import { createRequire } from "node:module";
 import { Poppler } from "node-poppler";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 const require = createRequire(import.meta.url);
 
@@ -109,7 +110,7 @@ async function pdfToImagesViaNodePoppler({
 
   if (!images.length) {
     throw recoverableToolError(`${tSystem("doc2img.noImageOutputFromPdf")}: ${pdfFile}`, {
-      code: "RECOVERABLE_DOC_TO_IMAGE_EMPTY",
+      code: ERROR_CODE.RECOVERABLE_DOC_TO_IMAGE_EMPTY,
     });
   }
   return images;
@@ -124,7 +125,7 @@ export async function convertDocumentToImages({
 }) {
   if (!inputFile) {
     throw recoverableToolError(tSystem("doc2img.inputFileRequired"), {
-      code: "RECOVERABLE_INPUT_MISSING",
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
     });
   }
   const resolvedInput = path.resolve(inputFile);
@@ -132,7 +133,7 @@ export async function convertDocumentToImages({
     await access(resolvedInput);
   } catch {
     throw recoverableToolError(`${tSystem("common.fileNotFound")}: ${resolvedInput}`, {
-      code: "RECOVERABLE_FILE_NOT_FOUND",
+      code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
     });
   }
 
@@ -166,7 +167,7 @@ export async function convertDocumentToImages({
     throw recoverableToolError(
       `${tSystem("doc2img.unsupportedFileType")}: ${path.extname(resolvedInput)}`,
       {
-        code: "RECOVERABLE_UNSUPPORTED_FILE_TYPE",
+        code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
       },
     );
   }

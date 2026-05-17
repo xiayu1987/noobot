@@ -15,6 +15,7 @@ import { createWeb2DataTool } from "./web2data-tool.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export function createContentProcessTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
@@ -75,14 +76,14 @@ export function createContentProcessTool({ agentContext }) {
       const normalizedContentPath = String(contentPath || "").trim();
       if (!normalizedTask) {
         throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
-          code: "RECOVERABLE_INPUT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         });
       }
       if (!normalizedContentPath) {
         throw recoverableToolError(
           tTool(runtime, "tools.content_process.errorContentPathRequired"),
           {
-            code: "RECOVERABLE_INPUT_MISSING",
+            code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
           },
         );
       }
@@ -108,7 +109,7 @@ export function createContentProcessTool({ agentContext }) {
         throw recoverableToolError(
           tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
           {
-            code: "RECOVERABLE_RUNTIME_CONTEXT_MISSING",
+            code: ERROR_CODE.RECOVERABLE_RUNTIME_CONTEXT_MISSING,
           },
         );
       }
@@ -116,7 +117,7 @@ export function createContentProcessTool({ agentContext }) {
         throw recoverableToolError(
           tTool(runtime, "tools.content_process.errorToolsUnavailable"),
           {
-            code: "RECOVERABLE_TOOLS_UNAVAILABLE",
+            code: ERROR_CODE.RECOVERABLE_TOOLS_UNAVAILABLE,
           },
         );
       }
@@ -186,7 +187,7 @@ export function createContentProcessTool({ agentContext }) {
       } catch (error) {
         if (isAbortError(error)) throw error;
         throw recoverableToolError(error?.message || String(error), {
-          code: String(error?.code || "RECOVERABLE_PROCESS_CONTENT_FAILED"),
+          code: String(error?.code || ERROR_CODE.RECOVERABLE_PROCESS_CONTENT_FAILED),
         });
       }
     },

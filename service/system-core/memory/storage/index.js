@@ -30,6 +30,7 @@ import {
 } from "./file-ops.js";
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export class StorageManager {
   constructor(globalConfig = {}) {
@@ -41,7 +42,7 @@ export class StorageManager {
     const workspaceRoot = String(this.globalConfig?.workspaceRoot || "").trim();
     if (!normalizedUserId || !workspaceRoot) {
       throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
-        code: "FATAL_WORKSPACE_PATH_INVALID",
+        code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,
       });
     }
     return resolveBasePath({ workspaceRoot, userId: normalizedUserId });

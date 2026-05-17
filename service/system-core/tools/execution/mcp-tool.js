@@ -14,6 +14,7 @@ import { appendMcpErrorLog } from "../../tracking/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export function createMcpTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
@@ -31,12 +32,12 @@ export function createMcpTool({ agentContext }) {
       if (!normalizedMcpName) {
         throw recoverableToolError(
           tTool(runtime, "tools.mcp.errorMcpNameRequired"),
-          { code: "RECOVERABLE_INPUT_MISSING" },
+          { code: ERROR_CODE.RECOVERABLE_INPUT_MISSING },
         );
       }
       if (!normalizedTask) {
         throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
-          code: "RECOVERABLE_INPUT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         });
       }
 
@@ -72,7 +73,7 @@ export function createMcpTool({ agentContext }) {
           throw recoverableToolError(
             tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
             {
-              code: "RECOVERABLE_RUNTIME_CONTEXT_MISSING",
+              code: ERROR_CODE.RECOVERABLE_RUNTIME_CONTEXT_MISSING,
             },
           );
         }
@@ -88,7 +89,7 @@ export function createMcpTool({ agentContext }) {
         });
         if (!Array.isArray(mcpToolset?.tools) || !mcpToolset.tools.length) {
           throw recoverableToolError(tTool(runtime, "mcp.noToolsAvailable"), {
-            code: "RECOVERABLE_TOOLS_UNAVAILABLE",
+            code: ERROR_CODE.RECOVERABLE_TOOLS_UNAVAILABLE,
           });
         }
         const subSessionId = randomUUID();
@@ -181,7 +182,7 @@ export function createMcpTool({ agentContext }) {
           }).catch(() => {});
         }
         throw recoverableToolError(error?.message || String(error), {
-          code: String(error?.code || "RECOVERABLE_CALL_MCP_TASK_FAILED"),
+          code: String(error?.code || ERROR_CODE.RECOVERABLE_CALL_MCP_TASK_FAILED),
         });
       }
     },

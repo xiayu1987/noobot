@@ -12,6 +12,7 @@ import { normalizeProviderFormat, PROVIDER_FORMAT } from "../../config/core/enum
 import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 import { getModelDefaultFields } from "../spec/defaults.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "../resolver/index.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function supportsTopP(modelSpec = {}) {
   const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
@@ -104,7 +105,7 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
   const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
   if (!normalizedSpec?.model) {
     throw fatalSystemError(tSystem("model.nameRequired"), {
-      code: "FATAL_MODEL_NAME_REQUIRED",
+      code: ERROR_CODE.FATAL_MODEL_NAME_REQUIRED,
     });
   }
   const apiKey = resolveApiKey(normalizedSpec);
@@ -112,7 +113,7 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
     throw fatalSystemError(
       `${tSystem("model.apiKeyMissingForProviderAlias")}: ${normalizedSpec.alias || "unknown"}`,
       {
-        code: "FATAL_PROVIDER_API_KEY_MISSING",
+        code: ERROR_CODE.FATAL_PROVIDER_API_KEY_MISSING,
         details: { alias: normalizedSpec.alias || "unknown" },
       },
     );
@@ -180,7 +181,7 @@ export function createChatModelByName(modelName, config = {}) {
   const spec = resolveModelSpecByName({ name: modelName, globalConfig, userConfig });
   if (!spec) {
     throw fatalSystemError(tSystem("model.notFoundByName"), {
-      code: "FATAL_MODEL_NOT_FOUND",
+      code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
       details: { name: modelName },
     });
   }

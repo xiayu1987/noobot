@@ -16,6 +16,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../utils/mime-utils.js";
 import { recoverableToolError } from "../../error/index.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
@@ -36,7 +37,7 @@ async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
   if (!response?.ok) {
     throw recoverableToolError(
       `${tMultimodal(runtime, "fetchGeneratedImageUrlFailed")}: HTTP ${response?.status || 500}`,
-      { code: "RECOVERABLE_FETCH_GENERATED_IMAGE_URL_FAILED" },
+      { code: ERROR_CODE.RECOVERABLE_FETCH_GENERATED_IMAGE_URL_FAILED },
     );
   }
   const imageBytes = Buffer.from(await response.arrayBuffer());
@@ -226,7 +227,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
       let resolvedModelSpec = null;
       if (!generationContent) {
         throw recoverableToolError(tMultimodal(runtime, "generationContentRequired"), {
-          code: "RECOVERABLE_INPUT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         });
       }
       try {
@@ -256,7 +257,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
               model: currentModelAlias || currentModelName || "unknown_model",
             }),
             {
-              code: "RECOVERABLE_MODEL_MULTIMODAL_GENERATION_UNSUPPORTED",
+              code: ERROR_CODE.RECOVERABLE_MODEL_MULTIMODAL_GENERATION_UNSUPPORTED,
               details: {
                 message: tMultimodal(runtime, "multimodalUnsupportedMessage"),
                 modelAlias: currentModelAlias,
@@ -271,7 +272,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         const modelApiKey = resolveModelApiKey(resolvedModelSpec || {});
         if (!modelApiKey) {
           throw recoverableToolError(tMultimodal(runtime, "modelApiKeyMissing"), {
-            code: "RECOVERABLE_MODEL_API_KEY_MISSING",
+            code: ERROR_CODE.RECOVERABLE_MODEL_API_KEY_MISSING,
             details: {
               modelAlias: String(resolvedModelSpec?.alias || "").trim(),
               model: String(resolvedModelSpec?.model || "").trim(),
@@ -357,7 +358,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           normalizedMessage.includes("images api is not enabled")
         ) {
           throw recoverableToolError(tMultimodal(runtime, "imagesApiNotEnabledError"), {
-            code: "RECOVERABLE_IMAGES_API_NOT_ENABLED",
+            code: ERROR_CODE.RECOVERABLE_IMAGES_API_NOT_ENABLED,
             details: {
               message: tMultimodal(runtime, "imagesApiNotEnabledMessage"),
               modelAlias,
@@ -368,7 +369,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         throw recoverableToolError(
           errorMessage || tMultimodal(runtime, "generateFailed"),
           {
-            code: String(error?.code || "RECOVERABLE_MULTIMODAL_GENERATE_FAILED"),
+            code: String(error?.code || ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED),
             details: {
               modelAlias,
               model: modelName,

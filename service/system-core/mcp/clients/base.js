@@ -5,6 +5,7 @@
  */
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export function resolveFetchImpl(fetchImpl = null) {
   if (typeof fetchImpl === "function") return fetchImpl;
@@ -42,7 +43,7 @@ export function throwRpcError(method, payloadError, baseUrl = "") {
   throw recoverableToolError(
     `${tSystem("mcp.rpcError")}(${method}): ${payloadError?.message || JSON.stringify(payloadError)}`,
     {
-      code: "RECOVERABLE_MCP_RPC_ERROR",
+      code: ERROR_CODE.RECOVERABLE_MCP_RPC_ERROR,
       details: {
         method,
         rpcError: payloadError || {},

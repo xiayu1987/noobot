@@ -10,6 +10,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -18,7 +19,7 @@ function nowIso() {
 function assertBasePath(basePath) {
   if (!basePath) {
     throw fatalSystemError(tSystem("common.basePathRequired"), {
-      code: "FATAL_BASE_PATH_REQUIRED",
+      code: ERROR_CODE.FATAL_BASE_PATH_REQUIRED,
     });
   }
 }

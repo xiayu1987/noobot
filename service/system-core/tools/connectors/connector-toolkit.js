@@ -52,6 +52,7 @@ import { buildAccessConnectorTool } from "./connector-toolkit/tool-access-connec
 import { createDatabaseConnectorTools } from "./connector-toolkit/tool-connect-database.js";
 import { createTerminalConnectorTools } from "./connector-toolkit/tool-connect-terminal.js";
 import { createEmailConnectorTools } from "./connector-toolkit/tool-connect-email.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function createConnectorTools({ agentContext } = {}) {
   const connectorToolContext = createConnectorToolContext(agentContext);
@@ -87,12 +88,12 @@ function createConnectorTools({ agentContext } = {}) {
     func: async () => {
       if (!store || typeof store.inspectSessionConnectors !== "function") {
         throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
-          code: "RECOVERABLE_CONNECTOR_STORE_MISSING",
+          code: ERROR_CODE.RECOVERABLE_CONNECTOR_STORE_MISSING,
         });
       }
       if (!rootSessionId) {
         throw recoverableToolError(tTool(runtime, "connectors.rootSessionMissing"), {
-          code: "RECOVERABLE_ROOT_SESSION_MISSING",
+          code: ERROR_CODE.RECOVERABLE_ROOT_SESSION_MISSING,
         });
       }
       const inspected = await store.inspectSessionConnectors({
@@ -122,7 +123,7 @@ function createConnectorTools({ agentContext } = {}) {
       if (totalCount <= 0) {
         const noConnectorMessage = tConnector(runtime, "noConnectorsFound");
         throw recoverableToolError(noConnectorMessage, {
-          code: "RECOVERABLE_NO_CONNECTORS_FOUND",
+          code: ERROR_CODE.RECOVERABLE_NO_CONNECTORS_FOUND,
           details: {
             status: "no_connectors",
             connectors: {

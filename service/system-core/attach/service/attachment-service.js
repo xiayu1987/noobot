@@ -23,6 +23,7 @@ import {
   resolveBasePath,
 } from "./path-resolver.js";
 import { buildPublicRecord, normalizeExtension } from "./record-builder.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 /**
  * 附件服务：对外暴露附件写入、读取、查询、删除 API。
@@ -92,7 +93,7 @@ export class AttachmentService {
       throw recoverableToolError(
         `${tSystem("attach.countExceedsLimit")}: ${attachments.length} > ${policy.maxFileCount}`,
         {
-          code: "RECOVERABLE_ATTACHMENT_COUNT_LIMIT_EXCEEDED",
+          code: ERROR_CODE.RECOVERABLE_ATTACHMENT_COUNT_LIMIT_EXCEEDED,
           details: {
             receivedCount: attachments.length,
             maxFileCount: policy.maxFileCount,
@@ -114,14 +115,14 @@ export class AttachmentService {
 
       if (!isMimeTypeAllowed(normalizedMime, policy.allowedMimeTypes)) {
         throw recoverableToolError(`${tSystem("attach.mimeTypeNotAllowed")}: ${normalizedMime}`, {
-          code: "RECOVERABLE_ATTACHMENT_MIME_TYPE_NOT_ALLOWED",
+          code: ERROR_CODE.RECOVERABLE_ATTACHMENT_MIME_TYPE_NOT_ALLOWED,
           details: { mimeType: normalizedMime },
         });
       }
 
       if (!isExtensionAllowed(safeStr(name), policy.allowedExtensions)) {
         throw recoverableToolError(`${tSystem("attach.extensionNotAllowed")}: ${safeStr(name)}`, {
-          code: "RECOVERABLE_ATTACHMENT_EXTENSION_NOT_ALLOWED",
+          code: ERROR_CODE.RECOVERABLE_ATTACHMENT_EXTENSION_NOT_ALLOWED,
           details: {
             fileName: safeStr(name),
             allowedExtensions: policy.allowedExtensions,
@@ -136,7 +137,7 @@ export class AttachmentService {
         throw recoverableToolError(
           `${tSystem("attach.fileTooLarge")}: ${safeStr(name)}, ${bytes.length} > ${policy.maxFileSizeBytes}`,
           {
-            code: "RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED",
+            code: ERROR_CODE.RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED,
             details: {
               fileName: safeStr(name),
               fileSizeBytes: bytes.length,
@@ -152,7 +153,7 @@ export class AttachmentService {
         throw recoverableToolError(
           `${tSystem("attach.totalSizeExceedsLimit")}: ${totalBytes} > ${policy.maxTotalSizeBytes}`,
           {
-            code: "RECOVERABLE_ATTACHMENT_TOTAL_SIZE_LIMIT_EXCEEDED",
+            code: ERROR_CODE.RECOVERABLE_ATTACHMENT_TOTAL_SIZE_LIMIT_EXCEEDED,
             details: {
               totalSizeBytes: totalBytes,
               maxTotalSizeBytes: policy.maxTotalSizeBytes,

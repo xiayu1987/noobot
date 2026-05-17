@@ -5,6 +5,7 @@
  */
 import { tSystem } from "../../i18n/system-text.js";
 import { recoverableToolError } from "../../error/index.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 const DEFAULT_BROWSER_HEADERS = {
   "User-Agent":
@@ -87,7 +88,7 @@ export async function browserLikeFetch(url, options = {}) {
     if (hops >= Math.max(0, Number(maxRedirects) || 0)) {
       throw recoverableToolError(
         `${tSystem("common.tooManyRedirects")}: ${currentUrl}`,
-        { code: "RECOVERABLE_TOO_MANY_REDIRECTS" },
+        { code: ERROR_CODE.RECOVERABLE_TOO_MANY_REDIRECTS },
       );
     }
     const location = String(res.headers.get("location") || "").trim();

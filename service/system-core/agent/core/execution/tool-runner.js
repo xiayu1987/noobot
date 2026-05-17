@@ -10,6 +10,7 @@ import { extractAttachmentMetasFromToolResult } from "../media/artifact-service.
 import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../error/index.js";
+import { ERROR_CODE } from "../../../error/constants.js";
 
 function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
   if (invokeError) {
@@ -43,7 +44,7 @@ export async function executeToolCall({
     toolResultText = toToolJsonResult(call?.name, {
       ok: false,
       status: "failed",
-      code: "RECOVERABLE_TOOL_NOT_FOUND",
+      code: ERROR_CODE.RECOVERABLE_TOOL_NOT_FOUND,
       error: `tool not found: ${call?.name}`,
     });
     emitEvent(eventListener, "tool_call_end", {
@@ -88,7 +89,7 @@ export async function executeToolCall({
     toolResultText = toToolJsonResult(call?.name, {
       ok: false,
       status: "failed",
-      code: String(error?.code || "RECOVERABLE_TOOL_INVOKE_ERROR"),
+      code: String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR),
       error: error?.message || String(error),
       ...(errorDetails ? { details: errorDetails } : {}),
     });

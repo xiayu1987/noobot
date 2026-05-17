@@ -10,6 +10,7 @@ import { markCurrentTurnStoreSummarized } from "../../context/session/summarized
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export const TASK_SUMMARY_TOOL_NAME = "task_summary";
 
@@ -69,7 +70,7 @@ export function createTaskSummaryTool(ctx = {}) {
       if (!summaryText) {
         throw recoverableToolError(
           tTool(runtime, "tools.task_summary.summaryContentRequired"),
-          { code: "RECOVERABLE_INPUT_MISSING" },
+          { code: ERROR_CODE.RECOVERABLE_INPUT_MISSING },
         );
       }
 

@@ -19,6 +19,7 @@ import { recoverableToolError } from "../../error/index.js";
 import { invokeServiceHandler } from "../../service-invoker/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export const REQUEST_HELP_TOOL_NAME = "request_help";
 const DEFAULT_HELP_SERVICES = ["web_search_service"];
@@ -319,7 +320,7 @@ export function createRequestHelpTool({ agentContext } = {}) {
       if (!normalizedHelpContent) {
         throw recoverableToolError(
           tTool(runtime, "tools.request_help.helpContentRequired"),
-          { code: "RECOVERABLE_INPUT_MISSING" },
+          { code: ERROR_CODE.RECOVERABLE_INPUT_MISSING },
         );
       }
 
@@ -426,7 +427,7 @@ export function createRequestHelpTool({ agentContext } = {}) {
             serviceError ||
             tTool(runtime, "tools.request_help.helpContentRequired"),
           {
-            code: "RECOVERABLE_REQUEST_HELP_FAILED",
+            code: ERROR_CODE.RECOVERABLE_REQUEST_HELP_FAILED,
             details: {
               status,
               requestType: normalizedRequestType,

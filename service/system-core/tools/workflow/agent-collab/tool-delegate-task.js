@@ -11,6 +11,7 @@ import { isFatalError, recoverableToolError } from "../../../error/index.js";
 import { assertValidParentDialogProcessId } from "../../core/check-tool-input.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
+import { ERROR_CODE } from "../../../error/constants.js";
 import {
   buildDelegateTaskFailureResult,
   cloneData,
@@ -52,7 +53,7 @@ export function createDelegateTaskTool({
         throw recoverableToolError(
           tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
           {
-            code: "RECOVERABLE_RUNTIME_MISSING",
+            code: ERROR_CODE.RECOVERABLE_RUNTIME_MISSING,
             details: {
               botManagerReady: Boolean(botManager),
               userIdReady: Boolean(userId),
@@ -82,7 +83,7 @@ export function createDelegateTaskTool({
         const normalizedParentSessionId = String(sourceSessionId || "").trim();
         if (!normalizedParentSessionId) {
           throw recoverableToolError(tAgentCollab(runtime, "runtimeSessionIdMissing"), {
-            code: "RECOVERABLE_INPUT_MISSING",
+            code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
             details: {
               field: "runtime.systemRuntime.sessionId",
               hint: tAgentCollab(runtime, "sessionContextHint"),
@@ -94,7 +95,7 @@ export function createDelegateTaskTool({
           throw recoverableToolError(
             tAgentCollab(runtime, "runtimeDialogProcessIdMissing"),
             {
-              code: "RECOVERABLE_INPUT_MISSING",
+              code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
               details: {
                 field: "runtime.systemRuntime.dialogProcessId",
                 hint: tAgentCollab(runtime, "dialogContextHint"),
@@ -115,7 +116,7 @@ export function createDelegateTaskTool({
 
       if (!Array.isArray(tasks) || !tasks.length) {
         throw recoverableToolError(tAgentCollab(runtime, "tasksRequired"), {
-          code: "RECOVERABLE_INPUT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
           details: { field: "tasks" },
         });
       }

@@ -16,6 +16,7 @@ import { RunConfigResolver } from "../config/run-config-resolver.js";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { AgentContextFactory } from "../execution/agent-context-factory.js";
 import { CALLER_ROLE } from "../config/constants.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -480,7 +481,7 @@ export class SessionExecutionEngine {
   }) {
     if (!sessionId) {
       throw recoverableToolError(tSystem("common.sessionIdRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
       });
     }
     return this.runSession({

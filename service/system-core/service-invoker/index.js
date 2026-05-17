@@ -8,6 +8,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { fatalSystemError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
+import { ERROR_CODE } from "../error/constants.js";
 
 const moduleCache = new Map();
 
@@ -20,7 +21,7 @@ function resolveBasePath({ globalConfig = {}, userId = "" }) {
   const workspaceRoot = normalizeName(globalConfig?.workspaceRoot || "");
   if (!normalizedUserId || !workspaceRoot) {
     throw fatalSystemError(tSystem("common.workspaceRootUserIdRequired"), {
-      code: "FATAL_WORKSPACE_PATH_INVALID",
+      code: ERROR_CODE.FATAL_WORKSPACE_PATH_INVALID,
     });
   }
   return path.resolve(workspaceRoot, normalizedUserId);
@@ -78,7 +79,7 @@ export async function invokeServiceHandler({
   const handlerName = normalizeName(serviceCfg?.handler || "");
   if (!handlerName) {
     throw fatalSystemError(tSystem("services.handlerRequired"), {
-      code: "FATAL_SERVICE_HANDLER_MISSING",
+      code: ERROR_CODE.FATAL_SERVICE_HANDLER_MISSING,
       details: { serviceName, endpointName },
     });
   }
@@ -91,7 +92,7 @@ export async function invokeServiceHandler({
     throw fatalSystemError(
       `${tSystem("services.handlerModuleNotFound")}: services/${handlerName}.js`,
       {
-        code: "FATAL_SERVICE_HANDLER_MODULE_NOT_FOUND",
+        code: ERROR_CODE.FATAL_SERVICE_HANDLER_MODULE_NOT_FOUND,
         details: { serviceName, endpointName, handlerName },
       },
     );
@@ -101,7 +102,7 @@ export async function invokeServiceHandler({
     throw fatalSystemError(
       `${tSystem("services.handlerNotFound")}: ${serviceName}.${endpointName} -> ${handlerName}`,
       {
-        code: "FATAL_SERVICE_HANDLER_NOT_FOUND",
+        code: ERROR_CODE.FATAL_SERVICE_HANDLER_NOT_FOUND,
         details: { serviceName, endpointName, handlerName },
       },
     );
