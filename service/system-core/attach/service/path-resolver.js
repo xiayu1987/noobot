@@ -8,7 +8,7 @@ import path from "node:path";
 import { readdir } from "node:fs/promises";
 
 import {
-  ATTACHMENT_SOURCES,
+  VALID_ATTACHMENT_SOURCES,
   DEFAULT_ATTACHMENT_SESSION_ID,
   DEFAULT_ATTACHMENT_SOURCE,
 } from "../constants.js";
@@ -44,7 +44,7 @@ export function resolveBasePath(globalConfig, userId) {
  */
 export function normalizeSource(source) {
   const normalized = safeStr(source).toLowerCase();
-  return ATTACHMENT_SOURCES.has(normalized) ? normalized : DEFAULT_ATTACHMENT_SOURCE;
+  return VALID_ATTACHMENT_SOURCES.has(normalized) ? normalized : DEFAULT_ATTACHMENT_SOURCE;
 }
 
 /**

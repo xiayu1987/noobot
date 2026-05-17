@@ -20,7 +20,7 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
-  ATTACHMENT_SOURCE,
+  TOOL_ATTACHMENT_SOURCE,
   TOOL_CALL_MODE,
   TOOL_NAME,
   TOOL_RESULT_STATUS,
@@ -323,7 +323,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
                     runtime?.systemRuntime?.rootSessionId ||
                     "",
                 ).trim(),
-                attachmentSource: ATTACHMENT_SOURCE.MODEL,
+                attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
                 artifacts: generatedAttachments,
                 generationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
               })
