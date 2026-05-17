@@ -322,11 +322,13 @@ function toggleConnectorPanelExpanded() {
 }
 
 .custom-radio :deep(.el-radio__input) {
-  display: inline-flex;
+  display: flex;
+  align-items: center;
 }
 
 .custom-radio :deep(.el-radio__label) {
   display: flex;
+  align-items: center;
   padding-left: 6px;
   height: 100%;
 }
@@ -345,7 +347,7 @@ function toggleConnectorPanelExpanded() {
 
 .connector-status-icon {
   font-size: 13px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
 }
 
@@ -366,7 +368,8 @@ function toggleConnectorPanelExpanded() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .empty-group-tip {

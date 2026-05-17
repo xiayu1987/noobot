@@ -830,12 +830,14 @@ defineExpose({
 }
 
 .more-panel {
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   background: var(--noobot-panel-bg, #ffffff);
   border: 1px solid var(--noobot-panel-border, #e4e4e7);
   border-radius: 16px;
-  overflow: hidden; /* 确保内部元素不溢出圆角 */
+  overflow-x: hidden; overflow-y: auto; /* 确保内部元素不溢出圆角，同时允许垂直滚动 */
   box-shadow: none;
 }
 
@@ -926,7 +928,7 @@ defineExpose({
 .camera-preview {
   width: 100%;
   display: block;
-  max-height: min(62vh, 420px);
+  max-height: min(62vh, 420px); max-height: calc(100vh - 150px);
   object-fit: cover;
 }
 
