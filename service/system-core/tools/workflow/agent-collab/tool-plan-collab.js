@@ -16,6 +16,7 @@ import {
 import { recoverableToolError } from "../../../error/index.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
+import { ERROR_CODE } from "../../../error/constants.js";
 
 export function createPlanMultiTaskCollaborationTool({
   runtime,
@@ -32,7 +33,7 @@ export function createPlanMultiTaskCollaborationTool({
       const taskText = String(task || "").trim();
       if (!taskText) {
         throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
-          code: "RECOVERABLE_INPUT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
           details: { field: "task" },
         });
       }

@@ -8,6 +8,7 @@ import path from "node:path";
 import { recoverableToolError } from "../../error/index.js";
 import { resolveConfigSecrets } from "./template-resolver.js";
 import { sanitizeUserConfig } from "./user-override-policy.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function normalizeConfigParams(input = {}) {
   const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
@@ -55,7 +56,7 @@ export class ConfigService {
       throw recoverableToolError(
         `config.json parse failed: ${error?.message || String(error)}`,
         {
-          code: "RECOVERABLE_INVALID_USER_CONFIG",
+          code: ERROR_CODE.RECOVERABLE_INVALID_USER_CONFIG,
         },
       );
     }

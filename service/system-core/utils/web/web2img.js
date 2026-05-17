@@ -21,6 +21,7 @@ import {
 import { navigateAndCapture } from "./web2img/web2img-capture.js";
 import { fileExists, postprocessScreenshot } from "./web2img/web2img-process.js";
 import { extractUsefulAndFullText } from "./web2img/web2img-extract.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 const fsp = fs.promises;
 
@@ -100,7 +101,7 @@ async function loadUrls(inputValue) {
   }
 
   throw recoverableToolError(`${tSystem("common.unrecognizedInputUrlFileDir")}: ${inputValue}`, {
-    code: "RECOVERABLE_INVALID_INPUT",
+    code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
   });
 }
 
@@ -183,7 +184,7 @@ async function web2multimodal(inputValue, output, preferTrafilatura = true, conf
   const urls = await loadUrls(inputValue);
   if (!urls.length) {
     throw recoverableToolError(tSystem("common.noProcessableUrl"), {
-      code: "RECOVERABLE_NO_PROCESSABLE_URL",
+      code: ERROR_CODE.RECOVERABLE_NO_PROCESSABLE_URL,
     });
   }
 
@@ -248,7 +249,7 @@ export async function runWeb2Img({
 
   if (!normalizedInput || !normalizedOutput) {
     throw recoverableToolError(tSystem("common.inputOutputDirRequired"), {
-      code: "RECOVERABLE_INPUT_MISSING",
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
     });
   }
 

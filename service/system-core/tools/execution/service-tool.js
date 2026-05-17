@@ -10,6 +10,7 @@ import { invokeServiceHandler } from "../../service-invoker/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function getServices(agentContext) {
   const globalConfig = agentContext?.runtime?.globalConfig || {};
@@ -89,18 +90,18 @@ export function createServiceTool({ agentContext }) {
       });
       if (inputErr) {
         throw recoverableToolError(inputErr, {
-          code: "RECOVERABLE_INVALID_TOOL_INPUT",
+          code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
         });
       }
       const customParamErr = validateCustomParam(custom_param, agentContext);
       if (customParamErr) {
         throw recoverableToolError(customParamErr, {
-          code: "RECOVERABLE_INVALID_TOOL_INPUT",
+          code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
         });
       }
       if (!userId) {
         throw recoverableToolError(tService(agentContext, "userIdMissing"), {
-          code: "RECOVERABLE_RUNTIME_CONTEXT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_RUNTIME_CONTEXT_MISSING,
         });
       }
 
@@ -113,7 +114,7 @@ export function createServiceTool({ agentContext }) {
           tService(agentContext, "serviceNotFound", {
             serviceName: normalizedServiceName,
           }),
-          { code: "RECOVERABLE_SERVICE_NOT_FOUND" },
+          { code: ERROR_CODE.RECOVERABLE_SERVICE_NOT_FOUND },
         );
       }
       if (!isServiceEnabled(serviceCfg)) {
@@ -121,7 +122,7 @@ export function createServiceTool({ agentContext }) {
           tService(agentContext, "serviceDisabled", {
             serviceName: normalizedServiceName,
           }),
-          { code: "RECOVERABLE_SERVICE_DISABLED" },
+          { code: ERROR_CODE.RECOVERABLE_SERVICE_DISABLED },
         );
       }
       const endpointCfg = serviceCfg?.endpoints?.[normalizedEndpointName];
@@ -131,7 +132,7 @@ export function createServiceTool({ agentContext }) {
             serviceName: normalizedServiceName,
             endpointName: normalizedEndpointName,
           }),
-          { code: "RECOVERABLE_ENDPOINT_NOT_FOUND" },
+          { code: ERROR_CODE.RECOVERABLE_ENDPOINT_NOT_FOUND },
         );
       }
       const endpointUrl = String(endpointCfg.url || "").trim();
@@ -141,7 +142,7 @@ export function createServiceTool({ agentContext }) {
             serviceName: normalizedServiceName,
             endpointName: normalizedEndpointName,
           }),
-          { code: "RECOVERABLE_ENDPOINT_URL_MISSING" },
+          { code: ERROR_CODE.RECOVERABLE_ENDPOINT_URL_MISSING },
         );
       }
       const result = await invokeServiceHandler({

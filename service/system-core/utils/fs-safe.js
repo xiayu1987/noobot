@@ -6,13 +6,14 @@
 import path from "node:path";
 import { recoverableToolError } from "../error/index.js";
 import { tSystem } from "../i18n/system-text.js";
+import { ERROR_CODE } from "../error/constants.js";
 
 export function safeJoin(base, target) {
   const resolvedBase = path.resolve(base);
   const resolvedTarget = path.resolve(base, target);
   if (!resolvedTarget.startsWith(resolvedBase)) {
     throw recoverableToolError(`${tSystem("common.pathOutOfScope")}: ${target}`, {
-      code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: { base: resolvedBase, target },
     });
   }

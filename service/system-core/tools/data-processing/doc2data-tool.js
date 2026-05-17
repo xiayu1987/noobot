@@ -17,6 +17,7 @@ import { convertDocumentToImages } from "../../utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -270,7 +271,7 @@ export function createDoc2DataTool({ agentContext }) {
       const images = converted.imagePaths || [];
       if (!images.length) {
         throw recoverableToolError(tTool(runtime, "tools.doc2data.noImagesProduced"), {
-          code: "RECOVERABLE_DOC2DATA_NO_IMAGES_PRODUCED",
+          code: ERROR_CODE.RECOVERABLE_DOC2DATA_NO_IMAGES_PRODUCED,
           details: { input: converted.input },
         });
       }

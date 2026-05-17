@@ -6,6 +6,7 @@
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 /**
  * Streamable HTTP MCP client.
@@ -44,7 +45,7 @@ export class StreamableHttpMcpClient extends BaseMcpClient {
       throw recoverableToolError(
         `${tSystem("mcp.httpError")}(${method}): ${response.status} ${response.statusText} ${text}`.trim(),
         {
-          code: "RECOVERABLE_MCP_HTTP_ERROR",
+          code: ERROR_CODE.RECOVERABLE_MCP_HTTP_ERROR,
           details: {
             method,
             status: Number(response.status || 0),

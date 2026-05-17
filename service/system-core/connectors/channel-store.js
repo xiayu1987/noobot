@@ -9,6 +9,7 @@ import { releaseTerminalChannel } from "./terminals/index.js";
 import { executeEmailCommand } from "./emails/index.js";
 import { tSystem } from "../i18n/system-text.js";
 import { recoverableToolError } from "../error/index.js";
+import { ERROR_CODE } from "../error/constants.js";
 import {
   CONNECTOR_TYPE,
   normalizeConnectorType,
@@ -68,7 +69,7 @@ class ConnectorChannelStore {
     const sid = String(sessionId || "").trim();
     if (!sid) {
       throw recoverableToolError(tSystem("common.sessionIdRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
       });
     }
     if (!this.sessionBuckets.has(sid)) {
@@ -153,12 +154,12 @@ class ConnectorChannelStore {
     const normalizedType = normalizeConnectorType(connectorType);
     if (!normalizedName) {
       throw recoverableToolError(tSystem("connectors.connectorNameRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
       });
     }
     if (!normalizedType) {
       throw recoverableToolError(tSystem("connectors.connectorTypeInvalid"), {
-        code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
+        code: ERROR_CODE.RECOVERABLE_INVALID_CONNECTOR_TYPE,
       });
     }
     const bucket = this._ensureSessionBucket(sessionId);
@@ -267,12 +268,12 @@ class ConnectorChannelStore {
     const normalizedType = normalizeConnectorType(connectorType);
     if (!normalizedName) {
       throw recoverableToolError(tSystem("connectors.connectorNameRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
       });
     }
     if (!normalizedType) {
       throw recoverableToolError(tSystem("connectors.connectorTypeInvalid"), {
-        code: "RECOVERABLE_INVALID_CONNECTOR_TYPE",
+        code: ERROR_CODE.RECOVERABLE_INVALID_CONNECTOR_TYPE,
       });
     }
     const bucket = this._ensureSessionBucket(sessionId);
@@ -281,7 +282,7 @@ class ConnectorChannelStore {
     if (!channel) {
       throw recoverableToolError(
         `${tSystem("connectors.connectorNotConnectedInSession")}: ${normalizedName}`,
-        { code: "RECOVERABLE_CONNECTOR_NOT_CONNECTED" },
+        { code: ERROR_CODE.RECOVERABLE_CONNECTOR_NOT_CONNECTED },
       );
     }
     return channel;
@@ -300,7 +301,7 @@ class ConnectorChannelStore {
     const cmd = String(command || "").trim();
     if (!cmd) {
       throw recoverableToolError(tSystem("connectors.commandRequired"), {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
       });
     }
     if (normalizedType === CONNECTOR_TYPE.TERMINAL) {

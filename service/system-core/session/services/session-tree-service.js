@@ -5,6 +5,7 @@
  */
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export class SessionTreeService {
   constructor({ sessionRepo, treeRepo, now = () => new Date().toISOString() } = {}) {
@@ -57,7 +58,7 @@ export class SessionTreeService {
           throw fatalSystemError(
             `${tSystem("session.parentSessionNotFoundPossiblyDeleted")}: ${normalizedParentSessionId}`,
             {
-              code: "FATAL_PARENT_SESSION_MISSING",
+              code: ERROR_CODE.FATAL_PARENT_SESSION_MISSING,
               details: { normalizedParentSessionId },
             },
           );
@@ -117,7 +118,7 @@ export class SessionTreeService {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: "FATAL_SESSION_ID_REQUIRED",
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
 

@@ -7,6 +7,7 @@ import { logError } from "../../tracking/console/logger.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function parseSseEventBlock(rawBlock = "") {
   const normalized = String(rawBlock || "").replace(/\r/g, "");
@@ -128,7 +129,7 @@ export class SseMcpClient extends BaseMcpClient {
       throw recoverableToolError(
         `${tSystem("mcp.sseConnectError")}: ${response.status} ${response.statusText} ${text}`.trim(),
         {
-          code: "RECOVERABLE_MCP_SSE_CONNECT_ERROR",
+          code: ERROR_CODE.RECOVERABLE_MCP_SSE_CONNECT_ERROR,
           details: {
             status: Number(response.status || 0),
             statusText: String(response.statusText || ""),
@@ -140,7 +141,7 @@ export class SseMcpClient extends BaseMcpClient {
     }
     if (!response.body) {
       throw recoverableToolError(tSystem("mcp.sseBodyMissing"), {
-        code: "RECOVERABLE_MCP_SSE_BODY_MISSING",
+        code: ERROR_CODE.RECOVERABLE_MCP_SSE_BODY_MISSING,
         details: { baseUrl: this.baseUrl },
       });
     }
@@ -164,7 +165,7 @@ export class SseMcpClient extends BaseMcpClient {
       }
       if (!this._endpointResolved) {
         throw recoverableToolError(tSystem("mcp.sseEndpointMissing"), {
-          code: "RECOVERABLE_MCP_SSE_ENDPOINT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_MCP_SSE_ENDPOINT_MISSING,
           details: { baseUrl: this.baseUrl },
         });
       }
@@ -199,7 +200,7 @@ export class SseMcpClient extends BaseMcpClient {
         this._pending.delete(requestId);
         reject(
           recoverableToolError(`${tSystem("mcp.sseRequestTimeout")}: ${method}`, {
-            code: "RECOVERABLE_MCP_SSE_TIMEOUT",
+            code: ERROR_CODE.RECOVERABLE_MCP_SSE_TIMEOUT,
             details: {
               method,
               requestId,
@@ -227,7 +228,7 @@ export class SseMcpClient extends BaseMcpClient {
       throw recoverableToolError(
         `${tSystem("mcp.ssePostError")}(${method}): ${postResponse.status} ${postResponse.statusText} ${text}`.trim(),
         {
-          code: "RECOVERABLE_MCP_SSE_POST_ERROR",
+          code: ERROR_CODE.RECOVERABLE_MCP_SSE_POST_ERROR,
           details: {
             method,
             status: Number(postResponse.status || 0),
@@ -244,7 +245,7 @@ export class SseMcpClient extends BaseMcpClient {
       throw recoverableToolError(
         `${tSystem("mcp.rpcError")}(${method}): ${payloadResponse.error?.message || JSON.stringify(payloadResponse.error)}`,
         {
-          code: "RECOVERABLE_MCP_RPC_ERROR",
+          code: ERROR_CODE.RECOVERABLE_MCP_RPC_ERROR,
           details: {
             method,
             rpcError: payloadResponse.error || {},

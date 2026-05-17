@@ -24,6 +24,7 @@ import { buildFirejailCommand } from "../../sandbox/firejail-sandbox.js";
 import { cleanTerminalOutputForLLM } from "../../utils/cleaners/output-cleaner.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 const TOOL_NAME = "execute_script";
 const DEFAULT_TIMEOUT = 120000;
@@ -157,7 +158,7 @@ function missingCommandError(mode, commandName = "", runtime = {}) {
   return recoverableToolError(
     tScript(runtime, "commandNotInstalled", { commandName }),
     {
-      code: "RECOVERABLE_COMMAND_NOT_INSTALLED",
+      code: ERROR_CODE.RECOVERABLE_COMMAND_NOT_INSTALLED,
       details: {
         mode,
         commandName,
@@ -169,7 +170,7 @@ function missingCommandError(mode, commandName = "", runtime = {}) {
 
 function scriptRuntimeError(message = "", options = {}) {
   return recoverableToolError(String(message || "").trim(), {
-    code: String(options?.code || "RECOVERABLE_SCRIPT_RUNTIME_ERROR"),
+    code: String(options?.code || ERROR_CODE.RECOVERABLE_SCRIPT_RUNTIME_ERROR),
     details:
       options?.details && typeof options.details === "object"
         ? options.details
@@ -391,7 +392,7 @@ export function createScriptTool({ agentContext }) {
           });
           if (fallbackResult) return fallbackResult;
           throw scriptRuntimeError(tScript(runtime, "overlaySrcUnsupported"), {
-            code: "RECOVERABLE_BWRAP_OVERLAY_SRC_UNSUPPORTED",
+            code: ERROR_CODE.RECOVERABLE_BWRAP_OVERLAY_SRC_UNSUPPORTED,
             details: {
               mode: "bubblewrap",
               code: 2,
@@ -412,7 +413,7 @@ export function createScriptTool({ agentContext }) {
               reason: err?.message || String(err),
             }),
             {
-              code: "RECOVERABLE_BWRAP_OVERLAY_NOT_WRITABLE",
+              code: ERROR_CODE.RECOVERABLE_BWRAP_OVERLAY_NOT_WRITABLE,
               details: {
                 mode: "bubblewrap",
                 code: 13,

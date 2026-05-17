@@ -7,6 +7,7 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import { recoverableToolError } from "../../error/index.js";
 import { tTool } from "./tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function tCheckInput(agentContext = {}, key = "") {
   const keyMap = {
@@ -44,7 +45,7 @@ function resolveRuntimeBasePath(agentContext = {}) {
   ).trim();
   if (!basePath) {
     throw recoverableToolError(tCheckInput(agentContext, "runtimeBasePathMissing"), {
-      code: "RECOVERABLE_RUNTIME_BASEPATH_MISSING",
+      code: ERROR_CODE.RECOVERABLE_RUNTIME_BASEPATH_MISSING,
     });
   }
   return path.resolve(basePath);
@@ -62,7 +63,7 @@ function resolveSessionContext(agentContext = {}) {
   ).trim();
   if (!sessionManager || !userId) {
     throw recoverableToolError(tCheckInput(agentContext, "sessionContextMissing"), {
-      code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
+      code: ERROR_CODE.RECOVERABLE_SESSION_CONTEXT_MISSING,
       details: { hasSessionManager: Boolean(sessionManager), hasUserId: Boolean(userId) },
     });
   }
@@ -78,7 +79,7 @@ export function assertValidSimpleFileName({
     throw recoverableToolError(
       `${fieldName} ${tCheckInput({}, "fieldRequired")}`,
       {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         details: { field: fieldName },
       },
     );
@@ -90,7 +91,7 @@ export function assertValidSimpleFileName({
     throw recoverableToolError(
       `${fieldName} ${tCheckInput({}, "pathSeparatorsNotAllowed")}`,
       {
-        code: "RECOVERABLE_INVALID_FILE_NAME",
+        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
         details: { field: fieldName, value: normalizedFileName },
       },
     );
@@ -99,7 +100,7 @@ export function assertValidSimpleFileName({
     throw recoverableToolError(
       `${fieldName} ${tCheckInput({}, "controlCharsNotAllowed")}`,
       {
-        code: "RECOVERABLE_INVALID_FILE_NAME",
+        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
         details: { field: fieldName, value: normalizedFileName },
       },
     );
@@ -116,7 +117,7 @@ export function assertValidFileNameFromPath({
     throw recoverableToolError(
       `${fieldName} ${tCheckInput({}, "fieldRequired")}`,
       {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         details: { field: fieldName },
       },
     );
@@ -126,7 +127,7 @@ export function assertValidFileNameFromPath({
     throw recoverableToolError(
       `${fieldName} ${tCheckInput({}, "fileNameIncludedRequired")}`,
       {
-        code: "RECOVERABLE_INVALID_FILE_NAME",
+        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
         details: { field: fieldName, value: normalizedPath },
       },
     );
@@ -147,7 +148,7 @@ export async function assertValidParentSessionId({
     throw recoverableToolError(
       `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
       {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         details: { field: fieldName },
       },
     );
@@ -156,7 +157,7 @@ export async function assertValidParentSessionId({
     throw recoverableToolError(
       `${fieldName} ${tCheckInput(agentContext, "invalidUuidFormat")}`,
       {
-        code: "RECOVERABLE_INVALID_PARENT_SESSION_ID",
+        code: ERROR_CODE.RECOVERABLE_INVALID_PARENT_SESSION_ID,
         details: { field: fieldName, value: normalizedParentSessionId },
       },
     );
@@ -169,7 +170,7 @@ export async function assertValidParentSessionId({
     throw recoverableToolError(
       `${tCheckInput(agentContext, "parentSessionNotFound")}: ${normalizedParentSessionId}`,
       {
-        code: "RECOVERABLE_PARENT_SESSION_NOT_FOUND",
+        code: ERROR_CODE.RECOVERABLE_PARENT_SESSION_NOT_FOUND,
         details: { parentSessionId: normalizedParentSessionId },
       },
     );
@@ -196,7 +197,7 @@ export async function assertValidParentDialogProcessId({
     throw recoverableToolError(
       `${dialogFieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
       {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         details: { field: dialogFieldName },
       },
     );
@@ -213,7 +214,7 @@ export async function assertValidParentDialogProcessId({
     throw recoverableToolError(
       `${dialogFieldName} ${tCheckInput(agentContext, "notFoundInParentSessionMessages")}: ${normalizedParentDialogProcessId}`,
       {
-        code: "RECOVERABLE_PARENT_DIALOG_PROCESS_NOT_FOUND",
+        code: ERROR_CODE.RECOVERABLE_PARENT_DIALOG_PROCESS_NOT_FOUND,
         details: {
           field: dialogFieldName,
           parentSessionId: normalizedParentSessionId,
@@ -239,7 +240,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
     throw recoverableToolError(
       `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
       {
-        code: "RECOVERABLE_INPUT_MISSING",
+        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         details: { field: fieldName },
       },
     );
@@ -254,7 +255,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
     throw recoverableToolError(
       `${tCheckInput(agentContext, "pathOutOfScope")}: ${normalizedPath}`,
       {
-        code: "RECOVERABLE_PATH_OUT_OF_SCOPE",
+        code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
         details: {
           field: fieldName,
           filePath: normalizedPath,
@@ -271,7 +272,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
       throw recoverableToolError(
         `${tCheckInput(agentContext, "fileNotFound")}: ${normalizedPath}`,
         {
-          code: "RECOVERABLE_FILE_NOT_FOUND",
+          code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
           details: { field: fieldName, filePath: normalizedPath },
         },
       );

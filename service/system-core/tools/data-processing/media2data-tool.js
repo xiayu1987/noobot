@@ -18,6 +18,7 @@ import {
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 const IMAGE_EXTENSION_TO_MIME = {
   ".png": "image/png",
@@ -309,7 +310,7 @@ export function createMedia2DataTool({ agentContext }) {
         throw recoverableToolError(
           tTool(runtime, "tools.media2data.unsupportedMediaFileType"),
           {
-            code: "RECOVERABLE_UNSUPPORTED_MEDIA_FILE_TYPE",
+            code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_MEDIA_FILE_TYPE,
             details: { input: inputFile },
           },
         );

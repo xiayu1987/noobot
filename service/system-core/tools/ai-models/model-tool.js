@@ -8,6 +8,7 @@ import { z } from "zod";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -47,13 +48,13 @@ export function createModelTool({
     func: async ({ modelName }) => {
       if (!runtime || !sessionId) {
         throw recoverableToolError(tModel(runtime, "sessionContextMissing"), {
-          code: "RECOVERABLE_SESSION_CONTEXT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_SESSION_CONTEXT_MISSING,
         });
       }
       const input = String(modelName || "").trim();
       if (!input) {
         throw recoverableToolError(tModel(runtime, "modelNameRequired"), {
-          code: "RECOVERABLE_INPUT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         });
       }
       let alias = input;
@@ -67,7 +68,7 @@ export function createModelTool({
         throw recoverableToolError(
           tModel(runtime, "modelNotFound", { input }),
           {
-            code: "RECOVERABLE_MODEL_NOT_FOUND",
+            code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
           },
         );
       }
@@ -75,7 +76,7 @@ export function createModelTool({
         throw recoverableToolError(
           tModel(runtime, "notConversationModel", { alias }),
           {
-            code: "RECOVERABLE_MODEL_NOT_CONVERSATION",
+            code: ERROR_CODE.RECOVERABLE_MODEL_NOT_CONVERSATION,
           },
         );
       }

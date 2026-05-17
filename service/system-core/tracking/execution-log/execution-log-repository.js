@@ -8,6 +8,7 @@
 import { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export class ExecutionLogRepository {
   constructor({
@@ -78,7 +79,7 @@ export class ExecutionLogRepository {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: "FATAL_SESSION_ID_REQUIRED",
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
     return this._getBundleStore(userId, normalizedSessionId, parentSessionId);
@@ -88,7 +89,7 @@ export class ExecutionLogRepository {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: "FATAL_SESSION_ID_REQUIRED",
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
     const queueKey = this._appendQueueKey(userId, normalizedSessionId, parentSessionId);

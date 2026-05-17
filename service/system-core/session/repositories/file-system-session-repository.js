@@ -6,6 +6,7 @@
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 export class FileSystemSessionRepository {
   constructor({
@@ -120,7 +121,7 @@ export class FileSystemSessionRepository {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
-        code: "FATAL_SESSION_ID_REQUIRED",
+        code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
     const { resolvedParentSessionId, sessionFile } = await this.resolveSessionScope(

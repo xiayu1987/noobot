@@ -13,6 +13,7 @@ import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 import { resolveModelSpecByName } from "../resolver/index.js";
 import { createChatModelFromSpec } from "../factory/chat-model.js";
 import { buildAttachmentContentBlock, normalizeModelOutputContent } from "../attachment/formatter.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 /**
  * Invoke a model with text and optional attachments.
@@ -43,7 +44,7 @@ export async function invokeModelWithTextAndAttachments({
     throw fatalSystemError(
       `${tSystem("model.enabledProviderModelNotFound")}: ${String(modelName || "")}`,
       {
-        code: "FATAL_MODEL_NOT_FOUND",
+        code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
         details: { modelName: String(modelName || "") },
       },
     );

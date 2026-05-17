@@ -8,6 +8,7 @@ import { z } from "zod";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ERROR_CODE } from "../../error/constants.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -153,14 +154,14 @@ export function createUserInteractionTool({ agentContext }) {
     func: async ({ content, fields }) => {
       if (!bridge?.requestUserInteraction) {
         throw recoverableToolError(tUserInteraction(runtime, "bridgeMissing"), {
-          code: "RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING",
+          code: ERROR_CODE.RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING,
         });
       }
 
       const interactionContent = String(content || "").trim();
       if (!interactionContent) {
         throw recoverableToolError(tUserInteraction(runtime, "contentRequired"), {
-          code: "RECOVERABLE_INPUT_MISSING",
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         });
       }
 
@@ -176,7 +177,7 @@ export function createUserInteractionTool({ agentContext }) {
           tUserInteraction(runtime, "invalidFieldsPayload", {
             reason: error?.message || String(error),
           }),
-          { code: "RECOVERABLE_INVALID_TOOL_INPUT" },
+          { code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT },
         );
       }
 
@@ -186,7 +187,7 @@ export function createUserInteractionTool({ agentContext }) {
       if (hasSensitiveFields) {
         throw recoverableToolError(
           tUserInteraction(runtime, "sensitiveFieldsBlocked"),
-          { code: "RECOVERABLE_SENSITIVE_FIELDS_BLOCKED" },
+          { code: ERROR_CODE.RECOVERABLE_SENSITIVE_FIELDS_BLOCKED },
         );
       }
 
@@ -206,7 +207,7 @@ export function createUserInteractionTool({ agentContext }) {
         result.confirmed === false
       ) {
         throw recoverableToolError(tUserInteraction(runtime, "cancelled"), {
-          code: "RECOVERABLE_USER_CANCELLED",
+          code: ERROR_CODE.RECOVERABLE_USER_CANCELLED,
           details: {
             confirmed: false,
             cancelled: true,
@@ -219,7 +220,7 @@ export function createUserInteractionTool({ agentContext }) {
         if (!result || typeof result !== "object" || Array.isArray(result)) {
           throw recoverableToolError(
             tUserInteraction(runtime, "invalidResponseObject"),
-            { code: "RECOVERABLE_INVALID_RESPONSE_OBJECT" },
+            { code: ERROR_CODE.RECOVERABLE_INVALID_RESPONSE_OBJECT },
           );
         }
         const requiredFields = normalizedFieldsPayload.fields
@@ -231,7 +232,7 @@ export function createUserInteractionTool({ agentContext }) {
             throw recoverableToolError(
               tUserInteraction(runtime, "missingRequiredField", { key }),
               {
-                code: "RECOVERABLE_MISSING_REQUIRED_FIELD",
+                code: ERROR_CODE.RECOVERABLE_MISSING_REQUIRED_FIELD,
                 details: { key },
               },
             );
