@@ -5,15 +5,15 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { TaskStatus } from "../../bot-manage/async/constants.js";
+import { TASK_STATUS } from "../../bot-manage/async/constants.js";
 import { markCurrentTurnStoreSummarized } from "../../context/session/summarized-message-policy.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { ToolName } from "../constants/index.js";
+import { TOOL_NAME } from "../constants/index.js";
 
-export const TASK_SUMMARY_TOOL_NAME = ToolName.TASK_SUMMARY;
+export const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
 
 function normalizeToolNameFromToolCall(toolCall = {}) {
   if (!toolCall || typeof toolCall !== "object") return "";
@@ -85,7 +85,7 @@ export function createTaskSummaryTool(ctx = {}) {
         TASK_SUMMARY_TOOL_NAME,
         {
           ok: true,
-          status: TaskStatus.COMPLETED,
+          status: TASK_STATUS.COMPLETED,
           message: tTool(runtime, "tools.task_summary.summaryCompletedContinue"),
           phaseSummary: summaryText,
           summarizedMessages: {

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { normalizeTerminalType } from "../../../config/index.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { createConnectConnectorTool } from "../base-connector-tool.js";
-import { ConnectorType } from "../../constants/index.js";
+import { CONNECTOR_TYPE } from "../../constants/index.js";
 import {
   normalizeProvidedTerminalDefaults,
   terminalFields,
@@ -17,8 +17,8 @@ export function createTerminalConnectorTools(context = {}) {
   const { runtime } = context;
   return [
     createConnectConnectorTool({
-      connectorType: ConnectorType.TERMINAL,
-      toolName: ConnectorType.CONNECT_TOOL_NAME.TERMINAL,
+      connectorType: CONNECTOR_TYPE.TERMINAL,
+      toolName: CONNECTOR_TYPE.CONNECT_TOOL_NAME.TERMINAL,
       extraSchemaParams: [
         {
           name: "terminal_type",

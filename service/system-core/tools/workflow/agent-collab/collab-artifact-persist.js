@@ -6,7 +6,7 @@
 import { Buffer } from "node:buffer";
 import { logError } from "../../../tracking/console/logger.js";
 import { mapAttachmentRecordsToMetas } from "../../../attach/index.js";
-import { TaskStatus } from "../../../bot-manage/async/constants.js";
+import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { normalizeString } from "./collab-task-utils.js";
 
@@ -72,7 +72,7 @@ export function createCollabArtifactPersistor({
         const sessionId = normalizeString(item?.request?.sessionId);
         if (!sessionId) return false;
         if (
-          ![TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.STOPPED].includes(
+          ![TASK_STATUS.COMPLETED, TASK_STATUS.FAILED, TASK_STATUS.STOPPED].includes(
             status,
           )
         ) {
@@ -84,7 +84,7 @@ export function createCollabArtifactPersistor({
     if (!pendingItems.length) return [];
 
     const generatedAttachments = pendingItems.map((item = {}, index) => {
-      const status = String(item?.status || "").trim() || TaskStatus.RUNNING;
+      const status = String(item?.status || "").trim() || TASK_STATUS.RUNNING;
       const taskName = normalizeString(item?.request?.taskName);
       const sessionId = normalizeString(item?.request?.sessionId);
       const fileLabel =

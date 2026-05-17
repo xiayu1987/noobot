@@ -20,7 +20,9 @@
     "test:utils": "node --test __tests__/utils/*.test.js",
     "test:connectors": "node --test __tests__/connectors/**/*.test.js",
     "test:tools": "node --test __tests__/system-core/tools/*.test.js",
-    "test:routes": "node --test __tests__/routes/*.test.js"
+    "test:routes": "node --test __tests__/routes/*.test.js",
+    "lint:tools-constants": "eslint .",
+    "lint:service-constants": "eslint ."
   },
   "dependencies": {
     "@langchain/core": "^1.1.46",
@@ -52,5 +54,8 @@
   },
   "overrides": {
     "systeminformation": "^5.31.6"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.4"
   }
 }

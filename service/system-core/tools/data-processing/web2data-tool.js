@@ -29,7 +29,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { normalizeText } from '../../utils/shared-utils.js';
 import { ERROR_CODE } from "../../error/constants.js";
-import { ToolDataMode, ToolName, ToolResultStatus } from "../constants/index.js";
+import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import {
   DEFAULT_MIME_TYPE,
   IMAGE_EXTENSION_TO_MIME,
@@ -275,8 +275,8 @@ async function runDirectFetchExtract(
         const fullText = extractVisibleTextFromHtml(html);
         return {
           url,
-          status: res.ok ? ToolResultStatus.OK : ToolResultStatus.ERROR,
-          mode: ToolDataMode.DIRECT,
+          status: res.ok ? TOOL_RESULT_STATUS.OK : TOOL_RESULT_STATUS.ERROR,
+          mode: TOOL_DATA_MODE.DIRECT,
           title: pageTitle,
           usefulText: cleanAndDedupTextLines(
             `${pageTitle ? `# ${pageTitle}\n` : ""}${readableText || fullText}`,
@@ -288,8 +288,8 @@ async function runDirectFetchExtract(
       } catch (error) {
         return {
           url,
-          status: ToolResultStatus.ERROR,
-          mode: ToolDataMode.DIRECT,
+          status: TOOL_RESULT_STATUS.ERROR,
+          mode: TOOL_DATA_MODE.DIRECT,
           title: "",
           usefulText: "",
           fullText: "",
@@ -347,8 +347,8 @@ async function runBrowserSimulateExtract(
         const fullText = cleanAndDedupTextLines(bodyInnerText, 10000);
         return {
           url,
-          status: ToolResultStatus.OK,
-          mode: ToolDataMode.BROWSER_SIMULATE,
+          status: TOOL_RESULT_STATUS.OK,
+          mode: TOOL_DATA_MODE.BROWSER_SIMULATE,
           title: pageTitle,
           usefulText: cleanAndDedupTextLines(
             `${pageTitle ? `# ${pageTitle}\n` : ""}${readableText || fullText}`,
@@ -360,8 +360,8 @@ async function runBrowserSimulateExtract(
       } catch (error) {
         return {
           url,
-          status: ToolResultStatus.ERROR,
-          mode: ToolDataMode.BROWSER_SIMULATE,
+          status: TOOL_RESULT_STATUS.ERROR,
+          mode: TOOL_DATA_MODE.BROWSER_SIMULATE,
           title: "",
           usefulText: "",
           fullText: "",
@@ -545,7 +545,7 @@ export async function runWebToDataPipeline({
       }
       records.push({
         url: String(item?.url || ""),
-        status: ToolResultStatus.OK,
+        status: TOOL_RESULT_STATUS.OK,
         mode,
         usefulText,
         fullText,
@@ -580,16 +580,16 @@ export async function runWebToDataPipeline({
   }
 
   const records =
-    mode === ToolDataMode.BROWSER_SIMULATE
+    mode === TOOL_DATA_MODE.BROWSER_SIMULATE
       ? await runBrowserSimulateExtract(resolvedUrls, parallelism, runtime)
       : await runDirectFetchExtract(resolvedUrls, parallelism, runtime);
   const successCount = records.filter(
-    (recordItem) => recordItem?.status === ToolResultStatus.OK,
+    (recordItem) => recordItem?.status === TOOL_RESULT_STATUS.OK,
   ).length;
   if (successCount <= 0) {
     const errorMessages = records
       .map((recordItem) =>
-        recordItem?.status === ToolResultStatus.ERROR
+        recordItem?.status === TOOL_RESULT_STATUS.ERROR
           ? `${recordItem?.url || ""}: ${recordItem?.error || "unknown error"}`
           : "",
       )
@@ -646,12 +646,12 @@ export function createWeb2DataTool({ agentContext }) {
     runtime?.userConfig || {},
   );
   const processMode = normalizeProcessMode(
-    effectiveConfig?.tools?.[ToolName.WEB_TO_DATA]?.switchWebMode,
+    effectiveConfig?.tools?.[TOOL_NAME.WEB_TO_DATA]?.switchWebMode,
   );
   if (!basePath) return [];
 
   const webToDataTool = new DynamicStructuredTool({
-    name: ToolName.WEB_TO_DATA,
+    name: TOOL_NAME.WEB_TO_DATA,
     description: tTool(runtime, "tools.web2data.description"),
     schema: z.object({
       input: z
@@ -694,10 +694,10 @@ export function createWeb2DataTool({ agentContext }) {
       }
       const text = String(payload?.text || "").trim();
       return toToolJsonResult(
-        ToolName.WEB_TO_DATA,
+        TOOL_NAME.WEB_TO_DATA,
         {
           ok: true,
-          status: ToolResultStatus.COMPLETED,
+          status: TOOL_RESULT_STATUS.COMPLETED,
           mode: payload?.mode || processMode,
           message: "",
           input: payload?.input || input || "",

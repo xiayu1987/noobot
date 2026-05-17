@@ -14,26 +14,26 @@ import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
 } from "../../model/index.js";
-import { TaskStatus } from "../../bot-manage/async/constants.js";
+import { TASK_STATUS } from "../../bot-manage/async/constants.js";
 import { recoverableToolError } from "../../error/index.js";
 import { invokeServiceHandler } from "../../service-invoker/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { ToolName } from "../constants/index.js";
+import { TOOL_NAME } from "../constants/index.js";
 
-export const REQUEST_HELP_TOOL_NAME = ToolName.REQUEST_HELP;
+export const REQUEST_HELP_TOOL_NAME = TOOL_NAME.REQUEST_HELP;
 const DEFAULT_HELP_SERVICES = ["web_search_service"];
 const DEFAULT_QUERY_KEY = "q";
 const DEFAULT_SEARCH_ENDPOINT = "search";
 const TOOL_RESULT_STATUS = Object.freeze({
-  COMPLETED: TaskStatus.COMPLETED,
-  PARTIAL: TaskStatus.PARTIAL,
-  FAILED: TaskStatus.FAILED,
+  COMPLETED: TASK_STATUS.COMPLETED,
+  PARTIAL: TASK_STATUS.PARTIAL,
+  FAILED: TASK_STATUS.FAILED,
 });
 const PROMISE_STATUS = Object.freeze({
-  FULFILLED: TaskStatus.FULFILLED,
-  REJECTED: TaskStatus.REJECTED,
+  FULFILLED: TASK_STATUS.FULFILLED,
+  REJECTED: TASK_STATUS.REJECTED,
 });
 const RUNTIME_KEYS = Object.freeze({
   OBJECT: "object",

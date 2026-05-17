@@ -53,7 +53,7 @@ import { createDatabaseConnectorTools } from "./connector-toolkit/tool-connect-d
 import { createTerminalConnectorTools } from "./connector-toolkit/tool-connect-terminal.js";
 import { createEmailConnectorTools } from "./connector-toolkit/tool-connect-email.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { ToolName, ToolResultStatus } from "../constants/index.js";
+import { TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 
 function createConnectorTools({ agentContext } = {}) {
   const connectorToolContext = createConnectorToolContext(agentContext);
@@ -83,8 +83,8 @@ function createConnectorTools({ agentContext } = {}) {
   });
 
   const inspectConnectorsTool = new DynamicStructuredTool({
-    name: ToolName.INSPECT_CONNECTORS,
-    description: tToolDescription(runtime, ToolName.INSPECT_CONNECTORS),
+    name: TOOL_NAME.INSPECT_CONNECTORS,
+    description: tToolDescription(runtime, TOOL_NAME.INSPECT_CONNECTORS),
     schema: z.object({}),
     func: async () => {
       if (!store || typeof store.inspectSessionConnectors !== "function") {
@@ -126,7 +126,7 @@ function createConnectorTools({ agentContext } = {}) {
         throw recoverableToolError(noConnectorMessage, {
             code: ERROR_CODE.RECOVERABLE_NO_CONNECTORS_FOUND,
             details: {
-              status: ToolResultStatus.NO_CONNECTORS,
+              status: TOOL_RESULT_STATUS.NO_CONNECTORS,
               connectors: {
                 databases,
                 terminals,
@@ -142,10 +142,10 @@ function createConnectorTools({ agentContext } = {}) {
         });
       }
       return toToolJsonResult(
-        ToolName.INSPECT_CONNECTORS,
+        TOOL_NAME.INSPECT_CONNECTORS,
         {
           ok: true,
-          status: ToolResultStatus.COMPLETED,
+          status: TOOL_RESULT_STATUS.COMPLETED,
           connectors: {
             databases,
             terminals,

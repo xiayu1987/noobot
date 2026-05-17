@@ -11,7 +11,7 @@ import { tTool } from "../../core/tool-i18n.js";
 import { isPlainObject } from "../../../utils/shared-utils.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
 import { ERROR_CODE } from "../../../error/constants.js";
-import { ToolName } from "../../constants/index.js";
+import { TOOL_NAME } from "../../constants/index.js";
 import {
   buildWaitAsyncTaskResultPayload,
   buildWaitTaskFailedResult,
@@ -34,7 +34,7 @@ export function createWaitAsyncTaskResultTool({
   tAgentCollab,
 }) {
   return new DynamicStructuredTool({
-    name: ToolName.WAIT_ASYNC_TASK_RESULT,
+    name: TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
     description: tTool(runtime, "tools.agent_collab.waitDescription"),
     schema: z.object({
       timeoutMs: z.number().optional().describe(tTool(runtime, "tools.agent_collab.fieldTimeoutMs")),

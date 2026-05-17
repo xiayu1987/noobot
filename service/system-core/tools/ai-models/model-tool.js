@@ -9,7 +9,7 @@ import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { ToolName } from "../constants/index.js";
+import { TOOL_NAME } from "../constants/index.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -41,7 +41,7 @@ export function createModelTool({
   const allEnabledProviders = runtime.allEnabledProviders || {};
 
   const switchModelTool = new DynamicStructuredTool({
-    name: ToolName.SWITCH_MODEL,
+    name: TOOL_NAME.SWITCH_MODEL,
     description: tTool(runtime, "tools.model.description"),
     schema: z.object({
       modelName: z.string().describe(tTool(runtime, "tools.model.fieldModelName")),
@@ -101,7 +101,7 @@ export function createModelTool({
       } catch {
         // ignore persistence failures; runtime switch still applies to current turn
       }
-      return toToolJsonResult(ToolName.SWITCH_MODEL, {
+      return toToolJsonResult(TOOL_NAME.SWITCH_MODEL, {
         ok: true,
         sessionId,
         modelAlias: alias,

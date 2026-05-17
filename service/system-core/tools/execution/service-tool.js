@@ -11,7 +11,7 @@ import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { ToolName } from "../constants/index.js";
+import { TOOL_NAME } from "../constants/index.js";
 
 function getServices(agentContext) {
   const globalConfig = agentContext?.runtime?.globalConfig || {};
@@ -57,7 +57,7 @@ function validateCustomParam(customParam, agentContext) {
 
 export function createServiceTool({ agentContext }) {
   const callServiceTool = new DynamicStructuredTool({
-    name: ToolName.CALL_SERVICE,
+    name: TOOL_NAME.CALL_SERVICE,
     description: tTool(agentContext, "tools.service.description"),
     schema: z.object({
       serviceName: z.string().describe(tTool(agentContext, "tools.service.fieldServiceName")),
@@ -163,7 +163,7 @@ export function createServiceTool({ agentContext }) {
           ? result
           : { data: result };
       return toToolJsonResult(
-        ToolName.CALL_SERVICE,
+        TOOL_NAME.CALL_SERVICE,
         {
           ok: normalizedResult?.ok !== false,
           ...normalizedResult,

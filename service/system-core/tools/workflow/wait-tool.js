@@ -7,12 +7,12 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
-import { ToolName, ToolResultState } from "../constants/index.js";
+import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
 
 export function createWaitTool(ctx = {}) {
   const runtime = ctx?.agentContext?.runtime || {};
   const waitTool = new DynamicStructuredTool({
-    name: ToolName.WAIT,
+    name: TOOL_NAME.WAIT,
     description: tTool(runtime, "tools.wait.description"),
     schema: z.object({
       waitMs: z.number().describe(tTool(runtime, "tools.wait.fieldWaitMs")),
@@ -22,9 +22,9 @@ export function createWaitTool(ctx = {}) {
       const requestedWaitMs = Number(waitMs) || 0;
       const actualWaitMs = Math.min(Math.max(requestedWaitMs, 0), MAX_WAIT_MS);
       await new Promise((resolve) => setTimeout(resolve, actualWaitMs));
-      return toToolJsonResult(ToolName.WAIT, {
+      return toToolJsonResult(TOOL_NAME.WAIT, {
         ok: true,
-        state: ToolResultState.OK,
+        state: TOOL_RESULT_STATE.OK,
         requested_wait_ms: requestedWaitMs,
         actual_wait_ms: actualWaitMs,
         capped: requestedWaitMs > MAX_WAIT_MS,
