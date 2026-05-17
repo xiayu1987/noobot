@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { TaskStatus } from "../../bot-manage/async/constants.js";
 import { markCurrentTurnStoreSummarized } from "../../context/session/summarized-message-policy.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -82,7 +83,7 @@ export function createTaskSummaryTool(ctx = {}) {
         TASK_SUMMARY_TOOL_NAME,
         {
           ok: true,
-          status: "completed",
+          status: TaskStatus.COMPLETED,
           message: tTool(runtime, "tools.task_summary.summaryCompletedContinue"),
           phaseSummary: summaryText,
           summarizedMessages: {

@@ -5,6 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { isPlainObject } from "../../../utils/shared-utils.js";
+import { TaskStatus } from "../../../bot-manage/async/constants.js";
 import { cloneData } from "./collab-task-utils.js";
 
 export function createCollabContainerStore({ runtime }) {
@@ -37,7 +38,9 @@ export function createCollabContainerStore({ runtime }) {
       parentDialogProcessId: String(
         container?.parentDialogProcessId || "",
       ).trim(),
-      status: String(container?.status || "running").trim() || "running",
+      status:
+        String(container?.status || TaskStatus.RUNNING).trim() ||
+        TaskStatus.RUNNING,
       updatedAt: String(container?.updatedAt || nowIso()),
       tasks: Array.isArray(container?.tasks)
         ? container.tasks.map((item = {}, index) => ({
@@ -46,7 +49,9 @@ export function createCollabContainerStore({ runtime }) {
             taskName: String(item?.taskName || "").trim(),
             taskContent: String(item?.taskContent || "").trim(),
             deliverable: String(item?.deliverable || "").trim(),
-            status: String(item?.status || "running").trim() || "running",
+            status:
+              String(item?.status || TaskStatus.RUNNING).trim() ||
+              TaskStatus.RUNNING,
             startedAt: String(item?.startedAt || "").trim(),
             endedAt: String(item?.endedAt || "").trim(),
             error: String(item?.error || "").trim(),
@@ -88,19 +93,21 @@ export function createCollabContainerStore({ runtime }) {
   };
 
   const updateContainerStatusByTasks = (container = {}) => {
-    if (!isPlainObject(container)) return "unknown";
+    if (!isPlainObject(container)) return TaskStatus.UNKNOWN;
     const taskList = Array.isArray(container.tasks) ? container.tasks : [];
-    if (!taskList.length) return "running";
-    if (taskList.some((task) => String(task?.status || "") === "failed")) {
-      return "failed";
+    if (!taskList.length) return TaskStatus.RUNNING;
+    if (taskList.some((task) => String(task?.status || "") === TaskStatus.FAILED)) {
+      return TaskStatus.FAILED;
     }
-    if (taskList.every((task) => String(task?.status || "") === "completed")) {
-      return "completed";
+    if (
+      taskList.every((task) => String(task?.status || "") === TaskStatus.COMPLETED)
+    ) {
+      return TaskStatus.COMPLETED;
     }
-    if (taskList.some((task) => String(task?.status || "") === "stopped")) {
-      return "stopped";
+    if (taskList.some((task) => String(task?.status || "") === TaskStatus.STOPPED)) {
+      return TaskStatus.STOPPED;
     }
-    return "running";
+    return TaskStatus.RUNNING;
   };
 
   const addChildAsyncResultContainer = (container = {}) => {
@@ -129,7 +136,7 @@ export function createCollabContainerStore({ runtime }) {
       id: randomUUID(),
       parentSessionId,
       parentDialogProcessId,
-      status: "running",
+      status: TaskStatus.RUNNING,
       updatedAt: nowIso(),
       tasks: [
         {
@@ -137,7 +144,7 @@ export function createCollabContainerStore({ runtime }) {
           sessionId: String(request?.sessionId || "").trim(),
           taskName: String(request?.taskName || "").trim(),
           taskContent: String(request?.taskContent || "").trim(),
-          status: "running",
+          status: TaskStatus.RUNNING,
           startedAt: "",
           endedAt: "",
           error: "",
