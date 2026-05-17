@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import path from "node:path";
 import { dedupeTextList } from "../utils/text.js";
 import { buildDailyExperiencePrompt } from "../prompts/builders.js";
 import { appendParseErrorLog } from "../parsers/error-logger.js";
@@ -21,9 +22,9 @@ import { mergeDomainTextForMonths } from "./yearly/merger.js";
 import { saveYearlyDomainSummary } from "./yearly/saver.js";
 import { runYearlySummaryIfNeeded } from "./yearly/runner.js";
 import {
-  readExperienceLessonsModel,
-  writeExperienceLessonsModel,
-  upsertExperienceLessonsModelEntries,
+  readSummaryPipelineModel,
+  writeSummaryPipelineModel,
+  upsertSummaryPipelineModelEntries,
 } from "./model/index.js";
 import { isAbortLikeError } from "./workflow.js";
 
@@ -33,14 +34,25 @@ export class ExperienceManager {
   }
 
   async readMetadata(basePath) {
-    const metadata = await this.storage.readJson(
-      this.storage.experienceLessonsMetadataPath(basePath),
-      {
-        domainNames: [],
-        weeklyBatches: [],
-        updatedAt: "",
-      },
+    let metadata = await this.storage.readJson(
+      this.storage.summaryPipelineMetadataPath(basePath),
+      null,
     );
+    if (!metadata || typeof metadata !== "object") {
+      const legacyPath = path.join(basePath, "memory/experience-lessons/metadata.json");
+      metadata = await this.storage.readJson(legacyPath, null);
+      if (metadata && typeof metadata === "object") {
+        await this.storage.ensureDir(this.storage.summaryPipelineDir(basePath));
+        await this.storage.writeJson(this.storage.summaryPipelineMetadataPath(basePath), metadata);
+      }
+    }
+    metadata = metadata && typeof metadata === "object"
+      ? metadata
+      : {
+          domainNames: [],
+          weeklyBatches: [],
+          updatedAt: "",
+        };
     return {
       domainNames: dedupeTextList(metadata?.domainNames),
       weeklyBatches: Array.isArray(metadata?.weeklyBatches) ? metadata.weeklyBatches : [],
@@ -121,14 +133,14 @@ export class ExperienceManager {
   }
 
   async readExperienceModel(basePath = "") {
-    return readExperienceLessonsModel(this.storage, basePath);
+    return readSummaryPipelineModel(this.storage, basePath);
   }
 
   async upsertExperienceModelEntries(basePath = "", entries = []) {
     const model = await this.readExperienceModel(basePath);
-    const { changed, model: nextModel } = upsertExperienceLessonsModelEntries(model, entries);
+    const { changed, model: nextModel } = upsertSummaryPipelineModelEntries(model, entries);
     if (!changed) return false;
-    return writeExperienceLessonsModel(this.storage, basePath, nextModel);
+    return writeSummaryPipelineModel(this.storage, basePath, nextModel);
   }
 
   async collectKnownDomainNames(basePath = "") {

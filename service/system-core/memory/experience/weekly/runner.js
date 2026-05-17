@@ -77,7 +77,7 @@ export async function runWeeklySummaryIfNeeded({
     if (savedDomains.length !== mergedDomainMap.size) break;
 
     for (const dateKey of targetDates) {
-      await storage.removeDir(storage.experienceLessonsDailyDir(basePath, dateKey));
+      await storage.removeDir(storage.dailySummaryDateDir(basePath, dateKey));
     }
     const metadata = await readMetadata(basePath);
     metadata.weeklyBatches.push({
@@ -87,7 +87,7 @@ export async function runWeeklySummaryIfNeeded({
       createdAt: new Date().toISOString(),
     });
     metadata.updatedAt = new Date().toISOString();
-    await storage.writeJson(storage.experienceLessonsMetadataPath(basePath), metadata);
+    await storage.writeJson(storage.summaryPipelineMetadataPath(basePath), metadata);
     hasWrittenSummary = true;
   }
   return hasWrittenSummary;

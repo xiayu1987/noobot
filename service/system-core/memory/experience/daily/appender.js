@@ -18,7 +18,7 @@ export async function appendDailyDomainResults({
   const normalizedResults = Array.isArray(results) ? results : [];
   if (!basePath || !normalizedResults.length) return false;
   const dateKey = toDateKey(createdAt);
-  const dayDir = storage.experienceLessonsDailyDir(basePath, dateKey);
+  const dayDir = storage.dailySummaryDateDir(basePath, dateKey);
   await storage.ensureDir(dayDir);
 
   let appendedCount = 0;
@@ -39,9 +39,9 @@ export async function appendDailyDomainResults({
   if (!appendedCount) return false;
 
   const metadata = await readMetadata(basePath);
-  await storage.ensureDir(storage.experienceLessonsDir(basePath));
+  await storage.ensureDir(storage.summaryPipelineDir(basePath));
   metadata.domainNames = dedupeTextList([...metadata.domainNames, ...domainNames]);
   metadata.updatedAt = new Date().toISOString();
-  await storage.writeJson(storage.experienceLessonsMetadataPath(basePath), metadata);
+  await storage.writeJson(storage.summaryPipelineMetadataPath(basePath), metadata);
   return true;
 }

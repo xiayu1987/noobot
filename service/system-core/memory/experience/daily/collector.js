@@ -14,7 +14,7 @@ export async function collectKnownDomainNames({
   const names = [...(Array.isArray(metadata?.domainNames) ? metadata.domainNames : [])];
   const dateDirs = await listDateDirs(basePath);
   for (const dateKey of dateDirs) {
-    const dayDir = storage.experienceLessonsDailyDir(basePath, dateKey);
+    const dayDir = storage.dailySummaryDateDir(basePath, dateKey);
     const entries = await storage.safeReadDirEntries(dayDir);
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith(".md")) continue;

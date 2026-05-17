@@ -12,10 +12,10 @@ export async function appendParseErrorLog({
   rawContent = "",
   candidate = "",
   error = "",
-} = {}) {
+  } = {}) {
   try {
     if (!basePath) return;
-    const lessonsDir = storage.experienceLessonsDir(basePath);
+    const lessonsDir = storage.summaryPipelineDir(basePath);
     await storage.ensureDir(lessonsDir);
     const logPath = path.join(lessonsDir, "_parse-error.log");
     const rawText =
@@ -36,4 +36,3 @@ export async function appendParseErrorLog({
     // 调试日志写入失败不影响主流程
   }
 }
-

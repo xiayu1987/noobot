@@ -7,14 +7,14 @@ import {
   resolveBasePath,
   shortPath,
   longPath,
-  experienceLessonsDir,
-  experienceLessonsMetadataPath,
-  experienceLessonsModelPath,
+  summaryPipelineDir,
+  summaryPipelineMetadataPath,
+  summaryPipelineModelPath,
   dailySummaryDir,
   weeklySummaryDir,
   monthlySummaryDir,
   yearlySummaryDir,
-  experienceLessonsDailyDir,
+  dailySummaryDateDir,
   sessionFile,
   longMemoryModelPath,
 } from "./paths.js";
@@ -55,16 +55,16 @@ export class StorageManager {
     return longPath(basePath);
   }
 
-  experienceLessonsDir(basePath) {
-    return experienceLessonsDir(basePath);
+  summaryPipelineDir(basePath) {
+    return summaryPipelineDir(basePath);
   }
 
-  experienceLessonsMetadataPath(basePath) {
-    return experienceLessonsMetadataPath(basePath);
+  summaryPipelineMetadataPath(basePath) {
+    return summaryPipelineMetadataPath(basePath);
   }
 
-  experienceLessonsModelPath(basePath) {
-    return experienceLessonsModelPath(basePath);
+  summaryPipelineModelPath(basePath) {
+    return summaryPipelineModelPath(basePath);
   }
 
   dailySummaryDir(basePath) {
@@ -83,8 +83,25 @@ export class StorageManager {
     return yearlySummaryDir(basePath);
   }
 
+  dailySummaryDateDir(basePath, dateKey = "") {
+    return dailySummaryDateDir(basePath, dateKey);
+  }
+
+  // Backward-compatible aliases (deprecated)
+  experienceLessonsDir(basePath) {
+    return this.summaryPipelineDir(basePath);
+  }
+
+  experienceLessonsMetadataPath(basePath) {
+    return this.summaryPipelineMetadataPath(basePath);
+  }
+
+  experienceLessonsModelPath(basePath) {
+    return this.summaryPipelineModelPath(basePath);
+  }
+
   experienceLessonsDailyDir(basePath, dateKey = "") {
-    return experienceLessonsDailyDir(basePath, dateKey);
+    return this.dailySummaryDateDir(basePath, dateKey);
   }
 
   sessionFile(basePath, sessionId, parentSessionId = "") {
