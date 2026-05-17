@@ -15,8 +15,8 @@ export async function mergeDomainTextForDates({
     const dayDir = storage.experienceLessonsDailyDir(basePath, dateKey);
     const entries = await storage.safeReadDirEntries(dayDir);
     for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".txt")) continue;
-      const domainName = entry.name.replace(/\.txt$/i, "");
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      const domainName = entry.name.replace(/\.md$/i, "");
       const filePath = path.join(dayDir, entry.name);
       const content = String(await storage.readText(filePath, "") || "").trim();
       if (!content) continue;
@@ -26,4 +26,3 @@ export async function mergeDomainTextForDates({
   }
   return domainMap;
 }
-

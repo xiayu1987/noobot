@@ -9,6 +9,10 @@ const DAILY_EXPERIENCE_JSON_SCHEMA_EXAMPLE =
 
 const WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
   '{"domain_name":"当前领域", "categories":[{"category_name":"分类", "experiences":["经验1"], "lessons":["教训1"]}]}';
+const MONTHLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
+  '{"domain_name":"当前领域","categories":[{"category_name":"大类","subcategories":[{"subcategory_name":"小类","patterns":["规律"],"methodologies":["方法论"]}]}]}';
+const YEARLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
+  '{"domain_name":"当前领域","categories":[{"category_name":"大类","subcategories":[{"subcategory_name":"小类","yearly_principles":["底层原则"],"strategic_reflections":["战略反思"]}]}]}';
 
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
   contextPrompt: {
@@ -47,7 +51,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
           : JSON.stringify(params.existingLongMemory ?? "", null, 2);
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
       const modelRuleText = longMemoryModel
-        ? `请严格遵循以下长期记忆建模规则（来自 long-memory-model.md）：\n${longMemoryModel}`
+        ? `请严格遵循以下长期记忆建模规则（来自 long-memory-model.json）：\n${longMemoryModel}`
         : "若未提供记忆模型规则，请优先保留稳定偏好与长期约束。";
       return [
         "你是长期记忆整理助手。",
@@ -79,17 +83,57 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
     weeklySummaryPrompt: (params = {}) => {
       const domainName = String(params.domainName || "").trim();
+      const knownCategoryText = String(params.knownCategoryText || "").trim();
       const mergedText = String(params.mergedText || "");
       return [
         "系统指令：",
         `请对领域 [${domainName}] 最近 7 天的记录进行结构化周总结。`,
+        `已知大类列表：${knownCategoryText || "无"}`,
         "",
         "任务要求：",
-        "1. 领域与分类保持高层抽象，不要过细（如：编程、项目管理、测试、产品；分类可用性能优化、架构设计等）。",
-        "2. 分类归组：按语义相关性拆分子类，并尽量合并近义项，避免碎片化。",
+        "1. 优先归入已知大类；若完全不匹配可新增大类。",
+        "2. 分类归组：按语义相关性拆分，并尽量合并近义项，避免碎片化。",
         "3. 归纳提炼：去重合并后，提炼每类最关键的 experiences 与 lessons（各 1-3 条）。",
         "4. 仅输出严格 JSON，不要输出 markdown 或解释，格式如下：",
         WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
+        "",
+        "输入：",
+        mergedText,
+      ].join("\n");
+    },
+    monthlySummaryPrompt: (params = {}) => {
+      const domainName = String(params.domainName || "").trim();
+      const knownTreeText = String(params.knownTreeText || "").trim();
+      const mergedText = String(params.mergedText || "");
+      return [
+        "系统指令：",
+        `分析以下【${domainName}】领域过去一个月的总结，目标是模式识别。`,
+        `已知大类与小类结构：${knownTreeText || "无"}`,
+        "",
+        "任务要求：",
+        "1. 将规律归入已知大类和小类；若有全新发现，可输出新的小类名称。",
+        "2. 为每个小类提炼本月核心规律（Patterns）和改进方法论（Methodologies）。",
+        "3. 仅输出严格 JSON，不要输出 markdown 或解释，格式如下：",
+        MONTHLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
+        "",
+        "输入：",
+        mergedText,
+      ].join("\n");
+    },
+    yearlySummaryPrompt: (params = {}) => {
+      const domainName = String(params.domainName || "").trim();
+      const knownTreeText = String(params.knownTreeText || "").trim();
+      const mergedText = String(params.mergedText || "");
+      return [
+        "系统指令：",
+        `站在高维视角审视【${domainName}】领域过去一年的全部复盘。`,
+        `已知分类树：${knownTreeText || "无"}`,
+        "",
+        "任务要求：",
+        "1. 忽略短期波动，提炼跨时间的底层原则（Principles）与年度战略反思。",
+        "2. 必须将输出落实到具体的大类和小类。",
+        "3. 仅输出严格 JSON，不要输出 markdown 或解释，格式如下：",
+        YEARLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
         "",
         "输入：",
         mergedText,

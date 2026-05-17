@@ -25,12 +25,28 @@ export function experienceLessonsMetadataPath(basePath) {
   return path.join(experienceLessonsDir(basePath), "metadata.json");
 }
 
+export function experienceLessonsModelPath(basePath) {
+  return path.join(basePath, "memory/experience-lessons-model.json");
+}
+
+export function dailySummaryDir(basePath) {
+  return path.join(basePath, "memory/daily_summary");
+}
+
 export function weeklySummaryDir(basePath) {
-  return path.join(basePath, "memory/Weekly_Summary");
+  return path.join(basePath, "memory/weekly_summary");
+}
+
+export function monthlySummaryDir(basePath) {
+  return path.join(basePath, "memory/monthly_summary");
+}
+
+export function yearlySummaryDir(basePath) {
+  return path.join(basePath, "memory/yearly_summary");
 }
 
 export function experienceLessonsDailyDir(basePath, dateKey = "") {
-  return path.join(experienceLessonsDir(basePath), dateKey);
+  return path.join(dailySummaryDir(basePath), dateKey);
 }
 
 export function sessionFile(basePath, sessionId, parentSessionId = "") {
@@ -46,6 +62,5 @@ export function sessionFile(basePath, sessionId, parentSessionId = "") {
 }
 
 export function longMemoryModelPath(basePath) {
-  return path.join(basePath, "memory/long-memory-model.md");
+  return path.join(basePath, "memory/long-memory-model.json");
 }
-

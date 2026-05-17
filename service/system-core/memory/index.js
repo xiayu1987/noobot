@@ -67,8 +67,6 @@ export class MemoryManager {
     const short = await this.shortMemory.read(basePath);
     throwIfAborted(abortSignal);
     const unextracted = this.shortMemory.sorted(short);
-    if (!unextracted.length) return;
-
     const memoryMaxItems = Number(effectiveConfig.memoryMaxItems || 100);
     const shouldUpdateLongMemory = unextracted.length >= memoryMaxItems;
     const promptPayload = unextracted.map((item) => ({ records: item.records }));
@@ -115,16 +113,33 @@ export class MemoryManager {
       hasUpdatedLongMemory = await this.longMemory.update(basePath, nextLongMemory);
     }
 
-    const hasAppendedExperienceLessons = await this.experience.runDaily({
+    let hasAppendedExperienceLessons = false;
+    if (promptPayload.length) {
+      hasAppendedExperienceLessons = await this.experience.runDaily({
+        basePath,
+        llm,
+        promptI18n,
+        promptPayload,
+        createdAt: summaryCreatedAt,
+        abortSignal,
+      });
+    }
+
+    await this.experience.runWeeklySummaryIfNeeded({
       basePath,
       llm,
       promptI18n,
-      promptPayload,
-      createdAt: summaryCreatedAt,
       abortSignal,
     });
 
-    await this.experience.runWeeklySummaryIfNeeded({
+    await this.experience.runMonthlySummaryIfNeeded({
+      basePath,
+      llm,
+      promptI18n,
+      abortSignal,
+    });
+
+    await this.experience.runYearlySummaryIfNeeded({
       basePath,
       llm,
       promptI18n,

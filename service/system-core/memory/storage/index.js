@@ -9,7 +9,11 @@ import {
   longPath,
   experienceLessonsDir,
   experienceLessonsMetadataPath,
+  experienceLessonsModelPath,
+  dailySummaryDir,
   weeklySummaryDir,
+  monthlySummaryDir,
+  yearlySummaryDir,
   experienceLessonsDailyDir,
   sessionFile,
   longMemoryModelPath,
@@ -59,8 +63,24 @@ export class StorageManager {
     return experienceLessonsMetadataPath(basePath);
   }
 
+  experienceLessonsModelPath(basePath) {
+    return experienceLessonsModelPath(basePath);
+  }
+
+  dailySummaryDir(basePath) {
+    return dailySummaryDir(basePath);
+  }
+
   weeklySummaryDir(basePath) {
     return weeklySummaryDir(basePath);
+  }
+
+  monthlySummaryDir(basePath) {
+    return monthlySummaryDir(basePath);
+  }
+
+  yearlySummaryDir(basePath) {
+    return yearlySummaryDir(basePath);
   }
 
   experienceLessonsDailyDir(basePath, dateKey = "") {
@@ -107,4 +127,3 @@ export class StorageManager {
     await removeDir(dirPath);
   }
 }
-

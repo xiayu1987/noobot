@@ -220,3 +220,49 @@ export async function syncUserWorkspaceFromTemplate({
   await syncDirectoryIncremental(templateBase, base);
   return base;
 }
+
+export async function ensureUserWorkspaceMissingFilesFromTemplate({
+  workspaceRoot,
+  workspaceTemplatePath = "",
+  userId,
+  relativePaths = [],
+}) {
+  const { base, templateBase } = await resolveWorkspaceInitPaths({
+    workspaceRoot,
+    workspaceTemplatePath,
+    userId,
+  });
+
+  const normalizedRelativePaths = Array.from(
+    new Set(
+      (Array.isArray(relativePaths) ? relativePaths : [])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (!normalizedRelativePaths.length) {
+    await mkdir(base, { recursive: true });
+    await cp(templateBase, base, {
+      recursive: true,
+      force: false,
+      errorOnExist: false,
+    });
+    return base;
+  }
+
+  await mkdir(base, { recursive: true });
+  for (const relPath of normalizedRelativePaths) {
+    const srcPath = path.join(templateBase, relPath);
+    const dstPath = path.join(base, relPath);
+    if (await pathExists(dstPath)) continue;
+    if (!(await pathExists(srcPath))) continue;
+    await mkdir(path.dirname(dstPath), { recursive: true });
+    await cp(srcPath, dstPath, {
+      recursive: true,
+      force: false,
+      errorOnExist: false,
+    });
+  }
+  return base;
+}

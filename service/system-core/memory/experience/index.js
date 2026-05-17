@@ -6,13 +6,25 @@
 import { dedupeTextList } from "../utils/text.js";
 import { buildDailyExperiencePrompt } from "../prompts/builders.js";
 import { appendParseErrorLog } from "../parsers/error-logger.js";
-import { collectKnownDomainNames } from "./daily/collector.js";
 import { parseDailyExperienceOutput } from "./daily/parser.js";
 import { appendDailyDomainResults } from "./daily/appender.js";
 import { normalizeWeeklySummaryOutput } from "./weekly/parser.js";
 import { mergeDomainTextForDates } from "./weekly/merger.js";
 import { saveWeeklyDomainSummary } from "./weekly/saver.js";
 import { runWeeklySummaryIfNeeded } from "./weekly/runner.js";
+import { normalizeMonthlySummaryOutput } from "./monthly/parser.js";
+import { mergeDomainTextForWeeks } from "./monthly/merger.js";
+import { saveMonthlyDomainSummary } from "./monthly/saver.js";
+import { runMonthlySummaryIfNeeded } from "./monthly/runner.js";
+import { normalizeYearlySummaryOutput } from "./yearly/parser.js";
+import { mergeDomainTextForMonths } from "./yearly/merger.js";
+import { saveYearlyDomainSummary } from "./yearly/saver.js";
+import { runYearlySummaryIfNeeded } from "./yearly/runner.js";
+import {
+  readExperienceLessonsModel,
+  writeExperienceLessonsModel,
+  upsertExperienceLessonsModelEntries,
+} from "./model/index.js";
 import { isAbortLikeError } from "./workflow.js";
 
 export class ExperienceManager {
@@ -65,8 +77,20 @@ export class ExperienceManager {
     });
   }
 
+  normalizeMonthly(rawContent, fallbackDomainName = "", { basePath = "" } = {}) {
+    return normalizeMonthlySummaryOutput(rawContent, fallbackDomainName, {
+      onParseError: (payload) => void this.appendParseErrorLog({ basePath, ...payload }),
+    });
+  }
+
+  normalizeYearly(rawContent, fallbackDomainName = "", { basePath = "" } = {}) {
+    return normalizeYearlySummaryOutput(rawContent, fallbackDomainName, {
+      onParseError: (payload) => void this.appendParseErrorLog({ basePath, ...payload }),
+    });
+  }
+
   async listDateDirs(basePath = "") {
-    const lessonsDir = this.storage.experienceLessonsDir(basePath);
+    const lessonsDir = this.storage.dailySummaryDir(basePath);
     const entries = await this.storage.safeReadDirEntries(lessonsDir);
     return entries
       .filter(
@@ -78,14 +102,40 @@ export class ExperienceManager {
       .sort();
   }
 
+  async listWeekDirs(basePath = "") {
+    const weeklyDir = this.storage.weeklySummaryDir(basePath);
+    const entries = await this.storage.safeReadDirEntries(weeklyDir);
+    return entries
+      .filter((entry) => entry.isDirectory() && /^\d{4}-W\d{2}$/.test(entry.name || ""))
+      .map((entry) => entry.name)
+      .sort();
+  }
+
+  async listMonthDirs(basePath = "") {
+    const monthlyDir = this.storage.monthlySummaryDir(basePath);
+    const entries = await this.storage.safeReadDirEntries(monthlyDir);
+    return entries
+      .filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}$/.test(entry.name || ""))
+      .map((entry) => entry.name)
+      .sort();
+  }
+
+  async readExperienceModel(basePath = "") {
+    return readExperienceLessonsModel(this.storage, basePath);
+  }
+
+  async upsertExperienceModelEntries(basePath = "", entries = []) {
+    const model = await this.readExperienceModel(basePath);
+    const { changed, model: nextModel } = upsertExperienceLessonsModelEntries(model, entries);
+    if (!changed) return false;
+    return writeExperienceLessonsModel(this.storage, basePath, nextModel);
+  }
+
   async collectKnownDomainNames(basePath = "") {
+    const model = await this.readExperienceModel(basePath);
+    const modelDomains = Object.keys(model || {});
     const metadata = await this.readMetadata(basePath);
-    return collectKnownDomainNames({
-      storage: this.storage,
-      metadata,
-      listDateDirs: (bp) => this.listDateDirs(bp),
-      basePath,
-    });
+    return dedupeTextList([...modelDomains, ...(metadata?.domainNames || [])]);
   }
 
   async appendDailyDomainResults({ basePath = "", results = [], createdAt = "" } = {}) {
@@ -131,6 +181,80 @@ export class ExperienceManager {
         this.normalizeWeekly(raw, fallback, options),
       saveWeeklySummary: (params) => this.saveWeeklyDomainSummary(params),
       readMetadata: (bp) => this.readMetadata(bp),
+      readExperienceModel: (bp) => this.readExperienceModel(bp),
+      upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
+    });
+  }
+
+  async mergeDomainTextForWeeks(basePath = "", weekKeys = []) {
+    return mergeDomainTextForWeeks({
+      storage: this.storage,
+      basePath,
+      weekKeys,
+    });
+  }
+
+  async saveMonthlyDomainSummary(params = {}) {
+    return saveMonthlyDomainSummary({
+      storage: this.storage,
+      ...params,
+    });
+  }
+
+  async runMonthlySummaryIfNeeded({
+    basePath = "",
+    llm = null,
+    promptI18n = {},
+    abortSignal = null,
+  } = {}) {
+    return runMonthlySummaryIfNeeded({
+      storage: this.storage,
+      llm,
+      promptI18n,
+      abortSignal,
+      basePath,
+      mergeDomainText: (bp, weekKeys) => this.mergeDomainTextForWeeks(bp, weekKeys),
+      normalizeMonthlySummary: (raw, fallback, options) =>
+        this.normalizeMonthly(raw, fallback, options),
+      saveMonthlySummary: (params) => this.saveMonthlyDomainSummary(params),
+      readExperienceModel: (bp) => this.readExperienceModel(bp),
+      upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
+    });
+  }
+
+  async mergeDomainTextForMonths(basePath = "", monthKeys = []) {
+    return mergeDomainTextForMonths({
+      storage: this.storage,
+      basePath,
+      monthKeys,
+    });
+  }
+
+  async saveYearlyDomainSummary(params = {}) {
+    return saveYearlyDomainSummary({
+      storage: this.storage,
+      ...params,
+    });
+  }
+
+  async runYearlySummaryIfNeeded({
+    basePath = "",
+    llm = null,
+    promptI18n = {},
+    abortSignal = null,
+  } = {}) {
+    return runYearlySummaryIfNeeded({
+      storage: this.storage,
+      llm,
+      promptI18n,
+      abortSignal,
+      basePath,
+      mergeDomainText: (bp, monthKeys) => this.mergeDomainTextForMonths(bp, monthKeys),
+      normalizeYearlySummary: (raw, fallback, options) =>
+        this.normalizeYearly(raw, fallback, options),
+      saveYearlySummary: (params) => this.saveYearlyDomainSummary(params),
+      readExperienceModel: (bp) => this.readExperienceModel(bp),
+      upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
     });
   }
 
@@ -152,6 +276,12 @@ export class ExperienceManager {
       });
       const lessonRes = await llm.invoke(lessonPrompt, { signal: abortSignal });
       const normalizedResults = this.parseDaily(lessonRes?.content, { basePath });
+      const modelEntries = normalizedResults.map((item) => ({
+        domain_name: item?.domain_name,
+      }));
+      if (modelEntries.length) {
+        await this.upsertExperienceModelEntries(basePath, modelEntries);
+      }
       return this.appendDailyDomainResults({
         basePath,
         results: normalizedResults,

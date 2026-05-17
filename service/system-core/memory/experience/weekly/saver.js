@@ -25,7 +25,7 @@ export async function saveWeeklyDomainSummary({
   for (const category of categories) {
     const categoryName = sanitizeFileName(category?.category_name, "");
     if (!categoryName) continue;
-    const filePath = path.join(domainDir, `${categoryName}.txt`);
+    const filePath = path.join(domainDir, `${categoryName}.md`);
     const block = [
       `时间：${createdAt || new Date().toISOString()}`,
       `来源日期：${(Array.isArray(sourceDates) ? sourceDates : []).join(", ")}`,
@@ -41,4 +41,3 @@ export async function saveWeeklyDomainSummary({
   }
   return writtenCount > 0;
 }
-
