@@ -362,12 +362,16 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "request_help": {
     "description": {
       "key": "tools.request_help.description",
-      "text": "Request help tool. Input helpContent. It concurrently calls configured help services and help model, then returns assistance results."
+      "text": "Request help tool. Input helpContent and requestType. Supports model help, web-search help, and experience help."
     },
     "params": {
       "helpContent": {
         "key": "tools.request_help.fieldHelpContent",
         "text": "Help request content."
+      },
+      "requestType": {
+        "key": "tools.request_help.fieldRequestType",
+        "text": "Request type: all_help (default, model + web search), model_help (model only), web_search_help (web search only), experience_help (returns memory directories for follow-up lookup)."
       }
     },
     "texts": {

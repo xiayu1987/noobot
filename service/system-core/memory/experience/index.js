@@ -22,9 +22,9 @@ import { mergeDomainTextForMonths } from "./yearly/merger.js";
 import { saveYearlyDomainSummary } from "./yearly/saver.js";
 import { runYearlySummaryIfNeeded } from "./yearly/runner.js";
 import {
-  readSummaryPipelineModel,
-  writeSummaryPipelineModel,
-  upsertSummaryPipelineModelEntries,
+  readExperienceModel as readExperienceModelFile,
+  writeExperienceModel as writeExperienceModelFile,
+  upsertExperienceModelEntries as upsertExperienceModelEntriesInMemory,
 } from "./model/index.js";
 import { isAbortLikeError } from "./workflow.js";
 
@@ -35,15 +35,15 @@ export class ExperienceManager {
 
   async readMetadata(basePath) {
     let metadata = await this.storage.readJson(
-      this.storage.summaryPipelineMetadataPath(basePath),
+      this.storage.experienceMetadataPath(basePath),
       null,
     );
     if (!metadata || typeof metadata !== "object") {
       const legacyPath = path.join(basePath, "memory/experience-lessons/metadata.json");
       metadata = await this.storage.readJson(legacyPath, null);
       if (metadata && typeof metadata === "object") {
-        await this.storage.ensureDir(this.storage.summaryPipelineDir(basePath));
-        await this.storage.writeJson(this.storage.summaryPipelineMetadataPath(basePath), metadata);
+        await this.storage.ensureDir(this.storage.experienceDir(basePath));
+        await this.storage.writeJson(this.storage.experienceMetadataPath(basePath), metadata);
       }
     }
     metadata = metadata && typeof metadata === "object"
@@ -133,14 +133,14 @@ export class ExperienceManager {
   }
 
   async readExperienceModel(basePath = "") {
-    return readSummaryPipelineModel(this.storage, basePath);
+    return readExperienceModelFile(this.storage, basePath);
   }
 
   async upsertExperienceModelEntries(basePath = "", entries = []) {
     const model = await this.readExperienceModel(basePath);
-    const { changed, model: nextModel } = upsertSummaryPipelineModelEntries(model, entries);
+    const { changed, model: nextModel } = upsertExperienceModelEntriesInMemory(model, entries);
     if (!changed) return false;
-    return writeSummaryPipelineModel(this.storage, basePath, nextModel);
+    return writeExperienceModelFile(this.storage, basePath, nextModel);
   }
 
   async collectKnownDomainNames(basePath = "") {

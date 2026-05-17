@@ -73,7 +73,7 @@ test("append daily domain results writes per-domain md and metadata", async () =
 
   const metadata = JSON.parse(
     await readFile(
-      path.join(userRoot, "memory/summary_pipeline/metadata.json"),
+      path.join(userRoot, "memory/experience/metadata.json"),
       "utf8",
     ),
   );
@@ -113,7 +113,7 @@ test("logs raw model output when daily json parse fails", async () => {
 
   const logContent = await waitFor(() =>
     readFile(
-      path.join(userRoot, "memory/summary_pipeline/_parse-error.log"),
+      path.join(userRoot, "memory/experience/_parse-error.log"),
       "utf8",
     ),
   );

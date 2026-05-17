@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
+import path from "node:path";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import {
@@ -20,9 +21,22 @@ import { tTool } from "../core/tool-i18n.js";
 
 export const REQUEST_HELP_TOOL_NAME = "request_help";
 const DEFAULT_HELP_SERVICES = ["web_search_service"];
+const REQUEST_HELP_TYPES = Object.freeze({
+  ALL: "all_help",
+  MODEL: "model_help",
+  WEB_SEARCH: "web_search_help",
+  EXPERIENCE: "experience_help",
+});
 
 function normalizeName(value = "") {
   return String(value || "").trim();
+}
+
+function normalizeRequestType(value = "") {
+  const normalized = normalizeName(value);
+  if (!normalized) return REQUEST_HELP_TYPES.ALL;
+  if (Object.values(REQUEST_HELP_TYPES).includes(normalized)) return normalized;
+  return REQUEST_HELP_TYPES.ALL;
 }
 
 function isEnabled(config = {}) {
@@ -226,6 +240,31 @@ async function invokeHelpModel({
   };
 }
 
+function resolveMemoryHelpPaths(agentContext = {}) {
+  const runtime = agentContext?.runtime || {};
+  const basePath = normalizeName(
+    agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
+  );
+  if (!basePath) return {};
+  const memoryDir = path.join(basePath, "memory");
+  return {
+    basePath,
+    memoryDir,
+    longMemoryPath: path.join(memoryDir, "long-memory.json"),
+    shortMemoryPath: path.join(memoryDir, "short-memory.json"),
+    longMemoryModelPath: path.join(memoryDir, "long-memory-model.json"),
+    experienceModelPath: path.join(memoryDir, "experience-model.json"),
+    experienceDir: path.join(memoryDir, "experience"),
+    dailySummaryDir: path.join(memoryDir, "daily_summary"),
+    weeklySummaryDir: path.join(memoryDir, "weekly_summary"),
+    monthlySummaryDir: path.join(memoryDir, "monthly_summary"),
+    yearlySummaryDir: path.join(memoryDir, "yearly_summary"),
+    // backward-compatible path hints
+    summaryPipelineModelPath: path.join(memoryDir, "summary-pipeline-model.json"),
+    summaryPipelineDir: path.join(memoryDir, "summary_pipeline"),
+  };
+}
+
 export function createRequestHelpTool({ agentContext } = {}) {
   const runtime = agentContext?.runtime || {};
   const requestHelpTool = new DynamicStructuredTool({
@@ -233,13 +272,40 @@ export function createRequestHelpTool({ agentContext } = {}) {
     description: tTool(runtime, "tools.request_help.description"),
     schema: z.object({
       helpContent: z.string().describe(tTool(runtime, "tools.request_help.fieldHelpContent")),
+      requestType: z
+        .enum([
+          REQUEST_HELP_TYPES.ALL,
+          REQUEST_HELP_TYPES.MODEL,
+          REQUEST_HELP_TYPES.WEB_SEARCH,
+          REQUEST_HELP_TYPES.EXPERIENCE,
+        ])
+        .optional()
+        .default(REQUEST_HELP_TYPES.ALL)
+        .describe(tTool(runtime, "tools.request_help.fieldRequestType")),
     }),
-    func: async ({ helpContent }) => {
+    func: async ({ helpContent, requestType }) => {
       const normalizedHelpContent = String(helpContent || "").trim();
+      const normalizedRequestType = normalizeRequestType(requestType);
       if (!normalizedHelpContent) {
         throw recoverableToolError(
           tTool(runtime, "tools.request_help.helpContentRequired"),
           { code: "RECOVERABLE_INPUT_MISSING" },
+        );
+      }
+
+      if (normalizedRequestType === REQUEST_HELP_TYPES.EXPERIENCE) {
+        const memoryHelpPaths = resolveMemoryHelpPaths(agentContext);
+        return toToolJsonResult(
+          REQUEST_HELP_TOOL_NAME,
+          {
+            ok: true,
+            status: "completed",
+            requestType: normalizedRequestType,
+            helpContent: normalizedHelpContent,
+            hint: "Use read_file/list tools to inspect memory paths for experience help.",
+            memoryHelpPaths,
+          },
+          true,
         );
       }
 
@@ -254,7 +320,12 @@ export function createRequestHelpTool({ agentContext } = {}) {
       );
       const servicesConfig = effectiveConfig?.services || {};
       const helpServiceList = normalizeHelpServiceList(toolConfig);
-      const shouldCallServices = Boolean(helpServiceList.length && userId);
+      const shouldCallServices = Boolean(
+        normalizedRequestType !== REQUEST_HELP_TYPES.MODEL &&
+          helpServiceList.length &&
+          userId,
+      );
+      const shouldCallModel = normalizedRequestType !== REQUEST_HELP_TYPES.WEB_SEARCH;
 
       const servicePromise = shouldCallServices
         ? Promise.all(
@@ -270,13 +341,18 @@ export function createRequestHelpTool({ agentContext } = {}) {
             ),
           )
         : Promise.resolve([]);
-      const modelPromise = invokeHelpModel({
-        helpContent: normalizedHelpContent,
-        runtime,
-        toolConfig,
-        globalConfig,
-        userConfig,
-      });
+      const modelPromise = shouldCallModel
+        ? invokeHelpModel({
+            helpContent: normalizedHelpContent,
+            runtime,
+            toolConfig,
+            globalConfig,
+            userConfig,
+          })
+        : Promise.resolve({
+            modelName: "",
+            content: "",
+          });
       const [serviceSettled, modelSettled] = await Promise.allSettled([
         servicePromise,
         modelPromise,
@@ -296,12 +372,15 @@ export function createRequestHelpTool({ agentContext } = {}) {
           ? serviceSettled.reason?.message || String(serviceSettled.reason || "")
           : "";
       const hasServiceSuccess = serviceResults.some((item) => item?.ok === true);
-      const hasModelSuccess = !modelResult?.error;
+      const hasModelSuccess = shouldCallModel ? !modelResult?.error : false;
+      const hasAnySuccess = shouldCallServices ? hasServiceSuccess : hasModelSuccess;
       const status =
-        hasServiceSuccess || hasModelSuccess
-          ? hasServiceSuccess && hasModelSuccess
-            ? "completed"
-            : "partial"
+        hasAnySuccess
+          ? shouldCallServices && shouldCallModel
+            ? hasServiceSuccess && hasModelSuccess
+              ? "completed"
+              : "partial"
+            : "completed"
           : "failed";
 
       if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
@@ -317,6 +396,7 @@ export function createRequestHelpTool({ agentContext } = {}) {
             code: "RECOVERABLE_REQUEST_HELP_FAILED",
             details: {
               status,
+              requestType: normalizedRequestType,
               helpContent: normalizedHelpContent,
               serviceResults,
               modelResult,
@@ -331,6 +411,7 @@ export function createRequestHelpTool({ agentContext } = {}) {
         {
           ok: true,
           status,
+          requestType: normalizedRequestType,
           helpContent: normalizedHelpContent,
           serviceResults,
           modelResult,

@@ -7,9 +7,9 @@ import {
   resolveBasePath,
   shortPath,
   longPath,
-  summaryPipelineDir,
-  summaryPipelineMetadataPath,
-  summaryPipelineModelPath,
+  experienceDir,
+  experienceMetadataPath,
+  experienceModelPath,
   dailySummaryDir,
   weeklySummaryDir,
   monthlySummaryDir,
@@ -55,16 +55,28 @@ export class StorageManager {
     return longPath(basePath);
   }
 
+  experienceDir(basePath) {
+    return experienceDir(basePath);
+  }
+
+  experienceMetadataPath(basePath) {
+    return experienceMetadataPath(basePath);
+  }
+
+  experienceModelPath(basePath) {
+    return experienceModelPath(basePath);
+  }
+
   summaryPipelineDir(basePath) {
-    return summaryPipelineDir(basePath);
+    return this.experienceDir(basePath);
   }
 
   summaryPipelineMetadataPath(basePath) {
-    return summaryPipelineMetadataPath(basePath);
+    return this.experienceMetadataPath(basePath);
   }
 
   summaryPipelineModelPath(basePath) {
-    return summaryPipelineModelPath(basePath);
+    return this.experienceModelPath(basePath);
   }
 
   dailySummaryDir(basePath) {

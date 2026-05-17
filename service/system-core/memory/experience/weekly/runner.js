@@ -87,7 +87,7 @@ export async function runWeeklySummaryIfNeeded({
       createdAt: new Date().toISOString(),
     });
     metadata.updatedAt = new Date().toISOString();
-    await storage.writeJson(storage.summaryPipelineMetadataPath(basePath), metadata);
+    await storage.writeJson(storage.experienceMetadataPath(basePath), metadata);
     hasWrittenSummary = true;
   }
   return hasWrittenSummary;

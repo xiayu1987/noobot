@@ -362,12 +362,16 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "request_help": {
     "description": {
       "key": "tools.request_help.description",
-      "text": "请求帮助工具。输入 helpContent。返回求助结果。"
+      "text": "请求帮助工具。输入 helpContent 和 requestType。可请求模型帮助、网页搜索帮助、经验帮助。"
     },
     "params": {
       "helpContent": {
         "key": "tools.request_help.fieldHelpContent",
         "text": "请求帮助内容。"
+      },
+      "requestType": {
+        "key": "tools.request_help.fieldRequestType",
+        "text": "请求类型：all_help（默认，模型+网页搜索）、model_help（仅模型）、web_search_help（仅网页搜索）、experience_help（返回记忆目录供后续查询）。"
       }
     },
     "texts": {
