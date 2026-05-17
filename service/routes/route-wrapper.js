@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { HTTP_STATUS } from "../system-core/constants/index.js";
+
 export function withJsonError(
   handler,
   {
-    statusCode = 400,
+    statusCode = HTTP_STATUS.BAD_REQUEST,
     fallbackErrorKey = "",
     translateText = () => "",
   } = {},
@@ -30,7 +32,7 @@ export function withJsonError(
 
 export function createJsonRouteWrapper(
   {
-    statusCode = 400,
+    statusCode = HTTP_STATUS.BAD_REQUEST,
     fallbackErrorKey = "",
     translateText = () => "",
   } = {},

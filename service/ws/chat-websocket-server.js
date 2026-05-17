@@ -9,6 +9,7 @@ import { normalizeSseLogEvent } from "../system-core/event/index.js";
 import { mergeConfig } from "../system-core/config/index.js";
 import { decryptPayloadBySessionId } from "../system-core/utils/session-crypto.js";
 import { logError } from "../system-core/tracking/index.js";
+import { HTTP_STATUS } from "../system-core/constants/index.js";
 
 const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const MIN_RUN_TIMEOUT_MS = 10000;
@@ -56,7 +57,11 @@ async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} }
   return resolveRunTimeoutMs(resolveConfigRunTimeoutMs(effectiveConfig));
 }
 
-function sendUpgradeError(socket, statusCode = 401, message = "Unauthorized") {
+function sendUpgradeError(
+  socket,
+  statusCode = HTTP_STATUS.UNAUTHORIZED,
+  message = "Unauthorized",
+) {
   if (!socket.writable) return;
   socket.write(
     `HTTP/1.1 ${statusCode} ${message}\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(message)}\r\n\r\n${message}`,
@@ -89,7 +94,11 @@ export function registerChatWebSocketServer(
         url: String(request?.url || ""),
         error: error?.message || String(error),
       });
-      sendUpgradeError(socket, 400, translateText("ws.badRequest", requestLocale));
+      sendUpgradeError(
+        socket,
+        HTTP_STATUS.BAD_REQUEST,
+        translateText("ws.badRequest", requestLocale),
+      );
       return;
     }
 
@@ -100,7 +109,11 @@ export function registerChatWebSocketServer(
 
     const authInfo = resolveAuthByApiKey(request);
     if (!authInfo) {
-      sendUpgradeError(socket, 401, translateText("auth.missingApiKey", requestLocale));
+      sendUpgradeError(
+        socket,
+        HTTP_STATUS.UNAUTHORIZED,
+        translateText("auth.missingApiKey", requestLocale),
+      );
       return;
     }
     request.auth = authInfo;

@@ -15,6 +15,7 @@ import {
   sanitizeGeneratedArtifactName,
 } from "../../../utils/mime-utils.js";
 import { safeNum } from "../../../utils/shared-utils.js";
+import { MIME_TYPE } from "../../../constants/index.js";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
@@ -39,7 +40,7 @@ export function extractGeneratedMediaCandidates(aiContent) {
     if (sourceType === "base64" && sourceData) {
       mediaCandidates.push({
         mediaType: partType.includes("video") ? "video" : "image",
-        mimeType: sourceMediaType || "application/octet-stream",
+        mimeType: sourceMediaType || MIME_TYPE.APPLICATION_OCTET_STREAM,
         contentBase64: sourceData,
         fileName: sanitizeGeneratedArtifactName(
           `${partType || "media"}_${mediaIndex}`,
@@ -98,7 +99,7 @@ export async function fetchRemoteMediaArtifact(
       .trim()
       .toLowerCase();
     return {
-      mimeType: contentTypeHeader || "application/octet-stream",
+      mimeType: contentTypeHeader || MIME_TYPE.APPLICATION_OCTET_STREAM,
       contentBase64: responseBytes.toString("base64"),
       fileName: sanitizeGeneratedArtifactName(
         `generated_media_${mediaIndex}`,
@@ -182,7 +183,7 @@ export async function persistModelGeneratedArtifacts({
     generationSource: "llm_output",
   });
   const attachmentMetas = mapAttachmentRecordsToMetas(savedRecords, {
-    fallbackMimeType: "application/octet-stream",
+    fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
     fallbackGenerationSource: "llm_output",
     userId,
   });
@@ -213,7 +214,7 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
       attachmentId: String(attachmentItem?.attachmentId || "").trim(),
       name: String(attachmentItem?.name || "").trim(),
       mimeType: String(
-        attachmentItem?.mimeType || "application/octet-stream",
+        attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
       ).trim(),
       size: safeNum(attachmentItem?.size),
       sessionId: String(attachmentItem?.sessionId || "").trim(),

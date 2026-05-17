@@ -17,6 +17,7 @@ import { resolveRememberedConnectorInfo } from "./connector-context.js";
 import { resolveConfiguredConnectorInfo } from "./connector-resolver.js";
 import { findConnectedConnector, tConnector } from "./connector-runtime.js";
 import { ERROR_CODE } from "../../../error/constants.js";
+import { MIME_TYPE } from "../../../constants/index.js";
 import {
   ArtifactGenerationSource,
   AttachmentSource,
@@ -86,7 +87,7 @@ function buildAccessConnectorTool(context = {}) {
           ).trim(),
           name: String(attachmentItem?.name || "").trim(),
           mimeType: String(
-            attachmentItem?.mimeType || "application/octet-stream",
+            attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
           ).trim(),
           size: Number(attachmentItem?.size || 0),
           generatedByModel: attachmentItem?.generatedByModel === true,

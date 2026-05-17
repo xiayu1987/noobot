@@ -30,20 +30,18 @@ import { tTool } from "../core/tool-i18n.js";
 import { normalizeText } from '../../utils/shared-utils.js';
 import { ERROR_CODE } from "../../error/constants.js";
 import { ToolDataMode, ToolName, ToolResultStatus } from "../constants/index.js";
-import { IMAGE_EXTENSIONS, TEXT_EXTENSIONS } from "./file-extension-constants.js";
+import {
+  DEFAULT_MIME_TYPE,
+  IMAGE_EXTENSION_TO_MIME,
+  IMAGE_EXTENSIONS,
+  TEXT_EXTENSIONS,
+} from "./file-extension-constants.js";
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_TEXT_CHARS = 12000;
 const BROWSER_RETRY_COUNT = 2;
 const DEFAULT_CONCURRENCY = 8;
 const MAX_CONCURRENCY = 60;
-const IMAGE_EXTENSION_TO_MIME = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-};
-
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
@@ -232,8 +230,8 @@ async function buildImageBatches(imagePaths = []) {
     const st = await stat(imagePath);
     const ext = path.extname(imagePath).toLowerCase();
     const mime = IMAGE_EXTENSIONS.has(ext)
-      ? (IMAGE_EXTENSION_TO_MIME[ext] || "application/octet-stream")
-      : "application/octet-stream";
+      ? (IMAGE_EXTENSION_TO_MIME[ext] || DEFAULT_MIME_TYPE)
+      : DEFAULT_MIME_TYPE;
     const b64 = (await readFile(imagePath)).toString("base64");
     items.push({
       imagePath,

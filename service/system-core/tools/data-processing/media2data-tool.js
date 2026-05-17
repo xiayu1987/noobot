@@ -20,35 +20,15 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { ToolName, ToolResultStatus } from "../constants/index.js";
-import { AUDIO_EXTENSIONS, IMAGE_EXTENSIONS } from "./file-extension-constants.js";
-
-const IMAGE_EXTENSION_TO_MIME = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".bmp": "image/bmp",
-};
-
-const AUDIO_EXTENSION_TO_MIME = {
-  ".mp3": "audio/mpeg",
-  ".wav": "audio/wav",
-  ".m4a": "audio/mp4",
-  ".aac": "audio/aac",
-  ".ogg": "audio/ogg",
-  ".opus": "audio/opus",
-  ".flac": "audio/flac",
-  ".webm": "audio/webm",
-};
-
-const VIDEO_EXTENSION_TO_MIME = {
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mov": "video/quicktime",
-  ".avi": "video/x-msvideo",
-  ".mkv": "video/x-matroska",
-  ".m4v": "video/x-m4v",
-};
+import {
+  AUDIO_EXTENSION_TO_MIME,
+  AUDIO_EXTENSIONS,
+  DEFAULT_MIME_TYPE,
+  IMAGE_EXTENSION_TO_MIME,
+  IMAGE_EXTENSIONS,
+  MIME_TYPE,
+  VIDEO_EXTENSION_TO_MIME,
+} from "./file-extension-constants.js";
 const FFPROBE_AMBIGUOUS_EXTENSIONS = new Set([".webm", ".ogg", ".mkv"]);
 const MODEL_READY_AUDIO_EXTENSIONS = new Set([".wav", ".mp3"]);
 
@@ -95,16 +75,16 @@ function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
     .trim()
     .toLowerCase();
   if (normalizedPreferredMediaType === "audio") {
-    return AUDIO_EXTENSION_TO_MIME[extension] || "application/octet-stream";
+    return AUDIO_EXTENSION_TO_MIME[extension] || DEFAULT_MIME_TYPE;
   }
   if (normalizedPreferredMediaType === "video") {
-    return VIDEO_EXTENSION_TO_MIME[extension] || "application/octet-stream";
+    return VIDEO_EXTENSION_TO_MIME[extension] || DEFAULT_MIME_TYPE;
   }
   return (
     IMAGE_EXTENSION_TO_MIME[extension] ||
     AUDIO_EXTENSION_TO_MIME[extension] ||
     VIDEO_EXTENSION_TO_MIME[extension] ||
-    "application/octet-stream"
+    DEFAULT_MIME_TYPE
   );
 }
 
@@ -245,7 +225,7 @@ async function ensureVideoFileForModel(inputFile = "", outputDirectory = "") {
   await mkdir(outputDirectory, { recursive: true });
   const extension = path.extname(String(inputFile || "")).toLowerCase();
   if (extension === ".mp4") {
-    return { filePath: inputFile, mimeType: "video/mp4" };
+    return { filePath: inputFile, mimeType: MIME_TYPE.VIDEO_MP4 };
   }
   const outputFilePath = path.join(outputDirectory, `${randomUUID()}.mp4`);
   await runFfmpeg([
@@ -260,7 +240,7 @@ async function ensureVideoFileForModel(inputFile = "", outputDirectory = "") {
     "+faststart",
     outputFilePath,
   ]);
-  return { filePath: outputFilePath, mimeType: "video/mp4" };
+  return { filePath: outputFilePath, mimeType: MIME_TYPE.VIDEO_MP4 };
 }
 
 function resolveMedia2DataPromptByMediaType({
@@ -350,7 +330,9 @@ export function createMedia2DataTool({ agentContext }) {
           await readFile(preparedAudioFile.filePath)
         ).toString("base64");
         const audioMimeType =
-          preparedAudioFile.format === "wav" ? "audio/wav" : "audio/mpeg";
+          preparedAudioFile.format === "wav"
+            ? MIME_TYPE.AUDIO_WAV
+            : MIME_TYPE.AUDIO_MPEG;
         attachmentPayload = {
           type: audioMimeType,
           mimeType: audioMimeType,

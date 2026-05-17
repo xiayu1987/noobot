@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { safeNum } from "../../utils/shared-utils.js";
+import { MIME_TYPE } from "../../constants/index.js";
 
 export async function resolveAttachments({
   attachmentService = null,
@@ -29,7 +30,9 @@ export async function resolveAttachments({
       sessionId: String(attachmentItem?.sessionId || sessionId || ""),
       attachmentSource: String(attachmentItem?.attachmentSource || "user").trim(),
       name: String(attachmentItem?.name || ""),
-      mimeType: String(attachmentItem?.mimeType || "application/octet-stream"),
+      mimeType: String(
+        attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
+      ),
       size: safeNum(attachmentItem?.size),
       path: String(attachmentItem?.path || ""),
       relativePath: String(attachmentItem?.relativePath || ""),

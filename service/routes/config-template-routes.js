@@ -5,6 +5,7 @@
  */
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { withJsonError } from "./route-wrapper.js";
+import { HTTP_STATUS } from "../system-core/constants/index.js";
 
 export function registerConfigAndTemplateRoutes(
   app,
@@ -35,7 +36,7 @@ export function registerConfigAndTemplateRoutes(
       async (req, res) => {
       const scope = resolveConfigParamScope(req);
       if (scope === "system" && String(req?.auth?.role || "") !== "super_admin") {
-        res.status(403).json({
+        res.status(HTTP_STATUS.FORBIDDEN).json({
           ok: false,
           error: translateText("common.superAdminRequiredForSystemParams", req.locale),
         });
@@ -57,7 +58,7 @@ export function registerConfigAndTemplateRoutes(
       async (req, res) => {
       const scope = resolveConfigParamScope(req);
       if (scope === "system" && String(req?.auth?.role || "") !== "super_admin") {
-        res.status(403).json({
+        res.status(HTTP_STATUS.FORBIDDEN).json({
           ok: false,
           error: translateText("common.superAdminRequiredForSystemParams", req.locale),
         });

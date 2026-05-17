@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
+import { HTTP_STATUS } from "../system-core/constants/index.js";
 
 export function registerSessionRoutes(
   app,
@@ -128,7 +129,7 @@ export function registerSessionRoutes(
       res.sendFile(attachment.absolutePath);
       },
       {
-        statusCode: 404,
+        statusCode: HTTP_STATUS.NOT_FOUND,
         fallbackErrorKey: "common.notFound",
       },
     ),

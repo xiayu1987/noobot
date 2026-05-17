@@ -8,4 +8,10 @@ export {
   TEXT_EXTENSIONS,
   IMAGE_EXTENSIONS,
   AUDIO_EXTENSIONS,
-} from "../../constants/file-extensions.js";
+  DEFAULT_MIME_TYPE,
+  MIME_TYPE,
+  IMAGE_EXTENSION_TO_MIME,
+  AUDIO_EXTENSION_TO_MIME,
+  VIDEO_EXTENSION_TO_MIME,
+  EXTENSION_TO_MIME,
+} from "../../constants/index.js";

@@ -7,6 +7,7 @@ import { Buffer } from "node:buffer";
 import { logError } from "../../../tracking/console/logger.js";
 import { mapAttachmentRecordsToMetas } from "../../../attach/index.js";
 import { TaskStatus } from "../../../bot-manage/async/constants.js";
+import { MIME_TYPE } from "../../../constants/index.js";
 import { normalizeString } from "./collab-task-utils.js";
 
 function toSafeArtifactName(value = "") {
@@ -92,7 +93,7 @@ export function createCollabArtifactPersistor({
       return {
         __sessionId: sessionId,
         name: `subtask-${fileLabel}-${status}.md`,
-        mimeType: "text/markdown",
+        mimeType: MIME_TYPE.TEXT_MARKDOWN,
         contentBase64: Buffer.from(markdownText || tAgentCollab(runtime, "noResult"), "utf8").toString("base64"),
       };
     });
@@ -107,7 +108,7 @@ export function createCollabArtifactPersistor({
         artifacts: generatedAttachments,
       });
       attachmentMetas = mapAttachmentRecordsToMetas(savedRecords, {
-        fallbackMimeType: "text/markdown",
+        fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
         fallbackGenerationSource: "async_subtask_result",
         userId,
       });

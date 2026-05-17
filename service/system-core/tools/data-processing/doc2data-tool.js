@@ -19,7 +19,12 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { ToolDataMode, ToolName, ToolResultStatus } from "../constants/index.js";
-import { IMAGE_EXTENSIONS, TEXT_EXTENSIONS } from "./file-extension-constants.js";
+import {
+  DEFAULT_MIME_TYPE,
+  IMAGE_EXTENSION_TO_MIME,
+  IMAGE_EXTENSIONS,
+  TEXT_EXTENSIONS,
+} from "./file-extension-constants.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -28,21 +33,13 @@ function getRuntime(agentContext) {
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_DIRECT_TEXT_BYTES = 8 * 1024 * 1024;
 
-const IMAGE_EXTENSION_TO_MIME = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".bmp": "image/bmp",
-};
-
 function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
   const extension = path.extname(String(filePath || "")).toLowerCase();
   void preferredMediaType;
-  if (!IMAGE_EXTENSIONS.has(extension)) return "application/octet-stream";
+  if (!IMAGE_EXTENSIONS.has(extension)) return DEFAULT_MIME_TYPE;
   return (
     IMAGE_EXTENSION_TO_MIME[extension] ||
-    "application/octet-stream"
+    DEFAULT_MIME_TYPE
   );
 }
 
