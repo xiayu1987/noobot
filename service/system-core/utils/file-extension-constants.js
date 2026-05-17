@@ -8,4 +8,4 @@ export {
   TEXT_EXTENSIONS,
   IMAGE_EXTENSIONS,
   AUDIO_EXTENSIONS,
-} from "../../constants/file-extensions.js";
+} from "../constants/file-extensions.js";
