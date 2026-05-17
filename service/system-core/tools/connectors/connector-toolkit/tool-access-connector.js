@@ -17,6 +17,7 @@ import { resolveRememberedConnectorInfo } from "./connector-context.js";
 import { resolveConfiguredConnectorInfo } from "./connector-resolver.js";
 import { findConnectedConnector, tConnector } from "./connector-runtime.js";
 import { ERROR_CODE } from "../../../error/constants.js";
+import { ConnectorType } from "../../constants/index.js";
 
 function buildAccessConnectorTool(context = {}) {
   const {
@@ -29,11 +30,11 @@ function buildAccessConnectorTool(context = {}) {
     maxAccessOutputChars,
   } = context;
   const resolveReconnectToolName = (connectorType = "") =>
-    connectorType === "database"
-      ? "database_connect_connector"
-      : connectorType === "terminal"
-        ? "terminal_connect_connector"
-        : "email_connect_connector";
+    connectorType === ConnectorType.DATABASE
+      ? ConnectorType.CONNECT_TOOL_NAME.DATABASE
+      : connectorType === ConnectorType.TERMINAL
+        ? ConnectorType.CONNECT_TOOL_NAME.TERMINAL
+        : ConnectorType.CONNECT_TOOL_NAME.EMAIL;
   const buildEmailAttachmentHandler = () => {
     const userId = String(runtime?.userId || "").trim();
     const attachmentService = runtime?.attachmentService || null;
@@ -120,7 +121,13 @@ function buildAccessConnectorTool(context = {}) {
         });
       }
       const connectorType = normalizeConnectorType(connector_type);
-      if (!["database", "terminal", "email"].includes(connectorType)) {
+      if (
+        ![
+          ConnectorType.DATABASE,
+          ConnectorType.TERMINAL,
+          ConnectorType.EMAIL,
+        ].includes(connectorType)
+      ) {
         throw recoverableToolError(
           tTool(runtime, "tools.access_connector.errorConnectorTypeRequired"),
           {

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { pickObject } from "./connector-fields.js";
+import { ConnectorType } from "../../constants/index.js";
 
 function normalizeLookupKey(input = "") {
   return String(input || "")
@@ -46,12 +47,12 @@ function collectConnectorMapsByType({
 } = {}) {
   const normalizedType = String(connectorType || "").trim().toLowerCase();
   const connectorToolConfigKey =
-    normalizedType === "database"
-      ? "database_connect_connector"
-      : normalizedType === "terminal"
-        ? "terminal_connect_connector"
-        : normalizedType === "email"
-          ? "email_connect_connector"
+    normalizedType === ConnectorType.DATABASE
+      ? ConnectorType.CONNECT_TOOL_NAME.DATABASE
+      : normalizedType === ConnectorType.TERMINAL
+        ? ConnectorType.CONNECT_TOOL_NAME.TERMINAL
+        : normalizedType === ConnectorType.EMAIL
+          ? ConnectorType.CONNECT_TOOL_NAME.EMAIL
           : "";
   const scopedConnectorMap = pickObject(
     connectorToolConfigKey

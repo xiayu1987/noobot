@@ -5,6 +5,7 @@
  */
 import { BACKEND_I18N } from "../../../i18n/backend-messages.js";
 import { pickToolText } from "../../core/tool-i18n.js";
+import { ConnectorType } from "../../constants/index.js";
 
 function tConnectorField(locale = "zh-CN", key = "", params = {}) {
   return pickToolText({
@@ -53,7 +54,7 @@ function normalizeProvidedDefaults(defaultValuesInput = {}, allowedKeys = []) {
 }
 
 function databaseFields(databaseType = "", locale = "zh-CN") {
-  if (databaseType === "sqlite") {
+  if (databaseType === ConnectorType.DATABASE_ENGINE.SQLITE) {
     return [
       {
         name: "file_path",
@@ -84,7 +85,7 @@ function databaseFields(databaseType = "", locale = "zh-CN") {
 }
 
 function terminalFields(terminalType = "", locale = "zh-CN") {
-  if (terminalType !== "ssh") return [];
+  if (terminalType !== ConnectorType.TERMINAL_PROTOCOL.SSH) return [];
   return [
     {
       name: "host",
