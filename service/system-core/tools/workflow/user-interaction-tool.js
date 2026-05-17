@@ -158,7 +158,9 @@ export function createUserInteractionTool({ agentContext }) {
           typeof fields === "string" && String(fields || "").trim()
             ? JSON.parse(fields)
             : fields || {};
-        normalizedFieldsPayload = fieldsPayloadSchema.parse(parsedFields || {});
+        normalizedFieldsPayload = Array.isArray(parsedFields)
+          ? fieldsPayloadSchema.parse({ fields: parsedFields })
+          : fieldsPayloadSchema.parse(parsedFields || {});
       } catch (error) {
         throw recoverableToolError(
           tUserInteraction(runtime, "invalidFieldsPayload", {
