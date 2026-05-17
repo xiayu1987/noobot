@@ -13,6 +13,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { createConnectorTools } from "./connector-toolkit.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { SandboxConfig } from "../constants/index.js";
 
 
 export function createConnectorAccessTool({ agentContext }) {
@@ -95,7 +96,7 @@ export function createConnectorAccessTool({ agentContext }) {
                 ? runtime.systemRuntime.config.selectedConnectors
                 : {},
             toolPolicy: {
-              mode: "custom_only",
+              mode: SandboxConfig.TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: subTools,
               forceIncludeUserInteraction: false,
             },

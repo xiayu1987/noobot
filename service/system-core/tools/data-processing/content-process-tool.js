@@ -16,6 +16,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { SandboxConfig } from "../constants/index.js";
 
 export function createContentProcessTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
@@ -139,7 +140,7 @@ export function createContentProcessTool({ agentContext }) {
               runtime?.systemRuntime?.config?.selectedConnectors || {},
             ),
             toolPolicy: {
-              mode: "custom_only",
+              mode: SandboxConfig.TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: contentProcessTools,
             },
             runtimeModel: resolvedModelName || "",
