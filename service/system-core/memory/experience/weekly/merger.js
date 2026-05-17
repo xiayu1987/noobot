@@ -12,7 +12,7 @@ export async function mergeDomainTextForDates({
 } = {}) {
   const domainMap = new Map();
   for (const dateKey of Array.isArray(dateKeys) ? dateKeys : []) {
-    const dayDir = storage.experienceLessonsDailyDir(basePath, dateKey);
+    const dayDir = storage.dailySummaryDateDir(basePath, dateKey);
     const entries = await storage.safeReadDirEntries(dayDir);
     for (const entry of entries) {
       if (!entry.isFile() || !entry.name.endsWith(".md")) continue;

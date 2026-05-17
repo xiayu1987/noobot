@@ -17,16 +17,16 @@ export function longPath(basePath) {
   return path.join(basePath, "memory/long-memory.json");
 }
 
-export function experienceLessonsDir(basePath) {
-  return path.join(basePath, "memory/experience-lessons");
+export function summaryPipelineDir(basePath) {
+  return path.join(basePath, "memory/summary_pipeline");
 }
 
-export function experienceLessonsMetadataPath(basePath) {
-  return path.join(experienceLessonsDir(basePath), "metadata.json");
+export function summaryPipelineMetadataPath(basePath) {
+  return path.join(summaryPipelineDir(basePath), "metadata.json");
 }
 
-export function experienceLessonsModelPath(basePath) {
-  return path.join(basePath, "memory/experience-lessons-model.json");
+export function summaryPipelineModelPath(basePath) {
+  return path.join(basePath, "memory/summary-pipeline-model.json");
 }
 
 export function dailySummaryDir(basePath) {
@@ -45,8 +45,25 @@ export function yearlySummaryDir(basePath) {
   return path.join(basePath, "memory/yearly_summary");
 }
 
-export function experienceLessonsDailyDir(basePath, dateKey = "") {
+export function dailySummaryDateDir(basePath, dateKey = "") {
   return path.join(dailySummaryDir(basePath), dateKey);
+}
+
+// Backward-compatible aliases (deprecated)
+export function experienceLessonsDir(basePath) {
+  return summaryPipelineDir(basePath);
+}
+
+export function experienceLessonsMetadataPath(basePath) {
+  return summaryPipelineMetadataPath(basePath);
+}
+
+export function experienceLessonsModelPath(basePath) {
+  return summaryPipelineModelPath(basePath);
+}
+
+export function experienceLessonsDailyDir(basePath, dateKey = "") {
+  return dailySummaryDateDir(basePath, dateKey);
 }
 
 export function sessionFile(basePath, sessionId, parentSessionId = "") {
