@@ -20,7 +20,7 @@ import { ERROR_CODE } from "../../../error/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
-  ATTACHMENT_SOURCE,
+  TOOL_ATTACHMENT_SOURCE,
   CONNECTOR_TYPE,
   TOOL_NAME,
   TOOL_RESULT_STATUS,
@@ -70,8 +70,8 @@ function buildAccessConnectorTool(context = {}) {
               sessionId: runtimeSessionId,
               attachmentSource:
                 generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ
-                  ? ATTACHMENT_SOURCE.EMAIL
-                  : ATTACHMENT_SOURCE.MODEL,
+                  ? TOOL_ATTACHMENT_SOURCE.EMAIL
+                  : TOOL_ATTACHMENT_SOURCE.MODEL,
               artifacts: sourceArtifacts,
               generationSource,
             });
@@ -82,8 +82,8 @@ function buildAccessConnectorTool(context = {}) {
           attachmentSource: String(
             attachmentItem?.attachmentSource ||
               (generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ
-                ? ATTACHMENT_SOURCE.EMAIL
-                : ATTACHMENT_SOURCE.MODEL),
+                ? TOOL_ATTACHMENT_SOURCE.EMAIL
+                : TOOL_ATTACHMENT_SOURCE.MODEL),
           ).trim(),
           name: String(attachmentItem?.name || "").trim(),
           mimeType: String(

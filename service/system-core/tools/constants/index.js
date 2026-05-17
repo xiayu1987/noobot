@@ -106,7 +106,7 @@ export const TOOL_CALLER = Object.freeze({
   BOT: "bot",
 });
 
-export const ATTACHMENT_SOURCE = Object.freeze({
+export const TOOL_ATTACHMENT_SOURCE = Object.freeze({
   MODEL: "model",
   EMAIL: "email",
 });
