@@ -259,9 +259,6 @@ function resolveMemoryHelpPaths(agentContext = {}) {
     weeklySummaryDir: path.join(memoryDir, "weekly_summary"),
     monthlySummaryDir: path.join(memoryDir, "monthly_summary"),
     yearlySummaryDir: path.join(memoryDir, "yearly_summary"),
-    // backward-compatible path hints
-    summaryPipelineModelPath: path.join(memoryDir, "summary-pipeline-model.json"),
-    summaryPipelineDir: path.join(memoryDir, "summary_pipeline"),
   };
 }
 

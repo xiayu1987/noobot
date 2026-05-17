@@ -41,7 +41,7 @@ function resolveUserIdFromBasePath(storage, basePath = "") {
   return String(userId || "").trim();
 }
 
-async function ensureSummaryPipelineModelIfMissing(storage, basePath = "") {
+async function ensureExperienceModelIfMissing(storage, basePath = "") {
   const modelPath = storage.experienceModelPath(basePath);
   if (await storage.fileExists(modelPath)) return true;
   const workspaceRoot = String(storage?.globalConfig?.workspaceRoot || "").trim();
@@ -59,33 +59,16 @@ async function ensureSummaryPipelineModelIfMissing(storage, basePath = "") {
   return storage.fileExists(modelPath);
 }
 
-export async function readSummaryPipelineModel(storage, basePath = "") {
+export async function readExperienceModel(storage, basePath = "") {
   if (!basePath) return {};
   const modelPath = storage.experienceModelPath(basePath);
-  await ensureSummaryPipelineModelIfMissing(storage, basePath);
-  let raw = await storage.readJson(modelPath, null);
-  if (raw && typeof raw === "object") {
-    return normalizeModelTree(raw);
-  }
-  const legacySummaryPipelineModelPath = path.join(
-    basePath,
-    "memory/summary-pipeline-model.json",
-  );
-  raw = await storage.readJson(legacySummaryPipelineModelPath, null);
-  if (raw && typeof raw === "object") {
-    const normalized = normalizeModelTree(raw);
-    await writeSummaryPipelineModel(storage, basePath, normalized);
-    return normalized;
-  }
-  const legacyModelPath = path.join(basePath, "memory/experience-lessons-model.json");
-  raw = await storage.readJson(legacyModelPath, null);
+  await ensureExperienceModelIfMissing(storage, basePath);
+  const raw = await storage.readJson(modelPath, null);
   if (!(raw && typeof raw === "object")) return {};
-  const normalized = normalizeModelTree(raw);
-  await writeSummaryPipelineModel(storage, basePath, normalized);
-  return normalized;
+  return normalizeModelTree(raw);
 }
 
-export async function writeSummaryPipelineModel(storage, basePath = "", payload = {}) {
+export async function writeExperienceModel(storage, basePath = "", payload = {}) {
   if (!basePath) return false;
   const modelPath = storage.experienceModelPath(basePath);
   await storage.ensureDir(path.dirname(modelPath));
@@ -93,7 +76,7 @@ export async function writeSummaryPipelineModel(storage, basePath = "", payload 
   return true;
 }
 
-export function upsertSummaryPipelineModelEntries(modelTree = {}, entries = []) {
+export function upsertExperienceModelEntries(modelTree = {}, entries = []) {
   const tree = normalizeModelTree(modelTree);
   let changed = false;
   for (const entry of Array.isArray(entries) ? entries : []) {
@@ -118,12 +101,3 @@ export function upsertSummaryPipelineModelEntries(modelTree = {}, entries = []) 
   }
   return { changed, model: tree };
 }
-
-export const readExperienceModel = readSummaryPipelineModel;
-export const writeExperienceModel = writeSummaryPipelineModel;
-export const upsertExperienceModelEntries = upsertSummaryPipelineModelEntries;
-
-// Backward-compatible aliases (deprecated)
-export const readExperienceLessonsModel = readSummaryPipelineModel;
-export const writeExperienceLessonsModel = writeSummaryPipelineModel;
-export const upsertExperienceLessonsModelEntries = upsertSummaryPipelineModelEntries;

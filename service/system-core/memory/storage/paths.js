@@ -49,35 +49,6 @@ export function dailySummaryDateDir(basePath, dateKey = "") {
   return path.join(dailySummaryDir(basePath), dateKey);
 }
 
-// Backward-compatible aliases (deprecated)
-export function summaryPipelineDir(basePath) {
-  return experienceDir(basePath);
-}
-
-export function summaryPipelineMetadataPath(basePath) {
-  return experienceMetadataPath(basePath);
-}
-
-export function summaryPipelineModelPath(basePath) {
-  return experienceModelPath(basePath);
-}
-
-export function experienceLessonsDir(basePath) {
-  return experienceDir(basePath);
-}
-
-export function experienceLessonsMetadataPath(basePath) {
-  return experienceMetadataPath(basePath);
-}
-
-export function experienceLessonsModelPath(basePath) {
-  return experienceModelPath(basePath);
-}
-
-export function experienceLessonsDailyDir(basePath, dateKey = "") {
-  return dailySummaryDateDir(basePath, dateKey);
-}
-
 export function sessionFile(basePath, sessionId, parentSessionId = "") {
   return parentSessionId
     ? path.join(

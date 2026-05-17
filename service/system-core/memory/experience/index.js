@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import path from "node:path";
 import { dedupeTextList } from "../utils/text.js";
 import { buildDailyExperiencePrompt } from "../prompts/builders.js";
 import { appendParseErrorLog } from "../parsers/error-logger.js";
@@ -39,12 +38,7 @@ export class ExperienceManager {
       null,
     );
     if (!metadata || typeof metadata !== "object") {
-      const legacyPath = path.join(basePath, "memory/experience-lessons/metadata.json");
-      metadata = await this.storage.readJson(legacyPath, null);
-      if (metadata && typeof metadata === "object") {
-        await this.storage.ensureDir(this.storage.experienceDir(basePath));
-        await this.storage.writeJson(this.storage.experienceMetadataPath(basePath), metadata);
-      }
+      metadata = null;
     }
     metadata = metadata && typeof metadata === "object"
       ? metadata
