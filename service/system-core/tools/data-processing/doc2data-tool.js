@@ -18,6 +18,7 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { IMAGE_EXTENSIONS, TEXT_EXTENSIONS } from "./file-extension-constants.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -25,50 +26,6 @@ function getRuntime(agentContext) {
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_DIRECT_TEXT_BYTES = 8 * 1024 * 1024;
-
-const DIRECT_TEXT_EXTENSIONS = new Set([
-  ".txt",
-  ".md",
-  ".markdown",
-  ".json",
-  ".jsonl",
-  ".csv",
-  ".tsv",
-  ".xml",
-  ".html",
-  ".htm",
-  ".yaml",
-  ".yml",
-  ".ini",
-  ".conf",
-  ".cfg",
-  ".log",
-  ".sql",
-  ".toml",
-  ".env",
-  ".properties",
-  ".sh",
-  ".bash",
-  ".zsh",
-  ".ps1",
-  ".bat",
-  ".cmd",
-  ".js",
-  ".mjs",
-  ".cjs",
-  ".ts",
-  ".tsx",
-  ".jsx",
-  ".py",
-  ".java",
-  ".go",
-  ".rs",
-  ".c",
-  ".cc",
-  ".cpp",
-  ".h",
-  ".hpp",
-]);
 
 const IMAGE_EXTENSION_TO_MIME = {
   ".png": "image/png",
@@ -81,6 +38,7 @@ const IMAGE_EXTENSION_TO_MIME = {
 function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
   const extension = path.extname(String(filePath || "")).toLowerCase();
   void preferredMediaType;
+  if (!IMAGE_EXTENSIONS.has(extension)) return "application/octet-stream";
   return (
     IMAGE_EXTENSION_TO_MIME[extension] ||
     "application/octet-stream"
@@ -142,7 +100,7 @@ async function readDirectTextDocumentIfAvailable(filePath = "") {
 
   const extension = path.extname(normalizedFilePath).toLowerCase();
   const contentBuffer = await readFile(normalizedFilePath);
-  const extensionMarkedAsText = DIRECT_TEXT_EXTENSIONS.has(extension);
+  const extensionMarkedAsText = TEXT_EXTENSIONS.has(extension);
   const canReadAsText = extensionMarkedAsText || isLikelyUtf8Text(contentBuffer);
   if (!canReadAsText) return null;
 
