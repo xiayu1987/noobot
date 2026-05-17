@@ -19,7 +19,7 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { ToolName, ToolResultStatus } from "../constants/index.js";
+import { TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import {
   AUDIO_EXTENSION_TO_MIME,
   AUDIO_EXTENSIONS,
@@ -268,7 +268,7 @@ export function createMedia2DataTool({ agentContext }) {
   if (!basePath) return [];
 
   const media2dataTool = new DynamicStructuredTool({
-    name: ToolName.MEDIA_TO_DATA,
+    name: TOOL_NAME.MEDIA_TO_DATA,
     description: tTool(runtime, "tools.media2data.description"),
     schema: z.object({
       filePath: z.string().describe(tTool(runtime, "tools.media2data.fieldFilePath")),
@@ -363,10 +363,10 @@ export function createMedia2DataTool({ agentContext }) {
         streaming: false,
       });
       return toToolJsonResult(
-        ToolName.MEDIA_TO_DATA,
+        TOOL_NAME.MEDIA_TO_DATA,
         {
           ok: true,
-          status: ToolResultStatus.COMPLETED,
+          status: TOOL_RESULT_STATUS.COMPLETED,
           mode: `${mediaType}_model`,
           input: inputFile,
           text: modelResult.text,

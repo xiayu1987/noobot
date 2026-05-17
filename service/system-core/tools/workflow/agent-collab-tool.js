@@ -12,7 +12,7 @@ import { createDelegateTaskTool } from "./agent-collab/tool-delegate-task.js";
 import { createWaitAsyncTaskResultTool } from "./agent-collab/tool-wait-async-result.js";
 import { createPlanMultiTaskCollaborationTool } from "./agent-collab/tool-plan-collab.js";
 import { cloneData } from "./agent-collab/collab-task-utils.js";
-import { ToolName } from "../constants/index.js";
+import { TOOL_NAME } from "../constants/index.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -28,9 +28,9 @@ export function createAgentCollabTool({ agentContext }) {
   const effectiveConfig = mergeConfig(runtime.globalConfig || {}, runtime.userConfig || {});
 
   const delegateTaskAsyncConfig =
-    effectiveConfig?.tools?.[ToolName.DELEGATE_TASK_ASYNC] &&
-    typeof effectiveConfig.tools[ToolName.DELEGATE_TASK_ASYNC] === "object"
-      ? effectiveConfig.tools[ToolName.DELEGATE_TASK_ASYNC]
+    effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC] &&
+    typeof effectiveConfig.tools[TOOL_NAME.DELEGATE_TASK_ASYNC] === "object"
+      ? effectiveConfig.tools[TOOL_NAME.DELEGATE_TASK_ASYNC]
       : {};
   const runConfigPassthrough =
     delegateTaskAsyncConfig?.runConfigPassthrough &&
@@ -67,11 +67,11 @@ export function createAgentCollabTool({ agentContext }) {
   };
 
   const defaultWaitMs = Number(
-    effectiveConfig?.tools?.[ToolName.DELEGATE_TASK_ASYNC]?.waitTimeoutMs ?? 120000,
+    effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.waitTimeoutMs ?? 120000,
   );
   const defaultPollIntervalMs = Number(
-    effectiveConfig?.tools?.[ToolName.WAIT_ASYNC_TASK_RESULT]?.pollIntervalMs ??
-      effectiveConfig?.tools?.[ToolName.DELEGATE_TASK_ASYNC]?.pollIntervalMs ??
+    effectiveConfig?.tools?.[TOOL_NAME.WAIT_ASYNC_TASK_RESULT]?.pollIntervalMs ??
+      effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.pollIntervalMs ??
       5000,
   );
 

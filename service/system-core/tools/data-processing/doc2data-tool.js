@@ -18,7 +18,7 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { ToolDataMode, ToolName, ToolResultStatus } from "../constants/index.js";
+import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import {
   DEFAULT_MIME_TYPE,
   IMAGE_EXTENSION_TO_MIME,
@@ -158,7 +158,7 @@ export function createDoc2DataTool({ agentContext }) {
   if (!basePath) return [];
 
   const doc2dataTool = new DynamicStructuredTool({
-    name: ToolName.DOC_TO_DATA,
+    name: TOOL_NAME.DOC_TO_DATA,
     description: tTool(runtime, "tools.doc2data.description"),
     schema: z.object({
       filePath: z.string().describe(tTool(runtime, "tools.doc2data.fieldFilePath")),
@@ -194,11 +194,11 @@ export function createDoc2DataTool({ agentContext }) {
       const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
       if (directTextDocument) {
         return toToolJsonResult(
-          ToolName.DOC_TO_DATA,
+          TOOL_NAME.DOC_TO_DATA,
           {
             ok: true,
-            status: ToolResultStatus.COMPLETED,
-            mode: ToolDataMode.DIRECT_TEXT,
+            status: TOOL_RESULT_STATUS.COMPLETED,
+            mode: TOOL_DATA_MODE.DIRECT_TEXT,
             input: inputFile,
             text: directTextDocument.text,
             summary: {
@@ -279,11 +279,11 @@ export function createDoc2DataTool({ agentContext }) {
         .reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
 
       return toToolJsonResult(
-        ToolName.DOC_TO_DATA,
+        TOOL_NAME.DOC_TO_DATA,
         {
           ok: true,
-          status: ToolResultStatus.COMPLETED,
-          mode: ToolDataMode.IMAGE_MODEL,
+          status: TOOL_RESULT_STATUS.COMPLETED,
+          mode: TOOL_DATA_MODE.IMAGE_MODEL,
           input: converted.input,
           pdfPath: converted.pdfPath,
           imageCount: images.length,

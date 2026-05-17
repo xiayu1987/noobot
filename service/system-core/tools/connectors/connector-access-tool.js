@@ -14,10 +14,10 @@ import { isAbortError } from "../../utils/error-utils.js";
 import { createConnectorTools } from "./connector-toolkit.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import {
-  SandboxConfig,
-  ToolCaller,
-  ToolName,
-  ToolResultStatus,
+  SANDBOX_CONFIG,
+  TOOL_CALLER,
+  TOOL_NAME,
+  TOOL_RESULT_STATUS,
 } from "../constants/index.js";
 
 
@@ -28,7 +28,7 @@ export function createConnectorAccessTool({ agentContext }) {
     runtime?.userConfig || {},
   );
   const processConnectorTaskEnabled =
-    effectiveConfig?.tools?.[ToolName.PROCESS_CONNECTOR_TOOL]?.enabled !== false;
+    effectiveConfig?.tools?.[TOOL_NAME.PROCESS_CONNECTOR_TOOL]?.enabled !== false;
   if (!processConnectorTaskEnabled) return [];
 
   const botManager = runtime?.botManager || null;
@@ -42,12 +42,12 @@ export function createConnectorAccessTool({ agentContext }) {
   const allowUserInteraction =
     systemRuntime?.config?.allowUserInteraction !== false;
   const maxToolLoopTurns = Number(
-    effectiveConfig?.tools?.[ToolName.PROCESS_CONNECTOR_TOOL]?.maxToolLoopTurns ??
+    effectiveConfig?.tools?.[TOOL_NAME.PROCESS_CONNECTOR_TOOL]?.maxToolLoopTurns ??
       6,
   );
 
   const processConnectorTaskTool = new DynamicStructuredTool({
-    name: ToolName.PROCESS_CONNECTOR_TOOL,
+    name: TOOL_NAME.PROCESS_CONNECTOR_TOOL,
     description: tTool(runtime, "tools.process_connector.description"),
     schema: z.object({
       task: z.string().describe(tTool(runtime, "tools.process_connector.fieldTask")),
@@ -88,7 +88,7 @@ export function createConnectorAccessTool({ agentContext }) {
           userId,
           sessionId: subSessionId,
           message: normalizedTask,
-          caller: ToolCaller.BOT,
+          caller: TOOL_CALLER.BOT,
           parentSessionId: sessionId,
           parentDialogProcessId,
           eventListener,
@@ -101,7 +101,7 @@ export function createConnectorAccessTool({ agentContext }) {
                 ? runtime.systemRuntime.config.selectedConnectors
                 : {},
             toolPolicy: {
-              mode: SandboxConfig.TOOL_POLICY_MODE.CUSTOM_ONLY,
+              mode: SANDBOX_CONFIG.TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: subTools,
               forceIncludeUserInteraction: false,
             },
@@ -127,10 +127,10 @@ export function createConnectorAccessTool({ agentContext }) {
           ),
         );
         return toToolJsonResult(
-          ToolName.PROCESS_CONNECTOR_TOOL,
+          TOOL_NAME.PROCESS_CONNECTOR_TOOL,
           {
             ok: true,
-            status: ToolResultStatus.COMPLETED,
+            status: TOOL_RESULT_STATUS.COMPLETED,
             sessionId: subSessionId,
             parentSessionId: sessionId,
             answer,

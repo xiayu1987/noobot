@@ -19,11 +19,11 @@ import { findConnectedConnector, tConnector } from "./connector-runtime.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import {
-  ArtifactGenerationSource,
-  AttachmentSource,
-  ConnectorType,
-  ToolName,
-  ToolResultStatus,
+  ARTIFACT_GENERATION_SOURCE,
+  ATTACHMENT_SOURCE,
+  CONNECTOR_TYPE,
+  TOOL_NAME,
+  TOOL_RESULT_STATUS,
 } from "../../constants/index.js";
 
 function buildAccessConnectorTool(context = {}) {
@@ -37,11 +37,11 @@ function buildAccessConnectorTool(context = {}) {
     maxAccessOutputChars,
   } = context;
   const resolveReconnectToolName = (connectorType = "") =>
-    connectorType === ConnectorType.DATABASE
-      ? ConnectorType.CONNECT_TOOL_NAME.DATABASE
-      : connectorType === ConnectorType.TERMINAL
-        ? ConnectorType.CONNECT_TOOL_NAME.TERMINAL
-        : ConnectorType.CONNECT_TOOL_NAME.EMAIL;
+    connectorType === CONNECTOR_TYPE.DATABASE
+      ? CONNECTOR_TYPE.CONNECT_TOOL_NAME.DATABASE
+      : connectorType === CONNECTOR_TYPE.TERMINAL
+        ? CONNECTOR_TYPE.CONNECT_TOOL_NAME.TERMINAL
+        : CONNECTOR_TYPE.CONNECT_TOOL_NAME.EMAIL;
   const buildEmailAttachmentHandler = () => {
     const userId = String(runtime?.userId || "").trim();
     const attachmentService = runtime?.attachmentService || null;
@@ -55,10 +55,10 @@ function buildAccessConnectorTool(context = {}) {
           "",
       ).trim();
       const generationSource = String(
-        options?.generationSource || ArtifactGenerationSource.EMAIL_CONNECTOR_READ,
+        options?.generationSource || ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ,
       ).trim();
       const savedRecords =
-        generationSource === ArtifactGenerationSource.EMAIL_CONNECTOR_READ &&
+        generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ &&
         typeof attachmentService.ingestEmailArtifacts === "function"
           ? await attachmentService.ingestEmailArtifacts({
               userId,
@@ -69,9 +69,9 @@ function buildAccessConnectorTool(context = {}) {
               userId,
               sessionId: runtimeSessionId,
               attachmentSource:
-                generationSource === ArtifactGenerationSource.EMAIL_CONNECTOR_READ
-                  ? AttachmentSource.EMAIL
-                  : AttachmentSource.MODEL,
+                generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ
+                  ? ATTACHMENT_SOURCE.EMAIL
+                  : ATTACHMENT_SOURCE.MODEL,
               artifacts: sourceArtifacts,
               generationSource,
             });
@@ -81,9 +81,9 @@ function buildAccessConnectorTool(context = {}) {
           sessionId: String(attachmentItem?.sessionId || runtimeSessionId).trim(),
           attachmentSource: String(
             attachmentItem?.attachmentSource ||
-              (generationSource === ArtifactGenerationSource.EMAIL_CONNECTOR_READ
-                ? AttachmentSource.EMAIL
-                : AttachmentSource.MODEL),
+              (generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ
+                ? ATTACHMENT_SOURCE.EMAIL
+                : ATTACHMENT_SOURCE.MODEL),
           ).trim(),
           name: String(attachmentItem?.name || "").trim(),
           mimeType: String(
@@ -107,17 +107,17 @@ function buildAccessConnectorTool(context = {}) {
     };
   };
   return {
-    name: ToolName.ACCESS_CONNECTOR,
-    description: tToolDescription(runtime, ToolName.ACCESS_CONNECTOR),
+    name: TOOL_NAME.ACCESS_CONNECTOR,
+    description: tToolDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR),
     schemaShape: {
       connector_name: {
-        description: tToolParamDescription(runtime, ToolName.ACCESS_CONNECTOR, "connector_name"),
+        description: tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "connector_name"),
       },
       connector_type: {
-        description: tToolParamDescription(runtime, ToolName.ACCESS_CONNECTOR, "connector_type"),
+        description: tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "connector_type"),
       },
       command: {
-        description: tToolParamDescription(runtime, ToolName.ACCESS_CONNECTOR, "command"),
+        description: tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "command"),
       },
     },
     async func({ connector_name, connector_type, command }) {
@@ -134,9 +134,9 @@ function buildAccessConnectorTool(context = {}) {
       const connectorType = normalizeConnectorType(connector_type);
       if (
         ![
-          ConnectorType.DATABASE,
-          ConnectorType.TERMINAL,
-          ConnectorType.EMAIL,
+          CONNECTOR_TYPE.DATABASE,
+          CONNECTOR_TYPE.TERMINAL,
+          CONNECTOR_TYPE.EMAIL,
         ].includes(connectorType)
       ) {
         throw recoverableToolError(
@@ -217,7 +217,7 @@ function buildAccessConnectorTool(context = {}) {
           {
             code: ERROR_CODE.RECOVERABLE_CONNECTOR_NEEDS_RECONNECT,
             details: {
-              status: ToolResultStatus.NEEDS_RECONNECT,
+              status: TOOL_RESULT_STATUS.NEEDS_RECONNECT,
               reconnect_required: true,
               reconnect_tool: reconnectToolName,
               connector: {
@@ -252,12 +252,12 @@ function buildAccessConnectorTool(context = {}) {
           result?.output?.stderr || result?.output?.stdout || "",
         ).trim();
         return toToolJsonResult(
-          ToolName.ACCESS_CONNECTOR,
+          TOOL_NAME.ACCESS_CONNECTOR,
           {
             ok: result?.ok === true,
             status: result?.ok
-              ? ToolResultStatus.COMPLETED
-              : ToolResultStatus.FAILED,
+              ? TOOL_RESULT_STATUS.COMPLETED
+              : TOOL_RESULT_STATUS.FAILED,
             message: result?.ok
               ? tConnector(runtime, "execCompleted")
               : tConnector(runtime, "execFailed", {

@@ -19,6 +19,6 @@ export {
   ASYNC_JOB_RETENTION_MS,
   SESSION_ASYNC_STATUS,
   SESSION_ASYNC_TERMINAL_STATUSES,
-  TaskStatus,
+  TASK_STATUS,
   VALID_CALLER_ROLES,
 } from "../config/constants.js";

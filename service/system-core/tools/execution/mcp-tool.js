@@ -16,17 +16,17 @@ import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import {
-  SandboxConfig,
-  ToolCaller,
-  ToolEventName,
-  ToolName,
-  ToolResultStatus,
+  SANDBOX_CONFIG,
+  TOOL_CALLER,
+  TOOL_EVENT_NAME,
+  TOOL_NAME,
+  TOOL_RESULT_STATUS,
 } from "../constants/index.js";
 
 export function createMcpTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
   const callMcpTaskTool = new DynamicStructuredTool({
-    name: ToolName.CALL_MCP_TASK,
+    name: TOOL_NAME.CALL_MCP_TASK,
     description: tTool(runtime, "tools.mcp.description"),
     schema: z.object({
       mcpName: z.string().describe(tTool(runtime, "tools.mcp.fieldMcpName")),
@@ -72,7 +72,7 @@ export function createMcpTool({ agentContext }) {
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
       const maxToolLoopTurns = Number(
-        effectiveConfig?.tools?.[ToolName.CALL_MCP_TASK]?.maxToolLoopTurns ??
+        effectiveConfig?.tools?.[TOOL_NAME.CALL_MCP_TASK]?.maxToolLoopTurns ??
           6,
       );
       try {
@@ -107,7 +107,7 @@ export function createMcpTool({ agentContext }) {
           userId,
           sessionId: subSessionId,
           message: subTaskMessage,
-          caller: ToolCaller.BOT,
+          caller: TOOL_CALLER.BOT,
           parentSessionId,
           parentDialogProcessId,
           eventListener,
@@ -118,7 +118,7 @@ export function createMcpTool({ agentContext }) {
               runtime?.systemRuntime?.config?.selectedConnectors || {},
             ),
             toolPolicy: {
-              mode: SandboxConfig.TOOL_POLICY_MODE.CUSTOM_ONLY,
+              mode: SANDBOX_CONFIG.TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: mcpToolset.tools,
             },
             runtimeModel: resolvedModelName || "",
@@ -146,11 +146,11 @@ export function createMcpTool({ agentContext }) {
           ),
         );
         return toToolJsonResult(
-          ToolName.CALL_MCP_TASK,
+          TOOL_NAME.CALL_MCP_TASK,
           {
             ok: true,
             mcpName: normalizedMcpName,
-            status: ToolResultStatus.COMPLETED,
+            status: TOOL_RESULT_STATUS.COMPLETED,
             sessionId: subSessionId,
             parentSessionId,
             tools: mcpToolset.toolNames || [],
@@ -178,8 +178,8 @@ export function createMcpTool({ agentContext }) {
             mcpName: normalizedMcpName,
             task: normalizedTask,
             modelName: resolvedModelName,
-            source: ToolName.CALL_MCP_TASK,
-            event: ToolEventName.CALL_MCP_TASK_FAILED,
+            source: TOOL_NAME.CALL_MCP_TASK,
+            event: TOOL_EVENT_NAME.CALL_MCP_TASK_FAILED,
             message: error?.message || String(error),
             stack: error?.stack || "",
             details:

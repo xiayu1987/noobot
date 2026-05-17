@@ -19,11 +19,11 @@ import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import {
-  ArtifactGenerationSource,
-  AttachmentSource,
-  ToolCallMode,
-  ToolName,
-  ToolResultStatus,
+  ARTIFACT_GENERATION_SOURCE,
+  ATTACHMENT_SOURCE,
+  TOOL_CALL_MODE,
+  TOOL_NAME,
+  TOOL_RESULT_STATUS,
 } from "../constants/index.js";
 
 function tMultimodal(runtime = {}, key = "", params = {}) {
@@ -200,7 +200,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
     runtime?.userConfig || {},
   );
   const toolEnabled =
-    effectiveConfig?.tools?.[ToolName.MULTIMODAL_GENERATE]?.enabled !== false;
+    effectiveConfig?.tools?.[TOOL_NAME.MULTIMODAL_GENERATE]?.enabled !== false;
   if (!toolEnabled) return [];
 
   const globalConfig = runtime?.globalConfig || {};
@@ -215,7 +215,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         : null;
 
   const multimodalGenerateTool = new DynamicStructuredTool({
-    name: ToolName.MULTIMODAL_GENERATE,
+    name: TOOL_NAME.MULTIMODAL_GENERATE,
     description: tTool(runtime, "tools.multimodal.description"),
     schema: z.object({
       generation_content: z
@@ -323,9 +323,9 @@ export function createMultimodalGenerateTool({ agentContext }) {
                     runtime?.systemRuntime?.rootSessionId ||
                     "",
                 ).trim(),
-                attachmentSource: AttachmentSource.MODEL,
+                attachmentSource: ATTACHMENT_SOURCE.MODEL,
                 artifacts: generatedAttachments,
-                generationSource: ArtifactGenerationSource.MULTIMODAL_GENERATE_TOOL,
+                generationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
               })
             : [];
         const attachmentMetas = mapAttachmentRecordsToMetas(
@@ -333,16 +333,16 @@ export function createMultimodalGenerateTool({ agentContext }) {
           {
             fallbackMimeType: MIME_TYPE.IMAGE_PNG,
             fallbackGenerationSource:
-              ArtifactGenerationSource.MULTIMODAL_GENERATE_TOOL,
+              ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
             userId,
           },
         );
         return toToolJsonResult(
-          ToolName.MULTIMODAL_GENERATE,
+          TOOL_NAME.MULTIMODAL_GENERATE,
           {
             ok: true,
-            status: ToolResultStatus.COMPLETED,
-            callMode: ToolCallMode.OPENAI_RESPONSES_API,
+            status: TOOL_RESULT_STATUS.COMPLETED,
+            callMode: TOOL_CALL_MODE.OPENAI_RESPONSES_API,
             modelAlias: String(resolvedModelSpec?.alias || "").trim(),
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),

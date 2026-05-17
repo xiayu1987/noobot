@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const SandboxConfig = Object.freeze({
+export const SANDBOX_CONFIG = Object.freeze({
   PROVIDERS: Object.freeze({
     DOCKER: "docker",
     BUBBLEWRAP: "bubblewrap",
@@ -25,7 +25,7 @@ export const SandboxConfig = Object.freeze({
   }),
 });
 
-export const ConnectorType = Object.freeze({
+export const CONNECTOR_TYPE = Object.freeze({
   DATABASE: "database",
   TERMINAL: "terminal",
   EMAIL: "email",
@@ -47,7 +47,7 @@ export const ConnectorType = Object.freeze({
   }),
 });
 
-export const ToolName = Object.freeze({
+export const TOOL_NAME = Object.freeze({
   READ_FILE: "read_file",
   WRITE_FILE: "write_file",
   WAIT: "wait",
@@ -77,7 +77,7 @@ export const ToolName = Object.freeze({
   EMAIL_CONNECT_CONNECTOR: "email_connect_connector",
 });
 
-export const ToolConfigAliasKey = Object.freeze({
+export const TOOL_CONFIG_ALIAS_KEY = Object.freeze({
   FILE: "file",
   SKILL: "skill",
   SERVICE: "service",
@@ -86,11 +86,11 @@ export const ToolConfigAliasKey = Object.freeze({
   MODEL: "model",
 });
 
-export const ToolResultState = Object.freeze({
+export const TOOL_RESULT_STATE = Object.freeze({
   OK: "OK",
 });
 
-export const ToolResultStatus = Object.freeze({
+export const TOOL_RESULT_STATUS = Object.freeze({
   RUNNING: "running",
   COMPLETED: "completed",
   FAILED: "failed",
@@ -102,31 +102,31 @@ export const ToolResultStatus = Object.freeze({
   NEEDS_RECONNECT: "needs_reconnect",
 });
 
-export const ToolCaller = Object.freeze({
+export const TOOL_CALLER = Object.freeze({
   BOT: "bot",
 });
 
-export const AttachmentSource = Object.freeze({
+export const ATTACHMENT_SOURCE = Object.freeze({
   MODEL: "model",
   EMAIL: "email",
 });
 
-export const ArtifactGenerationSource = Object.freeze({
+export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
   MULTIMODAL_GENERATE_TOOL: "multimodal_generate_tool",
   EMAIL_CONNECTOR_READ: "email_connector_read",
 });
 
-export const ToolCallMode = Object.freeze({
+export const TOOL_CALL_MODE = Object.freeze({
   OPENAI_RESPONSES_API: "openai_responses_api",
 });
 
-export const ToolDataMode = Object.freeze({
+export const TOOL_DATA_MODE = Object.freeze({
   DIRECT_TEXT: "direct_text",
   IMAGE_MODEL: "image_model",
   DIRECT: "direct",
   BROWSER_SIMULATE: "browser_simulate",
 });
 
-export const ToolEventName = Object.freeze({
+export const TOOL_EVENT_NAME = Object.freeze({
   CALL_MCP_TASK_FAILED: "call_mcp_task_failed",
 });

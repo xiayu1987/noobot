@@ -25,14 +25,14 @@ import { cleanTerminalOutputForLLM } from "../../utils/cleaners/output-cleaner.j
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { SandboxConfig, ToolName } from "../constants/index.js";
+import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
 
-const TOOL_NAME = ToolName.EXECUTE_SCRIPT;
+const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
 const DEFAULT_TIMEOUT = 120000;
 const DEFAULT_MAX_OUTPUT_CHARS = 20000;
-const SANDBOX_PROVIDER_NAME = SandboxConfig.PROVIDERS;
-const DOCKER_SANDBOX_DEFAULT = SandboxConfig.DOCKER;
-const SANDBOX_COMMAND = SandboxConfig.COMMANDS;
+const SANDBOX_PROVIDER_NAME = SANDBOX_CONFIG.PROVIDERS;
+const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
+const SANDBOX_COMMAND = SANDBOX_CONFIG.COMMANDS;
 
 function run(cmd, cwd, timeoutMs) {
   return new Promise((resolve) => {
@@ -152,7 +152,7 @@ function normalizeScriptOutput(r = {}, policy = {}) {
 
 function toolExecResult(mode, r = {}, extra = {}, outputPolicy = {}) {
   const { normalized, cleaned } = normalizeScriptOutput(r, outputPolicy);
-  return toToolJsonResult(TOOL_NAME, {
+  return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
     ok: Number(normalized?.code || 0) === 0,
     mode,
     output_cleaned: cleaned,
@@ -345,10 +345,10 @@ export function createScriptTool({ agentContext }) {
   const userRoot = basePath;
   const userId = String(runtime?.userId || "").trim();
   const scriptConfig =
-    effectiveConfig?.tools?.[TOOL_NAME] &&
-    typeof effectiveConfig.tools[TOOL_NAME] === "object" &&
-    !Array.isArray(effectiveConfig.tools[TOOL_NAME])
-      ? effectiveConfig.tools[TOOL_NAME]
+    effectiveConfig?.tools?.[EXECUTE_SCRIPT_TOOL_NAME] &&
+    typeof effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME] === "object" &&
+    !Array.isArray(effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME])
+      ? effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME]
       : {};
   const sandboxEnabled = !!scriptConfig?.sandboxMode;
   const { provider: sandboxProvider, providerDetail } =
@@ -364,7 +364,7 @@ export function createScriptTool({ agentContext }) {
   });
 
   const execute_script = new DynamicStructuredTool({
-    name: TOOL_NAME,
+    name: EXECUTE_SCRIPT_TOOL_NAME,
     description,
     schema: z.object({
       command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),

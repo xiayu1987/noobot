@@ -8,7 +8,7 @@
 // Async Domain Constants
 // ========================
 
-export const TaskStatus = Object.freeze({
+export const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
   FAILED: "failed",
   FULFILLED: "fulfilled",
@@ -21,17 +21,17 @@ export const TaskStatus = Object.freeze({
 
 export const ASYNC_JOB_STATUS = {
   PENDING: "pending",
-  RUNNING: TaskStatus.RUNNING,
-  COMPLETED: TaskStatus.COMPLETED,
-  FAILED: TaskStatus.FAILED,
+  RUNNING: TASK_STATUS.RUNNING,
+  COMPLETED: TASK_STATUS.COMPLETED,
+  FAILED: TASK_STATUS.FAILED,
   CANCELLED: "cancelled",
 };
 
 export const SESSION_ASYNC_STATUS = {
-  RUNNING: TaskStatus.RUNNING,
-  COMPLETED: TaskStatus.COMPLETED,
-  FAILED: TaskStatus.FAILED,
-  STOPPED: TaskStatus.STOPPED,
+  RUNNING: TASK_STATUS.RUNNING,
+  COMPLETED: TASK_STATUS.COMPLETED,
+  FAILED: TASK_STATUS.FAILED,
+  STOPPED: TASK_STATUS.STOPPED,
   ERROR: "error",
   NOT_FOUND: "not_found",
   INVALID_REQUEST: "invalid_request",
