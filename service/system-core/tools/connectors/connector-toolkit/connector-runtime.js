@@ -8,6 +8,7 @@ import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { pickObject } from "./connector-fields.js";
 import { matchesSensitiveFieldPattern } from "../../core/sensitive-field-patterns.js";
+import { ConnectorType } from "../../constants/index.js";
 
 function tConnector(runtime = {}, key = "", params = {}) {
   const normalizedKey = String(key || "").trim();
@@ -29,18 +30,38 @@ function addRuntimeConnectorChannel(runtime = {}, connector = {}) {
   const normalizedType = String(connector?.connectorType || "")
     .trim()
     .toLowerCase();
-  if (!["database", "terminal", "email"].includes(normalizedType)) return;
+  if (
+    ![
+      ConnectorType.DATABASE,
+      ConnectorType.TERMINAL,
+      ConnectorType.EMAIL,
+    ].includes(normalizedType)
+  ) {
+    return;
+  }
   const bucketKey =
-    normalizedType === "database"
-      ? "databases"
-      : normalizedType === "terminal"
-        ? "terminals"
-        : "emails";
+    normalizedType === ConnectorType.DATABASE
+      ? ConnectorType.CHANNEL_BUCKET.DATABASE
+      : normalizedType === ConnectorType.TERMINAL
+        ? ConnectorType.CHANNEL_BUCKET.TERMINAL
+        : ConnectorType.CHANNEL_BUCKET.EMAIL;
   const current = pickObject(runtime?.connectorChannels);
   const next = {
-    databases: Array.isArray(current?.databases) ? [...current.databases] : [],
-    terminals: Array.isArray(current?.terminals) ? [...current.terminals] : [],
-    emails: Array.isArray(current?.emails) ? [...current.emails] : [],
+    [ConnectorType.CHANNEL_BUCKET.DATABASE]: Array.isArray(
+      current?.[ConnectorType.CHANNEL_BUCKET.DATABASE],
+    )
+      ? [...current[ConnectorType.CHANNEL_BUCKET.DATABASE]]
+      : [],
+    [ConnectorType.CHANNEL_BUCKET.TERMINAL]: Array.isArray(
+      current?.[ConnectorType.CHANNEL_BUCKET.TERMINAL],
+    )
+      ? [...current[ConnectorType.CHANNEL_BUCKET.TERMINAL]]
+      : [],
+    [ConnectorType.CHANNEL_BUCKET.EMAIL]: Array.isArray(
+      current?.[ConnectorType.CHANNEL_BUCKET.EMAIL],
+    )
+      ? [...current[ConnectorType.CHANNEL_BUCKET.EMAIL]]
+      : [],
   };
   const list = next[bucketKey];
   const targetName = String(connector?.connectorName || "").trim();
@@ -58,7 +79,15 @@ function upsertRuntimeSelectedConnector(
 ) {
   const normalizedType = normalizeConnectorType(connectorType);
   const normalizedName = String(connectorName || "").trim();
-  if (!["database", "terminal", "email"].includes(normalizedType)) return;
+  if (
+    ![
+      ConnectorType.DATABASE,
+      ConnectorType.TERMINAL,
+      ConnectorType.EMAIL,
+    ].includes(normalizedType)
+  ) {
+    return;
+  }
   if (!normalizedName) return;
   if (!runtime.systemRuntime || typeof runtime.systemRuntime !== "object") {
     runtime.systemRuntime = {};
@@ -86,11 +115,11 @@ function findConnectedConnector({
   if (!store || typeof store.getSessionConnectors !== "function") return null;
   const allConnectors = store.getSessionConnectors(String(rootSessionId || "").trim());
   const bucket =
-    String(connectorType || "").trim() === "database"
-      ? "databases"
-      : String(connectorType || "").trim() === "terminal"
-        ? "terminals"
-        : "emails";
+    String(connectorType || "").trim() === ConnectorType.DATABASE
+      ? ConnectorType.CHANNEL_BUCKET.DATABASE
+      : String(connectorType || "").trim() === ConnectorType.TERMINAL
+        ? ConnectorType.CHANNEL_BUCKET.TERMINAL
+        : ConnectorType.CHANNEL_BUCKET.EMAIL;
   const sourceList = Array.isArray(allConnectors?.[bucket]) ? allConnectors[bucket] : [];
   const normalizedName = String(connectorName || "").trim();
   return (

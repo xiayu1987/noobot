@@ -7,6 +7,7 @@ import { z } from "zod";
 import { normalizeDatabaseType } from "../../../config/index.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { createConnectConnectorTool } from "../base-connector-tool.js";
+import { ConnectorType } from "../../constants/index.js";
 import {
   databaseFields,
   normalizeProvidedDatabaseDefaults,
@@ -16,8 +17,8 @@ export function createDatabaseConnectorTools(context = {}) {
   const { runtime } = context;
   return [
     createConnectConnectorTool({
-      connectorType: "database",
-      toolName: "database_connect_connector",
+      connectorType: ConnectorType.DATABASE,
+      toolName: ConnectorType.CONNECT_TOOL_NAME.DATABASE,
       extraSchemaParams: [
         {
           name: "database_type",

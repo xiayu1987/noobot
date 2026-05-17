@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createConnectConnectorTool } from "../base-connector-tool.js";
+import { ConnectorType } from "../../constants/index.js";
 import {
   emailFields,
   normalizeProvidedEmailDefaults,
@@ -12,8 +13,8 @@ import {
 export function createEmailConnectorTools(context = {}) {
   return [
     createConnectConnectorTool({
-      connectorType: "email",
-      toolName: "email_connect_connector",
+      connectorType: ConnectorType.EMAIL,
+      toolName: ConnectorType.CONNECT_TOOL_NAME.EMAIL,
       normalizeDefaults: normalizeProvidedEmailDefaults,
       getFields: (_type, locale) => emailFields("", locale),
       context,
