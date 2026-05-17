@@ -25,9 +25,9 @@ import { cleanTerminalOutputForLLM } from "../../utils/cleaners/output-cleaner.j
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { SandboxConfig } from "../constants/index.js";
+import { SandboxConfig, ToolName } from "../constants/index.js";
 
-const TOOL_NAME = "execute_script";
+const TOOL_NAME = ToolName.EXECUTE_SCRIPT;
 const DEFAULT_TIMEOUT = 120000;
 const DEFAULT_MAX_OUTPUT_CHARS = 20000;
 const SANDBOX_PROVIDER_NAME = SandboxConfig.PROVIDERS;
@@ -345,10 +345,10 @@ export function createScriptTool({ agentContext }) {
   const userRoot = basePath;
   const userId = String(runtime?.userId || "").trim();
   const scriptConfig =
-    effectiveConfig?.tools?.execute_script &&
-    typeof effectiveConfig.tools.execute_script === "object" &&
-    !Array.isArray(effectiveConfig.tools.execute_script)
-      ? effectiveConfig.tools.execute_script
+    effectiveConfig?.tools?.[TOOL_NAME] &&
+    typeof effectiveConfig.tools[TOOL_NAME] === "object" &&
+    !Array.isArray(effectiveConfig.tools[TOOL_NAME])
+      ? effectiveConfig.tools[TOOL_NAME]
       : {};
   const sandboxEnabled = !!scriptConfig?.sandboxMode;
   const { provider: sandboxProvider, providerDetail } =

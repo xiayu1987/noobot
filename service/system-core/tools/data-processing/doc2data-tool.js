@@ -18,6 +18,7 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { ToolDataMode, ToolName, ToolResultStatus } from "../constants/index.js";
 import { IMAGE_EXTENSIONS, TEXT_EXTENSIONS } from "./file-extension-constants.js";
 
 function getRuntime(agentContext) {
@@ -160,7 +161,7 @@ export function createDoc2DataTool({ agentContext }) {
   if (!basePath) return [];
 
   const doc2dataTool = new DynamicStructuredTool({
-    name: "doc_to_data",
+    name: ToolName.DOC_TO_DATA,
     description: tTool(runtime, "tools.doc2data.description"),
     schema: z.object({
       filePath: z.string().describe(tTool(runtime, "tools.doc2data.fieldFilePath")),
@@ -196,11 +197,11 @@ export function createDoc2DataTool({ agentContext }) {
       const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
       if (directTextDocument) {
         return toToolJsonResult(
-          "doc_to_data",
+          ToolName.DOC_TO_DATA,
           {
             ok: true,
-            status: "completed",
-            mode: "direct_text",
+            status: ToolResultStatus.COMPLETED,
+            mode: ToolDataMode.DIRECT_TEXT,
             input: inputFile,
             text: directTextDocument.text,
             summary: {
@@ -281,11 +282,11 @@ export function createDoc2DataTool({ agentContext }) {
         .reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
 
       return toToolJsonResult(
-        "doc_to_data",
+        ToolName.DOC_TO_DATA,
         {
           ok: true,
-          status: "completed",
-          mode: "image_model",
+          status: ToolResultStatus.COMPLETED,
+          mode: ToolDataMode.IMAGE_MODEL,
           input: converted.input,
           pdfPath: converted.pdfPath,
           imageCount: images.length,

@@ -53,6 +53,7 @@ import { createDatabaseConnectorTools } from "./connector-toolkit/tool-connect-d
 import { createTerminalConnectorTools } from "./connector-toolkit/tool-connect-terminal.js";
 import { createEmailConnectorTools } from "./connector-toolkit/tool-connect-email.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { ToolName, ToolResultStatus } from "../constants/index.js";
 
 function createConnectorTools({ agentContext } = {}) {
   const connectorToolContext = createConnectorToolContext(agentContext);
@@ -82,8 +83,8 @@ function createConnectorTools({ agentContext } = {}) {
   });
 
   const inspectConnectorsTool = new DynamicStructuredTool({
-    name: "inspect_connectors",
-    description: tToolDescription(runtime, "inspect_connectors"),
+    name: ToolName.INSPECT_CONNECTORS,
+    description: tToolDescription(runtime, ToolName.INSPECT_CONNECTORS),
     schema: z.object({}),
     func: async () => {
       if (!store || typeof store.inspectSessionConnectors !== "function") {
@@ -123,12 +124,12 @@ function createConnectorTools({ agentContext } = {}) {
       if (totalCount <= 0) {
         const noConnectorMessage = tConnector(runtime, "noConnectorsFound");
         throw recoverableToolError(noConnectorMessage, {
-          code: ERROR_CODE.RECOVERABLE_NO_CONNECTORS_FOUND,
-          details: {
-            status: "no_connectors",
-            connectors: {
-              databases,
-              terminals,
+            code: ERROR_CODE.RECOVERABLE_NO_CONNECTORS_FOUND,
+            details: {
+              status: ToolResultStatus.NO_CONNECTORS,
+              connectors: {
+                databases,
+                terminals,
               emails,
             },
             summary: {
@@ -141,10 +142,10 @@ function createConnectorTools({ agentContext } = {}) {
         });
       }
       return toToolJsonResult(
-        "inspect_connectors",
+        ToolName.INSPECT_CONNECTORS,
         {
           ok: true,
-          status: "completed",
+          status: ToolResultStatus.COMPLETED,
           connectors: {
             databases,
             terminals,

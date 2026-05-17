@@ -15,12 +15,18 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { SandboxConfig } from "../constants/index.js";
+import {
+  SandboxConfig,
+  ToolCaller,
+  ToolEventName,
+  ToolName,
+  ToolResultStatus,
+} from "../constants/index.js";
 
 export function createMcpTool({ agentContext }) {
   const runtime = agentContext?.runtime || {};
   const callMcpTaskTool = new DynamicStructuredTool({
-    name: "call_mcp_task",
+    name: ToolName.CALL_MCP_TASK,
     description: tTool(runtime, "tools.mcp.description"),
     schema: z.object({
       mcpName: z.string().describe(tTool(runtime, "tools.mcp.fieldMcpName")),
@@ -66,7 +72,7 @@ export function createMcpTool({ agentContext }) {
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
       const maxToolLoopTurns = Number(
-        effectiveConfig?.tools?.call_mcp_task?.maxToolLoopTurns ??
+        effectiveConfig?.tools?.[ToolName.CALL_MCP_TASK]?.maxToolLoopTurns ??
           6,
       );
       try {
@@ -101,7 +107,7 @@ export function createMcpTool({ agentContext }) {
           userId,
           sessionId: subSessionId,
           message: subTaskMessage,
-          caller: "bot",
+          caller: ToolCaller.BOT,
           parentSessionId,
           parentDialogProcessId,
           eventListener,
@@ -140,11 +146,11 @@ export function createMcpTool({ agentContext }) {
           ),
         );
         return toToolJsonResult(
-          "call_mcp_task",
+          ToolName.CALL_MCP_TASK,
           {
             ok: true,
             mcpName: normalizedMcpName,
-            status: "completed",
+            status: ToolResultStatus.COMPLETED,
             sessionId: subSessionId,
             parentSessionId,
             tools: mcpToolset.toolNames || [],
@@ -172,8 +178,8 @@ export function createMcpTool({ agentContext }) {
             mcpName: normalizedMcpName,
             task: normalizedTask,
             modelName: resolvedModelName,
-            source: "call_mcp_task",
-            event: "call_mcp_task_failed",
+            source: ToolName.CALL_MCP_TASK,
+            event: ToolEventName.CALL_MCP_TASK_FAILED,
             message: error?.message || String(error),
             stack: error?.stack || "",
             details:

@@ -13,10 +13,11 @@ import {
 } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
+import { ToolName, ToolResultState } from "../constants/index.js";
 
 export function createFileTool({ agentContext }) {
   const readFileTool = new DynamicStructuredTool({
-    name: "read_file",
+    name: ToolName.READ_FILE,
     description: tTool(agentContext, "tools.file.readDescription"),
     schema: z.object({
       filePath: z.string().describe(tTool(agentContext, "tools.file.readFilePathField")),
@@ -30,7 +31,7 @@ export function createFileTool({ agentContext }) {
         mustExist: true,
       });
       const content = await readFile(resolvedPath, "utf8");
-      return toToolJsonResult("read_file", {
+      return toToolJsonResult(ToolName.READ_FILE, {
         ok: true,
         resolvedPath,
         fileName: path.basename(resolvedPath),
@@ -40,7 +41,7 @@ export function createFileTool({ agentContext }) {
   });
 
   const writeFileTool = new DynamicStructuredTool({
-    name: "write_file",
+    name: ToolName.WRITE_FILE,
     description: tTool(agentContext, "tools.file.writeDescription"),
     schema: z.object({
       filePath: z.string().describe(tTool(agentContext, "tools.file.writeFilePathField")),
@@ -55,9 +56,9 @@ export function createFileTool({ agentContext }) {
       });
       await mkdir(path.dirname(resolvedPath), { recursive: true });
       await writeFile(resolvedPath, content, "utf8");
-      return toToolJsonResult("write_file", {
+      return toToolJsonResult(ToolName.WRITE_FILE, {
         ok: true,
-        state: "OK",
+        state: ToolResultState.OK,
         resolvedPath,
         fileName: path.basename(resolvedPath),
       });

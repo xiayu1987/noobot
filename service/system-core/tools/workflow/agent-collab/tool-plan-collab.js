@@ -17,6 +17,7 @@ import { recoverableToolError } from "../../../error/index.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { ERROR_CODE } from "../../../error/constants.js";
+import { ToolName } from "../../constants/index.js";
 
 export function createPlanMultiTaskCollaborationTool({
   runtime,
@@ -24,7 +25,7 @@ export function createPlanMultiTaskCollaborationTool({
   userConfig,
 }) {
   return new DynamicStructuredTool({
-    name: "plan_multi_task_collaboration",
+    name: ToolName.PLAN_MULTI_TASK_COLLABORATION,
     description: tTool(runtime, "tools.agent_collab.planDescription"),
     schema: z.object({
       task: z.string().describe(tTool(runtime, "tools.agent_collab.fieldPlanTask")),
@@ -98,7 +99,7 @@ export function createPlanMultiTaskCollaborationTool({
       }
 
       return toToolJsonResult(
-        "plan_multi_task_collaboration",
+        ToolName.PLAN_MULTI_TASK_COLLABORATION,
         {
           ok: true,
           task: taskText,

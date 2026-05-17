@@ -29,6 +29,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { normalizeText } from '../../utils/shared-utils.js';
 import { ERROR_CODE } from "../../error/constants.js";
+import { ToolDataMode, ToolName, ToolResultStatus } from "../constants/index.js";
 import { IMAGE_EXTENSIONS, TEXT_EXTENSIONS } from "./file-extension-constants.js";
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
@@ -276,8 +277,8 @@ async function runDirectFetchExtract(
         const fullText = extractVisibleTextFromHtml(html);
         return {
           url,
-          status: res.ok ? "ok" : "error",
-          mode: "direct",
+          status: res.ok ? ToolResultStatus.OK : ToolResultStatus.ERROR,
+          mode: ToolDataMode.DIRECT,
           title: pageTitle,
           usefulText: cleanAndDedupTextLines(
             `${pageTitle ? `# ${pageTitle}\n` : ""}${readableText || fullText}`,
@@ -289,8 +290,8 @@ async function runDirectFetchExtract(
       } catch (error) {
         return {
           url,
-          status: "error",
-          mode: "direct",
+          status: ToolResultStatus.ERROR,
+          mode: ToolDataMode.DIRECT,
           title: "",
           usefulText: "",
           fullText: "",
@@ -348,8 +349,8 @@ async function runBrowserSimulateExtract(
         const fullText = cleanAndDedupTextLines(bodyInnerText, 10000);
         return {
           url,
-          status: "ok",
-          mode: "browser_simulate",
+          status: ToolResultStatus.OK,
+          mode: ToolDataMode.BROWSER_SIMULATE,
           title: pageTitle,
           usefulText: cleanAndDedupTextLines(
             `${pageTitle ? `# ${pageTitle}\n` : ""}${readableText || fullText}`,
@@ -361,8 +362,8 @@ async function runBrowserSimulateExtract(
       } catch (error) {
         return {
           url,
-          status: "error",
-          mode: "browser_simulate",
+          status: ToolResultStatus.ERROR,
+          mode: ToolDataMode.BROWSER_SIMULATE,
           title: "",
           usefulText: "",
           fullText: "",
@@ -546,7 +547,7 @@ export async function runWebToDataPipeline({
       }
       records.push({
         url: String(item?.url || ""),
-        status: "ok",
+        status: ToolResultStatus.OK,
         mode,
         usefulText,
         fullText,
@@ -581,14 +582,16 @@ export async function runWebToDataPipeline({
   }
 
   const records =
-    mode === "browser_simulate"
+    mode === ToolDataMode.BROWSER_SIMULATE
       ? await runBrowserSimulateExtract(resolvedUrls, parallelism, runtime)
       : await runDirectFetchExtract(resolvedUrls, parallelism, runtime);
-  const successCount = records.filter((recordItem) => recordItem?.status === "ok").length;
+  const successCount = records.filter(
+    (recordItem) => recordItem?.status === ToolResultStatus.OK,
+  ).length;
   if (successCount <= 0) {
     const errorMessages = records
       .map((recordItem) =>
-        recordItem?.status === "error"
+        recordItem?.status === ToolResultStatus.ERROR
           ? `${recordItem?.url || ""}: ${recordItem?.error || "unknown error"}`
           : "",
       )
@@ -645,12 +648,12 @@ export function createWeb2DataTool({ agentContext }) {
     runtime?.userConfig || {},
   );
   const processMode = normalizeProcessMode(
-    effectiveConfig?.tools?.web_to_data?.switchWebMode,
+    effectiveConfig?.tools?.[ToolName.WEB_TO_DATA]?.switchWebMode,
   );
   if (!basePath) return [];
 
   const webToDataTool = new DynamicStructuredTool({
-    name: "web_to_data",
+    name: ToolName.WEB_TO_DATA,
     description: tTool(runtime, "tools.web2data.description"),
     schema: z.object({
       input: z
@@ -693,10 +696,10 @@ export function createWeb2DataTool({ agentContext }) {
       }
       const text = String(payload?.text || "").trim();
       return toToolJsonResult(
-        "web_to_data",
+        ToolName.WEB_TO_DATA,
         {
           ok: true,
-          status: "completed",
+          status: ToolResultStatus.COMPLETED,
           mode: payload?.mode || processMode,
           message: "",
           input: payload?.input || input || "",
