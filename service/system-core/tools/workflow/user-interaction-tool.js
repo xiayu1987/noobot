@@ -9,6 +9,11 @@ import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import {
+  SENSITIVE_FIELD_PATTERNS,
+  normalizeSensitiveFieldText,
+  canonicalSensitiveFieldText,
+} from "../core/sensitive-field-patterns.js";
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -19,17 +24,15 @@ function tUserInteraction(runtime = {}, key = "", params = {}) {
 }
 
 const SENSITIVE_FIELD_KEYWORDS = [
-  "password",
+  ...SENSITIVE_FIELD_PATTERNS,
   "passwd",
   "pwd",
   "secret",
-  "token",
   "auth",
   "authorization",
   "bearer",
   "cookie",
   "session",
-  "api_key",
   "apikey",
   "app_key",
   "app_secret",
@@ -38,14 +41,10 @@ const SENSITIVE_FIELD_KEYWORDS = [
   "refresh_token",
   "private_key",
   "public_key",
-  "ssh_key",
   "client_secret",
   "client_id",
   "credential",
   "credentials",
-  "connection_string",
-  "dsn",
-  "jdbc",
   "uri",
   "conn_str",
   "密钥",
@@ -60,19 +59,6 @@ const SENSITIVE_FIELD_KEYWORDS = [
   "凭证",
 ];
 
-function normalizeSensitiveText(input = "") {
-  return String(input || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function canonicalSensitiveText(input = "") {
-  return normalizeSensitiveText(input).replace(/[_-]+/g, "");
-}
-
 function containsRelation(left = "", right = "") {
   const normalizedLeft = String(left || "").trim();
   const normalizedRight = String(right || "").trim();
@@ -85,11 +71,11 @@ function containsRelation(left = "", right = "") {
 
 function isSensitiveField(field = {}) {
   const texts = [
-    normalizeSensitiveText(field?.name || ""),
-    normalizeSensitiveText(field?.displayName || ""),
-    normalizeSensitiveText(field?.description || ""),
+    normalizeSensitiveFieldText(field?.name || ""),
+    normalizeSensitiveFieldText(field?.displayName || ""),
+    normalizeSensitiveFieldText(field?.description || ""),
   ];
-  const canonicalTexts = texts.map((item) => canonicalSensitiveText(item));
+  const canonicalTexts = texts.map((item) => canonicalSensitiveFieldText(item));
   const merged = texts.join(" ");
   const sensitivePatterns = [
     /\b(api|access|refresh|bearer|auth|session)[_\s-]?(key|token|secret)\b/i,
@@ -100,8 +86,8 @@ function isSensitiveField(field = {}) {
   if (sensitivePatterns.some((pattern) => pattern.test(merged))) return true;
   return texts.some((text, index) =>
     SENSITIVE_FIELD_KEYWORDS.some((keyword) => {
-      const normalizedKeyword = normalizeSensitiveText(keyword);
-      const canonicalKeyword = canonicalSensitiveText(keyword);
+      const normalizedKeyword = normalizeSensitiveFieldText(keyword);
+      const canonicalKeyword = canonicalSensitiveFieldText(keyword);
       return (
         text.includes(normalizedKeyword) ||
         canonicalTexts[index].includes(canonicalKeyword) ||

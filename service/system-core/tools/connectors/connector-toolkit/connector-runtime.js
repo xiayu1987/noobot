@@ -7,6 +7,7 @@ import { normalizeConnectorType } from "../../../config/index.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { pickObject } from "./connector-fields.js";
+import { matchesSensitiveFieldPattern } from "../../core/sensitive-field-patterns.js";
 
 function tConnector(runtime = {}, key = "", params = {}) {
   const normalizedKey = String(key || "").trim();
@@ -16,8 +17,10 @@ function tConnector(runtime = {}, key = "", params = {}) {
 
 function maskConnectionInfo(info = {}) {
   const out = { ...pickObject(info) };
-  for (const key of ["password", "connection_string", "connectionString"]) {
-    if (out[key]) out[key] = "***";
+  for (const key of Object.keys(out || {})) {
+    if (matchesSensitiveFieldPattern(key) && out[key]) {
+      out[key] = "***";
+    }
   }
   return out;
 }

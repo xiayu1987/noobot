@@ -10,6 +10,7 @@ import { executeEmailCommand } from "./emails/index.js";
 import { tSystem } from "../i18n/system-text.js";
 import { recoverableToolError } from "../error/index.js";
 import { ERROR_CODE } from "../error/constants.js";
+import { matchesSensitiveFieldPattern } from "../tools/core/sensitive-field-patterns.js";
 import {
   CONNECTOR_TYPE,
   normalizeConnectorType,
@@ -21,18 +22,7 @@ import {
 } from "./constants.js";
 
 function hasSensitiveKeyName(keyName = "") {
-  const normalizedKeyName = String(keyName || "").trim().toLowerCase();
-  if (!normalizedKeyName) return false;
-  return (
-    normalizedKeyName.includes("password") ||
-    normalizedKeyName.includes("passwd") ||
-    normalizedKeyName.includes("secret") ||
-    normalizedKeyName.includes("token") ||
-    normalizedKeyName.includes("apikey") ||
-    normalizedKeyName.includes("api_key") ||
-    normalizedKeyName.includes("connectionstring") ||
-    normalizedKeyName.includes("connection_string")
-  );
+  return matchesSensitiveFieldPattern(keyName);
 }
 
 function sanitizeConnectorMeta(connectionMeta = {}) {
