@@ -25,10 +25,14 @@ import { cleanTerminalOutputForLLM } from "../../utils/cleaners/output-cleaner.j
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { SandboxConfig } from "../constants/index.js";
 
 const TOOL_NAME = "execute_script";
 const DEFAULT_TIMEOUT = 120000;
 const DEFAULT_MAX_OUTPUT_CHARS = 20000;
+const SANDBOX_PROVIDER_NAME = SandboxConfig.PROVIDERS;
+const DOCKER_SANDBOX_DEFAULT = SandboxConfig.DOCKER;
+const SANDBOX_COMMAND = SandboxConfig.COMMANDS;
 
 function run(cmd, cwd, timeoutMs) {
   return new Promise((resolve) => {
@@ -62,9 +66,11 @@ function hasCommand(commandName = "") {
 function resolveSandboxProviderConfig(scriptConfig = {}) {
   const providerConfig = scriptConfig?.sandboxProvider;
   if (!providerConfig || typeof providerConfig !== "object" || Array.isArray(providerConfig)) {
-    return { provider: "docker", providerDetail: {} };
+    return { provider: SANDBOX_PROVIDER_NAME.DOCKER, providerDetail: {} };
   }
-  const provider = normalizeSandboxProvider(providerConfig?.default || "docker");
+  const provider = normalizeSandboxProvider(
+    providerConfig?.default || SANDBOX_PROVIDER_NAME.DOCKER,
+  );
   const detail =
     providerConfig?.[provider] &&
     typeof providerConfig?.[provider] === "object" &&
@@ -78,10 +84,12 @@ function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
   void scriptConfig;
   return {
     dockerContainerScope:
-      providerDetail?.dockerContainerScope || "global",
+      providerDetail?.dockerContainerScope ||
+      DOCKER_SANDBOX_DEFAULT.DEFAULT_CONTAINER_SCOPE,
     dockerContainerName:
-      providerDetail?.dockerContainerName || "noobot-script-sandbox",
-    dockerImage: providerDetail?.dockerImage || "node:20",
+      providerDetail?.dockerContainerName ||
+      DOCKER_SANDBOX_DEFAULT.DEFAULT_CONTAINER_NAME,
+    dockerImage: providerDetail?.dockerImage || DOCKER_SANDBOX_DEFAULT.DEFAULT_IMAGE,
     dockerMounts: Array.isArray(providerDetail?.dockerMounts)
       ? providerDetail.dockerMounts
       : [],
@@ -202,7 +210,7 @@ async function tryDockerFallback({
   fallbackFrom,
   warning,
 }) {
-  const dockerInstalled = await hasCommand("docker");
+  const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
   if (!dockerInstalled) return null;
   const { result: dr, docker } = await runDockerCommand({
     userRoot,
@@ -213,7 +221,7 @@ async function tryDockerFallback({
     scriptConfig,
   });
   return toolExecResult(
-    "docker",
+    SANDBOX_PROVIDER_NAME.DOCKER,
     dr,
     {
       fallbackFrom,
@@ -270,20 +278,20 @@ function buildScriptToolDescription({
       ]
     : [tTool(runtime, "tools.script.docker.mounts.none")];
   const providerDescriptionMap = {
-    bubblewrap: [
+    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: [
       tTool(runtime, "tools.script.bubblewrap.title"),
       tTool(runtime, "tools.script.bubblewrap.line1"),
       tTool(runtime, "tools.script.bubblewrap.line2"),
       tTool(runtime, "tools.script.bubblewrap.line3"),
       tTool(runtime, "tools.script.commonUserInstallHint"),
     ],
-    firejail: [
+    [SANDBOX_PROVIDER_NAME.FIREJAIL]: [
       tTool(runtime, "tools.script.firejail.title"),
       tTool(runtime, "tools.script.firejail.line1"),
       tTool(runtime, "tools.script.firejail.line2"),
       tTool(runtime, "tools.script.commonUserInstallHint"),
     ],
-    docker: [
+    [SANDBOX_PROVIDER_NAME.DOCKER]: [
       tTool(runtime, "tools.script.docker.title"),
       `- ${
         dockerScope === "user"
@@ -296,15 +304,15 @@ function buildScriptToolDescription({
   };
 
   const workdirDescriptionMap = {
-    firejail: [
+    [SANDBOX_PROVIDER_NAME.FIREJAIL]: [
       tTool(runtime, "tools.script.workdir.firejail.line1"),
       tTool(runtime, "tools.script.workdir.firejail.line2"),
     ],
-    bubblewrap: [
+    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: [
       tTool(runtime, "tools.script.workdir.bubblewrap.line1"),
       tTool(runtime, "tools.script.workdir.commonPathHint"),
     ],
-    docker:
+    [SANDBOX_PROVIDER_NAME.DOCKER]:
       dockerScope === "user"
         ? [
             tTool(runtime, "tools.script.workdir.docker.user.line1"),
@@ -318,8 +326,10 @@ function buildScriptToolDescription({
 
   return [
     `${tTool(runtime, "tools.script.sandboxModeTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.sandboxModeTitleSuffix")}`,
-    ...(providerDescriptionMap[sandboxProvider] || providerDescriptionMap.docker),
-    ...(workdirDescriptionMap[sandboxProvider] || workdirDescriptionMap.docker),
+    ...(providerDescriptionMap[sandboxProvider] ||
+      providerDescriptionMap[SANDBOX_PROVIDER_NAME.DOCKER]),
+    ...(workdirDescriptionMap[sandboxProvider] ||
+      workdirDescriptionMap[SANDBOX_PROVIDER_NAME.DOCKER]),
   ].join("\n");
 }
 
@@ -368,13 +378,17 @@ export function createScriptTool({ agentContext }) {
       }
 
       let sandboxCmd = "";
-      let mode = "docker";
+      let mode = SANDBOX_PROVIDER_NAME.DOCKER;
       let extra = {};
 
-      if (sandboxProvider === "bubblewrap") {
-        const bwrapInstalled = await hasCommand("bwrap");
+      if (sandboxProvider === SANDBOX_PROVIDER_NAME.BUBBLEWRAP) {
+        const bwrapInstalled = await hasCommand(SANDBOX_COMMAND.BUBBLEWRAP);
         if (!bwrapInstalled) {
-          throw missingCommandError("bubblewrap", "bwrap", runtime);
+          throw missingCommandError(
+            SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
+            SANDBOX_COMMAND.BUBBLEWRAP,
+            runtime,
+          );
         }
 
         const supportsOverlaySrc = await bwrapSupportsOption("--overlay-src");
@@ -387,14 +401,14 @@ export function createScriptTool({ agentContext }) {
             timeout,
             scriptConfig: dockerConfig,
             outputPolicy: scriptOutputPolicy,
-            fallbackFrom: "bubblewrap",
+            fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
             warning: tScript(runtime, "fallbackOverlaySrc"),
           });
           if (fallbackResult) return fallbackResult;
           throw scriptRuntimeError(tScript(runtime, "overlaySrcUnsupported"), {
             code: ERROR_CODE.RECOVERABLE_BWRAP_OVERLAY_SRC_UNSUPPORTED,
             details: {
-              mode: "bubblewrap",
+              mode: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
               code: 2,
             },
           });
@@ -415,7 +429,7 @@ export function createScriptTool({ agentContext }) {
             {
               code: ERROR_CODE.RECOVERABLE_BWRAP_OVERLAY_NOT_WRITABLE,
               details: {
-                mode: "bubblewrap",
+                mode: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
                 code: 13,
                 sandboxRoot: built.sandboxRoot,
                 overlayUpper: built.overlayUpper,
@@ -425,27 +439,35 @@ export function createScriptTool({ agentContext }) {
           );
         }
         sandboxCmd = built.cmd;
-        mode = "bubblewrap";
+        mode = SANDBOX_PROVIDER_NAME.BUBBLEWRAP;
         extra = {
           sandboxRoot: built.sandboxRoot,
           overlayUpper: built.overlayUpper,
           overlayWork: built.overlayWork,
           persistDir: built.persistDir,
         };
-      } else if (sandboxProvider === "firejail") {
-        const firejailInstalled = await hasCommand("firejail");
+      } else if (sandboxProvider === SANDBOX_PROVIDER_NAME.FIREJAIL) {
+        const firejailInstalled = await hasCommand(SANDBOX_COMMAND.FIREJAIL);
         if (!firejailInstalled) {
-          throw missingCommandError("firejail", "firejail", runtime);
+          throw missingCommandError(
+            SANDBOX_PROVIDER_NAME.FIREJAIL,
+            SANDBOX_COMMAND.FIREJAIL,
+            runtime,
+          );
         }
 
         const built = buildFirejailCommand({ userRoot, command });
         sandboxCmd = built.cmd;
-        mode = "firejail";
+        mode = SANDBOX_PROVIDER_NAME.FIREJAIL;
         extra = { sandboxHome: built.homeDir, persistDir: built.persistDir };
       } else {
-        const dockerInstalled = await hasCommand("docker");
+        const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
         if (!dockerInstalled) {
-          throw missingCommandError("docker", "docker", runtime);
+          throw missingCommandError(
+            SANDBOX_PROVIDER_NAME.DOCKER,
+            SANDBOX_COMMAND.DOCKER,
+            runtime,
+          );
         }
         const built = buildDockerCommand({
           userRoot,
@@ -477,7 +499,7 @@ export function createScriptTool({ agentContext }) {
 
       let runResult = await run(sandboxCmd, workspace, timeout);
       if (
-        mode === "bubblewrap" &&
+        mode === SANDBOX_PROVIDER_NAME.BUBBLEWRAP &&
         Number(runResult?.code || 0) !== 0 &&
         /Can't make overlay mount|userxattr:\s*Invalid argument/i.test(
           String(runResult?.stderr || ""),
@@ -491,7 +513,7 @@ export function createScriptTool({ agentContext }) {
           timeout,
           scriptConfig: dockerConfig,
           outputPolicy: scriptOutputPolicy,
-          fallbackFrom: "bubblewrap",
+          fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
           warning: tScript(runtime, "fallbackUserxattr"),
         });
         if (fallbackResult) return fallbackResult;
