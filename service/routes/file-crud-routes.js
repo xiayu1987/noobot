@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { safeJoin } from "../system-core/utils/fs-safe.js";
+import { safeJoin } from "#agent/utils";
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 
 /**

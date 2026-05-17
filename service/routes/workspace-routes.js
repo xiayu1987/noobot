@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "../system-core/tracking/console/logger.js";
+import { logError } from "#agent/tracking";
 import { mkdir, readdir } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";

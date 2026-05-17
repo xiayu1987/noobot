@@ -5,11 +5,11 @@
  */
 import { randomBytes } from "node:crypto";
 import { WebSocketServer } from "ws";
-import { normalizeSseLogEvent } from "../system-core/event/index.js";
-import { mergeConfig } from "../system-core/config/index.js";
-import { decryptPayloadBySessionId } from "../system-core/utils/session-crypto.js";
-import { logError } from "../system-core/tracking/index.js";
-import { HTTP_STATUS } from "../system-core/constants/index.js";
+import { normalizeSseLogEvent } from "#agent/event";
+import { mergeConfig } from "#agent/config";
+import { decryptPayloadBySessionId } from "#agent/session-crypto";
+import { logError } from "#agent/tracking";
+import { HTTP_STATUS } from "#agent/constants";
 
 const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const MIN_RUN_TIMEOUT_MS = 10000;
@@ -73,6 +73,7 @@ export function registerChatWebSocketServer(
   server,
   {
     bot,
+    getBot,
     resolveRequestLocale,
     resolveAuthByApiKey,
     isForbiddenUserScope,
@@ -82,6 +83,11 @@ export function registerChatWebSocketServer(
     translateText,
   } = {},
 ) {
+  const resolveBot = () => {
+    if (typeof getBot === "function") return getBot();
+    return bot;
+  };
+
   const webSocketServer = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (request, socket, head) => {
@@ -277,7 +283,7 @@ export function registerChatWebSocketServer(
           }
           rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", currentLocale)));
           try {
-            await bot?.persistStoppedAssistantMessage?.({
+            await resolveBot()?.persistStoppedAssistantMessage?.({
               userId: currentRunMeta?.userId || "",
               sessionId: currentRunMeta?.sessionId || "",
               parentSessionId: currentRunMeta?.parentSessionId || "",
@@ -329,8 +335,9 @@ export function registerChatWebSocketServer(
           throw new Error(translateText("auth.forbiddenUserScope", currentLocale));
         }
         const normalizedRunConfig = normalizeRunConfig(config);
+        const activeBot = resolveBot();
         const runTimeoutMs = await resolveEffectiveRunTimeoutMs({
-          bot,
+          bot: activeBot,
           userId,
           runConfig: normalizedRunConfig,
         });
@@ -399,7 +406,7 @@ export function registerChatWebSocketServer(
           },
         };
 
-        const result = await bot.runSession({
+        const result = await activeBot.runSession({
           userId,
           sessionId,
           parentSessionId,

@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "../system-core/tracking/console/logger.js";
+import { logError } from "#agent/tracking";
 import { randomBytes } from "node:crypto";
-import { HTTP_STATUS } from "../system-core/constants/index.js";
+import { HTTP_STATUS } from "#agent/constants";
 
 const DEFAULT_API_KEY_TTL_MS = 24 * 60 * 60 * 1000;
 

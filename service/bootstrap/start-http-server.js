@@ -20,7 +20,7 @@ export function startHttpServer({
 } = {}) {
   const server = createServer(app);
   registerChatWebSocketServer(server, {
-    bot: getBot(),
+    getBot,
     resolveRequestLocale,
     resolveAuthByApiKey,
     isForbiddenUserScope,

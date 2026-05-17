@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { HTTP_STATUS } from "../system-core/constants/index.js";
+import { HTTP_STATUS } from "#agent/constants";
 
 export function withJsonError(
   handler,

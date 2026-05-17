@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BotManager } from "../system-core/bot-manage/index.js";
-import { resolveConfigSecrets } from "../system-core/config/index.js";
+import { BotManager } from "#agent/bot-manage";
+import { resolveConfigSecrets } from "#agent/config";
 import {
   normalizeLocale,
   resolveLocaleFromAcceptLanguage,
   pickLocaleText,
   DEFAULT_LOCALE,
-} from "../system-core/i18n/index.js";
-import { BACKEND_I18N } from "../system-core/i18n/backend-messages.js";
+  BACKEND_I18N,
+} from "#agent/i18n";
 import { createAuthService } from "../services/auth-service.js";
 import { createChatRunService } from "../services/chat-run-service.js";
 import { createConfigParamsService } from "../services/config-params-service.js";

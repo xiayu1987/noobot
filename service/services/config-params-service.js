@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "../system-core/tracking/console/logger.js";
+import { logError } from "#agent/tracking";
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 

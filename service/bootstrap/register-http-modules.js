@@ -42,8 +42,25 @@ export function registerHttpModules(
     translateText,
   } = {},
 ) {
+  const workspaceService = {
+    ensureUserWorkspace: (...args) => bot?.ensureUserWorkspace?.(...args),
+    resetUserWorkspace: (...args) => bot?.resetUserWorkspace?.(...args),
+    syncUserWorkspace: (...args) => bot?.syncUserWorkspace?.(...args),
+    getWorkspacePath: (...args) => bot?.getWorkspacePath?.(...args),
+  };
+
+  const loadUserConfigForUser = async (userId = "") => {
+    const normalizedUserId = String(userId || "").trim();
+    if (!normalizedUserId) return {};
+    if (typeof bot?.getWorkspacePath !== "function") return {};
+    if (typeof bot?.loadUserConfig !== "function") return {};
+    const workspacePath = bot.getWorkspacePath(normalizedUserId);
+    return (await bot.loadUserConfig(workspacePath)) || {};
+  };
+
   registerAuthRoutes(app, {
-    workspaceService: bot?.workspaceService,
+    workspaceService,
+    loadUserConfigForUser,
     globalConfigProvider,
     issueApiKey,
     readWorkspaceUsers,
@@ -91,7 +108,7 @@ export function registerHttpModules(
   });
 
   registerWorkspaceRoutes(app, {
-    workspaceService: bot?.workspaceService,
+    workspaceService,
     workspaceRootPath,
     requireApiKey,
     requireSuperAdmin,

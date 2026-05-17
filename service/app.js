@@ -5,15 +5,13 @@
  */
 import "dotenv/config";
 import express from "express";
-import { loadGlobalConfig } from "./system-core/config/index.js";
+import { loadGlobalConfig } from "#agent/config";
 import {
   getConnectorChannelStore,
   initConnectorChannelStore,
-} from "./system-core/connectors/index.js";
-import {
   getConnectorHistoryStore,
   initConnectorHistoryStore,
-} from "./system-core/connectors/index.js";
+} from "#agent/connectors";
 import { createAppDependencies } from "./bootstrap/create-app-dependencies.js";
 import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewares.js";
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";

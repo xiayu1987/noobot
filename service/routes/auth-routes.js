@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logError } from "../system-core/tracking/console/logger.js";
+import { logError } from "#agent/tracking";
 import { withJsonError } from "./route-wrapper.js";
 
 function isPlainObject(value) {
@@ -80,6 +80,7 @@ export function registerAuthRoutes(
   app,
   {
     workspaceService,
+    loadUserConfigForUser,
     globalConfigProvider,
     issueApiKey,
     readWorkspaceUsers,
@@ -138,13 +139,9 @@ export function registerAuthRoutes(
       await workspaceService.ensureUserWorkspace(userId);
       let userScenarios = {};
       try {
-        const userWorkspacePath =
-          workspaceService && typeof workspaceService.getWorkspacePath === "function"
-            ? workspaceService.getWorkspacePath(userId)
-            : "";
         const loadedUserConfig =
-          userWorkspacePath && typeof bot.loadUserConfig === "function"
-            ? await bot.loadUserConfig(userWorkspacePath)
+          typeof loadUserConfigForUser === "function"
+            ? await loadUserConfigForUser(userId)
             : {};
         userScenarios =
           loadedUserConfig && typeof loadedUserConfig === "object"
