@@ -21,6 +21,36 @@ import { tTool } from "../core/tool-i18n.js";
 
 export const REQUEST_HELP_TOOL_NAME = "request_help";
 const DEFAULT_HELP_SERVICES = ["web_search_service"];
+const DEFAULT_QUERY_KEY = "q";
+const DEFAULT_SEARCH_ENDPOINT = "search";
+const TOOL_RESULT_STATUS = Object.freeze({
+  COMPLETED: "completed",
+  PARTIAL: "partial",
+  FAILED: "failed",
+});
+const PROMISE_STATUS = Object.freeze({
+  FULFILLED: "fulfilled",
+  REJECTED: "rejected",
+});
+const RUNTIME_KEYS = Object.freeze({
+  OBJECT: "object",
+});
+const MEMORY_PATHS = Object.freeze({
+  MEMORY_DIR: "memory",
+  LONG_MEMORY: "long-memory.json",
+  SHORT_MEMORY: "short-memory.json",
+  LONG_MEMORY_MODEL: "long-memory-model.json",
+  EXPERIENCE_MODEL: "experience-model.json",
+  EXPERIENCE_DIR: "experience",
+  DAILY_SUMMARY_DIR: "daily_summary",
+  WEEKLY_SUMMARY_DIR: "weekly_summary",
+  MONTHLY_SUMMARY_DIR: "monthly_summary",
+  YEARLY_SUMMARY_DIR: "yearly_summary",
+});
+const HELP_HINTS = Object.freeze({
+  EXPERIENCE:
+    "Use read_file/list tools to inspect memory paths for experience help.",
+});
 const REQUEST_HELP_TYPES = Object.freeze({
   ALL: "all_help",
   MODEL: "model_help",
@@ -82,7 +112,9 @@ function normalizeHelpServiceList(toolConfig = {}) {
       const customParam = normalizeName(
         item?.custom_param ?? item?.customParam ?? "",
       );
-      const queryKey = normalizeName(item?.query_key ?? item?.queryKey ?? "q");
+      const queryKey = normalizeName(
+        item?.query_key ?? item?.queryKey ?? DEFAULT_QUERY_KEY,
+      );
       const queryString =
         item?.queryString && typeof item.queryString === "object" && !Array.isArray(item.queryString)
           ? item.queryString
@@ -91,7 +123,7 @@ function normalizeHelpServiceList(toolConfig = {}) {
         serviceName,
         endpointName,
         customParam,
-        queryKey: queryKey || "q",
+        queryKey: queryKey || DEFAULT_QUERY_KEY,
         queryString,
       };
     })
@@ -106,7 +138,7 @@ function pickEndpointName(serviceCfg = {}, preferred = "") {
       : {};
   if (!Object.keys(endpoints).length) return "";
   if (configured && endpoints[configured]) return configured;
-  if (endpoints.search) return "search";
+  if (endpoints[DEFAULT_SEARCH_ENDPOINT]) return DEFAULT_SEARCH_ENDPOINT;
   return String(Object.keys(endpoints)[0] || "").trim();
 }
 
@@ -146,7 +178,7 @@ async function invokeOneHelpService({
   }
   const queryString = {
     ...(configItem?.queryString || {}),
-    [configItem?.queryKey || "q"]: helpContent,
+    [configItem?.queryKey || DEFAULT_QUERY_KEY]: helpContent,
   };
   try {
     const result = await invokeServiceHandler({
@@ -246,19 +278,19 @@ function resolveMemoryHelpPaths(agentContext = {}) {
     agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
   );
   if (!basePath) return {};
-  const memoryDir = path.join(basePath, "memory");
+  const memoryDir = path.join(basePath, MEMORY_PATHS.MEMORY_DIR);
   return {
     basePath,
     memoryDir,
-    longMemoryPath: path.join(memoryDir, "long-memory.json"),
-    shortMemoryPath: path.join(memoryDir, "short-memory.json"),
-    longMemoryModelPath: path.join(memoryDir, "long-memory-model.json"),
-    experienceModelPath: path.join(memoryDir, "experience-model.json"),
-    experienceDir: path.join(memoryDir, "experience"),
-    dailySummaryDir: path.join(memoryDir, "daily_summary"),
-    weeklySummaryDir: path.join(memoryDir, "weekly_summary"),
-    monthlySummaryDir: path.join(memoryDir, "monthly_summary"),
-    yearlySummaryDir: path.join(memoryDir, "yearly_summary"),
+    longMemoryPath: path.join(memoryDir, MEMORY_PATHS.LONG_MEMORY),
+    shortMemoryPath: path.join(memoryDir, MEMORY_PATHS.SHORT_MEMORY),
+    longMemoryModelPath: path.join(memoryDir, MEMORY_PATHS.LONG_MEMORY_MODEL),
+    experienceModelPath: path.join(memoryDir, MEMORY_PATHS.EXPERIENCE_MODEL),
+    experienceDir: path.join(memoryDir, MEMORY_PATHS.EXPERIENCE_DIR),
+    dailySummaryDir: path.join(memoryDir, MEMORY_PATHS.DAILY_SUMMARY_DIR),
+    weeklySummaryDir: path.join(memoryDir, MEMORY_PATHS.WEEKLY_SUMMARY_DIR),
+    monthlySummaryDir: path.join(memoryDir, MEMORY_PATHS.MONTHLY_SUMMARY_DIR),
+    yearlySummaryDir: path.join(memoryDir, MEMORY_PATHS.YEARLY_SUMMARY_DIR),
   };
 }
 
@@ -296,10 +328,10 @@ export function createRequestHelpTool({ agentContext } = {}) {
           REQUEST_HELP_TOOL_NAME,
           {
             ok: true,
-            status: "completed",
+            status: TOOL_RESULT_STATUS.COMPLETED,
             requestType: normalizedRequestType,
             helpContent: normalizedHelpContent,
-            hint: "Use read_file/list tools to inspect memory paths for experience help.",
+            hint: HELP_HINTS.EXPERIENCE,
             memoryHelpPaths,
           },
           true,
@@ -355,9 +387,9 @@ export function createRequestHelpTool({ agentContext } = {}) {
         modelPromise,
       ]);
       const serviceResults =
-        serviceSettled.status === "fulfilled" ? serviceSettled.value : [];
+        serviceSettled.status === PROMISE_STATUS.FULFILLED ? serviceSettled.value : [];
       const modelResult =
-        modelSettled.status === "fulfilled"
+        modelSettled.status === PROMISE_STATUS.FULFILLED
           ? modelSettled.value
           : {
               modelName: "",
@@ -365,7 +397,7 @@ export function createRequestHelpTool({ agentContext } = {}) {
               error: modelSettled.reason?.message || String(modelSettled.reason || ""),
             };
       const serviceError =
-        serviceSettled.status === "rejected"
+        serviceSettled.status === PROMISE_STATUS.REJECTED
           ? serviceSettled.reason?.message || String(serviceSettled.reason || "")
           : "";
       const hasServiceSuccess = serviceResults.some((item) => item?.ok === true);
@@ -375,16 +407,19 @@ export function createRequestHelpTool({ agentContext } = {}) {
         hasAnySuccess
           ? shouldCallServices && shouldCallModel
             ? hasServiceSuccess && hasModelSuccess
-              ? "completed"
-              : "partial"
-            : "completed"
-          : "failed";
+              ? TOOL_RESULT_STATUS.COMPLETED
+              : TOOL_RESULT_STATUS.PARTIAL
+            : TOOL_RESULT_STATUS.COMPLETED
+          : TOOL_RESULT_STATUS.FAILED;
 
-      if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
+      if (
+        runtime?.systemRuntime &&
+        typeof runtime.systemRuntime === RUNTIME_KEYS.OBJECT
+      ) {
         runtime.systemRuntime.toolConsecutiveFailureCount = 0;
       }
 
-      if (status === "failed") {
+      if (status === TOOL_RESULT_STATUS.FAILED) {
         throw recoverableToolError(
           modelResult?.error ||
             serviceError ||
