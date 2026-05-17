@@ -9,6 +9,10 @@ const DAILY_EXPERIENCE_JSON_SCHEMA_EXAMPLE =
 
 const WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
   '{"domain_name":"Current Domain", "categories":[{"category_name":"Category", "experiences":["Experience 1"], "lessons":["Lesson 1"]}]}';
+const MONTHLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
+  '{"domain_name":"Current Domain","categories":[{"category_name":"Category","subcategories":[{"subcategory_name":"Subcategory","patterns":["Pattern"],"methodologies":["Methodology"]}]}]}';
+const YEARLY_SUMMARY_JSON_SCHEMA_EXAMPLE =
+  '{"domain_name":"Current Domain","categories":[{"category_name":"Category","subcategories":[{"subcategory_name":"Subcategory","yearly_principles":["Principle"],"strategic_reflections":["Reflection"]}]}]}';
 
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
   contextPrompt: {
@@ -50,7 +54,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
           : JSON.stringify(params.existingLongMemory ?? "", null, 2);
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
       const modelRuleText = longMemoryModel
-        ? `Please strictly follow this long-term memory modeling rule (from long-memory-model.md):\n${longMemoryModel}`
+        ? `Please strictly follow this long-term memory modeling rule (from long-memory-model.json):\n${longMemoryModel}`
         : "If no memory model rule is provided, prioritize stable preferences and long-term constraints.";
       return [
         "You are a long-term memory refiner.",
@@ -82,17 +86,57 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
     weeklySummaryPrompt: (params = {}) => {
       const domainName = String(params.domainName || "").trim();
+      const knownCategoryText = String(params.knownCategoryText || "").trim();
       const mergedText = String(params.mergedText || "");
       return [
         "System Instruction:",
         `Create a structured weekly synthesis for the past 7 days of records in domain [${domainName}].`,
+        `Known categories: ${knownCategoryText || "None"}`,
         "",
         "Task Requirements:",
-        "1. Keep domain and categories at a high level; avoid overly granular labels (e.g., Programming, ProjectMgmt, Testing, Product; categories like performance optimization, architecture design).",
-        "2. Group into categories by semantic relevance, and merge near-duplicate categories to avoid fragmentation.",
+        "1. Prefer known categories first; create a new category only when no match exists.",
+        "2. Group by semantic relevance and merge near-duplicates to avoid fragmentation.",
         "3. Synthesize: merge duplicates and extract the most essential experiences and lessons for each category (1-3 each).",
         "4. Output strict JSON only. Do not include markdown or explanations. Format:",
         WEEKLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
+        "",
+        "Input:",
+        mergedText,
+      ].join("\n");
+    },
+    monthlySummaryPrompt: (params = {}) => {
+      const domainName = String(params.domainName || "").trim();
+      const knownTreeText = String(params.knownTreeText || "").trim();
+      const mergedText = String(params.mergedText || "");
+      return [
+        "System Instruction:",
+        `Analyze monthly summaries for domain [${domainName}] and focus on pattern recognition.`,
+        `Known category/subcategory tree: ${knownTreeText || "None"}`,
+        "",
+        "Task Requirements:",
+        "1. Map findings to known categories/subcategories first; add new subcategories only when needed.",
+        "2. For each subcategory, extract core Patterns and Methodologies.",
+        "3. Output strict JSON only. Do not include markdown or explanations. Format:",
+        MONTHLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
+        "",
+        "Input:",
+        mergedText,
+      ].join("\n");
+    },
+    yearlySummaryPrompt: (params = {}) => {
+      const domainName = String(params.domainName || "").trim();
+      const knownTreeText = String(params.knownTreeText || "").trim();
+      const mergedText = String(params.mergedText || "");
+      return [
+        "System Instruction:",
+        `Review one year of retrospectives for domain [${domainName}] at a high strategic level.`,
+        `Known taxonomy tree: ${knownTreeText || "None"}`,
+        "",
+        "Task Requirements:",
+        "1. Ignore short-term noise and extract enduring Principles and strategic reflections.",
+        "2. Anchor outputs to specific categories and subcategories.",
+        "3. Output strict JSON only. Do not include markdown or explanations. Format:",
+        YEARLY_SUMMARY_JSON_SCHEMA_EXAMPLE,
         "",
         "Input:",
         mergedText,

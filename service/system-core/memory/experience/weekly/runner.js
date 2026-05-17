@@ -18,6 +18,8 @@ export async function runWeeklySummaryIfNeeded({
   normalizeWeeklySummary,
   saveWeeklySummary,
   readMetadata,
+  readExperienceModel,
+  upsertModelEntries,
 } = {}) {
   if (!basePath || !llm) return false;
   let hasWrittenSummary = false;
@@ -28,16 +30,19 @@ export async function runWeeklySummaryIfNeeded({
     throwIfAborted(abortSignal);
     const targetDates = dateDirs.slice(0, 7);
     const weekInfo = toIsoWeekInfo(targetDates[targetDates.length - 1]);
-    const weekLabel = weekInfo.weekLabel;
+    const weekLabel = weekInfo.weekKey || weekInfo.weekLabel;
     const mergedDomainMap = await mergeDomainText(basePath, targetDates);
     if (!mergedDomainMap.size) break;
 
     const savedDomains = [];
     for (const [domainName, mergedText] of mergedDomainMap.entries()) {
       throwIfAborted(abortSignal);
+      const modelTree = await readExperienceModel(basePath);
+      const knownCategoryText = Object.keys(modelTree?.[domainName] || {}).join(", ");
       const prompt = buildWeeklySummaryPrompt({
         promptI18n,
         domainName,
+        knownCategoryText,
         mergedText,
       });
       let parsedSummary = { domain_name: domainName, categories: [] };
@@ -56,7 +61,18 @@ export async function runWeeklySummaryIfNeeded({
         createdAt: new Date().toISOString(),
         sourceDates: targetDates,
       });
-      if (saved) savedDomains.push(domainName);
+      if (!saved) continue;
+      const modelEntries = (Array.isArray(parsedSummary?.categories)
+        ? parsedSummary.categories
+        : []
+      ).map((item) => ({
+        domain_name: parsedSummary.domain_name || domainName,
+        category_name: item?.category_name,
+      }));
+      if (modelEntries.length) {
+        await upsertModelEntries(basePath, modelEntries);
+      }
+      savedDomains.push(domainName);
     }
     if (savedDomains.length !== mergedDomainMap.size) break;
 
@@ -76,4 +92,3 @@ export async function runWeeklySummaryIfNeeded({
   }
   return hasWrittenSummary;
 }
-

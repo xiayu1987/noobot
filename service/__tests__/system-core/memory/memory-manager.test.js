@@ -42,7 +42,7 @@ test("readLongMemory only returns static long memory content", async () => {
   assert.equal(content, "static long memory");
 });
 
-test("append daily domain results writes per-domain txt and metadata", async () => {
+test("append daily domain results writes per-domain md and metadata", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
   const userId = "admin";
   const userRoot = path.join(workspaceRoot, userId);
@@ -63,11 +63,11 @@ test("append daily domain results writes per-domain txt and metadata", async () 
   });
   assert.equal(ok, true);
 
-  const dayDir = path.join(userRoot, "memory/experience-lessons/2026-05-13");
+  const dayDir = path.join(userRoot, "memory/daily_summary/2026-05-13");
   const files = await readdir(dayDir);
-  assert.deepEqual(files, ["前端_开发_基础.txt"]);
+  assert.deepEqual(files, ["前端_开发_基础.md"]);
 
-  const content = await readFile(path.join(dayDir, "前端_开发_基础.txt"), "utf8");
+  const content = await readFile(path.join(dayDir, "前端_开发_基础.md"), "utf8");
   assert.match(content, /经验：/);
   assert.match(content, /教训：/);
 

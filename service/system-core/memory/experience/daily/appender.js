@@ -26,7 +26,7 @@ export async function appendDailyDomainResults({
   for (const item of normalizedResults) {
     const domainName = sanitizeFileName(item?.domain_name, "");
     if (!domainName) continue;
-    const filePath = path.join(dayDir, `${domainName}.txt`);
+    const filePath = path.join(dayDir, `${domainName}.md`);
     const block = formatDomainBlock({
       createdAt,
       experiences: item?.experiences,
@@ -39,9 +39,9 @@ export async function appendDailyDomainResults({
   if (!appendedCount) return false;
 
   const metadata = await readMetadata(basePath);
+  await storage.ensureDir(storage.experienceLessonsDir(basePath));
   metadata.domainNames = dedupeTextList([...metadata.domainNames, ...domainNames]);
   metadata.updatedAt = new Date().toISOString();
   await storage.writeJson(storage.experienceLessonsMetadataPath(basePath), metadata);
   return true;
 }
-

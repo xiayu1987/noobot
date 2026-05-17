@@ -17,10 +17,9 @@ export async function collectKnownDomainNames({
     const dayDir = storage.experienceLessonsDailyDir(basePath, dateKey);
     const entries = await storage.safeReadDirEntries(dayDir);
     for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".txt")) continue;
-      names.push(entry.name.replace(/\.txt$/i, ""));
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      names.push(entry.name.replace(/\.md$/i, ""));
     }
   }
   return dedupeTextList(names);
 }
-

@@ -31,7 +31,7 @@ export function toIsoWeekInfo(value = "") {
   return {
     weekYear,
     weekNumber,
+    weekKey: `${weekYear}-W${String(weekNumber).padStart(2, "0")}`,
     weekLabel: `${weekYear}-第${weekNumber}周`,
   };
 }
-
