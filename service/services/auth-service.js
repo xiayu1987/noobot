@@ -5,6 +5,7 @@
  */
 import { logError } from "../system-core/tracking/console/logger.js";
 import { randomBytes } from "node:crypto";
+import { HTTP_STATUS } from "../system-core/constants/index.js";
 
 const DEFAULT_API_KEY_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -70,7 +71,7 @@ export function createAuthService({
     const authInfo = resolveAuthByApiKey(req);
     if (!authInfo) {
       res
-        .status(401)
+        .status(HTTP_STATUS.UNAUTHORIZED)
         .json({ ok: false, error: translateText("auth.missingApiKey", req.locale) });
       return;
     }
@@ -80,7 +81,7 @@ export function createAuthService({
       String(req.body?.userId || "").trim() ||
       String(req.query?.userId || "").trim();
     if (isForbiddenUserScope(authInfo, requestUserId)) {
-      res.status(403).json({
+      res.status(HTTP_STATUS.FORBIDDEN).json({
         ok: false,
         error: translateText("auth.forbiddenUserScope", req.locale),
       });
@@ -92,7 +93,7 @@ export function createAuthService({
   function requireSuperAdmin(req, res, next) {
     const authInfo = req.auth || null;
     if (String(authInfo?.role || "") !== "super_admin") {
-      res.status(403).json({
+      res.status(HTTP_STATUS.FORBIDDEN).json({
         ok: false,
         error: translateText("auth.superAdminRequired", req.locale),
       });

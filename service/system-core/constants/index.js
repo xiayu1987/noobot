@@ -5,3 +5,5 @@
  */
 
 export * from "./file-extensions.js";
+export * from "./http-status-codes.js";
+export * from "./mime-types.js";

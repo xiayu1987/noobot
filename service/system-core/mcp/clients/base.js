@@ -6,6 +6,7 @@
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { MIME_TYPE } from "../../constants/index.js";
 
 export function resolveFetchImpl(fetchImpl = null) {
   if (typeof fetchImpl === "function") return fetchImpl;
@@ -32,8 +33,8 @@ export function buildJsonRpcNotification(method, params = {}) {
 
 export function buildRequestHeaders(extraHeaders = {}, sessionHeaders = {}) {
   return {
-    "content-type": "application/json",
-    accept: "application/json, text/event-stream",
+    "content-type": MIME_TYPE.APPLICATION_JSON,
+    accept: `${MIME_TYPE.APPLICATION_JSON}, text/event-stream`,
     ...extraHeaders,
     ...sessionHeaders,
   };

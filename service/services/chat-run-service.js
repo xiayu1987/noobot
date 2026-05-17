@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveForceToolCall } from "../system-core/utils/shared-utils.js";
+import { HTTP_STATUS } from "../system-core/constants/index.js";
 
 export function createChatRunService({
   getBot,
@@ -71,7 +72,7 @@ export function createChatRunService({
       });
       res.json({ ok: true, ...result });
     } catch (error) {
-      res.status(400).json({ ok: false, error: error.message });
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ ok: false, error: error.message });
     }
   }
 

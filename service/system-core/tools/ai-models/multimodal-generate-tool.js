@@ -17,6 +17,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../utils/mime-utils.js";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { MIME_TYPE } from "../../constants/index.js";
 import {
   ArtifactGenerationSource,
   AttachmentSource,
@@ -309,7 +310,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           if (!resolvedBase64) continue;
           generatedAttachments.push({
             name: imageArtifact.fileName,
-            mimeType: "image/png",
+            mimeType: MIME_TYPE.IMAGE_PNG,
             contentBase64: resolvedBase64,
           });
         }
@@ -330,7 +331,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         const attachmentMetas = mapAttachmentRecordsToMetas(
           savedAttachmentRecords,
           {
-            fallbackMimeType: "image/png",
+            fallbackMimeType: MIME_TYPE.IMAGE_PNG,
             fallbackGenerationSource:
               ArtifactGenerationSource.MULTIMODAL_GENERATE_TOOL,
             userId,

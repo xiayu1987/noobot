@@ -5,6 +5,7 @@
  */
 
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { MIME_TYPE } from "../../constants/index.js";
 import { emitEvent } from "../../event/index.js";
 import { tSystem } from "../../i18n/system-text.js";
 import { isAbortError } from "../../utils/error-utils.js";
@@ -125,7 +126,7 @@ export class SessionExecutionRunner {
       const userMessageAttachmentMetas = mapAttachmentRecordsToMetas(
         runtimeAttachmentMetas,
         {
-          fallbackMimeType: "application/octet-stream",
+          fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
           userId,
         },
       );

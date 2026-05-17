@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createJsonRouteWrapper, withJsonError } from "../../routes/route-wrapper.js";
+import { HTTP_STATUS } from "../../system-core/constants/index.js";
 
 async function withTestServer(app, run) {
   const server = await new Promise((resolve) => {
@@ -29,7 +30,7 @@ test("withJsonError: 默认 400，保留显式错误消息", async () => {
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/boom`);
     const payload = await response.json();
-    assert.equal(response.status, 400);
+    assert.equal(response.status, HTTP_STATUS.BAD_REQUEST);
     assert.equal(payload.ok, false);
     assert.equal(payload.error, "boom");
   });
@@ -44,7 +45,7 @@ test("withJsonError: 可使用 fallbackErrorKey + 自定义状态码", async () 
         throw { message: "" };
       },
       {
-        statusCode: 404,
+        statusCode: HTTP_STATUS.NOT_FOUND,
         fallbackErrorKey: "common.notFound",
         translateText: (key) => (key === "common.notFound" ? "Not Found" : ""),
       },
@@ -53,7 +54,7 @@ test("withJsonError: 可使用 fallbackErrorKey + 自定义状态码", async () 
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/fallback`);
     const payload = await response.json();
-    assert.equal(response.status, 404);
+    assert.equal(response.status, HTTP_STATUS.NOT_FOUND);
     assert.equal(payload.ok, false);
     assert.equal(payload.error, "Not Found");
   });
@@ -68,12 +69,12 @@ test("createJsonRouteWrapper: 可复用默认 translate/fallback 配置", async 
     "/wrapper",
     jsonRoute(async () => {
       throw { message: "" };
-    }, { statusCode: 404, fallbackErrorKey: "common.notFound" }),
+    }, { statusCode: HTTP_STATUS.NOT_FOUND, fallbackErrorKey: "common.notFound" }),
   );
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/wrapper`);
     const payload = await response.json();
-    assert.equal(response.status, 404);
+    assert.equal(response.status, HTTP_STATUS.NOT_FOUND);
     assert.equal(payload.ok, false);
     assert.equal(payload.error, "Not Found");
   });

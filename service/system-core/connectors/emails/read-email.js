@@ -5,6 +5,7 @@
  */
 import { tSystem } from "../../i18n/system-text.js";
 import { normalizeEmailConnectionInfo } from "./connection.js";
+import { MIME_TYPE } from "../../constants/index.js";
 
 const INLINE_ATTACHMENT_ITEM_PREFIX = "INLINE";
 const INLINE_ATTACHMENT_BLOCK_START = "[INLINE_ATTACHMENTS]";
@@ -27,7 +28,9 @@ async function saveEmailAttachments({
     if (!contentBuffer || !contentBuffer.length) continue;
     attachmentIndex += 1;
     const fileName = String(attachmentItem?.filename || "").trim() || `email_attachment_${attachmentIndex}`;
-    const mimeType = String(attachmentItem?.contentType || "application/octet-stream")
+    const mimeType = String(
+      attachmentItem?.contentType || MIME_TYPE.APPLICATION_OCTET_STREAM,
+    )
       .trim()
       .toLowerCase();
     const contentDisposition = String(
@@ -166,7 +169,7 @@ export async function executeReadEmail({
           ).trim()}, cid=${String(
             attachmentItem?.email_content_id || "none",
           ).trim()}, type=${String(
-            attachmentItem?.mimeType || "application/octet-stream",
+            attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
           ).trim()}`,
       );
       const baseText = String(parsedEmail?.text || "").trim();
@@ -193,7 +196,7 @@ export async function executeReadEmail({
                 ).trim()} (cid=${String(
                   attachmentItem?.email_content_id || "none",
                 ).trim()}, type=${String(
-                  attachmentItem?.mimeType || "application/octet-stream",
+                  attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
                 ).trim()})</li>`,
             )
             .join("")}</ul></div>`
