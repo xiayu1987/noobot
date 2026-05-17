@@ -114,7 +114,7 @@ export class MemoryManager {
     }
 
     let hasAppendedExperienceLessons = false;
-    if (promptPayload.length) {
+    if (shouldUpdateLongMemory && promptPayload.length) {
       hasAppendedExperienceLessons = await this.experience.runDaily({
         basePath,
         llm,
