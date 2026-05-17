@@ -30,6 +30,27 @@
 
 ---
 
+## 2.1 Interaction 事件统一字段（v1）
+
+`pendingInteraction` / `interaction_request` 建议统一携带：
+
+- `interactionType`: 业务类型（如 `connector_connected`）
+- `lifecycle`: `pending | resolved | failed`
+- `ackMode`: `manual | auto`
+- `resolvedBy`: `user | system | auto`
+- `notification`: `{ enabled, level, title, content, data }`
+
+执行策略（严格）：
+- 自动收敛仅由 `lifecycle=resolved` 且 `ackMode=auto` 触发；
+- 不再基于 `interactionType` 做兼容推断自动收敛。
+
+后端当前约定（已接入）：
+- 连接成功通知：`lifecycle=resolved` + `ackMode=auto` + `resolvedBy=system`
+- 需要重连交互：`lifecycle=pending` + `ackMode=manual`
+- `user_interaction` 工具发起表单：`lifecycle=pending` + `ackMode=manual`
+
+---
+
 ## 3. 每个状态的前端处理
 
 ### `no_conversation`
@@ -40,7 +61,9 @@
 ### `sending`
 - `sending=true`
 - assistant `pending=true`
-- 清理同轮过期交互态（如果有）
+- **仅当 `sourceEvent=interaction_response` 时**，清理同轮过期交互态（如果有）
+  - 目的：避免在回放或状态重放中，`interaction_pending` 刚恢复出的表单被后续泛化 `sending` 误清理
+  - 说明：`sending` 可由 `thinking/delta` 映射而来，不等价于“用户已提交交互响应”
 
 ### `interaction_pending`
 - `sending=true`
@@ -109,6 +132,9 @@ reconnect
   -> 后续 channel_state 持续驱动终态/交互态
 ```
 
+> 注：在 `interaction_pending` 之后，收到 `channel_state:sending` 是允许且正常的。  
+> 前端必须结合 `sourceEvent` 判定是否可清理交互态，而不是只看 `state=sending`。
+
 ---
 
 ## 5. 交互态一致性
@@ -128,6 +154,23 @@ reconnect
 ```
 
 前端据此恢复交互表单，保证刷新/多端一致。
+
+交互态清理闭环（必须同时满足）：
+- 恢复入口：`interaction_pending + pendingInteraction`
+- 清理入口：
+  - `completed/stopped/error/no_conversation/expired`（终态）
+  - `sending + sourceEvent=interaction_response`（用户已响应，回到执行态）
+- 非清理入口：
+  - `sending`（无 `sourceEvent` 或非 `interaction_response`）
+  - replay 内容事件（`thinking/delta`）
+
+特殊分支（连接器已连接）：
+- 当 `interactionType=connector_connected` 时，前端会走自动处理分支：
+  - 更新连接器面板状态
+  - 自动提交 `interaction_response`（`connector_connected_ack`）
+  - 清理当前交互态
+- 该分支用于“连接成功通知”类事件，不需要用户手动填写表单。
+- 若业务需要用户停留确认，请不要使用 `connector_connected` 作为交互类型。
 
 输入可用性约束：
 - 主输入框：可用条件不应仅由 `sending` 决定，应结合是否处于交互态
@@ -150,6 +193,7 @@ reconnect
 
 - 前端实时状态处理：`src/composables/chat/useChatEngine.js`
 - 前端回放状态处理：`src/composables/chat/useReconnectReplay.js`
+- Interaction 契约：`docs/interaction-contract.md`
 - 状态来源与广播：`agent-proxy/src/channel-manager.js`
 - 状态测试：
   - `tests/unit/composables/chat/useChatEngine.spec.js`

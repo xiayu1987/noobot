@@ -242,6 +242,9 @@ export function createConnectConnectorTool(opts) {
         needConnectionInfo: true,
         connectorName,
         connectorType,
+        lifecycle: "pending",
+        ackMode: "manual",
+        resolvedBy: "",
       });
       if (isUserCancelledInteraction(interactionResult)) {
         throw recoverableToolError(tConnector(runtime, "userCancelledAction"), {

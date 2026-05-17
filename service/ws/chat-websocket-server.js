@@ -170,6 +170,10 @@ export function registerChatWebSocketServer(
         connectorType = "",
         interactionType = "",
         interactionData = {},
+        lifecycle = "pending",
+        ackMode = "manual",
+        resolvedBy = "",
+        notification = {},
       } = {}) =>
         new Promise((resolveInteraction, rejectInteraction) => {
           const requestId = randomBytes(12).toString("hex");
@@ -199,6 +203,13 @@ export function registerChatWebSocketServer(
             connectorName: String(connectorName || "").trim(),
             connectorType: String(connectorType || "").trim(),
             interactionType: String(interactionType || "").trim(),
+            lifecycle: String(lifecycle || "").trim().toLowerCase() || "pending",
+            ackMode: String(ackMode || "").trim().toLowerCase() || "manual",
+            resolvedBy: String(resolvedBy || "").trim().toLowerCase(),
+            notification:
+              notification && typeof notification === "object" && !Array.isArray(notification)
+                ? notification
+                : {},
             interactionData:
               interactionData && typeof interactionData === "object"
                 ? interactionData

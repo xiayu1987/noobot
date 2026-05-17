@@ -149,6 +149,20 @@ export class ConnectorEventListener {
             connectorType: normalizedType,
             status: CONNECTOR_RUNTIME_STATUS.CONNECTED,
             interactionType: CONNECTOR_INTERACTION_TYPE.CONNECTED,
+            lifecycle: "resolved",
+            ackMode: "auto",
+            resolvedBy: "system",
+            notification: {
+              enabled: true,
+              level: "success",
+              title: tSystem("connectors.event.connected"),
+              content: `${normalizedType}: ${normalizedName}`,
+              data: {
+                connectorName: normalizedName,
+                connectorType: normalizedType,
+                status: CONNECTOR_RUNTIME_STATUS.CONNECTED,
+              },
+            },
             interactionData: {
               connectorName: normalizedName,
               connectorType: normalizedType,
@@ -169,6 +183,20 @@ export class ConnectorEventListener {
         connectorName: normalizedName,
         connectorType: normalizedType,
         interactionType: CONNECTOR_INTERACTION_TYPE.CONNECTED,
+        lifecycle: "resolved",
+        ackMode: "auto",
+        resolvedBy: "system",
+        notification: {
+          enabled: true,
+          level: "success",
+          title: tSystem("connectors.event.connected"),
+          content: `${normalizedType}: ${normalizedName}`,
+          data: {
+            connectorName: normalizedName,
+            connectorType: normalizedType,
+            status: CONNECTOR_RUNTIME_STATUS.CONNECTED,
+          },
+        },
         interactionData: {
           connectorName: normalizedName,
           connectorType: normalizedType,
@@ -210,6 +238,8 @@ export class ConnectorEventListener {
         connectorName: normalizedName,
         connectorType: normalizedType,
         interactionType: CONNECTOR_INTERACTION_TYPE.RECONNECT_REQUIRED,
+        lifecycle: "pending",
+        ackMode: "manual",
         interactionData: {
           connectorName: normalizedName,
           connectorType: normalizedType,

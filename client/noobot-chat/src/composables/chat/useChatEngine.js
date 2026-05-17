@@ -11,6 +11,7 @@ import { useLocale } from "../../shared/i18n/useLocale";
 import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
 import { enUSMessages } from "../../shared/i18n/locales/en-US";
 import {
+  isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
   resolveConnectorConnectedPayload,
   resolveConnectorStatusPayload,
@@ -103,30 +104,34 @@ export function useChatEngine({
     }
   }
 
-  function tryAutoHandleConnectorConnectedInteraction(rawRequest = {}) {
+  function tryAutoResolveInteraction(rawRequest = {}) {
     const request = normalizeInteractionRequestPayload(rawRequest || {});
-    if (String(request?.interactionType || "").trim() !== "connector_connected") {
+    if (!isAutoResolvedInteraction(request)) {
       return false;
     }
     const requestId = String(request?.requestId || "").trim();
     if (requestId && connectorConnectedAckedRequestIds.has(requestId)) {
       return true;
     }
-    const { connectorType, connectorName, status } = resolveConnectorConnectedPayload(request);
-    if (connectorTypeSet.has(connectorType) && connectorName) {
-      upsertConnectedConnectorInPanelState(activeSession.value, {
-        connectorType,
-        connectorName,
-        status,
-      });
-      refreshSessionConnectorsAsync(activeSession.value?.id || "");
+    if (String(request?.interactionType || "").trim() === "connector_connected") {
+      const { connectorType, connectorName, status } = resolveConnectorConnectedPayload(request);
+      if (connectorTypeSet.has(connectorType) && connectorName) {
+        upsertConnectedConnectorInPanelState(activeSession.value, {
+          connectorType,
+          connectorName,
+          status,
+        });
+        refreshSessionConnectorsAsync(activeSession.value?.id || "");
+      }
     }
     try {
       if (request?.requestId) {
         submitInteractionResponse(
           {
             confirmed: true,
-            response: "connector_connected_ack",
+            response: String(request?.interactionType || "").trim()
+              ? `${String(request.interactionType).trim()}_ack`
+              : "interaction_auto_ack",
           },
           {
             requestId: request.requestId,
@@ -313,7 +318,7 @@ export function useChatEngine({
               pendingInteractionPayload?.interactionType || "",
             ).trim(),
           });
-          if (!tryAutoHandleConnectorConnectedInteraction(normalizedPendingInteractionRequest)) {
+          if (!tryAutoResolveInteraction(normalizedPendingInteractionRequest)) {
             setPendingInteractionRequest(normalizedPendingInteractionRequest);
           }
         } else {
@@ -519,7 +524,7 @@ export function useChatEngine({
             ...(data || {}),
             interactionType: String(data?.interactionType || "").trim(),
           });
-          if (tryAutoHandleConnectorConnectedInteraction(normalizedInteractionRequest)) {
+          if (tryAutoResolveInteraction(normalizedInteractionRequest)) {
             return;
           }
           setPendingInteractionRequest(normalizedInteractionRequest);
