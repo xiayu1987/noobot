@@ -67,18 +67,6 @@ export class StorageManager {
     return experienceModelPath(basePath);
   }
 
-  summaryPipelineDir(basePath) {
-    return this.experienceDir(basePath);
-  }
-
-  summaryPipelineMetadataPath(basePath) {
-    return this.experienceMetadataPath(basePath);
-  }
-
-  summaryPipelineModelPath(basePath) {
-    return this.experienceModelPath(basePath);
-  }
-
   dailySummaryDir(basePath) {
     return dailySummaryDir(basePath);
   }
@@ -97,23 +85,6 @@ export class StorageManager {
 
   dailySummaryDateDir(basePath, dateKey = "") {
     return dailySummaryDateDir(basePath, dateKey);
-  }
-
-  // Backward-compatible aliases (deprecated)
-  experienceLessonsDir(basePath) {
-    return this.summaryPipelineDir(basePath);
-  }
-
-  experienceLessonsMetadataPath(basePath) {
-    return this.summaryPipelineMetadataPath(basePath);
-  }
-
-  experienceLessonsModelPath(basePath) {
-    return this.summaryPipelineModelPath(basePath);
-  }
-
-  experienceLessonsDailyDir(basePath, dateKey = "") {
-    return this.dailySummaryDateDir(basePath, dateKey);
   }
 
   sessionFile(basePath, sessionId, parentSessionId = "") {
