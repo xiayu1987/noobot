@@ -14,22 +14,12 @@ import {
   CONNECTOR_RUNTIME_STATUS,
   CONNECTOR_STATUS_CODE,
 } from "./constants.js";
+import { matchesSensitiveFieldPattern } from "../tools/core/sensitive-field-patterns.js";
 
 const HISTORY_FILE_NAME = "connector-history.json";
 
 function isSensitiveKeyName(keyName = "") {
-  const normalizedKeyName = String(keyName || "").trim().toLowerCase();
-  if (!normalizedKeyName) return false;
-  return (
-    normalizedKeyName.includes("password") ||
-    normalizedKeyName.includes("passwd") ||
-    normalizedKeyName.includes("secret") ||
-    normalizedKeyName.includes("token") ||
-    normalizedKeyName.includes("apikey") ||
-    normalizedKeyName.includes("api_key") ||
-    normalizedKeyName.includes("connectionstring") ||
-    normalizedKeyName.includes("connection_string")
-  );
+  return matchesSensitiveFieldPattern(keyName);
 }
 
 function sanitizeObject(inputValue = {}) {
