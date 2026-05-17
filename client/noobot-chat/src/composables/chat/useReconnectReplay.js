@@ -28,7 +28,9 @@ import {
 } from "../infra/reconnectReplayModel";
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
 import {
+  isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
+  resolveConnectorConnectedPayload,
   resolveConnectorStatusPayload,
 } from "./interactionPayload";
 
@@ -74,6 +76,31 @@ export function useReconnectReplay({
         error: targetAssistantMessage.error || translate("chat.unknownError"),
       })}`;
     }
+  }
+
+  function tryAutoResolveInteraction(rawRequest = {}) {
+    const request = normalizeInteractionRequestPayload(rawRequest || {});
+    if (!isAutoResolvedInteraction(request)) return false;
+    if (String(request?.interactionType || "").trim() === "connector_connected") {
+      const { connectorType, connectorName, status } = resolveConnectorConnectedPayload(request);
+      if (
+        connectorTypeSet?.has?.(connectorType) &&
+        connectorName &&
+        typeof upsertConnectedConnectorInPanelState === "function"
+      ) {
+        upsertConnectedConnectorInPanelState(activeSession.value, {
+          connectorType,
+          connectorName,
+          status,
+        });
+        if (typeof refreshSessionConnectorsAsync === "function") {
+          refreshSessionConnectorsAsync(activeSession.value?.id || "");
+        }
+      }
+    }
+    clearPendingInteraction();
+    interactionSubmitting.value = false;
+    return true;
   }
 
   function emitSyntheticErrorConversationState({
@@ -246,6 +273,9 @@ export function useReconnectReplay({
             ...pendingInteractionPayload,
             interactionType: String(pendingInteractionPayload?.interactionType || "").trim(),
           });
+          if (tryAutoResolveInteraction(interactionRequest)) {
+            return;
+          }
           if (!isInteractionRequestHandled(interactionRequest)) {
             setPendingInteractionRequest(interactionRequest);
           }
@@ -727,6 +757,9 @@ export function useReconnectReplay({
         targetMessage.realtimeLogs = [...(targetMessage.realtimeLogs || []), logItem].slice(-10);
       } else if (eventName === StreamEventEnum.INTERACTION_REQUEST) {
         const interactionRequest = normalizeInteractionRequestPayload(eventData);
+        if (tryAutoResolveInteraction(interactionRequest)) {
+          continue;
+        }
         if (!isInteractionRequestHandled(interactionRequest)) {
           setPendingInteractionRequest(interactionRequest);
         }

@@ -59,6 +59,11 @@ test("ConnectorEventListener.notifyConnectorConnected: informational flow should
     String(emitCalls[0]?.data?.interactionType || ""),
     "connector_connected",
   );
+  assert.equal(String(emitCalls[0]?.data?.lifecycle || ""), "resolved");
+  assert.equal(String(emitCalls[0]?.data?.ackMode || ""), "auto");
+  assert.equal(String(emitCalls[0]?.data?.resolvedBy || ""), "system");
+  assert.equal(emitCalls[0]?.data?.notification?.enabled, true);
+  assert.equal(String(emitCalls[0]?.data?.notification?.level || ""), "success");
 });
 
 test("ConnectorEventListener.notifyConnectorConnected: fallback to requestUserInteraction when emitNotification is unavailable", async () => {
@@ -81,5 +86,7 @@ test("ConnectorEventListener.notifyConnectorConnected: fallback to requestUserIn
   assert.equal(String(requestCalls[0]?.interactionType || ""), "connector_connected");
   assert.equal(String(requestCalls[0]?.connectorType || ""), "email");
   assert.equal(String(requestCalls[0]?.connectorName || ""), "example_email");
+  assert.equal(String(requestCalls[0]?.lifecycle || ""), "resolved");
+  assert.equal(String(requestCalls[0]?.ackMode || ""), "auto");
+  assert.equal(String(requestCalls[0]?.resolvedBy || ""), "system");
 });
-

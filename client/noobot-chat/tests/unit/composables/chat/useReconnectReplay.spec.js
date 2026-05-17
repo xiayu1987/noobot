@@ -602,6 +602,23 @@ describe("useReconnectReplay", () => {
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
   });
 
+  it("EV-03b2: auto-resolved interaction replay does not enter pending", async () => {
+    const { api, mocks } = createFixture();
+
+    await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-int2-auto",
+      seq: 1,
+      requestId: "req-2-auto",
+      interactionType: "post_action_notice",
+      lifecycle: "resolved",
+      ackMode: "auto",
+    });
+
+    expect(mocks.setPendingInteractionRequest).not.toHaveBeenCalled();
+    expect(mocks.clearPendingInteraction).toHaveBeenCalled();
+  });
+
   it("EV-03c: channel_state completed clears obsolete interaction for same turn", async () => {
     const { api, mocks } = createFixture();
 
@@ -644,6 +661,31 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-int4",
       interactionType: "confirm",
       content: "need confirm",
+    });
+  });
+
+  it("EV-03e: channel_state sending only clears interaction when sourceEvent=interaction_response", async () => {
+    const { api, mocks } = createFixture();
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-int5",
+      state: "sending",
+      seq: 14,
+    });
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-int5",
+      state: "sending",
+      sourceEvent: "interaction_response",
+      seq: 15,
+    });
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledTimes(1);
+    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      dialogProcessId: "dp-int5",
     });
   });
 

@@ -184,6 +184,9 @@ export function createUserInteractionTool({ agentContext }) {
         requireEncryption: false,
         sessionId,
         toolName: "user_interaction",
+        lifecycle: "pending",
+        ackMode: "manual",
+        resolvedBy: "",
       });
 
       if (
