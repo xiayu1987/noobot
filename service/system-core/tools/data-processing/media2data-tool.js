@@ -19,6 +19,7 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { AUDIO_EXTENSIONS, IMAGE_EXTENSIONS } from "./file-extension-constants.js";
 
 const IMAGE_EXTENSION_TO_MIME = {
   ".png": "image/png",
@@ -48,6 +49,7 @@ const VIDEO_EXTENSION_TO_MIME = {
   ".m4v": "video/x-m4v",
 };
 const FFPROBE_AMBIGUOUS_EXTENSIONS = new Set([".webm", ".ogg", ".mkv"]);
+const MODEL_READY_AUDIO_EXTENSIONS = new Set([".wav", ".mp3"]);
 
 function getRuntime(agentContext) {
   return agentContext?.runtime || {};
@@ -126,9 +128,9 @@ function resolveAttachmentAliasByType({
 
 function resolveMediaTypeByPath(filePath = "") {
   const extension = path.extname(String(filePath || "")).toLowerCase();
-  if (IMAGE_EXTENSION_TO_MIME[extension]) return "image";
+  if (IMAGE_EXTENSIONS.has(extension)) return "image";
   if (VIDEO_EXTENSION_TO_MIME[extension]) return "video";
-  if (AUDIO_EXTENSION_TO_MIME[extension]) return "audio";
+  if (AUDIO_EXTENSIONS.has(extension)) return "audio";
   return "";
 }
 
@@ -217,7 +219,7 @@ function runFfmpeg(args = []) {
 async function ensureAudioFileForModel(inputFile = "", outputDirectory = "") {
   await mkdir(outputDirectory, { recursive: true });
   const extension = path.extname(String(inputFile || "")).toLowerCase();
-  if (extension === ".wav" || extension === ".mp3") {
+  if (MODEL_READY_AUDIO_EXTENSIONS.has(extension)) {
     return {
       filePath: inputFile,
       format: extension.replace(/^\./, ""),
