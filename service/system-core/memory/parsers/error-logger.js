@@ -15,7 +15,7 @@ export async function appendParseErrorLog({
   } = {}) {
   try {
     if (!basePath) return;
-    const lessonsDir = storage.summaryPipelineDir(basePath);
+    const lessonsDir = storage.experienceDir(basePath);
     await storage.ensureDir(lessonsDir);
     const logPath = path.join(lessonsDir, "_parse-error.log");
     const rawText =

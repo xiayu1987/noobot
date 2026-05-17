@@ -39,9 +39,9 @@ export async function appendDailyDomainResults({
   if (!appendedCount) return false;
 
   const metadata = await readMetadata(basePath);
-  await storage.ensureDir(storage.summaryPipelineDir(basePath));
+  await storage.ensureDir(storage.experienceDir(basePath));
   metadata.domainNames = dedupeTextList([...metadata.domainNames, ...domainNames]);
   metadata.updatedAt = new Date().toISOString();
-  await storage.writeJson(storage.summaryPipelineMetadataPath(basePath), metadata);
+  await storage.writeJson(storage.experienceMetadataPath(basePath), metadata);
   return true;
 }
