@@ -292,7 +292,11 @@ export function useChatEngine({
     }
     if (isInFlightConversationState(state)) {
       sending.value = true;
-      if (state === "sending" && typeof clearPendingInteractionIfObsolete === "function") {
+      if (
+        state === "sending" &&
+        String(statePayload?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
+        typeof clearPendingInteractionIfObsolete === "function"
+      ) {
         clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
       }
       if (state === "interaction_pending") {
