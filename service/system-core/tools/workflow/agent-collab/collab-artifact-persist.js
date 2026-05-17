@@ -6,6 +6,7 @@
 import { Buffer } from "node:buffer";
 import { logError } from "../../../tracking/console/logger.js";
 import { mapAttachmentRecordsToMetas } from "../../../attach/index.js";
+import { TaskStatus } from "../../../bot-manage/async/constants.js";
 import { normalizeString } from "./collab-task-utils.js";
 
 function toSafeArtifactName(value = "") {
@@ -69,14 +70,20 @@ export function createCollabArtifactPersistor({
         const status = normalizeString(item?.status);
         const sessionId = normalizeString(item?.request?.sessionId);
         if (!sessionId) return false;
-        if (!["completed", "failed", "stopped"].includes(status)) return false;
+        if (
+          ![TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.STOPPED].includes(
+            status,
+          )
+        ) {
+          return false;
+        }
         return !attachedSessionIdSet.has(sessionId);
       },
     );
     if (!pendingItems.length) return [];
 
     const generatedAttachments = pendingItems.map((item = {}, index) => {
-      const status = String(item?.status || "").trim() || "running";
+      const status = String(item?.status || "").trim() || TaskStatus.RUNNING;
       const taskName = normalizeString(item?.request?.taskName);
       const sessionId = normalizeString(item?.request?.sessionId);
       const fileLabel =

@@ -14,6 +14,7 @@ import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
 } from "../../model/index.js";
+import { TaskStatus } from "../../bot-manage/async/constants.js";
 import { recoverableToolError } from "../../error/index.js";
 import { invokeServiceHandler } from "../../service-invoker/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -24,13 +25,13 @@ const DEFAULT_HELP_SERVICES = ["web_search_service"];
 const DEFAULT_QUERY_KEY = "q";
 const DEFAULT_SEARCH_ENDPOINT = "search";
 const TOOL_RESULT_STATUS = Object.freeze({
-  COMPLETED: "completed",
-  PARTIAL: "partial",
-  FAILED: "failed",
+  COMPLETED: TaskStatus.COMPLETED,
+  PARTIAL: TaskStatus.PARTIAL,
+  FAILED: TaskStatus.FAILED,
 });
 const PROMISE_STATUS = Object.freeze({
-  FULFILLED: "fulfilled",
-  REJECTED: "rejected",
+  FULFILLED: TaskStatus.FULFILLED,
+  REJECTED: TaskStatus.REJECTED,
 });
 const RUNTIME_KEYS = Object.freeze({
   OBJECT: "object",
