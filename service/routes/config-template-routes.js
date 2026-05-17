@@ -5,7 +5,7 @@
  */
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { withJsonError } from "./route-wrapper.js";
-import { HTTP_STATUS } from "../system-core/constants/index.js";
+import { HTTP_STATUS } from "#agent/constants";
 
 export function registerConfigAndTemplateRoutes(
   app,

@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveForceToolCall } from "../system-core/utils/shared-utils.js";
-import { HTTP_STATUS } from "../system-core/constants/index.js";
+import { resolveForceToolCall } from "#agent/utils";
+import { HTTP_STATUS } from "#agent/constants";
 
 export function createChatRunService({
   getBot,

@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { readdir } from "node:fs/promises";
-import { safeJoin } from "../system-core/utils/fs-safe.js";
+import { safeJoin } from "#agent/utils";
 
 export async function buildWorkspaceTree(
   rootPath,

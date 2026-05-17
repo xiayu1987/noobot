@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createJsonRouteWrapper, withJsonError } from "../../routes/route-wrapper.js";
-import { HTTP_STATUS } from "../../system-core/constants/index.js";
+import { HTTP_STATUS } from "#agent/constants";
 
 async function withTestServer(app, run) {
   const server = await new Promise((resolve) => {
