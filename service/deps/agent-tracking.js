@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { logError } from "agent-project/tracking";
+export { logError } from "noobot-agent/tracking";

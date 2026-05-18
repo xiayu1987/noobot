@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { loadGlobalConfig, resolveConfigSecrets, mergeConfig } from "agent-project/config";
+export { loadGlobalConfig, resolveConfigSecrets, mergeConfig } from "noobot-agent/config";

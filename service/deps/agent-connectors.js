@@ -9,4 +9,4 @@ export {
   initConnectorChannelStore,
   getConnectorHistoryStore,
   initConnectorHistoryStore,
-} from "agent-project/connectors";
+} from "noobot-agent/connectors";

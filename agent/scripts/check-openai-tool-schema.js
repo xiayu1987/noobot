@@ -11,14 +11,14 @@ import { createInterface } from "node:readline/promises";
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
-import { buildTools } from "agent-project/tools";
-import { createConnectorTools } from "agent-project/tools/connectors/connector-toolkit";
+import { buildTools } from "noobot-agent/tools";
+import { createConnectorTools } from "noobot-agent/tools/connectors/connector-toolkit";
 import {
   loadGlobalConfig,
   resolveConfigSecrets,
   sanitizeUserConfig,
-} from "agent-project/config";
-import { resolveDefaultModelSpec, resolveModelSpecByName } from "agent-project/model";
+} from "noobot-agent/config";
+import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
 
 function parseArgs(argv = []) {
   const out = {
