@@ -1,0 +1,12 @@
+{
+  "plugins": {
+    "harness": {
+      "enabled": true,
+      "trace": true,
+      "promptPolicy": true,
+      "writeContextSnapshot": true,
+      "writePrompts": true,
+      "maxPreviewChars": 1200
+    }
+  }
+}

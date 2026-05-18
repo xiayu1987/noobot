@@ -257,6 +257,11 @@
       }
     }
   },
+  "plugins": {
+    "harness": {
+      "enabled": true
+    }
+  },
   "preferences": {
     "language": "zh-CN"
   },
