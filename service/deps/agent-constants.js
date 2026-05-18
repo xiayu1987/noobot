@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { HTTP_STATUS } from "agent-project/constants";
+export { HTTP_STATUS } from "noobot-agent/constants";

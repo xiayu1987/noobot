@@ -1,5 +1,5 @@
 {
-  "name": "noobot-project",
+  "name": "noobot-service",
   "version": "1.1.0",
   "type": "module",
   "imports": {
@@ -34,7 +34,6 @@
     "lint:service-constants": "eslint ."
   },
   "dependencies": {
-    "agent-project": "file:../agent",
     "@langchain/core": "^1.1.46",
     "@langchain/openai": "^1.4.5",
     "@mozilla/readability": "^0.6.0",
@@ -60,7 +59,8 @@
     "uuid": "^14.0.0",
     "ws": "^8.20.1",
     "yazl": "^3.3.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "noobot-agent": "file:../agent"
   },
   "overrides": {
     "systeminformation": "^5.31.6"

@@ -1,4 +1,4 @@
-# agent-project
+# noobot-agent
 
 English: [README.md](./README.md)
 
@@ -21,23 +21,23 @@ npm run check:api
 
 ## 对外入口
 
-- 主入口：`agent-project`
+- 主入口：`noobot-agent`
 - 子路径：
-  - `agent-project/agent`
-  - `agent-project/tools`
-  - `agent-project/model`
-  - `agent-project/event`
-  - `agent-project/tracking`
-  - `agent-project/store`
-  - `agent-project/session`
-  - `agent-project/attach`
-  - `agent-project/context`
-  - `agent-project/config`
+  - `noobot-agent/agent`
+  - `noobot-agent/tools`
+  - `noobot-agent/model`
+  - `noobot-agent/event`
+  - `noobot-agent/tracking`
+  - `noobot-agent/store`
+  - `noobot-agent/session`
+  - `noobot-agent/attach`
+  - `noobot-agent/context`
+  - `noobot-agent/config`
 
 ## 最小示例
 
 ```js
-import { runAgentTurn } from "agent-project/agent";
+import { runAgentTurn } from "noobot-agent/agent";
 ```
 
 ## Adapter 扩展点

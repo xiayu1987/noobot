@@ -1,4 +1,4 @@
-# agent-project
+# noobot-agent
 
 Chinese version: [README.zh-CN.md](./README.zh-CN.md)
 
@@ -21,23 +21,23 @@ npm run check:api
 
 ## Public entry points
 
-- Main entry: `agent-project`
+- Main entry: `noobot-agent`
 - Subpaths:
-  - `agent-project/agent`
-  - `agent-project/tools`
-  - `agent-project/model`
-  - `agent-project/event`
-  - `agent-project/tracking`
-  - `agent-project/store`
-  - `agent-project/session`
-  - `agent-project/attach`
-  - `agent-project/context`
-  - `agent-project/config`
+  - `noobot-agent/agent`
+  - `noobot-agent/tools`
+  - `noobot-agent/model`
+  - `noobot-agent/event`
+  - `noobot-agent/tracking`
+  - `noobot-agent/store`
+  - `noobot-agent/session`
+  - `noobot-agent/attach`
+  - `noobot-agent/context`
+  - `noobot-agent/config`
 
 ## Minimal usage example
 
 ```js
-import { runAgentTurn } from "agent-project/agent";
+import { runAgentTurn } from "noobot-agent/agent";
 ```
 
 ## Adapter extension points

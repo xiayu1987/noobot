@@ -4,5 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { resolveForceToolCall } from "agent-project/utils/shared-utils";
-export { safeJoin } from "agent-project/utils/fs-safe";
+export { resolveForceToolCall } from "noobot-agent/utils/shared-utils";
+export { safeJoin } from "noobot-agent/utils/fs-safe";

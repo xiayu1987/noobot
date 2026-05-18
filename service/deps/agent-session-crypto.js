@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { decryptPayloadBySessionId } from "agent-project/utils/session-crypto";
+export { decryptPayloadBySessionId } from "noobot-agent/utils/session-crypto";

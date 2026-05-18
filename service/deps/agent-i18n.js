@@ -9,5 +9,5 @@ export {
   resolveLocaleFromAcceptLanguage,
   pickLocaleText,
   DEFAULT_LOCALE,
-} from "agent-project/i18n";
-export { BACKEND_I18N } from "agent-project/i18n/backend-messages";
+} from "noobot-agent/i18n";
+export { BACKEND_I18N } from "noobot-agent/i18n/backend-messages";
