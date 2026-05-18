@@ -17,6 +17,8 @@ import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { AgentContextFactory } from "../execution/agent-context-factory.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { createHookManager } from "../../hook/index.js";
+import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -445,6 +447,69 @@ export class SessionExecutionEngine {
     });
   }
 
+
+  _mergeHarnessPluginOptions(...items) {
+    return items.reduce((acc, item) => {
+      if (!item || typeof item !== "object") return acc;
+      return { ...acc, ...item };
+    }, {});
+  }
+
+  _resolveHarnessPluginOptions({ userId = "", runConfig = {} } = {}) {
+    const globalHarness =
+      this.globalConfig?.plugins?.harness && typeof this.globalConfig.plugins.harness === "object"
+        ? this.globalConfig.plugins.harness
+        : {};
+    const runHarness =
+      runConfig?.plugins?.harness && typeof runConfig.plugins.harness === "object"
+        ? runConfig.plugins.harness
+        : {};
+    const legacyRunHarness =
+      runConfig?.harness && typeof runConfig.harness === "object" ? runConfig.harness : {};
+    const options = this._mergeHarnessPluginOptions(
+      globalHarness,
+      legacyRunHarness,
+      runHarness,
+    );
+    const explicitlyEnabled =
+      options.enabled === true || runConfig?.enableHarness === true || runConfig?.harness === true;
+    if (!explicitlyEnabled) return { enabled: false };
+    const basePath =
+      typeof options.basePath === "string" && options.basePath.trim()
+        ? options.basePath.trim()
+        : this.workspaceService && userId
+          ? this.workspaceService.getWorkspacePath(userId)
+          : "";
+    return { ...options, enabled: true, basePath };
+  }
+
+  _prepareHarnessRunConfig({ userId = "", runConfig = {} } = {}) {
+    const harnessOptions = this._resolveHarnessPluginOptions({ userId, runConfig });
+    if (!harnessOptions.enabled) return runConfig;
+    const hookManager =
+      runConfig?.hookManager && typeof runConfig.hookManager === "object"
+        ? runConfig.hookManager
+        : runConfig?.hooks && typeof runConfig.hooks === "object" && typeof runConfig.hooks.on === "function"
+          ? runConfig.hooks
+          : createHookManager();
+    if (!hookManager.__noobotHarnessPluginRegistered) {
+      registerHarnessPlugin({ hookManager }, harnessOptions);
+      Object.defineProperty(hookManager, "__noobotHarnessPluginRegistered", {
+        value: true,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    return {
+      ...runConfig,
+      hookManager,
+      plugins: {
+        ...(runConfig?.plugins || {}),
+        harness: harnessOptions,
+      },
+    };
+  }
+
   async runSession({
     userId,
     sessionId,
@@ -459,6 +524,7 @@ export class SessionExecutionEngine {
     runConfig = {},
     parentAsyncResultContainer = null,
   }) {
+    const preparedRunConfig = this._prepareHarnessRunConfig({ userId, runConfig });
     return this.runner.runSession({
       userId,
       sessionId,
@@ -470,7 +536,7 @@ export class SessionExecutionEngine {
       parentDialogProcessId,
       abortSignal,
       userInteractionBridge,
-      runConfig,
+      runConfig: preparedRunConfig,
       parentAsyncResultContainer,
     });
   }
