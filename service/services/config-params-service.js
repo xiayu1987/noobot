@@ -31,7 +31,11 @@ function collectTemplateKeysFromObject(input, collector = new Set()) {
   return collector;
 }
 
-export function createConfigParamsService({ workspaceRootPath, globalConfigRaw } = {}) {
+export function createConfigParamsService({
+  workspaceRootPath,
+  getGlobalConfigRaw,
+  templateRootPath,
+} = {}) {
   function workspaceConfigParamsFilePath() {
     return path.join(workspaceRootPath(), CONFIG_PARAMS_FILE_NAME);
   }
@@ -123,16 +127,15 @@ export function createConfigParamsService({ workspaceRootPath, globalConfigRaw }
   }
 
   async function collectConfigTemplateKeys() {
-    const globalConfigFilePath = path.resolve(process.cwd(), "./config/global.config.json");
-    const templateConfigFilePath = path.resolve(
-      process.cwd(),
-      String(globalConfigRaw?.workspaceTemplatePath || "../user-template/default-user"),
-      "config.json",
+    const globalConfigJson =
+      typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
+    const templateBasePath =
+      typeof templateRootPath === "function"
+        ? templateRootPath()
+        : path.resolve(process.cwd(), "../user-template/default-user");
+    const templateConfigJson = await readConfigJsonIfExists(
+      path.join(templateBasePath, "config.json"),
     );
-    const [globalConfigJson, templateConfigJson] = await Promise.all([
-      readConfigJsonIfExists(globalConfigFilePath),
-      readConfigJsonIfExists(templateConfigFilePath),
-    ]);
     const keys = new Set();
     collectTemplateKeysFromObject(globalConfigJson, keys);
     collectTemplateKeysFromObject(templateConfigJson, keys);
@@ -143,10 +146,9 @@ export function createConfigParamsService({ workspaceRootPath, globalConfigRaw }
     const normalizedUserId = String(userId || "").trim();
     if (!normalizedUserId) return [];
     const userConfigFilePath = path.join(workspaceRootPath(), normalizedUserId, "config.json");
-    const [globalConfigJson, userConfigJson] = await Promise.all([
-      readConfigJsonIfExists(path.resolve(process.cwd(), "./config/global.config.json")),
-      readConfigJsonIfExists(userConfigFilePath),
-    ]);
+    const globalConfigJson =
+      typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
+    const userConfigJson = await readConfigJsonIfExists(userConfigFilePath);
     const keys = new Set();
     collectTemplateKeysFromObject(globalConfigJson, keys);
     collectTemplateKeysFromObject(userConfigJson, keys);

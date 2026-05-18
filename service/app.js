@@ -5,7 +5,7 @@
  */
 import "dotenv/config";
 import express from "express";
-import { loadGlobalConfig } from "#agent/config";
+import { createGlobalConfigBuilder } from "#agent/config";
 import {
   getConnectorChannelStore,
   initConnectorChannelStore,
@@ -16,13 +16,18 @@ import { createAppDependencies } from "./bootstrap/create-app-dependencies.js";
 import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewares.js";
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";
 import { startHttpServer } from "./bootstrap/start-http-server.js";
+import { createServiceGlobalConfigSource } from "./services/global-config-source.js";
 import { buildWorkspaceTree } from "./services/workspace-tree-service.js";
 
 const app = express();
 
-const globalConfigRaw = await loadGlobalConfig();
+const globalConfigSource = createServiceGlobalConfigSource();
+const globalConfigBuilder = createGlobalConfigBuilder({
+  source: globalConfigSource,
+  sourceName: globalConfigSource.name,
+});
 const appDependencies = await createAppDependencies({
-  globalConfigRaw,
+  globalConfigBuilder,
   initConnectorHistoryStore,
   getConnectorChannelStore,
   getConnectorHistoryStore,

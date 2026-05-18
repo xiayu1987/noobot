@@ -5,30 +5,34 @@
  */
 
 export function createRuntimeConfigService({
-  globalConfigRaw,
   readWorkspaceConfigParams,
-  resolveConfigSecrets,
+  globalConfigBuilder,
   BotManager,
   setApiKeyTtlMs,
+  setGlobalConfigRaw,
   setGlobalConfig,
   setBot,
   workspaceRootPath,
   initConnectorHistoryStore,
 } = {}) {
   async function rebuildRuntimeConfig() {
+    if (!globalConfigBuilder || typeof globalConfigBuilder.build !== "function") {
+      throw new Error("[runtime-config-service] globalConfigBuilder.build is required");
+    }
     const paramsPayload = await readWorkspaceConfigParams({ createIfMissing: true });
     const configParams = paramsPayload.values || {};
-    const resolvedGlobalConfig = resolveConfigSecrets(globalConfigRaw, {
-      configParams,
-    });
-    resolvedGlobalConfig.configParams = { ...configParams };
+    const builtConfig = await globalConfigBuilder.build({ configParams });
+    const rawGlobalConfig = builtConfig?.rawConfig || {};
+    const resolvedGlobalConfig = builtConfig?.resolvedConfig || {};
     setApiKeyTtlMs(Number(resolvedGlobalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000));
     const bot = new BotManager(resolvedGlobalConfig);
+    setGlobalConfigRaw(rawGlobalConfig);
     setGlobalConfig(resolvedGlobalConfig);
     setBot(bot);
     initConnectorHistoryStore({ workspaceRoot: workspaceRootPath() });
     return {
       bot,
+      globalConfigRaw: rawGlobalConfig,
       globalConfig: resolvedGlobalConfig,
       configParams,
     };

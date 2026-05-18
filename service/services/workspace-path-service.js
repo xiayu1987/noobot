@@ -7,7 +7,7 @@ import path from "node:path";
 
 export function createWorkspacePathService({
   getGlobalConfig,
-  globalConfigRaw,
+  getGlobalConfigRaw,
   getProcessCwd = () => process.cwd(),
 } = {}) {
   function workspaceRootPath() {
@@ -19,6 +19,8 @@ export function createWorkspacePathService({
   }
 
   function templateRootPath() {
+    const globalConfigRaw =
+      typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
     return path.resolve(
       getProcessCwd(),
       String(globalConfigRaw?.workspaceTemplatePath || "../user-template/default-user"),
