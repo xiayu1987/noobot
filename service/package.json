@@ -9,8 +9,7 @@
     "#agent/tracking": "./deps/agent-tracking.js",
     "#agent/constants": "./deps/agent-constants.js",
     "#agent/utils": "./deps/agent-utils.js",
-    "#agent/event": "./deps/agent-event.js",
-    "#agent/session-crypto": "./deps/agent-session-crypto.js"
+    "#agent/event": "./deps/agent-event.js"
   },
   "main": "app.js",
   "scripts": {

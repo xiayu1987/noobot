@@ -149,6 +149,31 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
   };
 }
 
+function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools = {}) {
+  const bridge = runtimeContext?.userInteractionBridge;
+  if (!bridge || typeof bridge.requestUserInteraction !== "function") return;
+  if (bridge.__sessionCryptoWrapped === true) return;
+  const decryptBySessionId = sharedTools?.sessionCrypto?.decryptBySessionId;
+  if (typeof decryptBySessionId !== "function") return;
+
+  const originalRequestUserInteraction = bridge.requestUserInteraction.bind(bridge);
+  bridge.requestUserInteraction = async function wrappedRequestUserInteraction(payload = {}) {
+    const result = await originalRequestUserInteraction(payload);
+    if (payload?.requireEncryption !== true) return result;
+
+    const encryptedPayload = result?.payload;
+    const encryptedFlag = result?.encrypted === true;
+    const fallbackSessionId = String(payload?.sessionId || "").trim();
+    const responseSessionId = String(result?.sessionId || "").trim();
+    const targetSessionId = responseSessionId || fallbackSessionId;
+    if (!encryptedFlag || !String(encryptedPayload || "").trim() || !targetSessionId) {
+      throw new Error("encrypted interaction response required");
+    }
+    return decryptBySessionId(String(encryptedPayload || ""), targetSessionId);
+  };
+  bridge.__sessionCryptoWrapped = true;
+}
+
 function initializeConnectorRuntime(
   runtimeContext = {},
   sharedTools = {},
@@ -193,6 +218,7 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   initializeSharedFetch(sharedTools);
   initializeTextCleaner(sharedTools);
   initializeSessionCrypto(sharedTools, { sessionId });
+  initializeUserInteractionBridgeCrypto(runtimeContext, sharedTools);
   initializeConnectorRuntime(runtimeContext, sharedTools, { rootSessionId, sessionId });
   await initializeBrowserRuntime(runtimeContext, sharedTools);
 }

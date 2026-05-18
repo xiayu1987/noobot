@@ -7,7 +7,6 @@ import { randomBytes } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "#agent/event";
 import { mergeConfig } from "#agent/config";
-import { decryptPayloadBySessionId } from "#agent/session-crypto";
 import { logError } from "#agent/tracking";
 import { HTTP_STATUS } from "#agent/constants";
 
@@ -206,8 +205,6 @@ export function registerChatWebSocketServer(
             resolve: resolveInteraction,
             reject: rejectInteraction,
             timer,
-            requireEncryption: Boolean(requireEncryption),
-            sessionId: String(sessionId || "").trim(),
           });
 
           sendEvent("interaction_request", {
@@ -261,20 +258,7 @@ export function registerChatWebSocketServer(
           }
           pendingInteractionRequests.delete(requestId);
           clearTimeout(requestItem.timer);
-          let normalizedResponse = payload?.response ?? {};
-          if (requestItem?.requireEncryption) {
-            const encryptedPayload = normalizedResponse?.payload;
-            const encryptedFlag = normalizedResponse?.encrypted === true;
-            const sessionId = String(requestItem?.sessionId || "").trim();
-            if (!encryptedFlag || !String(encryptedPayload || "").trim() || !sessionId) {
-              throw new Error(translateText("ws.interactionEncryptedRequired", currentLocale));
-            }
-            normalizedResponse = decryptPayloadBySessionId(
-              String(encryptedPayload || ""),
-              sessionId,
-            );
-          }
-          requestItem.resolve(normalizedResponse);
+          requestItem.resolve(payload?.response ?? {});
           return;
         }
         if (action === "stop") {

@@ -64,3 +64,63 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
     await runtime.sharedTools.browser.close().catch(() => {});
   }
 });
+
+test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encrypted response", async () => {
+  const runtime = buildRuntimeContext({
+    userId: "u1",
+    userInteractionBridge: {
+      async requestUserInteraction() {
+        return {
+          encrypted: true,
+          payload: "CBMcWlELB0MGVA4=",
+        };
+      },
+    },
+    systemRuntime: {
+      sessionId: "s1",
+      rootSessionId: "r1",
+      config: { allowUserInteraction: true },
+    },
+  });
+
+  await initializeRuntimeEnvironment(runtime);
+
+  const response = await runtime.userInteractionBridge.requestUserInteraction({
+    requireEncryption: true,
+    sessionId: "s1",
+  });
+  assert.deepEqual(response, { ok: true });
+});
+
+test("initializeRuntimeEnvironment encrypted response invalid should throw", async () => {
+  const runtime = buildRuntimeContext({
+    userId: "u1",
+    userInteractionBridge: {
+      async requestUserInteraction() {
+        return {
+          encrypted: false,
+          payload: "",
+        };
+      },
+    },
+    systemRuntime: {
+      sessionId: "s1",
+      rootSessionId: "r1",
+      config: { allowUserInteraction: true },
+    },
+  });
+
+  await initializeRuntimeEnvironment(runtime);
+
+  await assert.rejects(
+    () =>
+      runtime.userInteractionBridge.requestUserInteraction({
+        requireEncryption: true,
+        sessionId: "s1",
+      }),
+    (error) =>
+      error &&
+      typeof error.message === "string" &&
+      error.message.includes("encrypted interaction response required"),
+  );
+});
