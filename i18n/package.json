@@ -1,0 +1,26 @@
+{
+  "name": "noobot-i18n",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/shared/index.js",
+  "exports": {
+    ".": "./src/shared/index.js",
+    "./shared": "./src/shared/index.js",
+    "./agent/backend-messages": "./src/agent/backend-messages.js",
+    "./agent/system-text": "./src/agent/system-text.js",
+    "./agent/locales/en-US": "./src/agent/locales/en-US.js",
+    "./agent/locales/zh-CN": "./src/agent/locales/zh-CN.js",
+    "./agent/locales/en-US/tool-schema": "./src/agent/locales/en-US/tool-schema.js",
+    "./agent/locales/en-US/system-prompt": "./src/agent/locales/en-US/system-prompt.js",
+    "./agent/locales/zh-CN/tool-schema": "./src/agent/locales/zh-CN/tool-schema.js",
+    "./agent/locales/zh-CN/system-prompt": "./src/agent/locales/zh-CN/system-prompt.js",
+    "./service": "./src/service/index.js",
+    "./service/backend-messages": "./src/service/backend-messages.js",
+    "./client/messages": "./src/client/messages.js",
+    "./client/locales/en-US": "./src/client/locales/en-US.js",
+    "./client/locales/zh-CN": "./src/client/locales/zh-CN.js",
+    "./agent-proxy": "./src/agent-proxy/index.js",
+    "./package.json": "./package.json"
+  }
+}

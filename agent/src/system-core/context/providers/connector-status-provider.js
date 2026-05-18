@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { safeNum, normalizeSelectedConnectors } from "../../utils/shared-utils.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { CONNECTOR_TYPE } from "../../config/core/enums.js";
 import { CONNECTOR_RUNTIME_STATUS } from "../../connectors/constants.js";
 function normalizeHistoryConnectorItems(items = []) {

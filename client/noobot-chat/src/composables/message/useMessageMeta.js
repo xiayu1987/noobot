@@ -5,8 +5,8 @@
  */
 import { computed } from "vue";
 import { useLocale } from "../../shared/i18n/useLocale";
-import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
-import { enUSMessages } from "../../shared/i18n/locales/en-US";
+import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
+import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 
 export function useMessageMeta({ getMessageItem = () => ({}) } = {}) {
   const { translate } = useLocale();

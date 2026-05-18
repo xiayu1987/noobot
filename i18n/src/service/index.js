@@ -5,9 +5,10 @@
  */
 
 export {
+  SUPPORTED_LOCALES,
+  DEFAULT_LOCALE,
   normalizeLocale,
   resolveLocaleFromAcceptLanguage,
+  resolveLocaleFromRuntime,
   pickLocaleText,
-  DEFAULT_LOCALE,
-} from "noobot-agent/i18n";
-export { BACKEND_I18N } from "noobot-agent/i18n/backend-messages";
+} from "../shared/index.js";

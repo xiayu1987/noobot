@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../../../tracking/index.js";
-import { tSystem } from "../../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { HAS_SHARP, getSharp } from "./web2img-config.js";
 
 const fsp = fs.promises;

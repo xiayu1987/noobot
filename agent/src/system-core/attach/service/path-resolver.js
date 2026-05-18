@@ -14,7 +14,7 @@ import {
 } from "../constants.js";
 import { safeStr } from "../../utils/shared-utils.js";
 import { fatalSystemError, recoverableToolError } from "../../error/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { readAttachIndex } from "../index-manager.js";
 import { ERROR_CODE } from "../../error/constants.js";
 

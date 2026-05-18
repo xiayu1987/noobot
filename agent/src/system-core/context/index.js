@@ -33,7 +33,7 @@ import {
 import { resolveScenarioProfile } from "./builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "./formatters/system-prompt-formatter.js";
 import { mapToAgentContextSchema } from "./formatters/agent-context-mapper.js";
-import { tSystem } from "../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import {
   filterSummarizedMessages,
   normalizeContextWindow,

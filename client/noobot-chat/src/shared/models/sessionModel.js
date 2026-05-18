@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { CONNECTOR_TYPES } from "../constants/chatConstants";
-import { messages } from "../i18n/messages";
+import { messages } from "noobot-i18n/client/messages";
 
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =

@@ -21,7 +21,7 @@ import { safeNum, safeStr } from "../../utils/shared-utils.js";
 import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
 import { resolveAttachmentPolicy, isMimeTypeAllowed, isExtensionAllowed } from "../policy/policy-validator.js";
 import { recoverableToolError } from "../../error/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import {
   attachScopeRoot,
   attachScopedRoot,

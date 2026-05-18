@@ -7,7 +7,7 @@ import { executeDatabaseCommand } from "./databases/index.js";
 import { executeTerminalCommand } from "./terminals/index.js";
 import { releaseTerminalChannel } from "./terminals/index.js";
 import { executeEmailCommand } from "./emails/index.js";
-import { tSystem } from "../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { recoverableToolError } from "../error/index.js";
 import { ERROR_CODE } from "../error/constants.js";
 import { matchesSensitiveFieldPattern } from "../tools/core/sensitive-field-patterns.js";

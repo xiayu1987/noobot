@@ -5,9 +5,9 @@
  */
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
 import { mergeConfig } from "../config/index.js";
-import { normalizeLocale } from "../i18n/index.js";
-import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptI18n } from "../i18n/locales/zh-CN/system-prompt.js";
-import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptI18n } from "../i18n/locales/en-US/system-prompt.js";
+import { normalizeLocale } from "noobot-i18n/shared";
+import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
+import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptI18n } from "noobot-i18n/agent/locales/en-US/system-prompt";
 import { StorageManager } from "./storage/index.js";
 import { ShortMemoryManager } from "./short-memory/index.js";
 import { LongMemoryManager } from "./long-memory/index.js";

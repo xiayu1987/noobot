@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { recoverableToolError } from "../../error/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 import { ERROR_CODE } from "../../error/constants.js";
 

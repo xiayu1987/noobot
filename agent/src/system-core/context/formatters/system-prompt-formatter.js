@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { safeNum } from "../../utils/shared-utils.js";
-import { normalizeLocale } from "../../i18n/index.js";
-import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "../../i18n/locales/zh-CN/system-prompt.js";
-import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "../../i18n/locales/en-US/system-prompt.js";
+import { normalizeLocale } from "noobot-i18n/shared";
+import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
+import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/en-US/system-prompt";
 import { normalizeAttachmentMetas } from "../../attach/index.js";
 
 function toSystemSection(title, content) {

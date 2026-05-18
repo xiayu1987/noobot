@@ -6,7 +6,6 @@
     "#agent/config": "./deps/agent-config.js",
     "#agent/connectors": "./deps/agent-connectors.js",
     "#agent/bot-manage": "./deps/agent-bot-manage.js",
-    "#agent/i18n": "./deps/agent-i18n.js",
     "#agent/tracking": "./deps/agent-tracking.js",
     "#agent/constants": "./deps/agent-constants.js",
     "#agent/utils": "./deps/agent-utils.js",
@@ -31,7 +30,9 @@
     "test:tools": "npm --prefix ../agent run test:tools",
     "test:routes": "node --test __tests__/routes/*.test.js",
     "lint:tools-constants": "eslint .",
-    "lint:service-constants": "eslint ."
+    "lint:service-constants": "eslint .",
+    "check:i18n-imports": "node ../scripts/check-i18n-imports.mjs --project=service",
+    "pretest": "npm run -s check:i18n-imports"
   },
   "dependencies": {
     "@langchain/core": "^1.1.46",
@@ -60,7 +61,8 @@
     "ws": "^8.20.1",
     "yazl": "^3.3.1",
     "zod": "^4.4.3",
-    "noobot-agent": "file:../agent"
+    "noobot-agent": "file:../agent",
+    "noobot-i18n": "file:../i18n"
   },
   "overrides": {
     "systeminformation": "^5.31.6"

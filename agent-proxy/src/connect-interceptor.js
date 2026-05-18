@@ -5,7 +5,7 @@
  */
 import { config } from "./config.js";
 import { AGENT_PROXY_ERROR } from "./constants.js";
-import { resolveLocaleFromRequest } from "./i18n.js";
+import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
 import { buildClientPermissions } from "./utils.js";
 import {
   collectRequestBody,

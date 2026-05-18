@@ -14,9 +14,12 @@
     "pm2:stop": "PM2_HOME=../.pm2 npx pm2 stop noobot-agent-proxy",
     "pm2:delete": "PM2_HOME=../.pm2 npx pm2 delete noobot-agent-proxy",
     "pm2:logs": "PM2_HOME=../.pm2 npx pm2 logs noobot-agent-proxy",
-    "pm2:list": "PM2_HOME=../.pm2 npx pm2 list"
+    "pm2:list": "PM2_HOME=../.pm2 npx pm2 list",
+    "check:i18n-imports": "node ../scripts/check-i18n-imports.mjs --project=agent-proxy",
+    "pretest": "npm run -s check:i18n-imports"
   },
   "dependencies": {
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "noobot-i18n": "file:../i18n"
   }
 }

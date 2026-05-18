@@ -10,7 +10,9 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "serve:caddy": "bash ./deploy/run-caddy.sh",
-    "serve:caddy:restart": "bash ./deploy/restart-caddy.sh"
+    "serve:caddy:restart": "bash ./deploy/restart-caddy.sh",
+    "check:i18n-imports": "node ../../scripts/check-i18n-imports.mjs --project=client",
+    "pretest": "npm run -s check:i18n-imports"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -18,7 +20,8 @@
     "markdown-it": "^14.1.1",
     "mermaid": "^11.15.0",
     "pinia": "^3.0.4",
-    "vue": "^3.5.34"
+    "vue": "^3.5.34",
+    "noobot-i18n": "file:../../i18n"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.5",

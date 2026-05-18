@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { BACKEND_I18N } from "./backend-messages.js";
-import { DEFAULT_LOCALE, normalizeLocale, pickLocaleText } from "./index.js";
+import { DEFAULT_LOCALE, normalizeLocale, pickLocaleText } from "../shared/index.js";
 
-function resolveLocaleFromEnv() {
+export function resolveLocaleFromEnv() {
   const lang = String(process.env.NOOBOT_LANG || process.env.LANG || "").trim();
   return normalizeLocale(lang, DEFAULT_LOCALE);
 }

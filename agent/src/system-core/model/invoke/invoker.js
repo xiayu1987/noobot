@@ -7,7 +7,7 @@
  */
 import { HumanMessage } from "@langchain/core/messages";
 import { fatalSystemError } from "../../error/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeProviderFormat } from "../../config/core/enums.js";
 import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 import { resolveModelSpecByName } from "../resolver/index.js";

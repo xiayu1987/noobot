@@ -9,9 +9,9 @@ import {
   normalizeLocale,
   resolveLocaleFromAcceptLanguage,
   pickLocaleText,
-  DEFAULT_LOCALE,
-  BACKEND_I18N,
-} from "#agent/i18n";
+  DEFAULT_LOCALE
+} from "noobot-i18n/service";
+import { BACKEND_I18N } from "noobot-i18n/service/backend-messages";
 import { createAuthService } from "../services/auth-service.js";
 import { createChatRunService } from "../services/chat-run-service.js";
 import { createConfigParamsService } from "../services/config-params-service.js";

@@ -24,7 +24,7 @@ import {
   buildFingerprint,
   buildUpstreamUrl,
 } from "./utils.js";
-import { localizeAgentProxyMessage } from "./i18n.js";
+import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 
 export class ChannelManager {
   constructor(WebSocket) {

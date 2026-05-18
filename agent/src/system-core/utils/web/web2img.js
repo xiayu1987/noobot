@@ -9,7 +9,7 @@ import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { logger } from "../../tracking/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { recoverableToolError } from "../../error/index.js";
 import {
   DEFAULT_CONFIG,

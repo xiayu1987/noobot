@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { Poppler } from "node-poppler";
 import { recoverableToolError } from "../../error/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";
 import { IMAGE_EXTENSIONS } from "../../constants/file-extensions.js";
 
