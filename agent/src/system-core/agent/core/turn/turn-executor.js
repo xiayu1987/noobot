@@ -22,6 +22,7 @@ import {
 } from "../media/artifact-service.js";
 import { invokeLlmWithTransientRetry, normalizeAiTextContent } from "../llm-invoker.js";
 import { resolveCurrentModelInfo } from "../model/model-manager.js";
+import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
 
 function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -99,16 +100,65 @@ export async function invokeNoToolsTurn({
 
   const invokeLlm = resolveInvokeLlm(modelState, "no_tools");
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
-  const modelResponse = await invokeLlmWithTransientRetry({
-    modelState,
-    turn,
-    mode: "no_tools",
-    invoke: ({ callbacks }) =>
-      invokeLlm.invoke(filterSummarizedMessages(messages), {
-        callbacks,
-        signal: abortSignal,
-        ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
+  const llmStartedAtMs = Date.now();
+  const llmStartedAt = new Date(llmStartedAtMs).toISOString();
+  await runRuntimeHook({
+    runtime,
+    point: HOOK_POINTS.BEFORE_LLM_CALL,
+    context: withHookRuntimeMeta(runtime, {
+      phase: "llm_call",
+      turn,
+      mode: "no_tools",
+      status: "start",
+      startedAt: llmStartedAt,
+      forceToolChoiceNone,
+    }),
+  });
+  let modelResponse = null;
+  try {
+    modelResponse = await invokeLlmWithTransientRetry({
+      modelState,
+      turn,
+      mode: "no_tools",
+      invoke: ({ callbacks }) =>
+        invokeLlm.invoke(filterSummarizedMessages(messages), {
+          callbacks,
+          signal: abortSignal,
+          ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
+        }),
+    });
+  } catch (error) {
+    await runRuntimeHook({
+      runtime,
+      point: HOOK_POINTS.LLM_CALL_ERROR,
+      context: withHookRuntimeMeta(runtime, {
+        phase: "llm_call",
+        turn,
+        mode: "no_tools",
+        status: "error",
+        startedAt: llmStartedAt,
+        endedAt: new Date(Date.now()).toISOString(),
+        durationMs: Date.now() - llmStartedAtMs,
+        error,
       }),
+    });
+    throw error;
+  }
+  const llmEndedAtMs = Date.now();
+  await runRuntimeHook({
+    runtime,
+    point: HOOK_POINTS.AFTER_LLM_CALL,
+    context: withHookRuntimeMeta(runtime, {
+      phase: "llm_call",
+      turn,
+      mode: "no_tools",
+      status: "success",
+      startedAt: llmStartedAt,
+      endedAt: new Date(llmEndedAtMs).toISOString(),
+      durationMs: llmEndedAtMs - llmStartedAtMs,
+      hasToolCalls: false,
+      modelResponse,
+    }),
   });
   const responseContentText = normalizeAiTextContent(modelResponse?.content, {
     additionalKwargs: modelResponse?.additional_kwargs ?? null,
@@ -127,7 +177,7 @@ export async function invokeNoToolsTurn({
     runtime,
   });
 
-  stateCommitter.pushAssistantMessage({
+  await stateCommitter.pushAssistantMessage({
     content: responseContentText,
     rawModelContent: modelResponse?.content ?? null,
     modelAdditionalKwargs: modelResponse?.additional_kwargs ?? null,
@@ -245,10 +295,41 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       },
     });
 
+  const llmStartedAtMs = Date.now();
+  const llmStartedAt = new Date(llmStartedAtMs).toISOString();
+  await runRuntimeHook({
+    runtime,
+    point: HOOK_POINTS.BEFORE_LLM_CALL,
+    context: withHookRuntimeMeta(runtime, {
+      phase: "llm_call",
+      turn,
+      mode: "with_tools",
+      status: "start",
+      startedAt: llmStartedAt,
+      toolChoice: configuredToolChoice || "",
+      toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
+    }),
+  });
+
   let ai = null;
   try {
     ai = await invokeBoundLlmWithToolChoice();
   } catch (error) {
+    await runRuntimeHook({
+      runtime,
+      point: HOOK_POINTS.LLM_CALL_ERROR,
+      context: withHookRuntimeMeta(runtime, {
+        phase: "llm_call",
+        turn,
+        mode: "with_tools",
+        status: "error",
+        startedAt: llmStartedAt,
+        endedAt: new Date(Date.now()).toISOString(),
+        durationMs: Date.now() - llmStartedAtMs,
+        toolChoice: configuredToolChoice || "",
+        error,
+      }),
+    });
     if (configuredToolChoice === "required" && isRequiredToolChoiceUnsupportedError(error)) {
       if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
         runtime.systemRuntime.toolChoiceRequiredUnsupported = true;
@@ -294,6 +375,23 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     additionalKwargs: ai?.additional_kwargs ?? null,
     allowReasoningFallback: calls.length === 0,
   });
+  await runRuntimeHook({
+    runtime,
+    point: HOOK_POINTS.AFTER_LLM_CALL,
+    context: withHookRuntimeMeta(runtime, {
+      phase: "llm_call",
+      turn,
+      mode: "with_tools",
+      status: "success",
+      startedAt: llmStartedAt,
+      endedAt: new Date(Date.now()).toISOString(),
+      durationMs: Date.now() - llmStartedAtMs,
+      hasToolCalls: Boolean(calls.length),
+      toolChoice: configuredToolChoice || "",
+      ai,
+      calls,
+    }),
+  });
   messages.push(ai);
 
   const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
@@ -308,7 +406,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     runtime,
   });
 
-  stateCommitter.pushAssistantMessage({
+  await stateCommitter.pushAssistantMessage({
     content: aiContentText,
     rawModelContent: ai?.content ?? null,
     modelAdditionalKwargs: ai?.additional_kwargs ?? null,

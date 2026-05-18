@@ -11,6 +11,7 @@ import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
+import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
 
 function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
   if (invokeError) {
@@ -37,7 +38,10 @@ export async function executeToolCall({
   userId = "",
   sessionId = "",
   parentSessionId = "",
+  runtime = {},
 } = {}) {
+  const toolStartedAtMs = Date.now();
+  const toolStartedAt = new Date(toolStartedAtMs).toISOString();
   let toolResultText = "";
   let invokeError = null;
   if (!tool) {
@@ -52,6 +56,23 @@ export async function executeToolCall({
       tool: call?.name,
       result: String(toolResultText).slice(0, 200),
     });
+    await runRuntimeHook({
+      runtime,
+      point: HOOK_POINTS.AFTER_TOOL_CALL,
+      context: withHookRuntimeMeta(runtime, {
+        phase: "tool_call",
+        turn,
+        status: "error",
+        startedAt: toolStartedAt,
+        endedAt: new Date(Date.now()).toISOString(),
+        durationMs: Date.now() - toolStartedAtMs,
+        call,
+        toolName: call?.name || "",
+        success: false,
+        failureReason: "tool_not_found",
+        toolResultText,
+      }),
+    });
     return {
       call,
       toolResultText,
@@ -61,6 +82,19 @@ export async function executeToolCall({
     };
   }
   let rawResult = null;
+  await runRuntimeHook({
+    runtime,
+    point: HOOK_POINTS.BEFORE_TOOL_CALL,
+    context: withHookRuntimeMeta(runtime, {
+      phase: "tool_call",
+      turn,
+      status: "start",
+      startedAt: toolStartedAt,
+      call,
+      toolName: call?.name || "",
+      args: call?.args || {},
+    }),
+  });
   try {
     rawResult = await tool.invoke(call?.args || {}, {
       signal: abortSignal,
@@ -83,6 +117,22 @@ export async function executeToolCall({
       },
     });
     if (isAbort || isFatal) throw error;
+    await runRuntimeHook({
+      runtime,
+      point: HOOK_POINTS.TOOL_CALL_ERROR,
+      context: withHookRuntimeMeta(runtime, {
+        phase: "tool_call",
+        turn,
+        status: "error",
+        startedAt: toolStartedAt,
+        endedAt: new Date(Date.now()).toISOString(),
+        durationMs: Date.now() - toolStartedAtMs,
+        call,
+        toolName: call?.name || "",
+        args: call?.args || {},
+        error,
+      }),
+    });
     invokeError = error;
     const errorDetails =
       error?.details && typeof error.details === "object" ? error.details : null;
@@ -115,6 +165,24 @@ export async function executeToolCall({
     tool: call?.name,
     result: String(toolResultText).slice(0, 200),
     success: failureState.success,
+  });
+  await runRuntimeHook({
+    runtime,
+    point: HOOK_POINTS.AFTER_TOOL_CALL,
+    context: withHookRuntimeMeta(runtime, {
+      phase: "tool_call",
+      turn,
+      status: failureState.success ? "success" : "error",
+      startedAt: toolStartedAt,
+      endedAt: new Date(Date.now()).toISOString(),
+      durationMs: Date.now() - toolStartedAtMs,
+      call,
+      toolName: call?.name || "",
+      args: call?.args || {},
+      success: failureState.success,
+      failureReason: failureState.reason || "",
+      toolResultText,
+    }),
   });
   return {
     call,

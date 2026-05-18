@@ -24,6 +24,7 @@
     "./attach": "./src/system-core/attach/index.js",
     "./context": "./src/system-core/context/index.js",
     "./config": "./src/system-core/config/index.js",
+    "./hook": "./src/system-core/hook/index.js",
     "./package.json": "./package.json"
   },
   "scripts": {

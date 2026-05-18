@@ -10,6 +10,7 @@ import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
 import { assertNotAborted } from "../utils/error-utils.js";
 import { normalizeToolResultAttachmentMetas } from "./turn-executor.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../../tools/workflow/final-answer-tool.js";
+import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
 
 export async function processToolResults({
   modelState,
@@ -23,6 +24,17 @@ export async function processToolResults({
   const { eventListener, runtime, abortSignal } = modelState;
 
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
+  await runRuntimeHook({
+    runtime,
+    point: HOOK_POINTS.BEFORE_TOOL_CALLS,
+    context: withHookRuntimeMeta(runtime, {
+      phase: "tool_calls",
+      status: "start",
+      turn,
+      toolCallCount: calls.length,
+      calls,
+    }),
+  });
 
   const toolCallResults = await Promise.all(
     calls.map(async (call) => {
@@ -43,6 +55,7 @@ export async function processToolResults({
         userId: runtime?.systemRuntime?.userId || runtime?.userId || "",
         sessionId: runtime?.systemRuntime?.sessionId || "",
         parentSessionId: runtime?.systemRuntime?.parentSessionId || "",
+        runtime,
       });
     }),
   );
@@ -64,10 +77,10 @@ export async function processToolResults({
   for (const toolCallResult of toolCallResults) {
     const call = toolCallResult?.call || {};
     const toolResultText = String(toolCallResult?.toolResultText || "");
-    stateCommitter.pushToolResult({ call, toolResultText });
+    await stateCommitter.pushToolResult({ call, toolResultText });
 
     const extractedAttachmentMetas = normalizeToolResultAttachmentMetas(toolCallResult, call);
-    stateCommitter.appendAttachmentMetas(extractedAttachmentMetas);
+    await stateCommitter.appendAttachmentMetas(extractedAttachmentMetas);
 
     const toolName = String(call?.name || "").trim();
     if (!toolName) continue;

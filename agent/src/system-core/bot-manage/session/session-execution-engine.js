@@ -299,7 +299,10 @@ export class SessionExecutionEngine {
     });
     return this.agentContextFactory.buildAgentContextFromBuilder({
       mode,
+      userId,
       sessionId,
+      caller,
+      parentSessionId,
       eventListener,
       dialogProcessId,
       runConfig,
