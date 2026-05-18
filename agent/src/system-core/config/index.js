@@ -5,7 +5,6 @@
  */
 
 export {
-  resolveConfigSecrets,
   resolveConfigTemplates,
 } from "./core/template-resolver.js";
 export { sanitizeUserConfig } from "./core/user-override-policy.js";
@@ -13,7 +12,7 @@ export {
   mergeConfig,
   applySessionModelOverride,
 } from "./core/config-merge.js";
-export { loadGlobalConfig } from "./core/global-config-loader.js";
+export { createGlobalConfigBuilder } from "./core/global-config-builder.js";
 export { ConfigService } from "./core/config-service.js";
 export {
   DATABASE_TYPE,

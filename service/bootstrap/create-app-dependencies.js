@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { BotManager } from "#agent/bot-manage";
-import { resolveConfigSecrets } from "#agent/config";
+import { createGlobalConfigBuilder } from "#agent/config";
 import {
   normalizeLocale,
   resolveLocaleFromAcceptLanguage,
@@ -31,12 +31,19 @@ const DEFAULT_WORKSPACE_USERS_CONFIG = {
 };
 
 export async function createAppDependencies({
-  globalConfigRaw,
+  globalConfigBuilder,
   initConnectorHistoryStore,
   getConnectorChannelStore,
   getConnectorHistoryStore,
   buildWorkspaceTree,
 } = {}) {
+  const configBuilder =
+    globalConfigBuilder && typeof globalConfigBuilder?.build === "function"
+      ? globalConfigBuilder
+      : createGlobalConfigBuilder();
+  const initialRawConfig =
+    (await configBuilder?.loadRawConfig?.({ reload: false })) || {};
+  let globalConfigRaw = initialRawConfig;
   let globalConfig = globalConfigRaw;
   let bot = null;
 
@@ -51,13 +58,14 @@ export async function createAppDependencies({
 
   const workspacePathService = createWorkspacePathService({
     getGlobalConfig: () => globalConfig,
-    globalConfigRaw,
+    getGlobalConfigRaw: () => globalConfigRaw,
   });
   const { workspaceRootPath, templateRootPath } = workspacePathService;
 
   const configParamsService = createConfigParamsService({
     workspaceRootPath,
-    globalConfigRaw,
+    getGlobalConfigRaw: () => globalConfigRaw,
+    templateRootPath,
   });
   const {
     normalizeConfigParams,
@@ -124,11 +132,13 @@ export async function createAppDependencies({
   } = configScopeService;
 
   const runtimeConfigService = createRuntimeConfigService({
-    globalConfigRaw,
     readWorkspaceConfigParams,
-    resolveConfigSecrets,
+    globalConfigBuilder: configBuilder,
     BotManager,
     setApiKeyTtlMs,
+    setGlobalConfigRaw: (nextGlobalConfigRaw) => {
+      globalConfigRaw = nextGlobalConfigRaw || {};
+    },
     setGlobalConfig: (nextGlobalConfig) => {
       globalConfig = nextGlobalConfig;
     },

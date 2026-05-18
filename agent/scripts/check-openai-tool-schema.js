@@ -13,11 +13,9 @@ import { HumanMessage } from "@langchain/core/messages";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { buildTools } from "noobot-agent/tools";
 import { createConnectorTools } from "noobot-agent/tools/connectors/connector-toolkit";
-import {
-  loadGlobalConfig,
-  resolveConfigSecrets,
-  sanitizeUserConfig,
-} from "noobot-agent/config";
+import { sanitizeUserConfig } from "noobot-agent/config";
+import { loadGlobalConfig } from "../src/system-core/config/core/global-config-loader.js";
+import { resolveConfigSecrets } from "../src/system-core/config/core/template-resolver.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
 
 function parseArgs(argv = []) {
