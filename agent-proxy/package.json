@@ -19,7 +19,7 @@
     "pretest": "npm run -s check:i18n-imports"
   },
   "dependencies": {
-    "ws": "^8.20.0",
+    "ws": "^8.20.1",
     "noobot-i18n": "file:../i18n"
   }
 }

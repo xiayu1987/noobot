@@ -41,7 +41,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "imapflow": "^1.3.3",
-    "jscpd": "^4.2.2",
+    "jscpd": "^4.2.3",
     "jsdom": "^29.1.1",
     "libreoffice": "^0.4.5",
     "mailparser": "^3.9.8",
@@ -67,6 +67,6 @@
     "systeminformation": "^5.31.6"
   },
   "devDependencies": {
-    "eslint": "^9.39.4"
+    "eslint": "^10.4.0"
   }
 }
