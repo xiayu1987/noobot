@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { tSystem } from "../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 
 export function buildMcpToolDescription(toolSpec = {}) {
   const description = String(toolSpec?.description || "").trim();

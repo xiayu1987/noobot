@@ -16,8 +16,6 @@
     "./tracking": "./src/system-core/tracking/index.js",
     "./connectors": "./src/system-core/connectors/index.js",
     "./constants": "./src/system-core/constants/index.js",
-    "./i18n": "./src/system-core/i18n/index.js",
-    "./i18n/backend-messages": "./src/system-core/i18n/backend-messages.js",
     "./utils/fs-safe": "./src/system-core/utils/fs-safe.js",
     "./utils/shared-utils": "./src/system-core/utils/shared-utils.js",
     "./utils/session-crypto": "./src/system-core/utils/session-crypto.js",
@@ -38,7 +36,9 @@
     "test:bot-manage": "node --test --test-force-exit __tests__/system-core/bot-manage/*.test.js",
     "test:tools": "node --test --test-force-exit __tests__/system-core/tools/*.test.js",
     "test:utils": "node --test --test-force-exit __tests__/system-core/utils/*.test.js __tests__/system-core/utils/**/*.test.js",
-    "test:connectors": "node --test --test-force-exit __tests__/system-core/connectors/*.test.js __tests__/system-core/connectors/**/*.test.js"
+    "test:connectors": "node --test --test-force-exit __tests__/system-core/connectors/*.test.js __tests__/system-core/connectors/**/*.test.js",
+    "check:i18n-imports": "node ../scripts/check-i18n-imports.mjs --project=agent",
+    "pretest": "npm run -s check:i18n-imports"
   },
   "dependencies": {
     "@langchain/core": "^1.1.46",
@@ -46,7 +46,8 @@
     "openai": "^6.38.0",
     "pino": "^10.3.1",
     "uuid": "^14.0.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "noobot-i18n": "file:../i18n"
   },
   "optionalDependencies": {
     "@mozilla/readability": "^0.6.0",

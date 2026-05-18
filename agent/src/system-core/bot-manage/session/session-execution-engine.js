@@ -5,7 +5,7 @@
  */
 import { runAgentTurn } from "../../agent/index.js";
 import { recoverableToolError } from "../../error/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { SessionExecutionInitializer } from "../execution/initializer.js";
 import { SessionExecutionFinalizer } from "../execution/finalizer.js";
 import { SessionTurnPersister } from "../execution/turn-persister.js";

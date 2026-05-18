@@ -6,7 +6,7 @@
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { createChatModel, createChatModelByName } from "../model/index.js";
 import { recoverableToolError } from "../error/index.js";
-import { tSystem } from "../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { getMcpServerByName, createMcpClient } from "./client-factory.js";
 import { buildLangChainMcpTools } from "./tool-adapter.js";
 

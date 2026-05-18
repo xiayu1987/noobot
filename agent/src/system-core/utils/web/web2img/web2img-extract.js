@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tSystem } from "../../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { extractReadableLinesFromHtml } from "../text-cleaner.js";
 import { HAS_READABILITY } from "./web2img-config.js";
 import { cleanAndDedupLines } from "./web2img-clean.js";

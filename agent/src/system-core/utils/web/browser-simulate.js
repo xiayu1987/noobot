@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { chromium } from "playwright";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { logger } from "../../tracking/index.js";
 
 const DEFAULT_USER_AGENT =

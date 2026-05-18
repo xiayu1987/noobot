@@ -1,5 +1,5 @@
 import { computed, ref } from "vue";
-import { messages } from "./messages";
+import { messages } from "noobot-i18n/client/messages";
 
 const STORAGE_KEY = "noobot_locale";
 const FALLBACK_LOCALE = "zh-CN";

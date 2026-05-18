@@ -9,7 +9,7 @@ import {
   resetUserWorkspaceKeepRuntimeInitialized,
   syncUserWorkspaceFromTemplate,
 } from "../../init/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 
 export class WorkspaceService {
   constructor({ globalConfig = {} } = {}) {

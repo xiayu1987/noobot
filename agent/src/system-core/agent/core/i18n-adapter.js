@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { pickLocaleText, resolveLocaleFromRuntime } from "../../i18n/index.js";
-import { BACKEND_I18N } from "../../i18n/backend-messages.js";
+import { pickLocaleText, resolveLocaleFromRuntime } from "noobot-i18n/shared";
+import { BACKEND_I18N } from "noobot-i18n/agent/backend-messages";
 import { ENGINE_I18N_KEY_MAP } from "./constants/index.js";
 
 export function tEngine(runtime = {}, key = "", params = {}) {

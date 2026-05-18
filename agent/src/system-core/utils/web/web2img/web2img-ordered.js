@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tSystem } from "../../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { prepareAdPatternMatchers, isNoiseOrAdLine } from "./web2img-clean.js";
 
 async function extractOrderedSegments(page, maxItems = 8000) {

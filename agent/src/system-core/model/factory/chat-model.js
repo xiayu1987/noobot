@@ -7,7 +7,7 @@
  */
 import { ChatOpenAI } from "@langchain/openai";
 import { fatalSystemError } from "../../error/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeProviderFormat, PROVIDER_FORMAT } from "../../config/core/enums.js";
 import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 import { getModelDefaultFields } from "../spec/defaults.js";

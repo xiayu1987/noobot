@@ -10,7 +10,7 @@ import { AGENT_PROXY_ERROR } from "./constants.js";
 import {
   localizeAgentProxyMessage,
   resolveLocaleFromRequest,
-} from "./i18n.js";
+} from "noobot-i18n/agent-proxy";
 import { buildSecurityHeaders } from "./security.js";
 
 function resolveSafeErrorMessage(statusCode = 502, message = "Bad Gateway") {

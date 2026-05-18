@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BACKEND_I18N } from "../../../i18n/backend-messages.js";
+import { BACKEND_I18N } from "noobot-i18n/agent/backend-messages";
 import { pickToolText } from "../../core/tool-i18n.js";
 import { CONNECTOR_TYPE } from "../../constants/index.js";
 

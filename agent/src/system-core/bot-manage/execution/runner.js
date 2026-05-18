@@ -7,7 +7,7 @@
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { emitEvent } from "../../event/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { isAbortError } from "../../utils/error-utils.js";
 import {
   BOT_MANAGE_LOG_EVENT,

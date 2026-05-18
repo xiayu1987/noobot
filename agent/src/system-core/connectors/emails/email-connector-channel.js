@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { executeSendEmail } from "./send-email.js";
 import { executeListEmail } from "./list-email.js";
 import { executeReadEmail } from "./read-email.js";

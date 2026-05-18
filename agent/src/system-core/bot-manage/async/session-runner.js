@@ -5,7 +5,7 @@
  */
 
 import { isValidSessionId, now } from "../utils/session-utils.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import {
   BOT_MANAGE_LOG_EVENT,
   BOT_MANAGE_LOG_SOURCE,

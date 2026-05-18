@@ -5,7 +5,7 @@
  */
 
 import { recoverableToolError } from "../../error/index.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import { isValidSessionId } from "../utils/session-utils.js";
 import { CALLER_ROLE, VALID_CALLER_ROLES } from "./constants.js";
 import { ERROR_CODE } from "../../error/constants.js";

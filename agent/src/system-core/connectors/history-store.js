@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { tSystem } from "../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 import {
   CONNECTOR_TYPE,
   normalizeConnectorType,

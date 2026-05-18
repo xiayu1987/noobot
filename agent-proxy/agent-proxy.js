@@ -25,7 +25,7 @@ import {
   isIpTrusted,
   isOriginTrusted,
 } from "./src/security.js";
-import { resolveLocaleFromRequest } from "./src/i18n.js";
+import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
 
 async function loadWebSocketLibrary() {
   try {

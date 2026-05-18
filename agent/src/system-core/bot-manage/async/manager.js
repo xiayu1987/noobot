@@ -7,7 +7,7 @@
 import { isValidSessionId, now } from "../utils/session-utils.js";
 import { AsyncJobResponseBuilder } from "./response-builder.js";
 import { ASYNC_JOB_STATUS } from "./constants.js";
-import { tSystem } from "../../i18n/system-text.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 
 /**
  * Generic async job lifecycle manager.

@@ -14,8 +14,8 @@ import {
   copyMarkdownText,
 } from "../../shared/utils/markdown-copy";
 import { useLocale } from "../../shared/i18n/useLocale";
-import { zhCNMessages } from "../../shared/i18n/locales/zh-CN";
-import { enUSMessages } from "../../shared/i18n/locales/en-US";
+import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
+import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 
 // --- 常量集合（避免每次调用 new Set） ---
 const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);

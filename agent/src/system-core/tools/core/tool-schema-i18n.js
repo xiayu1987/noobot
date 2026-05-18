@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TOOL_SCHEMA_BY_TOOL as zhToolSchemaByTool } from "../../i18n/locales/zh-CN.js";
-import { TOOL_SCHEMA_BY_TOOL as enToolSchemaByTool } from "../../i18n/locales/en-US.js";
+import { TOOL_SCHEMA_BY_TOOL as zhToolSchemaByTool } from "noobot-i18n/agent/locales/zh-CN";
+import { TOOL_SCHEMA_BY_TOOL as enToolSchemaByTool } from "noobot-i18n/agent/locales/en-US";
 import { resolveToolLocale } from "./tool-i18n.js";
 
 const TOOL_SCHEMA_I18N = Object.freeze({
