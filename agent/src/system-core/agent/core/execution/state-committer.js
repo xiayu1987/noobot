@@ -14,6 +14,7 @@ export function createStateCommitter({
   turnMessageStore = null,
   dialogProcessId = "",
   runtime = {},
+  agentContext = null,
 } = {}) {
   const resolveCallId = (call = {}) =>
     String(
@@ -72,6 +73,7 @@ export function createStateCommitter({
           commitType: "assistant_message",
           status: "start",
           payload: assistantMessage,
+          agentContext,
         }),
       });
       turnMessageStore.push(assistantMessage);
@@ -83,6 +85,7 @@ export function createStateCommitter({
           commitType: "assistant_message",
           status: "success",
           payload: assistantMessage,
+          agentContext,
         }),
       });
     },
@@ -106,6 +109,7 @@ export function createStateCommitter({
           status: "start",
           payload: toolResultPayload,
           call,
+          agentContext,
         }),
       });
       const normalizedToolResultText = String(toolResultPayload.content || "");
@@ -136,6 +140,7 @@ export function createStateCommitter({
           status: "success",
           payload: toolResultPayload,
           call,
+          agentContext,
         }),
       });
     },
@@ -149,6 +154,7 @@ export function createStateCommitter({
           commitType: "attachment_metas",
           status: "start",
           payload: { attachmentMetas },
+          agentContext,
         }),
       });
       appendAttachmentMetasToRuntimeAndTurn({
@@ -164,6 +170,7 @@ export function createStateCommitter({
           commitType: "attachment_metas",
           status: "success",
           payload: { attachmentMetas },
+          agentContext,
         }),
       });
     },

@@ -33,6 +33,7 @@ export async function processToolResults({
       turn,
       toolCallCount: calls.length,
       calls,
+      agentContext: modelState?.agentContext || null,
     }),
   });
 
@@ -56,6 +57,7 @@ export async function processToolResults({
         sessionId: runtime?.systemRuntime?.sessionId || "",
         parentSessionId: runtime?.systemRuntime?.parentSessionId || "",
         runtime,
+        agentContext: modelState?.agentContext || null,
       });
     }),
   );

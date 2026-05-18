@@ -39,6 +39,7 @@ export async function executeToolCall({
   sessionId = "",
   parentSessionId = "",
   runtime = {},
+  agentContext = null,
 } = {}) {
   const toolStartedAtMs = Date.now();
   const toolStartedAt = new Date(toolStartedAtMs).toISOString();
@@ -71,6 +72,7 @@ export async function executeToolCall({
         success: false,
         failureReason: "tool_not_found",
         toolResultText,
+        agentContext,
       }),
     });
     return {
@@ -93,6 +95,7 @@ export async function executeToolCall({
       call,
       toolName: call?.name || "",
       args: call?.args || {},
+      agentContext,
     }),
   });
   try {
@@ -131,6 +134,7 @@ export async function executeToolCall({
         toolName: call?.name || "",
         args: call?.args || {},
         error,
+        agentContext,
       }),
     });
     invokeError = error;
@@ -182,6 +186,7 @@ export async function executeToolCall({
       success: failureState.success,
       failureReason: failureState.reason || "",
       toolResultText,
+      agentContext,
     }),
   });
   return {
