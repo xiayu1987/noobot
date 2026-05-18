@@ -69,6 +69,26 @@ Default endpoints:
 - npm 9+
 - Linux/macOS
 
+## Workspace Dependency Management
+
+This repo uses npm workspaces at root (`noobot/package.json`).
+
+```bash
+cd noobot
+npm install --workspaces
+```
+
+Useful commands:
+
+```bash
+# run all test scripts that exist
+npm run test
+
+# run a script in one workspace
+npm run -w service dev
+npm run -w client/noobot-chat build
+```
+
 Optional system deps:
 
 - `libreoffice` (Office document conversion)

@@ -1,0 +1,22 @@
+{
+  "name": "noobot",
+  "version": "1.1.0",
+  "private": true,
+  "workspaces": [
+    "service",
+    "agent",
+    "agent-proxy",
+    "model-proxy",
+    "i18n",
+    "client/noobot-chat"
+  ],
+  "scripts": {
+    "install:all": "npm install --workspaces",
+    "build": "npm run -w client/noobot-chat build",
+    "dev:service": "npm run -w service dev",
+    "dev:agent-proxy": "npm run -w agent-proxy dev",
+    "dev:client": "npm run -w client/noobot-chat dev",
+    "test": "npm run -ws --if-present test",
+    "check:i18n-imports": "npm run -ws --if-present check:i18n-imports"
+  }
+}

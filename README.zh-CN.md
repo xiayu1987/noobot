@@ -69,6 +69,26 @@ NOOBOT_MODEL_BASE_URL=https://example.com/v1 \
 - npm 9+
 - Linux/macOS
 
+## Workspace 依赖管理
+
+仓库根目录（`noobot/package.json`）已启用 npm workspaces。
+
+```bash
+cd noobot
+npm install --workspaces
+```
+
+常用命令：
+
+```bash
+# 运行所有存在 test 脚本的子项目
+npm run test
+
+# 只运行某个子项目脚本
+npm run -w service dev
+npm run -w client/noobot-chat build
+```
+
 可选系统依赖：
 
 - `libreoffice`（Office 文档转换）
