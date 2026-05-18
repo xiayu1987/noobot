@@ -68,6 +68,7 @@ export function createStateBuilder({
     });
 
     const modelState = {
+      agentContext,
       llm,
       activeModelName: selectedModelSpec?.model || "",
       activeModelAlias: selectedModelSpec?.alias || "",

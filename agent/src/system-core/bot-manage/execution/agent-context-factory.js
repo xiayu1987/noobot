@@ -195,6 +195,7 @@ export class AgentContextFactory {
           durationMs: failedAtMs - buildStartedAtMs,
           status: "error",
           error,
+          agentContext: null,
         },
         eventListener,
       });
@@ -221,6 +222,7 @@ export class AgentContextFactory {
         status: "success",
         messageCount:
           scopedAgentContext?.payload?.messages?.history?.length || 0,
+        agentContext: scopedAgentContext,
       },
       eventListener,
     });

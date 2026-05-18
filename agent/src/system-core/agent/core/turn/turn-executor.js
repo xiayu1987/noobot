@@ -112,6 +112,9 @@ export async function invokeNoToolsTurn({
       status: "start",
       startedAt: llmStartedAt,
       forceToolChoiceNone,
+      messages,
+      maxTurns: Number(loopState?.maxTurns || 0),
+      agentContext: modelState?.agentContext || null,
     }),
   });
   let modelResponse = null;
@@ -140,6 +143,9 @@ export async function invokeNoToolsTurn({
         endedAt: new Date(Date.now()).toISOString(),
         durationMs: Date.now() - llmStartedAtMs,
         error,
+        messages,
+        maxTurns: Number(loopState?.maxTurns || 0),
+        agentContext: modelState?.agentContext || null,
       }),
     });
     throw error;
@@ -158,6 +164,9 @@ export async function invokeNoToolsTurn({
       durationMs: llmEndedAtMs - llmStartedAtMs,
       hasToolCalls: false,
       modelResponse,
+      messages,
+      maxTurns: Number(loopState?.maxTurns || 0),
+      agentContext: modelState?.agentContext || null,
     }),
   });
   const responseContentText = normalizeAiTextContent(modelResponse?.content, {
@@ -175,6 +184,7 @@ export async function invokeNoToolsTurn({
     turnMessageStore,
     dialogProcessId,
     runtime,
+    agentContext: modelState?.agentContext || null,
   });
 
   await stateCommitter.pushAssistantMessage({
@@ -308,6 +318,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       startedAt: llmStartedAt,
       toolChoice: configuredToolChoice || "",
       toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
+      messages,
+      maxTurns: Number(loopState?.maxTurns || 0),
+      agentContext: modelState?.agentContext || null,
     }),
   });
 
@@ -328,6 +341,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
         durationMs: Date.now() - llmStartedAtMs,
         toolChoice: configuredToolChoice || "",
         error,
+        messages,
+        maxTurns: Number(loopState?.maxTurns || 0),
+        agentContext: modelState?.agentContext || null,
       }),
     });
     if (configuredToolChoice === "required" && isRequiredToolChoiceUnsupportedError(error)) {
@@ -390,6 +406,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       toolChoice: configuredToolChoice || "",
       ai,
       calls,
+      messages,
+      maxTurns: Number(loopState?.maxTurns || 0),
+      agentContext: modelState?.agentContext || null,
     }),
   });
   messages.push(ai);
@@ -404,6 +423,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     turnMessageStore,
     dialogProcessId,
     runtime,
+    agentContext: modelState?.agentContext || null,
   });
 
   await stateCommitter.pushAssistantMessage({
