@@ -22,8 +22,90 @@
 
 import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
+import { runRuntimeHook, HOOK_POINTS, withHookRuntimeMeta } from "../../hook/index.js";
+import { isAbortError } from "./utils/error-utils.js";
 
 export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
+  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const startedAtMs = Date.now();
+  const startedAt = new Date(startedAtMs).toISOString();
+  await runRuntimeHook({
+    runtime,
+    point: HOOK_POINTS.BEFORE_TURN,
+    context: withHookRuntimeMeta(runtime, {
+      phase: "agent_turn",
+      status: "start",
+      startedAt,
+      agentContext,
+      userMessage,
+    }),
+  });
   const { modelState, loopState } = buildAgentState({ agentContext, userMessage, errorLogger });
-  return runFunctionCallLoop({ modelState, loopState, turn: 1 });
+  try {
+    const result = await runFunctionCallLoop({ modelState, loopState, turn: 1 });
+    const beforeFinalAtMs = Date.now();
+    await runRuntimeHook({
+      runtime,
+      point: HOOK_POINTS.BEFORE_FINAL_OUTPUT,
+      context: withHookRuntimeMeta(runtime, {
+        phase: "agent_turn",
+        status: "success",
+        startedAt,
+        endedAt: new Date(beforeFinalAtMs).toISOString(),
+        durationMs: beforeFinalAtMs - startedAtMs,
+        agentContext,
+        userMessage,
+        result,
+      }),
+    });
+    const endedAtMs = Date.now();
+    await runRuntimeHook({
+      runtime,
+      point: HOOK_POINTS.AFTER_TURN,
+      context: withHookRuntimeMeta(runtime, {
+        phase: "agent_turn",
+        status: "success",
+        startedAt,
+        endedAt: new Date(endedAtMs).toISOString(),
+        durationMs: endedAtMs - startedAtMs,
+        agentContext,
+        userMessage,
+        result,
+      }),
+    });
+    return result;
+  } catch (error) {
+    const failedAtMs = Date.now();
+    if (isAbortError(error) || isAbortError(error?.cause)) {
+      await runRuntimeHook({
+        runtime,
+        point: HOOK_POINTS.ON_ABORT,
+        context: withHookRuntimeMeta(runtime, {
+          phase: "agent_turn",
+          status: "abort",
+          startedAt,
+          endedAt: new Date(failedAtMs).toISOString(),
+          durationMs: failedAtMs - startedAtMs,
+          agentContext,
+          userMessage,
+          error,
+        }),
+      });
+    }
+    await runRuntimeHook({
+      runtime,
+      point: HOOK_POINTS.ON_ERROR,
+      context: withHookRuntimeMeta(runtime, {
+        phase: "agent_turn",
+        status: "error",
+        startedAt,
+        endedAt: new Date(failedAtMs).toISOString(),
+        durationMs: failedAtMs - startedAtMs,
+        agentContext,
+        userMessage,
+        error,
+      }),
+    });
+    throw error;
+  }
 }

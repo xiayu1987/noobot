@@ -7,12 +7,17 @@ import {
 } from "../../../src/system-core/context/builders/runtime-environment-builder.js";
 
 test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores", () => {
+  const hookManager = { emit() {} };
   const runtime = buildRuntimeContext({
     userId: "u1",
     basePath: " /workspace/u1 ",
     runConfig: {
       sharedTools: {
         customFetch: true,
+      },
+      hookManager,
+      hooks: {
+        manager: hookManager,
       },
     },
     attachmentMetas: [{ attachmentId: "att_1" }],
@@ -21,6 +26,8 @@ test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores"
   assert.equal(runtime.userId, "u1");
   assert.equal(runtime.basePath, "/workspace/u1");
   assert.equal(runtime.sharedTools.customFetch, true);
+  assert.equal(runtime.hookManager, hookManager);
+  assert.equal(runtime.hooks?.manager, hookManager);
   assert.equal(typeof runtime.currentTurnMessages.push, "function");
   assert.equal(typeof runtime.currentTurnTasks.push, "function");
   assert.deepEqual(runtime.attachmentMetas, [{ attachmentId: "att_1" }]);

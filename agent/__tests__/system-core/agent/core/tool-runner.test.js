@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { executeToolCall } from "../../../../src/system-core/agent/core/execution/tool-runner.js";
+import { createHookManager, HOOK_POINTS } from "../../../../src/system-core/hook/index.js";
 
 test("executeToolCall extracts attachmentMetas from multimodal tool result", async () => {
   const call = {
@@ -104,4 +105,50 @@ test("executeToolCall includes error details from recoverable error", async () =
     serviceName: "weather",
     endpointName: "forecast",
   });
+});
+
+test("executeToolCall hook payload includes normalized runtime meta", async () => {
+  const hookManager = createHookManager();
+  const starts = [];
+  const ends = [];
+  hookManager.on(HOOK_POINTS.BEFORE_TOOL_CALL, async (ctx = {}) => {
+    starts.push(ctx);
+  });
+  hookManager.on(HOOK_POINTS.AFTER_TOOL_CALL, async (ctx = {}) => {
+    ends.push(ctx);
+  });
+
+  const tool = {
+    invoke: async () => ({ ok: true }),
+  };
+  const runtime = {
+    userId: "runtime_user",
+    systemRuntime: {
+      sessionId: "session_1",
+      parentSessionId: "parent_1",
+      dialogProcessId: "dp_1",
+      caller: "user",
+    },
+    hookManager,
+  };
+
+  await executeToolCall({
+    call: { id: "call_meta", name: "meta_tool", args: { q: 1 } },
+    tool,
+    turn: 2,
+    runtime,
+  });
+
+  assert.equal(starts.length, 1);
+  assert.equal(ends.length, 1);
+  assert.equal(starts[0].phase, "tool_call");
+  assert.equal(starts[0].status, "start");
+  assert.equal(starts[0].userId, "runtime_user");
+  assert.equal(starts[0].sessionId, "session_1");
+  assert.equal(starts[0].parentSessionId, "parent_1");
+  assert.equal(starts[0].dialogProcessId, "dp_1");
+  assert.equal(starts[0].caller, "user");
+  assert.equal(typeof starts[0].startedAt, "string");
+  assert.equal(ends[0].status, "success");
+  assert.equal(Number.isFinite(ends[0].durationMs), true);
 });

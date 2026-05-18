@@ -6,6 +6,7 @@
 
 import { ContextBuilder } from "../../context/index.js";
 import { emitEvent } from "../../event/index.js";
+import { HOOK_POINTS, runRuntimeHook } from "../../hook/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 /**
@@ -100,7 +101,10 @@ export class AgentContextFactory {
     });
     return this.buildAgentContextFromBuilder({
       mode,
+      userId,
       sessionId,
+      caller,
+      parentSessionId,
       eventListener,
       dialogProcessId,
       runConfig,
@@ -108,9 +112,30 @@ export class AgentContextFactory {
     });
   }
 
+  _buildContextHookBase({
+    mode = "",
+    userId = "",
+    sessionId = "",
+    caller = "",
+    parentSessionId = "",
+    dialogProcessId = "",
+  } = {}) {
+    return {
+      mode: String(mode || "").trim(),
+      userId: String(userId || "").trim(),
+      sessionId: String(sessionId || "").trim(),
+      caller: String(caller || "").trim(),
+      parentSessionId: String(parentSessionId || "").trim(),
+      dialogProcessId: String(dialogProcessId || "").trim(),
+    };
+  }
+
   async buildAgentContextFromBuilder({
     mode,
+    userId = "",
     sessionId,
+    caller = "",
+    parentSessionId = "",
     eventListener,
     dialogProcessId = "",
     runConfig = {},
@@ -119,15 +144,86 @@ export class AgentContextFactory {
     if (!contextBuilder) {
       throw new Error(tSystem("context.contextBuilderRequired"));
     }
+    const runtimeHookCarrier = {
+      eventListener,
+      hookManager:
+        runConfig?.hookManager && typeof runConfig.hookManager === "object"
+          ? runConfig.hookManager
+          : null,
+      hooks:
+        runConfig?.hooks && typeof runConfig.hooks === "object"
+          ? runConfig.hooks
+          : null,
+    };
+
+    const contextHookBase = this._buildContextHookBase({
+      mode,
+      userId,
+      sessionId,
+      caller,
+      parentSessionId,
+      dialogProcessId,
+    });
+    const buildStartedAtMs = Date.now();
+    const buildStartedAt = new Date(buildStartedAtMs).toISOString();
+
+    await runRuntimeHook({
+      runtime: runtimeHookCarrier,
+      point: HOOK_POINTS.BEFORE_CONTEXT_BUILD,
+      context: {
+        ...contextHookBase,
+        startedAt: buildStartedAt,
+      },
+      eventListener,
+    });
     emitEvent(eventListener, "context_building", { sessionId, mode });
-    const agentContext =
-      mode === "initial"
-        ? await contextBuilder.buildInitialContext({ dialogProcessId })
-        : await contextBuilder.buildContinueContext({ dialogProcessId });
+    let agentContext = null;
+    try {
+      agentContext =
+        mode === "initial"
+          ? await contextBuilder.buildInitialContext({ dialogProcessId })
+          : await contextBuilder.buildContinueContext({ dialogProcessId });
+    } catch (error) {
+      const failedAtMs = Date.now();
+      await runRuntimeHook({
+        runtime: runtimeHookCarrier,
+        point: HOOK_POINTS.CONTEXT_BUILD_ERROR,
+        context: {
+          ...contextHookBase,
+          startedAt: buildStartedAt,
+          endedAt: new Date(failedAtMs).toISOString(),
+          durationMs: failedAtMs - buildStartedAtMs,
+          status: "error",
+          error,
+        },
+        eventListener,
+      });
+      throw error;
+    }
     const scopedAgentContext = this.applyRunConfigToolPolicy(
       agentContext,
       runConfig,
     );
+    const runtime =
+      scopedAgentContext?.execution?.controllers?.runtime &&
+      typeof scopedAgentContext.execution.controllers.runtime === "object"
+        ? scopedAgentContext.execution.controllers.runtime
+        : runtimeHookCarrier;
+    const completedAtMs = Date.now();
+    await runRuntimeHook({
+      runtime,
+      point: HOOK_POINTS.AFTER_CONTEXT_BUILD,
+      context: {
+        ...contextHookBase,
+        startedAt: buildStartedAt,
+        endedAt: new Date(completedAtMs).toISOString(),
+        durationMs: completedAtMs - buildStartedAtMs,
+        status: "success",
+        messageCount:
+          scopedAgentContext?.payload?.messages?.history?.length || 0,
+      },
+      eventListener,
+    });
     emitEvent(eventListener, "context_ready", {
       sessionId,
       messageCount:
