@@ -19,6 +19,7 @@ import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { createHookManager } from "../../hook/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
+import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -480,7 +481,17 @@ export class SessionExecutionEngine {
         : this.workspaceService && userId
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
-    return { ...options, enabled: true, basePath };
+    const next = { ...options, enabled: true, basePath };
+    if (
+      String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model" &&
+      typeof next?.capabilityModelInvoker !== "function"
+    ) {
+      next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
+        maxTurns: next?.miniRunnerMaxTurns,
+        toolAllowlist: next?.miniRunnerToolAllowlist,
+      });
+    }
+    return next;
   }
 
   _prepareHarnessRunConfig({ userId = "", runConfig = {} } = {}) {

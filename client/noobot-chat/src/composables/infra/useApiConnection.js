@@ -20,6 +20,7 @@ export function useApiConnection({
   const scenarioConfig = ref({
     default: "",
     definitions: {},
+    plugins: {},
   });
   const connecting = ref(false);
 
@@ -67,6 +68,7 @@ export function useApiConnection({
     scenarioConfig.value = {
       default: "",
       definitions: {},
+      plugins: {},
     };
     persistApiAuth();
   }
@@ -116,9 +118,24 @@ export function useApiConnection({
             : [],
       };
     }
+    const pluginSource = isPlainObject(source?.plugins) ? source.plugins : {};
+    const normalizedPlugins = {};
+    for (const [pluginKey, pluginValue] of Object.entries(pluginSource)) {
+      const normalizedPluginKey = String(pluginKey || "").trim();
+      if (!normalizedPluginKey) continue;
+      const sourcePlugin = isPlainObject(pluginValue) ? pluginValue : {};
+      normalizedPlugins[normalizedPluginKey] = {
+        ...sourcePlugin,
+        name: String(sourcePlugin?.name || sourcePlugin?.label || normalizedPluginKey).trim(),
+        label: String(sourcePlugin?.label || sourcePlugin?.name || normalizedPluginKey).trim(),
+        description: String(sourcePlugin?.description || "").trim(),
+        enabled: sourcePlugin?.enabled !== false,
+      };
+    }
     return {
       default: String(source?.default || "").trim(),
       definitions: normalizedDefinitions,
+      plugins: normalizedPlugins,
     };
   }
 
@@ -170,7 +187,10 @@ export function useApiConnection({
       apiKey.value = String(data.apiKey || "");
       apiKeyUserId.value = String(userId.value || "").trim();
       apiRole.value = String(data.role || "user");
-      scenarioConfig.value = normalizeScenarioConfig(data?.scenarios || {});
+      scenarioConfig.value = normalizeScenarioConfig({
+        ...(data?.scenarios || {}),
+        plugins: data?.plugins || data?.scenarios?.plugins || {},
+      });
       persistApiAuth();
       persistConnectProfile();
       if (!silent) {

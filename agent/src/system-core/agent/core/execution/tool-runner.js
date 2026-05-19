@@ -34,6 +34,7 @@ export async function executeToolCall({
   abortSignal = null,
   eventListener = null,
   turn = 1,
+  executionScope = "primary",
   errorLogger = null,
   userId = "",
   sessionId = "",
@@ -62,6 +63,7 @@ export async function executeToolCall({
       point: HOOK_POINTS.AFTER_TOOL_CALL,
       context: withHookRuntimeMeta(runtime, {
         phase: "tool_call",
+        executionScope,
         turn,
         status: "error",
         startedAt: toolStartedAt,
@@ -89,6 +91,7 @@ export async function executeToolCall({
     point: HOOK_POINTS.BEFORE_TOOL_CALL,
     context: withHookRuntimeMeta(runtime, {
       phase: "tool_call",
+      executionScope,
       turn,
       status: "start",
       startedAt: toolStartedAt,
@@ -101,6 +104,20 @@ export async function executeToolCall({
   try {
     rawResult = await tool.invoke(call?.args || {}, {
       signal: abortSignal,
+      configurable: {
+        noobotHookContext: withHookRuntimeMeta(runtime, {
+          phase: "tool_call",
+          executionScope,
+          turn,
+          status: "running",
+          startedAt: toolStartedAt,
+          call,
+          toolName: call?.name || "",
+          args: call?.args || {},
+          agentContext,
+        }),
+        noobotHookMeta: runtime,
+      },
     });
     toolResultText =
       typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
@@ -125,6 +142,7 @@ export async function executeToolCall({
       point: HOOK_POINTS.TOOL_CALL_ERROR,
       context: withHookRuntimeMeta(runtime, {
         phase: "tool_call",
+        executionScope,
         turn,
         status: "error",
         startedAt: toolStartedAt,
@@ -175,6 +193,7 @@ export async function executeToolCall({
     point: HOOK_POINTS.AFTER_TOOL_CALL,
     context: withHookRuntimeMeta(runtime, {
       phase: "tool_call",
+      executionScope,
       turn,
       status: failureState.success ? "success" : "error",
       startedAt: toolStartedAt,

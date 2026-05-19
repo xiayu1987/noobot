@@ -4,7 +4,20 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
+
+import {
+  buildContextSnapshot,
+  buildEvent,
+  buildPromptRecord,
+  nowIso,
+  safeError,
+  safeId,
+} from "./data/record-builders.js";
+import {
+  HARNESS_ENGINEERING_CAPABILITIES,
+  resolveCapabilityProfile,
+} from "./capabilities/profile.js";
+import { createCapabilityRuntime } from "./capabilities/runtime.js";
 
 export const PLUGIN_NAME = "noobot-plugin-harness";
 export const PLUGIN_VERSION = "0.1.0";
@@ -43,6 +56,16 @@ const DEFAULT_OPTIONS = Object.freeze({
   tracePriority: 20,
   timeoutMs: 1000,
   maxPreviewChars: 1200,
+  planningGuidanceMode: "inject",
+  capabilityModelInvoker: null,
+  miniRunnerMaxTurns: 4,
+  miniRunnerToolAllowlist: [],
+  acceptance: Object.freeze({
+    semanticValidation: false,
+  }),
+  review: Object.freeze({
+    attachToFinalOutput: true,
+  }),
   promptText: [
     "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
   ].join("\n"),
@@ -51,44 +74,36 @@ const DEFAULT_OPTIONS = Object.freeze({
   ].join("\n"),
 });
 
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function stableStringify(value) {
-  try {
-    return JSON.stringify(value, Object.keys(value || {}).sort());
-  } catch {
-    return JSON.stringify(value);
-  }
-}
-
-function sha256Text(text = "") {
-  return crypto.createHash("sha256").update(String(text || "")).digest("hex");
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function safeId(value = "") {
-  const text = String(value || "").trim();
-  return text.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
-}
-
-function safeError(error) {
-  if (!error) return null;
+function normalizeOptions(userOptions = {}, api = {}) {
+  const merged = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
   return {
-    name: String(error?.name || "Error"),
-    message: String(error?.message || error),
-    code: error?.code ? String(error.code) : undefined,
+    ...merged,
+    planningGuidanceMode:
+      String(merged.planningGuidanceMode || DEFAULT_OPTIONS.planningGuidanceMode).trim() ||
+      DEFAULT_OPTIONS.planningGuidanceMode,
+    capabilityModelInvoker:
+      typeof merged.capabilityModelInvoker === "function" ? merged.capabilityModelInvoker : null,
+    miniRunnerMaxTurns:
+      Number.isFinite(Number(merged.miniRunnerMaxTurns)) && Number(merged.miniRunnerMaxTurns) > 0
+        ? Number(merged.miniRunnerMaxTurns)
+        : DEFAULT_OPTIONS.miniRunnerMaxTurns,
+    miniRunnerToolAllowlist: Array.isArray(merged.miniRunnerToolAllowlist)
+      ? merged.miniRunnerToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
+      : DEFAULT_OPTIONS.miniRunnerToolAllowlist,
+    acceptance: {
+      ...(DEFAULT_OPTIONS.acceptance || {}),
+      ...(merged.acceptance && typeof merged.acceptance === "object" ? merged.acceptance : {}),
+    },
+    review: {
+      ...(DEFAULT_OPTIONS.review || {}),
+      ...(merged.review && typeof merged.review === "object" ? merged.review : {}),
+    },
+    capabilityProfile: resolveCapabilityProfile(merged.capabilityProfile),
+    capabilityHandlers:
+      merged.capabilityHandlers && typeof merged.capabilityHandlers === "object"
+        ? merged.capabilityHandlers
+        : {},
   };
-}
-
-function preview(value, maxChars = DEFAULT_OPTIONS.maxPreviewChars) {
-  if (value == null) return "";
-  const text = typeof value === "string" ? value : JSON.stringify(value);
-  return String(text || "").slice(0, Math.max(0, Number(maxChars) || 0));
 }
 
 function extractRuntime(ctx = {}) {
@@ -106,7 +121,9 @@ function extractBasePath(ctx = {}, options = {}) {
 }
 
 function extractRunId(ctx = {}) {
-  return safeId(ctx.dialogProcessId || ctx?.agentContext?.execution?.dialogProcessId || ctx.sessionId || "run");
+  return safeId(
+    ctx.dialogProcessId || ctx?.agentContext?.execution?.dialogProcessId || ctx.sessionId || "run",
+  );
 }
 
 function createRunPaths(ctx = {}, options = {}) {
@@ -131,6 +148,7 @@ function createRunPaths(ctx = {}, options = {}) {
     toolCalls: path.join(runDir, "tool-calls.jsonl"),
     stateCommits: path.join(runDir, "state-commits.jsonl"),
     policyChecks: path.join(runDir, "policy-checks.json"),
+    capabilityTraces: path.join(runDir, "capability-traces.jsonl"),
   };
 }
 
@@ -156,98 +174,7 @@ async function writeJson(file, value) {
   await fs.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-function buildEvent(point, ctx = {}, options = {}) {
-  return {
-    eventId: crypto.randomUUID(),
-    plugin: PLUGIN_NAME,
-    version: PLUGIN_VERSION,
-    point,
-    phase: ctx.phase || undefined,
-    status: ctx.status || undefined,
-    timestamp: nowIso(),
-    userId: ctx.userId || undefined,
-    sessionId: ctx.sessionId || undefined,
-    parentSessionId: ctx.parentSessionId || undefined,
-    dialogProcessId: ctx.dialogProcessId || ctx?.agentContext?.execution?.dialogProcessId || undefined,
-    caller: ctx.caller || undefined,
-    turn: ctx.turn,
-    mode: ctx.mode,
-    toolName: ctx.toolName,
-    commitType: ctx.commitType,
-    durationMs: Number.isFinite(ctx.durationMs) ? ctx.durationMs : undefined,
-    success: typeof ctx.success === "boolean" ? ctx.success : undefined,
-    failureReason: ctx.failureReason || undefined,
-    error: safeError(ctx.error),
-    preview: buildPayloadPreview(point, ctx, options),
-  };
-}
-
-function buildPayloadPreview(point, ctx = {}, options = {}) {
-  const maxPreviewChars = options.maxPreviewChars || DEFAULT_OPTIONS.maxPreviewChars;
-  if (point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL || point === HARNESS_HOOK_POINTS.AFTER_LLM_CALL) {
-    return {
-      messageCount: Array.isArray(ctx.messages) ? ctx.messages.length : undefined,
-      toolChoice: ctx.toolChoice,
-      hasToolCalls: ctx.hasToolCalls,
-      callCount: Array.isArray(ctx.calls) ? ctx.calls.length : undefined,
-    };
-  }
-  if (point.includes("tool_call")) {
-    return {
-      callId: ctx.call?.id,
-      argsHash: ctx.args ? sha256Text(stableStringify(ctx.args)) : undefined,
-      resultPreview: ctx.toolResultText ? preview(ctx.toolResultText, maxPreviewChars) : undefined,
-      resultSize: ctx.toolResultText ? String(ctx.toolResultText).length : undefined,
-    };
-  }
-  if (point.includes("state_commit")) {
-    return {
-      commitType: ctx.commitType,
-      payloadPreview: preview(ctx.payload, maxPreviewChars),
-    };
-  }
-  return undefined;
-}
-
-function buildContextSnapshot(ctx = {}) {
-  const agentContext = ctx.agentContext || {};
-  const runtime = extractRuntime(ctx) || {};
-  const systemRuntime = runtime.systemRuntime || {};
-  return {
-    plugin: PLUGIN_NAME,
-    version: PLUGIN_VERSION,
-    createdAt: nowIso(),
-    userId: ctx.userId || runtime.userId || agentContext?.environment?.identity?.userId || "",
-    sessionId: ctx.sessionId || systemRuntime.sessionId || agentContext?.session?.current?.id || "",
-    parentSessionId: ctx.parentSessionId || systemRuntime.parentSessionId || agentContext?.session?.parent?.id || "",
-    dialogProcessId: ctx.dialogProcessId || systemRuntime.dialogProcessId || agentContext?.execution?.dialogProcessId || "",
-    caller: ctx.caller || systemRuntime.caller || agentContext?.session?.parent?.caller || "",
-    environment: {
-      os: agentContext?.environment?.os || {},
-      workspace: agentContext?.environment?.workspace || {},
-    },
-    execution: {
-      flags: agentContext?.execution?.flags || {},
-      runtimeModel: agentContext?.execution?.models?.runtimeModel || runtime.runtimeModel || "",
-    },
-    session: {
-      attachmentCount: Array.isArray(agentContext?.session?.current?.attachments)
-        ? agentContext.session.current.attachments.length
-        : 0,
-      connectors: agentContext?.session?.current?.connectors || {},
-    },
-    payload: {
-      systemMessageCount: Array.isArray(agentContext?.payload?.messages?.system)
-        ? agentContext.payload.messages.system.length
-        : 0,
-      historyMessageCount: Array.isArray(agentContext?.payload?.messages?.history)
-        ? agentContext.payload.messages.history.length
-        : 0,
-    },
-  };
-}
-
-async function updateManifest(paths, ctx = {}, patch = {}) {
+async function updateManifest(paths, ctx = {}, patch = {}, options = {}, capabilityRuntime = null) {
   if (!paths) return;
   const current = await readJson(paths.manifest, {});
   const next = {
@@ -262,6 +189,13 @@ async function updateManifest(paths, ctx = {}, patch = {}) {
     status: current.status || "running",
     startedAt: current.startedAt || ctx.startedAt || nowIso(),
     updatedAt: nowIso(),
+    capabilities:
+      current.capabilities ||
+      {
+        domains: HARNESS_ENGINEERING_CAPABILITIES,
+        profile: resolveCapabilityProfile(options.capabilityProfile),
+        hookMap: capabilityRuntime?.hookMap || {},
+      },
     paths: {
       runDir: paths.runDir,
       contextSnapshot: paths.contextSnapshot,
@@ -270,6 +204,7 @@ async function updateManifest(paths, ctx = {}, patch = {}) {
       toolCalls: paths.toolCalls,
       stateCommits: paths.stateCommits,
       policyChecks: paths.policyChecks,
+      capabilityTraces: paths.capabilityTraces,
     },
     ...current,
     ...patch,
@@ -300,12 +235,32 @@ async function trace(point, ctx, options) {
   const paths = createRunPaths(ctx, options);
   if (!paths) return;
   await ensureRunDir(paths);
-  const event = buildEvent(point, ctx, options);
+  const event = buildEvent({
+    point,
+    ctx,
+    options,
+    pluginName: PLUGIN_NAME,
+    pluginVersion: PLUGIN_VERSION,
+  });
   await appendJsonl(paths.events, event);
   if (point.includes("tool_call")) await appendJsonl(paths.toolCalls, event);
   if (point.includes("state_commit")) await appendJsonl(paths.stateCommits, event);
+  const capabilityTraceLogs = (Array.isArray(event.capabilityLogs) ? event.capabilityLogs : []).filter(
+    (log) => log?.event === "capability_model_trace",
+  );
+  for (const log of capabilityTraceLogs) {
+    await appendJsonl(paths.capabilityTraces, {
+      eventId: event.eventId,
+      point,
+      timestamp: event.timestamp,
+      userId: event.userId,
+      sessionId: event.sessionId,
+      dialogProcessId: event.dialogProcessId,
+      ...log,
+    });
+  }
   if (point === HARNESS_HOOK_POINTS.AFTER_CONTEXT_BUILD && options.writeContextSnapshot) {
-    await writeJson(paths.contextSnapshot, buildContextSnapshot(ctx));
+    await writeJson(paths.contextSnapshot, buildContextSnapshot({ ctx, pluginName: PLUGIN_NAME, pluginVersion: PLUGIN_VERSION }));
   }
   const terminalStatus =
     point === HARNESS_HOOK_POINTS.AFTER_TURN
@@ -315,34 +270,42 @@ async function trace(point, ctx, options) {
         : point === HARNESS_HOOK_POINTS.ON_ABORT
           ? "abort"
           : null;
-  await updateManifest(paths, ctx, {
-    status: terminalStatus || "running",
-    updatedAt: nowIso(),
-    lastEvent: { point, timestamp: event.timestamp, status: event.status },
-    ...(terminalStatus ? { endedAt: nowIso(), error: safeError(ctx.error) } : {}),
-  });
+  await updateManifest(
+    paths,
+    ctx,
+    {
+      status: terminalStatus || "running",
+      updatedAt: nowIso(),
+      lastEvent: { point, timestamp: event.timestamp, status: event.status },
+      ...(terminalStatus ? { endedAt: nowIso(), error: safeError(ctx.error) } : {}),
+    },
+    options,
+    options?.capabilityRuntime || null,
+  );
 }
 
 async function injectPrompt(point, ctx, options) {
   if (!options.enabled || !options.promptPolicy) return;
-  const id = point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
-    ? "noobot-harness-final-response"
-    : "noobot-harness-policy";
-  const content = point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
-    ? options.finalResponseText
-    : options.promptText;
+  const id =
+    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
+      ? "noobot-harness-final-response"
+      : "noobot-harness-policy";
+  const content =
+    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText;
   const injected = injectSystemMessage(ctx, content, id);
   if (!injected || !options.writePrompts) return;
   const paths = createRunPaths(ctx, options);
   if (!paths) return;
   await ensureRunDir(paths);
-  await appendJsonl(paths.prompts, {
-    promptId: id,
-    point,
-    timestamp: nowIso(),
-    contentHash: sha256Text(content),
-    contentPreview: preview(content, options.maxPreviewChars),
-  });
+  await appendJsonl(
+    paths.prompts,
+    buildPromptRecord({
+      promptId: id,
+      point,
+      content,
+      maxPreviewChars: options.maxPreviewChars,
+    }),
+  );
 }
 
 function resolveHookManager(api = {}) {
@@ -350,7 +313,7 @@ function resolveHookManager(api = {}) {
 }
 
 export function createHarnessPlugin(userOptions = {}) {
-  const options = { ...DEFAULT_OPTIONS, ...(userOptions || {}) };
+  const options = normalizeOptions(userOptions);
   return {
     name: PLUGIN_NAME,
     version: PLUGIN_VERSION,
@@ -362,8 +325,18 @@ export function createHarnessPlugin(userOptions = {}) {
 }
 
 export function registerNoobotPlugin(api = {}, userOptions = {}) {
-  const options = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
+  const options = normalizeOptions(userOptions, api);
+  if (options.planningGuidanceMode === "separate_model" && !options.capabilityModelInvoker) {
+    // 安全回退：未显式提供 invoker 时，避免隐式触发额外模型调用。
+    // 保持老行为，回退到 inject 模式。
+    options.planningGuidanceMode = "inject";
+  }
   const hookManager = resolveHookManager(api);
+  const capabilityRuntime = createCapabilityRuntime({
+    profile: options.capabilityProfile,
+    handlers: options.capabilityHandlers,
+  });
+  options.capabilityRuntime = capabilityRuntime;
   if (!hookManager || typeof hookManager.on !== "function") {
     throw new Error(`${PLUGIN_NAME}: hookManager with .on(point, handler, options) is required`);
   }
@@ -386,27 +359,48 @@ export function registerNoobotPlugin(api = {}, userOptions = {}) {
     HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
     HARNESS_HOOK_POINTS.BEFORE_STATE_COMMIT,
     HARNESS_HOOK_POINTS.AFTER_STATE_COMMIT,
+    HARNESS_HOOK_POINTS.BEFORE_LLM_CALL,
     HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
   ];
 
   for (const point of tracePoints) {
-    disposers.push(hookManager.on(point, (ctx = {}) => trace(point, ctx, options), {
-      id: `${PLUGIN_NAME}.trace.${point}`,
-      priority: options.tracePriority,
-      timeoutMs: options.timeoutMs,
-    }));
+    disposers.push(
+      hookManager.on(
+        point,
+        async (ctx = {}) => {
+          await capabilityRuntime.runHook(point, ctx, {
+            pluginName: PLUGIN_NAME,
+            pluginVersion: PLUGIN_VERSION,
+            harness: {
+              planningGuidanceMode: options.planningGuidanceMode,
+              capabilityModelInvoker: options.capabilityModelInvoker,
+              acceptance: options.acceptance,
+              review: options.review,
+              runTraceSink: async (record = {}) => {
+                const paths = createRunPaths(ctx, options);
+                if (!paths) return;
+                await ensureRunDir(paths);
+                await appendJsonl(paths.capabilityTraces, record);
+              },
+            },
+          });
+          if (
+            point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL ||
+            (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false)
+          ) {
+            await injectPrompt(point, ctx, options);
+          }
+          await trace(point, ctx, options);
+        },
+        {
+          id: `${PLUGIN_NAME}.trace.${point}`,
+          priority: options.tracePriority,
+          timeoutMs: options.timeoutMs,
+        },
+      ),
+    );
   }
 
-  for (const point of [HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT]) {
-    disposers.push(hookManager.on(point, async (ctx = {}) => {
-      await injectPrompt(point, ctx, options);
-      await trace(point, ctx, options);
-    }, {
-      id: `${PLUGIN_NAME}.prompt.${point}`,
-      priority: options.promptPriority,
-      timeoutMs: options.timeoutMs,
-    }));
-  }
 
   return { name: PLUGIN_NAME, version: PLUGIN_VERSION, disposers };
 }

@@ -22,6 +22,31 @@ export function createChatRunService({
     };
   }
 
+  function normalizeStringArray(input = []) {
+    return Array.isArray(input)
+      ? input.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+  }
+
+  function normalizePlugins(inputPlugins = {}, selectedPlugins = []) {
+    const sourcePlugins =
+      inputPlugins && typeof inputPlugins === "object" && !Array.isArray(inputPlugins)
+        ? inputPlugins
+        : {};
+    const normalizedPlugins = { ...sourcePlugins };
+    for (const pluginKey of normalizeStringArray(selectedPlugins)) {
+      const current =
+        normalizedPlugins[pluginKey] && typeof normalizedPlugins[pluginKey] === "object"
+          ? normalizedPlugins[pluginKey]
+          : {};
+      normalizedPlugins[pluginKey] = {
+        ...current,
+        enabled: true,
+      };
+    }
+    return normalizedPlugins;
+  }
+
   function normalizeRunConfig(input = {}) {
     const source = input && typeof input === "object" ? input : {};
     const allowUserInteractionRaw = input?.allowUserInteraction;
@@ -42,6 +67,8 @@ export function createChatRunService({
         ? { runTimeoutMs: Math.floor(runTimeoutMs) }
         : {}),
       selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
+      selectedPlugins: normalizeStringArray(input?.selectedPlugins),
+      plugins: normalizePlugins(input?.plugins, input?.selectedPlugins),
     };
   }
 
