@@ -71,7 +71,7 @@ const I18N_TEXT = Object.freeze({
     planningPromptLine3: "限制：输出清单后继续执行，不要直接结束；可包含 subOwners。",
     planningPromptLine4: "限制：工具范围使用通配符 *（表示全量工具）。",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
-    guidanceSummaryBody: "轮数已超过15轮，请立即输出当前阶段小结（目标、完成项、未完成项、阻塞项、下一步）。",
+    guidanceSummaryBody: "请立即输出当前阶段小结（目标、完成项、未完成项、阻塞项、下一步）。",
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody: "检测到工具失败阈值({reason})，请基于未小结消息给出下一步指引。",
     guidancePreferTools: "优先使用工具: {tools}。",
@@ -90,7 +90,7 @@ const I18N_TEXT = Object.freeze({
     planningPromptLine4: "Constraints: tool scope must use wildcard * (all tools).",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody:
-      "The loop count exceeded 15. Output a phase summary now (goal, completed, pending, blockers, next steps).",
+      "Please output a phase summary now (goal, completed, pending, blockers, next steps).",
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody:
       "Tool-failure threshold reached ({reason}). Provide next-step guidance based on unsummarized messages.",
