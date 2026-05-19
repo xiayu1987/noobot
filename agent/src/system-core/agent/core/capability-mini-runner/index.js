@@ -76,12 +76,24 @@ function resolveSessionMeta(ctx = {}, runtime = {}) {
   };
 }
 
-function resolveToolsFromContext(ctx = {}, allowSet = new Set()) {
+function resolveAllowPolicy(input = []) {
+  const normalized = (Array.isArray(input) ? input : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  const allowAll = normalized.includes("*");
+  return {
+    allowAll,
+    allowSet: new Set(allowAll ? normalized.filter((item) => item !== "*") : normalized),
+  };
+}
+
+function resolveToolsFromContext(ctx = {}, allowPolicy = { allowAll: false, allowSet: new Set() }) {
   const registry = ctx?.agentContext?.payload?.tools?.registry;
   if (!Array.isArray(registry)) return [];
   const tools = registry.filter((tool) => String(tool?.name || "").trim());
-  if (!allowSet.size) return [];
-  return tools.filter((tool) => allowSet.has(String(tool?.name || "").trim()));
+  if (allowPolicy?.allowAll === true) return tools;
+  if (!allowPolicy?.allowSet?.size) return [];
+  return tools.filter((tool) => allowPolicy.allowSet.has(String(tool?.name || "").trim()));
 }
 
 export function createAgentCapabilityModelInvoker({
@@ -91,11 +103,7 @@ export function createAgentCapabilityModelInvoker({
   adaptToolsForBindingFn = adaptToolsForBinding,
   executeToolCallFn = executeToolCall,
 } = {}) {
-  const allowSet = new Set(
-    (Array.isArray(toolAllowlist) ? toolAllowlist : [])
-      .map((item) => String(item || "").trim())
-      .filter(Boolean),
-  );
+  const baseAllowPolicy = resolveAllowPolicy(toolAllowlist);
   const maxTurnCount =
     Number.isFinite(Number(maxTurns)) && Number(maxTurns) > 0 ? Number(maxTurns) : 4;
 
@@ -124,14 +132,10 @@ export function createAgentCapabilityModelInvoker({
       streaming: false,
     });
 
-    const effectiveAllowSet = Array.isArray(toolAllowlistOverride)
-      ? new Set(
-          toolAllowlistOverride
-            .map((item) => String(item || "").trim())
-            .filter(Boolean),
-        )
-      : allowSet;
-    const tools = resolveToolsFromContext(ctx, effectiveAllowSet);
+    const effectiveAllowPolicy = Array.isArray(toolAllowlistOverride)
+      ? resolveAllowPolicy(toolAllowlistOverride)
+      : baseAllowPolicy;
+    const tools = resolveToolsFromContext(ctx, effectiveAllowPolicy);
     const adapted = adaptToolsForBindingFn(tools, {
       globalConfig,
       userConfig,
@@ -182,7 +186,11 @@ export function createAgentCapabilityModelInvoker({
       }
 
       for (const call of calls) {
-        if (effectiveAllowSet.size && !effectiveAllowSet.has(call.name)) {
+        if (
+          effectiveAllowPolicy?.allowAll !== true &&
+          effectiveAllowPolicy?.allowSet?.size &&
+          !effectiveAllowPolicy.allowSet.has(call.name)
+        ) {
           currentTrace.toolCalls = currentTrace.toolCalls.map((item) =>
             item.name === call.name && item.id === (call.id || "")
               ? { ...item, status: "rejected", error: `tool not allowed: ${call.name}` }
