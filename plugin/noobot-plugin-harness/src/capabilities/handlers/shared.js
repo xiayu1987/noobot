@@ -131,7 +131,7 @@ export function resolveLocale(ctx = {}) {
   return String(locale).toLowerCase().startsWith("en") ? LOCALE.EN_US : LOCALE.ZH_CN;
 }
 
-export function t(locale = LOCALE.ZH_CN, key = "", params = {}) {
+export function translateI18nText(locale = LOCALE.ZH_CN, key = "", params = {}) {
   const dict = I18N_TEXT[locale] || I18N_TEXT[LOCALE.ZH_CN];
   const raw = String(dict?.[key] || I18N_TEXT[LOCALE.ZH_CN]?.[key] || "").trim();
   if (!raw) return "";
@@ -276,9 +276,9 @@ export function attachArtifactsToAssistantResult(ctx = {}, attachmentMetas = [])
   const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
   if (!result || !Array.isArray(result.turnMessages)) return false;
   const assistantIndexes = [];
-  for (let i = 0; i < result.turnMessages.length; i += 1) {
-    if (String(result.turnMessages[i]?.role || "").trim() === "assistant") {
-      assistantIndexes.push(i);
+  for (let messageIndex = 0; messageIndex < result.turnMessages.length; messageIndex += 1) {
+    if (String(result.turnMessages[messageIndex]?.role || "").trim() === "assistant") {
+      assistantIndexes.push(messageIndex);
     }
   }
   if (!assistantIndexes.length) return false;
@@ -327,7 +327,9 @@ export function relaySeparateModelOutputAsUserMessage(
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   const text = String(content || "").trim();
   if (!messages || !text) return false;
-  const prefix = t(locale, "separateModelRelayPrefix", { purpose: String(purpose || "").trim() || "unknown" });
+  const prefix = translateI18nText(locale, "separateModelRelayPrefix", {
+    purpose: String(purpose || "").trim() || "unknown",
+  });
   messages.push({
     role: "user",
     content: `${prefix}\n${text}`,

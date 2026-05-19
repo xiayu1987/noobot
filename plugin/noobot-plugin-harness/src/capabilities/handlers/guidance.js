@@ -14,7 +14,7 @@ import {
   resolveCapabilityModelInvoker,
   resolveCapabilityToolAllowlist,
   shouldUseSeparateModel,
-  t,
+  translateI18nText,
 } from "./shared.js";
 
 function markToolSignals(ctx = {}) {
@@ -83,8 +83,8 @@ function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
     messages.unshift({
       role: "system",
       content: [
-        t(locale, "guidanceSummaryMarker"),
-        t(locale, "guidanceSummaryBody"),
+        translateI18nText(locale, "guidanceSummaryMarker"),
+        translateI18nText(locale, "guidanceSummaryBody"),
       ].join("\n"),
     });
     state.pending.summary = false;
@@ -101,10 +101,10 @@ function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   messages.unshift({
     role: "system",
     content: [
-      t(locale, "guidanceMarker"),
-      t(locale, "guidanceBody", { reason }),
-      t(locale, "guidancePreferTools", { tools: GUIDANCE_WEB_TOOL_NAMES.join(", ") }),
-      t(locale, "guidanceWebService", {
+      translateI18nText(locale, "guidanceMarker"),
+      translateI18nText(locale, "guidanceBody", { reason }),
+      translateI18nText(locale, "guidancePreferTools", { tools: GUIDANCE_WEB_TOOL_NAMES.join(", ") }),
+      translateI18nText(locale, "guidanceWebService", {
         service: GUIDANCE_WEB_SERVICE_NAME,
         tool: TOOL_NAME_SET.CALL_SERVICE,
       }),
@@ -134,16 +134,16 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   let reason = "";
   if (state.pending.summary === true) {
     purpose = "summary";
-    prompt = t(locale, "guidanceSummaryBody");
+    prompt = translateI18nText(locale, "guidanceSummaryBody");
     state.pending.summary = false;
     state.counters.llmTurns = 0;
   } else if (state.pending.guidance) {
     purpose = "guidance";
     reason = state.pending.guidance;
     prompt = [
-      t(locale, "guidanceBody", { reason }),
-      t(locale, "guidancePreferTools", { tools: GUIDANCE_WEB_TOOL_NAMES.join(", ") }),
-      t(locale, "guidanceWebService", {
+      translateI18nText(locale, "guidanceBody", { reason }),
+      translateI18nText(locale, "guidancePreferTools", { tools: GUIDANCE_WEB_TOOL_NAMES.join(", ") }),
+      translateI18nText(locale, "guidanceWebService", {
         service: GUIDANCE_WEB_SERVICE_NAME,
         tool: TOOL_NAME_SET.CALL_SERVICE,
       }),

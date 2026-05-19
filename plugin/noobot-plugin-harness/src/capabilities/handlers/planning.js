@@ -19,7 +19,7 @@ import {
   safeJsonStringify,
   sanitizeInternalMessages,
   shouldUseSeparateModel,
-  t,
+  translateI18nText,
 } from "./shared.js";
 
 function maybeInjectPlanningPrompt(ctx = {}) {
@@ -33,13 +33,13 @@ function maybeInjectPlanningPrompt(ctx = {}) {
   messages.unshift({
     role: "system",
     content: [
-      t(locale, "planningPromptMarker"),
-      t(locale, "planningPromptLine1"),
-      t(locale, "planningPromptLine2", {
+      translateI18nText(locale, "planningPromptMarker"),
+      translateI18nText(locale, "planningPromptLine1"),
+      translateI18nText(locale, "planningPromptLine2", {
         example: `{"taskOwner":"${getDefaultTaskOwner(locale)}","taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}"}]}`,
       }),
-      t(locale, "planningPromptLine3"),
-      t(locale, "planningPromptLine4"),
+      translateI18nText(locale, "planningPromptLine3"),
+      translateI18nText(locale, "planningPromptLine4"),
     ].join("\n"),
   });
   state.flags.planningPromptInjected = true;
@@ -114,12 +114,12 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
         : `规划输入上下文(ctx)如下，必须完整参考：\n\`\`\`json\n${safeJsonStringify(ctx)}\n\`\`\``,
   });
   const planningPrompt = [
-    t(locale, "planningPromptLine1"),
-    t(locale, "planningPromptLine2", {
+    translateI18nText(locale, "planningPromptLine1"),
+    translateI18nText(locale, "planningPromptLine2", {
       example: `{"taskOwner":"${getDefaultTaskOwner(locale)}","taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}"}]}`,
     }),
-    t(locale, "planningPromptLine3"),
-    t(locale, "planningPromptLine4"),
+    translateI18nText(locale, "planningPromptLine3"),
+    translateI18nText(locale, "planningPromptLine4"),
     "",
     JSON.stringify(
       {
