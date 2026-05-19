@@ -123,6 +123,7 @@ export function registerAuthRoutes(
           apiKey,
           permissions: buildClientPermissions("super_admin"),
           scenarios: superAdminScenarios,
+          plugins: globalConfig?.plugins || {},
         });
         return;
       }
@@ -166,6 +167,7 @@ export function registerAuthRoutes(
         apiKey,
         permissions: buildClientPermissions("user"),
         scenarios: mergedScenarios,
+        plugins: globalConfig?.plugins || {},
       });
       },
       { fallbackErrorKey: "connect.failed", translateText },

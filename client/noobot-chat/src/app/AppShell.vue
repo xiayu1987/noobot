@@ -58,8 +58,26 @@ const forceTool = ref(localStorage.getItem("noobot_force_tool") === "true");
 const botScenario = ref(
   String(localStorage.getItem("noobot_bot_scenario") || "").trim(),
 );
+const SELECTED_PLUGINS_STORAGE_KEY = "noobot_selected_plugins";
+const hasStoredSelectedPlugins = ref(
+  localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY) !== null,
+);
+const selectedPlugins = ref(
+  safeParseStringArray(localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY)),
+);
 const composerRef = ref();
 const messageListPanelRef = ref();
+
+function safeParseStringArray(rawValue = "") {
+  try {
+    const parsed = JSON.parse(String(rawValue || "[]"));
+    return Array.isArray(parsed)
+      ? parsed.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 // --- API connection ---
 const {
@@ -103,6 +121,43 @@ const availableBotScenarios = computed(() => {
     description: String(definitions?.[scenarioKey]?.description || "").trim(),
   }));
 });
+
+const availablePlugins = computed(() => {
+  const definitions =
+    scenarioConfig?.value?.plugins && typeof scenarioConfig.value.plugins === "object"
+      ? scenarioConfig.value.plugins
+      : {};
+  return Object.entries(definitions)
+    .map(([pluginKey, pluginDefinition]) => {
+      const source = pluginDefinition && typeof pluginDefinition === "object" ? pluginDefinition : {};
+      return {
+        key: String(pluginKey || "").trim(),
+        label: String(source?.label || source?.name || pluginKey || "").trim(),
+        description: String(source?.description || "").trim(),
+        enabled: source?.enabled === true,
+      };
+    })
+    .filter((pluginItem) => Boolean(pluginItem.key));
+});
+
+function persistSelectedPlugins() {
+  hasStoredSelectedPlugins.value = true;
+  localStorage.setItem(SELECTED_PLUGINS_STORAGE_KEY, JSON.stringify(selectedPlugins.value));
+}
+
+function syncSelectedPluginsWithConfig() {
+  const availablePluginKeySet = new Set(availablePlugins.value.map((item) => item.key));
+  if (!hasStoredSelectedPlugins.value) {
+    selectedPlugins.value = availablePlugins.value
+      .filter((pluginItem) => pluginItem.enabled === true)
+      .map((pluginItem) => pluginItem.key);
+    return;
+  }
+  selectedPlugins.value = selectedPlugins.value.filter((pluginKey) =>
+    availablePluginKeySet.has(pluginKey),
+  );
+  persistSelectedPlugins();
+}
 
 function syncBotScenarioWithConfig() {
   const configuredDefaultScenario = String(
@@ -350,6 +405,7 @@ const {
   allowUserInteraction,
   forceTool,
   botScenario,
+  selectedPlugins,
   connected,
   ensureConnected,
   authFetch,
@@ -525,6 +581,7 @@ watch(
   () => scenarioConfig.value,
   () => {
     syncBotScenarioWithConfig();
+    syncSelectedPluginsWithConfig();
   },
   { deep: true, immediate: true },
 );
@@ -577,6 +634,18 @@ function onBotScenarioUpdate(value = "") {
   botScenario.value =
     nextScenario && availableScenarioKeySet.has(nextScenario) ? nextScenario : "";
   localStorage.setItem("noobot_bot_scenario", botScenario.value);
+}
+
+function onSelectedPluginsUpdate(value = []) {
+  const availablePluginKeySet = new Set(
+    availablePlugins.value
+      .map((pluginItem) => String(pluginItem?.key || "").trim())
+      .filter(Boolean),
+  );
+  selectedPlugins.value = (Array.isArray(value) ? value : [])
+    .map((pluginKey) => String(pluginKey || "").trim())
+    .filter((pluginKey) => pluginKey && availablePluginKeySet.has(pluginKey));
+  persistSelectedPlugins();
 }
 
 function onUserIdUpdate(value = "") {
@@ -729,12 +798,15 @@ const drawerPanels = computed(() => [
         :force-tool="forceTool"
         :bot-scenario="botScenario"
         :scenario-options="availableBotScenarios"
+        :available-plugins="availablePlugins"
+        :selected-plugins="selectedPlugins"
         :interaction-active="Boolean(pendingInteractionRequest)"
         @upload-change="onUploadChange"
         @append-uploads="appendUploads"
         @update:allow-user-interaction="onAllowUserInteractionUpdate"
         @update:force-tool="onForceToolUpdate"
         @update:bot-scenario="onBotScenarioUpdate"
+        @update:selected-plugins="onSelectedPluginsUpdate"
         @clear-uploads="clearUploads"
         @connector-selected="onConnectorSelected"
         @send="send"

@@ -6,7 +6,24 @@
       "promptPolicy": true,
       "writeContextSnapshot": true,
       "writePrompts": true,
-      "maxPreviewChars": 1200
+      "maxPreviewChars": 1200,
+      "capabilityProfile": {
+        "planning": {
+          "mode": "planned"
+        },
+        "review": {
+          "mode": "planned"
+        }
+      },
+      "planningGuidanceMode": "separate_model",
+      "miniRunnerMaxTurns": 4,
+      "miniRunnerToolAllowlist": [
+        "read_context",
+        "search_memory"
+      ],
+      "acceptance": {
+        "semanticValidation": true
+      }
     }
   }
 }

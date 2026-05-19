@@ -27,6 +27,8 @@ const props = defineProps({
   forceTool: { type: Boolean, default: false },
   botScenario: { type: String, default: "" },
   scenarioOptions: { type: Array, default: () => [] },
+  availablePlugins: { type: Array, default: () => [] },
+  selectedPlugins: { type: Array, default: () => [] },
   interactionActive: { type: Boolean, default: false },
   connectorPanelState: { type: Object, default: () => ({}) },
 });
@@ -36,6 +38,7 @@ const emit = defineEmits([
   "update:allowUserInteraction",
   "update:forceTool",
   "update:botScenario",
+  "update:selectedPlugins",
   "upload-change",
   "append-uploads",
   "clear-uploads",
@@ -132,6 +135,44 @@ const selectedScenarioDescription = computed(() => {
   );
   return String(matchedScenario?.description || "").trim();
 });
+
+const normalizedPluginOptions = computed(() => {
+  const sourcePlugins = Array.isArray(props.availablePlugins)
+    ? props.availablePlugins
+    : [];
+  return sourcePlugins
+    .map((pluginItem) => ({
+      key: String(pluginItem?.key || pluginItem?.name || "").trim(),
+      label: String(pluginItem?.label || pluginItem?.name || pluginItem?.key || "").trim(),
+      description: String(pluginItem?.description || "").trim(),
+      enabled: pluginItem?.enabled === true,
+    }))
+    .filter((pluginItem) => Boolean(pluginItem.key));
+});
+
+const selectedPluginKeySet = computed(
+  () =>
+    new Set(
+      (Array.isArray(props.selectedPlugins) ? props.selectedPlugins : [])
+        .map((pluginKey) => String(pluginKey || "").trim())
+        .filter(Boolean),
+    ),
+);
+
+const selectedPluginLabels = computed(() =>
+  normalizedPluginOptions.value
+    .filter((pluginItem) => selectedPluginKeySet.value.has(pluginItem.key))
+    .map((pluginItem) => pluginItem.label || pluginItem.key),
+);
+
+function onSelectedPluginsChange(pluginKeys = []) {
+  emit(
+    "update:selectedPlugins",
+    (Array.isArray(pluginKeys) ? pluginKeys : [])
+      .map((pluginKey) => String(pluginKey || "").trim())
+      .filter(Boolean),
+  );
+}
 
 function onInputChange(value) {
   emit("update:modelValue", value);
@@ -450,7 +491,7 @@ defineExpose({
   <div class="composer-wrapper">
     <!-- 顶部选中标签 -->
     <div
-      v-if="selectedConnectorNames.length || selectedScenarioLabel"
+      v-if="selectedConnectorNames.length || selectedScenarioLabel || selectedPluginLabels.length"
       class="selected-connectors-row"
     >
       <span
@@ -465,6 +506,13 @@ defineExpose({
         class="selected-connector-name"
       >
         {{ connectorName }}
+      </span>
+      <span
+        v-for="(pluginLabel, pluginIndex) in selectedPluginLabels"
+        :key="`plugin-${pluginLabel}-${pluginIndex}`"
+        class="selected-connector-name selected-plugin-name"
+      >
+        {{ pluginLabel }}
       </span>
     </div>
 
@@ -541,6 +589,27 @@ defineExpose({
                   >
                     {{ translate("composer.scenarioProgramming") }}
                   </el-button>
+                </div>
+                <div class="plugin-selector">
+                  <span class="scenario-selector-label">{{ translate("composer.availablePlugins") }}</span>
+                  <el-checkbox-group
+                    v-if="normalizedPluginOptions.length"
+                    :model-value="Array.from(selectedPluginKeySet)"
+                    size="small"
+                    class="plugin-checkbox-group"
+                    @update:model-value="onSelectedPluginsChange"
+                  >
+                    <el-checkbox-button
+                      v-for="pluginItem in normalizedPluginOptions"
+                      :key="pluginItem.key"
+                      :value="pluginItem.key"
+                      :label="pluginItem.key"
+                      :title="pluginItem.description || pluginItem.label"
+                    >
+                      {{ pluginItem.label || pluginItem.key }}
+                    </el-checkbox-button>
+                  </el-checkbox-group>
+                  <span v-else class="plugin-empty-text">{{ translate("composer.noAvailablePlugins") }}</span>
                 </div>
                 <p v-if="selectedScenarioDescription" class="scenario-description">
                   {{ selectedScenarioDescription }}
@@ -714,6 +783,12 @@ defineExpose({
 
 .selected-scenario-name {
   border-color: rgba(59, 130, 246, 0.25);
+}
+
+
+.selected-plugin-name {
+  border-color: rgba(14, 165, 233, 0.28);
+  background: color-mix(in srgb, var(--noobot-cyber-cyan, #0ea5e9) 10%, transparent);
 }
 
 /* ================= 悬浮停止按钮 ================= */
@@ -894,7 +969,8 @@ defineExpose({
   --el-switch-off-color: var(--noobot-status-idle, #d4d4d8);
 }
 
-.scenario-selector {
+.scenario-selector,
+.plugin-selector {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -903,6 +979,28 @@ defineExpose({
 .scenario-selector-label {
   font-size: 13px;
   color: var(--noobot-text-secondary, #52525b);
+}
+
+.plugin-checkbox-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.plugin-checkbox-group :deep(.el-checkbox-button) {
+  margin-right: 0;
+}
+
+.plugin-checkbox-group :deep(.el-checkbox-button__inner) {
+  border-left: var(--el-border) !important;
+  border-radius: var(--el-border-radius-base) !important;
+  padding: 5px 11px;
+  line-height: 1;
+}
+
+.plugin-empty-text {
+  font-size: 12px;
+  color: var(--noobot-text-muted, #71717a);
 }
 
 .scenario-description {
@@ -958,6 +1056,24 @@ defineExpose({
     border-radius: 12px; 
   }
   .more-panel-overlay { left: 12px; right: 12px; }
+  .selected-connectors-row {
+    margin-bottom: 8px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  .composer-options,
+  .scenario-selector,
+  .plugin-selector {
+    width: 100%;
+    align-items: flex-start;
+  }
+  .plugin-checkbox-group {
+    max-width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
   .stop-float-btn { top: -50px; width: 40px; height: 40px; }
   .send-btn {
     height: 32px;

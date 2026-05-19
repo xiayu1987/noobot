@@ -58,6 +58,7 @@ export function useChatEngine({
   allowUserInteraction,
   forceTool,
   botScenario,
+  selectedPlugins,
   isImageMime,
   classifyRealtimeLog,
   scrollBottom,
@@ -492,6 +493,12 @@ export function useChatEngine({
           selectedConnectors: normalizeSelectedConnectors(
             activeSession.value?.connectorPanelState?.selectedConnectors || {},
           ),
+          selectedPlugins: (Array.isArray(selectedPlugins?.value)
+            ? selectedPlugins.value
+            : []
+          )
+            .map((pluginKey) => String(pluginKey || "").trim())
+            .filter(Boolean),
         },
       };
 
