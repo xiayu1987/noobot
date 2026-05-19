@@ -15,7 +15,6 @@ import {
   resolveCapabilityModelInvoker,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
-  safeJsonStringify,
   sanitizeInternalMessages,
   shouldUseSeparateModel,
   translateI18nText,
@@ -78,6 +77,98 @@ function parseChecklistWithLocalRepair(text = "", locale = LOCALE.ZH_CN) {
   const sanitized = sanitizeJsonCandidate(raw);
   if (!sanitized || sanitized === raw) return [];
   return parseTaskChecklistFromModelOutput(sanitized, locale);
+}
+
+function compactText(text = "", maxChars = 500) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  if (raw.length <= maxChars) return raw;
+  return `${raw.slice(0, maxChars)}...`;
+}
+
+function normalizePlanningTextContent(content = "") {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && typeof item.text === "string") return item.text;
+      return "";
+    })
+    .join("\n")
+    .trim();
+}
+
+function collectAgentStyleHistoryMessages(ctx = {}) {
+  const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
+    ? ctx.agentContext.payload.messages.history
+    : [];
+  if (!history.length) return Array.isArray(ctx?.messages) ? ctx.messages : [];
+
+  const knownToolCallIds = new Set();
+  for (const msg of history) {
+    if (msg?.summarized === true) continue;
+    if (String(msg?.role || "").trim().toLowerCase() !== "assistant") continue;
+    const calls = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
+    for (const call of calls) {
+      const id = String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim();
+      if (id) knownToolCallIds.add(id);
+    }
+  }
+
+  return history
+    .filter((msg) => msg?.summarized !== true)
+    .filter((msg) => {
+      const role = String(msg?.role || "").trim().toLowerCase();
+      if (!role) return false;
+      if (role !== "tool") return true;
+      const toolCallId = String(msg?.tool_call_id || "").trim();
+      return !toolCallId || knownToolCallIds.has(toolCallId);
+    })
+    .map((msg = {}) => {
+      const role = String(msg?.role || "").trim().toLowerCase();
+      const assistantRaw =
+        typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
+          ? msg.rawModelContent
+          : msg?.content;
+      const content =
+        role === "assistant"
+          ? normalizePlanningTextContent(assistantRaw)
+          : normalizePlanningTextContent(msg?.content);
+      return { role, content };
+    })
+    .filter((msg) => msg.content);
+}
+
+function summarizePlanningMessages(messages = [], maxItems = 8) {
+  const source = Array.isArray(messages) ? messages : [];
+  const simplified = source
+    .filter((item) => {
+      const role = String(item?.role || "").trim().toLowerCase();
+      return role === "user" || role === "assistant" || role === "tool" || role === "system";
+    })
+    .slice(-maxItems)
+    .map((item = {}) => ({
+      role: String(item?.role || "").trim(),
+      content: compactText(extractRawTextContent(item?.content ?? item), 500),
+    }))
+    .filter((item) => item.content);
+  return simplified;
+}
+
+function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN) {
+  const messages = collectAgentStyleHistoryMessages(ctx);
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((item) => String(item?.role || "").trim().toLowerCase() === "user");
+  return {
+    locale,
+    turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
+    latestUserGoal: compactText(extractRawTextContent(latestUserMessage?.content), 800),
+    recentDialog: summarizePlanningMessages(messages, 8),
+    sceneTools: resolveSceneToolNames(ctx),
+    toolAllowlist: resolvePlanningToolAllowlist(meta),
+  };
 }
 
 async function repairChecklistByModel({
@@ -194,12 +285,13 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   if (!invoker) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
   const planningMessages = Array.isArray(ctx?.messages) ? [...ctx.messages] : [];
+  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
   planningMessages.unshift({
     role: "system",
     content:
       locale === LOCALE.EN_US
-        ? `Context input (ctx) for planning. Must be fully considered:\n\`\`\`json\n${safeJsonStringify(ctx)}\n\`\`\``
-        : `规划输入上下文(ctx)如下，必须完整参考：\n\`\`\`json\n${safeJsonStringify(ctx)}\n\`\`\``,
+        ? `Planning context summary (compact). Must be fully considered:\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``
+        : `规划输入上下文摘要（精简）如下，必须完整参考：\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
   });
   const planningPromptBase = [
     translateI18nText(locale, "planningPromptLine1"),
