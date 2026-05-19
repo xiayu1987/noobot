@@ -3,7 +3,7 @@ import {
   LOCALE,
   appendCapabilityLog,
   ensureHarnessBucket,
-  t,
+  translateI18nText,
 } from "./shared.js";
 
 function buildReviewReport(point = "", ctx = {}) {
@@ -56,7 +56,7 @@ function appendReviewReport(point = "", ctx = {}, { attachToFinalOutput = false 
   if (attachToFinalOutput && ctx?.result && typeof ctx.result === "object") {
     const locale = state?.locale || LOCALE.ZH_CN;
     const original = String(ctx.result.output || "").trim();
-    ctx.result.output = [original, "", t(locale, "reviewHeader"), JSON.stringify(report, null, 2)]
+    ctx.result.output = [original, "", translateI18nText(locale, "reviewHeader"), JSON.stringify(report, null, 2)]
       .filter(Boolean)
       .join("\n");
   }

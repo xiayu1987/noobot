@@ -22,7 +22,7 @@ import {
   normalizeChecklistItem,
   resolveCapabilityModelInvoker,
   resolveCapabilityToolAllowlist,
-  t,
+  translateI18nText,
 } from "./shared.js";
 
 const TASK_STATUS = Object.freeze({
@@ -160,7 +160,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
       : "验收模式：active(主动) 或 forced(强行)。";
   return new DynamicStructuredTool({
     name: TASK_ACCEPTANCE_TOOL_NAME,
-    description: t(locale, "taskAcceptanceToolDescription"),
+    description: translateI18nText(locale, "taskAcceptanceToolDescription"),
     schema: z.object({
       mode: z
         .enum([ACCEPTANCE_MODE.ACTIVE, ACCEPTANCE_MODE.FORCED])
@@ -314,7 +314,7 @@ async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
     ctx.result.output = [
       original,
       "",
-      t(locale, "forcedAcceptanceHeader"),
+      translateI18nText(locale, "forcedAcceptanceHeader"),
       JSON.stringify(report, null, 2),
     ].filter(Boolean).join("\n");
     appendCapabilityLog(ctx, {
