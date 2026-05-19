@@ -86,3 +86,41 @@ test("mini-runner records rejected and missing tool call statuses in traces", as
     ],
   );
 });
+
+test("mini-runner treats * as all tools in current registry", async () => {
+  const first = {
+    content: "need tools",
+    tool_calls: [
+      { id: "c1", name: "echo", args: {} },
+      { id: "c2", name: "other", args: {} },
+    ],
+  };
+  const executed = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    maxTurns: 1,
+    toolAllowlist: ["*"],
+    createChatModelFn: () => createFakeModel([first]),
+    adaptToolsForBindingFn: (tools) => ({ tools }),
+    executeToolCallFn: async ({ call }) => {
+      executed.push(call.name);
+      return { toolResultText: "ok" };
+    },
+  });
+
+  const result = await invoker({
+    ctx: {
+      agentContext: {
+        payload: { tools: { registry: [{ name: "echo" }, { name: "other" }] } },
+      },
+    },
+  });
+
+  assert.deepEqual(executed, ["echo", "other"]);
+  assert.deepEqual(
+    result.traces[0].toolCalls.map((call) => ({ name: call.name, status: call.status })),
+    [
+      { name: "echo", status: "executed" },
+      { name: "other", status: "executed" },
+    ],
+  );
+});
