@@ -56,8 +56,10 @@ const DEFAULT_OPTIONS = Object.freeze({
   tracePriority: 20,
   timeoutMs: 1000,
   maxPreviewChars: 1200,
-  planningGuidanceMode: "inject",
+  planningGuidanceMode: "separate_model",
   capabilityModelInvoker: null,
+  capabilityToolAllowlist: [],
+  capabilityToolAllowlistByPurpose: Object.freeze({}),
   miniRunnerMaxTurns: 4,
   miniRunnerToolAllowlist: [],
   acceptance: Object.freeze({
@@ -83,6 +85,22 @@ function normalizeOptions(userOptions = {}, api = {}) {
       DEFAULT_OPTIONS.planningGuidanceMode,
     capabilityModelInvoker:
       typeof merged.capabilityModelInvoker === "function" ? merged.capabilityModelInvoker : null,
+    capabilityToolAllowlist: Array.isArray(merged.capabilityToolAllowlist)
+      ? merged.capabilityToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
+      : DEFAULT_OPTIONS.capabilityToolAllowlist,
+    capabilityToolAllowlistByPurpose:
+      merged.capabilityToolAllowlistByPurpose &&
+      typeof merged.capabilityToolAllowlistByPurpose === "object" &&
+      !Array.isArray(merged.capabilityToolAllowlistByPurpose)
+        ? Object.fromEntries(
+            Object.entries(merged.capabilityToolAllowlistByPurpose).map(([purpose, value]) => [
+              String(purpose || "").trim(),
+              Array.isArray(value)
+                ? value.map((item) => String(item || "").trim()).filter(Boolean)
+                : [],
+            ]),
+          )
+        : DEFAULT_OPTIONS.capabilityToolAllowlistByPurpose,
     miniRunnerMaxTurns:
       Number.isFinite(Number(merged.miniRunnerMaxTurns)) && Number(merged.miniRunnerMaxTurns) > 0
         ? Number(merged.miniRunnerMaxTurns)
@@ -374,6 +392,8 @@ export function registerNoobotPlugin(api = {}, userOptions = {}) {
             harness: {
               planningGuidanceMode: options.planningGuidanceMode,
               capabilityModelInvoker: options.capabilityModelInvoker,
+              capabilityToolAllowlist: options.capabilityToolAllowlist,
+              capabilityToolAllowlistByPurpose: options.capabilityToolAllowlistByPurpose,
               acceptance: options.acceptance,
               review: options.review,
               runTraceSink: async (record = {}) => {

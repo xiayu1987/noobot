@@ -69,7 +69,7 @@ const I18N_TEXT = Object.freeze({
     taskAcceptanceToolDescription:
       "请求任务验收：按 harness 插件任务清单输出验收报告；mode=active(主动) 或 forced(强行)。",
     planningPromptMarker: "<!-- harness-planning-bootstrap -->",
-    planningPromptLine1: "首次模型调用：先输出任务清单(JSON)。",
+    planningPromptLine1: "首次模型调用：先输出任务清单(JSON)，随后继续执行任务，不要在清单后直接结束。",
     planningPromptLine2: "格式示例：{example}",
     planningPromptLine3: "可包含子任务负责人(subOwners)。",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
@@ -86,7 +86,8 @@ const I18N_TEXT = Object.freeze({
     taskAcceptanceToolDescription:
       "Request task acceptance: validate completion against the harness checklist; mode=active or forced.",
     planningPromptMarker: "<!-- harness-planning-bootstrap -->",
-    planningPromptLine1: "On the first model call, output a task checklist in JSON first.",
+    planningPromptLine1:
+      "On the first model call, output a JSON task checklist first, then continue execution instead of stopping.",
     planningPromptLine2: "Format example: {example}",
     planningPromptLine3: "You may include subtask owners (subOwners).",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
@@ -179,7 +180,23 @@ function ensureHarnessBucket(ctx = {}) {
       planningPromptInjected: false,
       planningCaptured: false,
       acceptanceRequested: false,
+      checklistArtifactsAttached: false,
+      planningForceToolTemporarilyEnabled: false,
+      planningForceToolOriginalSet: false,
+      planningForceToolOriginal: false,
     };
+  }
+  if (state.flags.checklistArtifactsAttached === undefined) {
+    state.flags.checklistArtifactsAttached = false;
+  }
+  if (state.flags.planningForceToolTemporarilyEnabled === undefined) {
+    state.flags.planningForceToolTemporarilyEnabled = false;
+  }
+  if (state.flags.planningForceToolOriginalSet === undefined) {
+    state.flags.planningForceToolOriginalSet = false;
+  }
+  if (state.flags.planningForceToolOriginal === undefined) {
+    state.flags.planningForceToolOriginal = false;
   }
   if (!state.signals || typeof state.signals !== "object") {
     state.signals = {
@@ -219,6 +236,69 @@ function ensureHarnessBucket(ctx = {}) {
   const locale = resolveLocale(ctx);
   state.locale = locale;
   return { bucket, state };
+}
+
+function mergeAttachmentMetas(existing = [], incoming = []) {
+  const current = Array.isArray(existing) ? existing : [];
+  const next = Array.isArray(incoming) ? incoming : [];
+  if (!next.length) return current;
+  const keyOf = (item = {}) =>
+    String(item?.attachmentId || "").trim() ||
+    `${String(item?.name || "").trim()}|${String(item?.path || "").trim()}`;
+  const seen = new Set(current.map((item) => keyOf(item)).filter(Boolean));
+  const merged = [...current];
+  for (const item of next) {
+    const key = keyOf(item);
+    if (key && seen.has(key)) continue;
+    merged.push(item);
+    if (key) seen.add(key);
+  }
+  return merged;
+}
+
+function mapAttachmentRecordsToMetas(records = []) {
+  const list = Array.isArray(records) ? records : [];
+  return list.map((record = {}) => ({
+    attachmentId: String(record?.attachmentId || "").trim(),
+    sessionId: String(record?.sessionId || "").trim(),
+    attachmentSource: String(record?.attachmentSource || "model").trim(),
+    name: String(record?.name || "").trim(),
+    mimeType: String(record?.mimeType || "application/octet-stream").trim(),
+    size: Number(record?.size) || 0,
+    path: String(record?.path || "").trim(),
+    relativePath: String(record?.relativePath || "").trim(),
+    generatedByModel: record?.generatedByModel === true,
+    generationSource: String(record?.generationSource || "").trim(),
+  }));
+}
+
+function attachArtifactsToAssistantResult(ctx = {}, attachmentMetas = []) {
+  const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  if (!metas.length) return false;
+  const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
+  if (!result || !Array.isArray(result.turnMessages)) return false;
+  const assistantIndexes = [];
+  for (let i = 0; i < result.turnMessages.length; i += 1) {
+    if (String(result.turnMessages[i]?.role || "").trim() === "assistant") {
+      assistantIndexes.push(i);
+    }
+  }
+  if (!assistantIndexes.length) return false;
+  const latestDialogProcessId = String(
+    result.turnMessages[assistantIndexes[assistantIndexes.length - 1]]?.dialogProcessId || "",
+  ).trim();
+  let changed = false;
+  for (const index of assistantIndexes) {
+    const message = result.turnMessages[index] || {};
+    const dialogProcessId = String(message?.dialogProcessId || "").trim();
+    if (latestDialogProcessId && dialogProcessId !== latestDialogProcessId) continue;
+    result.turnMessages[index] = {
+      ...message,
+      attachmentMetas: mergeAttachmentMetas(message?.attachmentMetas, metas),
+    };
+    changed = true;
+  }
+  return changed;
 }
 
 function appendCapabilityLog(ctx = {}, { domain = "", event = "", detail = {} } = {}) {
@@ -288,7 +368,7 @@ async function appendCapabilityModelTraceLog(ctx = {}, meta = {}, { domain = "",
 }
 
 function resolvePlanningGuidanceMode(meta = {}) {
-  return String(meta?.harness?.planningGuidanceMode || "inject").trim().toLowerCase();
+  return String(meta?.harness?.planningGuidanceMode || "separate_model").trim().toLowerCase();
 }
 
 function shouldUseSeparateModel(meta = {}) {
@@ -299,6 +379,23 @@ function resolveCapabilityModelInvoker(meta = {}) {
   return typeof meta?.harness?.capabilityModelInvoker === "function"
     ? meta.harness.capabilityModelInvoker
     : null;
+}
+
+function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {
+  const normalizedPurpose = String(purpose || "").trim();
+  const byPurpose =
+    meta?.harness?.capabilityToolAllowlistByPurpose &&
+    typeof meta.harness.capabilityToolAllowlistByPurpose === "object"
+      ? meta.harness.capabilityToolAllowlistByPurpose
+      : {};
+  const scoped = Array.isArray(byPurpose?.[normalizedPurpose]) ? byPurpose[normalizedPurpose] : null;
+  if (scoped) {
+    return scoped.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  const globalAllowlist = Array.isArray(meta?.harness?.capabilityToolAllowlist)
+    ? meta.harness.capabilityToolAllowlist
+    : [];
+  return globalAllowlist.map((item) => String(item || "").trim()).filter(Boolean);
 }
 
 function shouldProcessPrimaryToolHooks(ctx = {}) {
@@ -537,6 +634,7 @@ async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseReport = nu
       messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
       ctx,
       baseReport,
+      toolAllowlist: resolveCapabilityToolAllowlist(meta, "acceptance_semantic_validation"),
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -643,11 +741,58 @@ function maybeInjectPlanningPrompt(ctx = {}) {
   return true;
 }
 
+function enablePlanningForceToolRetry(ctx = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { state } = holder;
+  if (state.flags.planningCaptured === true) return false;
+  if (state.flags.planningForceToolTemporarilyEnabled === true) return false;
+  const runtimeConfig = ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.config;
+  if (!runtimeConfig || typeof runtimeConfig !== "object") return false;
+  state.flags.planningForceToolOriginalSet = Object.prototype.hasOwnProperty.call(runtimeConfig, "forceTool");
+  state.flags.planningForceToolOriginal = Boolean(runtimeConfig?.forceTool);
+  runtimeConfig.forceTool = true;
+  state.flags.planningForceToolTemporarilyEnabled = true;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event: "planning_force_tool_retry_enabled",
+  });
+  return true;
+}
+
+function restorePlanningForceToolRetry(ctx = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { state } = holder;
+  if (state.flags.planningForceToolTemporarilyEnabled !== true) return false;
+  const runtimeConfig = ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.config;
+  if (!runtimeConfig || typeof runtimeConfig !== "object") return false;
+  if (state.flags.planningForceToolOriginalSet === true) {
+    runtimeConfig.forceTool = Boolean(state.flags.planningForceToolOriginal);
+  } else {
+    delete runtimeConfig.forceTool;
+  }
+  state.flags.planningForceToolTemporarilyEnabled = false;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event: "planning_force_tool_retry_restored",
+  });
+  return true;
+}
+
 async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
   if (state.flags.planningCaptured === true) return false;
+  if (
+    String(bucket?.taskChecklistSource || "").trim().toLowerCase() === "model" &&
+    Array.isArray(bucket?.taskChecklist) &&
+    bucket.taskChecklist.length
+  ) {
+    state.flags.planningCaptured = true;
+    return false;
+  }
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
@@ -667,6 +812,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       prompt: planningPrompt,
       messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
       ctx,
+      toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning"),
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -685,7 +831,15 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
   const parsed = parseTaskChecklistFromModelOutput(responseText, locale);
-  bucket.taskChecklist = parsed.length ? parsed : defaultTaskChecklist(locale);
+  if (parsed.length) {
+    bucket.taskChecklist = parsed;
+    bucket.taskChecklistSource = "model";
+  } else if (!Array.isArray(bucket.taskChecklist) || !bucket.taskChecklist.length) {
+    bucket.taskChecklist = defaultTaskChecklist(locale);
+    bucket.taskChecklistSource = "default";
+  } else if (!String(bucket?.taskChecklistSource || "").trim()) {
+    bucket.taskChecklistSource = "existing";
+  }
   bucket.taskOwner = getDefaultTaskOwner(locale);
   state.flags.planningCaptured = true;
   relaySeparateModelOutputAsUserMessage(ctx, {
@@ -696,7 +850,10 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: "planning_checklist_captured_by_separate_model",
-    detail: { checklistCount: bucket.taskChecklist.length, source: parsed.length ? "model" : "default" },
+    detail: {
+      checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
+      source: String(bucket?.taskChecklistSource || "").trim() || (parsed.length ? "model" : "default"),
+    },
   });
   return true;
 }
@@ -871,6 +1028,7 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       prompt,
       messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
       ctx,
+      toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -909,6 +1067,101 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
         ? "summary_generated_by_separate_model"
         : "guidance_generated_by_separate_model",
     detail: { reason: reason || undefined },
+  });
+  return true;
+}
+
+async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  if (state.flags.checklistArtifactsAttached === true) return false;
+
+  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
+  const attachmentService = runtime?.attachmentService || null;
+  if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
+    return false;
+  }
+  const userId = String(
+    ctx?.userId || runtime?.systemRuntime?.userId || runtime?.userId || "",
+  ).trim();
+  const sessionId = String(
+    ctx?.sessionId || runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
+  ).trim();
+  if (!userId || !sessionId) return false;
+
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const checklist = Array.isArray(bucket?.taskChecklist) && bucket.taskChecklist.length
+    ? bucket.taskChecklist
+    : defaultTaskChecklist(locale);
+  const acceptanceReport =
+    bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
+      ? bucket.lastAcceptanceReport
+      : buildAcceptanceReport({ bucket, state, mode: ACCEPTANCE_MODE.FORCED });
+
+  const artifacts = [
+    {
+      name: "harness-task-checklist.json",
+      mimeType: "application/json",
+      contentBase64: Buffer.from(
+        JSON.stringify(
+          {
+            generatedAt: new Date().toISOString(),
+            taskOwner: bucket?.taskOwner || getDefaultTaskOwner(locale),
+            taskChecklist: checklist,
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      ).toString("base64"),
+    },
+    {
+      name: "harness-acceptance-checklist.json",
+      mimeType: "application/json",
+      contentBase64: Buffer.from(
+        JSON.stringify(
+          {
+            generatedAt: new Date().toISOString(),
+            report: acceptanceReport,
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      ).toString("base64"),
+    },
+  ];
+
+  let savedRecords = [];
+  try {
+    savedRecords = await attachmentService.ingestGeneratedArtifacts({
+      userId,
+      sessionId,
+      attachmentSource: "model",
+      generationSource: "harness_checklist",
+      artifacts,
+    });
+  } catch (error) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      event: "checklist_artifact_attach_failed",
+      detail: { error: String(error?.message || error || "") },
+    });
+    return false;
+  }
+
+  const metas = mapAttachmentRecordsToMetas(savedRecords);
+  if (!metas.length) return false;
+  if (runtime && typeof runtime === "object") {
+    runtime.attachmentMetas = mergeAttachmentMetas(runtime?.attachmentMetas, metas);
+  }
+  attachArtifactsToAssistantResult(ctx, metas);
+  state.flags.checklistArtifactsAttached = true;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    event: "checklist_artifacts_attached",
+    detail: { attachmentCount: metas.length },
   });
   return true;
 }
@@ -957,6 +1210,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
   }
   if (point === "before_final_output") {
     changed = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || changed;
+    changed = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || changed;
   }
   return changed;
 }

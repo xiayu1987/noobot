@@ -482,6 +482,9 @@ export class SessionExecutionEngine {
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
     const next = { ...options, enabled: true, basePath };
+    if (!String(next?.planningGuidanceMode || "").trim()) {
+      next.planningGuidanceMode = "separate_model";
+    }
     if (
       String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model" &&
       typeof next?.capabilityModelInvoker !== "function"
