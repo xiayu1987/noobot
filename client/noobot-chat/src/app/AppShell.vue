@@ -146,9 +146,14 @@ function persistSelectedPlugins() {
 }
 
 function syncSelectedPluginsWithConfig() {
-  const availablePluginKeySet = new Set(availablePlugins.value.map((item) => item.key));
+  const pluginOptions = Array.isArray(availablePlugins.value) ? availablePlugins.value : [];
+  if (!pluginOptions.length) {
+    // 连接前 scenarioConfig 为空，避免把本地已选插件误清空并持久化。
+    return;
+  }
+  const availablePluginKeySet = new Set(pluginOptions.map((item) => item.key));
   if (!hasStoredSelectedPlugins.value) {
-    selectedPlugins.value = availablePlugins.value
+    selectedPlugins.value = pluginOptions
       .filter((pluginItem) => pluginItem.enabled === true)
       .map((pluginItem) => pluginItem.key);
     return;

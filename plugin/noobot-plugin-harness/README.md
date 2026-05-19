@@ -106,11 +106,13 @@ runConfig: {
 | `finalResponseText` | built-in guard | System prompt text injected at `before_final_output`. |
 | `capabilityProfile` | built-in planned profile | Declares Harness Engineering capability contract; implementation can be filled later. |
 | `capabilityHandlers` | built-in noop handlers | Optional capability handler overrides for each capability domain. |
-| `planningGuidanceMode` | `inject` | `inject` or `separate_model`. In `separate_model`, planning/guidance can call an external model invoker. |
+| `planningGuidanceMode` | `separate_model` | `inject` or `separate_model`. In `separate_model`, planning/guidance can call an external model invoker. |
 | `capabilityModelInvoker` | `null` | Optional async invoker used by `separate_model` mode. If the invoker returns `traces`, harness records them to `capability-traces.jsonl`. |
+| `capabilityToolAllowlist` | `[]` | Tool allowlist passed from harness to capability invoker (all purposes). Empty means no tools. |
+| `capabilityToolAllowlistByPurpose` | `{}` | Per-purpose allowlist override, e.g. `planning`, `guidance`, `summary`, `acceptance_semantic_validation`. |
 | `acceptance.semanticValidation` | `false` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
 | `miniRunnerMaxTurns` | `4` | Hint option for agent-side mini-runner injector (when `planningGuidanceMode=separate_model`). |
-| `miniRunnerToolAllowlist` | `[]` | Hint option for agent-side mini-runner tool allowlist. |
+| `miniRunnerToolAllowlist` | `[]` | Fallback allowlist used by the injected mini-runner when harness does not pass a per-call allowlist. Empty means no tools. |
 
 ## Acceptance semantic validation
 

@@ -80,7 +80,7 @@ function resolveToolsFromContext(ctx = {}, allowSet = new Set()) {
   const registry = ctx?.agentContext?.payload?.tools?.registry;
   if (!Array.isArray(registry)) return [];
   const tools = registry.filter((tool) => String(tool?.name || "").trim());
-  if (!allowSet.size) return tools;
+  if (!allowSet.size) return [];
   return tools.filter((tool) => allowSet.has(String(tool?.name || "").trim()));
 }
 
@@ -106,6 +106,7 @@ export function createAgentCapabilityModelInvoker({
     prompt = "",
     messages = [],
     ctx = {},
+    toolAllowlist: toolAllowlistOverride = undefined,
   } = {}) {
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
@@ -123,7 +124,14 @@ export function createAgentCapabilityModelInvoker({
       streaming: false,
     });
 
-    const tools = resolveToolsFromContext(ctx, allowSet);
+    const effectiveAllowSet = Array.isArray(toolAllowlistOverride)
+      ? new Set(
+          toolAllowlistOverride
+            .map((item) => String(item || "").trim())
+            .filter(Boolean),
+        )
+      : allowSet;
+    const tools = resolveToolsFromContext(ctx, effectiveAllowSet);
     const adapted = adaptToolsForBindingFn(tools, {
       globalConfig,
       userConfig,
@@ -144,11 +152,13 @@ export function createAgentCapabilityModelInvoker({
         .filter(([name]) => Boolean(name)),
     );
 
+    let lastAssistantText = "";
     for (let turn = 1; turn <= maxTurnCount; turn += 1) {
       const ai = await model.invoke(runMessages, {
         signal: runtime?.abortSignal || null,
       });
       const text = normalizeTextContent(ai?.content);
+      lastAssistantText = text;
       const calls = normalizeToolCalls(ai);
       traces.push({
         turn,
@@ -172,7 +182,7 @@ export function createAgentCapabilityModelInvoker({
       }
 
       for (const call of calls) {
-        if (allowSet.size && !allowSet.has(call.name)) {
+        if (effectiveAllowSet.size && !effectiveAllowSet.has(call.name)) {
           currentTrace.toolCalls = currentTrace.toolCalls.map((item) =>
             item.name === call.name && item.id === (call.id || "")
               ? { ...item, status: "rejected", error: `tool not allowed: ${call.name}` }
@@ -227,8 +237,8 @@ export function createAgentCapabilityModelInvoker({
     }
 
     return {
-      content: "",
-      output: "",
+      content: lastAssistantText,
+      output: lastAssistantText,
       traces,
       turn: maxTurnCount,
       finishedReason: "max_turn_reached",
