@@ -182,6 +182,7 @@ export function ensureHarnessBucket(ctx = {}) {
       planningForceToolTemporarilyEnabled: false,
       planningForceToolOriginalSet: false,
       planningForceToolOriginal: false,
+      guidanceSummaryMarkPending: false,
     };
   }
   if (state.flags.checklistArtifactsAttached === undefined) {
@@ -195,6 +196,9 @@ export function ensureHarnessBucket(ctx = {}) {
   }
   if (state.flags.planningForceToolOriginal === undefined) {
     state.flags.planningForceToolOriginal = false;
+  }
+  if (state.flags.guidanceSummaryMarkPending === undefined) {
+    state.flags.guidanceSummaryMarkPending = false;
   }
   if (!state.signals || typeof state.signals !== "object") {
     state.signals = {
@@ -519,6 +523,30 @@ export function safeJsonStringify(value = null, space = 2) {
       message: String(error?.message || error || ""),
     });
   }
+}
+
+function markMessageSummarized(messageItem = null) {
+  if (!messageItem || typeof messageItem !== "object") return false;
+  if (messageItem.summarized === true && messageItem?.lc_kwargs?.summarized === true) return false;
+  messageItem.summarized = true;
+  if (messageItem?.lc_kwargs && typeof messageItem.lc_kwargs === "object") {
+    messageItem.lc_kwargs.summarized = true;
+  }
+  return true;
+}
+
+export function markMessagesSummarized(messages = []) {
+  if (!Array.isArray(messages)) return 0;
+  let changedCount = 0;
+  for (const messageItem of messages) {
+    if (!messageItem || typeof messageItem !== "object") continue;
+    const role = String(messageItem?.role || messageItem?.lc_kwargs?.role || "").trim().toLowerCase();
+    if (role === "system") continue;
+    if (markMessageSummarized(messageItem)) {
+      changedCount += 1;
+    }
+  }
+  return changedCount;
 }
 
 export function extractJsonObjectFromText(text = "") {

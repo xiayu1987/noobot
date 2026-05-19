@@ -10,12 +10,21 @@ import {
   appendCapabilityModelTraceLog,
   ensureHarnessBucket,
   extractRawTextContent,
+  markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,
   resolveCapabilityModelInvoker,
   resolveCapabilityToolAllowlist,
   shouldUseSeparateModel,
   translateI18nText,
 } from "./shared.js";
+
+function markGuidanceSummarizedMessages(ctx = {}) {
+  const historyMessages = ctx?.agentContext?.payload?.messages?.history;
+  const currentMessages = ctx?.messages;
+  const currentMarked = markMessagesSummarized(currentMessages);
+  const historyMarked = markMessagesSummarized(historyMessages);
+  return currentMarked + historyMarked;
+}
 
 function markToolSignals(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -89,6 +98,7 @@ function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
     });
     state.pending.summary = false;
     state.counters.llmTurns = 0;
+    state.flags.guidanceSummaryMarkPending = true;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: "summary_prompt_injected",
@@ -191,6 +201,14 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     content: responseText,
     timestamp: new Date().toISOString(),
   });
+  if (purpose === "summary") {
+    const markedCount = markGuidanceSummarizedMessages(ctx);
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+      event: "summary_messages_marked",
+      detail: { markedCount },
+    });
+  }
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose,
@@ -224,6 +242,19 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
     }
     if (point === "tool_call_error" && shouldProcessPrimaryToolHooks(ctx)) {
       changed = updateFailureCounters(ctx, true) || changed;
+    }
+    if (point === "after_llm_call") {
+      const holder = ensureHarnessBucket(ctx);
+      if (holder?.state?.flags?.guidanceSummaryMarkPending === true) {
+        holder.state.flags.guidanceSummaryMarkPending = false;
+        const markedCount = markGuidanceSummarizedMessages(ctx);
+        appendCapabilityLog(ctx, {
+          domain: CAPABILITY_DOMAIN.GUIDANCE,
+          event: "summary_messages_marked",
+          detail: { markedCount },
+        });
+        changed = markedCount > 0 || changed;
+      }
     }
     return { capability, point, status: "active", changed };
   };
