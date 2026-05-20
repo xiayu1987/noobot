@@ -24,7 +24,32 @@ require_cmd() {
 }
 
 run_pm2() {
-  (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx pm2 "$@")
+  local err_file out_file
+  err_file="$(mktemp)"
+  out_file="$(mktemp)"
+  if (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@" >"$out_file" 2>"$err_file"); then
+    cat "$out_file"
+    rm -f "$out_file" "$err_file"
+    return 0
+  fi
+
+  local exit_code=$?
+  local err_text out_text combined_text
+  err_text="$(cat "$err_file" 2>/dev/null || true)"
+  out_text="$(cat "$out_file" 2>/dev/null || true)"
+  rm -f "$out_file" "$err_file"
+  combined_text="${out_text}"$'\n'"${err_text}"
+
+  if echo "$combined_text" | grep -qiE "Cannot find module .*pm2|ProcessContainerFork\\.js|could not determine executable to run|pm2: not found"; then
+    log "pm2 missing/broken detected, reinstall pm2 and retry once"
+    rm -rf "$SERVICE_DIR/node_modules/pm2" "$SERVICE_DIR/node_modules/.bin/pm2"
+    (cd "$SERVICE_DIR" && npm install pm2@^7.0.1 --no-save)
+    (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@")
+    return $?
+  fi
+
+  echo "$combined_text" >&2
+  return "$exit_code"
 }
 
 pm2_has_app() {
