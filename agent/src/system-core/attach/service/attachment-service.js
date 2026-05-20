@@ -268,6 +268,9 @@ export class AttachmentService {
     sourceAttachmentId = "",
     parsedAttachmentMeta = {},
     toolName = "",
+    sourceSessionId = "",
+    sourceAttachmentSource = "",
+    sourceAttachmentPath = "",
   } = {}) {
     const sourceId = safeStr(sourceAttachmentId);
     const parsedId = safeStr(parsedAttachmentMeta?.attachmentId);
@@ -275,13 +278,106 @@ export class AttachmentService {
 
     const basePath = resolveBasePath(this.globalConfig, userId);
     const scopedRoot = attachScopedRoot(basePath);
+    const normalizedSessionId = safeStr(sourceSessionId);
+    const normalizedAttachmentSource = safeStr(sourceAttachmentSource).toLowerCase();
+    const normalizedSourcePath = safeStr(sourceAttachmentPath);
+
+    const scopedCandidates = await this._buildLinkParsedScopeCandidates({
+      scopedRoot,
+      sessionId: normalizedSessionId,
+      attachmentSource: normalizedAttachmentSource,
+    });
+
+    let updatedRecord = await this._linkParsedResultInScopes({
+      basePath,
+      scopes: scopedCandidates,
+      sourceAttachmentId: sourceId,
+      parsedAttachmentMeta,
+      toolName,
+      sourceAttachmentPath: normalizedSourcePath,
+    });
+
+    if (!updatedRecord) {
+      const fallbackScopes = await this._buildLinkParsedScopeCandidates({
+        scopedRoot,
+        sessionId: "",
+        attachmentSource: "",
+      });
+      updatedRecord = await this._linkParsedResultInScopes({
+        basePath,
+        scopes: fallbackScopes,
+        sourceAttachmentId: sourceId,
+        parsedAttachmentMeta,
+        toolName,
+        sourceAttachmentPath: normalizedSourcePath,
+      });
+    }
+
+    if (updatedRecord) {
+      await this._syncParsedResultToSessionSnapshots({
+        basePath,
+        sourceAttachmentId: sourceId,
+        sourceAttachmentPath:
+          safeStr(updatedRecord?.path) || normalizedSourcePath,
+        updatedSourceAttachment: updatedRecord,
+        sessionIdHint: normalizedSessionId || safeStr(updatedRecord?.sessionId),
+      });
+    }
+
+    return updatedRecord || null;
+  }
+
+  async _buildLinkParsedScopeCandidates({
+    scopedRoot = "",
+    sessionId = "",
+    attachmentSource = "",
+  } = {}) {
+    const normalizedSessionId = safeStr(sessionId);
+    const normalizedAttachmentSource = safeStr(attachmentSource).toLowerCase();
+    const scopes = [];
+    const dedupe = new Set();
+    const pushScope = (scopeSessionId = "", scopeAttachmentSource = "") => {
+      const normalizedScopeSessionId = safeStr(scopeSessionId);
+      const normalizedScopeAttachmentSource = safeStr(scopeAttachmentSource).toLowerCase();
+      if (!normalizedScopeSessionId || !normalizedScopeAttachmentSource) return;
+      const dedupeKey = `${normalizedScopeSessionId}::${normalizedScopeAttachmentSource}`;
+      if (dedupe.has(dedupeKey)) return;
+      dedupe.add(dedupeKey);
+      scopes.push({
+        sessionId: normalizedScopeSessionId,
+        attachmentSource: normalizedScopeAttachmentSource,
+      });
+    };
+
+    if (normalizedSessionId && normalizedAttachmentSource) {
+      pushScope(normalizedSessionId, normalizedAttachmentSource);
+      return scopes;
+    }
+
+    if (normalizedSessionId) {
+      const sessionRoot = path.join(scopedRoot, normalizedSessionId);
+      let sourceEntries = [];
+      try {
+        sourceEntries = await readdir(sessionRoot, { withFileTypes: true });
+      } catch {
+        sourceEntries = [];
+      }
+      for (const sourceEntry of sourceEntries) {
+        if (!sourceEntry?.isDirectory?.()) continue;
+        if (normalizedAttachmentSource && sourceEntry.name !== normalizedAttachmentSource) {
+          continue;
+        }
+        pushScope(normalizedSessionId, sourceEntry.name);
+      }
+      return scopes;
+    }
+
     let sessionEntries = [];
     try {
       sessionEntries = await readdir(scopedRoot, { withFileTypes: true });
     } catch {
-      return null;
+      return scopes;
     }
-
     for (const sessionEntry of sessionEntries) {
       if (!sessionEntry?.isDirectory?.()) continue;
       const sessionRoot = path.join(scopedRoot, sessionEntry.name);
@@ -293,27 +389,196 @@ export class AttachmentService {
       }
       for (const sourceEntry of sourceEntries) {
         if (!sourceEntry?.isDirectory?.()) continue;
-        const scope = {
-          sessionId: sessionEntry.name,
-          attachmentSource: sourceEntry.name,
-        };
-        const index = await readAttachIndex(basePath, scope);
-        const sourceRecord = index?.attachments?.[sourceId];
-        if (!sourceRecord) continue;
-        const nextRecord = {
-          ...sourceRecord,
-          parsedResultAttachmentId: parsedId,
-          parsedResultPath: safeStr(parsedAttachmentMeta?.path),
-          parsedResultRelativePath: safeStr(parsedAttachmentMeta?.relativePath),
-          parsedResultTool: safeStr(toolName),
-          parsedResultUpdatedAt: new Date().toISOString(),
-        };
-        index.attachments[sourceId] = nextRecord;
-        await writeAttachIndex(basePath, index, scope);
-        return buildPublicRecord(basePath, nextRecord);
+        if (normalizedAttachmentSource && sourceEntry.name !== normalizedAttachmentSource) {
+          continue;
+        }
+        pushScope(sessionEntry.name, sourceEntry.name);
       }
     }
+    return scopes;
+  }
+
+  async _linkParsedResultInScopes({
+    basePath = "",
+    scopes = [],
+    sourceAttachmentId = "",
+    parsedAttachmentMeta = {},
+    toolName = "",
+    sourceAttachmentPath = "",
+  } = {}) {
+    const normalizedSourceId = safeStr(sourceAttachmentId);
+    const normalizedSourcePath = safeStr(sourceAttachmentPath);
+    if (!normalizedSourceId || !Array.isArray(scopes) || !scopes.length) return null;
+
+    for (const scope of scopes) {
+      const index = await readAttachIndex(basePath, scope);
+      const sourceRecord = index?.attachments?.[normalizedSourceId];
+      if (!sourceRecord) continue;
+      if (!this._isAttachmentPathMatch({
+        expectedPath: normalizedSourcePath,
+        actualPath: safeStr(sourceRecord?.path),
+      })) {
+        continue;
+      }
+      const nextRecord = {
+        ...sourceRecord,
+        parsedResultAttachmentId: safeStr(parsedAttachmentMeta?.attachmentId),
+        parsedResultPath: safeStr(parsedAttachmentMeta?.path),
+        parsedResultRelativePath: safeStr(parsedAttachmentMeta?.relativePath),
+        parsedResultTool: safeStr(toolName),
+        parsedResultUpdatedAt: new Date().toISOString(),
+      };
+      index.attachments[normalizedSourceId] = nextRecord;
+      await writeAttachIndex(basePath, index, scope);
+      return buildPublicRecord(basePath, nextRecord);
+    }
     return null;
+  }
+
+  _isAttachmentPathMatch({ expectedPath = "", actualPath = "" } = {}) {
+    const normalizedExpectedPath = safeStr(expectedPath);
+    if (!normalizedExpectedPath) return true;
+    const normalizedActualPath = safeStr(actualPath);
+    if (!normalizedActualPath) return false;
+    return path.normalize(normalizedExpectedPath) === path.normalize(normalizedActualPath);
+  }
+
+  async _syncParsedResultToSessionSnapshots({
+    basePath = "",
+    sourceAttachmentId = "",
+    sourceAttachmentPath = "",
+    updatedSourceAttachment = {},
+    sessionIdHint = "",
+  } = {}) {
+    const normalizedAttachmentId = safeStr(sourceAttachmentId);
+    if (!normalizedAttachmentId) return;
+
+    const sessionRoot = path.join(basePath, "runtime/session");
+    const sessionJsonFiles = await this._collectSessionJsonFiles({
+      sessionRoot,
+      sessionIdHint,
+    });
+    if (!sessionJsonFiles.length) return;
+
+    const nextParsedFields = {
+      parsedResultAttachmentId: safeStr(updatedSourceAttachment?.parsedResultAttachmentId),
+      parsedResultPath: safeStr(updatedSourceAttachment?.parsedResultPath),
+      parsedResultRelativePath: safeStr(updatedSourceAttachment?.parsedResultRelativePath),
+      parsedResultTool: safeStr(updatedSourceAttachment?.parsedResultTool),
+      parsedResultUpdatedAt: safeStr(updatedSourceAttachment?.parsedResultUpdatedAt),
+    };
+    const normalizedSourcePath = safeStr(sourceAttachmentPath);
+
+    for (const sessionJsonFile of sessionJsonFiles) {
+      let raw = "";
+      try {
+        raw = await fsReadFile(sessionJsonFile, "utf8");
+      } catch {
+        continue;
+      }
+      let sessionPayload = null;
+      try {
+        sessionPayload = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      const messages = Array.isArray(sessionPayload?.messages)
+        ? sessionPayload.messages
+        : [];
+      let changed = false;
+      const nextMessages = messages.map((messageItem) => {
+        const attachmentMetas = Array.isArray(messageItem?.attachmentMetas)
+          ? messageItem.attachmentMetas
+          : [];
+        if (!attachmentMetas.length) return messageItem;
+        let messageChanged = false;
+        const nextAttachmentMetas = attachmentMetas.map((attachmentItem) => {
+          const attachmentId = safeStr(attachmentItem?.attachmentId);
+          const attachmentPath = safeStr(attachmentItem?.path);
+          const isMatchedAttachment =
+            attachmentId === normalizedAttachmentId &&
+            this._isAttachmentPathMatch({
+              expectedPath: normalizedSourcePath,
+              actualPath: attachmentPath,
+            });
+          if (!isMatchedAttachment) return attachmentItem;
+          messageChanged = true;
+          changed = true;
+          return {
+            ...(attachmentItem || {}),
+            ...nextParsedFields,
+          };
+        });
+        if (!messageChanged) return messageItem;
+        return {
+          ...(messageItem || {}),
+          attachmentMetas: nextAttachmentMetas,
+        };
+      });
+      if (!changed) continue;
+      try {
+        await fsWriteFile(
+          sessionJsonFile,
+          `${JSON.stringify({
+            ...(sessionPayload || {}),
+            messages: nextMessages,
+          }, null, 2)}\n`,
+          "utf8",
+        );
+      } catch {
+        // ignore snapshot sync failures
+      }
+    }
+  }
+
+  async _collectSessionJsonFiles({
+    sessionRoot = "",
+    sessionIdHint = "",
+  } = {}) {
+    const normalizedSessionRoot = safeStr(sessionRoot);
+    if (!normalizedSessionRoot) return [];
+    const normalizedHint = safeStr(sessionIdHint);
+    const candidateRoots = normalizedHint
+      ? [path.join(normalizedSessionRoot, normalizedHint), normalizedSessionRoot]
+      : [normalizedSessionRoot];
+    const discovered = [];
+    const visited = new Set();
+
+    for (const rootPath of candidateRoots) {
+      const normalizedRootPath = path.normalize(String(rootPath || ""));
+      if (!normalizedRootPath || visited.has(normalizedRootPath)) continue;
+      visited.add(normalizedRootPath);
+      const files = await this._walkSessionJsonFilesFromRoot(normalizedRootPath);
+      for (const filePath of files) {
+        const normalizedFilePath = path.normalize(String(filePath || ""));
+        if (!normalizedFilePath || visited.has(normalizedFilePath)) continue;
+        visited.add(normalizedFilePath);
+        discovered.push(normalizedFilePath);
+      }
+    }
+    return discovered;
+  }
+
+  async _walkSessionJsonFilesFromRoot(rootPath = "") {
+    let entries = [];
+    try {
+      entries = await readdir(rootPath, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const discovered = [];
+    for (const entry of entries) {
+      const entryPath = path.join(rootPath, entry.name);
+      if (entry?.isDirectory?.()) {
+        const childFiles = await this._walkSessionJsonFilesFromRoot(entryPath);
+        discovered.push(...childFiles);
+        continue;
+      }
+      if (entry?.isFile?.() && entry.name === "session.json") {
+        discovered.push(entryPath);
+      }
+    }
+    return discovered;
   }
 
   /**
