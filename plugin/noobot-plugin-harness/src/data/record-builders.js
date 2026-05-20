@@ -72,10 +72,22 @@ function extractRuntime(ctx = {}) {
   return ctx?.agentContext?.execution?.controllers?.runtime || null;
 }
 
+function resolveToolTurnLimitReached(capabilityLogs = []) {
+  const logs = Array.isArray(capabilityLogs) ? capabilityLogs : [];
+  return logs.some(
+    (log) =>
+      log?.event === "capability_model_trace" &&
+      (log?.detail?.toolTurnLimitReached === true ||
+        (Array.isArray(log?.detail?.traces) &&
+          log.detail.traces.some((trace) => trace?.toolTurnLimitReached === true))),
+  );
+}
+
 export function buildEvent({ point, ctx = {}, options = {}, pluginName = "", pluginVersion = "" } = {}) {
   const capabilityLogs = Array.isArray(ctx?.harnessCapabilityLogs)
     ? ctx.harnessCapabilityLogs
     : [];
+  const toolTurnLimitReached = resolveToolTurnLimitReached(capabilityLogs);
   return {
     eventId: crypto.randomUUID(),
     plugin: pluginName,
@@ -98,6 +110,7 @@ export function buildEvent({ point, ctx = {}, options = {}, pluginName = "", plu
     failureReason: ctx.failureReason || undefined,
     error: safeError(ctx.error),
     preview: buildPayloadPreview(point, ctx, options),
+    toolTurnLimitReached: toolTurnLimitReached === true ? true : undefined,
     capabilityLogs: capabilityLogs.length ? capabilityLogs : undefined,
   };
 }

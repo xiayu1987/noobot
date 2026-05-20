@@ -5,6 +5,8 @@
 import { createChatModel, adaptToolsForBinding } from "../../../model/index.js";
 import { executeToolCall } from "../execution/tool-runner.js";
 
+const MAX_MINI_RUNNER_TOOL_TURNS = 5;
+
 function normalizeToolCalls(ai = {}) {
   const rawCalls = Array.isArray(ai?.tool_calls)
     ? ai.tool_calls
@@ -96,19 +98,8 @@ function resolveToolsFromContext(ctx = {}, allowPolicy = { allowAll: false, allo
   return tools.filter((tool) => allowPolicy.allowSet.has(String(tool?.name || "").trim()));
 }
 
-function extractLastToolTextMessage(messages = []) {
-  const list = Array.isArray(messages) ? messages : [];
-  for (let index = list.length - 1; index >= 0; index -= 1) {
-    const message = list[index];
-    if (String(message?.role || "").trim().toLowerCase() !== "tool") continue;
-    const content = normalizeTextContent(message?.content);
-    if (content) return content;
-  }
-  return "";
-}
-
 export function createAgentCapabilityModelInvoker({
-  maxTurns = 4,
+  maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
   toolAllowlist = [],
   createChatModelFn = createChatModel,
   adaptToolsForBindingFn = adaptToolsForBinding,
@@ -116,7 +107,42 @@ export function createAgentCapabilityModelInvoker({
 } = {}) {
   const baseAllowPolicy = resolveAllowPolicy(toolAllowlist);
   const maxTurnCount =
-    Number.isFinite(Number(maxTurns)) && Number(maxTurns) > 0 ? Number(maxTurns) : 4;
+    Number.isFinite(Number(maxTurns)) && Number(maxTurns) > 0
+      ? Math.min(Number(maxTurns), MAX_MINI_RUNNER_TOOL_TURNS)
+      : MAX_MINI_RUNNER_TOOL_TURNS;
+
+  function buildDefaultCapabilityOutput({ targetLocale = "zh-CN", targetPurpose = "" } = {}) {
+    const isEn = String(targetLocale || "").trim().toLowerCase() === "en-us";
+    const purposeValue = String(targetPurpose || "").trim().toLowerCase();
+    if (purposeValue.includes("planning")) {
+      return JSON.stringify(
+        {
+          taskOwner: "primary_task_owner",
+          taskChecklist: isEn
+            ? [
+                { index: 1, task: "Clarify scope and constraints", owner: "primary_task_owner", subOwners: [] },
+                { index: 2, task: "Implement minimal safe solution", owner: "primary_task_owner", subOwners: [] },
+                { index: 3, task: "Validate and summarize next actions", owner: "primary_task_owner", subOwners: [] },
+              ]
+            : [
+                { index: 1, task: "澄清范围与约束", owner: "primary_task_owner", subOwners: [] },
+                { index: 2, task: "实现最小可行且安全的方案", owner: "primary_task_owner", subOwners: [] },
+                { index: 3, task: "完成验证并给出后续建议", owner: "primary_task_owner", subOwners: [] },
+              ],
+          meta: {
+            source: "mini_runner_default",
+            reason: "tool_turn_limit_reached",
+            maxToolTurns: MAX_MINI_RUNNER_TOOL_TURNS,
+          },
+        },
+        null,
+        0,
+      );
+    }
+    return isEn
+      ? `Tool turn limit reached (${MAX_MINI_RUNNER_TOOL_TURNS}). Please proceed with a conservative answer and clear next-step suggestions.`
+      : `已达到工具调用轮数上限（${MAX_MINI_RUNNER_TOOL_TURNS}）。请基于当前信息给出保守结论与下一步建议。`;
+  }
 
   return async function capabilityModelInvoker({
     purpose = "",
@@ -168,6 +194,7 @@ export function createAgentCapabilityModelInvoker({
     );
 
     let lastAssistantText = "";
+    let toolTurnLimitReached = false;
     for (let turn = 1; turn <= maxTurnCount; turn += 1) {
       const ai = await model.invoke(runMessages, {
         signal: runtime?.abortSignal || null,
@@ -193,6 +220,7 @@ export function createAgentCapabilityModelInvoker({
           traces,
           turn,
           finishedReason: "no_tool_call",
+          toolTurnLimitReached: false,
         };
       }
 
@@ -254,6 +282,13 @@ export function createAgentCapabilityModelInvoker({
         });
       }
     }
+    toolTurnLimitReached = true;
+    if (traces.length) {
+      traces[traces.length - 1] = {
+        ...traces[traces.length - 1],
+        toolTurnLimitReached: true,
+      };
+    }
 
     let finalizedText = lastAssistantText;
     if (!finalizedText) {
@@ -272,7 +307,10 @@ export function createAgentCapabilityModelInvoker({
       }
     }
     if (!finalizedText) {
-      finalizedText = extractLastToolTextMessage(runMessages);
+      finalizedText = buildDefaultCapabilityOutput({
+        targetLocale: locale,
+        targetPurpose: purpose,
+      });
     }
 
     return {
@@ -281,6 +319,7 @@ export function createAgentCapabilityModelInvoker({
       traces,
       turn: maxTurnCount,
       finishedReason: finalizedText ? "max_turn_reached_finalized" : "max_turn_reached",
+      toolTurnLimitReached,
     };
   };
 }

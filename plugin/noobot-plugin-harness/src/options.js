@@ -1,0 +1,159 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { resolveCapabilityProfile } from "./capabilities/profile.js";
+import { z } from "zod";
+
+export const DEFAULT_OPTIONS = Object.freeze({
+  enabled: true,
+  trace: true,
+  promptPolicy: true,
+  finalResponseGuard: true,
+  writeContextSnapshot: true,
+  writePrompts: true,
+  policyMode: "warn",
+  runtimeDirName: "runtime",
+  harnessDirName: "harness",
+  promptPriority: 80,
+  tracePriority: 20,
+  timeoutMs: 1000,
+  maxPreviewChars: 1200,
+  planningGuidanceMode: "separate_model",
+  capabilityModelInvoker: null,
+  capabilityToolAllowlist: [],
+  capabilityToolAllowlistByPurpose: Object.freeze({}),
+  miniRunnerMaxTurns: 5,
+  miniRunnerToolAllowlist: [],
+  acceptance: Object.freeze({
+    semanticValidation: false,
+  }),
+  review: Object.freeze({
+    attachToFinalOutput: true,
+  }),
+  manifestDebounceMs: 500,
+  jsonlBatchSize: 50,
+  jsonlFlushIntervalMs: 2000,
+  jsonlFlushStrategy: Object.freeze({
+    maxSize: 50,
+    maxTime: 2000,
+    onTerminal: true,
+    onError: true,
+  }),
+  maxRuns: 100,
+  maxRunAgeDays: 30,
+  cleanupGraceMs: 10 * 60 * 1000,
+  fsmEnabled: true,
+  promptText: [
+    "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
+  ].join("\n"),
+  finalResponseText: [
+    "最终回复请包含：做了什么、改了哪些文件、验证情况或未验证原因、下一步建议。",
+  ].join("\n"),
+});
+
+const HarnessOptionsSchema = z
+  .object({
+    planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
+    capabilityModelInvoker: z.any().optional(),
+    capabilityToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.capabilityToolAllowlist),
+    capabilityToolAllowlistByPurpose: z.record(z.any()).default({}),
+    miniRunnerMaxTurns: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.miniRunnerMaxTurns),
+    miniRunnerToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.miniRunnerToolAllowlist),
+    acceptance: z.record(z.any()).optional(),
+    review: z.record(z.any()).optional(),
+    manifestDebounceMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
+    jsonlBatchSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlBatchSize),
+    jsonlFlushIntervalMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushIntervalMs),
+    jsonlFlushStrategy: z
+      .object({
+        maxSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
+        maxTime: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxTime),
+        onTerminal: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onTerminal),
+        onError: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onError),
+      })
+      .partial()
+      .default(DEFAULT_OPTIONS.jsonlFlushStrategy),
+    maxRuns: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.maxRuns),
+    maxRunAgeDays: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.maxRunAgeDays),
+    cleanupGraceMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.cleanupGraceMs),
+    fsmEnabled: z.boolean().default(DEFAULT_OPTIONS.fsmEnabled),
+    capabilityProfile: z.any().optional(),
+    capabilityHandlers: z.any().optional(),
+  })
+  .passthrough();
+
+export function normalizeOptions(userOptions = {}, api = {}) {
+  const merged = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
+  const hasCustomFlushStrategy =
+    (userOptions &&
+      typeof userOptions === "object" &&
+      userOptions.jsonlFlushStrategy &&
+      typeof userOptions.jsonlFlushStrategy === "object") ||
+    (api?.options?.harness &&
+      typeof api.options.harness === "object" &&
+      api.options.harness.jsonlFlushStrategy &&
+      typeof api.options.harness.jsonlFlushStrategy === "object");
+  const parsed = HarnessOptionsSchema.safeParse(merged);
+  const safe = parsed.success ? parsed.data : DEFAULT_OPTIONS;
+
+  const capabilityToolAllowlist = Array.isArray(safe.capabilityToolAllowlist)
+    ? safe.capabilityToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
+    : DEFAULT_OPTIONS.capabilityToolAllowlist;
+  const capabilityToolAllowlistByPurpose =
+    safe.capabilityToolAllowlistByPurpose &&
+    typeof safe.capabilityToolAllowlistByPurpose === "object" &&
+    !Array.isArray(safe.capabilityToolAllowlistByPurpose)
+      ? Object.fromEntries(
+          Object.entries(safe.capabilityToolAllowlistByPurpose).map(([purpose, value]) => [
+            String(purpose || "").trim(),
+            Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : [],
+          ]),
+        )
+      : DEFAULT_OPTIONS.capabilityToolAllowlistByPurpose;
+
+  return {
+    ...merged,
+    ...safe,
+    planningGuidanceMode:
+      String(safe.planningGuidanceMode || DEFAULT_OPTIONS.planningGuidanceMode).trim() ||
+      DEFAULT_OPTIONS.planningGuidanceMode,
+    capabilityModelInvoker:
+      typeof safe.capabilityModelInvoker === "function" ? safe.capabilityModelInvoker : null,
+    capabilityToolAllowlist,
+    capabilityToolAllowlistByPurpose,
+    miniRunnerMaxTurns: safe.miniRunnerMaxTurns,
+    miniRunnerToolAllowlist: Array.isArray(safe.miniRunnerToolAllowlist)
+      ? safe.miniRunnerToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
+      : DEFAULT_OPTIONS.miniRunnerToolAllowlist,
+    acceptance: {
+      ...(DEFAULT_OPTIONS.acceptance || {}),
+      ...(safe.acceptance && typeof safe.acceptance === "object" ? safe.acceptance : {}),
+    },
+    review: {
+      ...(DEFAULT_OPTIONS.review || {}),
+      ...(safe.review && typeof safe.review === "object" ? safe.review : {}),
+    },
+    jsonlFlushStrategy: {
+      ...DEFAULT_OPTIONS.jsonlFlushStrategy,
+      maxSize: safe.jsonlBatchSize,
+      maxTime: safe.jsonlFlushIntervalMs,
+      ...(hasCustomFlushStrategy && safe.jsonlFlushStrategy && typeof safe.jsonlFlushStrategy === "object"
+        ? safe.jsonlFlushStrategy
+        : {}),
+    },
+    capabilityProfile: resolveCapabilityProfile(safe.capabilityProfile),
+    capabilityHandlers:
+      safe.capabilityHandlers && typeof safe.capabilityHandlers === "object"
+        ? safe.capabilityHandlers
+        : {},
+    manifestDebounceMs: safe.manifestDebounceMs,
+    jsonlBatchSize: safe.jsonlBatchSize,
+    jsonlFlushIntervalMs: safe.jsonlFlushIntervalMs,
+    maxRuns: safe.maxRuns,
+    maxRunAgeDays: safe.maxRunAgeDays,
+    cleanupGraceMs: safe.cleanupGraceMs,
+    fsmEnabled: safe.fsmEnabled !== false,
+  };
+}

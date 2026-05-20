@@ -1,0 +1,252 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import {
+  updateManifestCached,
+  appendJsonlBuffered,
+  writeJson,
+} from "../lib/store.js";
+import {
+  isHarnessPromptAlreadyInjected,
+  injectSystemMessages,
+} from "../lib/prompt-injector.js";
+import { nowIso, safeError } from "../data/record-builders.js";
+import {
+  HARNESS_ENGINEERING_CAPABILITIES,
+  resolveCapabilityProfile,
+} from "../capabilities/profile.js";
+import { HARNESS_HOOK_POINTS } from "../constants.js";
+import { createRunPaths, ensureRunDir } from "../runtime-context.js";
+import { advanceFsmState } from "../fsm/state-machine.js";
+import {
+  buildTraceContextSnapshot,
+  buildTraceEvent,
+  buildTracePromptRecord,
+} from "./event-builder.js";
+import {
+  normalizeFsmState,
+  statusToFsmState,
+} from "../fsm/transitions.js";
+
+function resolveFlushReasonByPoint(point = "") {
+  if (
+    point === HARNESS_HOOK_POINTS.AFTER_TURN ||
+    point === HARNESS_HOOK_POINTS.ON_ABORT ||
+    point === HARNESS_HOOK_POINTS.ON_ERROR
+  ) {
+    return "terminal";
+  }
+  if (
+    point === HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR ||
+    point === HARNESS_HOOK_POINTS.LLM_CALL_ERROR ||
+    point === HARNESS_HOOK_POINTS.TOOL_CALL_ERROR
+  ) {
+    return "error";
+  }
+  return "";
+}
+
+function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = null, plugin = {}) {
+  const resolvedPaths =
+    current?.paths && typeof current.paths === "object" && Object.keys(current.paths).length > 0
+      ? current.paths
+      : paths && typeof paths === "object"
+        ? {
+            runDir: paths.runDir,
+            contextSnapshot: paths.contextSnapshot,
+            events: paths.events,
+            prompts: paths.prompts,
+            toolCalls: paths.toolCalls,
+            stateCommits: paths.stateCommits,
+            policyChecks: paths.policyChecks,
+            capabilityTraces: paths.capabilityTraces,
+          }
+        : {};
+  const next = {
+    plugin: plugin.name,
+    version: plugin.version,
+    harnessRunId: current.harnessRunId || "",
+    userId: ctx.userId || current.userId || "",
+    sessionId: ctx.sessionId || current.sessionId || "",
+    parentSessionId: ctx.parentSessionId || current.parentSessionId || "",
+    dialogProcessId: ctx.dialogProcessId || current.dialogProcessId || current.harnessRunId || "",
+    caller: ctx.caller || current.caller || "",
+    status: current.status || "running",
+    fsmStatus: normalizeFsmState(current.fsmStatus || current?.fsm?.state || statusToFsmState(current.status)),
+    startedAt: current.startedAt || ctx.startedAt || nowIso(),
+    updatedAt: nowIso(),
+    capabilities:
+      current.capabilities ||
+      {
+        domains: HARNESS_ENGINEERING_CAPABILITIES,
+        profile: resolveCapabilityProfile(options.capabilityProfile),
+        hookMap: capabilityRuntime?.hookMap || {},
+      },
+    paths: resolvedPaths,
+    ...current,
+    ...patch,
+  };
+  if (["success", "error", "abort"].includes(String(patch.status || ""))) {
+    next.endedAt = patch.endedAt || nowIso();
+  }
+  return next;
+}
+
+export async function updateManifest(paths, ctx = {}, patch = {}, options = {}, capabilityRuntime = null, plugin = {}) {
+  if (!paths) return;
+  await updateManifestCached(
+    paths,
+    ctx,
+    patch,
+    options,
+    capabilityRuntime,
+    (current, hookCtx, nextPatch, hookOptions, runtimeCapability) =>
+      mergeManifest(current, hookCtx, nextPatch, hookOptions, runtimeCapability, paths, plugin),
+    options.manifestDebounceMs,
+  );
+}
+
+export async function injectPrompt(point, ctx, options, plugin = {}) {
+  if (!options.enabled || !options.promptPolicy) return;
+  const id =
+    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
+      ? "noobot-harness-final-response"
+      : "noobot-harness-policy";
+  const content =
+    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText;
+
+  if (isHarnessPromptAlreadyInjected(ctx.messages, id)) return;
+
+  const injected = injectSystemMessages(ctx, {
+    skipIds: new Set(),
+    prompts: [{ id, content, priority: options.promptPriority, mode: "prepend" }],
+  });
+
+  if (!injected || !options.writePrompts) return;
+  const paths = createRunPaths(ctx, options);
+  if (!paths) return;
+  await ensureRunDir(paths);
+  await appendJsonlBuffered(
+    paths.prompts,
+    buildTracePromptRecord({
+      promptId: id,
+      point,
+      content,
+      maxPreviewChars: options.maxPreviewChars,
+    }),
+    options.jsonlFlushStrategy || options.jsonlBatchSize,
+    options.jsonlFlushIntervalMs,
+  );
+}
+
+export async function traceHook(point, ctx, options, plugin = {}) {
+  if (!options.enabled || !options.trace) return;
+  const paths = createRunPaths(ctx, options);
+  if (!paths) return;
+  await ensureRunDir(paths);
+  const fsm = await advanceFsmState(point, ctx, paths, options);
+  const event = buildTraceEvent({
+    point,
+    ctx,
+    options,
+    pluginName: plugin.name,
+    pluginVersion: plugin.version,
+  });
+  const flushReason = resolveFlushReasonByPoint(point);
+
+  await appendJsonlBuffered(
+    paths.events,
+    event,
+    options.jsonlFlushStrategy || options.jsonlBatchSize,
+    options.jsonlFlushIntervalMs,
+    { reason: flushReason },
+  );
+  if (point.includes("tool_call")) {
+    await appendJsonlBuffered(
+      paths.toolCalls,
+      event,
+      options.jsonlFlushStrategy || options.jsonlBatchSize,
+      options.jsonlFlushIntervalMs,
+      { reason: flushReason },
+    );
+  }
+  if (point.includes("state_commit")) {
+    await appendJsonlBuffered(
+      paths.stateCommits,
+      event,
+      options.jsonlFlushStrategy || options.jsonlBatchSize,
+      options.jsonlFlushIntervalMs,
+      { reason: flushReason },
+    );
+  }
+
+  const capabilityTraceLogs = (Array.isArray(event.capabilityLogs) ? event.capabilityLogs : []).filter(
+    (log) => log?.event === "capability_model_trace",
+  );
+  for (const log of capabilityTraceLogs) {
+    await appendJsonlBuffered(
+      paths.capabilityTraces,
+      {
+        eventId: event.eventId,
+        point,
+        timestamp: event.timestamp,
+        userId: event.userId,
+        sessionId: event.sessionId,
+        dialogProcessId: event.dialogProcessId,
+        ...log,
+      },
+      options.jsonlFlushStrategy || options.jsonlBatchSize,
+      options.jsonlFlushIntervalMs,
+      { reason: flushReason },
+    );
+  }
+
+  if (point === HARNESS_HOOK_POINTS.AFTER_CONTEXT_BUILD && options.writeContextSnapshot) {
+    await writeJson(
+      paths.contextSnapshot,
+      buildTraceContextSnapshot({
+        ctx,
+        pluginName: plugin.name,
+        pluginVersion: plugin.version,
+      }),
+    );
+  }
+
+  const terminalStatus =
+    point === HARNESS_HOOK_POINTS.AFTER_TURN
+      ? "success"
+      : point === HARNESS_HOOK_POINTS.ON_ERROR || point === HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR
+        ? "error"
+        : point === HARNESS_HOOK_POINTS.ON_ABORT
+          ? "abort"
+          : null;
+
+  await updateManifest(
+    paths,
+    ctx,
+    {
+      status: terminalStatus || "running",
+      fsmStatus: fsm.state,
+      fsm: {
+        state: fsm.state,
+        updatedAt: nowIso(),
+        lastPoint: point,
+        rejectedTransition: fsm.rejected === true ? { attemptedState: fsm.attempted, at: nowIso() } : null,
+        resumedFromCheckpoint: fsm.resumed === true,
+      },
+      updatedAt: nowIso(),
+      lastEvent: { point, timestamp: event.timestamp, status: event.status },
+      ...(terminalStatus ? { endedAt: nowIso(), error: safeError(ctx.error) } : {}),
+    },
+    options,
+    options?.capabilityRuntime || null,
+    plugin,
+  );
+
+  return {
+    fsmState: fsm.state,
+    fsmRejected: fsm.rejected === true,
+  };
+}

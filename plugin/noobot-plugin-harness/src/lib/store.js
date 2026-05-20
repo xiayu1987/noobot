@@ -147,6 +147,57 @@ const jsonlFlushTimers = new Map(); // filePath -> Timer
 
 const DEFAULT_JSONL_BATCH_SIZE = 50;
 const DEFAULT_JSONL_FLUSH_INTERVAL_MS = 2000;
+const DEFAULT_JSONL_FLUSH_STRATEGY = Object.freeze({
+  maxSize: DEFAULT_JSONL_BATCH_SIZE,
+  maxTime: DEFAULT_JSONL_FLUSH_INTERVAL_MS,
+  onTerminal: true,
+  onError: true,
+});
+
+function normalizeFlushStrategy(batchSize, flushIntervalMs) {
+  if (batchSize && typeof batchSize === "object" && !Array.isArray(batchSize)) {
+    const input = batchSize;
+    const maxSize = Number(input?.maxSize);
+    const maxTime = Number(input?.maxTime);
+    return {
+      maxSize: Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
+      maxTime: Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
+      onTerminal:
+        typeof input?.onTerminal === "boolean"
+          ? input.onTerminal
+          : DEFAULT_JSONL_FLUSH_STRATEGY.onTerminal,
+      onError: typeof input?.onError === "boolean" ? input.onError : DEFAULT_JSONL_FLUSH_STRATEGY.onError,
+    };
+  }
+  const resolvedBatch = Number(batchSize);
+  const resolvedInterval = Number(flushIntervalMs);
+  return {
+    maxSize: Number.isFinite(resolvedBatch) && resolvedBatch > 0 ? resolvedBatch : DEFAULT_JSONL_BATCH_SIZE,
+    maxTime:
+      Number.isFinite(resolvedInterval) && resolvedInterval >= 0
+        ? resolvedInterval
+        : DEFAULT_JSONL_FLUSH_INTERVAL_MS,
+    onTerminal: true,
+    onError: true,
+  };
+}
+
+function clearJsonlFlushTimer(filePath = "") {
+  const timer = jsonlFlushTimers.get(filePath);
+  if (timer) clearTimeout(timer);
+  jsonlFlushTimers.delete(filePath);
+}
+
+function scheduleJsonlFlush(filePath = "", maxTime = DEFAULT_JSONL_FLUSH_INTERVAL_MS) {
+  if (!filePath || jsonlFlushTimers.has(filePath) || maxTime <= 0) return;
+  jsonlFlushTimers.set(
+    filePath,
+    setTimeout(async () => {
+      await flushJsonlBuffer(filePath);
+      jsonlFlushTimers.delete(filePath);
+    }, maxTime),
+  );
+}
 
 /**
  * Append to JSONL buffer. Flushes when batch size reached or on interval.
@@ -156,8 +207,10 @@ export async function appendJsonlBuffered(
   record,
   batchSize = DEFAULT_JSONL_BATCH_SIZE,
   flushIntervalMs = DEFAULT_JSONL_FLUSH_INTERVAL_MS,
+  flushHint = {},
 ) {
   if (!filePath || !record) return;
+  const strategy = normalizeFlushStrategy(batchSize, flushIntervalMs);
 
   let buffer = jsonlBuffers.get(filePath);
   if (!buffer) {
@@ -167,16 +220,15 @@ export async function appendJsonlBuffered(
 
   buffer.push(JSON.stringify(record));
 
-  if (buffer.length >= batchSize) {
+  const reason = String(flushHint?.reason || "").trim().toLowerCase();
+  const shouldFlushByReason =
+    (reason === "terminal" && strategy.onTerminal) || (reason === "error" && strategy.onError);
+
+  if (buffer.length >= strategy.maxSize || shouldFlushByReason) {
+    clearJsonlFlushTimer(filePath);
     await flushJsonlBuffer(filePath);
-  } else if (!jsonlFlushTimers.has(filePath) && flushIntervalMs > 0) {
-    jsonlFlushTimers.set(
-      filePath,
-      setTimeout(async () => {
-        await flushJsonlBuffer(filePath);
-        jsonlFlushTimers.delete(filePath);
-      }, flushIntervalMs),
-    );
+  } else {
+    scheduleJsonlFlush(filePath, strategy.maxTime);
   }
 }
 
@@ -211,11 +263,7 @@ async function flushJsonlBuffer(filePath) {
 export async function flushAllJsonlBuffers() {
   const filePaths = Array.from(jsonlBuffers.keys());
   for (const filePath of filePaths) {
-    const timer = jsonlFlushTimers.get(filePath);
-    if (timer) {
-      clearTimeout(timer);
-      jsonlFlushTimers.delete(filePath);
-    }
+    clearJsonlFlushTimer(filePath);
     await flushJsonlBuffer(filePath);
   }
 }

@@ -372,6 +372,7 @@ export async function appendCapabilityModelTraceLog(
     purpose: String(purpose || response?.purpose || "").trim() || undefined,
     finishedReason: response?.finishedReason || undefined,
     turn: response?.turn || undefined,
+    toolTurnLimitReached: response?.toolTurnLimitReached === true,
     traces,
   };
   const log = {
