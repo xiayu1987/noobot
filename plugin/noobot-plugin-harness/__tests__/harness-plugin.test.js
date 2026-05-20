@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { createHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
+import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
 
 async function exists(file) {
   try { await fs.access(file); return true; } catch { return false; }
@@ -32,6 +33,58 @@ async function readJsonl(file) {
     .filter(Boolean)
     .map((line) => JSON.parse(line));
 }
+
+test("ensureHarnessBucket fast-path keeps initialized references stable", async () => {
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            counters: { llmTurns: 9 },
+            flags: { planningCaptured: true },
+            signals: { successfulToolCount: 3 },
+            pending: { guidance: null, summary: false },
+          },
+          taskChecklist: [{ index: 1, task: "t1" }],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          lastPlanningRawOutput: null,
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          __harnessBucketVersion: 1,
+        },
+      },
+    },
+  };
+  ctx.agentContext.payload.harness.state.__harnessBucketVersion = 1;
+
+  const first = ensureHarnessBucket(ctx);
+  assert.ok(first);
+  const refs = {
+    bucket: first.bucket,
+    state: first.state,
+    counters: first.state.counters,
+    flags: first.state.flags,
+    signals: first.state.signals,
+    pending: first.state.pending,
+    logs: first.bucket.logs,
+    taskChecklist: first.bucket.taskChecklist,
+  };
+
+  const second = ensureHarnessBucket(ctx);
+  assert.ok(second);
+  assert.equal(second.bucket, refs.bucket);
+  assert.equal(second.state, refs.state);
+  assert.equal(second.state.counters, refs.counters);
+  assert.equal(second.state.flags, refs.flags);
+  assert.equal(second.state.signals, refs.signals);
+  assert.equal(second.state.pending, refs.pending);
+  assert.equal(second.bucket.logs, refs.logs);
+  assert.equal(second.bucket.taskChecklist, refs.taskChecklist);
+  assert.equal(second.state.counters.llmTurns, 9);
+  assert.equal(second.state.flags.planningCaptured, true);
+  assert.equal(second.state.signals.successfulToolCount, 3);
+});
 
 test("harness plugin writes manifest, events and context snapshot", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));

@@ -8,32 +8,61 @@ const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility
 // P2#5: Injected prompt ID cache per messages array reference for O(1) lookup
 // WeakMap so it doesn't prevent GC of message arrays
 const injectedPromptCache = new WeakMap();
+const HARNESS_MARKER_PATTERN = /<!--\s*([^<>]*?)\s*-->/g;
+
+function scanInjectedIdsInContent(content = "", target = new Set()) {
+  const text = typeof content === "string" ? content : "";
+  if (!text) return target;
+  HARNESS_MARKER_PATTERN.lastIndex = 0;
+  let matched = HARNESS_MARKER_PATTERN.exec(text);
+  while (matched) {
+    const id = String(matched?.[1] || "").trim();
+    if (id) target.add(id);
+    matched = HARNESS_MARKER_PATTERN.exec(text);
+  }
+  return target;
+}
+
+function rebuildInjectedPromptCache(messages = []) {
+  const ids = new Set();
+  for (const msg of messages) {
+    scanInjectedIdsInContent(msg?.content, ids);
+  }
+  const entry = { ids, scannedLength: messages.length };
+  injectedPromptCache.set(messages, entry);
+  return entry;
+}
+
+function getOrCreateInjectedPromptCache(messages = []) {
+  const current = injectedPromptCache.get(messages);
+  if (!current) return rebuildInjectedPromptCache(messages);
+  const scannedLength = Number.isFinite(Number(current.scannedLength))
+    ? Number(current.scannedLength)
+    : 0;
+  const ids = current.ids instanceof Set ? current.ids : new Set();
+  if (messages.length < scannedLength) return rebuildInjectedPromptCache(messages);
+  if (messages.length > scannedLength) {
+    for (let index = scannedLength; index < messages.length; index += 1) {
+      scanInjectedIdsInContent(messages[index]?.content, ids);
+    }
+    current.ids = ids;
+    current.scannedLength = messages.length;
+  }
+  return current;
+}
 
 export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
   if (!id) return false;
-
-  // P2#5: Check cache first (O(1))
-  if (messages.length > 0) {
-    const cache = injectedPromptCache.get(messages);
-    if (cache && cache.has(id)) return true;
+  if (!Array.isArray(messages)) return false;
+  const cache = getOrCreateInjectedPromptCache(messages);
+  if (cache.ids.has(id)) return true;
+  const found = messages.some((msg) =>
+    String(msg?.content || "").includes(`<!-- ${id} -->`),
+  );
+  if (found) {
+    cache.ids.add(id);
+    cache.scannedLength = messages.length;
   }
-
-  // Fallback: scan messages (only on cache miss or first call)
-  const found = messages.some((msg) => {
-    const content = typeof msg?.content === "string" ? msg.content : "";
-    return content.includes(`<!-- ${id} -->`);
-  });
-
-  // P2#5: Update cache
-  if (found && messages.length > 0) {
-    let cache = injectedPromptCache.get(messages);
-    if (!cache) {
-      cache = new Set();
-      injectedPromptCache.set(messages, cache);
-    }
-    cache.add(id);
-  }
-
   return found;
 }
 
@@ -42,13 +71,10 @@ export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
  * Call this after successful injection to update the O(1) cache.
  */
 export function markPromptAsInjected(messages, id) {
-  if (!messages || !id || messages.length === 0) return;
-  let cache = injectedPromptCache.get(messages);
-  if (!cache) {
-    cache = new Set();
-    injectedPromptCache.set(messages, cache);
-  }
-  cache.add(id);
+  if (!messages || !id || messages.length === 0 || !Array.isArray(messages)) return;
+  const cache = getOrCreateInjectedPromptCache(messages);
+  cache.ids.add(id);
+  cache.scannedLength = messages.length;
 }
 
 export function registerPrompt(id, content, priority = 50, mode = "prepend") {
@@ -97,18 +123,8 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   if (!promptEntries.length) return false;
 
   let injected = false;
-  const existingIds = new Set();
-
-  // Collect already-injected IDs
-  for (const msg of messages) {
-    const content = typeof msg?.content === "string" ? msg.content : "";
-    for (const prompt of promptEntries) {
-      const id = prompt.id;
-      if (content.includes(`<!-- ${id} -->`)) {
-        existingIds.add(id);
-      }
-    }
-  }
+  const cache = getOrCreateInjectedPromptCache(messages);
+  const existingIds = cache.ids;
 
   // Sort by priority (descending)
   const sorted = promptEntries
@@ -149,19 +165,8 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     messages.push(item);
   }
 
-  // P2#5: Update cache for newly injected IDs
-  if (injected) {
-    let cache = injectedPromptCache.get(messages);
-    if (!cache) {
-      cache = new Set();
-      injectedPromptCache.set(messages, cache);
-    }
-    for (const { id } of sorted) {
-      if (!options.skipIds?.has(id)) {
-        cache.add(id);
-      }
-    }
-  }
+  // P2#5: refresh cache once to keep replace/remove semantics consistent
+  if (injected) rebuildInjectedPromptCache(messages);
 
   return injected;
 }
