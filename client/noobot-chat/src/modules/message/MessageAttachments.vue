@@ -54,7 +54,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
       class="file-card noobot-flat-card"
     >
       <button
-        v-if="isImageMime(attachmentItem.mimeType || '') && attachmentItem.previewUrl"
+        v-if="isImageMime(attachmentItem.mimeType || '') && attachmentItem.previewUrl && canPreviewAttachment(attachmentItem)"
         type="button"
         class="attachment-preview-btn"
         :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
@@ -63,7 +63,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
         <img :src="attachmentItem.previewUrl" :alt="attachmentItem.name" class="file-thumb" />
       </button>
       <button
-        v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && attachmentItem.previewUrl"
+        v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && attachmentItem.previewUrl && canPreviewAttachment(attachmentItem)"
         type="button"
         class="attachment-preview-btn"
         :title="translate('message.previewFile', { name: attachmentItem.name || '' })"

@@ -95,6 +95,13 @@ watch(
       controls
       autoplay
     />
+    <audio
+      v-else-if="resolvedPreviewMode === 'audio' && resolvedPreviewUrl"
+      class="preview-audio"
+      :src="resolvedPreviewUrl"
+      controls
+      autoplay
+    />
     <div
       v-else-if="resolvedPreviewMode === 'markdown'"
       ref="markdownContainerRef"
@@ -168,6 +175,11 @@ watch(
   display: block;
   border-radius: 6px;
   background: var(--noobot-msg-code-block-bg);
+}
+
+.preview-audio {
+  width: 100%;
+  display: block;
 }
 
 .preview-text {
