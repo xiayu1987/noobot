@@ -223,6 +223,12 @@ export function ensureHarnessBucket(ctx = {}) {
   if (!Array.isArray(bucket.reviewReports)) {
     bucket.reviewReports = [];
   }
+  if (!Array.isArray(bucket.planningRawOutputs)) {
+    bucket.planningRawOutputs = [];
+  }
+  if (!bucket.lastPlanningRawOutput || typeof bucket.lastPlanningRawOutput !== "object") {
+    bucket.lastPlanningRawOutput = null;
+  }
   if (!bucket.logs || typeof bucket.logs !== "object") {
     bucket.logs = {
       planning: [],

@@ -20,7 +20,7 @@ export function createDefaultCapabilityHandlers() {
     return acc;
   }, {});
 
-  fallback.planning = createPlanningHandler();
+  fallback.planning = createPlanningHandler({ shouldProcessPrimaryToolHooks });
   fallback.guidance = createGuidanceHandler({ shouldProcessPrimaryToolHooks });
   fallback.acceptance = createAcceptanceHandler({ shouldProcessPrimaryToolHooks });
   fallback.review = createReviewHandler();

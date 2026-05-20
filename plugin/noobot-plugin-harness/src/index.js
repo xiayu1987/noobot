@@ -1,6 +1,14 @@
 /*
  * Noobot Harness Plugin
  * Hook-based tracing, prompt policy and run manifest for Noobot agent runtime.
+ *
+ * Optimizations applied:
+ *  - Manifest: memory cache + debounced write (terminal states flush immediately)
+ *  - JSONL: buffered writes (batch 50 records or 2s interval)
+ *  - Write validation: JSON integrity check after write
+ *  - Run log cleanup: maxRuns / maxAgeDays config with periodic cleanup
+ *  - Prompt injection: priority-based with replace/append/prepend modes
+ *  - Takeover: unified dispatcher for tool/message/memory takeover
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -18,6 +26,20 @@ import {
   resolveCapabilityProfile,
 } from "./capabilities/profile.js";
 import { createCapabilityRuntime } from "./capabilities/runtime.js";
+import {
+  readJson,
+  writeJson,
+  updateManifestCached,
+  flushAllManifests,
+  appendJsonlBuffered,
+  flushAllJsonlBuffers,
+  appendJsonl,
+} from "./lib/store.js";
+import {
+  isHarnessPromptAlreadyInjected,
+  injectSystemMessages,
+} from "./lib/prompt-injector.js";
+import { cleanupOldRuns } from "./lib/cleanup.js";
 
 export const PLUGIN_NAME = "noobot-plugin-harness";
 export const PLUGIN_VERSION = "0.1.0";
@@ -60,7 +82,7 @@ const DEFAULT_OPTIONS = Object.freeze({
   capabilityModelInvoker: null,
   capabilityToolAllowlist: [],
   capabilityToolAllowlistByPurpose: Object.freeze({}),
-  miniRunnerMaxTurns: 4,
+  miniRunnerMaxTurns: 50,
   miniRunnerToolAllowlist: [],
   acceptance: Object.freeze({
     semanticValidation: false,
@@ -68,6 +90,13 @@ const DEFAULT_OPTIONS = Object.freeze({
   review: Object.freeze({
     attachToFinalOutput: true,
   }),
+  // --- Optimization configs ---
+  manifestDebounceMs: 500,
+  jsonlBatchSize: 50,
+  jsonlFlushIntervalMs: 2000,
+  maxRuns: 100,
+  maxRunAgeDays: 30,
+  cleanupGraceMs: 10 * 60 * 1000,
   promptText: [
     "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
   ].join("\n"),
@@ -121,6 +150,23 @@ function normalizeOptions(userOptions = {}, api = {}) {
       merged.capabilityHandlers && typeof merged.capabilityHandlers === "object"
         ? merged.capabilityHandlers
         : {},
+    // Optimization configs
+    manifestDebounceMs:
+      Number.isFinite(Number(merged.manifestDebounceMs)) && Number(merged.manifestDebounceMs) >= 0
+        ? Number(merged.manifestDebounceMs)
+        : DEFAULT_OPTIONS.manifestDebounceMs,
+    maxRuns:
+      Number.isFinite(Number(merged.maxRuns)) && Number(merged.maxRuns) > 0
+        ? Number(merged.maxRuns)
+        : DEFAULT_OPTIONS.maxRuns,
+    maxRunAgeDays:
+      Number.isFinite(Number(merged.maxRunAgeDays)) && Number(merged.maxRunAgeDays) > 0
+        ? Number(merged.maxRunAgeDays)
+        : DEFAULT_OPTIONS.maxRunAgeDays,
+    cleanupGraceMs:
+      Number.isFinite(Number(merged.cleanupGraceMs)) && Number(merged.cleanupGraceMs) >= 0
+        ? Number(merged.cleanupGraceMs)
+        : DEFAULT_OPTIONS.cleanupGraceMs,
   };
 }
 
@@ -176,33 +222,31 @@ async function ensureRunDir(paths) {
   return true;
 }
 
-async function appendJsonl(file, record) {
-  await fs.appendFile(file, `${JSON.stringify(record)}\n`, "utf8");
-}
-
-async function readJson(file, fallback = {}) {
-  try {
-    return JSON.parse(await fs.readFile(file, "utf8"));
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJson(file, value) {
-  await fs.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-async function updateManifest(paths, ctx = {}, patch = {}, options = {}, capabilityRuntime = null) {
-  if (!paths) return;
-  const current = await readJson(paths.manifest, {});
+// ---- Manifest merge logic (extracted for reuse with cache) ----
+function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = null) {
+  const resolvedPaths =
+    current?.paths && typeof current.paths === "object" && Object.keys(current.paths).length > 0
+      ? current.paths
+      : paths && typeof paths === "object"
+        ? {
+            runDir: paths.runDir,
+            contextSnapshot: paths.contextSnapshot,
+            events: paths.events,
+            prompts: paths.prompts,
+            toolCalls: paths.toolCalls,
+            stateCommits: paths.stateCommits,
+            policyChecks: paths.policyChecks,
+            capabilityTraces: paths.capabilityTraces,
+          }
+        : {};
   const next = {
     plugin: PLUGIN_NAME,
     version: PLUGIN_VERSION,
-    harnessRunId: paths.runId,
+    harnessRunId: current.harnessRunId || "",
     userId: ctx.userId || current.userId || "",
     sessionId: ctx.sessionId || current.sessionId || "",
     parentSessionId: ctx.parentSessionId || current.parentSessionId || "",
-    dialogProcessId: ctx.dialogProcessId || current.dialogProcessId || paths.runId,
+    dialogProcessId: ctx.dialogProcessId || current.dialogProcessId || current.harnessRunId || "",
     caller: ctx.caller || current.caller || "",
     status: current.status || "running",
     startedAt: current.startedAt || ctx.startedAt || nowIso(),
@@ -214,38 +258,105 @@ async function updateManifest(paths, ctx = {}, patch = {}, options = {}, capabil
         profile: resolveCapabilityProfile(options.capabilityProfile),
         hookMap: capabilityRuntime?.hookMap || {},
       },
-    paths: {
-      runDir: paths.runDir,
-      contextSnapshot: paths.contextSnapshot,
-      events: paths.events,
-      prompts: paths.prompts,
-      toolCalls: paths.toolCalls,
-      stateCommits: paths.stateCommits,
-      policyChecks: paths.policyChecks,
-      capabilityTraces: paths.capabilityTraces,
-    },
+    paths: resolvedPaths,
     ...current,
     ...patch,
   };
   if (["success", "error", "abort"].includes(String(patch.status || ""))) {
     next.endedAt = patch.endedAt || nowIso();
   }
-  await writeJson(paths.manifest, next);
+  return next;
 }
 
-function isHarnessPromptAlreadyInjected(messages = [], id = "") {
-  return messages.some((msg) => {
-    const content = typeof msg?.content === "string" ? msg.content : "";
-    return content.includes(`<!-- ${id} -->`);
+async function updateManifest(paths, ctx = {}, patch = {}, options = {}, capabilityRuntime = null) {
+  if (!paths) return;
+  await updateManifestCached(
+    paths,
+    ctx,
+    patch,
+    options,
+    capabilityRuntime,
+    (current, hookCtx, nextPatch, hookOptions, runtimeCapability) =>
+      mergeManifest(current, hookCtx, nextPatch, hookOptions, runtimeCapability, paths),
+    options.manifestDebounceMs,
+  );
+}
+
+// ---- Unified Takeover Dispatcher ----
+const takeoverHandlers = new Map();
+
+export function registerTakeover(type, handler) {
+  takeoverHandlers.set(String(type).toLowerCase(), handler);
+}
+
+export async function applyTakeover(type, ctx, directive, options = {}) {
+  const handler = takeoverHandlers.get(String(type).toLowerCase());
+  if (!handler) return { applied: false, reason: `No handler for takeover type: ${type}` };
+  try {
+    return await handler(ctx, directive, options);
+  } catch (err) {
+    return { applied: false, error: safeError(err) };
+  }
+}
+
+// Register default takeover handlers
+registerTakeover("tool", async (ctx, directive, options) => {
+  const toolName = directive?.toolName || directive?.name;
+  if (!toolName) return { applied: false, reason: "No tool name specified" };
+  const allowlist = options.capabilityToolAllowlist || [];
+  if (allowlist.length > 0 && !allowlist.includes(toolName)) {
+    return { applied: true, action: "block", toolName, reason: "Not in allowlist" };
+  }
+  return { applied: true, action: "allow", toolName };
+});
+
+registerTakeover("message", async (ctx, directive, options) => {
+  const messages = Array.isArray(ctx.messages) ? ctx.messages : [];
+  const content = directive?.content || directive?.text;
+  if (!content) return { applied: false, reason: "No content specified" };
+  messages.push({ role: directive.role || "system", content });
+  return { applied: true, action: "inject", messageCount: messages.length };
+});
+
+registerTakeover("memory", async (ctx, directive, options) => {
+  const key = directive?.key || directive?.name;
+  const value = directive?.value;
+  if (!key) return { applied: false, reason: "No memory key specified" };
+  const memory = ctx.memory || ctx.agentContext?.memory || {};
+  memory[key] = value;
+  return { applied: true, action: "set", key };
+});
+
+// ---- Prompt Injection (using new module) ----
+async function injectPrompt(point, ctx, options) {
+  if (!options.enabled || !options.promptPolicy) return;
+  const id =
+    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
+      ? "noobot-harness-final-response"
+      : "noobot-harness-policy";
+  const content =
+    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText;
+
+  if (isHarnessPromptAlreadyInjected(ctx.messages, id)) return;
+
+  const injected = injectSystemMessages(ctx, {
+    skipIds: new Set(),
+    prompts: [{ id, content, priority: options.promptPriority, mode: "prepend" }],
   });
-}
 
-function injectSystemMessage(ctx = {}, content = "", id = "noobot-harness") {
-  if (!content) return false;
-  const messages = Array.isArray(ctx.messages) ? ctx.messages : null;
-  if (!messages || isHarnessPromptAlreadyInjected(messages, id)) return false;
-  messages.unshift({ role: "system", content: `<!-- ${id} -->\n${content}` });
-  return true;
+  if (!injected || !options.writePrompts) return;
+  const paths = createRunPaths(ctx, options);
+  if (!paths) return;
+  await ensureRunDir(paths);
+  await appendJsonlBuffered(
+    paths.prompts,
+    buildPromptRecord({
+      promptId: id,
+      point,
+      content,
+      maxPreviewChars: options.maxPreviewChars,
+    }),
+  );
 }
 
 async function trace(point, ctx, options) {
@@ -260,14 +371,15 @@ async function trace(point, ctx, options) {
     pluginName: PLUGIN_NAME,
     pluginVersion: PLUGIN_VERSION,
   });
-  await appendJsonl(paths.events, event);
-  if (point.includes("tool_call")) await appendJsonl(paths.toolCalls, event);
-  if (point.includes("state_commit")) await appendJsonl(paths.stateCommits, event);
+  // Buffered JSONL writes
+  await appendJsonlBuffered(paths.events, event);
+  if (point.includes("tool_call")) await appendJsonlBuffered(paths.toolCalls, event);
+  if (point.includes("state_commit")) await appendJsonlBuffered(paths.stateCommits, event);
   const capabilityTraceLogs = (Array.isArray(event.capabilityLogs) ? event.capabilityLogs : []).filter(
     (log) => log?.event === "capability_model_trace",
   );
   for (const log of capabilityTraceLogs) {
-    await appendJsonl(paths.capabilityTraces, {
+    await appendJsonlBuffered(paths.capabilityTraces, {
       eventId: event.eventId,
       point,
       timestamp: event.timestamp,
@@ -302,30 +414,6 @@ async function trace(point, ctx, options) {
   );
 }
 
-async function injectPrompt(point, ctx, options) {
-  if (!options.enabled || !options.promptPolicy) return;
-  const id =
-    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
-      ? "noobot-harness-final-response"
-      : "noobot-harness-policy";
-  const content =
-    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText;
-  const injected = injectSystemMessage(ctx, content, id);
-  if (!injected || !options.writePrompts) return;
-  const paths = createRunPaths(ctx, options);
-  if (!paths) return;
-  await ensureRunDir(paths);
-  await appendJsonl(
-    paths.prompts,
-    buildPromptRecord({
-      promptId: id,
-      point,
-      content,
-      maxPreviewChars: options.maxPreviewChars,
-    }),
-  );
-}
-
 function resolveHookManager(api = {}) {
   return api.hookManager || api.hooks || api.manager || api?.runtime?.hookManager || api?.runConfig?.hookManager || null;
 }
@@ -345,8 +433,6 @@ export function createHarnessPlugin(userOptions = {}) {
 export function registerNoobotPlugin(api = {}, userOptions = {}) {
   const options = normalizeOptions(userOptions, api);
   if (options.planningGuidanceMode === "separate_model" && !options.capabilityModelInvoker) {
-    // 安全回退：未显式提供 invoker 时，避免隐式触发额外模型调用。
-    // 保持老行为，回退到 inject 模式。
     options.planningGuidanceMode = "inject";
   }
   const hookManager = resolveHookManager(api);
@@ -381,6 +467,12 @@ export function registerNoobotPlugin(api = {}, userOptions = {}) {
     HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
   ];
 
+  // Cleanup old runs on registration
+  const basePath = extractBasePath({}, options);
+  if (basePath) {
+    cleanupOldRuns(basePath, options).catch(() => {});
+  }
+
   for (const point of tracePoints) {
     disposers.push(
       hookManager.on(
@@ -400,7 +492,7 @@ export function registerNoobotPlugin(api = {}, userOptions = {}) {
                 const paths = createRunPaths(ctx, options);
                 if (!paths) return;
                 await ensureRunDir(paths);
-                await appendJsonl(paths.capabilityTraces, record);
+                await appendJsonlBuffered(paths.capabilityTraces, record);
               },
             },
           });
@@ -421,6 +513,29 @@ export function registerNoobotPlugin(api = {}, userOptions = {}) {
     );
   }
 
+  // Flush buffers on terminal events
+  const flushPoints = [
+    HARNESS_HOOK_POINTS.AFTER_TURN,
+    HARNESS_HOOK_POINTS.ON_ABORT,
+    HARNESS_HOOK_POINTS.ON_ERROR,
+    HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
+  ];
+  for (const point of flushPoints) {
+    disposers.push(
+      hookManager.on(
+        point,
+        async () => {
+          await flushAllManifests();
+          await flushAllJsonlBuffers();
+        },
+        {
+          id: `${PLUGIN_NAME}.flush.${point}`,
+          priority: 5,
+          timeoutMs: 2000,
+        },
+      ),
+    );
+  }
 
   return { name: PLUGIN_NAME, version: PLUGIN_VERSION, disposers };
 }

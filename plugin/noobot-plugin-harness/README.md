@@ -111,7 +111,7 @@ runConfig: {
 | `capabilityToolAllowlist` | `[]` | Tool allowlist passed from harness to capability invoker (all purposes). Empty means no tools. |
 | `capabilityToolAllowlistByPurpose` | `{}` | Per-purpose allowlist override, e.g. `planning`, `guidance`, `summary`, `acceptance_semantic_validation`. |
 | `acceptance.semanticValidation` | `false` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
-| `miniRunnerMaxTurns` | `4` | Hint option for agent-side mini-runner injector (when `planningGuidanceMode=separate_model`). |
+| `miniRunnerMaxTurns` | `50` | Hint option for agent-side mini-runner injector (when `planningGuidanceMode=separate_model`). |
 | `miniRunnerToolAllowlist` | `[]` | Fallback allowlist used by the injected mini-runner when harness does not pass a per-call allowlist. Empty means no tools. |
 
 ## Acceptance semantic validation
@@ -153,7 +153,7 @@ Example config:
     "harness": {
       "enabled": true,
       "planningGuidanceMode": "separate_model",
-      "miniRunnerMaxTurns": 4,
+      "miniRunnerMaxTurns": 50,
       "miniRunnerToolAllowlist": ["read_context", "search_memory"]
     }
   }
