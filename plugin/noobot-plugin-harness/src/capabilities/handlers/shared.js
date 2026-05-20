@@ -129,6 +129,7 @@ const DEFAULT_HARNESS_COUNTERS = Object.freeze({
 const DEFAULT_HARNESS_FLAGS = Object.freeze({
   planningPromptInjected: false,
   planningCaptured: false,
+  planningSeparateModelInFlight: false,
   acceptanceRequested: false,
   checklistArtifactsAttached: false,
   planningForceToolTemporarilyEnabled: false,
@@ -348,7 +349,7 @@ export function appendCapabilityLog(ctx = {}, { domain = "", event = "", detail 
 
 export function relaySeparateModelOutputAsUserMessage(
   ctx = {},
-  { locale = LOCALE.ZH_CN, purpose = "", content = "" } = {},
+  { locale = LOCALE.ZH_CN, purpose = "", content = "", dedupe = false } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   const text = String(content || "").trim();
@@ -356,9 +357,24 @@ export function relaySeparateModelOutputAsUserMessage(
   const prefix = translateI18nText(locale, "separateModelRelayPrefix", {
     purpose: String(purpose || "").trim() || "unknown",
   });
+  const relayContent = `${prefix}\n${text}`;
+  if (dedupe === true) {
+    const exists = messages.some(
+      (message = {}) =>
+        String(message?.role || "").trim() === "user" &&
+        String(message?.content || "").trim() === relayContent,
+    );
+    if (exists) {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_separate_model_relay_skipped_duplicate",
+      });
+      return false;
+    }
+  }
   messages.push({
     role: "user",
-    content: `${prefix}\n${text}`,
+    content: relayContent,
   });
   return true;
 }
@@ -409,6 +425,25 @@ export function resolveCapabilityModelInvoker(meta = {}) {
   return typeof meta?.harness?.capabilityModelInvoker === "function"
     ? meta.harness.capabilityModelInvoker
     : null;
+}
+
+export function resolveCapabilityModelMessages(
+  meta = {},
+  { ctx = {}, purpose = "", messages = [] } = {},
+) {
+  const source = Array.isArray(messages) ? messages : [];
+  const resolver = meta?.harness?.resolveModelMessages;
+  if (typeof resolver !== "function") return source;
+  try {
+    const resolved = resolver({
+      ctx,
+      purpose: String(purpose || "").trim(),
+      messages: source,
+    });
+    return Array.isArray(resolved) ? resolved : source;
+  } catch {
+    return source;
+  }
 }
 
 export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {

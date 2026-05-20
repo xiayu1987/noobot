@@ -26,6 +26,7 @@ import {
   mergeAttachmentMetas,
   normalizeChecklistItem,
   resolveCapabilityModelInvoker,
+  resolveCapabilityModelMessages,
   resolveCapabilityToolAllowlist,
   translateI18nText,
 } from "./shared.js";
@@ -126,7 +127,11 @@ async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseReport = nu
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       locale,
       prompt,
-      messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+      messages: resolveCapabilityModelMessages(meta, {
+        ctx,
+        purpose: "acceptance_semantic_validation",
+        messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+      }),
       ctx,
       baseReport,
       toolAllowlist: resolveCapabilityToolAllowlist(meta, "acceptance_semantic_validation"),

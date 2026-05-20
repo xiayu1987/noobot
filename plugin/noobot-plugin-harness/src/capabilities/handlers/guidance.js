@@ -18,6 +18,7 @@ import {
   markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,
   resolveCapabilityModelInvoker,
+  resolveCapabilityModelMessages,
   resolveCapabilityToolAllowlist,
   shouldUseSeparateModel,
   translateI18nText,
@@ -177,7 +178,11 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       locale,
       prompt,
-      messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+      messages: resolveCapabilityModelMessages(meta, {
+        ctx,
+        purpose,
+        messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+      }),
       ctx,
       toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
     });
