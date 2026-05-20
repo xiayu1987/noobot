@@ -66,6 +66,35 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
   assert.equal(names.includes("request_task_acceptance"), false);
 });
 
+test("harness planning prompt includes current tool names and descriptions", async () => {
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+
+  const messages = [{ role: "user", content: "开始任务" }];
+  const ctx = {
+    messages,
+    agentContext: {
+      payload: {
+        tools: {
+          registry: [
+            { name: "read_file", description: "读取文件内容", invoke: async () => ({ ok: true }) },
+            { name: "web_to_data", description: "抓取网页并提取结构化信息", invoke: async () => ({ ok: true }) },
+          ],
+        },
+        messages: { system: [], history: [] },
+        harness: {},
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+  const systemPrompt = String(messages[0]?.content || "");
+  assert.match(systemPrompt, /当前可用工具（名称与说明）如下/);
+  assert.match(systemPrompt, /"name": "read_file"/);
+  assert.match(systemPrompt, /"description": "读取文件内容"/);
+  assert.match(systemPrompt, /"name": "web_to_data"/);
+});
+
 test("harness planning captures checklist and forces acceptance at final output", async () => {
   const hookManager = createHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
@@ -405,4 +434,3 @@ test("harness planning separate model uses resolved planning tool allowlist", as
   assert.equal(invocations.length >= 1, true);
   assert.deepEqual(invocations[0].toolAllowlist, []);
 });
-

@@ -75,6 +75,7 @@ const I18N_TEXT = Object.freeze({
     planningPromptLine2: "输出：只输出 JSON，格式：{example}",
     planningPromptLine3: "限制：输出清单后继续执行，不要直接结束；可包含 subOwners。",
     planningPromptLine4: "限制：工具范围使用通配符 *（表示全量工具）。",
+    planningPromptToolsHeader: "当前可用工具（名称与说明）如下，规划时必须参考：",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody: "请立即输出当前阶段小结（目标、完成项、未完成项、阻塞项、下一步）。",
     guidanceMarker: "<!-- harness-guidance -->",
@@ -93,6 +94,7 @@ const I18N_TEXT = Object.freeze({
     planningPromptLine2: "Output: JSON only. Format: {example}",
     planningPromptLine3: "Constraints: continue execution after checklist; do not stop. subOwners is optional.",
     planningPromptLine4: "Constraints: tool scope must use wildcard * (all tools).",
+    planningPromptToolsHeader: "Current available tools (name + description). You must use this list during planning:",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody:
       "Please output a phase summary now (goal, completed, pending, blockers, next steps).",

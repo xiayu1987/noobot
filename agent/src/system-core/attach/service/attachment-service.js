@@ -6,6 +6,7 @@
 
 import path from "node:path";
 import { Buffer } from "node:buffer";
+import { readdir } from "node:fs/promises";
 import { v4 as uuidv4 } from "uuid";
 import {
   fsAccess,
@@ -250,6 +251,69 @@ export class AttachmentService {
       artifacts,
       generationSource: "email_connector_read",
     });
+  }
+
+  /**
+   * 将解析产物路径回写到源附件记录上（latest）。
+   *
+   * @param {object} params
+   * @param {string} params.userId
+   * @param {string} params.sourceAttachmentId
+   * @param {object} params.parsedAttachmentMeta
+   * @param {string} [params.toolName]
+   * @returns {Promise<object|null>}
+   */
+  async linkParsedResultToAttachment({
+    userId,
+    sourceAttachmentId = "",
+    parsedAttachmentMeta = {},
+    toolName = "",
+  } = {}) {
+    const sourceId = safeStr(sourceAttachmentId);
+    const parsedId = safeStr(parsedAttachmentMeta?.attachmentId);
+    if (!userId || !sourceId || !parsedId) return null;
+
+    const basePath = resolveBasePath(this.globalConfig, userId);
+    const scopedRoot = attachScopedRoot(basePath);
+    let sessionEntries = [];
+    try {
+      sessionEntries = await readdir(scopedRoot, { withFileTypes: true });
+    } catch {
+      return null;
+    }
+
+    for (const sessionEntry of sessionEntries) {
+      if (!sessionEntry?.isDirectory?.()) continue;
+      const sessionRoot = path.join(scopedRoot, sessionEntry.name);
+      let sourceEntries = [];
+      try {
+        sourceEntries = await readdir(sessionRoot, { withFileTypes: true });
+      } catch {
+        sourceEntries = [];
+      }
+      for (const sourceEntry of sourceEntries) {
+        if (!sourceEntry?.isDirectory?.()) continue;
+        const scope = {
+          sessionId: sessionEntry.name,
+          attachmentSource: sourceEntry.name,
+        };
+        const index = await readAttachIndex(basePath, scope);
+        const sourceRecord = index?.attachments?.[sourceId];
+        if (!sourceRecord) continue;
+        const nextRecord = {
+          ...sourceRecord,
+          parsedResultAttachmentId: parsedId,
+          parsedResultPath: safeStr(parsedAttachmentMeta?.path),
+          parsedResultRelativePath: safeStr(parsedAttachmentMeta?.relativePath),
+          parsedResultTool: safeStr(toolName),
+          parsedResultUpdatedAt: new Date().toISOString(),
+        };
+        index.attachments[sourceId] = nextRecord;
+        await writeAttachIndex(basePath, index, scope);
+        return buildPublicRecord(basePath, nextRecord);
+      }
+    }
+    return null;
   }
 
   /**

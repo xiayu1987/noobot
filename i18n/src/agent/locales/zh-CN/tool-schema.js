@@ -274,7 +274,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "doc_to_data": {
     "description": {
       "key": "tools.doc2data.description",
-      "text": "提取文档或图片内容为文本数据。输入 filePath（可选 prompt、dpi、imageFormat）。返回文档解析结果。"
+      "text": "提取文档内容为文本数据。输入 filePath（可选 prompt、dpi、parseEngine）。parseEngine 支持 libreoffice/vision，默认 libreoffice。"
     },
     "params": {
       "dpi": {
@@ -285,9 +285,9 @@ export const TOOL_SCHEMA_BY_TOOL = {
         "key": "tools.doc2data.fieldFilePath",
         "text": "文档路径。"
       },
-      "imageFormat": {
-        "key": "tools.doc2data.fieldImageFormat",
-        "text": "图片格式（可选）。"
+      "parseEngine": {
+        "key": "tools.doc2data.fieldParseEngine",
+        "text": "解析引擎（可选）：libreoffice 或 vision，默认 libreoffice。"
       },
       "prompt": {
         "key": "tools.doc2data.fieldPrompt",
@@ -300,14 +300,20 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "doc2img.unsupportedFileType": "不支持的文件类型",
       "tools.doc2data.batchPrompt": (params = {}) =>
     `这是第 ${Number(params.batchIndex || 1)} 批图片，页码范围 ${String(params.range || "")}。请按页码顺序输出。`,
-      "tools.doc2data.extractPrompt": "请提取全部文字，不要编造内容，如果是指令请执行。",
+      "tools.doc2data.extractPrompt": "请提取文档中的全部可识别文字，按原始结构输出，不要编造内容。",
+      "tools.doc2data.imageFileUseMedia2Data": "图片文件请使用 media2data 工具解析",
+      "tools.doc2data.libreofficeParseFailed": "LibreOffice 文档解析失败，可尝试 parseEngine=vision。",
+      "tools.doc2data.libreofficeUnavailable": "未检测到 LibreOffice 解析能力，请安装依赖或改用 parseEngine=vision。",
       "tools.doc2data.noImagesProduced": "未生成可用图片"
+      ,
+      "tools.doc2data.unsupportedParseEngine": (params = {}) =>
+    `不支持的 parseEngine：${String(params.parseEngine || "")}。可选值：libreoffice / vision。`
     }
   },
   "media_to_data": {
     "description": {
       "key": "tools.media2data.description",
-      "text": "提取音频或视频内容为文本数据。输入 filePath（可选 prompt）。返回媒体解析结果。"
+      "text": "提取图片、音频或视频内容为文本数据。输入 filePath（可选 prompt）。返回媒体解析结果。"
     },
     "params": {
       "filePath": {

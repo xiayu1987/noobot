@@ -188,7 +188,9 @@ export function createChatWebSocketClient({
             };
           } else {
             // 连接失败
-            reject(new Error(translateText("infra.websocketStreamError")));
+            finalize(() =>
+              reject(new Error(translateText("infra.websocketStreamError"))),
+            );
           }
         };
         setTimeout(waitOpen, 100);
@@ -199,64 +201,70 @@ export function createChatWebSocketClient({
       function onSocketReady() {
         ws = getActiveSocket();
         if (!ws || ws.readyState !== WebSocket.OPEN) {
-          reject(new Error(translateText("infra.websocketStreamError")));
+          finalize(() =>
+            reject(new Error(translateText("infra.websocketStreamError"))),
+          );
           return;
         }
         activeSocket = ws;
         resolveCurrentStream = () => finalize(() => resolve());
+        bindStreamSocketHandlers(ws);
 
         ws.send(JSON.stringify(payload || {}));
       }
 
-      ws.onmessage = (messageEvent) => {
-        try {
-          const parsed = JSON.parse(String(messageEvent?.data || "{}"));
-          const event = String(parsed?.event || "message");
-          const data = parsed?.data || {};
-          if (event === StreamEventEnum.ERROR) {
-            throw new Error(
-              data?.error || translateText("infra.websocketStreamError"),
+      function bindStreamSocketHandlers(streamSocket) {
+        if (!streamSocket) return;
+        streamSocket.onmessage = (messageEvent) => {
+          try {
+            const parsed = JSON.parse(String(messageEvent?.data || "{}"));
+            const event = String(parsed?.event || "message");
+            const data = parsed?.data || {};
+            if (event === StreamEventEnum.ERROR) {
+              throw new Error(
+                data?.error || translateText("infra.websocketStreamError"),
+              );
+            }
+            trackIncomingEvent(data);
+            // Clear seq on done/stopped
+            if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
+              if (data?.dialogProcessId) {
+                removeLastReceivedSeq(data.dialogProcessId);
+              }
+            }
+            onEvent({ event, data });
+            if (event === StreamEventEnum.DONE) {
+              doneReceived = true;
+              finalize(() => resolve());
+            } else if (event === StreamEventEnum.STOPPED) {
+              doneReceived = true;
+              finalize(() => resolve());
+            }
+          } catch (error) {
+            streamSocket.close(1011, "invalid_event");
+            finalize(() => reject(error));
+          }
+        };
+
+        streamSocket.onerror = () => {
+          // 错误时清理引用，不 reject（连接由 connect 管理）
+          cleanupSocketRef(streamSocket);
+        };
+
+        streamSocket.onclose = () => {
+          if (doneReceived || stopRequested) {
+            finalize(() => resolve());
+            return;
+          }
+          // 未收到 done/stopped 就断开，按异常处理，避免 UI 一直显示“等待实时日志”
+          cleanupSocketRef(streamSocket);
+          if (!settled) {
+            finalize(() =>
+              reject(new Error(translateText("infra.websocketStreamError"))),
             );
           }
-          trackIncomingEvent(data);
-          // Clear seq on done/stopped
-          if (event === StreamEventEnum.DONE || event === StreamEventEnum.STOPPED) {
-            if (data?.dialogProcessId) {
-              removeLastReceivedSeq(data.dialogProcessId);
-            }
-          }
-          onEvent({ event, data });
-          if (event === StreamEventEnum.DONE) {
-            doneReceived = true;
-            finalize(() => resolve());
-          } else if (event === StreamEventEnum.STOPPED) {
-            doneReceived = true;
-            finalize(() => resolve());
-          }
-        } catch (error) {
-          ws.close(1011, "invalid_event");
-          finalize(() => reject(error));
-        }
-      };
-
-      ws.onerror = () => {
-        // 错误时清理引用，不 reject（连接由 connect 管理）
-        cleanupSocketRef(ws);
-      };
-
-      ws.onclose = () => {
-        if (doneReceived || stopRequested) {
-          finalize(() => resolve());
-          return;
-        }
-        // 未收到 done/stopped 就断开，按异常处理，避免 UI 一直显示“等待实时日志”
-        cleanupSocketRef(ws);
-        if (!settled) {
-          finalize(() =>
-            reject(new Error(translateText("infra.websocketStreamError"))),
-          );
-        }
-      };
+        };
+      }
     });
   }
 

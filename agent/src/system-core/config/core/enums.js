@@ -143,6 +143,28 @@ export const DOC2DATA_FORMAT_ALIASES = {
 };
 
 /**
+ * Doc2Data parse engine enum.
+ * Canonical values: "libreoffice" | "vision"
+ */
+export const DOC2DATA_PARSE_ENGINE = {
+  LIBREOFFICE: "libreoffice",
+  VISION: "vision",
+};
+
+export const DOC2DATA_PARSE_ENGINE_ALIASES = {
+  [DOC2DATA_PARSE_ENGINE.LIBREOFFICE]: [
+    DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
+    "libre_office",
+    "lo",
+  ],
+  [DOC2DATA_PARSE_ENGINE.VISION]: [
+    DOC2DATA_PARSE_ENGINE.VISION,
+    "image_model",
+    "model",
+  ],
+};
+
+/**
  * Multimodal generation scope enum.
  * Canonical values: "image" | "audio" | "video"
  */
@@ -304,6 +326,15 @@ export function normalizeSkillAction(input = "") {
  */
 export function normalizeDoc2DataFormat(input = "") {
   return normalizeWithAliases(input, DOC2DATA_FORMAT_ALIASES);
+}
+
+/**
+ * Normalize doc2data parse engine input.
+ * @param {string} input
+ * @returns {string} Canonical parse engine or empty string
+ */
+export function normalizeDoc2DataParseEngine(input = "") {
+  return normalizeWithAliases(input, DOC2DATA_PARSE_ENGINE_ALIASES);
 }
 
 /**
