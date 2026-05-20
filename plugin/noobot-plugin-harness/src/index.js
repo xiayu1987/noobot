@@ -58,6 +58,45 @@ export const HARNESS_HOOK_POINTS = Object.freeze({
   AFTER_STATE_COMMIT: "after_state_commit",
 });
 
+const HARNESS_FSM_STATES = Object.freeze({
+  IDLE: "idle",
+  PLANNING: "planning",
+  PLANNED: "planned",
+  HUMAN_APPROVAL: "human_approval",
+  EXECUTING: "executing",
+  VERIFYING: "verifying",
+  DONE: "done",
+  FAILED: "failed",
+});
+
+const HARNESS_FSM_ALLOWED_TRANSITIONS = Object.freeze({
+  [HARNESS_FSM_STATES.IDLE]: new Set([HARNESS_FSM_STATES.PLANNING, HARNESS_FSM_STATES.FAILED]),
+  [HARNESS_FSM_STATES.PLANNING]: new Set([HARNESS_FSM_STATES.PLANNED, HARNESS_FSM_STATES.FAILED]),
+  [HARNESS_FSM_STATES.PLANNED]: new Set([
+    HARNESS_FSM_STATES.EXECUTING,
+    HARNESS_FSM_STATES.HUMAN_APPROVAL,
+    HARNESS_FSM_STATES.FAILED,
+  ]),
+  [HARNESS_FSM_STATES.HUMAN_APPROVAL]: new Set([
+    HARNESS_FSM_STATES.EXECUTING,
+    HARNESS_FSM_STATES.FAILED,
+  ]),
+  [HARNESS_FSM_STATES.EXECUTING]: new Set([HARNESS_FSM_STATES.VERIFYING, HARNESS_FSM_STATES.FAILED]),
+  [HARNESS_FSM_STATES.VERIFYING]: new Set([HARNESS_FSM_STATES.DONE, HARNESS_FSM_STATES.FAILED]),
+  [HARNESS_FSM_STATES.DONE]: new Set(),
+  [HARNESS_FSM_STATES.FAILED]: new Set(),
+});
+
+const HARNESS_FSM_TERMINAL_STATES = new Set([HARNESS_FSM_STATES.DONE, HARNESS_FSM_STATES.FAILED]);
+const fsmStateCache = new Map(); // runId -> state
+const HARNESS_FSM_EFFECTS = Object.freeze({
+  AUDIT_RESUME: "audit_resume",
+  AUDIT_TRANSITION: "audit_transition",
+  AUDIT_REJECTED: "audit_rejected",
+  CACHE_SET: "cache_set",
+  CACHE_DELETE: "cache_delete",
+});
+
 const DEFAULT_OPTIONS = Object.freeze({
   enabled: true,
   trace: true,
@@ -91,6 +130,7 @@ const DEFAULT_OPTIONS = Object.freeze({
   maxRuns: 100,
   maxRunAgeDays: 30,
   cleanupGraceMs: 10 * 60 * 1000,
+  fsmEnabled: true,
   promptText: [
     "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
   ].join("\n"),
@@ -161,6 +201,7 @@ function normalizeOptions(userOptions = {}, api = {}) {
       Number.isFinite(Number(merged.cleanupGraceMs)) && Number(merged.cleanupGraceMs) >= 0
         ? Number(merged.cleanupGraceMs)
         : DEFAULT_OPTIONS.cleanupGraceMs,
+    fsmEnabled: merged.fsmEnabled !== false,
   };
 }
 
@@ -216,6 +257,237 @@ async function ensureRunDir(paths) {
   return true;
 }
 
+function normalizeFsmState(state = "") {
+  const value = String(state || "").trim().toLowerCase();
+  return Object.values(HARNESS_FSM_STATES).includes(value) ? value : HARNESS_FSM_STATES.IDLE;
+}
+
+function statusToFsmState(status = "") {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "success") return HARNESS_FSM_STATES.DONE;
+  if (normalized === "error" || normalized === "abort") return HARNESS_FSM_STATES.FAILED;
+  return HARNESS_FSM_STATES.IDLE;
+}
+
+function isAllowedFsmTransition(from, to) {
+  if (from === to) return true;
+  return HARNESS_FSM_ALLOWED_TRANSITIONS[from]?.has(to) === true;
+}
+
+function inferFsmTarget(point, ctx = {}, currentState = HARNESS_FSM_STATES.IDLE) {
+  const commitHint = String(ctx?.commitType || "").toLowerCase();
+  const checklist = Array.isArray(ctx?.agentContext?.payload?.harness?.taskChecklist)
+    ? ctx.agentContext.payload.harness.taskChecklist
+    : [];
+  if (
+    point === HARNESS_HOOK_POINTS.ON_ERROR ||
+    point === HARNESS_HOOK_POINTS.ON_ABORT ||
+    point === HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR ||
+    point === HARNESS_HOOK_POINTS.LLM_CALL_ERROR ||
+    point === HARNESS_HOOK_POINTS.TOOL_CALL_ERROR
+  ) {
+    return HARNESS_FSM_STATES.FAILED;
+  }
+  if (point === HARNESS_HOOK_POINTS.AFTER_TURN) return HARNESS_FSM_STATES.DONE;
+  if (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT) return HARNESS_FSM_STATES.VERIFYING;
+  if (point === HARNESS_HOOK_POINTS.BEFORE_TOOL_CALLS || point === HARNESS_HOOK_POINTS.BEFORE_TOOL_CALL) {
+    return HARNESS_FSM_STATES.EXECUTING;
+  }
+  if (
+    point === HARNESS_HOOK_POINTS.BEFORE_STATE_COMMIT ||
+    point === HARNESS_HOOK_POINTS.AFTER_STATE_COMMIT
+  ) {
+    if (commitHint.includes("approval")) return HARNESS_FSM_STATES.HUMAN_APPROVAL;
+    return null;
+  }
+  if (point === HARNESS_HOOK_POINTS.AFTER_LLM_CALL) {
+    if (currentState === HARNESS_FSM_STATES.IDLE || currentState === HARNESS_FSM_STATES.PLANNING) {
+      return checklist.length > 0 ? HARNESS_FSM_STATES.PLANNED : HARNESS_FSM_STATES.PLANNING;
+    }
+    return null;
+  }
+  if (
+    point === HARNESS_HOOK_POINTS.BEFORE_CONTEXT_BUILD ||
+    point === HARNESS_HOOK_POINTS.AFTER_CONTEXT_BUILD ||
+    point === HARNESS_HOOK_POINTS.BEFORE_TURN ||
+    point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL
+  ) {
+    if (currentState === HARNESS_FSM_STATES.IDLE) return HARNESS_FSM_STATES.PLANNING;
+    return null;
+  }
+  return null;
+}
+
+async function appendFsmAudit(paths, ctx = {}, payload = {}, options = {}) {
+  if (!paths?.stateCommits || !payload?.type) return;
+  await appendJsonlBuffered(
+    paths.stateCommits,
+    {
+      timestamp: nowIso(),
+      runId: paths.runId,
+      point: payload.point,
+      type: payload.type,
+      accepted: payload.accepted === true,
+      from: payload.from,
+      to: payload.to,
+      reason: payload.reason,
+      dialogProcessId: ctx.dialogProcessId || ctx?.agentContext?.execution?.dialogProcessId || undefined,
+      sessionId: ctx.sessionId || undefined,
+      userId: ctx.userId || undefined,
+    },
+    options.jsonlBatchSize,
+    options.jsonlFlushIntervalMs,
+  );
+}
+
+async function resolveCurrentFsmState(paths, options = {}) {
+  if (!paths?.runId || options.fsmEnabled === false) {
+    return { state: HARNESS_FSM_STATES.IDLE, resumed: false };
+  }
+  if (fsmStateCache.has(paths.runId)) {
+    return { state: fsmStateCache.get(paths.runId), resumed: false };
+  }
+  const manifest = await readJson(paths.manifest, {});
+  const fromManifest = normalizeFsmState(manifest?.fsmStatus || manifest?.fsm?.state);
+  const inferred = fromManifest !== HARNESS_FSM_STATES.IDLE ? fromManifest : statusToFsmState(manifest?.status);
+  const state = normalizeFsmState(inferred);
+  fsmStateCache.set(paths.runId, state);
+  const resumed = state !== HARNESS_FSM_STATES.IDLE && !HARNESS_FSM_TERMINAL_STATES.has(state);
+  return { state, resumed };
+}
+
+function buildFsmTransitionPlan(point, ctx = {}, currentState, resumed = false, runId = "") {
+  const actions = [];
+  if (resumed) {
+    actions.push({
+      type: HARNESS_FSM_EFFECTS.AUDIT_RESUME,
+      payload: {
+        point,
+        accepted: true,
+        from: currentState,
+        to: currentState,
+        reason: "resume_from_checkpoint",
+      },
+    });
+  }
+
+  const target = inferFsmTarget(point, ctx, currentState);
+  if (!target) {
+    return {
+      state: currentState,
+      changed: false,
+      rejected: false,
+      resumed,
+      attempted: null,
+      actions,
+    };
+  }
+
+  if (!isAllowedFsmTransition(currentState, target)) {
+    actions.push({
+      type: HARNESS_FSM_EFFECTS.AUDIT_REJECTED,
+      payload: {
+        point,
+        accepted: false,
+        from: currentState,
+        to: target,
+        reason: "illegal_transition",
+      },
+    });
+    return {
+      state: currentState,
+      changed: false,
+      rejected: true,
+      resumed,
+      attempted: target,
+      actions,
+    };
+  }
+
+  if (currentState !== target) {
+    actions.push({
+      type: HARNESS_FSM_EFFECTS.AUDIT_TRANSITION,
+      payload: {
+        point,
+        accepted: true,
+        from: currentState,
+        to: target,
+        reason: "accepted",
+      },
+    });
+    if (HARNESS_FSM_TERMINAL_STATES.has(target)) {
+      actions.push({
+        type: HARNESS_FSM_EFFECTS.CACHE_DELETE,
+        payload: { runId },
+      });
+    } else {
+      actions.push({
+        type: HARNESS_FSM_EFFECTS.CACHE_SET,
+        payload: { runId, state: target },
+      });
+    }
+  }
+
+  return {
+    state: target,
+    changed: currentState !== target,
+    rejected: false,
+    resumed,
+    attempted: null,
+    actions,
+  };
+}
+
+async function applyFsmTransitionEffects(paths, ctx = {}, options = {}, plan = {}) {
+  const actions = Array.isArray(plan.actions) ? plan.actions : [];
+  for (const action of actions) {
+    const payload = action?.payload || {};
+    if (
+      action.type === HARNESS_FSM_EFFECTS.AUDIT_RESUME ||
+      action.type === HARNESS_FSM_EFFECTS.AUDIT_TRANSITION ||
+      action.type === HARNESS_FSM_EFFECTS.AUDIT_REJECTED
+    ) {
+      await appendFsmAudit(paths, ctx, {
+        point: payload.point,
+        type:
+          action.type === HARNESS_FSM_EFFECTS.AUDIT_RESUME
+            ? "fsm_resume"
+            : action.type === HARNESS_FSM_EFFECTS.AUDIT_REJECTED
+              ? "fsm_transition_rejected"
+              : "fsm_transition",
+        accepted: payload.accepted,
+        from: payload.from,
+        to: payload.to,
+        reason: payload.reason,
+      }, options);
+      continue;
+    }
+    if (action.type === HARNESS_FSM_EFFECTS.CACHE_SET) {
+      if (payload.runId) fsmStateCache.set(payload.runId, payload.state);
+      continue;
+    }
+    if (action.type === HARNESS_FSM_EFFECTS.CACHE_DELETE) {
+      if (payload.runId) fsmStateCache.delete(payload.runId);
+    }
+  }
+}
+
+async function advanceFsmState(point, ctx = {}, paths = null, options = {}) {
+  if (!paths || options.fsmEnabled === false) {
+    return { state: HARNESS_FSM_STATES.IDLE, changed: false, rejected: false, resumed: false };
+  }
+  const { state: currentState, resumed } = await resolveCurrentFsmState(paths, options);
+  const plan = buildFsmTransitionPlan(point, ctx, currentState, resumed, paths.runId);
+  await applyFsmTransitionEffects(paths, ctx, options, plan);
+  return {
+    state: plan.state,
+    changed: plan.changed,
+    rejected: plan.rejected,
+    resumed: plan.resumed,
+    attempted: plan.attempted || undefined,
+  };
+}
+
 // ---- Manifest merge logic (extracted for reuse with cache) ----
 function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = null) {
   const resolvedPaths =
@@ -243,6 +515,7 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
     dialogProcessId: ctx.dialogProcessId || current.dialogProcessId || current.harnessRunId || "",
     caller: ctx.caller || current.caller || "",
     status: current.status || "running",
+    fsmStatus: normalizeFsmState(current.fsmStatus || current?.fsm?.state || statusToFsmState(current.status)),
     startedAt: current.startedAt || ctx.startedAt || nowIso(),
     updatedAt: nowIso(),
     capabilities:
@@ -358,6 +631,7 @@ async function trace(point, ctx, options) {
   const paths = createRunPaths(ctx, options);
   if (!paths) return;
   await ensureRunDir(paths);
+  const fsm = await advanceFsmState(point, ctx, paths, options);
   const event = buildEvent({
     point,
     ctx,
@@ -399,6 +673,14 @@ async function trace(point, ctx, options) {
     ctx,
     {
       status: terminalStatus || "running",
+      fsmStatus: fsm.state,
+      fsm: {
+        state: fsm.state,
+        updatedAt: nowIso(),
+        lastPoint: point,
+        rejectedTransition: fsm.rejected === true ? { attemptedState: fsm.attempted, at: nowIso() } : null,
+        resumedFromCheckpoint: fsm.resumed === true,
+      },
       updatedAt: nowIso(),
       lastEvent: { point, timestamp: event.timestamp, status: event.status },
       ...(terminalStatus ? { endedAt: nowIso(), error: safeError(ctx.error) } : {}),
