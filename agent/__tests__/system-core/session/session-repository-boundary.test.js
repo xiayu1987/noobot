@@ -121,3 +121,32 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
     assert.deepEqual(tree.nodes.A.children, []);
   });
 });
+
+test("appendTurn should not recreate session after deletion marker is set", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "race-session";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+
+    const runtime = createSessionServices(
+      { workspaceRoot },
+      { now: () => "2026-05-14T00:00:00.000Z" },
+    );
+
+    await runtime.sessionCrudService.ensureSession(userId, sessionId);
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, sessionId);
+    assert.equal(await exists(scope.sessionFile), true);
+
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
+    assert.equal(await exists(scope.sessionFile), false);
+
+    await runtime.sessionMessageService.appendTurn({
+      userId,
+      sessionId,
+      role: "assistant",
+      content: "late async write",
+    });
+
+    assert.equal(await exists(scope.sessionFile), false);
+  });
+});

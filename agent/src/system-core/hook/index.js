@@ -49,6 +49,7 @@ export const HOOK_POINTS = Object.freeze({
   BEFORE_STATE_COMMIT: "before_state_commit",
   AFTER_STATE_COMMIT: "after_state_commit",
   BEFORE_FINAL_OUTPUT: "before_final_output",
+  AFTER_SESSION_DELETE: "after_session_delete",
 });
 
 function createHookTimeoutError({ point = "", hookId = "", timeoutMs = 0 } = {}) {

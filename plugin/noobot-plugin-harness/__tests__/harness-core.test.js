@@ -140,6 +140,37 @@ test("harness plugin emits hook progress via client channel when available", asy
   assert.equal(channelEvents.some((item) => item.event === "harness.hook_end"), true);
 });
 
+test("harness plugin deletes related run records on after_session_delete", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-cleanup-"));
+  const runsDir = path.join(basePath, "runtime", "harness", "runs");
+  const runA = path.join(runsDir, "run-a");
+  const runB = path.join(runsDir, "run-b");
+  await fs.mkdir(runA, { recursive: true });
+  await fs.mkdir(runB, { recursive: true });
+  await fs.writeFile(
+    path.join(runA, "harness-run.json"),
+    JSON.stringify({ sessionId: "s-delete", dialogProcessId: "run-a" }, null, 2),
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(runB, "harness-run.json"),
+    JSON.stringify({ sessionId: "s-keep", dialogProcessId: "run-b" }, null, 2),
+    "utf8",
+  );
+
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { basePath, trace: false, promptPolicy: false });
+  await hookManager.emit("after_session_delete", {
+    userId: "u-cleanup",
+    sessionId: "s-delete",
+    deletedSessionIds: ["s-delete"],
+    basePath,
+  });
+
+  assert.equal(await exists(runA), false);
+  assert.equal(await exists(runB), true);
+});
+
 test("harness plugin rejects illegal FSM transitions and audits state commits", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createHookManager();
@@ -423,4 +454,3 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
   assert.equal(Array.isArray(manifest?.capabilities?.domains), true);
   assert.equal(typeof manifest?.capabilities?.hookMap, "object");
 });
-

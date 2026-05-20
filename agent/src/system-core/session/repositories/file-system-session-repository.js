@@ -16,6 +16,7 @@ export class FileSystemSessionRepository {
     normalizeMessages,
     normalizeSelectedConnectors,
     now = () => new Date().toISOString(),
+    deletedSessionGuardTtlMs = 15 * 60 * 1000,
   } = {}) {
     this.pathResolver = pathResolver;
     this.sessionPathResolver = sessionPathResolver;
@@ -23,6 +24,11 @@ export class FileSystemSessionRepository {
     this.normalizeMessages = normalizeMessages;
     this.normalizeSelectedConnectors = normalizeSelectedConnectors;
     this.now = now;
+    this.deletedSessionGuardTtlMs =
+      Number.isFinite(Number(deletedSessionGuardTtlMs)) && Number(deletedSessionGuardTtlMs) > 0
+        ? Number(deletedSessionGuardTtlMs)
+        : 15 * 60 * 1000;
+    this._deletedSessionCache = new Map(); // userId -> { sessions, updatedAt }
   }
 
   _basePath(userId = "") {
@@ -31,6 +37,99 @@ export class FileSystemSessionRepository {
 
   _sessionRoot(userId = "") {
     return this.pathResolver.sessionRoot(this._basePath(userId));
+  }
+
+  _deletedSessionMarkerFile(userId = "") {
+    if (typeof this.pathResolver?.deletedSessionMarkerFile === "function") {
+      return this.pathResolver.deletedSessionMarkerFile(this._basePath(userId));
+    }
+    return `${this._sessionRoot(userId)}/.deleted-sessions.json`;
+  }
+
+  async _readDeletedSessions(userId = "") {
+    const normalizedUserId = String(userId || "").trim();
+    if (!normalizedUserId) return { sessions: {}, updatedAt: this.now() };
+    const markerFile = this._deletedSessionMarkerFile(normalizedUserId);
+    const raw = await this.storageService.readJson(markerFile, null);
+    const currentSessions =
+      raw?.sessions && typeof raw.sessions === "object" && !Array.isArray(raw.sessions)
+        ? raw.sessions
+        : {};
+    const nowMs = Date.now();
+    const ttlMs = this.deletedSessionGuardTtlMs;
+    let pruned = false;
+    const nextSessions = {};
+    for (const [sessionId, deletedAt] of Object.entries(currentSessions)) {
+      const normalizedSessionId = String(sessionId || "").trim();
+      const deletedAtMs = Number(deletedAt);
+      if (!normalizedSessionId || !Number.isFinite(deletedAtMs)) {
+        pruned = true;
+        continue;
+      }
+      if (nowMs - deletedAtMs > ttlMs) {
+        pruned = true;
+        continue;
+      }
+      nextSessions[normalizedSessionId] = deletedAtMs;
+    }
+    const payload = {
+      sessions: nextSessions,
+      updatedAt: String(raw?.updatedAt || this.now()),
+    };
+    if (pruned) {
+      await this.storageService.writeJsonAtomic(markerFile, {
+        sessions: nextSessions,
+        updatedAt: this.now(),
+      });
+      payload.updatedAt = this.now();
+    }
+    this._deletedSessionCache.set(normalizedUserId, payload);
+    return payload;
+  }
+
+  async _writeDeletedSessions(userId = "", sessions = {}) {
+    const normalizedUserId = String(userId || "").trim();
+    if (!normalizedUserId) return false;
+    const markerFile = this._deletedSessionMarkerFile(normalizedUserId);
+    const payload = {
+      sessions:
+        sessions && typeof sessions === "object" && !Array.isArray(sessions)
+          ? sessions
+          : {},
+      updatedAt: this.now(),
+    };
+    await this.storageService.writeJsonAtomic(markerFile, payload);
+    this._deletedSessionCache.set(normalizedUserId, payload);
+    return true;
+  }
+
+  async markSessionsDeleted(userId = "", sessionIds = []) {
+    const normalizedUserId = String(userId || "").trim();
+    if (!normalizedUserId) return 0;
+    const ids = (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+    if (!ids.length) return 0;
+    await this.storageService.ensureRuntimeDirsByBasePath(this._basePath(normalizedUserId));
+    const current = await this._readDeletedSessions(normalizedUserId);
+    const nextSessions = {
+      ...(current?.sessions && typeof current.sessions === "object" ? current.sessions : {}),
+    };
+    const deletedAt = Date.now();
+    let marked = 0;
+    for (const sessionId of ids) {
+      nextSessions[sessionId] = deletedAt;
+      marked += 1;
+    }
+    await this._writeDeletedSessions(normalizedUserId, nextSessions);
+    return marked;
+  }
+
+  async isSessionDeleted(userId = "", sessionId = "") {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return false;
+    const payload = await this._readDeletedSessions(userId);
+    return Boolean(payload?.sessions?.[normalizedSessionId]);
   }
 
   async resolveParentSessionId(userId, sessionId, parentSessionId = "") {
@@ -66,12 +165,16 @@ export class FileSystemSessionRepository {
     } catch {
       return [];
     }
+    const deletedSessions = await this._readDeletedSessions(userId);
+    const deletedSet = new Set(Object.keys(deletedSessions?.sessions || {}));
     return entries
       .filter((dirEntry) => dirEntry.isDirectory())
-      .map((dirEntry) => dirEntry.name);
+      .map((dirEntry) => dirEntry.name)
+      .filter((sessionId) => !deletedSet.has(String(sessionId || "").trim()));
   }
 
   async ensureSession({ userId, sessionId, parentSessionId = "", meta = {} }) {
+    if (await this.isSessionDeleted(userId, sessionId)) return false;
     const basePath = this._basePath(userId);
     await this.storageService.ensureRuntimeDirsByBasePath(basePath);
     const { resolvedParentSessionId, sessionDir, sessionFile } =
@@ -93,9 +196,11 @@ export class FileSystemSessionRepository {
         updatedAt: this.now(),
       });
     }
+    return true;
   }
 
   async findById(userId, sessionId, parentSessionId = "") {
+    if (await this.isSessionDeleted(userId, sessionId)) return null;
     const { resolvedParentSessionId, sessionFile } = await this.resolveSessionScope(
       userId,
       sessionId,
@@ -124,6 +229,7 @@ export class FileSystemSessionRepository {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
+    if (await this.isSessionDeleted(userId, sessionId)) return false;
     const { resolvedParentSessionId, sessionFile } = await this.resolveSessionScope(
       userId,
       sessionId,
@@ -142,6 +248,7 @@ export class FileSystemSessionRepository {
       updatedAt: this.now(),
     };
     await this.storageService.writeJson(sessionFile, payload);
+    return true;
   }
 
   async delete(userId, sessionId, parentSessionId = "") {
