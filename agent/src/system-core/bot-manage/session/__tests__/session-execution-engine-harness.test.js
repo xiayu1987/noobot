@@ -20,9 +20,10 @@ test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for harn
   const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
-      enableHarness: true,
       plugins: {
         harness: {
+          enabled: true,
+          mode: "on",
           planningGuidanceMode: "separate_model",
           miniRunnerMaxTurns: 2,
           miniRunnerToolAllowlist: ["call_service"],
@@ -45,10 +46,13 @@ test("SessionExecutionEngine preserves explicit harness capabilityModelInvoker",
   const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
-      enableHarness: true,
-      harness: {
-        planningGuidanceMode: "separate_model",
-        capabilityModelInvoker: explicitInvoker,
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+          planningGuidanceMode: "separate_model",
+          capabilityModelInvoker: explicitInvoker,
+        },
       },
     },
   });
@@ -62,9 +66,10 @@ test("SessionExecutionEngine defaults harness miniRunnerMaxTurns to 5", async ()
   const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
-      enableHarness: true,
       plugins: {
         harness: {
+          enabled: true,
+          mode: "on",
           planningGuidanceMode: "separate_model",
         },
       },
@@ -80,9 +85,10 @@ test("SessionExecutionEngine caps harness miniRunnerMaxTurns at 5", async () => 
   const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
-      enableHarness: true,
       plugins: {
         harness: {
+          enabled: true,
+          mode: "on",
           planningGuidanceMode: "separate_model",
           miniRunnerMaxTurns: 99,
         },

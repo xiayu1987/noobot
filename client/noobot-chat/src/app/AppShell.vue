@@ -135,9 +135,14 @@ const availablePlugins = computed(() => {
         label: String(source?.label || source?.name || pluginKey || "").trim(),
         description: String(source?.description || "").trim(),
         enabled: source?.enabled === true,
+        mode: String(source?.mode || "")
+          .trim()
+          .toLowerCase() === "on"
+          ? "on"
+          : "off",
       };
     })
-    .filter((pluginItem) => Boolean(pluginItem.key));
+    .filter((pluginItem) => Boolean(pluginItem.key) && pluginItem.enabled === true);
 });
 
 function persistSelectedPlugins() {
@@ -152,14 +157,20 @@ function syncSelectedPluginsWithConfig() {
     return;
   }
   const availablePluginKeySet = new Set(pluginOptions.map((item) => item.key));
+  const enabledPluginKeySet = new Set(
+    pluginOptions.filter((item) => item.enabled === true).map((item) => item.key),
+  );
   if (!hasStoredSelectedPlugins.value) {
     selectedPlugins.value = pluginOptions
-      .filter((pluginItem) => pluginItem.enabled === true)
+      .filter(
+        (pluginItem) =>
+          pluginItem.enabled === true && String(pluginItem.mode || "").toLowerCase() === "on",
+      )
       .map((pluginItem) => pluginItem.key);
     return;
   }
   selectedPlugins.value = selectedPlugins.value.filter((pluginKey) =>
-    availablePluginKeySet.has(pluginKey),
+    availablePluginKeySet.has(pluginKey) && enabledPluginKeySet.has(pluginKey),
   );
   persistSelectedPlugins();
 }
@@ -642,14 +653,15 @@ function onBotScenarioUpdate(value = "") {
 }
 
 function onSelectedPluginsUpdate(value = []) {
-  const availablePluginKeySet = new Set(
+  const selectablePluginKeySet = new Set(
     availablePlugins.value
+      .filter((pluginItem) => pluginItem?.enabled === true)
       .map((pluginItem) => String(pluginItem?.key || "").trim())
       .filter(Boolean),
   );
   selectedPlugins.value = (Array.isArray(value) ? value : [])
     .map((pluginKey) => String(pluginKey || "").trim())
-    .filter((pluginKey) => pluginKey && availablePluginKeySet.has(pluginKey));
+    .filter((pluginKey) => pluginKey && selectablePluginKeySet.has(pluginKey));
   persistSelectedPlugins();
 }
 

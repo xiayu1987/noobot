@@ -124,12 +124,16 @@ export function useApiConnection({
       const normalizedPluginKey = String(pluginKey || "").trim();
       if (!normalizedPluginKey) continue;
       const sourcePlugin = isPlainObject(pluginValue) ? pluginValue : {};
+      const normalizedMode = String(sourcePlugin?.mode || "")
+        .trim()
+        .toLowerCase();
       normalizedPlugins[normalizedPluginKey] = {
         ...sourcePlugin,
         name: String(sourcePlugin?.name || sourcePlugin?.label || normalizedPluginKey).trim(),
         label: String(sourcePlugin?.label || sourcePlugin?.name || normalizedPluginKey).trim(),
         description: String(sourcePlugin?.description || "").trim(),
         enabled: sourcePlugin?.enabled !== false,
+        mode: normalizedMode === "on" ? "on" : "off",
       };
     }
     return {

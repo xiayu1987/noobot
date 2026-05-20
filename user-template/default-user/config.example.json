@@ -242,6 +242,12 @@
       }
     }
   },
+  "plugins": {
+    "harness": {
+      "enabled": true,
+      "mode": "off"
+    }
+  },
   "providers": {
     "gemini_3_flash": {
       "enabled": false,
