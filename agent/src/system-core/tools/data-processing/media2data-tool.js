@@ -336,6 +336,9 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentId,
       parsedAttachmentMeta,
       toolName: TOOL_NAME.MEDIA_TO_DATA,
+      sourceSessionId: String(sourceAttachmentMeta?.sessionId || "").trim(),
+      sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
+      sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
     if (Array.isArray(runtime?.attachmentMetas)) {
       const sourceAttachmentIndex = runtime.attachmentMetas.findIndex(
