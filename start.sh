@@ -9,6 +9,7 @@ CLIENT_DIR="$ROOT_DIR/client/noobot-chat"
 SERVICE_DIR="$ROOT_DIR/service"
 AGENT_PROXY_DIR="$ROOT_DIR/agent-proxy"
 PM2_HOME_DIR="$ROOT_DIR/.pm2"
+PM2_CLEAN_START="${PM2_CLEAN_START:-0}"
 CLIENT_APP_NAME="noobot-client"
 SERVICE_APP_NAME="noobot-service"
 AGENT_PROXY_APP_NAME="noobot-agent-proxy"
@@ -67,6 +68,8 @@ msg() {
     step_rebuild_en) echo "4/5 Rebuild PM2 services" ;;
     step_start_zh) echo "5/5 用 PM2 启动服务" ;;
     step_start_en) echo "5/5 Start services with PM2" ;;
+    step_clean_pm2_zh) echo "清理 PM2 缓存与旧进程" ;;
+    step_clean_pm2_en) echo "Clean PM2 cache and stale processes" ;;
     done_list_zh) echo "完成。当前 PM2 进程列表:" ;;
     done_list_en) echo "Done. Current PM2 process list:" ;;
     path_info_zh) echo "路径信息:" ;;
@@ -174,6 +177,21 @@ run_pm2() {
   (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx pm2 "$@")
 }
 
+is_truthy() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+clean_pm2_cache() {
+  log "$(msg step_clean_pm2)"
+  run_pm2 delete all >/dev/null 2>&1 || true
+  run_pm2 kill >/dev/null 2>&1 || true
+  rm -rf "$PM2_HOME_DIR"
+  mkdir -p "$PM2_HOME_DIR"
+}
+
 pm2_has_app() {
   run_pm2 describe "$1" >/dev/null 2>&1
 }
@@ -240,6 +258,9 @@ main() {
   npm --prefix "$CLIENT_DIR" run build
 
   log "$(msg step_rebuild)"
+  if is_truthy "$PM2_CLEAN_START"; then
+    clean_pm2_cache
+  fi
   local has_service_app=0
   local has_client_app=0
   local has_agent_proxy_app=0
