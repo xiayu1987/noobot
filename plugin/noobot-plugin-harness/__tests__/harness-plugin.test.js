@@ -11,6 +11,14 @@ async function exists(file) {
   try { await fs.access(file); return true; } catch { return false; }
 }
 
+async function waitForFile(file, retries = 200, delayMs = 20) {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    if (await exists(file)) return true;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return false;
+}
+
 test("harness plugin writes manifest, events and context snapshot", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createHookManager();
@@ -290,6 +298,29 @@ test("harness planning disables blocked tools and injects request_task_acceptanc
   assert.equal(names.includes("request_task_acceptance"), true);
 });
 
+test("harness planning skips auxiliary scope llm hooks", async () => {
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+
+  const messages = [{ role: "user", content: "auxiliary planning call" }];
+  const ctx = {
+    executionScope: "auxiliary",
+    messages,
+    agentContext: {
+      payload: {
+        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+        messages: { system: [], history: [] },
+        harness: {},
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+  assert.doesNotMatch(String(messages[0]?.content || ""), /harness-planning-bootstrap/);
+  const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
+  assert.equal(names.includes("request_task_acceptance"), false);
+});
+
 test("harness planning captures checklist and forces acceptance at final output", async () => {
   const hookManager = createHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
@@ -325,6 +356,12 @@ test("harness planning captures checklist and forces acceptance at final output"
 
   assert.equal(Array.isArray(agentContext.payload.harness.taskChecklist), true);
   assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
+  assert.equal(Array.isArray(agentContext.payload.harness.planningRawOutputs), true);
+  assert.equal(agentContext.payload.harness.planningRawOutputs.length >= 1, true);
+  assert.match(
+    String(agentContext.payload.harness.lastPlanningRawOutput?.content || ""),
+    /taskChecklist/,
+  );
 
   const result = { output: "done" };
   await hookManager.emit("before_final_output", {
@@ -336,6 +373,195 @@ test("harness planning captures checklist and forces acceptance at final output"
   });
   assert.match(String(result.output), /Harness-Forced-Acceptance/);
   assert.match(String(result.output), /"mode": "forced"/);
+});
+
+test("harness planning retries injection when first response has no checklist", async () => {
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+    execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
+  };
+
+  const firstMessages = [{ role: "user", content: "执行任务" }];
+  await hookManager.emit("before_llm_call", { messages: firstMessages, agentContext });
+  await hookManager.emit("after_llm_call", {
+    ai: { content: "先读取上下文后再规划。" },
+    agentContext,
+  });
+
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
+  assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, false);
+  assert.equal(agentContext.execution.controllers.runtime.systemRuntime.config.forceTool, undefined);
+
+  const secondMessages = [{ role: "user", content: "继续" }];
+  await hookManager.emit("before_llm_call", { messages: secondMessages, agentContext });
+  assert.match(String(secondMessages[0]?.content || ""), /harness-planning-bootstrap/);
+
+  await hookManager.emit("after_llm_call", {
+    ai: { content: "{\"taskChecklist\":[{\"index\":1,\"task\":\"解析附件\"},{\"index\":2,\"task\":\"执行核心任务\"}]}" },
+    agentContext,
+  });
+
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
+});
+
+test("harness planning does not mutate runtime forceTool config", async () => {
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  const runtimeConfig = { forceTool: true };
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+    execution: { controllers: { runtime: { systemRuntime: { config: runtimeConfig } } } },
+  };
+
+  await hookManager.emit("before_llm_call", {
+    messages: [{ role: "user", content: "执行任务" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    ai: { content: "" },
+    agentContext,
+  });
+
+  assert.equal(runtimeConfig.forceTool, true);
+
+  await hookManager.emit("before_llm_call", {
+    messages: [{ role: "user", content: "继续" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    ai: { content: "{\"taskChecklist\":[{\"index\":1,\"task\":\"执行核心任务\"}]}" },
+    agentContext,
+  });
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(runtimeConfig.forceTool, true);
+
+  await hookManager.emit("before_final_output", {
+    result: { output: "done" },
+    agentContext,
+  });
+  assert.equal(runtimeConfig.forceTool, true);
+});
+
+test("harness planning skips capture on tool-call turn without assistant text", async () => {
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+  };
+
+  await hookManager.emit("before_llm_call", {
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    ai: { content: "", tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }] },
+    modelResponse: { finish_reason: "tool_calls" },
+    agentContext,
+  });
+
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
+  assert.equal(agentContext.payload.harness.state.counters.planningCaptureAttempts || 0, 0);
+});
+
+test("harness planning can parse numbered plain-text checklist output", async () => {
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+  };
+
+  await hookManager.emit("before_llm_call", {
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    ai: {
+      content: "1. 解析附件\n2. 执行核心任务\n3. 启动子任务",
+    },
+    agentContext,
+  });
+
+  assert.equal(agentContext.payload.harness.taskChecklist.length, 3);
+  assert.equal(agentContext.payload.harness.taskChecklist[0].task, "解析附件");
+});
+
+test("harness planning can parse checklist wrapped in tool result payload", async () => {
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+  };
+
+  await hookManager.emit("before_llm_call", {
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    ai: {
+      content: JSON.stringify({
+        toolName: "execute_script",
+        ok: true,
+        stdout: JSON.stringify({
+          taskChecklist: [
+            { index: 1, task: "解析附件", owner: "任务负责者1" },
+            { index: 2, task: "执行核心任务", owner: "任务负责者1" },
+          ],
+        }),
+      }),
+    },
+    agentContext,
+  });
+
+  assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
+  assert.equal(agentContext.payload.harness.taskChecklist[0].task, "解析附件");
+});
+
+test("harness planning still retries when malformed json appears but no repair invoker is configured", async () => {
+  const hookManager = createHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+    execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
+  };
+
+  await hookManager.emit("before_llm_call", {
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    ai: { content: "{\"taskChecklist\":[{index:1,task:\"解析附件\"}]}" },
+    agentContext,
+  });
+
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
+  assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, false);
 });
 
 test("harness writes capability model traces to dedicated jsonl artifact", async () => {
@@ -366,6 +592,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
   );
 
   const ctx = {
+    executionScope: "primary",
     userId: "u7",
     sessionId: "s7",
     dialogProcessId: "dp7",
@@ -380,7 +607,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
 
   const runDir = path.join(basePath, "runtime", "harness", "runs", "dp7");
   const traceFile = path.join(runDir, "capability-traces.jsonl");
-  assert.equal(await exists(traceFile), true);
+  assert.equal(await waitForFile(traceFile), true);
   const [line] = (await fs.readFile(traceFile, "utf8")).trim().split("\n");
   const record = JSON.parse(line);
   assert.equal(record.event, "capability_model_trace");
@@ -389,6 +616,49 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
 
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(manifest.paths.capabilityTraces, traceFile);
+});
+
+test("harness planning separate model uses resolved planning tool allowlist", async () => {
+  const hookManager = createHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        return {
+          content: '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
+          output: '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
+          finishedReason: "no_tool_call",
+          turn: 1,
+          traces: [{ turn: 1, purpose: "planning", domain: "planning", locale: "zh-CN", toolCalls: [] }],
+        };
+      },
+    },
+  );
+
+  const ctx = {
+    userId: "u-planning-allowlist",
+    sessionId: "s-planning-allowlist",
+    dialogProcessId: "dp-planning-allowlist",
+    caller: "user",
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        tools: { registry: [{ name: "execute_script", invoke: async () => ({ ok: true }) }] },
+      },
+      execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  assert.equal(invocations.length >= 1, true);
+  assert.deepEqual(invocations[0].toolAllowlist, ["*"]);
 });
 
 
@@ -484,6 +754,7 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
   registerNoobotPlugin({ hookManager }, { basePath, promptPolicy: false, trace: true });
 
   await hookManager.emit("before_llm_call", {
+    executionScope: "primary",
     userId: "u15",
     sessionId: "s15",
     dialogProcessId: "dp15",
@@ -491,7 +762,7 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
   });
 
   const eventsFile = path.join(basePath, "runtime", "harness", "runs", "dp15", "events.jsonl");
-  assert.equal(await exists(eventsFile), true);
+  assert.equal(await waitForFile(eventsFile), true);
   const events = (await fs.readFile(eventsFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
   assert.equal(events.some((event) => event.point === "before_llm_call"), true);
 });

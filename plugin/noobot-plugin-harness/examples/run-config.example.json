@@ -16,7 +16,7 @@
         }
       },
       "planningGuidanceMode": "separate_model",
-      "miniRunnerMaxTurns": 4,
+      "miniRunnerMaxTurns": 50,
       "miniRunnerToolAllowlist": [
         "read_context",
         "search_memory"

@@ -124,3 +124,24 @@ test("mini-runner treats * as all tools in current registry", async () => {
     ],
   );
 });
+
+test("mini-runner finalizes with no-tools follow-up when max turns reached without assistant text", async () => {
+  const first = {
+    content: "",
+    tool_calls: [{ id: "c1", name: "echo", args: { text: "hi" } }],
+  };
+  const second = { content: '{"taskChecklist":[{"index":1,"task":"执行核心任务"}]}' };
+  const invoker = createAgentCapabilityModelInvoker({
+    maxTurns: 1,
+    createChatModelFn: () => createFakeModel([first, second]),
+    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
+    executeToolCallFn: async () => ({ toolResultText: "echo:hi" }),
+  });
+
+  const result = await invoker({
+    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+  });
+
+  assert.equal(result.finishedReason, "max_turn_reached_finalized");
+  assert.match(String(result.output || ""), /taskChecklist/);
+});

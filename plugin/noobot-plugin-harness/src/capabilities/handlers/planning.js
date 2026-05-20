@@ -7,6 +7,7 @@ import {
   appendCapabilityModelTraceLog,
   disableBlockedToolsInRegistry,
   ensureHarnessBucket,
+  extractJsonObjectFromText,
   extractRawTextContent,
   getDefaultTaskOwner,
   getTaskTemplate,
@@ -75,8 +76,131 @@ function parseChecklistWithLocalRepair(text = "", locale = LOCALE.ZH_CN) {
   const parsedDirect = parseTaskChecklistFromModelOutput(raw, locale);
   if (parsedDirect.length) return parsedDirect;
   const sanitized = sanitizeJsonCandidate(raw);
-  if (!sanitized || sanitized === raw) return [];
-  return parseTaskChecklistFromModelOutput(sanitized, locale);
+  if (sanitized && sanitized !== raw) {
+    const repaired = parseTaskChecklistFromModelOutput(sanitized, locale);
+    if (repaired.length) return repaired;
+  }
+  const wrapped = parseChecklistFromWrappedPayload(raw, locale);
+  if (wrapped.length) return wrapped;
+  return parseChecklistFromPlainText(raw, locale);
+}
+
+function parseChecklistFromWrappedPayload(text = "", locale = LOCALE.ZH_CN) {
+  const parsed = extractJsonObjectFromText(text);
+  if (!parsed || typeof parsed !== "object") return [];
+
+  const visited = new Set();
+  const queue = [{ value: parsed, depth: 0 }];
+  const candidateKeys = new Set([
+    "stdout",
+    "stderr",
+    "output",
+    "content",
+    "text",
+    "result",
+    "data",
+    "payload",
+    "toolResultText",
+    "raw",
+    "message",
+  ]);
+
+  while (queue.length) {
+    const current = queue.shift();
+    const value = current?.value;
+    const depth = Number(current?.depth || 0);
+    if (value === null || value === undefined) continue;
+    if (typeof value === "object") {
+      if (visited.has(value)) continue;
+      visited.add(value);
+    }
+
+    if (typeof value === "string") {
+      const checklist = parseTaskChecklistFromModelOutput(value, locale);
+      if (checklist.length) return checklist;
+      if (depth < 3) {
+        const nested = extractJsonObjectFromText(value);
+        if (nested && typeof nested === "object") {
+          queue.push({ value: nested, depth: depth + 1 });
+        }
+      }
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      const checklist = parseTaskChecklistFromModelOutput(JSON.stringify(value), locale);
+      if (checklist.length) return checklist;
+      if (depth < 3) {
+        for (const item of value) {
+          queue.push({ value: item, depth: depth + 1 });
+        }
+      }
+      continue;
+    }
+
+    if (typeof value !== "object") continue;
+
+    const checklist = parseTaskChecklistFromModelOutput(JSON.stringify(value), locale);
+    if (checklist.length) return checklist;
+    if (depth >= 3) continue;
+
+    for (const [key, nested] of Object.entries(value)) {
+      if (candidateKeys.has(String(key || "").trim())) {
+        queue.push({ value: nested, depth: depth + 1 });
+      } else if (nested && typeof nested === "object") {
+        queue.push({ value: nested, depth: depth + 1 });
+      }
+    }
+  }
+
+  return [];
+}
+
+function parseChecklistFromPlainText(text = "", locale = LOCALE.ZH_CN) {
+  const raw = String(text || "").trim();
+  if (!raw) return [];
+  const lines = raw
+    .replace(/```[\s\S]*?```/g, "")
+    .split(/\r?\n/)
+    .map((line) => String(line || "").trim())
+    .filter(Boolean);
+  if (!lines.length) return [];
+
+  const matched = [];
+  for (const line of lines) {
+    const numbered = line.match(/^\s*(\d+)\s*[\.、\)\-:：]\s*(.+)$/);
+    const checkbox = line.match(/^\s*[-*+]\s*(?:\[[ xX]\]\s*)?(.+)$/);
+    const step = line.match(/^\s*第?\s*(\d+)\s*步\s*[:：]?\s*(.+)$/);
+    const detail = (numbered?.[2] || step?.[2] || checkbox?.[1] || "").trim();
+    if (!detail) continue;
+    matched.push({
+      index: Number(numbered?.[1] || step?.[1] || matched.length + 1),
+      task: detail,
+    });
+  }
+
+  if (!matched.length || matched.length < 2) return [];
+  const owner = getDefaultTaskOwner(locale);
+  return matched.map((item, index) => ({
+    index: Number.isFinite(Number(item.index)) ? Number(item.index) : index + 1,
+    task: String(item.task || "").trim() || `${locale === LOCALE.EN_US ? "Task" : "任务"} ${index + 1}`,
+    owner,
+    subOwners: [],
+  }));
+}
+
+const MAX_PLANNING_CAPTURE_ATTEMPTS = 3;
+
+function increasePlanningCaptureAttempts(state = {}) {
+  if (!state || typeof state !== "object") return 1;
+  const counters = state.counters && typeof state.counters === "object" ? state.counters : {};
+  const current = Number.isFinite(Number(counters.planningCaptureAttempts))
+    ? Number(counters.planningCaptureAttempts)
+    : 0;
+  const next = current + 1;
+  counters.planningCaptureAttempts = next;
+  state.counters = counters;
+  return next;
 }
 
 function compactText(text = "", maxChars = 500) {
@@ -84,6 +208,41 @@ function compactText(text = "", maxChars = 500) {
   if (!raw) return "";
   if (raw.length <= maxChars) return raw;
   return `${raw.slice(0, maxChars)}...`;
+}
+
+function recordPlanningRawOutput(
+  ctx = {},
+  { source = "unknown", content = "", parsedCount = 0 } = {},
+) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket } = holder;
+  const rawText = String(content || "");
+  const entry = {
+    source: String(source || "unknown").trim() || "unknown",
+    capturedAt: new Date().toISOString(),
+    content: rawText,
+    parsedCount: Number.isFinite(Number(parsedCount)) ? Number(parsedCount) : 0,
+  };
+  if (!Array.isArray(bucket.planningRawOutputs)) {
+    bucket.planningRawOutputs = [];
+  }
+  bucket.planningRawOutputs.push(entry);
+  if (bucket.planningRawOutputs.length > 20) {
+    bucket.planningRawOutputs.splice(0, bucket.planningRawOutputs.length - 20);
+  }
+  bucket.lastPlanningRawOutput = entry;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event: "planning_raw_output_recorded",
+    detail: {
+      source: entry.source,
+      chars: rawText.length,
+      parsedCount: entry.parsedCount,
+      preview: compactText(rawText, 300),
+    },
+  });
+  return true;
 }
 
 function normalizePlanningTextContent(content = "") {
@@ -229,42 +388,86 @@ async function repairChecklistByModel({
   return parseChecklistWithLocalRepair(repairedText, locale);
 }
 
-function enablePlanningForceToolRetry(ctx = {}) {
-  const holder = ensureHarnessBucket(ctx);
-  if (!holder) return false;
-  const { state } = holder;
-  if (state.flags.planningCaptured === true) return false;
-  if (state.flags.planningForceToolTemporarilyEnabled === true) return false;
-  const runtimeConfig = ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.config;
-  if (!runtimeConfig || typeof runtimeConfig !== "object") return false;
-  state.flags.planningForceToolOriginalSet = Object.prototype.hasOwnProperty.call(runtimeConfig, "forceTool");
-  state.flags.planningForceToolOriginal = Boolean(runtimeConfig?.forceTool);
-  runtimeConfig.forceTool = true;
-  state.flags.planningForceToolTemporarilyEnabled = true;
-  appendCapabilityLog(ctx, {
+async function synthesizeChecklistByModel({
+  invoker = null,
+  ctx = {},
+  meta = {},
+  locale = LOCALE.ZH_CN,
+  traces = [],
+} = {}) {
+  if (typeof invoker !== "function") return [];
+  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
+  const compactTraces = Array.isArray(traces)
+    ? traces.map((item = {}) => ({
+      turn: item?.turn,
+      toolCalls: Array.isArray(item?.toolCalls)
+        ? item.toolCalls.map((call = {}) => ({
+          name: call?.name,
+          id: call?.id,
+          status: call?.status,
+          error: call?.error,
+        }))
+        : [],
+    }))
+    : [];
+  const synthPrompt =
+    locale === LOCALE.EN_US
+      ? [
+          "Generate a task checklist JSON from context and tool traces.",
+          "Output JSON only.",
+          'Format: {"taskOwner":"...","taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[]}]}',
+          "Do not call tools.",
+          "",
+          `Context: ${JSON.stringify(contextSummary)}`,
+          `Traces: ${JSON.stringify(compactTraces)}`,
+        ].join("\n")
+      : [
+          "请根据上下文与工具轨迹生成任务清单 JSON。",
+          "仅输出 JSON。",
+          '格式：{"taskOwner":"...","taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[]}]}',
+          "不要调用工具。",
+          "",
+          `上下文：${JSON.stringify(contextSummary)}`,
+          `轨迹：${JSON.stringify(compactTraces)}`,
+        ].join("\n");
+  let response = null;
+  try {
+    response = await invoker({
+      purpose: "planning_json_synthesis",
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      locale,
+      prompt: synthPrompt,
+      messages: [],
+      ctx,
+      toolAllowlist: [],
+    });
+  } catch (error) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_json_synthesis_model_failed",
+      detail: { error: String(error?.message || error || "") },
+    });
+    return [];
+  }
+  await appendCapabilityModelTraceLog(ctx, meta, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "planning_force_tool_retry_enabled",
+    purpose: "planning_json_synthesis",
+    response,
   });
-  return true;
+  const text =
+    extractRawTextContent(response?.content) ||
+    String(response?.text || response?.output || "").trim();
+  return parseChecklistWithLocalRepair(text, locale);
+}
+
+function enablePlanningForceToolRetry(ctx = {}) {
+  void ctx;
+  return false;
 }
 
 function restorePlanningForceToolRetry(ctx = {}) {
-  const holder = ensureHarnessBucket(ctx);
-  if (!holder) return false;
-  const { state } = holder;
-  if (state.flags.planningForceToolTemporarilyEnabled !== true) return false;
-  const runtimeConfig = ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.config;
-  if (!runtimeConfig || typeof runtimeConfig !== "object") return false;
-  if (state.flags.planningForceToolOriginalSet === true) {
-    runtimeConfig.forceTool = Boolean(state.flags.planningForceToolOriginal);
-  } else {
-    delete runtimeConfig.forceTool;
-  }
-  state.flags.planningForceToolTemporarilyEnabled = false;
-  appendCapabilityLog(ctx, {
-    domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "planning_force_tool_retry_restored",
-  });
+  // Keep tool choice in auto mode for planning; no restore path.
+  void ctx;
   return true;
 }
 
@@ -337,8 +540,14 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   const responseText =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
+  recordPlanningRawOutput(ctx, {
+    source: "separate_model",
+    content: responseText,
+  });
   let parsed = parseChecklistWithLocalRepair(responseText, locale);
+  let jsonRepairAttempted = false;
   if (!parsed.length && hasJsonFeature(responseText)) {
+    jsonRepairAttempted = true;
     parsed = await repairChecklistByModel({
       invoker,
       ctx,
@@ -347,16 +556,42 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       rawText: responseText,
     });
   }
+  if (!parsed.length) {
+    parsed = await synthesizeChecklistByModel({
+      invoker,
+      ctx,
+      meta,
+      locale,
+      traces: response?.traces,
+    });
+  }
 
   if (parsed.length) {
     bucket.taskChecklist = parsed;
     bucket.taskChecklistSource = "model";
+    state.counters.planningCaptureAttempts = 0;
+    state.flags.planningCaptured = true;
   } else {
     bucket.taskChecklist = [];
     bucket.taskChecklistSource = "none";
+    bucket.taskOwner = getDefaultTaskOwner(locale);
+    const attempts = increasePlanningCaptureAttempts(state);
+    if (!jsonRepairAttempted && attempts < MAX_PLANNING_CAPTURE_ATTEMPTS) {
+      relaySeparateModelOutputAsUserMessage(ctx, {
+        locale,
+        purpose: "planning",
+        content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
+      });
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_checklist_retry_scheduled_by_separate_model",
+        detail: { attempts, maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS },
+      });
+      return true;
+    }
+    state.flags.planningCaptured = true;
   }
   bucket.taskOwner = getDefaultTaskOwner(locale);
-  state.flags.planningCaptured = true;
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "planning",
@@ -384,11 +619,31 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     extractRawTextContent(ctx?.ai?.content) ||
     extractRawTextContent(ctx?.modelResponse?.content) ||
     "";
+  const hasToolCalls =
+    Array.isArray(ctx?.ai?.tool_calls) ||
+    Array.isArray(ctx?.ai?.toolCalls) ||
+    Array.isArray(ctx?.modelResponse?.tool_calls) ||
+    Array.isArray(ctx?.modelResponse?.toolCalls) ||
+    String(ctx?.modelResponse?.finish_reason || "").trim() === "tool_calls";
+  if (hasToolCalls && !String(sourceContent || "").trim()) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_capture_skipped_for_tool_call_turn",
+    });
+    return false;
+  }
+  recordPlanningRawOutput(ctx, {
+    source: "after_llm_call",
+    content: sourceContent,
+  });
   const locale = state?.locale || LOCALE.ZH_CN;
   let parsed = parseChecklistWithLocalRepair(sourceContent, locale);
-  if (!parsed.length && hasJsonFeature(sourceContent)) {
+  let jsonRepairAttempted = false;
+  const repairInvoker = resolveCapabilityModelInvoker(meta);
+  if (!parsed.length && hasJsonFeature(sourceContent) && typeof repairInvoker === "function") {
+    jsonRepairAttempted = true;
     parsed = await repairChecklistByModel({
-      invoker: resolveCapabilityModelInvoker(meta),
+      invoker: repairInvoker,
       ctx,
       meta,
       locale,
@@ -399,8 +654,8 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     bucket.taskChecklist = parsed;
     bucket.taskChecklistSource = "model";
     bucket.taskOwner = getDefaultTaskOwner(locale);
+    state.counters.planningCaptureAttempts = 0;
     state.flags.planningCaptured = true;
-    restorePlanningForceToolRetry(ctx);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: "planning_checklist_captured",
@@ -414,6 +669,21 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
   bucket.taskChecklist = [];
   bucket.taskChecklistSource = "none";
   bucket.taskOwner = getDefaultTaskOwner(locale);
+  const attempts = increasePlanningCaptureAttempts(state);
+  if (!jsonRepairAttempted && attempts < MAX_PLANNING_CAPTURE_ATTEMPTS) {
+    state.flags.planningPromptInjected = false;
+    enablePlanningForceToolRetry(ctx);
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_checklist_retry_scheduled",
+      detail: {
+        attempts,
+        maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS,
+        emptyResponse: !String(sourceContent || "").trim(),
+      },
+    });
+    return true;
+  }
   state.flags.planningCaptured = true;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
@@ -427,9 +697,15 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
   return true;
 }
 
-export function createPlanningHandler() {
+export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => true } = {}) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     let changed = false;
+    if (
+      ["before_llm_call", "after_llm_call", "before_final_output"].includes(point) &&
+      !shouldProcessPrimaryToolHooks(ctx)
+    ) {
+      return { capability, point, status: "active", changed: false };
+    }
     if (point === "before_llm_call") {
       const holder = ensureHarnessBucket(ctx);
       if (holder) {
@@ -438,6 +714,7 @@ export function createPlanningHandler() {
           holder.state.pending.summary = true;
         }
       }
+      changed = enablePlanningForceToolRetry(ctx) || changed;
       changed = sanitizeInternalMessages(ctx) || changed;
       changed = disableBlockedToolsInRegistry(ctx) || changed;
       changed = ensureTaskAcceptanceTool(ctx, meta) || changed;

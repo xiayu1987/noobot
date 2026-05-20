@@ -96,6 +96,17 @@ function resolveToolsFromContext(ctx = {}, allowPolicy = { allowAll: false, allo
   return tools.filter((tool) => allowPolicy.allowSet.has(String(tool?.name || "").trim()));
 }
 
+function extractLastToolTextMessage(messages = []) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const message = list[index];
+    if (String(message?.role || "").trim().toLowerCase() !== "tool") continue;
+    const content = normalizeTextContent(message?.content);
+    if (content) return content;
+  }
+  return "";
+}
+
 export function createAgentCapabilityModelInvoker({
   maxTurns = 4,
   toolAllowlist = [],
@@ -244,12 +255,32 @@ export function createAgentCapabilityModelInvoker({
       }
     }
 
+    let finalizedText = lastAssistantText;
+    if (!finalizedText) {
+      const finalizePrompt =
+        locale === "en-US"
+          ? "Based on the above tool results, provide the final planning answer now."
+          : "请基于以上工具结果，立即给出最终规划答案。";
+      try {
+        const finalAi = await llm.invoke(
+          [...runMessages, { role: "system", content: finalizePrompt }],
+          { signal: runtime?.abortSignal || null },
+        );
+        finalizedText = normalizeTextContent(finalAi?.content);
+      } catch {
+        finalizedText = "";
+      }
+    }
+    if (!finalizedText) {
+      finalizedText = extractLastToolTextMessage(runMessages);
+    }
+
     return {
-      content: lastAssistantText,
-      output: lastAssistantText,
+      content: finalizedText,
+      output: finalizedText,
       traces,
       turn: maxTurnCount,
-      finishedReason: "max_turn_reached",
+      finishedReason: finalizedText ? "max_turn_reached_finalized" : "max_turn_reached",
     };
   };
 }

@@ -482,6 +482,10 @@ export class SessionExecutionEngine {
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
     const next = { ...options, enabled: true, basePath };
+    next.miniRunnerMaxTurns =
+      Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
+        ? Number(next.miniRunnerMaxTurns)
+        : 50;
     if (!String(next?.planningGuidanceMode || "").trim()) {
       next.planningGuidanceMode = "separate_model";
     }
