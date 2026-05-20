@@ -18,6 +18,7 @@ import { AgentContextFactory } from "../execution/agent-context-factory.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { createHookManager } from "../../hook/index.js";
+import { mergeConfig } from "../../config/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
 
@@ -97,6 +98,7 @@ export class SessionExecutionEngine {
         this._initializeRunSessionRuntime(payload),
       resolveScenarioRunConfig: (runConfig = {}, userConfig = {}) =>
         this._resolveScenarioRunConfig(runConfig, userConfig),
+      prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
       buildAgentContext: (payload = {}) => this._buildAgentContext(payload),
       appendSessionTurn: (payload = {}) => this._appendSessionTurn(payload),
       buildRunTurnAgentContext: (agentContext = {}, abortSignal = null) =>
@@ -270,6 +272,10 @@ export class SessionExecutionEngine {
 
   _resolveScenarioRunConfig(runConfig = {}, userConfig = {}) {
     return this.runConfigResolver.resolveScenarioRunConfig(runConfig, userConfig);
+  }
+
+  _prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    return this._prepareHarnessRunConfig({ userId, runConfig, userConfig });
   }
 
   async _buildAgentContext({
@@ -456,21 +462,30 @@ export class SessionExecutionEngine {
     }, {});
   }
 
-  _resolveHarnessPluginOptions({ userId = "", runConfig = {} } = {}) {
-    const globalHarness =
-      this.globalConfig?.plugins?.harness && typeof this.globalConfig.plugins.harness === "object"
-        ? this.globalConfig.plugins.harness
+  _resolveHarnessPluginOptions({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    const effectiveConfig = mergeConfig(
+      this.globalConfig || {},
+      userConfig && typeof userConfig === "object" ? userConfig : {},
+    );
+    const effectiveHarness =
+      effectiveConfig?.plugins?.harness && typeof effectiveConfig.plugins.harness === "object"
+        ? effectiveConfig.plugins.harness
         : {};
+    if (effectiveHarness?.enabled === false) return { enabled: false, mode: "off" };
     const runHarness =
       runConfig?.plugins?.harness && typeof runConfig.plugins.harness === "object"
         ? runConfig.plugins.harness
         : {};
+    if (runHarness?.enabled === false) return { enabled: false, mode: "off" };
+    const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
+      ? runConfig.selectedPlugins
+      : [];
+    const harnessSelected = selectedPlugins.includes("harness");
     const options = this._mergeHarnessPluginOptions(
-      globalHarness,
+      effectiveHarness,
       runHarness,
     );
-    if (options?.enabled !== true) return { enabled: false, mode: "off" };
-    const normalizedMode = String(options?.mode ?? "off")
+    const normalizedMode = String(harnessSelected ? "on" : options?.mode ?? "off")
       .trim()
       .toLowerCase();
     const resolvedMode = normalizedMode === "on" ? "on" : "off";
@@ -501,8 +516,12 @@ export class SessionExecutionEngine {
     return next;
   }
 
-  _prepareHarnessRunConfig({ userId = "", runConfig = {} } = {}) {
-    const harnessOptions = this._resolveHarnessPluginOptions({ userId, runConfig });
+  _prepareHarnessRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    const harnessOptions = this._resolveHarnessPluginOptions({
+      userId,
+      runConfig,
+      userConfig,
+    });
     if (!harnessOptions.enabled) return runConfig;
     const hookManager =
       runConfig?.hookManager && typeof runConfig.hookManager === "object"
@@ -542,7 +561,6 @@ export class SessionExecutionEngine {
     runConfig = {},
     parentAsyncResultContainer = null,
   }) {
-    const preparedRunConfig = this._prepareHarnessRunConfig({ userId, runConfig });
     return this.runner.runSession({
       userId,
       sessionId,
@@ -554,7 +572,7 @@ export class SessionExecutionEngine {
       parentDialogProcessId,
       abortSignal,
       userInteractionBridge,
-      runConfig: preparedRunConfig,
+      runConfig,
       parentAsyncResultContainer,
     });
   }

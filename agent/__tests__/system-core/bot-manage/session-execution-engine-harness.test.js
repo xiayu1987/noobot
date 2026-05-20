@@ -42,7 +42,16 @@ test("_prepareHarnessRunConfig registers harness plugin and resolves basePath fr
 
   const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
-    runConfig: { plugins: { harness: { enabled: true } } },
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+          manifestDebounceMs: 0,
+          jsonlFlushStrategy: { maxSize: 1, maxTime: 0, onTerminal: true, onError: true },
+        },
+      },
+    },
   });
 
   assert.ok(prepared.hookManager);
@@ -79,7 +88,7 @@ test("_prepareHarnessRunConfig reuses existing hookManager instead of replacing 
     userId: "u1",
     runConfig: {
       hookManager,
-      plugins: { harness: { enabled: true, basePath: "/tmp/noobot-test/u1" } },
+      plugins: { harness: { enabled: true, mode: "on", basePath: "/tmp/noobot-test/u1" } },
     },
   });
 
@@ -91,10 +100,10 @@ test("_prepareHarnessRunConfig reuses existing hookManager instead of replacing 
   assert.equal(hookManager.list("before_llm_call").length, 2);
 });
 
-test("globalConfig.plugins.harness.enabled enables harness by default", () => {
+test("globalConfig.plugins.harness.mode=on enables harness by default", () => {
   const tempRoot = "/tmp/noobot-global-harness-test";
   const engine = new SessionExecutionEngine({
-    globalConfig: { plugins: { harness: { enabled: true, trace: false } } },
+    globalConfig: { plugins: { harness: { enabled: true, mode: "on", trace: false } } },
     workspaceService: createWorkspaceService(tempRoot),
   });
 
@@ -184,7 +193,15 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     userId: "u1",
     sessionId,
     message: "hello harness",
-    runConfig: { plugins: { harness: { enabled: true } } },
+    runConfig: {
+      selectedPlugins: ["harness"],
+      plugins: {
+        harness: {
+          manifestDebounceMs: 0,
+          jsonlFlushStrategy: { maxSize: 1, maxTime: 0, onTerminal: true, onError: true },
+        },
+      },
+    },
   });
 
   assert.equal(result.answer, "ok from fake agent");
@@ -229,7 +246,14 @@ test("harness records tool call and state commit hook artifacts", async () => {
     userId: "u1",
     runConfig: {
       hookManager,
-      plugins: { harness: { enabled: true } },
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+          manifestDebounceMs: 0,
+          jsonlFlushStrategy: { maxSize: 1, maxTime: 0, onTerminal: true, onError: true },
+        },
+      },
     },
   });
   const runtime = {
