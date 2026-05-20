@@ -30,6 +30,7 @@ export class SessionExecutionRunner {
     ensureParentAsyncResultContainer,
     initializeRunSessionRuntime,
     resolveScenarioRunConfig,
+    prepareRunConfig,
     buildAgentContext,
     appendSessionTurn,
     buildRunTurnAgentContext,
@@ -44,6 +45,7 @@ export class SessionExecutionRunner {
     this.ensureParentAsyncResultContainer = ensureParentAsyncResultContainer;
     this.initializeRunSessionRuntime = initializeRunSessionRuntime;
     this.resolveScenarioRunConfig = resolveScenarioRunConfig;
+    this.prepareRunConfig = prepareRunConfig;
     this.buildAgentContext = buildAgentContext;
     this.appendSessionTurn = appendSessionTurn;
     this.buildRunTurnAgentContext = buildRunTurnAgentContext;
@@ -92,10 +94,18 @@ export class SessionExecutionRunner {
         caller,
         eventListener,
       });
-      const resolvedRunConfig = this.resolveScenarioRunConfig(
+      const scenarioResolvedRunConfig = this.resolveScenarioRunConfig(
         runConfig,
         userConfig,
       );
+      const resolvedRunConfig =
+        typeof this.prepareRunConfig === "function"
+          ? this.prepareRunConfig({
+              userId,
+              runConfig: scenarioResolvedRunConfig,
+              userConfig,
+            })
+          : scenarioResolvedRunConfig;
       if (
         !String(resolvedRunConfig?.runtimeModel || "").trim() &&
         String(currentSessionModelAlias || "").trim()

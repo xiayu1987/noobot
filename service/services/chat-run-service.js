@@ -57,6 +57,7 @@ export function createChatRunService({
       if (current?.enabled === false) continue;
       normalizedPlugins[pluginKey] = {
         ...current,
+        enabled: true,
         mode: "on",
       };
     }
@@ -84,7 +85,7 @@ export function createChatRunService({
         : {}),
       selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
       selectedPlugins: normalizeStringArray(input?.selectedPlugins),
-      plugins: normalizePlugins(input?.plugins, input?.selectedPlugins),
+      plugins: normalizePlugins(source?.plugins, input?.selectedPlugins),
     };
   }
 
