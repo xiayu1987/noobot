@@ -143,6 +143,17 @@
 - `full`（默认）：tools/context 为空数组，表示不额外限制
 - `programming`：model=`"qwen3_6_plus_2026_04_02"`，description=“优先分析代码结构…”，tools=`["execute_script", "task_summary", "request_help"]`，services=`["web_search_service"]`，context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
 
+### 3.5.1 插件配置
+
+| 键名 | 类型 | 说明 |
+|---|---|---|
+| `plugins.<name>.enabled` | boolean | 插件总开关。为 `false` 时前端不展示且运行时禁用。 |
+| `plugins.<name>.mode` | enum | 插件默认运行模式。目前支持 `on` / `off`（`off` 表示插件可用但默认不激活）。 |
+
+当前仓库插件默认值：
+- `plugins.harness.enabled = true`
+- `plugins.harness.mode = "off"`
+
 ### 3.6 连接器预置
 
 #### 数据库连接器（`tools.database_connect_connector.connectors.<name>`）
@@ -231,6 +242,7 @@
 | `attachments` | 用户级附件策略覆盖 |
 | `tools` | 用户级工具开关/参数覆盖 |
 | `scenarios` | 用户级情景定义/默认值覆盖 |
+| `plugins` | 用户级插件开关/默认模式覆盖 |
 | `providers` | 用户级模型配置覆盖 |
 | `services` | 用户级外部服务定义（见 §4.1） |
 | `mcp_servers` | 用户级 MCP 配置覆盖 |
@@ -257,6 +269,13 @@
 当前仓库默认：
 - `web_search_service`：基于 SearX 实例的搜索端点
 - `weather_service`：通过 `wttr.in` 查询天气
+
+### 4.2 插件配置（`plugins.<name>`）
+
+| 键名 | 类型 | 说明 |
+|---|---|---|
+| `plugins.<name>.enabled` | boolean | 用户级插件开关覆盖。 |
+| `plugins.<name>.mode` | enum | 用户级默认模式覆盖（`on` / `off`）。 |
 
 ---
 

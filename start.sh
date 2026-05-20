@@ -86,6 +86,10 @@ log() {
   echo "[$(date '+%F %T')] $*"
 }
 
+is_pm2_runtime_error_text() {
+  grep -qiE "Cannot find module .*pm2|ProcessContainerFork\\.js|pm2: not found|could not determine executable to run"
+}
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "$(msg missing_cmd "$1")" >&2
@@ -177,8 +181,15 @@ run_pm2() {
   local err_file out_file
   err_file="$(mktemp)"
   out_file="$(mktemp)"
+
+  # With `set -e` enabled, a failing PM2 command would normally abort the
+  # whole script before we can inspect stderr and repair a broken local PM2
+  # runtime. Capture the exit code explicitly so the recovery path below can
+  # run on deployment machines with stale PM2 daemon/module paths.
+  set +e
   (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@" >"$out_file" 2>"$err_file")
   local exit_code=$?
+  set -e
   if [[ "$exit_code" -eq 0 ]]; then
     cat "$out_file"
     rm -f "$out_file"
@@ -196,16 +207,92 @@ run_pm2() {
   local combined_text=""
   combined_text="${out_text}"$'\n'"${err_text}"
 
-  if echo "$combined_text" | grep -qiE "Cannot find module .*pm2|ProcessContainerFork\\.js|could not determine executable to run|pm2: not found"; then
-    log "pm2 missing/broken detected, reinstall pm2 and retry once"
-    rm -rf "$SERVICE_DIR/node_modules/pm2" "$SERVICE_DIR/node_modules/.bin/pm2"
-    (cd "$SERVICE_DIR" && npm install pm2@latest --no-save)
+  if echo "$combined_text" | is_pm2_runtime_error_text; then
+    repair_pm2_runtime "pm2 command failed with missing/broken runtime"
+    set +e
     (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@")
-    return $?
+    exit_code=$?
+    set -e
+    return "$exit_code"
   fi
 
   echo "$combined_text" >&2
   return "$exit_code"
+}
+
+resolve_pm2_package_dir() {
+  (cd "$SERVICE_DIR" && node -e '
+const path = require("path");
+try {
+  console.log(path.dirname(require.resolve("pm2/package.json")));
+} catch {
+  process.exit(1);
+}
+' 2>/dev/null)
+}
+
+ensure_service_pm2_compat_link() {
+  local pm2_pkg_dir service_pm2_dir service_bin_dir service_pm2_bin
+  pm2_pkg_dir="$(resolve_pm2_package_dir || true)"
+  [[ -n "$pm2_pkg_dir" && -d "$pm2_pkg_dir" ]] || return 0
+
+  service_pm2_dir="$SERVICE_DIR/node_modules/pm2"
+  service_bin_dir="$SERVICE_DIR/node_modules/.bin"
+  service_pm2_bin="$service_bin_dir/pm2"
+
+  # Older PM2 daemons may have cached .../service/node_modules/pm2 as their
+  # own runtime location. In npm workspaces pm2 is usually hoisted to the repo
+  # root, so provide a compatibility symlink as well.
+  if [[ -L "$service_pm2_dir" && ! -e "$service_pm2_dir" ]]; then
+    rm -f "$service_pm2_dir"
+  fi
+  if [[ "$pm2_pkg_dir" != "$service_pm2_dir" && ! -e "$service_pm2_dir" ]]; then
+    mkdir -p "$SERVICE_DIR/node_modules"
+    ln -s "$pm2_pkg_dir" "$service_pm2_dir"
+  fi
+  if [[ -L "$service_pm2_bin" && ! -e "$service_pm2_bin" ]]; then
+    rm -f "$service_pm2_bin"
+  fi
+  if [[ -x "$pm2_pkg_dir/bin/pm2" && ! -e "$service_pm2_bin" ]]; then
+    mkdir -p "$service_bin_dir"
+    ln -s "$pm2_pkg_dir/bin/pm2" "$service_pm2_bin"
+  fi
+}
+
+install_or_repair_pm2_package() {
+  local pm2_pkg_dir pm2_fork_file
+  pm2_pkg_dir="$(resolve_pm2_package_dir || true)"
+  pm2_fork_file="${pm2_pkg_dir}/lib/ProcessContainerFork.js"
+
+  if [[ -z "$pm2_pkg_dir" || ! -f "$pm2_fork_file" ]]; then
+    log "pm2 runtime package missing/broken, reinstall pm2@latest"
+    rm -rf "$SERVICE_DIR/node_modules/pm2" "$SERVICE_DIR/node_modules/.bin/pm2"
+    (cd "$SERVICE_DIR" && npm install pm2@latest --no-save)
+  fi
+
+  ensure_service_pm2_compat_link
+}
+
+kill_pm2_daemon_best_effort() {
+  set +e
+  (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 kill >/dev/null 2>&1)
+  set -e
+}
+
+repair_pm2_runtime() {
+  local reason="${1:-pm2 runtime repair requested}"
+  log "$reason; clean PM2 cache, reinstall/repair pm2, and retry once"
+  kill_pm2_daemon_best_effort
+  rm -rf "$PM2_HOME_DIR"
+  mkdir -p "$PM2_HOME_DIR"
+  install_or_repair_pm2_package
+  kill_pm2_daemon_best_effort
+}
+
+ensure_pm2_runtime_preflight() {
+  install_or_repair_pm2_package
+  # Always restart PM2 daemon before rebuild/start to avoid stale runtime path cache.
+  kill_pm2_daemon_best_effort
 }
 
 is_truthy() {
@@ -250,6 +337,45 @@ start_pm2() {
 
   log "$(msg start_pm2 "$app_name")"
   run_pm2 start "$@"
+}
+
+start_or_restart_pm2_apps() {
+  local has_service_app=0
+  local has_client_app=0
+  local has_agent_proxy_app=0
+  if pm2_has_app "$SERVICE_APP_NAME"; then
+    has_service_app=1
+  fi
+  if pm2_has_app "$CLIENT_APP_NAME"; then
+    has_client_app=1
+  fi
+  if pm2_has_app "$AGENT_PROXY_APP_NAME"; then
+    has_agent_proxy_app=1
+  fi
+
+  export CADDY_ADDR AGENT_PROXY_UPSTREAM
+  export AGENT_PROXY_PORT AGENT_PROXY_HOST AGENT_PROXY_UPSTREAM_WS_URL AGENT_PROXY_UPSTREAM_HTTP_BASE
+  if [[ "$has_service_app" -eq 1 ]]; then
+    run_pm2 restart "$SERVICE_APP_NAME" --update-env
+  else
+    start_pm2 "$SERVICE_APP_NAME" npm --name "$SERVICE_APP_NAME" --cwd "$SERVICE_DIR" -- start
+  fi
+  if [[ "$has_agent_proxy_app" -eq 1 ]]; then
+    run_pm2 restart "$AGENT_PROXY_APP_NAME" --update-env
+  else
+    start_pm2 "$AGENT_PROXY_APP_NAME" npm --name "$AGENT_PROXY_APP_NAME" --cwd "$AGENT_PROXY_DIR" -- start
+  fi
+  if [[ "$has_client_app" -eq 1 ]]; then
+    run_pm2 restart "$CLIENT_APP_NAME" --update-env
+  else
+    start_pm2 "$CLIENT_APP_NAME" npm --name "$CLIENT_APP_NAME" --cwd "$CLIENT_DIR" -- run serve:caddy
+  fi
+}
+
+pm2_recent_logs_have_runtime_error() {
+  local logs_text
+  logs_text="$(run_pm2 logs --lines 120 --nostream 2>&1 || true)"
+  echo "$logs_text" | is_pm2_runtime_error_text
 }
 
 wait_for_apps_and_ports_ready() {
@@ -334,42 +460,24 @@ main() {
   npm --prefix "$CLIENT_DIR" run build
 
   log "$(msg step_rebuild)"
+  ensure_pm2_runtime_preflight
   if is_truthy "$PM2_CLEAN_START"; then
     clean_pm2_cache
   fi
-  local has_service_app=0
-  local has_client_app=0
-  local has_agent_proxy_app=0
-  if pm2_has_app "$SERVICE_APP_NAME"; then
-    has_service_app=1
-  fi
-  if pm2_has_app "$CLIENT_APP_NAME"; then
-    has_client_app=1
-  fi
-  if pm2_has_app "$AGENT_PROXY_APP_NAME"; then
-    has_agent_proxy_app=1
-  fi
 
   log "$(msg step_start)"
-  export CADDY_ADDR AGENT_PROXY_UPSTREAM
-  export AGENT_PROXY_PORT AGENT_PROXY_HOST AGENT_PROXY_UPSTREAM_WS_URL AGENT_PROXY_UPSTREAM_HTTP_BASE
-  if [[ "$has_service_app" -eq 1 ]]; then
-    run_pm2 restart "$SERVICE_APP_NAME" --update-env
-  else
-    start_pm2 "$SERVICE_APP_NAME" npm --name "$SERVICE_APP_NAME" --cwd "$SERVICE_DIR" -- start
-  fi
-  if [[ "$has_agent_proxy_app" -eq 1 ]]; then
-    run_pm2 restart "$AGENT_PROXY_APP_NAME" --update-env
-  else
-    start_pm2 "$AGENT_PROXY_APP_NAME" npm --name "$AGENT_PROXY_APP_NAME" --cwd "$AGENT_PROXY_DIR" -- start
-  fi
-  if [[ "$has_client_app" -eq 1 ]]; then
-    run_pm2 restart "$CLIENT_APP_NAME" --update-env
-  else
-    start_pm2 "$CLIENT_APP_NAME" npm --name "$CLIENT_APP_NAME" --cwd "$CLIENT_DIR" -- run serve:caddy
-  fi
+  start_or_restart_pm2_apps
 
-  wait_for_apps_and_ports_ready
+  if ! wait_for_apps_and_ports_ready; then
+    if pm2_recent_logs_have_runtime_error; then
+      repair_pm2_runtime "detected PM2 runtime module error in startup logs"
+      log "$(msg step_start) (retry)"
+      start_or_restart_pm2_apps
+      wait_for_apps_and_ports_ready
+    else
+      return 1
+    fi
+  fi
 
   log "$(msg done_list)"
   run_pm2 ls

@@ -47,25 +47,12 @@ await botManager.runSession({
   runConfig: {
     plugins: {
       harness: {
-        enabled: true
+        enabled: true,
+        mode: "on"
       }
     }
   }
 });
-```
-
-Shorthand forms are also supported:
-
-```js
-runConfig: {
-  enableHarness: true
-}
-```
-
-```js
-runConfig: {
-  harness: true
-}
 ```
 
 ## Enable from globalConfig
@@ -77,6 +64,7 @@ Harness can be enabled globally, then overridden by per-run config.
   "plugins": {
     "harness": {
       "enabled": true,
+      "mode": "on",
       "trace": true,
       "promptPolicy": true
     }
@@ -90,7 +78,7 @@ Per-run config takes precedence over global config:
 runConfig: {
   plugins: {
     harness: {
-      enabled: false
+      mode: "off"
     }
   }
 }
@@ -100,7 +88,8 @@ runConfig: {
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `enabled` | `true` | Enables plugin registration. In `runSession`, the plugin is registered only when explicitly enabled by `runConfig` or `globalConfig`. |
+| `enabled` | `true` | Global plugin switch. Must be `true` for harness to run. |
+| `mode` | `off` | Runtime mode: `on` enables harness for the run; `off` keeps it inactive. |
 | `basePath` | current user workspace | Root workspace for harness output. If omitted, `SessionExecutionEngine` resolves it from `workspaceService.getWorkspacePath(userId)`. |
 | `trace` | `true` | Writes hook events to `events.jsonl` and related index files. |
 | `promptPolicy` | `true` | Injects a lightweight system message before LLM calls. |
@@ -134,6 +123,7 @@ By default, acceptance is rule-based and uses the captured harness checklist plu
   "plugins": {
     "harness": {
       "enabled": true,
+      "mode": "on",
       "planningGuidanceMode": "separate_model",
       "acceptance": {
         "semanticValidation": true
@@ -163,6 +153,7 @@ Example config:
   "plugins": {
     "harness": {
       "enabled": true,
+      "mode": "on",
       "planningGuidanceMode": "separate_model",
       "miniRunnerMaxTurns": 50,
       "miniRunnerToolAllowlist": ["read_context", "search_memory"]

@@ -61,6 +61,40 @@ function resolveMergedScenarios(globalScenarios = {}, userScenarios = {}) {
   };
 }
 
+function normalizePluginMode(value = "off") {
+  return String(value || "").trim().toLowerCase() === "on" ? "on" : "off";
+}
+
+function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {
+  const globalSource = isPlainObject(globalPlugins) ? globalPlugins : {};
+  const userSource = isPlainObject(userPlugins) ? userPlugins : {};
+  const keys = new Set([
+    ...Object.keys(globalSource),
+    ...Object.keys(userSource),
+  ]);
+  const mergedPlugins = {};
+  for (const key of keys) {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) continue;
+    const globalItem = isPlainObject(globalSource?.[normalizedKey])
+      ? globalSource[normalizedKey]
+      : {};
+    const userItem = isPlainObject(userSource?.[normalizedKey])
+      ? userSource[normalizedKey]
+      : {};
+    const mergedItem = {
+      ...globalItem,
+      ...userItem,
+    };
+    mergedPlugins[normalizedKey] = {
+      ...mergedItem,
+      enabled: mergedItem?.enabled === true,
+      mode: normalizePluginMode(mergedItem?.mode),
+    };
+  }
+  return mergedPlugins;
+}
+
 function buildClientPermissions(role = "user") {
   const normalizedRole = String(role || "user").trim() || "user";
   const isSuperAdmin = normalizedRole === "super_admin";
@@ -104,6 +138,19 @@ export function registerAuthRoutes(
 
       const globalConfig =
         typeof globalConfigProvider === "function" ? globalConfigProvider() : {};
+      const loadUserConfigSafe = async (targetUserId = "") => {
+        try {
+          return typeof loadUserConfigForUser === "function"
+            ? (await loadUserConfigForUser(targetUserId)) || {}
+            : {};
+        } catch (error) {
+          logError("[auth-routes] loadUserConfig failed", {
+            userId: targetUserId,
+            error: error?.message || String(error),
+          });
+          return {};
+        }
+      };
       const superAdmin = globalConfig?.superAdmin || {};
       const superAdminUserId = String(superAdmin?.userId || "").trim();
       const superAdminCode = String(superAdmin?.connectCode || "").trim();
@@ -114,7 +161,12 @@ export function registerAuthRoutes(
         connectCode === superAdminCode
       ) {
         await workspaceService.ensureUserWorkspace(userId);
+        const loadedSuperAdminConfig = await loadUserConfigSafe(userId);
         const superAdminScenarios = resolveMergedScenarios(globalConfig?.scenarios, {});
+        const superAdminPlugins = resolveMergedPlugins(
+          globalConfig?.plugins,
+          loadedSuperAdminConfig?.plugins,
+        );
         const apiKey = issueApiKey({ userId, role: "super_admin" });
         res.json({
           ok: true,
@@ -123,7 +175,7 @@ export function registerAuthRoutes(
           apiKey,
           permissions: buildClientPermissions("super_admin"),
           scenarios: superAdminScenarios,
-          plugins: globalConfig?.plugins || {},
+          plugins: superAdminPlugins,
         });
         return;
       }
@@ -138,26 +190,18 @@ export function registerAuthRoutes(
       if (!matchedUser) throw new Error(translateText("connect.codeVerifyFailed", req.locale));
 
       await workspaceService.ensureUserWorkspace(userId);
-      let userScenarios = {};
-      try {
-        const loadedUserConfig =
-          typeof loadUserConfigForUser === "function"
-            ? await loadUserConfigForUser(userId)
-            : {};
-        userScenarios =
-          loadedUserConfig && typeof loadedUserConfig === "object"
-            ? loadedUserConfig.scenarios || {}
-            : {};
-      } catch (error) {
-        logError("[auth-routes] loadUserConfig for scenarios failed", {
-          userId,
-          error: error?.message || String(error),
-        });
-        userScenarios = {};
-      }
+      const loadedUserConfig = await loadUserConfigSafe(userId);
+      const userScenarios =
+        loadedUserConfig && typeof loadedUserConfig === "object"
+          ? loadedUserConfig.scenarios || {}
+          : {};
       const mergedScenarios = resolveMergedScenarios(
         globalConfig?.scenarios,
         userScenarios,
+      );
+      const mergedPlugins = resolveMergedPlugins(
+        globalConfig?.plugins,
+        loadedUserConfig?.plugins,
       );
       const apiKey = issueApiKey({ userId, role: "user" });
       res.json({
@@ -167,7 +211,7 @@ export function registerAuthRoutes(
         apiKey,
         permissions: buildClientPermissions("user"),
         scenarios: mergedScenarios,
-        plugins: globalConfig?.plugins || {},
+        plugins: mergedPlugins,
       });
       },
       { fallbackErrorKey: "connect.failed", translateText },

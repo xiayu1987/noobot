@@ -143,6 +143,17 @@ Current defaults in repo:
 - `full` (default): tools/context are empty arrays, meaning no extra restriction
 - `programming`: model=`"qwen3_6_plus_2026_04_02"`, description="analyze code structure first...", tools=`["execute_script", "task_summary", "request_help"]`, services=`["web_search_service"]`, context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
 
+### 3.5.1 Plugins
+
+| Key | Type | Description |
+|---|---|---|
+| `plugins.<name>.enabled` | boolean | Plugin global switch. When `false`, plugin is hidden in frontend and disabled at runtime. |
+| `plugins.<name>.mode` | enum | Default runtime mode for this plugin. Currently `on` / `off` (`off` means enabled but not active by default). |
+
+Current plugin defaults in repo:
+- `plugins.harness.enabled = true`
+- `plugins.harness.mode = "off"`
+
 ### 3.6 Connector Presets
 
 #### Database preset (`tools.database_connect_connector.connectors.<name>`)
@@ -231,6 +242,7 @@ User config can override global values.
 | `attachments` | User attachment policy override |
 | `tools` | User tool enable/options override |
 | `scenarios` | User scenario definitions/default override |
+| `plugins` | User plugin default/enable override |
 | `providers` | User provider override |
 | `services` | User external service definitions (see §4.1) |
 | `mcp_servers` | User MCP override |
@@ -257,6 +269,13 @@ User-level external service definitions for `call_service` tool.
 Current defaults in repo:
 - `web_search_service`: search endpoint using SearX instance
 - `weather_service`: weather query via `wttr.in`
+
+### 4.2 Plugins (`plugins.<name>`)
+
+| Key | Type | Description |
+|---|---|---|
+| `plugins.<name>.enabled` | boolean | User-level plugin switch override. |
+| `plugins.<name>.mode` | enum | User-level default mode override (`on` / `off`). |
 
 ---
 

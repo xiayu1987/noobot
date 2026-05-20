@@ -146,6 +146,11 @@ const normalizedPluginOptions = computed(() => {
       label: String(pluginItem?.label || pluginItem?.name || pluginItem?.key || "").trim(),
       description: String(pluginItem?.description || "").trim(),
       enabled: pluginItem?.enabled === true,
+      mode: String(pluginItem?.mode || "")
+        .trim()
+        .toLowerCase() === "on"
+        ? "on"
+        : "off",
     }))
     .filter((pluginItem) => Boolean(pluginItem.key));
 });

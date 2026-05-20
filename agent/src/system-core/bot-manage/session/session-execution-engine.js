@@ -465,23 +465,23 @@ export class SessionExecutionEngine {
       runConfig?.plugins?.harness && typeof runConfig.plugins.harness === "object"
         ? runConfig.plugins.harness
         : {};
-    const legacyRunHarness =
-      runConfig?.harness && typeof runConfig.harness === "object" ? runConfig.harness : {};
     const options = this._mergeHarnessPluginOptions(
       globalHarness,
-      legacyRunHarness,
       runHarness,
     );
-    const explicitlyEnabled =
-      options.enabled === true || runConfig?.enableHarness === true || runConfig?.harness === true;
-    if (!explicitlyEnabled) return { enabled: false };
+    if (options?.enabled !== true) return { enabled: false, mode: "off" };
+    const normalizedMode = String(options?.mode ?? "off")
+      .trim()
+      .toLowerCase();
+    const resolvedMode = normalizedMode === "on" ? "on" : "off";
+    if (resolvedMode !== "on") return { enabled: false, mode: "off" };
     const basePath =
       typeof options.basePath === "string" && options.basePath.trim()
         ? options.basePath.trim()
         : this.workspaceService && userId
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
-    const next = { ...options, enabled: true, basePath };
+    const next = { ...options, enabled: true, mode: "on", basePath };
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
         ? Math.min(Number(next.miniRunnerMaxTurns), 5)

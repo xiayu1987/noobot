@@ -15,6 +15,7 @@ const USER_OVERRIDE_POLICY = {
   mcpServers: "deep",
   tools: "deep",
   scenarios: "deep",
+  plugins: "deep",
   preferences: "deep",
 };
 

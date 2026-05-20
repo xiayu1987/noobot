@@ -260,7 +260,8 @@
   },
   "plugins": {
     "harness": {
-      "enabled": false
+      "enabled": true,
+      "mode": "off"
     }
   },
   "preferences": {
