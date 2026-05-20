@@ -177,14 +177,15 @@ run_pm2() {
   local err_file out_file
   err_file="$(mktemp)"
   out_file="$(mktemp)"
-  if (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@" >"$out_file" 2>"$err_file"); then
+  (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@" >"$out_file" 2>"$err_file")
+  local exit_code=$?
+  if [[ "$exit_code" -eq 0 ]]; then
     cat "$out_file"
     rm -f "$out_file"
     rm -f "$err_file"
     return 0
   fi
 
-  local exit_code=$?
   local err_text=""
   local out_text=""
   err_text="$(cat "$err_file" 2>/dev/null || true)"
@@ -249,6 +250,51 @@ start_pm2() {
 
   log "$(msg start_pm2 "$app_name")"
   run_pm2 start "$@"
+}
+
+wait_for_apps_and_ports_ready() {
+  local max_wait_seconds="${START_WAIT_TIMEOUT_SECONDS:-25}"
+  local interval_seconds=1
+  local elapsed=0
+  local apps_json=""
+  local check_cmd=(
+    node -e '
+const fs = require("fs");
+const data = JSON.parse(fs.readFileSync(0, "utf8"));
+const required = ["noobot-service", "noobot-agent-proxy", "noobot-client"];
+const bad = required.filter((name) => !data.find((item) => item.name === name && item.pm2_env && item.pm2_env.status === "online"));
+if (bad.length) {
+  console.error("PM2 apps not online:", bad.join(", "));
+  process.exit(1);
+}
+'
+  )
+
+  while [[ "$elapsed" -lt "$max_wait_seconds" ]]; do
+    if apps_json="$(run_pm2 jlist 2>/dev/null)"; then
+      if echo "$apps_json" | "${check_cmd[@]}" >/dev/null 2>&1; then
+        if command -v ss >/dev/null 2>&1; then
+          if ss -lnt | egrep ':10060|:10061|:10062' >/dev/null 2>&1; then
+            log "Health check passed: apps online and ports 10060/10061/10062 listening."
+            return 0
+          fi
+        else
+          log "Health check passed: apps online (skip port check, 'ss' not found)."
+          return 0
+        fi
+      fi
+    fi
+    sleep "$interval_seconds"
+    elapsed=$((elapsed + interval_seconds))
+  done
+
+  echo "Startup health check failed after ${max_wait_seconds}s." >&2
+  run_pm2 ls || true
+  if command -v ss >/dev/null 2>&1; then
+    ss -lntp | egrep ':10060|:10061|:10062' || true
+  fi
+  run_pm2 logs --lines 80 --nostream || true
+  return 1
 }
 
 main() {
@@ -322,6 +368,8 @@ main() {
   else
     start_pm2 "$CLIENT_APP_NAME" npm --name "$CLIENT_APP_NAME" --cwd "$CLIENT_DIR" -- run serve:caddy
   fi
+
+  wait_for_apps_and_ports_ready
 
   log "$(msg done_list)"
   run_pm2 ls
