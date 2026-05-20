@@ -6,6 +6,30 @@
 import { emitEvent } from "../event/index.js";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 3000;
+const HOOK_CLIENT_BLOCKED_KEYS = new Set([
+  "agent",
+  "agentContext",
+  "runtime",
+  "hookManager",
+  "hooks",
+  "controllers",
+]);
+const HOOK_PLUGIN_PROGRESS_ALLOWED_KEYS = new Set([
+  "plugin",
+  "version",
+  "point",
+  "stage",
+  "status",
+  "fsmState",
+  "fsmRejected",
+  "reason",
+  "toolName",
+  "commitType",
+  "message",
+  "timestamp",
+  "durationMs",
+  "error",
+]);
 
 export const HOOK_POINTS = Object.freeze({
   BEFORE_TURN: "before_turn",
@@ -264,6 +288,76 @@ export function withHookRuntimeMeta(runtime = {}, context = {}) {
   };
 }
 
+function sanitizeForHookClient(value, depth = 0, seen = new WeakSet()) {
+  if (value == null) return value;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (depth >= 6) return "[Truncated]";
+  if (Array.isArray(value)) {
+    return value.slice(0, 100).map((item) => sanitizeForHookClient(item, depth + 1, seen));
+  }
+  if (typeof value !== "object") return String(value);
+  if (seen.has(value)) return "[Circular]";
+  seen.add(value);
+  const output = {};
+  let count = 0;
+  for (const [key, item] of Object.entries(value)) {
+    if (HOOK_CLIENT_BLOCKED_KEYS.has(String(key || "").trim())) continue;
+    output[key] = sanitizeForHookClient(item, depth + 1, seen);
+    count += 1;
+    if (count >= 100) break;
+  }
+  return output;
+}
+
+function normalizeHookPluginProgressData(data = {}) {
+  const input = data && typeof data === "object" ? data : {};
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    const normalizedKey = String(key || "").trim();
+    if (!HOOK_PLUGIN_PROGRESS_ALLOWED_KEYS.has(normalizedKey)) continue;
+    if (normalizedKey === "error") {
+      const safeError = sanitizeForHookClient(value);
+      if (safeError && typeof safeError === "object" && !Array.isArray(safeError)) {
+        output.error = {
+          name: String(safeError?.name || "Error"),
+          message: String(safeError?.message || ""),
+          code: safeError?.code ? String(safeError.code) : undefined,
+        };
+      } else if (typeof safeError === "string") {
+        output.error = { name: "Error", message: safeError };
+      } else {
+        output.error = null;
+      }
+      continue;
+    }
+    output[normalizedKey] = sanitizeForHookClient(value);
+  }
+  return output;
+}
+
+function createHookClientChannel({ listener = null, point = "" } = {}) {
+  return {
+    emit(event = "", data = {}) {
+      const name = String(event || "").trim() || "hook_progress";
+      emitEvent(listener, "hook_plugin_progress", {
+        point: String(point || "").trim(),
+        event: name,
+        data: normalizeHookPluginProgressData(data),
+      });
+    },
+  };
+}
+
+function withHookClientChannel(context = {}, channel = null) {
+  const safeContext = context && typeof context === "object" ? context : {};
+  if (!channel || typeof channel.emit !== "function") return safeContext;
+  safeContext.hookClientChannel = channel;
+  safeContext.emitHookClientEvent = (event = "", data = {}) => channel.emit(event, data);
+  return safeContext;
+}
+
 export async function runRuntimeHook({
   runtime = {},
   point = "",
@@ -280,6 +374,11 @@ export async function runRuntimeHook({
   if (!manager) {
     return { executed: false, point: normalizedPoint, context, results: [], errors: [] };
   }
+  const hookClientChannel = createHookClientChannel({
+    listener,
+    point: normalizedPoint,
+  });
+  const hookedContext = withHookClientChannel(context, hookClientChannel);
 
   emitEvent(listener, "hook_start", { point: normalizedPoint });
   try {
@@ -290,9 +389,9 @@ export async function runRuntimeHook({
           ? manager.run.bind(manager)
           : null;
     if (!runner) {
-      return { executed: false, point: normalizedPoint, context, results: [], errors: [] };
+      return { executed: false, point: normalizedPoint, context: hookedContext, results: [], errors: [] };
     }
-    const result = await runner(normalizedPoint, context, { parallel });
+    const result = await runner(normalizedPoint, hookedContext, { parallel });
     emitEvent(listener, "hook_end", {
       point: normalizedPoint,
       errorCount: Array.isArray(result?.errors) ? result.errors.length : 0,
@@ -301,7 +400,7 @@ export async function runRuntimeHook({
       executed: true,
       ...(result && typeof result === "object" ? result : {}),
       point: normalizedPoint,
-      context,
+      context: hookedContext,
     };
   } catch (error) {
     emitEvent(listener, "hook_error", {
@@ -311,7 +410,7 @@ export async function runRuntimeHook({
     return {
       executed: true,
       point: normalizedPoint,
-      context,
+      context: hookedContext,
       results: [],
       errors: [error],
     };

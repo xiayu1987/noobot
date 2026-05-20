@@ -148,6 +148,49 @@ test("runRuntimeHook resolves manager, executes, and emits hook_start/hook_end",
   assert.equal(events[1]?.event, "hook_end");
 });
 
+test("runRuntimeHook exposes hook client channel to plugins and sanitizes forwarded payload", async () => {
+  const manager = createHookManager();
+  const events = [];
+  const eventListener = {
+    onEvent(evt = {}) {
+      events.push(evt);
+    },
+  };
+  const runtime = { hookManager: manager };
+  manager.on("runtime_point", async (ctx = {}) => {
+    assert.equal(typeof ctx?.hookClientChannel?.emit, "function");
+    assert.equal(typeof ctx?.emitHookClientEvent, "function");
+    ctx.emitHookClientEvent("plugin_step", {
+      plugin: "harness",
+      point: "before_turn",
+      stage: "trace_done",
+      fsmState: "planning",
+      fsmRejected: false,
+      agent: { shouldBeHidden: true },
+      agentContext: { shouldBeHidden: true },
+      nested: { runtime: { shouldBeHidden: true }, pass: 1 },
+      customFieldShouldDrop: "x",
+    });
+  });
+
+  await runRuntimeHook({
+    runtime,
+    point: "runtime_point",
+    context: {},
+    eventListener,
+  });
+
+  const pluginEvent = events.find((evt) => evt?.event === "hook_plugin_progress");
+  assert.ok(pluginEvent);
+  assert.equal(pluginEvent?.data?.event, "plugin_step");
+  assert.equal(pluginEvent?.data?.data?.plugin, "harness");
+  assert.equal(pluginEvent?.data?.data?.fsmState, "planning");
+  assert.equal("agent" in (pluginEvent?.data?.data || {}), false);
+  assert.equal("agentContext" in (pluginEvent?.data?.data || {}), false);
+  assert.equal("nested" in (pluginEvent?.data?.data || {}), false);
+  assert.equal("customFieldShouldDrop" in (pluginEvent?.data?.data || {}), false);
+});
+
 test("runRuntimeHook returns executed=false when no manager exists", async () => {
   const runtime = {};
   const result = await runRuntimeHook({

@@ -300,6 +300,30 @@ async function ensureRunDir(paths) {
   return true;
 }
 
+function resolveHookClientEmitter(ctx = {}) {
+  if (typeof ctx?.emitHookClientEvent === "function") {
+    return (event, data) => ctx.emitHookClientEvent(event, data);
+  }
+  if (ctx?.hookClientChannel && typeof ctx.hookClientChannel.emit === "function") {
+    return (event, data) => ctx.hookClientChannel.emit(event, data);
+  }
+  return null;
+}
+
+function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
+  const emit = resolveHookClientEmitter(ctx);
+  if (!emit) return;
+  try {
+    emit(`harness.${String(event || "").trim() || "progress"}`, {
+      plugin: PLUGIN_NAME,
+      version: PLUGIN_VERSION,
+      ...(data && typeof data === "object" ? data : {}),
+    });
+  } catch {
+    // client channel failures should not interrupt main flow
+  }
+}
+
 function normalizeFsmState(state = "") {
   const value = String(state || "").trim().toLowerCase();
   return Object.values(HARNESS_FSM_STATES).includes(value) ? value : HARNESS_FSM_STATES.IDLE;
@@ -732,6 +756,10 @@ async function trace(point, ctx, options) {
     options,
     options?.capabilityRuntime || null,
   );
+  return {
+    fsmState: fsm.state,
+    fsmRejected: fsm.rejected === true,
+  };
 }
 
 function resolveHookManager(api = {}) {
@@ -798,31 +826,47 @@ export function registerNoobotPlugin(api = {}, userOptions = {}) {
       hookManager.on(
         point,
         async (ctx = {}) => {
-          await capabilityRuntime.runHook(point, ctx, {
-            pluginName: PLUGIN_NAME,
-            pluginVersion: PLUGIN_VERSION,
-            harness: {
-              planningGuidanceMode: options.planningGuidanceMode,
-              capabilityModelInvoker: options.capabilityModelInvoker,
-              capabilityToolAllowlist: options.capabilityToolAllowlist,
-              capabilityToolAllowlistByPurpose: options.capabilityToolAllowlistByPurpose,
-              acceptance: options.acceptance,
-              review: options.review,
-              runTraceSink: async (record = {}) => {
-                const paths = createRunPaths(ctx, options);
-                if (!paths) return;
-                await ensureRunDir(paths);
-                await appendJsonlBuffered(paths.capabilityTraces, record);
+          emitHarnessHookProgress(ctx, "hook_start", { point });
+          try {
+            await capabilityRuntime.runHook(point, ctx, {
+              pluginName: PLUGIN_NAME,
+              pluginVersion: PLUGIN_VERSION,
+              harness: {
+                planningGuidanceMode: options.planningGuidanceMode,
+                capabilityModelInvoker: options.capabilityModelInvoker,
+                capabilityToolAllowlist: options.capabilityToolAllowlist,
+                capabilityToolAllowlistByPurpose: options.capabilityToolAllowlistByPurpose,
+                acceptance: options.acceptance,
+                review: options.review,
+                runTraceSink: async (record = {}) => {
+                  const paths = createRunPaths(ctx, options);
+                  if (!paths) return;
+                  await ensureRunDir(paths);
+                  await appendJsonlBuffered(paths.capabilityTraces, record);
+                },
               },
-            },
-          });
-          if (
-            point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL ||
-            (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false)
-          ) {
-            await injectPrompt(point, ctx, options);
+            });
+            emitHarnessHookProgress(ctx, "capability_runtime_done", { point });
+            if (
+              point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL ||
+              (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false)
+            ) {
+              await injectPrompt(point, ctx, options);
+              emitHarnessHookProgress(ctx, "prompt_injected", { point });
+            }
+            const traceResult = await trace(point, ctx, options);
+            emitHarnessHookProgress(ctx, "hook_end", {
+              point,
+              fsmState: traceResult?.fsmState,
+              fsmRejected: traceResult?.fsmRejected === true,
+            });
+          } catch (error) {
+            emitHarnessHookProgress(ctx, "hook_error", {
+              point,
+              error: safeError(error),
+            });
+            throw error;
           }
-          await trace(point, ctx, options);
         },
         {
           id: `${PLUGIN_NAME}.trace.${point}`,
