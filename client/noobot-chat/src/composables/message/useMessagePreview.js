@@ -20,6 +20,18 @@ import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 // --- 常量集合（避免每次调用 new Set） ---
 const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "avif"]);
+const OFFICE_EXTS = new Set([
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "rtf",
+  "odt",
+  "ods",
+  "odp",
+]);
 const MARKDOWN_MIMES = new Set(["text/markdown", "text/x-markdown", "application/markdown", "application/x-markdown"]);
 
 // --- 通用工具函数 ---
@@ -53,6 +65,10 @@ function isImageFile(fileName = "") {
   return IMAGE_EXTS.has(getFileExtension(fileName));
 }
 
+function isOfficeFile(fileName = "") {
+  return OFFICE_EXTS.has(getFileExtension(fileName));
+}
+
 function isMarkdownMime(mimeType = "", fileName = "") {
   const mime = String(mimeType || "").trim().toLowerCase();
   const name = String(fileName || "").trim().toLowerCase();
@@ -62,6 +78,30 @@ function isMarkdownMime(mimeType = "", fileName = "") {
 function isTextPreviewMime(mimeType = "") {
   const mime = String(mimeType || "").trim().toLowerCase();
   return mime.startsWith("text/") || ["json", "xml", "yaml", "javascript"].some((kw) => mime.includes(kw));
+}
+
+function isAudioPreviewMime(mimeType = "") {
+  const mime = String(mimeType || "").trim().toLowerCase();
+  return mime.startsWith("audio/");
+}
+
+function isOfficeMime(mimeType = "") {
+  const mime = String(mimeType || "").trim().toLowerCase();
+  return (
+    mime.includes("msword") ||
+    mime.includes("officedocument") ||
+    mime.includes("ms-excel") ||
+    mime.includes("ms-powerpoint") ||
+    mime.includes("opendocument") ||
+    mime.includes("rtf")
+  );
+}
+
+function hasParsedResult(attachmentItem = {}) {
+  return Boolean(
+    String(attachmentItem?.parsedResultAttachmentId || "").trim() ||
+      String(attachmentItem?.parsedResultUrl || "").trim(),
+  );
 }
 
 function parseContentDisposition(contentDisposition = "") {
@@ -326,9 +366,13 @@ export function useMessagePreview({
   function canPreviewAttachment(attachmentItem = {}) {
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
+    const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
+    if (officeLike) return hasParsedResult(attachmentItem);
+    // Source preview is allowed for image/audio/video/text.
     return (
       isImageMime(mimeType) ||
       mimeType.startsWith("video/") ||
+      isAudioPreviewMime(mimeType) ||
       isTextPreviewMime(mimeType) ||
       isMarkdownMime(mimeType, name)
     );
@@ -337,14 +381,18 @@ export function useMessagePreview({
   async function openAttachmentPreview(attachmentItem = {}) {
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
+    const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
+    const parsedResultUrl = String(attachmentItem?.parsedResultUrl || "").trim();
     const sourceUrl = resolveAttachmentUrl(attachmentItem);
-    if (!sourceUrl) return;
+    const targetUrl = officeLike ? parsedResultUrl : sourceUrl;
+    if (!targetUrl) return;
 
-    const isImage = isImageMime(mimeType);
-    const isVideo = mimeType.startsWith("video/");
-    if (isImage || isVideo) {
-      attachmentPreview.type.value = isImage ? "image" : "video";
-      attachmentPreview.url.value = sourceUrl;
+    const isImage = !officeLike && isImageMime(mimeType);
+    const isVideo = !officeLike && mimeType.startsWith("video/");
+    const isAudio = !officeLike && isAudioPreviewMime(mimeType);
+    if (isImage || isVideo || isAudio) {
+      attachmentPreview.type.value = isImage ? "image" : isVideo ? "video" : "audio";
+      attachmentPreview.url.value = targetUrl;
       attachmentPreview.name.value = name;
       attachmentPreview.error.value = "";
       attachmentPreview.textContent.value = "";
@@ -352,18 +400,23 @@ export function useMessagePreview({
       attachmentPreview.visible.value = true;
       return;
     }
-    if (!isTextPreviewMime(mimeType) && !isMarkdownMime(mimeType, name)) return;
+    const markdownMode = officeLike
+      ? true
+      : isMarkdownMime(mimeType, name);
+    if (!markdownMode && !isTextPreviewMime(mimeType)) return;
 
     attachmentPreview.visible.value = true;
     attachmentPreview.loading.value = true;
     attachmentPreview.error.value = "";
     attachmentPreview.textContent.value = "";
     attachmentPreview.url.value = "";
-    attachmentPreview.name.value = name;
-    attachmentPreview.type.value = isMarkdownMime(mimeType, name) ? "markdown" : "text";
+    attachmentPreview.name.value = officeLike
+      ? String(attachmentItem?.parsedResultName || name || "").trim()
+      : name;
+    attachmentPreview.type.value = markdownMode ? "markdown" : "text";
     try {
       const runFetch = authFetch || fetch;
-      const response = await runFetch(sourceUrl);
+      const response = await runFetch(targetUrl);
       if (!response?.ok) {
         throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
       }
