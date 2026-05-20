@@ -174,7 +174,27 @@ print_missing_dependency_hints() {
 }
 
 run_pm2() {
-  (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx pm2 "$@")
+  local err_file
+  err_file="$(mktemp)"
+  if (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@" 2>"$err_file"); then
+    rm -f "$err_file"
+    return 0
+  fi
+
+  local exit_code=$?
+  local err_text=""
+  err_text="$(cat "$err_file" 2>/dev/null || true)"
+  rm -f "$err_file"
+
+  if echo "$err_text" | grep -qiE "Cannot find module .*pm2|ProcessContainerFork\\.js|could not determine executable to run|pm2: not found"; then
+    log "pm2 missing/broken detected, reinstall pm2 and retry once"
+    (cd "$SERVICE_DIR" && npm install pm2@^7.0.1 --no-save)
+    (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@")
+    return $?
+  fi
+
+  echo "$err_text" >&2
+  return "$exit_code"
 }
 
 is_truthy() {
