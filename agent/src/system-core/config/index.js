@@ -32,6 +32,8 @@ export {
   SKILL_ACTION_ALIASES,
   DOC2DATA_FORMAT,
   DOC2DATA_FORMAT_ALIASES,
+  DOC2DATA_PARSE_ENGINE,
+  DOC2DATA_PARSE_ENGINE_ALIASES,
   MULTIMODAL_SCOPE,
   CONTEXT_SECTION,
   CONTEXT_SECTION_ALIASES,
@@ -45,5 +47,6 @@ export {
   normalizeMcpServerType,
   normalizeSkillAction,
   normalizeDoc2DataFormat,
+  normalizeDoc2DataParseEngine,
   normalizeContextSection,
 } from "./core/enums.js";

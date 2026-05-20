@@ -26,6 +26,38 @@ import {
   translateI18nText,
 } from "./shared.js";
 
+function resolvePlanningToolCatalog(ctx = {}, locale = LOCALE.ZH_CN) {
+  const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)
+    ? ctx.agentContext.payload.tools.registry
+    : [];
+  const fallbackDescription = locale === LOCALE.EN_US ? "(no description)" : "（无说明）";
+  const catalog = [];
+  const seenNames = new Set();
+  for (const toolItem of registry) {
+    const name = String(toolItem?.name || "").trim();
+    if (!name || seenNames.has(name)) continue;
+    const description = String(toolItem?.description || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    catalog.push({
+      name,
+      description: description || fallbackDescription,
+    });
+    seenNames.add(name);
+  }
+  return catalog;
+}
+
+function buildPlanningToolCatalogPrompt(ctx = {}, locale = LOCALE.ZH_CN) {
+  const catalog = resolvePlanningToolCatalog(ctx, locale);
+  return [
+    translateI18nText(locale, "planningPromptToolsHeader"),
+    "```json",
+    JSON.stringify(catalog, null, 2),
+    "```",
+  ].join("\n");
+}
+
 function maybeInjectPlanningPrompt(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -44,6 +76,7 @@ function maybeInjectPlanningPrompt(ctx = {}) {
       }),
       translateI18nText(locale, "planningPromptLine3"),
       translateI18nText(locale, "planningPromptLine4"),
+      buildPlanningToolCatalogPrompt(ctx, locale),
     ].join("\n"),
   });
   state.flags.planningPromptInjected = true;
@@ -508,6 +541,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
     }),
     translateI18nText(locale, "planningPromptLine3"),
     translateI18nText(locale, "planningPromptLine4"),
+    buildPlanningToolCatalogPrompt(ctx, locale),
     "",
     JSON.stringify(
       {

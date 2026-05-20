@@ -84,6 +84,17 @@ export function buildContextMessages(
         name: String(attachmentItem?.name || "").trim(),
         path: String(attachmentItem?.path || "").trim(),
         relativePath: String(attachmentItem?.relativePath || "").trim(),
+        parsedResultAttachmentId: String(
+          attachmentItem?.parsedResultAttachmentId || "",
+        ).trim(),
+        parsedResultPath: String(attachmentItem?.parsedResultPath || "").trim(),
+        parsedResultRelativePath: String(
+          attachmentItem?.parsedResultRelativePath || "",
+        ).trim(),
+        parsedResultTool: String(attachmentItem?.parsedResultTool || "").trim(),
+        parsedResultUpdatedAt: String(
+          attachmentItem?.parsedResultUpdatedAt || "",
+        ).trim(),
       })),
     };
     return JSON.stringify(payload, null, 2);

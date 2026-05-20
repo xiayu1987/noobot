@@ -274,7 +274,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "doc_to_data": {
     "description": {
       "key": "tools.doc2data.description",
-      "text": "Extract document or image content into text data. Input filePath (optional prompt, dpi, imageFormat). Returns document parsing result."
+      "text": "Extract document content into text data. Input filePath (optional prompt, dpi, parseEngine). parseEngine supports libreoffice/vision and defaults to libreoffice."
     },
     "params": {
       "dpi": {
@@ -285,9 +285,9 @@ export const TOOL_SCHEMA_BY_TOOL = {
         "key": "tools.doc2data.fieldFilePath",
         "text": "Document path."
       },
-      "imageFormat": {
-        "key": "tools.doc2data.fieldImageFormat",
-        "text": "Image format (optional)."
+      "parseEngine": {
+        "key": "tools.doc2data.fieldParseEngine",
+        "text": "Parse engine (optional): libreoffice or vision. Default is libreoffice."
       },
       "prompt": {
         "key": "tools.doc2data.fieldPrompt",
@@ -300,14 +300,20 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "doc2img.unsupportedFileType": "unsupported file type",
       "tools.doc2data.batchPrompt": (params = {}) =>
     `This is image batch ${Number(params.batchIndex || 1)}, page range ${String(params.range || "")}. Output in page order.`,
-      "tools.doc2data.extractPrompt": "Extract all readable text from the images, keep original structure, and do not fabricate content.",
+      "tools.doc2data.extractPrompt": "Extract all readable text from the document, preserve original structure, and do not fabricate content.",
+      "tools.doc2data.imageFileUseMedia2Data": "Image files should be parsed with the media2data tool.",
+      "tools.doc2data.libreofficeParseFailed": "LibreOffice document parsing failed. You can try parseEngine=vision.",
+      "tools.doc2data.libreofficeUnavailable": "LibreOffice parsing is unavailable. Install dependencies or use parseEngine=vision.",
       "tools.doc2data.noImagesProduced": "no images produced"
+      ,
+      "tools.doc2data.unsupportedParseEngine": (params = {}) =>
+    `Unsupported parseEngine: ${String(params.parseEngine || "")}. Allowed values: libreoffice / vision.`
     }
   },
   "media_to_data": {
     "description": {
       "key": "tools.media2data.description",
-      "text": "Extract audio or video content into text data. Input filePath (optional prompt). Returns parsed media result."
+      "text": "Extract image, audio, or video content into text data. Input filePath (optional prompt). Returns parsed media result."
     },
     "params": {
       "filePath": {

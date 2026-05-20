@@ -124,7 +124,8 @@
       "switch_web_mode": "browser_simulate"
     },
     "doc_to_data": {
-      "enabled": true
+      "enabled": true,
+      "parse_engine": "libreoffice"
     },
     "process_content_task": {
       "enabled": true,

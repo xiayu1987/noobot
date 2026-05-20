@@ -36,6 +36,17 @@ export async function resolveAttachments({
       size: safeNum(attachmentItem?.size),
       path: String(attachmentItem?.path || ""),
       relativePath: String(attachmentItem?.relativePath || ""),
+      parsedResultAttachmentId: String(
+        attachmentItem?.parsedResultAttachmentId || "",
+      ).trim(),
+      parsedResultPath: String(attachmentItem?.parsedResultPath || "").trim(),
+      parsedResultRelativePath: String(
+        attachmentItem?.parsedResultRelativePath || "",
+      ).trim(),
+      parsedResultTool: String(attachmentItem?.parsedResultTool || "").trim(),
+      parsedResultUpdatedAt: String(
+        attachmentItem?.parsedResultUpdatedAt || "",
+      ).trim(),
     }));
   }
   return attachmentService.ingest({

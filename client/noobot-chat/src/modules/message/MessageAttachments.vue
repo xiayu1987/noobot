@@ -16,6 +16,34 @@ defineProps({
 
 const emit = defineEmits(["preview", "download"]);
 const { translate } = useLocale();
+
+function emitPreviewParsedResult(attachmentItem = {}) {
+  const url = String(attachmentItem?.parsedResultUrl || "").trim();
+  if (!url) return;
+  emit("preview", {
+    ...attachmentItem,
+    attachmentId: String(attachmentItem?.parsedResultAttachmentId || "").trim(),
+    name:
+      String(attachmentItem?.parsedResultName || "").trim() ||
+      translate("message.parsedResultDefaultName"),
+    mimeType: "text/markdown",
+    previewUrl: url,
+  });
+}
+
+function emitDownloadParsedResult(attachmentItem = {}) {
+  const url = String(attachmentItem?.parsedResultUrl || "").trim();
+  if (!url) return;
+  emit("download", {
+    ...attachmentItem,
+    attachmentId: String(attachmentItem?.parsedResultAttachmentId || "").trim(),
+    name:
+      String(attachmentItem?.parsedResultName || "").trim() ||
+      translate("message.parsedResultDefaultName"),
+    mimeType: "text/markdown",
+    previewUrl: url,
+  });
+}
 </script>
 
 <template>
@@ -58,6 +86,28 @@ const { translate } = useLocale();
       <div class="file-meta">
         <div class="file-name">{{ attachmentItem.name }}</div>
         <div class="file-size">{{ formatFileSize(attachmentItem.size || 0) }}</div>
+        <div
+          v-if="attachmentItem.parsedResultAttachmentId && attachmentItem.parsedResultUrl"
+          class="parsed-result-row"
+        >
+          <span class="parsed-result-label">{{ translate("message.parsedResultLabel") }}</span>
+          <button
+            type="button"
+            class="parsed-result-action noobot-flat-icon-btn"
+            :title="translate('message.previewParsedResult', { name: attachmentItem.parsedResultName || translate('message.parsedResultDefaultName') })"
+            @click="emitPreviewParsedResult(attachmentItem)"
+          >
+            {{ translate("message.previewParsedResultShort") }}
+          </button>
+          <button
+            type="button"
+            class="parsed-result-action noobot-flat-icon-btn"
+            :title="translate('message.downloadParsedResult', { name: attachmentItem.parsedResultName || translate('message.parsedResultDefaultName') })"
+            @click="emitDownloadParsedResult(attachmentItem)"
+          >
+            {{ translate("message.downloadParsedResultShort") }}
+          </button>
+        </div>
       </div>
       <button
         type="button"
@@ -145,6 +195,23 @@ const { translate } = useLocale();
 .file-size {
   font-size: var(--noobot-msg-meta-font-size);
   color: var(--noobot-msg-file-size);
+}
+.parsed-result-row {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.parsed-result-label {
+  font-size: var(--noobot-msg-meta-font-size);
+  color: var(--noobot-msg-file-size);
+}
+.parsed-result-action {
+  font-size: var(--noobot-msg-meta-font-size);
+  padding: 2px 6px;
+  border-radius: var(--noobot-radius-xs);
+  color: var(--noobot-msg-file-name);
 }
 .attachment-download-btn {
   border-radius: var(--noobot-radius-xs);

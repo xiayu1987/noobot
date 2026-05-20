@@ -4,10 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile, stat } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
+import { promisify } from "node:util";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { normalizeDoc2DataFormat, DOC2DATA_FORMAT } from "../../config/core/enums.js";
+import {
+  DOC2DATA_PARSE_ENGINE,
+  normalizeDoc2DataParseEngine,
+} from "../../config/core/enums.js";
+import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { MIME_TYPE } from "../../constants/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
   invokeModelWithTextAndAttachments,
@@ -18,7 +25,13 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import {
+  ARTIFACT_GENERATION_SOURCE,
+  TOOL_ATTACHMENT_SOURCE,
+  TOOL_DATA_MODE,
+  TOOL_NAME,
+  TOOL_RESULT_STATUS,
+} from "../constants/index.js";
 import {
   DEFAULT_MIME_TYPE,
   IMAGE_EXTENSION_TO_MIME,
@@ -30,8 +43,30 @@ function getRuntime(agentContext) {
   return agentContext?.runtime || {};
 }
 
+const require = createRequire(import.meta.url);
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_DIRECT_TEXT_BYTES = 8 * 1024 * 1024;
+
+let libreOfficeConvertAsync = null;
+
+function resolveLibreOfficeConvertAsync() {
+  if (typeof libreOfficeConvertAsync === "function") {
+    return libreOfficeConvertAsync;
+  }
+  try {
+    const libreOfficeModule = require("libreoffice");
+    libreOfficeConvertAsync = promisify(libreOfficeModule.convert);
+    return libreOfficeConvertAsync;
+  } catch {
+    try {
+      const libreOfficeConvertModule = require("libreoffice-convert");
+      libreOfficeConvertAsync = promisify(libreOfficeConvertModule.convert);
+      return libreOfficeConvertAsync;
+    } catch {
+      return null;
+    }
+  }
+}
 
 function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
   const extension = path.extname(String(filePath || "")).toLowerCase();
@@ -118,6 +153,62 @@ function resolveDoc2DataPrompt(runtime = {}, prompt = "") {
   return tTool(runtime, "tools.doc2data.extractPrompt");
 }
 
+function resolveDoc2DataParseEngine(
+  runtime = {},
+  parseEngine = "",
+  userConfig = {},
+  globalConfig = {},
+) {
+  const inputParseEngine = String(parseEngine || "").trim();
+  const configuredParseEngine =
+    userConfig?.tools?.doc_to_data?.parse_engine ||
+    userConfig?.tools?.doc_to_data?.parseEngine ||
+    globalConfig?.tools?.doc_to_data?.parse_engine ||
+    globalConfig?.tools?.doc_to_data?.parseEngine ||
+    "";
+  const parseEngineCandidate = inputParseEngine || String(configuredParseEngine || "").trim();
+  const normalizedParseEngine = normalizeDoc2DataParseEngine(parseEngineCandidate);
+  if (!normalizedParseEngine && parseEngineCandidate) {
+    throw recoverableToolError(
+      tTool(runtime, "tools.doc2data.unsupportedParseEngine", {
+        parseEngine: parseEngineCandidate,
+      }),
+      {
+        code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+        details: { parseEngine: parseEngineCandidate },
+      },
+    );
+  }
+  return normalizedParseEngine || DOC2DATA_PARSE_ENGINE.LIBREOFFICE;
+}
+
+function isImageInputFile(filePath = "") {
+  const extension = path.extname(String(filePath || "")).toLowerCase();
+  return IMAGE_EXTENSIONS.has(extension);
+}
+
+function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}) {
+  const normalizedInputPath = String(filePath || "").trim();
+  const runtimeAttachmentMetas = Array.isArray(agentContext?.runtime?.attachmentMetas)
+    ? agentContext.runtime.attachmentMetas
+    : [];
+  if (!normalizedInputPath || !runtimeAttachmentMetas.length) return null;
+  const inputBaseName = path.basename(normalizedInputPath);
+  const inputAttachmentId = String(inputBaseName || "").split(".")[0];
+  return (
+    runtimeAttachmentMetas.find((attachmentItem) => {
+      const metaPath = String(attachmentItem?.path || "").trim();
+      if (!metaPath) return false;
+      const metaBaseName = path.basename(metaPath);
+      const metaAttachmentId = String(attachmentItem?.attachmentId || "").trim();
+      return (
+        (inputBaseName && metaBaseName === inputBaseName) ||
+        (inputAttachmentId && metaAttachmentId && inputAttachmentId === metaAttachmentId)
+      );
+    }) || null
+  );
+}
+
 async function buildImageBatches(imagePaths) {
   const inputs = await Promise.all(
     imagePaths.map(async (imagePath, pageIndex) => {
@@ -149,6 +240,120 @@ async function buildImageBatches(imagePaths) {
   return batches;
 }
 
+async function parseDocumentToTextViaLibreOffice({
+  runtime = {},
+  inputFile = "",
+}) {
+  const converter = resolveLibreOfficeConvertAsync();
+  if (!converter) {
+    throw recoverableToolError(tTool(runtime, "tools.doc2data.libreofficeUnavailable"), {
+      code: ERROR_CODE.RECOVERABLE_TOOL_ERROR,
+      details: { input: inputFile },
+    });
+  }
+  try {
+    const inputBuffer = await readFile(inputFile);
+    if (!inputBuffer.length) {
+      return { text: "", bytes: 0 };
+    }
+    const outputBuffer = await converter(inputBuffer, ".txt", undefined);
+    const text = Buffer.from(outputBuffer || "").toString("utf8").replace(/^\uFEFF/, "");
+    return {
+      text,
+      bytes: Number(outputBuffer?.length || 0),
+    };
+  } catch (error) {
+    throw recoverableToolError(tTool(runtime, "tools.doc2data.libreofficeParseFailed"), {
+      code: ERROR_CODE.RECOVERABLE_TOOL_ERROR,
+      details: {
+        input: inputFile,
+        cause: error?.message || String(error || ""),
+      },
+    });
+  }
+}
+
+function sanitizeArtifactBaseName(input = "", fallback = "doc2data_result") {
+  const normalized = String(input || "").trim();
+  if (!normalized) return fallback;
+  return normalized.replace(/[^\w.-]+/g, "_");
+}
+
+async function persistDoc2DataTextAttachment({
+  runtime = {},
+  inputFile = "",
+  text = "",
+  mode = "",
+}) {
+  const attachmentService = runtime?.attachmentService || null;
+  const userId = String(runtime?.userId || "").trim();
+  if (!attachmentService || !userId) return [];
+  const content = String(text || "");
+  const inputBaseName = sanitizeArtifactBaseName(
+    path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
+  );
+  const modeSuffix = sanitizeArtifactBaseName(mode || "result", "result");
+  const artifactName = `${inputBaseName}.doc2data.${modeSuffix}.md`;
+  try {
+    const savedAttachmentRecords = await attachmentService.ingestGeneratedArtifacts({
+      userId,
+      sessionId: String(
+        runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
+      ).trim(),
+      attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
+      artifacts: [
+        {
+          name: artifactName,
+          mimeType: MIME_TYPE.TEXT_MARKDOWN,
+          contentBase64: Buffer.from(content, "utf8").toString("base64"),
+        },
+      ],
+      generationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+    });
+    return mapAttachmentRecordsToMetas(savedAttachmentRecords, {
+      fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
+      fallbackGenerationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+      userId,
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function backwriteParsedResultToSourceAttachment({
+  runtime = {},
+  sourceAttachmentMeta = null,
+  parsedAttachmentMeta = null,
+}) {
+  const sourceAttachmentId = String(sourceAttachmentMeta?.attachmentId || "").trim();
+  if (!sourceAttachmentId || !parsedAttachmentMeta) return null;
+  const attachmentService = runtime?.attachmentService || null;
+  const userId = String(runtime?.userId || "").trim();
+  if (!attachmentService || !userId) return null;
+  try {
+    const updatedSourceAttachment = await attachmentService.linkParsedResultToAttachment({
+      userId,
+      sourceAttachmentId,
+      parsedAttachmentMeta,
+      toolName: TOOL_NAME.DOC_TO_DATA,
+    });
+    if (Array.isArray(runtime?.attachmentMetas)) {
+      const sourceAttachmentIndex = runtime.attachmentMetas.findIndex(
+        (item) => String(item?.attachmentId || "").trim() === sourceAttachmentId,
+      );
+      if (sourceAttachmentIndex >= 0) {
+        runtime.attachmentMetas[sourceAttachmentIndex] = {
+          ...(runtime.attachmentMetas[sourceAttachmentIndex] || {}),
+          ...(updatedSourceAttachment || {}),
+        };
+      }
+    }
+    return updatedSourceAttachment;
+  } catch {
+    return null;
+  }
+}
+
 export function createDoc2DataTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const basePath =
@@ -170,15 +375,18 @@ export function createDoc2DataTool({ agentContext }) {
         .number()
         .optional()
         .describe(tTool(runtime, "tools.doc2data.fieldDpi")),
-      imageFormat: z
+      parseEngine: z
         .string()
         .optional()
-        .describe(tTool(runtime, "tools.doc2data.fieldImageFormat")),
+        .describe(tTool(runtime, "tools.doc2data.fieldParseEngine")),
     }),
-    func: async ({ filePath, prompt, dpi, imageFormat }) => {
-      const normalizedFormat = normalizeDoc2DataFormat(imageFormat);
-      const resolvedFormat = normalizedFormat || DOC2DATA_FORMAT.PNG;
-
+    func: async ({ filePath, prompt, dpi, parseEngine }) => {
+      const resolvedParseEngine = resolveDoc2DataParseEngine(
+        runtime,
+        parseEngine,
+        userConfig,
+        globalConfig,
+      );
       const normalizedDpi = Number(dpi);
       const resolvedDpi =
         Number.isFinite(normalizedDpi) && normalizedDpi > 0
@@ -190,9 +398,30 @@ export function createDoc2DataTool({ agentContext }) {
         fieldName: "filePath",
         mustExist: true,
       });
+      const sourceAttachmentMeta = resolveDocInputAttachmentMeta(inputFile, agentContext);
+      if (isImageInputFile(inputFile)) {
+        throw recoverableToolError(
+          tTool(runtime, "tools.doc2data.imageFileUseMedia2Data"),
+          {
+            code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
+            details: { input: inputFile },
+          },
+        );
+      }
 
       const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
       if (directTextDocument) {
+        const attachmentMetas = await persistDoc2DataTextAttachment({
+          runtime,
+          inputFile,
+          text: directTextDocument.text,
+          mode: TOOL_DATA_MODE.DIRECT_TEXT,
+        });
+        const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
+          runtime,
+          sourceAttachmentMeta,
+          parsedAttachmentMeta: attachmentMetas[0] || null,
+        });
         return toToolJsonResult(
           TOOL_NAME.DOC_TO_DATA,
           {
@@ -201,9 +430,56 @@ export function createDoc2DataTool({ agentContext }) {
             mode: TOOL_DATA_MODE.DIRECT_TEXT,
             input: inputFile,
             text: directTextDocument.text,
+            attachmentMetas,
+            sourceAttachmentMeta: updatedSourceAttachment || null,
             summary: {
               bytes: Number(directTextDocument.bytes || 0),
+              parse_engine: resolvedParseEngine,
+              parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
+              parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+              source_attachment_backwritten: Boolean(updatedSourceAttachment),
+              saved_attachment_count: attachmentMetas.length,
               text_length: directTextDocument.text.length,
+            },
+          },
+          true,
+        );
+      }
+
+      if (resolvedParseEngine === DOC2DATA_PARSE_ENGINE.LIBREOFFICE) {
+        const libreOfficeResult = await parseDocumentToTextViaLibreOffice({
+          runtime,
+          inputFile,
+        });
+        const attachmentMetas = await persistDoc2DataTextAttachment({
+          runtime,
+          inputFile,
+          text: libreOfficeResult.text,
+          mode: "libreoffice_text",
+        });
+        const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
+          runtime,
+          sourceAttachmentMeta,
+          parsedAttachmentMeta: attachmentMetas[0] || null,
+        });
+        return toToolJsonResult(
+          TOOL_NAME.DOC_TO_DATA,
+          {
+            ok: true,
+            status: TOOL_RESULT_STATUS.COMPLETED,
+            mode: "libreoffice_text",
+            input: inputFile,
+            text: libreOfficeResult.text,
+            attachmentMetas,
+            sourceAttachmentMeta: updatedSourceAttachment || null,
+            summary: {
+              bytes: Number(libreOfficeResult.bytes || 0),
+              parse_engine: resolvedParseEngine,
+              parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
+              parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+              source_attachment_backwritten: Boolean(updatedSourceAttachment),
+              saved_attachment_count: attachmentMetas.length,
+              text_length: libreOfficeResult.text.length,
             },
           },
           true,
@@ -220,7 +496,7 @@ export function createDoc2DataTool({ agentContext }) {
       const converted = await convertDocumentToImages({
         inputFile,
         outputRoot,
-        format: resolvedFormat,
+        format: "png",
         dpi: resolvedDpi,
       });
 
@@ -277,6 +553,17 @@ export function createDoc2DataTool({ agentContext }) {
       const totalImageBytes = imageBatches
         .flatMap((batch) => batch)
         .reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
+      const attachmentMetas = await persistDoc2DataTextAttachment({
+        runtime,
+        inputFile,
+        text: mergedText,
+        mode: TOOL_DATA_MODE.IMAGE_MODEL,
+      });
+      const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
+        runtime,
+        sourceAttachmentMeta,
+        parsedAttachmentMeta: attachmentMetas[0] || null,
+      });
 
       return toToolJsonResult(
         TOOL_NAME.DOC_TO_DATA,
@@ -288,14 +575,21 @@ export function createDoc2DataTool({ agentContext }) {
           pdfPath: converted.pdfPath,
           imageCount: images.length,
           text: mergedText,
+          attachmentMetas,
+          sourceAttachmentMeta: updatedSourceAttachment || null,
           model: {
             alias: modelSpec?.alias || "",
             name: modelSpec?.model || "",
           },
           summary: {
             batch_count: batchResults.length,
+            parse_engine: resolvedParseEngine,
+            parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
+            parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+            source_attachment_backwritten: Boolean(updatedSourceAttachment),
             total_image_bytes: totalImageBytes,
             batch_max_bytes: MAX_BATCH_BYTES,
+            saved_attachment_count: attachmentMetas.length,
             text_length: mergedText.length,
             pages: batchResults.flatMap((item) => item.pages || []),
           },

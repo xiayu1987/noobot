@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
   invokeModelWithTextAndAttachments,
@@ -19,7 +20,12 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import {
+  ARTIFACT_GENERATION_SOURCE,
+  TOOL_ATTACHMENT_SOURCE,
+  TOOL_NAME,
+  TOOL_RESULT_STATUS,
+} from "../constants/index.js";
 import {
   AUDIO_EXTENSION_TO_MIME,
   AUDIO_EXTENSIONS,
@@ -52,7 +58,12 @@ function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = 
   const runtimeAttachmentMetas = Array.isArray(agentContext?.runtime?.attachmentMetas)
     ? agentContext.runtime.attachmentMetas
     : [];
-  if (!normalizedInputPath || !runtimeAttachmentMetas.length) return normalizedInputPath;
+  if (!normalizedInputPath || !runtimeAttachmentMetas.length) {
+    return {
+      resolvedInputPath: normalizedInputPath,
+      sourceAttachmentMeta: null,
+    };
+  }
   const inputBaseName = path.basename(normalizedInputPath);
   const inputAttachmentId = String(inputBaseName || "").split(".")[0];
   const matchedMeta = runtimeAttachmentMetas.find((attachmentItem) => {
@@ -66,7 +77,10 @@ function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = 
     );
   });
   const matchedMetaPath = normalizeMediaInputPath(String(matchedMeta?.path || ""));
-  return matchedMetaPath || normalizedInputPath;
+  return {
+    resolvedInputPath: matchedMetaPath || normalizedInputPath,
+    sourceAttachmentMeta: matchedMeta || null,
+  };
 }
 
 function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
@@ -259,6 +273,87 @@ function resolveMedia2DataPromptByMediaType({
   return tTool(runtime, "tools.media2data.extractImagePrompt");
 }
 
+function sanitizeArtifactBaseName(input = "", fallback = "media2data_result") {
+  const normalized = String(input || "").trim();
+  if (!normalized) return fallback;
+  return normalized.replace(/[^\w.-]+/g, "_");
+}
+
+async function persistMedia2DataTextAttachment({
+  runtime = {},
+  inputFile = "",
+  mediaType = "",
+  text = "",
+}) {
+  const attachmentService = runtime?.attachmentService || null;
+  const userId = String(runtime?.userId || "").trim();
+  if (!attachmentService || !userId) return [];
+  const content = String(text || "");
+  const inputBaseName = sanitizeArtifactBaseName(
+    path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
+  );
+  const mediaTypeSuffix = sanitizeArtifactBaseName(mediaType || "media", "media");
+  const artifactName = `${inputBaseName}.media2data.${mediaTypeSuffix}.md`;
+  try {
+    const savedAttachmentRecords = await attachmentService.ingestGeneratedArtifacts({
+      userId,
+      sessionId: String(
+        runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
+      ).trim(),
+      attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
+      artifacts: [
+        {
+          name: artifactName,
+          mimeType: MIME_TYPE.TEXT_MARKDOWN,
+          contentBase64: Buffer.from(content, "utf8").toString("base64"),
+        },
+      ],
+      generationSource: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
+    });
+    return mapAttachmentRecordsToMetas(savedAttachmentRecords, {
+      fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
+      fallbackGenerationSource: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
+      userId,
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function backwriteParsedResultToSourceAttachment({
+  runtime = {},
+  sourceAttachmentMeta = null,
+  parsedAttachmentMeta = null,
+}) {
+  const sourceAttachmentId = String(sourceAttachmentMeta?.attachmentId || "").trim();
+  if (!sourceAttachmentId || !parsedAttachmentMeta) return null;
+  const attachmentService = runtime?.attachmentService || null;
+  const userId = String(runtime?.userId || "").trim();
+  if (!attachmentService || !userId) return null;
+  try {
+    const updatedSourceAttachment = await attachmentService.linkParsedResultToAttachment({
+      userId,
+      sourceAttachmentId,
+      parsedAttachmentMeta,
+      toolName: TOOL_NAME.MEDIA_TO_DATA,
+    });
+    if (Array.isArray(runtime?.attachmentMetas)) {
+      const sourceAttachmentIndex = runtime.attachmentMetas.findIndex(
+        (item) => String(item?.attachmentId || "").trim() === sourceAttachmentId,
+      );
+      if (sourceAttachmentIndex >= 0) {
+        runtime.attachmentMetas[sourceAttachmentIndex] = {
+          ...(runtime.attachmentMetas[sourceAttachmentIndex] || {}),
+          ...(updatedSourceAttachment || {}),
+        };
+      }
+    }
+    return updatedSourceAttachment;
+  } catch {
+    return null;
+  }
+}
+
 export function createMedia2DataTool({ agentContext }) {
   const runtime = getRuntime(agentContext);
   const globalConfig = runtime.globalConfig || {};
@@ -278,7 +373,8 @@ export function createMedia2DataTool({ agentContext }) {
         .describe(tTool(runtime, "tools.media2data.fieldPrompt")),
     }),
     func: async ({ filePath, prompt }) => {
-      const resolvedInputHintPath = resolveMediaInputPathFromAttachmentMetas(
+      const { resolvedInputPath: resolvedInputHintPath, sourceAttachmentMeta } =
+        resolveMediaInputPathFromAttachmentMetas(
         filePath,
         agentContext,
       );
@@ -362,6 +458,18 @@ export function createMedia2DataTool({ agentContext }) {
         userConfig,
         streaming: false,
       });
+      const extractedText = String(modelResult.text || "");
+      const attachmentMetas = await persistMedia2DataTextAttachment({
+        runtime,
+        inputFile,
+        mediaType,
+        text: extractedText,
+      });
+      const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
+        runtime,
+        sourceAttachmentMeta,
+        parsedAttachmentMeta: attachmentMetas[0] || null,
+      });
       return toToolJsonResult(
         TOOL_NAME.MEDIA_TO_DATA,
         {
@@ -369,14 +477,20 @@ export function createMedia2DataTool({ agentContext }) {
           status: TOOL_RESULT_STATUS.COMPLETED,
           mode: `${mediaType}_model`,
           input: inputFile,
-          text: modelResult.text,
+          text: extractedText,
+          attachmentMetas,
+          sourceAttachmentMeta: updatedSourceAttachment || null,
           model: {
             alias: modelSpec?.alias || "",
             name: modelSpec?.model || "",
           },
           summary: {
             media_type: mediaType,
-            text_length: modelResult.text.length,
+            parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
+            parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+            source_attachment_backwritten: Boolean(updatedSourceAttachment),
+            saved_attachment_count: attachmentMetas.length,
+            text_length: extractedText.length,
           },
         },
         true,

@@ -10,6 +10,13 @@ function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function resolveBaseName(filePath = "") {
+  const normalized = String(filePath || "").trim().replaceAll("\\", "/");
+  if (!normalized) return "";
+  const parts = normalized.split("/");
+  return String(parts[parts.length - 1] || "").trim();
+}
+
 function buildModelRunLabel(messageItem = {}) {
   const modelAlias = String(messageItem?.modelAlias || "").trim();
   const modelName = String(
@@ -38,6 +45,24 @@ function normalizeAttachment(
         attachmentSource,
       })
     : "";
+  const parsedResultAttachmentId = String(
+    attachmentItem?.parsedResultAttachmentId || "",
+  ).trim();
+  const parsedResultPath = String(attachmentItem?.parsedResultPath || "").trim();
+  const parsedResultRelativePath = String(
+    attachmentItem?.parsedResultRelativePath || "",
+  ).trim();
+  const parsedResultUrl = parsedResultAttachmentId
+    ? buildAttachmentUrl({
+        userId,
+        attachmentId: parsedResultAttachmentId,
+        apiKey,
+      })
+    : "";
+  const parsedResultName =
+    resolveBaseName(parsedResultRelativePath) ||
+    resolveBaseName(parsedResultPath) ||
+    "";
   return {
     ...attachmentItem,
     sessionId,
@@ -49,6 +74,11 @@ function normalizeAttachment(
       (isImageMime(mimeType) || mimeType.startsWith("video/"))
         ? attachmentUrl
         : ""),
+    parsedResultAttachmentId,
+    parsedResultPath,
+    parsedResultRelativePath,
+    parsedResultUrl,
+    parsedResultName,
   };
 }
 

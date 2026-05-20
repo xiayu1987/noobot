@@ -79,5 +79,10 @@ export function mapAttachmentRecordsToMetas(
     relativePath: safeStr(item?.relativePath),
     generatedByModel: item?.generatedByModel === true,
     generationSource: safeStr(item?.generationSource, fallbackGenerationSource),
+    parsedResultAttachmentId: safeStr(item?.parsedResultAttachmentId),
+    parsedResultPath: safeStr(item?.parsedResultPath),
+    parsedResultRelativePath: safeStr(item?.parsedResultRelativePath),
+    parsedResultTool: safeStr(item?.parsedResultTool),
+    parsedResultUpdatedAt: safeStr(item?.parsedResultUpdatedAt),
   }));
 }

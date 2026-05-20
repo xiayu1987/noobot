@@ -28,6 +28,11 @@ export function normalizeRelativePath(basePath, absolutePath) {
  * @returns {object}
  */
 export function buildPublicRecord(basePath, record) {
+  const parsedResultAttachmentId = safeStr(record?.parsedResultAttachmentId);
+  const parsedResultPath = safeStr(record?.parsedResultPath);
+  const parsedResultRelativePath = safeStr(record?.parsedResultRelativePath);
+  const parsedResultTool = safeStr(record?.parsedResultTool);
+  const parsedResultUpdatedAt = safeStr(record?.parsedResultUpdatedAt);
   return {
     attachmentId: safeStr(record.attachmentId),
     name: safeStr(record.name),
@@ -40,6 +45,15 @@ export function buildPublicRecord(basePath, record) {
     attachmentSource: safeStr(record.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
     generatedByModel: record?.generatedByModel === true,
     generationSource: safeStr(record.generationSource),
+    ...(parsedResultAttachmentId
+      ? {
+          parsedResultAttachmentId,
+          parsedResultPath,
+          parsedResultRelativePath,
+          parsedResultTool,
+          parsedResultUpdatedAt,
+        }
+      : {}),
   };
 }
 
