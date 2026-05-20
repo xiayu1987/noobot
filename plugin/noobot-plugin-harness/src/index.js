@@ -89,6 +89,10 @@ const HARNESS_FSM_ALLOWED_TRANSITIONS = Object.freeze({
 
 const HARNESS_FSM_TERMINAL_STATES = new Set([HARNESS_FSM_STATES.DONE, HARNESS_FSM_STATES.FAILED]);
 const fsmStateCache = new Map(); // runId -> state
+const fsmStateLastAccessed = new Map(); // runId -> timestamp
+const FSM_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+const FSM_CACHE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+let fsmCacheCleanupTimer = null;
 const HARNESS_FSM_EFFECTS = Object.freeze({
   AUDIT_RESUME: "audit_resume",
   AUDIT_TRANSITION: "audit_transition",
@@ -96,6 +100,45 @@ const HARNESS_FSM_EFFECTS = Object.freeze({
   CACHE_SET: "cache_set",
   CACHE_DELETE: "cache_delete",
 });
+
+function touchFsmState(runId = "") {
+  if (!runId) return;
+  fsmStateLastAccessed.set(runId, Date.now());
+}
+
+function getFsmState(runId = "") {
+  if (!runId || !fsmStateCache.has(runId)) return null;
+  touchFsmState(runId);
+  return fsmStateCache.get(runId);
+}
+
+function setFsmState(runId = "", state = HARNESS_FSM_STATES.IDLE) {
+  if (!runId) return;
+  fsmStateCache.set(runId, state);
+  touchFsmState(runId);
+}
+
+function deleteFsmState(runId = "") {
+  if (!runId) return;
+  fsmStateCache.delete(runId);
+  fsmStateLastAccessed.delete(runId);
+}
+
+function cleanupStaleFsmStates() {
+  const now = Date.now();
+  for (const [runId, lastAccessed] of fsmStateLastAccessed.entries()) {
+    if (now - lastAccessed <= FSM_CACHE_MAX_AGE_MS) continue;
+    deleteFsmState(runId);
+  }
+}
+
+function startFsmStateCleanupTimer() {
+  if (fsmCacheCleanupTimer) return;
+  fsmCacheCleanupTimer = setInterval(cleanupStaleFsmStates, FSM_CACHE_CLEANUP_INTERVAL_MS);
+  if (fsmCacheCleanupTimer.unref) fsmCacheCleanupTimer.unref();
+}
+
+startFsmStateCleanupTimer();
 
 const DEFAULT_OPTIONS = Object.freeze({
   enabled: true,
@@ -344,14 +387,15 @@ async function resolveCurrentFsmState(paths, options = {}) {
   if (!paths?.runId || options.fsmEnabled === false) {
     return { state: HARNESS_FSM_STATES.IDLE, resumed: false };
   }
-  if (fsmStateCache.has(paths.runId)) {
-    return { state: fsmStateCache.get(paths.runId), resumed: false };
+  const cached = getFsmState(paths.runId);
+  if (cached) {
+    return { state: cached, resumed: false };
   }
   const manifest = await readJson(paths.manifest, {});
   const fromManifest = normalizeFsmState(manifest?.fsmStatus || manifest?.fsm?.state);
   const inferred = fromManifest !== HARNESS_FSM_STATES.IDLE ? fromManifest : statusToFsmState(manifest?.status);
   const state = normalizeFsmState(inferred);
-  fsmStateCache.set(paths.runId, state);
+  setFsmState(paths.runId, state);
   const resumed = state !== HARNESS_FSM_STATES.IDLE && !HARNESS_FSM_TERMINAL_STATES.has(state);
   return { state, resumed };
 }
@@ -463,11 +507,11 @@ async function applyFsmTransitionEffects(paths, ctx = {}, options = {}, plan = {
       continue;
     }
     if (action.type === HARNESS_FSM_EFFECTS.CACHE_SET) {
-      if (payload.runId) fsmStateCache.set(payload.runId, payload.state);
+      if (payload.runId) setFsmState(payload.runId, payload.state);
       continue;
     }
     if (action.type === HARNESS_FSM_EFFECTS.CACHE_DELETE) {
-      if (payload.runId) fsmStateCache.delete(payload.runId);
+      if (payload.runId) deleteFsmState(payload.runId);
     }
   }
 }

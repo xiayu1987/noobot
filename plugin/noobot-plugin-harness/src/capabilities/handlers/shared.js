@@ -116,6 +116,57 @@ export const BLOCKED_AGENT_TOOL_NAMES = new Set([
 export const GUIDANCE_WEB_SERVICE_NAME = "web_search_service";
 export const GUIDANCE_WEB_TOOL_NAMES = [TOOL_NAME_SET.CALL_SERVICE];
 export const TASK_ACCEPTANCE_TOOL_NAME = "request_task_acceptance";
+const HARNESS_BUCKET_VERSION = 1;
+
+const DEFAULT_HARNESS_COUNTERS = Object.freeze({
+  llmTurns: 0,
+  consecutiveToolFailures: 0,
+  totalToolFailures: 0,
+});
+
+const DEFAULT_HARNESS_FLAGS = Object.freeze({
+  planningPromptInjected: false,
+  planningCaptured: false,
+  acceptanceRequested: false,
+  checklistArtifactsAttached: false,
+  planningForceToolTemporarilyEnabled: false,
+  planningForceToolOriginalSet: false,
+  planningForceToolOriginal: false,
+  guidanceSummaryMarkPending: false,
+});
+
+const DEFAULT_HARNESS_SIGNALS = Object.freeze({
+  parsedAttachment: false,
+  subtaskStarted: false,
+  subtaskWaited: false,
+  successfulToolCount: 0,
+});
+
+const DEFAULT_HARNESS_PENDING = Object.freeze({
+  guidance: null,
+  summary: false,
+});
+
+function ensureObjectField(target = {}, key = "") {
+  if (!target || !key) return {};
+  const current = target[key];
+  if (!current || typeof current !== "object" || Array.isArray(current)) {
+    target[key] = {};
+  }
+  return target[key];
+}
+
+function ensureArrayField(target = {}, key = "") {
+  if (!target || !key) return [];
+  if (!Array.isArray(target[key])) target[key] = [];
+  return target[key];
+}
+
+function fillMissingDefaults(target = {}, defaults = {}) {
+  for (const [key, value] of Object.entries(defaults)) {
+    if (target[key] === undefined) target[key] = value;
+  }
+}
 
 export function resolveLocale(ctx = {}) {
   const runtime =
@@ -160,92 +211,50 @@ export function ensureHarnessBucket(ctx = {}) {
   const agentContext =
     ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
   if (!agentContext) return null;
-  if (!agentContext.payload || typeof agentContext.payload !== "object") {
-    agentContext.payload = {};
+  const payload = ensureObjectField(agentContext, "payload");
+  const bucket = ensureObjectField(payload, "harness");
+  const state = ensureObjectField(bucket, "state");
+
+  const isFastPathReady =
+    bucket.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
+    state.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
+    Array.isArray(bucket.taskChecklist) &&
+    Array.isArray(bucket.acceptanceReports) &&
+    Array.isArray(bucket.reviewReports) &&
+    Array.isArray(bucket.planningRawOutputs) &&
+    bucket.logs &&
+    typeof bucket.logs === "object" &&
+    Array.isArray(bucket.logs.planning) &&
+    Array.isArray(bucket.logs.guidance) &&
+    Array.isArray(bucket.logs.acceptance) &&
+    Array.isArray(bucket.logs.review);
+
+  if (!isFastPathReady) {
+    const counters = ensureObjectField(state, "counters");
+    const flags = ensureObjectField(state, "flags");
+    const signals = ensureObjectField(state, "signals");
+    const pending = ensureObjectField(state, "pending");
+    fillMissingDefaults(counters, DEFAULT_HARNESS_COUNTERS);
+    fillMissingDefaults(flags, DEFAULT_HARNESS_FLAGS);
+    fillMissingDefaults(signals, DEFAULT_HARNESS_SIGNALS);
+    fillMissingDefaults(pending, DEFAULT_HARNESS_PENDING);
+
+    ensureArrayField(bucket, "taskChecklist");
+    ensureArrayField(bucket, "acceptanceReports");
+    ensureArrayField(bucket, "reviewReports");
+    ensureArrayField(bucket, "planningRawOutputs");
+    if (!("lastPlanningRawOutput" in bucket) || (bucket.lastPlanningRawOutput && typeof bucket.lastPlanningRawOutput !== "object")) {
+      bucket.lastPlanningRawOutput = null;
+    }
+    const logs = ensureObjectField(bucket, "logs");
+    ensureArrayField(logs, "planning");
+    ensureArrayField(logs, "guidance");
+    ensureArrayField(logs, "acceptance");
+    ensureArrayField(logs, "review");
+    bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
+    state.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
   }
-  if (!agentContext.payload.harness || typeof agentContext.payload.harness !== "object") {
-    agentContext.payload.harness = {};
-  }
-  const bucket = agentContext.payload.harness;
-  if (!bucket.state || typeof bucket.state !== "object") {
-    bucket.state = {};
-  }
-  const state = bucket.state;
-  if (!state.counters || typeof state.counters !== "object") {
-    state.counters = {
-      llmTurns: 0,
-      consecutiveToolFailures: 0,
-      totalToolFailures: 0,
-    };
-  }
-  if (!state.flags || typeof state.flags !== "object") {
-    state.flags = {
-      planningPromptInjected: false,
-      planningCaptured: false,
-      acceptanceRequested: false,
-      checklistArtifactsAttached: false,
-      planningForceToolTemporarilyEnabled: false,
-      planningForceToolOriginalSet: false,
-      planningForceToolOriginal: false,
-      guidanceSummaryMarkPending: false,
-    };
-  }
-  if (state.flags.checklistArtifactsAttached === undefined) {
-    state.flags.checklistArtifactsAttached = false;
-  }
-  if (state.flags.planningForceToolTemporarilyEnabled === undefined) {
-    state.flags.planningForceToolTemporarilyEnabled = false;
-  }
-  if (state.flags.planningForceToolOriginalSet === undefined) {
-    state.flags.planningForceToolOriginalSet = false;
-  }
-  if (state.flags.planningForceToolOriginal === undefined) {
-    state.flags.planningForceToolOriginal = false;
-  }
-  if (state.flags.guidanceSummaryMarkPending === undefined) {
-    state.flags.guidanceSummaryMarkPending = false;
-  }
-  if (!state.signals || typeof state.signals !== "object") {
-    state.signals = {
-      parsedAttachment: false,
-      subtaskStarted: false,
-      subtaskWaited: false,
-      successfulToolCount: 0,
-    };
-  }
-  if (!state.pending || typeof state.pending !== "object") {
-    state.pending = {
-      guidance: null,
-      summary: false,
-    };
-  }
-  if (!Array.isArray(bucket.taskChecklist)) {
-    bucket.taskChecklist = [];
-  }
-  if (!Array.isArray(bucket.acceptanceReports)) {
-    bucket.acceptanceReports = [];
-  }
-  if (!Array.isArray(bucket.reviewReports)) {
-    bucket.reviewReports = [];
-  }
-  if (!Array.isArray(bucket.planningRawOutputs)) {
-    bucket.planningRawOutputs = [];
-  }
-  if (!bucket.lastPlanningRawOutput || typeof bucket.lastPlanningRawOutput !== "object") {
-    bucket.lastPlanningRawOutput = null;
-  }
-  if (!bucket.logs || typeof bucket.logs !== "object") {
-    bucket.logs = {
-      planning: [],
-      guidance: [],
-      acceptance: [],
-      review: [],
-    };
-  }
-  if (!Array.isArray(bucket.logs.planning)) bucket.logs.planning = [];
-  if (!Array.isArray(bucket.logs.guidance)) bucket.logs.guidance = [];
-  if (!Array.isArray(bucket.logs.acceptance)) bucket.logs.acceptance = [];
-  if (!Array.isArray(bucket.logs.review)) bucket.logs.review = [];
+
   const locale = resolveLocale(ctx);
   state.locale = locale;
   return { bucket, state };
