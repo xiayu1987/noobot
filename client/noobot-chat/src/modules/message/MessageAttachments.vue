@@ -197,21 +197,50 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   color: var(--noobot-msg-file-size);
 }
 .parsed-result-row {
-  margin-top: 4px;
-  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px 5px 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 46%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--noobot-panel-muted) 76%, transparent);
+  white-space: nowrap;
 }
 .parsed-result-label {
+  flex: 0 0 auto;
   font-size: var(--noobot-msg-meta-font-size);
   color: var(--noobot-msg-file-size);
+  line-height: 1;
+}
+.parsed-result-label::after {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 12px;
+  margin-left: 6px;
+  vertical-align: -2px;
+  background: color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
 }
 .parsed-result-action {
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 34px;
+  height: 22px !important;
+  line-height: 1;
   font-size: var(--noobot-msg-meta-font-size);
-  padding: 2px 6px;
-  border-radius: var(--noobot-radius-xs);
+  padding: 0 8px;
+  border-color: transparent;
+  border-radius: 999px;
   color: var(--noobot-msg-file-name);
+  white-space: nowrap;
+}
+.parsed-result-action:hover {
+  color: var(--noobot-text-strong);
+  border-color: color-mix(in srgb, var(--noobot-panel-border) 44%, transparent);
+  background: color-mix(in srgb, var(--noobot-text-accent) 10%, transparent);
 }
 .attachment-download-btn {
   border-radius: var(--noobot-radius-xs);
