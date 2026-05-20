@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 export const CAPABILITY_HOOK_MAP = Object.freeze({
   planning: ["before_context_build", "before_turn", "before_llm_call", "after_llm_call", "before_final_output"],
   guidance: [

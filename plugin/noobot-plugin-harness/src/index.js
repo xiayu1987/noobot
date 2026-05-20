@@ -1,14 +1,7 @@
 /*
- * Noobot Harness Plugin
- * Hook-based tracing, prompt policy and run manifest for Noobot agent runtime.
- *
- * Optimizations applied:
- *  - Manifest: memory cache + debounced write (terminal states flush immediately)
- *  - JSONL: buffered writes (batch 50 records or 2s interval)
- *  - Write validation: JSON integrity check after write
- *  - Run log cleanup: maxRuns / maxAgeDays config with periodic cleanup
- *  - Prompt injection: priority-based with replace/append/prepend modes
- *  - Takeover: unified dispatcher for tool/message/memory takeover
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
 import path from "node:path";

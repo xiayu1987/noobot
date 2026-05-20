@@ -1,12 +1,8 @@
 /*
- * Noobot Harness - Prompt injection with priority and conflict resolution.
- *
- * Supports:
- *  - priority-based ordering (higher priority wins)
- *  - modes: replace / append / prepend
- *  - idempotent injection (skip if already present)
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
  */
-
 const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility only
 
 export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
