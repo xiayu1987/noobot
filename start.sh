@@ -198,7 +198,7 @@ run_pm2() {
   if echo "$combined_text" | grep -qiE "Cannot find module .*pm2|ProcessContainerFork\\.js|could not determine executable to run|pm2: not found"; then
     log "pm2 missing/broken detected, reinstall pm2 and retry once"
     rm -rf "$SERVICE_DIR/node_modules/pm2" "$SERVICE_DIR/node_modules/.bin/pm2"
-    (cd "$SERVICE_DIR" && npm install pm2@^7.0.1 --no-save)
+    (cd "$SERVICE_DIR" && npm install pm2@latest --no-save)
     (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@")
     return $?
   fi
