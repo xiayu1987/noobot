@@ -421,8 +421,10 @@ export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {
 }
 
 export function resolvePlanningToolAllowlist(meta = {}) {
+  // Follow harness config directly; no hardcoded fallback to wildcard.
+  // If caller does not configure planning allowlist, default is empty (no tools).
   const allowlist = resolveCapabilityToolAllowlist(meta, "planning");
-  if (!Array.isArray(allowlist) || !allowlist.length) return ["*"];
+  if (!Array.isArray(allowlist) || !allowlist.length) return [];
   if (allowlist.includes("*")) return ["*"];
   return allowlist;
 }
