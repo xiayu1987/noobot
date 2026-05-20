@@ -21,6 +21,10 @@ import { createHookManager } from "../../hook/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
+import {
+  filterSummarizedMessages,
+  normalizeRecentWindow,
+} from "../../session/utils/context-window-normalizer.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -462,6 +466,23 @@ export class SessionExecutionEngine {
     }, {});
   }
 
+  _createHarnessResolveModelMessages({ effectiveConfig = {} } = {}) {
+    const sessionConfig =
+      effectiveConfig?.session && typeof effectiveConfig.session === "object"
+        ? effectiveConfig.session
+        : {};
+    const recentMessageLimit = Number(sessionConfig?.recentMessageLimit || 20);
+    const normalizedLimit = Number.isFinite(recentMessageLimit)
+      ? Math.floor(recentMessageLimit)
+      : 20;
+    return ({ messages = [] } = {}) => {
+      const source = Array.isArray(messages) ? messages : [];
+      const filtered = filterSummarizedMessages(source);
+      if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) return [];
+      return normalizeRecentWindow(filtered, normalizedLimit);
+    };
+  }
+
   _resolveHarnessPluginOptions({ userId = "", runConfig = {}, userConfig = {} } = {}) {
     const effectiveConfig = mergeConfig(
       this.globalConfig || {},
@@ -497,12 +518,23 @@ export class SessionExecutionEngine {
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
     const next = { ...options, enabled: true, mode: "on", basePath };
+    next.resolveModelMessages = this._createHarnessResolveModelMessages({
+      effectiveConfig,
+    });
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
         ? Math.min(Number(next.miniRunnerMaxTurns), 5)
         : 5;
     if (!String(next?.planningGuidanceMode || "").trim()) {
       next.planningGuidanceMode = "separate_model";
+    }
+    if (String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model") {
+      const timeoutMs = Number(next?.timeoutMs);
+      // Separate-model planning performs an external model call, so 1s hook timeout
+      // is too aggressive and can cause repeated scheduling across turns.
+      if (!Number.isFinite(timeoutMs) || timeoutMs < 60_000) {
+        next.timeoutMs = 60_000;
+      }
     }
     if (
       String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model" &&

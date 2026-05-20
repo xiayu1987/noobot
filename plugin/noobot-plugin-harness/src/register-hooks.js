@@ -49,6 +49,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                 harness: {
                   planningGuidanceMode: options.planningGuidanceMode,
                   capabilityModelInvoker: options.capabilityModelInvoker,
+                  resolveModelMessages: options.resolveModelMessages,
                   capabilityToolAllowlist: options.capabilityToolAllowlist,
                   capabilityToolAllowlistByPurpose: options.capabilityToolAllowlistByPurpose,
                   acceptance: options.acceptance,
