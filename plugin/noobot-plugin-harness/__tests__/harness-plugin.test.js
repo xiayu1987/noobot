@@ -898,7 +898,7 @@ test("harness planning separate model uses resolved planning tool allowlist", as
   await hookManager.emit("before_llm_call", ctx);
 
   assert.equal(invocations.length >= 1, true);
-  assert.deepEqual(invocations[0].toolAllowlist, ["*"]);
+  assert.deepEqual(invocations[0].toolAllowlist, []);
 });
 
 
