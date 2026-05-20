@@ -56,7 +56,7 @@ test("SessionExecutionEngine preserves explicit harness capabilityModelInvoker",
   assert.equal(prepared.plugins.harness.capabilityModelInvoker, explicitInvoker);
 });
 
-test("SessionExecutionEngine defaults harness miniRunnerMaxTurns to 50", async () => {
+test("SessionExecutionEngine defaults harness miniRunnerMaxTurns to 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
   const prepared = engine._prepareHarnessRunConfig({
@@ -71,5 +71,24 @@ test("SessionExecutionEngine defaults harness miniRunnerMaxTurns to 50", async (
     },
   });
 
-  assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, 50);
+  assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, 5);
+});
+
+test("SessionExecutionEngine caps harness miniRunnerMaxTurns at 5", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      enableHarness: true,
+      plugins: {
+        harness: {
+          planningGuidanceMode: "separate_model",
+          miniRunnerMaxTurns: 99,
+        },
+      },
+    },
+  });
+
+  assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, 5);
 });

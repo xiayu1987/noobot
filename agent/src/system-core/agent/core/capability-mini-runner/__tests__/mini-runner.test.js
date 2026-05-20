@@ -34,6 +34,7 @@ test("mini-runner appends assistant tool-call message before tool result", async
   });
 
   assert.equal(result.output, "done");
+  assert.equal(result.toolTurnLimitReached, false);
   assert.equal(second.seenMessages.at(1), first);
   assert.equal(second.seenMessages.at(2).role, "tool");
 });
@@ -144,4 +145,43 @@ test("mini-runner finalizes with no-tools follow-up when max turns reached witho
 
   assert.equal(result.finishedReason, "max_turn_reached_finalized");
   assert.match(String(result.output || ""), /taskChecklist/);
+});
+
+test("mini-runner caps tool turns at 5 and returns default planning output when model gives no final text", async () => {
+  const makeToolCall = (id) => ({
+    content: "",
+    tool_calls: [{ id: `c${id}`, name: "echo", args: { text: `hi-${id}` } }],
+  });
+  const responses = [
+    makeToolCall(1),
+    makeToolCall(2),
+    makeToolCall(3),
+    makeToolCall(4),
+    makeToolCall(5),
+    { content: "" },
+  ];
+  let executedCount = 0;
+  const invoker = createAgentCapabilityModelInvoker({
+    maxTurns: 99,
+    createChatModelFn: () => createFakeModel(responses),
+    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
+    executeToolCallFn: async () => {
+      executedCount += 1;
+      return { toolResultText: "echo:ok" };
+    },
+  });
+
+  const result = await invoker({
+    purpose: "planning",
+    locale: "zh-CN",
+    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+  });
+
+  assert.equal(executedCount, 5);
+  assert.equal(result.turn, 5);
+  assert.equal(result.finishedReason, "max_turn_reached_finalized");
+  assert.equal(result.toolTurnLimitReached, true);
+  assert.equal(result.traces.at(-1)?.toolTurnLimitReached, true);
+  assert.match(String(result.output || ""), /taskChecklist/);
+  assert.match(String(result.output || ""), /tool_turn_limit_reached/);
 });

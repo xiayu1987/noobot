@@ -484,8 +484,8 @@ export class SessionExecutionEngine {
     const next = { ...options, enabled: true, basePath };
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
-        ? Number(next.miniRunnerMaxTurns)
-        : 50;
+        ? Math.min(Number(next.miniRunnerMaxTurns), 5)
+        : 5;
     if (!String(next?.planningGuidanceMode || "").trim()) {
       next.planningGuidanceMode = "separate_model";
     }

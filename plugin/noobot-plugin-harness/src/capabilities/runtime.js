@@ -213,6 +213,35 @@ function resolveDirectivePriority(value, fallback = 0) {
   return Number.isFinite(priority) ? priority : fallback;
 }
 
+function getNestedValue(source = {}, key = "") {
+  if (!source || typeof source !== "object" || !key) return undefined;
+  const segments = String(key)
+    .split(".")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  let current = source;
+  for (const segment of segments) {
+    if (!current || typeof current !== "object") return undefined;
+    current = current[segment];
+  }
+  return current;
+}
+
+const BASE_TAKEOVER_PRIORITY_PIPELINE = Object.freeze([
+  ({ kind }) => `${kind}Takeover.priority`,
+  () => "takeoverPriority",
+  () => "priority",
+]);
+
+function resolveProfileTakeoverPriority(kind = "", profile = {}) {
+  for (const keyResolver of BASE_TAKEOVER_PRIORITY_PIPELINE) {
+    const key = keyResolver({ kind });
+    const value = getNestedValue(profile, key);
+    if (Number.isFinite(Number(value))) return Number(value);
+  }
+  return 0;
+}
+
 function resolveTakeoverPriority({
   kind = "",
   point = "",
@@ -221,10 +250,7 @@ function resolveTakeoverPriority({
   profile = {},
   sequence = 0,
 } = {}) {
-  const profilePriority = resolveDirectivePriority(
-    profile?.[`${kind}Takeover`]?.priority ?? profile?.takeoverPriority ?? profile?.priority,
-    0,
-  );
+  const profilePriority = resolveProfileTakeoverPriority(kind, profile);
   const directPriority = resolveDirectivePriority(directive?.priority, profilePriority);
   if (kind !== "memory") return { priority: directPriority, sequence };
 
@@ -233,18 +259,15 @@ function resolveTakeoverPriority({
     return { priority: directPriority, sequence };
   }
 
-  const profileByCommitType =
-    profile?.memoryTakeover?.priorityByCommitType &&
-    typeof profile.memoryTakeover.priorityByCommitType === "object"
-      ? profile.memoryTakeover.priorityByCommitType
-      : {};
-  const directiveByCommitType =
-    directive?.priorityByCommitType && typeof directive.priorityByCommitType === "object"
-      ? directive.priorityByCommitType
-      : {};
+  const profileByCommitType = getNestedValue(profile, "memoryTakeover.priorityByCommitType");
+  const directiveByCommitType = getNestedValue(directive, "priorityByCommitType");
+  const profileByCommitTypeSafe =
+    profileByCommitType && typeof profileByCommitType === "object" ? profileByCommitType : {};
+  const directiveByCommitTypeSafe =
+    directiveByCommitType && typeof directiveByCommitType === "object" ? directiveByCommitType : {};
 
   const commitPriority = resolveDirectivePriority(
-    directiveByCommitType[commitType] ?? profileByCommitType[commitType],
+    directiveByCommitTypeSafe[commitType] ?? profileByCommitTypeSafe[commitType],
     directPriority,
   );
   return { priority: commitPriority, sequence };
