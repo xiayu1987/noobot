@@ -30,6 +30,7 @@ import {
 } from "./lib/store.js";
 import {
   isHarnessPromptAlreadyInjected,
+  markPromptAsInjected,
   injectSystemMessages,
 } from "./lib/prompt-injector.js";
 import { cleanupOldRuns } from "./lib/cleanup.js";

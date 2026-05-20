@@ -5,11 +5,50 @@
  */
 const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility only
 
+// P2#5: Injected prompt ID cache per messages array reference for O(1) lookup
+// WeakMap so it doesn't prevent GC of message arrays
+const injectedPromptCache = new WeakMap();
+
 export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
-  return messages.some((msg) => {
+  if (!id) return false;
+
+  // P2#5: Check cache first (O(1))
+  if (messages.length > 0) {
+    const cache = injectedPromptCache.get(messages);
+    if (cache && cache.has(id)) return true;
+  }
+
+  // Fallback: scan messages (only on cache miss or first call)
+  const found = messages.some((msg) => {
     const content = typeof msg?.content === "string" ? msg.content : "";
     return content.includes(`<!-- ${id} -->`);
   });
+
+  // P2#5: Update cache
+  if (found && messages.length > 0) {
+    let cache = injectedPromptCache.get(messages);
+    if (!cache) {
+      cache = new Set();
+      injectedPromptCache.set(messages, cache);
+    }
+    cache.add(id);
+  }
+
+  return found;
+}
+
+/**
+ * P2#5: Mark a prompt as injected without scanning messages.
+ * Call this after successful injection to update the O(1) cache.
+ */
+export function markPromptAsInjected(messages, id) {
+  if (!messages || !id || messages.length === 0) return;
+  let cache = injectedPromptCache.get(messages);
+  if (!cache) {
+    cache = new Set();
+    injectedPromptCache.set(messages, cache);
+  }
+  cache.add(id);
 }
 
 export function registerPrompt(id, content, priority = 50, mode = "prepend") {
@@ -108,6 +147,20 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   // Apply append items
   for (const item of appendItems) {
     messages.push(item);
+  }
+
+  // P2#5: Update cache for newly injected IDs
+  if (injected) {
+    let cache = injectedPromptCache.get(messages);
+    if (!cache) {
+      cache = new Set();
+      injectedPromptCache.set(messages, cache);
+    }
+    for (const { id } of sorted) {
+      if (!options.skipIds?.has(id)) {
+        cache.add(id);
+      }
+    }
   }
 
   return injected;

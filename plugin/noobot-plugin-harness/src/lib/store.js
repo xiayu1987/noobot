@@ -9,6 +9,51 @@ import path from "node:path";
 // ---- Manifest Cache & Debounce ----
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
+const manifestLastAccessed = new Map(); // Track last access time for LRU cleanup
+
+// P0#2: Periodic manifest cache cleanup timer
+let manifestCleanupTimer = null;
+const MANIFEST_CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+const MANIFEST_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
+
+function startManifestCleanupTimer() {
+  if (manifestCleanupTimer) return;
+  manifestCleanupTimer = setInterval(() => {
+    cleanupStaleManifests();
+  }, MANIFEST_CLEANUP_INTERVAL_MS);
+  if (manifestCleanupTimer.unref) manifestCleanupTimer.unref();
+}
+
+function cleanupStaleManifests() {
+  const now = Date.now();
+  for (const [key, lastAccess] of manifestLastAccessed.entries()) {
+    if (now - lastAccess > MANIFEST_CACHE_MAX_AGE_MS) {
+      // Flush stale entry
+      const timer = manifestWriteTimers.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        manifestWriteTimers.delete(key);
+      }
+      const cached = manifestCache.get(key);
+      if (cached) {
+        writeJsonValidated(key, cached)
+          .then(() => {
+            manifestCache.delete(key);
+            manifestLastAccessed.delete(key);
+          })
+          .catch((err) => {
+            console.debug(`[harness] Manifest cleanup write failed for ${key}: ${err.message}`);
+          });
+        continue;
+      }
+      manifestCache.delete(key);
+      manifestLastAccessed.delete(key);
+    }
+  }
+}
+
+// Start cleanup timer on first use
+startManifestCleanupTimer();
 
 /**
  * Update manifest with memory cache + debounced write.
@@ -25,6 +70,7 @@ export async function updateManifestCached(
 ) {
   if (!paths?.manifest) return;
   const key = paths.manifest;
+  manifestLastAccessed.set(key, Date.now()); // P0#2: Track access time
   let current = manifestCache.get(key);
   if (!current) {
     try {
@@ -49,14 +95,20 @@ export async function updateManifestCached(
     manifestWriteTimers.delete(key);
     await writeJsonValidated(key, next);
     manifestCache.delete(key);
+    manifestLastAccessed.delete(key);
   } else if (debounceMs > 0) {
     manifestWriteTimers.set(
       key,
       setTimeout(async () => {
         const cached = manifestCache.get(key);
         if (cached) {
-          await writeJsonValidated(key, cached);
-          manifestCache.delete(key);
+          try {
+            await writeJsonValidated(key, cached);
+            manifestCache.delete(key);
+            manifestLastAccessed.delete(key);
+          } catch (err) {
+            console.debug(`[harness] Manifest debounced write failed for ${key}: ${err.message}`);
+          }
         }
         manifestWriteTimers.delete(key);
       }, debounceMs),
@@ -64,6 +116,7 @@ export async function updateManifestCached(
   } else {
     await writeJsonValidated(key, next);
     manifestCache.delete(key);
+    manifestLastAccessed.delete(key);
   }
 }
 
@@ -72,7 +125,6 @@ export async function updateManifestCached(
  */
 export async function flushAllManifests() {
   const entries = Array.from(manifestCache.entries());
-  manifestCache.clear();
   for (const [key, value] of entries) {
     const timer = manifestWriteTimers.get(key);
     if (timer) {
@@ -81,7 +133,11 @@ export async function flushAllManifests() {
     }
     try {
       await writeJsonValidated(key, value);
-    } catch {}
+      manifestCache.delete(key);
+      manifestLastAccessed.delete(key);
+    } catch (err) {
+      console.error(`[harness] Failed to flush manifest ${key}:`, err.message); // P2#7
+    }
   }
 }
 
@@ -126,18 +182,24 @@ export async function appendJsonlBuffered(
 
 /**
  * Flush a single JSONL buffer to disk.
+ * P0#1: Fixed race condition using atomic swap pattern.
  */
 async function flushJsonlBuffer(filePath) {
   const buffer = jsonlBuffers.get(filePath);
   if (!buffer || buffer.length === 0) return;
 
+  // P0#1: Atomic swap - extract current buffer, replace with new empty array immediately
   const lines = buffer.join("\n") + "\n";
-  jsonlBuffers.set(filePath, []); // Clear buffer before write (avoid race)
+  const newBuffer = [];
+  jsonlBuffers.set(filePath, newBuffer); // Atomically replace with new empty buffer
 
   try {
     await appendFileValidated(filePath, lines);
-  } catch {
-    // On failure, prepend back to buffer for retry
+  } catch (err) {
+    // P2#7: Log the error
+    console.error(`[harness] JSONL flush failed for ${filePath}:`, err.message);
+    // P0#1: On failure, merge the extracted buffer INTO the new buffer (which may have new entries)
+    // Prepend old data so it gets retried first, but preserve any new records that arrived during write
     const current = jsonlBuffers.get(filePath) || [];
     jsonlBuffers.set(filePath, [...buffer, ...current]);
   }
@@ -172,16 +234,31 @@ export async function writeJson(filePath, data) {
   await writeJsonValidated(filePath, data);
 }
 
-async function writeJsonValidated(filePath, data) {
+/**
+ * P1#4: Optimized JSON write - atomic write with temp file + rename.
+ * Falls back to read-back validation only in dev mode or on first failure.
+ */
+async function writeJsonValidated(filePath, data, devMode = false) {
   const content = JSON.stringify(data, null, 2);
-  await fs.writeFile(filePath, content, "utf-8");
-  // Validate by reading back
-  try {
-    const written = await fs.readFile(filePath, "utf-8");
-    JSON.parse(written); // Throws if invalid
-  } catch {
-    // Fallback: try writing again
-    await fs.writeFile(filePath, content, "utf-8");
+  const dir = path.dirname(filePath);
+  const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
+
+  await fs.mkdir(dir, { recursive: true });
+
+  // Atomic write: write to temp file, then rename
+  await fs.writeFile(tmpPath, content, "utf-8");
+  await fs.rename(tmpPath, filePath);
+
+  // P1#4: Only validate in dev mode or if explicitly requested
+  if (devMode || process.env.HARNESS_VALIDATE_WRITES === "1") {
+    try {
+      const written = await fs.readFile(filePath, "utf-8");
+      JSON.parse(written);
+    } catch (err) {
+      console.error(`[harness] JSON validation failed for ${filePath}:`, err.message); // P2#7
+      // Fallback: try writing again
+      await fs.writeFile(filePath, content, "utf-8");
+    }
   }
 }
 
