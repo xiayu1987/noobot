@@ -174,6 +174,19 @@ function onSelectedPluginsChange(pluginKeys = []) {
   );
 }
 
+function onPluginToggle(pluginKey = "") {
+  const key = String(pluginKey || "").trim();
+  if (!key) return;
+  const current = new Set(
+    (Array.isArray(props.selectedPlugins) ? props.selectedPlugins : [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean),
+  );
+  if (current.has(key)) current.delete(key);
+  else current.add(key);
+  onSelectedPluginsChange(Array.from(current));
+}
+
 function onInputChange(value) {
   emit("update:modelValue", value);
 }
@@ -592,23 +605,22 @@ defineExpose({
                 </div>
                 <div class="plugin-selector">
                   <span class="scenario-selector-label">{{ translate("composer.availablePlugins") }}</span>
-                  <el-checkbox-group
+                  <div
                     v-if="normalizedPluginOptions.length"
-                    :model-value="Array.from(selectedPluginKeySet)"
-                    size="small"
-                    class="plugin-checkbox-group"
-                    @update:model-value="onSelectedPluginsChange"
+                    class="plugin-button-group"
                   >
-                    <el-checkbox-button
+                    <el-button
                       v-for="pluginItem in normalizedPluginOptions"
                       :key="pluginItem.key"
-                      :value="pluginItem.key"
-                      :label="pluginItem.key"
+                      size="small"
+                      :type="selectedPluginKeySet.has(pluginItem.key) ? 'primary' : 'default'"
+                      :disabled="pluginItem.enabled === false"
                       :title="pluginItem.description || pluginItem.label"
+                      @click="onPluginToggle(pluginItem.key)"
                     >
                       {{ pluginItem.label || pluginItem.key }}
-                    </el-checkbox-button>
-                  </el-checkbox-group>
+                    </el-button>
+                  </div>
                   <span v-else class="plugin-empty-text">{{ translate("composer.noAvailablePlugins") }}</span>
                 </div>
                 <p v-if="selectedScenarioDescription" class="scenario-description">
@@ -981,21 +993,10 @@ defineExpose({
   color: var(--noobot-text-secondary, #52525b);
 }
 
-.plugin-checkbox-group {
+.plugin-button-group {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.plugin-checkbox-group :deep(.el-checkbox-button) {
-  margin-right: 0;
-}
-
-.plugin-checkbox-group :deep(.el-checkbox-button__inner) {
-  border-left: var(--el-border) !important;
-  border-radius: var(--el-border-radius-base) !important;
-  padding: 5px 11px;
-  line-height: 1;
 }
 
 .plugin-empty-text {
@@ -1068,7 +1069,7 @@ defineExpose({
     width: 100%;
     align-items: flex-start;
   }
-  .plugin-checkbox-group {
+  .plugin-button-group {
     max-width: 100%;
     overflow-x: auto;
     flex-wrap: nowrap;

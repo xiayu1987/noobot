@@ -145,6 +145,9 @@ export class SessionTreeService {
       }
 
       const deletedSessionIds = [];
+      if (typeof this.sessionRepo?.markSessionsDeleted === "function") {
+        await this.sessionRepo.markSessionsDeleted(userId, toDelete);
+      }
       for (const id of toDelete) {
         await this.sessionRepo.delete(userId, id);
         deletedSessionIds.push(id);

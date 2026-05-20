@@ -23,6 +23,17 @@ The plugin is non-invasive: it is attached through Noobot hooks, and hook errors
 - Writes separate-model capability traces: `capability-traces.jsonl`
 - Injects lightweight prompt policy through `before_llm_call`
 - Injects final response guard through `before_final_output`
+- Cleans related harness run artifacts on `after_session_delete`
+
+## Session delete cleanup hook
+
+Harness listens to `after_session_delete`.
+When this hook is emitted with `deletedSessionIds` (or fallback `sessionId`), harness will:
+
+1. flush in-memory manifest/jsonl buffers
+2. delete matching `runtime/harness/runs/*` records by run-id or manifest `sessionId`
+
+`service/routes/session-routes.js` emits this hook after `deleteSessionBranch` succeeds.
 
 ## Recommended usage: enable from runConfig
 

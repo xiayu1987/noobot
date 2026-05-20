@@ -4,8 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { flushAllManifests, flushAllJsonlBuffers } from "./lib/store.js";
-import { HARNESS_FLUSH_POINTS, HARNESS_TRACE_POINTS, shouldInjectPromptAtPoint } from "./hook-points.js";
-import { emitHarnessHookProgress, isPrimaryExecutionScope } from "./runtime-context.js";
+import {
+  HARNESS_FLUSH_POINTS,
+  HARNESS_SESSION_CLEANUP_POINTS,
+  HARNESS_TRACE_POINTS,
+  shouldInjectPromptAtPoint,
+} from "./hook-points.js";
+import { cleanupRunsBySessionIds } from "./lib/cleanup.js";
+import { emitHarnessHookProgress, extractBasePath, isPrimaryExecutionScope } from "./runtime-context.js";
 import { injectPrompt, traceHook } from "./tracing/buffer-manager.js";
 import { createRunTraceSink } from "./tracing/run-trace-sink.js";
 import { safeError } from "./data/record-builders.js";
@@ -22,6 +28,9 @@ export function createRegisterHarnessHooks(deps = {}) {
   const safeErrorFn = deps.safeError || safeError;
   const flushAllManifestsFn = deps.flushAllManifests || flushAllManifests;
   const flushAllJsonlBuffersFn = deps.flushAllJsonlBuffers || flushAllJsonlBuffers;
+  const sessionCleanupPoints = deps.sessionCleanupPoints || HARNESS_SESSION_CLEANUP_POINTS;
+  const cleanupRunsBySessionIdsFn = deps.cleanupRunsBySessionIds || cleanupRunsBySessionIds;
+  const extractBasePathFn = deps.extractBasePath || extractBasePath;
 
   return function registerHarnessHooks({ hookManager, options, capabilityRuntime, plugin }) {
     const disposers = [];
@@ -86,6 +95,44 @@ export function createRegisterHarnessHooks(deps = {}) {
             id: `${plugin.name}.flush.${point}`,
             priority: 5,
             timeoutMs: 2000,
+          },
+        ),
+      );
+    }
+
+    for (const point of sessionCleanupPoints) {
+      disposers.push(
+        hookManager.on(
+          point,
+          async (ctx = {}) => {
+            const deletedSessionIds = Array.isArray(ctx?.deletedSessionIds)
+              ? ctx.deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
+              : [];
+            const fallbackSessionId = String(ctx?.sessionId || "").trim();
+            const sessionIds = deletedSessionIds.length
+              ? deletedSessionIds
+              : fallbackSessionId
+                ? [fallbackSessionId]
+                : [];
+            if (!sessionIds.length) return;
+
+            await flushAllManifestsFn();
+            await flushAllJsonlBuffersFn();
+
+            const basePath = extractBasePathFn(ctx, options);
+            if (!basePath) return;
+            const cleanup = await cleanupRunsBySessionIdsFn(basePath, sessionIds, options);
+            emitHarnessHookProgressFn(ctx, "session_cleanup_done", {
+              point,
+              deleted: cleanup?.deleted || 0,
+              matchedRuns: cleanup?.matchedRuns || 0,
+              errors: cleanup?.errors || 0,
+            });
+          },
+          {
+            id: `${plugin.name}.cleanup.${point}`,
+            priority: 10,
+            timeoutMs: Math.max(2000, Number(options?.timeoutMs) || 0),
           },
         ),
       );

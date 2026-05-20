@@ -32,6 +32,10 @@ export const HARNESS_FLUSH_POINTS = Object.freeze([
   HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
 ]);
 
+export const HARNESS_SESSION_CLEANUP_POINTS = Object.freeze([
+  HARNESS_HOOK_POINTS.AFTER_SESSION_DELETE,
+]);
+
 export function shouldInjectPromptAtPoint(point = "", options = {}) {
   return (
     point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL ||

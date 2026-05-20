@@ -25,4 +25,5 @@ export const HARNESS_HOOK_POINTS = Object.freeze({
   TOOL_CALL_ERROR: "tool_call_error",
   BEFORE_STATE_COMMIT: "before_state_commit",
   AFTER_STATE_COMMIT: "after_state_commit",
+  AFTER_SESSION_DELETE: "after_session_delete",
 });

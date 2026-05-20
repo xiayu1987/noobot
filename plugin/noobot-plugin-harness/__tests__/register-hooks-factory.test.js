@@ -22,6 +22,7 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
   const registerHarnessHooks = createRegisterHarnessHooks({
     tracePoints: ["before_llm_call"],
     flushPoints: ["after_turn"],
+    sessionCleanupPoints: [],
     emitHarnessHookProgress: (_ctx, event, data) => {
       calls.push(["emit", event, data?.point]);
     },
@@ -111,6 +112,7 @@ test("createRegisterHarnessHooks emits hook_error and rethrows when trace handle
   const registerHarnessHooks = createRegisterHarnessHooks({
     tracePoints: ["before_turn"],
     flushPoints: [],
+    sessionCleanupPoints: [],
     emitHarnessHookProgress: (_ctx, event, data) => {
       progressEvents.push({ event, data });
     },
@@ -158,6 +160,7 @@ test("createRegisterHarnessHooks skips non-primary execution scope", async () =>
   const registerHarnessHooks = createRegisterHarnessHooks({
     tracePoints: ["before_llm_call"],
     flushPoints: [],
+    sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {
       calls.push("emit");
     },
@@ -195,4 +198,52 @@ test("createRegisterHarnessHooks skips non-primary execution scope", async () =>
 
   await handlers.get("before_llm_call")({ executionScope: "auxiliary" });
   assert.deepEqual(calls, []);
+});
+
+test("createRegisterHarnessHooks cleans harness runs on after_session_delete", async () => {
+  const calls = [];
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: [],
+    flushPoints: [],
+    sessionCleanupPoints: ["after_session_delete"],
+    flushAllManifests: async () => {
+      calls.push("flushAllManifests");
+    },
+    flushAllJsonlBuffers: async () => {
+      calls.push("flushAllJsonlBuffers");
+    },
+    extractBasePath: () => "/tmp/base",
+    cleanupRunsBySessionIds: async (_basePath, sessionIds) => {
+      calls.push(["cleanupRunsBySessionIds", sessionIds]);
+      return { deleted: 2, matchedRuns: 2, errors: 0 };
+    },
+    emitHarnessHookProgress: (_ctx, event, data) => {
+      calls.push(["emit", event, data?.deleted]);
+    },
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: { timeoutMs: 1000 },
+    capabilityRuntime: {},
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  await handlers.get("after_session_delete")({
+    sessionId: "s-parent",
+    deletedSessionIds: ["s-parent", "s-child"],
+  });
+
+  assert.deepEqual(
+    calls.map((item) => (Array.isArray(item) ? item[0] : item)),
+    ["flushAllManifests", "flushAllJsonlBuffers", "cleanupRunsBySessionIds", "emit"],
+  );
 });

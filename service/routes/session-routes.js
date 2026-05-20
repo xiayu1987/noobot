@@ -5,6 +5,45 @@
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
+import { createHookManager, HOOK_POINTS } from "../../agent/src/system-core/hook/index.js";
+import { registerNoobotPlugin as registerHarnessPlugin } from "../../plugin/noobot-plugin-harness/src/index.js";
+
+async function emitAfterSessionDeleteHook({
+  bot = null,
+  userId = "",
+  sessionId = "",
+  deletedSessionIds = [],
+} = {}) {
+  const basePath =
+    bot && typeof bot.getWorkspacePath === "function"
+      ? String(bot.getWorkspacePath(userId) || "").trim()
+      : "";
+  if (!basePath) return;
+
+  const hookManager = createHookManager();
+  registerHarnessPlugin(
+    { hookManager },
+    {
+      enabled: true,
+      basePath,
+      trace: false,
+      promptPolicy: false,
+      writeContextSnapshot: false,
+      writePrompts: false,
+      finalResponseGuard: false,
+    },
+  );
+
+  await hookManager.emit(HOOK_POINTS.AFTER_SESSION_DELETE, {
+    userId: String(userId || "").trim(),
+    sessionId: String(sessionId || "").trim(),
+    deletedSessionIds: Array.isArray(deletedSessionIds)
+      ? deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
+      : [],
+    basePath,
+    executionScope: "primary",
+  });
+}
 
 export function registerSessionRoutes(
   app,
@@ -61,6 +100,12 @@ export function registerSessionRoutes(
       const result = await bot.session.deleteSessionBranch({
         userId,
         sessionId,
+      });
+      await emitAfterSessionDeleteHook({
+        bot,
+        userId,
+        sessionId: normalizedSessionId,
+        deletedSessionIds: result?.deletedSessionIds || [normalizedSessionId],
       });
       const deletedAttachments =
         typeof bot.deleteScopedAttachmentsBySessionIds === "function"

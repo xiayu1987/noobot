@@ -6,6 +6,25 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+function normalizeSessionIds(input = []) {
+  if (Array.isArray(input)) {
+    return input.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  const single = String(input || "").trim();
+  return single ? [single] : [];
+}
+
+async function resolveRunSessionId(manifestPath = "") {
+  if (!manifestPath) return "";
+  try {
+    const raw = await fs.readFile(manifestPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return String(parsed?.sessionId || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function cleanupOldRuns(basePath, options = {}) {
   if (!basePath) return { deleted: 0, errors: 0 };
   const runtimeDirName = options.runtimeDirName || "runtime";
@@ -91,4 +110,40 @@ export async function cleanupOldRuns(basePath, options = {}) {
   }
 
   return { deleted, errors };
+}
+
+export async function cleanupRunsBySessionIds(basePath, sessionIds = [], options = {}) {
+  if (!basePath) return { deleted: 0, errors: 0, matchedRuns: 0 };
+  const normalizedIds = new Set(normalizeSessionIds(sessionIds));
+  if (!normalizedIds.size) return { deleted: 0, errors: 0, matchedRuns: 0 };
+
+  const runtimeDirName = options.runtimeDirName || "runtime";
+  const harnessDirName = options.harnessDirName || "harness";
+  const harnessRunsDir = path.join(basePath, runtimeDirName, harnessDirName, "runs");
+  let deleted = 0;
+  let errors = 0;
+  let matchedRuns = 0;
+
+  try {
+    const entries = await fs.readdir(harnessRunsDir, { withFileTypes: true });
+    const dirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+
+    for (const runDirName of dirs) {
+      const manifestPath = path.join(harnessRunsDir, runDirName, "harness-run.json");
+      const manifestSessionId = await resolveRunSessionId(manifestPath);
+      const shouldDelete = normalizedIds.has(runDirName) || (manifestSessionId && normalizedIds.has(manifestSessionId));
+      if (!shouldDelete) continue;
+      matchedRuns += 1;
+      try {
+        await fs.rm(path.join(harnessRunsDir, runDirName), { recursive: true, force: true });
+        deleted += 1;
+      } catch {
+        errors += 1;
+      }
+    }
+  } catch {
+    // Runs dir doesn't exist yet
+  }
+
+  return { deleted, errors, matchedRuns };
 }

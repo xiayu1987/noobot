@@ -93,6 +93,9 @@ Additionally, `hook_plugin_progress.data` is schema-whitelisted to:
 - `before_state_commit`
 - `after_state_commit`
 
+### Session lifecycle
+- `after_session_delete`
+
 ---
 
 ## Point-specific payload additions
@@ -106,6 +109,9 @@ Additionally, `hook_plugin_progress.data` is schema-whitelisted to:
 - `before_state_commit` / `after_state_commit`:
   - `commitType` (`assistant_message` / `tool_result` / `attachment_metas`)
   - `payload`, `call` (for tool result)
+- `after_session_delete`:
+  - `deletedSessionIds` (deleted branch IDs)
+  - `basePath` (workspace path used by cleanup plugins)
 
 ---
 
