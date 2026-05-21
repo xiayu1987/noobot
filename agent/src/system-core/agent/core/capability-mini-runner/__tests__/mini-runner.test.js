@@ -185,3 +185,29 @@ test("mini-runner caps tool turns at 5 and returns default planning output when 
   assert.match(String(result.output || ""), /taskChecklist/);
   assert.match(String(result.output || ""), /tool_turn_limit_reached/);
 });
+
+test("mini-runner uses configured capability model name when provided", async () => {
+  let defaultFactoryCalled = false;
+  let namedModel = "";
+  const invoker = createAgentCapabilityModelInvoker({
+    createChatModelFn: () => {
+      defaultFactoryCalled = true;
+      return createFakeModel([{ content: "default" }]);
+    },
+    createChatModelByNameFn: (modelName) => {
+      namedModel = modelName;
+      return createFakeModel([{ content: "named" }]);
+    },
+  });
+
+  const result = await invoker({
+    model: "planner_model_alias",
+    purpose: "planning",
+    messages: [{ role: "user", content: "go" }],
+  });
+
+  assert.equal(defaultFactoryCalled, false);
+  assert.equal(namedModel, "planner_model_alias");
+  assert.equal(result.output, "named");
+  assert.equal(result.traces[0].model, "planner_model_alias");
+});

@@ -356,6 +356,48 @@ test("harness planning still retries when malformed json appears but no repair i
   assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, false);
 });
 
+test("harness planning falls back to default checklist when json repair is unusable", async () => {
+  const hookManager = createHookManager();
+  const purposes = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async ({ purpose }) => {
+        purposes.push(purpose);
+        if (purpose === "planning_json_repair") return { content: "{}" };
+        return { content: '{"taskChecklist":[{bad json}]' };
+      },
+    },
+  );
+
+  const ctx = {
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+        harness: {},
+      },
+      execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  assert.deepEqual(purposes, ["planning", "planning_json_repair"]);
+  assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "default");
+  assert.equal(ctx.agentContext.payload.harness.taskChecklist.length > 0, true);
+  assert.equal(
+    ctx.agentContext.payload.harness.logs.planning.some(
+      (item) => item.event === "planning_default_checklist_applied",
+    ),
+    true,
+  );
+});
+
 test("harness writes capability model traces to dedicated jsonl artifact", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createHookManager();
@@ -419,6 +461,9 @@ test("harness planning separate model uses resolved planning tool allowlist", as
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
+      stepModels: {
+        planning: "planner_model_alias",
+      },
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         return {
@@ -451,6 +496,7 @@ test("harness planning separate model uses resolved planning tool allowlist", as
 
   assert.equal(invocations.length >= 1, true);
   assert.deepEqual(invocations[0].toolAllowlist, []);
+  assert.equal(invocations[0].model, "planner_model_alias");
 });
 
 test("harness planning rejects incomplete checklist payload without totalGoal or io-file fields", async () => {

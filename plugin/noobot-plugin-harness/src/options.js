@@ -22,6 +22,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
   maxPreviewChars: 1200,
   planningGuidanceMode: "separate_model",
   capabilityModelInvoker: null,
+  capabilityModelByPurpose: Object.freeze({}),
+  stepModels: Object.freeze({}),
   capabilityToolAllowlist: [],
   capabilityToolAllowlistByPurpose: Object.freeze({}),
   miniRunnerMaxTurns: 5,
@@ -57,6 +59,8 @@ const HarnessOptionsSchema = z
   .object({
     planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
     capabilityModelInvoker: z.any().optional(),
+    capabilityModelByPurpose: z.record(z.any()).default({}),
+    stepModels: z.record(z.any()).default({}),
     capabilityToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.capabilityToolAllowlist),
     capabilityToolAllowlistByPurpose: z.record(z.any()).default({}),
     miniRunnerMaxTurns: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.miniRunnerMaxTurns),
@@ -83,6 +87,24 @@ const HarnessOptionsSchema = z
     capabilityHandlers: z.any().optional(),
   })
   .passthrough();
+
+function normalizeModelByPurpose(...items) {
+  const out = {};
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    for (const [key, value] of Object.entries(item)) {
+      const normalizedKey = String(key || "").trim();
+      if (!normalizedKey) continue;
+      const rawValue =
+        value && typeof value === "object" && !Array.isArray(value)
+          ? value.model
+          : value;
+      const normalizedValue = String(rawValue || "").trim();
+      if (normalizedValue) out[normalizedKey] = normalizedValue;
+    }
+  }
+  return out;
+}
 
 export function normalizeOptions(userOptions = {}, api = {}) {
   const merged = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
@@ -112,6 +134,10 @@ export function normalizeOptions(userOptions = {}, api = {}) {
           ]),
         )
       : DEFAULT_OPTIONS.capabilityToolAllowlistByPurpose;
+  const capabilityModelByPurpose = normalizeModelByPurpose(
+    safe.capabilityModelByPurpose,
+    safe.stepModels,
+  );
 
   return {
     ...merged,
@@ -121,6 +147,8 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       DEFAULT_OPTIONS.planningGuidanceMode,
     capabilityModelInvoker:
       typeof safe.capabilityModelInvoker === "function" ? safe.capabilityModelInvoker : null,
+    capabilityModelByPurpose,
+    stepModels: capabilityModelByPurpose,
     capabilityToolAllowlist,
     capabilityToolAllowlistByPurpose,
     miniRunnerMaxTurns: safe.miniRunnerMaxTurns,

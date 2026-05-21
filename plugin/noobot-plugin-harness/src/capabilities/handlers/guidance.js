@@ -20,8 +20,10 @@ import {
   parseTaskChecklistFromModelOutput,
   relaySeparateModelOutputAsUserMessage,
   resolveCapabilityModelInvoker,
+  resolveCapabilityModelName,
   resolveCapabilityModelMessages,
   resolveCapabilityToolAllowlist,
+  resolveInjectedMessageSummarizer,
   shouldUseSeparateModel,
   translateI18nText,
 } from "./shared.js";
@@ -36,11 +38,28 @@ import {
   scheduleInjectTask,
 } from "./inject-fallback.js";
 
-function markGuidanceSummarizedMessages(ctx = {}) {
+function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const historyMessages = ctx?.agentContext?.payload?.messages?.history;
   const currentMessages = ctx?.messages;
-  const currentMarked = markMessagesSummarized(currentMessages);
-  const historyMarked = markMessagesSummarized(historyMessages);
+  const injectedSummarizer = resolveInjectedMessageSummarizer(meta);
+  const safeMark = (messages = []) => {
+    if (!Array.isArray(messages)) return 0;
+    if (typeof injectedSummarizer === "function") {
+      try {
+        const result = injectedSummarizer({
+          messages,
+          taskSummaryToolName: "task_summary",
+        });
+        const normalized = Number(result);
+        if (Number.isFinite(normalized)) return normalized;
+      } catch {
+        // fallback to local implementation
+      }
+    }
+    return markMessagesSummarized(messages);
+  };
+  const currentMarked = safeMark(currentMessages);
+  const historyMarked = safeMark(historyMessages);
   return currentMarked + historyMarked;
 }
 
@@ -250,6 +269,10 @@ async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "") {
     response = await invoker({
       purpose: "planning_revision",
       domain: CAPABILITY_DOMAIN.PLANNING,
+      model: resolveCapabilityModelName(meta, {
+        purpose: "planning_revision",
+        domain: CAPABILITY_DOMAIN.PLANNING,
+      }),
       locale,
       prompt,
       messages: resolveCapabilityModelMessages(meta, {
@@ -375,6 +398,10 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     response = await invoker({
       purpose,
       domain: CAPABILITY_DOMAIN.GUIDANCE,
+      model: resolveCapabilityModelName(meta, {
+        purpose,
+        domain: CAPABILITY_DOMAIN.GUIDANCE,
+      }),
       locale,
       prompt,
       messages: resolveCapabilityModelMessages(meta, {
@@ -411,7 +438,7 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     timestamp: new Date().toISOString(),
   });
   if (purpose === "summary") {
-    const markedCount = markGuidanceSummarizedMessages(ctx);
+    const markedCount = markGuidanceSummarizedMessages(ctx, meta);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: "summary_messages_marked",
@@ -465,7 +492,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
       const holder = ensureHarnessBucket(ctx);
       if (holder?.state?.flags?.guidanceSummaryMarkPending === true) {
         holder.state.flags.guidanceSummaryMarkPending = false;
-        const markedCount = markGuidanceSummarizedMessages(ctx);
+        const markedCount = markGuidanceSummarizedMessages(ctx, meta);
         appendCapabilityLog(ctx, {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
           event: "summary_messages_marked",

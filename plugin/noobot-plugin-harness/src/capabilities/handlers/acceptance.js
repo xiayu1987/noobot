@@ -26,6 +26,7 @@ import {
   mergeAttachmentMetas,
   normalizeChecklistItem,
   resolveCapabilityModelInvoker,
+  resolveCapabilityModelName,
   resolveCapabilityModelMessages,
   resolveCapabilityToolAllowlist,
   resolvePlanningGuidanceMode,
@@ -244,6 +245,10 @@ async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseReport = nu
     response = await invoker({
       purpose: "acceptance_semantic_validation",
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      model: resolveCapabilityModelName(meta, {
+        purpose: "acceptance_semantic_validation",
+        domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      }),
       locale,
       prompt,
       messages: resolveCapabilityModelMessages(meta, {

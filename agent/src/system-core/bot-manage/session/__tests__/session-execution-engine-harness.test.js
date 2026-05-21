@@ -60,6 +60,44 @@ test("SessionExecutionEngine preserves explicit harness capabilityModelInvoker",
   assert.equal(prepared.plugins.harness.capabilityModelInvoker, explicitInvoker);
 });
 
+test("SessionExecutionEngine deep-merges harness step model config", async () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+          stepModels: {
+            planning: "planner_global",
+            summary: "summary_global",
+          },
+        },
+      },
+    },
+  });
+
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        harness: {
+          mode: "on",
+          stepModels: {
+            planning: "planner_run",
+            guidance: "guidance_run",
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(prepared.plugins.harness.stepModels, {
+    planning: "planner_run",
+    summary: "summary_global",
+    guidance: "guidance_run",
+  });
+});
+
 test("SessionExecutionEngine defaults harness miniRunnerMaxTurns to 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
@@ -159,4 +197,37 @@ test("SessionExecutionEngine injects harness resolveModelMessages aligned with s
     resolved.map((item = {}) => String(item?.content || "")),
     ["u1", "a3", "a4"],
   );
+});
+
+test("SessionExecutionEngine injects harness markMessagesSummarized aligned with agent summary policy", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+        },
+      },
+    },
+  });
+
+  const summarizer = prepared.plugins.harness.markMessagesSummarized;
+  assert.equal(typeof summarizer, "function");
+
+  const messages = [
+    { role: "system", content: "policy" },
+    { role: "user", content: "task" },
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
+    { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
+    { role: "tool", content: '{"toolName":"task_summary","ok":true}' },
+  ];
+  const marked = summarizer({ messages });
+  assert.equal(marked, 2);
+  assert.equal(messages[0].summarized, undefined);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, true);
+  assert.equal(messages[3].summarized, true);
+  assert.equal(messages[4].summarized, undefined);
 });
