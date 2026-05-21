@@ -61,7 +61,7 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
   };
 
   await hookManager.emit("before_llm_call", ctx);
-  assert.doesNotMatch(String(messages[0]?.content || ""), /harness-planning-bootstrap/);
+  assert.equal(messages.some((item = {}) => /harness-planning-bootstrap/.test(String(item?.content || ""))), false);
   const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
   assert.equal(names.includes("request_task_acceptance"), false);
 });
@@ -88,11 +88,12 @@ test("harness planning prompt includes current tool names and descriptions", asy
   };
 
   await hookManager.emit("before_llm_call", ctx);
-  const systemPrompt = String(messages[0]?.content || "");
-  assert.match(systemPrompt, /当前可用工具（名称与说明）如下/);
-  assert.match(systemPrompt, /"name": "read_file"/);
-  assert.match(systemPrompt, /"description": "读取文件内容"/);
-  assert.match(systemPrompt, /"name": "web_to_data"/);
+  const planningPrompt = String(messages.at(-1)?.content || "");
+  assert.equal(String(messages.at(-1)?.role || ""), "user");
+  assert.match(planningPrompt, /当前可用工具（名称与说明）如下/);
+  assert.match(planningPrompt, /"name": "read_file"/);
+  assert.match(planningPrompt, /"description": "读取文件内容"/);
+  assert.match(planningPrompt, /"name": "web_to_data"/);
 });
 
 test("harness planning captures checklist and forces acceptance at final output", async () => {
@@ -115,7 +116,7 @@ test("harness planning captures checklist and forces acceptance at final output"
     messages,
     agentContext,
   });
-  assert.match(String(messages[0]?.content || ""), /harness-planning-bootstrap/);
+  assert.match(String(messages.at(-1)?.content || ""), /harness-planning-bootstrap/);
 
   await hookManager.emit("after_llm_call", {
     userId: "u11",
@@ -174,7 +175,7 @@ test("harness planning retries injection when first response has no checklist", 
 
   const secondMessages = [{ role: "user", content: "继续" }];
   await hookManager.emit("before_llm_call", { messages: secondMessages, agentContext });
-  assert.match(String(secondMessages[0]?.content || ""), /harness-planning-bootstrap/);
+  assert.match(String(secondMessages.at(-1)?.content || ""), /harness-planning-bootstrap/);
 
   await hookManager.emit("after_llm_call", {
     ai: { content: "{\"totalGoal\":\"完成任务\",\"taskChecklist\":[{\"index\":1,\"task\":\"解析附件\",\"input\":\"附件\",\"output\":\"解析结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}},{\"index\":2,\"task\":\"执行核心任务\",\"input\":\"需求\",\"output\":\"执行结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}}]}" },

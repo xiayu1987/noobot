@@ -223,6 +223,8 @@ function maybeInjectPlanRevisionPrompt(ctx = {}) {
     },
     buildPromptContent: ({ locale, bucket, state, pendingData }) =>
       buildPlanningRevisionPrompt(locale, bucket, state, pendingData.summaryText || ""),
+    messageRole: "user",
+    injectAt: "append",
   });
 }
 
@@ -263,6 +265,12 @@ async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "") {
   }
   const locale = state?.locale || LOCALE.ZH_CN;
   const prompt = buildPlanningRevisionPrompt(locale, bucket, state, summaryText);
+  const revisionMessages = resolveCapabilityModelMessages(meta, {
+    ctx,
+    purpose: "planning_revision",
+    messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+  });
+  revisionMessages.push({ role: "user", content: prompt });
 
   let response = null;
   try {
@@ -274,12 +282,8 @@ async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "") {
         domain: CAPABILITY_DOMAIN.PLANNING,
       }),
       locale,
-      prompt,
-      messages: resolveCapabilityModelMessages(meta, {
-        ctx,
-        purpose: "planning_revision",
-        messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
-      }),
+      prompt: "",
+      messages: revisionMessages,
       ctx,
       toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_revision"),
     });

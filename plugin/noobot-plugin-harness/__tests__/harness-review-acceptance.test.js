@@ -176,7 +176,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
     messages,
     agentContext,
   });
-  assert.match(String(messages[0]?.content || ""), /harness-planning-bootstrap/);
+  assert.match(String(messages.at(-1)?.content || ""), /harness-planning-bootstrap/);
 
   await hookManager.emit("after_llm_call", {
     userId: "flow-user",

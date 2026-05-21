@@ -74,8 +74,8 @@ function maybeInjectPlanningPrompt(ctx = {}) {
   if (state.flags.planningPromptInjected === true) return false;
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
-  messages.unshift({
-    role: "system",
+  messages.push({
+    role: "user",
     content: [
       translateI18nText(locale, "planningPromptMarker"),
       translateI18nText(locale, "planningPromptLine1"),
@@ -262,6 +262,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
         : `规划输入上下文摘要（精简）如下，必须完整参考：\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
   });
   const planningPromptBase = [
+    translateI18nText(locale, "planningPromptMarker"),
     translateI18nText(locale, "planningPromptLine1"),
     translateI18nText(locale, "planningPromptLine2", {
       example: `{"totalGoal":"完成用户请求","taskOwner":"${getDefaultTaskOwner(locale)}","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}","input":"用户请求/上下文/附件","output":"可用于后续步骤的解析结果","files":{"create":[],"modify":[],"delete":[]}}]}`,
@@ -279,6 +280,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       2,
     ),
   ].join("\n");
+  planningMessages.push({ role: "user", content: planningPromptBase });
   try {
     let response = null;
     try {
@@ -290,7 +292,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
           domain: CAPABILITY_DOMAIN.PLANNING,
         }),
         locale,
-        prompt: planningPromptBase,
+        prompt: "",
         messages: planningMessages,
         ctx,
         toolAllowlist: resolvePlanningToolAllowlist(meta),
