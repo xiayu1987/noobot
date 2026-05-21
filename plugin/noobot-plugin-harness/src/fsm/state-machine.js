@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readJson } from "../store/store.js";
+import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { applyFsmTransitionEffects } from "./audit.js";
 import {
   HARNESS_FSM_STATES,
@@ -17,7 +18,6 @@ const fsmStateCache = new Map(); // runId -> state
 const fsmStateLastAccessed = new Map(); // runId -> timestamp
 const FSM_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const FSM_CACHE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-let fsmCacheCleanupTimer = null;
 
 function touchFsmState(runId = "") {
   if (!runId) return;
@@ -50,13 +50,11 @@ function cleanupStaleFsmStates() {
   }
 }
 
-function startFsmStateCleanupTimer() {
-  if (fsmCacheCleanupTimer) return;
-  fsmCacheCleanupTimer = setInterval(cleanupStaleFsmStates, FSM_CACHE_CLEANUP_INTERVAL_MS);
-  if (fsmCacheCleanupTimer.unref) fsmCacheCleanupTimer.unref();
-}
-
-startFsmStateCleanupTimer();
+ensureIntervalCleanupTask(
+  "harness_fsm_state_cache_cleanup",
+  cleanupStaleFsmStates,
+  FSM_CACHE_CLEANUP_INTERVAL_MS,
+);
 
 async function resolveCurrentFsmState(paths, options = {}) {
   if (!paths?.runId || options.fsmEnabled === false) {

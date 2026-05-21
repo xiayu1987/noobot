@@ -5,24 +5,15 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 
 // ---- Manifest Cache & Debounce ----
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
 const manifestLastAccessed = new Map(); // Track last access time for LRU cleanup
 
-// P0#2: Periodic manifest cache cleanup timer
-let manifestCleanupTimer = null;
 const MANIFEST_CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 const MANIFEST_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
-
-function startManifestCleanupTimer() {
-  if (manifestCleanupTimer) return;
-  manifestCleanupTimer = setInterval(() => {
-    cleanupStaleManifests();
-  }, MANIFEST_CLEANUP_INTERVAL_MS);
-  if (manifestCleanupTimer.unref) manifestCleanupTimer.unref();
-}
 
 function cleanupStaleManifests() {
   const now = Date.now();
@@ -52,8 +43,11 @@ function cleanupStaleManifests() {
   }
 }
 
-// Start cleanup timer on first use
-startManifestCleanupTimer();
+ensureIntervalCleanupTask(
+  "harness_manifest_cache_cleanup",
+  cleanupStaleManifests,
+  MANIFEST_CLEANUP_INTERVAL_MS,
+);
 
 /**
  * Update manifest with memory cache + debounced write.
