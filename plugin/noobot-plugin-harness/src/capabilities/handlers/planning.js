@@ -66,6 +66,25 @@ function buildPlanningToolCatalogPrompt(ctx = {}, locale = LOCALE.ZH_CN) {
   ].join("\n");
 }
 
+function buildPlanningPromptBase(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
+  return [
+    translateI18nText(locale, "planningPromptMarker"),
+    translateI18nText(locale, "planningPromptBody", {
+      example: `{"totalGoal":"完成用户请求","taskOwner":"${getDefaultTaskOwner(locale)}","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}","input":"用户请求/上下文/附件","output":"可用于后续步骤的解析结果","files":{"create":[],"modify":[],"delete":[]}}]}`,
+    }),
+    buildPlanningToolCatalogPrompt(ctx, locale),
+    "",
+    JSON.stringify(
+      {
+        sceneTools: resolveSceneToolNames(ctx),
+        toolAllowlist: resolvePlanningToolAllowlist(meta),
+      },
+      null,
+      2,
+    ),
+  ].join("\n");
+}
+
 function maybeInjectPlanningPrompt(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -77,14 +96,7 @@ function maybeInjectPlanningPrompt(ctx = {}) {
   messages.push({
     role: "user",
     content: [
-      translateI18nText(locale, "planningPromptMarker"),
-      translateI18nText(locale, "planningPromptLine1"),
-      translateI18nText(locale, "planningPromptLine2", {
-        example: `{"totalGoal":"完成用户请求","taskOwner":"${getDefaultTaskOwner(locale)}","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}","input":"用户请求/上下文/附件","output":"可用于后续步骤的解析结果","files":{"create":[],"modify":[],"delete":[]}}]}`,
-      }),
-      translateI18nText(locale, "planningPromptLine3"),
-      translateI18nText(locale, "planningPromptLine4"),
-      buildPlanningToolCatalogPrompt(ctx, locale),
+      buildPlanningPromptBase(locale, ctx),
     ].join("\n"),
   });
   state.flags.planningPromptInjected = true;
@@ -261,25 +273,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
         ? `Planning context summary (compact). Must be fully considered:\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``
         : `规划输入上下文摘要（精简）如下，必须完整参考：\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
   });
-  const planningPromptBase = [
-    translateI18nText(locale, "planningPromptMarker"),
-    translateI18nText(locale, "planningPromptLine1"),
-    translateI18nText(locale, "planningPromptLine2", {
-      example: `{"totalGoal":"完成用户请求","taskOwner":"${getDefaultTaskOwner(locale)}","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}","input":"用户请求/上下文/附件","output":"可用于后续步骤的解析结果","files":{"create":[],"modify":[],"delete":[]}}]}`,
-    }),
-    translateI18nText(locale, "planningPromptLine3"),
-    translateI18nText(locale, "planningPromptLine4"),
-    buildPlanningToolCatalogPrompt(ctx, locale),
-    "",
-    JSON.stringify(
-      {
-        sceneTools: resolveSceneToolNames(ctx),
-        toolAllowlist: resolvePlanningToolAllowlist(meta),
-      },
-      null,
-      2,
-    ),
-  ].join("\n");
+  const planningPromptBase = buildPlanningPromptBase(locale, ctx, meta);
   planningMessages.push({ role: "user", content: planningPromptBase });
   try {
     let response = null;
@@ -467,4 +461,3 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
     return { capability, point, status: "active", changed };
   };
 }
-
