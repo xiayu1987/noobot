@@ -73,7 +73,7 @@ const I18N_TEXT = Object.freeze({
     planningPromptLine4: "限制：工具范围使用通配符 *（表示全量工具）；计划必须是完整计划，后续修正也输出完整计划。",
     planningPromptToolsHeader: "当前可用工具（名称与说明）如下，规划时必须参考：",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
-    guidanceSummaryBody: "请立即输出当前阶段小结：只说明当前已完成内容，最后一行必须写“小结完成”。不要输出计划、下一步或未完成事项。",
+    guidanceSummaryBody: "请立即输出当前阶段小结：只说明当前已完成内容，最后一行必须写“小结完成”。",
     planningRevisionMarker: "<!-- harness-planning-revision -->",
     planningRevisionBody: "请基于当前状态与阶段小结，对既有计划进行增量/修正，输出完整计划 JSON，并格式化给出下一阶段要完成的内容。",
     guidanceMarker: "<!-- harness-guidance -->",
@@ -97,7 +97,7 @@ const I18N_TEXT = Object.freeze({
     planningPromptToolsHeader: "Current available tools (name + description). You must use this list during planning:",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody:
-      'Please output a phase summary now: only state what has been completed so far. The final line must be "Summary complete". Do not output a plan, next steps, or pending items.',
+      'Please output a phase summary now: only state what has been completed so far. The final line must be "Summary complete". ',
     planningRevisionMarker: "<!-- harness-planning-revision -->",
     planningRevisionBody:
       "Based on the current state and phase summary, incrementally revise the existing plan, output the complete plan JSON, and format the next phase to complete.",
