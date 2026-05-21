@@ -29,7 +29,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   miniRunnerMaxTurns: 5,
   miniRunnerToolAllowlist: [],
   acceptance: Object.freeze({
-    semanticValidation: false,
+    semanticValidation: true,
   }),
   review: Object.freeze({
     attachToFinalOutput: true,
