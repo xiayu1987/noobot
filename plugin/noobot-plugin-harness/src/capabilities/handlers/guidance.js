@@ -271,7 +271,7 @@ async function maybeCapturePlanRevisionByInject(ctx = {}) {
   });
 }
 
-async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "") {
+async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "", { baseMessages = null } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -281,11 +281,14 @@ async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "") {
   }
   const locale = state?.locale || LOCALE.ZH_CN;
   const prompt = buildPlanningRevisionPrompt(locale, bucket, state, summaryText);
-  const revisionMessages = resolveCapabilityModelMessages(meta, {
+  const fallbackMessages = resolveCapabilityModelMessages(meta, {
     ctx,
-    purpose: "planning_revision",
+    purpose: "summary",
     messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
   });
+  const revisionMessages = [
+    ...(Array.isArray(baseMessages) ? baseMessages : fallbackMessages),
+  ];
   revisionMessages.push({ role: "user", content: prompt });
 
   let response = null;
@@ -398,6 +401,12 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     return false;
   }
 
+  const modelMessages = resolveCapabilityModelMessages(meta, {
+    ctx,
+    purpose,
+    messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+  });
+
   let response = null;
   try {
     response = await invoker({
@@ -409,11 +418,7 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       }),
       locale,
       prompt,
-      messages: resolveCapabilityModelMessages(meta, {
-        ctx,
-        purpose,
-        messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
-      }),
+      messages: modelMessages,
       ctx,
       toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
     });
@@ -450,7 +455,7 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       detail: { markedCount },
     });
     if (isSummaryCompletionMarked(responseText, locale)) {
-      await revisePlanAfterSummary(ctx, meta, responseText);
+      await revisePlanAfterSummary(ctx, meta, responseText, { baseMessages: modelMessages });
     } else {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,
