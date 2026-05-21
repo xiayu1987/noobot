@@ -153,12 +153,13 @@ function applyRevisedPlanFromText(ctx = {}, text = "", { summary = "", source = 
 }
 
 function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}, summaryText = "") {
+  const planJsonExample =
+    '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}';
   return [
     translateI18nText(locale, "planningRevisionMarker"),
-    translateI18nText(locale, "planningRevisionBody"),
-    locale === LOCALE.EN_US
-      ? 'Output JSON only. Required format: {"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}'
-      : '只输出 JSON。必需格式：{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
+    translateI18nText(locale, "planningRevisionPromptBody", {
+      example: planJsonExample,
+    }),
     JSON.stringify({
       currentSummary: String(summaryText || "").trim(),
       currentPlan: {

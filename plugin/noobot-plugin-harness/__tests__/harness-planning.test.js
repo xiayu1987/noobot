@@ -90,7 +90,7 @@ test("harness planning prompt includes current tool names and descriptions", asy
   await hookManager.emit("before_llm_call", ctx);
   const planningPrompt = String(messages.at(-1)?.content || "");
   assert.equal(String(messages.at(-1)?.role || ""), "user");
-  assert.match(planningPrompt, /当前可用工具（名称与说明）如下/);
+  assert.match(planningPrompt, /可用工具（name\/description）/);
   assert.match(planningPrompt, /"name": "read_file"/);
   assert.match(planningPrompt, /"description": "读取文件内容"/);
   assert.match(planningPrompt, /"name": "web_to_data"/);
