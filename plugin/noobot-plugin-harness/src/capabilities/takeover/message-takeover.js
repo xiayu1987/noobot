@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isMessageInjected } from "./shared.js";
+
 function ensureMessageArray(ctx = {}, target = "auto") {
   const arrays = [];
   if ((target === "auto" || target === "ctx_messages") && Array.isArray(ctx?.messages)) {
@@ -15,14 +17,6 @@ function ensureMessageArray(ctx = {}, target = "auto") {
     arrays.push(ctx.agentContext.payload.messages.system);
   }
   return arrays;
-}
-
-function isMessageInjected(messages = [], id = "", content = "") {
-  if (!Array.isArray(messages) || !messages.length) return false;
-  if (id) {
-    return messages.some((msg) => String(msg?.content || "").includes(`<!-- ${id} -->`));
-  }
-  return messages.some((msg) => String(msg?.content || "") === content);
 }
 
 function resolveInternalMessageType(message = {}) {

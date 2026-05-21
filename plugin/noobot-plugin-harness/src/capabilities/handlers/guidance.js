@@ -229,6 +229,21 @@ function maybeInjectPlanRevisionPrompt(ctx = {}) {
   });
 }
 
+function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", { includeMarker = false } = {}) {
+  const lines = [
+    translateI18nText(locale, "guidanceBody", { reason }),
+    translateI18nText(locale, "guidancePreferTools", { tools: GUIDANCE_WEB_TOOL_NAMES.join(", ") }),
+    translateI18nText(locale, "guidanceWebService", {
+      service: GUIDANCE_WEB_SERVICE_NAME,
+      tool: TOOL_NAME_SET.CALL_SERVICE,
+    }),
+  ];
+  if (includeMarker) {
+    lines.unshift(translateI18nText(locale, "guidanceMarker"));
+  }
+  return lines.join("\n");
+}
+
 async function maybeCapturePlanRevisionByInject(ctx = {}) {
   return captureInjectedResult(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
@@ -343,15 +358,7 @@ function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   const reason = state.pending.guidance;
   messages.unshift({
     role: "system",
-    content: [
-      translateI18nText(locale, "guidanceMarker"),
-      translateI18nText(locale, "guidanceBody", { reason }),
-      translateI18nText(locale, "guidancePreferTools", { tools: GUIDANCE_WEB_TOOL_NAMES.join(", ") }),
-      translateI18nText(locale, "guidanceWebService", {
-        service: GUIDANCE_WEB_SERVICE_NAME,
-        tool: TOOL_NAME_SET.CALL_SERVICE,
-      }),
-    ].join("\n"),
+    content: buildGuidancePromptContent(locale, reason, { includeMarker: true }),
   });
   setPendingStateWithMeta(state, "guidance", null);
   state.counters.consecutiveToolFailures = 0;
@@ -383,14 +390,7 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   } else if (state.pending.guidance) {
     purpose = "guidance";
     reason = state.pending.guidance;
-    prompt = [
-      translateI18nText(locale, "guidanceBody", { reason }),
-      translateI18nText(locale, "guidancePreferTools", { tools: GUIDANCE_WEB_TOOL_NAMES.join(", ") }),
-      translateI18nText(locale, "guidanceWebService", {
-        service: GUIDANCE_WEB_SERVICE_NAME,
-        tool: TOOL_NAME_SET.CALL_SERVICE,
-      }),
-    ].join("\n");
+    prompt = buildGuidancePromptContent(locale, reason);
     setPendingStateWithMeta(state, "guidance", null);
     state.counters.consecutiveToolFailures = 0;
     state.counters.totalToolFailures = 0;

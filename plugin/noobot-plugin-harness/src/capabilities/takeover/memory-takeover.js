@@ -3,17 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isMessageInjected } from "./shared.js";
+
 function normalizeStringArray(input) {
   if (!Array.isArray(input)) return [];
   return input.map((item) => String(item || "").trim()).filter(Boolean);
-}
-
-function isMessageInjected(messages = [], id = "", content = "") {
-  if (!Array.isArray(messages) || !messages.length) return false;
-  if (id) {
-    return messages.some((msg) => String(msg?.content || "").includes(`<!-- ${id} -->`));
-  }
-  return messages.some((msg) => String(msg?.content || "") === content);
 }
 
 function applyMemoryTakeoverForStateCommit(ctx = {}, takeover = {}) {
