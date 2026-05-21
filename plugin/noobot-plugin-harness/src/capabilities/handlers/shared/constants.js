@@ -77,7 +77,7 @@ export const I18N_TEXT = Object.freeze({
     guidanceSummaryBody: "只输出已完成项；最后一行必须为“小结完成”。",
     planningRefinementMarker: "<!-- harness-planning-refinement -->",
     planningRefinementPromptBody:
-      "基于当前状态和阶段小结生成细化的增量计划。\\n仅输出计划 JSON，并给出 nextPhase；taskChecklist 中均为需完成项。\\n格式：{example}",
+      "基于当前状态和阶段小结生成细化的增量计划。\\n仅输出计划 JSON，必须使用 refinement 专用结构：stage=refinement，输出 refinementChecklist（禁止输出 taskChecklist）；每项必须包含 mainStepIndex 且 isMainStep=false，并且必须可映射到 targetMainSteps。\\n格式：{example}",
     planningRevisionMarker: "<!-- harness-planning-revision -->",
     planningRevisionPromptBody:
       "基于当前状态和阶段小结修订计划。\\n仅输出完整计划 JSON，并给出 nextPhase。\\n格式：{example}",
@@ -102,7 +102,7 @@ export const I18N_TEXT = Object.freeze({
     guidanceSummaryBody: 'Only output completed items; final line must be "Summary complete".',
     planningRefinementMarker: "<!-- harness-planning-refinement -->",
     planningRefinementPromptBody:
-      "Generate a refined incremental plan from current state and phase summary.\\nOutput plan JSON only and include nextPhase; all items in taskChecklist are actionable items to complete.\\nFormat: {example}",
+      "Generate a refined incremental plan from current state and phase summary.\\nOutput JSON only and use a refinement-only schema: stage=refinement and refinementChecklist (taskChecklist is forbidden). Every item must include mainStepIndex and isMainStep=false, and must map to targetMainSteps.\\nFormat: {example}",
     planningRevisionMarker: "<!-- harness-planning-revision -->",
     planningRevisionPromptBody:
       "Revise the plan from current state and phase summary.\\nOutput full plan JSON only and include nextPhase.\\nFormat: {example}",

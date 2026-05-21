@@ -13,8 +13,10 @@ import {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
   ensureHarnessBucket,
+  extractJsonObjectFromText,
   extractRawTextContent,
   getDefaultTaskOwner,
+  parseRefinementChecklistFromModelOutput,
   markMessagesSummarized,
   parseTaskChecklistFromModelOutput,
   relaySeparateModelOutputAsUserMessage,
@@ -239,11 +241,33 @@ function applyRevisedPlanFromText(
   const { bucket, state } = holder;
   const locale = state?.locale || LOCALE.ZH_CN;
   const previousChecklist = Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist : [];
-  const checklist = parseTaskChecklistFromModelOutput(text, locale);
-  if (!checklist.length) return false;
-  if (!isPlanPayloadComplete(text, checklist)) return false;
   const normalizedStage =
     String(stage || source || "revision").toLowerCase().includes("refinement") ? "refinement" : "revision";
+  const checklist =
+    normalizedStage === "refinement"
+      ? parseRefinementChecklistFromModelOutput(text, locale)
+      : parseTaskChecklistFromModelOutput(text, locale);
+  if (!checklist.length) return false;
+  if (!isPlanPayloadComplete(text, checklist)) return false;
+  if (normalizedStage === "refinement") {
+    const payloadObject = extractJsonObjectFromText(text);
+    const payloadStage = String(payloadObject?.stage || "").trim().toLowerCase();
+    if (payloadStage !== "refinement") {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_refinement_rejected_invalid_stage",
+        detail: { stage: payloadStage || "missing" },
+      });
+      return false;
+    }
+    if (Array.isArray(payloadObject?.taskChecklist)) {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_refinement_rejected_forbidden_task_checklist",
+      });
+      return false;
+    }
+  }
   const normalizedChecklistForRevision =
     normalizedStage === "revision"
       ? checklist.map((item = {}, index) => ({
@@ -370,7 +394,7 @@ function applyRevisedPlanFromText(
 function buildPlanningRefinementPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}, summaryText = "") {
   const targetMainSteps = resolveRefinementTargetMainSteps(bucket, state);
   const planJsonExample =
-    '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}';
+    '{"stage":"refinement","totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"refinementChecklist":[{"index":101,"mainStepIndex":1,"isMainStep":false,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}';
   return [
     translateI18nText(locale, "planningRefinementMarker"),
     translateI18nText(locale, "planningRefinementPromptBody", {
@@ -421,17 +445,41 @@ function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state =
   ].join("\n");
 }
 
-function buildNextPhaseRelayContent(bucket = {}, locale = LOCALE.ZH_CN) {
+function buildNextPhaseRelayContent(bucket = {}, locale = LOCALE.ZH_CN, stage = "revision") {
   const nextPhase = bucket?.nextPhase && typeof bucket.nextPhase === "object" ? bucket.nextPhase : null;
-  const selected = nextPhase?.checklistIndexes?.length
-    ? (bucket.taskChecklist || []).filter((item) => nextPhase.checklistIndexes.includes(Number(item.index)))
-    : [];
+  const normalizedStage = String(stage || "revision").trim().toLowerCase() === "refinement" ? "refinement" : "revision";
+  const refinementPlan =
+    bucket?.planRefinementIncrementPlan &&
+    typeof bucket.planRefinementIncrementPlan === "object" &&
+    bucket.planRefinementIncrementPlan.stage === "refinement"
+      ? bucket.planRefinementIncrementPlan
+      : null;
+  const selected =
+    normalizedStage === "refinement"
+      ? Array.isArray(refinementPlan?.taskChecklist)
+        ? refinementPlan.taskChecklist
+        : []
+      : nextPhase?.checklistIndexes?.length
+        ? (bucket.taskChecklist || []).filter((item) => nextPhase.checklistIndexes.includes(Number(item.index)))
+        : [];
   const payload = {
     totalGoal: bucket.totalGoal || "",
     nextPhase: nextPhase || {},
-    taskChecklist: selected.length ? selected : bucket.taskChecklist || [],
+    taskChecklist:
+      selected.length
+        ? selected
+        : normalizedStage === "refinement"
+          ? []
+          : bucket.taskChecklist || [],
   };
-  const title = locale === LOCALE.EN_US ? "Next phase plan checklist:" : "下一阶段计划清单：";
+  const title =
+    normalizedStage === "refinement"
+      ? locale === LOCALE.EN_US
+        ? "Refined next phase substeps:"
+        : "细化后的下一阶段子步骤："
+      : locale === LOCALE.EN_US
+        ? "Next phase plan checklist:"
+        : "下一阶段计划清单：";
   return `${title}
 ${JSON.stringify(payload, null, 2)}`;
 }
@@ -584,15 +632,15 @@ async function maybeCapturePlanRevisionByInject(ctx = {}) {
         summary: captureMeta?.summaryText || "",
         stage,
         targetMainStepIndexes: Array.isArray(captureMeta?.targetMainStepIndexes)
-          ? captureMeta.targetMainStepIndexes
-          : [],
+        ? captureMeta.targetMainStepIndexes
+        : [],
       });
       const locale = state?.locale || LOCALE.ZH_CN;
       if (applied) {
         relaySeparateModelOutputAsUserMessage(currentCtx, {
           locale,
           purpose: stage === "revision" ? "next_phase_plan" : "next_phase_plan_refinement",
-          content: buildNextPhaseRelayContent(bucket, locale),
+          content: buildNextPhaseRelayContent(bucket, locale, stage),
           dedupe: true,
         });
       }
@@ -686,7 +734,7 @@ async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "", { b
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "next_phase_plan",
-    content: buildNextPhaseRelayContent(bucket, locale),
+    content: buildNextPhaseRelayContent(bucket, locale, "revision"),
     dedupe: true,
   });
   changed = true;
@@ -745,7 +793,7 @@ async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "", { b
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
       purpose: "next_phase_plan_refinement",
-      content: buildNextPhaseRelayContent(bucket, locale),
+      content: buildNextPhaseRelayContent(bucket, locale, "refinement"),
       dedupe: true,
     });
     changed = true;

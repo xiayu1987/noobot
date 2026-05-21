@@ -68,5 +68,6 @@ export {
   defaultTaskChecklist,
   extractJsonObjectFromText,
   normalizeChecklistItem,
+  parseRefinementChecklistFromModelOutput,
   parseTaskChecklistFromModelOutput,
 } from "./shared/checklist-utils.js";
