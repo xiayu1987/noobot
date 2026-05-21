@@ -45,6 +45,8 @@ export function injectScheduledPrompt(
     consumePendingData = null,
     markCapturePending = null,
     buildPromptContent = null,
+    messageRole = "system",
+    injectAt = "prepend",
   } = {},
 ) {
   const holder = ensureHarnessBucket(ctx);
@@ -57,7 +59,14 @@ export function injectScheduledPrompt(
   const locale = state?.locale || LOCALE.ZH_CN;
   const content = String(buildPromptContent({ bucket, state, ctx, pendingData, locale }) || "").trim();
   if (!content) return false;
-  messages.unshift({ role: "system", content });
+  const normalizedRole = String(messageRole || "system").trim().toLowerCase() === "user" ? "user" : "system";
+  const normalizedInjectAt = String(injectAt || "prepend").trim().toLowerCase();
+  const message = { role: normalizedRole, content };
+  if (normalizedInjectAt === "append") {
+    messages.push(message);
+  } else {
+    messages.unshift(message);
+  }
   if (typeof consumePendingData === "function") {
     consumePendingData({ bucket, state, ctx, pendingData });
   }
