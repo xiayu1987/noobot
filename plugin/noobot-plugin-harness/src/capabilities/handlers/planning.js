@@ -4,7 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { ensureTaskAcceptanceTool } from "./acceptance.js";
-import { LLM_SUMMARY_THRESHOLD, MAX_PLANNING_CAPTURE_ATTEMPTS } from "../../core/thresholds.js";
+import {
+  LLM_SUMMARY_THRESHOLD,
+  MAX_PLANNING_CAPTURE_ATTEMPTS,
+  PLANNING_RAW_OUTPUT_LIMIT,
+  PLANNING_SUMMARY_MAX_ITEMS,
+  PLANNING_COMPACT_TEXT_MAX_CHARS,
+  PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS,
+  PLANNING_CONTEXT_GOAL_MAX_CHARS,
+} from "../../core/thresholds.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -267,7 +275,7 @@ function increasePlanningCaptureAttempts(state = {}) {
   return next;
 }
 
-function compactText(text = "", maxChars = 500) {
+function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
   const raw = String(text || "").replace(/\s+/g, " ").trim();
   if (!raw) return "";
   if (raw.length <= maxChars) return raw;
@@ -292,8 +300,8 @@ function recordPlanningRawOutput(
     bucket.planningRawOutputs = [];
   }
   bucket.planningRawOutputs.push(entry);
-  if (bucket.planningRawOutputs.length > 20) {
-    bucket.planningRawOutputs.splice(0, bucket.planningRawOutputs.length - 20);
+  if (bucket.planningRawOutputs.length > PLANNING_RAW_OUTPUT_LIMIT) {
+    bucket.planningRawOutputs.splice(0, bucket.planningRawOutputs.length - PLANNING_RAW_OUTPUT_LIMIT);
   }
   bucket.lastPlanningRawOutput = entry;
   appendCapabilityLog(ctx, {
@@ -303,7 +311,7 @@ function recordPlanningRawOutput(
       source: entry.source,
       chars: rawText.length,
       parsedCount: entry.parsedCount,
-      preview: compactText(rawText, 300),
+      preview: compactText(rawText, PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS),
     },
   });
   return true;
@@ -363,7 +371,7 @@ function collectAgentStyleHistoryMessages(ctx = {}) {
     .filter((msg) => msg.content);
 }
 
-function summarizePlanningMessages(messages = [], maxItems = 8) {
+function summarizePlanningMessages(messages = [], maxItems = PLANNING_SUMMARY_MAX_ITEMS) {
   const source = Array.isArray(messages) ? messages : [];
   const simplified = source
     .filter((item) => {
@@ -373,7 +381,7 @@ function summarizePlanningMessages(messages = [], maxItems = 8) {
     .slice(-maxItems)
     .map((item = {}) => ({
       role: String(item?.role || "").trim(),
-      content: compactText(extractRawTextContent(item?.content ?? item), 500),
+      content: compactText(extractRawTextContent(item?.content ?? item), PLANNING_COMPACT_TEXT_MAX_CHARS),
     }))
     .filter((item) => item.content);
   return simplified;
@@ -387,8 +395,8 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
   return {
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
-    latestUserGoal: compactText(extractRawTextContent(latestUserMessage?.content), 800),
-    recentDialog: summarizePlanningMessages(messages, 8),
+    latestUserGoal: compactText(extractRawTextContent(latestUserMessage?.content), PLANNING_CONTEXT_GOAL_MAX_CHARS),
+    recentDialog: summarizePlanningMessages(messages, PLANNING_SUMMARY_MAX_ITEMS),
     sceneTools: resolveSceneToolNames(ctx),
     toolAllowlist: resolvePlanningToolAllowlist(meta),
   };
@@ -495,6 +503,94 @@ function restorePlanningForceToolRetry(ctx = {}) {
   return true;
 }
 
+async function processPlanningResult(
+  ctx = {},
+  meta = {},
+  {
+    source = "unknown",
+    rawText = "",
+    locale = LOCALE.ZH_CN,
+    repairInvoker = null,
+  } = {},
+) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) {
+    return { captured: false, retryScheduled: false, sourceType: "none", checklistCount: 0 };
+  }
+  const { bucket, state } = holder;
+  const responseText = String(rawText || "");
+  let parsed = parseChecklistWithLocalRepair(responseText, locale);
+  let jsonRepairAttempted = false;
+
+  if (!parsed.length && hasJsonFeature(responseText) && typeof repairInvoker === "function") {
+    jsonRepairAttempted = true;
+    parsed = await repairChecklistByModel({
+      invoker: repairInvoker,
+      ctx,
+      meta,
+      locale,
+      rawText: responseText,
+    });
+  }
+
+  if (parsed.length && !isPlanPayloadComplete(responseText, parsed)) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_checklist_incomplete_rejected",
+      detail: { reason: "missing_total_goal_or_step_io_files", source },
+    });
+    parsed = [];
+  }
+
+  if (parsed.length) {
+    bucket.taskChecklist = parsed;
+    bucket.taskChecklistSource = "model";
+    state.counters.planningCaptureAttempts = 0;
+    state.flags.planningCaptured = true;
+    return {
+      captured: true,
+      retryScheduled: false,
+      sourceType: "model",
+      checklistCount: parsed.length,
+      jsonRepairAttempted,
+      emptyResponse: !String(responseText || "").trim(),
+      attempts: 0,
+    };
+  }
+
+  bucket.taskChecklist = [];
+  bucket.taskChecklistSource = "none";
+  bucket.taskOwner = getDefaultTaskOwner(locale);
+  const attempts = increasePlanningCaptureAttempts(state);
+  const shouldRetry = !jsonRepairAttempted && attempts < MAX_PLANNING_CAPTURE_ATTEMPTS;
+  if (shouldRetry) {
+    return {
+      captured: false,
+      retryScheduled: true,
+      sourceType: "none",
+      checklistCount: 0,
+      jsonRepairAttempted,
+      attempts,
+      emptyResponse: !String(responseText || "").trim(),
+    };
+  }
+
+  applyDefaultPlanningChecklist(ctx, locale, {
+    reason: jsonRepairAttempted
+      ? "planning_json_repair_unusable"
+      : "planning_retry_exhausted",
+  });
+  return {
+    captured: true,
+    retryScheduled: false,
+    sourceType: String(bucket?.taskChecklistSource || "").trim() || "default",
+    checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
+    jsonRepairAttempted,
+    attempts,
+    emptyResponse: !String(responseText || "").trim(),
+  };
+}
+
 async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -588,59 +684,28 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       source: "separate_model",
       content: responseText,
     });
-    let parsed = parseChecklistWithLocalRepair(responseText, locale);
-    let jsonRepairAttempted = false;
-    if (!parsed.length && hasJsonFeature(responseText)) {
-      jsonRepairAttempted = true;
-      parsed = await repairChecklistByModel({
-        invoker,
-        ctx,
-        meta,
+    const processed = await processPlanningResult(ctx, meta, {
+      source: "separate_model",
+      rawText: responseText,
+      locale,
+      repairInvoker: invoker,
+    });
+
+    if (processed.retryScheduled) {
+      relaySeparateModelOutputAsUserMessage(ctx, {
         locale,
-        rawText: responseText,
+        purpose: "planning",
+        content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
+        dedupe: true,
       });
-    }
-    if (parsed.length) {
-      if (!isPlanPayloadComplete(responseText, parsed)) {
-        appendCapabilityLog(ctx, {
-          domain: CAPABILITY_DOMAIN.PLANNING,
-          event: "planning_checklist_incomplete_rejected",
-          detail: { reason: "missing_total_goal_or_step_io_files", source: "separate_model" },
-        });
-        parsed = [];
-      }
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_checklist_retry_scheduled_by_separate_model",
+        detail: { attempts: processed.attempts, maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS },
+      });
+      return true;
     }
 
-    if (parsed.length) {
-      bucket.taskChecklist = parsed;
-      bucket.taskChecklistSource = "model";
-      state.counters.planningCaptureAttempts = 0;
-      state.flags.planningCaptured = true;
-    } else {
-      bucket.taskChecklist = [];
-      bucket.taskChecklistSource = "none";
-      bucket.taskOwner = getDefaultTaskOwner(locale);
-      const attempts = increasePlanningCaptureAttempts(state);
-      if (!jsonRepairAttempted && attempts < MAX_PLANNING_CAPTURE_ATTEMPTS) {
-        relaySeparateModelOutputAsUserMessage(ctx, {
-          locale,
-          purpose: "planning",
-          content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
-          dedupe: true,
-        });
-        appendCapabilityLog(ctx, {
-          domain: CAPABILITY_DOMAIN.PLANNING,
-          event: "planning_checklist_retry_scheduled_by_separate_model",
-          detail: { attempts, maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS },
-        });
-        return true;
-      }
-      applyDefaultPlanningChecklist(ctx, locale, {
-        reason: jsonRepairAttempted
-          ? "planning_json_repair_unusable"
-          : "planning_retry_exhausted",
-      });
-    }
     applyPlanningMetadata(bucket, responseText, locale, { source: "initial_plan" });
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
@@ -652,9 +717,9 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: "planning_checklist_captured_by_separate_model",
       detail: {
-        checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
-        source: String(bucket?.taskChecklistSource || "").trim() || (parsed.length ? "model" : "default"),
-        emptyResponse: !String(responseText || "").trim(),
+        checklistCount: processed.checklistCount,
+        source: processed.sourceType,
+        emptyResponse: processed.emptyResponse === true,
       },
     });
     return true;
@@ -691,76 +756,48 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     content: sourceContent,
   });
   const locale = state?.locale || LOCALE.ZH_CN;
-  let parsed = parseChecklistWithLocalRepair(sourceContent, locale);
-  let jsonRepairAttempted = false;
-  const repairInvoker = resolveCapabilityModelInvoker(meta);
-  if (!parsed.length && hasJsonFeature(sourceContent) && typeof repairInvoker === "function") {
-    jsonRepairAttempted = true;
-    parsed = await repairChecklistByModel({
-      invoker: repairInvoker,
-      ctx,
-      meta,
-      locale,
-      rawText: sourceContent,
-    });
-  }
-  if (parsed.length) {
-    if (!isPlanPayloadComplete(sourceContent, parsed)) {
-      appendCapabilityLog(ctx, {
-        domain: CAPABILITY_DOMAIN.PLANNING,
-        event: "planning_checklist_incomplete_rejected",
-        detail: { reason: "missing_total_goal_or_step_io_files", source: "after_llm_call" },
-      });
-      parsed = [];
-    }
-  }
+  const processed = await processPlanningResult(ctx, meta, {
+    source: "after_llm_call",
+    rawText: sourceContent,
+    locale,
+    repairInvoker: resolveCapabilityModelInvoker(meta),
+  });
 
-  if (parsed.length) {
-    bucket.taskChecklist = parsed;
-    bucket.taskChecklistSource = "model";
+  if (processed.sourceType === "model") {
     applyPlanningMetadata(bucket, sourceContent, locale, { source: "initial_plan" });
-    state.counters.planningCaptureAttempts = 0;
-    state.flags.planningCaptured = true;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: "planning_checklist_captured",
       detail: {
-        checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
-        source: "model",
+        checklistCount: processed.checklistCount,
+        source: processed.sourceType,
       },
     });
     return true;
   }
-  bucket.taskChecklist = [];
-  bucket.taskChecklistSource = "none";
-  bucket.taskOwner = getDefaultTaskOwner(locale);
-  const attempts = increasePlanningCaptureAttempts(state);
-  if (!jsonRepairAttempted && attempts < MAX_PLANNING_CAPTURE_ATTEMPTS) {
+
+  if (processed.retryScheduled) {
     state.flags.planningPromptInjected = false;
     enablePlanningForceToolRetry(ctx);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: "planning_checklist_retry_scheduled",
       detail: {
-        attempts,
+        attempts: processed.attempts,
         maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS,
-        emptyResponse: !String(sourceContent || "").trim(),
+        emptyResponse: processed.emptyResponse === true,
       },
     });
     return true;
   }
-  applyDefaultPlanningChecklist(ctx, locale, {
-    reason: jsonRepairAttempted
-      ? "planning_json_repair_unusable"
-      : "planning_retry_exhausted",
-  });
+
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: "planning_checklist_captured",
     detail: {
-      checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
-      source: String(bucket?.taskChecklistSource || "").trim() || "default",
-      emptyResponse: !String(sourceContent || "").trim(),
+      checklistCount: processed.checklistCount,
+      source: processed.sourceType || "default",
+      emptyResponse: processed.emptyResponse === true,
     },
   });
   return true;
