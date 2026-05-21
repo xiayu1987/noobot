@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { FAILURE_THRESHOLD, LLM_SUMMARY_THRESHOLD } from "../../core/thresholds.js";
+
 export const LOCALE = Object.freeze({
   ZH_CN: "zh-CN",
   EN_US: "en-US",
@@ -40,13 +42,7 @@ export const GUIDANCE_REASON = Object.freeze({
   CONSECUTIVE_FAILURES: "consecutive_failures",
   ACCUMULATED_FAILURES: "accumulated_failures",
 });
-
-export const FAILURE_THRESHOLD = Object.freeze({
-  CONSECUTIVE: 3,
-  ACCUMULATED: 10,
-});
-
-export const LLM_SUMMARY_THRESHOLD = 15;
+export { FAILURE_THRESHOLD, LLM_SUMMARY_THRESHOLD };
 
 export const TOOL_NAME_SET = Object.freeze({
   CALL_SERVICE: "call_service",

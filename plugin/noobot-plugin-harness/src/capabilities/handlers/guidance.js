@@ -5,7 +5,6 @@
  */
 import {
   CAPABILITY_DOMAIN,
-  FAILURE_THRESHOLD,
   GUIDANCE_REASON,
   GUIDANCE_WEB_SERVICE_NAME,
   GUIDANCE_WEB_TOOL_NAMES,
@@ -37,6 +36,7 @@ import {
   injectScheduledPrompt,
   scheduleInjectTask,
 } from "./inject-fallback.js";
+import { FAILURE_THRESHOLD } from "../../core/thresholds.js";
 
 function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const historyMessages = ctx?.agentContext?.payload?.messages?.history;
