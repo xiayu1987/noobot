@@ -85,6 +85,14 @@ export function parseTaskChecklistFromModelOutput(text = "", locale = LOCALE.ZH_
   return [];
 }
 
+export function parseRefinementChecklistFromModelOutput(text = "", locale = LOCALE.ZH_CN) {
+  const parsed = extractJsonObjectFromText(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const checklist = Array.isArray(parsed.refinementChecklist) ? parsed.refinementChecklist : null;
+  if (!checklist) return [];
+  return checklist.map((item, index) => normalizeChecklistItem(item, index, locale));
+}
+
 export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
   const source = bucket && typeof bucket === "object" ? bucket : {};
   return {
