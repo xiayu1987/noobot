@@ -36,6 +36,7 @@ import {
   injectScheduledPrompt,
   scheduleInjectTask,
 } from "./inject-fallback.js";
+import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../pending-cleanup.js";
 import { FAILURE_THRESHOLD } from "../../core/thresholds.js";
 
 function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
@@ -107,9 +108,9 @@ function updateFailureCounters(ctx = {}, failed = false) {
     state.counters.consecutiveToolFailures += 1;
     state.counters.totalToolFailures += 1;
     if (state.counters.consecutiveToolFailures >= FAILURE_THRESHOLD.CONSECUTIVE) {
-      state.pending.guidance = GUIDANCE_REASON.CONSECUTIVE_FAILURES;
+      setPendingStateWithMeta(state, "guidance", GUIDANCE_REASON.CONSECUTIVE_FAILURES);
     } else if (state.counters.totalToolFailures >= FAILURE_THRESHOLD.ACCUMULATED) {
-      state.pending.guidance = GUIDANCE_REASON.ACCUMULATED_FAILURES;
+      setPendingStateWithMeta(state, "guidance", GUIDANCE_REASON.ACCUMULATED_FAILURES);
     }
     return true;
   }
@@ -196,7 +197,7 @@ function schedulePlanRevisionByInject(ctx = {}, summaryText = "") {
     domain: CAPABILITY_DOMAIN.PLANNING,
     scheduledEvent: "planning_revision_scheduled_by_inject",
     setPendingData: ({ state }) => {
-      state.pending.planRevision = true;
+      setPendingStateWithMeta(state, "planRevision", true);
       state.pending.summaryText = String(summaryText || "").trim();
       return true;
     },
@@ -216,11 +217,10 @@ function maybeInjectPlanRevisionPrompt(ctx = {}) {
         ? { summaryText: String(state.pending.summaryText || "").trim() }
         : null,
     consumePendingData: ({ state }) => {
-      state.pending.planRevision = false;
-      state.pending.summaryText = "";
+      setPendingStateWithMeta(state, "planRevision", false);
     },
     markCapturePending: ({ state }) => {
-      state.flags.planRevisionCapturePending = true;
+      setCaptureFlagStateWithMeta(state, "planRevisionCapturePending", true);
     },
     buildPromptContent: ({ locale, bucket, state, pendingData }) =>
       buildPlanningRevisionPrompt(locale, bucket, state, pendingData.summaryText || ""),
@@ -236,7 +236,7 @@ async function maybeCapturePlanRevisionByInject(ctx = {}) {
     failedEvent: "planning_revision_capture_failed_inject",
     isCapturePending: ({ state }) => state.flags.planRevisionCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
-      state.flags.planRevisionCapturePending = false;
+      setCaptureFlagStateWithMeta(state, "planRevisionCapturePending", false);
       return {};
     },
     applyCaptureResult: ({ responseText, ctx: currentCtx, state, bucket }) => {
@@ -329,7 +329,7 @@ function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
         translateI18nText(locale, "guidanceSummaryBody"),
       ].join("\n"),
     });
-    state.pending.summary = false;
+    setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
     state.flags.guidanceSummaryMarkPending = true;
     appendCapabilityLog(ctx, {
@@ -353,7 +353,7 @@ function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
       }),
     ].join("\n"),
   });
-  state.pending.guidance = null;
+  setPendingStateWithMeta(state, "guidance", null);
   state.counters.consecutiveToolFailures = 0;
   state.counters.totalToolFailures = 0;
   appendCapabilityLog(ctx, {
@@ -378,7 +378,7 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   if (state.pending.summary === true) {
     purpose = "summary";
     prompt = translateI18nText(locale, "guidanceSummaryBody");
-    state.pending.summary = false;
+    setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
   } else if (state.pending.guidance) {
     purpose = "guidance";
@@ -391,7 +391,7 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
         tool: TOOL_NAME_SET.CALL_SERVICE,
       }),
     ].join("\n");
-    state.pending.guidance = null;
+    setPendingStateWithMeta(state, "guidance", null);
     state.counters.consecutiveToolFailures = 0;
     state.counters.totalToolFailures = 0;
   } else {

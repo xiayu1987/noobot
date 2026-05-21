@@ -5,6 +5,7 @@
  */
 import { ensureTaskAcceptanceTool } from "./acceptance.js";
 import { processPlanningResult } from "./planning/result-pipeline.js";
+import { setPendingStateWithMeta } from "../pending-cleanup.js";
 import {
   LLM_SUMMARY_THRESHOLD,
   MAX_PLANNING_CAPTURE_ATTEMPTS,
@@ -443,7 +444,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       if (holder) {
         holder.state.counters.llmTurns += 1;
         if (holder.state.counters.llmTurns > LLM_SUMMARY_THRESHOLD) {
-          holder.state.pending.summary = true;
+          setPendingStateWithMeta(holder.state, "summary", true);
         }
       }
       changed = sanitizeInternalMessages(ctx) || changed;

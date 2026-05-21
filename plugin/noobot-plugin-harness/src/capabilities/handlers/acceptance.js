@@ -38,6 +38,7 @@ import {
   injectScheduledPrompt,
   scheduleInjectTask,
 } from "./inject-fallback.js";
+import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../pending-cleanup.js";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -127,7 +128,7 @@ function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseReport = nul
       const reportIndex = Array.isArray(bucket.acceptanceReports)
         ? bucket.acceptanceReports.lastIndexOf(baseReport)
         : -1;
-      state.pending.acceptanceSemanticValidation = {
+      setPendingStateWithMeta(state, "acceptanceSemanticValidation", {
         reportIndex,
         payload: buildSemanticValidationPromptPayload({
           bucket,
@@ -136,7 +137,7 @@ function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseReport = nul
           finalOutput,
           locale,
         }),
-      };
+      });
       return { reportIndex, hasFinalOutput: Boolean(finalOutput) };
     },
     buildScheduledDetail: ({ result }) => ({
@@ -156,10 +157,10 @@ function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
         ? state.pending.acceptanceSemanticValidation
         : null,
     consumePendingData: ({ state }) => {
-      state.pending.acceptanceSemanticValidation = null;
+      setPendingStateWithMeta(state, "acceptanceSemanticValidation", null);
     },
     markCapturePending: ({ state, pendingData }) => {
-      state.flags.acceptanceSemanticValidationCapturePending = true;
+      setCaptureFlagStateWithMeta(state, "acceptanceSemanticValidationCapturePending", true);
       state.flags.acceptanceSemanticValidationCaptureReportIndex = Number(pendingData.reportIndex);
     },
     buildPromptContent: ({ locale, pendingData }) =>
@@ -178,9 +179,8 @@ function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
     failedEvent: "acceptance_semantic_validation_capture_failed_inject",
     isCapturePending: ({ state }) => state.flags.acceptanceSemanticValidationCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
-      state.flags.acceptanceSemanticValidationCapturePending = false;
       const reportIndex = Number(state.flags.acceptanceSemanticValidationCaptureReportIndex);
-      delete state.flags.acceptanceSemanticValidationCaptureReportIndex;
+      setCaptureFlagStateWithMeta(state, "acceptanceSemanticValidationCapturePending", false);
       return { reportIndex };
     },
     applyCaptureResult: ({ bucket, responseText, captureMeta }) => {

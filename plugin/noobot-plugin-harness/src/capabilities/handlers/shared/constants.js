@@ -128,6 +128,7 @@ export const HARNESS_BUCKET_VERSION = 1;
 
 export const DEFAULT_HARNESS_COUNTERS = Object.freeze({
   llmTurns: 0,
+  hookTurns: 0,
   consecutiveToolFailures: 0,
   totalToolFailures: 0,
 });

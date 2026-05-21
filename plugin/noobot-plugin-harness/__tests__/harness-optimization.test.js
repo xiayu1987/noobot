@@ -55,6 +55,72 @@ test("appendJsonlBuffered supports adaptive flush by reason", async () => {
   await flushAllJsonlBuffers();
 });
 
+test("pending states are auto-cleaned by hook turns without timers", async () => {
+  const runtime = createCapabilityRuntime({
+    handlers: {},
+  });
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            counters: {},
+            flags: {
+              planRevisionCapturePending: true,
+              acceptanceSemanticValidationCapturePending: true,
+              acceptanceSemanticValidationCaptureReportIndex: 3,
+            },
+            signals: {},
+            pending: {
+              guidance: "consecutive_failures",
+              summary: true,
+              planRevision: true,
+              summaryText: "pending-summary",
+              acceptanceSemanticValidation: { reportIndex: 3 },
+            },
+          },
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          lastPlanningRawOutput: null,
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+  const meta = { harness: { pendingTtlHookTurns: 1 } };
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planRevisionCapturePending, true);
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_TURN, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planRevisionCapturePending, true);
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planRevisionCapturePending, true);
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 2);
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.guidance, null);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.summaryText, "");
+  assert.equal(ctx.agentContext.payload.harness.state.pending.acceptanceSemanticValidation, null);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planRevisionCapturePending, false);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.acceptanceSemanticValidationCapturePending, false);
+  assert.equal(
+    "acceptanceSemanticValidationCaptureReportIndex" in ctx.agentContext.payload.harness.state.flags,
+    false,
+  );
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 3);
+});
+
 test("takeover priority pipeline keeps higher priority takeover effective", async () => {
   const runtime = createCapabilityRuntime({
     profile: {

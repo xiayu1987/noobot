@@ -34,6 +34,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   review: Object.freeze({
     attachToFinalOutput: true,
   }),
+  pendingTtlHookTurns: 8,
   manifestDebounceMs: 500,
   jsonlBatchSize: 50,
   jsonlFlushIntervalMs: 2000,
@@ -42,6 +43,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
     maxTime: 2000,
     onTerminal: true,
     onError: true,
+    maxRetry: 5,
+    maxBufferEntries: 5000,
   }),
   maxRuns: 100,
   maxRunAgeDays: 30,
@@ -67,6 +70,7 @@ const HarnessOptionsSchema = z
     miniRunnerToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.miniRunnerToolAllowlist),
     acceptance: z.record(z.any()).optional(),
     review: z.record(z.any()).optional(),
+    pendingTtlHookTurns: z.coerce.number().int().finite().nonnegative().default(DEFAULT_OPTIONS.pendingTtlHookTurns),
     manifestDebounceMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
     jsonlBatchSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlBatchSize),
     jsonlFlushIntervalMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushIntervalMs),
@@ -76,6 +80,13 @@ const HarnessOptionsSchema = z
         maxTime: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxTime),
         onTerminal: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onTerminal),
         onError: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onError),
+        maxRetry: z.coerce.number().int().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxRetry),
+        maxBufferEntries: z.coerce
+          .number()
+          .int()
+          .finite()
+          .positive()
+          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferEntries),
       })
       .partial()
       .default(DEFAULT_OPTIONS.jsonlFlushStrategy),
@@ -163,6 +174,7 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       ...(DEFAULT_OPTIONS.review || {}),
       ...(safe.review && typeof safe.review === "object" ? safe.review : {}),
     },
+    pendingTtlHookTurns: safe.pendingTtlHookTurns,
     jsonlFlushStrategy: {
       ...DEFAULT_OPTIONS.jsonlFlushStrategy,
       maxSize: safe.jsonlBatchSize,

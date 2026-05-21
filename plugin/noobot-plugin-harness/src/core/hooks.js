@@ -90,6 +90,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                   capabilityToolAllowlistByPurpose: options.capabilityToolAllowlistByPurpose,
                   acceptance: options.acceptance,
                   review: options.review,
+                  pendingTtlHookTurns: options.pendingTtlHookTurns,
                   runTraceSink: createRunTraceSinkFn(ctx, options),
                 },
               });
