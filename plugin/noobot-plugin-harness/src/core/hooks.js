@@ -3,18 +3,51 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { flushAllManifests, flushAllJsonlBuffers } from "./lib/store.js";
-import {
-  HARNESS_FLUSH_POINTS,
-  HARNESS_SESSION_CLEANUP_POINTS,
-  HARNESS_TRACE_POINTS,
-  shouldInjectPromptAtPoint,
-} from "./hook-points.js";
-import { cleanupRunsBySessionIds } from "./lib/cleanup.js";
-import { emitHarnessHookProgress, extractBasePath, isPrimaryExecutionScope } from "./runtime-context.js";
-import { injectPrompt, traceHook } from "./tracing/buffer-manager.js";
-import { createRunTraceSink } from "./tracing/run-trace-sink.js";
-import { safeError } from "./data/record-builders.js";
+import { flushAllManifests, flushAllJsonlBuffers } from "../store/store.js";
+import { cleanupRunsBySessionIds } from "../utils/cleanup.js";
+import { injectPrompt, traceHook } from "../tracing/buffer-manager.js";
+import { createRunTraceSink } from "../tracing/run-trace-sink.js";
+import { safeError } from "../data/record-builders.js";
+import { emitHarnessHookProgress, extractBasePath, isPrimaryExecutionScope } from "./context.js";
+import { HARNESS_HOOK_POINTS } from "./constants.js";
+
+export const HARNESS_TRACE_POINTS = Object.freeze([
+  HARNESS_HOOK_POINTS.BEFORE_CONTEXT_BUILD,
+  HARNESS_HOOK_POINTS.AFTER_CONTEXT_BUILD,
+  HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
+  HARNESS_HOOK_POINTS.BEFORE_TURN,
+  HARNESS_HOOK_POINTS.AFTER_TURN,
+  HARNESS_HOOK_POINTS.ON_ABORT,
+  HARNESS_HOOK_POINTS.ON_ERROR,
+  HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
+  HARNESS_HOOK_POINTS.LLM_CALL_ERROR,
+  HARNESS_HOOK_POINTS.BEFORE_TOOL_CALLS,
+  HARNESS_HOOK_POINTS.BEFORE_TOOL_CALL,
+  HARNESS_HOOK_POINTS.AFTER_TOOL_CALL,
+  HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
+  HARNESS_HOOK_POINTS.BEFORE_STATE_COMMIT,
+  HARNESS_HOOK_POINTS.AFTER_STATE_COMMIT,
+  HARNESS_HOOK_POINTS.BEFORE_LLM_CALL,
+  HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
+]);
+
+export const HARNESS_FLUSH_POINTS = Object.freeze([
+  HARNESS_HOOK_POINTS.AFTER_TURN,
+  HARNESS_HOOK_POINTS.ON_ABORT,
+  HARNESS_HOOK_POINTS.ON_ERROR,
+  HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
+]);
+
+export const HARNESS_SESSION_CLEANUP_POINTS = Object.freeze([
+  HARNESS_HOOK_POINTS.AFTER_SESSION_DELETE,
+]);
+
+export function shouldInjectPromptAtPoint(point = "", options = {}) {
+  return (
+    point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL ||
+    (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false)
+  );
+}
 
 export function createRegisterHarnessHooks(deps = {}) {
   const tracePoints = deps.tracePoints || HARNESS_TRACE_POINTS;

@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HARNESS_ENGINEERING_CAPABILITIES } from "./profile.js";
-import { createAcceptanceHandler } from "./handlers/acceptance.js";
-import { createGuidanceHandler } from "./handlers/guidance.js";
-import { createPlanningHandler } from "./handlers/planning.js";
-import { createReviewHandler } from "./handlers/review.js";
-import { shouldProcessPrimaryToolHooks } from "./handlers/shared.js";
+import { HARNESS_ENGINEERING_CAPABILITIES } from "../profile.js";
+import { createAcceptanceHandler } from "./acceptance.js";
+import { createGuidanceHandler } from "./guidance.js";
+import { createPlanningHandler } from "./planning.js";
+import { createReviewHandler } from "./review.js";
+import { shouldProcessPrimaryToolHooks } from "./shared.js";
 
 function createNoopHandler(capability = "") {
   return async ({ point = "" } = {}) => ({

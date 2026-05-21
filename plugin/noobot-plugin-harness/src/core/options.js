@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveCapabilityProfile } from "./capabilities/profile.js";
+import { resolveCapabilityProfile } from "../capabilities/profile.js";
 import { z } from "zod";
 
 export const DEFAULT_OPTIONS = Object.freeze({

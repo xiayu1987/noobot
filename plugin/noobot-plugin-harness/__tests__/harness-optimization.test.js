@@ -9,10 +9,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { normalizeOptions } from "../src/options.js";
-import { appendJsonlBuffered, flushAllJsonlBuffers } from "../src/lib/store.js";
+import { normalizeOptions } from "../src/core/options.js";
+import { appendJsonlBuffered, flushAllJsonlBuffers } from "../src/store/store.js";
 import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
-import { HARNESS_HOOK_POINTS } from "../src/constants.js";
+import { HARNESS_HOOK_POINTS } from "../src/core/constants.js";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../src/fsm/transitions.js";
 import { buildEvent } from "../src/data/record-builders.js";
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";

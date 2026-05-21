@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HARNESS_HOOK_POINTS } from "../constants.js";
+import { HARNESS_HOOK_POINTS } from "../core/constants.js";
 
 export const HARNESS_FSM_STATES = Object.freeze({
   IDLE: "idle",

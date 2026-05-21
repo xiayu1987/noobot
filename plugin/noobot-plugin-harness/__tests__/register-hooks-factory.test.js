@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createRegisterHarnessHooks } from "../src/register-hooks.js";
+import { createRegisterHarnessHooks } from "../src/core/hooks.js";
 
 test("createRegisterHarnessHooks wires trace/flush handlers and executes success flow", async () => {
   const calls = [];

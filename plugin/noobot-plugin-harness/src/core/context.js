@@ -6,9 +6,16 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { safeId } from "./data/record-builders.js";
-import { DEFAULT_OPTIONS } from "./options.js";
+import { createCapabilityRuntime } from "../capabilities/runtime.js";
+import { safeId } from "../data/record-builders.js";
+import { DEFAULT_OPTIONS, normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
+
+export function normalizePlanningGuidance(options = {}) {
+  if (options.planningGuidanceMode === "separate_model" && !options.capabilityModelInvoker) {
+    options.planningGuidanceMode = "inject";
+  }
+}
 
 export function extractRuntime(ctx = {}) {
   return ctx?.agentContext?.execution?.controllers?.runtime || null;
@@ -94,3 +101,31 @@ export function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
 export function resolveHookManager(api = {}) {
   return api.hookManager || api.hooks || api.manager || api?.runtime?.hookManager || api?.runConfig?.hookManager || null;
 }
+
+export function createPluginRuntimeContextFactory(deps = {}) {
+  const normalizeOptionsFn = deps.normalizeOptions || normalizeOptions;
+  const resolveHookManagerFn = deps.resolveHookManager || resolveHookManager;
+  const createCapabilityRuntimeFn = deps.createCapabilityRuntime || createCapabilityRuntime;
+
+  return function createPluginRuntimeContext(api = {}, userOptions = {}) {
+    const options = normalizeOptionsFn(userOptions, api);
+    normalizePlanningGuidance(options);
+
+    const hookManager = resolveHookManagerFn(api);
+    const capabilityRuntime = createCapabilityRuntimeFn({
+      profile: options.capabilityProfile,
+      handlers: options.capabilityHandlers,
+    });
+    options.capabilityRuntime = capabilityRuntime;
+
+    return { options, hookManager, capabilityRuntime };
+  };
+}
+
+export function assertHookManager(hookManager) {
+  if (!hookManager || typeof hookManager.on !== "function") {
+    throw new Error(`${PLUGIN_NAME}: hookManager with .on(point, handler, options) is required`);
+  }
+}
+
+export const createPluginRuntimeContext = createPluginRuntimeContextFactory();

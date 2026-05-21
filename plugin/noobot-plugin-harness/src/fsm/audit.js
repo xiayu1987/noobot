@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../data/record-builders.js";
-import { appendJsonlBuffered } from "../lib/store.js";
+import { appendJsonlBuffered } from "../store/store.js";
 import { HARNESS_FSM_EFFECTS } from "./transitions.js";
 
 export async function appendFsmAudit(paths, ctx = {}, payload = {}, options = {}) {

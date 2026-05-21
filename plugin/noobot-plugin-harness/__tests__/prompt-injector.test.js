@@ -5,7 +5,7 @@ import {
   injectSystemMessages,
   isHarnessPromptAlreadyInjected,
   markPromptAsInjected,
-} from "../src/lib/prompt-injector.js";
+} from "../src/prompt/prompt-injector.js";
 
 test("injectSystemMessages skips already injected prompt IDs and injects missing ones", () => {
   const messages = [

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HARNESS_ENGINEERING_CAPABILITIES, resolveCapabilityProfile } from "./profile.js";
-import { resolveCapabilityHandlers } from "./handlers.js";
+import { resolveCapabilityHandlers } from "./handlers/index.js";
 import { resolveCapabilitiesForHook, CAPABILITY_HOOK_MAP } from "./hook-map.js";
 
 function normalizeToolNameSet(input) {

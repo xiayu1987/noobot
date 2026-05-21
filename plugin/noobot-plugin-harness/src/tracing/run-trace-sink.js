@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { appendJsonlBuffered } from "../lib/store.js";
-import { createRunPaths, ensureRunDir } from "../runtime-context.js";
+import { appendJsonlBuffered } from "../store/store.js";
+import { createRunPaths, ensureRunDir } from "../core/context.js";
 
 export function createRunTraceSink(ctx = {}, options = {}) {
   return async (record = {}) => {
