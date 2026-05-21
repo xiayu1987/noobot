@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { ensureTaskAcceptanceTool } from "./acceptance.js";
+import { LLM_SUMMARY_THRESHOLD, MAX_PLANNING_CAPTURE_ATTEMPTS } from "../../core/thresholds.js";
 import {
   CAPABILITY_DOMAIN,
-  LLM_SUMMARY_THRESHOLD,
   LOCALE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
@@ -254,8 +254,6 @@ function parseChecklistFromPlainText(text = "", locale = LOCALE.ZH_CN) {
     subOwners: [],
   }));
 }
-
-const MAX_PLANNING_CAPTURE_ATTEMPTS = 3;
 
 function increasePlanningCaptureAttempts(state = {}) {
   if (!state || typeof state !== "object") return 1;
