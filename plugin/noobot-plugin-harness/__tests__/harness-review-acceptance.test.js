@@ -644,6 +644,86 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.plan.revisionCount >= 1, true);
 });
 
+test("planning_revision reuses summary model messages in separate_model flow", async () => {
+  const hookManager = createHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      resolveModelMessages: ({ purpose = "", messages = [] } = {}) => {
+        if (purpose === "summary") {
+          return (Array.isArray(messages) ? messages : []).filter((item = {}) =>
+            String(item?.content || "").includes("history"),
+          );
+        }
+        if (purpose === "planning_revision") {
+          return [{ role: "user", content: "REVISION-ONLY" }];
+        }
+        return Array.isArray(messages) ? messages : [];
+      },
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        if (payload.purpose === "summary") return { content: "小结完成" };
+        if (payload.purpose === "planning_revision") {
+          return {
+            content: JSON.stringify({
+              totalGoal: "完成计划修复",
+              taskOwner: "primary_task_owner",
+              taskChecklist: [
+                {
+                  index: 1,
+                  task: "修复计划",
+                  owner: "primary_task_owner",
+                  input: "阶段小结和历史执行",
+                  output: "更新后的计划清单",
+                  files: { create: [], modify: ["src/capabilities/handlers/guidance.js"], delete: [] },
+                },
+              ],
+            }),
+          };
+        }
+        return { content: "{}" };
+      },
+    },
+  );
+
+  const messages = [
+    { role: "user", content: "history-user" },
+    { role: "assistant", content: "history-assistant" },
+    { role: "user", content: "non-history" },
+  ];
+  const agentContext = {
+    payload: {
+      messages: { system: [], history: [] },
+      harness: {
+        taskChecklist: [{ index: 1, task: "初始计划", owner: "primary_task_owner" }],
+        state: {
+          flags: { planningCaptured: true, acceptanceRequested: false },
+          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          signals: { successfulToolCount: 1 },
+          pending: { summary: true, guidance: null },
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", { messages, agentContext });
+
+  assert.deepEqual(invocations.map((item) => item.purpose), ["summary", "planning_revision"]);
+  const summaryMessages = invocations[0].messages;
+  const revisionMessages = invocations[1].messages;
+  const revisionBaseMessages = revisionMessages.slice(0, -1);
+  assert.deepEqual(revisionBaseMessages, summaryMessages);
+  assert.equal(
+    revisionMessages.some((item = {}) => String(item?.content || "").includes("REVISION-ONLY")),
+    false,
+  );
+});
+
 test("harness summary without completion marker does not trigger planning revision", async () => {
   const hookManager = createHookManager();
   const invocations = [];
