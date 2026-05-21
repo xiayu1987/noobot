@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { cleanupOldRuns } from "./lib/cleanup.js";
-
+import { cleanupOldRuns } from "../utils/cleanup.js";
+import { assertHookManager, createPluginRuntimeContext } from "./context.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
-import { extractBasePath } from "./runtime-context.js";
-import { assertHookManager, createPluginRuntimeContext } from "./plugin-runtime-context.js";
-import { registerHarnessHooks } from "./register-hooks.js";
+import { registerHarnessHooks } from "./hooks.js";
+import { normalizeOptions } from "./options.js";
+import { extractBasePath } from "./context.js";
 
 export function createRegisterNoobotPlugin(deps = {}) {
   const createPluginRuntimeContextFn = deps.createPluginRuntimeContext || createPluginRuntimeContext;
@@ -38,3 +38,22 @@ export function createRegisterNoobotPlugin(deps = {}) {
 }
 
 export const registerNoobotPlugin = createRegisterNoobotPlugin();
+
+export function createHarnessPluginFactory(deps = {}) {
+  const normalizeOptionsFn = deps.normalizeOptions || normalizeOptions;
+  const registerNoobotPluginFn = deps.registerNoobotPlugin || registerNoobotPlugin;
+
+  return function createHarnessPlugin(userOptions = {}) {
+    const options = normalizeOptionsFn(userOptions);
+    return {
+      name: PLUGIN_NAME,
+      version: PLUGIN_VERSION,
+      options,
+      register(api = {}) {
+        return registerNoobotPluginFn(api, options);
+      },
+    };
+  };
+}
+
+export const createHarnessPlugin = createHarnessPluginFactory();

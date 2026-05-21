@@ -7,18 +7,18 @@ import {
   updateManifestCached,
   appendJsonlBuffered,
   writeJson,
-} from "../lib/store.js";
+} from "../store/store.js";
 import {
   isHarnessPromptAlreadyInjected,
   injectSystemMessages,
-} from "../lib/prompt-injector.js";
+} from "../prompt/prompt-injector.js";
 import { nowIso, safeError } from "../data/record-builders.js";
 import {
   HARNESS_ENGINEERING_CAPABILITIES,
   resolveCapabilityProfile,
 } from "../capabilities/profile.js";
-import { HARNESS_HOOK_POINTS } from "../constants.js";
-import { createRunPaths, ensureRunDir } from "../runtime-context.js";
+import { HARNESS_HOOK_POINTS } from "../core/constants.js";
+import { createRunPaths, ensureRunDir } from "../core/context.js";
 import { advanceFsmState } from "../fsm/state-machine.js";
 import {
   buildTraceContextSnapshot,

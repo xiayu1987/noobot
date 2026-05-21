@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readJson } from "../lib/store.js";
+import { readJson } from "../store/store.js";
 import { applyFsmTransitionEffects } from "./audit.js";
 import {
   HARNESS_FSM_STATES,

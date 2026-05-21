@@ -4,11 +4,15 @@ Hook-based Harness Engineering plugin for Noobot.
 
 Current architecture split:
 - `src/data/record-builders.js`: trace/snapshot/prompt record generation
+- `src/core/`: plugin composition (`plugin.js`), hook wiring (`hooks.js`), runtime context (`context.js`), options/constants
 - `src/capabilities/profile.js`: capability contract profile (planning/guidance/assistance/memory/synthesis/supervision/review)
 - `src/capabilities/hook-map.js`: capability to lifecycle hook mapping
-- `src/capabilities/handlers.js`: capability handler skeleton (default noop planned handlers)
+- `src/capabilities/handlers/index.js`: capability handler skeleton (default noop planned handlers)
 - `src/capabilities/runtime.js`: capability runtime dispatcher (runs mapped handlers on hook points)
-- `src/index.js`: hook wiring + persistence orchestration
+- `src/prompt/`: prompt injection helpers
+- `src/store/`: manifest/jsonl buffered persistence
+- `src/utils/`: cleanup helpers
+- `src/index.js`: public entry and exports
 
 The plugin is non-invasive: it is attached through Noobot hooks, and hook errors are captured by Noobot's hook manager instead of breaking the main agent flow.
 
