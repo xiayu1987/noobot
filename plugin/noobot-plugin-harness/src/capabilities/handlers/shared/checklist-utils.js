@@ -40,10 +40,20 @@ function normalizeFilePlan(files = null) {
 
 export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_CN) {
   const source = item && typeof item === "object" ? item : {};
+  const normalizedIndex = Number(source.index ?? source.seq ?? source.id ?? index + 1);
+  const mainStepCandidate = Number(
+    source.mainStepIndex ?? source.parentIndex ?? source.refineFrom ?? source.refinementOf,
+  );
+  const hasMainStepCandidate = Number.isFinite(mainStepCandidate);
+  const resolvedMainStepIndex = hasMainStepCandidate ? mainStepCandidate : normalizedIndex;
+  const isMainStep =
+    source.isMainStep === true || !hasMainStepCandidate || resolvedMainStepIndex === normalizedIndex;
   const fallbackTaskName =
     locale === LOCALE.EN_US ? `Task ${index + 1}` : `任务${index + 1}`;
   return {
-    index: Number(source.index ?? source.seq ?? source.id ?? index + 1),
+    index: normalizedIndex,
+    mainStepIndex: Number(resolvedMainStepIndex),
+    isMainStep,
     task: String(source.task ?? source.name ?? source.todo ?? "").trim() || fallbackTaskName,
     owner:
       String(source.owner ?? source.assignee ?? getDefaultTaskOwner(locale)).trim() ||

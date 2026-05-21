@@ -128,7 +128,8 @@ Harness itself only calls a model through `capabilityModelInvoker` when a capabi
 | Planning bootstrap | At `before_llm_call`, when `planningGuidanceMode=separate_model`, the current run has not captured a checklist yet, and a `capabilityModelInvoker` is available. | `planning` | If no invoker is available, separate-model planning is skipped; plugin-runtime normalization may fall back to `inject`. |
 | Planning JSON repair | After planning output is received, only when local parsing fails and the output looks like JSON. | `planning` by default; optional detail override `planning_json_repair` | If repair fails or returns unusable content, Harness applies the built-in default checklist; it does not call another synthesis model. |
 | Summary | When guidance detects the LLM turn counter exceeded the summary threshold and schedules a summary in `separate_model` mode. | `guidance` by default; optional detail override `summary` | If the model call fails, Harness keeps running without blocking the main flow. |
-| Planning revision | After a phase summary is available, Harness asks for a revised complete plan in `separate_model` mode. | `planning` by default; optional detail override `planning_revision` | If no invoker is available, Harness schedules an injected planning-revision prompt instead. |
+| Planning revision | After a phase summary is available, Harness first asks for a revised **main plan** in `separate_model` mode. | `planning` by default; optional detail override `planning_revision` | If no invoker is available, Harness schedules an injected planning-revision prompt instead. |
+| Planning refinement | After revision succeeds, Harness asks for refinement under selected **target main step(s)**. | `planning` by default; optional detail override `planning_refinement` | If no valid target main step remains, refinement is considered converged and skipped. |
 | Guidance | When tool failure thresholds are reached and `planningGuidanceMode=separate_model`. | `guidance` | If the model call fails, Harness logs the failure and continues. |
 | Acceptance semantic validation | During forced final acceptance or active `request_task_acceptance`, only when `acceptance.semanticValidation=true`. | `acceptance` by default; optional detail override `acceptance_semantic_validation` | If validation fails to run, base rule-based acceptance remains authoritative and the main flow continues. |
 
@@ -141,6 +142,55 @@ These steps do **not** call a separate Harness model by themselves:
 - Planning fallback default checklist: local built-in checklist, no model call.
 
 When `planningGuidanceMode=inject`, planning/guidance prompts are injected into the **main agent model** instead of calling `capabilityModelInvoker`; in that mode `stepModels` does not select a separate Harness model for those injected prompts.
+
+## Plan revision/refinement lifecycle (latest)
+
+Harness now uses a two-stage plan update pipeline after summary:
+
+1. **Revision first** (`planning_revision`): update the main plan only (main steps).
+2. **Refinement second** (`planning_refinement`): refine only under selected target main step(s).
+
+This order is the same in both `separate_model` and `inject` modes.
+
+### Main plan vs refinement plan
+
+- **Main plan**: authoritative checklist for top-level steps.
+- **Refinement plan**: step-level refinements tied to specific main steps.
+
+Revision writes main plan; refinement does **not** overwrite main plan.
+
+### Refinement targeting and convergence
+
+- Harness computes `targetMainSteps` from unrefined main steps (prefers `nextPhase.checklistIndexes`).
+- One main step can be refined at most once until a later revision changes/removes/adds that step.
+- If no target main step exists, refinement is skipped as converged (`planning_refinement_converged_no_target_main_step`).
+
+### Hard validation for refinement output
+
+Refinement output is accepted only when items:
+
+- have `mainStepIndex`
+- belong to current `targetMainSteps`
+- are not main steps themselves (`isMainStep !== true`)
+
+Otherwise refinement is rejected (`planning_refinement_rejected_invalid_target_main_step`).
+
+### Retry/limits
+
+- Revision attempts are capped by `MAX_PLAN_REVISION_ATTEMPTS` (default `5`).
+- On each successful revision, changed/new main steps reset refinement eligibility.
+
+### Acceptance payload semantics
+
+Semantic acceptance validation now emphasizes:
+
+- `finalMainPlan` (latest revised main plan)
+- `refinementPlansForFinalMainPlan` (only refinements belonging to the same `mainPlanVersion`)
+
+Validation checklists (`taskChecklist`/`finalPlanChecklist`) are composed from:
+
+- `finalMainPlan.taskChecklist`
+- plus refinement items from `refinementPlansForFinalMainPlan`
 
 ## Acceptance semantic validation
 
