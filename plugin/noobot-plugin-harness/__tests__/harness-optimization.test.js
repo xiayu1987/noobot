@@ -15,8 +15,12 @@ import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
 import { HARNESS_HOOK_POINTS } from "../src/constants.js";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../src/fsm/transitions.js";
 import { buildEvent } from "../src/data/record-builders.js";
+import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
-import { relaySeparateModelOutputAsUserMessage } from "../src/capabilities/handlers/shared.js";
+import {
+  markMessagesSummarized,
+  relaySeparateModelOutputAsUserMessage,
+} from "../src/capabilities/handlers/shared.js";
 
 test("normalizeOptions applies schema defaults and coercion", () => {
   const options = normalizeOptions({
@@ -206,4 +210,70 @@ test("planning separate_model uses injected resolveModelMessages from harness me
   assert.equal(Array.isArray(capturedMessages), true);
   assert.equal(capturedMessages.some((item = {}) => String(item?.content || "") === "drop-me"), false);
   assert.equal(capturedMessages.some((item = {}) => String(item?.content || "") === "keep-me"), true);
+});
+
+test("markMessagesSummarized keeps user/system messages unsummarized", () => {
+  const messages = [
+    { role: "system", content: "policy" },
+    { role: "user", content: "analyze harness plugin" },
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
+    { role: "tool", toolName: "execute_script", content: '{"toolName":"execute_script","ok":true}' },
+  ];
+
+  const marked = markMessagesSummarized(messages);
+  assert.equal(marked, 2);
+  assert.equal(messages[0].summarized, undefined);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, true);
+  assert.equal(messages[3].summarized, true);
+});
+
+test("markMessagesSummarized follows task_summary exclusions", () => {
+  const messages = [
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "task_summary" } }] },
+    { role: "assistant", content: "normal assistant text" },
+    { role: "tool", content: '{"toolName":"task_summary","ok":true}' },
+  ];
+
+  const marked = markMessagesSummarized(messages);
+  assert.equal(marked, 0);
+  assert.equal(messages[0].summarized, undefined);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, undefined);
+});
+
+test("guidance summary prefers injected markMessagesSummarized from harness meta", async () => {
+  const handler = createGuidanceHandler({
+    shouldProcessPrimaryToolHooks: () => true,
+  });
+  let injectedCalled = 0;
+  const ctx = {
+    messages: [{ role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] }],
+    ai: { content: "小结完成" },
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            flags: { guidanceSummaryMarkPending: true },
+            counters: {},
+            signals: {},
+            pending: {},
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+  const meta = {
+    harness: {
+      markMessagesSummarized: ({ messages = [] } = {}) => {
+        injectedCalled += 1;
+        for (const item of messages) item.summarized = true;
+        return Array.isArray(messages) ? messages.length : 0;
+      },
+    },
+  };
+
+  await handler({ capability: "guidance", point: "after_llm_call", ctx, meta });
+  assert.ok(injectedCalled >= 1);
 });

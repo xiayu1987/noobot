@@ -441,6 +441,48 @@ export function resolveCapabilityModelInvoker(meta = {}) {
     : null;
 }
 
+function normalizeCapabilityModelMap(source = {}) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([key, value]) => [
+        String(key || "").trim(),
+        String(
+          value && typeof value === "object" && !Array.isArray(value)
+            ? value.model
+            : value || "",
+        ).trim(),
+      ])
+      .filter(([key, value]) => key && value),
+  );
+}
+
+export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "" } = {}) {
+  const byPurpose = {
+    ...normalizeCapabilityModelMap(meta?.harness?.capabilityModelByPurpose),
+    ...normalizeCapabilityModelMap(meta?.harness?.stepModels),
+  };
+  const normalizedPurpose = String(purpose || "").trim();
+  const normalizedDomain = String(domain || "").trim();
+  const lowerPurpose = normalizedPurpose.toLowerCase();
+  const candidates = [
+    normalizedPurpose,
+    lowerPurpose,
+    lowerPurpose.includes("planning") ? "planning" : "",
+    lowerPurpose.includes("acceptance") ? "acceptance" : "",
+    lowerPurpose === "summary" ? "summary" : "",
+    lowerPurpose.includes("guidance") ? "guidance" : "",
+    normalizedDomain,
+    normalizedDomain.toLowerCase(),
+    "default",
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (byPurpose[candidate]) return byPurpose[candidate];
+  }
+  return "";
+}
+
 export function resolveCapabilityModelMessages(
   meta = {},
   { ctx = {}, purpose = "", messages = [] } = {},
@@ -609,18 +651,80 @@ function markMessageSummarized(messageItem = null) {
   return true;
 }
 
+const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
+
+function resolveToolNamesFromToolCalls(toolCalls = []) {
+  return (Array.isArray(toolCalls) ? toolCalls : [])
+    .map((toolCall = {}) => {
+      if (!toolCall || typeof toolCall !== "object") return "";
+      if (toolCall.name) return String(toolCall.name || "").trim();
+      const fn =
+        toolCall.function && typeof toolCall.function === "object"
+          ? toolCall.function
+          : {};
+      return String(fn.name || "").trim();
+    })
+    .filter(Boolean);
+}
+
+function getMessageToolCalls(messageItem = {}) {
+  if (Array.isArray(messageItem?.tool_calls)) return messageItem.tool_calls;
+  if (Array.isArray(messageItem?.lc_kwargs?.tool_calls)) return messageItem.lc_kwargs.tool_calls;
+  if (Array.isArray(messageItem?.additional_kwargs?.tool_calls)) return messageItem.additional_kwargs.tool_calls;
+  return [];
+}
+
+function resolveToolNameFromMessage(messageItem = {}) {
+  const explicitToolName = String(
+    messageItem?.toolName || messageItem?.tool_name || "",
+  ).trim();
+  if (explicitToolName) return explicitToolName;
+  try {
+    const parsed = JSON.parse(String(messageItem?.content || ""));
+    return String(parsed?.toolName || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function shouldMarkHarnessSummaryMessage(
+  messageItem = {},
+  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
+) {
+  if (!messageItem || typeof messageItem !== "object") return false;
+  const role = String(messageItem?.role || messageItem?.lc_kwargs?.role || "").trim().toLowerCase();
+  if (role === "system" || role === "user") return false;
+  if (role === "tool") {
+    return resolveToolNameFromMessage(messageItem) !== taskSummaryToolName;
+  }
+  if (role !== "assistant") return false;
+  const toolCallNames = resolveToolNamesFromToolCalls(getMessageToolCalls(messageItem));
+  if (toolCallNames.includes(taskSummaryToolName)) return false;
+  return !String(messageItem?.content || "").trim();
+}
+
 export function markMessagesSummarized(messages = []) {
   if (!Array.isArray(messages)) return 0;
   let changedCount = 0;
   for (const messageItem of messages) {
-    if (!messageItem || typeof messageItem !== "object") continue;
-    const role = String(messageItem?.role || messageItem?.lc_kwargs?.role || "").trim().toLowerCase();
-    if (role === "system") continue;
+    if (
+      !shouldMarkHarnessSummaryMessage(messageItem, {
+        taskSummaryToolName: DEFAULT_TASK_SUMMARY_TOOL_NAME,
+      })
+    ) {
+      continue;
+    }
     if (markMessageSummarized(messageItem)) {
       changedCount += 1;
     }
   }
   return changedCount;
+}
+
+export function resolveInjectedMessageSummarizer(meta = {}) {
+  return typeof meta?.harness?.markMessagesSummarized === "function"
+    ? meta.harness.markMessagesSummarized
+    : null;
 }
 
 export function extractJsonObjectFromText(text = "") {

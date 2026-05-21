@@ -14,6 +14,14 @@ import { getModelDefaultFields } from "../spec/defaults.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "../resolver/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 
+const MODEL_NAME_HEADER_KEY = "X-Model-Name";
+const FLOW_HEADER_KEY = "X-Harness-Flow";
+const PURPOSE_HEADER_KEY = "X-Harness-Purpose";
+const DOMAIN_HEADER_KEY = "X-Harness-Domain";
+const DEFAULT_MAIN_FLOW = "agent.main";
+const DEFAULT_MAIN_PURPOSE = "main_agent";
+const DEFAULT_MAIN_DOMAIN = "primary";
+
 function supportsTopP(modelSpec = {}) {
   const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
   const modelName = String(modelSpec?.model || "").trim().toLowerCase();
@@ -95,6 +103,34 @@ export function resolveUseResponsesApi(modelSpec = {}) {
   return modelName.includes("codex") || modelName.includes("gpt-5.3-codex");
 }
 
+function normalizeAdditionalHeaders(input = null) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return Object.fromEntries(
+    Object.entries(input)
+      .map(([key, value]) => [String(key || "").trim(), String(value ?? "").trim()])
+      .filter(([key, value]) => key && value),
+  );
+}
+
+function buildChatModelConfiguration(normalizedSpec = {}, options = {}) {
+  const defaultHeaders = {
+    [MODEL_NAME_HEADER_KEY]: String(normalizedSpec?.model || "").trim(),
+    [FLOW_HEADER_KEY]: DEFAULT_MAIN_FLOW,
+    [PURPOSE_HEADER_KEY]: DEFAULT_MAIN_PURPOSE,
+    [DOMAIN_HEADER_KEY]: DEFAULT_MAIN_DOMAIN,
+    ...normalizeAdditionalHeaders(options?.additionalHeaders),
+  };
+  const config = {
+    defaultHeaders,
+  };
+
+  if (normalizedSpec.base_url) {
+    config.baseURL = normalizedSpec.base_url;
+  }
+
+  return config;
+}
+
 /**
  * Create a ChatOpenAI instance from a model spec.
  * @param {object} modelSpec
@@ -127,9 +163,7 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
     maxTokens:
       normalizedSpec.max_tokens !== undefined ? Number(normalizedSpec.max_tokens) : undefined,
     apiKey,
-    ...(normalizedSpec.base_url
-      ? { configuration: { baseURL: normalizedSpec.base_url } }
-      : {}),
+    configuration: buildChatModelConfiguration(normalizedSpec, options),
     useResponsesApi: resolveUseResponsesApi(normalizedSpec),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });

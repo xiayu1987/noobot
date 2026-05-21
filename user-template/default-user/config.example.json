@@ -245,7 +245,13 @@
   "plugins": {
     "harness": {
       "enabled": true,
-      "mode": "off"
+      "mode": "off",
+      "stepModels": {
+        "planning": "qwen3_6_plus",
+        "guidance": "qwen3_6_plus",
+        "acceptance": "qwen3_6_plus",
+        "default": "qwen3_6_plus"
+      }
     }
   },
   "providers": {
@@ -291,6 +297,29 @@
           ]
         }
       }
+    },
+    "qwen3_6_plus": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${DASHSCOPE_API_KEY}",
+      "base_url": "${DASHSCOPE_API_ADDRESS}",
+      "model": "qwen3.6-plus",
+      "format": "dashscope",
+      "temperature": 0.7,
+      "max_tokens": 10000,
+      "preserve_thinking": false,
+      "thinking_budget": 0,
+      "description": "擅长通用对话、快速响应",
+      "multimodal_generation": {
+        "support_understanding": false,
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "top_p": 0.9,
+      "frequency_penalty": 0.3,
+      "presence_penalty": 0.2
     },
     "qwen3_6_plus_2026_04_02": {
       "enabled": true,

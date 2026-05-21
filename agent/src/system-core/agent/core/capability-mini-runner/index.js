@@ -2,10 +2,13 @@
  * Capability mini-runner for harness external model calls.
  * Independent entry + reuse existing Noobot model/tool core.
  */
-import { createChatModel, adaptToolsForBinding } from "../../../model/index.js";
+import { createChatModel, createChatModelByName, adaptToolsForBinding } from "../../../model/index.js";
 import { executeToolCall } from "../execution/tool-runner.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
+const HARNESS_FLOW_HEADER_KEY = "X-Harness-Flow";
+const HARNESS_PURPOSE_HEADER_KEY = "X-Harness-Purpose";
+const HARNESS_DOMAIN_HEADER_KEY = "X-Harness-Domain";
 
 function normalizeToolCalls(ai = {}) {
   const rawCalls = Array.isArray(ai?.tool_calls)
@@ -98,10 +101,19 @@ function resolveToolsFromContext(ctx = {}, allowPolicy = { allowAll: false, allo
   return tools.filter((tool) => allowPolicy.allowSet.has(String(tool?.name || "").trim()));
 }
 
+function normalizeHeaderValue(input = "") {
+  return String(input || "")
+    .trim()
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120);
+}
+
 export function createAgentCapabilityModelInvoker({
   maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
   toolAllowlist = [],
   createChatModelFn = createChatModel,
+  createChatModelByNameFn = createChatModelByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
   executeToolCallFn = executeToolCall,
 } = {}) {
@@ -147,6 +159,7 @@ export function createAgentCapabilityModelInvoker({
   return async function capabilityModelInvoker({
     purpose = "",
     domain = "",
+    model: modelName = "",
     locale = "zh-CN",
     prompt = "",
     messages = [],
@@ -163,11 +176,27 @@ export function createAgentCapabilityModelInvoker({
 
     const globalConfig = runtime?.globalConfig || {};
     const userConfig = runtime?.userConfig || {};
-    const llm = createChatModelFn({
-      globalConfig,
-      userConfig,
-      streaming: false,
-    });
+    const normalizedModelName = String(modelName || "").trim();
+    const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
+    const normalizedDomain = normalizeHeaderValue(domain || "unknown");
+    const additionalHeaders = {
+      [HARNESS_FLOW_HEADER_KEY]: `harness.${normalizedPurpose}`,
+      [HARNESS_PURPOSE_HEADER_KEY]: normalizedPurpose,
+      [HARNESS_DOMAIN_HEADER_KEY]: normalizedDomain,
+    };
+    const llm = normalizedModelName
+      ? createChatModelByNameFn(normalizedModelName, {
+          globalConfig,
+          userConfig,
+          streaming: false,
+          additionalHeaders,
+        })
+      : createChatModelFn({
+          globalConfig,
+          userConfig,
+          streaming: false,
+          additionalHeaders,
+        });
 
     const effectiveAllowPolicy = Array.isArray(toolAllowlistOverride)
       ? resolveAllowPolicy(toolAllowlistOverride)
@@ -206,6 +235,7 @@ export function createAgentCapabilityModelInvoker({
         turn,
         purpose,
         domain,
+        model: normalizedModelName || undefined,
         locale,
         toolCalls: calls.map((call) => ({ name: call.name, id: call.id || "", status: "pending" })),
       });

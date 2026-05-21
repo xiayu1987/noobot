@@ -108,11 +108,35 @@ runConfig: {
 | `capabilityHandlers` | built-in noop handlers | Optional capability handler overrides for each capability domain. |
 | `planningGuidanceMode` | `separate_model` | `inject` or `separate_model`. In `separate_model`, planning/guidance can call an external model invoker. |
 | `capabilityModelInvoker` | `null` | Optional async invoker used by `separate_model` mode. If the invoker returns `traces`, harness records them to `capability-traces.jsonl`. |
+| `stepModels` / `capabilityModelByPurpose` | `{}` | Per harness flow model alias. Values can be strings or `{ "model": "alias" }`. Recommended big-flow keys: `planning`, `guidance`, `acceptance`, `default`. Detailed purpose keys such as `planning_json_repair`, `summary`, `planning_revision`, `acceptance_semantic_validation` are still accepted when a fine-grained override is needed. |
 | `capabilityToolAllowlist` | `[]` | Tool allowlist passed from harness to capability invoker (all purposes). Empty means no tools. |
 | `capabilityToolAllowlistByPurpose` | `{}` | Per-purpose allowlist override, e.g. `planning`, `guidance`, `summary`, `acceptance_semantic_validation`. |
 | `acceptance.semanticValidation` | `false` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
 | `miniRunnerMaxTurns` | `50` | Hint option for agent-side mini-runner injector (when `planningGuidanceMode=separate_model`). |
 | `miniRunnerToolAllowlist` | `[]` | Fallback allowlist used by the injected mini-runner when harness does not pass a per-call allowlist. Empty means no tools. |
+
+## Model invocation flow
+
+Harness itself only calls a model through `capabilityModelInvoker` when a capability is in `separate_model` mode or when a feature explicitly enables semantic validation. The selected model alias is resolved from `stepModels` / `capabilityModelByPurpose` and is passed to the invoker as `payload.model`.
+
+| Purpose / step | When it calls a model | Model key | Fallback behavior |
+| --- | --- | --- | --- |
+| Planning bootstrap | At `before_llm_call`, when `planningGuidanceMode=separate_model`, the current run has not captured a checklist yet, and a `capabilityModelInvoker` is available. | `planning` | If no invoker is available, separate-model planning is skipped; plugin-runtime normalization may fall back to `inject`. |
+| Planning JSON repair | After planning output is received, only when local parsing fails and the output looks like JSON. | `planning` by default; optional detail override `planning_json_repair` | If repair fails or returns unusable content, Harness applies the built-in default checklist; it does not call another synthesis model. |
+| Summary | When guidance detects the LLM turn counter exceeded the summary threshold and schedules a summary in `separate_model` mode. | `guidance` by default; optional detail override `summary` | If the model call fails, Harness keeps running without blocking the main flow. |
+| Planning revision | After a phase summary is available, Harness asks for a revised complete plan in `separate_model` mode. | `planning` by default; optional detail override `planning_revision` | If no invoker is available, Harness schedules an injected planning-revision prompt instead. |
+| Guidance | When tool failure thresholds are reached and `planningGuidanceMode=separate_model`. | `guidance` | If the model call fails, Harness logs the failure and continues. |
+| Acceptance semantic validation | During forced final acceptance or active `request_task_acceptance`, only when `acceptance.semanticValidation=true`. | `acceptance` by default; optional detail override `acceptance_semantic_validation` | If validation fails to run, base rule-based acceptance remains authoritative and the main flow continues. |
+
+These steps do **not** call a separate Harness model by themselves:
+
+- `promptPolicy`: injects a system prompt into the main agent call.
+- `finalResponseGuard`: injects final-output instructions.
+- Base acceptance: rule-based checklist validation.
+- Review: rule-based report generation.
+- Planning fallback default checklist: local built-in checklist, no model call.
+
+When `planningGuidanceMode=inject`, planning/guidance prompts are injected into the **main agent model** instead of calling `capabilityModelInvoker`; in that mode `stepModels` does not select a separate Harness model for those injected prompts.
 
 ## Acceptance semantic validation
 
@@ -139,6 +163,7 @@ When enabled, both forced final-output acceptance and active `request_task_accep
 
 Mini runner now lives in `agent` and is injected into harness through run-time options (`capabilityModelInvoker`).
 When `planningGuidanceMode` is `separate_model`, the engine can inject the mini runner as the capability model invoker.
+When `stepModels` is set, the injected mini runner uses the configured provider alias/model name for each purpose; custom `capabilityModelInvoker` implementations receive the same value as `payload.model`.
 
 Mini-runner diagnostics are preserved when the invoker returns `traces`:
 
@@ -155,6 +180,12 @@ Example config:
       "enabled": true,
       "mode": "on",
       "planningGuidanceMode": "separate_model",
+      "stepModels": {
+        "planning": "qwen3_6_plus",
+        "guidance": "qwen3_6_plus",
+        "acceptance": "qwen3_6_plus",
+        "default": "qwen3_6_plus"
+      },
       "miniRunnerMaxTurns": 50,
       "miniRunnerToolAllowlist": ["read_context", "search_memory"]
     }

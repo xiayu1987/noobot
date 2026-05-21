@@ -16,6 +16,12 @@
         }
       },
       "planningGuidanceMode": "separate_model",
+      "stepModels": {
+        "planning": "qwen3_6_plus",
+        "guidance": "qwen3_6_plus",
+        "acceptance": "qwen3_6_plus",
+        "default": "qwen3_6_plus"
+      },
       "miniRunnerMaxTurns": 50,
       "miniRunnerToolAllowlist": [
         "read_context",

@@ -25,6 +25,7 @@ import {
   filterSummarizedMessages,
   normalizeRecentWindow,
 } from "../../session/utils/context-window-normalizer.js";
+import { shouldMarkCurrentTurnSummarizedMessage } from "../../context/session/summarized-message-policy.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -460,9 +461,34 @@ export class SessionExecutionEngine {
 
 
   _mergeHarnessPluginOptions(...items) {
+    const deepMergeKeys = new Set([
+      "stepModels",
+      "capabilityModelByPurpose",
+      "capabilityToolAllowlistByPurpose",
+      "acceptance",
+      "review",
+    ]);
     return items.reduce((acc, item) => {
       if (!item || typeof item !== "object") return acc;
-      return { ...acc, ...item };
+      const next = { ...acc };
+      for (const [key, value] of Object.entries(item)) {
+        if (
+          deepMergeKeys.has(key) &&
+          value &&
+          typeof value === "object" &&
+          !Array.isArray(value)
+        ) {
+          next[key] = {
+            ...(next[key] && typeof next[key] === "object" && !Array.isArray(next[key])
+              ? next[key]
+              : {}),
+            ...value,
+          };
+          continue;
+        }
+        next[key] = value;
+      }
+      return next;
     }, {});
   }
 
@@ -480,6 +506,32 @@ export class SessionExecutionEngine {
       const filtered = filterSummarizedMessages(source);
       if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) return [];
       return normalizeRecentWindow(filtered, normalizedLimit);
+    };
+  }
+
+  _createHarnessMarkMessagesSummarized() {
+    return ({ messages = [], taskSummaryToolName = "task_summary" } = {}) => {
+      const source = Array.isArray(messages) ? messages : [];
+      let changedCount = 0;
+      for (const messageItem of source) {
+        if (
+          !shouldMarkCurrentTurnSummarizedMessage(messageItem, {
+            taskSummaryToolName: String(taskSummaryToolName || "").trim() || "task_summary",
+          })
+        ) {
+          continue;
+        }
+        const summarizedAlready =
+          messageItem?.summarized === true &&
+          messageItem?.lc_kwargs?.summarized === true;
+        if (summarizedAlready) continue;
+        messageItem.summarized = true;
+        if (messageItem?.lc_kwargs && typeof messageItem.lc_kwargs === "object") {
+          messageItem.lc_kwargs.summarized = true;
+        }
+        changedCount += 1;
+      }
+      return changedCount;
     };
   }
 
@@ -521,6 +573,7 @@ export class SessionExecutionEngine {
     next.resolveModelMessages = this._createHarnessResolveModelMessages({
       effectiveConfig,
     });
+    next.markMessagesSummarized = this._createHarnessMarkMessagesSummarized();
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
         ? Math.min(Number(next.miniRunnerMaxTurns), 5)

@@ -18,6 +18,10 @@ const LOCAL_PORT = 12341;
 const TARGET_URL = 'https://dashscope.aliyuncs.com';
 const LOG_DIR = path.join(__dirname, 'logs');
 const LOG_PREFIX = 'requests';
+const UNKNOWN_MODEL_NAME = 'unknown_model';
+const UNKNOWN_FLOW_NAME = 'unknown_flow';
+const MODEL_NAME_HEADER_KEY = 'x-model-name';
+const HARNESS_FLOW_HEADER_KEY = 'x-harness-flow';
 const MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const RETAIN_MS = 60 * 60 * 1000; // 仅保留最近 1 小时
 
@@ -35,17 +39,66 @@ function ensureLogDir() {
   fs.mkdirSync(LOG_DIR, { recursive: true });
 }
 
-function cleanupOldLogs(now = Date.now()) {
-  // 降低清理频率：每分钟最多清理一次
-  if (now - lastCleanupAt < 60 * 1000) return;
-  lastCleanupAt = now;
+function sanitizeModelName(modelName = '') {
+  const normalizedModelName = String(modelName || '').trim();
+  if (!normalizedModelName) return UNKNOWN_MODEL_NAME;
 
-  const files = fs.readdirSync(LOG_DIR);
+  return normalizedModelName
+    .replace(/[\\/]+/g, '_')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 120) || UNKNOWN_MODEL_NAME;
+}
+
+function sanitizeFlowName(flowName = '') {
+  const normalizedFlowName = String(flowName || '').trim();
+  if (!normalizedFlowName) return UNKNOWN_FLOW_NAME;
+
+  return normalizedFlowName
+    .replace(/[\\/]+/g, '_')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 120) || UNKNOWN_FLOW_NAME;
+}
+
+function getModelFlowLogDir(modelName = '', flowName = '') {
+  return path.join(LOG_DIR, sanitizeModelName(modelName), sanitizeFlowName(flowName));
+}
+
+function ensureModelFlowLogDir(modelName = '', flowName = '') {
+  const modelFlowLogDir = getModelFlowLogDir(modelName, flowName);
+  fs.mkdirSync(modelFlowLogDir, { recursive: true });
+  return modelFlowLogDir;
+}
+
+function isManagedLogFile(fileName = '') {
+  return new RegExp(`^${LOG_PREFIX}-\\d{4}-\\d{2}-\\d{2}-\\d{3}\\.log$`).test(fileName);
+}
+
+function cleanupOldLogsInDir(dirPath, now) {
+  const files = fs.readdirSync(dirPath);
   for (const file of files) {
-    if (!new RegExp(`^${LOG_PREFIX}-\\d{4}-\\d{2}-\\d{2}-\\d{3}\\.log$`).test(file)) continue;
-    const filePath = path.join(LOG_DIR, file);
+    const filePath = path.join(dirPath, file);
+    let stat = null;
     try {
-      const stat = fs.statSync(filePath);
+      stat = fs.statSync(filePath);
+    } catch (_) {
+      // 忽略单文件异常，避免影响代理主流程
+      continue;
+    }
+
+    if (stat.isDirectory()) {
+      cleanupOldLogsInDir(filePath, now);
+      try {
+        if (!fs.readdirSync(filePath).length) fs.rmdirSync(filePath);
+      } catch (_) {
+        // 忽略清理空目录异常
+      }
+      continue;
+    }
+
+    if (!isManagedLogFile(file)) continue;
+    try {
       if (now - stat.mtimeMs > RETAIN_MS) {
         fs.unlinkSync(filePath);
       }
@@ -55,10 +108,19 @@ function cleanupOldLogs(now = Date.now()) {
   }
 }
 
-function getWritableLogFilePath(entrySizeBytes) {
+function cleanupOldLogs(now = Date.now()) {
+  // 降低清理频率：每分钟最多清理一次
+  if (now - lastCleanupAt < 60 * 1000) return;
+  lastCleanupAt = now;
+
+  cleanupOldLogsInDir(LOG_DIR, now);
+}
+
+function getWritableLogFilePath(entrySizeBytes, modelName = '', flowName = '') {
+  const modelFlowLogDir = ensureModelFlowLogDir(modelName, flowName);
   const dateStr = formatDateForFile(new Date());
   const regex = new RegExp(`^${LOG_PREFIX}-${dateStr}-(\\d{3})\\.log$`);
-  const files = fs.readdirSync(LOG_DIR);
+  const files = fs.readdirSync(modelFlowLogDir);
 
   const indices = files
     .map((fileName) => {
@@ -69,14 +131,14 @@ function getWritableLogFilePath(entrySizeBytes) {
     .sort((leftIndex, rightIndex) => leftIndex - rightIndex);
 
   let index = indices.length ? indices[indices.length - 1] : 1;
-  let filePath = path.join(LOG_DIR, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
+  let filePath = path.join(modelFlowLogDir, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
 
   try {
     if (fs.existsSync(filePath)) {
       const stat = fs.statSync(filePath);
       if (stat.size + entrySizeBytes > MAX_LOG_FILE_SIZE) {
         index += 1;
-        filePath = path.join(LOG_DIR, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
+        filePath = path.join(modelFlowLogDir, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
       }
     }
   } catch (_) {
@@ -86,19 +148,45 @@ function getWritableLogFilePath(entrySizeBytes) {
   return filePath;
 }
 
-function appendLog(logEntry) {
+function appendLog(
+  logEntry,
+  modelName = UNKNOWN_MODEL_NAME,
+  flowName = UNKNOWN_FLOW_NAME,
+) {
   try {
     ensureLogDir();
     cleanupOldLogs(Date.now());
 
     const bytes = Buffer.byteLength(logEntry, 'utf8');
-    const filePath = getWritableLogFilePath(bytes);
+    const filePath = getWritableLogFilePath(bytes, modelName, flowName);
     fs.appendFile(filePath, logEntry, (err) => {
       if (err) console.error('Error writing log:', err);
     });
   } catch (err) {
     console.error('Logger error:', err);
   }
+}
+
+function extractModelNameFromHeaders(headers = {}) {
+  if (!headers || typeof headers !== 'object') return '';
+  const rawHeaderValue = headers[MODEL_NAME_HEADER_KEY];
+  if (Array.isArray(rawHeaderValue)) {
+    return String(rawHeaderValue[0] || '').trim();
+  }
+  return String(rawHeaderValue || '').trim();
+}
+
+function extractHarnessFlowFromHeaders(headers = {}) {
+  if (!headers || typeof headers !== 'object') return '';
+  const rawHeaderValue = headers[HARNESS_FLOW_HEADER_KEY];
+  if (Array.isArray(rawHeaderValue)) {
+    return String(rawHeaderValue[0] || '').trim();
+  }
+  return String(rawHeaderValue || '').trim();
+}
+
+function resolveRequestModelName(req) {
+  return extractModelNameFromHeaders(req?.headers) || UNKNOWN_MODEL_NAME;
 }
 
 const proxy = httpProxy.createProxyServer({
@@ -113,17 +201,24 @@ function logRequestStream(req) {
   req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
   req.on('end', () => {
     const bodyBuffer = Buffer.concat(chunks);
+    const bodyText = bodyBuffer.toString('utf8');
+    const modelName = resolveRequestModelName(req);
+    const harnessFlow = extractHarnessFlowFromHeaders(req?.headers) || UNKNOWN_FLOW_NAME;
+    req.__logModelName = modelName;
+    req.__logHarnessFlow = harnessFlow;
     const logEntry = `
 === ${new Date().toLocaleString()} ===
 [Request]
+Model: ${modelName}
+Flow: ${harnessFlow}
 URL: ${req.url}
 Method: ${req.method}
 Headers: ${JSON.stringify(req.headers, null, 2)}
 Body:
-${bodyBuffer.toString('utf8')}
+${bodyText}
 ========================
 `;
-    appendLog(logEntry);
+    appendLog(logEntry, modelName, harnessFlow);
   });
 }
 
@@ -250,17 +345,24 @@ function resolveFinalResponseBodyText(bodyText = '', contentType = '') {
   return normalizedBodyText;
 }
 
-function logResponse(proxyRes, bodyText) {
+function logResponse(
+  proxyRes,
+  bodyText,
+  modelName = UNKNOWN_MODEL_NAME,
+  harnessFlow = UNKNOWN_FLOW_NAME,
+) {
   const logEntry = `
 --- ${new Date().toLocaleString()} ---
 [Response]
+Model: ${modelName}
+Flow: ${harnessFlow}
 Status: ${proxyRes.statusCode}
 Headers: ${JSON.stringify(proxyRes.headers, null, 2)}
 Body:
 ${bodyText}
 ----------------
 `;
-  appendLog(logEntry);
+  appendLog(logEntry, modelName, harnessFlow);
 }
 
 // 在上游响应层面抓包（关键）
@@ -280,9 +382,15 @@ proxy.on('proxyRes', (proxyRes, req, res) => {
         text,
         proxyRes.headers['content-type'],
       );
-      logResponse(proxyRes, finalText);
+      const modelName = req.__logModelName || UNKNOWN_MODEL_NAME;
+      const harnessFlow = req.__logHarnessFlow || UNKNOWN_FLOW_NAME;
+      logResponse(proxyRes, finalText, modelName, harnessFlow);
     } catch (error) {
-      appendLog(`\n[Response Log Error] ${new Date().toLocaleString()} ${error.stack || error}\n`);
+      appendLog(
+        `\n[Response Log Error] ${new Date().toLocaleString()} ${error.stack || error}\n`,
+        req.__logModelName || UNKNOWN_MODEL_NAME,
+        req.__logHarnessFlow || UNKNOWN_FLOW_NAME,
+      );
     }
   });
 });

@@ -10,6 +10,7 @@ import {
   LOCALE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  defaultTaskChecklist,
   disableBlockedToolsInRegistry,
   ensureHarnessBucket,
   extractJsonObjectFromText,
@@ -19,6 +20,7 @@ import {
   parseTaskChecklistFromModelOutput,
   relaySeparateModelOutputAsUserMessage,
   resolveCapabilityModelInvoker,
+  resolveCapabilityModelName,
   resolveCapabilityModelMessages,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
@@ -427,6 +429,10 @@ async function repairChecklistByModel({
     response = await invoker({
       purpose: "planning_json_repair",
       domain: CAPABILITY_DOMAIN.PLANNING,
+      model: resolveCapabilityModelName(meta, {
+        purpose: "planning_json_repair",
+        domain: CAPABILITY_DOMAIN.PLANNING,
+      }),
       locale,
       prompt: repairPrompt,
       messages: [],
@@ -452,76 +458,32 @@ async function repairChecklistByModel({
   return parseChecklistWithLocalRepair(repairedText, locale);
 }
 
-async function synthesizeChecklistByModel({
-  invoker = null,
-  ctx = {},
-  meta = {},
-  locale = LOCALE.ZH_CN,
-  traces = [],
-} = {}) {
-  if (typeof invoker !== "function") return [];
-  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
-  const compactTraces = Array.isArray(traces)
-    ? traces.map((item = {}) => ({
-      turn: item?.turn,
-      toolCalls: Array.isArray(item?.toolCalls)
-        ? item.toolCalls.map((call = {}) => ({
-          name: call?.name,
-          id: call?.id,
-          status: call?.status,
-          error: call?.error,
-        }))
-        : [],
-    }))
-    : [];
-  const synthPrompt =
-    locale === LOCALE.EN_US
-      ? [
-          "Generate a task checklist JSON from context and tool traces.",
-          "Output JSON only.",
-          'Format: {"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
-          "Do not call tools.",
-          "",
-          `Context: ${JSON.stringify(contextSummary)}`,
-          `Traces: ${JSON.stringify(compactTraces)}`,
-        ].join("\n")
-      : [
-          "请根据上下文与工具轨迹生成任务清单 JSON。",
-          "仅输出 JSON。",
-          '格式：{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
-          "不要调用工具。",
-          "",
-          `上下文：${JSON.stringify(contextSummary)}`,
-          `轨迹：${JSON.stringify(compactTraces)}`,
-        ].join("\n");
-  let response = null;
-  try {
-    response = await invoker({
-      purpose: "planning_json_synthesis",
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      locale,
-      prompt: synthPrompt,
-      messages: [],
-      ctx,
-      toolAllowlist: [],
-    });
-  } catch (error) {
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_json_synthesis_model_failed",
-      detail: { error: String(error?.message || error || "") },
-    });
-    return [];
-  }
-  await appendCapabilityModelTraceLog(ctx, meta, {
+function applyDefaultPlanningChecklist(ctx = {}, locale = LOCALE.ZH_CN, { reason = "" } = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  const owner = getDefaultTaskOwner(locale);
+  bucket.taskChecklist = defaultTaskChecklist(locale);
+  bucket.taskChecklistSource = "default";
+  bucket.taskOwner = owner;
+  bucket.totalGoal =
+    bucket.totalGoal ||
+    (locale === LOCALE.EN_US ? "Complete the user request" : "完成用户请求");
+  bucket.nextPhase = bucket.nextPhase || {
+    objective: locale === LOCALE.EN_US ? "Execute the default plan" : "执行默认计划",
+    checklistIndexes: [1],
+  };
+  state.counters.planningCaptureAttempts = 0;
+  state.flags.planningCaptured = true;
+  appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    purpose: "planning_json_synthesis",
-    response,
+    event: "planning_default_checklist_applied",
+    detail: {
+      reason: String(reason || "").trim() || "planning_parse_failed",
+      checklistCount: bucket.taskChecklist.length,
+    },
   });
-  const text =
-    extractRawTextContent(response?.content) ||
-    String(response?.text || response?.output || "").trim();
-  return parseChecklistWithLocalRepair(text, locale);
+  return true;
 }
 
 function enablePlanningForceToolRetry(ctx = {}) {
@@ -598,6 +560,10 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       response = await invoker({
         purpose: "planning",
         domain: CAPABILITY_DOMAIN.PLANNING,
+        model: resolveCapabilityModelName(meta, {
+          purpose: "planning",
+          domain: CAPABILITY_DOMAIN.PLANNING,
+        }),
         locale,
         prompt: planningPromptBase,
         messages: planningMessages,
@@ -636,16 +602,6 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
         rawText: responseText,
       });
     }
-    if (!parsed.length) {
-      parsed = await synthesizeChecklistByModel({
-        invoker,
-        ctx,
-        meta,
-        locale,
-        traces: response?.traces,
-      });
-    }
-
     if (parsed.length) {
       if (!isPlanPayloadComplete(responseText, parsed)) {
         appendCapabilityLog(ctx, {
@@ -681,7 +637,11 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
         });
         return true;
       }
-      state.flags.planningCaptured = true;
+      applyDefaultPlanningChecklist(ctx, locale, {
+        reason: jsonRepairAttempted
+          ? "planning_json_repair_unusable"
+          : "planning_retry_exhausted",
+      });
     }
     applyPlanningMetadata(bucket, responseText, locale, { source: "initial_plan" });
     relaySeparateModelOutputAsUserMessage(ctx, {
@@ -695,7 +655,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       event: "planning_checklist_captured_by_separate_model",
       detail: {
         checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
-        source: String(bucket?.taskChecklistSource || "").trim() || (parsed.length ? "model" : "none"),
+        source: String(bucket?.taskChecklistSource || "").trim() || (parsed.length ? "model" : "default"),
         emptyResponse: !String(responseText || "").trim(),
       },
     });
@@ -791,13 +751,17 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     });
     return true;
   }
-  state.flags.planningCaptured = true;
+  applyDefaultPlanningChecklist(ctx, locale, {
+    reason: jsonRepairAttempted
+      ? "planning_json_repair_unusable"
+      : "planning_retry_exhausted",
+  });
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: "planning_checklist_captured",
     detail: {
       checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
-      source: "none",
+      source: String(bucket?.taskChecklistSource || "").trim() || "default",
       emptyResponse: !String(sourceContent || "").trim(),
     },
   });

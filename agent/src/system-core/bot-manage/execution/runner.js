@@ -163,12 +163,7 @@ export class SessionExecutionRunner {
         agentContext: runtimeAgentContext,
         userMessage: normalizedMessage,
       });
-      emitEvent(runtimeEventListener, "agent_done", {
-        sessionId: usedSessionId,
-        traceCount: agentResult?.traces?.length || 0,
-      });
-
-      return this.finalizeRunSession({
+      const finalizedResult = await this.finalizeRunSession({
         userId,
         sessionId: usedSessionId,
         parentSessionId,
@@ -181,6 +176,11 @@ export class SessionExecutionRunner {
         userConfig,
         resolvedParentAsyncResultContainer,
       });
+      emitEvent(runtimeEventListener, "agent_done", {
+        sessionId: usedSessionId,
+        traceCount: agentResult?.traces?.length || 0,
+      });
+      return finalizedResult;
     } catch (error) {
       this.upsertParentAsyncTask({
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
