@@ -577,6 +577,33 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
         if (payload.purpose === "summary") {
           return { content: "已完成：完成初始检查\n小结完成" };
         }
+        if (payload.purpose === "planning_refinement") {
+          return {
+            content: JSON.stringify({
+              totalGoal: "完成 harness 计划闭环",
+              taskOwner: "primary_task_owner",
+              nextPhase: { objective: "实现验收闭环", checklistIndexes: [2] },
+              taskChecklist: [
+                {
+                  index: 1,
+                  task: "完成初始检查",
+                  owner: "primary_task_owner",
+                  input: "用户请求",
+                  output: "检查结果",
+                  files: { create: [], modify: ["src/a.js"], delete: [] },
+                },
+                {
+                  index: 2,
+                  task: "实现验收闭环",
+                  owner: "primary_task_owner",
+                  input: "阶段小结和当前计划",
+                  output: "最终计划清单验收结果",
+                  files: { create: ["reports/acceptance.json"], modify: [], delete: [] },
+                },
+              ],
+            }),
+          };
+        }
         if (payload.purpose === "planning_revision") {
           return {
             content: JSON.stringify({
@@ -628,7 +655,11 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
 
   await hookManager.emit("before_llm_call", { messages, agentContext });
 
-  assert.deepEqual(invocations.map((item) => item.purpose), ["summary", "planning_revision"]);
+  assert.deepEqual(invocations.map((item) => item.purpose), [
+    "summary",
+    "planning_revision",
+    "planning_refinement",
+  ]);
   assert.equal(agentContext.payload.harness.totalGoal, "完成 harness 计划闭环");
   assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
   assert.equal(agentContext.payload.harness.taskChecklist[1].input, "阶段小结和当前计划");
@@ -667,6 +698,24 @@ test("planning_revision reuses summary model messages in separate_model flow", a
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
+        if (payload.purpose === "planning_refinement") {
+          return {
+            content: JSON.stringify({
+              totalGoal: "完成计划细化",
+              taskOwner: "primary_task_owner",
+              taskChecklist: [
+                {
+                  index: 1,
+                  task: "细化计划",
+                  owner: "primary_task_owner",
+                  input: "阶段小结和历史执行",
+                  output: "细化后的执行清单",
+                  files: { create: [], modify: ["src/capabilities/handlers/guidance.js"], delete: [] },
+                },
+              ],
+            }),
+          };
+        }
         if (payload.purpose === "planning_revision") {
           return {
             content: JSON.stringify({
@@ -713,10 +762,17 @@ test("planning_revision reuses summary model messages in separate_model flow", a
 
   await hookManager.emit("before_llm_call", { messages, agentContext });
 
-  assert.deepEqual(invocations.map((item) => item.purpose), ["summary", "planning_revision"]);
+  assert.deepEqual(invocations.map((item) => item.purpose), [
+    "summary",
+    "planning_revision",
+    "planning_refinement",
+  ]);
   const summaryMessages = invocations[0].messages;
   const revisionMessages = invocations[1].messages;
+  const refinementMessages = invocations[2].messages;
+  const refinementBaseMessages = refinementMessages.slice(0, -1);
   const revisionBaseMessages = revisionMessages.slice(0, -1);
+  assert.deepEqual(refinementBaseMessages, summaryMessages);
   assert.deepEqual(revisionBaseMessages, summaryMessages);
   assert.equal(
     revisionMessages.some((item = {}) => String(item?.content || "").includes("REVISION-ONLY")),
@@ -866,6 +922,32 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     agentContext,
   };
   await handler({ capability: "guidance", point: "after_llm_call", ctx: revisionCtx, meta });
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(
+    String(agentContext.payload.harness.state.pending.planRevisionStage || ""),
+    "refinement",
+  );
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_refinement_scheduled_by_inject"),
+    true,
+  );
+
+  const thirdCtx = {
+    messages: [{ role: "user", content: "继续执行修订" }],
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx: thirdCtx, meta });
+  assert.equal(
+    thirdCtx.messages.some((msg) => String(msg.content || "").includes("harness-planning-refinement")),
+    true,
+  );
+
+  const refinementCtx = {
+    messages: thirdCtx.messages,
+    ai: revisionCtx.ai,
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "after_llm_call", ctx: refinementCtx, meta });
   assert.equal(agentContext.payload.harness.totalGoal, "完成 inject 模式计划闭环");
   assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
   assert.equal(

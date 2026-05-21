@@ -75,6 +75,9 @@ export const I18N_TEXT = Object.freeze({
     planningPromptToolsHeader: "可用工具（name/description），规划必须参考：",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody: "只输出已完成项；最后一行必须为“小结完成”。",
+    planningRefinementMarker: "<!-- harness-planning-refinement -->",
+    planningRefinementPromptBody:
+      "基于当前状态和阶段小结生成细化的增量计划。\\n仅输出计划 JSON，并给出 nextPhase；taskChecklist 中均为需完成项。\\n格式：{example}",
     planningRevisionMarker: "<!-- harness-planning-revision -->",
     planningRevisionPromptBody:
       "基于当前状态和阶段小结修订计划。\\n仅输出完整计划 JSON，并给出 nextPhase。\\n格式：{example}",
@@ -97,6 +100,9 @@ export const I18N_TEXT = Object.freeze({
     planningPromptToolsHeader: "Available tools (name/description), must be referenced:",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody: 'Only output completed items; final line must be "Summary complete".',
+    planningRefinementMarker: "<!-- harness-planning-refinement -->",
+    planningRefinementPromptBody:
+      "Generate a refined incremental plan from current state and phase summary.\\nOutput plan JSON only and include nextPhase; all items in taskChecklist are actionable items to complete.\\nFormat: {example}",
     planningRevisionMarker: "<!-- harness-planning-revision -->",
     planningRevisionPromptBody:
       "Revise the plan from current state and phase summary.\\nOutput full plan JSON only and include nextPhase.\\nFormat: {example}",
@@ -131,6 +137,7 @@ export const DEFAULT_HARNESS_COUNTERS = Object.freeze({
   hookTurns: 0,
   consecutiveToolFailures: 0,
   totalToolFailures: 0,
+  planRevisionAttempts: 0,
 });
 
 export const DEFAULT_HARNESS_FLAGS = Object.freeze({

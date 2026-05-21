@@ -271,6 +271,12 @@ function applyDefaultPlanningChecklist(ctx = {}, locale = LOCALE.ZH_CN, { reason
 
 function applyPlanningMetadata(bucket = {}, text = "", locale = LOCALE.ZH_CN, { source = "model", summary = "" } = {}) {
   if (!bucket || typeof bucket !== "object") return false;
+  const previousMainPlanVersion = Number.isFinite(Number(bucket.mainPlanVersion))
+    ? Number(bucket.mainPlanVersion)
+    : 0;
+  const mainPlanVersion = previousMainPlanVersion > 0 ? previousMainPlanVersion : 1;
+  bucket.mainPlanVersion = mainPlanVersion;
+  bucket.currentMainPlanVersion = mainPlanVersion;
   const metadata = extractPlanMetadataFromText(text);
   bucket.totalGoal = metadata.totalGoal || bucket.totalGoal || "";
   bucket.taskOwner = metadata.taskOwner || bucket.taskOwner || getDefaultTaskOwner(locale);
@@ -280,10 +286,13 @@ function applyPlanningMetadata(bucket = {}, text = "", locale = LOCALE.ZH_CN, { 
   if (!Array.isArray(bucket.planRevisions)) bucket.planRevisions = [];
   bucket.planRevisions.push({
     source,
+    stage: "main_plan",
+    mainPlanVersion,
     revisedAt: new Date().toISOString(),
     totalGoal: bucket.totalGoal || "",
     nextPhase: bucket.nextPhase || null,
     summary: String(summary || "").trim() || undefined,
+    taskChecklist: Array.isArray(bucket.taskChecklist) ? [...bucket.taskChecklist] : [],
     checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
   });
   if (bucket.planRevisions.length > 20) bucket.planRevisions.splice(0, bucket.planRevisions.length - 20);
