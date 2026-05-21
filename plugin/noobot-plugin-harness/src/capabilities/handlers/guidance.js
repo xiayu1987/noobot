@@ -15,7 +15,9 @@ import {
   appendCapabilityModelTraceLog,
   ensureHarnessBucket,
   extractRawTextContent,
+  getDefaultTaskOwner,
   markMessagesSummarized,
+  parseTaskChecklistFromModelOutput,
   relaySeparateModelOutputAsUserMessage,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
@@ -23,6 +25,16 @@ import {
   shouldUseSeparateModel,
   translateI18nText,
 } from "./shared.js";
+import {
+  extractPlanMetadataFromText,
+  isPlanPayloadComplete,
+  isSummaryCompletionMarked,
+} from "./model-response-parser.js";
+import {
+  captureInjectedResult,
+  injectScheduledPrompt,
+  scheduleInjectTask,
+} from "./inject-fallback.js";
 
 function markGuidanceSummarizedMessages(ctx = {}) {
   const historyMessages = ctx?.agentContext?.payload?.messages?.history;
@@ -83,6 +95,193 @@ function updateFailureCounters(ctx = {}, failed = false) {
     return true;
   }
   state.counters.consecutiveToolFailures = 0;
+  return true;
+}
+
+function applyRevisedPlanFromText(ctx = {}, text = "", { summary = "", source = "planning_revision" } = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const checklist = parseTaskChecklistFromModelOutput(text, locale);
+  if (!checklist.length) return false;
+  if (!isPlanPayloadComplete(text, checklist)) return false;
+  const payload = extractPlanMetadataFromText(text);
+  bucket.taskChecklist = checklist;
+  bucket.taskChecklistSource = source;
+  bucket.totalGoal = String(payload.totalGoal ?? bucket.totalGoal ?? "").trim();
+  bucket.taskOwner = String(payload.taskOwner ?? bucket.taskOwner ?? getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale);
+  const nextPhase = payload.nextPhase && typeof payload.nextPhase === "object" ? payload.nextPhase : {};
+  if (nextPhase.objective || nextPhase.content || nextPhase.checklistIndexes.length) {
+    bucket.nextPhase = nextPhase;
+  }
+  if (!Array.isArray(bucket.planRevisions)) bucket.planRevisions = [];
+  bucket.planRevisions.push({
+    source,
+    revisedAt: new Date().toISOString(),
+    summary: String(summary || "").trim() || undefined,
+    totalGoal: bucket.totalGoal || "",
+    nextPhase: bucket.nextPhase || null,
+    checklistCount: checklist.length,
+  });
+  if (bucket.planRevisions.length > 20) bucket.planRevisions.splice(0, bucket.planRevisions.length - 20);
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event: "planning_checklist_revised_after_summary",
+    detail: { checklistCount: checklist.length, hasNextPhase: Boolean(bucket.nextPhase) },
+  });
+  return true;
+}
+
+function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}, summaryText = "") {
+  return [
+    translateI18nText(locale, "planningRevisionMarker"),
+    translateI18nText(locale, "planningRevisionBody"),
+    locale === LOCALE.EN_US
+      ? 'Output JSON only. Required format: {"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}'
+      : '只输出 JSON。必需格式：{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
+    JSON.stringify({
+      currentSummary: String(summaryText || "").trim(),
+      currentPlan: {
+        totalGoal: bucket.totalGoal || "",
+        taskOwner: bucket.taskOwner || getDefaultTaskOwner(locale),
+        taskChecklist: bucket.taskChecklist || [],
+        nextPhase: bucket.nextPhase || null,
+      },
+      harnessState: {
+        signals: state.signals || {},
+        counters: state.counters || {},
+      },
+    }, null, 2),
+  ].join("\n");
+}
+
+function buildNextPhaseRelayContent(bucket = {}, locale = LOCALE.ZH_CN) {
+  const nextPhase = bucket?.nextPhase && typeof bucket.nextPhase === "object" ? bucket.nextPhase : null;
+  const selected = nextPhase?.checklistIndexes?.length
+    ? (bucket.taskChecklist || []).filter((item) => nextPhase.checklistIndexes.includes(Number(item.index)))
+    : [];
+  const payload = {
+    totalGoal: bucket.totalGoal || "",
+    nextPhase: nextPhase || {},
+    taskChecklist: selected.length ? selected : bucket.taskChecklist || [],
+  };
+  const title = locale === LOCALE.EN_US ? "Next phase plan checklist:" : "下一阶段计划清单：";
+  return `${title}
+${JSON.stringify(payload, null, 2)}`;
+}
+
+function schedulePlanRevisionByInject(ctx = {}, summaryText = "") {
+  return scheduleInjectTask(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    scheduledEvent: "planning_revision_scheduled_by_inject",
+    setPendingData: ({ state }) => {
+      state.pending.planRevision = true;
+      state.pending.summaryText = String(summaryText || "").trim();
+      return true;
+    },
+    buildScheduledDetail: ({ bucket, state }) => ({
+      hasSummaryText: Boolean(state.pending.summaryText),
+      checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
+    }),
+  });
+}
+
+function maybeInjectPlanRevisionPrompt(ctx = {}) {
+  return injectScheduledPrompt(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    injectedEvent: "planning_revision_prompt_injected",
+    getPendingData: ({ state }) =>
+      state.pending.planRevision === true
+        ? { summaryText: String(state.pending.summaryText || "").trim() }
+        : null,
+    consumePendingData: ({ state }) => {
+      state.pending.planRevision = false;
+      state.pending.summaryText = "";
+    },
+    markCapturePending: ({ state }) => {
+      state.flags.planRevisionCapturePending = true;
+    },
+    buildPromptContent: ({ locale, bucket, state, pendingData }) =>
+      buildPlanningRevisionPrompt(locale, bucket, state, pendingData.summaryText || ""),
+  });
+}
+
+async function maybeCapturePlanRevisionByInject(ctx = {}) {
+  return captureInjectedResult(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    completedEvent: "planning_revision_capture_completed_inject",
+    failedEvent: "planning_revision_capture_failed_inject",
+    isCapturePending: ({ state }) => state.flags.planRevisionCapturePending === true,
+    consumeCaptureMeta: ({ state }) => {
+      state.flags.planRevisionCapturePending = false;
+      return {};
+    },
+    applyCaptureResult: ({ responseText, ctx: currentCtx, state, bucket }) => {
+      const applied = applyRevisedPlanFromText(currentCtx, responseText, {
+        source: "planning_revision_inject",
+      });
+      if (!applied) return { applied: false };
+      const locale = state?.locale || LOCALE.ZH_CN;
+      relaySeparateModelOutputAsUserMessage(currentCtx, {
+        locale,
+        purpose: "next_phase_plan",
+        content: buildNextPhaseRelayContent(bucket, locale),
+        dedupe: true,
+      });
+      return { applied: true, detail: { checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0 } };
+    },
+  });
+}
+
+async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "") {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  const invoker = resolveCapabilityModelInvoker(meta);
+  if (!invoker) {
+    return schedulePlanRevisionByInject(ctx, summaryText);
+  }
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const prompt = buildPlanningRevisionPrompt(locale, bucket, state, summaryText);
+
+  let response = null;
+  try {
+    response = await invoker({
+      purpose: "planning_revision",
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      locale,
+      prompt,
+      messages: resolveCapabilityModelMessages(meta, {
+        ctx,
+        purpose: "planning_revision",
+        messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+      }),
+      ctx,
+      toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_revision"),
+    });
+  } catch (error) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_revision_model_failed",
+      detail: { error: String(error?.message || error || "") },
+    });
+    return false;
+  }
+  await appendCapabilityModelTraceLog(ctx, meta, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    purpose: "planning_revision",
+    response,
+  });
+  const responseText = extractRawTextContent(response?.content) || String(response?.text || response?.output || "").trim();
+  const applied = applyRevisedPlanFromText(ctx, responseText, { summary: summaryText });
+  if (!applied) return false;
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "next_phase_plan",
+    content: buildNextPhaseRelayContent(bucket, locale),
+    dedupe: true,
+  });
   return true;
 }
 
@@ -218,6 +417,14 @@ async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       event: "summary_messages_marked",
       detail: { markedCount },
     });
+    if (isSummaryCompletionMarked(responseText, locale)) {
+      await revisePlanAfterSummary(ctx, meta, responseText);
+    } else {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.GUIDANCE,
+        event: "summary_completion_marker_missing",
+      });
+    }
   }
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
@@ -242,6 +449,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
       if (shouldUseSeparateModel(meta)) {
         changed = (await runGuidanceBySeparateModel(ctx, meta)) || changed;
       } else {
+        changed = maybeInjectPlanRevisionPrompt(ctx) || changed;
         changed = maybeInjectGuidanceOrSummaryPrompt(ctx) || changed;
       }
     }
@@ -263,8 +471,23 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
           event: "summary_messages_marked",
           detail: { markedCount },
         });
+        const summaryText = extractRawTextContent(ctx?.ai?.content) || extractRawTextContent(ctx?.modelResponse?.content) || "";
+        const locale = holder.state?.locale || LOCALE.ZH_CN;
+        if (isSummaryCompletionMarked(summaryText, locale)) {
+          if (!shouldUseSeparateModel(meta) && !resolveCapabilityModelInvoker(meta)) {
+            changed = schedulePlanRevisionByInject(ctx, summaryText) || changed;
+          } else {
+            changed = (await revisePlanAfterSummary(ctx, meta, summaryText)) || changed;
+          }
+        } else {
+          appendCapabilityLog(ctx, {
+            domain: CAPABILITY_DOMAIN.GUIDANCE,
+            event: "summary_completion_marker_missing",
+          });
+        }
         changed = markedCount > 0 || changed;
       }
+      changed = (await maybeCapturePlanRevisionByInject(ctx)) || changed;
     }
     return { capability, point, status: "active", changed };
   };
