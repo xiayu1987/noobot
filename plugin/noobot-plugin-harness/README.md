@@ -115,7 +115,7 @@ runConfig: {
 | `stepModels` / `capabilityModelByPurpose` | `{}` | Per harness flow model alias. Values can be strings or `{ "model": "alias" }`. Recommended big-flow keys: `planning`, `guidance`, `acceptance`, `default`. Detailed purpose keys such as `planning_json_repair`, `summary`, `planning_revision`, `acceptance_semantic_validation` are still accepted when a fine-grained override is needed. |
 | `capabilityToolAllowlist` | `[]` | Tool allowlist passed from harness to capability invoker (all purposes). Empty means no tools. |
 | `capabilityToolAllowlistByPurpose` | `{}` | Per-purpose allowlist override, e.g. `planning`, `guidance`, `summary`, `acceptance_semantic_validation`. |
-| `acceptance.semanticValidation` | `false` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
+| `acceptance.semanticValidation` | `true` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
 | `miniRunnerMaxTurns` | `50` | Hint option for agent-side mini-runner injector (when `planningGuidanceMode=separate_model`). |
 | `miniRunnerToolAllowlist` | `[]` | Fallback allowlist used by the injected mini-runner when harness does not pass a per-call allowlist. Empty means no tools. |
 
@@ -144,7 +144,7 @@ When `planningGuidanceMode=inject`, planning/guidance prompts are injected into 
 
 ## Acceptance semantic validation
 
-By default, acceptance is rule-based and uses the captured harness checklist plus runtime signals. To additionally verify semantic consistency between the checklist, the acceptance report, tool signals, and final output, enable:
+By default, acceptance includes semantic validation (when `capabilityModelInvoker` is available) in addition to rule-based checks. To explicitly configure it:
 
 ```json
 {
