@@ -15,11 +15,11 @@ import {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
   attachArtifactsToAssistantResult,
+  buildPlanSnapshot,
   defaultTaskChecklist,
   disableBlockedCalls,
   disableBlockedToolsInRegistry,
   ensureHarnessBucket,
-  extractJsonObjectFromText,
   extractRawTextContent,
   getDefaultTaskOwner,
   mapAttachmentRecordsToMetas,
@@ -28,8 +28,15 @@ import {
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityToolAllowlist,
+  resolvePlanningGuidanceMode,
   translateI18nText,
 } from "./shared.js";
+import { parseSemanticValidationResult } from "./model-response-parser.js";
+import {
+  captureInjectedResult,
+  injectScheduledPrompt,
+  scheduleInjectTask,
+} from "./inject-fallback.js";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -64,6 +71,7 @@ function buildAcceptanceReport({ bucket = {}, state = {}, mode = ACCEPTANCE_MODE
       status: evaluateTaskStatus(normalized, state),
     };
   });
+  const plan = buildPlanSnapshot(bucket, locale);
   return {
     mode,
     acceptedAt: new Date().toISOString(),
@@ -73,18 +81,132 @@ function buildAcceptanceReport({ bucket = {}, state = {}, mode = ACCEPTANCE_MODE
       inProgress: items.filter((item) => item.status === TASK_STATUS.IN_PROGRESS).length,
       pending: items.filter((item) => item.status === TASK_STATUS.PENDING).length,
     },
+    // Always validate against the latest harness plan checklist (including post-summary revisions).
     taskChecklist: items,
+    finalPlanChecklist: items,
+    plan,
   };
 }
 
-function parseSemanticValidationResult(responseText = "") {
-  const parsed = extractJsonObjectFromText(responseText);
-  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+function buildSemanticValidationPromptPayload({
+  bucket = {},
+  state = {},
+  baseReport = null,
+  finalOutput = "",
+  locale = LOCALE.ZH_CN,
+} = {}) {
   return {
-    status: "warn",
-    consistent: false,
-    raw: String(responseText || "").trim(),
+    expectedSchema: {
+      status: "pass|warn|fail",
+      consistent: true,
+      missingItems: [],
+      unsupportedClaims: [],
+      checklistCoverage: [
+        { index: 1, task: "...", covered: true, evidence: "...", risk: "low|medium|high" },
+      ],
+      suggestions: [],
+    },
+    finalPlanChecklist: bucket.taskChecklist || [],
+    taskChecklist: bucket.taskChecklist || [],
+    plan: buildPlanSnapshot(bucket, locale),
+    acceptanceReport: baseReport,
+    toolSignals: state.signals || {},
+    finalOutput,
   };
+}
+
+function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseReport = null) {
+  if (!baseReport) return false;
+  return scheduleInjectTask(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    scheduledEvent: "acceptance_semantic_validation_scheduled_by_inject",
+    setPendingData: ({ bucket, state }) => {
+      const locale = state?.locale || LOCALE.ZH_CN;
+      const finalOutput = String(ctx?.result?.output || "").trim();
+      const reportIndex = Array.isArray(bucket.acceptanceReports)
+        ? bucket.acceptanceReports.lastIndexOf(baseReport)
+        : -1;
+      state.pending.acceptanceSemanticValidation = {
+        reportIndex,
+        payload: buildSemanticValidationPromptPayload({
+          bucket,
+          state,
+          baseReport,
+          finalOutput,
+          locale,
+        }),
+      };
+      return { reportIndex, hasFinalOutput: Boolean(finalOutput) };
+    },
+    buildScheduledDetail: ({ result }) => ({
+      reportIndex: Number(result?.reportIndex ?? -1),
+      hasFinalOutput: result?.hasFinalOutput === true,
+    }),
+  });
+}
+
+function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
+  return injectScheduledPrompt(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    injectedEvent: "acceptance_semantic_validation_prompt_injected",
+    getPendingData: ({ state }) =>
+      state.pending.acceptanceSemanticValidation &&
+      typeof state.pending.acceptanceSemanticValidation === "object"
+        ? state.pending.acceptanceSemanticValidation
+        : null,
+    consumePendingData: ({ state }) => {
+      state.pending.acceptanceSemanticValidation = null;
+    },
+    markCapturePending: ({ state, pendingData }) => {
+      state.flags.acceptanceSemanticValidationCapturePending = true;
+      state.flags.acceptanceSemanticValidationCaptureReportIndex = Number(pendingData.reportIndex);
+    },
+    buildPromptContent: ({ locale, pendingData }) =>
+      [
+        translateI18nText(locale, "acceptanceSemanticValidationMarker"),
+        translateI18nText(locale, "acceptanceSemanticValidationBody"),
+        JSON.stringify(pendingData.payload || {}, null, 2),
+      ].join("\n"),
+  });
+}
+
+function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
+  return captureInjectedResult(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    completedEvent: "acceptance_semantic_validation_completed_inject",
+    failedEvent: "acceptance_semantic_validation_capture_failed_inject",
+    isCapturePending: ({ state }) => state.flags.acceptanceSemanticValidationCapturePending === true,
+    consumeCaptureMeta: ({ state }) => {
+      state.flags.acceptanceSemanticValidationCapturePending = false;
+      const reportIndex = Number(state.flags.acceptanceSemanticValidationCaptureReportIndex);
+      delete state.flags.acceptanceSemanticValidationCaptureReportIndex;
+      return { reportIndex };
+    },
+    applyCaptureResult: ({ bucket, responseText, captureMeta }) => {
+      const reportIndex = Number(captureMeta?.reportIndex);
+      const targetReport =
+        (Array.isArray(bucket.acceptanceReports) && reportIndex >= 0
+          ? bucket.acceptanceReports[reportIndex]
+          : null) ||
+        bucket.lastAcceptanceReport ||
+        null;
+      if (!targetReport || typeof targetReport !== "object") {
+        return { applied: false, detail: { reportIndex, reason: "missing_target_report" } };
+      }
+      targetReport.semanticValidation = parseSemanticValidationResult(responseText);
+      bucket.lastAcceptanceReport = targetReport;
+      return {
+        applied: true,
+        detail: {
+          reportIndex,
+          status: targetReport.semanticValidation?.status,
+          consistent: targetReport.semanticValidation?.consistent,
+        },
+      };
+    },
+    buildCompletedDetail: ({ result }) => result?.detail || {},
+    buildFailedDetail: ({ result, captureMeta }) => result?.detail || { reportIndex: Number(captureMeta?.reportIndex) },
+  });
 }
 
 async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseReport = null) {
@@ -96,29 +218,26 @@ async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseReport = nu
     : {};
   if (acceptanceOptions.semanticValidation !== true) return false;
   const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) return false;
+  if (!invoker) {
+    if (resolvePlanningGuidanceMode(meta) === "inject") {
+      return scheduleAcceptanceSemanticValidationByInject(ctx, baseReport);
+    }
+    return false;
+  }
   const locale = state?.locale || LOCALE.ZH_CN;
   const finalOutput = String(ctx?.result?.output || "").trim();
+  const promptPayload = buildSemanticValidationPromptPayload({
+    bucket,
+    state,
+    baseReport,
+    finalOutput,
+    locale,
+  });
   const prompt = [
     locale === LOCALE.EN_US
       ? "Validate semantic consistency between the task checklist, acceptance report, tool signals, and final output. Return JSON only."
       : "请验证任务清单、规则验收报告、工具信号与最终输出之间的语义一致性。只返回 JSON。",
-    JSON.stringify({
-      expectedSchema: {
-        status: "pass|warn|fail",
-        consistent: true,
-        missingItems: [],
-        unsupportedClaims: [],
-        checklistCoverage: [
-          { index: 1, task: "...", covered: true, evidence: "...", risk: "low|medium|high" },
-        ],
-        suggestions: [],
-      },
-      taskChecklist: bucket.taskChecklist || [],
-      acceptanceReport: baseReport,
-      toolSignals: state.signals || {},
-      finalOutput,
-    }, null, 2),
+    JSON.stringify(promptPayload, null, 2),
   ].join("\n");
   let response = null;
   try {
@@ -250,7 +369,9 @@ async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         JSON.stringify(
           {
             generatedAt: new Date().toISOString(),
+            totalGoal: bucket?.totalGoal || "",
             taskOwner: bucket?.taskOwner || getDefaultTaskOwner(locale),
+            nextPhase: bucket?.nextPhase || null,
             taskChecklist: checklist,
           },
           null,
@@ -354,6 +475,12 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
   if (point === "before_final_output") {
     changed = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || changed;
     changed = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || changed;
+  }
+  if (point === "before_llm_call") {
+    changed = maybeInjectAcceptanceSemanticValidationPrompt(ctx) || changed;
+  }
+  if (point === "after_llm_call") {
+    changed = maybeCaptureAcceptanceSemanticValidationByInject(ctx) || changed;
   }
   return changed;
 }

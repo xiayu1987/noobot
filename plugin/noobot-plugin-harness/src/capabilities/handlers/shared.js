@@ -71,17 +71,21 @@ const I18N_TEXT = Object.freeze({
     taskAcceptanceToolDescription:
       "请求任务验收：按 harness 插件任务清单输出验收报告；mode=active(主动) 或 forced(强行)。",
     planningPromptMarker: "<!-- harness-planning-bootstrap -->",
-    planningPromptLine1: "任务：基于完整 context 与场景全部工具，生成流程任务清单。",
+    planningPromptLine1: "任务：基于完整 context 与场景全部工具，生成完整计划清单；必须规定总目标，并为每个步骤规定输入、输出、涉及文件新增/修改/删除信息。",
     planningPromptLine2: "输出：只输出 JSON，格式：{example}",
-    planningPromptLine3: "限制：输出清单后继续执行，不要直接结束；可包含 subOwners。",
-    planningPromptLine4: "限制：工具范围使用通配符 *（表示全量工具）。",
+    planningPromptLine3: "限制：输出清单后继续执行，不要直接结束；taskChecklist 可包含 subOwners/input/output/files。",
+    planningPromptLine4: "限制：工具范围使用通配符 *（表示全量工具）；计划必须是完整计划，后续修正也输出完整计划。",
     planningPromptToolsHeader: "当前可用工具（名称与说明）如下，规划时必须参考：",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
-    guidanceSummaryBody: "请立即输出当前阶段小结（目标、完成项、未完成项、阻塞项、下一步）。",
+    guidanceSummaryBody: "请立即输出当前阶段小结：只说明当前已完成内容，最后一行必须写“小结完成”。不要输出计划、下一步或未完成事项。",
+    planningRevisionMarker: "<!-- harness-planning-revision -->",
+    planningRevisionBody: "请基于当前状态与阶段小结，对既有计划进行增量/修正，输出完整计划 JSON，并格式化给出下一阶段要完成的内容。",
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody: "检测到工具失败阈值({reason})，请基于未小结消息给出下一步指引。",
     guidancePreferTools: "优先使用工具: {tools}。",
     guidanceWebService: "网页搜索服务请使用: {service}（通过 {tool} 调用）。",
+    acceptanceSemanticValidationMarker: "<!-- harness-acceptance-semantic-validation -->",
+    acceptanceSemanticValidationBody: "请基于最新计划清单与验收报告做语义一致性校验，只输出 JSON。",
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[来自harness外部模型输出/{purpose}]",
     reviewHeader: "[Harness-Review]",
@@ -90,19 +94,25 @@ const I18N_TEXT = Object.freeze({
     taskAcceptanceToolDescription:
       "Request task acceptance: validate completion against the harness checklist; mode=active or forced.",
     planningPromptMarker: "<!-- harness-planning-bootstrap -->",
-    planningPromptLine1: "Task: generate a workflow checklist from the full context and all scene tools.",
+    planningPromptLine1: "Task: generate a complete plan checklist from the full context and all scene tools; define the total goal and each step's input, output, and file create/modify/delete information.",
     planningPromptLine2: "Output: JSON only. Format: {example}",
-    planningPromptLine3: "Constraints: continue execution after checklist; do not stop. subOwners is optional.",
-    planningPromptLine4: "Constraints: tool scope must use wildcard * (all tools).",
+    planningPromptLine3: "Constraints: continue execution after checklist; do not stop. taskChecklist may include subOwners/input/output/files.",
+    planningPromptLine4: "Constraints: tool scope must use wildcard * (all tools). The plan must be complete; later revisions must also output the complete plan.",
     planningPromptToolsHeader: "Current available tools (name + description). You must use this list during planning:",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody:
-      "Please output a phase summary now (goal, completed, pending, blockers, next steps).",
+      'Please output a phase summary now: only state what has been completed so far. The final line must be "Summary complete". Do not output a plan, next steps, or pending items.',
+    planningRevisionMarker: "<!-- harness-planning-revision -->",
+    planningRevisionBody:
+      "Based on the current state and phase summary, incrementally revise the existing plan, output the complete plan JSON, and format the next phase to complete.",
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody:
       "Tool-failure threshold reached ({reason}). Provide next-step guidance based on unsummarized messages.",
     guidancePreferTools: "Prefer tools: {tools}.",
     guidanceWebService: "Use web search service: {service} (via {tool}).",
+    acceptanceSemanticValidationMarker: "<!-- harness-acceptance-semantic-validation -->",
+    acceptanceSemanticValidationBody:
+      "Validate semantic consistency based on the latest plan checklist and acceptance report. Output JSON only.",
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[Relay from harness external model/{purpose}]",
     reviewHeader: "[Harness-Review]",
@@ -136,6 +146,8 @@ const DEFAULT_HARNESS_FLAGS = Object.freeze({
   planningForceToolOriginalSet: false,
   planningForceToolOriginal: false,
   guidanceSummaryMarkPending: false,
+  planRevisionCapturePending: false,
+  acceptanceSemanticValidationCapturePending: false,
 });
 
 const DEFAULT_HARNESS_SIGNALS = Object.freeze({
@@ -148,6 +160,8 @@ const DEFAULT_HARNESS_SIGNALS = Object.freeze({
 const DEFAULT_HARNESS_PENDING = Object.freeze({
   guidance: null,
   summary: false,
+  planRevision: false,
+  acceptanceSemanticValidation: null,
 });
 
 function ensureObjectField(target = {}, key = "") {
@@ -626,6 +640,21 @@ export function extractJsonObjectFromText(text = "") {
   return null;
 }
 
+function normalizeFilePlan(files = null) {
+  const source = files && typeof files === "object" && !Array.isArray(files) ? files : {};
+  const readArray = (...keys) => {
+    for (const key of keys) {
+      if (Array.isArray(source[key])) return source[key].map((item) => String(item || "").trim()).filter(Boolean);
+    }
+    return [];
+  };
+  return {
+    create: readArray("create", "created", "add", "新增", "new"),
+    modify: readArray("modify", "modified", "change", "update", "修改"),
+    delete: readArray("delete", "deleted", "remove", "删除"),
+  };
+}
+
 export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_CN) {
   const source = item && typeof item === "object" ? item : {};
   const fallbackTaskName =
@@ -639,6 +668,9 @@ export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_
     subOwners: Array.isArray(source.subOwners ?? source.subTaskOwners)
       ? (source.subOwners ?? source.subTaskOwners).map((name) => String(name || "").trim()).filter(Boolean)
       : [],
+    input: String(source.input ?? source.inputs ?? source.requiredInput ?? "").trim(),
+    output: String(source.output ?? source.outputs ?? source.expectedOutput ?? "").trim(),
+    files: normalizeFilePlan(source.files ?? source.fileChanges ?? source.filePlan),
   };
 }
 
@@ -660,18 +692,33 @@ export function parseTaskChecklistFromModelOutput(text = "", locale = LOCALE.ZH_
   return [];
 }
 
+export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
+  const source = bucket && typeof bucket === "object" ? bucket : {};
+  return {
+    totalGoal: String(source.totalGoal || "").trim(),
+    taskOwner: String(source.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
+    nextPhase: source.nextPhase && typeof source.nextPhase === "object" ? source.nextPhase : null,
+    checklistSource: String(source.taskChecklistSource || "").trim(),
+    revisionCount: Array.isArray(source.planRevisions) ? source.planRevisions.length : 0,
+  };
+}
+
 export function defaultTaskChecklist(locale = LOCALE.ZH_CN) {
   const owner = getDefaultTaskOwner(locale);
   const template = getTaskTemplate(locale);
+  const emptyFiles = () => ({ create: [], modify: [], delete: [] });
   return [
-    { index: 1, task: template.PARSE_ATTACHMENT, owner, subOwners: [] },
-    { index: 2, task: template.EXECUTE_CORE, owner, subOwners: [] },
+    { index: 1, task: template.PARSE_ATTACHMENT, owner, subOwners: [], input: "user attachments/context", output: "parsed attachment/context data", files: emptyFiles() },
+    { index: 2, task: template.EXECUTE_CORE, owner, subOwners: [], input: "task requirements and parsed data", output: "core task result", files: emptyFiles() },
     {
       index: 3,
       task: template.START_SUBTASK,
       owner,
       subOwners: getDefaultSubtaskOwners(locale),
+      input: "delegable subtasks",
+      output: "started subtask records",
+      files: emptyFiles(),
     },
-    { index: 4, task: template.WAIT_SUBTASK_RESULT, owner, subOwners: [] },
+    { index: 4, task: template.WAIT_SUBTASK_RESULT, owner, subOwners: [], input: "started subtask records", output: "merged subtask results", files: emptyFiles() },
   ];
 }

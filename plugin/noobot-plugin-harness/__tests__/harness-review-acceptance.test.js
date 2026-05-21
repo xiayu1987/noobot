@@ -11,6 +11,8 @@ import path from "node:path";
 
 import { createHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
+import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
+import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
 test("harness review generates review report at final output", async () => {
@@ -182,7 +184,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
     dialogProcessId: "flow-dp",
     ai: {
       content:
-        '{"taskChecklist":[{"index":1,"task":"解析附件","owner":"owner"},{"index":2,"task":"执行核心任务","owner":"owner"}]}',
+        '{"totalGoal":"完成任务","taskChecklist":[{"index":1,"task":"解析附件","owner":"owner","input":"附件","output":"解析结果","files":{"create":[],"modify":[],"delete":[]}},{"index":2,"task":"执行核心任务","owner":"owner","input":"需求","output":"执行结果","files":{"create":[],"modify":[],"delete":[]}}]}',
     },
     agentContext,
   });
@@ -450,6 +452,82 @@ test("harness acceptance semantic validation failure does not block active accep
   assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "acceptance_semantic_validation_failed"), true);
 });
 
+test("acceptance handler inject mode schedules and captures semantic validation without invoker", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = {
+    payload: {
+      messages: { system: [], history: [] },
+      harness: {
+        taskChecklist: [
+          {
+            index: 1,
+            task: "执行核心任务",
+            owner: "primary_task_owner",
+            input: "需求",
+            output: "结果",
+            files: { create: [], modify: ["src/a.js"], delete: [] },
+          },
+        ],
+        state: {
+          flags: { planningCaptured: true, acceptanceRequested: false },
+          counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          signals: { successfulToolCount: 1 },
+          pending: { guidance: null, summary: false },
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      acceptance: { semanticValidation: true },
+    },
+  };
+
+  const finalCtx = { agentContext, result: { output: "done" } };
+  await handler({ capability: "acceptance", point: "before_final_output", ctx: finalCtx, meta });
+  assert.equal(
+    agentContext.payload.harness.logs.acceptance.some(
+      (item) => item.event === "acceptance_semantic_validation_scheduled_by_inject",
+    ),
+    true,
+  );
+
+  const injectCtx = { agentContext, messages: [{ role: "user", content: "continue" }] };
+  await handler({ capability: "acceptance", point: "before_llm_call", ctx: injectCtx, meta });
+  assert.equal(
+    injectCtx.messages.some((item) =>
+      String(item?.content || "").includes("harness-acceptance-semantic-validation"),
+    ),
+    true,
+  );
+
+  const captureCtx = {
+    agentContext,
+    ai: {
+      content: JSON.stringify({
+        status: "pass",
+        consistent: true,
+        missingItems: [],
+        unsupportedClaims: [],
+        checklistCoverage: [{ index: 1, task: "执行核心任务", covered: true, evidence: "done", risk: "low" }],
+        suggestions: [],
+      }),
+    },
+  };
+  await handler({ capability: "acceptance", point: "after_llm_call", ctx: captureCtx, meta });
+  assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
+  assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
+  assert.equal(
+    agentContext.payload.harness.logs.acceptance.some(
+      (item) => item.event === "acceptance_semantic_validation_completed_inject",
+    ),
+    true,
+  );
+});
+
 test("harness review reports failed or inconsistent semantic acceptance", async () => {
   const hookManager = createHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
@@ -484,3 +562,234 @@ test("harness review reports failed or inconsistent semantic acceptance", async 
   assert.match(String(result.output), /acceptance_semantic_validation_failed_or_inconsistent/);
 });
 
+
+test("harness summary triggers complete revised plan and acceptance uses latest checklist", async () => {
+  const hookManager = createHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        if (payload.purpose === "summary") {
+          return { content: "已完成：完成初始检查\n小结完成" };
+        }
+        if (payload.purpose === "planning_revision") {
+          return {
+            content: JSON.stringify({
+              totalGoal: "完成 harness 计划闭环",
+              taskOwner: "primary_task_owner",
+              nextPhase: { objective: "实现验收闭环", checklistIndexes: [2] },
+              taskChecklist: [
+                {
+                  index: 1,
+                  task: "完成初始检查",
+                  owner: "primary_task_owner",
+                  input: "用户请求",
+                  output: "检查结果",
+                  files: { create: [], modify: ["src/a.js"], delete: [] },
+                },
+                {
+                  index: 2,
+                  task: "实现验收闭环",
+                  owner: "primary_task_owner",
+                  input: "阶段小结和当前计划",
+                  output: "最终计划清单验收结果",
+                  files: { create: ["reports/acceptance.json"], modify: [], delete: [] },
+                },
+              ],
+            }),
+          };
+        }
+        return { content: "{}" };
+      },
+    },
+  );
+
+  const messages = [{ role: "user", content: "继续" }];
+  const agentContext = {
+    payload: {
+      messages: { system: [], history: [] },
+      harness: {
+        taskChecklist: [{ index: 1, task: "完成初始检查", owner: "primary_task_owner" }],
+        state: {
+          flags: { planningCaptured: true, acceptanceRequested: false },
+          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          signals: { successfulToolCount: 1 },
+          pending: { summary: true, guidance: null },
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", { messages, agentContext });
+
+  assert.deepEqual(invocations.map((item) => item.purpose), ["summary", "planning_revision"]);
+  assert.equal(agentContext.payload.harness.totalGoal, "完成 harness 计划闭环");
+  assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
+  assert.equal(agentContext.payload.harness.taskChecklist[1].input, "阶段小结和当前计划");
+  assert.deepEqual(agentContext.payload.harness.taskChecklist[1].files.create, ["reports/acceptance.json"]);
+  assert.equal(agentContext.payload.harness.nextPhase.objective, "实现验收闭环");
+  assert.match(String(messages.map((item) => item.content).join("\n")), /下一阶段计划清单/);
+
+  const result = { output: "done" };
+  await hookManager.emit("before_final_output", { agentContext, result });
+
+  assert.equal(agentContext.payload.harness.lastAcceptanceReport.finalPlanChecklist.length, 2);
+  assert.equal(agentContext.payload.harness.lastAcceptanceReport.plan.totalGoal, "完成 harness 计划闭环");
+  assert.equal(agentContext.payload.harness.lastAcceptanceReport.plan.revisionCount >= 1, true);
+});
+
+test("harness summary without completion marker does not trigger planning revision", async () => {
+  const hookManager = createHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        if (payload.purpose === "summary") {
+          return { content: "已完成：完成初始检查" };
+        }
+        return { content: "{}" };
+      },
+    },
+  );
+
+  const messages = [{ role: "user", content: "继续" }];
+  const agentContext = {
+    payload: {
+      messages: { system: [], history: [] },
+      harness: {
+        taskChecklist: [{ index: 1, task: "完成初始检查", owner: "primary_task_owner" }],
+        state: {
+          flags: { planningCaptured: true, acceptanceRequested: false },
+          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          signals: { successfulToolCount: 1 },
+          pending: { summary: true, guidance: null },
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", { messages, agentContext });
+
+  assert.deepEqual(invocations.map((item) => item.purpose), ["summary"]);
+  assert.equal(
+    agentContext.payload.harness.logs.guidance.some((item) => item.event === "summary_completion_marker_missing"),
+    true,
+  );
+  assert.equal(agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_checklist_revised_after_summary"), false);
+});
+
+test("guidance handler inject mode can schedule and capture planning revision without invoker", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = {
+    payload: {
+      messages: { system: [], history: [] },
+      harness: {
+        totalGoal: "初始目标",
+        taskChecklist: [
+          {
+            index: 1,
+            task: "完成初始检查",
+            owner: "primary_task_owner",
+            input: "用户请求",
+            output: "检查结果",
+            files: { create: [], modify: [], delete: [] },
+          },
+        ],
+        state: {
+          flags: { planningCaptured: true, acceptanceRequested: false },
+          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          signals: { successfulToolCount: 1 },
+          pending: { summary: true, guidance: null },
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+    },
+  };
+
+  const firstCtx = {
+    messages: [{ role: "user", content: "继续" }],
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx: firstCtx, meta });
+  assert.equal(
+    firstCtx.messages.some((msg) => String(msg.content || "").includes("harness-guidance-summary")),
+    true,
+  );
+
+  const summaryCtx = {
+    messages: firstCtx.messages,
+    ai: { content: "已完成：完成初始检查\n小结完成" },
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "after_llm_call", ctx: summaryCtx, meta });
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_revision_scheduled_by_inject"),
+    true,
+  );
+
+  const secondCtx = {
+    messages: [{ role: "user", content: "继续执行" }],
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx: secondCtx, meta });
+  assert.equal(
+    secondCtx.messages.some((msg) => String(msg.content || "").includes("harness-planning-revision")),
+    true,
+  );
+
+  const revisionCtx = {
+    messages: secondCtx.messages,
+    ai: {
+      content: JSON.stringify({
+        totalGoal: "完成 inject 模式计划闭环",
+        taskOwner: "primary_task_owner",
+        nextPhase: { objective: "完成最终验收", checklistIndexes: [2] },
+        taskChecklist: [
+          {
+            index: 1,
+            task: "完成初始检查",
+            owner: "primary_task_owner",
+            input: "用户请求",
+            output: "检查结果",
+            files: { create: [], modify: ["src/a.js"], delete: [] },
+          },
+          {
+            index: 2,
+            task: "完成最终验收",
+            owner: "primary_task_owner",
+            input: "修正后的计划清单",
+            output: "验收报告",
+            files: { create: ["reports/acceptance.json"], modify: [], delete: [] },
+          },
+        ],
+      }),
+    },
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "after_llm_call", ctx: revisionCtx, meta });
+  assert.equal(agentContext.payload.harness.totalGoal, "完成 inject 模式计划闭环");
+  assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_checklist_revised_after_summary"),
+    true,
+  );
+});

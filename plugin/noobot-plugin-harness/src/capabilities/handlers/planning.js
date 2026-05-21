@@ -26,6 +26,10 @@ import {
   shouldUseSeparateModel,
   translateI18nText,
 } from "./shared.js";
+import {
+  extractPlanMetadataFromText,
+  isPlanPayloadComplete,
+} from "./model-response-parser.js";
 
 function resolvePlanningToolCatalog(ctx = {}, locale = LOCALE.ZH_CN) {
   const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)
@@ -73,7 +77,7 @@ function maybeInjectPlanningPrompt(ctx = {}) {
       translateI18nText(locale, "planningPromptMarker"),
       translateI18nText(locale, "planningPromptLine1"),
       translateI18nText(locale, "planningPromptLine2", {
-        example: `{"taskOwner":"${getDefaultTaskOwner(locale)}","taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}"}]}`,
+        example: `{"totalGoal":"完成用户请求","taskOwner":"${getDefaultTaskOwner(locale)}","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}","input":"用户请求/上下文/附件","output":"可用于后续步骤的解析结果","files":{"create":[],"modify":[],"delete":[]}}]}`,
       }),
       translateI18nText(locale, "planningPromptLine3"),
       translateI18nText(locale, "planningPromptLine4"),
@@ -122,6 +126,27 @@ function parseChecklistWithLocalRepair(text = "", locale = LOCALE.ZH_CN) {
   const wrapped = parseChecklistFromWrappedPayload(raw, locale);
   if (wrapped.length) return wrapped;
   return parseChecklistFromPlainText(raw, locale);
+}
+
+function applyPlanningMetadata(bucket = {}, text = "", locale = LOCALE.ZH_CN, { source = "model", summary = "" } = {}) {
+  if (!bucket || typeof bucket !== "object") return false;
+  const metadata = extractPlanMetadataFromText(text);
+  bucket.totalGoal = metadata.totalGoal || bucket.totalGoal || "";
+  bucket.taskOwner = metadata.taskOwner || bucket.taskOwner || getDefaultTaskOwner(locale);
+  if (metadata.nextPhase?.objective || metadata.nextPhase?.content || metadata.nextPhase?.checklistIndexes?.length) {
+    bucket.nextPhase = metadata.nextPhase;
+  }
+  if (!Array.isArray(bucket.planRevisions)) bucket.planRevisions = [];
+  bucket.planRevisions.push({
+    source,
+    revisedAt: new Date().toISOString(),
+    totalGoal: bucket.totalGoal || "",
+    nextPhase: bucket.nextPhase || null,
+    summary: String(summary || "").trim() || undefined,
+    checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
+  });
+  if (bucket.planRevisions.length > 20) bucket.planRevisions.splice(0, bucket.planRevisions.length - 20);
+  return true;
 }
 
 function parseChecklistFromWrappedPayload(text = "", locale = LOCALE.ZH_CN) {
@@ -384,7 +409,7 @@ async function repairChecklistByModel({
       ? [
           "Repair the following text into strict JSON only.",
           "Output only JSON object or array.",
-          'Preferred format: {"taskOwner":"...","taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[]}]}',
+          'Preferred format: {"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
           "If content cannot be repaired into checklist JSON, output {}.",
           "",
           content,
@@ -392,7 +417,7 @@ async function repairChecklistByModel({
       : [
           "请把以下文本修复为严格 JSON，只输出 JSON。",
           "输出只能是 JSON 对象或数组。",
-          '优先格式：{"taskOwner":"...","taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[]}]}',
+          '优先格式：{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
           "如果无法修复为清单 JSON，请输出 {}。",
           "",
           content,
@@ -454,7 +479,7 @@ async function synthesizeChecklistByModel({
       ? [
           "Generate a task checklist JSON from context and tool traces.",
           "Output JSON only.",
-          'Format: {"taskOwner":"...","taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[]}]}',
+          'Format: {"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
           "Do not call tools.",
           "",
           `Context: ${JSON.stringify(contextSummary)}`,
@@ -463,7 +488,7 @@ async function synthesizeChecklistByModel({
       : [
           "请根据上下文与工具轨迹生成任务清单 JSON。",
           "仅输出 JSON。",
-          '格式：{"taskOwner":"...","taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[]}]}',
+          '格式：{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
           "不要调用工具。",
           "",
           `上下文：${JSON.stringify(contextSummary)}`,
@@ -552,7 +577,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   const planningPromptBase = [
     translateI18nText(locale, "planningPromptLine1"),
     translateI18nText(locale, "planningPromptLine2", {
-      example: `{"taskOwner":"${getDefaultTaskOwner(locale)}","taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}"}]}`,
+      example: `{"totalGoal":"完成用户请求","taskOwner":"${getDefaultTaskOwner(locale)}","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}","input":"用户请求/上下文/附件","output":"可用于后续步骤的解析结果","files":{"create":[],"modify":[],"delete":[]}}]}`,
     }),
     translateI18nText(locale, "planningPromptLine3"),
     translateI18nText(locale, "planningPromptLine4"),
@@ -622,6 +647,17 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
     }
 
     if (parsed.length) {
+      if (!isPlanPayloadComplete(responseText, parsed)) {
+        appendCapabilityLog(ctx, {
+          domain: CAPABILITY_DOMAIN.PLANNING,
+          event: "planning_checklist_incomplete_rejected",
+          detail: { reason: "missing_total_goal_or_step_io_files", source: "separate_model" },
+        });
+        parsed = [];
+      }
+    }
+
+    if (parsed.length) {
       bucket.taskChecklist = parsed;
       bucket.taskChecklistSource = "model";
       state.counters.planningCaptureAttempts = 0;
@@ -647,7 +683,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       }
       state.flags.planningCaptured = true;
     }
-    bucket.taskOwner = getDefaultTaskOwner(locale);
+    applyPlanningMetadata(bucket, responseText, locale, { source: "initial_plan" });
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
       purpose: "planning",
@@ -711,9 +747,20 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     });
   }
   if (parsed.length) {
+    if (!isPlanPayloadComplete(sourceContent, parsed)) {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_checklist_incomplete_rejected",
+        detail: { reason: "missing_total_goal_or_step_io_files", source: "after_llm_call" },
+      });
+      parsed = [];
+    }
+  }
+
+  if (parsed.length) {
     bucket.taskChecklist = parsed;
     bucket.taskChecklistSource = "model";
-    bucket.taskOwner = getDefaultTaskOwner(locale);
+    applyPlanningMetadata(bucket, sourceContent, locale, { source: "initial_plan" });
     state.counters.planningCaptureAttempts = 0;
     state.flags.planningCaptured = true;
     appendCapabilityLog(ctx, {
