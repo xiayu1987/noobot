@@ -24,7 +24,7 @@ export function ensureIntervalCleanupTask(
     try {
       task();
     } catch (error) {
-      console.debug(`[harness] cleanup task failed (${taskName}): ${String(error?.message || error || "")}`);
+      console.warn(`[harness] cleanup task failed (${taskName}): ${String(error?.message || error || "")}`);
     }
   }, normalizedInterval);
 

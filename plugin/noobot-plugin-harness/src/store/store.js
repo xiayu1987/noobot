@@ -33,7 +33,7 @@ function cleanupStaleManifests() {
             manifestLastAccessed.delete(key);
           })
           .catch((err) => {
-            console.debug(`[harness] Manifest cleanup write failed for ${key}: ${err.message}`);
+            console.warn(`[harness] Manifest cleanup write failed for ${key}: ${err.message}`);
           });
         continue;
       }
@@ -101,7 +101,7 @@ export async function updateManifestCached(
             manifestCache.delete(key);
             manifestLastAccessed.delete(key);
           } catch (err) {
-            console.debug(`[harness] Manifest debounced write failed for ${key}: ${err.message}`);
+            console.warn(`[harness] Manifest debounced write failed for ${key}: ${err.message}`);
           }
         }
         manifestWriteTimers.delete(key);
@@ -146,13 +146,19 @@ const DEFAULT_JSONL_FLUSH_STRATEGY = Object.freeze({
   maxTime: DEFAULT_JSONL_FLUSH_INTERVAL_MS,
   onTerminal: true,
   onError: true,
+  maxRetry: 5,
+  maxBufferEntries: 5000,
 });
+const jsonlFlushFailures = new Map(); // filePath -> number
+const jsonlFlushStrategies = new Map(); // filePath -> strategy
 
 function normalizeFlushStrategy(batchSize, flushIntervalMs) {
   if (batchSize && typeof batchSize === "object" && !Array.isArray(batchSize)) {
     const input = batchSize;
     const maxSize = Number(input?.maxSize);
     const maxTime = Number(input?.maxTime);
+    const maxRetry = Number(input?.maxRetry);
+    const maxBufferEntries = Number(input?.maxBufferEntries);
     return {
       maxSize: Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
       maxTime: Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
@@ -161,6 +167,14 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
           ? input.onTerminal
           : DEFAULT_JSONL_FLUSH_STRATEGY.onTerminal,
       onError: typeof input?.onError === "boolean" ? input.onError : DEFAULT_JSONL_FLUSH_STRATEGY.onError,
+      maxRetry:
+        Number.isFinite(maxRetry) && maxRetry >= 0
+          ? Math.trunc(maxRetry)
+          : DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
+      maxBufferEntries:
+        Number.isFinite(maxBufferEntries) && maxBufferEntries > 0
+          ? Math.trunc(maxBufferEntries)
+          : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
     };
   }
   const resolvedBatch = Number(batchSize);
@@ -173,6 +187,8 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
         : DEFAULT_JSONL_FLUSH_INTERVAL_MS,
     onTerminal: true,
     onError: true,
+    maxRetry: DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
+    maxBufferEntries: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
   };
 }
 
@@ -182,15 +198,31 @@ function clearJsonlFlushTimer(filePath = "") {
   jsonlFlushTimers.delete(filePath);
 }
 
-function scheduleJsonlFlush(filePath = "", maxTime = DEFAULT_JSONL_FLUSH_INTERVAL_MS) {
+function scheduleJsonlFlush(
+  filePath = "",
+  maxTime = DEFAULT_JSONL_FLUSH_INTERVAL_MS,
+  strategy = DEFAULT_JSONL_FLUSH_STRATEGY,
+) {
   if (!filePath || jsonlFlushTimers.has(filePath) || maxTime <= 0) return;
   jsonlFlushTimers.set(
     filePath,
     setTimeout(async () => {
-      await flushJsonlBuffer(filePath);
+      await flushJsonlBuffer(filePath, strategy);
       jsonlFlushTimers.delete(filePath);
     }, maxTime),
   );
+}
+
+function trimJsonlBuffer(filePath = "", buffer = [], strategy = DEFAULT_JSONL_FLUSH_STRATEGY) {
+  if (!filePath || !Array.isArray(buffer)) return buffer;
+  const limit = Number(strategy?.maxBufferEntries);
+  if (!Number.isFinite(limit) || limit <= 0 || buffer.length <= limit) return buffer;
+  const dropped = buffer.length - limit;
+  buffer.splice(0, dropped);
+  console.warn(
+    `[harness] JSONL buffer capped for ${filePath}; dropped ${dropped} oldest record(s) to avoid OOM`,
+  );
+  return buffer;
 }
 
 /**
@@ -205,6 +237,7 @@ export async function appendJsonlBuffered(
 ) {
   if (!filePath || !record) return;
   const strategy = normalizeFlushStrategy(batchSize, flushIntervalMs);
+  jsonlFlushStrategies.set(filePath, strategy);
 
   let buffer = jsonlBuffers.get(filePath);
   if (!buffer) {
@@ -213,6 +246,7 @@ export async function appendJsonlBuffered(
   }
 
   buffer.push(JSON.stringify(record));
+  trimJsonlBuffer(filePath, buffer, strategy);
 
   const reason = String(flushHint?.reason || "").trim().toLowerCase();
   const shouldFlushByReason =
@@ -220,9 +254,9 @@ export async function appendJsonlBuffered(
 
   if (buffer.length >= strategy.maxSize || shouldFlushByReason) {
     clearJsonlFlushTimer(filePath);
-    await flushJsonlBuffer(filePath);
+    await flushJsonlBuffer(filePath, strategy);
   } else {
-    scheduleJsonlFlush(filePath, strategy.maxTime);
+    scheduleJsonlFlush(filePath, strategy.maxTime, strategy);
   }
 }
 
@@ -230,7 +264,7 @@ export async function appendJsonlBuffered(
  * Flush a single JSONL buffer to disk.
  * P0#1: Fixed race condition using atomic swap pattern.
  */
-async function flushJsonlBuffer(filePath) {
+async function flushJsonlBuffer(filePath, strategy = DEFAULT_JSONL_FLUSH_STRATEGY) {
   const buffer = jsonlBuffers.get(filePath);
   if (!buffer || buffer.length === 0) return;
 
@@ -241,13 +275,33 @@ async function flushJsonlBuffer(filePath) {
 
   try {
     await appendFileValidated(filePath, lines);
+    jsonlFlushFailures.delete(filePath);
+    const current = jsonlBuffers.get(filePath);
+    if (Array.isArray(current) && current.length === 0) {
+      jsonlBuffers.delete(filePath);
+      jsonlFlushStrategies.delete(filePath);
+    }
   } catch (err) {
     // P2#7: Log the error
     console.error(`[harness] JSONL flush failed for ${filePath}:`, err.message);
+    const retries = Number(jsonlFlushFailures.get(filePath) || 0) + 1;
+    jsonlFlushFailures.set(filePath, retries);
     // P0#1: On failure, merge the extracted buffer INTO the new buffer (which may have new entries)
     // Prepend old data so it gets retried first, but preserve any new records that arrived during write
     const current = jsonlBuffers.get(filePath) || [];
-    jsonlBuffers.set(filePath, [...buffer, ...current]);
+    const merged = [...buffer, ...current];
+    trimJsonlBuffer(filePath, merged, strategy);
+    const maxRetry = Number(strategy?.maxRetry);
+    if (Number.isFinite(maxRetry) && retries > maxRetry) {
+      console.error(
+        `[harness] JSONL flush exceeded retry limit for ${filePath}; dropped ${merged.length} buffered record(s)`,
+      );
+      jsonlBuffers.delete(filePath);
+      jsonlFlushFailures.delete(filePath);
+      clearJsonlFlushTimer(filePath);
+      return;
+    }
+    jsonlBuffers.set(filePath, merged);
   }
 }
 
@@ -258,7 +312,7 @@ export async function flushAllJsonlBuffers() {
   const filePaths = Array.from(jsonlBuffers.keys());
   for (const filePath of filePaths) {
     clearJsonlFlushTimer(filePath);
-    await flushJsonlBuffer(filePath);
+    await flushJsonlBuffer(filePath, jsonlFlushStrategies.get(filePath) || DEFAULT_JSONL_FLUSH_STRATEGY);
   }
 }
 

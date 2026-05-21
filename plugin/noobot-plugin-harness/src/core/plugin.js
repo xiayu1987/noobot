@@ -24,7 +24,11 @@ export function createRegisterNoobotPlugin(deps = {}) {
 
     const basePath = extractBasePathFn({}, options);
     if (basePath) {
-      cleanupOldRunsFn(basePath, options).catch(() => {});
+      cleanupOldRunsFn(basePath, options).catch((error) => {
+        console.warn(
+          `[harness] cleanupOldRuns failed during plugin registration: ${String(error?.message || error || "")}`,
+        );
+      });
     }
     const disposers = registerHarnessHooksFn({
       hookManager,
