@@ -453,4 +453,12 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(Array.isArray(manifest?.capabilities?.domains), true);
   assert.equal(typeof manifest?.capabilities?.hookMap, "object");
+  assert.equal(
+    manifest?.capabilities?.hookMap?.acceptance?.includes("before_llm_call"),
+    true,
+  );
+  assert.equal(
+    manifest?.capabilities?.hookMap?.acceptance?.includes("after_llm_call"),
+    true,
+  );
 });
