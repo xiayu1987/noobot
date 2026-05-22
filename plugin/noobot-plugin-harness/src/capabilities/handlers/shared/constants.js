@@ -129,6 +129,7 @@ export const BLOCKED_AGENT_TOOL_NAMES = new Set([
 export const GUIDANCE_WEB_SERVICE_NAME = "web_search_service";
 export const GUIDANCE_WEB_TOOL_NAMES = [TOOL_NAME_SET.CALL_SERVICE];
 export const TASK_ACCEPTANCE_TOOL_NAME = "request_task_acceptance";
+export const PLAN_REFINEMENT_TOOL_NAME = "request_plan_refinement";
 
 export const HARNESS_BUCKET_VERSION = 1;
 

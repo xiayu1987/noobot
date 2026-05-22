@@ -1,0 +1,386 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import {
+  MAX_PLANNING_CAPTURE_ATTEMPTS,
+  PLANNING_RAW_OUTPUT_LIMIT,
+  PLANNING_SUMMARY_MAX_ITEMS,
+  PLANNING_COMPACT_TEXT_MAX_CHARS,
+  PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS,
+  PLANNING_CONTEXT_GOAL_MAX_CHARS,
+} from "../../../core/thresholds.js";
+import { processPlanningResult } from "./result-pipeline.js";
+import { buildPlanningPromptBase } from "./prompt-builder.js";
+import {
+  CAPABILITY_DOMAIN,
+  LOCALE,
+  appendCapabilityLog,
+  appendCapabilityModelTraceLog,
+  ensureHarnessBucket,
+  extractRawTextContent,
+  relaySeparateModelOutputAsUserMessage,
+  resolveCapabilityModelInvoker,
+  resolveCapabilityModelName,
+  resolveCapabilityModelMessages,
+  resolvePlanningToolAllowlist,
+  resolveSceneToolNames,
+} from "./deps.js";
+
+function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  if (raw.length <= maxChars) return raw;
+  return `${raw.slice(0, maxChars)}...`;
+}
+
+export function recordPlanningRawOutput(
+  ctx = {},
+  { source = "unknown", content = "", parsedCount = 0 } = {},
+) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket } = holder;
+  const rawText = String(content || "");
+  const entry = {
+    source: String(source || "unknown").trim() || "unknown",
+    capturedAt: new Date().toISOString(),
+    content: rawText,
+    parsedCount: Number.isFinite(Number(parsedCount)) ? Number(parsedCount) : 0,
+  };
+  if (!Array.isArray(bucket.planningRawOutputs)) {
+    bucket.planningRawOutputs = [];
+  }
+  bucket.planningRawOutputs.push(entry);
+  if (bucket.planningRawOutputs.length > PLANNING_RAW_OUTPUT_LIMIT) {
+    bucket.planningRawOutputs.splice(0, bucket.planningRawOutputs.length - PLANNING_RAW_OUTPUT_LIMIT);
+  }
+  bucket.lastPlanningRawOutput = entry;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event: "planning_raw_output_recorded",
+    detail: {
+      source: entry.source,
+      chars: rawText.length,
+      parsedCount: entry.parsedCount,
+      preview: compactText(rawText, PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS),
+    },
+  });
+  return true;
+}
+
+function normalizePlanningTextContent(content = "") {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && typeof item.text === "string") return item.text;
+      return "";
+    })
+    .join("\n")
+    .trim();
+}
+
+function collectAgentStyleHistoryMessages(ctx = {}) {
+  const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
+    ? ctx.agentContext.payload.messages.history
+    : [];
+  if (!history.length) return Array.isArray(ctx?.messages) ? ctx.messages : [];
+
+  const knownToolCallIds = new Set();
+  for (const msg of history) {
+    if (msg?.summarized === true) continue;
+    if (String(msg?.role || "").trim().toLowerCase() !== "assistant") continue;
+    const calls = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
+    for (const call of calls) {
+      const id = String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim();
+      if (id) knownToolCallIds.add(id);
+    }
+  }
+
+  return history
+    .filter((msg) => msg?.summarized !== true)
+    .filter((msg) => {
+      const role = String(msg?.role || "").trim().toLowerCase();
+      if (!role) return false;
+      if (role !== "tool") return true;
+      const toolCallId = String(msg?.tool_call_id || "").trim();
+      return !toolCallId || knownToolCallIds.has(toolCallId);
+    })
+    .map((msg = {}) => {
+      const role = String(msg?.role || "").trim().toLowerCase();
+      const assistantRaw =
+        typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
+          ? msg.rawModelContent
+          : msg?.content;
+      const content =
+        role === "assistant"
+          ? normalizePlanningTextContent(assistantRaw)
+          : normalizePlanningTextContent(msg?.content);
+      return { role, content };
+    })
+    .filter((msg) => msg.content);
+}
+
+function summarizePlanningMessages(messages = [], maxItems = PLANNING_SUMMARY_MAX_ITEMS) {
+  const source = Array.isArray(messages) ? messages : [];
+  const simplified = source
+    .filter((item) => {
+      const role = String(item?.role || "").trim().toLowerCase();
+      return role === "user" || role === "assistant" || role === "tool" || role === "system";
+    })
+    .slice(-maxItems)
+    .map((item = {}) => ({
+      role: String(item?.role || "").trim(),
+      content: compactText(extractRawTextContent(item?.content ?? item), PLANNING_COMPACT_TEXT_MAX_CHARS),
+    }))
+    .filter((item) => item.content);
+  return simplified;
+}
+
+function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN) {
+  const messages = collectAgentStyleHistoryMessages(ctx);
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((item) => String(item?.role || "").trim().toLowerCase() === "user");
+  return {
+    locale,
+    turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
+    latestUserGoal: compactText(extractRawTextContent(latestUserMessage?.content), PLANNING_CONTEXT_GOAL_MAX_CHARS),
+    recentDialog: summarizePlanningMessages(messages, PLANNING_SUMMARY_MAX_ITEMS),
+    sceneTools: resolveSceneToolNames(ctx),
+    toolAllowlist: resolvePlanningToolAllowlist(meta),
+  };
+}
+
+function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOCALE.ZH_CN) {
+  const planningMessages = [
+    ...resolveCapabilityModelMessages(meta, {
+      ctx,
+      purpose: "planning",
+      messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+    }),
+  ];
+  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
+  planningMessages.unshift({
+    role: "system",
+    content:
+      locale === LOCALE.EN_US
+        ? `Planning context summary (compact). Must be fully considered:\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``
+        : `规划输入上下文摘要（精简）如下，必须完整参考：\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
+  });
+  planningMessages.push({ role: "user", content: buildPlanningPromptBase(locale, ctx, meta) });
+  return planningMessages;
+}
+
+function extractPlanningResponseText(response = null) {
+  return (
+    extractRawTextContent(response?.content) ||
+    String(response?.text || response?.output || "").trim()
+  );
+}
+
+function extractAfterCallContent(ctx = {}) {
+  return (
+    extractRawTextContent(ctx?.ai?.content) ||
+    extractRawTextContent(ctx?.modelResponse?.content) ||
+    ""
+  );
+}
+
+function hasToolCallOnlyWithoutText(ctx = {}, sourceContent = "") {
+  const hasToolCalls =
+    Array.isArray(ctx?.ai?.tool_calls) ||
+    Array.isArray(ctx?.ai?.toolCalls) ||
+    Array.isArray(ctx?.modelResponse?.tool_calls) ||
+    Array.isArray(ctx?.modelResponse?.toolCalls) ||
+    String(ctx?.modelResponse?.finish_reason || "").trim() === "tool_calls";
+  return hasToolCalls && !String(sourceContent || "").trim();
+}
+
+function logPlanningCaptureResult(ctx = {}, processed = {}, {
+  event = "planning_checklist_captured",
+  defaultSource = "default",
+} = {}) {
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event,
+    detail: {
+      checklistCount: processed?.checklistCount,
+      source: processed?.sourceType || defaultSource,
+      emptyResponse: processed?.emptyResponse === true,
+    },
+  });
+}
+
+function handleAfterLlmPlanningProcessResult(ctx = {}, processed = {}, state = {}) {
+  if (processed.sourceType === "model") {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_checklist_captured",
+      detail: {
+        checklistCount: processed.checklistCount,
+        source: processed.sourceType,
+      },
+    });
+    return true;
+  }
+
+  if (processed.retryScheduled) {
+    state.flags.planningPromptInjected = false;
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_checklist_retry_scheduled",
+      detail: {
+        attempts: processed.attempts,
+        maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS,
+        emptyResponse: processed.emptyResponse === true,
+      },
+    });
+    return true;
+  }
+
+  logPlanningCaptureResult(ctx, processed, {
+    event: "planning_checklist_captured",
+    defaultSource: "default",
+  });
+  return true;
+}
+
+function handleSeparateModelPlanningProcessResult(
+  ctx = {},
+  processed = {},
+  locale = LOCALE.ZH_CN,
+  responseText = "",
+) {
+  if (processed.retryScheduled) {
+    relaySeparateModelOutputAsUserMessage(ctx, {
+      locale,
+      purpose: "planning",
+      content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
+      dedupe: true,
+    });
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_checklist_retry_scheduled_by_separate_model",
+      detail: { attempts: processed.attempts, maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS },
+    });
+    return true;
+  }
+
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "planning",
+    content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
+    dedupe: true,
+  });
+  logPlanningCaptureResult(ctx, processed, {
+    event: "planning_checklist_captured_by_separate_model",
+    defaultSource: "unknown",
+  });
+  return true;
+}
+
+export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  if (state.flags.planningCaptured === true) return false;
+  if (state.flags.planningSeparateModelInFlight === true) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_separate_model_skipped_inflight",
+    });
+    return false;
+  }
+  if (
+    String(bucket?.taskChecklistSource || "").trim().toLowerCase() === "model" &&
+    Array.isArray(bucket?.taskChecklist) &&
+    bucket.taskChecklist.length
+  ) {
+    state.flags.planningCaptured = true;
+    return false;
+  }
+  const invoker = resolveCapabilityModelInvoker(meta);
+  if (!invoker) return false;
+  state.flags.planningSeparateModelInFlight = true;
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const planningMessages = buildPlanningMessagesForSeparateModel(ctx, meta, locale);
+  try {
+    let response = null;
+    try {
+      response = await invoker({
+        purpose: "planning",
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        model: resolveCapabilityModelName(meta, {
+          purpose: "planning",
+          domain: CAPABILITY_DOMAIN.PLANNING,
+        }),
+        locale,
+        prompt: "",
+        messages: planningMessages,
+        ctx,
+        toolAllowlist: resolvePlanningToolAllowlist(meta),
+      });
+    } catch (error) {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_separate_model_call_failed",
+        detail: { error: String(error?.message || error || "") },
+      });
+      return false;
+    }
+    await appendCapabilityModelTraceLog(ctx, meta, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      purpose: "planning",
+      response,
+    });
+    const responseText = extractPlanningResponseText(response);
+    recordPlanningRawOutput(ctx, {
+      source: "separate_model",
+      content: responseText,
+    });
+    const processed = await processPlanningResult(ctx, meta, {
+      source: "separate_model",
+      rawText: responseText,
+      locale,
+      repairInvoker: invoker,
+      appendCapabilityModelTraceLog,
+    });
+    return handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText);
+  } finally {
+    state.flags.planningSeparateModelInFlight = false;
+  }
+}
+
+export async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { state } = holder;
+  if (state.flags.planningCaptured === true) return false;
+  if (state.flags.planningPromptInjected !== true) return false;
+  const sourceContent = extractAfterCallContent(ctx);
+  if (hasToolCallOnlyWithoutText(ctx, sourceContent)) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_capture_skipped_for_tool_call_turn",
+    });
+    return false;
+  }
+  recordPlanningRawOutput(ctx, {
+    source: "after_llm_call",
+    content: sourceContent,
+  });
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const processed = await processPlanningResult(ctx, meta, {
+    source: "after_llm_call",
+    rawText: sourceContent,
+    locale,
+    repairInvoker: resolveCapabilityModelInvoker(meta),
+    appendCapabilityModelTraceLog,
+  });
+  return handleAfterLlmPlanningProcessResult(ctx, processed, state);
+}
+

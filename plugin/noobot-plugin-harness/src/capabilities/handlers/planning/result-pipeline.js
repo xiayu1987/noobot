@@ -15,7 +15,7 @@ import {
   getDefaultTaskOwner,
   parseTaskChecklistFromModelOutput,
   resolveCapabilityModelName,
-} from "../shared.js";
+} from "./deps.js";
 import {
   extractPlanMetadataFromText,
   isPlanPayloadComplete,
