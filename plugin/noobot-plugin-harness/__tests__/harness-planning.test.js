@@ -150,6 +150,97 @@ test("harness planning captures checklist and forces acceptance at final output"
   assert.match(String(result.output), /"mode": "forced"/);
 });
 
+test("harness planning injects refinement tool and tool call runs plugin-side refinement directly", async () => {
+  const hookManager = createHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        if (payload.purpose === "planning_refinement") {
+          return {
+            content: JSON.stringify({
+              stage: "refinement",
+              totalGoal: "完成任务",
+              taskOwner: "primary_task_owner",
+              nextPhase: { objective: "执行下一步", checklistIndexes: [1] },
+              refinementChecklist: [
+                {
+                  index: 101,
+                  mainStepIndex: 1,
+                  isMainStep: false,
+                  task: "细化步骤一",
+                  owner: "primary_task_owner",
+                  subOwners: [],
+                  input: "阶段完成，细化下一步",
+                  output: "细化计划结果",
+                  files: { create: [], modify: ["src/a.js"], delete: [] },
+                },
+              ],
+            }),
+          };
+        }
+        return { content: "{}" };
+      },
+    },
+  );
+
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+  };
+
+  await hookManager.emit("before_llm_call", {
+    userId: "u11-r",
+    sessionId: "s11-r",
+    dialogProcessId: "dp11-r",
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    userId: "u11-r",
+    sessionId: "s11-r",
+    dialogProcessId: "dp11-r",
+    ai: {
+      content:
+        "{\"totalGoal\":\"完成任务\",\"nextPhase\":{\"objective\":\"执行下一步\",\"checklistIndexes\":[1]},\"taskChecklist\":[{\"index\":1,\"task\":\"解析附件\",\"owner\":\"任务负责者1\",\"input\":\"附件\",\"output\":\"解析结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}},{\"index\":2,\"task\":\"执行核心任务\",\"owner\":\"任务负责者1\",\"input\":\"需求\",\"output\":\"执行结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}}]}",
+    },
+    agentContext,
+  });
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
+
+  const messages = [{ role: "user", content: "继续处理" }];
+  await hookManager.emit("before_llm_call", {
+    userId: "u11-r",
+    sessionId: "s11-r",
+    dialogProcessId: "dp11-r",
+    messages,
+    agentContext,
+  });
+  const refinementTool = agentContext.payload.tools.registry.find(
+    (tool) => tool?.name === "request_plan_refinement",
+  );
+  assert.ok(refinementTool, "request_plan_refinement 工具应注入");
+
+  const toolResult = await refinementTool.invoke({ summary: "阶段完成，细化下一步" });
+  assert.equal(toolResult?.ok, true);
+  assert.equal(toolResult?.status, "completed");
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(
+    invocations.some((item = {}) => item.purpose === "planning_refinement"),
+    true,
+  );
+  assert.equal(Array.isArray(agentContext.payload.harness.planRefinementRecords), true);
+  assert.equal(agentContext.payload.harness.planRefinementRecords.length >= 1, true);
+});
+
 test("harness planning retries injection when first response has no checklist", async () => {
   const hookManager = createHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
