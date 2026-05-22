@@ -7,6 +7,35 @@
 export const PLUGIN_NAME = "noobot-plugin-harness";
 export const PLUGIN_VERSION = "0.1.0";
 
+export const HARNESS_RUN_STATUS = Object.freeze({
+  RUNNING: "running",
+  SUCCESS: "success",
+  ERROR: "error",
+  ABORT: "abort",
+  REVIEWED: "reviewed",
+});
+
+export const HARNESS_TERMINAL_RUN_STATUSES = new Set([
+  HARNESS_RUN_STATUS.SUCCESS,
+  HARNESS_RUN_STATUS.ERROR,
+  HARNESS_RUN_STATUS.ABORT,
+]);
+
+export const HARNESS_FLUSH_REASONS = Object.freeze({
+  NONE: "",
+  TERMINAL: "terminal",
+  ERROR: "error",
+});
+
+export const HARNESS_LIMITS = Object.freeze({
+  JSONL_MAX_BUFFER_ENTRIES: 5000,
+  JSONL_MAX_BUFFER_BYTES: 5 * 1024 * 1024,
+});
+
+export const HARNESS_FILES = Object.freeze({
+  RUN_WRITE_LOCK: ".harness-write.lock",
+});
+
 export const HARNESS_HOOK_POINTS = Object.freeze({
   BEFORE_CONTEXT_BUILD: "before_context_build",
   AFTER_CONTEXT_BUILD: "after_context_build",
