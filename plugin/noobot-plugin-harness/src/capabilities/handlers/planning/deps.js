@@ -26,6 +26,7 @@ export { extractRawTextContent, sanitizeInternalMessages } from "../shared/messa
 export {
   defaultTaskChecklist,
   extractJsonObjectFromText,
+  parseChecklistWithLocalRepair,
   parseRefinementChecklistFromModelOutput,
   parseTaskChecklistFromModelOutput,
 } from "../shared/checklist-utils.js";

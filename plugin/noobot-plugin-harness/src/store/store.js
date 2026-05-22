@@ -144,6 +144,8 @@ const jsonlFlushTimers = new Map(); // filePath -> Timer
 const DEFAULT_JSONL_BATCH_SIZE = DEFAULT_OPTIONS.jsonlBatchSize;
 const DEFAULT_JSONL_FLUSH_INTERVAL_MS = DEFAULT_OPTIONS.jsonlFlushIntervalMs;
 const DEFAULT_JSONL_FLUSH_STRATEGY = DEFAULT_OPTIONS.jsonlFlushStrategy;
+const JSONL_RETRY_BASE_DELAY_MS = 200;
+const JSONL_RETRY_MAX_DELAY_MS = 5000;
 const jsonlFlushFailures = new Map(); // filePath -> number
 const jsonlFlushStrategies = new Map(); // filePath -> strategy
 const tmpCleanupLastRunByFile = new Map(); // filePath -> timestamp
@@ -244,6 +246,26 @@ function scheduleJsonlFlush(
       await flushJsonlBuffer(filePath, strategy);
       jsonlFlushTimers.delete(filePath);
     }, maxTime),
+  );
+}
+
+function computeJsonlRetryDelayMs(retries = 1) {
+  const cappedRetries = Math.max(1, Number(retries) || 1);
+  const backoff = Math.min(JSONL_RETRY_MAX_DELAY_MS, JSONL_RETRY_BASE_DELAY_MS * 2 ** (cappedRetries - 1));
+  const jitterFactor = 0.5 + Math.random();
+  return Math.max(50, Math.round(backoff * jitterFactor));
+}
+
+function scheduleJsonlRetry(filePath = "", strategy = DEFAULT_JSONL_FLUSH_STRATEGY, retries = 1) {
+  if (!filePath) return;
+  const delayMs = computeJsonlRetryDelayMs(retries);
+  clearJsonlFlushTimer(filePath);
+  jsonlFlushTimers.set(
+    filePath,
+    setTimeout(async () => {
+      await flushJsonlBuffer(filePath, strategy);
+      jsonlFlushTimers.delete(filePath);
+    }, delayMs),
   );
 }
 
@@ -398,6 +420,7 @@ async function flushJsonlBuffer(filePath, strategy = DEFAULT_JSONL_FLUSH_STRATEG
       return;
     }
     jsonlBuffers.set(filePath, merged);
+    scheduleJsonlRetry(filePath, strategy, retries);
   }
 }
 
