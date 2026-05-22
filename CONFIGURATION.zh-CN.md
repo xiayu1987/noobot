@@ -105,6 +105,10 @@
 | `tools.process_connector_tool.enabled` | boolean | 启用连接器处理工具 |
 | `tools.process_connector_tool.max_tool_loop_turns` | number | 连接器任务内部循环上限 |
 | `tools.access_connector.enabled` | boolean | 启用连接器访问工具 |
+| `tools.access_connector.command_file.enabled` | boolean | 启用 access_connector 的 `command_file_path` 输入 |
+| `tools.access_connector.command_file.max_bytes` | number | 命令文件可读取的最大字节数 |
+| `tools.access_connector.command_file.allowed_extensions` | string[] | 命令文件后缀白名单 |
+| `tools.access_connector.command_file.allowed_roots` | string(path)[] | 命令文件路径白名单根目录（为空时默认工作区根目录） |
 | `tools.max_output_chars` | number | 工具输出清洗与截断的统一长度上限 |
 | `tools.database_connect_connector.enabled` | boolean | 启用数据库连接器工具 |
 | `tools.terminal_connect_connector.enabled` | boolean | 启用终端连接器工具 |

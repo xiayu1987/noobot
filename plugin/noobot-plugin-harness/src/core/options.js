@@ -38,6 +38,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
   manifestDebounceMs: 500,
   jsonlBatchSize: 50,
   jsonlFlushIntervalMs: 2000,
+  flushHookPriority: 5,
+  flushHookTimeoutMs: 2000,
   jsonlFlushStrategy: Object.freeze({
     maxSize: 50,
     maxTime: 2000,
@@ -45,6 +47,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
     onError: true,
     maxRetry: 5,
     maxBufferEntries: 5000,
+    maxBufferBytes: 5 * 1024 * 1024,
   }),
   maxRuns: 100,
   maxRunAgeDays: 30,
@@ -74,6 +77,8 @@ const HarnessOptionsSchema = z
     manifestDebounceMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
     jsonlBatchSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlBatchSize),
     jsonlFlushIntervalMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushIntervalMs),
+    flushHookPriority: z.coerce.number().finite().default(DEFAULT_OPTIONS.flushHookPriority),
+    flushHookTimeoutMs: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.flushHookTimeoutMs),
     jsonlFlushStrategy: z
       .object({
         maxSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
@@ -87,6 +92,12 @@ const HarnessOptionsSchema = z
           .finite()
           .positive()
           .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferEntries),
+        maxBufferBytes: z.coerce
+          .number()
+          .int()
+          .finite()
+          .positive()
+          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferBytes),
       })
       .partial()
       .default(DEFAULT_OPTIONS.jsonlFlushStrategy),
@@ -191,6 +202,8 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     manifestDebounceMs: safe.manifestDebounceMs,
     jsonlBatchSize: safe.jsonlBatchSize,
     jsonlFlushIntervalMs: safe.jsonlFlushIntervalMs,
+    flushHookPriority: safe.flushHookPriority,
+    flushHookTimeoutMs: safe.flushHookTimeoutMs,
     maxRuns: safe.maxRuns,
     maxRunAgeDays: safe.maxRunAgeDays,
     cleanupGraceMs: safe.cleanupGraceMs,

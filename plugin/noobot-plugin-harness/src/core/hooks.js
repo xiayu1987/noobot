@@ -131,8 +131,12 @@ export function createRegisterHarnessHooks(deps = {}) {
           },
           {
             id: `${plugin.name}.flush.${point}`,
-            priority: 5,
-            timeoutMs: 2000,
+            priority: Number.isFinite(Number(options?.flushHookPriority))
+              ? Number(options.flushHookPriority)
+              : 5,
+            timeoutMs: Number.isFinite(Number(options?.flushHookTimeoutMs))
+              ? Math.max(1, Number(options.flushHookTimeoutMs))
+              : 2000,
           },
         ),
       );

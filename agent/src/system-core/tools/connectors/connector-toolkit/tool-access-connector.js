@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import path from "node:path";
+import { access, readFile, realpath, stat } from "node:fs/promises";
 import { normalizeConnectorType } from "../../../config/index.js";
 import { recoverableToolError } from "../../../error/index.js";
 import { cleanConnectorOutputForLLM } from "../../../utils/text-cleaner.js";
@@ -25,6 +27,242 @@ import {
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../../constants/index.js";
+
+function normalizeBoolean(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function normalizePositiveInt(value, fallback = 0, min = 1) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return Math.max(min, Number(fallback || 0));
+  return Math.max(min, Math.floor(num));
+}
+
+function normalizeExtensionList(input = [], fallback = []) {
+  const source = Array.isArray(input) ? input : fallback;
+  const set = new Set();
+  for (const item of source) {
+    const normalized = String(item || "").trim().toLowerCase();
+    if (!normalized) continue;
+    set.add(normalized.startsWith(".") ? normalized : `.${normalized}`);
+  }
+  return Array.from(set);
+}
+
+function isPathUnderRoot(rootPath = "", targetPath = "") {
+  const rel = path.relative(rootPath, targetPath);
+  if (!rel) return true;
+  return !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function resolveWorkspaceBasePath(runtime = {}) {
+  const basePath = String(
+    runtime?.basePath || runtime?.workspaceBasePath || "",
+  ).trim();
+  if (!basePath) return "";
+  return path.resolve(basePath);
+}
+
+function resolveAccessConnectorFilePolicy({
+  effectiveConfig = {},
+  runtime = {},
+  connectorType = "",
+} = {}) {
+  const toolsConfig =
+    effectiveConfig?.tools && typeof effectiveConfig.tools === "object"
+      ? effectiveConfig.tools
+      : {};
+  const accessConfig =
+    toolsConfig?.accessConnector && typeof toolsConfig.accessConnector === "object"
+      ? toolsConfig.accessConnector
+      : toolsConfig?.access_connector && typeof toolsConfig.access_connector === "object"
+        ? toolsConfig.access_connector
+        : {};
+  const commandFileConfig =
+    accessConfig?.commandFile && typeof accessConfig.commandFile === "object"
+      ? accessConfig.commandFile
+      : accessConfig?.command_file && typeof accessConfig.command_file === "object"
+        ? accessConfig.command_file
+        : {};
+  const workspaceBasePath = resolveWorkspaceBasePath(runtime);
+  const configuredRoots = Array.isArray(commandFileConfig?.allowedRoots)
+    ? commandFileConfig.allowedRoots
+    : Array.isArray(commandFileConfig?.allowed_roots)
+      ? commandFileConfig.allowed_roots
+      : [];
+  const roots = configuredRoots.length
+    ? configuredRoots
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .map((item) =>
+          path.isAbsolute(item)
+            ? path.resolve(item)
+            : workspaceBasePath
+              ? path.resolve(workspaceBasePath, item)
+              : path.resolve(item),
+        )
+    : workspaceBasePath
+      ? [workspaceBasePath]
+      : [];
+  const defaultExtensionsByType = connectorType === CONNECTOR_TYPE.DATABASE
+    ? [".sql"]
+    : connectorType === CONNECTOR_TYPE.TERMINAL
+      ? [".sh", ".bash", ".zsh", ".ksh", ".py", ".js"]
+      : [];
+  const configuredExtensions = Array.isArray(commandFileConfig?.allowedExtensions)
+    ? commandFileConfig.allowedExtensions
+    : Array.isArray(commandFileConfig?.allowed_extensions)
+      ? commandFileConfig.allowed_extensions
+      : [];
+  return {
+    enabled: normalizeBoolean(
+      commandFileConfig?.enabled ?? commandFileConfig?.enable,
+      true,
+    ),
+    maxBytes: normalizePositiveInt(
+      commandFileConfig?.maxBytes ?? commandFileConfig?.max_bytes,
+      256 * 1024,
+      1024,
+    ),
+    allowedRoots: roots,
+    allowedExtensions: normalizeExtensionList(
+      configuredExtensions,
+      defaultExtensionsByType,
+    ),
+  };
+}
+
+async function resolveCommandFromFile({
+  commandFilePath = "",
+  connectorType = "",
+  effectiveConfig = {},
+  runtime = {},
+} = {}) {
+  const normalizedFilePath = String(commandFilePath || "").trim();
+  if (!normalizedFilePath) {
+    throw recoverableToolError("command_file_path required", {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+      details: { field: "command_file_path" },
+    });
+  }
+
+  if (![CONNECTOR_TYPE.DATABASE, CONNECTOR_TYPE.TERMINAL].includes(connectorType)) {
+    throw recoverableToolError(
+      "command_file_path only supports database/terminal connector",
+      {
+        code: ERROR_CODE.RECOVERABLE_INVALID_CONNECTOR_TYPE,
+        details: { field: "command_file_path", connector_type: connectorType },
+      },
+    );
+  }
+
+  const policy = resolveAccessConnectorFilePolicy({
+    effectiveConfig,
+    runtime,
+    connectorType,
+  });
+  if (!policy.enabled) {
+    throw recoverableToolError("command_file_path is disabled by config", {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: { field: "command_file_path", reason: "disabled" },
+    });
+  }
+  if (!policy.allowedRoots.length) {
+    throw recoverableToolError("command_file_path allowed roots not configured", {
+      code: ERROR_CODE.RECOVERABLE_RUNTIME_BASEPATH_MISSING,
+      details: { field: "command_file_path" },
+    });
+  }
+
+  const resolvedInputPath = path.isAbsolute(normalizedFilePath)
+    ? path.resolve(normalizedFilePath)
+    : path.resolve(policy.allowedRoots[0], normalizedFilePath);
+
+  const inAllowedRoots = policy.allowedRoots.some((rootPath) =>
+    isPathUnderRoot(rootPath, resolvedInputPath),
+  );
+  if (!inAllowedRoots) {
+    throw recoverableToolError("command_file_path out of allowed roots", {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        field: "command_file_path",
+        file_path: normalizedFilePath,
+        allowed_roots: policy.allowedRoots,
+      },
+    });
+  }
+
+  try {
+    await access(resolvedInputPath);
+  } catch {
+    throw recoverableToolError("command_file_path not found", {
+      code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
+      details: { field: "command_file_path", file_path: normalizedFilePath },
+    });
+  }
+
+  const [resolvedRealPath, fileStat] = await Promise.all([
+    realpath(resolvedInputPath),
+    stat(resolvedInputPath),
+  ]);
+  const realInAllowedRoots = policy.allowedRoots.some((rootPath) =>
+    isPathUnderRoot(rootPath, resolvedRealPath),
+  );
+  if (!realInAllowedRoots) {
+    throw recoverableToolError("command_file_path out of allowed roots", {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        field: "command_file_path",
+        file_path: normalizedFilePath,
+        allowed_roots: policy.allowedRoots,
+      },
+    });
+  }
+  if (!fileStat?.isFile?.()) {
+    throw recoverableToolError("command_file_path must be a file", {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: { field: "command_file_path", file_path: normalizedFilePath },
+    });
+  }
+  if (Number(fileStat.size || 0) > policy.maxBytes) {
+    throw recoverableToolError("command_file_path exceeds max bytes", {
+      code: ERROR_CODE.RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED,
+      details: {
+        field: "command_file_path",
+        file_path: normalizedFilePath,
+        file_size_bytes: Number(fileStat.size || 0),
+        max_bytes: policy.maxBytes,
+      },
+    });
+  }
+
+  const fileExt = String(path.extname(resolvedRealPath) || "").toLowerCase();
+  if (policy.allowedExtensions.length && !policy.allowedExtensions.includes(fileExt)) {
+    throw recoverableToolError("command_file_path extension not allowed", {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: {
+        field: "command_file_path",
+        extension: fileExt,
+        allowed_extensions: policy.allowedExtensions,
+      },
+    });
+  }
+
+  const commandText = String(await readFile(resolvedRealPath, "utf8") || "").trim();
+  if (!commandText) {
+    throw recoverableToolError("command file is empty", {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+      details: { field: "command_file_path", file_path: normalizedFilePath },
+    });
+  }
+  return commandText;
+}
 
 function buildAccessConnectorTool(context = {}) {
   const {
@@ -119,8 +357,11 @@ function buildAccessConnectorTool(context = {}) {
       command: {
         description: tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "command"),
       },
+      command_file_path: {
+        description: tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "command_file_path"),
+      },
     },
-    async func({ connector_name, connector_type, command }) {
+    async func({ connector_name, connector_type, command, command_file_path }) {
       if (!store || typeof store.executeConnectorCommand !== "function") {
         throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
           code: ERROR_CODE.RECOVERABLE_CONNECTOR_STORE_MISSING,
@@ -146,6 +387,23 @@ function buildAccessConnectorTool(context = {}) {
           },
         );
       }
+      const inlineCommand = String(command || "").trim();
+      const fileCommandPath = String(command_file_path || "").trim();
+      if (inlineCommand && fileCommandPath) {
+        throw recoverableToolError(
+          "Provide either command or command_file_path, not both",
+          {
+            code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+            details: { fields: ["command", "command_file_path"] },
+          },
+        );
+      }
+      const resolvedCommand = inlineCommand || (await resolveCommandFromFile({
+        commandFilePath: fileCommandPath,
+        connectorType,
+        effectiveConfig,
+        runtime,
+      }));
       const selectedConnectors =
         runtime?.systemRuntime?.config?.selectedConnectors &&
         typeof runtime.systemRuntime.config.selectedConnectors === "object"
@@ -235,7 +493,7 @@ function buildAccessConnectorTool(context = {}) {
           sessionId: rootSessionId,
           connectorName,
           connectorType,
-          command: String(command || "").trim(),
+          command: resolvedCommand,
           emailAttachmentHandler: buildEmailAttachmentHandler(),
         });
         runtime.connectorChannels = store.getSessionConnectors(rootSessionId);
