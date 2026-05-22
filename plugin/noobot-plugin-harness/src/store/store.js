@@ -5,6 +5,8 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { HARNESS_FILES, HARNESS_FLUSH_REASONS, HARNESS_TERMINAL_RUN_STATUSES } from "../core/constants.js";
+import { DEFAULT_OPTIONS } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 
 // ---- Manifest Cache & Debounce ----
@@ -81,7 +83,7 @@ export async function updateManifestCached(
   const existingTimer = manifestWriteTimers.get(key);
   if (existingTimer) clearTimeout(existingTimer);
 
-  const isTerminal = ["success", "error", "abort"].includes(String(patch.status || ""));
+  const isTerminal = HARNESS_TERMINAL_RUN_STATUSES.has(String(patch.status || ""));
 
   if (isTerminal) {
     // Flush immediately for terminal states
@@ -139,22 +141,44 @@ export async function flushAllManifests() {
 const jsonlBuffers = new Map(); // filePath -> string[]
 const jsonlFlushTimers = new Map(); // filePath -> Timer
 
-const DEFAULT_JSONL_BATCH_SIZE = 50;
-const DEFAULT_JSONL_FLUSH_INTERVAL_MS = 2000;
-const DEFAULT_JSONL_FLUSH_STRATEGY = Object.freeze({
-  maxSize: DEFAULT_JSONL_BATCH_SIZE,
-  maxTime: DEFAULT_JSONL_FLUSH_INTERVAL_MS,
-  onTerminal: true,
-  onError: true,
-  maxRetry: 5,
-  maxBufferEntries: 5000,
-  maxBufferBytes: 5 * 1024 * 1024,
-});
+const DEFAULT_JSONL_BATCH_SIZE = DEFAULT_OPTIONS.jsonlBatchSize;
+const DEFAULT_JSONL_FLUSH_INTERVAL_MS = DEFAULT_OPTIONS.jsonlFlushIntervalMs;
+const DEFAULT_JSONL_FLUSH_STRATEGY = DEFAULT_OPTIONS.jsonlFlushStrategy;
 const jsonlFlushFailures = new Map(); // filePath -> number
 const jsonlFlushStrategies = new Map(); // filePath -> strategy
 const tmpCleanupLastRunByFile = new Map(); // filePath -> timestamp
+const runWriteLockRefCounts = new Map(); // runDir -> count
 const TMP_FILE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const TMP_CLEANUP_MIN_INTERVAL_MS = 5 * 60 * 1000;
+
+function resolveRunWriteLockPath(targetPath = "") {
+  const dir = path.dirname(String(targetPath || "").trim());
+  if (!dir || dir === ".") return "";
+  return path.join(dir, HARNESS_FILES.RUN_WRITE_LOCK);
+}
+
+async function withRunWriteLock(targetPath = "", operation = async () => undefined) {
+  const lockPath = resolveRunWriteLockPath(targetPath);
+  if (!lockPath) return operation();
+  const runDir = path.dirname(lockPath);
+  const current = Number(runWriteLockRefCounts.get(runDir) || 0);
+  if (current <= 0) {
+    await fs.mkdir(runDir, { recursive: true });
+    await fs.writeFile(lockPath, String(Date.now()), "utf-8");
+  }
+  runWriteLockRefCounts.set(runDir, current + 1);
+  try {
+    return await operation();
+  } finally {
+    const next = Number(runWriteLockRefCounts.get(runDir) || 1) - 1;
+    if (next > 0) {
+      runWriteLockRefCounts.set(runDir, next);
+      return;
+    }
+    runWriteLockRefCounts.delete(runDir);
+    await fs.unlink(lockPath).catch(() => {});
+  }
+}
 
 function normalizeFlushStrategy(batchSize, flushIntervalMs) {
   if (batchSize && typeof batchSize === "object" && !Array.isArray(batchSize)) {
@@ -194,8 +218,8 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
       Number.isFinite(resolvedInterval) && resolvedInterval >= 0
         ? resolvedInterval
         : DEFAULT_JSONL_FLUSH_INTERVAL_MS,
-    onTerminal: true,
-    onError: true,
+    onTerminal: DEFAULT_JSONL_FLUSH_STRATEGY.onTerminal,
+    onError: DEFAULT_JSONL_FLUSH_STRATEGY.onError,
     maxRetry: DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
     maxBufferEntries: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
     maxBufferBytes: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
@@ -321,7 +345,8 @@ export async function appendJsonlBuffered(
 
   const reason = String(flushHint?.reason || "").trim().toLowerCase();
   const shouldFlushByReason =
-    (reason === "terminal" && strategy.onTerminal) || (reason === "error" && strategy.onError);
+    (reason === HARNESS_FLUSH_REASONS.TERMINAL && strategy.onTerminal) ||
+    (reason === HARNESS_FLUSH_REASONS.ERROR && strategy.onError);
 
   if (buffer.length >= strategy.maxSize || shouldFlushByReason) {
     clearJsonlFlushTimer(filePath);
@@ -410,24 +435,26 @@ async function writeJsonValidated(filePath, data, devMode = false) {
   const dir = path.dirname(filePath);
   const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
 
-  await fs.mkdir(dir, { recursive: true });
-  await cleanupStaleTmpFilesForTarget(filePath);
+  await withRunWriteLock(filePath, async () => {
+    await fs.mkdir(dir, { recursive: true });
+    await cleanupStaleTmpFilesForTarget(filePath);
 
-  // Atomic write: write to temp file, then rename
-  await fs.writeFile(tmpPath, content, "utf-8");
-  await fs.rename(tmpPath, filePath);
+    // Atomic write: write to temp file, then rename
+    await fs.writeFile(tmpPath, content, "utf-8");
+    await fs.rename(tmpPath, filePath);
 
-  // P1#4: Only validate in dev mode or if explicitly requested
-  if (devMode || process.env.HARNESS_VALIDATE_WRITES === "1") {
-    try {
-      const written = await fs.readFile(filePath, "utf-8");
-      JSON.parse(written);
-    } catch (err) {
-      console.error(`[harness] JSON validation failed for ${filePath}:`, err.message); // P2#7
-      // Fallback: try writing again
-      await fs.writeFile(filePath, content, "utf-8");
+    // P1#4: Only validate in dev mode or if explicitly requested
+    if (devMode || process.env.HARNESS_VALIDATE_WRITES === "1") {
+      try {
+        const written = await fs.readFile(filePath, "utf-8");
+        JSON.parse(written);
+      } catch (err) {
+        console.error(`[harness] JSON validation failed for ${filePath}:`, err.message); // P2#7
+        // Fallback: try writing again
+        await fs.writeFile(filePath, content, "utf-8");
+      }
     }
-  }
+  });
 }
 
 export async function appendJsonl(filePath, record) {
@@ -436,6 +463,8 @@ export async function appendJsonl(filePath, record) {
 }
 
 async function appendFileValidated(filePath, content) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.appendFile(filePath, content, "utf-8");
+  await withRunWriteLock(filePath, async () => {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.appendFile(filePath, content, "utf-8");
+  });
 }

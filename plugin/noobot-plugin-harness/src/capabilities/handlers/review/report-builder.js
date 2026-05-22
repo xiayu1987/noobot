@@ -4,18 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 import { CAPABILITY_DOMAIN, appendCapabilityLog, ensureHarnessBucket } from "./deps.js";
+import { HARNESS_HOOK_POINTS, HARNESS_RUN_STATUS } from "../../../core/constants.js";
 
 export function buildReviewReport(point = "", ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return null;
   const { bucket, state } = holder;
   const acceptance = bucket.lastAcceptanceReport || null;
+  const errorPoints = new Set([
+    HARNESS_HOOK_POINTS.ON_ERROR,
+    HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
+    HARNESS_HOOK_POINTS.LLM_CALL_ERROR,
+    HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
+  ]);
   const status = String(ctx?.status || "").trim() ||
-    (["on_error", "context_build_error", "llm_call_error", "tool_call_error"].includes(point)
-      ? "error"
-      : point === "on_abort"
-        ? "abort"
-        : "reviewed");
+    (errorPoints.has(point)
+      ? HARNESS_RUN_STATUS.ERROR
+      : point === HARNESS_HOOK_POINTS.ON_ABORT
+        ? HARNESS_RUN_STATUS.ABORT
+        : HARNESS_RUN_STATUS.REVIEWED);
   const issues = [];
   if (state.flags.planningCaptured !== true) issues.push("planning_not_captured");
   if (acceptance?.summary?.pending > 0) issues.push("acceptance_has_pending_items");

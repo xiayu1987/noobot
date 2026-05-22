@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HARNESS_HOOK_POINTS } from "../core/constants.js";
+import { HARNESS_HOOK_POINTS, HARNESS_RUN_STATUS } from "../core/constants.js";
 
 export const HARNESS_FSM_STATES = Object.freeze({
   IDLE: "idle",
@@ -56,8 +56,10 @@ export function normalizeFsmState(state = "") {
 
 export function statusToFsmState(status = "") {
   const normalized = String(status || "").trim().toLowerCase();
-  if (normalized === "success") return HARNESS_FSM_STATES.DONE;
-  if (normalized === "error" || normalized === "abort") return HARNESS_FSM_STATES.FAILED;
+  if (normalized === HARNESS_RUN_STATUS.SUCCESS) return HARNESS_FSM_STATES.DONE;
+  if (normalized === HARNESS_RUN_STATUS.ERROR || normalized === HARNESS_RUN_STATUS.ABORT) {
+    return HARNESS_FSM_STATES.FAILED;
+  }
   return HARNESS_FSM_STATES.IDLE;
 }
 

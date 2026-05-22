@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveCapabilityProfile } from "../capabilities/profile.js";
+import { HARNESS_LIMITS } from "./constants.js";
 import { z } from "zod";
 
 export const DEFAULT_OPTIONS = Object.freeze({
@@ -46,8 +47,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
     onTerminal: true,
     onError: true,
     maxRetry: 5,
-    maxBufferEntries: 5000,
-    maxBufferBytes: 5 * 1024 * 1024,
+    maxBufferEntries: HARNESS_LIMITS.JSONL_MAX_BUFFER_ENTRIES,
+    maxBufferBytes: HARNESS_LIMITS.JSONL_MAX_BUFFER_BYTES,
   }),
   maxRuns: 100,
   maxRunAgeDays: 30,

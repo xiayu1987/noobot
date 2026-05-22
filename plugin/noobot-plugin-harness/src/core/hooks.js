@@ -169,6 +169,7 @@ export function createRegisterHarnessHooks(deps = {}) {
               deleted: cleanup?.deleted || 0,
               matchedRuns: cleanup?.matchedRuns || 0,
               errors: cleanup?.errors || 0,
+              skippedLocked: cleanup?.skippedLocked || 0,
             });
           },
           {
