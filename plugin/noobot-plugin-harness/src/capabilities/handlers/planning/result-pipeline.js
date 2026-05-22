@@ -21,6 +21,10 @@ import {
   isPlanPayloadComplete,
 } from "../model-response-parser.js";
 
+const FENCED_BLOCK_RE = /```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/gi;
+const STRIP_FENCED_BLOCK_RE = /```[\s\S]*?```/g;
+const TRAILING_COMMA_RE = /,\s*([}\]])/g;
+
 function hasJsonFeature(text = "") {
   const raw = String(text || "").trim();
   if (!raw) return false;
@@ -30,7 +34,8 @@ function hasJsonFeature(text = "") {
 function sanitizeJsonCandidate(text = "") {
   const raw = String(text || "").trim();
   if (!raw) return "";
-  const fencedBlocks = Array.from(raw.matchAll(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/gi));
+  FENCED_BLOCK_RE.lastIndex = 0;
+  const fencedBlocks = Array.from(raw.matchAll(FENCED_BLOCK_RE));
   const preferredBlock = fencedBlocks
     .map((item) => String(item?.[1] || "").trim())
     .find((block) => block.includes("{") || block.includes("["));
@@ -38,7 +43,7 @@ function sanitizeJsonCandidate(text = "") {
   const source = preferredBlock || fallbackBlock || raw;
   return source
     .replace(/^\s*json\s*/i, "")
-    .replace(/,\s*([}\]])/g, "$1")
+    .replace(TRAILING_COMMA_RE, "$1")
     .trim();
 }
 
@@ -116,8 +121,9 @@ function parseChecklistFromWrappedPayload(text = "", locale = LOCALE.ZH_CN) {
 function parseChecklistFromPlainText(text = "", locale = LOCALE.ZH_CN) {
   const raw = String(text || "").trim();
   if (!raw) return [];
+  STRIP_FENCED_BLOCK_RE.lastIndex = 0;
   const lines = raw
-    .replace(/```[\s\S]*?```/g, "")
+    .replace(STRIP_FENCED_BLOCK_RE, "")
     .split(/\r?\n/)
     .map((line) => String(line || "").trim())
     .filter(Boolean);
@@ -241,6 +247,30 @@ async function repairChecklistByModel({
   return parseChecklistWithLocalRepair(repairedText, locale);
 }
 
+async function extractChecklistFromResponse({
+  ctx = {},
+  meta = {},
+  locale = LOCALE.ZH_CN,
+  responseText = "",
+  invoker = null,
+  appendCapabilityModelTraceLog = null,
+} = {}) {
+  let parsed = parseChecklistWithLocalRepair(responseText, locale);
+  let jsonRepairAttempted = false;
+  if (!parsed.length && hasJsonFeature(responseText) && typeof invoker === "function") {
+    jsonRepairAttempted = true;
+    parsed = await repairChecklistByModel({
+      invoker,
+      ctx,
+      meta,
+      locale,
+      rawText: responseText,
+      appendCapabilityModelTraceLog,
+    });
+  }
+  return { parsed, jsonRepairAttempted };
+}
+
 function applyDefaultPlanningChecklist(ctx = {}, locale = LOCALE.ZH_CN, { reason = "" } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -316,20 +346,15 @@ export async function processPlanningResult(
   }
   const { bucket, state } = holder;
   const responseText = String(rawText || "");
-  let parsed = parseChecklistWithLocalRepair(responseText, locale);
-  let jsonRepairAttempted = false;
-
-  if (!parsed.length && hasJsonFeature(responseText) && typeof repairInvoker === "function") {
-    jsonRepairAttempted = true;
-    parsed = await repairChecklistByModel({
-      invoker: repairInvoker,
-      ctx,
-      meta,
-      locale,
-      rawText: responseText,
-      appendCapabilityModelTraceLog,
-    });
-  }
+  const { parsed: extractedChecklist, jsonRepairAttempted } = await extractChecklistFromResponse({
+    ctx,
+    meta,
+    locale,
+    responseText,
+    invoker: repairInvoker,
+    appendCapabilityModelTraceLog,
+  });
+  let parsed = extractedChecklist;
 
   if (parsed.length && !isPlanPayloadComplete(responseText, parsed)) {
     appendCapabilityLog(ctx, {

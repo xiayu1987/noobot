@@ -148,9 +148,13 @@ const DEFAULT_JSONL_FLUSH_STRATEGY = Object.freeze({
   onError: true,
   maxRetry: 5,
   maxBufferEntries: 5000,
+  maxBufferBytes: 5 * 1024 * 1024,
 });
 const jsonlFlushFailures = new Map(); // filePath -> number
 const jsonlFlushStrategies = new Map(); // filePath -> strategy
+const tmpCleanupLastRunByFile = new Map(); // filePath -> timestamp
+const TMP_FILE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const TMP_CLEANUP_MIN_INTERVAL_MS = 5 * 60 * 1000;
 
 function normalizeFlushStrategy(batchSize, flushIntervalMs) {
   if (batchSize && typeof batchSize === "object" && !Array.isArray(batchSize)) {
@@ -159,6 +163,7 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
     const maxTime = Number(input?.maxTime);
     const maxRetry = Number(input?.maxRetry);
     const maxBufferEntries = Number(input?.maxBufferEntries);
+    const maxBufferBytes = Number(input?.maxBufferBytes);
     return {
       maxSize: Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
       maxTime: Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
@@ -175,6 +180,10 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
         Number.isFinite(maxBufferEntries) && maxBufferEntries > 0
           ? Math.trunc(maxBufferEntries)
           : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
+      maxBufferBytes:
+        Number.isFinite(maxBufferBytes) && maxBufferBytes > 0
+          ? Math.trunc(maxBufferBytes)
+          : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
     };
   }
   const resolvedBatch = Number(batchSize);
@@ -189,6 +198,7 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
     onError: true,
     maxRetry: DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
     maxBufferEntries: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
+    maxBufferBytes: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
   };
 }
 
@@ -213,16 +223,77 @@ function scheduleJsonlFlush(
   );
 }
 
+function estimateUtf8Bytes(text = "") {
+  return Buffer.byteLength(String(text || ""), "utf8");
+}
+
+function calculateJsonlBufferBytes(buffer = []) {
+  if (!Array.isArray(buffer) || !buffer.length) return 0;
+  return buffer.reduce((sum, line) => sum + estimateUtf8Bytes(line), 0);
+}
+
 function trimJsonlBuffer(filePath = "", buffer = [], strategy = DEFAULT_JSONL_FLUSH_STRATEGY) {
   if (!filePath || !Array.isArray(buffer)) return buffer;
-  const limit = Number(strategy?.maxBufferEntries);
-  if (!Number.isFinite(limit) || limit <= 0 || buffer.length <= limit) return buffer;
-  const dropped = buffer.length - limit;
-  buffer.splice(0, dropped);
-  console.warn(
-    `[harness] JSONL buffer capped for ${filePath}; dropped ${dropped} oldest record(s) to avoid OOM`,
-  );
+  const maxEntries = Number(strategy?.maxBufferEntries);
+  if (Number.isFinite(maxEntries) && maxEntries > 0 && buffer.length > maxEntries) {
+    const dropped = buffer.length - maxEntries;
+    buffer.splice(0, dropped);
+    console.warn(
+      `[harness] JSONL buffer capped by entries for ${filePath}; dropped ${dropped} oldest record(s) to avoid OOM`,
+    );
+  }
+  const maxBytes = Number(strategy?.maxBufferBytes);
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0 || !buffer.length) return buffer;
+  const currentBytes = calculateJsonlBufferBytes(buffer);
+  if (currentBytes <= maxBytes) return buffer;
+  let droppedEntries = 0;
+  let droppedBytes = 0;
+  for (const line of buffer) {
+    droppedEntries += 1;
+    droppedBytes += estimateUtf8Bytes(line);
+    if (currentBytes - droppedBytes <= maxBytes) break;
+  }
+  if (droppedEntries > 0) {
+    buffer.splice(0, droppedEntries);
+    console.warn(
+      `[harness] JSONL buffer capped by bytes for ${filePath}; dropped ${droppedEntries} oldest record(s), reclaimed ${droppedBytes} bytes`,
+    );
+  }
   return buffer;
+}
+
+async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = {}) {
+  const targetPath = String(filePath || "").trim();
+  if (!targetPath) return 0;
+  const now = Date.now();
+  const last = Number(tmpCleanupLastRunByFile.get(targetPath) || 0);
+  if (!force && now - last < TMP_CLEANUP_MIN_INTERVAL_MS) return 0;
+  tmpCleanupLastRunByFile.set(targetPath, now);
+  const dir = path.dirname(targetPath);
+  const prefix = `${path.basename(targetPath)}.tmp.`;
+  let entries = [];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry?.isFile?.() || !String(entry.name || "").startsWith(prefix)) continue;
+    const tmpPath = path.join(dir, entry.name);
+    try {
+      const stat = await fs.stat(tmpPath);
+      if (now - Number(stat?.mtimeMs || 0) <= TMP_FILE_MAX_AGE_MS) continue;
+      await fs.unlink(tmpPath);
+      removed += 1;
+    } catch {
+      // ignore cleanup failures for best-effort stale temp cleanup
+    }
+  }
+  if (removed > 0) {
+    console.warn(`[harness] Cleaned ${removed} stale tmp file(s) near ${targetPath}`);
+  }
+  return removed;
 }
 
 /**
@@ -340,6 +411,7 @@ async function writeJsonValidated(filePath, data, devMode = false) {
   const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
 
   await fs.mkdir(dir, { recursive: true });
+  await cleanupStaleTmpFilesForTarget(filePath);
 
   // Atomic write: write to temp file, then rename
   await fs.writeFile(tmpPath, content, "utf-8");

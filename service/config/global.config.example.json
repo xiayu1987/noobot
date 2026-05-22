@@ -154,7 +154,21 @@
       "max_tool_loop_turns": 50
     },
     "access_connector": {
-      "enabled": true
+      "enabled": true,
+      "command_file": {
+        "enabled": true,
+        "max_bytes": 262144,
+        "allowed_extensions": [
+          ".sql",
+          ".sh",
+          ".bash",
+          ".zsh",
+          ".ksh",
+          ".py",
+          ".js"
+        ],
+        "allowed_roots": []
+      }
     },
     "database_connect_connector": {
       "enabled": true,

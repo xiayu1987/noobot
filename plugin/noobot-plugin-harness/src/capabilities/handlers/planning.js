@@ -235,6 +235,135 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
   };
 }
 
+function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOCALE.ZH_CN) {
+  const planningMessages = [
+    ...resolveCapabilityModelMessages(meta, {
+      ctx,
+      purpose: "planning",
+      messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+    }),
+  ];
+  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
+  planningMessages.unshift({
+    role: "system",
+    content:
+      locale === LOCALE.EN_US
+        ? `Planning context summary (compact). Must be fully considered:\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``
+        : `规划输入上下文摘要（精简）如下，必须完整参考：\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
+  });
+  const planningPromptBase = buildPlanningPromptBase(locale, ctx, meta);
+  planningMessages.push({ role: "user", content: planningPromptBase });
+  return planningMessages;
+}
+
+function extractPlanningResponseText(response = null) {
+  return (
+    extractRawTextContent(response?.content) ||
+    String(response?.text || response?.output || "").trim()
+  );
+}
+
+function extractAfterCallContent(ctx = {}) {
+  return (
+    extractRawTextContent(ctx?.ai?.content) ||
+    extractRawTextContent(ctx?.modelResponse?.content) ||
+    ""
+  );
+}
+
+function hasToolCallOnlyWithoutText(ctx = {}, sourceContent = "") {
+  const hasToolCalls =
+    Array.isArray(ctx?.ai?.tool_calls) ||
+    Array.isArray(ctx?.ai?.toolCalls) ||
+    Array.isArray(ctx?.modelResponse?.tool_calls) ||
+    Array.isArray(ctx?.modelResponse?.toolCalls) ||
+    String(ctx?.modelResponse?.finish_reason || "").trim() === "tool_calls";
+  return hasToolCalls && !String(sourceContent || "").trim();
+}
+
+function logPlanningCaptureResult(ctx = {}, processed = {}, {
+  event = "planning_checklist_captured",
+  defaultSource = "default",
+} = {}) {
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event,
+    detail: {
+      checklistCount: processed?.checklistCount,
+      source: processed?.sourceType || defaultSource,
+      emptyResponse: processed?.emptyResponse === true,
+    },
+  });
+}
+
+function handleAfterLlmPlanningProcessResult(ctx = {}, processed = {}, state = {}) {
+  if (processed.sourceType === "model") {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_checklist_captured",
+      detail: {
+        checklistCount: processed.checklistCount,
+        source: processed.sourceType,
+      },
+    });
+    return true;
+  }
+
+  if (processed.retryScheduled) {
+    state.flags.planningPromptInjected = false;
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_checklist_retry_scheduled",
+      detail: {
+        attempts: processed.attempts,
+        maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS,
+        emptyResponse: processed.emptyResponse === true,
+      },
+    });
+    return true;
+  }
+
+  logPlanningCaptureResult(ctx, processed, {
+    event: "planning_checklist_captured",
+    defaultSource: "default",
+  });
+  return true;
+}
+
+function handleSeparateModelPlanningProcessResult(
+  ctx = {},
+  processed = {},
+  locale = LOCALE.ZH_CN,
+  responseText = "",
+) {
+  if (processed.retryScheduled) {
+    relaySeparateModelOutputAsUserMessage(ctx, {
+      locale,
+      purpose: "planning",
+      content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
+      dedupe: true,
+    });
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_checklist_retry_scheduled_by_separate_model",
+      detail: { attempts: processed.attempts, maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS },
+    });
+    return true;
+  }
+
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "planning",
+    content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
+    dedupe: true,
+  });
+  logPlanningCaptureResult(ctx, processed, {
+    event: "planning_checklist_captured_by_separate_model",
+    defaultSource: "unknown",
+  });
+  return true;
+}
+
 async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -259,23 +388,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   if (!invoker) return false;
   state.flags.planningSeparateModelInFlight = true;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const planningMessages = [
-    ...resolveCapabilityModelMessages(meta, {
-      ctx,
-      purpose: "planning",
-      messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
-    }),
-  ];
-  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
-  planningMessages.unshift({
-    role: "system",
-    content:
-      locale === LOCALE.EN_US
-        ? `Planning context summary (compact). Must be fully considered:\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``
-        : `规划输入上下文摘要（精简）如下，必须完整参考：\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
-  });
-  const planningPromptBase = buildPlanningPromptBase(locale, ctx, meta);
-  planningMessages.push({ role: "user", content: planningPromptBase });
+  const planningMessages = buildPlanningMessagesForSeparateModel(ctx, meta, locale);
   try {
     let response = null;
     try {
@@ -305,9 +418,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       purpose: "planning",
       response,
     });
-    const responseText =
-      extractRawTextContent(response?.content) ||
-      String(response?.text || response?.output || "").trim();
+    const responseText = extractPlanningResponseText(response);
     recordPlanningRawOutput(ctx, {
       source: "separate_model",
       content: responseText,
@@ -319,38 +430,7 @@ async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       repairInvoker: invoker,
       appendCapabilityModelTraceLog,
     });
-
-    if (processed.retryScheduled) {
-      relaySeparateModelOutputAsUserMessage(ctx, {
-        locale,
-        purpose: "planning",
-        content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
-        dedupe: true,
-      });
-      appendCapabilityLog(ctx, {
-        domain: CAPABILITY_DOMAIN.PLANNING,
-        event: "planning_checklist_retry_scheduled_by_separate_model",
-        detail: { attempts: processed.attempts, maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS },
-      });
-      return true;
-    }
-
-    relaySeparateModelOutputAsUserMessage(ctx, {
-      locale,
-      purpose: "planning",
-      content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
-      dedupe: true,
-    });
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_checklist_captured_by_separate_model",
-      detail: {
-        checklistCount: processed.checklistCount,
-        source: processed.sourceType,
-        emptyResponse: processed.emptyResponse === true,
-      },
-    });
-    return true;
+    return handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText);
   } finally {
     state.flags.planningSeparateModelInFlight = false;
   }
@@ -362,17 +442,8 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
   const { state } = holder;
   if (state.flags.planningCaptured === true) return false;
   if (state.flags.planningPromptInjected !== true) return false;
-  const sourceContent =
-    extractRawTextContent(ctx?.ai?.content) ||
-    extractRawTextContent(ctx?.modelResponse?.content) ||
-    "";
-  const hasToolCalls =
-    Array.isArray(ctx?.ai?.tool_calls) ||
-    Array.isArray(ctx?.ai?.toolCalls) ||
-    Array.isArray(ctx?.modelResponse?.tool_calls) ||
-    Array.isArray(ctx?.modelResponse?.toolCalls) ||
-    String(ctx?.modelResponse?.finish_reason || "").trim() === "tool_calls";
-  if (hasToolCalls && !String(sourceContent || "").trim()) {
+  const sourceContent = extractAfterCallContent(ctx);
+  if (hasToolCallOnlyWithoutText(ctx, sourceContent)) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: "planning_capture_skipped_for_tool_call_turn",
@@ -391,43 +462,7 @@ async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     repairInvoker: resolveCapabilityModelInvoker(meta),
     appendCapabilityModelTraceLog,
   });
-
-  if (processed.sourceType === "model") {
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_checklist_captured",
-      detail: {
-        checklistCount: processed.checklistCount,
-        source: processed.sourceType,
-      },
-    });
-    return true;
-  }
-
-  if (processed.retryScheduled) {
-    state.flags.planningPromptInjected = false;
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_checklist_retry_scheduled",
-      detail: {
-        attempts: processed.attempts,
-        maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS,
-        emptyResponse: processed.emptyResponse === true,
-      },
-    });
-    return true;
-  }
-
-  appendCapabilityLog(ctx, {
-    domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "planning_checklist_captured",
-    detail: {
-      checklistCount: processed.checklistCount,
-      source: processed.sourceType || "default",
-      emptyResponse: processed.emptyResponse === true,
-    },
-  });
-  return true;
+  return handleAfterLlmPlanningProcessResult(ctx, processed, state);
 }
 
 export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => true } = {}) {
