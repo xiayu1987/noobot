@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { ContextBuilder } from "../../context/index.js";
-import { emitEvent } from "../../event/index.js";
-import { HOOK_POINTS, runRuntimeHook } from "../../hook/index.js";
+import { ContextBuilder } from "../../../context/index.js";
+import { emitEvent } from "../../../event/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 /**
@@ -167,9 +167,9 @@ export class AgentContextFactory {
     const buildStartedAtMs = Date.now();
     const buildStartedAt = new Date(buildStartedAtMs).toISOString();
 
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime: runtimeHookCarrier,
-      point: HOOK_POINTS.BEFORE_CONTEXT_BUILD,
+      point: AGENT_HOOK_POINTS.BEFORE_CONTEXT_BUILD,
       context: {
         ...contextHookBase,
         startedAt: buildStartedAt,
@@ -185,9 +185,9 @@ export class AgentContextFactory {
           : await contextBuilder.buildContinueContext({ dialogProcessId });
     } catch (error) {
       const failedAtMs = Date.now();
-      await runRuntimeHook({
+      await runAgentRuntimeHook({
         runtime: runtimeHookCarrier,
-        point: HOOK_POINTS.CONTEXT_BUILD_ERROR,
+        point: AGENT_HOOK_POINTS.CONTEXT_BUILD_ERROR,
         context: {
           ...contextHookBase,
           startedAt: buildStartedAt,
@@ -211,9 +211,9 @@ export class AgentContextFactory {
         ? scopedAgentContext.execution.controllers.runtime
         : runtimeHookCarrier;
     const completedAtMs = Date.now();
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.AFTER_CONTEXT_BUILD,
+      point: AGENT_HOOK_POINTS.AFTER_CONTEXT_BUILD,
       context: {
         ...contextHookBase,
         startedAt: buildStartedAt,

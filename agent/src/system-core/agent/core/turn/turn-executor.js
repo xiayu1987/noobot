@@ -22,7 +22,7 @@ import {
 } from "../media/artifact-service.js";
 import { invokeLlmWithTransientRetry, normalizeAiTextContent } from "../llm-invoker.js";
 import { resolveCurrentModelInfo } from "../model/model-manager.js";
-import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
 
 function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -102,9 +102,9 @@ export async function invokeNoToolsTurn({
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.BEFORE_LLM_CALL,
+    point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
     context: withHookRuntimeMeta(runtime, {
       phase: "llm_call",
       turn,
@@ -131,9 +131,9 @@ export async function invokeNoToolsTurn({
         }),
     });
   } catch (error) {
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.LLM_CALL_ERROR,
+      point: AGENT_HOOK_POINTS.LLM_CALL_ERROR,
       context: withHookRuntimeMeta(runtime, {
         phase: "llm_call",
         turn,
@@ -151,9 +151,9 @@ export async function invokeNoToolsTurn({
     throw error;
   }
   const llmEndedAtMs = Date.now();
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.AFTER_LLM_CALL,
+    point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
     context: withHookRuntimeMeta(runtime, {
       phase: "llm_call",
       turn,
@@ -307,9 +307,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.BEFORE_LLM_CALL,
+    point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
     context: withHookRuntimeMeta(runtime, {
       phase: "llm_call",
       turn,
@@ -328,9 +328,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   try {
     ai = await invokeBoundLlmWithToolChoice();
   } catch (error) {
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.LLM_CALL_ERROR,
+      point: AGENT_HOOK_POINTS.LLM_CALL_ERROR,
       context: withHookRuntimeMeta(runtime, {
         phase: "llm_call",
         turn,
@@ -391,9 +391,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     additionalKwargs: ai?.additional_kwargs ?? null,
     allowReasoningFallback: calls.length === 0,
   });
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.AFTER_LLM_CALL,
+    point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
     context: withHookRuntimeMeta(runtime, {
       phase: "llm_call",
       turn,

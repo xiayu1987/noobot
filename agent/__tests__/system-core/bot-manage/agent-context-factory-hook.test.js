@@ -1,21 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { AgentContextFactory } from "../../../src/system-core/bot-manage/execution/agent-context-factory.js";
+import { AgentContextFactory } from "../../../src/system-core/agent/core/context/agent-context-factory.js";
 import {
-  createHookManager,
-  HOOK_POINTS,
+  createAgentHookManager,
+  AGENT_HOOK_POINTS,
 } from "../../../src/system-core/hook/index.js";
 
 test("buildAgentContextFromBuilder triggers before/after context build hooks", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const beforePayloads = [];
   const afterPayloads = [];
 
-  hookManager.on(HOOK_POINTS.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
     beforePayloads.push(ctx);
   });
-  hookManager.on(HOOK_POINTS.AFTER_CONTEXT_BUILD, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.AFTER_CONTEXT_BUILD, async (ctx = {}) => {
     afterPayloads.push(ctx);
   });
 
@@ -72,15 +72,15 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
 });
 
 test("buildAgentContextFromBuilder triggers context_build_error hook on failure", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const calls = [];
   const errorPayloads = [];
 
-  hookManager.on(HOOK_POINTS.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
     assert.equal(ctx.sessionId, "s_ctx_2");
     calls.push("before");
   });
-  hookManager.on(HOOK_POINTS.CONTEXT_BUILD_ERROR, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.CONTEXT_BUILD_ERROR, async (ctx = {}) => {
     calls.push(`error:${ctx?.error?.message || ""}`);
     errorPayloads.push(ctx);
   });

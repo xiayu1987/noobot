@@ -31,7 +31,7 @@ const HOOK_PLUGIN_PROGRESS_ALLOWED_KEYS = new Set([
   "error",
 ]);
 
-export const HOOK_POINTS = Object.freeze({
+export const AGENT_HOOK_POINTS = Object.freeze({
   BEFORE_TURN: "before_turn",
   AFTER_TURN: "after_turn",
   ON_ERROR: "on_error",
@@ -96,7 +96,7 @@ function resolveRuntimeHookManager(runtime = {}) {
   return null;
 }
 
-export function createHookManager({
+export function createAgentHookManager({
   defaultTimeoutMs = DEFAULT_HOOK_TIMEOUT_MS,
   onError = null,
 } = {}) {
@@ -359,7 +359,7 @@ function withHookClientChannel(context = {}, channel = null) {
   return safeContext;
 }
 
-export async function runRuntimeHook({
+export async function runAgentRuntimeHook({
   runtime = {},
   point = "",
   context = {},

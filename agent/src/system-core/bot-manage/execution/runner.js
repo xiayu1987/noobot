@@ -4,11 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
-import { MIME_TYPE } from "../../constants/index.js";
 import { emitEvent } from "../../event/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { isAbortError } from "../../utils/error-utils.js";
+import {
+  BOT_HOOK_POINTS,
+  runBotRuntimeHook,
+  withBotHookRuntimeMeta,
+} from "../hook/index.js";
 import {
   BOT_MANAGE_LOG_EVENT,
   BOT_MANAGE_LOG_SOURCE,
@@ -20,6 +23,11 @@ import {
 
 /**
  * Main execution runner (pipeline orchestration).
+ *
+ * Responsibilities:
+ * - Decide when a session enters each orchestration phase
+ * - Delegate agent-side implementation details to prepareAgentTurnExecution/agentRunner
+ * - Keep bot-level concerns (session I/O, bot hooks, async task status, error logging)
  */
 export class SessionExecutionRunner {
   constructor({
@@ -31,9 +39,8 @@ export class SessionExecutionRunner {
     initializeRunSessionRuntime,
     resolveScenarioRunConfig,
     prepareRunConfig,
-    buildAgentContext,
+    prepareAgentTurnExecution,
     appendSessionTurn,
-    buildRunTurnAgentContext,
     finalizeRunSession,
     upsertParentAsyncTask,
     now,
@@ -46,12 +53,64 @@ export class SessionExecutionRunner {
     this.initializeRunSessionRuntime = initializeRunSessionRuntime;
     this.resolveScenarioRunConfig = resolveScenarioRunConfig;
     this.prepareRunConfig = prepareRunConfig;
-    this.buildAgentContext = buildAgentContext;
+    this.prepareAgentTurnExecution = prepareAgentTurnExecution;
     this.appendSessionTurn = appendSessionTurn;
-    this.buildRunTurnAgentContext = buildRunTurnAgentContext;
     this.finalizeRunSession = finalizeRunSession;
     this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
+  }
+
+  _normalizePreparedAgentTurnExecution(prepared = {}) {
+    const safePrepared = prepared && typeof prepared === "object" ? prepared : {};
+    const agentContext =
+      safePrepared?.agentContext && typeof safePrepared.agentContext === "object"
+        ? safePrepared.agentContext
+        : {};
+    const runtimeAgentContext =
+      safePrepared?.runtimeAgentContext && typeof safePrepared.runtimeAgentContext === "object"
+        ? safePrepared.runtimeAgentContext
+        : agentContext;
+    const userMessageAttachmentMetas = Array.isArray(safePrepared?.userMessageAttachmentMetas)
+      ? safePrepared.userMessageAttachmentMetas
+      : [];
+    return {
+      agentContext,
+      runtimeAgentContext,
+      userMessageAttachmentMetas,
+    };
+  }
+
+  _buildAgentContextSummary(agentContext = {}) {
+    const runtime =
+      agentContext?.execution?.controllers?.runtime &&
+      typeof agentContext.execution.controllers.runtime === "object"
+        ? agentContext.execution.controllers.runtime
+        : {};
+    const systemRuntime =
+      runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+        ? runtime.systemRuntime
+        : {};
+    const messagesHistory = Array.isArray(agentContext?.payload?.messages?.history)
+      ? agentContext.payload.messages.history
+      : [];
+    const toolRegistry = Array.isArray(agentContext?.payload?.tools?.registry)
+      ? agentContext.payload.tools.registry
+      : [];
+    const attachmentMetas = Array.isArray(runtime?.attachmentMetas)
+      ? runtime.attachmentMetas
+      : [];
+    return {
+      userId: String(systemRuntime?.userId || "").trim(),
+      sessionId: String(systemRuntime?.sessionId || "").trim(),
+      parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
+      dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+      caller: String(systemRuntime?.caller || "").trim(),
+      runtimeModel: String(runtime?.runtimeModel || "").trim(),
+      messageCount: messagesHistory.length,
+      toolCount: toolRegistry.length,
+      attachmentCount: attachmentMetas.length,
+      hasAbortSignal: Boolean(runtime?.abortSignal),
+    };
   }
 
   async runSession({
@@ -69,6 +128,10 @@ export class SessionExecutionRunner {
     parentAsyncResultContainer = null,
   }) {
     let resolvedParentAsyncResultContainer = parentAsyncResultContainer;
+    let resolvedRunConfig = runConfig;
+    let resolvedUsedSessionId = sessionId;
+    let resolvedDialogProcessId = parentDialogProcessId;
+    let resolvedRuntimeEventListener = eventListener;
     try {
       const normalizedMessage = this.normalizeRunMessage(message);
       this.validateRunInput({ userId, sessionId, caller, parentSessionId });
@@ -98,7 +161,7 @@ export class SessionExecutionRunner {
         runConfig,
         userConfig,
       );
-      const resolvedRunConfig =
+      resolvedRunConfig =
         typeof this.prepareRunConfig === "function"
           ? this.prepareRunConfig({
               userId,
@@ -112,8 +175,45 @@ export class SessionExecutionRunner {
       ) {
         resolvedRunConfig.runtimeModel = String(currentSessionModelAlias || "").trim();
       }
+      const botHookRuntime = {
+        eventListener: runtimeEventListener,
+        botHookManager:
+          resolvedRunConfig?.botHookManager &&
+          typeof resolvedRunConfig.botHookManager === "object"
+            ? resolvedRunConfig.botHookManager
+            : null,
+        botHooks:
+          resolvedRunConfig?.botHooks && typeof resolvedRunConfig.botHooks === "object"
+            ? resolvedRunConfig.botHooks
+            : null,
+      };
+      const botHookBase = withBotHookRuntimeMeta(
+        {
+          userId,
+          sessionId: usedSessionId,
+          parentSessionId,
+          dialogProcessId,
+          caller,
+        },
+        {
+          runConfig: resolvedRunConfig,
+        },
+      );
+      resolvedUsedSessionId = usedSessionId;
+      resolvedDialogProcessId = dialogProcessId;
+      resolvedRuntimeEventListener = runtimeEventListener;
+      await runBotRuntimeHook({
+        runtime: botHookRuntime,
+        point: BOT_HOOK_POINTS.BEFORE_SESSION_RUN,
+        context: {
+          ...botHookBase,
+          message: normalizedMessage,
+          isContinue,
+        },
+        eventListener: runtimeEventListener,
+      });
 
-      const agentContext = await this.buildAgentContext({
+      const buildContextPayload = {
         mode: isContinue ? "continue" : "initial",
         userId,
         sessionId: usedSessionId,
@@ -127,19 +227,17 @@ export class SessionExecutionRunner {
         runConfig: resolvedRunConfig,
         abortSignal,
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
+      };
+      if (typeof this.prepareAgentTurnExecution !== "function") {
+        throw new Error("prepareAgentTurnExecution is required");
+      }
+      const preparedAgentTurnExecution = await this.prepareAgentTurnExecution({
+        buildContextPayload,
+        abortSignal,
       });
-      const runtimeAttachmentMetas = Array.isArray(
-        agentContext?.execution?.controllers?.runtime?.attachmentMetas,
-      )
-        ? agentContext.execution.controllers.runtime.attachmentMetas
-        : [];
-      const userMessageAttachmentMetas = mapAttachmentRecordsToMetas(
-        runtimeAttachmentMetas,
-        {
-          fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
-          userId,
-        },
-      );
+      const { agentContext, runtimeAgentContext, userMessageAttachmentMetas } =
+        this._normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
+      const agentContextSummary = this._buildAgentContextSummary(runtimeAgentContext);
 
       await this.appendSessionTurn({
         userId,
@@ -154,14 +252,47 @@ export class SessionExecutionRunner {
         eventListener: runtimeEventListener,
       });
 
-      const runtimeAgentContext = this.buildRunTurnAgentContext(
-        agentContext,
-        abortSignal,
-      );
-      const agentResult = await this.agentRunner({
-        errorLogger: this.errorLogger,
-        agentContext: runtimeAgentContext,
-        userMessage: normalizedMessage,
+      await runBotRuntimeHook({
+        runtime: botHookRuntime,
+        point: BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH,
+        context: {
+          ...botHookBase,
+          userMessage: normalizedMessage,
+          agentContextSummary,
+        },
+        eventListener: runtimeEventListener,
+      });
+      let agentResult = null;
+      try {
+        agentResult = await this.agentRunner({
+          errorLogger: this.errorLogger,
+          agentContext: runtimeAgentContext,
+          userMessage: normalizedMessage,
+        });
+      } catch (error) {
+        await runBotRuntimeHook({
+          runtime: botHookRuntime,
+          point: BOT_HOOK_POINTS.AGENT_DISPATCH_ERROR,
+          context: {
+            ...botHookBase,
+            userMessage: normalizedMessage,
+            agentContextSummary,
+            error,
+          },
+          eventListener: runtimeEventListener,
+        });
+        throw error;
+      }
+      await runBotRuntimeHook({
+        runtime: botHookRuntime,
+        point: BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH,
+        context: {
+          ...botHookBase,
+          userMessage: normalizedMessage,
+          agentContextSummary,
+          agentResult,
+        },
+        eventListener: runtimeEventListener,
       });
       const finalizedResult = await this.finalizeRunSession({
         userId,
@@ -180,8 +311,49 @@ export class SessionExecutionRunner {
         sessionId: usedSessionId,
         traceCount: agentResult?.traces?.length || 0,
       });
+      await runBotRuntimeHook({
+        runtime: botHookRuntime,
+        point: BOT_HOOK_POINTS.AFTER_SESSION_RUN,
+        context: {
+          ...botHookBase,
+          message: normalizedMessage,
+          isContinue,
+          result: finalizedResult,
+        },
+        eventListener: runtimeEventListener,
+      });
       return finalizedResult;
     } catch (error) {
+      await runBotRuntimeHook({
+        runtime: {
+          eventListener: resolvedRuntimeEventListener,
+          botHookManager:
+            resolvedRunConfig?.botHookManager &&
+            typeof resolvedRunConfig.botHookManager === "object"
+              ? resolvedRunConfig.botHookManager
+              : null,
+          botHooks:
+            resolvedRunConfig?.botHooks && typeof resolvedRunConfig.botHooks === "object"
+              ? resolvedRunConfig.botHooks
+              : null,
+        },
+        point: BOT_HOOK_POINTS.SESSION_RUN_ERROR,
+        context: withBotHookRuntimeMeta(
+          {
+            userId,
+            sessionId: resolvedUsedSessionId,
+            parentSessionId,
+            dialogProcessId: resolvedDialogProcessId,
+            caller,
+          },
+          {
+            message,
+            runConfig: resolvedRunConfig,
+            error,
+          },
+        ),
+        eventListener: resolvedRuntimeEventListener,
+      });
       this.upsertParentAsyncTask({
         parentAsyncResultContainer: resolvedParentAsyncResultContainer,
         sessionId,

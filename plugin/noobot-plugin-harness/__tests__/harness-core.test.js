@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createHookManager } from "../../../agent/src/system-core/hook/index.js";
+import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
 import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
@@ -68,7 +68,7 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
 
 test("harness plugin writes manifest, events and context snapshot", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { basePath, promptPolicy: false });
 
   const agentContext = {
@@ -119,7 +119,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
 });
 
 test("harness plugin emits hook progress via client channel when available", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const channelEvents = [];
   registerNoobotPlugin(
     { hookManager },
@@ -158,7 +158,7 @@ test("harness plugin deletes related run records on after_session_delete", async
     "utf8",
   );
 
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { basePath, trace: false, promptPolicy: false });
   await hookManager.emit("after_session_delete", {
     userId: "u-cleanup",
@@ -173,7 +173,7 @@ test("harness plugin deletes related run records on after_session_delete", async
 
 test("harness plugin rejects illegal FSM transitions and audits state commits", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     { basePath, promptPolicy: false, manifestDebounceMs: 0 },
@@ -220,7 +220,7 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
   );
 
   {
-    const hookManager = createHookManager();
+    const hookManager = createAgentHookManager();
     registerNoobotPlugin(
       { hookManager },
       { basePath, promptPolicy: false, manifestDebounceMs: 0 },
@@ -251,7 +251,7 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
 
 test("harness FSM transition matrix (table-driven)", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const runId = "dp-fsm-matrix";
   registerNoobotPlugin(
     { hookManager },
@@ -358,7 +358,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
 
 test("harness FSM remains planning when checklist is absent", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     {
@@ -399,7 +399,7 @@ test("harness FSM remains planning when checklist is absent", async () => {
 
 test("harness plugin injects prompt into before_llm_call messages", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { basePath, trace: false });
   const messages = [{ role: "user", content: "hello" }];
 
@@ -417,7 +417,7 @@ test("harness plugin injects prompt into before_llm_call messages", async () => 
 
 test("harness plugin exposes capability handler skeleton and hook mapping in manifest", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const calls = [];
   registerNoobotPlugin(
     { hookManager },

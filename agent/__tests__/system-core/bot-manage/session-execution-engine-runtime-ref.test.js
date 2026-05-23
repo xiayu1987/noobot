@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/session/session-execution-engine.js";
 
-test("_buildRunTurnAgentContext should keep runtime object reference for tool/model switch consistency", () => {
+test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for tool/model switch consistency", () => {
   const engine = new SessionExecutionEngine({});
   const runtime = { runtimeModel: "" };
   const agentContext = {
@@ -20,7 +20,7 @@ test("_buildRunTurnAgentContext should keep runtime object reference for tool/mo
   };
 
   const abortSignal = { aborted: false };
-  const out = engine._buildRunTurnAgentContext(agentContext, abortSignal);
+  const out = engine.agentRuntimeFacade.buildRunTurnContext(agentContext, abortSignal);
 
   assert.equal(
     out.execution.controllers.runtime,

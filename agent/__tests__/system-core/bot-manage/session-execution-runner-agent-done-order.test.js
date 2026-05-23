@@ -33,19 +33,21 @@ function createRunner({ callOrder, eventListener, finalizeRunSession }) {
     }),
     resolveScenarioRunConfig: (runConfig) => runConfig,
     prepareRunConfig: ({ runConfig }) => runConfig,
-    buildAgentContext: async () => ({
-      execution: {
-        controllers: {
-          runtime: {
-            attachmentMetas: [],
+    prepareAgentTurnExecution: async () => ({
+      agentContext: {
+        execution: {
+          controllers: {
+            runtime: {
+              attachmentMetas: [],
+            },
           },
         },
       },
+      runtimeAgentContext: {},
     }),
     appendSessionTurn: async () => {
       callOrder.push("appendSessionTurn");
     },
-    buildRunTurnAgentContext: () => ({}),
     finalizeRunSession,
     upsertParentAsyncTask: () => {
       callOrder.push("upsertParentAsyncTask");
