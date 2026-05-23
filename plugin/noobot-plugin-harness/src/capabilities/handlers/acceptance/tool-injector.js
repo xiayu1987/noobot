@@ -19,10 +19,6 @@ import { runAcceptanceBySeparateModel } from "./validation-runner.js";
 
 function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, meta = {} } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
-  const modeDescription =
-    locale === LOCALE.EN_US
-      ? "Acceptance mode: active or forced."
-      : "验收模式：active(主动) 或 forced(强行)。";
   return new DynamicStructuredTool({
     name: TASK_ACCEPTANCE_TOOL_NAME,
     description: translateI18nText(locale, "taskAcceptanceToolDescription"),
@@ -30,7 +26,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
       mode: z
         .enum([ACCEPTANCE_MODE.ACTIVE, ACCEPTANCE_MODE.FORCED])
         .optional()
-        .describe(modeDescription),
+        .describe(translateI18nText(locale, "taskAcceptanceModeDescription")),
     }),
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;

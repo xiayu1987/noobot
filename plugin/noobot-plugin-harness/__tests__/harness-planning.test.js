@@ -13,7 +13,18 @@ import { createAgentHookManager } from "../../../agent/src/system-core/hook/inde
 import { registerNoobotPlugin } from "../src/index.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
-test("harness planning disables blocked tools and injects request_task_acceptance tool", async () => {
+function assertFlatCapabilityMessages(messages = []) {
+  assert.equal(Array.isArray(messages), true);
+  assert.equal(messages.length >= 1, true);
+  const roles = messages.map((item = {}) => String(item?.role || "").trim());
+  assert.equal(roles.includes("user"), true);
+  const first = messages[0] || {};
+  const last = messages[messages.length - 1] || {};
+  assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
+  assert.equal(String(last.role || ""), "user");
+}
+
+test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
@@ -38,7 +49,7 @@ test("harness planning disables blocked tools and injects request_task_acceptanc
   await hookManager.emit("before_turn", ctx);
   const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
   assert.equal(names.includes("task_summary"), false);
-  assert.equal(names.includes("request_help"), false);
+  assert.equal(names.includes("request_help"), true);
   assert.equal(names.includes("read_file"), true);
   assert.equal(names.includes("request_task_acceptance"), true);
 });
@@ -89,11 +100,16 @@ test("harness planning prompt includes current tool names and descriptions", asy
 
   await hookManager.emit("before_llm_call", ctx);
   const planningPrompt = String(messages.at(-1)?.content || "");
+  const toolsPrompt = messages.find((item = {}) =>
+    /harness-planning-tools/.test(String(item?.content || "")),
+  );
+  const toolsPromptText = String(toolsPrompt?.content || "");
   assert.equal(String(messages.at(-1)?.role || ""), "user");
-  assert.match(planningPrompt, /可用工具（name\/description）/);
-  assert.match(planningPrompt, /"name": "read_file"/);
-  assert.match(planningPrompt, /"description": "读取文件内容"/);
-  assert.match(planningPrompt, /"name": "web_to_data"/);
+  assert.match(planningPrompt, /harness-planning-bootstrap/);
+  assert.match(toolsPromptText, /可用工具（name\/description）/);
+  assert.match(toolsPromptText, /"name": "read_file"/);
+  assert.match(toolsPromptText, /"description": "读取文件内容"/);
+  assert.match(toolsPromptText, /"name": "web_to_data"/);
 });
 
 test("harness planning captures checklist and forces acceptance at final output", async () => {
@@ -319,7 +335,7 @@ test("harness planning does not mutate runtime forceTool config", async () => {
   assert.equal(runtimeConfig.forceTool, true);
 });
 
-test("harness planning skips capture on tool-call turn without assistant text", async () => {
+test("harness planning blocks tool-call turn without assistant text and schedules retry", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
@@ -341,7 +357,54 @@ test("harness planning skips capture on tool-call turn without assistant text", 
   });
 
   assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
+  assert.equal(agentContext.payload.harness.state.counters.planningCaptureAttempts || 0, 1);
+  assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, false);
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some(
+      (item) => item.event === "planning_capture_blocked_for_tool_call_turn",
+    ),
+    true,
+  );
+});
+
+test("harness planning allows tool-call turn without assistant text when planning tools are allowed", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      capabilityToolAllowlistByPurpose: {
+        planning: ["read_file"],
+      },
+    },
+  );
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+  };
+
+  await hookManager.emit("before_llm_call", {
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    ai: { content: "", tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }] },
+    modelResponse: { finish_reason: "tool_calls" },
+    agentContext,
+  });
+
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
   assert.equal(agentContext.payload.harness.state.counters.planningCaptureAttempts || 0, 0);
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some(
+      (item) => item.event === "planning_capture_skipped_for_tool_call_turn",
+    ),
+    true,
+  );
 });
 
 test("harness planning rejects numbered plain-text checklist output without complete plan payload", async () => {
@@ -589,19 +652,74 @@ test("harness planning separate model uses resolved planning tool allowlist", as
   assert.equal(invocations.length >= 1, true);
   assert.deepEqual(invocations[0].toolAllowlist, []);
   assert.equal(invocations[0].model, "planner_model_alias");
+  assert.equal(invocations[0].promptVersion, "v1");
+  assert.equal(invocations[0].envelopeType, "structured_v1");
+  assertFlatCapabilityMessages(invocations[0].messages);
+  const constraintPrompt = invocations[0].messages.find((item = {}) =>
+    String(item?.role || "") === "system" &&
+    /规划输入上下文摘要（精简）如下/.test(String(item?.content || "")));
+  assert.match(String(constraintPrompt?.content || ""), /"latestUserGoal": "开始任务"/);
 });
 
-test("harness planning rejects incomplete checklist payload without totalGoal or io-file fields", async () => {
+test("harness planning separate model keeps recent dialog in flattened messages", async () => {
   const hookManager = createAgentHookManager();
+  const invocations = [];
   registerNoobotPlugin(
     { hookManager },
     {
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async () => ({
-        content: '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
-      }),
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        return {
+          content:
+            '{"totalGoal":"完成用户请求","taskOwner":"AI Agent","nextPhase":{"objective":"推进首步","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"分析用户目标","owner":"AI Agent","subOwners":[],"input":"用户诉求与上下文","output":"可执行任务分解","files":{"create":[],"modify":[],"delete":[]}}]}',
+        };
+      },
+    },
+  );
+
+  const ctx = {
+    messages: [],
+    userMessage: "查找最适合组织的人",
+    agentContext: {
+      payload: {
+        messages: {
+          system: [],
+          history: [
+            { role: "user", content: "重新查找最适合AI开发的人" },
+            { role: "assistant", content: "已给出AI开发TOP榜单" },
+            { role: "user", content: "查找最适合组织的人" },
+          ],
+        },
+        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+  assert.equal(invocations.length >= 1, true);
+  const allMessagesText = invocations[0].messages.map((item = {}) => String(item?.content || "")).join("\n");
+  assert.match(allMessagesText, /重新查找最适合AI开发的人/);
+  assert.match(allMessagesText, /查找最适合组织的人/);
+});
+
+test("harness planning rejects incomplete checklist payload without totalGoal or io-file fields", async () => {
+  const hookManager = createAgentHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        return {
+          content: '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
+        };
+      },
     },
   );
 
@@ -617,6 +735,8 @@ test("harness planning rejects incomplete checklist payload without totalGoal or
   };
 
   await hookManager.emit("before_llm_call", ctx);
+  assert.equal(invocations.length >= 1, true);
+  assertFlatCapabilityMessages(invocations[0].messages);
 
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, false);
   assert.equal(Array.isArray(ctx.agentContext.payload.harness.taskChecklist), true);

@@ -6,15 +6,19 @@
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
+  PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractJsonObjectFromText,
   extractRawTextContent,
   getDefaultTaskOwner,
+  getPromptJsonFormatExample,
   parseRefinementChecklistFromModelOutput,
   parseTaskChecklistFromModelOutput,
   relaySeparateModelOutputAsUserMessage,
+  invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelName,
   resolveCapabilityModelMessages,
@@ -30,6 +34,7 @@ const planRevisionHelpers = createPlanRevisionHelpers({
   ensureHarnessBucket,
   extractJsonObjectFromText,
   getDefaultTaskOwner,
+  getPromptJsonFormatExample,
   parseRefinementChecklistFromModelOutput,
   parseTaskChecklistFromModelOutput,
   translateI18nText,
@@ -73,31 +78,50 @@ export async function runPlanningRefinementBySeparateModel(
         purpose: "planning_refinement",
         messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
       });
-  const refinementMessages = [...modelMessages];
-  refinementMessages.push({
-    role: "user",
-    content: buildPlanningRefinementPrompt(
-      locale,
-      bucket,
-      state,
-      String(summaryText || "").trim(),
-    ),
+  const refinementTask = buildPlanningRefinementPrompt(
+    locale,
+    bucket,
+    state,
+    String(summaryText || "").trim(),
+  );
+  const refinementMessages = buildCapabilityModelMessages({
+    locale,
+    agentMessages: modelMessages,
+    task: refinementTask,
   });
 
   let refinementResponse = null;
   try {
-    refinementResponse = await invoker({
+    refinementResponse = await invokeWithReasoningRetry({
+      invoker,
+      invokePayload: {
+        purpose: "planning_refinement",
+        promptVersion: PROMPT_ENVELOPE.VERSION,
+        envelopeType: PROMPT_ENVELOPE.TYPE,
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        model: resolveCapabilityModelName(meta, {
+          purpose: "planning_refinement",
+          domain: CAPABILITY_DOMAIN.PLANNING,
+        }),
+        locale,
+        prompt: "",
+        messages: refinementMessages,
+        ctx,
+        toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_refinement"),
+      },
+      maxReasoningRetries: 1,
       purpose: "planning_refinement",
       domain: CAPABILITY_DOMAIN.PLANNING,
-      model: resolveCapabilityModelName(meta, {
-        purpose: "planning_refinement",
-        domain: CAPABILITY_DOMAIN.PLANNING,
-      }),
-      locale,
-      prompt: "",
-      messages: refinementMessages,
+      appendCapabilityLog,
+      appendModelTrace: async (retryResponse = null) => {
+        await appendCapabilityModelTraceLog(ctx, meta, {
+          domain: CAPABILITY_DOMAIN.PLANNING,
+          purpose: "planning_refinement",
+          response: retryResponse,
+        });
+      },
       ctx,
-      toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_refinement"),
+      meta,
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -111,11 +135,6 @@ export async function runPlanningRefinementBySeparateModel(
       error: String(error?.message || error || ""),
     };
   }
-  await appendCapabilityModelTraceLog(ctx, meta, {
-    domain: CAPABILITY_DOMAIN.PLANNING,
-    purpose: "planning_refinement",
-    response: refinementResponse,
-  });
   const refinementText =
     extractRawTextContent(refinementResponse?.content) ||
     String(refinementResponse?.text || refinementResponse?.output || "").trim();

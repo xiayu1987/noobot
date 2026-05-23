@@ -11,7 +11,8 @@ export const FAILURE_THRESHOLD = Object.freeze({
 
 export const LLM_SUMMARY_THRESHOLD = 15;
 
-export const MAX_PLANNING_CAPTURE_ATTEMPTS = 3;
+// Retry at most once after the first failed planning capture.
+export const MAX_PLANNING_CAPTURE_ATTEMPTS = 2;
 
 export const PLANNING_RAW_OUTPUT_LIMIT = 20;
 export const PLANNING_SUMMARY_MAX_ITEMS = 8;

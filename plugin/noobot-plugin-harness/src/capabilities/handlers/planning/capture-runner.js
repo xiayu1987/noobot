@@ -12,20 +12,28 @@ import {
   PLANNING_CONTEXT_GOAL_MAX_CHARS,
 } from "../../../core/thresholds.js";
 import { processPlanningResult } from "./result-pipeline.js";
-import { buildPlanningPromptBase } from "./prompt-builder.js";
+import {
+  buildPlanningPromptBase,
+  buildPlanningToolContextPrompt,
+  resolveLatestUserMessageText,
+} from "./prompt-builder.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
+  PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
+  invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelName,
   resolveCapabilityModelMessages,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
+  translateI18nText,
 } from "./deps.js";
 
 function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
@@ -145,34 +153,41 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
   const latestUserMessage = [...messages]
     .reverse()
     .find((item) => String(item?.role || "").trim().toLowerCase() === "user");
+  const latestUserGoalText =
+    resolveLatestUserMessageText(ctx) ||
+    compactText(extractRawTextContent(latestUserMessage?.content), PLANNING_CONTEXT_GOAL_MAX_CHARS);
   return {
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
-    latestUserGoal: compactText(extractRawTextContent(latestUserMessage?.content), PLANNING_CONTEXT_GOAL_MAX_CHARS),
-    recentDialog: summarizePlanningMessages(messages, PLANNING_SUMMARY_MAX_ITEMS),
+    latestUserGoal: compactText(latestUserGoalText, PLANNING_CONTEXT_GOAL_MAX_CHARS),
     sceneTools: resolveSceneToolNames(ctx),
     toolAllowlist: resolvePlanningToolAllowlist(meta),
   };
 }
 
 function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOCALE.ZH_CN) {
-  const planningMessages = [
-    ...resolveCapabilityModelMessages(meta, {
-      ctx,
-      purpose: "planning",
-      messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
-    }),
-  ];
-  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
-  planningMessages.unshift({
-    role: "system",
-    content:
-      locale === LOCALE.EN_US
-        ? `Planning context summary (compact). Must be fully considered:\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``
-        : `规划输入上下文摘要（精简）如下，必须完整参考：\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
+  const resolvedAgentMessages = resolveCapabilityModelMessages(meta, {
+    ctx,
+    purpose: "planning",
+    messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
   });
-  planningMessages.push({ role: "user", content: buildPlanningPromptBase(locale, ctx, meta) });
-  return planningMessages;
+  const historyAgentMessages = collectAgentStyleHistoryMessages(ctx);
+  const agentMessages =
+    Array.isArray(resolvedAgentMessages) && resolvedAgentMessages.length
+      ? resolvedAgentMessages
+      : historyAgentMessages;
+  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
+  const messages = buildCapabilityModelMessages({
+    locale,
+    agentMessages,
+    constraints: [
+      `${translateI18nText(locale, "planningContextSummaryHeader")}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
+      buildPlanningToolContextPrompt(locale, ctx, meta),
+    ],
+    task: "",
+  });
+  messages.push({ role: "user", content: buildPlanningPromptBase(locale, ctx, meta) });
+  return messages;
 }
 
 function extractPlanningResponseText(response = null) {
@@ -198,6 +213,13 @@ function hasToolCallOnlyWithoutText(ctx = {}, sourceContent = "") {
     Array.isArray(ctx?.modelResponse?.toolCalls) ||
     String(ctx?.modelResponse?.finish_reason || "").trim() === "tool_calls";
   return hasToolCalls && !String(sourceContent || "").trim();
+}
+
+function shouldBlockToolCallOnlyTurn(meta = {}) {
+  const allowlist = resolvePlanningToolAllowlist(meta);
+  if (!Array.isArray(allowlist) || !allowlist.length) return true;
+  if (allowlist.includes("*")) return false;
+  return false;
 }
 
 function logPlanningCaptureResult(ctx = {}, processed = {}, {
@@ -259,7 +281,7 @@ function handleSeparateModelPlanningProcessResult(
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
       purpose: "planning",
-      content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
+      content: responseText || translateI18nText(locale, "planningSeparateModelEmptyRelay"),
       dedupe: true,
     });
     appendCapabilityLog(ctx, {
@@ -273,7 +295,7 @@ function handleSeparateModelPlanningProcessResult(
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "planning",
-    content: responseText || (locale === LOCALE.EN_US ? "None" : "无"),
+    content: responseText || translateI18nText(locale, "planningSeparateModelEmptyRelay"),
     dedupe: true,
   });
   logPlanningCaptureResult(ctx, processed, {
@@ -311,18 +333,36 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   try {
     let response = null;
     try {
-      response = await invoker({
+      response = await invokeWithReasoningRetry({
+        invoker,
+        invokePayload: {
+          purpose: "planning",
+          promptVersion: PROMPT_ENVELOPE.VERSION,
+          envelopeType: PROMPT_ENVELOPE.TYPE,
+          domain: CAPABILITY_DOMAIN.PLANNING,
+          model: resolveCapabilityModelName(meta, {
+            purpose: "planning",
+            domain: CAPABILITY_DOMAIN.PLANNING,
+          }),
+          locale,
+          prompt: "",
+          messages: planningMessages,
+          ctx,
+          toolAllowlist: resolvePlanningToolAllowlist(meta),
+        },
+        maxReasoningRetries: 1,
         purpose: "planning",
         domain: CAPABILITY_DOMAIN.PLANNING,
-        model: resolveCapabilityModelName(meta, {
-          purpose: "planning",
-          domain: CAPABILITY_DOMAIN.PLANNING,
-        }),
-        locale,
-        prompt: "",
-        messages: planningMessages,
+        appendCapabilityLog,
+        appendModelTrace: async (retryResponse = null) => {
+          await appendCapabilityModelTraceLog(ctx, meta, {
+            domain: CAPABILITY_DOMAIN.PLANNING,
+            purpose: "planning",
+            response: retryResponse,
+          });
+        },
         ctx,
-        toolAllowlist: resolvePlanningToolAllowlist(meta),
+        meta,
       });
     } catch (error) {
       appendCapabilityLog(ctx, {
@@ -332,11 +372,6 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       });
       return false;
     }
-    await appendCapabilityModelTraceLog(ctx, meta, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      purpose: "planning",
-      response,
-    });
     const responseText = extractPlanningResponseText(response);
     recordPlanningRawOutput(ctx, {
       source: "separate_model",
@@ -363,11 +398,26 @@ export async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
   if (state.flags.planningPromptInjected !== true) return false;
   const sourceContent = extractAfterCallContent(ctx);
   if (hasToolCallOnlyWithoutText(ctx, sourceContent)) {
+    if (!shouldBlockToolCallOnlyTurn(meta)) {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_capture_skipped_for_tool_call_turn",
+      });
+      return false;
+    }
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_capture_skipped_for_tool_call_turn",
+      event: "planning_capture_blocked_for_tool_call_turn",
     });
-    return false;
+    const locale = state?.locale || LOCALE.ZH_CN;
+    const processed = await processPlanningResult(ctx, meta, {
+      source: "after_llm_call_tool_calls_blocked",
+      rawText: "",
+      locale,
+      repairInvoker: resolveCapabilityModelInvoker(meta),
+      appendCapabilityModelTraceLog,
+    });
+    return handleAfterLlmPlanningProcessResult(ctx, processed, state);
   }
   recordPlanningRawOutput(ctx, {
     source: "after_llm_call",
@@ -383,4 +433,3 @@ export async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
   });
   return handleAfterLlmPlanningProcessResult(ctx, processed, state);
 }
-

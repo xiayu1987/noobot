@@ -10,6 +10,7 @@ export {
   GUIDANCE_WEB_SERVICE_NAME,
   GUIDANCE_WEB_TOOL_NAMES,
   LOCALE,
+  PROMPT_ENVELOPE,
   TOOL_NAME_SET,
 } from "../shared/constants.js";
 
@@ -25,7 +26,13 @@ export {
   shouldUseSeparateModel,
 } from "../shared/model-utils.js";
 
-export { extractRawTextContent, markMessagesSummarized, resolveInjectedMessageSummarizer } from "../shared/message-utils.js";
+export {
+  extractRawTextContent,
+  markMessagesSummarized,
+  resolveInjectedMessageSummarizer,
+} from "../shared/message-utils.js";
+export { buildCapabilityModelMessages } from "../shared/model-message-factory.js";
+export { invokeWithReasoningRetry } from "../shared/model-invocation-utils.js";
 
 export {
   extractJsonObjectFromText,
@@ -33,4 +40,4 @@ export {
   parseTaskChecklistFromModelOutput,
 } from "../shared/checklist-utils.js";
 
-export { getDefaultTaskOwner, translateI18nText } from "../shared/i18n.js";
+export { getDefaultTaskOwner, getPromptJsonFormatExample, translateI18nText } from "../shared/i18n.js";

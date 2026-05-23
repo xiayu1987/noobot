@@ -27,3 +27,22 @@ test("buildModelKwargs keeps top_p for non-gpt-5 models", () => {
 
   assert.equal(kwargs.top_p, 0.9);
 });
+
+test("buildModelKwargs sets dashscope enable_thinking default to false", () => {
+  const kwargs = buildModelKwargs({
+    format: "dashscope",
+    model: "qwen3.6-plus",
+  });
+
+  assert.equal(kwargs.enable_thinking, false);
+});
+
+test("buildModelKwargs respects explicit dashscope enable_thinking value", () => {
+  const kwargs = buildModelKwargs({
+    format: "dashscope",
+    model: "qwen3.6-plus",
+    enable_thinking: true,
+  });
+
+  assert.equal(kwargs.enable_thinking, true);
+});

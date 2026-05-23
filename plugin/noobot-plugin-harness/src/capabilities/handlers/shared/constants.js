@@ -65,28 +65,65 @@ export const CAPABILITY_DOMAIN = Object.freeze({
   REVIEW: "review",
 });
 
+export const PROMPT_ENVELOPE = Object.freeze({
+  VERSION: "v1",
+  TYPE: "structured_v1",
+});
+
+export const PROMPT_JSON_FORMAT_EXAMPLES = Object.freeze({
+  planning_main:
+    '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
+  planning_revision:
+    '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
+  planning_refinement:
+    '{"stage":"refinement","totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"refinementChecklist":[{"index":101,"mainStepIndex":1,"isMainStep":false,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
+  acceptance_semantic_validation:
+    '{"status":"pass|warn|fail","consistent":true,"missingItems":[],"unsupportedClaims":[],"checklistCoverage":[{"index":1,"task":"...","covered":true,"evidence":"...","risk":"low"}],"suggestions":[]}',
+});
+
 export const I18N_TEXT = Object.freeze({
   [LOCALE.ZH_CN]: Object.freeze({
     taskAcceptanceToolDescription:
       "请求任务验收：按 harness 插件任务清单输出验收报告；mode=active(主动) 或 forced(强行)。",
+    taskAcceptanceModeDescription: "验收模式：active(主动) 或 forced(强行)。",
+    jsonOnlyOutputRequirement: "仅输出 JSON。",
     planningPromptMarker: "<!-- harness-planning-bootstrap -->",
+    planningToolContextMarker: "<!-- harness-planning-tools -->",
+    planningOriginalUserInputMarker: "<!-- harness-planning-user-input -->",
+    planningOriginalUserInputHeader: "原始用户消息：",
+    planningOriginalUserInputFallback: "（未获取到原始用户消息）",
     planningPromptBody:
-      "基于完整上下文和全部工具生成完整计划：必须包含 totalGoal；每步必须包含 task、input、output、files(create/modify/delete)。\\n仅输出 JSON：{example}\\n输出后继续执行，不要结束。\\n工具范围用 *；后续修订也必须输出完整计划。",
+      "基于完整上下文和全部工具生成完整计划。\\n输出后继续执行，不要结束。\\n工具范围用 *；后续修订也必须输出完整计划。",
+    planningPromptFormatExample: "格式：{example}",
+    planningContextSummaryHeader: "规划输入上下文摘要（精简）如下，必须完整参考：",
+    planningSeparateModelEmptyRelay: "无",
+    planningJsonRepairInstruction: "请把以下文本修复为严格 JSON，只输出 JSON。",
+    planningJsonRepairOutputConstraint: "输出只能是 JSON 对象或数组。",
+    planningJsonRepairStructureConstraint:
+      "修复后的 JSON 需为规划清单结构（包含 totalGoal、taskOwner、nextPhase、taskChecklist）。",
+    planningJsonRepairFormatExample: "格式示例：{example}",
+    planningJsonRepairFallbackInstruction: "如果无法修复为清单 JSON，请输出 {}。",
     planningPromptToolsHeader: "可用工具（name/description），规划必须参考：",
+    planRefinementToolDescription: "在总计划完成后触发计划细化流程。",
+    planRefinementToolSummaryDescription: "可选的小结文本，会作为计划细化上下文。",
+    planRefinementNotReadyReason: "总计划流程尚未完成",
+    planRefinementConvergedReason: "未找到可细化的主步骤",
+    planRefinementFailedReason: "插件侧细化失败",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody: "只输出已完成项；最后一行必须为“小结完成”。",
     planningRefinementMarker: "<!-- harness-planning-refinement -->",
     planningRefinementPromptBody:
-      "基于当前状态和阶段小结生成细化的增量计划。\\n仅输出计划 JSON，必须使用 refinement 专用结构：stage=refinement，输出 refinementChecklist（禁止输出 taskChecklist）；每项必须包含 mainStepIndex 且 isMainStep=false，并且必须可映射到 targetMainSteps。\\n格式：{example}",
+      "基于当前状态和阶段小结生成细化的增量计划。\\n必须使用 refinement 专用结构：stage=refinement，输出 refinementChecklist（禁止输出 taskChecklist）；每项必须包含 mainStepIndex 且 isMainStep=false，并且必须可映射到 targetMainSteps。\\n格式：{example}",
     planningRevisionMarker: "<!-- harness-planning-revision -->",
     planningRevisionPromptBody:
-      "基于当前状态和阶段小结修订计划。\\n仅输出完整计划 JSON，并给出 nextPhase。\\n格式：{example}",
+      "基于当前状态和阶段小结修订计划，并给出 nextPhase。\\n格式：{example}",
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody: "工具失败达到阈值({reason})，基于未小结消息给出下一步指引。",
     guidancePreferTools: "优先工具：{tools}。",
     guidanceWebService: "网页搜索使用 {service}（通过 {tool}）。",
     acceptanceSemanticValidationMarker: "<!-- harness-acceptance-semantic-validation -->",
-    acceptanceSemanticValidationBody: "基于最新计划和验收报告做语义一致性校验；仅输出 JSON。",
+    acceptanceSemanticValidationBody: "基于最新计划和验收报告做语义一致性校验。",
+    acceptanceSemanticValidationFormatExample: "格式：{example}",
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[来自harness外部模型输出/{purpose}]",
     reviewHeader: "[Harness-Review]",
@@ -94,18 +131,38 @@ export const I18N_TEXT = Object.freeze({
   [LOCALE.EN_US]: Object.freeze({
     taskAcceptanceToolDescription:
       "Request task acceptance: validate completion against the harness checklist; mode=active or forced.",
+    taskAcceptanceModeDescription: "Acceptance mode: active or forced.",
+    jsonOnlyOutputRequirement: "Output JSON only.",
     planningPromptMarker: "<!-- harness-planning-bootstrap -->",
+    planningToolContextMarker: "<!-- harness-planning-tools -->",
+    planningOriginalUserInputMarker: "<!-- harness-planning-user-input -->",
+    planningOriginalUserInputHeader: "Original user message:",
+    planningOriginalUserInputFallback: "(original user message unavailable)",
     planningPromptBody:
-      "Generate a complete plan from full context and all tools: include totalGoal; each step must include task/input/output/files(create/modify/delete).\\nJSON only: {example}\\nContinue after output; do not end.\\nUse * for tool scope; revisions must also output the full plan.",
+      "Generate a complete plan from full context and all tools.\\nContinue after output and do not end.\\nUse * for tool scope; revisions must also output the full plan.",
+    planningPromptFormatExample: "Format: {example}",
+    planningContextSummaryHeader: "Planning context summary (compact). Must be fully considered:",
+    planningSeparateModelEmptyRelay: "None",
+    planningJsonRepairInstruction: "Repair the following text into strict JSON only.",
+    planningJsonRepairOutputConstraint: "Output only JSON object or array.",
+    planningJsonRepairStructureConstraint:
+      "The repaired JSON should be a planning checklist structure (including totalGoal, taskOwner, nextPhase, taskChecklist).",
+    planningJsonRepairFormatExample: "Format example: {example}",
+    planningJsonRepairFallbackInstruction: "If content cannot be repaired into checklist JSON, output {}.",
     planningPromptToolsHeader: "Available tools (name/description), must be referenced:",
+    planRefinementToolDescription: "Trigger planning refinement flow after main plan is ready.",
+    planRefinementToolSummaryDescription: "Optional summary text used as refinement context.",
+    planRefinementNotReadyReason: "main planning flow is not completed yet",
+    planRefinementConvergedReason: "no refinable main step found",
+    planRefinementFailedReason: "plugin-side refinement failed",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
     guidanceSummaryBody: 'Only output completed items; final line must be "Summary complete".',
     planningRefinementMarker: "<!-- harness-planning-refinement -->",
     planningRefinementPromptBody:
-      "Generate a refined incremental plan from current state and phase summary.\\nOutput JSON only and use a refinement-only schema: stage=refinement and refinementChecklist (taskChecklist is forbidden). Every item must include mainStepIndex and isMainStep=false, and must map to targetMainSteps.\\nFormat: {example}",
+      "Generate a refined incremental plan from current state and phase summary.\\nUse a refinement-only schema: stage=refinement and refinementChecklist (taskChecklist is forbidden). Every item must include mainStepIndex and isMainStep=false, and must map to targetMainSteps.\\nFormat: {example}",
     planningRevisionMarker: "<!-- harness-planning-revision -->",
     planningRevisionPromptBody:
-      "Revise the plan from current state and phase summary.\\nOutput full plan JSON only and include nextPhase.\\nFormat: {example}",
+      "Revise the plan from current state and phase summary and include nextPhase.\\nFormat: {example}",
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody:
       "Tool failures reached threshold ({reason}); provide next-step guidance from unsummarized messages.",
@@ -113,7 +170,8 @@ export const I18N_TEXT = Object.freeze({
     guidanceWebService: "Use web search {service} (via {tool}).",
     acceptanceSemanticValidationMarker: "<!-- harness-acceptance-semantic-validation -->",
     acceptanceSemanticValidationBody:
-      "Validate semantic consistency from latest plan and acceptance report; JSON only.",
+      "Validate semantic consistency from latest plan and acceptance report.",
+    acceptanceSemanticValidationFormatExample: "Format: {example}",
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[Relay from harness external model/{purpose}]",
     reviewHeader: "[Harness-Review]",
@@ -122,7 +180,6 @@ export const I18N_TEXT = Object.freeze({
 
 export const BLOCKED_AGENT_TOOL_NAMES = new Set([
   TOOL_NAME_SET.PLAN_MULTI_TASK_COLLABORATION,
-  "request_help",
   "task_summary",
 ]);
 
@@ -131,7 +188,7 @@ export const GUIDANCE_WEB_TOOL_NAMES = [TOOL_NAME_SET.CALL_SERVICE];
 export const TASK_ACCEPTANCE_TOOL_NAME = "request_task_acceptance";
 export const PLAN_REFINEMENT_TOOL_NAME = "request_plan_refinement";
 
-export const HARNESS_BUCKET_VERSION = 1;
+export const HARNESS_BUCKET_VERSION = 2;
 
 export const DEFAULT_HARNESS_COUNTERS = Object.freeze({
   llmTurns: 0,
@@ -145,6 +202,7 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
   planningPromptInjected: false,
   planningCaptured: false,
   planningSeparateModelInFlight: false,
+  agentTurnEnded: false,
   acceptanceRequested: false,
   checklistArtifactsAttached: false,
   planningForceToolTemporarilyEnabled: false,
@@ -160,6 +218,7 @@ export const DEFAULT_HARNESS_SIGNALS = Object.freeze({
   subtaskStarted: false,
   subtaskWaited: false,
   successfulToolCount: 0,
+  activeDialogProcessId: "",
 });
 
 export const DEFAULT_HARNESS_PENDING = Object.freeze({

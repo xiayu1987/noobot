@@ -10,6 +10,7 @@ import {
   ensureHarnessBucket,
   extractRawTextContent,
 } from "./shared.js";
+import { injectMessageWithPolicy } from "./shared/message-injection-utils.js";
 
 export function scheduleInjectTask(
   ctx = {},
@@ -61,12 +62,14 @@ export function injectScheduledPrompt(
   if (!content) return false;
   const normalizedRole = String(messageRole || "system").trim().toLowerCase() === "user" ? "user" : "system";
   const normalizedInjectAt = String(injectAt || "prepend").trim().toLowerCase();
-  const message = { role: normalizedRole, content };
-  if (normalizedInjectAt === "append") {
-    messages.push(message);
-  } else {
-    messages.unshift(message);
-  }
+  const injection = injectMessageWithPolicy(ctx, {
+    role: normalizedRole,
+    content,
+    injectAt: normalizedInjectAt === "append" ? "append" : "prepend",
+    dedupe: false,
+    avoidBreakToolCallContinuity: true,
+  });
+  if (!injection.injected) return false;
   if (typeof consumePendingData === "function") {
     consumePendingData({ bucket, state, ctx, pendingData });
   }
@@ -129,4 +132,3 @@ export async function captureInjectedResult(
   });
   return false;
 }
-

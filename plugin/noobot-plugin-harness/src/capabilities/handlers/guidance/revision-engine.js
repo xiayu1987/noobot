@@ -10,6 +10,7 @@ import {
   ensureHarnessBucket,
   extractJsonObjectFromText,
   getDefaultTaskOwner,
+  getPromptJsonFormatExample,
   parseRefinementChecklistFromModelOutput,
   parseTaskChecklistFromModelOutput,
   translateI18nText,
@@ -24,6 +25,7 @@ const planRevisionHelpers = createPlanRevisionHelpers({
   ensureHarnessBucket,
   extractJsonObjectFromText,
   getDefaultTaskOwner,
+  getPromptJsonFormatExample,
   parseRefinementChecklistFromModelOutput,
   parseTaskChecklistFromModelOutput,
   translateI18nText,
@@ -35,13 +37,12 @@ export const buildPlanningRefinementPrompt = planRevisionHelpers.buildPlanningRe
 export const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayContent;
 
 export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}, summaryText = "") {
-  const planJsonExample =
-    '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}';
   return [
     translateI18nText(locale, "planningRevisionMarker"),
     translateI18nText(locale, "planningRevisionPromptBody", {
-      example: planJsonExample,
+      example: getPromptJsonFormatExample("planning_revision"),
     }),
+    translateI18nText(locale, "jsonOnlyOutputRequirement"),
     JSON.stringify({
       currentSummary: String(summaryText || "").trim(),
       currentPlan: {

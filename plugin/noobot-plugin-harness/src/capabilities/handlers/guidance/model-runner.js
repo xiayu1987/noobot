@@ -6,11 +6,14 @@
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
+  PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
+  invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
@@ -52,25 +55,44 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
   if (!canAttemptPlanRevision(ctx, state, { increment: true })) {
     return changed;
   }
-  const revisionMessagesFinal = [...modelMessages];
-  revisionMessagesFinal.push({
-    role: "user",
-    content: buildPlanningRevisionPrompt(locale, bucket, state, summaryText),
+  const revisionTask = buildPlanningRevisionPrompt(locale, bucket, state, summaryText);
+  const revisionMessagesFinal = buildCapabilityModelMessages({
+    locale,
+    agentMessages: modelMessages,
+    task: revisionTask,
   });
   let revisionResponse = null;
   try {
-    revisionResponse = await invoker({
+    revisionResponse = await invokeWithReasoningRetry({
+      invoker,
+      invokePayload: {
+        purpose: "planning_revision",
+        promptVersion: PROMPT_ENVELOPE.VERSION,
+        envelopeType: PROMPT_ENVELOPE.TYPE,
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        model: resolveCapabilityModelName(meta, {
+          purpose: "planning_revision",
+          domain: CAPABILITY_DOMAIN.PLANNING,
+        }),
+        locale,
+        prompt: "",
+        messages: revisionMessagesFinal,
+        ctx,
+        toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_revision"),
+      },
+      maxReasoningRetries: 1,
       purpose: "planning_revision",
       domain: CAPABILITY_DOMAIN.PLANNING,
-      model: resolveCapabilityModelName(meta, {
-        purpose: "planning_revision",
-        domain: CAPABILITY_DOMAIN.PLANNING,
-      }),
-      locale,
-      prompt: "",
-      messages: revisionMessagesFinal,
+      appendCapabilityLog,
+      appendModelTrace: async (retryResponse = null) => {
+        await appendCapabilityModelTraceLog(ctx, meta, {
+          domain: CAPABILITY_DOMAIN.PLANNING,
+          purpose: "planning_revision",
+          response: retryResponse,
+        });
+      },
       ctx,
-      toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_revision"),
+      meta,
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -80,11 +102,6 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
     });
     return changed;
   }
-  await appendCapabilityModelTraceLog(ctx, meta, {
-    domain: CAPABILITY_DOMAIN.PLANNING,
-    purpose: "planning_revision",
-    response: revisionResponse,
-  });
   const revisionText =
     extractRawTextContent(revisionResponse?.content) ||
     String(revisionResponse?.text || revisionResponse?.output || "").trim();
@@ -142,21 +159,44 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     purpose,
     messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
   });
+  const invokerMessages = buildCapabilityModelMessages({
+    locale,
+    agentMessages: modelMessages,
+    task: prompt,
+  });
 
   let response = null;
   try {
-    response = await invoker({
+    response = await invokeWithReasoningRetry({
+      invoker,
+      invokePayload: {
+        purpose,
+        promptVersion: PROMPT_ENVELOPE.VERSION,
+        envelopeType: PROMPT_ENVELOPE.TYPE,
+        domain: CAPABILITY_DOMAIN.GUIDANCE,
+        model: resolveCapabilityModelName(meta, {
+          purpose,
+          domain: CAPABILITY_DOMAIN.GUIDANCE,
+        }),
+        locale,
+        prompt: "",
+        messages: invokerMessages,
+        ctx,
+        toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
+      },
+      maxReasoningRetries: 1,
       purpose,
       domain: CAPABILITY_DOMAIN.GUIDANCE,
-      model: resolveCapabilityModelName(meta, {
-        purpose,
-        domain: CAPABILITY_DOMAIN.GUIDANCE,
-      }),
-      locale,
-      prompt,
-      messages: modelMessages,
+      appendCapabilityLog,
+      appendModelTrace: async (retryResponse = null) => {
+        await appendCapabilityModelTraceLog(ctx, meta, {
+          domain: CAPABILITY_DOMAIN.GUIDANCE,
+          purpose,
+          response: retryResponse,
+        });
+      },
       ctx,
-      toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
+      meta,
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -166,11 +206,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     });
     return false;
   }
-  await appendCapabilityModelTraceLog(ctx, meta, {
-    domain: CAPABILITY_DOMAIN.GUIDANCE,
-    purpose,
-    response,
-  });
   const responseText =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
@@ -196,7 +231,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       detail: { markedCount },
     });
     if (isSummaryCompletionMarked(responseText, locale)) {
-      await revisePlanAfterSummary(ctx, meta, responseText, { baseMessages: modelMessages });
+      await revisePlanAfterSummary(ctx, meta, responseText, { baseMessages: invokerMessages });
     } else {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,

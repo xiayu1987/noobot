@@ -5,45 +5,14 @@
  */
 import { LOCALE } from "./constants.js";
 import { getDefaultSubtaskOwners, getDefaultTaskOwner, getTaskTemplate } from "./i18n.js";
+import { extractJsonObjectFromText, sanitizeJsonCandidate } from "./json-repair-utils.js";
+export { extractJsonObjectFromText, sanitizeJsonCandidate } from "./json-repair-utils.js";
 
 const WRAPPED_PAYLOAD_MAX_DEPTH = 3;
 const WRAPPED_PAYLOAD_MAX_NODES = 100;
 const WRAPPED_PAYLOAD_MAX_STRING_LENGTH = 200_000;
 const CHECKLIST_HINT_RE = /taskchecklist|refinementchecklist|checklist|\"task\"|\"index\"|步骤|任务/i;
-const TRAILING_COMMA_RE = /,\s*([}\]])/g;
 const STRIP_FENCED_BLOCK_RE = /```[\s\S]*?```/g;
-
-export function extractJsonObjectFromText(text = "") {
-  const raw = String(text || "").trim();
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {}
-  const candidates = [raw.match(/\{[\s\S]*\}/), raw.match(/\[[\s\S]*\]/)];
-  for (const matched of candidates) {
-    const segment = matched?.[0];
-    if (!segment) continue;
-    try {
-      return JSON.parse(segment);
-    } catch {}
-  }
-  return null;
-}
-
-export function sanitizeJsonCandidate(text = "") {
-  const raw = String(text || "").trim();
-  if (!raw) return "";
-  const fencedBlocks = Array.from(raw.matchAll(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/gi));
-  const preferredBlock = fencedBlocks
-    .map((item) => String(item?.[1] || "").trim())
-    .find((block) => block.includes("{") || block.includes("["));
-  const fallbackBlock = String(fencedBlocks?.[0]?.[1] || "").trim();
-  const source = preferredBlock || fallbackBlock || raw;
-  return source
-    .replace(/^\s*json\s*/i, "")
-    .replace(TRAILING_COMMA_RE, "$1")
-    .trim();
-}
 
 function normalizeFilePlan(files = null) {
   const source = files && typeof files === "object" && !Array.isArray(files) ? files : {};

@@ -249,12 +249,56 @@ function normalizeReasoningContent(reasoningContent = null) {
   return "";
 }
 
+const THINK_BLOCK_RE = /<think>[\s\S]*?<\/think>/gi;
+const THINK_BLOCK_CAPTURE_RE = /<think>([\s\S]*?)<\/think>/gi;
+
+export function stripThinkingBlocks(text = "") {
+  return String(text || "").replace(THINK_BLOCK_RE, "").trim();
+}
+
+function extractThinkingBlocks(text = "") {
+  const raw = String(text || "");
+  if (!raw) return "";
+  const out = [];
+  let match = null;
+  const regex = new RegExp(THINK_BLOCK_CAPTURE_RE);
+  while ((match = regex.exec(raw))) {
+    const content = String(match?.[1] || "").trim();
+    if (content) out.push(content);
+  }
+  return out.join("\n").trim();
+}
+
+export function extractAiReasoningText(ai = null) {
+  if (!ai || typeof ai !== "object") return "";
+  const additionalKwargs =
+    ai?.additional_kwargs && typeof ai.additional_kwargs === "object"
+      ? ai.additional_kwargs
+      : {};
+  const candidates = [
+    additionalKwargs?.reasoning_content,
+    additionalKwargs?.reasoningContent,
+    ai?.reasoning_content,
+    ai?.reasoningContent,
+    ai?.response_metadata?.reasoning_content,
+    ai?.response_metadata?.reasoningContent,
+  ];
+  for (const item of candidates) {
+    const text = normalizeReasoningContent(item);
+    if (text) return text;
+  }
+  const contentText = normalizeReasoningContent(ai?.content);
+  const thinkingText = extractThinkingBlocks(contentText);
+  if (thinkingText) return thinkingText;
+  return "";
+}
+
 export function normalizeAiTextContent(aiContent, options = {}) {
   const { additionalKwargs = null, allowReasoningFallback = false } =
     options && typeof options === "object" ? options : {};
-  if (typeof aiContent === "string") return String(aiContent || "");
+  if (typeof aiContent === "string") return stripThinkingBlocks(String(aiContent || ""));
   const normalizedRaw = !Array.isArray(aiContent)
-    ? String(aiContent || "")
+    ? stripThinkingBlocks(String(aiContent || ""))
     : aiContent
     .map((contentPart) => {
       if (!contentPart || typeof contentPart !== "object") return "";
@@ -264,7 +308,7 @@ export function normalizeAiTextContent(aiContent, options = {}) {
     })
     .filter(Boolean)
     .join("\n");
-  if (normalizedRaw) return normalizedRaw;
+  if (normalizedRaw) return stripThinkingBlocks(normalizedRaw);
   if (!allowReasoningFallback) return normalizedRaw;
   return normalizeReasoningContent(additionalKwargs?.reasoning_content);
 }

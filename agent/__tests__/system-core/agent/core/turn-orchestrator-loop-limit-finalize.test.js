@@ -55,7 +55,11 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
   };
 }
 
-function createModelState(llm) {
+function createModelState(llm, defaultModelSpec = null) {
+  const resolvedModelSpec =
+    defaultModelSpec && typeof defaultModelSpec === "object"
+      ? defaultModelSpec
+      : { alias: "test_alias", model: "test-model" };
   return {
     llm,
     activeModelName: "test-model",
@@ -68,7 +72,7 @@ function createModelState(llm) {
     },
     globalConfig: {},
     userConfig: {},
-    defaultModelSpec: { alias: "test_alias", model: "test-model" },
+    defaultModelSpec: resolvedModelSpec,
     abortSignal: null,
   };
 }

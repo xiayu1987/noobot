@@ -33,6 +33,98 @@ import { shouldMarkCurrentTurnSummarizedMessage } from "../../context/session/su
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 
+function extractTextContent(content = "") {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((item = {}) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && typeof item.text === "string") {
+        return item.text;
+      }
+      return "";
+    })
+    .join("\n")
+    .trim();
+}
+
+function resolveMessageRole(messageItem = {}) {
+  const explicitRole = String(
+    messageItem?.role || messageItem?.lc_kwargs?.role || "",
+  )
+    .trim()
+    .toLowerCase();
+  if (explicitRole) return explicitRole;
+  const messageType =
+    typeof messageItem?._getType === "function"
+      ? String(messageItem._getType() || "").trim().toLowerCase()
+      : typeof messageItem?.getType === "function"
+        ? String(messageItem.getType() || "").trim().toLowerCase()
+        : "";
+  if (messageType === "human") return "user";
+  if (messageType === "ai") return "assistant";
+  if (messageType === "system") return "system";
+  if (messageType === "tool") return "tool";
+  return "";
+}
+
+function isWrappedUserMetaMessage(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw.startsWith("[") || !raw.includes("[/")) return false;
+  const match = raw.match(/^\[([^\]\n\/]+)\]\s*[\s\S]*\s*\[\/\1\]\s*$/);
+  if (!match) return false;
+  return (
+    raw.includes("\"sessionId\"") ||
+    raw.includes("\"dialogProcessId\"") ||
+    raw.includes("\"attachments\"")
+  );
+}
+
+function normalizeMessageForHarness(messageItem = {}) {
+  const role = resolveMessageRole(messageItem);
+  if (!role) return null;
+  const content = extractTextContent(
+    messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
+  );
+  if (role === "user" && isWrappedUserMetaMessage(content)) {
+    return null;
+  }
+  const normalized = {
+    role,
+    content,
+    summarized:
+      messageItem?.summarized === true || messageItem?.lc_kwargs?.summarized === true,
+  };
+  const toolCalls = Array.isArray(messageItem?.tool_calls)
+    ? messageItem.tool_calls
+    : Array.isArray(messageItem?.lc_kwargs?.tool_calls)
+      ? messageItem.lc_kwargs.tool_calls
+      : Array.isArray(messageItem?.additional_kwargs?.tool_calls)
+        ? messageItem.additional_kwargs.tool_calls
+        : [];
+  if (toolCalls.length) normalized.tool_calls = toolCalls;
+  const toolCallId = String(
+    messageItem?.tool_call_id || messageItem?.lc_kwargs?.tool_call_id || "",
+  ).trim();
+  if (toolCallId) normalized.tool_call_id = toolCallId;
+  return normalized;
+}
+
+function resolveCurrentTurnUserMessage(ctx = {}) {
+  const directCandidates = [
+    ctx?.userMessage,
+    ctx?.message,
+    ctx?.latestUserMessage,
+    ctx?.latestUserGoal,
+    ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.currentTurnUserMessage,
+  ];
+  for (const candidate of directCandidates) {
+    const text = String(candidate || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
 export class SessionExecutionEngine {
   constructor({
     globalConfig = {},
@@ -510,11 +602,21 @@ export class SessionExecutionEngine {
     const normalizedLimit = Number.isFinite(recentMessageLimit)
       ? Math.floor(recentMessageLimit)
       : 20;
-    return ({ messages = [] } = {}) => {
+    return ({ messages = [], ctx = {} } = {}) => {
       const source = Array.isArray(messages) ? messages : [];
-      const filtered = filterSummarizedMessages(source);
+      const normalized = source
+        .map((item) => normalizeMessageForHarness(item))
+        .filter((item) => item && String(item?.content || "").trim());
+      const filtered = filterSummarizedMessages(normalized);
       if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) return [];
-      return normalizeRecentWindow(filtered, normalizedLimit);
+      const windowed = normalizeRecentWindow(filtered, normalizedLimit);
+      const hasUserMessage = windowed.some(
+        (item) => String(item?.role || "").trim().toLowerCase() === "user",
+      );
+      if (hasUserMessage) return windowed;
+      const currentUserMessage = resolveCurrentTurnUserMessage(ctx);
+      if (!currentUserMessage) return windowed;
+      return [{ role: "user", content: currentUserMessage }, ...windowed];
     };
   }
 
@@ -592,10 +694,10 @@ export class SessionExecutionEngine {
     }
     if (String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model") {
       const timeoutMs = Number(next?.timeoutMs);
-      // Separate-model planning performs an external model call, so 1s hook timeout
-      // is too aggressive and can cause repeated scheduling across turns.
-      if (!Number.isFinite(timeoutMs) || timeoutMs < 60_000) {
-        next.timeoutMs = 60_000;
+      // Separate-model planning performs external model calls; 1s timeout is too
+      // aggressive and causes repeated scheduling across turns.
+      if (!Number.isFinite(timeoutMs) || timeoutMs < 180_000) {
+        next.timeoutMs = 180_000;
       }
     }
     if (
@@ -604,7 +706,7 @@ export class SessionExecutionEngine {
     ) {
       next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
         maxTurns: next?.miniRunnerMaxTurns,
-        toolAllowlist: next?.miniRunnerToolAllowlist,
+        enableToolBinding: false,
       });
     }
     return next;

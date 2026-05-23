@@ -11,6 +11,7 @@ import { applyMessageTakeover } from "./takeover/message-takeover.js";
 import { applyMemoryTakeover } from "./takeover/memory-takeover.js";
 import { resolveTakeoverPriority, sortTakeovers } from "./takeover/priority.js";
 import { cleanupExpiredPendingOnHook } from "./pending-cleanup.js";
+import { markHarnessTurnLifecycle } from "./handlers/shared/lifecycle-utils.js";
 
 function resolveTakeoverDirectives(result = {}) {
   return {
@@ -59,6 +60,7 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
         .filter((capability) => resolvedProfile?.[capability]?.enabled !== false);
     },
     async runHook(point = "", ctx = {}, meta = {}) {
+      markHarnessTurnLifecycle(point, ctx);
       cleanupExpiredPendingOnHook(point, ctx, meta);
       const capabilities = this.resolveByHook(point);
       const results = [];

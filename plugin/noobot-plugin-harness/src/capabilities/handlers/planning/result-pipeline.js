@@ -4,27 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 import { MAX_PLANNING_CAPTURE_ATTEMPTS } from "../../../core/thresholds.js";
+import { hasJsonFeature, repairJsonTextByModel } from "../shared/json-repair-utils.js";
+import { isHarnessAgentTurnEnded } from "../shared/lifecycle-utils.js";
 import {
+  buildCapabilityModelMessages,
   CAPABILITY_DOMAIN,
   LOCALE,
+  PROMPT_ENVELOPE,
   appendCapabilityLog,
   defaultTaskChecklist,
   ensureHarnessBucket,
-  extractRawTextContent,
   getDefaultTaskOwner,
+  getPromptJsonFormatExample,
   parseChecklistWithLocalRepair,
   resolveCapabilityModelName,
+  translateI18nText,
 } from "./deps.js";
 import {
   extractPlanMetadataFromText,
   isPlanPayloadComplete,
 } from "../model-response-parser.js";
-
-function hasJsonFeature(text = "") {
-  const raw = String(text || "").trim();
-  if (!raw) return false;
-  return raw.includes("{") || raw.includes("[") || /```(?:json)?/i.test(raw);
-}
 
 function increasePlanningCaptureAttempts(state = {}) {
   if (!state || typeof state !== "object") return 1;
@@ -46,64 +45,70 @@ async function repairChecklistByModel({
   rawText = "",
   appendCapabilityModelTraceLog = null,
 } = {}) {
-  if (typeof invoker !== "function") return [];
+  if (typeof invoker !== "function") return { parsed: [], repairedText: "" };
+  if (isHarnessAgentTurnEnded(ctx)) {
+    return { parsed: [], repairedText: "" };
+  }
   const content = String(rawText || "").trim();
-  if (!content) return [];
-  const repairPrompt =
-    locale === LOCALE.EN_US
-      ? [
-          "Repair the following text into strict JSON only.",
-          "Output only JSON object or array.",
-          'Preferred format: {"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
-          "If content cannot be repaired into checklist JSON, output {}.",
-          "",
-          content,
-        ].join("\n")
-      : [
-          "请把以下文本修复为严格 JSON，只输出 JSON。",
-          "输出只能是 JSON 对象或数组。",
-          '优先格式：{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
-          "如果无法修复为清单 JSON，请输出 {}。",
-          "",
-          content,
-        ].join("\n");
+  if (!content) return { parsed: [], repairedText: "" };
+  const repairPrompt = [
+    translateI18nText(locale, "planningJsonRepairInstruction"),
+    translateI18nText(locale, "planningJsonRepairFormatExample", {
+      example: getPromptJsonFormatExample("planning_main"),
+    }),
+    "",
+    content,
+  ].join("\n");
+  const repairConstraints = [
+    translateI18nText(locale, "planningJsonRepairOutputConstraint"),
+    translateI18nText(locale, "planningJsonRepairStructureConstraint"),
+    translateI18nText(locale, "planningJsonRepairFallbackInstruction"),
+  ];
 
-  let response = null;
-  try {
-    response = await invoker({
+  const repairedText = await repairJsonTextByModel({
+    invoker,
+    invokePayload: {
       purpose: "planning_json_repair",
+      promptVersion: PROMPT_ENVELOPE.VERSION,
+      envelopeType: PROMPT_ENVELOPE.TYPE,
       domain: CAPABILITY_DOMAIN.PLANNING,
       model: resolveCapabilityModelName(meta, {
         purpose: "planning_json_repair",
         domain: CAPABILITY_DOMAIN.PLANNING,
       }),
       locale,
-      prompt: repairPrompt,
-      messages: [],
+      prompt: "",
+      messages: buildCapabilityModelMessages({
+        locale,
+        agentMessages: [],
+        constraints: repairConstraints,
+        task: repairPrompt,
+      }),
       ctx,
       toolAllowlist: [],
-    });
-  } catch (error) {
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_json_repair_model_failed",
-      detail: { error: String(error?.message || error || "") },
-    });
-    return [];
-  }
-
-  if (typeof appendCapabilityModelTraceLog === "function") {
-    await appendCapabilityModelTraceLog(ctx, meta, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      purpose: "planning_json_repair",
-      response,
-    });
-  }
-
-  const repairedText =
-    extractRawTextContent(response?.content) ||
-    String(response?.text || response?.output || "").trim();
-  return parseChecklistWithLocalRepair(repairedText, locale);
+    },
+    appendModelTrace:
+      typeof appendCapabilityModelTraceLog === "function"
+        ? async (response) => {
+            await appendCapabilityModelTraceLog(ctx, meta, {
+              domain: CAPABILITY_DOMAIN.PLANNING,
+              purpose: "planning_json_repair",
+              response,
+            });
+          }
+        : null,
+    onError: (error) => {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: "planning_json_repair_model_failed",
+        detail: { error: String(error?.message || error || "") },
+      });
+    },
+  });
+  return {
+    parsed: parseChecklistWithLocalRepair(repairedText, locale),
+    repairedText: String(repairedText || ""),
+  };
 }
 
 async function extractChecklistFromResponse({
@@ -115,10 +120,16 @@ async function extractChecklistFromResponse({
   appendCapabilityModelTraceLog = null,
 } = {}) {
   let parsed = parseChecklistWithLocalRepair(responseText, locale);
+  let metadataText = String(responseText || "");
   let jsonRepairAttempted = false;
-  if (!parsed.length && hasJsonFeature(responseText) && typeof invoker === "function") {
+  if (
+    !parsed.length &&
+    hasJsonFeature(responseText) &&
+    typeof invoker === "function" &&
+    !isHarnessAgentTurnEnded(ctx)
+  ) {
     jsonRepairAttempted = true;
-    parsed = await repairChecklistByModel({
+    const repaired = await repairChecklistByModel({
       invoker,
       ctx,
       meta,
@@ -126,8 +137,12 @@ async function extractChecklistFromResponse({
       rawText: responseText,
       appendCapabilityModelTraceLog,
     });
+    parsed = Array.isArray(repaired?.parsed) ? repaired.parsed : [];
+    if (parsed.length) {
+      metadataText = String(repaired?.repairedText || responseText || "");
+    }
   }
-  return { parsed, jsonRepairAttempted };
+  return { parsed, jsonRepairAttempted, metadataText };
 }
 
 function applyDefaultPlanningChecklist(ctx = {}, locale = LOCALE.ZH_CN, { reason = "" } = {}) {
@@ -205,7 +220,7 @@ export async function processPlanningResult(
   }
   const { bucket, state } = holder;
   const responseText = String(rawText || "");
-  const { parsed: extractedChecklist, jsonRepairAttempted } = await extractChecklistFromResponse({
+  const { parsed: extractedChecklist, jsonRepairAttempted, metadataText } = await extractChecklistFromResponse({
     ctx,
     meta,
     locale,
@@ -215,7 +230,7 @@ export async function processPlanningResult(
   });
   let parsed = extractedChecklist;
 
-  if (parsed.length && !isPlanPayloadComplete(responseText, parsed)) {
+  if (parsed.length && !isPlanPayloadComplete(metadataText, parsed)) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: "planning_checklist_incomplete_rejected",
@@ -229,7 +244,7 @@ export async function processPlanningResult(
     bucket.taskChecklistSource = "model";
     state.counters.planningCaptureAttempts = 0;
     state.flags.planningCaptured = true;
-    applyPlanningMetadata(bucket, responseText, locale, { source: "initial_plan" });
+    applyPlanningMetadata(bucket, metadataText, locale, { source: "initial_plan" });
     return {
       captured: true,
       retryScheduled: false,

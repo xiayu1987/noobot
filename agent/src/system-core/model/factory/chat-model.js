@@ -60,6 +60,12 @@ export function buildModelKwargs(modelSpec = {}) {
     out.reasoning_effort = normalizedSpec.reasoning_effort;
   if (
     providerFormat === PROVIDER_FORMAT.DASHSCOPE &&
+    normalizedSpec.enable_thinking !== undefined
+  ) {
+    out.enable_thinking = normalizedSpec.enable_thinking === true;
+  }
+  if (
+    providerFormat === PROVIDER_FORMAT.DASHSCOPE &&
     normalizedSpec.preserve_thinking !== undefined
   ) {
     out.preserve_thinking = normalizedSpec.preserve_thinking;

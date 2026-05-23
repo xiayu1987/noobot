@@ -3,9 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { CAPABILITY_DOMAIN, LOCALE } from "./constants.js";
+import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
 import { translateI18nText } from "./i18n.js";
+import { injectMessageWithPolicy } from "./message-injection-utils.js";
 
 export function mergeAttachmentMetas(existing = [], incoming = []) {
   const current = Array.isArray(existing) ? existing : [];
@@ -75,13 +76,31 @@ export function appendCapabilityLog(ctx = {}, { domain = "", event = "", detail 
   if (!holder) return false;
   const { bucket } = holder;
   if (!domain || !bucket?.logs?.[domain] || !Array.isArray(bucket.logs[domain])) return false;
+  const inputDetail = detail && typeof detail === "object" ? detail : {};
+  const normalizedPurpose =
+    String(inputDetail?.purpose || "").trim() ||
+    String(ctx?.harnessCapabilityPurpose || "").trim() ||
+    "unknown";
+  const normalizedPromptVersion =
+    String(inputDetail?.promptVersion || "").trim() ||
+    String(ctx?.harnessPromptVersion || "").trim() ||
+    PROMPT_ENVELOPE.VERSION;
+  const normalizedEnvelopeType =
+    String(inputDetail?.envelopeType || "").trim() ||
+    String(ctx?.harnessEnvelopeType || "").trim() ||
+    PROMPT_ENVELOPE.TYPE;
   const entry = {
     domain,
     event: String(event || "").trim() || "unknown",
     timestamp: new Date().toISOString(),
     point: String(ctx?.phase || "").trim() || undefined,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
-    detail: detail && typeof detail === "object" ? detail : {},
+    detail: {
+      ...inputDetail,
+      purpose: normalizedPurpose,
+      promptVersion: normalizedPromptVersion,
+      envelopeType: normalizedEnvelopeType,
+    },
   };
   bucket.logs[domain].push(entry);
   if (!Array.isArray(ctx.harnessCapabilityLogs)) {
@@ -102,25 +121,36 @@ export function relaySeparateModelOutputAsUserMessage(
     purpose: String(purpose || "").trim() || "unknown",
   });
   const relayContent = `${prefix}\n${text}`;
-  if (dedupe === true) {
-    const exists = messages.some(
-      (message = {}) =>
-        String(message?.role || "").trim() === "user" &&
-        String(message?.content || "").trim() === relayContent,
-    );
-    if (exists) {
-      appendCapabilityLog(ctx, {
-        domain: CAPABILITY_DOMAIN.PLANNING,
-        event: "planning_separate_model_relay_skipped_duplicate",
-      });
-      return false;
-    }
-  }
-  messages.push({
+  const injection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: relayContent,
+    injectAt: "append",
+    dedupe,
+    avoidBreakToolCallContinuity: true,
   });
-  return true;
+  if (!injection.injected && injection.deduped === true) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_separate_model_relay_skipped_duplicate",
+    });
+    return false;
+  }
+  if (!injection.injected && injection.blockedByTurnEnded === true) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_separate_model_relay_skipped_turn_ended",
+      detail: { purpose: String(purpose || "").trim() || "unknown" },
+    });
+    return false;
+  }
+  if (injection.injected && injection.target === "agent_system") {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_separate_model_relay_injected_as_system_context",
+      detail: { purpose: String(purpose || "").trim() || "unknown" },
+    });
+  }
+  return injection.injected === true;
 }
 
 export async function appendCapabilityModelTraceLog(

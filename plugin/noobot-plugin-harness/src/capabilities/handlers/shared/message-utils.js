@@ -164,3 +164,64 @@ export function resolveInjectedMessageSummarizer(meta = {}) {
     ? meta.harness.markMessagesSummarized
     : null;
 }
+
+function normalizePromptMessageItem(message = {}) {
+  const role = String(message?.role || "").trim().toLowerCase();
+  if (!role) return null;
+  const content = extractRawTextContent(message?.content ?? message);
+  const text = String(content || "").trim();
+  if (!text) return null;
+  return { role, content: text };
+}
+
+export function buildModelMessagesWithStructuredEnvelope({
+  locale = "zh-CN",
+  agentMessages = [],
+  constraints = [],
+  task = "",
+} = {}) {
+  const isEn = String(locale || "").trim().toLowerCase() === "en-us";
+  const normalizedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
+    .map((item = {}) => normalizePromptMessageItem(item))
+    .filter(Boolean);
+  const normalizedConstraints = (Array.isArray(constraints) ? constraints : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  const taskText = String(task || "").trim();
+
+  const output = [];
+  output.push({
+    role: "system",
+    content: [
+      isEn ? "[Agent message context]" : "[Agent消息上下文]",
+      "```json",
+      JSON.stringify(normalizedAgentMessages, null, 2),
+      "```",
+    ].join("\n"),
+  });
+  if (normalizedConstraints.length) {
+    output.push({
+      role: "system",
+      content: [
+        isEn ? "[Constraint context]" : "[约束上下文]",
+        ...normalizedConstraints,
+      ].join("\n"),
+    });
+  }
+  if (taskText) {
+    output.push({
+      role: "user",
+      content: taskText,
+    });
+  }
+  return output;
+}
+
+export function isStructuredEnvelopeMessages(messages = []) {
+  const list = Array.isArray(messages) ? messages : [];
+  if (!list.length) return false;
+  const first = list[0];
+  if (String(first?.role || "").trim().toLowerCase() !== "system") return false;
+  const text = String(first?.content || "").trim();
+  return text.startsWith("[Agent message context]") || text.startsWith("[Agent消息上下文]");
+}

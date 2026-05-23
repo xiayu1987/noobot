@@ -6,10 +6,14 @@
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
+  PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
+  getPromptJsonFormatExample,
+  invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
@@ -76,6 +80,10 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
       [
         translateI18nText(locale, "acceptanceSemanticValidationMarker"),
         translateI18nText(locale, "acceptanceSemanticValidationBody"),
+        translateI18nText(locale, "acceptanceSemanticValidationFormatExample", {
+          example: getPromptJsonFormatExample("acceptance_semantic_validation"),
+        }),
+        translateI18nText(locale, "jsonOnlyOutputRequirement"),
         JSON.stringify(pendingData.payload || {}, null, 2),
       ].join("\n"),
   });
@@ -144,30 +152,55 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     locale,
   });
   const prompt = [
-    locale === LOCALE.EN_US
-      ? "Validate semantic consistency between the task checklist, acceptance report, tool signals, and final output. Return JSON only."
-      : "请验证任务清单、规则验收报告、工具信号与最终输出之间的语义一致性。只返回 JSON。",
+    translateI18nText(locale, "acceptanceSemanticValidationBody"),
+    translateI18nText(locale, "acceptanceSemanticValidationFormatExample", {
+      example: getPromptJsonFormatExample("acceptance_semantic_validation"),
+    }),
+    translateI18nText(locale, "jsonOnlyOutputRequirement"),
     JSON.stringify(promptPayload, null, 2),
   ].join("\n");
+  const agentMessages = resolveCapabilityModelMessages(meta, {
+    ctx,
+    purpose: "acceptance_semantic_validation",
+    messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
+  });
   let response = null;
   try {
-    response = await invoker({
+    response = await invokeWithReasoningRetry({
+      invoker,
+      invokePayload: {
+        purpose: "acceptance_semantic_validation",
+        promptVersion: PROMPT_ENVELOPE.VERSION,
+        envelopeType: PROMPT_ENVELOPE.TYPE,
+        domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+        model: resolveCapabilityModelName(meta, {
+          purpose: "acceptance_semantic_validation",
+          domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+        }),
+        locale,
+        prompt: "",
+        messages: buildCapabilityModelMessages({
+          locale,
+          agentMessages,
+          task: prompt,
+        }),
+        ctx,
+        baseReport,
+        toolAllowlist: resolveCapabilityToolAllowlist(meta, "acceptance_semantic_validation"),
+      },
+      maxReasoningRetries: 1,
       purpose: "acceptance_semantic_validation",
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      model: resolveCapabilityModelName(meta, {
-        purpose: "acceptance_semantic_validation",
-        domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      }),
-      locale,
-      prompt,
-      messages: resolveCapabilityModelMessages(meta, {
-        ctx,
-        purpose: "acceptance_semantic_validation",
-        messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
-      }),
+      appendCapabilityLog,
+      appendModelTrace: async (retryResponse = null) => {
+        await appendCapabilityModelTraceLog(ctx, meta, {
+          domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+          purpose: "acceptance_semantic_validation",
+          response: retryResponse,
+        });
+      },
       ctx,
-      baseReport,
-      toolAllowlist: resolveCapabilityToolAllowlist(meta, "acceptance_semantic_validation"),
+      meta,
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -177,11 +210,6 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     });
     return false;
   }
-  await appendCapabilityModelTraceLog(ctx, meta, {
-    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    purpose: "acceptance_semantic_validation",
-    response,
-  });
   const responseText =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();

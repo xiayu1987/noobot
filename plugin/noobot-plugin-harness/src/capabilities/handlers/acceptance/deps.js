@@ -4,9 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { ACCEPTANCE_MODE, BLOCKED_AGENT_TOOL_NAMES, CAPABILITY_DOMAIN, LOCALE, TASK_ACCEPTANCE_TOOL_NAME } from "../shared/constants.js";
+export {
+  ACCEPTANCE_MODE,
+  BLOCKED_AGENT_TOOL_NAMES,
+  CAPABILITY_DOMAIN,
+  LOCALE,
+  PROMPT_ENVELOPE,
+  TASK_ACCEPTANCE_TOOL_NAME,
+} from "../shared/constants.js";
 
-export { getDefaultTaskOwner, translateI18nText } from "../shared/i18n.js";
+export { getDefaultTaskOwner, getPromptJsonFormatExample, translateI18nText } from "../shared/i18n.js";
 
 export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 
@@ -27,6 +34,8 @@ export {
 } from "../shared/model-utils.js";
 
 export { extractRawTextContent } from "../shared/message-utils.js";
+export { buildCapabilityModelMessages } from "../shared/model-message-factory.js";
+export { invokeWithReasoningRetry } from "../shared/model-invocation-utils.js";
 
 export { buildPlanSnapshot, defaultTaskChecklist, normalizeChecklistItem } from "../shared/checklist-utils.js";
 
