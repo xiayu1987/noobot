@@ -15,6 +15,17 @@ import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
+function assertFlatCapabilityMessages(messages = []) {
+  assert.equal(Array.isArray(messages), true);
+  assert.equal(messages.length >= 1, true);
+  const roles = messages.map((item = {}) => String(item?.role || "").trim());
+  assert.equal(roles.includes("user"), true);
+  const first = messages[0] || {};
+  const last = messages[messages.length - 1] || {};
+  assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
+  assert.equal(String(last.role || ""), "user");
+}
+
 test("harness review generates review report at final output", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
@@ -364,6 +375,9 @@ test("harness acceptance semantic validation uses separate model when enabled", 
 
   assert.equal(invocations.length, 1);
   assert.equal(invocations[0].purpose, "acceptance_semantic_validation");
+  assert.equal(invocations[0].promptVersion, "v1");
+  assert.equal(invocations[0].envelopeType, "structured_v1");
+  assertFlatCapabilityMessages(invocations[0].messages);
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
   assert.match(String(result.output), /"semanticValidation"/);
@@ -406,6 +420,9 @@ test("harness active request_task_acceptance semantic validation receives agent 
   const result = typeof raw === "string" ? JSON.parse(raw) : raw;
   assert.equal(invocations.length, 1);
   assert.equal(invocations[0].purpose, "acceptance_semantic_validation");
+  assert.equal(invocations[0].promptVersion, "v1");
+  assert.equal(invocations[0].envelopeType, "structured_v1");
+  assertFlatCapabilityMessages(invocations[0].messages);
   assert.equal(result.report.semanticValidation.status, "pass");
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
 });
@@ -767,9 +784,14 @@ test("planning_revision reuses summary model messages in separate_model flow", a
     "planning_revision",
     "planning_refinement",
   ]);
+  assert.equal(invocations.every((item) => item.promptVersion === "v1"), true);
+  assert.equal(invocations.every((item) => item.envelopeType === "structured_v1"), true);
   const summaryMessages = invocations[0].messages;
   const revisionMessages = invocations[1].messages;
   const refinementMessages = invocations[2].messages;
+  assertFlatCapabilityMessages(summaryMessages);
+  assertFlatCapabilityMessages(revisionMessages);
+  assertFlatCapabilityMessages(refinementMessages);
   const refinementBaseMessages = refinementMessages.slice(0, -1);
   const revisionBaseMessages = revisionMessages.slice(0, -1);
   assert.deepEqual(refinementBaseMessages, summaryMessages);

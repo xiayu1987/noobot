@@ -9,6 +9,7 @@ import {
   DEFAULT_TASK_TEMPLATE,
   I18N_TEXT,
   LOCALE,
+  PROMPT_JSON_FORMAT_EXAMPLES,
 } from "./constants.js";
 
 export function resolveLocale(ctx = {}) {
@@ -48,4 +49,9 @@ export function getDefaultSubtaskOwners(locale = LOCALE.ZH_CN) {
 
 export function getTaskTemplate(locale = LOCALE.ZH_CN) {
   return DEFAULT_TASK_TEMPLATE[locale] || DEFAULT_TASK_TEMPLATE[LOCALE.ZH_CN];
+}
+
+export function getPromptJsonFormatExample(type = "planning_main") {
+  const key = String(type || "").trim();
+  return PROMPT_JSON_FORMAT_EXAMPLES[key] || PROMPT_JSON_FORMAT_EXAMPLES.planning_main || "{}";
 }

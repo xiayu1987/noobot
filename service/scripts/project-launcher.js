@@ -344,6 +344,9 @@ function buildProviderFromTemplate({
   }
 
   if (format === "dashscope") {
+    if (!hasOwnProperty(baseProvider, "enable_thinking")) {
+      baseProvider.enable_thinking = false;
+    }
     if (!hasOwnProperty(baseProvider, "preserve_thinking")) {
       baseProvider.preserve_thinking = false;
     }

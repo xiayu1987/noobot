@@ -8,8 +8,9 @@ import {
   LOCALE,
   appendCapabilityLog,
   ensureHarnessBucket,
-  getDefaultTaskOwner,
-  getTaskTemplate,
+  extractRawTextContent,
+  getPromptJsonFormatExample,
+  injectMessageWithPolicy,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
   translateI18nText,
@@ -47,12 +48,14 @@ function buildPlanningToolCatalogPrompt(ctx = {}, locale = LOCALE.ZH_CN) {
   ].join("\n");
 }
 
-export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
+function isHarnessRelayMessage(text = "") {
+  const raw = String(text || "").trim();
+  return raw.startsWith("[来自harness外部模型输出/") || raw.startsWith("[Relay from harness external model/");
+}
+
+export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
   return [
-    translateI18nText(locale, "planningPromptMarker"),
-    translateI18nText(locale, "planningPromptBody", {
-      example: `{"totalGoal":"完成用户请求","taskOwner":"${getDefaultTaskOwner(locale)}","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"${getTaskTemplate(locale).PARSE_ATTACHMENT}","owner":"${getDefaultTaskOwner(locale)}","input":"用户请求/上下文/附件","output":"可用于后续步骤的解析结果","files":{"create":[],"modify":[],"delete":[]}}]}`,
-    }),
+    translateI18nText(locale, "planningToolContextMarker"),
     buildPlanningToolCatalogPrompt(ctx, locale),
     "",
     JSON.stringify(
@@ -66,6 +69,53 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, ctx = {}, meta = 
   ].join("\n");
 }
 
+export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}) {
+  return [
+    translateI18nText(locale, "planningPromptMarker"),
+    translateI18nText(locale, "planningPromptBody"),
+    translateI18nText(locale, "planningPromptFormatExample", {
+      example: getPromptJsonFormatExample("planning_main"),
+    }),
+    translateI18nText(locale, "jsonOnlyOutputRequirement"),
+  ].join("\n");
+}
+
+export function resolveLatestUserMessageText(ctx = {}) {
+  const messages = Array.isArray(ctx?.messages) ? ctx.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const item = messages[index] || {};
+    const role = String(item?.role || "").trim().toLowerCase();
+    if (role !== "user") continue;
+    const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
+    if (isHarnessRelayMessage(text)) continue;
+    if (text) return text;
+  }
+  const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
+    ? ctx.agentContext.payload.messages.history
+    : [];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index] || {};
+    const role = String(item?.role || "").trim().toLowerCase();
+    if (role !== "user") continue;
+    const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
+    if (isHarnessRelayMessage(text)) continue;
+    if (text) return text;
+  }
+  const fallbackCandidates = [
+    ctx?.userMessage,
+    ctx?.message,
+    ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.currentTurnUserMessage,
+    ctx?.latestUserGoal,
+    ctx?.agentContext?.payload?.latestUserGoal,
+    ctx?.agentContext?.payload?.context?.latestUserGoal,
+  ];
+  for (const candidate of fallbackCandidates) {
+    const text = String(candidate || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
 export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -74,9 +124,17 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
   if (state.flags.planningPromptInjected === true) return false;
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
-  messages.push({
+  injectMessageWithPolicy(ctx, {
+    role: "system",
+    content: buildPlanningToolContextPrompt(locale, ctx, meta),
+    injectAt: "append",
+    avoidBreakToolCallContinuity: true,
+  });
+  injectMessageWithPolicy(ctx, {
     role: "user",
     content: buildPlanningPromptBase(locale, ctx, meta),
+    injectAt: "append",
+    avoidBreakToolCallContinuity: true,
   });
   state.flags.planningPromptInjected = true;
   appendCapabilityLog(ctx, {
@@ -85,4 +143,3 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
   });
   return true;
 }
-

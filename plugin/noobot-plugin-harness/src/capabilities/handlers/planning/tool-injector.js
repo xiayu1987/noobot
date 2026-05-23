@@ -12,22 +12,19 @@ import {
   PLAN_REFINEMENT_TOOL_NAME,
   appendCapabilityLog,
   ensureHarnessBucket,
+  translateI18nText,
 } from "./deps.js";
 
 function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
-  const modeDescription =
-    locale === LOCALE.EN_US
-      ? "Optional summary text used as refinement context."
-      : "可选的小结文本，会作为计划细化上下文。";
   return new DynamicStructuredTool({
     name: PLAN_REFINEMENT_TOOL_NAME,
-    description:
-      locale === LOCALE.EN_US
-        ? "Trigger planning refinement flow after main plan is ready."
-        : "在总计划完成后触发计划细化流程。",
+    description: translateI18nText(locale, "planRefinementToolDescription"),
     schema: z.object({
-      summary: z.string().optional().describe(modeDescription),
+      summary: z
+        .string()
+        .optional()
+        .describe(translateI18nText(locale, "planRefinementToolSummaryDescription")),
     }),
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
@@ -38,10 +35,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           ok: false,
           status: "not_ready",
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason:
-            locale === LOCALE.EN_US
-              ? "main planning flow is not completed yet"
-              : "总计划流程尚未完成",
+          reason: translateI18nText(locale, "planRefinementNotReadyReason"),
         };
       }
       const refinementResult = await runPlanningRefinementBySeparateModel(
@@ -57,10 +51,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           ok: false,
           status: "converged",
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason:
-            locale === LOCALE.EN_US
-              ? "no refinable main step found"
-              : "未找到可细化的主步骤",
+          reason: translateI18nText(locale, "planRefinementConvergedReason"),
         };
       }
       if (refinementResult?.applied !== true) {
@@ -68,10 +59,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           ok: false,
           status: String(refinementResult?.status || "failed"),
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason:
-            locale === LOCALE.EN_US
-              ? "plugin-side refinement failed"
-              : "插件侧细化失败",
+          reason: translateI18nText(locale, "planRefinementFailedReason"),
         };
       }
       return {
@@ -104,4 +92,3 @@ export function ensurePlanRefinementTool(ctx = {}, meta = {}) {
   });
   return true;
 }
-

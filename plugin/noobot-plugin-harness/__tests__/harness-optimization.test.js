@@ -17,6 +17,7 @@ import { inferFsmTarget, HARNESS_FSM_STATES } from "../src/fsm/transitions.js";
 import { buildEvent } from "../src/data/record-builders.js";
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
+import { invokeWithReasoningRetry } from "../src/capabilities/handlers/shared/model-invocation-utils.js";
 import {
   markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,
@@ -242,6 +243,27 @@ test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when
   assert.match(String(ctx.messages[0]?.content || ""), /\[来自harness外部模型输出\/planning\]/);
 });
 
+test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", async () => {
+  const runtime = createCapabilityRuntime({ handlers: {} });
+  const ctx = {
+    dialogProcessId: "dialog-old",
+    messages: [],
+    agentContext: { payload: {} },
+  };
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_TURN, ctx, {});
+  await runtime.runHook(HARNESS_HOOK_POINTS.AFTER_TURN, ctx, {});
+
+  const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
+    purpose: "planning",
+    content: '{"taskOwner":"admin","taskChecklist":[{"index":1,"task":"x","owner":"admin"}]}',
+    dedupe: true,
+  });
+
+  assert.equal(relayed, false);
+  assert.equal(ctx.messages.length, 0);
+});
+
 test("planning separate_model uses injected resolveModelMessages from harness meta", async () => {
   const handler = createPlanningHandler();
   const ctx = {
@@ -342,4 +364,39 @@ test("guidance summary prefers injected markMessagesSummarized from harness meta
 
   await handler({ capability: "guidance", point: "after_llm_call", ctx, meta });
   assert.ok(injectedCalled >= 1);
+});
+
+test("invokeWithReasoningRetry throws error when reasoning-only persists after one retry", async () => {
+  let calls = 0;
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          state: { counters: {}, flags: {}, signals: {}, pending: {} },
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      invokeWithReasoningRetry({
+        invoker: async () => {
+          calls += 1;
+          return { content: "<think>only reasoning</think>" };
+        },
+        invokePayload: { messages: [{ role: "user", content: "x" }] },
+        maxReasoningRetries: 1,
+        purpose: "planning",
+        domain: "planning",
+        ctx,
+      }),
+    (error) => error?.code === "CAPABILITY_REASONING_RETRY_EXHAUSTED",
+  );
+  assert.equal(calls, 2);
 });

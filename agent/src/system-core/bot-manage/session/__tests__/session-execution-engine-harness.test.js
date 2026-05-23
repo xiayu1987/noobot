@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 import { SessionExecutionEngine } from "../session-execution-engine.js";
 
@@ -154,7 +155,7 @@ test("SessionExecutionEngine raises harness timeoutMs for separate_model plannin
     },
   });
 
-  assert.equal(prepared.plugins.harness.timeoutMs, 60_000);
+  assert.equal(prepared.plugins.harness.timeoutMs, 180_000);
 });
 
 test("SessionExecutionEngine injects harness resolveModelMessages aligned with session.recentMessageLimit", async () => {
@@ -230,4 +231,53 @@ test("SessionExecutionEngine injects harness markMessagesSummarized aligned with
   assert.equal(messages[2].summarized, true);
   assert.equal(messages[3].summarized, true);
   assert.equal(messages[4].summarized, undefined);
+});
+
+test("SessionExecutionEngine resolveModelMessages normalizes langchain messages and keeps current user input", async () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: {
+      session: {
+        recentMessageLimit: 8,
+      },
+    },
+  });
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+        },
+      },
+    },
+  });
+  const resolver = prepared.plugins.harness.resolveModelMessages;
+  const resolved = resolver({
+    messages: [
+      new HumanMessage("查找最适合组织的人"),
+      new HumanMessage('[user_meta]\n{"sessionId":"s1","attachments":[]}\n[/user_meta]'),
+      new AIMessage("收到，准备规划"),
+    ],
+    ctx: {
+      agentContext: {
+        execution: {
+          controllers: {
+            runtime: {
+              systemRuntime: {
+                currentTurnUserMessage: "查找最适合组织的人",
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  assert.deepEqual(
+    resolved.map((item = {}) => ({ role: item.role, content: item.content })),
+    [
+      { role: "user", content: "查找最适合组织的人" },
+      { role: "assistant", content: "收到，准备规划" },
+    ],
+  );
 });

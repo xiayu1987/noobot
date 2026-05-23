@@ -14,6 +14,7 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
+import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
 
 export function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", { includeMarker = false } = {}) {
   const lines = [
@@ -39,12 +40,14 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   if (!messages) return false;
 
   if (state.pending.summary === true) {
-    messages.unshift({
+    injectMessageWithPolicy(ctx, {
       role: "system",
       content: [
         translateI18nText(locale, "guidanceSummaryMarker"),
         translateI18nText(locale, "guidanceSummaryBody"),
       ].join("\n"),
+      injectAt: "prepend",
+      avoidBreakToolCallContinuity: true,
     });
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
@@ -58,9 +61,11 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
 
   if (!state.pending.guidance) return false;
   const reason = state.pending.guidance;
-  messages.unshift({
+  injectMessageWithPolicy(ctx, {
     role: "system",
     content: buildGuidancePromptContent(locale, reason, { includeMarker: true }),
+    injectAt: "prepend",
+    avoidBreakToolCallContinuity: true,
   });
   setPendingStateWithMeta(state, "guidance", null);
   state.counters.consecutiveToolFailures = 0;

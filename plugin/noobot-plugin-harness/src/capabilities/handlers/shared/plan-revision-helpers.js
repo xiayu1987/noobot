@@ -12,6 +12,7 @@ export function createPlanRevisionHelpers({
   ensureHarnessBucket,
   extractJsonObjectFromText,
   getDefaultTaskOwner,
+  getPromptJsonFormatExample,
   parseRefinementChecklistFromModelOutput,
   parseTaskChecklistFromModelOutput,
   translateI18nText,
@@ -286,13 +287,12 @@ export function createPlanRevisionHelpers({
 
   function buildPlanningRefinementPrompt(locale = LOCALE?.ZH_CN, bucket = {}, state = {}, summaryText = "") {
     const targetMainSteps = resolveRefinementTargetMainSteps(bucket, state);
-    const planJsonExample =
-      '{"stage":"refinement","totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"refinementChecklist":[{"index":101,"mainStepIndex":1,"isMainStep":false,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}';
     return [
       translateI18nText?.(locale, "planningRefinementMarker"),
       translateI18nText?.(locale, "planningRefinementPromptBody", {
-        example: planJsonExample,
+        example: getPromptJsonFormatExample?.("planning_refinement"),
       }),
+      translateI18nText?.(locale, "jsonOnlyOutputRequirement"),
       JSON.stringify(
         {
           currentSummary: String(summaryText || "").trim(),

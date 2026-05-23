@@ -112,6 +112,7 @@ function normalizeHeaderValue(input = "") {
 export function createAgentCapabilityModelInvoker({
   maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
   toolAllowlist = [],
+  enableToolBinding = false,
   createChatModelFn = createChatModel,
   createChatModelByNameFn = createChatModelByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
@@ -197,6 +198,21 @@ export function createAgentCapabilityModelInvoker({
           streaming: false,
           additionalHeaders,
         });
+
+    if (enableToolBinding !== true) {
+      const ai = await llm.invoke(runMessages, {
+        signal: runtime?.abortSignal || null,
+      });
+      const text = normalizeTextContent(ai?.content);
+      return {
+        content: text,
+        output: text,
+        traces: [],
+        turn: 1,
+        finishedReason: "tool_binding_disabled",
+        toolTurnLimitReached: false,
+      };
+    }
 
     const effectiveAllowPolicy = Array.isArray(toolAllowlistOverride)
       ? resolveAllowPolicy(toolAllowlistOverride)

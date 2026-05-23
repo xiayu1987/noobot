@@ -69,6 +69,7 @@ export function ensureHarnessBucket(ctx = {}) {
     ensureArrayField(bucket, "acceptanceReports");
     ensureArrayField(bucket, "reviewReports");
     ensureArrayField(bucket, "planningRawOutputs");
+    ensureArrayField(bucket, "completedDialogProcessIds");
     if (
       !("lastPlanningRawOutput" in bucket) ||
       (bucket.lastPlanningRawOutput && typeof bucket.lastPlanningRawOutput !== "object")

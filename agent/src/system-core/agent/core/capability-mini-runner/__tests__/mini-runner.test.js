@@ -23,6 +23,7 @@ test("mini-runner appends assistant tool-call message before tool result", async
   };
   const second = { content: "done" };
   const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
     createChatModelFn: () => createFakeModel([first, second]),
     adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
     executeToolCallFn: async () => ({ toolResultText: "echo:hi" }),
@@ -48,6 +49,7 @@ test("mini-runner supports OpenAI function-style tool calls and JSON args", asyn
   };
   let capturedCall = null;
   const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
     maxTurns: 1,
     createChatModelFn: () => createFakeModel([first]),
     adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
@@ -68,6 +70,7 @@ test("mini-runner records rejected and missing tool call statuses in traces", as
     ],
   };
   const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
     maxTurns: 1,
     toolAllowlist: ["missing"],
     createChatModelFn: () => createFakeModel([first]),
@@ -98,6 +101,7 @@ test("mini-runner treats * as all tools in current registry", async () => {
   };
   const executed = [];
   const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
     maxTurns: 1,
     toolAllowlist: ["*"],
     createChatModelFn: () => createFakeModel([first]),
@@ -133,6 +137,7 @@ test("mini-runner finalizes with no-tools follow-up when max turns reached witho
   };
   const second = { content: '{"taskChecklist":[{"index":1,"task":"执行核心任务"}]}' };
   const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
     maxTurns: 1,
     createChatModelFn: () => createFakeModel([first, second]),
     adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
@@ -162,6 +167,7 @@ test("mini-runner caps tool turns at 5 and returns default planning output when 
   ];
   let executedCount = 0;
   const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
     maxTurns: 99,
     createChatModelFn: () => createFakeModel(responses),
     adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
@@ -190,6 +196,7 @@ test("mini-runner uses configured capability model name when provided", async ()
   let defaultFactoryCalled = false;
   let namedModel = "";
   const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
     createChatModelFn: () => {
       defaultFactoryCalled = true;
       return createFakeModel([{ content: "default" }]);
@@ -210,4 +217,32 @@ test("mini-runner uses configured capability model name when provided", async ()
   assert.equal(namedModel, "planner_model_alias");
   assert.equal(result.output, "named");
   assert.equal(result.traces[0].model, "planner_model_alias");
+});
+
+test("mini-runner defaults to no-tool binding invocation", async () => {
+  let bindCalled = false;
+  const invoker = createAgentCapabilityModelInvoker({
+    createChatModelFn: () => ({
+      bindTools() {
+        bindCalled = true;
+        return this;
+      },
+      async invoke() {
+        return { content: "plain result" };
+      },
+    }),
+  });
+  const result = await invoker({
+    messages: [{ role: "user", content: "go" }],
+    ctx: {
+      agentContext: {
+        payload: {
+          tools: { registry: [{ name: "echo" }] },
+        },
+      },
+    },
+  });
+  assert.equal(bindCalled, false);
+  assert.equal(result.finishedReason, "tool_binding_disabled");
+  assert.equal(result.output, "plain result");
 });
