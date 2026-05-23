@@ -11,7 +11,7 @@ import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
-import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
 
 function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
   if (invokeError) {
@@ -58,9 +58,9 @@ export async function executeToolCall({
       tool: call?.name,
       result: String(toolResultText).slice(0, 200),
     });
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.AFTER_TOOL_CALL,
+      point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
       context: withHookRuntimeMeta(runtime, {
         phase: "tool_call",
         executionScope,
@@ -86,9 +86,9 @@ export async function executeToolCall({
     };
   }
   let rawResult = null;
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.BEFORE_TOOL_CALL,
+    point: AGENT_HOOK_POINTS.BEFORE_TOOL_CALL,
     context: withHookRuntimeMeta(runtime, {
       phase: "tool_call",
       executionScope,
@@ -137,9 +137,9 @@ export async function executeToolCall({
       },
     });
     if (isAbort || isFatal) throw error;
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.TOOL_CALL_ERROR,
+      point: AGENT_HOOK_POINTS.TOOL_CALL_ERROR,
       context: withHookRuntimeMeta(runtime, {
         phase: "tool_call",
         executionScope,
@@ -188,9 +188,9 @@ export async function executeToolCall({
     result: String(toolResultText).slice(0, 200),
     success: failureState.success,
   });
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.AFTER_TOOL_CALL,
+    point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
     context: withHookRuntimeMeta(runtime, {
       phase: "tool_call",
       executionScope,

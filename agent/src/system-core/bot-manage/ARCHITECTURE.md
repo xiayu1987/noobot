@@ -11,7 +11,6 @@
   - `execution/turn-persister.js` – append turn / append messages
   - `execution/parent-async-task-manager.js` – parent async task container state machine
   - `execution/memory-postprocess.js` – memory summarize/post-process flow
-  - `execution/agent-context-factory.js` – context builder and runtime context normalization
 - **Async domain**
   - `async/manager.js` – generic job lifecycle
   - `async/session-runner.js` – session-specific async wrappers (legacy API)
@@ -24,6 +23,8 @@
   - `config/constants.js` – grouped constants
 - **Session orchestration**
   - `session/session-execution-engine.js` – coordinator + stable runtime surface
+- **Bot hooks (orchestration layer)**
+  - `hook/index.js` – bot lifecycle hooks for multi-agent orchestration management
 - **Infra**
   - `workspace-infra/workspace-service.js`
 
@@ -34,11 +35,14 @@ BotManager.runSession
   -> SessionExecutionEngine.runSession
     -> execution/runner.runSession
       -> execution/initializer.initializeRunSessionRuntime
-      -> execution/agent-context-factory.build*Context
-      -> agentRunner (runAgentTurn)
+      -> AgentRuntimeFacade.prepareTurnExecution
+      -> AgentRuntimeFacade.runTurn
       -> execution/finalizer.finalizeRunSession
          -> execution/turn-persister.appendAgentMessages
          -> execution/memory-postprocess.runMemoryPostProcessFlow
+
+Note:
+- Agent turn preparation is centralized at `AgentRuntimeFacade.prepareTurnExecution`.
 ```
 
 ## 3) Async call graph

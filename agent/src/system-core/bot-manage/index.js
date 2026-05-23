@@ -13,6 +13,8 @@ import { AsyncJobManager } from "./async-job-manager.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
 
+export * as hook from "./hook/index.js";
+
 export class BotManager {
   constructor(globalConfig) {
     this.globalConfig = globalConfig;

@@ -10,7 +10,7 @@ import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
 import { assertNotAborted } from "../utils/error-utils.js";
 import { normalizeToolResultAttachmentMetas } from "./turn-executor.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../../tools/workflow/final-answer-tool.js";
-import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
 
 export async function processToolResults({
   modelState,
@@ -24,9 +24,9 @@ export async function processToolResults({
   const { eventListener, runtime, abortSignal } = modelState;
 
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.BEFORE_TOOL_CALLS,
+    point: AGENT_HOOK_POINTS.BEFORE_TOOL_CALLS,
     context: withHookRuntimeMeta(runtime, {
       phase: "tool_calls",
       status: "start",

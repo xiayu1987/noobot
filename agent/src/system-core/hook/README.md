@@ -2,7 +2,8 @@
 
 ## Overview
 
-Noobot Agent supports lifecycle hooks via `createHookManager()` and `runRuntimeHook()`.
+Noobot Agent supports **agent-level** lifecycle hooks via `createAgentHookManager()` and `runAgentRuntimeHook()`.
+Use `AGENT_HOOK_POINTS` as the hook-point constant.
 
 - Register hooks with `on / once / off`
 - Execute by hook point name (sequential by default, optional parallel)
@@ -14,11 +15,11 @@ Noobot Agent supports lifecycle hooks via `createHookManager()` and `runRuntimeH
 ## Registration
 
 ```js
-import { createHookManager, HOOK_POINTS } from "noobot-agent/hook";
+import { createAgentHookManager, AGENT_HOOK_POINTS } from "noobot-agent/hook";
 
-const hookManager = createHookManager({ defaultTimeoutMs: 3000 });
+const hookManager = createAgentHookManager({ defaultTimeoutMs: 3000 });
 
-hookManager.on(HOOK_POINTS.BEFORE_LLM_CALL, async (ctx) => {
+hookManager.on(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, async (ctx) => {
   // observe or mutate ctx
 });
 

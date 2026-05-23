@@ -5,7 +5,7 @@
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
-import { createHookManager, HOOK_POINTS } from "../../agent/src/system-core/hook/index.js";
+import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../plugin/noobot-plugin-harness/src/index.js";
 
 async function emitAfterSessionDeleteHook({
@@ -20,7 +20,7 @@ async function emitAfterSessionDeleteHook({
       : "";
   if (!basePath) return;
 
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerHarnessPlugin(
     { hookManager },
     {
@@ -34,7 +34,7 @@ async function emitAfterSessionDeleteHook({
     },
   );
 
-  await hookManager.emit(HOOK_POINTS.AFTER_SESSION_DELETE, {
+  await hookManager.emit(AGENT_HOOK_POINTS.AFTER_SESSION_DELETE, {
     userId: String(userId || "").trim(),
     sessionId: String(sessionId || "").trim(),
     deletedSessionIds: Array.isArray(deletedSessionIds)

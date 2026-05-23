@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/session/session-execution-engine.js";
 import { createStateCommitter } from "../../../src/system-core/agent/core/execution/state-committer.js";
 import { executeToolCall } from "../../../src/system-core/agent/core/execution/tool-runner.js";
-import { createHookManager } from "../../../src/system-core/hook/index.js";
+import { createAgentHookManager } from "../../../src/system-core/hook/index.js";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -32,6 +32,20 @@ test("_prepareHarnessRunConfig keeps runConfig unchanged when harness is disable
 
   assert.equal(prepared, runConfig);
   assert.equal(prepared.hookManager, undefined);
+});
+
+test("_prepareRunConfig attaches independent botHookManager", () => {
+  const engine = new SessionExecutionEngine({
+    workspaceService: createWorkspaceService("/tmp/noobot-test"),
+  });
+  const prepared = engine._prepareRunConfig({
+    userId: "u1",
+    runConfig: {
+      hookManager: createAgentHookManager(),
+    },
+  });
+  assert.ok(prepared.botHookManager);
+  assert.notEqual(prepared.botHookManager, prepared.hookManager);
 });
 
 test("_prepareHarnessRunConfig registers harness plugin and resolves basePath from user workspace", async () => {
@@ -78,7 +92,7 @@ test("_prepareHarnessRunConfig registers harness plugin and resolves basePath fr
 });
 
 test("_prepareHarnessRunConfig reuses existing hookManager instead of replacing it", () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   hookManager.on("before_llm_call", () => {}, { id: "existing.before_llm_call" });
   const engine = new SessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
@@ -236,7 +250,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
 
 test("harness records tool call and state commit hook artifacts", async () => {
   const tempRoot = await createTempRoot();
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const engine = new SessionExecutionEngine({
     workspaceService: createWorkspaceService(tempRoot),
   });

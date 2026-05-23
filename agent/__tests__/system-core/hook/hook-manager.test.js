@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  createHookManager,
-  runRuntimeHook,
+  createAgentHookManager,
+  runAgentRuntimeHook,
   resolveRuntimeHookManager,
   withHookRuntimeMeta,
 } from "../../../src/system-core/hook/index.js";
@@ -13,7 +13,7 @@ function sleep(ms = 0) {
 }
 
 test("hook manager runs hooks by priority (high -> low)", async () => {
-  const manager = createHookManager();
+  const manager = createAgentHookManager();
   const order = [];
 
   manager.on("p", async () => order.push("low"), { priority: 1 });
@@ -26,7 +26,7 @@ test("hook manager runs hooks by priority (high -> low)", async () => {
 });
 
 test("hook manager once hook only runs once", async () => {
-  const manager = createHookManager();
+  const manager = createAgentHookManager();
   let count = 0;
 
   manager.once("once_point", async () => {
@@ -41,7 +41,7 @@ test("hook manager once hook only runs once", async () => {
 });
 
 test("hook manager off/remove works (including disposer)", async () => {
-  const manager = createHookManager();
+  const manager = createAgentHookManager();
   let count = 0;
 
   const dispose = manager.on(
@@ -70,7 +70,7 @@ test("hook manager off/remove works (including disposer)", async () => {
 
 test("hook manager timeout returns hook error and calls onError", async () => {
   const errors = [];
-  const manager = createHookManager({
+  const manager = createAgentHookManager({
     defaultTimeoutMs: 20,
     onError: (payload = {}) => errors.push(payload),
   });
@@ -88,7 +88,7 @@ test("hook manager timeout returns hook error and calls onError", async () => {
 });
 
 test("hook manager supports parallel emit", async () => {
-  const manager = createHookManager();
+  const manager = createAgentHookManager();
   const order = [];
 
   manager.on("parallel_point", async () => {
@@ -110,8 +110,8 @@ test("hook manager supports parallel emit", async () => {
   assert.deepEqual(order, ["fast", "slow"]);
 });
 
-test("runRuntimeHook resolves manager, executes, and emits hook_start/hook_end", async () => {
-  const manager = createHookManager();
+test("runAgentRuntimeHook resolves manager, executes, and emits hook_start/hook_end", async () => {
+  const manager = createAgentHookManager();
   const events = [];
   const eventListener = {
     onEvent(evt = {}) {
@@ -133,7 +133,7 @@ test("runRuntimeHook resolves manager, executes, and emits hook_start/hook_end",
   assert.equal(resolved, manager);
 
   const context = { value: 1 };
-  const result = await runRuntimeHook({
+  const result = await runAgentRuntimeHook({
     runtime,
     point: "runtime_point",
     context,
@@ -148,8 +148,8 @@ test("runRuntimeHook resolves manager, executes, and emits hook_start/hook_end",
   assert.equal(events[1]?.event, "hook_end");
 });
 
-test("runRuntimeHook exposes hook client channel to plugins and sanitizes forwarded payload", async () => {
-  const manager = createHookManager();
+test("runAgentRuntimeHook exposes hook client channel to plugins and sanitizes forwarded payload", async () => {
+  const manager = createAgentHookManager();
   const events = [];
   const eventListener = {
     onEvent(evt = {}) {
@@ -173,7 +173,7 @@ test("runRuntimeHook exposes hook client channel to plugins and sanitizes forwar
     });
   });
 
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
     point: "runtime_point",
     context: {},
@@ -191,9 +191,9 @@ test("runRuntimeHook exposes hook client channel to plugins and sanitizes forwar
   assert.equal("customFieldShouldDrop" in (pluginEvent?.data?.data || {}), false);
 });
 
-test("runRuntimeHook returns executed=false when no manager exists", async () => {
+test("runAgentRuntimeHook returns executed=false when no manager exists", async () => {
   const runtime = {};
-  const result = await runRuntimeHook({
+  const result = await runAgentRuntimeHook({
     runtime,
     point: "missing_manager_point",
     context: { a: 1 },
@@ -202,7 +202,7 @@ test("runRuntimeHook returns executed=false when no manager exists", async () =>
   assert.equal(result.errors.length, 0);
 });
 
-test("runRuntimeHook handles runner throw and emits hook_error", async () => {
+test("runAgentRuntimeHook handles runner throw and emits hook_error", async () => {
   const events = [];
   const eventListener = {
     onEvent(evt = {}) {
@@ -217,7 +217,7 @@ test("runRuntimeHook handles runner throw and emits hook_error", async () => {
     },
   };
 
-  const result = await runRuntimeHook({
+  const result = await runAgentRuntimeHook({
     runtime,
     point: "explode_point",
     context: { x: 1 },

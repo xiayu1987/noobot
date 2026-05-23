@@ -424,10 +424,10 @@ plugin/noobot-plugin-harness/examples/run-config.example.json
 Manual registration is still supported when running outside `SessionExecutionEngine.runSession()`.
 
 ```js
-import { createHookManager } from "noobot-agent/hook";
+import { createAgentHookManager } from "noobot-agent/hook";
 import { registerNoobotPlugin } from "./plugin/noobot-plugin-harness/src/index.js";
 
-const hookManager = createHookManager();
+const hookManager = createAgentHookManager();
 
 registerNoobotPlugin({ hookManager }, {
   basePath: "/path/to/workspace/user",

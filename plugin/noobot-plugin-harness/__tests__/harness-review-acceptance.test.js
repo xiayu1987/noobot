@@ -9,14 +9,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createHookManager } from "../../../agent/src/system-core/hook/index.js";
+import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
 import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
 test("harness review generates review report at final output", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
@@ -48,7 +48,7 @@ test("harness review generates review report at final output", async () => {
 });
 
 test("harness before_final_output capability runtime runs once", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   let count = 0;
   registerNoobotPlugin(
     { hookManager },
@@ -83,7 +83,7 @@ test("harness before_final_output capability runtime runs once", async () => {
 });
 
 test("harness finalResponseGuard false skips final policy injection but keeps review", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: true, finalResponseGuard: false });
 
   const result = { output: "done" };
@@ -102,7 +102,7 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
 
 test("harness promptPolicy false still traces before_llm_call", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { basePath, promptPolicy: false, trace: true });
 
   await hookManager.emit("before_llm_call", {
@@ -120,7 +120,7 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
 });
 
 test("harness review records reports on error and abort hooks", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
 
@@ -145,7 +145,7 @@ test("harness review records reports on error and abort hooks", async () => {
 });
 
 test("harness full engineering capability flow plans, guides, accepts and reviews", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
@@ -254,7 +254,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
 });
 
 test("harness review attachToFinalOutput false keeps report internal", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     { trace: false, promptPolicy: false, review: { attachToFinalOutput: false } },
@@ -277,7 +277,7 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
 });
 
 test("harness forced acceptance is owned by acceptance and appended once", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
@@ -311,7 +311,7 @@ test("harness forced acceptance is owned by acceptance and appended once", async
 });
 
 test("harness acceptance semantic validation uses separate model when enabled", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
     { hookManager },
@@ -371,7 +371,7 @@ test("harness acceptance semantic validation uses separate model when enabled", 
 });
 
 test("harness active request_task_acceptance semantic validation receives agent ctx via tool config", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
     { hookManager },
@@ -411,7 +411,7 @@ test("harness active request_task_acceptance semantic validation receives agent 
 });
 
 test("harness acceptance semantic validation failure does not block active acceptance", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     {
@@ -529,7 +529,7 @@ test("acceptance handler inject mode schedules and captures semantic validation 
 });
 
 test("harness review reports failed or inconsistent semantic acceptance", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
@@ -564,7 +564,7 @@ test("harness review reports failed or inconsistent semantic acceptance", async 
 
 
 test("harness summary triggers complete revised plan and acceptance uses latest checklist", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
     { hookManager },
@@ -676,7 +676,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
 });
 
 test("planning_revision reuses summary model messages in separate_model flow", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
     { hookManager },
@@ -781,7 +781,7 @@ test("planning_revision reuses summary model messages in separate_model flow", a
 });
 
 test("harness summary without completion marker does not trigger planning revision", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
     { hookManager },

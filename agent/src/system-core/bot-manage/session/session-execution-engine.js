@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { runAgentTurn } from "../../agent/index.js";
+import {
+  runAgentTurn,
+  AgentContextFactory,
+  AgentRuntimeFacade,
+} from "../../agent/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { SessionExecutionInitializer } from "../execution/initializer.js";
@@ -14,10 +18,10 @@ import { BotManageValidator } from "../config/validator.js";
 import { ParentAsyncTaskManager } from "../execution/parent-async-task-manager.js";
 import { RunConfigResolver } from "../config/run-config-resolver.js";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
-import { AgentContextFactory } from "../execution/agent-context-factory.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { createHookManager } from "../../hook/index.js";
+import { createAgentHookManager } from "../../hook/index.js";
+import { createBotHookManager } from "../hook/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
@@ -26,6 +30,8 @@ import {
   normalizeRecentWindow,
 } from "../../session/utils/context-window-normalizer.js";
 import { shouldMarkCurrentTurnSummarizedMessage } from "../../context/session/summarized-message-policy.js";
+import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { MIME_TYPE } from "../../constants/index.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -72,6 +78,10 @@ export class SessionExecutionEngine {
       applyRunConfigToolPolicy: (agentContext = {}, runConfig = {}) =>
         this._applyRunConfigToolPolicy(agentContext, runConfig),
     });
+    this.agentRuntimeFacade = new AgentRuntimeFacade({
+      contextFactory: this.agentContextFactory,
+      turnRunner: this.agentRunner,
+    });
     this.turnPersister = new SessionTurnPersister({
       session: this.session,
     });
@@ -92,11 +102,12 @@ export class SessionExecutionEngine {
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
       now: () => this._now(),
     });
-    this.runner = new SessionExecutionRunner({
-      agentRunner: this.agentRunner,
-      errorLogger: this.errorLogger,
+    // SessionExecutionRunner dependency wiring (grouped by concern)
+    const runnerValidationDeps = {
       normalizeRunMessage: (message) => this._normalizeRunMessage(message),
       validateRunInput: (payload = {}) => this._validateRunInput(payload),
+    };
+    const runnerRuntimeDeps = {
       ensureParentAsyncResultContainer: (payload = {}) =>
         this._ensureParentAsyncResultContainer(payload),
       initializeRunSessionRuntime: (payload = {}) =>
@@ -104,12 +115,20 @@ export class SessionExecutionEngine {
       resolveScenarioRunConfig: (runConfig = {}, userConfig = {}) =>
         this._resolveScenarioRunConfig(runConfig, userConfig),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
-      buildAgentContext: (payload = {}) => this._buildAgentContext(payload),
+      prepareAgentTurnExecution: (payload = {}) =>
+        this._prepareAgentTurnExecution(payload),
+    };
+    const runnerPersistenceDeps = {
       appendSessionTurn: (payload = {}) => this._appendSessionTurn(payload),
-      buildRunTurnAgentContext: (agentContext = {}, abortSignal = null) =>
-        this._buildRunTurnAgentContext(agentContext, abortSignal),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
+    };
+    this.runner = new SessionExecutionRunner({
+      agentRunner: (payload = {}) => this.agentRuntimeFacade.runTurn(payload),
+      errorLogger: this.errorLogger,
+      ...runnerValidationDeps,
+      ...runnerRuntimeDeps,
+      ...runnerPersistenceDeps,
       now: () => this._now(),
     });
   }
@@ -185,34 +204,6 @@ export class SessionExecutionEngine {
     });
   }
 
-  _buildContextBuilder({
-    userId,
-    sessionId,
-    caller = CALLER_ROLE.USER,
-    parentSessionId,
-    userConfig,
-    attachmentMetas,
-    eventListener,
-    userInteractionBridge = null,
-    runConfig = {},
-    abortSignal = null,
-    parentAsyncResultContainer = null,
-  }) {
-    return this.agentContextFactory.buildContextBuilder({
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
-      userConfig,
-      attachmentMetas,
-      eventListener,
-      userInteractionBridge,
-      runConfig,
-      abortSignal,
-      parentAsyncResultContainer,
-    });
-  }
-
   _resolveMemorySummaryTimeoutMs(userConfig = {}) {
     return this.memoryPostProcessService.resolveMemorySummaryTimeoutMs(userConfig);
   }
@@ -280,25 +271,28 @@ export class SessionExecutionEngine {
   }
 
   _prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    return this._prepareHarnessRunConfig({ userId, runConfig, userConfig });
+    const preparedHarnessConfig = this._prepareHarnessRunConfig({
+      userId,
+      runConfig,
+      userConfig,
+    });
+    return this._prepareBotHookRunConfig({ runConfig: preparedHarnessConfig });
   }
 
-  async _buildAgentContext({
-    mode,
+  _buildContextBuilder({
     userId,
     sessionId,
-    caller,
+    caller = CALLER_ROLE.USER,
     parentSessionId,
     userConfig,
     attachmentMetas,
     eventListener,
-    dialogProcessId = "",
     userInteractionBridge = null,
     runConfig = {},
     abortSignal = null,
     parentAsyncResultContainer = null,
   }) {
-    const contextBuilder = this._buildContextBuilder({
+    return this.agentContextFactory.buildContextBuilder({
       userId,
       sessionId,
       caller,
@@ -311,17 +305,39 @@ export class SessionExecutionEngine {
       abortSignal,
       parentAsyncResultContainer,
     });
-    return this.agentContextFactory.buildAgentContextFromBuilder({
-      mode,
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
-      eventListener,
-      dialogProcessId,
-      runConfig,
-      contextBuilder,
+  }
+
+  async _prepareAgentTurnExecution({
+    buildContextPayload = {},
+    abortSignal = null,
+  } = {}) {
+    const payload =
+      buildContextPayload && typeof buildContextPayload === "object"
+        ? buildContextPayload
+        : {};
+    const contextBuilder =
+      payload?.contextBuilder && typeof payload.contextBuilder === "object"
+        ? payload.contextBuilder
+        : this._buildContextBuilder(payload);
+    const prepared = await this.agentRuntimeFacade.prepareTurnExecution({
+      buildContextPayload: {
+        ...payload,
+        contextBuilder,
+      },
+      abortSignal,
     });
+    const runtimeAttachmentMetas = Array.isArray(
+      prepared?.agentContext?.execution?.controllers?.runtime?.attachmentMetas,
+    )
+      ? prepared.agentContext.execution.controllers.runtime.attachmentMetas
+      : [];
+    return {
+      ...(prepared && typeof prepared === "object" ? prepared : {}),
+      userMessageAttachmentMetas: mapAttachmentRecordsToMetas(runtimeAttachmentMetas, {
+        fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
+        userId: String(payload?.userId || "").trim(),
+      }),
+    };
   }
 
   async _appendSessionTurn({
@@ -406,13 +422,6 @@ export class SessionExecutionEngine {
       parentDialogProcessId,
       partialAssistant,
     });
-  }
-
-  _buildRunTurnAgentContext(agentContext = {}, abortSignal = null) {
-    return this.agentContextFactory.buildRunTurnAgentContext(
-      agentContext,
-      abortSignal,
-    );
   }
 
   async _initializeRunSessionRuntime({
@@ -613,7 +622,7 @@ export class SessionExecutionEngine {
         ? runConfig.hookManager
         : runConfig?.hooks && typeof runConfig.hooks === "object" && typeof runConfig.hooks.on === "function"
           ? runConfig.hooks
-          : createHookManager();
+          : createAgentHookManager();
     if (!hookManager.__noobotHarnessPluginRegistered) {
       registerHarnessPlugin({ hookManager }, harnessOptions);
       Object.defineProperty(hookManager, "__noobotHarnessPluginRegistered", {
@@ -629,6 +638,21 @@ export class SessionExecutionEngine {
         ...(runConfig?.plugins || {}),
         harness: harnessOptions,
       },
+    };
+  }
+
+  _prepareBotHookRunConfig({ runConfig = {} } = {}) {
+    const botHookManager =
+      runConfig?.botHookManager && typeof runConfig.botHookManager === "object"
+        ? runConfig.botHookManager
+        : runConfig?.botHooks &&
+            typeof runConfig.botHooks === "object" &&
+            typeof runConfig.botHooks.on === "function"
+          ? runConfig.botHooks
+          : createBotHookManager();
+    return {
+      ...runConfig,
+      botHookManager,
     };
   }
 

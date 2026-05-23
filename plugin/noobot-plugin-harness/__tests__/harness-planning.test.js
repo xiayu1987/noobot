@@ -9,12 +9,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createHookManager } from "../../../agent/src/system-core/hook/index.js";
+import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
 test("harness planning disables blocked tools and injects request_task_acceptance tool", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
   const ctx = {
@@ -44,7 +44,7 @@ test("harness planning disables blocked tools and injects request_task_acceptanc
 });
 
 test("harness planning skips auxiliary scope llm hooks", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
   const messages = [{ role: "user", content: "auxiliary planning call" }];
@@ -67,7 +67,7 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
 });
 
 test("harness planning prompt includes current tool names and descriptions", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
   const messages = [{ role: "user", content: "开始任务" }];
@@ -97,7 +97,7 @@ test("harness planning prompt includes current tool names and descriptions", asy
 });
 
 test("harness planning captures checklist and forces acceptance at final output", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
@@ -151,7 +151,7 @@ test("harness planning captures checklist and forces acceptance at final output"
 });
 
 test("harness planning injects refinement tool and tool call runs plugin-side refinement directly", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
     { hookManager },
@@ -242,7 +242,7 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
 });
 
 test("harness planning retries injection when first response has no checklist", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
@@ -278,7 +278,7 @@ test("harness planning retries injection when first response has no checklist", 
 });
 
 test("harness planning does not mutate runtime forceTool config", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const runtimeConfig = { forceTool: true };
   const agentContext = {
@@ -320,7 +320,7 @@ test("harness planning does not mutate runtime forceTool config", async () => {
 });
 
 test("harness planning skips capture on tool-call turn without assistant text", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
@@ -345,7 +345,7 @@ test("harness planning skips capture on tool-call turn without assistant text", 
 });
 
 test("harness planning rejects numbered plain-text checklist output without complete plan payload", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
@@ -374,7 +374,7 @@ test("harness planning rejects numbered plain-text checklist output without comp
 });
 
 test("harness planning can parse checklist wrapped in tool result payload", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
@@ -424,7 +424,7 @@ test("harness planning can parse checklist wrapped in tool result payload", asyn
 });
 
 test("harness planning still retries when malformed json appears but no repair invoker is configured", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
@@ -449,7 +449,7 @@ test("harness planning still retries when malformed json appears but no repair i
 });
 
 test("harness planning falls back to default checklist when json repair is unusable", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const purposes = [];
   registerNoobotPlugin(
     { hookManager },
@@ -492,7 +492,7 @@ test("harness planning falls back to default checklist when json repair is unusa
 
 test("harness writes capability model traces to dedicated jsonl artifact", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     {
@@ -545,7 +545,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
 });
 
 test("harness planning separate model uses resolved planning tool allowlist", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
     { hookManager },
@@ -592,7 +592,7 @@ test("harness planning separate model uses resolved planning tool allowlist", as
 });
 
 test("harness planning rejects incomplete checklist payload without totalGoal or io-file fields", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     {
