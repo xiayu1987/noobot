@@ -8,12 +8,12 @@ import {
   CAPABILITY_DOMAIN,
   LOCALE,
   appendCapabilityLog,
-  attachArtifactsToAssistantResult,
+  attachMetasToLatestInjectedMessage,
   defaultTaskChecklist,
   ensureHarnessBucket,
   getDefaultTaskOwner,
   mapAttachmentRecordsToMetas,
-  mergeAttachmentMetas,
+  relaySeparateModelOutputAsUserMessage,
   translateI18nText,
 } from "./deps.js";
 import { buildAcceptanceReport } from "./report-builder.js";
@@ -103,10 +103,19 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
 
   const metas = mapAttachmentRecordsToMetas(savedRecords);
   if (!metas.length) return false;
-  if (runtime && typeof runtime === "object") {
-    runtime.attachmentMetas = mergeAttachmentMetas(runtime?.attachmentMetas, metas);
+  const attached = attachMetasToLatestInjectedMessage(ctx, metas);
+  if (!attached) {
+    relaySeparateModelOutputAsUserMessage(ctx, {
+      locale,
+      purpose: "acceptance_checklist",
+      content:
+        locale === LOCALE.EN_US
+          ? "Harness checklist artifacts generated. See attachmentMetas for details."
+          : "已生成 harness 清单附件，详见 attachmentMetas。",
+      dedupe: true,
+      attachmentMetas: metas,
+    });
   }
-  attachArtifactsToAssistantResult(ctx, metas);
   state.flags.checklistArtifactsAttached = true;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,

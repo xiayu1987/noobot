@@ -15,6 +15,7 @@ import {
   getPromptJsonFormatExample,
   invokeWithReasoningRetry,
   relaySeparateModelOutputAsUserMessage,
+  saveCapabilityOutputAsAttachmentMetas,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
@@ -213,11 +214,18 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   const responseText =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
+  const attachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+    purpose: "acceptance_semantic_validation",
+    content: responseText,
+    generationSource: "harness_acceptance_semantic_validation",
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+  });
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "acceptance_semantic_validation",
     content: responseText,
     dedupe: true,
+    attachmentMetas,
   });
   baseReport.semanticValidation = parseSemanticValidationResult(responseText);
   bucket.lastAcceptanceReport = baseReport;

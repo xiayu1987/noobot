@@ -20,10 +20,10 @@ export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 export {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
-  attachArtifactsToAssistantResult,
+  attachMetasToLatestInjectedMessage,
   mapAttachmentRecordsToMetas,
-  mergeAttachmentMetas,
   relaySeparateModelOutputAsUserMessage,
+  saveCapabilityOutputAsAttachmentMetas,
 } from "../shared/attachment-log-utils.js";
 
 export {

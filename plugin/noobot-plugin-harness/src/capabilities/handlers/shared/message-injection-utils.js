@@ -58,6 +58,7 @@ export function injectMessageWithPolicy(
   {
     role = "system",
     content = "",
+    attachmentMetas = [],
     injectAt = "append",
     dedupe = false,
     avoidBreakToolCallContinuity = true,
@@ -73,7 +74,9 @@ export function injectMessageWithPolicy(
   if (isHarnessAgentTurnEnded(ctx)) {
     return { injected: false, target: "none", blockedByTurnEnded: true };
   }
-  const message = buildHarnessInjectedMessage(normalizedContent);
+  const message = buildHarnessInjectedMessage(normalizedContent, {
+    attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+  });
 
   if (dedupe && dedupeExists(messages, message)) {
     return { injected: false, target: "ctx_messages", deduped: true };

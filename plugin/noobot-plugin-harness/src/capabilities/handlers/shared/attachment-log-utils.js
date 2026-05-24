@@ -7,6 +7,7 @@ import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
 import { translateI18nText } from "./i18n.js";
 import { injectMessageWithPolicy } from "./message-injection-utils.js";
+import { resolveCurrentTurnMessagesStore } from "./injected-message-utils.js";
 
 export function mergeAttachmentMetas(existing = [], incoming = []) {
   const current = Array.isArray(existing) ? existing : [];
@@ -42,33 +43,36 @@ export function mapAttachmentRecordsToMetas(records = []) {
   }));
 }
 
-export function attachArtifactsToAssistantResult(ctx = {}, attachmentMetas = []) {
-  const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
-  if (!metas.length) return false;
-  const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
-  if (!result || !Array.isArray(result.turnMessages)) return false;
-  const assistantIndexes = [];
-  for (let messageIndex = 0; messageIndex < result.turnMessages.length; messageIndex += 1) {
-    if (String(result.turnMessages[messageIndex]?.role || "").trim() === "assistant") {
-      assistantIndexes.push(messageIndex);
-    }
-  }
-  if (!assistantIndexes.length) return false;
-  const latestDialogProcessId = String(
-    result.turnMessages[assistantIndexes[assistantIndexes.length - 1]]?.dialogProcessId || "",
-  ).trim();
-  let changed = false;
-  for (const index of assistantIndexes) {
-    const message = result.turnMessages[index] || {};
-    const dialogProcessId = String(message?.dialogProcessId || "").trim();
-    if (latestDialogProcessId && dialogProcessId !== latestDialogProcessId) continue;
-    result.turnMessages[index] = {
-      ...message,
-      attachmentMetas: mergeAttachmentMetas(message?.attachmentMetas, metas),
+function isHarnessInjectedMessage(message = {}) {
+  return (
+    message?.injectedMessage === true &&
+    String(message?.injectedBy || "").trim() === "harness-plugin" &&
+    String(message?.role || "").trim() === "user"
+  );
+}
+
+export function attachMetasToLatestInjectedMessage(ctx = {}, metas = []) {
+  const messages = Array.isArray(ctx?.messages) ? ctx.messages : [];
+  if (!messages.length) return false;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const item = messages[index] || {};
+    if (!isHarnessInjectedMessage(item)) continue;
+    messages[index] = {
+      ...item,
+      attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
     };
-    changed = true;
+    const turnStore = resolveCurrentTurnMessagesStore(ctx);
+    if (turnStore && typeof turnStore.updateLast === "function") {
+      turnStore.updateLast(
+        {
+          attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
+        },
+        (messageItem = {}) => isHarnessInjectedMessage(messageItem),
+      );
+    }
+    return true;
   }
-  return changed;
+  return false;
 }
 
 export function appendCapabilityLog(ctx = {}, { domain = "", event = "", detail = {} } = {}) {
@@ -110,9 +114,80 @@ export function appendCapabilityLog(ctx = {}, { domain = "", event = "", detail 
   return true;
 }
 
+function sanitizeArtifactFileNamePart(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildCapabilityArtifactName({ purpose = "" } = {}) {
+  const normalizedPurpose = sanitizeArtifactFileNamePart(purpose) || "unknown";
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `harness-${normalizedPurpose}-${stamp}.md`;
+}
+
+export async function saveCapabilityOutputAsAttachmentMetas(
+  ctx = {},
+  {
+    purpose = "",
+    content = "",
+    generationSource = "",
+    domain = CAPABILITY_DOMAIN.PLANNING,
+  } = {},
+) {
+  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
+  const attachmentService = runtime?.attachmentService || null;
+  if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
+    return [];
+  }
+  const text = String(content || "").trim();
+  if (!text) return [];
+  const userId = String(
+    ctx?.userId || runtime?.systemRuntime?.userId || runtime?.userId || "",
+  ).trim();
+  const sessionId = String(
+    ctx?.sessionId || runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
+  ).trim();
+  if (!userId || !sessionId) return [];
+  try {
+    const records = await attachmentService.ingestGeneratedArtifacts({
+      userId,
+      sessionId,
+      attachmentSource: "model",
+      generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
+      artifacts: [
+        {
+          name: buildCapabilityArtifactName({ purpose }),
+          mimeType: "text/markdown",
+          contentBase64: Buffer.from(text, "utf8").toString("base64"),
+        },
+      ],
+    });
+    return mapAttachmentRecordsToMetas(records);
+  } catch (error) {
+    appendCapabilityLog(ctx, {
+      domain,
+      event: "capability_output_attachment_save_failed",
+      detail: {
+        purpose: String(purpose || "").trim() || "unknown",
+        error: String(error?.message || error || ""),
+      },
+    });
+    return [];
+  }
+}
+
 export function relaySeparateModelOutputAsUserMessage(
   ctx = {},
-  { locale = LOCALE.ZH_CN, purpose = "", content = "", dedupe = false } = {},
+  {
+    locale = LOCALE.ZH_CN,
+    purpose = "",
+    content = "",
+    dedupe = false,
+    attachmentMetas = [],
+  } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   const text = String(content || "").trim();
@@ -121,15 +196,20 @@ export function relaySeparateModelOutputAsUserMessage(
     purpose: String(purpose || "").trim() || "unknown",
   });
   const relayContent = `${prefix}\n${text}`;
+  const relayAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: relayContent,
+    attachmentMetas: relayAttachmentMetas,
     injectAt: "append",
     dedupe,
     avoidBreakToolCallContinuity: true,
     persistToCurrentTurn: true,
   });
   if (!injection.injected && injection.deduped === true) {
+    if (relayAttachmentMetas.length) {
+      attachMetasToLatestInjectedMessage(ctx, relayAttachmentMetas);
+    }
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: "planning_separate_model_relay_skipped_duplicate",
