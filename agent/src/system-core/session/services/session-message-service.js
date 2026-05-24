@@ -37,6 +37,8 @@ export class SessionMessageService {
     modelAdditionalKwargs = null,
     modelResponseMetadata = null,
     parentSessionId = "",
+    injectedMessage = false,
+    injectedBy = "",
   }) {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
@@ -80,6 +82,8 @@ export class SessionMessageService {
       rawModelContent,
       modelAdditionalKwargs,
       modelResponseMetadata,
+      injectedMessage: injectedMessage === true,
+      injectedBy: String(injectedBy || "").trim(),
       ts: this.now(),
     }, this.now);
 

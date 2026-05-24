@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { isMessageInjected } from "./shared.js";
+import {
+  HARNESS_INJECTED_MESSAGE_BY_FIELD,
+  HARNESS_INJECTED_MESSAGE_BY_VALUE,
+  HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
+  HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
+  HARNESS_INJECTION_MESSAGE_ROLE,
+} from "../handlers/shared/constants.js";
 
 function ensureMessageArray(ctx = {}, target = "auto") {
   const arrays = [];
@@ -68,8 +75,10 @@ function applyMessageArrayTakeover(messages = [], directive = {}) {
   if (dedupe && isMessageInjected(messages, id, messageContent)) return false;
 
   const nextMessage = {
-    role: String(directive?.role || "system").trim() || "system",
+    role: HARNESS_INJECTION_MESSAGE_ROLE,
     content: messageContent,
+    [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
+    [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
   };
 
   if (mode === "replace") {

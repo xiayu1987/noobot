@@ -16,6 +16,13 @@ import {
   translateI18nText,
 } from "./deps.js";
 
+function isHarnessInjectedMessage(message = {}) {
+  return (
+    message?.injectedMessage === true &&
+    String(message?.injectedBy || "").trim() === "harness-plugin"
+  );
+}
+
 function resolvePlanningToolCatalog(ctx = {}, locale = LOCALE.ZH_CN) {
   const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)
     ? ctx.agentContext.payload.tools.registry
@@ -84,6 +91,7 @@ export function resolveLatestUserMessageText(ctx = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const item = messages[index] || {};
+    if (isHarnessInjectedMessage(item)) continue;
     const role = String(item?.role || "").trim().toLowerCase();
     if (role !== "user") continue;
     const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
@@ -95,6 +103,7 @@ export function resolveLatestUserMessageText(ctx = {}) {
     : [];
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const item = history[index] || {};
+    if (isHarnessInjectedMessage(item)) continue;
     const role = String(item?.role || "").trim().toLowerCase();
     if (role !== "user") continue;
     const text = String(extractRawTextContent(item?.content ?? item) || "").trim();

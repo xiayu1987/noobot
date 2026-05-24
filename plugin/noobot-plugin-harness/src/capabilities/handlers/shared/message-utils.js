@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+function isHarnessInjectedMessage(message = {}) {
+  return (
+    message?.injectedMessage === true &&
+    String(message?.injectedBy || "").trim() === "harness-plugin"
+  );
+}
+
 export function extractRawTextContent(input) {
   if (typeof input === "string") return input;
   if (!Array.isArray(input)) return "";
@@ -166,6 +173,7 @@ export function resolveInjectedMessageSummarizer(meta = {}) {
 }
 
 function normalizePromptMessageItem(message = {}) {
+  if (isHarnessInjectedMessage(message)) return null;
   const role = String(message?.role || "").trim().toLowerCase();
   if (!role) return null;
   const content = extractRawTextContent(message?.content ?? message);

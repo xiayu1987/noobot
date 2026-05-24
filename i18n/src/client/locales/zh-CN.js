@@ -210,6 +210,8 @@ export const zhCNMessages = {
     "thinkingExpand": "💡 展开思考过程",
     "thinkingElapsed": "思考耗时：{duration}",
     "executionProcess": "执行过程 ({count})",
+    "injectedMessages": "注入消息 ({count})",
+    "noInjectedMessages": "暂无注入消息",
     "thinkingDetails": "思考明细 ({count})",
     "waitingRealtimeLog": "执行中，等待实时日志...",
     "noExecutionLogs": "无执行过程日志",
