@@ -194,6 +194,7 @@ export const zhCNMessages = {
     "noCopyableText": "没有可复制的文本",
     "generating": "生成中...",
     "generatedFiles": "已生成文件 ({count})",
+    "recognizedFile": "识别产生",
     "downloadFile": "下载 {name}",
     "previewFile": "预览 {name}",
     "parsedResultLabel": "解析结果：",

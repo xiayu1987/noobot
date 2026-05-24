@@ -33,6 +33,46 @@ function parseToolFileResult(content = "") {
   return { toolName, resolvedPath, fileName };
 }
 
+function resolveBaseName(filePath = "") {
+  const normalized = String(filePath || "").trim().replaceAll("\\", "/");
+  if (!normalized) return "";
+  const parts = normalized.split("/");
+  return String(parts[parts.length - 1] || "").trim();
+}
+
+function trimPathToken(token = "") {
+  return String(token || "")
+    .trim()
+    .replace(/^[`"'“”‘’<>()\[\]{}]+/, "")
+    .replace(/[`"'“”‘’<>()\[\]{}.,;:!?]+$/, "")
+    .trim();
+}
+
+function isLikelyPathToken(token = "") {
+  const normalized = String(token || "").trim();
+  if (!normalized) return false;
+  if (normalized.includes("://")) return false;
+  if (normalized.startsWith("#")) return false;
+  if (!normalized.includes("/")) return false;
+  if (normalized.endsWith("/")) return false;
+  return true;
+}
+
+function extractCandidatePathsFromText(content = "") {
+  const text = String(content || "");
+  if (!text) return [];
+  const pathMatchRegex =
+    /(?:^|[\s`"'“”‘’<>()\[\]{}])([./~]?[A-Za-z0-9_@-][A-Za-z0-9_@./\\-]*\/[A-Za-z0-9_@./\\-]+)(?=$|[\s`"'“”‘’<>()\[\]{}.,;:!?])/g;
+  const out = [];
+  let match = null;
+  while ((match = pathMatchRegex.exec(text))) {
+    const token = trimPathToken(match?.[1] || "");
+    if (!isLikelyPathToken(token)) continue;
+    out.push(token);
+  }
+  return out;
+}
+
 function getMessageAttachmentMetas(messageItem = {}) {
   if (Array.isArray(messageItem?.attachmentMetas)) return messageItem.attachmentMetas;
   if (Array.isArray(messageItem?.attachments)) return messageItem.attachments;
@@ -69,6 +109,60 @@ export function useMessageFiles({
     return normalizedPath.slice(idx + marker.length);
   }
 
+  function normalizeRecognizedFilePath(pathToken = "") {
+    const normalizedUserId = String(getUserId() || "").trim();
+    const normalizedPath = String(pathToken || "").trim().replaceAll("\\", "/");
+    if (!normalizedPath) return null;
+    const marker = normalizedUserId ? `/workspace/${normalizedUserId}/` : "";
+    const markerIndex = marker ? normalizedPath.indexOf(marker) : -1;
+    if (markerIndex >= 0) {
+      const relativePath = normalizedPath.slice(markerIndex + marker.length).replace(/^\/+/, "");
+      if (!relativePath) return null;
+      return {
+        resolvedPath: normalizedPath,
+        relativePath,
+        fileName: resolveBaseName(relativePath),
+      };
+    }
+    const workspacePrefix = normalizedUserId ? `workspace/${normalizedUserId}/` : "";
+    if (workspacePrefix && normalizedPath.startsWith(workspacePrefix)) {
+      const relativePath = normalizedPath.slice(workspacePrefix.length).replace(/^\/+/, "");
+      if (!relativePath) return null;
+      return {
+        resolvedPath: normalizedPath,
+        relativePath,
+        fileName: resolveBaseName(relativePath),
+      };
+    }
+    if (normalizedPath.startsWith("/") || normalizedPath.startsWith("~/")) {
+      return {
+        resolvedPath: normalizedPath,
+        relativePath: "",
+        fileName: resolveBaseName(normalizedPath),
+      };
+    }
+    const relativePath = normalizedPath
+      .replace(/^\.\//, "")
+      .replace(/^\/+/, "");
+    if (!relativePath || !relativePath.includes("/")) return null;
+    return {
+      resolvedPath: normalizedPath,
+      relativePath,
+      fileName: resolveBaseName(relativePath),
+    };
+  }
+
+  function toWrittenFileKey(fileItem = {}) {
+    return String(
+      fileItem?.relativePath ||
+        fileItem?.resolvedPath ||
+        fileItem?.fileName ||
+        "",
+    )
+      .trim()
+      .replaceAll("\\", "/");
+  }
+
   const writtenFiles = computed(() => {
     const messageItem = getMessageItem() || {};
     const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
@@ -94,10 +188,36 @@ export function useMessageFiles({
       const parsed = parseToolFileResult(sessionMessage?.content || "");
       if (!parsed) continue;
       const { resolvedPath, fileName, toolName } = parsed;
-      if (seen.has(resolvedPath)) continue;
-      seen.add(resolvedPath);
-      const relativePath = resolveRelativeWorkspacePath(resolvedPath);
-      out.push({ toolName, resolvedPath, fileName, relativePath });
+      const fileItem = {
+        toolName,
+        resolvedPath,
+        fileName,
+        relativePath: resolveRelativeWorkspacePath(resolvedPath),
+        sourceType: "tool",
+        recognized: false,
+      };
+      const fileKey = toWrittenFileKey(fileItem);
+      if (fileKey && seen.has(fileKey)) continue;
+      if (fileKey) seen.add(fileKey);
+      out.push(fileItem);
+    }
+
+    if (String(messageItem?.role || "").trim() === "assistant") {
+      const recognizedPathTokens = extractCandidatePathsFromText(messageItem?.content || "");
+      for (const pathToken of recognizedPathTokens) {
+        const normalizedFileItem = normalizeRecognizedFilePath(pathToken);
+        if (!normalizedFileItem?.fileName) continue;
+        const fileItem = {
+          toolName: "write_file",
+          ...normalizedFileItem,
+          sourceType: "recognized",
+          recognized: true,
+        };
+        const fileKey = toWrittenFileKey(fileItem);
+        if (fileKey && seen.has(fileKey)) continue;
+        if (fileKey) seen.add(fileKey);
+        out.push(fileItem);
+      }
     }
     return out;
   });

@@ -16,96 +16,138 @@ const { translate } = useLocale();
 </script>
 
 <template>
-  <div v-if="writtenFiles.length" class="written-files-container">
-    <div class="written-files-header">
-      <el-icon><Document /></el-icon>
-      <span>{{ translate("message.generatedFiles", { count: writtenFiles.length }) }}</span>
-    </div>
-    <div class="written-files-list">
-      <template v-for="(fileItem, fileIndex) in writtenFiles" :key="`${fileItem.resolvedPath}-${fileIndex}`">
+  <div v-if="writtenFiles.length" class="msg-attachments">
+    <div class="written-files-header">{{ translate("message.generatedFiles", { count: writtenFiles.length }) }}</div>
+    <div
+      v-for="(fileItem, fileIndex) in writtenFiles"
+      :key="`${fileItem.resolvedPath}-${fileIndex}`"
+      class="file-card noobot-flat-card"
+    >
+      <div class="file-icon">
         <button
           v-if="fileItem.relativePath"
           type="button"
-          class="written-file-link noobot-flat-chip"
-          :title="fileItem.resolvedPath"
+          class="attachment-preview-btn file-icon-button"
+          :title="translate('message.previewFile', { name: fileItem.fileName })"
           @click="emit('preview', fileItem)"
         >
           <el-icon><View /></el-icon>
-          <span class="file-name-text">{{ fileItem.fileName }}</span>
         </button>
-        <span v-else class="written-file-link disabled" :title="fileItem.resolvedPath">
-          <el-icon><Document /></el-icon>
-          <span class="file-name-text">{{ fileItem.fileName }}</span>
-        </span>
-        <button
-          v-if="fileItem.relativePath"
-          type="button"
-          class="written-file-download-btn noobot-flat-inline-icon-btn"
-          :title="translate('message.downloadFile', { name: fileItem.fileName })"
-          @click="emit('download', fileItem)"
-        >
-          <el-icon><Download /></el-icon>
-        </button>
-      </template>
+        <el-icon v-else><Document /></el-icon>
+      </div>
+      <div class="file-meta">
+        <div class="file-name-row">
+          <div class="file-name" :title="fileItem.resolvedPath || fileItem.fileName">
+            {{ fileItem.fileName }}
+          </div>
+          <span v-if="fileItem.recognized" class="attachment-owner-badge is-recognized">
+            {{ translate("message.recognizedFile") }}
+          </span>
+        </div>
+      </div>
+      <button
+        v-if="fileItem.relativePath"
+        type="button"
+        class="attachment-download-btn noobot-flat-icon-btn"
+        :title="translate('message.downloadFile', { name: fileItem.fileName })"
+        @click="emit('download', fileItem)"
+      >
+        <el-icon><Download /></el-icon>
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.written-files-container {
+.msg-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-xs);
   margin-top: var(--noobot-space-lg);
-  padding: var(--noobot-space-lg);
-  background: var(--noobot-panel-muted);
-  border: 1px solid var(--noobot-panel-border);
-  border-radius: var(--noobot-radius-md);
-  box-shadow: none;
+  padding-top: var(--noobot-space-md);
+  border-top: 1px dashed color-mix(in srgb, var(--noobot-cyber-cyan) 35%, transparent);
 }
 .written-files-header {
+  color: var(--noobot-msg-file-size);
+  font-size: var(--noobot-msg-meta-font-size);
+  font-weight: 600;
+}
+.file-card {
   display: flex;
   align-items: center;
-  gap: var(--noobot-space-xs);
-  color: var(--noobot-text-main);
-  font-size: var(--noobot-msg-caption-font-size);
-  font-weight: 600;
-  margin-bottom: var(--noobot-space-md);
-}
-.written-files-list {
-  display: flex;
-  flex-wrap: wrap;
   gap: var(--noobot-space-sm);
+  padding: var(--noobot-space-xs) var(--noobot-space-sm);
 }
-.written-file-link {
-  gap: var(--noobot-space-xs);
-  padding: var(--noobot-space-xs) var(--noobot-space-lg);
-  color: var(--noobot-text-main);
-  font-size: var(--noobot-msg-caption-font-size);
-  font-weight: 500;
+.attachment-preview-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  border-radius: var(--noobot-radius-xs);
   cursor: pointer;
-  transition: all 0.2s ease;
-  outline: none;
-  max-width: 100%;
+  line-height: 0;
 }
-.file-name-text {
-  max-width: 220px;
-  white-space: nowrap;
+.file-icon {
+  width: var(--noobot-msg-file-thumb-size);
+  height: var(--noobot-msg-file-thumb-size);
+  border-radius: var(--noobot-radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--noobot-msg-file-icon-bg);
+  color: var(--noobot-text-strong);
+}
+.file-icon-button {
+  width: var(--noobot-msg-file-thumb-size);
+  height: var(--noobot-msg-file-thumb-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--noobot-text-strong);
+  background: color-mix(in srgb, var(--noobot-text-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-text-accent) 26%, transparent);
+  border-radius: var(--noobot-radius-xs);
+}
+.file-icon-button:hover {
+  background: color-mix(in srgb, var(--noobot-text-accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-text-accent) 38%, transparent);
+}
+.file-meta {
+  min-width: 0;
+  flex: 1;
+}
+.file-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.file-name {
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--noobot-msg-caption-font-size);
+  color: var(--noobot-msg-file-name);
 }
-.written-file-link:hover:not(.disabled) {
-  background: var(--noobot-panel-muted);
-  color: var(--noobot-text-main);
-  transform: none;
-  box-shadow: none;
-  border-color: var(--noobot-panel-border);
-}
-.written-file-link.disabled {
-  cursor: default;
-  background: var(--noobot-panel-muted);
-  border-color: var(--noobot-panel-border);
-  color: var(--noobot-text-muted);
-  box-shadow: none;
-}
-.written-file-download-btn {
+.attachment-owner-badge {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+.attachment-owner-badge.is-recognized {
+  color: color-mix(in srgb, var(--el-color-success) 82%, #fff);
+  border-color: color-mix(in srgb, var(--el-color-success) 35%, transparent);
+  background: color-mix(in srgb, var(--el-color-success) 14%, transparent);
+}
+.attachment-download-btn {
+  border-radius: var(--noobot-radius-xs);
+  color: var(--noobot-msg-file-name);
 }
 </style>
