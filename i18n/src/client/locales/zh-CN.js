@@ -202,6 +202,8 @@ export const zhCNMessages = {
     "downloadParsedResult": "下载解析结果 {name}",
     "previewParsedResultShort": "预览",
     "downloadParsedResultShort": "下载",
+    "agentAttachment": "主流程",
+    "pluginAttachment": "插件",
     "me": "我",
     "attachmentPreviewTitle": "附件预览：{name}",
     "filePreviewTitle": "文件预览：{name}",
