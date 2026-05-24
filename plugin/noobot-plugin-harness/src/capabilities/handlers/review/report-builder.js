@@ -5,37 +5,70 @@
  */
 import { CAPABILITY_DOMAIN, appendCapabilityLog, ensureHarnessBucket } from "./deps.js";
 import { HARNESS_HOOK_POINTS, HARNESS_RUN_STATUS } from "../../../core/constants.js";
+import { collectRuleCodes } from "../shared/rule-table-utils.js";
+import { nowIsoTimestamp } from "../shared/report-utils.js";
+
+const REVIEW_ERROR_POINTS = new Set([
+  HARNESS_HOOK_POINTS.ON_ERROR,
+  HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
+  HARNESS_HOOK_POINTS.LLM_CALL_ERROR,
+  HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
+]);
+
+const REVIEW_ISSUE_RULES = Object.freeze([
+  {
+    code: "planning_not_captured",
+    when: ({ state = {} } = {}) => state?.flags?.planningCaptured !== true,
+  },
+  {
+    code: "acceptance_has_pending_items",
+    when: ({ acceptance = null } = {}) => Number(acceptance?.summary?.pending || 0) > 0,
+  },
+  {
+    code: "acceptance_semantic_validation_failed_or_inconsistent",
+    when: ({ acceptance = null } = {}) => {
+      const semanticValidation = acceptance?.semanticValidation || null;
+      if (!semanticValidation) return false;
+      return (
+        semanticValidation.consistent === false ||
+        String(semanticValidation.status || "").toLowerCase() === "fail"
+      );
+    },
+  },
+  {
+    code: "tool_failures_observed",
+    when: ({ state = {} } = {}) => Number(state?.counters?.totalToolFailures || 0) > 0,
+  },
+  {
+    code: "runtime_error_observed",
+    when: ({ ctx = {} } = {}) => Boolean(ctx?.error),
+  },
+]);
+
+function resolveReviewStatus(point = "", ctx = {}) {
+  const explicitStatus = String(ctx?.status || "").trim();
+  if (explicitStatus) return explicitStatus;
+  if (REVIEW_ERROR_POINTS.has(point)) return HARNESS_RUN_STATUS.ERROR;
+  if (point === HARNESS_HOOK_POINTS.ON_ABORT) return HARNESS_RUN_STATUS.ABORT;
+  return HARNESS_RUN_STATUS.REVIEWED;
+}
+
+function collectReviewIssues({ state = {}, acceptance = null, ctx = {} } = {}) {
+  return collectRuleCodes(REVIEW_ISSUE_RULES, { state, acceptance, ctx });
+}
 
 export function buildReviewReport(point = "", ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return null;
   const { bucket, state } = holder;
   const acceptance = bucket.lastAcceptanceReport || null;
-  const errorPoints = new Set([
-    HARNESS_HOOK_POINTS.ON_ERROR,
-    HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
-    HARNESS_HOOK_POINTS.LLM_CALL_ERROR,
-    HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
-  ]);
-  const status = String(ctx?.status || "").trim() ||
-    (errorPoints.has(point)
-      ? HARNESS_RUN_STATUS.ERROR
-      : point === HARNESS_HOOK_POINTS.ON_ABORT
-        ? HARNESS_RUN_STATUS.ABORT
-        : HARNESS_RUN_STATUS.REVIEWED);
-  const issues = [];
-  if (state.flags.planningCaptured !== true) issues.push("planning_not_captured");
-  if (acceptance?.summary?.pending > 0) issues.push("acceptance_has_pending_items");
   const semanticValidation = acceptance?.semanticValidation || null;
-  if (semanticValidation && (semanticValidation.consistent === false || String(semanticValidation.status || "").toLowerCase() === "fail")) {
-    issues.push("acceptance_semantic_validation_failed_or_inconsistent");
-  }
-  if (state.counters.totalToolFailures > 0) issues.push("tool_failures_observed");
-  if (ctx?.error) issues.push("runtime_error_observed");
+  const status = resolveReviewStatus(point, ctx);
+  const issues = collectReviewIssues({ state, acceptance, ctx });
   return {
     point,
     status,
-    reviewedAt: new Date().toISOString(),
+    reviewedAt: nowIsoTimestamp(),
     summary: {
       planningCaptured: state.flags.planningCaptured === true,
       acceptanceRequested: state.flags.acceptanceRequested === true,

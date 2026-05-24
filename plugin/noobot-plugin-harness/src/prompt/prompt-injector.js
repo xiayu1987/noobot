@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  HARNESS_INJECTED_MESSAGE_BY_FIELD,
-  HARNESS_INJECTED_MESSAGE_BY_VALUE,
   HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
-  HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
-  HARNESS_INJECTION_MESSAGE_ROLE,
 } from "../capabilities/handlers/shared/constants.js";
+import {
+  buildHarnessInjectedMessage,
+  persistHarnessMessageToCurrentTurn,
+} from "../capabilities/handlers/shared/injected-message-utils.js";
 const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility only
 
 // P2#5: Injected prompt ID cache per messages array reference for O(1) lookup
@@ -116,36 +116,10 @@ function readLegacyPromptEntries() {
   }));
 }
 
-function buildHarnessInjectedPromptMessage(content = "") {
-  return {
-    role: HARNESS_INJECTION_MESSAGE_ROLE,
-    content,
-    [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
-    [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
-  };
-}
-
-function resolveCurrentTurnMessagesStore(ctx = {}) {
-  const runtime =
-    ctx?.agentContext?.execution?.controllers?.runtime &&
-    typeof ctx.agentContext.execution.controllers.runtime === "object"
-      ? ctx.agentContext.execution.controllers.runtime
-      : {};
-  const store = runtime?.currentTurnMessages;
-  return store && typeof store.push === "function" ? store : null;
-}
-
 function persistPromptMessagesToCurrentTurn(ctx = {}, promptMessages = []) {
-  const currentTurnMessages = resolveCurrentTurnMessagesStore(ctx);
-  if (!currentTurnMessages) return 0;
   let count = 0;
   for (const message of Array.isArray(promptMessages) ? promptMessages : []) {
-    currentTurnMessages.push({
-      ...message,
-      type: "message",
-      dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-    });
-    count += 1;
+    if (persistHarnessMessageToCurrentTurn(ctx, message, true)) count += 1;
   }
   return count;
 }
@@ -189,12 +163,12 @@ export function injectSystemMessages(ctx = {}, options = {}) {
           messages.splice(i, 1);
         }
       }
-      prependItems.push(buildHarnessInjectedPromptMessage(marker));
+      prependItems.push(buildHarnessInjectedMessage(marker));
     } else if (mode === "append") {
-      appendItems.push(buildHarnessInjectedPromptMessage(marker));
+      appendItems.push(buildHarnessInjectedMessage(marker));
     } else {
       // prepend (default)
-      prependItems.push(buildHarnessInjectedPromptMessage(marker));
+      prependItems.push(buildHarnessInjectedMessage(marker));
     }
     injected = true;
   }

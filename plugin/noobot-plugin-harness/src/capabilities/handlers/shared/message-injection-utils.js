@@ -5,12 +5,9 @@
  */
 import { isHarnessAgentTurnEnded } from "./lifecycle-utils.js";
 import {
-  HARNESS_INJECTED_MESSAGE_BY_FIELD,
-  HARNESS_INJECTED_MESSAGE_BY_VALUE,
-  HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
-  HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
-  HARNESS_INJECTION_MESSAGE_ROLE,
-} from "./constants.js";
+  persistHarnessMessageToCurrentTurn,
+  buildHarnessInjectedMessage,
+} from "./injected-message-utils.js";
 
 function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;
@@ -45,16 +42,6 @@ function resolveSystemContextMessages(ctx = {}) {
   return Array.isArray(list) ? list : null;
 }
 
-function resolveCurrentTurnMessagesStore(ctx = {}) {
-  const runtime =
-    ctx?.agentContext?.execution?.controllers?.runtime &&
-    typeof ctx.agentContext.execution.controllers.runtime === "object"
-      ? ctx.agentContext.execution.controllers.runtime
-      : {};
-  const store = runtime?.currentTurnMessages;
-  return store && typeof store.push === "function" ? store : null;
-}
-
 function dedupeExists(messages = [], target = {}) {
   const role = String(target?.role || "").trim();
   const content = String(target?.content || "").trim();
@@ -64,18 +51,6 @@ function dedupeExists(messages = [], target = {}) {
     const itemContent = String(item?.content || "").trim();
     return itemRole === role && itemContent === content;
   });
-}
-
-function persistMessageToCurrentTurn(ctx = {}, message = {}, enabled = false) {
-  if (enabled !== true) return false;
-  const currentTurnMessages = resolveCurrentTurnMessagesStore(ctx);
-  if (!currentTurnMessages) return false;
-  currentTurnMessages.push({
-    ...message,
-    type: "message",
-    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-  });
-  return true;
 }
 
 export function injectMessageWithPolicy(
@@ -93,18 +68,12 @@ export function injectMessageWithPolicy(
   void role;
   // Plugin-to-main-flow injections are user-role messages, tagged so they can
   // be persisted and rendered separately from real user turns.
-  const normalizedRole = HARNESS_INJECTION_MESSAGE_ROLE;
   const normalizedContent = String(content || "").trim();
   if (!messages || !normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {
     return { injected: false, target: "none", blockedByTurnEnded: true };
   }
-  const message = {
-    role: normalizedRole,
-    content: normalizedContent,
-    [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
-    [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
-  };
+  const message = buildHarnessInjectedMessage(normalizedContent);
 
   if (dedupe && dedupeExists(messages, message)) {
     return { injected: false, target: "ctx_messages", deduped: true };
@@ -124,7 +93,7 @@ export function injectMessageWithPolicy(
       // System context is a string-only channel; persist the tagged user-role
       // copy for session display while keeping the model context protocol-safe.
       systemContextMessages.push(normalizedContent);
-      persistMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
+      persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
       return { injected: true, target: "agent_system" };
     }
   }
@@ -134,6 +103,6 @@ export function injectMessageWithPolicy(
   } else {
     messages.push(message);
   }
-  persistMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
+  persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
   return { injected: true, target: "ctx_messages" };
 }
