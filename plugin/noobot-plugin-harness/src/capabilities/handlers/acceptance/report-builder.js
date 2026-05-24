@@ -11,6 +11,8 @@ import {
   getDefaultTaskOwner,
   normalizeChecklistItem,
 } from "./deps.js";
+import { resolveFirstMatchedRuleResult } from "../shared/rule-table-utils.js";
+import { buildStatusSummary, nowIsoTimestamp } from "../shared/report-utils.js";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -18,19 +20,47 @@ const TASK_STATUS = Object.freeze({
   PENDING: "pending",
 });
 
+const ACCEPTANCE_TASK_STATUS_RULES = Object.freeze([
+  {
+    matches: ({ text = "" } = {}) => text.includes("附件") || text.includes("attachment"),
+    resolve: ({ signals = {} } = {}) =>
+      signals.parsedAttachment ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
+  },
+  {
+    matches: ({ text = "" } = {}) =>
+      (text.includes("子任务") && text.includes("开启")) ||
+      (text.includes("subtask") && text.includes("start")),
+    resolve: ({ signals = {} } = {}) =>
+      signals.subtaskStarted ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
+  },
+  {
+    matches: ({ text = "" } = {}) =>
+      (text.includes("等待") && text.includes("子任务")) ||
+      (text.includes("wait") && text.includes("subtask")),
+    resolve: ({ signals = {} } = {}) =>
+      signals.subtaskWaited ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
+  },
+]);
+
 function evaluateTaskStatus(task = {}, state = {}) {
   const text = String(task?.task || "").toLowerCase();
   const signals = state?.signals || {};
-  if (text.includes("附件") || text.includes("attachment")) {
-    return signals.parsedAttachment ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING;
-  }
-  if ((text.includes("子任务") && text.includes("开启")) || (text.includes("subtask") && text.includes("start"))) {
-    return signals.subtaskStarted ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING;
-  }
-  if ((text.includes("等待") && text.includes("子任务")) || (text.includes("wait") && text.includes("subtask"))) {
-    return signals.subtaskWaited ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING;
-  }
-  return signals.successfulToolCount > 0 ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.PENDING;
+  return resolveFirstMatchedRuleResult(
+    ACCEPTANCE_TASK_STATUS_RULES,
+    { signals, task, state, text },
+    signals.successfulToolCount > 0 ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.PENDING,
+  );
+}
+
+function buildAcceptanceSummary(items = []) {
+  return buildStatusSummary(items, {
+    statusAccessor: (item = {}) => item?.status,
+    fields: [
+      { key: "completed", value: TASK_STATUS.COMPLETED },
+      { key: "inProgress", value: TASK_STATUS.IN_PROGRESS },
+      { key: "pending", value: TASK_STATUS.PENDING },
+    ],
+  });
 }
 
 export function buildAcceptanceReport({ bucket = {}, state = {}, mode = ACCEPTANCE_MODE.ACTIVE } = {}) {
@@ -48,13 +78,8 @@ export function buildAcceptanceReport({ bucket = {}, state = {}, mode = ACCEPTAN
   const plan = buildPlanSnapshot(bucket, locale);
   return {
     mode,
-    acceptedAt: new Date().toISOString(),
-    summary: {
-      total: items.length,
-      completed: items.filter((item) => item.status === TASK_STATUS.COMPLETED).length,
-      inProgress: items.filter((item) => item.status === TASK_STATUS.IN_PROGRESS).length,
-      pending: items.filter((item) => item.status === TASK_STATUS.PENDING).length,
-    },
+    acceptedAt: nowIsoTimestamp(),
+    summary: buildAcceptanceSummary(items),
     taskChecklist: items,
     finalPlanChecklist: items,
     plan,
@@ -67,33 +92,85 @@ function resolveCurrentMainPlanVersion(bucket = {}) {
   return 1;
 }
 
+function buildBasePlanRecord({
+  source = "",
+  revisedAt = "",
+  totalGoal = "",
+  taskOwner = "",
+  nextPhase = null,
+  taskChecklist = [],
+} = {}) {
+  return {
+    source: String(source || "").trim(),
+    revisedAt: String(revisedAt || "").trim() || undefined,
+    totalGoal: String(totalGoal || "").trim(),
+    taskOwner: String(taskOwner || "").trim(),
+    nextPhase: nextPhase && typeof nextPhase === "object" ? nextPhase : null,
+    taskChecklist: Array.isArray(taskChecklist) ? taskChecklist : [],
+  };
+}
+
 function buildFallbackMainPlan(bucket = {}, locale = LOCALE.ZH_CN) {
   return {
-    source: String(bucket.taskChecklistSource || "current_plan").trim(),
-    revisedAt: undefined,
-    totalGoal: String(bucket.totalGoal || "").trim(),
+    ...buildBasePlanRecord({
+      source: bucket.taskChecklistSource || "current_plan",
+      revisedAt: undefined,
+      totalGoal: bucket.totalGoal || "",
+      taskOwner: bucket.taskOwner || getDefaultTaskOwner(locale),
+      nextPhase: bucket?.nextPhase,
+      taskChecklist: bucket.taskChecklist,
+    }),
     taskOwner: String(bucket.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
-    nextPhase: bucket?.nextPhase && typeof bucket.nextPhase === "object" ? bucket.nextPhase : null,
-    taskChecklist: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist : [],
     mainPlanVersion: resolveCurrentMainPlanVersion(bucket),
     stage: "main_plan",
   };
 }
 
+function resolveTaskOwner(taskOwner = "", fallbackTaskOwner = "", locale = LOCALE.ZH_CN) {
+  return String(taskOwner || fallbackTaskOwner || getDefaultTaskOwner(locale)).trim() ||
+    getDefaultTaskOwner(locale);
+}
+
 function normalizeMainPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) {
   return {
-    source: String(plan?.source || "").trim() || "unknown",
-    revisedAt: String(plan?.revisedAt || "").trim() || undefined,
-    totalGoal: String(plan?.totalGoal || "").trim(),
-    taskOwner:
-      String(plan?.taskOwner || bucket.taskOwner || getDefaultTaskOwner(locale)).trim() ||
-      getDefaultTaskOwner(locale),
-    nextPhase: plan?.nextPhase && typeof plan.nextPhase === "object" ? plan.nextPhase : null,
-    taskChecklist: Array.isArray(plan?.taskChecklist) ? plan.taskChecklist : [],
+    ...buildBasePlanRecord({
+      source: String(plan?.source || "").trim() || "unknown",
+      revisedAt: plan?.revisedAt,
+      totalGoal: plan?.totalGoal,
+      taskOwner: resolveTaskOwner(plan?.taskOwner, bucket.taskOwner, locale),
+      nextPhase: plan?.nextPhase,
+      taskChecklist: plan?.taskChecklist,
+    }),
     mainPlanVersion: Number.isFinite(Number(plan?.mainPlanVersion))
       ? Number(plan.mainPlanVersion)
       : resolveCurrentMainPlanVersion(bucket),
     stage: String(plan?.stage || "main_plan").trim() || "main_plan",
+  };
+}
+
+function buildOrderedPlanRecord(plan = {}, bucket = {}, locale = LOCALE.ZH_CN) {
+  return {
+    ...buildBasePlanRecord({
+      source: String(plan?.source || "").trim() || "unknown",
+      revisedAt: plan?.revisedAt,
+      totalGoal: plan?.totalGoal,
+      taskOwner: resolveTaskOwner(plan?.taskOwner, bucket.taskOwner, locale),
+      nextPhase: plan?.nextPhase,
+      taskChecklist: plan?.taskChecklist,
+    }),
+  };
+}
+
+function buildOrderedFallbackPlanRecord(bucket = {}, locale = LOCALE.ZH_CN) {
+  return {
+    ...buildBasePlanRecord({
+      source: bucket.taskChecklistSource || "current_plan",
+      revisedAt: undefined,
+      totalGoal: bucket.totalGoal || "",
+      taskOwner: resolveTaskOwner(bucket.taskOwner, "", locale),
+      nextPhase: bucket?.nextPhase,
+      taskChecklist: bucket?.taskChecklist,
+    }),
   };
 }
 
@@ -126,24 +203,13 @@ function buildPlansInOrder(bucket = {}, locale = LOCALE.ZH_CN) {
     return [
       {
         order: 1,
-        source: String(bucket.taskChecklistSource || "current_plan").trim(),
-        revisedAt: undefined,
-        totalGoal: String(bucket.totalGoal || "").trim(),
-        taskOwner: String(bucket.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
-        nextPhase: bucket?.nextPhase && typeof bucket.nextPhase === "object" ? bucket.nextPhase : null,
-        taskChecklist: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist : [],
+        ...buildOrderedFallbackPlanRecord(bucket, locale),
       },
     ];
   }
   return revisions.map((plan = {}, index) => ({
     order: index + 1,
-    source: String(plan?.source || "").trim() || "unknown",
-    revisedAt: String(plan?.revisedAt || "").trim() || undefined,
-    totalGoal: String(plan?.totalGoal || "").trim(),
-    taskOwner: String(plan?.taskOwner || bucket.taskOwner || getDefaultTaskOwner(locale)).trim() ||
-      getDefaultTaskOwner(locale),
-    nextPhase: plan?.nextPhase && typeof plan.nextPhase === "object" ? plan.nextPhase : null,
-    taskChecklist: Array.isArray(plan?.taskChecklist) ? plan.taskChecklist : [],
+    ...buildOrderedPlanRecord(plan, bucket, locale),
   }));
 }
 

@@ -60,6 +60,19 @@ function isHarnessRelayMessage(text = "") {
   return raw.startsWith("[来自harness外部模型输出/") || raw.startsWith("[Relay from harness external model/");
 }
 
+function resolveLatestUserTextFromMessages(messageList = []) {
+  for (let index = messageList.length - 1; index >= 0; index -= 1) {
+    const item = messageList[index] || {};
+    if (isHarnessInjectedMessage(item)) continue;
+    const role = String(item?.role || "").trim().toLowerCase();
+    if (role !== "user") continue;
+    const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
+    if (isHarnessRelayMessage(text)) continue;
+    if (text) return text;
+  }
+  return "";
+}
+
 export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
   return [
     translateI18nText(locale, "planningToolContextMarker"),
@@ -89,27 +102,13 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
 
 export function resolveLatestUserMessageText(ctx = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : [];
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const item = messages[index] || {};
-    if (isHarnessInjectedMessage(item)) continue;
-    const role = String(item?.role || "").trim().toLowerCase();
-    if (role !== "user") continue;
-    const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
-    if (isHarnessRelayMessage(text)) continue;
-    if (text) return text;
-  }
+  const latestFromMessages = resolveLatestUserTextFromMessages(messages);
+  if (latestFromMessages) return latestFromMessages;
   const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
     ? ctx.agentContext.payload.messages.history
     : [];
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const item = history[index] || {};
-    if (isHarnessInjectedMessage(item)) continue;
-    const role = String(item?.role || "").trim().toLowerCase();
-    if (role !== "user") continue;
-    const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
-    if (isHarnessRelayMessage(text)) continue;
-    if (text) return text;
-  }
+  const latestFromHistory = resolveLatestUserTextFromMessages(history);
+  if (latestFromHistory) return latestFromHistory;
   const fallbackCandidates = [
     ctx?.userMessage,
     ctx?.message,
