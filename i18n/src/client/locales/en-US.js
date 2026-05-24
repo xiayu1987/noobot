@@ -194,7 +194,7 @@ export const enUSMessages = {
     "noCopyableText": "No copyable text",
     "generating": "Generating...",
     "generatedFiles": "Generated Files ({count})",
-    "recognizedFile": "Recognized",
+    "recognizedFile": "Auto-detected",
     "downloadFile": "Download {name}",
     "previewFile": "Preview {name}",
     "parsedResultLabel": "Parsed result:",
