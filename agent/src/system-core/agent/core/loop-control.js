@@ -34,6 +34,46 @@ function hasTaskSummaryTool(tools = []) {
   return hasTool(tools, TASK_SUMMARY_TOOL_NAME);
 }
 
+function isMessageSummarized(message = {}) {
+  return message?.summarized === true || message?.lc_kwargs?.summarized === true;
+}
+
+function extractRawTextContent(content = null) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && typeof item.text === "string") {
+        return item.text;
+      }
+      return "";
+    })
+    .join("\n")
+    .trim();
+}
+
+function hasInternalMessageMarker(message = {}) {
+  const marker =
+    message?.additional_kwargs?.noobotInternalMessageType ||
+    message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+    message?.metadata?.noobotInternalMessageType ||
+    message?.lc_kwargs?.metadata?.noobotInternalMessageType ||
+    "";
+  return Boolean(String(marker || "").trim());
+}
+
+function resolveUnsummarizedMessageChars(messages = []) {
+  if (!Array.isArray(messages)) return 0;
+  return messages.reduce((total, message) => {
+    if (!message || typeof message !== "object") return total;
+    if (isMessageSummarized(message)) return total;
+    if (hasInternalMessageMarker(message)) return total;
+    const text = extractRawTextContent(message?.content ?? message);
+    return total + String(text || "").length;
+  }, 0);
+}
+
 export function removePhaseSummaryPromptMessages(messages = [], runtime = {}) {
   if (!Array.isArray(messages)) return 0;
   let removedCount = 0;
@@ -77,10 +117,19 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   systemRuntime.toolLoopExecutionCount = nextCount;
   systemRuntime.phaseSummaryLoopCount = nextCount;
 
-  const threshold = Number(loopState?.phaseSummaryLoopTurns || 0);
-  if (!Number.isFinite(threshold) || threshold <= 0) return false;
   if (!hasTaskSummaryTool(loopState?.tools || [])) return false;
-  if (nextCount < threshold) return false;
+  if (systemRuntime.needsPhaseSummary === true) return false;
+
+  const loopThreshold = Number(loopState?.phaseSummaryLoopTurns || 0);
+  const reachedLoopThreshold = Number.isFinite(loopThreshold) &&
+    loopThreshold > 0 &&
+    nextCount >= loopThreshold;
+  const charsThreshold = Number(loopState?.phaseSummaryMessageCharsThreshold || 0);
+  const unsummarizedChars = resolveUnsummarizedMessageChars(loopState?.messages || []);
+  const reachedCharsThreshold = Number.isFinite(charsThreshold) &&
+    charsThreshold > 0 &&
+    unsummarizedChars > charsThreshold;
+  if (!reachedLoopThreshold && !reachedCharsThreshold) return false;
 
   systemRuntime.needsPhaseSummary = true;
   systemRuntime.phaseSummaryLoopCount = 0;
@@ -96,7 +145,15 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   }
   emitEvent(modelState?.eventListener || null, "phase_summary_required", {
     loopCount: nextCount,
-    threshold,
+    loopThreshold,
+    charsThreshold,
+    unsummarizedChars,
+    trigger:
+      reachedLoopThreshold && reachedCharsThreshold
+        ? "both"
+        : reachedCharsThreshold
+          ? "message_chars"
+          : "loop_turns",
   });
   return true;
 }

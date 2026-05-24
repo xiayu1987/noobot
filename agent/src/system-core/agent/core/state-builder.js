@@ -13,6 +13,7 @@ import {
   resolveEffectiveModelSpec,
   resolveHelpPromptLoopTurns,
   resolveMaxToolLoopTurns,
+  resolvePhaseSummaryMessageCharsThreshold,
   resolvePhaseSummaryLoopTurns,
   resolveToolFailureHelpCount,
 } from "./config/index.js";
@@ -26,6 +27,7 @@ export function createStateBuilder({
   resolveEffectiveModelSpecFn = resolveEffectiveModelSpec,
   resolveMaxToolLoopTurnsFn = resolveMaxToolLoopTurns,
   resolvePhaseSummaryLoopTurnsFn = resolvePhaseSummaryLoopTurns,
+  resolvePhaseSummaryMessageCharsThresholdFn = resolvePhaseSummaryMessageCharsThreshold,
   resolveHelpPromptLoopTurnsFn = resolveHelpPromptLoopTurns,
   resolveToolFailureHelpCountFn = resolveToolFailureHelpCount,
 } = {}) {
@@ -50,6 +52,8 @@ export function createStateBuilder({
       effectiveConfig,
     });
     const phaseSummaryLoopTurns = resolvePhaseSummaryLoopTurnsFn(effectiveConfig);
+    const phaseSummaryMessageCharsThreshold =
+      resolvePhaseSummaryMessageCharsThresholdFn(effectiveConfig);
     const helpPromptLoopTurns = resolveHelpPromptLoopTurnsFn(effectiveConfig);
     const toolFailureHelpCount = resolveToolFailureHelpCountFn(effectiveConfig);
 
@@ -94,6 +98,7 @@ export function createStateBuilder({
           ? maxToolLoopTurns
           : DEFAULT_MAX_TOOL_LOOP_TURNS,
       phaseSummaryLoopTurns,
+      phaseSummaryMessageCharsThreshold,
       helpPromptLoopTurns,
       toolFailureHelpCount,
       taskSummaryTriggered: false,

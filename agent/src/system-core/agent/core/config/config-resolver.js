@@ -7,6 +7,7 @@ import { resolveDefaultModelSpec } from "../../../model/index.js";
 import {
   DEFAULT_HELP_PROMPT_LOOP_TURNS,
   DEFAULT_MAX_TOOL_LOOP_TURNS,
+  DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD,
   DEFAULT_PHASE_SUMMARY_LOOP_TURNS,
   DEFAULT_TOOL_FAILURE_HELP_COUNT,
   TASK_SUMMARY_TOOL_NAME,
@@ -16,6 +17,13 @@ import { REQUEST_HELP_TOOL_NAME } from "../../../tools/workflow/request-help-too
 function resolvePositiveInteger(value, fallback = 0) {
   const normalized = Number(value);
   if (!Number.isFinite(normalized) || normalized <= 0) return fallback;
+  return Math.floor(normalized);
+}
+
+function resolveNonNegativeInteger(value, fallback = 0) {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) return fallback;
+  if (normalized <= 0) return 0;
   return Math.floor(normalized);
 }
 
@@ -48,6 +56,20 @@ export function resolvePhaseSummaryLoopTurns(effectiveConfig = {}) {
     taskSummaryConfig.maxToolLoopTurns ??
     DEFAULT_PHASE_SUMMARY_LOOP_TURNS;
   return resolvePositiveInteger(configuredValue, 0);
+}
+
+export function resolvePhaseSummaryMessageCharsThreshold(effectiveConfig = {}) {
+  const taskSummaryConfig = resolveTaskSummaryConfig(effectiveConfig);
+  const configuredValue =
+    taskSummaryConfig.phase_summary_message_chars_threshold ??
+    taskSummaryConfig.phaseSummaryMessageCharsThreshold ??
+    taskSummaryConfig.phase_summary_chars_threshold ??
+    taskSummaryConfig.phaseSummaryCharsThreshold ??
+    DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD;
+  return resolveNonNegativeInteger(
+    configuredValue,
+    DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD,
+  );
 }
 
 export function resolveHelpPromptLoopTurns(effectiveConfig = {}) {
