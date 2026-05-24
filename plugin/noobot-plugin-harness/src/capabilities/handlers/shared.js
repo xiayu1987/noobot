@@ -30,7 +30,6 @@ export {
 export { ensureHarnessBucket } from "./shared/bucket-utils.js";
 
 export {
-  attachArtifactsToAssistantResult,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
   mapAttachmentRecordsToMetas,

@@ -13,6 +13,7 @@ import {
   ensureHarnessBucket,
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
+  saveCapabilityOutputAsAttachmentMetas,
   invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
@@ -104,11 +105,18 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
   const revisionText =
     extractRawTextContent(revisionResponse?.content) ||
     String(revisionResponse?.text || revisionResponse?.output || "").trim();
+  const revisionAttachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+    purpose: "planning_revision",
+    content: revisionText,
+    generationSource: "harness_planning_revision",
+    domain: CAPABILITY_DOMAIN.PLANNING,
+  });
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "planning_revision",
     content: revisionText,
     dedupe: true,
+    attachmentMetas: revisionAttachmentMetas,
   });
   const revisionApplied = applyRevisedPlanFromText(ctx, revisionText, {
     summary: summaryText,
@@ -220,6 +228,12 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   const responseText =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
+  const responseAttachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+    purpose,
+    content: responseText,
+    generationSource: `harness_${String(purpose || "").trim() || "guidance"}`,
+    domain: CAPABILITY_DOMAIN.GUIDANCE,
+  });
   if (!Array.isArray(bucket.guidanceOutputs)) {
     bucket.guidanceOutputs = [];
   }
@@ -233,6 +247,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     locale,
     purpose,
     content: responseText,
+    attachmentMetas: responseAttachmentMetas,
   });
   if (purpose === "summary") {
     const markedCount = await markGuidanceSummarizedMessages(ctx, meta);

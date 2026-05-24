@@ -18,6 +18,7 @@ import {
   parseRefinementChecklistFromModelOutput,
   parseTaskChecklistFromModelOutput,
   relaySeparateModelOutputAsUserMessage,
+  saveCapabilityOutputAsAttachmentMetas,
   invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelName,
@@ -137,11 +138,18 @@ export async function runPlanningRefinementBySeparateModel(
   const refinementText =
     extractRawTextContent(refinementResponse?.content) ||
     String(refinementResponse?.text || refinementResponse?.output || "").trim();
+  const refinementAttachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+    purpose: "planning_refinement",
+    content: refinementText,
+    generationSource: "harness_planning_refinement",
+    domain: CAPABILITY_DOMAIN.PLANNING,
+  });
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "planning_refinement",
     content: refinementText,
     dedupe: true,
+    attachmentMetas: refinementAttachmentMetas,
   });
   const refinementApplied = applyRevisedPlanFromText(ctx, refinementText, {
     summary: String(summaryText || "").trim(),

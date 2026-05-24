@@ -18,6 +18,7 @@ import {
   getPromptJsonFormatExample,
   parseChecklistWithLocalRepair,
   relaySeparateModelOutputAsUserMessage,
+  saveCapabilityOutputAsAttachmentMetas,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   translateI18nText,
@@ -112,11 +113,18 @@ async function repairChecklistByModel({
       });
     },
   });
+  const attachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+    purpose: "planning_json_repair",
+    content: repairedText,
+    generationSource: "harness_planning_json_repair",
+    domain: CAPABILITY_DOMAIN.PLANNING,
+  });
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "planning_json_repair",
     content: repairedText,
     dedupe: true,
+    attachmentMetas,
   });
   return {
     parsed: parseChecklistWithLocalRepair(repairedText, locale),

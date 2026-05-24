@@ -27,6 +27,7 @@ import {
   ensureHarnessBucket,
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
+  saveCapabilityOutputAsAttachmentMetas,
   invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelName,
@@ -265,18 +266,26 @@ function handleAfterLlmPlanningProcessResult(ctx = {}, processed = {}, state = {
   return true;
 }
 
-function handleSeparateModelPlanningProcessResult(
+async function handleSeparateModelPlanningProcessResult(
   ctx = {},
   processed = {},
   locale = LOCALE.ZH_CN,
   responseText = "",
 ) {
+  const relayText = responseText || translateI18nText(locale, "planningSeparateModelEmptyRelay");
+  const attachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+    purpose: "planning",
+    content: relayText,
+    generationSource: "harness_planning",
+    domain: CAPABILITY_DOMAIN.PLANNING,
+  });
   if (processed.retryScheduled) {
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
       purpose: "planning",
-      content: responseText || translateI18nText(locale, "planningSeparateModelEmptyRelay"),
+      content: relayText,
       dedupe: true,
+      attachmentMetas,
     });
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
@@ -289,8 +298,9 @@ function handleSeparateModelPlanningProcessResult(
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "planning",
-    content: responseText || translateI18nText(locale, "planningSeparateModelEmptyRelay"),
+    content: relayText,
     dedupe: true,
+    attachmentMetas,
   });
   logPlanningCaptureResult(ctx, processed, {
     event: "planning_checklist_captured_by_separate_model",
@@ -378,7 +388,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       repairInvoker: invoker,
       appendCapabilityModelTraceLog,
     });
-    return handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText);
+    return await handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText);
   } finally {
     state.flags.planningSeparateModelInFlight = false;
   }

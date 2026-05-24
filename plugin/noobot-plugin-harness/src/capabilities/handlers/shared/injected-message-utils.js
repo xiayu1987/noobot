@@ -11,13 +11,17 @@ import {
   HARNESS_INJECTION_MESSAGE_ROLE,
 } from "./constants.js";
 
-export function buildHarnessInjectedMessage(content = "") {
-  return {
+export function buildHarnessInjectedMessage(content = "", { attachmentMetas = [] } = {}) {
+  const message = {
     role: HARNESS_INJECTION_MESSAGE_ROLE,
     content: String(content || ""),
     [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
     [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
   };
+  if (Array.isArray(attachmentMetas) && attachmentMetas.length) {
+    message.attachmentMetas = attachmentMetas;
+  }
+  return message;
 }
 
 export function resolveCurrentTurnMessagesStore(ctx = {}) {
