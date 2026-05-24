@@ -276,6 +276,38 @@ test("final_answer tool: next model call uses tool_choice none and exits loop", 
   assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "none");
 });
 
+test("phaseSummaryNoToolsNextTurn enforces one no-tools round even when tools are available", async () => {
+  let toolInvokeCount = 0;
+  const tool = {
+    name: "execute_script",
+    async invoke() {
+      toolInvokeCount += 1;
+      return "{\"ok\":true}";
+    },
+  };
+  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
+    {
+      content: "overflow fallback answer",
+      tool_calls: [],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+
+  const modelState = createModelState(llm);
+  modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn = true;
+  const result = await runFunctionCallLoop({
+    modelState,
+    loopState: createLoopState({ maxTurns: 3, tool }),
+    turn: 1,
+  });
+
+  assert.equal(result.output, "overflow fallback answer");
+  assert.equal(toolInvokeCount, 0);
+  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
+  assert.equal(modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn, false);
+});
+
 test("loop over max turns: next turn no-tool response will keep retrying and finally stop at limit", async () => {
   let toolInvokeCount = 0;
   const tool = {

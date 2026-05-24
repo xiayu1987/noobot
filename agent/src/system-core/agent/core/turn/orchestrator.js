@@ -91,6 +91,29 @@ export function createTurnOrchestrator({
 
       resolveLlmForTurnFn(modelState);
 
+      const systemRuntime =
+        runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+          ? runtime.systemRuntime
+          : null;
+      if (systemRuntime?.phaseSummaryNoToolsNextTurn === true) {
+        systemRuntime.phaseSummaryNoToolsNextTurn = false;
+        emitEvent(eventListener, "phase_summary_no_tools_turn_enforced", { turn });
+        const noToolsResult = await invokeNoToolsTurnFn({
+          modelState,
+          loopState,
+          turn,
+          forceToolChoiceNone: true,
+        });
+        return buildLoopResultFn({
+          output: noToolsResult.output,
+          traces,
+          loopState,
+          turnTaskStore: noToolsResult.turnTaskStore,
+          turnMessageStore: noToolsResult.turnMessageStore,
+          modelMessages: noToolsResult.modelMessages,
+        });
+      }
+
       if (!Array.isArray(tools) || tools.length === 0) {
         const noToolsResult = await invokeNoToolsTurnFn({ modelState, loopState, turn });
         return buildLoopResultFn({

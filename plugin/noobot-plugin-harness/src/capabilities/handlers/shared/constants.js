@@ -6,10 +6,16 @@
 import {
   FAILURE_THRESHOLD,
   LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
+  LLM_SUMMARY_OVERFLOW_POLICY,
   LLM_SUMMARY_THRESHOLD,
 } from "../../../core/thresholds.js";
 
-export { FAILURE_THRESHOLD, LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD, LLM_SUMMARY_THRESHOLD };
+export {
+  FAILURE_THRESHOLD,
+  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
+  LLM_SUMMARY_OVERFLOW_POLICY,
+  LLM_SUMMARY_THRESHOLD,
+};
 
 export const LOCALE = Object.freeze({
   ZH_CN: "zh-CN",
@@ -217,6 +223,8 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
   planningForceToolOriginalSet: false,
   planningForceToolOriginal: false,
   guidanceSummaryMarkPending: false,
+  summaryByCharsPrompted: false,
+  overflowForceAcceptancePending: false,
   planRevisionCapturePending: false,
   acceptanceSemanticValidationCapturePending: false,
 });
