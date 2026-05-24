@@ -3,9 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { FAILURE_THRESHOLD, LLM_SUMMARY_THRESHOLD } from "../../../core/thresholds.js";
+import {
+  FAILURE_THRESHOLD,
+  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
+  LLM_SUMMARY_THRESHOLD,
+} from "../../../core/thresholds.js";
 
-export { FAILURE_THRESHOLD, LLM_SUMMARY_THRESHOLD };
+export { FAILURE_THRESHOLD, LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD, LLM_SUMMARY_THRESHOLD };
 
 export const LOCALE = Object.freeze({
   ZH_CN: "zh-CN",

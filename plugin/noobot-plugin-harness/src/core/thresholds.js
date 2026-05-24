@@ -10,6 +10,7 @@ export const FAILURE_THRESHOLD = Object.freeze({
 });
 
 export const LLM_SUMMARY_THRESHOLD = 15;
+export const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = 150000;
 
 // Retry at most once after the first failed planning capture.
 export const MAX_PLANNING_CAPTURE_ATTEMPTS = 2;

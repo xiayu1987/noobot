@@ -70,3 +70,35 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
   assert.equal(events.some((item) => item?.event === "phase_summary_required"), true);
 });
 
+test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars exceed threshold", () => {
+  const events = [];
+  const modelState = {
+    eventListener: {
+      onEvent: (payload = {}) => events.push(payload),
+    },
+    runtime: {
+      systemRuntime: {
+        toolLoopExecutionCount: 0,
+        phaseSummaryLoopCount: 0,
+      },
+    },
+  };
+  const loopState = {
+    tools: [{ name: "task_summary" }],
+    phaseSummaryLoopTurns: 0,
+    phaseSummaryMessageCharsThreshold: 10,
+    messages: [{ role: "user", content: "0123456789012345", summarized: false }],
+  };
+
+  const triggered = maybeRequestPhaseSummary({
+    modelState,
+    loopState,
+    toolCallResults: [],
+  });
+  assert.equal(triggered, true);
+  assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
+  assert.equal(loopState.messages.length, 2);
+  assert.equal(loopState.messages[1] instanceof HumanMessage, true);
+  const event = events.find((item) => item?.event === "phase_summary_required") || {};
+  assert.equal(event.data?.trigger, "message_chars");
+});
