@@ -109,7 +109,7 @@ export const I18N_TEXT = Object.freeze({
     planningJsonRepairOutputConstraint: "输出只能是 JSON 对象或数组。",
     planningJsonRepairStructureConstraint:
       "修复后的 JSON 需为规划清单结构（包含 totalGoal、taskOwner、nextPhase、taskChecklist）。",
-    planningJsonRepairFormatExample: "格式示例：{example}",
+    planningJsonRepairFormatExample: "待修复 JSON：{example}",
     planningJsonRepairFallbackInstruction: "如果无法修复为清单 JSON，请输出 {}。",
     planningPromptToolsHeader: "可用工具（name/description），规划必须参考：",
     planRefinementToolDescription: "在总计划完成后触发计划细化流程。",
@@ -153,7 +153,7 @@ export const I18N_TEXT = Object.freeze({
     planningJsonRepairOutputConstraint: "Output only JSON object or array.",
     planningJsonRepairStructureConstraint:
       "The repaired JSON should be a planning checklist structure (including totalGoal, taskOwner, nextPhase, taskChecklist).",
-    planningJsonRepairFormatExample: "Format example: {example}",
+    planningJsonRepairFormatExample: "JSON to repair: {example}",
     planningJsonRepairFallbackInstruction: "If content cannot be repaired into checklist JSON, output {}.",
     planningPromptToolsHeader: "Available tools (name/description), must be referenced:",
     planRefinementToolDescription: "Trigger planning refinement flow after main plan is ready.",
