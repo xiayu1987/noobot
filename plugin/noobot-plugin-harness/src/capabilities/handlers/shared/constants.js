@@ -118,7 +118,7 @@ export const I18N_TEXT = Object.freeze({
     planRefinementConvergedReason: "未找到可细化的主步骤",
     planRefinementFailedReason: "插件侧细化失败",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
-    guidanceSummaryBody: "输出已完成项，及问题说明。",
+    guidanceSummaryBody: "请先对已完成内容进行小结（注意是小结，不是总结），小结完请继续任务，输出已完成项，及问题说明。",
     planningRefinementMarker: "<!-- harness-planning-refinement -->",
     planningRefinementPromptBody:
       "基于当前状态和阶段小结生成细化的增量计划。\\n必须使用 refinement 专用结构：stage=refinement，输出 refinementChecklist（禁止输出 taskChecklist）；每项必须包含 mainStepIndex 且 isMainStep=false，并且必须可映射到 targetMainSteps。\\n格式：{example}",
@@ -162,7 +162,7 @@ export const I18N_TEXT = Object.freeze({
     planRefinementConvergedReason: "no refinable main step found",
     planRefinementFailedReason: "plugin-side refinement failed",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
-    guidanceSummaryBody: "Output completed items and issue notes.",
+    guidanceSummaryBody: "Please provide a guidance summary of completed items and issues based on unsummarized messages, then continue with the task.",
     planningRefinementMarker: "<!-- harness-planning-refinement -->",
     planningRefinementPromptBody:
       "Generate a refined incremental plan from current state and phase summary.\\nUse a refinement-only schema: stage=refinement and refinementChecklist (taskChecklist is forbidden). Every item must include mainStepIndex and isMainStep=false, and must map to targetMainSteps.\\nFormat: {example}",
