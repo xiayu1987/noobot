@@ -202,6 +202,8 @@ export const enUSMessages = {
     "downloadParsedResult": "Download parsed result {name}",
     "previewParsedResultShort": "Preview",
     "downloadParsedResultShort": "Download",
+    "agentAttachment": "Agent",
+    "pluginAttachment": "Plugin",
     "me": "Me",
     "attachmentPreviewTitle": "Attachment Preview: {name}",
     "filePreviewTitle": "File Preview: {name}",

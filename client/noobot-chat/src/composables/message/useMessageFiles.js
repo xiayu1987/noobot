@@ -33,6 +33,26 @@ function parseToolFileResult(content = "") {
   return { toolName, resolvedPath, fileName };
 }
 
+function getMessageAttachmentMetas(messageItem = {}) {
+  if (Array.isArray(messageItem?.attachmentMetas)) return messageItem.attachmentMetas;
+  if (Array.isArray(messageItem?.attachments)) return messageItem.attachments;
+  return [];
+}
+
+function isHarnessPluginInjectedMessage(messageItem = {}) {
+  return (
+    messageItem?.injectedMessage === true &&
+    String(messageItem?.injectedBy || "").trim() === "harness-plugin"
+  );
+}
+
+function toAttachmentKey(attachmentItem = {}) {
+  return String(
+    attachmentItem?.attachmentId ||
+      `${attachmentItem?.name || ""}|${attachmentItem?.size || 0}`,
+  ).trim();
+}
+
 export function useMessageFiles({
   getMessageItem = () => ({}),
   getAllMessages = () => [],
@@ -84,9 +104,7 @@ export function useMessageFiles({
 
   const displayedAttachmentMetas = computed(() => {
     const messageItem = getMessageItem() || {};
-    const baseAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
-      ? messageItem.attachmentMetas
-      : [];
+    const baseAttachmentMetas = getMessageAttachmentMetas(messageItem);
     if (String(messageItem?.role || "").trim() !== "assistant") {
       return baseAttachmentMetas;
     }
@@ -101,10 +119,10 @@ export function useMessageFiles({
       candidateMessages,
       rootDialogProcessId,
     );
-    let mergedAttachmentMetas = [...baseAttachmentMetas];
+    let mainFlowAttachmentMetas = [...baseAttachmentMetas];
+    let pluginAttachmentMetas = [];
     for (const sessionMessage of candidateMessages) {
       const messageRole = String(sessionMessage?.role || "").trim();
-      if (!["assistant", "tool"].includes(messageRole)) continue;
       const messageDialogProcessId = String(sessionMessage?.dialogProcessId || "").trim();
       const messageParentDialogProcessId = String(
         sessionMessage?.parentDialogProcessId || "",
@@ -115,16 +133,53 @@ export function useMessageFiles({
       ) {
         continue;
       }
-      const currentAttachmentMetas = Array.isArray(sessionMessage?.attachmentMetas)
-        ? sessionMessage.attachmentMetas
-        : [];
+      const currentAttachmentMetas = getMessageAttachmentMetas(sessionMessage);
       if (!currentAttachmentMetas.length) continue;
-      mergedAttachmentMetas = mergeAttachmentMetas(
-        mergedAttachmentMetas,
+      if (
+        messageRole === "user" &&
+        isHarnessPluginInjectedMessage(sessionMessage)
+      ) {
+        pluginAttachmentMetas = mergeAttachmentMetas(
+          pluginAttachmentMetas,
+          currentAttachmentMetas,
+        );
+        continue;
+      }
+      if (!["assistant", "tool"].includes(messageRole)) continue;
+      mainFlowAttachmentMetas = mergeAttachmentMetas(
+        mainFlowAttachmentMetas,
         currentAttachmentMetas,
       );
     }
-    return mergedAttachmentMetas;
+    const mergedWithOwnerType = [
+      ...mainFlowAttachmentMetas.map((attachmentItem) => ({
+        ...attachmentItem,
+        attachmentOwnerType: "agent",
+      })),
+      ...pluginAttachmentMetas.map((attachmentItem) => ({
+        ...attachmentItem,
+        attachmentOwnerType: "plugin",
+      })),
+    ];
+    const dedupedWithOwnerType = [];
+    const seenAttachmentKeySet = new Map();
+    for (const attachmentItem of mergedWithOwnerType) {
+      const attachmentKey = toAttachmentKey(attachmentItem);
+      if (!attachmentKey) {
+        dedupedWithOwnerType.push(attachmentItem);
+        continue;
+      }
+      const existingIndex = seenAttachmentKeySet.get(attachmentKey);
+      if (existingIndex === undefined) {
+        seenAttachmentKeySet.set(attachmentKey, dedupedWithOwnerType.length);
+        dedupedWithOwnerType.push(attachmentItem);
+        continue;
+      }
+      if (attachmentItem?.attachmentOwnerType === "plugin") {
+        dedupedWithOwnerType[existingIndex] = attachmentItem;
+      }
+    }
+    return dedupedWithOwnerType;
   });
 
   return {

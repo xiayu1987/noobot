@@ -126,7 +126,7 @@ export const I18N_TEXT = Object.freeze({
     planningRevisionPromptBody:
       "基于当前状态和阶段小结修订计划，并给出 nextPhase。\\n格式：{example}",
     guidanceMarker: "<!-- harness-guidance -->",
-    guidanceBody: "工具失败达到阈值({reason})，基于未小结消息给出下一步指引。",
+    guidanceBody: "工具失败达到阈值({reason})，请分析工具失败原因，并且给予修复建议。",
     acceptanceSemanticValidationMarker: "<!-- harness-acceptance-semantic-validation -->",
     acceptanceSemanticValidationBody: "基于最新计划和验收报告做语义一致性校验。",
     acceptanceSemanticValidationFormatExample: "格式：{example}",
@@ -171,7 +171,7 @@ export const I18N_TEXT = Object.freeze({
       "Revise the plan from current state and phase summary and include nextPhase.\\nFormat: {example}",
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody:
-      "Tool failures reached threshold ({reason}); provide next-step guidance from unsummarized messages.",
+      "Guidance triggered by tool failure threshold ({reason}). Please analyze the causes of tool failures and provide suggestions for fixes.",
     acceptanceSemanticValidationMarker: "<!-- harness-acceptance-semantic-validation -->",
     acceptanceSemanticValidationBody:
       "Validate semantic consistency from latest plan and acceptance report.",
