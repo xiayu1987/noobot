@@ -13,15 +13,16 @@ import {
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { FAILURE_THRESHOLD } from "../../../core/thresholds.js";
 
-export function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
+export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const historyMessages = ctx?.agentContext?.payload?.messages?.history;
   const currentMessages = ctx?.messages;
   const injectedSummarizer = resolveInjectedMessageSummarizer(meta);
-  const safeMark = (messages = []) => {
+  const safeMark = async (messages = []) => {
     if (!Array.isArray(messages)) return 0;
     if (typeof injectedSummarizer === "function") {
       try {
-        const result = injectedSummarizer({
+        const result = await injectedSummarizer({
+          ctx,
           messages,
           taskSummaryToolName: "task_summary",
         });
@@ -33,8 +34,8 @@ export function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
     }
     return markMessagesSummarized(messages);
   };
-  const currentMarked = safeMark(currentMessages);
-  const historyMarked = safeMark(historyMessages);
+  const currentMarked = await safeMark(currentMessages);
+  const historyMarked = await safeMark(historyMessages);
   return currentMarked + historyMarked;
 }
 

@@ -166,17 +166,11 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
 }
 
 function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOCALE.ZH_CN) {
-  const resolvedAgentMessages = resolveCapabilityModelMessages(meta, {
+  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
+  const agentMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "planning",
-    messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
   });
-  const historyAgentMessages = collectAgentStyleHistoryMessages(ctx);
-  const agentMessages =
-    Array.isArray(resolvedAgentMessages) && resolvedAgentMessages.length
-      ? resolvedAgentMessages
-      : historyAgentMessages;
-  const contextSummary = buildPlanningContextSummary(ctx, meta, locale);
   const messages = buildCapabilityModelMessages({
     locale,
     agentMessages,

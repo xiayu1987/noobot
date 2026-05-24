@@ -41,7 +41,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
       const holder = ensureHarnessBucket(ctx);
       if (holder?.state?.flags?.guidanceSummaryMarkPending === true) {
         holder.state.flags.guidanceSummaryMarkPending = false;
-        const markedCount = markGuidanceSummarizedMessages(ctx, meta);
+        const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
         appendCapabilityLog(ctx, {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
           event: "summary_messages_marked",

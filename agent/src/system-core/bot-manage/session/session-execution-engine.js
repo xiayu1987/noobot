@@ -29,7 +29,10 @@ import {
   filterSummarizedMessages,
   normalizeRecentWindow,
 } from "../../session/utils/context-window-normalizer.js";
-import { shouldMarkCurrentTurnSummarizedMessage } from "../../context/session/summarized-message-policy.js";
+import {
+  shouldMarkCurrentTurnSummarizedMessage,
+  shouldMarkCurrentTurnSummarizedModelMessage,
+} from "../../context/session/summarized-message-policy.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 
@@ -68,27 +71,12 @@ function resolveMessageRole(messageItem = {}) {
   return "";
 }
 
-function isWrappedUserMetaMessage(text = "") {
-  const raw = String(text || "").trim();
-  if (!raw.startsWith("[") || !raw.includes("[/")) return false;
-  const match = raw.match(/^\[([^\]\n\/]+)\]\s*[\s\S]*\s*\[\/\1\]\s*$/);
-  if (!match) return false;
-  return (
-    raw.includes("\"sessionId\"") ||
-    raw.includes("\"dialogProcessId\"") ||
-    raw.includes("\"attachments\"")
-  );
-}
-
 function normalizeMessageForHarness(messageItem = {}) {
   const role = resolveMessageRole(messageItem);
   if (!role) return null;
   const content = extractTextContent(
     messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
   );
-  if (role === "user" && isWrappedUserMetaMessage(content)) {
-    return null;
-  }
   const normalized = {
     role,
     content,
@@ -603,44 +591,84 @@ export class SessionExecutionEngine {
       ? Math.floor(recentMessageLimit)
       : 20;
     return ({ messages = [], ctx = {} } = {}) => {
-      const source = Array.isArray(messages) ? messages : [];
+      const explicitMessages = Array.isArray(messages) ? messages : [];
+      const source = explicitMessages.length
+        ? explicitMessages
+        : Array.isArray(ctx?.messages)
+          ? ctx.messages
+          : [];
       const normalized = source
         .map((item) => normalizeMessageForHarness(item))
-        .filter((item) => item && String(item?.content || "").trim());
+        .filter(
+          (item) =>
+            item &&
+            (String(item?.content || "").trim() ||
+              (String(item?.role || "").trim().toLowerCase() === "assistant" &&
+                Array.isArray(item?.tool_calls) &&
+                item.tool_calls.length)),
+        );
       const filtered = filterSummarizedMessages(normalized);
       if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) return [];
-      const windowed = normalizeRecentWindow(filtered, normalizedLimit);
-      const hasUserMessage = windowed.some(
-        (item) => String(item?.role || "").trim().toLowerCase() === "user",
-      );
-      if (hasUserMessage) return windowed;
-      const currentUserMessage = resolveCurrentTurnUserMessage(ctx);
-      if (!currentUserMessage) return windowed;
-      return [{ role: "user", content: currentUserMessage }, ...windowed];
+      return normalizeRecentWindow(filtered, normalizedLimit);
     };
   }
 
   _createHarnessMarkMessagesSummarized() {
-    return ({ messages = [], taskSummaryToolName = "task_summary" } = {}) => {
+    const shouldMark = (messageItem = {}, taskSummaryToolName = "task_summary") =>
+      shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName }) ||
+      shouldMarkCurrentTurnSummarizedModelMessage(messageItem, { taskSummaryToolName });
+    const isSummarized = (messageItem = {}) =>
+      messageItem?.summarized === true || messageItem?.lc_kwargs?.summarized === true;
+    const markMessage = (messageItem = null) => {
+      if (!messageItem || typeof messageItem !== "object") return false;
+      if (isSummarized(messageItem)) return false;
+      messageItem.summarized = true;
+      if (messageItem?.lc_kwargs && typeof messageItem.lc_kwargs === "object") {
+        messageItem.lc_kwargs.summarized = true;
+      }
+      return true;
+    };
+    return async ({ messages = [], ctx = {}, taskSummaryToolName = "task_summary" } = {}) => {
       const source = Array.isArray(messages) ? messages : [];
+      const normalizedTaskSummaryToolName =
+        String(taskSummaryToolName || "").trim() || "task_summary";
       let changedCount = 0;
       for (const messageItem of source) {
-        if (
-          !shouldMarkCurrentTurnSummarizedMessage(messageItem, {
-            taskSummaryToolName: String(taskSummaryToolName || "").trim() || "task_summary",
-          })
-        ) {
-          continue;
+        if (!shouldMark(messageItem, normalizedTaskSummaryToolName)) continue;
+        if (markMessage(messageItem)) changedCount += 1;
+      }
+      const runtime =
+        ctx?.agentContext?.execution?.controllers?.runtime &&
+        typeof ctx.agentContext.execution.controllers.runtime === "object"
+          ? ctx.agentContext.execution.controllers.runtime
+          : {};
+      const currentTurnMessages = runtime?.currentTurnMessages;
+      if (currentTurnMessages && typeof currentTurnMessages.updateWhere === "function") {
+        changedCount += currentTurnMessages.updateWhere(
+          { summarized: true },
+          (messageItem) =>
+            !isSummarized(messageItem) &&
+            shouldMark(messageItem, normalizedTaskSummaryToolName),
+        );
+      }
+      const systemRuntime =
+        runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+          ? runtime.systemRuntime
+          : {};
+      const userId = String(ctx?.userId || runtime?.userId || systemRuntime?.userId || "").trim();
+      const sessionId = String(ctx?.sessionId || systemRuntime?.sessionId || "").trim();
+      if (userId && sessionId && this.session?.markSessionMessagesSummarized) {
+        try {
+          changedCount += await this.session.markSessionMessagesSummarized({
+            userId,
+            sessionId,
+            parentSessionId: String(ctx?.parentSessionId || systemRuntime?.parentSessionId || "").trim(),
+            shouldMark: (messageItem) => shouldMark(messageItem, normalizedTaskSummaryToolName),
+          });
+        } catch {
+          // In-memory marking above is enough for the active turn; persistence
+          // failures should not break the model loop.
         }
-        const summarizedAlready =
-          messageItem?.summarized === true &&
-          messageItem?.lc_kwargs?.summarized === true;
-        if (summarizedAlready) continue;
-        messageItem.summarized = true;
-        if (messageItem?.lc_kwargs && typeof messageItem.lc_kwargs === "object") {
-          messageItem.lc_kwargs.summarized = true;
-        }
-        changedCount += 1;
       }
       return changedCount;
     };

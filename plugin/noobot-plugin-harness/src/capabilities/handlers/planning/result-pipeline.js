@@ -17,6 +17,8 @@ import {
   getDefaultTaskOwner,
   getPromptJsonFormatExample,
   parseChecklistWithLocalRepair,
+  relaySeparateModelOutputAsUserMessage,
+  resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   translateI18nText,
 } from "./deps.js";
@@ -65,6 +67,11 @@ async function repairChecklistByModel({
     translateI18nText(locale, "planningJsonRepairFallbackInstruction"),
   ];
 
+  const agentMessages = resolveCapabilityModelMessages(meta, {
+    ctx,
+    purpose: "planning_json_repair",
+  });
+
   const repairedText = await repairJsonTextByModel({
     invoker,
     invokePayload: {
@@ -80,7 +87,7 @@ async function repairChecklistByModel({
       prompt: "",
       messages: buildCapabilityModelMessages({
         locale,
-        agentMessages: [],
+        agentMessages,
         constraints: repairConstraints,
         task: repairPrompt,
       }),
@@ -104,6 +111,12 @@ async function repairChecklistByModel({
         detail: { error: String(error?.message || error || "") },
       });
     },
+  });
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "planning_json_repair",
+    content: repairedText,
+    dedupe: true,
   });
   return {
     parsed: parseChecklistWithLocalRepair(repairedText, locale),

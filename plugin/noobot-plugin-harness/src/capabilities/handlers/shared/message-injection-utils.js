@@ -38,6 +38,16 @@ function resolveSystemContextMessages(ctx = {}) {
   return Array.isArray(list) ? list : null;
 }
 
+function resolveCurrentTurnMessagesStore(ctx = {}) {
+  const runtime =
+    ctx?.agentContext?.execution?.controllers?.runtime &&
+    typeof ctx.agentContext.execution.controllers.runtime === "object"
+      ? ctx.agentContext.execution.controllers.runtime
+      : {};
+  const store = runtime?.currentTurnMessages;
+  return store && typeof store.push === "function" ? store : null;
+}
+
 function dedupeExists(messages = [], target = {}) {
   const role = String(target?.role || "").trim();
   const content = String(target?.content || "").trim();
@@ -49,6 +59,18 @@ function dedupeExists(messages = [], target = {}) {
   });
 }
 
+function persistMessageToCurrentTurn(ctx = {}, message = {}, enabled = false) {
+  if (enabled !== true) return false;
+  const currentTurnMessages = resolveCurrentTurnMessagesStore(ctx);
+  if (!currentTurnMessages) return false;
+  currentTurnMessages.push({
+    ...message,
+    type: "message",
+    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+  });
+  return true;
+}
+
 export function injectMessageWithPolicy(
   ctx = {},
   {
@@ -57,6 +79,7 @@ export function injectMessageWithPolicy(
     injectAt = "append",
     dedupe = false,
     avoidBreakToolCallContinuity = true,
+    persistToCurrentTurn = false,
   } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
@@ -84,6 +107,7 @@ export function injectMessageWithPolicy(
         return { injected: false, target: "agent_system", deduped: true };
       }
       systemContextMessages.push(message);
+      persistMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
       return { injected: true, target: "agent_system" };
     }
   }
@@ -93,5 +117,6 @@ export function injectMessageWithPolicy(
   } else {
     messages.push(message);
   }
+  persistMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
   return { injected: true, target: "ctx_messages" };
 }
