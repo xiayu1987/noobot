@@ -70,6 +70,9 @@ export const PROMPT_ENVELOPE = Object.freeze({
   TYPE: "structured_v1",
 });
 
+// All harness-to-main-flow injections are normalized to system role.
+export const HARNESS_INJECTION_MESSAGE_ROLE = "system";
+
 export const PROMPT_JSON_FORMAT_EXAMPLES = Object.freeze({
   planning_main:
     '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
@@ -110,7 +113,7 @@ export const I18N_TEXT = Object.freeze({
     planRefinementConvergedReason: "未找到可细化的主步骤",
     planRefinementFailedReason: "插件侧细化失败",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
-    guidanceSummaryBody: "只输出已完成项；最后一行必须为“小结完成”。",
+    guidanceSummaryBody: "输出已完成项，及问题说明。",
     planningRefinementMarker: "<!-- harness-planning-refinement -->",
     planningRefinementPromptBody:
       "基于当前状态和阶段小结生成细化的增量计划。\\n必须使用 refinement 专用结构：stage=refinement，输出 refinementChecklist（禁止输出 taskChecklist）；每项必须包含 mainStepIndex 且 isMainStep=false，并且必须可映射到 targetMainSteps。\\n格式：{example}",
@@ -119,8 +122,6 @@ export const I18N_TEXT = Object.freeze({
       "基于当前状态和阶段小结修订计划，并给出 nextPhase。\\n格式：{example}",
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody: "工具失败达到阈值({reason})，基于未小结消息给出下一步指引。",
-    guidancePreferTools: "优先工具：{tools}。",
-    guidanceWebService: "网页搜索使用 {service}（通过 {tool}）。",
     acceptanceSemanticValidationMarker: "<!-- harness-acceptance-semantic-validation -->",
     acceptanceSemanticValidationBody: "基于最新计划和验收报告做语义一致性校验。",
     acceptanceSemanticValidationFormatExample: "格式：{example}",
@@ -156,7 +157,7 @@ export const I18N_TEXT = Object.freeze({
     planRefinementConvergedReason: "no refinable main step found",
     planRefinementFailedReason: "plugin-side refinement failed",
     guidanceSummaryMarker: "<!-- harness-guidance-summary -->",
-    guidanceSummaryBody: 'Only output completed items; final line must be "Summary complete".',
+    guidanceSummaryBody: "Output completed items and issue notes.",
     planningRefinementMarker: "<!-- harness-planning-refinement -->",
     planningRefinementPromptBody:
       "Generate a refined incremental plan from current state and phase summary.\\nUse a refinement-only schema: stage=refinement and refinementChecklist (taskChecklist is forbidden). Every item must include mainStepIndex and isMainStep=false, and must map to targetMainSteps.\\nFormat: {example}",
@@ -166,8 +167,6 @@ export const I18N_TEXT = Object.freeze({
     guidanceMarker: "<!-- harness-guidance -->",
     guidanceBody:
       "Tool failures reached threshold ({reason}); provide next-step guidance from unsummarized messages.",
-    guidancePreferTools: "Preferred tools: {tools}.",
-    guidanceWebService: "Use web search {service} (via {tool}).",
     acceptanceSemanticValidationMarker: "<!-- harness-acceptance-semantic-validation -->",
     acceptanceSemanticValidationBody:
       "Validate semantic consistency from latest plan and acceptance report.",

@@ -5,10 +5,7 @@
  */
 import {
   CAPABILITY_DOMAIN,
-  GUIDANCE_WEB_SERVICE_NAME,
-  GUIDANCE_WEB_TOOL_NAMES,
   LOCALE,
-  TOOL_NAME_SET,
   appendCapabilityLog,
   ensureHarnessBucket,
   translateI18nText,
@@ -17,14 +14,7 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
 
 export function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", { includeMarker = false } = {}) {
-  const lines = [
-    translateI18nText(locale, "guidanceBody", { reason }),
-    translateI18nText(locale, "guidancePreferTools", { tools: GUIDANCE_WEB_TOOL_NAMES.join(", ") }),
-    translateI18nText(locale, "guidanceWebService", {
-      service: GUIDANCE_WEB_SERVICE_NAME,
-      tool: TOOL_NAME_SET.CALL_SERVICE,
-    }),
-  ];
+  const lines = [translateI18nText(locale, "guidanceBody", { reason })];
   if (includeMarker) {
     lines.unshift(translateI18nText(locale, "guidanceMarker"));
   }
