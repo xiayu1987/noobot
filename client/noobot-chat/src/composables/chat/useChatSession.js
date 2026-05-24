@@ -10,6 +10,7 @@ import {
   buildAppendMessage,
   buildViewMessage,
   foldConversationMessages,
+  isHarnessInjectedMessage,
 } from "../infra/messageModel";
 import {
   buildChatWebSocketUrl,
@@ -277,7 +278,7 @@ export function useChatSession({
 
   function shouldRenderMessageInChat(messageItem) {
     const messageRole = String(messageItem?.role || "");
-    return messageRole !== RoleEnum.TOOL;
+    return messageRole !== RoleEnum.TOOL && !isHarnessInjectedMessage(messageItem);
   }
 
   return {

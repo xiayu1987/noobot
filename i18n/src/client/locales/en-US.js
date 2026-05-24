@@ -210,6 +210,8 @@ export const enUSMessages = {
     "thinkingExpand": "💡 Expand Thinking",
     "thinkingElapsed": "Thinking time: {duration}",
     "executionProcess": "Execution ({count})",
+    "injectedMessages": "Injected Messages ({count})",
+    "noInjectedMessages": "No injected messages",
     "thinkingDetails": "Thinking Details ({count})",
     "waitingRealtimeLog": "Running, waiting for realtime logs...",
     "noExecutionLogs": "No execution logs",

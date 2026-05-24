@@ -82,6 +82,13 @@ function normalizeAttachment(
   };
 }
 
+function isHarnessInjectedMessage(messageItem = {}) {
+  return (
+    messageItem?.injectedMessage === true &&
+    String(messageItem?.injectedBy || "").trim() === "harness-plugin"
+  );
+}
+
 function createMessageModel(messageItem = {}) {
   const normalizedAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
@@ -113,6 +120,8 @@ function createMessageModel(messageItem = {}) {
     statusLabel: messageItem.statusLabel || "",
     ts: messageItem.ts || new Date().toISOString(),
     taskId: messageItem.taskId || "",
+    injectedMessage: messageItem.injectedMessage === true,
+    injectedBy: String(messageItem.injectedBy || "").trim(),
   };
 }
 
@@ -148,6 +157,7 @@ function buildViewMessage(
 function foldConversationMessages(messages = [], buildView) {
   const foldedMessages = normalizeArray(messages)
     .filter((messageItem) => {
+      if (isHarnessInjectedMessage(messageItem)) return false;
       const role = String(messageItem?.role || "");
       return role === "assistant" || role === "user";
     })
@@ -233,4 +243,5 @@ export {
   buildViewMessage,
   foldConversationMessages,
   createMessageModel,
+  isHarnessInjectedMessage,
 };

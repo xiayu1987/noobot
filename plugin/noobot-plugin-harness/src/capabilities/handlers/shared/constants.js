@@ -70,8 +70,13 @@ export const PROMPT_ENVELOPE = Object.freeze({
   TYPE: "structured_v1",
 });
 
-// All harness-to-main-flow injections are normalized to system role.
-export const HARNESS_INJECTION_MESSAGE_ROLE = "system";
+// All harness-to-main-flow injections are normalized to user role and
+// tagged so the agent can persist/display them separately from real user turns.
+export const HARNESS_INJECTION_MESSAGE_ROLE = "user";
+export const HARNESS_INJECTED_MESSAGE_FLAG_FIELD = "injectedMessage";
+export const HARNESS_INJECTED_MESSAGE_FLAG_VALUE = true;
+export const HARNESS_INJECTED_MESSAGE_BY_FIELD = "injectedBy";
+export const HARNESS_INJECTED_MESSAGE_BY_VALUE = "harness-plugin";
 
 export const PROMPT_JSON_FORMAT_EXAMPLES = Object.freeze({
   planning_main:

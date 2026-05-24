@@ -49,6 +49,7 @@ function resolveDefaultSessionTitle() {
 export function sessionTitleFromMessages(messages = [], fallback = resolveDefaultSessionTitle()) {
   const firstUser = (Array.isArray(messages) ? messages : []).find(
     (messageItem) =>
+      messageItem?.injectedMessage !== true &&
       String(messageItem?.role || "").trim().toLowerCase() === "user" &&
       String(messageItem?.content || "").trim(),
   );

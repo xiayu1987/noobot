@@ -3,6 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  HARNESS_INJECTED_MESSAGE_BY_FIELD,
+  HARNESS_INJECTED_MESSAGE_BY_VALUE,
+  HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
+  HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
+  HARNESS_INJECTION_MESSAGE_ROLE,
+} from "../capabilities/handlers/shared/constants.js";
 const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility only
 
 // P2#5: Injected prompt ID cache per messages array reference for O(1) lookup
@@ -109,8 +116,42 @@ function readLegacyPromptEntries() {
   }));
 }
 
+function buildHarnessInjectedPromptMessage(content = "") {
+  return {
+    role: HARNESS_INJECTION_MESSAGE_ROLE,
+    content,
+    [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
+    [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
+  };
+}
+
+function resolveCurrentTurnMessagesStore(ctx = {}) {
+  const runtime =
+    ctx?.agentContext?.execution?.controllers?.runtime &&
+    typeof ctx.agentContext.execution.controllers.runtime === "object"
+      ? ctx.agentContext.execution.controllers.runtime
+      : {};
+  const store = runtime?.currentTurnMessages;
+  return store && typeof store.push === "function" ? store : null;
+}
+
+function persistPromptMessagesToCurrentTurn(ctx = {}, promptMessages = []) {
+  const currentTurnMessages = resolveCurrentTurnMessagesStore(ctx);
+  if (!currentTurnMessages) return 0;
+  let count = 0;
+  for (const message of Array.isArray(promptMessages) ? promptMessages : []) {
+    currentTurnMessages.push({
+      ...message,
+      type: "message",
+      dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    });
+    count += 1;
+  }
+  return count;
+}
+
 /**
- * Inject system messages based on registered prompts.
+ * Inject user-role harness messages based on registered prompts.
  * Respects priority and mode. Returns true if any injection occurred.
  */
 export function injectSystemMessages(ctx = {}, options = {}) {
@@ -141,16 +182,19 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     if (mode === "replace") {
       // Replace: remove existing harness prompts and add this one
       for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i]?.role === "system" && messages[i].content.startsWith("<!-- noobot-harness")) {
+        if (
+          (messages[i]?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] === true || messages[i]?.role === "system") &&
+          String(messages[i]?.content || "").startsWith("<!-- noobot-harness")
+        ) {
           messages.splice(i, 1);
         }
       }
-      prependItems.push({ role: "system", content: marker });
+      prependItems.push(buildHarnessInjectedPromptMessage(marker));
     } else if (mode === "append") {
-      appendItems.push({ role: "system", content: marker });
+      appendItems.push(buildHarnessInjectedPromptMessage(marker));
     } else {
       // prepend (default)
-      prependItems.push({ role: "system", content: marker });
+      prependItems.push(buildHarnessInjectedPromptMessage(marker));
     }
     injected = true;
   }
@@ -165,8 +209,11 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     messages.push(item);
   }
 
-  // P2#5: refresh cache once to keep replace/remove semantics consistent
-  if (injected) rebuildInjectedPromptCache(messages);
+  if (injected) {
+    persistPromptMessagesToCurrentTurn(ctx, [...prependItems, ...appendItems]);
+    // P2#5: refresh cache once to keep replace/remove semantics consistent
+    rebuildInjectedPromptCache(messages);
+  }
 
   return injected;
 }

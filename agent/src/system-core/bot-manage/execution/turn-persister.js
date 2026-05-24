@@ -52,6 +52,8 @@ export class SessionTurnPersister {
     parentDialogProcessId = "",
     parentSessionId = "",
     eventListener,
+    injectedMessage = false,
+    injectedBy = "",
   }) {
     const fullTurnPayload = {
       role,
@@ -78,6 +80,8 @@ export class SessionTurnPersister {
         !Array.isArray(modelAdditionalKwargs)
           ? modelAdditionalKwargs
           : null,
+      injectedMessage: injectedMessage === true,
+      injectedBy: String(injectedBy || "").trim(),
       modelResponseMetadata:
         modelResponseMetadata &&
         typeof modelResponseMetadata === "object" &&
@@ -120,6 +124,8 @@ export class SessionTurnPersister {
       rawModelContent,
       modelAdditionalKwargs,
       modelResponseMetadata,
+      injectedMessage,
+      injectedBy,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -168,6 +174,8 @@ export class SessionTurnPersister {
           !Array.isArray(messageItem.modelAdditionalKwargs)
             ? messageItem.modelAdditionalKwargs
             : null,
+        injectedMessage: messageItem.injectedMessage === true,
+        injectedBy: String(messageItem.injectedBy || "").trim(),
         modelResponseMetadata:
           messageItem.modelResponseMetadata &&
           typeof messageItem.modelResponseMetadata === "object" &&

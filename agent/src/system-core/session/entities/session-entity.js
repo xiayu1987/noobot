@@ -40,6 +40,12 @@ export function normalizeMessageEntity(
     attachmentMetas: normalizedAttachmentMetas,
     ts: String(message?.ts || "").trim() || now(),
   };
+  if (message?.injectedMessage === true) {
+    normalizedMessage.injectedMessage = true;
+  }
+  const injectedBy = String(message?.injectedBy || "").trim();
+  if (injectedBy) normalizedMessage.injectedBy = injectedBy;
+
   const toolCallId = String(message?.tool_call_id || "").trim();
   const toolName = String(message?.toolName || message?.tool_name || "").trim();
   if (toolCallId) normalizedMessage.tool_call_id = toolCallId;

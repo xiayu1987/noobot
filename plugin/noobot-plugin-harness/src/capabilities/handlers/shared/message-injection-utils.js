@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { isHarnessAgentTurnEnded } from "./lifecycle-utils.js";
-import { HARNESS_INJECTION_MESSAGE_ROLE } from "./constants.js";
+import {
+  HARNESS_INJECTED_MESSAGE_BY_FIELD,
+  HARNESS_INJECTED_MESSAGE_BY_VALUE,
+  HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
+  HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
+  HARNESS_INJECTION_MESSAGE_ROLE,
+} from "./constants.js";
 
 function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;
@@ -80,20 +86,25 @@ export function injectMessageWithPolicy(
     injectAt = "append",
     dedupe = false,
     avoidBreakToolCallContinuity = true,
-    persistToCurrentTurn = false,
+    persistToCurrentTurn = true,
   } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   void role;
-  // Plugin-to-main-flow injections are always normalized as system messages
-  // to keep role semantics consistent across all harness capabilities.
+  // Plugin-to-main-flow injections are user-role messages, tagged so they can
+  // be persisted and rendered separately from real user turns.
   const normalizedRole = HARNESS_INJECTION_MESSAGE_ROLE;
   const normalizedContent = String(content || "").trim();
   if (!messages || !normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {
     return { injected: false, target: "none", blockedByTurnEnded: true };
   }
-  const message = { role: normalizedRole, content: normalizedContent };
+  const message = {
+    role: normalizedRole,
+    content: normalizedContent,
+    [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
+    [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
+  };
 
   if (dedupe && dedupeExists(messages, message)) {
     return { injected: false, target: "ctx_messages", deduped: true };
@@ -110,7 +121,9 @@ export function injectMessageWithPolicy(
       if (dedupe && dedupeExists(systemContextMessages, message)) {
         return { injected: false, target: "agent_system", deduped: true };
       }
-      systemContextMessages.push(message);
+      // System context is a string-only channel; persist the tagged user-role
+      // copy for session display while keeping the model context protocol-safe.
+      systemContextMessages.push(normalizedContent);
       persistMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
       return { injected: true, target: "agent_system" };
     }
