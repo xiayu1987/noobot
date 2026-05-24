@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isHarnessAgentTurnEnded } from "./lifecycle-utils.js";
+import { HARNESS_INJECTION_MESSAGE_ROLE } from "./constants.js";
 
 function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;
@@ -83,7 +84,10 @@ export function injectMessageWithPolicy(
   } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
-  const normalizedRole = String(role || "system").trim().toLowerCase() === "user" ? "user" : "system";
+  void role;
+  // Plugin-to-main-flow injections are always normalized as system messages
+  // to keep role semantics consistent across all harness capabilities.
+  const normalizedRole = HARNESS_INJECTION_MESSAGE_ROLE;
   const normalizedContent = String(content || "").trim();
   if (!messages || !normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {

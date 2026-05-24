@@ -17,8 +17,10 @@ export function isSummaryCompletionMarked(summaryText = "", locale = LOCALE.ZH_C
   const zhMatched = /小结完成[。！？”"]?$/.test(lastLine);
   const enMatched = /summary complete[.!?。！？”"]?$/.test(lastLine);
   if (zhMatched || enMatched) return true;
-  if (locale === LOCALE.EN_US) return false;
-  return false;
+  // Relaxed rule: as long as summary has non-empty content, treat it as completed.
+  // Marker is now optional to avoid blocking revision/refinement chaining.
+  void locale;
+  return true;
 }
 
 export function parseSemanticValidationResult(responseText = "") {
