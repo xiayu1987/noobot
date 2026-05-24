@@ -1,14 +1,14 @@
 /*
- * Capability mini-runner for harness external model calls.
+ * Capability mini-runner for plugin-side external model calls.
  * Independent entry + reuse existing Noobot model/tool core.
  */
 import { createChatModel, createChatModelByName, adaptToolsForBinding } from "../../../model/index.js";
 import { executeToolCall } from "../execution/tool-runner.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
-const HARNESS_FLOW_HEADER_KEY = "X-Harness-Flow";
-const HARNESS_PURPOSE_HEADER_KEY = "X-Harness-Purpose";
-const HARNESS_DOMAIN_HEADER_KEY = "X-Harness-Domain";
+const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";
+const MODEL_PURPOSE_HEADER_KEY = "X-Harness-Purpose";
+const MODEL_DOMAIN_HEADER_KEY = "X-Harness-Domain";
 
 function normalizeToolCalls(ai = {}) {
   const rawCalls = Array.isArray(ai?.tool_calls)
@@ -181,9 +181,9 @@ export function createAgentCapabilityModelInvoker({
     const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
     const normalizedDomain = normalizeHeaderValue(domain || "unknown");
     const additionalHeaders = {
-      [HARNESS_FLOW_HEADER_KEY]: `harness.${normalizedPurpose}`,
-      [HARNESS_PURPOSE_HEADER_KEY]: normalizedPurpose,
-      [HARNESS_DOMAIN_HEADER_KEY]: normalizedDomain,
+      [MODEL_FLOW_HEADER_KEY]: `harness.${normalizedPurpose}`,
+      [MODEL_PURPOSE_HEADER_KEY]: normalizedPurpose,
+      [MODEL_DOMAIN_HEADER_KEY]: normalizedDomain,
     };
     const llm = normalizedModelName
       ? createChatModelByNameFn(normalizedModelName, {

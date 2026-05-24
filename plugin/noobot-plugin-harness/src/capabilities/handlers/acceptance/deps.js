@@ -23,6 +23,7 @@ export {
   attachArtifactsToAssistantResult,
   mapAttachmentRecordsToMetas,
   mergeAttachmentMetas,
+  relaySeparateModelOutputAsUserMessage,
 } from "../shared/attachment-log-utils.js";
 
 export {

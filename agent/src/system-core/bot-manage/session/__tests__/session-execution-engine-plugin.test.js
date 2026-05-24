@@ -11,14 +11,14 @@ function createWorkspaceService(basePath) {
   return { getWorkspacePath: () => basePath };
 }
 
-test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for harness separate_model", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-engine-harness-"));
+test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plugin separate_model", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-engine-plugin-"));
   const engine = new SessionExecutionEngine({
     globalConfig: {},
     workspaceService: createWorkspaceService(basePath),
   });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -40,11 +40,11 @@ test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for harn
   assert.equal(typeof prepared.plugins.harness.capabilityModelInvoker, "function");
 });
 
-test("SessionExecutionEngine preserves explicit harness capabilityModelInvoker", async () => {
+test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", async () => {
   const explicitInvoker = async () => ({ output: "ok" });
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -61,7 +61,7 @@ test("SessionExecutionEngine preserves explicit harness capabilityModelInvoker",
   assert.equal(prepared.plugins.harness.capabilityModelInvoker, explicitInvoker);
 });
 
-test("SessionExecutionEngine deep-merges harness step model config", async () => {
+test("SessionExecutionEngine deep-merges plugin step model config", async () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
       plugins: {
@@ -77,7 +77,7 @@ test("SessionExecutionEngine deep-merges harness step model config", async () =>
     },
   });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -99,10 +99,10 @@ test("SessionExecutionEngine deep-merges harness step model config", async () =>
   });
 });
 
-test("SessionExecutionEngine defaults harness miniRunnerMaxTurns to 5", async () => {
+test("SessionExecutionEngine defaults plugin miniRunnerMaxTurns to 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -118,10 +118,10 @@ test("SessionExecutionEngine defaults harness miniRunnerMaxTurns to 5", async ()
   assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, 5);
 });
 
-test("SessionExecutionEngine caps harness miniRunnerMaxTurns at 5", async () => {
+test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -138,10 +138,10 @@ test("SessionExecutionEngine caps harness miniRunnerMaxTurns at 5", async () => 
   assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, 5);
 });
 
-test("SessionExecutionEngine raises harness timeoutMs for separate_model planning", async () => {
+test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -158,7 +158,7 @@ test("SessionExecutionEngine raises harness timeoutMs for separate_model plannin
   assert.equal(prepared.plugins.harness.timeoutMs, 180_000);
 });
 
-test("SessionExecutionEngine injects harness resolveModelMessages aligned with session.recentMessageLimit", async () => {
+test("SessionExecutionEngine injects plugin resolveModelMessages with recent window", async () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
       session: {
@@ -167,7 +167,7 @@ test("SessionExecutionEngine injects harness resolveModelMessages aligned with s
     },
   });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -182,27 +182,27 @@ test("SessionExecutionEngine injects harness resolveModelMessages aligned with s
   const resolver = prepared.plugins.harness.resolveModelMessages;
   assert.equal(typeof resolver, "function");
 
-  const resolved = resolver({
-    messages: [
-      { role: "user", content: "u1" },
-      { role: "assistant", content: "a1", summarized: true },
-      { role: "assistant", content: "a2" },
-      { role: "assistant", content: "a3" },
-      { role: "assistant", content: "a4" },
-    ],
-  });
+  const messages = [
+    { role: "system", content: "policy" },
+    { role: "user", content: "u1" },
+    { role: "assistant", content: "a1", summarized: true },
+    { role: "assistant", content: "a2" },
+    { role: "assistant", content: "a3" },
+    { role: "assistant", content: "a4" },
+  ];
+  const resolved = resolver({ messages });
 
   assert.equal(Array.isArray(resolved), true);
-  assert.equal(resolved.length, 3);
-  assert.deepEqual(
-    resolved.map((item = {}) => String(item?.content || "")),
-    ["u1", "a3", "a4"],
-  );
+  assert.deepEqual(resolved, [
+    { role: "user", content: "u1", summarized: false },
+    { role: "assistant", content: "a3", summarized: false },
+    { role: "assistant", content: "a4", summarized: false },
+  ]);
 });
 
-test("SessionExecutionEngine injects harness markMessagesSummarized aligned with agent summary policy", async () => {
+test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with agent summary policy", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -224,7 +224,7 @@ test("SessionExecutionEngine injects harness markMessagesSummarized aligned with
     { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
     { role: "tool", content: '{"toolName":"task_summary","ok":true}' },
   ];
-  const marked = summarizer({ messages });
+  const marked = await summarizer({ messages });
   assert.equal(marked, 2);
   assert.equal(messages[0].summarized, undefined);
   assert.equal(messages[1].summarized, undefined);
@@ -233,15 +233,11 @@ test("SessionExecutionEngine injects harness markMessagesSummarized aligned with
   assert.equal(messages[4].summarized, undefined);
 });
 
-test("SessionExecutionEngine resolveModelMessages normalizes langchain messages and keeps current user input", async () => {
+test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages for plugin model", async () => {
   const engine = new SessionExecutionEngine({
-    globalConfig: {
-      session: {
-        recentMessageLimit: 8,
-      },
-    },
+    globalConfig: {},
   });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine._preparePluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -273,11 +269,9 @@ test("SessionExecutionEngine resolveModelMessages normalizes langchain messages 
       },
     },
   });
-  assert.deepEqual(
-    resolved.map((item = {}) => ({ role: item.role, content: item.content })),
-    [
-      { role: "user", content: "查找最适合组织的人" },
-      { role: "assistant", content: "收到，准备规划" },
-    ],
-  );
+  assert.equal(Array.isArray(resolved), true);
+  assert.deepEqual(resolved, [
+    { role: "user", content: "查找最适合组织的人", summarized: false },
+    { role: "assistant", content: "收到，准备规划", summarized: false },
+  ]);
 });

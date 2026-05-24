@@ -71,22 +71,21 @@ export async function runPlanningRefinementBySeparateModel(
     return { applied: false, status: "converged" };
   }
 
-  const modelMessages = Array.isArray(baseMessages)
-    ? baseMessages
-    : resolveCapabilityModelMessages(meta, {
-        ctx,
-        purpose: "planning_refinement",
-        messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
-      });
   const refinementTask = buildPlanningRefinementPrompt(
     locale,
     bucket,
     state,
     String(summaryText || "").trim(),
   );
+  const agentMessages = Array.isArray(baseMessages)
+    ? baseMessages
+    : resolveCapabilityModelMessages(meta, {
+        ctx,
+        purpose: "planning_refinement",
+      });
   const refinementMessages = buildCapabilityModelMessages({
     locale,
-    agentMessages: modelMessages,
+    agentMessages,
     task: refinementTask,
   });
 
@@ -138,6 +137,12 @@ export async function runPlanningRefinementBySeparateModel(
   const refinementText =
     extractRawTextContent(refinementResponse?.content) ||
     String(refinementResponse?.text || refinementResponse?.output || "").trim();
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "planning_refinement",
+    content: refinementText,
+    dedupe: true,
+  });
   const refinementApplied = applyRevisedPlanFromText(ctx, refinementText, {
     summary: String(summaryText || "").trim(),
     source,

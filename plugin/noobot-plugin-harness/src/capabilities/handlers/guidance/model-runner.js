@@ -45,7 +45,6 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
   const fallbackMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "summary",
-    messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
   });
   const modelMessages = [
     ...(Array.isArray(baseMessages) ? baseMessages : fallbackMessages),
@@ -105,12 +104,25 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
   const revisionText =
     extractRawTextContent(revisionResponse?.content) ||
     String(revisionResponse?.text || revisionResponse?.output || "").trim();
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "planning_revision",
+    content: revisionText,
+    dedupe: true,
+  });
   const revisionApplied = applyRevisedPlanFromText(ctx, revisionText, {
     summary: summaryText,
     source: "planning_revision",
     stage: "revision",
   });
-  if (!revisionApplied) return changed;
+  if (!revisionApplied) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_revision_not_applied",
+      detail: { hasResponseText: Boolean(revisionText) },
+    });
+    return changed;
+  }
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "next_phase_plan",
@@ -157,7 +169,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   const modelMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose,
-    messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
   });
   const invokerMessages = buildCapabilityModelMessages({
     locale,
@@ -224,14 +235,14 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     content: responseText,
   });
   if (purpose === "summary") {
-    const markedCount = markGuidanceSummarizedMessages(ctx, meta);
+    const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: "summary_messages_marked",
       detail: { markedCount },
     });
     if (isSummaryCompletionMarked(responseText, locale)) {
-      await revisePlanAfterSummary(ctx, meta, responseText, { baseMessages: invokerMessages });
+      await revisePlanAfterSummary(ctx, meta, responseText, { baseMessages: modelMessages });
     } else {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,

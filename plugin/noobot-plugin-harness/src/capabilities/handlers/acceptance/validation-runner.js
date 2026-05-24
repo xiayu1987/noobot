@@ -14,6 +14,7 @@ import {
   extractRawTextContent,
   getPromptJsonFormatExample,
   invokeWithReasoningRetry,
+  relaySeparateModelOutputAsUserMessage,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
@@ -162,7 +163,6 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   const agentMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "acceptance_semantic_validation",
-    messages: Array.isArray(ctx?.messages) ? ctx.messages : [],
   });
   let response = null;
   try {
@@ -213,6 +213,12 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   const responseText =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "acceptance_semantic_validation",
+    content: responseText,
+    dedupe: true,
+  });
   baseReport.semanticValidation = parseSemanticValidationResult(responseText);
   bucket.lastAcceptanceReport = baseReport;
   appendCapabilityLog(ctx, {

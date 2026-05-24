@@ -60,23 +60,35 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
   return "";
 }
 
+function resolveAgentModelMessages(ctx = {}, fallbackMessages = []) {
+  if (Array.isArray(fallbackMessages) && fallbackMessages.length) return fallbackMessages;
+  if (Array.isArray(ctx?.messages) && ctx.messages.length) return ctx.messages;
+  return [];
+}
+
 export function resolveCapabilityModelMessages(
   meta = {},
   { ctx = {}, purpose = "", messages = [] } = {},
 ) {
-  const source = Array.isArray(messages) ? messages : [];
+  const sourceMessages = Array.isArray(messages) && messages.length
+    ? messages
+    : Array.isArray(ctx?.messages)
+      ? ctx.messages
+      : [];
   const resolver = meta?.harness?.resolveModelMessages;
-  if (typeof resolver !== "function") return source;
-  try {
-    const resolved = resolver({
-      ctx,
-      purpose: String(purpose || "").trim(),
-      messages: source,
-    });
-    return Array.isArray(resolved) ? resolved : source;
-  } catch {
-    return source;
+  if (typeof resolver === "function") {
+    try {
+      const resolved = resolver({
+        ctx,
+        purpose: String(purpose || "").trim(),
+        messages: sourceMessages,
+      });
+      if (Array.isArray(resolved) && resolved.length) return resolved;
+    } catch {
+      // fall through to local compatibility fallback
+    }
   }
+  return resolveAgentModelMessages(ctx, sourceMessages);
 }
 
 export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {

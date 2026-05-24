@@ -127,6 +127,7 @@ export function relaySeparateModelOutputAsUserMessage(
     injectAt: "append",
     dedupe,
     avoidBreakToolCallContinuity: true,
+    persistToCurrentTurn: true,
   });
   if (!injection.injected && injection.deduped === true) {
     appendCapabilityLog(ctx, {
