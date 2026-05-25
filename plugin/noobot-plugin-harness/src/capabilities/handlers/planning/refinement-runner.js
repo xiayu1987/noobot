@@ -21,6 +21,7 @@ import {
   resolveCapabilityToolAllowlist,
 } from "./deps.js";
 import { createPlanRevisionHelpers } from "../shared/plan-revision-helpers.js";
+import { buildPlanChecklistContextMessages } from "../shared/plan-checklist-context.js";
 
 const planRevisionHelpers = createPlanRevisionHelpers({
   CAPABILITY_DOMAIN,
@@ -66,12 +67,20 @@ export async function runPlanningRefinementBySeparateModel(
     state,
     String(summaryText || "").trim(),
   );
-  const agentMessages = Array.isArray(baseMessages)
+  const agentMessagesBase = Array.isArray(baseMessages)
     ? baseMessages
     : resolveCapabilityModelMessages(meta, {
         ctx,
         purpose: "planning_refinement",
       });
+  const agentMessages = [
+    ...agentMessagesBase,
+    ...buildPlanChecklistContextMessages({
+      locale,
+      planText: bucket?.planText || "",
+      bucket,
+    }),
+  ];
   const refinementMessages = buildCapabilityModelMessages({
     locale,
     agentMessages,

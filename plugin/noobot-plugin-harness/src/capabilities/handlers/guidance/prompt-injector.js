@@ -11,6 +11,7 @@ import {
 } from "./deps.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
+import { buildPlanChecklistSystemContent } from "../shared/plan-checklist-context.js";
 import {
   buildGuidanceFailurePromptText,
   buildGuidanceSummaryPromptText,
@@ -29,21 +30,37 @@ export function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", {
 export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
-  const { state } = holder;
+  const { bucket, state } = holder;
   const locale = state?.locale || LOCALE.ZH_CN;
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
 
   if (state.pending.summary === true) {
-    injectMessageWithPolicy(ctx, {
-      role: "system",
+    const checklistContent = buildPlanChecklistSystemContent({
+      locale,
+      planText: bucket?.planText || "",
+      bucket,
+    });
+    if (checklistContent) {
+      injectMessageWithPolicy(ctx, {
+        role: "system",
+        content: checklistContent,
+        injectAt: "append",
+        dedupe: false,
+        avoidBreakToolCallContinuity: true,
+      });
+    }
+    const userInjection = injectMessageWithPolicy(ctx, {
+      role: "user",
       content: buildGuidanceSummaryPromptText({
         locale,
         marker: getGuidanceSummaryMarker(locale),
       }),
-      injectAt: "prepend",
+      injectAt: "append",
+      dedupe: false,
       avoidBreakToolCallContinuity: true,
     });
+    if (!userInjection.injected) return false;
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
     state.flags.guidanceSummaryMarkPending = true;

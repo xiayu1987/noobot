@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "./constants.js";
+import { resolvePlanChecklistText } from "./plan-checklist-context.js";
 
 function normalizePromptOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
@@ -255,18 +256,34 @@ export function buildAcceptanceValidationPromptText(options = {}) {
 export function buildAcceptanceMainPlanContextPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const payload = data.mainPlanContext ?? options?.mainPlanContext ?? null;
-  const payloadText = JSON.stringify(payload || {}, null, 2);
+  const source = payload && typeof payload === "object" ? payload : {};
+  const planTextFromPayload = String(source?.planText || "").trim();
+  const plansInOrder = Array.isArray(source?.plansInOrder) ? source.plansInOrder : [];
+  const checklist = Array.isArray(source?.taskChecklist) ? source.taskChecklist : [];
+  const planChecklistText = (() => {
+    const mergedPlanTextFromOrderedPlans = plansInOrder
+      .map((item = {}) => String(item?.planText || "").trim())
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+    const resolved = resolvePlanChecklistText({
+      planText: planTextFromPayload || mergedPlanTextFromOrderedPlans,
+      bucket: { taskChecklist: checklist },
+    });
+    if (resolved) return resolved;
+    return locale === LOCALE.EN_US ? "(empty)" : "（空）";
+  })();
   if (locale === LOCALE.EN_US) {
     return [
       String(marker || "").trim(),
-      "Complete main plan context (must be fully respected during acceptance validation):",
-      payloadText,
+      "Plan checklist context (must be fully respected during acceptance validation):",
+      planChecklistText,
     ].filter(Boolean).join("\n");
   }
   return [
     String(marker || "").trim(),
-    "完整主计划上下文如下（验收时必须完整对齐）：",
-    payloadText,
+    "计划清单上下文如下（验收时必须完整对齐）：",
+    planChecklistText,
   ].filter(Boolean).join("\n");
 }
 

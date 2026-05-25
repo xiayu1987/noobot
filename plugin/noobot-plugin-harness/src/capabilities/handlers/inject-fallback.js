@@ -5,12 +5,10 @@
  */
 import {
   CAPABILITY_DOMAIN,
-  LOCALE,
   appendCapabilityLog,
   ensureHarnessBucket,
   extractRawTextContent,
 } from "./shared.js";
-import { injectMessageWithPolicy } from "./shared/message-injection-utils.js";
 
 export function scheduleInjectTask(
   ctx = {},
@@ -33,52 +31,6 @@ export function scheduleInjectTask(
       typeof buildScheduledDetail === "function"
         ? buildScheduledDetail({ bucket, state, ctx, result })
         : {},
-  });
-  return true;
-}
-
-export function injectScheduledPrompt(
-  ctx = {},
-  {
-    domain = CAPABILITY_DOMAIN.GUIDANCE,
-    injectedEvent = "",
-    getPendingData = null,
-    consumePendingData = null,
-    markCapturePending = null,
-    buildPromptContent = null,
-    messageRole = "system",
-    injectAt = "prepend",
-  } = {},
-) {
-  const holder = ensureHarnessBucket(ctx);
-  if (!holder || typeof getPendingData !== "function" || typeof buildPromptContent !== "function") return false;
-  const { bucket, state } = holder;
-  const pendingData = getPendingData({ bucket, state, ctx });
-  if (!pendingData) return false;
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
-  if (!messages) return false;
-  const locale = state?.locale || LOCALE.ZH_CN;
-  const content = String(buildPromptContent({ bucket, state, ctx, pendingData, locale }) || "").trim();
-  if (!content) return false;
-  const normalizedRole = String(messageRole || "system").trim().toLowerCase() === "user" ? "user" : "system";
-  const normalizedInjectAt = String(injectAt || "prepend").trim().toLowerCase();
-  const injection = injectMessageWithPolicy(ctx, {
-    role: normalizedRole,
-    content,
-    injectAt: normalizedInjectAt === "append" ? "append" : "prepend",
-    dedupe: false,
-    avoidBreakToolCallContinuity: true,
-  });
-  if (!injection.injected) return false;
-  if (typeof consumePendingData === "function") {
-    consumePendingData({ bucket, state, ctx, pendingData });
-  }
-  if (typeof markCapturePending === "function") {
-    markCapturePending({ bucket, state, ctx, pendingData });
-  }
-  appendCapabilityLog(ctx, {
-    domain,
-    event: String(injectedEvent || "").trim() || "inject_prompt_injected",
   });
   return true;
 }
