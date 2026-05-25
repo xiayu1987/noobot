@@ -11,11 +11,11 @@ const WARN_COOLDOWN_TURNS = 3;
 const TRACKED_PENDING_KEYS = Object.freeze([
   "guidance",
   "summary",
-  "planRevision",
+  "planUpdate",
   "acceptanceSemanticValidation",
 ]);
 const TRACKED_CAPTURE_FLAG_KEYS = Object.freeze([
-  "planRevisionCapturePending",
+  "planUpdateCapturePending",
   "acceptanceSemanticValidationCapturePending",
 ]);
 const HOOK_TURN_TICK_POINTS = new Set([
@@ -52,7 +52,7 @@ function resolveCurrentHookTurn(state = {}) {
 }
 
 function isPendingKeyActive(key = "", value = null) {
-  if (key === "summary" || key === "planRevision") return value === true;
+  if (key === "summary" || key === "planUpdate") return value === true;
   if (key === "guidance" || key === "acceptanceSemanticValidation") return value !== null && value !== undefined;
   return Boolean(value);
 }
@@ -62,8 +62,9 @@ export function setPendingStateWithMeta(state = {}, key = "", value = null) {
   if (!state.pending || typeof state.pending !== "object") state.pending = {};
   const pendingMeta = ensurePendingMeta(state);
   state.pending[key] = value;
-  if (key === "planRevision" && value !== true) {
-    state.pending.summaryText = "";
+  if (key === "planUpdate" && value !== true) {
+    state.pending.planUpdateStage = "";
+    state.pending.planUpdateContext = null;
   }
   if (isPendingKeyActive(key, value)) {
     pendingMeta.pending[key] = resolveCurrentHookTurn(state);
@@ -83,6 +84,11 @@ export function setCaptureFlagStateWithMeta(state = {}, key = "", active = false
     pendingMeta.flags[key] = resolveCurrentHookTurn(state);
   } else {
     delete pendingMeta.flags[key];
+    if (key === "planUpdateCapturePending") {
+      delete state.flags.planUpdateCaptureStage;
+      delete state.flags.planUpdateCaptureSummaryText;
+      delete state.flags.planUpdateCaptureTargetMainStepIndexes;
+    }
     if (key === "acceptanceSemanticValidationCapturePending") {
       delete state.flags.acceptanceSemanticValidationCaptureReportIndex;
     }
@@ -128,7 +134,7 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
     setPendingStateWithMeta(
       state,
       key,
-      key === "summary" || key === "planRevision" ? false : null,
+      key === "summary" || key === "planUpdate" ? false : null,
     );
     clearedCount += 1;
     clearedPendingKeys.push(key);

@@ -17,16 +17,23 @@ import {
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan-checklist-context.js";
+import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
+import {
+  canAttemptPlanUpdate,
+  clearPlanUpdateCaptureContext,
+  readPlanUpdateCaptureContext,
+  setPendingPlanUpdate,
+  writePlanUpdateCaptureContext,
+} from "./plan-update-engine.js";
 import {
   applyRevisedPlanFromText,
   buildNextPhaseRelayContent,
   buildPlanningRefinementPrompt,
   buildPlanningRevisionPrompt,
-  canAttemptPlanRevision,
   resolveRefinementTargetMainSteps,
 } from "./revision-engine.js";
 
-export function schedulePlanRevisionByInject(ctx = {}, summaryText = "", stage = "revision") {
+export function schedulePlanUpdateByInject(ctx = {}, summaryText = "", stage = "revision") {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -43,7 +50,7 @@ export function schedulePlanRevisionByInject(ctx = {}, summaryText = "", stage =
     });
     return false;
   }
-  if (normalizedStage === "revision" && !canAttemptPlanRevision(ctx, state, { increment: false })) {
+  if (!canAttemptPlanUpdate(ctx, state, { increment: false, stage: normalizedStage })) {
     return false;
   }
   return scheduleInjectTask(ctx, {
@@ -53,39 +60,33 @@ export function schedulePlanRevisionByInject(ctx = {}, summaryText = "", stage =
         ? "planning_revision_scheduled_by_inject"
         : "planning_refinement_scheduled_by_inject",
     setPendingData: ({ state }) => {
-      setPendingStateWithMeta(state, "planRevision", true);
-      state.pending.planRevisionStage = normalizedStage;
-      state.pending.summaryText = String(summaryText || "").trim();
-      state.pending.planRevisionTargetMainStepIndexes =
+      setPendingStateWithMeta(state, "planUpdate", true);
+      const normalizedTargetMainStepIndexes =
         normalizedStage === "refinement" ? targetMainSteps.map((item) => item.index) : [];
+      setPendingPlanUpdate(state, {
+        active: true,
+        stage: normalizedStage,
+        summaryText,
+        targetMainStepIndexes: normalizedTargetMainStepIndexes,
+      });
       return true;
     },
     buildScheduledDetail: ({ bucket, state }) => ({
       stage: normalizedStage,
-      hasSummaryText: Boolean(state.pending.summaryText),
+      hasSummaryText: Boolean(
+        state.pending?.planUpdateContext?.summaryText || state.pending.summaryText,
+      ),
       checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
     }),
   });
 }
 
-export function maybeInjectPlanRevisionPrompt(ctx = {}) {
+export function maybeInjectPlanUpdatePrompt(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const pendingData =
-    state.pending.planRevision === true
-      ? {
-          summaryText: String(state.pending.summaryText || "").trim(),
-          stage:
-            String(state.pending.planRevisionStage || "refinement").trim().toLowerCase() === "revision"
-              ? "revision"
-              : "refinement",
-          targetMainStepIndexes: Array.isArray(state.pending.planRevisionTargetMainStepIndexes)
-            ? state.pending.planRevisionTargetMainStepIndexes
-            : [],
-        }
-      : null;
-  if (!pendingData) return false;
+  const pendingData = resolvePendingPlanUpdate(state);
+  if (!pendingData?.active) return false;
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
@@ -115,18 +116,10 @@ export function maybeInjectPlanRevisionPrompt(ctx = {}) {
     avoidBreakToolCallContinuity: true,
   });
   if (!userInjection.injected) return false;
-  setPendingStateWithMeta(state, "planRevision", false);
-  delete state.pending.planRevisionStage;
-  delete state.pending.planRevisionTargetMainStepIndexes;
-  setCaptureFlagStateWithMeta(state, "planRevisionCapturePending", true);
-  state.flags.planRevisionCaptureStage =
-    String(pendingData?.stage || "refinement").trim().toLowerCase() === "revision"
-      ? "revision"
-      : "refinement";
-  state.flags.planRevisionCaptureSummaryText = String(pendingData?.summaryText || "").trim();
-  state.flags.planRevisionCaptureTargetMainStepIndexes = Array.isArray(pendingData?.targetMainStepIndexes)
-    ? pendingData.targetMainStepIndexes
-    : [];
+  setPendingStateWithMeta(state, "planUpdate", false);
+  setPendingPlanUpdate(state, { active: false });
+  setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", true);
+  writePlanUpdateCaptureContext(state, pendingData);
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: "planning_plan_update_prompt_injected",
@@ -134,30 +127,21 @@ export function maybeInjectPlanRevisionPrompt(ctx = {}) {
   return true;
 }
 
-export async function maybeCapturePlanRevisionByInject(ctx = {}) {
+export async function maybeCapturePlanUpdateByInject(ctx = {}) {
   return captureInjectedResult(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     completedEvent: "planning_plan_update_capture_completed_inject",
     failedEvent: "planning_plan_update_capture_failed_inject",
-    isCapturePending: ({ state }) => state.flags.planRevisionCapturePending === true,
+    isCapturePending: ({ state }) => state.flags.planUpdateCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
-      const stage =
-        String(state.flags.planRevisionCaptureStage || "refinement").trim().toLowerCase() === "revision"
-          ? "revision"
-          : "refinement";
-      const summaryText = String(state.flags.planRevisionCaptureSummaryText || "").trim();
-      const targetMainStepIndexes = Array.isArray(state.flags.planRevisionCaptureTargetMainStepIndexes)
-        ? state.flags.planRevisionCaptureTargetMainStepIndexes
-        : [];
-      setCaptureFlagStateWithMeta(state, "planRevisionCapturePending", false);
-      delete state.flags.planRevisionCaptureStage;
-      delete state.flags.planRevisionCaptureSummaryText;
-      delete state.flags.planRevisionCaptureTargetMainStepIndexes;
+      const { stage, summaryText, targetMainStepIndexes } = readPlanUpdateCaptureContext(state);
+      setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", false);
+      clearPlanUpdateCaptureContext(state);
       return { stage, summaryText, targetMainStepIndexes };
     },
     applyCaptureResult: ({ responseText, ctx: currentCtx, state, bucket, captureMeta }) => {
       const stage = captureMeta?.stage === "revision" ? "revision" : "refinement";
-      if (stage === "revision" && !canAttemptPlanRevision(currentCtx, state, { increment: true })) {
+      if (!canAttemptPlanUpdate(currentCtx, state, { increment: true, stage })) {
         return { applied: false, detail: { stage, reason: "max_revision_attempts" } };
       }
       const applied = applyRevisedPlanFromText(currentCtx, responseText, {
@@ -180,7 +164,7 @@ export async function maybeCapturePlanRevisionByInject(ctx = {}) {
       if (stage === "revision") {
         const mainPlanChanged = bucket?.lastMainPlanRevisionChanged === true;
         const scheduled = mainPlanChanged
-          ? schedulePlanRevisionByInject(currentCtx, captureMeta?.summaryText || "", "refinement")
+          ? schedulePlanUpdateByInject(currentCtx, captureMeta?.summaryText || "", "refinement")
           : false;
         if (!mainPlanChanged && applied) {
           appendCapabilityLog(currentCtx, {

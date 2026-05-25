@@ -10,11 +10,11 @@ import {
   ensureHarnessBucket,
 } from "./deps.js";
 import { createPlanRevisionHelpers } from "../shared/plan-revision-helpers.js";
-import { MAX_PLAN_REVISION_ATTEMPTS } from "../../../core/thresholds.js";
 import {
   buildPlanningRevisionPromptText,
   getPlanningRevisionMarker,
 } from "../shared/workflow-prompts.js";
+import { canAttemptPlanUpdate } from "./plan-update-engine.js";
 
 const planRevisionHelpers = createPlanRevisionHelpers({
   CAPABILITY_DOMAIN,
@@ -44,20 +44,6 @@ export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, 
   });
 }
 
-export function canAttemptPlanRevision(ctx = {}, state = {}, { increment = false } = {}) {
-  if (!state || typeof state !== "object") return false;
-  if (!state.counters || typeof state.counters !== "object") state.counters = {};
-  const current = Number.isFinite(Number(state.counters.planRevisionAttempts))
-    ? Number(state.counters.planRevisionAttempts)
-    : 0;
-  if (current >= MAX_PLAN_REVISION_ATTEMPTS) {
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_revision_skipped_by_max_attempts",
-      detail: { current, limit: MAX_PLAN_REVISION_ATTEMPTS },
-    });
-    return false;
-  }
-  if (increment) state.counters.planRevisionAttempts = current + 1;
-  return true;
+export function canAttemptPlanRevision(ctx = {}, state = {}, { increment = false, stage = "revision" } = {}) {
+  return canAttemptPlanUpdate(ctx, state, { increment, stage });
 }

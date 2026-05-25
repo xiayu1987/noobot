@@ -27,9 +27,9 @@ import {
   applyRevisedPlanFromText,
   buildNextPhaseRelayContent,
   buildPlanningRevisionPrompt,
-  canAttemptPlanRevision,
 } from "./revision-engine.js";
-import { schedulePlanRevisionByInject } from "./revision-injector.js";
+import { canAttemptPlanUpdate } from "./plan-update-engine.js";
+import { schedulePlanUpdateByInject } from "./revision-injector.js";
 import { buildGuidancePromptContent } from "./prompt-injector.js";
 import { markGuidanceSummarizedMessages } from "./signal-tracker.js";
 import { applySummaryText } from "./summary-manager.js";
@@ -37,13 +37,18 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { buildGuidanceSummaryPromptText } from "../shared/workflow-prompts.js";
 import { buildPlanChecklistContextMessages } from "../shared/plan-checklist-context.js";
 
-export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "", { baseMessages = null } = {}) {
+export async function runPlanUpdateAfterSummary(
+  ctx = {},
+  meta = {},
+  summaryText = "",
+  { baseMessages = null } = {},
+) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) {
-    return schedulePlanRevisionByInject(ctx, summaryText, "revision");
+    return schedulePlanUpdateByInject(ctx, summaryText, "revision");
   }
   const locale = state?.locale || LOCALE.ZH_CN;
   const fallbackMessages = resolveCapabilityModelMessages(meta, {
@@ -55,7 +60,7 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
   ];
   let changed = false;
 
-  if (!canAttemptPlanRevision(ctx, state, { increment: true })) {
+  if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "revision" })) {
     return changed;
   }
   const revisionTask = buildPlanningRevisionPrompt(locale, bucket, state, summaryText);
@@ -158,6 +163,13 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
     return changed;
   }
 
+  if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "refinement" })) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_refinement_skipped_by_max_attempts",
+    });
+    return changed;
+  }
   const refinementResult = await runPlanningRefinementBySeparateModel(ctx, meta, {
     summaryText,
     source: "planning_refinement",
@@ -288,7 +300,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       detail: { markedCount },
     });
     if (isSummaryCompletionMarked(mergedSummaryText, locale)) {
-      await revisePlanAfterSummary(ctx, meta, mergedSummaryText, { baseMessages: modelMessages });
+      await runPlanUpdateAfterSummary(ctx, meta, mergedSummaryText, { baseMessages: modelMessages });
     } else {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,

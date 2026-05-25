@@ -33,6 +33,51 @@ function fillMissingDefaults(target = {}, defaults = {}) {
   }
 }
 
+function migrateLegacyPlanUpdateState(state = {}) {
+  if (!state || typeof state !== "object") return;
+  const counters = state.counters && typeof state.counters === "object" ? state.counters : {};
+  const pending = state.pending && typeof state.pending === "object" ? state.pending : {};
+  const flags = state.flags && typeof state.flags === "object" ? state.flags : {};
+
+  const hasUnifiedAttempts = Number.isFinite(Number(counters.planUpdateAttempts));
+  const normalizedUnifiedAttempts = hasUnifiedAttempts ? Number(counters.planUpdateAttempts) : 0;
+  const legacyAttempts = Number.isFinite(Number(counters.planRevisionAttempts))
+    ? Number(counters.planRevisionAttempts)
+    : 0;
+  if (!hasUnifiedAttempts || (normalizedUnifiedAttempts === 0 && legacyAttempts > 0)) {
+    counters.planUpdateAttempts = legacyAttempts;
+  }
+
+  const normalizedLegacyStage =
+    String(pending.planRevisionStage || "").trim().toLowerCase() === "revision"
+      ? "revision"
+      : String(pending.planRevisionStage || "").trim()
+        ? "refinement"
+        : "";
+  if (pending.planUpdate !== true && pending.planRevision === true) {
+    pending.planUpdate = true;
+  }
+  if (!String(pending.planUpdateStage || "").trim() && normalizedLegacyStage) {
+    pending.planUpdateStage = normalizedLegacyStage;
+  }
+  if (
+    (pending.planUpdateContext === null || pending.planUpdateContext === undefined) &&
+    (String(pending.summaryText || "").trim() ||
+      Array.isArray(pending.planRevisionTargetMainStepIndexes))
+  ) {
+    pending.planUpdateContext = {
+      summaryText: String(pending.summaryText || "").trim(),
+      targetMainStepIndexes: Array.isArray(pending.planRevisionTargetMainStepIndexes)
+        ? pending.planRevisionTargetMainStepIndexes
+        : [],
+    };
+  }
+
+  if (flags.planUpdateCapturePending !== true && flags.planRevisionCapturePending === true) {
+    flags.planUpdateCapturePending = true;
+  }
+}
+
 export function ensureHarnessBucket(ctx = {}) {
   const agentContext =
     ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
@@ -65,6 +110,7 @@ export function ensureHarnessBucket(ctx = {}) {
     fillMissingDefaults(flags, DEFAULT_HARNESS_FLAGS);
     fillMissingDefaults(signals, DEFAULT_HARNESS_SIGNALS);
     fillMissingDefaults(pending, DEFAULT_HARNESS_PENDING);
+    migrateLegacyPlanUpdateState(state);
 
     ensureArrayField(bucket, "taskChecklist");
     ensureArrayField(bucket, "acceptanceReports");
