@@ -661,7 +661,7 @@ test("harness planning separate model uses resolved planning tool allowlist", as
   assert.match(String(constraintPrompt?.content || ""), /"latestUserGoal": "开始任务"/);
 });
 
-test("harness planning separate model keeps recent dialog in flattened messages", async () => {
+test("harness planning separate model keeps latest user goal in planning context summary", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
@@ -701,8 +701,8 @@ test("harness planning separate model keeps recent dialog in flattened messages"
   await hookManager.emit("before_llm_call", ctx);
   assert.equal(invocations.length >= 1, true);
   const allMessagesText = invocations[0].messages.map((item = {}) => String(item?.content || "")).join("\n");
-  assert.match(allMessagesText, /重新查找最适合AI开发的人/);
   assert.match(allMessagesText, /查找最适合组织的人/);
+  assert.doesNotMatch(allMessagesText, /重新查找最适合AI开发的人/);
 });
 
 test("harness planning rejects incomplete checklist payload without totalGoal or io-file fields", async () => {

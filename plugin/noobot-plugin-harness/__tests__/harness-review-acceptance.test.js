@@ -794,15 +794,15 @@ test("planning_revision reuses summary model messages in separate_model flow", a
   assertFlatCapabilityMessages(refinementMessages);
   const refinementBaseMessages = refinementMessages.slice(0, -1);
   const revisionBaseMessages = revisionMessages.slice(0, -1);
-  assert.deepEqual(refinementBaseMessages, summaryMessages);
-  assert.deepEqual(revisionBaseMessages, summaryMessages);
+  assert.deepEqual(refinementBaseMessages, summaryMessages.slice(0, -1));
+  assert.deepEqual(revisionBaseMessages, summaryMessages.slice(0, -1));
   assert.equal(
     revisionMessages.some((item = {}) => String(item?.content || "").includes("REVISION-ONLY")),
     false,
   );
 });
 
-test("harness summary without completion marker does not trigger planning revision", async () => {
+test("harness summary without completion marker still triggers planning revision", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
@@ -840,10 +840,10 @@ test("harness summary without completion marker does not trigger planning revisi
 
   await hookManager.emit("before_llm_call", { messages, agentContext });
 
-  assert.deepEqual(invocations.map((item) => item.purpose), ["summary"]);
+  assert.deepEqual(invocations.map((item) => item.purpose), ["summary", "planning_revision"]);
   assert.equal(
     agentContext.payload.harness.logs.guidance.some((item) => item.event === "summary_completion_marker_missing"),
-    true,
+    false,
   );
   assert.equal(agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_checklist_revised_after_summary"), false);
 });

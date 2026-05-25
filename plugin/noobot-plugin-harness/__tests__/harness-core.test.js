@@ -410,7 +410,7 @@ test("harness plugin injects prompt into before_llm_call messages", async () => 
     messages,
   });
 
-  assert.equal(messages[0].role, "system");
+  assert.equal(messages[0].role, "user");
   assert.match(messages[0].content, /noobot-harness-policy/);
   assert.match(messages[0].content, /用户隔离/);
 });

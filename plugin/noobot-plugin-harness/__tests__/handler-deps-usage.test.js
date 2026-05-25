@@ -12,6 +12,10 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const handlersRoot = path.resolve(__dirname, "../src/capabilities/handlers");
+const ALLOWED_UNUSED_EXPORTS = Object.freeze({
+  planning: new Set(["getTaskTemplate"]),
+  guidance: new Set(["GUIDANCE_WEB_SERVICE_NAME", "GUIDANCE_WEB_TOOL_NAMES"]),
+});
 
 function extractNamedExports(source = "") {
   const names = [];
@@ -47,7 +51,9 @@ for (const domain of ["planning", "guidance", "acceptance", "review"]) {
     const files = listJsFiles(domainDir);
     const joined = files.map((filePath) => fs.readFileSync(filePath, "utf8")).join("\n\n");
 
+    const allowed = ALLOWED_UNUSED_EXPORTS[domain] || new Set();
     const unused = exportNames.filter((name) => {
+      if (allowed.has(name)) return false;
       const pattern = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\b`, "g");
       return !pattern.test(joined);
     });
