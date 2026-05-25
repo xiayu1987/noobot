@@ -8,27 +8,20 @@ import {
   LOCALE,
   appendCapabilityLog,
   ensureHarnessBucket,
-  extractJsonObjectFromText,
-  getDefaultTaskOwner,
-  getPromptJsonFormatExample,
-  parseRefinementChecklistFromModelOutput,
-  parseTaskChecklistFromModelOutput,
-  translateI18nText,
 } from "./deps.js";
 import { createPlanRevisionHelpers } from "../shared/plan-revision-helpers.js";
 import { MAX_PLAN_REVISION_ATTEMPTS } from "../../../core/thresholds.js";
+import { parseMainPlansFromPlanText } from "../shared/plan-text-protocol.js";
+import {
+  buildPlanningRevisionPromptText,
+  getPlanningRevisionMarker,
+} from "../shared/workflow-prompts.js";
 
 const planRevisionHelpers = createPlanRevisionHelpers({
   CAPABILITY_DOMAIN,
   LOCALE,
   appendCapabilityLog,
   ensureHarnessBucket,
-  extractJsonObjectFromText,
-  getDefaultTaskOwner,
-  getPromptJsonFormatExample,
-  parseRefinementChecklistFromModelOutput,
-  parseTaskChecklistFromModelOutput,
-  translateI18nText,
 });
 
 export const resolveRefinementTargetMainSteps = planRevisionHelpers.resolveRefinementTargetMainSteps;
@@ -37,26 +30,24 @@ export const buildPlanningRefinementPrompt = planRevisionHelpers.buildPlanningRe
 export const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayContent;
 
 export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}, summaryText = "") {
-  return [
-    translateI18nText(locale, "planningRevisionMarker"),
-    translateI18nText(locale, "planningRevisionPromptBody", {
-      example: getPromptJsonFormatExample("planning_revision"),
-    }),
-    translateI18nText(locale, "jsonOnlyOutputRequirement"),
-    JSON.stringify({
-      currentSummary: String(summaryText || "").trim(),
-      currentPlan: {
-        totalGoal: bucket.totalGoal || "",
-        taskOwner: bucket.taskOwner || getDefaultTaskOwner(locale),
-        taskChecklist: bucket.taskChecklist || [],
-        nextPhase: bucket.nextPhase || null,
-      },
-      harnessState: {
-        signals: state.signals || {},
-        counters: state.counters || {},
-      },
-    }, null, 2),
-  ].join("\n");
+  const mainPlansText = (() => {
+    const plans = parseMainPlansFromPlanText(bucket?.planText || "");
+    if (!plans.length) return locale === LOCALE.EN_US ? "(empty)" : "（空）";
+    return plans.map((item = {}) => `${item.id}. ${item.content}`).join("\n");
+  })();
+  const globalRevisionCount = Number.isFinite(Number(bucket?.globalRevisionCount))
+    ? Number(bucket.globalRevisionCount)
+    : 0;
+  void state;
+  return buildPlanningRevisionPromptText({
+    locale,
+    marker: getPlanningRevisionMarker(locale),
+    data: {
+      globalRevisionCount,
+      currentMainPlansText: mainPlansText,
+      feedback: String(summaryText || "").trim(),
+    },
+  });
 }
 
 export function canAttemptPlanRevision(ctx = {}, state = {}, { increment = false } = {}) {

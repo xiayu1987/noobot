@@ -7,7 +7,7 @@ import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
 import { translateI18nText } from "./i18n.js";
 import { injectMessageWithPolicy } from "./message-injection-utils.js";
-import { resolveCurrentTurnMessagesStore } from "./injected-message-utils.js";
+import { buildHarnessInjectedMessage, resolveCurrentTurnMessagesStore } from "./injected-message-utils.js";
 
 export function mergeAttachmentMetas(existing = [], incoming = []) {
   const current = Array.isArray(existing) ? existing : [];
@@ -52,25 +52,36 @@ function isHarnessInjectedMessage(message = {}) {
 }
 
 export function attachMetasToLatestInjectedMessage(ctx = {}, metas = []) {
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : [];
-  if (!messages.length) return false;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const item = messages[index] || {};
-    if (!isHarnessInjectedMessage(item)) continue;
-    messages[index] = {
-      ...item,
-      attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
-    };
-    const turnStore = resolveCurrentTurnMessagesStore(ctx);
-    if (turnStore && typeof turnStore.updateLast === "function") {
-      turnStore.updateLast(
-        {
-          attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
-        },
-        (messageItem = {}) => isHarnessInjectedMessage(messageItem),
-      );
+  const candidates = [
+    { list: Array.isArray(ctx?.messages) ? ctx.messages : [], isCtxMessages: true },
+    {
+      list: Array.isArray(ctx?.result?.turnMessages) ? ctx.result.turnMessages : [],
+      isCtxMessages: false,
+    },
+  ];
+  for (const candidate of candidates) {
+    const messages = candidate.list;
+    if (!messages.length) continue;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const item = messages[index] || {};
+      if (!isHarnessInjectedMessage(item)) continue;
+      messages[index] = {
+        ...item,
+        attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
+      };
+      if (candidate.isCtxMessages) {
+        const turnStore = resolveCurrentTurnMessagesStore(ctx);
+        if (turnStore && typeof turnStore.updateLast === "function") {
+          turnStore.updateLast(
+            {
+              attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
+            },
+            (messageItem = {}) => isHarnessInjectedMessage(messageItem),
+          );
+        }
+      }
+      return true;
     }
-    return true;
   }
   return false;
 }
@@ -191,12 +202,40 @@ export function relaySeparateModelOutputAsUserMessage(
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   const text = String(content || "").trim();
-  if (!messages || !text) return false;
+  if (!text) return false;
   const prefix = translateI18nText(locale, "separateModelRelayPrefix", {
     purpose: String(purpose || "").trim() || "unknown",
   });
   const relayContent = `${prefix}\n${text}`;
   const relayAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  if (!messages) {
+    const turnMessages = Array.isArray(ctx?.result?.turnMessages) ? ctx.result.turnMessages : null;
+    if (!turnMessages) return false;
+    const relayMessage = buildHarnessInjectedMessage(relayContent, {
+      attachmentMetas: relayAttachmentMetas,
+    });
+    if (
+      dedupe &&
+      turnMessages.some(
+        (item = {}) =>
+          String(item?.role || "").trim() === String(relayMessage.role || "").trim() &&
+          String(item?.content || "").trim() === String(relayMessage.content || "").trim(),
+      )
+    ) {
+      return false;
+    }
+    turnMessages.push({
+      ...relayMessage,
+      type: "message",
+      dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    });
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_separate_model_relay_injected_to_final_output_turn",
+      detail: { purpose: String(purpose || "").trim() || "unknown" },
+    });
+    return true;
+  }
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: relayContent,

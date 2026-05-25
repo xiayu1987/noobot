@@ -9,12 +9,16 @@ import {
   appendCapabilityLog,
   ensureHarnessBucket,
   extractRawTextContent,
-  getPromptJsonFormatExample,
   injectMessageWithPolicy,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
-  translateI18nText,
 } from "./deps.js";
+import {
+  buildPlanningMainPrompt,
+  getPlanningPromptMarker,
+  getPlanningPromptToolsHeader,
+  getPlanningToolContextMarker,
+} from "../shared/workflow-prompts.js";
 
 function isHarnessInjectedMessage(message = {}) {
   return (
@@ -48,7 +52,7 @@ function resolvePlanningToolCatalog(ctx = {}, locale = LOCALE.ZH_CN) {
 function buildPlanningToolCatalogPrompt(ctx = {}, locale = LOCALE.ZH_CN) {
   const catalog = resolvePlanningToolCatalog(ctx, locale);
   return [
-    translateI18nText(locale, "planningPromptToolsHeader"),
+    getPlanningPromptToolsHeader(locale),
     "```json",
     JSON.stringify(catalog, null, 2),
     "```",
@@ -75,7 +79,7 @@ function resolveLatestUserTextFromMessages(messageList = []) {
 
 export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
   return [
-    translateI18nText(locale, "planningToolContextMarker"),
+    getPlanningToolContextMarker(locale),
     buildPlanningToolCatalogPrompt(ctx, locale),
     "",
     JSON.stringify(
@@ -90,14 +94,12 @@ export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, 
 }
 
 export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}) {
-  return [
-    translateI18nText(locale, "planningPromptMarker"),
-    translateI18nText(locale, "planningPromptBody"),
-    translateI18nText(locale, "planningPromptFormatExample", {
-      example: getPromptJsonFormatExample("planning_main"),
-    }),
-    translateI18nText(locale, "jsonOnlyOutputRequirement"),
-  ].join("\n");
+  const userGoal = resolveLatestUserMessageText(_ctx) || (locale === LOCALE.EN_US ? "N/A" : "（未获取到用户目标）");
+  return buildPlanningMainPrompt({
+    locale,
+    marker: getPlanningPromptMarker(locale),
+    data: { userGoal },
+  });
 }
 
 export function resolveLatestUserMessageText(ctx = {}) {

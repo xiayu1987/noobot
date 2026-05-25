@@ -218,6 +218,7 @@ export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
   const source = bucket && typeof bucket === "object" ? bucket : {};
   return {
     totalGoal: String(source.totalGoal || "").trim(),
+    planText: String(source.planText || "").trim(),
     taskOwner: String(source.taskOwner || getDefaultTaskOwner(locale)).trim() || getDefaultTaskOwner(locale),
     nextPhase: source.nextPhase && typeof source.nextPhase === "object" ? source.nextPhase : null,
     checklistSource: String(source.taskChecklistSource || "").trim(),

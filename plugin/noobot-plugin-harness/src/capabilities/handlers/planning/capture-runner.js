@@ -34,8 +34,11 @@ import {
   resolveCapabilityModelMessages,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
-  translateI18nText,
 } from "./deps.js";
+import {
+  getPlanningContextSummaryHeader,
+  getPlanningSeparateModelEmptyRelay,
+} from "../shared/workflow-prompts.js";
 
 function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
   const raw = String(text || "").replace(/\s+/g, " ").trim();
@@ -176,7 +179,7 @@ function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOC
     locale,
     agentMessages,
     constraints: [
-      `${translateI18nText(locale, "planningContextSummaryHeader")}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
+      `${getPlanningContextSummaryHeader(locale)}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
       buildPlanningToolContextPrompt(locale, ctx, meta),
     ],
     task: "",
@@ -272,7 +275,7 @@ async function handleSeparateModelPlanningProcessResult(
   locale = LOCALE.ZH_CN,
   responseText = "",
 ) {
-  const relayText = responseText || translateI18nText(locale, "planningSeparateModelEmptyRelay");
+  const relayText = responseText || getPlanningSeparateModelEmptyRelay(locale);
   const attachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
     purpose: "planning",
     content: relayText,
@@ -322,9 +325,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
     return false;
   }
   if (
-    String(bucket?.taskChecklistSource || "").trim().toLowerCase() === "model" &&
-    Array.isArray(bucket?.taskChecklist) &&
-    bucket.taskChecklist.length
+    String(bucket?.planText || "").trim().length > 0
   ) {
     state.flags.planningCaptured = true;
     return false;

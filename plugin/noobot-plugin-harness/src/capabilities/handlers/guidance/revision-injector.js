@@ -153,13 +153,23 @@ export async function maybeCapturePlanRevisionByInject(ctx = {}) {
         });
       }
       if (stage === "revision") {
-        const scheduled = schedulePlanRevisionByInject(currentCtx, captureMeta?.summaryText || "", "refinement");
+        const mainPlanChanged = bucket?.lastMainPlanRevisionChanged === true;
+        const scheduled = mainPlanChanged
+          ? schedulePlanRevisionByInject(currentCtx, captureMeta?.summaryText || "", "refinement")
+          : false;
+        if (!mainPlanChanged && applied) {
+          appendCapabilityLog(currentCtx, {
+            domain: CAPABILITY_DOMAIN.PLANNING,
+            event: "planning_refinement_skipped_no_main_plan_change",
+          });
+        }
         return {
           applied: applied || scheduled,
           detail: {
             stage,
             revisionApplied: applied === true,
             refinementScheduled: scheduled === true,
+            mainPlanChanged,
             checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
           },
         };

@@ -12,7 +12,6 @@ import {
   buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
-  getPromptJsonFormatExample,
   invokeWithReasoningRetry,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsAttachmentMetas,
@@ -21,9 +20,7 @@ import {
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
   resolvePlanningGuidanceMode,
-  translateI18nText,
 } from "./deps.js";
-import { parseSemanticValidationResult } from "../model-response-parser.js";
 import {
   captureInjectedResult,
   injectScheduledPrompt,
@@ -31,6 +28,21 @@ import {
 } from "../inject-fallback.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { buildSemanticValidationPromptPayload } from "./report-builder.js";
+import {
+  buildAcceptanceValidationPromptText,
+  getAcceptanceSemanticValidationMarker,
+} from "../shared/workflow-prompts.js";
+
+function buildTextAcceptanceValidationResult(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  return {
+    status: "pass",
+    consistent: true,
+    protocol: "text_patch",
+    content: raw,
+  };
+}
 
 export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseReport = null) {
   if (!baseReport) return false;
@@ -79,15 +91,13 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
       state.flags.acceptanceSemanticValidationCaptureReportIndex = Number(pendingData.reportIndex);
     },
     buildPromptContent: ({ locale, pendingData }) =>
-      [
-        translateI18nText(locale, "acceptanceSemanticValidationMarker"),
-        translateI18nText(locale, "acceptanceSemanticValidationBody"),
-        translateI18nText(locale, "acceptanceSemanticValidationFormatExample", {
-          example: getPromptJsonFormatExample("acceptance_semantic_validation"),
-        }),
-        translateI18nText(locale, "jsonOnlyOutputRequirement"),
-        JSON.stringify(pendingData.payload || {}, null, 2),
-      ].join("\n"),
+      buildAcceptanceValidationPromptText({
+        locale,
+        marker: getAcceptanceSemanticValidationMarker(locale),
+        data: {
+          payload: pendingData.payload || {},
+        },
+      }),
   });
 }
 
@@ -113,7 +123,11 @@ export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
       if (!targetReport || typeof targetReport !== "object") {
         return { applied: false, detail: { reportIndex, reason: "missing_target_report" } };
       }
-      targetReport.semanticValidation = parseSemanticValidationResult(responseText);
+      const parsed = buildTextAcceptanceValidationResult(responseText);
+      if (!parsed) {
+        return { applied: false, detail: { reportIndex, reason: "empty_validation_output" } };
+      }
+      targetReport.semanticValidation = parsed;
       bucket.lastAcceptanceReport = targetReport;
       return {
         applied: true,
@@ -153,14 +167,12 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     finalOutput,
     locale,
   });
-  const prompt = [
-    translateI18nText(locale, "acceptanceSemanticValidationBody"),
-    translateI18nText(locale, "acceptanceSemanticValidationFormatExample", {
-      example: getPromptJsonFormatExample("acceptance_semantic_validation"),
-    }),
-    translateI18nText(locale, "jsonOnlyOutputRequirement"),
-    JSON.stringify(promptPayload, null, 2),
-  ].join("\n");
+  const prompt = buildAcceptanceValidationPromptText({
+    locale,
+    data: {
+      payload: promptPayload,
+    },
+  });
   const agentMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "acceptance_semantic_validation",
@@ -227,7 +239,15 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     dedupe: true,
     attachmentMetas,
   });
-  baseReport.semanticValidation = parseSemanticValidationResult(responseText);
+  const parsed = buildTextAcceptanceValidationResult(responseText);
+  if (!parsed) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      event: "acceptance_semantic_validation_empty_output",
+    });
+    return false;
+  }
+  baseReport.semanticValidation = parsed;
   bucket.lastAcceptanceReport = baseReport;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,

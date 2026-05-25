@@ -32,7 +32,9 @@ import {
 import { schedulePlanRevisionByInject } from "./revision-injector.js";
 import { buildGuidancePromptContent } from "./prompt-injector.js";
 import { markGuidanceSummarizedMessages } from "./signal-tracker.js";
+import { applySummaryText } from "./summary-manager.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
+import { buildGuidanceSummaryPromptText } from "../shared/workflow-prompts.js";
 
 export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "", { baseMessages = null } = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -138,6 +140,14 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
     dedupe: true,
   });
   changed = true;
+  const mainPlanChanged = bucket?.lastMainPlanRevisionChanged === true;
+  if (!mainPlanChanged) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.PLANNING,
+      event: "planning_refinement_skipped_no_main_plan_change",
+    });
+    return changed;
+  }
 
   const refinementResult = await runPlanningRefinementBySeparateModel(ctx, meta, {
     summaryText,
@@ -160,7 +170,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   let reason = "";
   if (state.pending.summary === true) {
     purpose = "summary";
-    prompt = translateI18nText(locale, "guidanceSummaryBody");
+    prompt = buildGuidanceSummaryPromptText({ locale });
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
   } else if (state.pending.guidance) {
@@ -250,14 +260,15 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     attachmentMetas: responseAttachmentMetas,
   });
   if (purpose === "summary") {
+    const mergedSummaryText = applySummaryText(ctx, responseText);
     const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: "summary_messages_marked",
       detail: { markedCount },
     });
-    if (isSummaryCompletionMarked(responseText, locale)) {
-      await revisePlanAfterSummary(ctx, meta, responseText, { baseMessages: modelMessages });
+    if (isSummaryCompletionMarked(mergedSummaryText, locale)) {
+      await revisePlanAfterSummary(ctx, meta, mergedSummaryText, { baseMessages: modelMessages });
     } else {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,
