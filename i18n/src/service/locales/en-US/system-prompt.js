@@ -5,7 +5,7 @@
  */
 
 const DAILY_EXPERIENCE_PATCH_EXAMPLE =
-  'ADD D1 domain="Domain Name" new=true experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';
+  'ADD D1 domain="Domain" new=true experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';
 
 const WEEKLY_SUMMARY_PATCH_EXAMPLE =
   'ADD W1 category="Category" experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';

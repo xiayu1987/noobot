@@ -11,7 +11,7 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     promptProtocol:
       'ADD/UPDATE/DELETE D[整数ID] domain="领域" new=true|false experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
     promptExample:
-      'ADD D1 domain="编程" new=true experiences="先写测试 || 分层解耦" lessons="避免硬编码"',
+      'ADD D1 domain="领域" new=true experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
     fieldMap: Object.freeze({
       domain_name: Object.freeze({
         type: "sanitized",
@@ -38,7 +38,7 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     promptProtocol:
       'ADD/UPDATE/DELETE W[整数ID] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
     promptExample:
-      'ADD W1 category="架构设计" experiences="先抽象后实现" lessons="避免过早优化"',
+      'ADD W1 category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
     fieldMap: Object.freeze({
       category_name: Object.freeze({
         type: "sanitized",
@@ -61,7 +61,7 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     promptProtocol:
       'ADD/UPDATE/DELETE M[整数ID] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"',
     promptExample:
-      'ADD M1 category="工程效率" subcategory="测试策略" patterns="回归频繁" methodologies="灰度+自动化"',
+      'ADD M1 category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"',
     fieldMap: Object.freeze({
       category_name: Object.freeze({
         type: "sanitized",
@@ -89,7 +89,7 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     promptProtocol:
       'ADD/UPDATE/DELETE Y[整数ID] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"',
     promptExample:
-      'ADD Y1 category="系统设计" subcategory="可靠性" principles="先观测再优化" reflections="容量评估要前置"',
+      'ADD Y1 category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"',
     fieldMap: Object.freeze({
       category_name: Object.freeze({
         type: "sanitized",
