@@ -5,14 +5,14 @@
  */
 
 const DAILY_EXPERIENCE_PATCH_EXAMPLE =
-  'ADD D1 domain="领域名称" new=true experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
+  'ADD D1 domain="领域" new=true experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
 
 const WEEKLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD W1 category="分类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
+  'ADD W1 category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
 const MONTHLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD M1 category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法论1 || 方法论2"';
+  'ADD M1 category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"';
 const YEARLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD Y1 category="大类" subcategory="小类" principles="底层原则1 || 底层原则2" reflections="战略反思1 || 战略反思2"';
+  'ADD Y1 category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"';
 
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
   contextPrompt: {
