@@ -16,6 +16,7 @@ import {
 } from "./deps.js";
 import { buildAcceptanceReport } from "./report-builder.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
+import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
 
 function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, meta = {} } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
@@ -30,7 +31,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
     }),
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
-      const toolMeta = config?.configurable?.noobotHookMeta || meta;
+      const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
       const requestedMode = String(args?.mode || ACCEPTANCE_MODE.ACTIVE).trim().toLowerCase();
       const mode = requestedMode === ACCEPTANCE_MODE.FORCED ? ACCEPTANCE_MODE.FORCED : ACCEPTANCE_MODE.ACTIVE;
       state.flags.acceptanceRequested = true;

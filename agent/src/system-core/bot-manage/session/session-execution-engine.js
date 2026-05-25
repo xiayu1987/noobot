@@ -761,6 +761,15 @@ export class SessionExecutionEngine {
         configurable: true,
       });
     }
+    const existingRuntimeMeta =
+      hookManager.runtime && typeof hookManager.runtime === "object" ? hookManager.runtime : {};
+    hookManager.runtime = {
+      ...existingRuntimeMeta,
+      harness:
+        harnessOptions && typeof harnessOptions === "object"
+          ? harnessOptions
+          : existingRuntimeMeta.harness,
+    };
     return {
       ...runConfig,
       hookManager,

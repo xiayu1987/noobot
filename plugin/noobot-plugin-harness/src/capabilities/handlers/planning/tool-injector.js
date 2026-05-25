@@ -14,6 +14,7 @@ import {
   ensureHarnessBucket,
   translateI18nText,
 } from "./deps.js";
+import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
 
 function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
@@ -28,7 +29,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
     }),
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
-      const toolMeta = config?.configurable?.noobotHookMeta || meta;
+      const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
       const summaryText = String(args?.summary || "").trim();
       if (state?.flags?.planningCaptured !== true) {
         return {

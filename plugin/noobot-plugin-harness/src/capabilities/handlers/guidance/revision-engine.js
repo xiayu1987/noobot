@@ -11,7 +11,6 @@ import {
 } from "./deps.js";
 import { createPlanRevisionHelpers } from "../shared/plan-revision-helpers.js";
 import { MAX_PLAN_REVISION_ATTEMPTS } from "../../../core/thresholds.js";
-import { parseMainPlansFromPlanText } from "../shared/plan-text-protocol.js";
 import {
   buildPlanningRevisionPromptText,
   getPlanningRevisionMarker,
@@ -30,11 +29,6 @@ export const buildPlanningRefinementPrompt = planRevisionHelpers.buildPlanningRe
 export const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayContent;
 
 export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}, summaryText = "") {
-  const mainPlansText = (() => {
-    const plans = parseMainPlansFromPlanText(bucket?.planText || "");
-    if (!plans.length) return locale === LOCALE.EN_US ? "(empty)" : "（空）";
-    return plans.map((item = {}) => `${item.id}. ${item.content}`).join("\n");
-  })();
   const globalRevisionCount = Number.isFinite(Number(bucket?.globalRevisionCount))
     ? Number(bucket.globalRevisionCount)
     : 0;
@@ -44,7 +38,7 @@ export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, 
     marker: getPlanningRevisionMarker(locale),
     data: {
       globalRevisionCount,
-      currentMainPlansText: mainPlansText,
+      includeCurrentMainPlans: false,
       feedback: String(summaryText || "").trim(),
     },
   });

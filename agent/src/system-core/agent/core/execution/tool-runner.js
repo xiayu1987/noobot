@@ -13,6 +13,20 @@ import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
 
+function resolveToolHookMeta(runtime = {}) {
+  const runtimeMeta =
+    runtime?.hookManager?.runtime && typeof runtime.hookManager.runtime === "object"
+      ? runtime.hookManager.runtime
+      : null;
+  if (runtimeMeta) {
+    return {
+      ...runtimeMeta,
+      runtime,
+    };
+  }
+  return { runtime };
+}
+
 function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
   if (invokeError) {
     return { success: false, reason: "invoke_error" };
@@ -116,7 +130,7 @@ export async function executeToolCall({
           args: call?.args || {},
           agentContext,
         }),
-        noobotHookMeta: runtime,
+        noobotHookMeta: resolveToolHookMeta(runtime),
       },
     });
     toolResultText =
