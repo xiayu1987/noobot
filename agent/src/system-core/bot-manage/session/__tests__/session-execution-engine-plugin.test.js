@@ -38,6 +38,8 @@ test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plug
   assert.equal(prepared.plugins.harness.basePath, basePath);
   assert.equal(prepared.plugins.harness.planningGuidanceMode, "separate_model");
   assert.equal(typeof prepared.plugins.harness.capabilityModelInvoker, "function");
+  assert.equal(typeof prepared.hookManager.runtime?.harness, "object");
+  assert.equal(prepared.hookManager.runtime.harness.mode, "on");
 });
 
 test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", async () => {

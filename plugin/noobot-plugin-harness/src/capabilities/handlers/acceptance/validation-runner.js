@@ -20,18 +20,21 @@ import {
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
   resolvePlanningGuidanceMode,
+  getDefaultTaskOwner,
 } from "./deps.js";
 import {
   captureInjectedResult,
-  injectScheduledPrompt,
   scheduleInjectTask,
 } from "../inject-fallback.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { buildSemanticValidationPromptPayload } from "./report-builder.js";
 import {
-  buildAcceptanceValidationPromptText,
+  buildAcceptanceMainPlanContextPromptText,
+  buildAcceptanceValidationRequestPromptText,
+  getAcceptanceMainPlanContextMarker,
   getAcceptanceSemanticValidationMarker,
 } from "../shared/workflow-prompts.js";
+import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
 
 function buildTextAcceptanceValidationResult(text = "") {
   const raw = String(text || "").trim();
@@ -41,6 +44,69 @@ function buildTextAcceptanceValidationResult(text = "") {
     consistent: true,
     protocol: "text_patch",
     content: raw,
+  };
+}
+
+function resolveAcceptanceMainPlanContext(
+  promptPayload = {},
+  bucket = {},
+  locale = LOCALE.ZH_CN,
+) {
+  const finalMainPlan =
+    promptPayload?.finalMainPlan && typeof promptPayload.finalMainPlan === "object"
+      ? promptPayload.finalMainPlan
+      : {};
+  const checklistFromFinalMainPlan = Array.isArray(finalMainPlan?.taskChecklist)
+    ? finalMainPlan.taskChecklist
+    : [];
+  const checklistFromPayload = Array.isArray(promptPayload?.finalPlanChecklist)
+    ? promptPayload.finalPlanChecklist
+    : [];
+  const mainPlanVersion = Number.isFinite(Number(finalMainPlan?.mainPlanVersion))
+    ? Number(finalMainPlan.mainPlanVersion)
+    : Number.isFinite(Number(bucket?.currentMainPlanVersion))
+      ? Number(bucket.currentMainPlanVersion)
+      : Number.isFinite(Number(bucket?.mainPlanVersion))
+        ? Number(bucket.mainPlanVersion)
+        : 1;
+  const taskOwner =
+    String(finalMainPlan?.taskOwner || bucket?.taskOwner || getDefaultTaskOwner(locale)).trim() ||
+    getDefaultTaskOwner(locale);
+  const totalGoal = String(finalMainPlan?.totalGoal || bucket?.totalGoal || "").trim();
+  const nextPhase =
+    (finalMainPlan?.nextPhase && typeof finalMainPlan.nextPhase === "object"
+      ? finalMainPlan.nextPhase
+      : bucket?.nextPhase && typeof bucket.nextPhase === "object"
+        ? bucket.nextPhase
+        : null) || null;
+  return {
+    mainPlanVersion,
+    totalGoal,
+    taskOwner,
+    nextPhase,
+    taskChecklist:
+      checklistFromFinalMainPlan.length
+        ? checklistFromFinalMainPlan
+        : checklistFromPayload.length
+          ? checklistFromPayload
+          : Array.isArray(bucket?.taskChecklist)
+            ? bucket.taskChecklist
+            : [],
+    planText: String(promptPayload?.planText || "").trim(),
+    plansInOrder: Array.isArray(promptPayload?.plansInOrder) ? promptPayload.plansInOrder : [],
+    refinementPlansForFinalMainPlan: Array.isArray(promptPayload?.refinementPlansForFinalMainPlan)
+      ? promptPayload.refinementPlansForFinalMainPlan
+      : [],
+  };
+}
+
+function resolveAcceptanceValidationRequestPayload(promptPayload = {}) {
+  const source = promptPayload && typeof promptPayload === "object" ? promptPayload : {};
+  return {
+    expectedSchema: source.expectedSchema || {},
+    acceptanceReport: source.acceptanceReport || null,
+    toolSignals: source.toolSignals || {},
+    finalOutput: String(source.finalOutput || "").trim(),
   };
 }
 
@@ -75,30 +141,55 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
 }
 
 export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
-  return injectScheduledPrompt(ctx, {
-    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    injectedEvent: "acceptance_semantic_validation_prompt_injected",
-    getPendingData: ({ state }) =>
-      state.pending.acceptanceSemanticValidation &&
-      typeof state.pending.acceptanceSemanticValidation === "object"
-        ? state.pending.acceptanceSemanticValidation
-        : null,
-    consumePendingData: ({ state }) => {
-      setPendingStateWithMeta(state, "acceptanceSemanticValidation", null);
-    },
-    markCapturePending: ({ state, pendingData }) => {
-      setCaptureFlagStateWithMeta(state, "acceptanceSemanticValidationCapturePending", true);
-      state.flags.acceptanceSemanticValidationCaptureReportIndex = Number(pendingData.reportIndex);
-    },
-    buildPromptContent: ({ locale, pendingData }) =>
-      buildAcceptanceValidationPromptText({
-        locale,
-        marker: getAcceptanceSemanticValidationMarker(locale),
-        data: {
-          payload: pendingData.payload || {},
-        },
-      }),
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  const pendingData =
+    state.pending.acceptanceSemanticValidation &&
+    typeof state.pending.acceptanceSemanticValidation === "object"
+      ? state.pending.acceptanceSemanticValidation
+      : null;
+  if (!pendingData) return false;
+  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
+  if (!messages) return false;
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const promptPayload = pendingData.payload && typeof pendingData.payload === "object" ? pendingData.payload : {};
+  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale);
+  const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
+  const systemContent = buildAcceptanceMainPlanContextPromptText({
+    locale,
+    marker: getAcceptanceMainPlanContextMarker(locale),
+    data: { mainPlanContext },
   });
+  const requestContent = buildAcceptanceValidationRequestPromptText({
+    locale,
+    marker: getAcceptanceSemanticValidationMarker(locale),
+    data: { requestPayload },
+  });
+  const systemInjection = injectMessageWithPolicy(ctx, {
+    role: "system",
+    content: systemContent,
+    injectAt: "append",
+    dedupe: false,
+    avoidBreakToolCallContinuity: false,
+  });
+  if (!systemInjection.injected) return false;
+  const userInjection = injectMessageWithPolicy(ctx, {
+    role: "user",
+    content: requestContent,
+    injectAt: "append",
+    dedupe: false,
+    avoidBreakToolCallContinuity: false,
+  });
+  if (!userInjection.injected) return false;
+  setPendingStateWithMeta(state, "acceptanceSemanticValidation", null);
+  setCaptureFlagStateWithMeta(state, "acceptanceSemanticValidationCapturePending", true);
+  state.flags.acceptanceSemanticValidationCaptureReportIndex = Number(pendingData.reportIndex);
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    event: "acceptance_semantic_validation_prompt_injected",
+  });
+  return true;
 }
 
 export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
@@ -167,10 +258,13 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     finalOutput,
     locale,
   });
-  const prompt = buildAcceptanceValidationPromptText({
+  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale);
+  const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
+  const prompt = buildAcceptanceValidationRequestPromptText({
     locale,
+    marker: getAcceptanceSemanticValidationMarker(locale),
     data: {
-      payload: promptPayload,
+      requestPayload,
     },
   });
   const agentMessages = resolveCapabilityModelMessages(meta, {
@@ -195,6 +289,13 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
         messages: buildCapabilityModelMessages({
           locale,
           agentMessages,
+          constraints: [
+            buildAcceptanceMainPlanContextPromptText({
+              locale,
+              marker: getAcceptanceMainPlanContextMarker(locale),
+              data: { mainPlanContext },
+            }),
+          ],
           task: prompt,
         }),
         ctx,

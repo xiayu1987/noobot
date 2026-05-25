@@ -239,6 +239,76 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   assert.equal(agentContext.payload.harness.planRefinementRecords.length >= 1, true);
 });
 
+test("harness request_plan_refinement falls back to closure meta when configurable meta lacks harness", async () => {
+  const hookManager = createAgentHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        if (payload.purpose === "planning_refinement") {
+          return { content: "ADD 1.1 细化步骤一" };
+        }
+        return { content: "1. 解析附件\n2. 执行核心任务" };
+      },
+    },
+  );
+
+  const agentContext = {
+    payload: {
+      tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+  };
+
+  await hookManager.emit("before_llm_call", {
+    userId: "u11-r2",
+    sessionId: "s11-r2",
+    dialogProcessId: "dp11-r2",
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext,
+  });
+  await hookManager.emit("after_llm_call", {
+    userId: "u11-r2",
+    sessionId: "s11-r2",
+    dialogProcessId: "dp11-r2",
+    ai: { content: "1. 解析附件\n2. 执行核心任务" },
+    agentContext,
+  });
+  await hookManager.emit("before_llm_call", {
+    userId: "u11-r2",
+    sessionId: "s11-r2",
+    dialogProcessId: "dp11-r2",
+    messages: [{ role: "user", content: "继续处理" }],
+    agentContext,
+  });
+  const refinementTool = agentContext.payload.tools.registry.find(
+    (tool) => tool?.name === "request_plan_refinement",
+  );
+  assert.ok(refinementTool, "request_plan_refinement 工具应注入");
+
+  const toolResult = await refinementTool.invoke(
+    { summary: "阶段完成，细化下一步" },
+    {
+      configurable: {
+        noobotHookContext: { agentContext },
+        noobotHookMeta: { systemRuntime: { userId: "u11-r2", sessionId: "s11-r2" } },
+      },
+    },
+  );
+  assert.equal(toolResult?.ok, true);
+  assert.equal(toolResult?.status, "completed");
+  assert.equal(
+    invocations.some((item = {}) => item.purpose === "planning_refinement"),
+    true,
+  );
+});
+
 test("harness planning retries injection when first response has no checklist", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });

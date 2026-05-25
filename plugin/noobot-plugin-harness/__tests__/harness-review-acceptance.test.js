@@ -559,6 +559,62 @@ test("harness active request_task_acceptance semantic validation receives agent 
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
 });
 
+test("harness active request_task_acceptance falls back to closure meta when configurable meta lacks harness", async () => {
+  const hookManager = createAgentHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      acceptance: { semanticValidation: true },
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        return {
+          content: JSON.stringify({
+            status: "pass",
+            consistent: true,
+            checklistCoverage: [],
+            missingItems: [],
+            unsupportedClaims: [],
+            suggestions: [],
+          }),
+        };
+      },
+    },
+  );
+  const agentContext = {
+    payload: {
+      tools: { registry: [] },
+      harness: {
+        taskChecklist: [{ index: 1, task: "执行核心任务" }],
+        state: {
+          flags: {},
+          counters: {},
+          signals: { successfulToolCount: 1 },
+          pending: {},
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+  await hookManager.emit("before_turn", { agentContext });
+  const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
+  const raw = await tool.invoke(
+    { mode: "active" },
+    {
+      configurable: {
+        noobotHookContext: { agentContext, result: { output: "done" } },
+        noobotHookMeta: { systemRuntime: { userId: "u1", sessionId: "s1" } },
+      },
+    },
+  );
+  const result = typeof raw === "string" ? JSON.parse(raw) : raw;
+  assert.equal(invocations.length, 1);
+  assert.equal(invocations[0].purpose, "acceptance_semantic_validation");
+  assert.equal(result.report.semanticValidation.status, "pass");
+});
+
 test("harness acceptance semantic validation failure does not block active acceptance", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin(
@@ -914,11 +970,103 @@ test("planning_revision reuses summary model messages in separate_model flow", a
   const revisionMessages = invocations[1].messages;
   assertFlatCapabilityMessages(summaryMessages);
   assertFlatCapabilityMessages(revisionMessages);
+  const summaryBaseMessages = summaryMessages.slice(0, -1);
+  const revisionTaskMessage = revisionMessages.at(-1) || {};
   const revisionBaseMessages = revisionMessages.slice(0, -1);
-  assert.deepEqual(revisionBaseMessages, summaryMessages.slice(0, -1));
+  assert.deepEqual(revisionBaseMessages.slice(0, summaryBaseMessages.length), summaryBaseMessages);
+  assert.equal(
+    revisionBaseMessages.some((item = {}) => String(item?.content || "").includes("harness-main-plan-context")),
+    true,
+  );
+  const mainPlanContextMessage = revisionBaseMessages.find((item = {}) =>
+    String(item?.content || "").includes("harness-main-plan-context"),
+  );
+  assert.equal(String(mainPlanContextMessage?.role || ""), "system");
+  assert.equal(String(revisionTaskMessage?.role || ""), "user");
+  assert.equal(
+    String(revisionTaskMessage?.content || "").includes("当前主计划：") ||
+      String(revisionTaskMessage?.content || "").includes("Current main plan:"),
+    false,
+  );
   assert.equal(
     revisionMessages.some((item = {}) => String(item?.content || "").includes("REVISION-ONLY")),
     false,
+  );
+});
+
+test("planning_refinement receives planning_revision model output in its base messages", async () => {
+  const hookManager = createAgentHookManager();
+  const invocations = [];
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        if (payload.purpose === "summary") return { content: "小结完成" };
+        if (payload.purpose === "planning_revision") {
+          return { content: "UPDATE 1 修复后的主计划" };
+        }
+        if (payload.purpose === "planning_refinement") {
+          return { content: "ADD 1.1 细化修复后的主计划" };
+        }
+        return { content: "{}" };
+      },
+    },
+  );
+
+  const messages = [
+    { role: "user", content: "history-user" },
+    { role: "assistant", content: "history-assistant" },
+  ];
+  const agentContext = {
+    payload: {
+      messages: { system: [], history: [] },
+      harness: {
+        taskChecklist: [{ index: 1, task: "初始计划", owner: "primary_task_owner" }],
+        state: {
+          flags: { planningCaptured: true, acceptanceRequested: false },
+          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          signals: { successfulToolCount: 1 },
+          pending: { summary: true, guidance: null },
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", { messages, agentContext });
+
+  assert.deepEqual(invocations.map((item = {}) => item.purpose), [
+    "summary",
+    "planning_revision",
+    "planning_refinement",
+  ]);
+  const refinementInvocation = invocations.find((item = {}) => item.purpose === "planning_refinement");
+  assert.equal(Array.isArray(refinementInvocation?.messages), true);
+  assert.equal(
+    refinementInvocation.messages.some((item = {}) => String(item?.content || "").includes("UPDATE 1 修复后的主计划")),
+    true,
+  );
+  const refinementMessages = refinementInvocation.messages;
+  const mainPlanContextIndex = refinementMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("harness-main-plan-context"),
+  );
+  const revisionContextIndex = refinementMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("harness-plan-revision-context"),
+  );
+  assert.equal(mainPlanContextIndex >= 0, true);
+  assert.equal(revisionContextIndex >= 0, true);
+  assert.equal(mainPlanContextIndex < revisionContextIndex, true);
+  assert.equal(
+    String(refinementMessages[mainPlanContextIndex]?.role || ""),
+    "system",
+  );
+  assert.equal(
+    String(refinementMessages[revisionContextIndex]?.role || ""),
+    "system",
   );
 });
 

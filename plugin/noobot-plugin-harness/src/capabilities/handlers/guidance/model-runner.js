@@ -36,6 +36,74 @@ import { applySummaryText } from "./summary-manager.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { buildGuidanceSummaryPromptText } from "../shared/workflow-prompts.js";
 
+function buildRefinementContextMessages({
+  locale = LOCALE.ZH_CN,
+  planText = "",
+  revisionText = "",
+} = {}) {
+  const normalizedPlanText = String(planText || "").trim();
+  const normalizedRevisionText = String(revisionText || "").trim();
+  const planHeader =
+    locale === LOCALE.EN_US
+      ? "<!-- harness-main-plan-context -->\n[Main Plan Baseline]"
+      : "<!-- harness-main-plan-context -->\n【主计划基线】";
+  const revisionHeader =
+    locale === LOCALE.EN_US
+      ? "<!-- harness-plan-revision-context -->\n[Plan Revision Output]"
+      : "<!-- harness-plan-revision-context -->\n【计划修正输出】";
+  const messages = [];
+  if (normalizedPlanText) {
+    messages.push({
+      role: "system",
+      content: `${planHeader}\n${normalizedPlanText}`,
+    });
+  }
+  if (normalizedRevisionText) {
+    messages.push({
+      role: "system",
+      content: `${revisionHeader}\n${normalizedRevisionText}`,
+    });
+  }
+  return messages;
+}
+
+function buildMainPlanContextMessages({
+  locale = LOCALE.ZH_CN,
+  planText = "",
+  bucket = {},
+} = {}) {
+  const normalizedPlanText = (() => {
+    const text = String(planText || "").trim();
+    if (text) return text;
+    const checklist = Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist : [];
+    if (!checklist.length) return "";
+    const mainSteps = new Map();
+    for (const item of checklist) {
+      const mainStepIndex = Number(item?.mainStepIndex);
+      const index = Number(item?.index);
+      const id = Number.isFinite(mainStepIndex) && mainStepIndex > 0
+        ? mainStepIndex
+        : Number.isFinite(index) && index > 0
+          ? index
+          : null;
+      const content = String(item?.task || "").trim();
+      if (!id || !content || mainSteps.has(id)) continue;
+      mainSteps.set(id, content);
+    }
+    return [...mainSteps.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([id, content]) => `${id}. ${content}`)
+      .join("\n")
+      .trim();
+  })();
+  if (!normalizedPlanText) return [];
+  const planHeader =
+    locale === LOCALE.EN_US
+      ? "<!-- harness-main-plan-context -->\n[Main Plan Baseline]"
+      : "<!-- harness-main-plan-context -->\n【主计划基线】";
+  return [{ role: "system", content: `${planHeader}\n${normalizedPlanText}` }];
+}
+
 export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = "", { baseMessages = null } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -58,9 +126,17 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
     return changed;
   }
   const revisionTask = buildPlanningRevisionPrompt(locale, bucket, state, summaryText);
+  const revisionBaseMessages = [
+    ...modelMessages,
+    ...buildMainPlanContextMessages({
+      locale,
+      planText: bucket?.planText || "",
+      bucket,
+    }),
+  ];
   const revisionMessagesFinal = buildCapabilityModelMessages({
     locale,
-    agentMessages: modelMessages,
+    agentMessages: revisionBaseMessages,
     task: revisionTask,
   });
   let revisionResponse = null;
@@ -149,10 +225,18 @@ export async function revisePlanAfterSummary(ctx = {}, meta = {}, summaryText = 
     return changed;
   }
 
+  const refinementBaseMessages = [
+    ...(Array.isArray(modelMessages) ? modelMessages : []),
+    ...buildRefinementContextMessages({
+      locale,
+      planText: bucket?.planText || "",
+      revisionText,
+    }),
+  ];
   const refinementResult = await runPlanningRefinementBySeparateModel(ctx, meta, {
     summaryText,
     source: "planning_refinement",
-    baseMessages: modelMessages,
+    baseMessages: refinementBaseMessages,
   });
   return refinementResult.applied === true ? true : changed;
 }

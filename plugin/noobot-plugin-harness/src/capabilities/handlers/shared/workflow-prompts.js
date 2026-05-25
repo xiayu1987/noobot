@@ -74,6 +74,11 @@ export function getAcceptanceSemanticValidationMarker(locale = LOCALE.ZH_CN) {
   return "<!-- harness-acceptance-semantic-validation -->";
 }
 
+export function getAcceptanceMainPlanContextMarker(locale = LOCALE.ZH_CN) {
+  void locale;
+  return "<!-- harness-acceptance-main-plan -->";
+}
+
 export function buildPlanningMainPrompt(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const userGoal = String(data.userGoal || options?.userGoal || "").trim();
@@ -120,19 +125,20 @@ export function buildPlanningRevisionPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const globalRevisionCount = data.globalRevisionCount ?? options?.globalRevisionCount ?? 0;
   const currentMainPlansText = data.currentMainPlansText ?? options?.currentMainPlansText ?? "";
+  const includeCurrentMainPlans = data.includeCurrentMainPlans ?? options?.includeCurrentMainPlans ?? true;
   const feedback = data.feedback ?? options?.feedback ?? "";
   const mainPlansText = String(currentMainPlansText || "").trim() || (locale === LOCALE.EN_US ? "(empty)" : "（空）");
   const latestFeedback = String(feedback || "").trim() || (locale === LOCALE.EN_US ? "N/A" : "（无）");
   const revisionCount = Number.isFinite(Number(globalRevisionCount)) ? Number(globalRevisionCount) : 0;
   if (locale === LOCALE.EN_US) {
+    const currentPlanSection = includeCurrentMainPlans === false ? [] : ["Current main plan:", mainPlansText];
     return [
       String(marker || "").trim(),
       "Goal: Revise the high-level main plan based on latest feedback. Only operate on main plan IDs; do not include sub-steps.",
       "",
       "[Current Status]",
       `Revision count: ${revisionCount}/5`,
-      "Current main plan:",
-      mainPlansText,
+      ...currentPlanSection,
       "Latest feedback:",
       latestFeedback,
       "",
@@ -142,14 +148,14 @@ export function buildPlanningRevisionPromptText(options = {}) {
       "DELETE [existing integer ID]",
     ].filter(Boolean).join("\n");
   }
+  const currentPlanSection = includeCurrentMainPlans === false ? [] : ["当前主计划：", mainPlansText];
   return [
     String(marker || "").trim(),
     "目标：基于最新反馈修正宏观主计划。仅限操作主计划（整数ID），严禁涉及子计划。",
     "",
     "【当前状态】",
     `已修正次数：${revisionCount}/5`,
-    "当前主计划：",
-    mainPlansText,
+    ...currentPlanSection,
     "最新反馈：",
     latestFeedback,
     "",
@@ -243,13 +249,35 @@ export function buildGuidanceSummaryPromptText(options = {}) {
 }
 
 export function buildAcceptanceValidationPromptText(options = {}) {
+  return buildAcceptanceValidationRequestPromptText(options);
+}
+
+export function buildAcceptanceMainPlanContextPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const payload = data.payload ?? options?.payload ?? null;
+  const payload = data.mainPlanContext ?? options?.mainPlanContext ?? null;
   const payloadText = JSON.stringify(payload || {}, null, 2);
   if (locale === LOCALE.EN_US) {
     return [
       String(marker || "").trim(),
-      "Goal: Validate acceptance only from plan text and final output.",
+      "Complete main plan context (must be fully respected during acceptance validation):",
+      payloadText,
+    ].filter(Boolean).join("\n");
+  }
+  return [
+    String(marker || "").trim(),
+    "完整主计划上下文如下（验收时必须完整对齐）：",
+    payloadText,
+  ].filter(Boolean).join("\n");
+}
+
+export function buildAcceptanceValidationRequestPromptText(options = {}) {
+  const { locale, marker, data } = normalizePromptOptions(options);
+  const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? null;
+  const payloadText = JSON.stringify(payload || {}, null, 2);
+  if (locale === LOCALE.EN_US) {
+    return [
+      String(marker || "").trim(),
+      "Goal: Validate acceptance from the system-provided complete main plan context and final output.",
       "Prefer protocol: acceptance_patch_v1 (independent from plan/summary patch protocols).",
       "Syntax:",
       "ADD A[integer] plan=[main_plan_id] status=[pass|warn|fail] [acceptance conclusion]",
@@ -262,7 +290,7 @@ export function buildAcceptanceValidationPromptText(options = {}) {
   }
   return [
     String(marker || "").trim(),
-    "目标：仅基于计划文本与最终输出进行验收。",
+    "目标：基于 system 提供的完整主计划上下文与最终输出进行验收。",
     "建议协议：acceptance_patch_v1（与计划/小结 patch 协议独立）。",
     "语法：",
     "ADD A[整数] plan=[主计划ID] status=[pass|warn|fail] [验收结论]",
