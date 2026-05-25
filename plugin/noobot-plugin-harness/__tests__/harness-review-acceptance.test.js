@@ -975,11 +975,11 @@ test("planning_revision reuses summary model messages in separate_model flow", a
   const revisionBaseMessages = revisionMessages.slice(0, -1);
   assert.deepEqual(revisionBaseMessages.slice(0, summaryBaseMessages.length), summaryBaseMessages);
   assert.equal(
-    revisionBaseMessages.some((item = {}) => String(item?.content || "").includes("harness-main-plan-context")),
+    revisionBaseMessages.some((item = {}) => String(item?.content || "").includes("harness-plan-checklist-context")),
     true,
   );
   const mainPlanContextMessage = revisionBaseMessages.find((item = {}) =>
-    String(item?.content || "").includes("harness-main-plan-context"),
+    String(item?.content || "").includes("harness-plan-checklist-context"),
   );
   assert.equal(String(mainPlanContextMessage?.role || ""), "system");
   assert.equal(String(revisionTaskMessage?.role || ""), "user");
@@ -1047,27 +1047,20 @@ test("planning_refinement receives planning_revision model output in its base me
   const refinementInvocation = invocations.find((item = {}) => item.purpose === "planning_refinement");
   assert.equal(Array.isArray(refinementInvocation?.messages), true);
   assert.equal(
-    refinementInvocation.messages.some((item = {}) => String(item?.content || "").includes("UPDATE 1 修复后的主计划")),
+    refinementInvocation.messages.some((item = {}) => String(item?.content || "").includes("harness-plan-checklist-context")),
     true,
   );
   const refinementMessages = refinementInvocation.messages;
-  const mainPlanContextIndex = refinementMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("harness-main-plan-context"),
+  const checklistContextIndex = refinementMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("harness-plan-checklist-context"),
   );
-  const revisionContextIndex = refinementMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("harness-plan-revision-context"),
-  );
-  assert.equal(mainPlanContextIndex >= 0, true);
-  assert.equal(revisionContextIndex >= 0, true);
-  assert.equal(mainPlanContextIndex < revisionContextIndex, true);
+  assert.equal(checklistContextIndex >= 0, true);
   assert.equal(
-    String(refinementMessages[mainPlanContextIndex]?.role || ""),
+    String(refinementMessages[checklistContextIndex]?.role || ""),
     "system",
   );
-  assert.equal(
-    String(refinementMessages[revisionContextIndex]?.role || ""),
-    "system",
-  );
+  assert.equal(refinementMessages.some((item = {}) => String(item?.content || "").includes("harness-main-plan-context")), false);
+  assert.equal(refinementMessages.some((item = {}) => String(item?.content || "").includes("harness-plan-revision-context")), false);
 });
 
 test("harness summary without completion marker still triggers planning revision", async () => {

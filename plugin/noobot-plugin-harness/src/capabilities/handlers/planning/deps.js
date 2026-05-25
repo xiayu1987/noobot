@@ -6,7 +6,7 @@
 
 export { CAPABILITY_DOMAIN, LOCALE, PLAN_REFINEMENT_TOOL_NAME, PROMPT_ENVELOPE } from "../shared/constants.js";
 
-export { getDefaultTaskOwner, getPromptJsonFormatExample, getTaskTemplate, translateI18nText } from "../shared/i18n.js";
+export { getDefaultTaskOwner, getTaskTemplate, translateI18nText } from "../shared/i18n.js";
 
 export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 
@@ -34,12 +34,5 @@ export { buildCapabilityModelMessages } from "../shared/model-message-factory.js
 export { invokeWithReasoningRetry } from "../shared/model-invocation-utils.js";
 export { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
 
-export {
-  defaultTaskChecklist,
-  extractJsonObjectFromText,
-  parseChecklistWithLocalRepair,
-  parseRefinementChecklistFromModelOutput,
-  parseTaskChecklistFromModelOutput,
-} from "../shared/checklist-utils.js";
 
 export { disableBlockedToolsInRegistry, resolveSceneToolNames } from "../shared/tool-utils.js";

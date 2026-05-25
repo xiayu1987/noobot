@@ -12,10 +12,11 @@ import {
 } from "./deps.js";
 import {
   captureInjectedResult,
-  injectScheduledPrompt,
   scheduleInjectTask,
 } from "../inject-fallback.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
+import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
+import { buildPlanChecklistSystemContent } from "../shared/plan-checklist-context.js";
 import {
   applyRevisedPlanFromText,
   buildNextPhaseRelayContent,
@@ -68,45 +69,69 @@ export function schedulePlanRevisionByInject(ctx = {}, summaryText = "", stage =
 }
 
 export function maybeInjectPlanRevisionPrompt(ctx = {}) {
-  return injectScheduledPrompt(ctx, {
-    domain: CAPABILITY_DOMAIN.PLANNING,
-    injectedEvent: "planning_plan_update_prompt_injected",
-    getPendingData: ({ state }) =>
-      state.pending.planRevision === true
-        ? {
-            summaryText: String(state.pending.summaryText || "").trim(),
-            stage:
-              String(state.pending.planRevisionStage || "refinement").trim().toLowerCase() === "revision"
-                ? "revision"
-                : "refinement",
-            targetMainStepIndexes: Array.isArray(state.pending.planRevisionTargetMainStepIndexes)
-              ? state.pending.planRevisionTargetMainStepIndexes
-              : [],
-          }
-        : null,
-    consumePendingData: ({ state }) => {
-      setPendingStateWithMeta(state, "planRevision", false);
-      delete state.pending.planRevisionStage;
-      delete state.pending.planRevisionTargetMainStepIndexes;
-    },
-    markCapturePending: ({ state, pendingData }) => {
-      setCaptureFlagStateWithMeta(state, "planRevisionCapturePending", true);
-      state.flags.planRevisionCaptureStage =
-        String(pendingData?.stage || "refinement").trim().toLowerCase() === "revision"
-          ? "revision"
-          : "refinement";
-      state.flags.planRevisionCaptureSummaryText = String(pendingData?.summaryText || "").trim();
-      state.flags.planRevisionCaptureTargetMainStepIndexes = Array.isArray(pendingData?.targetMainStepIndexes)
-        ? pendingData.targetMainStepIndexes
-        : [];
-    },
-    buildPromptContent: ({ locale, bucket, state, pendingData }) =>
-      pendingData.stage === "revision"
-        ? buildPlanningRevisionPrompt(locale, bucket, state, pendingData.summaryText || "")
-        : buildPlanningRefinementPrompt(locale, bucket, state, pendingData.summaryText || ""),
-    messageRole: "user",
-    injectAt: "append",
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  const pendingData =
+    state.pending.planRevision === true
+      ? {
+          summaryText: String(state.pending.summaryText || "").trim(),
+          stage:
+            String(state.pending.planRevisionStage || "refinement").trim().toLowerCase() === "revision"
+              ? "revision"
+              : "refinement",
+          targetMainStepIndexes: Array.isArray(state.pending.planRevisionTargetMainStepIndexes)
+            ? state.pending.planRevisionTargetMainStepIndexes
+            : [],
+        }
+      : null;
+  if (!pendingData) return false;
+  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
+  if (!messages) return false;
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const systemChecklistContent = buildPlanChecklistSystemContent({
+    locale,
+    planText: bucket?.planText || "",
+    bucket,
   });
+  if (systemChecklistContent) {
+    injectMessageWithPolicy(ctx, {
+      role: "system",
+      content: systemChecklistContent,
+      injectAt: "append",
+      dedupe: false,
+      avoidBreakToolCallContinuity: true,
+    });
+  }
+  const promptContent =
+    pendingData.stage === "revision"
+      ? buildPlanningRevisionPrompt(locale, bucket, state, pendingData.summaryText || "")
+      : buildPlanningRefinementPrompt(locale, bucket, state, pendingData.summaryText || "");
+  const userInjection = injectMessageWithPolicy(ctx, {
+    role: "user",
+    content: String(promptContent || "").trim(),
+    injectAt: "append",
+    dedupe: false,
+    avoidBreakToolCallContinuity: true,
+  });
+  if (!userInjection.injected) return false;
+  setPendingStateWithMeta(state, "planRevision", false);
+  delete state.pending.planRevisionStage;
+  delete state.pending.planRevisionTargetMainStepIndexes;
+  setCaptureFlagStateWithMeta(state, "planRevisionCapturePending", true);
+  state.flags.planRevisionCaptureStage =
+    String(pendingData?.stage || "refinement").trim().toLowerCase() === "revision"
+      ? "revision"
+      : "refinement";
+  state.flags.planRevisionCaptureSummaryText = String(pendingData?.summaryText || "").trim();
+  state.flags.planRevisionCaptureTargetMainStepIndexes = Array.isArray(pendingData?.targetMainStepIndexes)
+    ? pendingData.targetMainStepIndexes
+    : [];
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event: "planning_plan_update_prompt_injected",
+  });
+  return true;
 }
 
 export async function maybeCapturePlanRevisionByInject(ctx = {}) {
