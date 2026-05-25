@@ -40,10 +40,11 @@ const RUNTIME_KEYS = Object.freeze({
 });
 const MEMORY_PATHS = Object.freeze({
   MEMORY_DIR: "memory",
-  LONG_MEMORY: "long-memory.json",
+  LONG_MEMORY: "long-memory.md",
+  LONG_MEMORY_METADATA: "long-memory/metadata.md",
   SHORT_MEMORY: "short-memory.json",
-  LONG_MEMORY_MODEL: "long-memory-model.json",
-  EXPERIENCE_MODEL: "experience-model.json",
+  LONG_MEMORY_MODEL: "long-memory-model.md",
+  EXPERIENCE_MODEL: "experience-model.md",
   EXPERIENCE_DIR: "experience",
   DAILY_SUMMARY_DIR: "daily_summary",
   WEEKLY_SUMMARY_DIR: "weekly_summary",
@@ -286,6 +287,7 @@ function resolveMemoryHelpPaths(agentContext = {}) {
     basePath,
     memoryDir,
     longMemoryPath: path.join(memoryDir, MEMORY_PATHS.LONG_MEMORY),
+    longMemoryMetadataPath: path.join(memoryDir, MEMORY_PATHS.LONG_MEMORY_METADATA),
     shortMemoryPath: path.join(memoryDir, MEMORY_PATHS.SHORT_MEMORY),
     longMemoryModelPath: path.join(memoryDir, MEMORY_PATHS.LONG_MEMORY_MODEL),
     experienceModelPath: path.join(memoryDir, MEMORY_PATHS.EXPERIENCE_MODEL),

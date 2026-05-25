@@ -13,7 +13,12 @@ import { ShortMemoryManager } from "./short-memory/index.js";
 import { LongMemoryManager } from "./long-memory/index.js";
 import { ExperienceManager } from "./experience/index.js";
 import { normalizeModelContent } from "./utils/format.js";
+import { trimPromptPayloadByCharLimit } from "./utils/payload-trimmer.js";
 import { isAbortLikeError, throwIfAborted } from "./experience/workflow.js";
+import {
+  MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
+  MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
+} from "./constants.js";
 
 const MEMORY_PROMPT_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhSystemPromptI18n?.memoryPrompt || {}),
@@ -70,10 +75,14 @@ export class MemoryManager {
     const memoryMaxItems = Number(effectiveConfig.memoryMaxItems || 100);
     const shouldUpdateLongMemory = unextracted.length >= memoryMaxItems;
     const promptPayload = unextracted.map((item) => ({ records: item.records }));
+    const longMemoryPromptPayload = trimPromptPayloadByCharLimit(promptPayload, {
+      maxChars: MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
+      shrinkRatio: MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
+    });
 
-    const longMemDoc = await this.storage.readJson(this.storage.longPath(basePath), {});
+    const existingLongMemoryText = await this.longMemory.read(basePath);
     throwIfAborted(abortSignal);
-    const existingLongMemory = longMemDoc.memory ?? "";
+    const existingLongMemory = String(existingLongMemoryText || "").trim();
 
     const modelSpec = resolveDefaultModelSpec({
       globalConfig: this.globalConfig,
@@ -88,12 +97,14 @@ export class MemoryManager {
     const summaryCreatedAt = new Date().toISOString();
     if (shouldUpdateLongMemory) {
       const longMemoryModel = await this.longMemory.readModel(basePath);
+      const longMemoryMetadata = await this.longMemory.readMetadata(basePath);
       throwIfAborted(abortSignal);
       const prompt = String(
         promptI18n?.prompt?.({
           longMemoryModel,
+          longMemoryMetadata,
           existingLongMemory,
-          promptPayload,
+          promptPayload: longMemoryPromptPayload,
         }) || "",
       ).trim();
       if (!prompt) return;

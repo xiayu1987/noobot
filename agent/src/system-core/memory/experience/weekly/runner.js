@@ -18,6 +18,7 @@ export async function runWeeklySummaryIfNeeded({
   normalizeWeeklySummary,
   saveWeeklySummary,
   readMetadata,
+  writeMetadata,
   readExperienceModel,
   upsertModelEntries,
 } = {}) {
@@ -87,7 +88,7 @@ export async function runWeeklySummaryIfNeeded({
       createdAt: new Date().toISOString(),
     });
     metadata.updatedAt = new Date().toISOString();
-    await storage.writeJson(storage.experienceMetadataPath(basePath), metadata);
+    await writeMetadata(basePath, metadata);
     hasWrittenSummary = true;
   }
   return hasWrittenSummary;

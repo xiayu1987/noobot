@@ -3,8 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { parseJsonWithLogging } from "../../parsers/json-parser.js";
 import { sanitizeFileName, dedupeTextList } from "../../utils/text.js";
+import { collectPatchItemsByFieldMap } from "../patch-utils.js";
+import { EXPERIENCE_PATCH_SCHEMA } from "../schema-config.js";
 
 export function normalizeDailyDomainResultItems(rawItems = []) {
   const out = [];
@@ -22,13 +23,15 @@ export function normalizeDailyDomainResultItems(rawItems = []) {
 }
 
 export function parseDailyExperienceOutput(rawContent, { onParseError = null } = {}) {
-  const { parsed } = parseJsonWithLogging({
+  const schema = EXPERIENCE_PATCH_SCHEMA.daily;
+  const items = collectPatchItemsByFieldMap({
     rawContent,
+    idPrefix: schema.idPrefix,
     stage: "daily_experience",
-    defaultValue: {},
-    onError: onParseError,
+    parseErrorCode: schema.parseErrorCode,
+    onParseError,
+    fieldMap: schema.fieldMap,
+    requiredFields: schema.requiredFields,
   });
-  const items = Array.isArray(parsed?.results) ? parsed.results : [];
   return normalizeDailyDomainResultItems(items);
 }
-

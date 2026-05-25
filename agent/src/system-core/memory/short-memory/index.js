@@ -10,6 +10,7 @@ import { compactShortMemory } from "./compactor.js";
 function sanitizeDialogRecordsForMemory(messages = []) {
   const out = [];
   for (const messageItem of messages) {
+    if (messageItem?.injectedMessage === true) continue;
     const role = String(messageItem?.role || "").trim();
     const type = String(messageItem?.type || "").trim();
     if (!["user", "assistant"].includes(role)) continue;
@@ -92,4 +93,3 @@ export class ShortMemoryManager {
     return true;
   }
 }
-
