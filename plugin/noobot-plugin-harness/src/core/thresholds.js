@@ -25,10 +25,12 @@ export const LLM_SUMMARY_OVERFLOW_POLICY = SUMMARY_POLICY.OVERFLOW_POLICY;
 
 export const PLAN_UPDATE_POLICY = Object.freeze({
   MAX_ATTEMPTS: 5,
+  TRIGGER_TURNS_THRESHOLD: 15,
 });
 
 // Legacy exports for backward compatibility.
 export const MAX_PLAN_UPDATE_ATTEMPTS = PLAN_UPDATE_POLICY.MAX_ATTEMPTS;
+export const PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = PLAN_UPDATE_POLICY.TRIGGER_TURNS_THRESHOLD;
 // Backward compatibility alias (revision + refinement now share one unified threshold).
 export const MAX_PLAN_REVISION_ATTEMPTS = MAX_PLAN_UPDATE_ATTEMPTS;
 
