@@ -1159,7 +1159,7 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     agentContext,
   };
   await handler({ capability: "guidance", point: "after_llm_call", ctx: summaryCtx, meta });
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
   assert.equal(
     agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_revision_scheduled_by_inject"),
     true,
@@ -1205,7 +1205,7 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     agentContext,
   };
   await handler({ capability: "guidance", point: "after_llm_call", ctx: revisionCtx, meta });
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
   assert.equal(
     agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_refinement_skipped_no_main_plan_change"),
     true,

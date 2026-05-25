@@ -158,14 +158,15 @@ export const GUIDANCE_WEB_TOOL_NAMES = [TOOL_NAME_SET.CALL_SERVICE];
 export const TASK_ACCEPTANCE_TOOL_NAME = "request_task_acceptance";
 export const PLAN_REFINEMENT_TOOL_NAME = "request_plan_refinement";
 
-export const HARNESS_BUCKET_VERSION = 2;
+export const HARNESS_BUCKET_VERSION = 3;
 
 export const DEFAULT_HARNESS_COUNTERS = Object.freeze({
   llmTurns: 0,
+  summaryRounds: 0,
   hookTurns: 0,
   consecutiveToolFailures: 0,
   totalToolFailures: 0,
-  planRevisionAttempts: 0,
+  planUpdateAttempts: 0,
 });
 
 export const DEFAULT_HARNESS_FLAGS = Object.freeze({
@@ -181,7 +182,7 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
   guidanceSummaryMarkPending: false,
   summaryByCharsPrompted: false,
   overflowForceAcceptancePending: false,
-  planRevisionCapturePending: false,
+  planUpdateCapturePending: false,
   acceptanceSemanticValidationCapturePending: false,
 });
 
@@ -196,6 +197,8 @@ export const DEFAULT_HARNESS_SIGNALS = Object.freeze({
 export const DEFAULT_HARNESS_PENDING = Object.freeze({
   guidance: null,
   summary: false,
-  planRevision: false,
+  planUpdate: false,
+  planUpdateStage: "",
+  planUpdateContext: null,
   acceptanceSemanticValidation: null,
 });

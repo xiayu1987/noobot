@@ -230,7 +230,7 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   const toolResult = await refinementTool.invoke({ summary: "阶段完成，细化下一步" });
   assert.equal(toolResult?.ok, true);
   assert.equal(toolResult?.status, "completed");
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
   assert.equal(
     invocations.some((item = {}) => item.purpose === "planning_refinement"),
     true,
