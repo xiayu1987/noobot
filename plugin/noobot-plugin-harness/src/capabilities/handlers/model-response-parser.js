@@ -23,16 +23,6 @@ export function isSummaryCompletionMarked(summaryText = "", locale = LOCALE.ZH_C
   return true;
 }
 
-export function parseSemanticValidationResult(responseText = "") {
-  const parsed = extractJsonObjectFromText(responseText);
-  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
-  return {
-    status: "warn",
-    consistent: false,
-    raw: String(responseText || "").trim(),
-  };
-}
-
 export function extractPlanMetadataFromText(text = "") {
   const parsed = extractJsonObjectFromText(text);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {

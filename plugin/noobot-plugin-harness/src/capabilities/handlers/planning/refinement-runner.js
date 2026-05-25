@@ -11,12 +11,7 @@ import {
   appendCapabilityModelTraceLog,
   buildCapabilityModelMessages,
   ensureHarnessBucket,
-  extractJsonObjectFromText,
   extractRawTextContent,
-  getDefaultTaskOwner,
-  getPromptJsonFormatExample,
-  parseRefinementChecklistFromModelOutput,
-  parseTaskChecklistFromModelOutput,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsAttachmentMetas,
   invokeWithReasoningRetry,
@@ -24,7 +19,6 @@ import {
   resolveCapabilityModelName,
   resolveCapabilityModelMessages,
   resolveCapabilityToolAllowlist,
-  translateI18nText,
 } from "./deps.js";
 import { createPlanRevisionHelpers } from "../shared/plan-revision-helpers.js";
 
@@ -33,12 +27,6 @@ const planRevisionHelpers = createPlanRevisionHelpers({
   LOCALE,
   appendCapabilityLog,
   ensureHarnessBucket,
-  extractJsonObjectFromText,
-  getDefaultTaskOwner,
-  getPromptJsonFormatExample,
-  parseRefinementChecklistFromModelOutput,
-  parseTaskChecklistFromModelOutput,
-  translateI18nText,
 });
 
 const resolveRefinementTargetMainSteps = planRevisionHelpers.resolveRefinementTargetMainSteps;

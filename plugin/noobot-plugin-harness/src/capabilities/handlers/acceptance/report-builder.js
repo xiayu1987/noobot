@@ -13,6 +13,7 @@ import {
 } from "./deps.js";
 import { resolveFirstMatchedRuleResult } from "../shared/rule-table-utils.js";
 import { buildStatusSummary, nowIsoTimestamp } from "../shared/report-utils.js";
+import { parsePlanDocumentFromText } from "../shared/plan-text-protocol.js";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -65,9 +66,20 @@ function buildAcceptanceSummary(items = []) {
 
 export function buildAcceptanceReport({ bucket = {}, state = {}, mode = ACCEPTANCE_MODE.ACTIVE } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
-  const checklist = Array.isArray(bucket.taskChecklist) && bucket.taskChecklist.length
-    ? bucket.taskChecklist
-    : defaultTaskChecklist(locale);
+  const planText = String(bucket?.planText || "").trim();
+  const parsedPlan = parsePlanDocumentFromText(planText);
+  const checklistFromPlanText = [
+    ...(Array.isArray(parsedPlan?.mainPlans) ? parsedPlan.mainPlans : []).map((item = {}) => ({
+      index: Number(item?.id),
+      task: String(item?.content || "").trim(),
+    })),
+  ];
+  const checklist =
+    checklistFromPlanText.length
+      ? checklistFromPlanText
+      : Array.isArray(bucket.taskChecklist) && bucket.taskChecklist.length
+        ? bucket.taskChecklist
+        : defaultTaskChecklist(locale);
   const items = checklist.map((task, index) => {
     const normalized = normalizeChecklistItem(task, index, locale);
     return {
@@ -79,6 +91,7 @@ export function buildAcceptanceReport({ bucket = {}, state = {}, mode = ACCEPTAN
   return {
     mode,
     acceptedAt: nowIsoTimestamp(),
+    planText,
     summary: buildAcceptanceSummary(items),
     taskChecklist: items,
     finalPlanChecklist: items,
@@ -220,6 +233,26 @@ export function buildSemanticValidationPromptPayload({
   finalOutput = "",
   locale = LOCALE.ZH_CN,
 } = {}) {
+  const planText = String(bucket?.planText || "").trim();
+  if (planText) {
+    return {
+      expectedSchema: {
+        status: "pass|warn|fail",
+        consistent: true,
+        missingItems: [],
+        unsupportedClaims: [],
+        checklistCoverage: [],
+        suggestions: [],
+      },
+      planText,
+      taskChecklist: [],
+      finalPlanChecklist: [],
+      plan: buildPlanSnapshot(bucket, locale),
+      acceptanceReport: baseReport,
+      toolSignals: state.signals || {},
+      finalOutput,
+    };
+  }
   const finalMainPlan = resolveFinalMainPlan(bucket, locale);
   const refinementPlansForFinalMainPlan = collectRefinementsForMainPlanVersion(
     bucket,
@@ -252,4 +285,38 @@ export function buildSemanticValidationPromptPayload({
     toolSignals: state.signals || {},
     finalOutput,
   };
+}
+
+export function renderAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
+  const data = report && typeof report === "object" ? report : {};
+  const mode = String(data.mode || "").trim() || "active";
+  const acceptedAt = String(data.acceptedAt || "").trim() || "";
+  const planText = String(data.planText || data?.plan?.planText || "").trim();
+  const checklist = Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [];
+  const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
+  const semanticValidation = data?.semanticValidation && typeof data.semanticValidation === "object"
+    ? data.semanticValidation
+    : null;
+  const lines = [
+    locale === LOCALE.EN_US ? "[Harness-Acceptance]" : "[Harness-验收]",
+    `mode: ${mode}`,
+    acceptedAt ? `acceptedAt: ${acceptedAt}` : "",
+    planText
+      ? `${locale === LOCALE.EN_US ? "planText" : "计划文本"}:\n${planText}`
+      : "",
+    locale === LOCALE.EN_US ? "Acceptance Checklist:" : "验收清单：",
+    ...checklist.map((item = {}) => {
+      const index = String(item?.index ?? "").trim();
+      const task = String(item?.task || "").trim();
+      const status = String(item?.status || "").trim() || "pending";
+      return `${index}. [${status}] ${task}`;
+    }),
+    Object.keys(summary).length
+      ? `${locale === LOCALE.EN_US ? "summary" : "汇总"}: ${JSON.stringify(summary)}`
+      : "",
+    semanticValidation?.content
+      ? `${locale === LOCALE.EN_US ? "semanticValidation" : "语义验收"}:\n${String(semanticValidation.content)}`
+      : "",
+  ].filter(Boolean);
+  return lines.join("\n").trim();
 }

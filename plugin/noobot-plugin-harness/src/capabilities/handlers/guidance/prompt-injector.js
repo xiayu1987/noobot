@@ -8,17 +8,22 @@ import {
   LOCALE,
   appendCapabilityLog,
   ensureHarnessBucket,
-  translateI18nText,
 } from "./deps.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
+import {
+  buildGuidanceFailurePromptText,
+  buildGuidanceSummaryPromptText,
+  getGuidanceMarker,
+  getGuidanceSummaryMarker,
+} from "../shared/workflow-prompts.js";
 
 export function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", { includeMarker = false } = {}) {
-  const lines = [translateI18nText(locale, "guidanceBody", { reason })];
-  if (includeMarker) {
-    lines.unshift(translateI18nText(locale, "guidanceMarker"));
-  }
-  return lines.join("\n");
+  return buildGuidanceFailurePromptText({
+    locale,
+    marker: includeMarker ? getGuidanceMarker(locale) : "",
+    reason,
+  });
 }
 
 export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
@@ -32,10 +37,10 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   if (state.pending.summary === true) {
     injectMessageWithPolicy(ctx, {
       role: "system",
-      content: [
-        translateI18nText(locale, "guidanceSummaryMarker"),
-        translateI18nText(locale, "guidanceSummaryBody"),
-      ].join("\n"),
+      content: buildGuidanceSummaryPromptText({
+        locale,
+        marker: getGuidanceSummaryMarker(locale),
+      }),
       injectAt: "prepend",
       avoidBreakToolCallContinuity: true,
     });

@@ -44,6 +44,7 @@ export function ensureHarnessBucket(ctx = {}) {
   const isFastPathReady =
     bucket.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
     state.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
+    typeof bucket.planText === "string" &&
     Array.isArray(bucket.taskChecklist) &&
     Array.isArray(bucket.acceptanceReports) &&
     Array.isArray(bucket.reviewReports) &&
@@ -70,6 +71,12 @@ export function ensureHarnessBucket(ctx = {}) {
     ensureArrayField(bucket, "reviewReports");
     ensureArrayField(bucket, "planningRawOutputs");
     ensureArrayField(bucket, "completedDialogProcessIds");
+    if (typeof bucket.summaryText !== "string") bucket.summaryText = "";
+    if (typeof bucket.planText !== "string") bucket.planText = "";
+    if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
+    if (typeof bucket.lastMainPlanRevisionChanged !== "boolean") {
+      bucket.lastMainPlanRevisionChanged = false;
+    }
     if (
       !("lastPlanningRawOutput" in bucket) ||
       (bucket.lastPlanningRawOutput && typeof bucket.lastPlanningRawOutput !== "object")

@@ -9,15 +9,49 @@ import {
   LOCALE,
   appendCapabilityLog,
   attachMetasToLatestInjectedMessage,
-  defaultTaskChecklist,
   ensureHarnessBucket,
-  getDefaultTaskOwner,
   mapAttachmentRecordsToMetas,
   relaySeparateModelOutputAsUserMessage,
   translateI18nText,
 } from "./deps.js";
-import { buildAcceptanceReport } from "./report-builder.js";
+import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-builder.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
+
+function mergeAttachmentMetasForOutput(existing = [], incoming = []) {
+  const current = Array.isArray(existing) ? existing : [];
+  const next = Array.isArray(incoming) ? incoming : [];
+  if (!next.length) return current;
+  const keyOf = (item = {}) =>
+    String(item?.attachmentId || "").trim() ||
+    `${String(item?.name || "").trim()}|${String(item?.path || "").trim()}`;
+  const seen = new Set(current.map((item) => keyOf(item)).filter(Boolean));
+  const merged = [...current];
+  for (const item of next) {
+    const key = keyOf(item);
+    if (key && seen.has(key)) continue;
+    merged.push(item);
+    if (key) seen.add(key);
+  }
+  return merged;
+}
+
+function attachMetasToFinalOutputTurn(ctx = {}, metas = []) {
+  if (!Array.isArray(metas) || !metas.length) return false;
+  const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
+  if (!result) return false;
+  const turnMessages = Array.isArray(result.turnMessages) ? result.turnMessages : [];
+  for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
+    const item = turnMessages[index] || {};
+    if (String(item?.role || "").trim() !== "assistant") continue;
+    turnMessages[index] = {
+      ...item,
+      attachmentMetas: mergeAttachmentMetasForOutput(item?.attachmentMetas, metas),
+    };
+    return true;
+  }
+  result.attachmentMetas = mergeAttachmentMetasForOutput(result?.attachmentMetas, metas);
+  return true;
+}
 
 export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -39,9 +73,6 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   if (!userId || !sessionId) return false;
 
   const locale = state?.locale || LOCALE.ZH_CN;
-  const checklist = Array.isArray(bucket?.taskChecklist) && bucket.taskChecklist.length
-    ? bucket.taskChecklist
-    : defaultTaskChecklist(locale);
   const acceptanceReport =
     bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
       ? bucket.lastAcceptanceReport
@@ -49,35 +80,25 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
 
   const artifacts = [
     {
-      name: "harness-task-checklist.json",
-      mimeType: "application/json",
+      name: "harness-plan-text.txt",
+      mimeType: "text/plain",
       contentBase64: Buffer.from(
-        JSON.stringify(
-          {
-            generatedAt: new Date().toISOString(),
-            totalGoal: bucket?.totalGoal || "",
-            taskOwner: bucket?.taskOwner || getDefaultTaskOwner(locale),
-            nextPhase: bucket?.nextPhase || null,
-            taskChecklist: checklist,
-          },
-          null,
-          2,
-        ),
+        [
+          `[generatedAt] ${new Date().toISOString()}`,
+          "[planText]",
+          String(bucket?.planText || "").trim(),
+        ].filter(Boolean).join("\n"),
         "utf8",
       ).toString("base64"),
     },
     {
-      name: "harness-acceptance-checklist.json",
-      mimeType: "application/json",
+      name: "harness-acceptance-report.txt",
+      mimeType: "text/plain",
       contentBase64: Buffer.from(
-        JSON.stringify(
-          {
-            generatedAt: new Date().toISOString(),
-            report: acceptanceReport,
-          },
-          null,
-          2,
-        ),
+        [
+          `[generatedAt] ${new Date().toISOString()}`,
+          renderAcceptanceReportText(acceptanceReport, locale),
+        ].filter(Boolean).join("\n\n"),
         "utf8",
       ).toString("base64"),
     },
@@ -103,8 +124,9 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
 
   const metas = mapAttachmentRecordsToMetas(savedRecords);
   if (!metas.length) return false;
-  const attached = attachMetasToLatestInjectedMessage(ctx, metas);
-  if (!attached) {
+  const attachedToInjectedMessage = attachMetasToLatestInjectedMessage(ctx, metas);
+  const attachedToFinalOutput = attachMetasToFinalOutputTurn(ctx, metas);
+  if (!attachedToInjectedMessage && !attachedToFinalOutput) {
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
       purpose: "acceptance_checklist",
@@ -141,7 +163,7 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
       original,
       "",
       translateI18nText(locale, "forcedAcceptanceHeader"),
-      JSON.stringify(report, null, 2),
+      renderAcceptanceReportText(report, locale),
     ].filter(Boolean).join("\n");
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,

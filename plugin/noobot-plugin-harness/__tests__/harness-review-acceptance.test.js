@@ -93,6 +93,77 @@ test("harness before_final_output capability runtime runs once", async () => {
   assert.equal((result.output.match(/acceptance-1/g) || []).length, 1);
 });
 
+test("acceptance checklist attachments are bound to final assistant turn output", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const records = [
+    {
+      attachmentId: "att_plan",
+      sessionId: "s-attach",
+      attachmentSource: "model",
+      name: "harness-plan-text.txt",
+      mimeType: "text/plain",
+      size: 10,
+      path: "/tmp/att_plan.txt",
+      relativePath: "runtime/attach/att_plan.txt",
+      generatedByModel: true,
+      generationSource: "harness_checklist",
+    },
+    {
+      attachmentId: "att_report",
+      sessionId: "s-attach",
+      attachmentSource: "model",
+      name: "harness-acceptance-report.txt",
+      mimeType: "text/plain",
+      size: 10,
+      path: "/tmp/att_report.txt",
+      relativePath: "runtime/attach/att_report.txt",
+      generatedByModel: true,
+      generationSource: "harness_checklist",
+    },
+  ];
+  const ctx = {
+    userId: "u-attach",
+    sessionId: "s-attach",
+    result: {
+      output: "done",
+      turnMessages: [{ role: "assistant", content: "done", type: "message" }],
+    },
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        harness: {
+          planText: "1. 保留计划文本",
+          state: {
+            flags: { acceptanceRequested: true },
+          },
+        },
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            attachmentService: {
+              ingestGeneratedArtifacts: async () => records,
+            },
+            systemRuntime: {
+              userId: "u-attach",
+              sessionId: "s-attach",
+            },
+          },
+        },
+      },
+    },
+  };
+
+  const result = await handler({ capability: "acceptance", point: "before_final_output", ctx, meta: {} });
+  assert.equal(result.status, "active");
+  assert.equal(Array.isArray(ctx.result.turnMessages?.[0]?.attachmentMetas), true);
+  assert.equal(ctx.result.turnMessages[0].attachmentMetas.length, 2);
+  assert.deepEqual(
+    ctx.result.turnMessages[0].attachmentMetas.map((item = {}) => item.attachmentId),
+    ["att_plan", "att_report"],
+  );
+});
+
 test("harness finalResponseGuard false skips final policy injection but keeps review", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: true, finalResponseGuard: false });
@@ -382,6 +453,67 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
   assert.match(String(result.output), /"semanticValidation"/);
   assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "acceptance_semantic_validation_completed"), true);
+});
+
+test("acceptance semantic validation can relay into final output turn when ctx.messages is absent", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const ctx = {
+    userId: "relay-u",
+    sessionId: "relay-s",
+    dialogProcessId: "relay-dp",
+    result: {
+      output: "任务完成",
+      turnMessages: [{ role: "assistant", content: "任务完成", type: "message" }],
+    },
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        harness: {
+          planText: "1. 核对输出",
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: {},
+            signals: {},
+            pending: {},
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            systemRuntime: { userId: "relay-u", sessionId: "relay-s" },
+          },
+        },
+      },
+    },
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      acceptance: { semanticValidation: true },
+      capabilityModelInvoker: async ({ purpose }) => {
+        if (purpose === "acceptance_semantic_validation") {
+          return { content: "ADD 1 验收通过，输出与计划一致" };
+        }
+        return { content: "" };
+      },
+    },
+  };
+
+  const res = await handler({ capability: "acceptance", point: "before_final_output", ctx, meta });
+  assert.equal(res.status, "active");
+  assert.equal(Array.isArray(ctx.result.turnMessages), true);
+  assert.equal(
+    ctx.result.turnMessages.some(
+      (item = {}) =>
+        item.injectedMessage === true &&
+        String(item.injectedBy || "") === "harness-plugin" &&
+        String(item.role || "") === "user" &&
+        String(item.content || "").includes("acceptance_semantic_validation"),
+    ),
+    true,
+  );
 });
 
 test("harness active request_task_acceptance semantic validation receives agent ctx via tool config", async () => {
@@ -675,20 +807,13 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
   assert.deepEqual(invocations.map((item) => item.purpose), [
     "summary",
     "planning_revision",
-    "planning_refinement",
   ]);
-  assert.equal(agentContext.payload.harness.totalGoal, "完成 harness 计划闭环");
-  assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
-  assert.equal(agentContext.payload.harness.taskChecklist[1].input, "阶段小结和当前计划");
-  assert.deepEqual(agentContext.payload.harness.taskChecklist[1].files.create, ["reports/acceptance.json"]);
-  assert.equal(agentContext.payload.harness.nextPhase.objective, "实现验收闭环");
-  assert.match(String(messages.map((item) => item.content).join("\n")), /下一阶段计划清单/);
+  assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, true);
 
   const result = { output: "done" };
   await hookManager.emit("before_final_output", { agentContext, result });
 
-  assert.equal(agentContext.payload.harness.lastAcceptanceReport.finalPlanChecklist.length, 2);
-  assert.equal(agentContext.payload.harness.lastAcceptanceReport.plan.totalGoal, "完成 harness 计划闭环");
+  assert.equal(agentContext.payload.harness.lastAcceptanceReport.finalPlanChecklist.length >= 1, true);
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.plan.revisionCount >= 1, true);
 });
 
@@ -782,19 +907,14 @@ test("planning_revision reuses summary model messages in separate_model flow", a
   assert.deepEqual(invocations.map((item) => item.purpose), [
     "summary",
     "planning_revision",
-    "planning_refinement",
   ]);
   assert.equal(invocations.every((item) => item.promptVersion === "v1"), true);
   assert.equal(invocations.every((item) => item.envelopeType === "structured_v1"), true);
   const summaryMessages = invocations[0].messages;
   const revisionMessages = invocations[1].messages;
-  const refinementMessages = invocations[2].messages;
   assertFlatCapabilityMessages(summaryMessages);
   assertFlatCapabilityMessages(revisionMessages);
-  assertFlatCapabilityMessages(refinementMessages);
-  const refinementBaseMessages = refinementMessages.slice(0, -1);
   const revisionBaseMessages = revisionMessages.slice(0, -1);
-  assert.deepEqual(refinementBaseMessages, summaryMessages.slice(0, -1));
   assert.deepEqual(revisionBaseMessages, summaryMessages.slice(0, -1));
   assert.equal(
     revisionMessages.some((item = {}) => String(item?.content || "").includes("REVISION-ONLY")),
@@ -845,7 +965,7 @@ test("harness summary without completion marker still triggers planning revision
     agentContext.payload.harness.logs.guidance.some((item) => item.event === "summary_completion_marker_missing"),
     false,
   );
-  assert.equal(agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_checklist_revised_after_summary"), false);
+  assert.equal(agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_checklist_revised_after_summary"), true);
 });
 
 test("guidance handler inject mode can schedule and capture planning revision without invoker", async () => {
@@ -944,34 +1064,12 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     agentContext,
   };
   await handler({ capability: "guidance", point: "after_llm_call", ctx: revisionCtx, meta });
-  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(
-    String(agentContext.payload.harness.state.pending.planRevisionStage || ""),
-    "refinement",
-  );
-  assert.equal(
-    agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_refinement_scheduled_by_inject"),
+    agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_refinement_skipped_no_main_plan_change"),
     true,
   );
-
-  const thirdCtx = {
-    messages: [{ role: "user", content: "继续执行修订" }],
-    agentContext,
-  };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx: thirdCtx, meta });
-  assert.equal(
-    thirdCtx.messages.some((msg) => String(msg.content || "").includes("harness-planning-refinement")),
-    true,
-  );
-
-  const refinementCtx = {
-    messages: thirdCtx.messages,
-    ai: revisionCtx.ai,
-    agentContext,
-  };
-  await handler({ capability: "guidance", point: "after_llm_call", ctx: refinementCtx, meta });
-  assert.equal(agentContext.payload.harness.totalGoal, "完成 inject 模式计划闭环");
-  assert.equal(agentContext.payload.harness.taskChecklist.length, 2);
+  assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, true);
   assert.equal(
     agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_checklist_revised_after_summary"),
     true,

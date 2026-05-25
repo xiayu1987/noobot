@@ -17,6 +17,7 @@ import { schedulePlanRevisionByInject, maybeInjectPlanRevisionPrompt, maybeCaptu
 import { maybeInjectGuidanceOrSummaryPrompt } from "./prompt-injector.js";
 import { revisePlanAfterSummary, runGuidanceBySeparateModel } from "./model-runner.js";
 import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters } from "./signal-tracker.js";
+import { applySummaryText } from "./summary-manager.js";
 
 export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
@@ -47,7 +48,8 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
           event: "summary_messages_marked",
           detail: { markedCount },
         });
-        const summaryText = extractRawTextContent(ctx?.ai?.content) || extractRawTextContent(ctx?.modelResponse?.content) || "";
+        const rawSummaryText = extractRawTextContent(ctx?.ai?.content) || extractRawTextContent(ctx?.modelResponse?.content) || "";
+        const summaryText = applySummaryText(ctx, rawSummaryText);
         const locale = holder.state?.locale || LOCALE.ZH_CN;
         if (isSummaryCompletionMarked(summaryText, locale)) {
           if (!shouldUseSeparateModel(meta) && !resolveCapabilityModelInvoker(meta)) {
