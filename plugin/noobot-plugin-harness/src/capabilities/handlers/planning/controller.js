@@ -9,8 +9,11 @@ import {
   LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
   LLM_SUMMARY_OVERFLOW_POLICY,
   LLM_SUMMARY_THRESHOLD,
+  PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
 } from "../../../core/thresholds.js";
 import {
+  CAPABILITY_DOMAIN,
+  appendCapabilityLog,
   disableBlockedToolsInRegistry,
   ensureHarnessBucket,
   extractRawTextContent,
@@ -20,6 +23,7 @@ import {
 import { ensurePlanRefinementTool } from "./tool-injector.js";
 import { maybeInjectPlanningPrompt } from "./prompt-builder.js";
 import { maybeCapturePlanningResult, runPlanningBySeparateModel } from "./capture-runner.js";
+import { canAttemptPlanUpdate, setPendingPlanUpdate } from "../guidance/plan-update-engine.js";
 
 function isMessageSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -143,9 +147,12 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       const holder = ensureHarnessBucket(ctx);
       if (holder) {
         holder.state.counters.llmTurns += 1;
+        holder.state.counters.planUpdateTurns = Number(holder.state.counters.planUpdateTurns || 0) + 1;
         let currentChars = resolveUnsummarizedMessageChars(ctx?.messages);
         const reachedTurnsSummary = holder.state.counters.llmTurns > LLM_SUMMARY_THRESHOLD;
         let reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
+        const reachedPlanUpdateTurns =
+          holder.state.counters.planUpdateTurns >= PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD;
 
         const pruneEnabled = LLM_SUMMARY_OVERFLOW_POLICY.ENABLE_PRUNE_AFTER_SUMMARY === true;
         const pruneTriggerRounds = Number(
@@ -182,6 +189,28 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         } else {
           holder.state.flags.summaryByCharsPrompted = false;
           holder.state.flags.overflowForceAcceptancePending = false;
+        }
+
+        if (reachedPlanUpdateTurns) {
+          holder.state.counters.planUpdateTurns = 0;
+          if (
+            holder.state.pending?.planUpdate !== true &&
+            canAttemptPlanUpdate(ctx, holder.state, { increment: false, stage: "revision" })
+          ) {
+            setPendingPlanUpdate(holder.state, {
+              active: true,
+              stage: "revision",
+              summaryText: String(holder.bucket?.summaryText || "").trim(),
+            });
+            appendCapabilityLog(ctx, {
+              domain: CAPABILITY_DOMAIN.PLANNING,
+              event: "planning_revision_scheduled_by_turn_threshold",
+              detail: {
+                triggerTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+                summaryPending: holder.state.pending?.summary === true,
+              },
+            });
+          }
         }
       }
       changed = sanitizeInternalMessages(ctx) || changed;
