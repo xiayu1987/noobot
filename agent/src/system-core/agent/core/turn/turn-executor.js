@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filterSummarizedMessages } from "../../../context/session/summarized-message-policy.js";
+import { filterForModelContext } from "../../../context/session/message-context-policy.js";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
@@ -160,7 +160,7 @@ export async function invokeNoToolsTurn({
       turn,
       mode: "no_tools",
       invoke: ({ callbacks }) =>
-        invokeLlm.invoke(filterSummarizedMessages(messages), {
+        invokeLlm.invoke(filterForModelContext(messages), {
           callbacks,
           signal: abortSignal,
           ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
@@ -230,7 +230,7 @@ export async function invokeNoToolsTurn({
       turn,
       mode: "no_tools_reasoning_retry",
       invoke: ({ callbacks }) =>
-        invokeLlm.invoke(filterSummarizedMessages(messages), {
+        invokeLlm.invoke(filterForModelContext(messages), {
           callbacks,
           signal: abortSignal,
           ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
@@ -375,7 +375,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
           effectiveToolChoice,
           modelState?.defaultModelSpec || {},
         );
-        return boundLlm.invoke(filterSummarizedMessages(messages), {
+        return boundLlm.invoke(filterForModelContext(messages), {
           callbacks,
           signal: abortSignal,
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),

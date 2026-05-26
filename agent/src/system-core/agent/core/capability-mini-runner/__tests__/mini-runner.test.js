@@ -246,3 +246,41 @@ test("mini-runner defaults to no-tool binding invocation", async () => {
   assert.equal(result.finishedReason, "tool_binding_disabled");
   assert.equal(result.output, "plain result");
 });
+
+test("mini-runner filters only summarized history before first model invoke", async () => {
+  let firstInvokeMessages = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
+    createChatModelFn: () => ({
+      bindTools() {
+        return this;
+      },
+      async invoke(messages) {
+        if (!firstInvokeMessages.length) firstInvokeMessages = messages.map((item) => ({ ...item }));
+        return { content: "ok" };
+      },
+    }),
+    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
+  });
+
+  await invoker({
+    messages: [
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "echo" } }] },
+      { role: "tool", content: "{\"ok\":true}", tool_call_id: "c1" },
+      { role: "assistant", content: "keep-assistant" },
+      { role: "user", content: "keep-user" },
+      { role: "assistant", content: "drop-summarized", summarized: true },
+    ],
+    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+  });
+
+  assert.deepEqual(
+    firstInvokeMessages.map((item) => ({ role: item.role, content: item.content })),
+    [
+      { role: "assistant", content: "" },
+      { role: "tool", content: "{\"ok\":true}" },
+      { role: "assistant", content: "keep-assistant" },
+      { role: "user", content: "keep-user" },
+    ],
+  );
+});
