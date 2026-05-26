@@ -277,3 +277,49 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
     { role: "assistant", content: "收到，准备规划", summarized: false },
   ]);
 });
+
+test("SessionExecutionEngine resolveModelMessages filters injected messages from non-current dialog", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const prepared = engine._preparePluginRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+        },
+      },
+    },
+  });
+  const resolver = prepared.plugins.harness.resolveModelMessages;
+  const resolved = resolver({
+    messages: [
+      {
+        role: "assistant",
+        content: "current injected",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        dialogProcessId: "dlg_current",
+      },
+      {
+        role: "assistant",
+        content: "old injected",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        dialogProcessId: "dlg_old",
+      },
+      {
+        role: "assistant",
+        content: "normal response",
+      },
+    ],
+    ctx: {
+      dialogProcessId: "dlg_current",
+    },
+  });
+
+  assert.deepEqual(resolved, [
+    { role: "assistant", content: "current injected", summarized: false },
+    { role: "assistant", content: "normal response", summarized: false },
+  ]);
+});

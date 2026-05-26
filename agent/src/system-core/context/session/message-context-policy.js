@@ -41,6 +41,47 @@ export function isMessageSummarized(messageItem = {}) {
   return false;
 }
 
+function isInjectedMessage(messageItem = {}) {
+  if (!messageItem || typeof messageItem !== "object") return false;
+  if (messageItem?.injectedMessage === true) return true;
+  if (messageItem?.lc_kwargs?.injectedMessage === true) return true;
+  return false;
+}
+
+function resolveMessageDialogProcessId(messageItem = {}) {
+  return String(
+    messageItem?.dialogProcessId ||
+      messageItem?.dialogId ||
+      messageItem?.lc_kwargs?.dialogProcessId ||
+      messageItem?.lc_kwargs?.dialogId ||
+      "",
+  ).trim();
+}
+
+function shouldKeepMessageForDialog(
+  messageItem = {},
+  currentDialogProcessId = "",
+) {
+  if (!isInjectedMessage(messageItem)) return true;
+  const normalizedCurrentDialogProcessId = String(
+    currentDialogProcessId || "",
+  ).trim();
+  if (!normalizedCurrentDialogProcessId) return true;
+  return (
+    resolveMessageDialogProcessId(messageItem) ===
+    normalizedCurrentDialogProcessId
+  );
+}
+
+export function filterInjectedMessagesForDialog(
+  messages = [],
+  currentDialogProcessId = "",
+) {
+  return (Array.isArray(messages) ? messages : []).filter((messageItem) =>
+    shouldKeepMessageForDialog(messageItem, currentDialogProcessId),
+  );
+}
+
 export function shouldKeepForModelContext(messageItem = {}) {
   return !isMessageSummarized(messageItem);
 }
