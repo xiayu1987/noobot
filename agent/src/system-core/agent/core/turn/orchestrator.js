@@ -24,6 +24,7 @@ import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
 import { resolveForceToolCall } from "../../../utils/shared-utils.js";
+import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
@@ -270,7 +271,7 @@ export function createTurnOrchestrator({
           hasTools: Array.isArray(tools) && tools.length > 0,
           sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
           parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
-          dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+          dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
         },
       });
       throw error;

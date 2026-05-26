@@ -25,22 +25,26 @@ export function normalizeContextWindow({
   if (useFiniteLimit && resolvedLimit <= 0) return [];
   if (!source.length) return [];
 
+  let windowStartIndex = normalizedStartIndex;
   let windowMessages = source.slice(normalizedStartIndex);
   if (!windowMessages.length) return [];
 
   if (useFiniteLimit && windowMessages.length > Math.floor(resolvedLimit)) {
     const keepCount = Math.floor(resolvedLimit);
     windowMessages = windowMessages.slice(-keepCount);
+    windowStartIndex = Math.max(0, source.length - keepCount);
   }
 
   let prependedUserAnchor = false;
+  const firstRole = String(windowMessages[0]?.role || "").trim().toLowerCase();
+  const shouldAnchorByFirstAssistant = firstRole === "assistant";
   const hasUserMessage = windowMessages.some(
-    (messageItem) => String(messageItem?.role || "") === "user",
+    (messageItem) => String(messageItem?.role || "").trim().toLowerCase() === "user",
   );
-  if (!hasUserMessage && normalizedStartIndex > 0) {
-    for (let index = normalizedStartIndex - 1; index >= 0; index -= 1) {
+  if ((shouldAnchorByFirstAssistant || !hasUserMessage) && windowStartIndex > 0) {
+    for (let index = windowStartIndex - 1; index >= 0; index -= 1) {
       const messageItem = source[index];
-      if (String(messageItem?.role || "") !== "user") continue;
+      if (String(messageItem?.role || "").trim().toLowerCase() !== "user") continue;
       windowMessages = [messageItem, ...windowMessages];
       prependedUserAnchor = true;
       break;

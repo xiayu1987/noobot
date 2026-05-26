@@ -7,6 +7,7 @@ import { createChatModel } from "../../model/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { emitEvent } from "../../event/index.js";
 import { buildContextMessages } from "./context/message-builder.js";
+import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { DEFAULT_MAX_TOOL_LOOP_TURNS } from "./constants/index.js";
 import {
   normalizeSystemRuntimeCounters,
@@ -39,7 +40,10 @@ export function createStateBuilder({
     const effectiveConfig = mergeConfigFn(globalConfig, userConfig);
     const eventListener = runtime.eventListener || null;
     const abortSignal = runtime.abortSignal || null;
-    const dialogProcessId = sys.dialogProcessId || "";
+    const dialogProcessId = resolveDialogProcessId({
+      ctx: { runtime, systemRuntime: sys, agentContext },
+      messages: agentContext?.payload?.messages?.history,
+    });
     const tools = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
       : [];

@@ -20,6 +20,7 @@ import {
   MESSAGE_TYPE,
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 
 /**
  * Main execution runner (pipeline orchestration).
@@ -103,7 +104,7 @@ export class SessionExecutionRunner {
       userId: String(systemRuntime?.userId || "").trim(),
       sessionId: String(systemRuntime?.sessionId || "").trim(),
       parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
-      dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+      dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
       caller: String(systemRuntime?.caller || "").trim(),
       runtimeModel: String(runtime?.runtimeModel || "").trim(),
       messageCount: messagesHistory.length,

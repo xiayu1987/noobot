@@ -15,6 +15,7 @@ import {
   sanitizeGeneratedArtifactName,
 } from "../../../utils/mime-utils.js";
 import { safeNum } from "../../../utils/shared-utils.js";
+import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 
 export function extractGeneratedMediaCandidates(aiContent) {
@@ -194,7 +195,7 @@ export async function persistModelGeneratedArtifacts({
     attachmentMetas,
   });
   emitEvent(eventListener, "model_generated_attachments_saved", {
-    dialogProcessId: String(dialogProcessId || ""),
+    dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
     count: attachmentMetas.length,
   });
   return attachmentMetas;

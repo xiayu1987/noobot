@@ -11,6 +11,10 @@ import {
   PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS,
   PLANNING_CONTEXT_GOAL_MAX_CHARS,
 } from "../../../core/thresholds.js";
+import {
+  resolveDialogProcessId,
+  resolveMessageDialogProcessId,
+} from "../shared/dialog-process-id.js";
 import { processPlanningResult } from "./result-pipeline.js";
 import {
   buildPlanningPromptBase,
@@ -95,7 +99,22 @@ function normalizePlanningTextContent(content = "") {
     .trim();
 }
 
+function isInjectedMessage(item = {}) {
+  if (!item || typeof item !== "object") return false;
+  if (item?.injectedMessage === true) return true;
+  if (String(item?.injectedBy || "").trim()) return true;
+  const content = String(item?.content || "").trim();
+  return (
+    content.startsWith("[来自harness外部模型输出/") ||
+    content.startsWith("[Relay from harness external model/")
+  );
+}
+
 function collectAgentStyleHistoryMessages(ctx = {}) {
+  const currentDialogProcessId = resolveDialogProcessId({
+    ctx,
+    messages: ctx?.agentContext?.payload?.messages?.history,
+  });
   const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
     ? ctx.agentContext.payload.messages.history
     : [];
@@ -114,6 +133,13 @@ function collectAgentStyleHistoryMessages(ctx = {}) {
 
   return history
     .filter((msg) => msg?.summarized !== true)
+    .filter((msg) => {
+      if (!isInjectedMessage(msg)) return true;
+      if (!currentDialogProcessId) return false;
+      return (
+        resolveMessageDialogProcessId(msg) === currentDialogProcessId
+      );
+    })
     .filter((msg) => {
       const role = String(msg?.role || "").trim().toLowerCase();
       if (!role) return false;

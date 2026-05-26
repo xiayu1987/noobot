@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
     selectedConnectors && typeof selectedConnectors === "object"
@@ -30,7 +32,7 @@ export function normalizeMessageEntity(
     role: String(message?.role || "").trim(),
     content: message?.content || "",
     type: String(message?.type || "").trim(),
-    dialogProcessId: String(message?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveMessageDialogProcessId(message),
     parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
     taskId: String(message?.taskId || "").trim(),
     taskStatus: String(message?.taskStatus || "").trim(),

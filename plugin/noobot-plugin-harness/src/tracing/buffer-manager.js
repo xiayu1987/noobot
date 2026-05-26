@@ -34,6 +34,7 @@ import {
   normalizeFsmState,
   statusToFsmState,
 } from "../fsm/transitions.js";
+import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/dialog-process-id.js";
 
 function resolveFlushReasonByPoint(point = "") {
   if (
@@ -51,6 +52,16 @@ function resolveFlushReasonByPoint(point = "") {
     return HARNESS_FLUSH_REASONS.ERROR;
   }
   return HARNESS_FLUSH_REASONS.NONE;
+}
+
+function resolveManifestDialogProcessId(ctx = {}, current = {}) {
+  const fromContext = resolveDialogProcessIdFromContext(ctx);
+  if (fromContext) return fromContext;
+  const fromCurrent = resolveDialogProcessIdFromContext({
+    dialogProcessId: current?.dialogProcessId,
+  });
+  if (fromCurrent) return fromCurrent;
+  return String(current?.harnessRunId || "").trim();
 }
 
 function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = null, plugin = {}) {
@@ -76,7 +87,7 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
     userId: ctx.userId || current.userId || "",
     sessionId: ctx.sessionId || current.sessionId || "",
     parentSessionId: ctx.parentSessionId || current.parentSessionId || "",
-    dialogProcessId: ctx.dialogProcessId || current.dialogProcessId || current.harnessRunId || "",
+    dialogProcessId: resolveManifestDialogProcessId(ctx, current),
     caller: ctx.caller || current.caller || "",
     status: current.status || HARNESS_RUN_STATUS.RUNNING,
     fsmStatus: normalizeFsmState(current.fsmStatus || current?.fsm?.state || statusToFsmState(current.status)),
@@ -199,7 +210,9 @@ export async function traceHook(point, ctx, options, plugin = {}) {
         timestamp: event.timestamp,
         userId: event.userId,
         sessionId: event.sessionId,
-        dialogProcessId: event.dialogProcessId,
+        dialogProcessId: resolveDialogProcessIdFromContext({
+          dialogProcessId: event.dialogProcessId,
+        }),
         ...log,
       },
       options.jsonlFlushStrategy || options.jsonlBatchSize,

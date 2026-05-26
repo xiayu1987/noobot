@@ -7,6 +7,7 @@ import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
 import { translateI18nText } from "./i18n.js";
 import { injectMessageWithPolicy } from "./message-injection-utils.js";
+import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
 import { buildHarnessInjectedMessage, resolveCurrentTurnMessagesStore } from "./injected-message-utils.js";
 
 export function mergeAttachmentMetas(existing = [], incoming = []) {
@@ -267,7 +268,7 @@ export async function appendCapabilityModelTraceLog(
       timestamp: new Date().toISOString(),
       userId: ctx?.userId || undefined,
       sessionId: ctx?.sessionId || undefined,
-      dialogProcessId: ctx?.dialogProcessId || undefined,
+      dialogProcessId: resolveDialogProcessIdFromContext(ctx) || undefined,
       ...log,
     });
   }

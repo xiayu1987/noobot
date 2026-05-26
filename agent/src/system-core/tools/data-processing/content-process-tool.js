@@ -7,6 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { recoverableToolError } from "../../error/index.js";
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { mergeConfig } from "../../config/index.js";
 import { createDoc2DataTool } from "./doc2data-tool.js";
@@ -15,6 +16,7 @@ import { createWeb2DataTool } from "./web2data-tool.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import {
   SANDBOX_CONFIG,
@@ -105,9 +107,9 @@ export function createContentProcessTool({ agentContext }) {
       const userId = String(runtime?.userId || agentContext?.userId || "").trim();
       const sessionId = String(systemRuntime?.sessionId || "").trim();
       const parentSessionId = sessionId;
-      const parentDialogProcessId = String(
-        systemRuntime?.dialogProcessId || "",
-      ).trim();
+      const parentDialogProcessId = resolveDialogProcessIdFromContext({
+        runtime,
+      });
       const resolvedModelName = String(modelName || "").trim();
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
@@ -183,7 +185,7 @@ export function createContentProcessTool({ agentContext }) {
               trace_count: traces.length,
               message_count: messages.length,
               used_tools: usedTools,
-              dialog_process_id: String(subResult?.dialogProcessId || ""),
+              dialog_process_id: resolveMessageDialogProcessId(subResult),
               content_path: normalizedContentPath,
             },
             error: "",

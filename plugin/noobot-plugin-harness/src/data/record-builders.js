@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import crypto from "node:crypto";
+import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/dialog-process-id.js";
 
 function stableStringify(value) {
   try {
@@ -99,7 +100,7 @@ export function buildEvent({ point, ctx = {}, options = {}, pluginName = "", plu
     userId: ctx.userId || undefined,
     sessionId: ctx.sessionId || undefined,
     parentSessionId: ctx.parentSessionId || undefined,
-    dialogProcessId: ctx.dialogProcessId || ctx?.agentContext?.execution?.dialogProcessId || undefined,
+    dialogProcessId: resolveDialogProcessIdFromContext(ctx) || undefined,
     caller: ctx.caller || undefined,
     turn: ctx.turn,
     mode: ctx.mode,
@@ -126,7 +127,7 @@ export function buildContextSnapshot({ ctx = {}, pluginName = "", pluginVersion 
     userId: ctx.userId || runtime.userId || agentContext?.environment?.identity?.userId || "",
     sessionId: ctx.sessionId || systemRuntime.sessionId || agentContext?.session?.current?.id || "",
     parentSessionId: ctx.parentSessionId || systemRuntime.parentSessionId || agentContext?.session?.parent?.id || "",
-    dialogProcessId: ctx.dialogProcessId || systemRuntime.dialogProcessId || agentContext?.execution?.dialogProcessId || "",
+    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
     caller: ctx.caller || systemRuntime.caller || agentContext?.session?.parent?.caller || "",
     environment: {
       os: agentContext?.environment?.os || {},

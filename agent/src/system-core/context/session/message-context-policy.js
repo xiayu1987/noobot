@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveMessageDialogProcessId } from "./dialog-process-id-resolver.js";
+
 export function getMessageToolCalls(messageItem = {}) {
   if (Array.isArray(messageItem?.tool_calls)) return messageItem.tool_calls;
   if (Array.isArray(messageItem?.lc_kwargs?.tool_calls)) return messageItem.lc_kwargs.tool_calls;
@@ -45,17 +47,18 @@ function isInjectedMessage(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem?.injectedMessage === true) return true;
   if (messageItem?.lc_kwargs?.injectedMessage === true) return true;
-  return false;
-}
-
-function resolveMessageDialogProcessId(messageItem = {}) {
-  return String(
-    messageItem?.dialogProcessId ||
-      messageItem?.dialogId ||
-      messageItem?.lc_kwargs?.dialogProcessId ||
-      messageItem?.lc_kwargs?.dialogId ||
-      "",
+  if (String(messageItem?.injectedBy || "").trim()) return true;
+  if (String(messageItem?.lc_kwargs?.injectedBy || "").trim()) return true;
+  const content = String(
+    messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
   ).trim();
+  if (
+    content.startsWith("[来自harness外部模型输出/") ||
+    content.startsWith("[Relay from harness external model/")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function shouldKeepMessageForDialog(

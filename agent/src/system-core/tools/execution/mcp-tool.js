@@ -8,12 +8,14 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createMcpAgentTools } from "../../mcp/index.js";
 import { mergeConfig } from "../../config/index.js";
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { appendMcpErrorLog } from "../../tracking/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import {
   SANDBOX_CONFIG,
@@ -65,9 +67,9 @@ export function createMcpTool({ agentContext }) {
       const userId = String(runtime?.userId || agentContext?.userId || "").trim();
       const sessionId = String(systemRuntime?.sessionId || "").trim();
       const parentSessionId = sessionId;
-      const parentDialogProcessId = String(
-        systemRuntime?.dialogProcessId || "",
-      ).trim();
+      const parentDialogProcessId = resolveDialogProcessIdFromContext({
+        runtime,
+      });
       const resolvedModelName = String(modelName || "").trim();
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
@@ -160,7 +162,7 @@ export function createMcpTool({ agentContext }) {
               trace_count: subTraces.length,
               message_count: subMessages.length,
               used_tools: traceToolNames,
-              dialog_process_id: String(subResult?.dialogProcessId || ""),
+              dialog_process_id: resolveMessageDialogProcessId(subResult),
             },
             error: "",
           },

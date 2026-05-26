@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../event/index.js";
+import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 3000;
 const HOOK_CLIENT_BLOCKED_KEYS = new Set([
@@ -276,7 +277,7 @@ export function resolveHookRuntimeMeta(runtime = {}) {
     userId: String(systemRuntime?.userId || runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
     parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
-    dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
     caller: String(systemRuntime?.caller || "").trim(),
   };
 }

@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
+import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/dialog-process-id.js";
 import { safeId } from "../data/record-builders.js";
 import { DEFAULT_OPTIONS, normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
@@ -81,9 +82,7 @@ export function extractBasePath(ctx = {}, options = {}) {
 }
 
 export function extractRunId(ctx = {}) {
-  return safeId(
-    ctx.dialogProcessId || ctx?.agentContext?.execution?.dialogProcessId || ctx.sessionId || "run",
-  );
+  return safeId(resolveDialogProcessIdFromContext(ctx) || ctx.sessionId || "run");
 }
 
 export function createRunPaths(ctx = {}, options = {}) {

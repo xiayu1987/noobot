@@ -8,6 +8,7 @@ import {
   normalizeSelectedConnectors,
   resolveForceToolCall,
 } from "../../utils/shared-utils.js";
+import { resolveDialogProcessId } from "../session/dialog-process-id-resolver.js";
 
 export function mapToAgentContextSchema({
   staticAgentContext = {},
@@ -30,6 +31,18 @@ export function mapToAgentContextSchema({
   const selectedConnectors = normalizeSelectedConnectors(
     systemRuntime?.config?.selectedConnectors || {},
   );
+  const resolvedDialogProcessId = resolveDialogProcessId({
+    ctx: {
+      dialogProcessId,
+      agentContext: {
+        execution: {
+          dialogProcessId: systemRuntime?.dialogProcessId,
+          controllers: { runtime: { systemRuntime } },
+        },
+      },
+    },
+    messages: conversationMessages,
+  });
   return {
     environment: {
       os: {
@@ -55,7 +68,7 @@ export function mapToAgentContextSchema({
       },
     },
     execution: {
-      dialogProcessId: String(systemRuntime?.dialogProcessId || dialogProcessId || "").trim(),
+      dialogProcessId: resolvedDialogProcessId,
       timestamp: String(systemRuntime?.now || now).trim(),
       flags: {
         allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,

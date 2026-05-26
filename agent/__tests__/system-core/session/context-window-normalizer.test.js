@@ -55,6 +55,23 @@ test("normalizeRecentWindow prepends a user anchor when sliced window has no use
   assert.equal(result[0]?.role, "user");
 });
 
+test("normalizeContextWindow prepends previous user when clipped window starts with assistant", () => {
+  const input = [
+    { role: "user", content: "u0" },
+    { role: "assistant", content: "a0" },
+    { role: "assistant", content: "a1" },
+  ];
+  const result = normalizeContextWindow({
+    sourceMessages: input,
+    startIndex: 1,
+    limit: 2,
+  });
+  assert.deepEqual(
+    result.map((item) => `${item.role}:${item.content}`),
+    ["user:u0", "assistant:a1"],
+  );
+});
+
 test("normalizeRecentWindow keeps latest assistant-tool pair after truncation", () => {
   const input = [
     { role: "user", content: "u0" },
@@ -119,6 +136,44 @@ test("resolveModelContextMessages filters injected messages by current dialog", 
   assert.deepEqual(
     result.map((item) => item.content),
     ["keep", "normal"],
+  );
+});
+
+test("resolveModelContextMessages filters injected user messages by current dialog", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "user", content: "keep", injectedBy: "harness-plugin", dialogProcessId: "d1" },
+      { role: "user", content: "drop", injectedBy: "harness-plugin", dialogProcessId: "d2" },
+      { role: "user", content: "normal user" },
+    ],
+    currentDialogProcessId: "d1",
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["keep", "normal user"],
+  );
+});
+
+test("resolveModelContextMessages treats harness relay message as injected and filters by dialog", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      {
+        role: "user",
+        content: "[来自harness外部模型输出/planning]\nold",
+        dialogProcessId: "d_old",
+      },
+      {
+        role: "user",
+        content: "[来自harness外部模型输出/planning]\nnew",
+        dialogProcessId: "d_new",
+      },
+      { role: "user", content: "normal user" },
+    ],
+    currentDialogProcessId: "d_new",
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["[来自harness外部模型输出/planning]\nnew", "normal user"],
   );
 });
 

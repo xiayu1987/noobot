@@ -5,6 +5,10 @@
  */
 
 import { emitEvent } from "../../event/index.js";
+import {
+  resolveDialogProcessIdFromContext,
+  resolveMessageDialogProcessId,
+} from "../../context/session/dialog-process-id-resolver.js";
 import { MessagePersister } from "../session/message-persister.js";
 import {
   EXECUTION_LOG_EVENT,
@@ -61,7 +65,7 @@ export class SessionTurnPersister {
       type: type || "",
       taskId: taskId ?? "",
       taskStatus: taskStatus ?? "",
-      dialogProcessId: dialogProcessId || "",
+      dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
       parentDialogProcessId: parentDialogProcessId || "",
       tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
       tool_call_id: tool_call_id || "",
@@ -94,7 +98,7 @@ export class SessionTurnPersister {
         userId,
         sessionId,
         parentSessionId,
-        dialogProcessId: String(dialogProcessId || "").trim(),
+        dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
         event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
         category: MESSAGE_ROLE.SYSTEM,
         type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
@@ -147,7 +151,9 @@ export class SessionTurnPersister {
         content: messageItem.content || "",
         type: messageItem.type || "",
         parentSessionId,
-        dialogProcessId: messageItem.dialogProcessId || dialogProcessId || "",
+        dialogProcessId:
+          resolveMessageDialogProcessId(messageItem) ||
+          resolveDialogProcessIdFromContext({ dialogProcessId }),
         parentDialogProcessId:
           messageItem.parentDialogProcessId || parentDialogProcessId || "",
         taskId: messageItem.taskId || null,
@@ -195,7 +201,7 @@ export class SessionTurnPersister {
     partialAssistant = {},
   } = {}) {
     const content = (partialAssistant?.content ?? "").trim();
-    const dialogProcessId = (partialAssistant?.dialogProcessId ?? "").trim();
+    const dialogProcessId = resolveMessageDialogProcessId(partialAssistant);
     if (!userId || !sessionId || !content || !dialogProcessId) return false;
     const sessionBundle = await this.session.getSessionBundle({
       userId,
@@ -208,7 +214,7 @@ export class SessionTurnPersister {
     const alreadySaved = messages.some(
       (messageItem) =>
         (messageItem?.role ?? "").trim() === MESSAGE_ROLE.ASSISTANT &&
-        (messageItem?.dialogProcessId ?? "").trim() === dialogProcessId,
+        resolveMessageDialogProcessId(messageItem) === dialogProcessId,
     );
     if (alreadySaved) return false;
     await this.appendSessionTurn({
