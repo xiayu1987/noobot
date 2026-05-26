@@ -14,16 +14,91 @@ const gunzip = util.promisify(zlib.gunzip);
 const inflate = util.promisify(zlib.inflate);
 const brotliDecompress = util.promisify(zlib.brotliDecompress);
 
-const LOCAL_PORT = 12341;
-const TARGET_URL = 'https://dashscope.aliyuncs.com';
-const LOG_DIR = path.join(__dirname, 'logs');
-const LOG_PREFIX = 'requests';
-const UNKNOWN_MODEL_NAME = 'unknown_model';
-const UNKNOWN_FLOW_NAME = 'unknown_flow';
-const MODEL_NAME_HEADER_KEY = 'x-model-name';
-const HARNESS_FLOW_HEADER_KEY = 'x-harness-flow';
-const MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const RETAIN_MS = 60 * 60 * 1000; // 仅保留最近 1 小时
+const CONFIG_FILE_PATH = path.join(__dirname, 'model-proxy.config.json');
+
+const DEFAULT_CONFIG = {
+  proxyHost: '0.0.0.0',
+  proxies: [
+    {
+      localPort: 12341,
+      targetUrl: 'https://dashscope.aliyuncs.com',
+    },
+    {
+      localPort: 12342,
+      targetUrl: 'https://api.poe.com',
+    },
+  ],
+  logDir: 'logs',
+  logPrefix: 'requests',
+  unknownModelName: 'unknown_model',
+  unknownFlowName: 'unknown_flow',
+  modelNameHeaderKey: 'x-model-name',
+  harnessFlowHeaderKey: 'x-harness-flow',
+  maxLogFileSizeBytes: 10 * 1024 * 1024,
+  retainMs: 60 * 60 * 1000,
+};
+
+function loadConfig() {
+  try {
+    if (!fs.existsSync(CONFIG_FILE_PATH)) return { ...DEFAULT_CONFIG };
+    const raw = fs.readFileSync(CONFIG_FILE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_CONFIG,
+      ...(parsed && typeof parsed === 'object' ? parsed : {}),
+    };
+  } catch (error) {
+    console.error('[model-proxy] Failed to load config, fallback to defaults:', error);
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+function normalizeProxyEntries(rawEntries = []) {
+  if (!Array.isArray(rawEntries) || !rawEntries.length) {
+    return [...DEFAULT_CONFIG.proxies];
+  }
+
+  const usedPorts = new Set();
+  const normalized = [];
+
+  for (let index = 0; index < rawEntries.length; index += 1) {
+    const item = rawEntries[index] || {};
+    const rawTarget = String(item.targetUrl || '').trim();
+    if (!rawTarget) continue;
+
+    let localPort = Number(item.localPort);
+    if (!Number.isInteger(localPort) || localPort <= 0 || localPort > 65535) {
+      localPort = DEFAULT_CONFIG.proxies[0].localPort + index;
+    }
+
+    if (usedPorts.has(localPort)) {
+      console.error(`[model-proxy] Duplicate localPort in config: ${localPort}, skip target ${rawTarget}`);
+      continue;
+    }
+
+    usedPorts.add(localPort);
+    normalized.push({
+      targetUrl: rawTarget,
+      localPort,
+    });
+  }
+
+  return normalized.length ? normalized : [...DEFAULT_CONFIG.proxies];
+}
+
+const config = loadConfig();
+const PROXY_HOST = String(config.proxyHost || DEFAULT_CONFIG.proxyHost).trim() || DEFAULT_CONFIG.proxyHost;
+const PROXY_ENTRIES = normalizeProxyEntries(config.proxies);
+const LOG_DIR = path.resolve(__dirname, String(config.logDir || DEFAULT_CONFIG.logDir));
+const LOG_PREFIX = String(config.logPrefix || DEFAULT_CONFIG.logPrefix);
+const UNKNOWN_MODEL_NAME = String(config.unknownModelName || DEFAULT_CONFIG.unknownModelName);
+const UNKNOWN_FLOW_NAME = String(config.unknownFlowName || DEFAULT_CONFIG.unknownFlowName);
+const MODEL_NAME_HEADER_KEY = String(config.modelNameHeaderKey || DEFAULT_CONFIG.modelNameHeaderKey).toLowerCase();
+const HARNESS_FLOW_HEADER_KEY = String(config.harnessFlowHeaderKey || DEFAULT_CONFIG.harnessFlowHeaderKey).toLowerCase();
+const MAX_LOG_FILE_SIZE = Number(config.maxLogFileSizeBytes) > 0
+  ? Number(config.maxLogFileSizeBytes)
+  : DEFAULT_CONFIG.maxLogFileSizeBytes;
+const RETAIN_MS = Number(config.retainMs) > 0 ? Number(config.retainMs) : DEFAULT_CONFIG.retainMs;
 
 let lastCleanupAt = 0;
 
@@ -83,7 +158,6 @@ function cleanupOldLogsInDir(dirPath, now) {
     try {
       stat = fs.statSync(filePath);
     } catch (_) {
-      // 忽略单文件异常，避免影响代理主流程
       continue;
     }
 
@@ -92,7 +166,7 @@ function cleanupOldLogsInDir(dirPath, now) {
       try {
         if (!fs.readdirSync(filePath).length) fs.rmdirSync(filePath);
       } catch (_) {
-        // 忽略清理空目录异常
+        // ignore
       }
       continue;
     }
@@ -103,13 +177,12 @@ function cleanupOldLogsInDir(dirPath, now) {
         fs.unlinkSync(filePath);
       }
     } catch (_) {
-      // 忽略单文件异常，避免影响代理主流程
+      // ignore
     }
   }
 }
 
 function cleanupOldLogs(now = Date.now()) {
-  // 降低清理频率：每分钟最多清理一次
   if (now - lastCleanupAt < 60 * 1000) return;
   lastCleanupAt = now;
 
@@ -142,7 +215,7 @@ function getWritableLogFilePath(entrySizeBytes, modelName = '', flowName = '') {
       }
     }
   } catch (_) {
-    // 出错时退回到当前文件，避免影响代理流程
+    // ignore
   }
 
   return filePath;
@@ -189,13 +262,6 @@ function resolveRequestModelName(req) {
   return extractModelNameFromHeaders(req?.headers) || UNKNOWN_MODEL_NAME;
 }
 
-const proxy = httpProxy.createProxyServer({
-  target: TARGET_URL,
-  changeOrigin: true,
-  secure: false, // 测试用，忽略证书
-});
-
-// 记录请求体（注意：大流量/大文件场景不建议这样做）
 function logRequestStream(req) {
   const chunks = [];
   req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
@@ -231,8 +297,7 @@ async function decodeBodyByEncoding(buffer, encoding) {
     if (enc.includes('deflate')) return await inflate(buffer);
     if (enc.includes('br')) return await brotliDecompress(buffer);
     return buffer;
-  } catch (error) {
-    // 解压失败就返回原始数据，避免影响代理功能
+  } catch (_) {
     return buffer;
   }
 }
@@ -240,7 +305,6 @@ async function decodeBodyByEncoding(buffer, encoding) {
 function normalizeBodyText(text, contentType = '') {
   const ct = String(contentType).toLowerCase();
 
-  // JSON 场景：让 JSON.parse 处理转义字符，比手写 \u 替换安全
   if (ct.includes('application/json')) {
     try {
       const obj = JSON.parse(text);
@@ -250,8 +314,6 @@ function normalizeBodyText(text, contentType = '') {
     }
   }
 
-  // SSE 常见 content-type: text/event-stream
-  // 不做额外替换，保持原样
   return text;
 }
 
@@ -365,51 +427,65 @@ ${bodyText}
   appendLog(logEntry, modelName, harnessFlow);
 }
 
-// 在上游响应层面抓包（关键）
-proxy.on('proxyRes', (proxyRes, req, res) => {
-  const chunks = [];
-
-  proxyRes.on('data', (chunk) => {
-    chunks.push(Buffer.from(chunk));
+function createProxyServer(localPort, targetUrl) {
+  const proxy = httpProxy.createProxyServer({
+    target: targetUrl,
+    changeOrigin: true,
+    secure: false,
   });
 
-  proxyRes.on('end', async () => {
-    try {
-      const raw = Buffer.concat(chunks);
-      const decoded = await decodeBodyByEncoding(raw, proxyRes.headers['content-encoding']);
-      const text = decoded.toString('utf8');
-      const finalText = resolveFinalResponseBodyText(
-        text,
-        proxyRes.headers['content-type'],
-      );
-      const modelName = req.__logModelName || UNKNOWN_MODEL_NAME;
-      const harnessFlow = req.__logHarnessFlow || UNKNOWN_FLOW_NAME;
-      logResponse(proxyRes, finalText, modelName, harnessFlow);
-    } catch (error) {
-      appendLog(
-        `\n[Response Log Error] ${new Date().toLocaleString()} ${error.stack || error}\n`,
-        req.__logModelName || UNKNOWN_MODEL_NAME,
-        req.__logHarnessFlow || UNKNOWN_FLOW_NAME,
-      );
+  proxy.on('proxyRes', (proxyRes, req) => {
+    const chunks = [];
+
+    proxyRes.on('data', (chunk) => {
+      chunks.push(Buffer.from(chunk));
+    });
+
+    proxyRes.on('end', async () => {
+      try {
+        const raw = Buffer.concat(chunks);
+        const decoded = await decodeBodyByEncoding(raw, proxyRes.headers['content-encoding']);
+        const text = decoded.toString('utf8');
+        const finalText = resolveFinalResponseBodyText(
+          text,
+          proxyRes.headers['content-type'],
+        );
+        const modelName = req.__logModelName || UNKNOWN_MODEL_NAME;
+        const harnessFlow = req.__logHarnessFlow || UNKNOWN_FLOW_NAME;
+        logResponse(proxyRes, finalText, modelName, harnessFlow);
+      } catch (error) {
+        appendLog(
+          `\n[Response Log Error] ${new Date().toLocaleString()} ${error.stack || error}\n`,
+          req.__logModelName || UNKNOWN_MODEL_NAME,
+          req.__logHarnessFlow || UNKNOWN_FLOW_NAME,
+        );
+      }
+    });
+  });
+
+  proxy.on('error', (err, req, res) => {
+    console.error(`[model-proxy:${localPort}] Proxy error:`, err);
+    if (res && !res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Bad Gateway');
+    } else if (res) {
+      res.end();
     }
   });
-});
 
-proxy.on('error', (err, req, res) => {
-  console.error('Proxy error:', err);
-  if (res && !res.headersSent) {
-    res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Bad Gateway');
-  } else if (res) {
-    res.end();
-  }
-});
+  const server = http.createServer((req, res) => {
+    logRequestStream(req);
+    proxy.web(req, res);
+  });
 
-const server = http.createServer((req, res) => {
-  logRequestStream(req);
-  proxy.web(req, res);
-});
+  server.listen(localPort, PROXY_HOST, () => {
+    console.log(`[model-proxy] Reverse proxy running on http://${PROXY_HOST}:${localPort} -> ${targetUrl}`);
+  });
 
-server.listen(LOCAL_PORT, '0.0.0.0', () => {
-  console.log(`Reverse proxy running on http://localhost:${LOCAL_PORT}`);
-});
+  return server;
+}
+
+ensureLogDir();
+for (const entry of PROXY_ENTRIES) {
+  createProxyServer(entry.localPort, entry.targetUrl);
+}
