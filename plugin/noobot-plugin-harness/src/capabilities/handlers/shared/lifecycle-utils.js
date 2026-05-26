@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { ensureHarnessBucket } from "./bucket-utils.js";
+import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
 
 const TURN_END_POINTS = new Set(["after_turn", "on_abort", "on_error"]);
 const TURN_START_POINTS = new Set(["before_turn", "before_context_build"]);
 const MAX_COMPLETED_DIALOG_IDS = 80;
 
 function resolveDialogProcessId(ctx = {}) {
-  return String(ctx?.dialogProcessId || "").trim();
+  return resolveDialogProcessIdFromContext(ctx);
 }
 
 export function markHarnessTurnLifecycle(point = "", ctx = {}) {

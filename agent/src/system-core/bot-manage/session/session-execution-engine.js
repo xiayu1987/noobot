@@ -34,6 +34,7 @@ import {
 } from "../../context/session/summarized-message-policy.js";
 import { resolveMessageRole } from "../../context/session/message-context-policy.js";
 import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
+import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 
@@ -61,6 +62,13 @@ function normalizeMessageForHarness(messageItem = {}) {
     messageItem?.tool_call_id || messageItem?.lc_kwargs?.tool_call_id || "",
   ).trim();
   if (toolCallId) normalized.tool_call_id = toolCallId;
+  if (messageItem?.injectedMessage === true || messageItem?.lc_kwargs?.injectedMessage === true) {
+    normalized.injectedMessage = true;
+  }
+  const injectedBy = String(
+    messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "",
+  ).trim();
+  if (injectedBy) normalized.injectedBy = injectedBy;
   return normalized;
 }
 
@@ -557,28 +565,37 @@ export class SessionExecutionEngine {
       ? Math.floor(recentMessageLimit)
       : 20;
     return ({ messages = [], ctx = {} } = {}) => {
-      const currentDialogProcessId = String(
-        ctx?.dialogProcessId ||
-          ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.dialogProcessId ||
-          "",
-      ).trim();
       const explicitMessages = Array.isArray(messages) ? messages : [];
       const source = explicitMessages.length
         ? explicitMessages
         : Array.isArray(ctx?.messages)
           ? ctx.messages
           : [];
+      const currentDialogProcessId = resolveDialogProcessId({
+        ctx,
+        messages: source,
+      });
       return resolveModelContextMessages({
         sourceMessages: source,
         currentDialogProcessId,
         mode: "harness",
         recentLimit: normalizedLimit,
         normalizeMessage: (item) => normalizeMessageForHarness(item),
-        shouldKeepMessage: (item) =>
-          String(item?.content || "").trim() ||
-          (String(item?.role || "").trim().toLowerCase() === "assistant" &&
-            Array.isArray(item?.tool_calls) &&
-            item.tool_calls.length),
+        shouldKeepMessage: (item) => {
+          const role = String(item?.role || "").trim().toLowerCase();
+          const isInjectedMessage =
+            item?.injectedMessage === true || String(item?.injectedBy || "").trim();
+          if (role === "user") {
+            if (isInjectedMessage) return String(item?.content || "").trim();
+            return true;
+          }
+          return (
+            String(item?.content || "").trim() ||
+            (role === "assistant" &&
+              Array.isArray(item?.tool_calls) &&
+              item.tool_calls.length)
+          );
+        },
       });
     };
   }

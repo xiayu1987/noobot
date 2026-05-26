@@ -9,6 +9,7 @@ import { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 
 export class ExecutionLogRepository {
   constructor({
@@ -101,10 +102,10 @@ export class ExecutionLogRepository {
       );
       const normalizedLog = normalizeExecutionLogEntity(executionLog, this.now);
       bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
-      const incomingDialogProcessId = String(normalizedLog?.dialogProcessId || "").trim();
+      const incomingDialogProcessId = resolveMessageDialogProcessId(normalizedLog);
       const existingLatestDialogProcessId = [...bundle.logs]
         .reverse()
-        .map((logItem) => String(logItem?.dialogProcessId || "").trim())
+        .map((logItem) => resolveMessageDialogProcessId(logItem))
         .find(Boolean);
       const targetDialogProcessId = incomingDialogProcessId || existingLatestDialogProcessId;
       if (!incomingDialogProcessId && targetDialogProcessId) {
@@ -112,8 +113,7 @@ export class ExecutionLogRepository {
       }
       if (targetDialogProcessId) {
         bundle.logs = bundle.logs.filter(
-          (logItem) =>
-            String(logItem?.dialogProcessId || "").trim() === targetDialogProcessId,
+          (logItem) => resolveMessageDialogProcessId(logItem) === targetDialogProcessId,
         );
       } else {
         bundle.logs = [];

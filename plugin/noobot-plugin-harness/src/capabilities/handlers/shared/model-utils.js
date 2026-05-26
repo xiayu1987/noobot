@@ -83,7 +83,7 @@ export function resolveCapabilityModelMessages(
         purpose: String(purpose || "").trim(),
         messages: sourceMessages,
       });
-      if (Array.isArray(resolved) && resolved.length) return resolved;
+      if (Array.isArray(resolved)) return resolved;
     } catch {
       // fall through to local compatibility fallback
     }

@@ -1,0 +1,19 @@
+{
+  "threshold": 0,
+  "reporters": ["consoleFull"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/*.log",
+    "**/*.json",
+    "**/*.md",
+    "**/i18n/**/locales/**/*.js",
+    "**/user-template/**",
+    "**/service/config/global.config.json"
+  ],
+  "patterns": [
+    "**/*.{js,ts,jsx,tsx,css,scss,html,vue}"
+  ]
+}

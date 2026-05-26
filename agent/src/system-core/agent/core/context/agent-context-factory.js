@@ -7,6 +7,7 @@
 import { ContextBuilder } from "../../../context/index.js";
 import { emitEvent } from "../../../event/index.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
+import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 /**
@@ -126,7 +127,7 @@ export class AgentContextFactory {
       sessionId: String(sessionId || "").trim(),
       caller: String(caller || "").trim(),
       parentSessionId: String(parentSessionId || "").trim(),
-      dialogProcessId: String(dialogProcessId || "").trim(),
+      dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
     };
   }
 

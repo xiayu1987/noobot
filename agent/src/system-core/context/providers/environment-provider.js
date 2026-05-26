@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import { resolveForceToolCall } from "../../utils/shared-utils.js";
+import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -62,7 +63,7 @@ export function buildDynamicInfo({
     parentSessionId: String(parentSessionId || "").trim(),
     rootSessionId: String(rootSessionId || "").trim(),
     caller: String(caller || "user").trim(),
-    dialogProcessId: String(dialogProcessId || "").trim(),
+    dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
     sessionTree,
     now,
     config: {

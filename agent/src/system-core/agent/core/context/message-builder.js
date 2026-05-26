@@ -12,6 +12,11 @@ import {
 import { tEngine } from "../i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
 import { resolveModelContextMessages } from "../../../session/utils/context-window-normalizer.js";
+import {
+  resolveDialogProcessIdFromContext,
+  resolveDialogProcessId,
+  resolveMessageDialogProcessId,
+} from "../../../context/session/dialog-process-id-resolver.js";
 
 export function buildContextMessages(
   agentContext,
@@ -74,9 +79,11 @@ export function buildContextMessages(
       parentSessionId: String(
         msg?.parentSessionId || fallbackMeta?.parentSessionId || "",
       ).trim(),
-      dialogProcessId: String(
-        msg?.dialogProcessId || fallbackMeta?.dialogProcessId || "",
-      ).trim(),
+      dialogProcessId:
+        resolveMessageDialogProcessId(msg) ||
+        resolveDialogProcessIdFromContext({
+          dialogProcessId: fallbackMeta?.dialogProcessId,
+        }),
       parentDialogProcessId: String(
         msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
       ).trim(),
@@ -118,7 +125,7 @@ export function buildContextMessages(
     userName: String(runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || "").trim(),
     parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
-    dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+    dialogProcessId: "",
     parentDialogProcessId: String(
       systemRuntime?.parentDialogProcessId || "",
     ).trim(),
@@ -132,9 +139,21 @@ export function buildContextMessages(
   const historyMessages = Array.isArray(agentContext?.payload?.messages?.history)
     ? agentContext.payload.messages.history
     : [];
+  const resolvedDialogProcessId = resolveDialogProcessId({
+    ctx: {
+      agentContext: {
+        execution: {
+          dialogProcessId: systemRuntime?.dialogProcessId,
+          controllers: { runtime: { systemRuntime } },
+        },
+      },
+    },
+    messages: historyMessages,
+  });
+  fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
   const effectiveHistoryMessages = resolveModelContextMessages({
     sourceMessages: historyMessages,
-    currentDialogProcessId: fallbackUserMeta.dialogProcessId,
+    currentDialogProcessId: resolvedDialogProcessId,
     mode: "agent",
   });
   const knownHistoryToolCallIds = new Set();

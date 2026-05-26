@@ -6,6 +6,7 @@
 
 import { emitEvent } from "../../event/index.js";
 import { createAgentHookManager } from "../../hook/index.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 
 export const BOT_HOOK_POINTS = Object.freeze({
   BEFORE_SESSION_RUN: "before_session_run",
@@ -49,7 +50,7 @@ export function resolveBotHookRuntimeMeta({
     userId: String(userId || "").trim(),
     sessionId: String(sessionId || "").trim(),
     parentSessionId: String(parentSessionId || "").trim(),
-    dialogProcessId: String(dialogProcessId || "").trim(),
+    dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
     caller: String(caller || "").trim(),
   };
 }

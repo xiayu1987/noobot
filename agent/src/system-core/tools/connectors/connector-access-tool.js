@@ -7,12 +7,14 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { mergeConfig } from "../../config/index.js";
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../utils/error-utils.js";
 import { createConnectorTools } from "./connector-toolkit.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import {
   SANDBOX_CONFIG,
   TOOL_CALLER,
@@ -38,7 +40,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const userId = String(runtime?.userId || agentContext?.userId || "").trim();
   const systemRuntime = runtime?.systemRuntime || {};
   const sessionId = String(systemRuntime?.sessionId || "").trim();
-  const parentDialogProcessId = String(systemRuntime?.dialogProcessId || "").trim();
+  const parentDialogProcessId = resolveDialogProcessIdFromContext({ runtime });
   const allowUserInteraction =
     systemRuntime?.config?.allowUserInteraction !== false;
   const maxToolLoopTurns = Number(
@@ -139,7 +141,7 @@ export function createConnectorAccessTool({ agentContext }) {
               answer_length: answer.length,
               trace_count: traces.length,
               used_tools: usedTools,
-              dialog_process_id: String(subResult?.dialogProcessId || ""),
+              dialog_process_id: resolveMessageDialogProcessId(subResult),
             },
           },
           true,

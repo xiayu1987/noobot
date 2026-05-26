@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig } from "../../config/index.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { tTool } from "../core/tool-i18n.js";
 import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
 import { createCollabContainerStore } from "./agent-collab/collab-container-store.js";
@@ -80,7 +81,9 @@ export function createAgentCollabTool({ agentContext }) {
   const runtimeEventListener = runtime.eventListener || null;
   const abortSignal = runtime.abortSignal || null;
   const userInteractionBridge = runtime.userInteractionBridge || null;
-  const sourceDialogProcessId = systemRuntime.dialogProcessId || "";
+  const sourceDialogProcessId = resolveDialogProcessIdFromContext({
+    runtime,
+  });
   const sourceSessionId = String(systemRuntime?.sessionId || "").trim();
   const rootSessionId = String(systemRuntime?.rootSessionId || "").trim();
   const globalConfig = runtime.globalConfig || {};

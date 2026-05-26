@@ -6,6 +6,7 @@
 import { readShortMemory, flattenShortItems, getSortedShortItems } from "./reader.js";
 import { writeShortMemory, assignShortItems } from "./writer.js";
 import { compactShortMemory } from "./compactor.js";
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 
 function sanitizeDialogRecordsForMemory(messages = []) {
   const out = [];
@@ -66,17 +67,16 @@ export class ShortMemoryManager {
 
     const messages = Array.isArray(sessionData.messages) ? sessionData.messages : [];
     if (!messages.length) return false;
-    const latestDialogProcessId = String(
+    const latestDialogProcessId =
       [...messages]
         .reverse()
-        .find((messageItem) => String(messageItem?.dialogProcessId || "").trim())
-        ?.dialogProcessId || "",
-    ).trim();
+        .map((messageItem) => resolveMessageDialogProcessId(messageItem))
+        .find(Boolean) || "";
     if (!latestDialogProcessId) return false;
 
     const dialogRecords = messages.filter(
       (messageItem) =>
-        String(messageItem?.dialogProcessId || "").trim() === latestDialogProcessId,
+        resolveMessageDialogProcessId(messageItem) === latestDialogProcessId,
     );
     const records = sanitizeDialogRecordsForMemory(dialogRecords);
     if (!records.length) return false;

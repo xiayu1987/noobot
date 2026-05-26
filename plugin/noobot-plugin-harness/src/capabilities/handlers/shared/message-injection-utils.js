@@ -8,6 +8,7 @@ import {
   persistHarnessMessageToCurrentTurn,
   buildHarnessInjectedMessage,
 } from "./injected-message-utils.js";
+import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
 
 function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;
@@ -76,6 +77,7 @@ export function injectMessageWithPolicy(
   }
   const message = buildHarnessInjectedMessage(normalizedContent, {
     attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
   });
 
   if (dedupe && dedupeExists(messages, message)) {

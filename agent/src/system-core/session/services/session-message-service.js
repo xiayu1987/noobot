@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeMessageEntity } from "../entities/session-entity.js";
+import {
+  resolveDialogProcessIdFromContext,
+  resolveMessageDialogProcessId,
+} from "../../context/session/dialog-process-id-resolver.js";
 
 export class SessionMessageService {
   constructor({
@@ -72,7 +76,7 @@ export class SessionMessageService {
       role,
       content,
       type: type || "",
-      dialogProcessId: dialogProcessId || "",
+      dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
       parentDialogProcessId: parentDialogProcessId || "",
       taskId: resolvedTaskId,
       taskStatus: resolvedTaskStatus,
@@ -140,7 +144,9 @@ export class SessionMessageService {
     dialogProcessId = "",
     parentSessionId = "",
   }) {
-    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    const normalizedDialogProcessId = resolveDialogProcessIdFromContext({
+      dialogProcessId,
+    });
     if (!normalizedDialogProcessId) return false;
     const session = await this.sessionRepo.findById(
       userId,
@@ -151,8 +157,7 @@ export class SessionMessageService {
     const messages = Array.isArray(session?.messages) ? session.messages : [];
     return messages.some(
       (messageItem) =>
-        String(messageItem?.dialogProcessId || "").trim() ===
-        normalizedDialogProcessId,
+        resolveMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
     );
   }
 }

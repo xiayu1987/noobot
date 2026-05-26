@@ -10,14 +10,24 @@ import {
   HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
   HARNESS_INJECTION_MESSAGE_ROLE,
 } from "./constants.js";
+import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
 
-export function buildHarnessInjectedMessage(content = "", { attachmentMetas = [] } = {}) {
+export function buildHarnessInjectedMessage(
+  content = "",
+  { attachmentMetas = [], dialogProcessId = "" } = {},
+) {
   const message = {
     role: HARNESS_INJECTION_MESSAGE_ROLE,
     content: String(content || ""),
     [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
     [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
   };
+  const normalizedDialogProcessId = resolveDialogProcessIdFromContext({
+    dialogProcessId,
+  });
+  if (normalizedDialogProcessId) {
+    message.dialogProcessId = normalizedDialogProcessId;
+  }
   if (Array.isArray(attachmentMetas) && attachmentMetas.length) {
     message.attachmentMetas = attachmentMetas;
   }
@@ -45,7 +55,7 @@ export function persistHarnessMessageToCurrentTurn(
   currentTurnMessages.push({
     ...message,
     type: "message",
-    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
   });
   return true;
 }

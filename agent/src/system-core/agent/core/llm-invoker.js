@@ -17,6 +17,7 @@ import {
   TRANSIENT_LLM_MAX_ATTEMPTS,
   TRANSIENT_LLM_RETRY_BASE_DELAY_MS,
 } from "./constants/index.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 
 // ── Helpers ──
 
@@ -135,7 +136,7 @@ function resolveRuntimeErrorContext(modelState = {}) {
   return {
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
     parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
-    dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
   };
 }
 
