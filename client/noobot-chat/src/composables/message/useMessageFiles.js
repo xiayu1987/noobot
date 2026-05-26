@@ -62,7 +62,7 @@ function extractCandidatePathsFromText(content = "") {
   const text = String(content || "");
   if (!text) return [];
   const pathMatchRegex =
-    /(?:^|[\s`"'“”‘’<>()\[\]{}])([./~]?[A-Za-z0-9_@-][A-Za-z0-9_@./\\-]*\/[A-Za-z0-9_@./\\-]+)(?=$|[\s`"'“”‘’<>()\[\]{}.,;:!?])/g;
+    /(?:^|[\s`"'“”‘’<>()\[\]{}])([./~]?[^\s`"'“”‘’<>()\[\]{}]+\/[^\s`"'“”‘’<>()\[\]{}]+)(?=$|[\s`"'“”‘’<>()\[\]{}.,;:!?])/g;
   const out = [];
   let match = null;
   while ((match = pathMatchRegex.exec(text))) {
