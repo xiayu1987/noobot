@@ -76,7 +76,12 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const acceptanceReport =
     bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
       ? bucket.lastAcceptanceReport
-      : buildAcceptanceReport({ bucket, state, mode: ACCEPTANCE_MODE.FORCED });
+      : buildAcceptanceReport({
+        bucket,
+        state,
+        mode: ACCEPTANCE_MODE.FORCED,
+        forcedReason: "补建验收报告_用于附件生成 | Rebuilt acceptance report for artifact generation",
+      });
 
   const artifacts = [
     {
@@ -152,7 +157,16 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   if (!holder) return false;
   const { bucket, state } = holder;
   if (state.flags.acceptanceRequested === true) return false;
-  const report = buildAcceptanceReport({ bucket, state, mode: ACCEPTANCE_MODE.FORCED });
+  const forcedReason =
+    state?.flags?.overflowForceAcceptancePending === true
+      ? "上下文溢出_最终输出兜底强制验收 | Context overflow (final-output fallback forced acceptance)"
+      : "未主动请求验收_最终输出兜底 | No active acceptance request (final-output fallback)";
+  const report = buildAcceptanceReport({
+    bucket,
+    state,
+    mode: ACCEPTANCE_MODE.FORCED,
+    forcedReason,
+  });
   bucket.lastAcceptanceReport = report;
   bucket.acceptanceReports.push(report);
   if (ctx?.result && typeof ctx.result === "object") {
@@ -168,6 +182,7 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       event: "forced_acceptance_triggered",
+      detail: { forcedReason },
     });
     return true;
   }
