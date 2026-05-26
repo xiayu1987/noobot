@@ -22,8 +22,9 @@
 
 import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
-import { runAgentRuntimeHook, AGENT_HOOK_POINTS, withHookRuntimeMeta } from "../../hook/index.js";
+import { runAgentRuntimeHook, AGENT_HOOK_POINTS } from "../../hook/index.js";
 import { isAbortError } from "./utils/error-utils.js";
+import { buildHookContext } from "./hook/hook-context-builder.js";
 
 export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
@@ -32,7 +33,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.BEFORE_TURN,
-    context: withHookRuntimeMeta(runtime, {
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TURN, runtime, {
       phase: "agent_turn",
       status: "start",
       startedAt,
@@ -47,7 +48,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
     await runAgentRuntimeHook({
       runtime,
       point: AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
-      context: withHookRuntimeMeta(runtime, {
+      context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT, runtime, {
         phase: "agent_turn",
         status: "success",
         startedAt,
@@ -62,7 +63,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
     await runAgentRuntimeHook({
       runtime,
       point: AGENT_HOOK_POINTS.AFTER_TURN,
-      context: withHookRuntimeMeta(runtime, {
+      context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TURN, runtime, {
         phase: "agent_turn",
         status: "success",
         startedAt,
@@ -80,7 +81,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.ON_ABORT,
-        context: withHookRuntimeMeta(runtime, {
+        context: buildHookContext(AGENT_HOOK_POINTS.ON_ABORT, runtime, {
           phase: "agent_turn",
           status: "abort",
           startedAt,
@@ -95,7 +96,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
     await runAgentRuntimeHook({
       runtime,
       point: AGENT_HOOK_POINTS.ON_ERROR,
-      context: withHookRuntimeMeta(runtime, {
+      context: buildHookContext(AGENT_HOOK_POINTS.ON_ERROR, runtime, {
         phase: "agent_turn",
         status: "error",
         startedAt,
