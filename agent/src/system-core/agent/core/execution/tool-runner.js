@@ -181,6 +181,10 @@ export async function executeToolCall({
       ...(errorDetails ? { details: errorDetails } : {}),
     });
     if (errorLogger && typeof errorLogger.log === "function") {
+      const normalizedCause =
+        typeof error?.cause === "string"
+          ? error.cause
+          : error?.cause?.message || "";
       void errorLogger.log({
         userId,
         sessionId,
@@ -188,7 +192,10 @@ export async function executeToolCall({
         source: "tool-runner",
         event: "tool_invoke_error",
         error,
-        extra: { toolName: call?.name || "" },
+        extra: {
+          toolName: call?.name || "",
+          ...(normalizedCause ? { cause: normalizedCause } : {}),
+        },
       });
     }
   }
