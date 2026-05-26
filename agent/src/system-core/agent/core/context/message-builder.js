@@ -11,6 +11,7 @@ import {
 } from "@langchain/core/messages";
 import { tEngine } from "../i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
+import { resolveModelContextMessages } from "../../../session/utils/context-window-normalizer.js";
 
 export function buildContextMessages(
   agentContext,
@@ -131,9 +132,14 @@ export function buildContextMessages(
   const historyMessages = Array.isArray(agentContext?.payload?.messages?.history)
     ? agentContext.payload.messages.history
     : [];
+  const effectiveHistoryMessages = resolveModelContextMessages({
+    sourceMessages: historyMessages,
+    currentDialogProcessId: fallbackUserMeta.dialogProcessId,
+    mode: "agent",
+  });
   const knownHistoryToolCallIds = new Set();
 
-  for (const msg of historyMessages) {
+  for (const msg of effectiveHistoryMessages) {
     if (msg?.summarized === true) continue;
     if ((msg?.role || "") !== MESSAGE_ROLE.ASSISTANT) continue;
     const normalizedToolCalls = toLangChainToolCalls(msg.tool_calls || []);
@@ -147,7 +153,7 @@ export function buildContextMessages(
     out.push(new SystemMessage(content));
   }
 
-  for (const msg of historyMessages) {
+  for (const msg of effectiveHistoryMessages) {
     if (msg?.summarized === true) continue;
     const role = msg.role || "";
     if (role === MESSAGE_ROLE.SYSTEM) {

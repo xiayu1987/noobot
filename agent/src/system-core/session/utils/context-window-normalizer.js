@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { filterForModelContext } from "../../context/session/message-context-policy.js";
+import {
+  filterForModelContext,
+  filterInjectedMessagesForDialog,
+} from "../../context/session/message-context-policy.js";
 
 export function filterSummarizedMessages(messages = []) {
   return filterForModelContext(messages);
@@ -66,5 +69,43 @@ export function normalizeRecentWindow(messages = [], limit = 20) {
     sourceMessages: source,
     startIndex,
     limit: resolvedLimit,
+  });
+}
+
+export function resolveModelContextMessages({
+  sourceMessages = [],
+  currentDialogProcessId = "",
+  mode = "agent",
+  normalizeMessage = null,
+  shouldKeepMessage = null,
+  useRecentWindow = false,
+  recentLimit = 20,
+  startIndex = 0,
+  limit = Number.POSITIVE_INFINITY,
+} = {}) {
+  const normalizedMode = String(mode || "agent").trim().toLowerCase();
+  const useRecentWindowByMode =
+    normalizedMode === "harness" ? true : useRecentWindow === true;
+  const sameDialogMessages = filterInjectedMessagesForDialog(
+    sourceMessages,
+    currentDialogProcessId,
+  );
+  const mappedMessages =
+    typeof normalizeMessage === "function"
+      ? sameDialogMessages
+          .map((messageItem) => normalizeMessage(messageItem))
+          .filter(Boolean)
+      : sameDialogMessages;
+  const filteredMessages =
+    typeof shouldKeepMessage === "function"
+      ? mappedMessages.filter((messageItem) => shouldKeepMessage(messageItem))
+      : mappedMessages;
+  if (useRecentWindowByMode) {
+    return normalizeRecentWindow(filteredMessages, recentLimit);
+  }
+  return normalizeContextWindow({
+    sourceMessages: filteredMessages,
+    startIndex,
+    limit,
   });
 }

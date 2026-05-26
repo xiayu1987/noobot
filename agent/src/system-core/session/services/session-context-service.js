@@ -5,9 +5,7 @@
  */
 import { mergeConfig } from "../../config/index.js";
 import {
-  filterSummarizedMessages,
-  normalizeContextWindow,
-  normalizeRecentWindow,
+  resolveModelContextMessages,
 } from "../utils/context-window-normalizer.js";
 
 export class SessionContextService {
@@ -36,15 +34,21 @@ export class SessionContextService {
     startIndex = 0,
     limit = Number.POSITIVE_INFINITY,
   } = {}) {
-    return normalizeContextWindow({
+    return resolveModelContextMessages({
       sourceMessages,
+      mode: "agent",
       startIndex,
       limit,
     });
   }
 
   _normalizeRecentWindow(messages = [], limit = 20) {
-    return normalizeRecentWindow(messages, limit);
+    return resolveModelContextMessages({
+      sourceMessages: messages,
+      mode: "agent",
+      useRecentWindow: true,
+      recentLimit: limit,
+    });
   }
 
   async _getSessionTurns({ userId, sessionId }) {
@@ -57,13 +61,15 @@ export class SessionContextService {
       limit || this._sessionContextConfig(userConfig).recentMessageLimit || 20,
     );
     if (resolvedLimit <= 0) return [];
-    const filteredMessages = filterSummarizedMessages(messages);
-    return this._normalizeRecentWindow(filteredMessages, resolvedLimit);
+    return this._normalizeRecentWindow(messages, resolvedLimit);
   }
 
   async getMessagesSinceLastRunningTask({ userId, sessionId }) {
     const messages = await this._getSessionTurns({ userId, sessionId });
-    const filteredMessages = filterSummarizedMessages(messages);
+    const filteredMessages = this._normalizeContextWindow({
+      sourceMessages: messages,
+      startIndex: 0,
+    });
     if (!filteredMessages.length) return [];
 
     let startIndex = -1;
@@ -87,7 +93,10 @@ export class SessionContextService {
 
   async getMessagesSinceLastCompletedTask({ userId, sessionId }) {
     const messages = await this._getSessionTurns({ userId, sessionId });
-    const filteredMessages = filterSummarizedMessages(messages);
+    const filteredMessages = this._normalizeContextWindow({
+      sourceMessages: messages,
+      startIndex: 0,
+    });
     if (!filteredMessages.length) return [];
 
     let startIndex = -1;

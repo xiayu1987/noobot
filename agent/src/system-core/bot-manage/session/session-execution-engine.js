@@ -26,55 +26,21 @@ import { mergeConfig } from "../../config/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
 import {
-  filterSummarizedMessages,
-  normalizeRecentWindow,
+  resolveModelContextMessages,
 } from "../../session/utils/context-window-normalizer.js";
 import {
   shouldMarkCurrentTurnSummarizedMessage,
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "../../context/session/summarized-message-policy.js";
+import { resolveMessageRole } from "../../context/session/message-context-policy.js";
+import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
-
-function extractTextContent(content = "") {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((item = {}) => {
-      if (typeof item === "string") return item;
-      if (item && typeof item === "object" && typeof item.text === "string") {
-        return item.text;
-      }
-      return "";
-    })
-    .join("\n")
-    .trim();
-}
-
-function resolveMessageRole(messageItem = {}) {
-  const explicitRole = String(
-    messageItem?.role || messageItem?.lc_kwargs?.role || "",
-  )
-    .trim()
-    .toLowerCase();
-  if (explicitRole) return explicitRole;
-  const messageType =
-    typeof messageItem?._getType === "function"
-      ? String(messageItem._getType() || "").trim().toLowerCase()
-      : typeof messageItem?.getType === "function"
-        ? String(messageItem.getType() || "").trim().toLowerCase()
-        : "";
-  if (messageType === "human") return "user";
-  if (messageType === "ai") return "assistant";
-  if (messageType === "system") return "system";
-  if (messageType === "tool") return "tool";
-  return "";
-}
 
 function normalizeMessageForHarness(messageItem = {}) {
   const role = resolveMessageRole(messageItem);
   if (!role) return null;
-  const content = extractTextContent(
+  const content = extractMessageTextContent(
     messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
   );
   const normalized = {
@@ -591,25 +557,29 @@ export class SessionExecutionEngine {
       ? Math.floor(recentMessageLimit)
       : 20;
     return ({ messages = [], ctx = {} } = {}) => {
+      const currentDialogProcessId = String(
+        ctx?.dialogProcessId ||
+          ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.dialogProcessId ||
+          "",
+      ).trim();
       const explicitMessages = Array.isArray(messages) ? messages : [];
       const source = explicitMessages.length
         ? explicitMessages
         : Array.isArray(ctx?.messages)
           ? ctx.messages
           : [];
-      const normalized = source
-        .map((item) => normalizeMessageForHarness(item))
-        .filter(
-          (item) =>
-            item &&
-            (String(item?.content || "").trim() ||
-              (String(item?.role || "").trim().toLowerCase() === "assistant" &&
-                Array.isArray(item?.tool_calls) &&
-                item.tool_calls.length)),
-        );
-      const filtered = filterSummarizedMessages(normalized);
-      if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) return [];
-      return normalizeRecentWindow(filtered, normalizedLimit);
+      return resolveModelContextMessages({
+        sourceMessages: source,
+        currentDialogProcessId,
+        mode: "harness",
+        recentLimit: normalizedLimit,
+        normalizeMessage: (item) => normalizeMessageForHarness(item),
+        shouldKeepMessage: (item) =>
+          String(item?.content || "").trim() ||
+          (String(item?.role || "").trim().toLowerCase() === "assistant" &&
+            Array.isArray(item?.tool_calls) &&
+            item.tool_calls.length),
+      });
     };
   }
 

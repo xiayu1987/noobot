@@ -5,6 +5,7 @@ import {
   filterSummarizedMessages,
   normalizeContextWindow,
   normalizeRecentWindow,
+  resolveModelContextMessages,
 } from "../../../src/system-core/session/utils/context-window-normalizer.js";
 
 test("filterSummarizedMessages removes only summarized messages", () => {
@@ -103,5 +104,60 @@ test("normalizeRecentWindow should not leave orphan tool after truncation shrink
   assert.deepEqual(
     result.map((item) => item.role),
     ["user"],
+  );
+});
+
+test("resolveModelContextMessages filters injected messages by current dialog", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "assistant", content: "keep", injectedMessage: true, dialogProcessId: "d1" },
+      { role: "assistant", content: "drop", injectedMessage: true, dialogProcessId: "d2" },
+      { role: "assistant", content: "normal" },
+    ],
+    currentDialogProcessId: "d1",
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["keep", "normal"],
+  );
+});
+
+test("resolveModelContextMessages supports recent window clipping", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "user", content: "u0" },
+      { role: "assistant", content: "a1" },
+      { role: "assistant", content: "a2" },
+    ],
+    useRecentWindow: true,
+    recentLimit: 2,
+  });
+  assert.deepEqual(
+    result.map((item) => item.role),
+    ["user", "assistant"],
+  );
+});
+
+test("resolveModelContextMessages supports harness mode with normalize/filter pipeline", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "assistant", content: "a0", injectedMessage: true, dialogProcessId: "d1" },
+      { role: "assistant", content: "drop-by-dialog", injectedMessage: true, dialogProcessId: "d2" },
+      { role: "assistant", content: "" },
+      { role: "assistant", content: "a1" },
+      { role: "assistant", content: "a2" },
+    ],
+    currentDialogProcessId: "d1",
+    mode: "harness",
+    recentLimit: 2,
+    normalizeMessage: (item = {}) => ({
+      role: String(item?.role || "").trim().toLowerCase(),
+      content: String(item?.content || "").trim(),
+    }),
+    shouldKeepMessage: (item = {}) => String(item?.content || "").trim(),
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["a1", "a2"],
   );
 });

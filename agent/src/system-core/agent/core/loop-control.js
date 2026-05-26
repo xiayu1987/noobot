@@ -14,6 +14,7 @@ import {
   TASK_SUMMARY_TOOL_NAME,
 } from "./constants/index.js";
 import { REQUEST_HELP_TOOL_NAME } from "../../tools/workflow/request-help-tool.js";
+import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
 
 // ── Helpers ──
 
@@ -39,21 +40,6 @@ function isMessageSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
 }
 
-function extractRawTextContent(content = null) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (item && typeof item === "object" && typeof item.text === "string") {
-        return item.text;
-      }
-      return "";
-    })
-    .join("\n")
-    .trim();
-}
-
 function hasInternalMessageMarker(message = {}) {
   const marker =
     message?.additional_kwargs?.noobotInternalMessageType ||
@@ -70,7 +56,7 @@ function resolveUnsummarizedMessageChars(messages = []) {
     if (!message || typeof message !== "object") return total;
     if (isMessageSummarized(message)) return total;
     if (hasInternalMessageMarker(message)) return total;
-    const text = extractRawTextContent(message?.content ?? message);
+    const text = extractMessageTextContent(message?.content ?? message);
     return total + String(text || "").length;
   }, 0);
 }
@@ -146,7 +132,7 @@ function discardOldestToolCallPairs(messages = [], charsThreshold = 0) {
     if (!message || typeof message !== "object") continue;
     if (isMessageSummarized(message)) continue;
     if (getMessageRole(message) !== "assistant") continue;
-    const contentText = extractRawTextContent(message?.content ?? "");
+    const contentText = extractMessageTextContent(message?.content ?? "");
     if (String(contentText || "").trim()) continue;
     const toolCalls = getMessageToolCalls(message);
     if (!toolCalls.length) continue;
