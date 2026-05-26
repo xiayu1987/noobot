@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { filterForModelContext } from "../../context/session/message-context-policy.js";
+
 export function filterSummarizedMessages(messages = []) {
-  return (Array.isArray(messages) ? messages : []).filter(
-    (messageItem) => messageItem?.summarized !== true,
-  );
+  return filterForModelContext(messages);
 }
 
 export function normalizeContextWindow({
@@ -15,7 +15,7 @@ export function normalizeContextWindow({
   startIndex = 0,
   limit = Number.POSITIVE_INFINITY,
 } = {}) {
-  const source = Array.isArray(sourceMessages) ? sourceMessages : [];
+  const source = filterSummarizedMessages(sourceMessages);
   const normalizedStartIndex = Math.max(0, Number(startIndex) || 0);
   const resolvedLimit = Number(limit);
   const useFiniteLimit = Number.isFinite(resolvedLimit);
@@ -54,30 +54,11 @@ export function normalizeContextWindow({
     }
   }
 
-  const knownToolCallIds = new Set();
-  for (const messageItem of windowMessages) {
-    if (String(messageItem?.role || "") !== "assistant") continue;
-    const toolCalls = Array.isArray(messageItem?.tool_calls)
-      ? messageItem.tool_calls
-      : [];
-    for (const toolCall of toolCalls) {
-      const toolCallId = String(
-        toolCall?.id || toolCall?.tool_call_id || "",
-      ).trim();
-      if (toolCallId) knownToolCallIds.add(toolCallId);
-    }
-  }
-
-  return windowMessages.filter((messageItem) => {
-    if (String(messageItem?.role || "") !== "tool") return true;
-    const toolCallId = String(messageItem?.tool_call_id || "").trim();
-    if (!toolCallId) return true;
-    return knownToolCallIds.has(toolCallId);
-  });
+  return filterSummarizedMessages(windowMessages);
 }
 
 export function normalizeRecentWindow(messages = [], limit = 20) {
-  const source = Array.isArray(messages) ? messages : [];
+  const source = filterSummarizedMessages(messages);
   const resolvedLimit = Number(limit);
   if (!Number.isFinite(resolvedLimit) || resolvedLimit <= 0) return [];
   const startIndex = Math.max(0, source.length - Math.floor(resolvedLimit));

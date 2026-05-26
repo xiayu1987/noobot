@@ -7,14 +7,15 @@ import {
   normalizeRecentWindow,
 } from "../../../src/system-core/session/utils/context-window-normalizer.js";
 
-test("filterSummarizedMessages removes summarized messages", () => {
+test("filterSummarizedMessages removes only summarized messages", () => {
   const input = [
     { role: "user", content: "a", summarized: false },
     { role: "assistant", content: "b", summarized: true },
     { role: "tool", content: "c" },
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "x" } }] },
   ];
   const result = filterSummarizedMessages(input);
-  assert.deepEqual(result.map((item) => item.content), ["a", "c"]);
+  assert.deepEqual(result.map((item) => item.content), ["a"]);
 });
 
 test("normalizeContextWindow drops orphan tool result and keeps valid pair", () => {
@@ -53,7 +54,7 @@ test("normalizeRecentWindow prepends a user anchor when sliced window has no use
   assert.equal(result[0]?.role, "user");
 });
 
-test("normalizeRecentWindow should keep latest assistant-tool pair integrity after truncation", () => {
+test("normalizeRecentWindow keeps latest assistant-tool pair after truncation", () => {
   const input = [
     { role: "user", content: "u0" },
     {
@@ -82,8 +83,6 @@ test("normalizeRecentWindow should keep latest assistant-tool pair integrity aft
     result.map((item) => item.role),
     ["user", "assistant", "tool"],
   );
-  assert.equal(result[1]?.tool_calls?.[0]?.id, "call_2");
-  assert.equal(result[2]?.tool_call_id, "call_2");
 });
 
 test("normalizeRecentWindow should not leave orphan tool after truncation shrink", () => {

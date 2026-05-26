@@ -4,6 +4,7 @@
  */
 import { createChatModel, createChatModelByName, adaptToolsForBinding } from "../../../model/index.js";
 import { executeToolCall } from "../execution/tool-runner.js";
+import { filterForModelContext } from "../../../context/session/message-context-policy.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
 const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";
@@ -170,7 +171,7 @@ export function createAgentCapabilityModelInvoker({
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
     const traces = [];
-    const runMessages = Array.isArray(messages) ? [...messages] : [];
+    const runMessages = filterForModelContext(messages);
     if (prompt) {
       runMessages.unshift({ role: "system", content: String(prompt) });
     }
