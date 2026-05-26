@@ -11,7 +11,8 @@ import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
+import { buildHookContext } from "../hook/hook-context-builder.js";
 
 function resolveToolHookMeta(runtime = {}) {
   const runtimeMeta =
@@ -75,7 +76,7 @@ export async function executeToolCall({
     await runAgentRuntimeHook({
       runtime,
       point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
-      context: withHookRuntimeMeta(runtime, {
+      context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, runtime, {
         phase: "tool_call",
         executionScope,
         turn,
@@ -103,7 +104,7 @@ export async function executeToolCall({
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.BEFORE_TOOL_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, runtime, {
       phase: "tool_call",
       executionScope,
       turn,
@@ -119,7 +120,7 @@ export async function executeToolCall({
     rawResult = await tool.invoke(call?.args || {}, {
       signal: abortSignal,
       configurable: {
-        noobotHookContext: withHookRuntimeMeta(runtime, {
+        noobotHookContext: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, runtime, {
           phase: "tool_call",
           executionScope,
           turn,
@@ -154,7 +155,7 @@ export async function executeToolCall({
     await runAgentRuntimeHook({
       runtime,
       point: AGENT_HOOK_POINTS.TOOL_CALL_ERROR,
-      context: withHookRuntimeMeta(runtime, {
+      context: buildHookContext(AGENT_HOOK_POINTS.TOOL_CALL_ERROR, runtime, {
         phase: "tool_call",
         executionScope,
         turn,
@@ -205,7 +206,7 @@ export async function executeToolCall({
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, runtime, {
       phase: "tool_call",
       executionScope,
       turn,

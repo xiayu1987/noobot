@@ -21,6 +21,55 @@ export function extractRuntime(ctx = {}) {
   return ctx?.agentContext?.execution?.controllers?.runtime || null;
 }
 
+function resolveUnifiedMessages(ctx = {}) {
+  if (Array.isArray(ctx?.messages)) return ctx.messages;
+  if (Array.isArray(ctx?.result?.modelMessages)) return ctx.result.modelMessages;
+  if (Array.isArray(ctx?.result?.turnMessages)) return ctx.result.turnMessages;
+  return null;
+}
+
+function resolveUnifiedCalls(ctx = {}) {
+  if (Array.isArray(ctx?.calls)) return ctx.calls;
+  if (Array.isArray(ctx?.call)) return ctx.call;
+  return null;
+}
+
+function resolveUnifiedCall(ctx = {}) {
+  if (ctx?.call && typeof ctx.call === "object" && !Array.isArray(ctx.call)) return ctx.call;
+  if (Array.isArray(ctx?.calls) && ctx.calls.length) {
+    const first = ctx.calls[0];
+    if (first && typeof first === "object" && !Array.isArray(first)) return first;
+  }
+  return null;
+}
+
+export function normalizeHookContextProtocol(point = "", ctx = {}) {
+  if (!ctx || typeof ctx !== "object") return ctx;
+  const normalizedPoint = String(point || ctx?.point || "").trim();
+  if (normalizedPoint && !ctx.point) ctx.point = normalizedPoint;
+
+  const unifiedMessages = resolveUnifiedMessages(ctx);
+  if (unifiedMessages && !Array.isArray(ctx.messages)) {
+    ctx.messages = unifiedMessages;
+  }
+
+  const unifiedCalls = resolveUnifiedCalls(ctx);
+  if (unifiedCalls && !Array.isArray(ctx.calls)) {
+    ctx.calls = unifiedCalls;
+  }
+
+  const unifiedCall = resolveUnifiedCall(ctx);
+  if (unifiedCall && (!ctx.call || typeof ctx.call !== "object" || Array.isArray(ctx.call))) {
+    ctx.call = unifiedCall;
+  }
+
+  if (!ctx.toolName && ctx?.call?.name) {
+    ctx.toolName = String(ctx.call.name || "").trim();
+  }
+
+  return ctx;
+}
+
 export function extractBasePath(ctx = {}, options = {}) {
   return String(
     options.basePath ||

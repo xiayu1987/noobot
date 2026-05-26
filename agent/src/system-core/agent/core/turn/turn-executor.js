@@ -26,7 +26,8 @@ import {
   normalizeAiTextContent,
 } from "../llm-invoker.js";
 import { resolveCurrentModelInfo } from "../model/model-manager.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
+import { buildHookContext } from "../hook/hook-context-builder.js";
 
 function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -136,7 +137,7 @@ export async function invokeNoToolsTurn({
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "no_tools",
@@ -175,7 +176,7 @@ export async function invokeNoToolsTurn({
     await runAgentRuntimeHook({
       runtime,
       point: AGENT_HOOK_POINTS.LLM_CALL_ERROR,
-      context: withHookRuntimeMeta(runtime, {
+      context: buildHookContext(AGENT_HOOK_POINTS.LLM_CALL_ERROR, runtime, {
         phase: "llm_call",
         turn,
         mode: "no_tools",
@@ -195,7 +196,7 @@ export async function invokeNoToolsTurn({
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "no_tools",
@@ -389,7 +390,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "with_tools",
@@ -410,7 +411,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     await runAgentRuntimeHook({
       runtime,
       point: AGENT_HOOK_POINTS.LLM_CALL_ERROR,
-      context: withHookRuntimeMeta(runtime, {
+      context: buildHookContext(AGENT_HOOK_POINTS.LLM_CALL_ERROR, runtime, {
         phase: "llm_call",
         turn,
         mode: "with_tools",
@@ -503,7 +504,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "with_tools",

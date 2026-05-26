@@ -455,14 +455,17 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "acceptance_semantic_validation_completed"), true);
 });
 
-test("acceptance semantic validation can relay into final output turn when ctx.messages is absent", async () => {
+test("acceptance semantic validation relays via unified ctx.messages protocol", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const modelMessages = [{ role: "assistant", content: "任务完成", type: "message" }];
   const ctx = {
     userId: "relay-u",
     sessionId: "relay-s",
     dialogProcessId: "relay-dp",
+    messages: modelMessages,
     result: {
       output: "任务完成",
+      modelMessages,
       turnMessages: [{ role: "assistant", content: "任务完成", type: "message" }],
     },
     agentContext: {
@@ -503,9 +506,9 @@ test("acceptance semantic validation can relay into final output turn when ctx.m
 
   const res = await handler({ capability: "acceptance", point: "before_final_output", ctx, meta });
   assert.equal(res.status, "active");
-  assert.equal(Array.isArray(ctx.result.turnMessages), true);
+  assert.equal(Array.isArray(ctx.messages), true);
   assert.equal(
-    ctx.result.turnMessages.some(
+    ctx.messages.some(
       (item = {}) =>
         item.injectedMessage === true &&
         String(item.injectedBy || "") === "harness-plugin" &&

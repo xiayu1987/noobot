@@ -52,13 +52,7 @@ function isHarnessInjectedMessage(message = {}) {
 }
 
 export function attachMetasToLatestInjectedMessage(ctx = {}, metas = []) {
-  const candidates = [
-    { list: Array.isArray(ctx?.messages) ? ctx.messages : [], isCtxMessages: true },
-    {
-      list: Array.isArray(ctx?.result?.turnMessages) ? ctx.result.turnMessages : [],
-      isCtxMessages: false,
-    },
-  ];
+  const candidates = [{ list: Array.isArray(ctx?.messages) ? ctx.messages : [], isCtxMessages: true }];
   for (const candidate of candidates) {
     const messages = candidate.list;
     if (!messages.length) continue;
@@ -208,34 +202,7 @@ export function relaySeparateModelOutputAsUserMessage(
   });
   const relayContent = `${prefix}\n${text}`;
   const relayAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
-  if (!messages) {
-    const turnMessages = Array.isArray(ctx?.result?.turnMessages) ? ctx.result.turnMessages : null;
-    if (!turnMessages) return false;
-    const relayMessage = buildHarnessInjectedMessage(relayContent, {
-      attachmentMetas: relayAttachmentMetas,
-    });
-    if (
-      dedupe &&
-      turnMessages.some(
-        (item = {}) =>
-          String(item?.role || "").trim() === String(relayMessage.role || "").trim() &&
-          String(item?.content || "").trim() === String(relayMessage.content || "").trim(),
-      )
-    ) {
-      return false;
-    }
-    turnMessages.push({
-      ...relayMessage,
-      type: "message",
-      dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-    });
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_separate_model_relay_injected_to_final_output_turn",
-      detail: { purpose: String(purpose || "").trim() || "unknown" },
-    });
-    return true;
-  }
+  if (!messages) return false;
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: relayContent,

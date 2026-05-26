@@ -8,7 +8,12 @@ import { cleanupRunsBySessionIds } from "../utils/cleanup.js";
 import { injectPrompt, traceHook } from "../tracing/buffer-manager.js";
 import { createRunTraceSink } from "../tracing/run-trace-sink.js";
 import { safeError } from "../data/record-builders.js";
-import { emitHarnessHookProgress, extractBasePath, isPrimaryExecutionScope } from "./context.js";
+import {
+  emitHarnessHookProgress,
+  extractBasePath,
+  isPrimaryExecutionScope,
+  normalizeHookContextProtocol,
+} from "./context.js";
 import { HARNESS_HOOK_POINTS } from "./constants.js";
 
 export const HARNESS_TRACE_POINTS = Object.freeze([
@@ -74,6 +79,7 @@ export function createRegisterHarnessHooks(deps = {}) {
           point,
           async (ctx = {}) => {
             if (!isPrimaryExecutionScopeFn(ctx)) return;
+            normalizeHookContextProtocol(point, ctx);
             emitHarnessHookProgressFn(ctx, "hook_start", { point });
             try {
               await capabilityRuntime.runHook(point, ctx, {
