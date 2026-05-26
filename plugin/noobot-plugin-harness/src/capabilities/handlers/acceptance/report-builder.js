@@ -64,7 +64,12 @@ function buildAcceptanceSummary(items = []) {
   });
 }
 
-export function buildAcceptanceReport({ bucket = {}, state = {}, mode = ACCEPTANCE_MODE.ACTIVE } = {}) {
+export function buildAcceptanceReport({
+  bucket = {},
+  state = {},
+  mode = ACCEPTANCE_MODE.ACTIVE,
+  forcedReason = "",
+} = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
   const planText = String(bucket?.planText || "").trim();
   const parsedPlan = parsePlanDocumentFromText(planText);
@@ -88,8 +93,10 @@ export function buildAcceptanceReport({ bucket = {}, state = {}, mode = ACCEPTAN
     };
   });
   const plan = buildPlanSnapshot(bucket, locale);
+  const normalizedForcedReason = String(forcedReason || "").trim();
   return {
     mode,
+    forcedReason: mode === ACCEPTANCE_MODE.FORCED ? normalizedForcedReason : "",
     acceptedAt: nowIsoTimestamp(),
     planText,
     summary: buildAcceptanceSummary(items),
@@ -290,6 +297,7 @@ export function buildSemanticValidationPromptPayload({
 export function renderAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   const data = report && typeof report === "object" ? report : {};
   const mode = String(data.mode || "").trim() || "active";
+  const forcedReason = String(data.forcedReason || "").trim();
   const acceptedAt = String(data.acceptedAt || "").trim() || "";
   const planText = String(data.planText || data?.plan?.planText || "").trim();
   const checklist = Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [];
@@ -300,6 +308,9 @@ export function renderAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   const lines = [
     locale === LOCALE.EN_US ? "[Harness-Acceptance]" : "[Harness-验收]",
     `mode: ${mode}`,
+    mode === ACCEPTANCE_MODE.FORCED && forcedReason
+      ? `${locale === LOCALE.EN_US ? "forcedReason" : "强制原因"}: ${forcedReason}`
+      : "",
     acceptedAt ? `acceptedAt: ${acceptedAt}` : "",
     planText
       ? `${locale === LOCALE.EN_US ? "planText" : "计划文本"}:\n${planText}`

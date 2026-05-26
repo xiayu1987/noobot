@@ -35,7 +35,13 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
       const requestedMode = String(args?.mode || ACCEPTANCE_MODE.ACTIVE).trim().toLowerCase();
       const mode = requestedMode === ACCEPTANCE_MODE.FORCED ? ACCEPTANCE_MODE.FORCED : ACCEPTANCE_MODE.ACTIVE;
       state.flags.acceptanceRequested = true;
-      const report = buildAcceptanceReport({ bucket, state, mode });
+      const forcedReason =
+        mode === ACCEPTANCE_MODE.FORCED
+          ? state?.flags?.overflowForceAcceptancePending === true
+            ? "上下文溢出_流程内强制验收 | Context overflow (in-flow forced acceptance)"
+            : "工具主动请求强制验收 | Tool-requested forced acceptance"
+          : "";
+      const report = buildAcceptanceReport({ bucket, state, mode, forcedReason });
       bucket.lastAcceptanceReport = report;
       bucket.acceptanceReports.push(report);
       await runAcceptanceBySeparateModel(toolCtx, toolMeta, report);
