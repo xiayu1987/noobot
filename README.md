@@ -62,6 +62,15 @@ Default endpoints:
 - Frontend: `http://127.0.0.1:10060`
 - Backend: `http://127.0.0.1:10061`
 - Agent Proxy: `http://127.0.0.1:10062`
+- Model Proxy (DashScope): `http://127.0.0.1:12341` -> `https://dashscope.aliyuncs.com`
+- Model Proxy (Poe): `http://127.0.0.1:12342` -> `https://api.poe.com`
+
+Stop all services:
+
+```bash
+chmod +x close.sh
+./close.sh
+```
 
 ## Requirements
 
@@ -119,11 +128,20 @@ CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
 > For first-time deployment or config auto-sync, use `./start.sh` first.
 
 ```bash
-cd service
-npm run pm2:list
-npm run pm2:logs
-npm run pm2:stop
-npm run pm2:delete
+cd service && npm run pm2:list
+cd service && npm run pm2:logs
+cd service && npm run pm2:stop
+cd service && npm run pm2:delete
+
+cd agent-proxy && npm run pm2:list
+cd agent-proxy && npm run pm2:logs
+cd agent-proxy && npm run pm2:stop
+cd agent-proxy && npm run pm2:delete
+
+cd model-proxy && npm run pm2:list
+cd model-proxy && npm run pm2:logs
+cd model-proxy && npm run pm2:stop
+cd model-proxy && npm run pm2:delete
 ```
 
 ## License

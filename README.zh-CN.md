@@ -62,6 +62,15 @@ NOOBOT_MODEL_BASE_URL=https://example.com/v1 \
 - 前端：`http://127.0.0.1:10060`
 - 后端：`http://127.0.0.1:10061`
 - Agent 代理：`http://127.0.0.1:10062`
+- 模型代理（DashScope）：`http://127.0.0.1:12341` -> `https://dashscope.aliyuncs.com`
+- 模型代理（Poe）：`http://127.0.0.1:12342` -> `https://api.poe.com`
+
+关闭全部服务：
+
+```bash
+chmod +x close.sh
+./close.sh
+```
 
 ## 环境要求
 
@@ -119,11 +128,20 @@ CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
 > 首次部署或需要自动配置同步时，请优先使用 `./start.sh`。
 
 ```bash
-cd service
-npm run pm2:list
-npm run pm2:logs
-npm run pm2:stop
-npm run pm2:delete
+cd service && npm run pm2:list
+cd service && npm run pm2:logs
+cd service && npm run pm2:stop
+cd service && npm run pm2:delete
+
+cd agent-proxy && npm run pm2:list
+cd agent-proxy && npm run pm2:logs
+cd agent-proxy && npm run pm2:stop
+cd agent-proxy && npm run pm2:delete
+
+cd model-proxy && npm run pm2:list
+cd model-proxy && npm run pm2:logs
+cd model-proxy && npm run pm2:stop
+cd model-proxy && npm run pm2:delete
 ```
 
 ## 开源协议
