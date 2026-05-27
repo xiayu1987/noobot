@@ -326,6 +326,7 @@ async function handleCopyAssistantMessageText() {
 .md {
   width: 100%;
   overflow-x: auto;
+  color: inherit;
 }
 
 /* --- Markdown 内部样式 --- */
@@ -444,6 +445,7 @@ async function handleCopyAssistantMessageText() {
 .md :deep(h4) {
   margin: var(--noobot-space-md) 0 var(--noobot-space-sm);
   line-height: 1.35;
+  color: inherit;
 }
 
 .md :deep(.mermaid svg) {
