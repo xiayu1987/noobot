@@ -51,17 +51,98 @@ function normalizeMessageForCompatibility(message = {}) {
   return normalized;
 }
 
+function resolveToolCallName(toolCall = {}) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  if (toolCall.function && typeof toolCall.function === "object") {
+    const fnName = String(toolCall.function.name || "").trim();
+    if (fnName) return fnName;
+  }
+  const name = String(toolCall.name || "").trim();
+  return name;
+}
+
+function resolveToolCallArguments(toolCall = {}) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  if (toolCall.function && typeof toolCall.function === "object") {
+    const fnArgs = toolCall.function.arguments;
+    if (typeof fnArgs === "string") return fnArgs.trim();
+    if (fnArgs && typeof fnArgs === "object") {
+      try {
+        return JSON.stringify(fnArgs);
+      } catch {
+        return String(fnArgs);
+      }
+    }
+  }
+  const args = toolCall.args;
+  if (typeof args === "string") return args.trim();
+  if (args && typeof args === "object") {
+    try {
+      return JSON.stringify(args);
+    } catch {
+      return String(args);
+    }
+  }
+  return "";
+}
+
+function buildToolCallSemanticText(toolCalls = [], locale = "zh-CN") {
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  if (!calls.length) return "";
+  const normalizedLocale = String(locale || "").trim().toLowerCase();
+  const isEnglish = normalizedLocale === "en-us";
+  return calls
+    .map((toolCall = {}) => {
+      const name = resolveToolCallName(toolCall) || (isEnglish ? "unknown_script" : "未知脚本");
+      const args = resolveToolCallArguments(toolCall) || (isEnglish ? "none" : "无参数");
+      if (isEnglish) {
+        return `Semantic execution: run ${name} script with arguments ${args}`;
+      }
+      return `语义执行 ${name}脚本,参数${args}`;
+    })
+    .join("\n");
+}
+
+function rewriteMessageForCapabilityContext(message = {}, locale = "zh-CN") {
+  const normalized = normalizeMessageForCompatibility(message);
+  if (!normalized) return null;
+
+  if (normalized.role === "tool") {
+    return {
+      role: "assistant",
+      content: String(normalized.content || "").trim(),
+    };
+  }
+
+  if (normalized.role === "assistant" && Array.isArray(normalized.tool_calls) && normalized.tool_calls.length) {
+    const semanticContent = buildToolCallSemanticText(normalized.tool_calls, locale);
+    if (!semanticContent) return null;
+    return {
+      role: "user",
+      content: semanticContent,
+    };
+  }
+
+  const passthrough = {
+    role: normalized.role,
+    content: String(normalized.content || "").trim(),
+  };
+  if (normalized.frontendUserMessage === true) {
+    passthrough.frontendUserMessage = true;
+  }
+  return passthrough;
+}
+
 export function buildCapabilityModelMessages({
   locale = "zh-CN",
   agentMessages = [],
   constraints = [],
   task = "",
 } = {}) {
-  void locale;
   const normalizedTask = String(task || "").trim();
   const flattenedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
-    .map((item = {}) => normalizeMessageForCompatibility(item))
-    .filter(Boolean);
+    .map((item = {}) => rewriteMessageForCapabilityContext(item, locale))
+    .filter((item) => item && String(item.content || "").trim());
   const constraintMessages = (Array.isArray(constraints) ? constraints : [])
     .map((item) => String(item || "").trim())
     .filter(Boolean)
