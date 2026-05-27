@@ -93,6 +93,29 @@ function toAttachmentKey(attachmentItem = {}) {
   ).trim();
 }
 
+function sanitizeWorkspaceRelativePath(pathValue = "") {
+  const normalized = String(pathValue || "")
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+/, "");
+  if (!normalized) return "";
+  if (normalized.startsWith("../")) return "";
+  if (normalized.includes("/../")) return "";
+  if (normalized.endsWith("/..")) return "";
+  return normalized;
+}
+
+function isLikelyFilePath(pathValue = "") {
+  const baseName = resolveBaseName(pathValue);
+  if (!baseName || baseName === "." || baseName === "..") return false;
+  if (baseName.startsWith(".") && baseName.length > 1) return true; // .env / .gitignore
+  const dotIndex = baseName.lastIndexOf(".");
+  if (dotIndex <= 0) return false; // no extension or hidden-only token
+  if (dotIndex === baseName.length - 1) return false;
+  return true;
+}
+
 export function useMessageFiles({
   getMessageItem = () => ({}),
   getAllMessages = () => [],
@@ -102,11 +125,20 @@ export function useMessageFiles({
   function resolveRelativeWorkspacePath(absolutePath = "") {
     const normalizedUserId = String(getUserId() || "").trim();
     const normalizedPath = String(absolutePath || "").trim();
-    if (!normalizedUserId || !normalizedPath) return "";
-    const marker = `/workspace/${normalizedUserId}/`;
-    const idx = normalizedPath.indexOf(marker);
-    if (idx < 0) return "";
-    return normalizedPath.slice(idx + marker.length);
+    if (!normalizedPath) return "";
+    if (normalizedUserId) {
+      const marker = `/workspace/${normalizedUserId}/`;
+      const idx = normalizedPath.indexOf(marker);
+      if (idx >= 0) {
+        return sanitizeWorkspaceRelativePath(normalizedPath.slice(idx + marker.length));
+      }
+    }
+    const genericWorkspaceMarker = "/workspace/";
+    const genericMarkerIndex = normalizedPath.indexOf(genericWorkspaceMarker);
+    if (genericMarkerIndex < 0) return "";
+    return sanitizeWorkspaceRelativePath(
+      normalizedPath.slice(genericMarkerIndex + genericWorkspaceMarker.length),
+    );
   }
 
   function normalizeRecognizedFilePath(pathToken = "") {
@@ -116,8 +148,23 @@ export function useMessageFiles({
     const marker = normalizedUserId ? `/workspace/${normalizedUserId}/` : "";
     const markerIndex = marker ? normalizedPath.indexOf(marker) : -1;
     if (markerIndex >= 0) {
-      const relativePath = normalizedPath.slice(markerIndex + marker.length).replace(/^\/+/, "");
-      if (!relativePath) return null;
+      const relativePath = sanitizeWorkspaceRelativePath(
+        normalizedPath.slice(markerIndex + marker.length),
+      );
+      if (!relativePath || !isLikelyFilePath(relativePath)) return null;
+      return {
+        resolvedPath: normalizedPath,
+        relativePath,
+        fileName: resolveBaseName(relativePath),
+      };
+    }
+    const genericWorkspaceMarker = "/workspace/";
+    const genericMarkerIndex = normalizedPath.indexOf(genericWorkspaceMarker);
+    if (genericMarkerIndex >= 0) {
+      const relativePath = sanitizeWorkspaceRelativePath(
+        normalizedPath.slice(genericMarkerIndex + genericWorkspaceMarker.length),
+      );
+      if (!relativePath || !isLikelyFilePath(relativePath)) return null;
       return {
         resolvedPath: normalizedPath,
         relativePath,
@@ -126,30 +173,29 @@ export function useMessageFiles({
     }
     const workspacePrefix = normalizedUserId ? `workspace/${normalizedUserId}/` : "";
     if (workspacePrefix && normalizedPath.startsWith(workspacePrefix)) {
-      const relativePath = normalizedPath.slice(workspacePrefix.length).replace(/^\/+/, "");
-      if (!relativePath) return null;
+      const relativePath = sanitizeWorkspaceRelativePath(
+        normalizedPath.slice(workspacePrefix.length),
+      );
+      if (!relativePath || !isLikelyFilePath(relativePath)) return null;
       return {
         resolvedPath: normalizedPath,
         relativePath,
         fileName: resolveBaseName(relativePath),
       };
     }
-    if (normalizedPath.startsWith("/") || normalizedPath.startsWith("~/")) {
+    const genericWorkspacePrefix = "workspace/";
+    if (normalizedPath.startsWith(genericWorkspacePrefix)) {
+      const relativePath = sanitizeWorkspaceRelativePath(
+        normalizedPath.slice(genericWorkspacePrefix.length),
+      );
+      if (!relativePath || !isLikelyFilePath(relativePath)) return null;
       return {
         resolvedPath: normalizedPath,
-        relativePath: "",
-        fileName: resolveBaseName(normalizedPath),
+        relativePath,
+        fileName: resolveBaseName(relativePath),
       };
     }
-    const relativePath = normalizedPath
-      .replace(/^\.\//, "")
-      .replace(/^\/+/, "");
-    if (!relativePath || !relativePath.includes("/")) return null;
-    return {
-      resolvedPath: normalizedPath,
-      relativePath,
-      fileName: resolveBaseName(relativePath),
-    };
+    return null;
   }
 
   function toWrittenFileKey(fileItem = {}) {
