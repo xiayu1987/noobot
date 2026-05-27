@@ -120,6 +120,7 @@ watch(
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--noobot-preview-bg);
+  color: var(--noobot-preview-text);
   border: 1px solid var(--noobot-preview-border);
   border-radius: var(--noobot-radius-sm);
   padding: 20px 24px;
@@ -209,7 +210,7 @@ watch(
 /* 标题 */
 .preview-markdown :deep(h1), .preview-markdown :deep(h2), .preview-markdown :deep(h3),
 .preview-markdown :deep(h4), .preview-markdown :deep(h5), .preview-markdown :deep(h6) {
-  margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; color: var(--noobot-text-strong);
+  margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; color: var(--noobot-preview-text);
 }
 .preview-markdown :deep(h1) { font-size: 1.8em; padding-bottom: 0.3em; border-bottom: 1px solid var(--noobot-divider); }
 .preview-markdown :deep(h2) { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--noobot-divider); }
@@ -218,7 +219,7 @@ watch(
 
 /* 引用块 */
 .preview-markdown :deep(blockquote) {
-  margin: 16px 0; padding: 12px 16px; color: var(--noobot-text-secondary); background-color: var(--noobot-panel-muted);
+  margin: 16px 0; padding: 12px 16px; color: var(--noobot-preview-text); background-color: var(--noobot-panel-muted);
   border-left: 4px solid var(--noobot-panel-border); border-radius: 0 6px 6px 0; font-style: italic;
 }
 .preview-markdown :deep(blockquote p:last-child) { margin-bottom: 0; }
@@ -246,7 +247,7 @@ watch(
 /* 表格 */
 .preview-markdown :deep(table) { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
 .preview-markdown :deep(th), .preview-markdown :deep(td) { border: 1px solid var(--noobot-panel-border); padding: 10px 14px; text-align: left; }
-.preview-markdown :deep(th) { background-color: var(--noobot-panel-muted); font-weight: 600; color: var(--noobot-text-main); }
+.preview-markdown :deep(th) { background-color: var(--noobot-panel-muted); font-weight: 600; color: var(--noobot-preview-text); }
 .preview-markdown :deep(tr:nth-child(even)) { background-color: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent); }
 .preview-markdown :deep(tr:hover) { background-color: var(--noobot-accent-soft); }
 
