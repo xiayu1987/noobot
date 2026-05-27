@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { computed } from "vue";
 import { WarningFilled } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import ThinkingPanel from "./ThinkingPanel.vue";
@@ -56,6 +57,8 @@ const {
   onCopyMarkdownText,
   onCopyAttachmentMarkdownRich,
   onCopyAttachmentMarkdownText,
+  onCopyMessageMarkdownRich,
+  onCopyMessageMarkdownText,
 } = useMessagePreview({
   userId: props.userId,
   authFetch: props.authFetch,
@@ -82,6 +85,21 @@ const { messageModelLabel, showSubTaskActivity, subTaskStatusText } = useMessage
 
 const { mermaidHostRef: messageMarkdownRef } = useMermaidRender();
 const { translate } = useLocale();
+
+const showAssistantCopyActions = computed(
+  () => props.messageItem.role === "assistant" && Boolean(String(props.messageItem.content || "").trim()),
+);
+
+async function handleCopyAssistantMessageRich() {
+  await onCopyMessageMarkdownRich({
+    textContent: props.messageItem.content,
+    renderedPreviewHtml: String(messageMarkdownRef.value?.innerHTML || ""),
+  });
+}
+
+async function handleCopyAssistantMessageText() {
+  await onCopyMessageMarkdownText(props.messageItem.content);
+}
 
 </script>
 
@@ -115,6 +133,15 @@ const { translate } = useLocale();
         <div v-if="messageItem.error" class="error-alert">
           <el-icon class="error-icon"><WarningFilled /></el-icon>
           {{ messageItem.error }}
+        </div>
+
+        <div v-if="showAssistantCopyActions" class="assistant-copy-actions">
+          <el-button size="small" type="primary" plain @click="handleCopyAssistantMessageRich">{{
+            translate("message.copyFormat")
+          }}</el-button>
+          <el-button size="small" @click="handleCopyAssistantMessageText">{{
+            translate("message.copyText")
+          }}</el-button>
         </div>
 
         <div ref="messageMarkdownRef" class="md" v-html="renderMarkdown(messageItem.content)" />
@@ -287,6 +314,13 @@ const { translate } = useLocale();
 
 .error-icon {
   font-size: 14px;
+}
+
+.assistant-copy-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 
 .md {

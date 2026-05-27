@@ -61,7 +61,9 @@ function normalizeSubPlans(subPlans = [], mainId = 0) {
 function parseId(rawId = "") {
   const text = String(rawId || "").trim();
   if (!text) return null;
-  const [mainPart, subPart] = text.split(".");
+  const parts = text.split(".");
+  if (parts.length === 0 || parts.length > 2) return null;
+  const [mainPart, subPart] = parts;
   const mainId = Number(mainPart);
   if (!Number.isFinite(mainId)) return null;
   if (subPart === undefined) return { raw: text, mainId, subIndex: null, isSub: false };

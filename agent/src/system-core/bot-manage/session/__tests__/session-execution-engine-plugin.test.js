@@ -18,7 +18,7 @@ test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plug
     workspaceService: createWorkspaceService(basePath),
   });
 
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -46,7 +46,7 @@ test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", 
   const explicitInvoker = async () => ({ output: "ok" });
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -79,7 +79,7 @@ test("SessionExecutionEngine deep-merges plugin step model config", async () => 
     },
   });
 
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -104,7 +104,7 @@ test("SessionExecutionEngine deep-merges plugin step model config", async () => 
 test("SessionExecutionEngine defaults plugin miniRunnerMaxTurns to 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -123,7 +123,7 @@ test("SessionExecutionEngine defaults plugin miniRunnerMaxTurns to 5", async () 
 test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -143,7 +143,7 @@ test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
 test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -169,7 +169,7 @@ test("SessionExecutionEngine injects plugin resolveModelMessages with recent win
     },
   });
 
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -204,7 +204,7 @@ test("SessionExecutionEngine injects plugin resolveModelMessages with recent win
 
 test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with agent summary policy", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -227,19 +227,19 @@ test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with 
     { role: "tool", content: '{"toolName":"task_summary","ok":true}' },
   ];
   const marked = await summarizer({ messages });
-  assert.equal(marked, 2);
-  assert.equal(messages[0].summarized, undefined);
+  assert.equal(marked, 4);
+  assert.equal(messages[0].summarized, true);
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, true);
   assert.equal(messages[3].summarized, true);
-  assert.equal(messages[4].summarized, undefined);
+  assert.equal(messages[4].summarized, true);
 });
 
 test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages for plugin model", async () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {},
   });
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -274,13 +274,14 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
   assert.equal(Array.isArray(resolved), true);
   assert.deepEqual(resolved, [
     { role: "user", content: "查找最适合组织的人", summarized: false },
+    { role: "user", content: '[user_meta]\n{"sessionId":"s1","attachments":[]}\n[/user_meta]', summarized: false },
     { role: "assistant", content: "收到，准备规划", summarized: false },
   ]);
 });
 
 test("SessionExecutionEngine resolveModelMessages filters injected messages from non-current dialog", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._preparePluginRunConfig({
+  const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -319,7 +320,13 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
   });
 
   assert.deepEqual(resolved, [
-    { role: "assistant", content: "current injected", summarized: false },
+    {
+      role: "assistant",
+      content: "current injected",
+      summarized: false,
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+    },
     { role: "assistant", content: "normal response", summarized: false },
   ]);
 });

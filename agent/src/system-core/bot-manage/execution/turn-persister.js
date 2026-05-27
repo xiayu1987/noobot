@@ -58,6 +58,7 @@ export class SessionTurnPersister {
     eventListener,
     injectedMessage = false,
     injectedBy = "",
+    frontendUserMessage = false,
   }) {
     const fullTurnPayload = {
       role,
@@ -86,6 +87,7 @@ export class SessionTurnPersister {
           : null,
       injectedMessage: injectedMessage === true,
       injectedBy: String(injectedBy || "").trim(),
+      frontendUserMessage: frontendUserMessage === true,
       modelResponseMetadata:
         modelResponseMetadata &&
         typeof modelResponseMetadata === "object" &&
@@ -130,6 +132,7 @@ export class SessionTurnPersister {
       modelResponseMetadata,
       injectedMessage,
       injectedBy,
+      frontendUserMessage,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -182,6 +185,7 @@ export class SessionTurnPersister {
             : null,
         injectedMessage: messageItem.injectedMessage === true,
         injectedBy: String(messageItem.injectedBy || "").trim(),
+        frontendUserMessage: messageItem.frontendUserMessage === true,
         modelResponseMetadata:
           messageItem.modelResponseMetadata &&
           typeof messageItem.modelResponseMetadata === "object" &&

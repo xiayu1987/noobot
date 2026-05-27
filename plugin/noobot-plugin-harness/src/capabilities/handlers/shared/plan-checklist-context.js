@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "./constants.js";
+import { parsePlanDocumentFromText, renderPlanDocument } from "./plan-text-protocol.js";
 
 function buildMainPlanTextFromChecklist(checklist = []) {
   const source = Array.isArray(checklist) ? checklist : [];
@@ -33,7 +34,15 @@ export function resolvePlanChecklistText({
   bucket = {},
 } = {}) {
   const normalizedPlanText = String(planText || "").trim();
-  if (normalizedPlanText) return normalizedPlanText;
+  if (normalizedPlanText) {
+    const parsed = parsePlanDocumentFromText(normalizedPlanText);
+    const hasNumberedPlans = Array.isArray(parsed?.mainPlans) && parsed.mainPlans.length > 0;
+    if (hasNumberedPlans) {
+      const rendered = String(renderPlanDocument(parsed) || "").trim();
+      if (rendered) return rendered;
+    }
+    return normalizedPlanText;
+  }
   return buildMainPlanTextFromChecklist(bucket?.taskChecklist || []);
 }
 

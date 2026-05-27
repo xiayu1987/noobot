@@ -114,6 +114,7 @@ export function ensureHarnessBucket(ctx = {}) {
 
     ensureArrayField(bucket, "taskChecklist");
     ensureArrayField(bucket, "acceptanceReports");
+    ensureArrayField(bucket, "phaseAcceptanceReports");
     ensureArrayField(bucket, "reviewReports");
     ensureArrayField(bucket, "planningRawOutputs");
     ensureArrayField(bucket, "completedDialogProcessIds");

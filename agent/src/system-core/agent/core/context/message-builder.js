@@ -109,9 +109,14 @@ export function buildContextMessages(
   }
 
   function buildHumanMessagesForUser(msg = {}, fallbackMeta = {}) {
-    const contentMessage = new HumanMessage(
-      buildHumanMessageContent(msg, fallbackMeta?.attachmentMetas || []),
-    );
+    const contentText = buildHumanMessageContent(msg, fallbackMeta?.attachmentMetas || []);
+    const isFrontendUserMessage = msg?.frontendUserMessage === true;
+    const contentMessage = isFrontendUserMessage
+      ? new HumanMessage({
+          content: contentText,
+          additional_kwargs: { frontendUserMessage: true },
+        })
+      : new HumanMessage(contentText);
     const userMetaTag = tEngine(runtime, "agent.userMetaTag");
     const metaMessage = new HumanMessage(
       `[${userMetaTag}]\n${buildUserMetaInfoContent(msg, fallbackMeta)}\n[/${userMetaTag}]`,
@@ -218,6 +223,7 @@ export function buildContextMessages(
         {
           role: MESSAGE_ROLE.USER,
           content: normalizedCurrentUserMessage,
+          frontendUserMessage: true,
           userName: fallbackUserMeta.userName,
           attachmentMetas: fallbackUserMeta.attachmentMetas,
           sessionId: fallbackUserMeta.sessionId,

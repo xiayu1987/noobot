@@ -179,7 +179,13 @@ function summarizePlanningMessages(messages = [], maxItems = PLANNING_SUMMARY_MA
 }
 
 function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN) {
-  const messages = collectAgentStyleHistoryMessages(ctx);
+  const unifiedMessages = resolveCapabilityModelMessages(meta, {
+    ctx,
+    purpose: "planning",
+  });
+  const messages = Array.isArray(unifiedMessages) && unifiedMessages.length
+    ? unifiedMessages
+    : collectAgentStyleHistoryMessages(ctx);
   const latestUserMessage = [...messages]
     .reverse()
     .find((item) => String(item?.role || "").trim().toLowerCase() === "user");
@@ -208,9 +214,8 @@ function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOC
       `${getPlanningContextSummaryHeader(locale)}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
       buildPlanningToolContextPrompt(locale, ctx, meta),
     ],
-    task: "",
+    task: buildPlanningPromptBase(locale, ctx, meta),
   });
-  messages.push({ role: "user", content: buildPlanningPromptBase(locale, ctx, meta) });
   return messages;
 }
 

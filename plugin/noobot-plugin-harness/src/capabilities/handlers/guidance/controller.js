@@ -19,7 +19,11 @@ import {
   maybeCapturePlanUpdateByInject,
 } from "./revision-injector.js";
 import { maybeInjectGuidanceOrSummaryPrompt } from "./prompt-injector.js";
-import { runPlanUpdateAfterSummary, runGuidanceBySeparateModel } from "./model-runner.js";
+import {
+  runPendingPlanUpdateBySeparateModel,
+  runPlanUpdateAfterSummary,
+  runGuidanceBySeparateModel,
+} from "./model-runner.js";
 import { resolveNextGuidanceAction } from "./plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters } from "./signal-tracker.js";
 import { applySummaryText } from "./summary-manager.js";
@@ -32,7 +36,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
       const nextAction = resolveNextGuidanceAction(holder?.state || {});
       if (shouldUseSeparateModel(meta)) {
         if (nextAction.action === "plan_update") {
-          changed = maybeInjectPlanUpdatePrompt(ctx) || changed;
+          changed = (await runPendingPlanUpdateBySeparateModel(ctx, meta)) || changed;
         }
         changed = (await runGuidanceBySeparateModel(ctx, meta)) || changed;
       } else {

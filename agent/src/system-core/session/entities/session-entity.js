@@ -47,6 +47,9 @@ export function normalizeMessageEntity(
   }
   const injectedBy = String(message?.injectedBy || "").trim();
   if (injectedBy) normalizedMessage.injectedBy = injectedBy;
+  if (message?.frontendUserMessage === true) {
+    normalizedMessage.frontendUserMessage = true;
+  }
 
   const toolCallId = String(message?.tool_call_id || "").trim();
   const toolName = String(message?.toolName || message?.tool_name || "").trim();

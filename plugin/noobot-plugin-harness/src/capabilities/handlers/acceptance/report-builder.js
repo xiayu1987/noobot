@@ -64,6 +64,40 @@ function buildAcceptanceSummary(items = []) {
   });
 }
 
+function buildChecklistFromParsedPlan(parsedPlan = null) {
+  const source = parsedPlan && typeof parsedPlan === "object" ? parsedPlan : {};
+  const mainPlans = Array.isArray(source?.mainPlans) ? source.mainPlans : [];
+  const subPlansByMainId =
+    source?.subPlansByMainId && typeof source.subPlansByMainId === "object"
+      ? source.subPlansByMainId
+      : {};
+  const checklist = [];
+  for (const main of mainPlans) {
+    const mainId = Number(main?.id);
+    const mainTask = String(main?.content || "").trim();
+    if (!Number.isFinite(mainId) || !mainTask) continue;
+    checklist.push({
+      index: mainId,
+      mainStepIndex: mainId,
+      isMainStep: true,
+      task: mainTask,
+    });
+    const subPlans = Array.isArray(subPlansByMainId[String(mainId)]) ? subPlansByMainId[String(mainId)] : [];
+    for (const sub of subPlans) {
+      const subIndex = Number(sub?.subIndex);
+      const subTask = String(sub?.content || "").trim();
+      if (!Number.isFinite(subIndex) || !subTask) continue;
+      checklist.push({
+        index: Number(`${mainId}.${subIndex}`),
+        mainStepIndex: mainId,
+        isMainStep: false,
+        task: subTask,
+      });
+    }
+  }
+  return checklist;
+}
+
 export function buildAcceptanceReport({
   bucket = {},
   state = {},
@@ -73,12 +107,7 @@ export function buildAcceptanceReport({
   const locale = state?.locale || LOCALE.ZH_CN;
   const planText = String(bucket?.planText || "").trim();
   const parsedPlan = parsePlanDocumentFromText(planText);
-  const checklistFromPlanText = [
-    ...(Array.isArray(parsedPlan?.mainPlans) ? parsedPlan.mainPlans : []).map((item = {}) => ({
-      index: Number(item?.id),
-      task: String(item?.content || "").trim(),
-    })),
-  ];
+  const checklistFromPlanText = buildChecklistFromParsedPlan(parsedPlan);
   const checklist =
     checklistFromPlanText.length
       ? checklistFromPlanText
@@ -256,6 +285,9 @@ export function buildSemanticValidationPromptPayload({
       finalPlanChecklist: [],
       plan: buildPlanSnapshot(bucket, locale),
       acceptanceReport: baseReport,
+      phaseAcceptanceReports: Array.isArray(bucket?.phaseAcceptanceReports)
+        ? bucket.phaseAcceptanceReports
+        : [],
       toolSignals: state.signals || {},
       finalOutput,
     };
@@ -289,6 +321,9 @@ export function buildSemanticValidationPromptPayload({
     refinementPlansForFinalMainPlan,
     plansInOrder,
     acceptanceReport: baseReport,
+    phaseAcceptanceReports: Array.isArray(bucket?.phaseAcceptanceReports)
+      ? bucket.phaseAcceptanceReports
+      : [],
     toolSignals: state.signals || {},
     finalOutput,
   };
