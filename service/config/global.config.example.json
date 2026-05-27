@@ -5,7 +5,7 @@
   "memory_max_items": 50,
   "max_tool_loop_turns": 200,
   "session": {
-    "recent_message_limit": 10,
+    "recent_message_limit": 15,
     "use_last_running_task_range": true,
     "use_last_completed_task_range": true
   },
