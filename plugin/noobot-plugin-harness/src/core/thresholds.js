@@ -10,7 +10,7 @@ export const FAILURE_THRESHOLD = Object.freeze({
 });
 
 export const SUMMARY_POLICY = Object.freeze({
-  TURNS_THRESHOLD: 15,
+  TURNS_THRESHOLD: 8,
   MESSAGE_CHARS_THRESHOLD: 150000,
   OVERFLOW_POLICY: Object.freeze({
     ENABLE_PRUNE_AFTER_SUMMARY: true,
