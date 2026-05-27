@@ -5,6 +5,14 @@
  */
 import { LOCALE } from "./constants.js";
 import { resolvePlanChecklistText } from "./plan-checklist-context.js";
+import { parseSummaryItemsFromText } from "./summary-text-protocol.js";
+import { PLAN_UPDATE_POLICY } from "../../../core/thresholds.js";
+import {
+  buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText,
+  buildPlanningRefinementPatchProtocolText as buildPlanningRefinementPatchProtocolCoreText,
+  buildPlanningRevisionPatchProtocolText as buildPlanningRevisionPatchProtocolCoreText,
+  buildSummaryPatchProtocolText as buildSummaryPatchProtocolCoreText,
+} from "./workflow-protocols.js";
 
 function normalizePromptOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
@@ -80,6 +88,30 @@ export function getAcceptanceMainPlanContextMarker(locale = LOCALE.ZH_CN) {
   return "<!-- harness-acceptance-main-plan -->";
 }
 
+export function getPhaseAcceptanceRequestMarker(locale = LOCALE.ZH_CN) {
+  void locale;
+  return "<!-- harness-phase-acceptance-request -->";
+}
+
+export function getAllPhaseAcceptanceReportsMarker(locale = LOCALE.ZH_CN) {
+  void locale;
+  return "<!-- harness-phase-acceptance-reports -->";
+}
+
+export function getAllSummaryReportsMarker(locale = LOCALE.ZH_CN) {
+  void locale;
+  return "<!-- harness-summary-reports -->";
+}
+
+export function buildAcceptancePatchProtocolText(options = {}) {
+  const { locale, data } = normalizePromptOptions(options);
+  const mode = String(data.mode || options?.mode || "final").trim().toLowerCase();
+  return buildAcceptancePatchProtocolCoreText({
+    locale,
+    mode,
+  });
+}
+
 export function buildPlanningMainPrompt(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const userGoal = String(data.userGoal || options?.userGoal || "").trim();
@@ -138,15 +170,12 @@ export function buildPlanningRevisionPromptText(options = {}) {
       "Goal: Revise the high-level main plan based on latest feedback. Only operate on main plan IDs; do not include sub-steps.",
       "",
       "[Current Status]",
-      `Revision count: ${revisionCount}/5`,
+      `Revision count: ${revisionCount}/${Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS)}`,
       ...currentPlanSection,
       "Latest feedback:",
       latestFeedback,
       "",
-      "[ID+PATCH Syntax]",
-      "ADD [new integer ID] [main plan content]",
-      "UPDATE [existing integer ID] [updated content]",
-      "DELETE [existing integer ID]",
+      buildPlanningRevisionPatchProtocolCoreText(locale),
     ].filter(Boolean).join("\n");
   }
   const currentPlanSection = includeCurrentMainPlans === false ? [] : ["当前主计划：", mainPlansText];
@@ -155,15 +184,12 @@ export function buildPlanningRevisionPromptText(options = {}) {
     "目标：基于最新反馈修正宏观主计划。仅限操作主计划（整数ID），严禁涉及子计划。",
     "",
     "【当前状态】",
-    `已修正次数：${revisionCount}/5`,
+    `已修正次数：${revisionCount}/${Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS)}`,
     ...currentPlanSection,
     "最新反馈：",
     latestFeedback,
     "",
-    "【ID+PATCH 协议语法】",
-    "ADD [新整数ID] [主计划内容]",
-    "UPDATE [已有整数ID] [修改后的内容]",
-    "DELETE [已有整数ID]",
+    buildPlanningRevisionPatchProtocolCoreText(locale),
     "",
     "【输出示例】",
     "UPDATE 2 数据库及缓存架构设计",
@@ -191,10 +217,7 @@ export function buildPlanningRefinementPromptText(options = {}) {
       "Existing sub-steps:",
       subPlans,
       "",
-      "[ID+PATCH Syntax] (sub-plan ID format: [main-id].[sub-id], and [main-id] must equal target main plan ID)",
-      "ADD [main-id].[sub-id] [content]",
-      "UPDATE [main-id].[sub-id] [updated content]",
-      "DELETE [main-id].[sub-id]",
+      buildPlanningRefinementPatchProtocolCoreText(locale),
       "",
       "[Latest Feedback]",
       latestFeedback,
@@ -209,10 +232,7 @@ export function buildPlanningRefinementPromptText(options = {}) {
     "已有子步骤：",
     subPlans,
     "",
-    "【ID+PATCH 协议语法】(子计划 ID 格式固定为 [主序号].[子序号]，且 [主序号] 必须等于目标主计划 ID)",
-    "ADD [主序号].[子序号] [细化内容]",
-    "UPDATE [主序号].[子序号] [修改后的内容]",
-    "DELETE [主序号].[子序号]",
+    buildPlanningRefinementPatchProtocolCoreText(locale),
     "",
     "【最新反馈】",
     latestFeedback,
@@ -229,23 +249,13 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     return [
       String(marker || "").trim(),
       "Provide a guidance summary of completed items and risks.",
-      "Prefer summary_patch_v1 (independent from plan patch protocol).",
-      "Syntax:",
-      "ADD S[integer] plan=[main_plan_id] status=[done|in_progress|risk|todo] [summary content]",
-      "UPDATE S[integer] status=[done|in_progress|risk|todo] [summary content]",
-      "DELETE S[integer]",
-      "If protocol cannot be followed, any non-empty text is acceptable. Then continue with the task.",
+      buildSummaryPatchProtocolCoreText(locale),
     ].filter(Boolean).join("\n");
   }
   return [
     String(marker || "").trim(),
     "请先对已完成内容进行小结（注意是小结，不是总结）。",
-    "建议使用 summary_patch_v1（与计划 patch 协议独立）。",
-    "语法：",
-    "ADD S[整数] plan=[主计划ID] status=[done|in_progress|risk|todo] [小结内容]",
-    "UPDATE S[整数] status=[done|in_progress|risk|todo] [小结内容]",
-    "DELETE S[整数]",
-    "若无法按协议输出，返回非空文本也可。小结后请继续任务，输出已完成项及问题说明。",
+    buildSummaryPatchProtocolCoreText(locale),
   ].filter(Boolean).join("\n");
 }
 
@@ -287,6 +297,113 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
   ].filter(Boolean).join("\n");
 }
 
+export function buildPhaseAcceptanceRequestPromptText(options = {}) {
+  const { locale, marker, data } = normalizePromptOptions(options);
+  const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? {};
+  const payloadText = JSON.stringify(payload || {}, null, 2);
+  if (locale === LOCALE.EN_US) {
+    return [
+      String(marker || "").trim(),
+      "Goal: Perform phase acceptance for the current stage only, based on the preceding context and the system-provided revised plan checklist.",
+      buildAcceptancePatchProtocolText({ locale, mode: "phase" }),
+      "This is not final acceptance. Do not conclude the whole task is complete unless the context proves it.",
+      payloadText,
+    ].filter(Boolean).join("\n");
+  }
+  return [
+    String(marker || "").trim(),
+    "目标：基于前面的上下文与 system 提供的计划修正后计划清单，仅进行当前阶段验收。",
+    buildAcceptancePatchProtocolText({ locale, mode: "phase" }),
+    "这不是总体验收；除非上下文能证明全部完成，否则不要判断整个任务已完成。",
+    payloadText,
+  ].filter(Boolean).join("\n");
+}
+
+export function buildAllPhaseAcceptanceReportsPromptText(options = {}) {
+  const { locale, marker, data } = normalizePromptOptions(options);
+  const reports = Array.isArray(data.phaseAcceptanceReports)
+    ? data.phaseAcceptanceReports
+    : Array.isArray(options?.phaseAcceptanceReports)
+      ? options.phaseAcceptanceReports
+      : [];
+  const parts = buildAllPhaseAcceptanceReportSystemContents({ locale, marker, data: { phaseAcceptanceReports: reports } });
+  return parts.join("\n\n").trim();
+}
+
+export function buildAllPhaseAcceptanceReportSystemContents(options = {}) {
+  const { locale, marker, data } = normalizePromptOptions(options);
+  const reports = Array.isArray(data.phaseAcceptanceReports)
+    ? data.phaseAcceptanceReports
+    : Array.isArray(options?.phaseAcceptanceReports)
+      ? options.phaseAcceptanceReports
+      : [];
+  if (!reports.length) return [];
+  return reports.map((item = {}, index) => {
+    const acceptedAt = String(item?.acceptedAt || item?.timestamp || "").trim();
+    const content = String(item?.content || item?.text || "").trim();
+    const total = reports.length;
+    if (locale === LOCALE.EN_US) {
+      return [
+        String(marker || "").trim(),
+        `Phase acceptance checklist #${index + 1}/${total} (must be considered during final acceptance):`,
+        `#${index + 1}${acceptedAt ? ` @ ${acceptedAt}` : ""}`,
+        content || "(empty)",
+      ].filter(Boolean).join("\n");
+    }
+    return [
+      String(marker || "").trim(),
+      `阶段验收清单 #${index + 1}/${total}（总体验收时必须参考）：`,
+      `#${index + 1}${acceptedAt ? ` @ ${acceptedAt}` : ""}`,
+      content || "（空）",
+    ].filter(Boolean).join("\n");
+  });
+}
+
+export function buildAllSummaryReportSystemContents(options = {}) {
+  const { locale, marker, data } = normalizePromptOptions(options);
+  const summaryText = String(data.summaryText ?? options?.summaryText ?? "").trim();
+  if (!summaryText) return [];
+  const items = parseSummaryItemsFromText(summaryText);
+  if (!items.length) {
+    if (locale === LOCALE.EN_US) {
+      return [
+        [
+          String(marker || "").trim(),
+          "Summary checklist #1/1 (must be considered during phase acceptance):",
+          "#1",
+          summaryText,
+        ].filter(Boolean).join("\n"),
+      ];
+    }
+    return [
+      [
+        String(marker || "").trim(),
+        "小结清单 #1/1（阶段验收时必须参考）：",
+        "#1",
+        summaryText,
+      ].filter(Boolean).join("\n"),
+    ];
+  }
+  return items.map((item = {}, index) => {
+    const content = `${Number(item?.id)}. ${String(item?.content || "").trim()}`.trim();
+    const total = items.length;
+    if (locale === LOCALE.EN_US) {
+      return [
+        String(marker || "").trim(),
+        `Summary checklist #${index + 1}/${total} (must be considered during phase acceptance):`,
+        `#${index + 1}`,
+        content,
+      ].filter(Boolean).join("\n");
+    }
+    return [
+      String(marker || "").trim(),
+      `小结清单 #${index + 1}/${total}（阶段验收时必须参考）：`,
+      `#${index + 1}`,
+      content,
+    ].filter(Boolean).join("\n");
+  });
+}
+
 export function buildAcceptanceValidationRequestPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? null;
@@ -295,26 +412,14 @@ export function buildAcceptanceValidationRequestPromptText(options = {}) {
     return [
       String(marker || "").trim(),
       "Goal: Validate acceptance from the system-provided complete main plan context and final output.",
-      "Prefer protocol: acceptance_patch_v1 (independent from plan/summary patch protocols).",
-      "Syntax:",
-      "ADD A[integer] plan=[main_plan_id] status=[pass|warn|fail] [acceptance conclusion]",
-      "UPDATE A[integer] status=[pass|warn|fail] [acceptance conclusion]",
-      "DELETE A[integer]",
-      "Optional fields in line text: evidence=[short evidence], risk=[low|medium|high].",
-      "Weak rule: non-empty output is required; if protocol cannot be followed, return non-empty plain text.",
+      buildAcceptancePatchProtocolText({ locale, mode: "final" }),
       payloadText,
     ].filter(Boolean).join("\n");
   }
   return [
     String(marker || "").trim(),
     "目标：基于 system 提供的完整主计划上下文与最终输出进行验收。",
-    "建议协议：acceptance_patch_v1（与计划/小结 patch 协议独立）。",
-    "语法：",
-    "ADD A[整数] plan=[主计划ID] status=[pass|warn|fail] [验收结论]",
-    "UPDATE A[整数] status=[pass|warn|fail] [验收结论]",
-    "DELETE A[整数]",
-    "可选字段（写在行文本中）：evidence=[简短证据]、risk=[low|medium|high]。",
-    "弱校验规则：仅要求输出非空；若无法严格按协议，返回非空纯文本也可。",
+    buildAcceptancePatchProtocolText({ locale, mode: "final" }),
     payloadText,
   ].filter(Boolean).join("\n");
 }

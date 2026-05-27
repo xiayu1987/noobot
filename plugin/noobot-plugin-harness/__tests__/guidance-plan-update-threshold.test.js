@@ -13,6 +13,8 @@ import {
   LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
   LLM_SUMMARY_THRESHOLD,
   MAX_PLAN_UPDATE_ATTEMPTS,
+  PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+  PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
 } from "../src/core/thresholds.js";
 
 function createAgentContext({
@@ -119,6 +121,37 @@ test("separate_model mode: when summary and revision are both pending, summary i
   );
 });
 
+test("separate_model mode: pending revision runs by separate model without prompt injection", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const agentContext = createAgentContext({
+    pending: {
+      planUpdate: true,
+      planUpdateStage: "revision",
+      planUpdateContext: { summaryText: "", targetMainStepIndexes: [] },
+    },
+  });
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        if (payload.purpose === "planning_revision") return { content: "" };
+        return { content: "" };
+      },
+    },
+  };
+
+  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  assert.equal(invocations.some((item = {}) => item.purpose === "planning_revision"), true);
+  assert.equal(
+    ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    false,
+  );
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+});
+
 test("revision and refinement share the same MAX_PLAN_UPDATE_ATTEMPTS budget", () => {
   const state = {
     counters: {
@@ -154,6 +187,36 @@ test("planning summary threshold by chars is independent from plan update attemp
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.summary, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
+});
+
+test("phase acceptance is deferred (not lost) when same-turn plan update has higher priority", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({
+    counters: {
+      llmTurns: 0,
+      planUpdateTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
+      phaseAcceptanceTurns: PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
+    },
+  });
+  agentContext.payload.harness.state.flags = {
+    ...agentContext.payload.harness.state.flags,
+    planningCaptured: true,
+  };
+
+  const firstCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  await planningHandler({ capability: "planning", point: "before_llm_call", ctx: firstCtx, meta: {} });
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(agentContext.payload.harness.state.pending.phaseAcceptance, false);
+  assert.equal(
+    agentContext.payload.harness.state.counters.phaseAcceptanceTurns,
+    PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
+  );
+
+  agentContext.payload.harness.state.pending.planUpdate = false;
+  const secondCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+  await planningHandler({ capability: "planning", point: "before_llm_call", ctx: secondCtx, meta: {} });
+  assert.equal(agentContext.payload.harness.state.pending.phaseAcceptance, true);
+  assert.equal(agentContext.payload.harness.state.counters.phaseAcceptanceTurns, 0);
 });
 
 test("separate_model summary -> revision -> refinement consumes two shared plan update attempts", async () => {

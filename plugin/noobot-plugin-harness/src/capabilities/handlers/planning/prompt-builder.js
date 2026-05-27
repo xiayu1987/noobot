@@ -15,6 +15,7 @@ import {
 } from "./deps.js";
 import {
   buildPlanningMainPrompt,
+  getPlanningContextSummaryHeader,
   getPlanningPromptMarker,
   getPlanningPromptToolsHeader,
   getPlanningToolContextMarker,
@@ -64,12 +65,34 @@ function isHarnessRelayMessage(text = "") {
   return raw.startsWith("[来自harness外部模型输出/") || raw.startsWith("[Relay from harness external model/");
 }
 
-function resolveLatestUserTextFromMessages(messageList = []) {
+function resolveCompatibleRole(message = {}) {
+  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  if (role === "human") return "user";
+  if (role === "ai") return "assistant";
+  if (role) return role;
+  const type = String(message?.type || message?.lc_kwargs?.type || "").trim().toLowerCase();
+  if (type === "human") return "user";
+  if (type === "ai") return "assistant";
+  if (type) return type;
+  return "";
+}
+
+function isFrontendUserMessage(item = {}) {
+  return (
+    item?.frontendUserMessage === true ||
+    item?.lc_kwargs?.frontendUserMessage === true ||
+    item?.additional_kwargs?.frontendUserMessage === true ||
+    item?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+  );
+}
+
+function resolveLatestUserTextFromMessages(messageList = [], { preferFrontend = false } = {}) {
   for (let index = messageList.length - 1; index >= 0; index -= 1) {
     const item = messageList[index] || {};
     if (isHarnessInjectedMessage(item)) continue;
-    const role = String(item?.role || "").trim().toLowerCase();
+    const role = resolveCompatibleRole(item);
     if (role !== "user") continue;
+    if (preferFrontend && !isFrontendUserMessage(item)) continue;
     const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
     if (isHarnessRelayMessage(text)) continue;
     if (text) return text;
@@ -93,6 +116,24 @@ export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, 
   ].join("\n");
 }
 
+export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
+  const latestUserGoal = resolveLatestUserMessageText(ctx) ||
+    (locale === LOCALE.EN_US ? "N/A" : "（未获取到用户目标）");
+  const contextSummary = {
+    locale,
+    turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
+    latestUserGoal: String(latestUserGoal || "").trim(),
+    sceneTools: resolveSceneToolNames(ctx),
+    toolAllowlist: resolvePlanningToolAllowlist(meta),
+  };
+  return [
+    getPlanningContextSummaryHeader(locale),
+    "```json",
+    JSON.stringify(contextSummary, null, 2),
+    "```",
+  ].join("\n");
+}
+
 export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}) {
   const userGoal = resolveLatestUserMessageText(_ctx) || (locale === LOCALE.EN_US ? "N/A" : "（未获取到用户目标）");
   return buildPlanningMainPrompt({
@@ -104,11 +145,15 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
 
 export function resolveLatestUserMessageText(ctx = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : [];
+  const latestFrontendFromMessages = resolveLatestUserTextFromMessages(messages, { preferFrontend: true });
+  if (latestFrontendFromMessages) return latestFrontendFromMessages;
   const latestFromMessages = resolveLatestUserTextFromMessages(messages);
   if (latestFromMessages) return latestFromMessages;
   const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
     ? ctx.agentContext.payload.messages.history
     : [];
+  const latestFrontendFromHistory = resolveLatestUserTextFromMessages(history, { preferFrontend: true });
+  if (latestFrontendFromHistory) return latestFrontendFromHistory;
   const latestFromHistory = resolveLatestUserTextFromMessages(history);
   if (latestFromHistory) return latestFromHistory;
   const fallbackCandidates = [
@@ -134,6 +179,12 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
   if (state.flags.planningPromptInjected === true) return false;
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
+  injectMessageWithPolicy(ctx, {
+    role: "system",
+    content: buildPlanningContextSummaryPrompt(locale, ctx, meta),
+    injectAt: "append",
+    avoidBreakToolCallContinuity: true,
+  });
   injectMessageWithPolicy(ctx, {
     role: "system",
     content: buildPlanningToolContextPrompt(locale, ctx, meta),

@@ -444,11 +444,14 @@ test("harness acceptance semantic validation uses separate model when enabled", 
     agentContext,
   });
 
-  assert.equal(invocations.length, 1);
-  assert.equal(invocations[0].purpose, "acceptance_semantic_validation");
-  assert.equal(invocations[0].promptVersion, "v1");
-  assert.equal(invocations[0].envelopeType, "structured_v1");
-  assertFlatCapabilityMessages(invocations[0].messages);
+  assert.equal(invocations.length, 2);
+  assert.equal(invocations[0].purpose, "phase_acceptance_before_final");
+  assert.equal(invocations[1].purpose, "acceptance_semantic_validation");
+  assert.equal(invocations[1].promptVersion, "v1");
+  assert.equal(invocations[1].envelopeType, "structured_v1");
+  assertFlatCapabilityMessages(invocations[1].messages);
+  assert.equal(Array.isArray(agentContext.payload.harness.phaseAcceptanceReports), true);
+  assert.equal(agentContext.payload.harness.phaseAcceptanceReports.length, 1);
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
   assert.match(String(result.output), /"semanticValidation"/);
@@ -517,6 +520,200 @@ test("acceptance semantic validation relays via unified ctx.messages protocol", 
     ),
     true,
   );
+});
+
+test("phase acceptance injects context, revised plan checklist, then phase request", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const ctx = {
+    messages: [{ role: "user", content: "阶段上下文：已完成核心实现" }],
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        harness: {
+          planText: "1. 核心实现\n2. 验证交付",
+          state: {
+            flags: { planningCaptured: true },
+            counters: {},
+            signals: {},
+            pending: { phaseAcceptance: true },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  const before = await handler({
+    capability: "acceptance",
+    point: "before_llm_call",
+    ctx,
+    meta: { harness: { planningGuidanceMode: "inject" } },
+  });
+
+  assert.equal(before.changed, true);
+  assert.equal(ctx.messages.at(-2).role, "system");
+  assert.match(String(ctx.messages.at(-2).content), /计划清单上下文|Plan checklist context/);
+  assert.match(String(ctx.messages.at(-2).content), /核心实现/);
+  assert.equal(ctx.messages.at(-1).role, "user");
+  assert.match(String(ctx.messages.at(-1).content), /harness-phase-acceptance-request/);
+  assert.match(String(ctx.messages.at(-1).content), /acceptance_patch_v1/);
+  assert.match(String(ctx.messages.at(-1).content), /ADD A\[验收ID\] plan=\[计划ID\] status=\[pass\|warn\|fail\]/);
+  assert.match(String(ctx.messages.at(-1).content), /evidence=\[简短证据\]/);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.phaseAcceptance, false);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.phaseAcceptanceCapturePending, true);
+
+  const after = await handler({
+    capability: "acceptance",
+    point: "after_llm_call",
+    ctx: { ...ctx, ai: { content: "阶段验收：pass" } },
+    meta: { harness: { planningGuidanceMode: "inject" } },
+  });
+  assert.equal(after.changed, true);
+  assert.equal(ctx.agentContext.payload.harness.phaseAcceptanceReports.length, 1);
+  assert.match(ctx.agentContext.payload.harness.phaseAcceptanceReports[0].content, /pass/);
+});
+
+test("phase acceptance separate model receives context, summaries, revised plan, phase checklists, then phase request", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const ctx = {
+    messages: [{ role: "user", content: "阶段上下文：继续审查" }],
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        harness: {
+          planText: "1. 核心实现\n1.1 子任务A\n2. 验证交付",
+          summaryText: "1. 已完成基础结构审查\n2. 正在补齐验收流程",
+          phaseAcceptanceReports: [
+            { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：warn" },
+          ],
+          state: {
+            flags: { planningCaptured: true },
+            counters: {},
+            signals: {},
+            pending: { phaseAcceptance: true },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  await handler({
+    capability: "acceptance",
+    point: "before_llm_call",
+    ctx,
+    meta: {
+      harness: {
+        planningGuidanceMode: "separate_model",
+        capabilityModelInvoker: async (payload) => {
+          invocations.push(payload);
+          return { content: "ADD A1 plan=1.1 status=pass risk=low evidence=[ok] [阶段通过]" };
+        },
+      },
+    },
+  });
+
+  assert.equal(invocations.length, 1);
+  const messages = invocations[0].messages;
+  assert.equal(Array.isArray(messages), true);
+  const summaryIndexes = messages
+    .map((item = {}, index) =>
+      String(item.content || "").includes("harness-summary-reports") ? index : -1)
+    .filter((index) => index >= 0);
+  const planIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-acceptance-main-plan"));
+  const phaseIndexes = messages
+    .map((item = {}, index) =>
+      String(item.content || "").includes("harness-phase-acceptance-reports") ? index : -1)
+    .filter((index) => index >= 0);
+  const requestIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-phase-acceptance-request"));
+  assert.equal(summaryIndexes.length, 2);
+  assert.equal(messages[summaryIndexes[0]].role, "system");
+  assert.equal(messages[summaryIndexes[1]].role, "system");
+  assert.equal(messages[planIndex].role, "system");
+  assert.equal(messages[phaseIndexes[0]].role, "system");
+  assert.equal(messages[requestIndex].role, "user");
+  assert.equal(
+    summaryIndexes[0] > 0 &&
+      summaryIndexes[1] > summaryIndexes[0] &&
+      planIndex > summaryIndexes[1] &&
+      phaseIndexes[0] > planIndex &&
+      requestIndex > phaseIndexes[0],
+    true,
+  );
+});
+
+test("final acceptance separate model receives revised plan, all phase checklists, then final request", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const ctx = {
+    messages: [{ role: "assistant", content: "最终输出：done" }],
+    result: { output: "最终输出：done" },
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        harness: {
+          planText: "1. 核心实现\n2. 验证交付",
+          phaseAcceptanceReports: [
+            { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：pass" },
+            { acceptedAt: "2026-05-27T00:10:00.000Z", content: "阶段验收清单二：warn" },
+          ],
+          taskChecklist: [{ index: 1, task: "核心实现" }],
+          state: {
+            flags: { planningCaptured: true, acceptanceRequested: false },
+            counters: {},
+            signals: { successfulToolCount: 1 },
+            pending: {},
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  await handler({
+    capability: "acceptance",
+    point: "before_final_output",
+    ctx,
+    meta: {
+      harness: {
+        planningGuidanceMode: "separate_model",
+        acceptance: { semanticValidation: true },
+        capabilityModelInvoker: async (payload) => {
+          invocations.push(payload);
+          return { content: "ADD A1 plan=1 status=pass 总体验收通过" };
+        },
+      },
+    },
+  });
+
+  assert.equal(invocations.length, 1);
+  const messages = invocations[0].messages;
+  assert.equal(Array.isArray(messages), true);
+  assert.equal(messages.length, 4);
+  const planIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-acceptance-main-plan"));
+  const phaseIndexes = messages
+    .map((item = {}, index) =>
+      String(item.content || "").includes("harness-phase-acceptance-reports") ? index : -1)
+    .filter((index) => index >= 0);
+  const requestIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-acceptance-semantic-validation"));
+  assert.equal(messages[planIndex].role, "system");
+  assert.equal(phaseIndexes.length, 2);
+  assert.equal(messages[phaseIndexes[0]].role, "system");
+  assert.equal(messages[phaseIndexes[1]].role, "system");
+  assert.equal(messages[requestIndex].role, "user");
+  assert.equal(
+    planIndex > -1 &&
+      phaseIndexes[0] > planIndex &&
+      phaseIndexes[1] > phaseIndexes[0] &&
+      requestIndex > phaseIndexes[1],
+    true,
+  );
+  assert.match(String(messages[phaseIndexes[0]].content), /阶段验收清单一/);
+  assert.match(String(messages[phaseIndexes[1]].content), /阶段验收清单二/);
+  assert.match(String(messages[requestIndex].content), /acceptance_patch_v1/);
+  assert.match(String(messages[requestIndex].content), /ADD A\[验收ID\] plan=\[计划ID\] status=\[pass\|warn\|fail\]/);
+  assert.match(String(messages[requestIndex].content), /risk=\[low\|medium\|high\]/);
 });
 
 test("harness active request_task_acceptance semantic validation receives agent ctx via tool config", async () => {

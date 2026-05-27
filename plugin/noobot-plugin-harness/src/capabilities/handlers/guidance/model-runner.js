@@ -28,14 +28,34 @@ import {
   buildNextPhaseRelayContent,
   buildPlanningRevisionPrompt,
 } from "./revision-engine.js";
-import { canAttemptPlanUpdate } from "./plan-update-engine.js";
+import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
 import { schedulePlanUpdateByInject } from "./revision-injector.js";
 import { buildGuidancePromptContent } from "./prompt-injector.js";
+import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages } from "./signal-tracker.js";
 import { applySummaryText } from "./summary-manager.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
-import { buildGuidanceSummaryPromptText } from "../shared/workflow-prompts.js";
+import {
+  buildGuidanceSummaryPromptText,
+} from "../shared/workflow-prompts.js";
 import { buildPlanChecklistContextMessages } from "../shared/plan-checklist-context.js";
+
+export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { state } = holder;
+  const invoker = resolveCapabilityModelInvoker(meta);
+  if (!invoker) return false;
+  const pendingData = resolvePendingPlanUpdate(state);
+  if (!pendingData?.active) return false;
+
+  // Consume pending revision/refinement once dispatched to avoid repeated replay.
+  setPendingStateWithMeta(state, "planUpdate", false);
+  setPendingPlanUpdate(state, { active: false });
+
+  const summaryText = String(pendingData.summaryText || "").trim();
+  return runPlanUpdateAfterSummary(ctx, meta, summaryText);
+}
 
 export async function runPlanUpdateAfterSummary(
   ctx = {},

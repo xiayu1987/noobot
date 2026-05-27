@@ -10,6 +10,7 @@ import {
   LLM_SUMMARY_OVERFLOW_POLICY,
   LLM_SUMMARY_THRESHOLD,
   PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+  PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
 } from "../../../core/thresholds.js";
 import {
   CAPABILITY_DOMAIN,
@@ -148,11 +149,15 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       if (holder) {
         holder.state.counters.llmTurns += 1;
         holder.state.counters.planUpdateTurns = Number(holder.state.counters.planUpdateTurns || 0) + 1;
+        holder.state.counters.phaseAcceptanceTurns =
+          Number(holder.state.counters.phaseAcceptanceTurns || 0) + 1;
         let currentChars = resolveUnsummarizedMessageChars(ctx?.messages);
         const reachedTurnsSummary = holder.state.counters.llmTurns > LLM_SUMMARY_THRESHOLD;
         let reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
         const reachedPlanUpdateTurns =
           holder.state.counters.planUpdateTurns >= PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD;
+        const reachedPhaseAcceptanceTurns =
+          holder.state.counters.phaseAcceptanceTurns >= PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD;
 
         const pruneEnabled = LLM_SUMMARY_OVERFLOW_POLICY.ENABLE_PRUNE_AFTER_SUMMARY === true;
         const pruneTriggerRounds = Number(
@@ -210,6 +215,38 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
                 summaryPending: holder.state.pending?.summary === true,
               },
             });
+          }
+        }
+
+        if (reachedPhaseAcceptanceTurns) {
+          let phaseAcceptanceScheduled = false;
+          if (
+            holder.state.flags.planningCaptured === true &&
+            holder.state.pending?.phaseAcceptance !== true &&
+            holder.state.pending?.summary !== true &&
+            !holder.state.pending?.guidance &&
+            holder.state.pending?.planUpdate !== true
+          ) {
+            setPendingStateWithMeta(holder.state, "phaseAcceptance", true);
+            phaseAcceptanceScheduled = true;
+            appendCapabilityLog(ctx, {
+              domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+              event: "phase_acceptance_scheduled_by_turn_threshold",
+              detail: {
+                triggerTurns: PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
+                summaryPending: holder.state.pending?.summary === true,
+                guidancePending: Boolean(holder.state.pending?.guidance),
+                planUpdatePending: holder.state.pending?.planUpdate === true,
+              },
+            });
+          }
+          if (phaseAcceptanceScheduled) {
+            holder.state.counters.phaseAcceptanceTurns = 0;
+          } else {
+            // Keep threshold pressure when blocked by higher-priority flows
+            // (summary/guidance/plan-update), so phase acceptance can be
+            // scheduled immediately after they are cleared.
+            holder.state.counters.phaseAcceptanceTurns = PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD;
           }
         }
       }

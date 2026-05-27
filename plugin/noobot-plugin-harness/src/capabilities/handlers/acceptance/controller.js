@@ -13,11 +13,26 @@ import {
   ensureHarnessBucket,
 } from "./deps.js";
 import {
+  ensurePhaseAcceptanceBeforeFinalAcceptance,
   maybeCaptureAcceptanceSemanticValidationByInject,
   maybeInjectAcceptanceSemanticValidationPrompt,
+  maybeCapturePhaseAcceptanceByInject,
+  maybeInjectPhaseAcceptancePrompt,
+  runPhaseAcceptanceBySeparateModel,
 } from "./validation-runner.js";
 import { maybeAttachChecklistArtifactsAtFinalOutput, maybeForceAcceptanceAtFinalOutput } from "./output-finalizer.js";
 import { ensureTaskAcceptanceTool } from "./tool-injector.js";
+import { shouldUseSeparateModel } from "../shared/model-utils.js";
+
+function hasHigherPriorityPendingForPhaseAcceptance(state = {}) {
+  const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
+  return (
+    pending.summary === true ||
+    Boolean(pending.guidance) ||
+    pending.planUpdate === true ||
+    state?.flags?.planningCaptured !== true
+  );
+}
 
 async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
   let changed = false;
@@ -62,6 +77,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
     }
   }
   if (point === "before_final_output") {
+    changed = (await ensurePhaseAcceptanceBeforeFinalAcceptance(ctx, meta)) || changed;
     changed = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || changed;
     changed = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || changed;
     if (holder?.state?.flags?.overflowForceAcceptancePending === true) {
@@ -70,10 +86,18 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
     }
   }
   if (point === "before_llm_call") {
+    if (holder?.state?.pending?.phaseAcceptance === true && !hasHigherPriorityPendingForPhaseAcceptance(holder.state)) {
+      if (shouldUseSeparateModel(meta)) {
+        changed = (await runPhaseAcceptanceBySeparateModel(ctx, meta)) || changed;
+      } else {
+        changed = maybeInjectPhaseAcceptancePrompt(ctx) || changed;
+      }
+    }
     changed = maybeInjectAcceptanceSemanticValidationPrompt(ctx) || changed;
   }
   if (point === "after_llm_call") {
-    changed = maybeCaptureAcceptanceSemanticValidationByInject(ctx) || changed;
+    changed = (await maybeCapturePhaseAcceptanceByInject(ctx)) || changed;
+    changed = (await maybeCaptureAcceptanceSemanticValidationByInject(ctx)) || changed;
   }
   return changed;
 }

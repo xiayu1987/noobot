@@ -69,6 +69,14 @@ function normalizeMessageForHarness(messageItem = {}) {
     messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "",
   ).trim();
   if (injectedBy) normalized.injectedBy = injectedBy;
+  if (
+    messageItem?.frontendUserMessage === true ||
+    messageItem?.lc_kwargs?.frontendUserMessage === true ||
+    messageItem?.additional_kwargs?.frontendUserMessage === true ||
+    messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+  ) {
+    normalized.frontendUserMessage = true;
+  }
   return normalized;
 }
 
@@ -560,10 +568,7 @@ export class SessionExecutionEngine {
       effectiveConfig?.session && typeof effectiveConfig.session === "object"
         ? effectiveConfig.session
         : {};
-    const recentMessageLimit = Number(sessionConfig?.recentMessageLimit || 20);
-    const normalizedLimit = Number.isFinite(recentMessageLimit)
-      ? Math.floor(recentMessageLimit)
-      : 20;
+    const recentLimit = Number(sessionConfig.recentMessageLimit || 20);
     return ({ messages = [], ctx = {} } = {}) => {
       const explicitMessages = Array.isArray(messages) ? messages : [];
       const source = explicitMessages.length
@@ -578,24 +583,10 @@ export class SessionExecutionEngine {
       return resolveModelContextMessages({
         sourceMessages: source,
         currentDialogProcessId,
-        mode: "harness",
-        recentLimit: normalizedLimit,
+        mode: "agent",
+        useRecentWindow: true,
+        recentLimit,
         normalizeMessage: (item) => normalizeMessageForHarness(item),
-        shouldKeepMessage: (item) => {
-          const role = String(item?.role || "").trim().toLowerCase();
-          const isInjectedMessage =
-            item?.injectedMessage === true || String(item?.injectedBy || "").trim();
-          if (role === "user") {
-            if (isInjectedMessage) return String(item?.content || "").trim();
-            return true;
-          }
-          return (
-            String(item?.content || "").trim() ||
-            (role === "assistant" &&
-              Array.isArray(item?.tool_calls) &&
-              item.tool_calls.length)
-          );
-        },
       });
     };
   }

@@ -12,10 +12,12 @@ const TRACKED_PENDING_KEYS = Object.freeze([
   "guidance",
   "summary",
   "planUpdate",
+  "phaseAcceptance",
   "acceptanceSemanticValidation",
 ]);
 const TRACKED_CAPTURE_FLAG_KEYS = Object.freeze([
   "planUpdateCapturePending",
+  "phaseAcceptanceCapturePending",
   "acceptanceSemanticValidationCapturePending",
 ]);
 const HOOK_TURN_TICK_POINTS = new Set([
@@ -52,7 +54,7 @@ function resolveCurrentHookTurn(state = {}) {
 }
 
 function isPendingKeyActive(key = "", value = null) {
-  if (key === "summary" || key === "planUpdate") return value === true;
+  if (key === "summary" || key === "planUpdate" || key === "phaseAcceptance") return value === true;
   if (key === "guidance" || key === "acceptanceSemanticValidation") return value !== null && value !== undefined;
   return Boolean(value);
 }
@@ -134,7 +136,7 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
     setPendingStateWithMeta(
       state,
       key,
-      key === "summary" || key === "planUpdate" ? false : null,
+      key === "summary" || key === "planUpdate" || key === "phaseAcceptance" ? false : null,
     );
     clearedCount += 1;
     clearedPendingKeys.push(key);

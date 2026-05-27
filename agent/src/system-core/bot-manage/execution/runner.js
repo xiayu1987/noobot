@@ -247,6 +247,7 @@ export class SessionExecutionRunner {
         role: MESSAGE_ROLE.USER,
         content: normalizedMessage,
         type: MESSAGE_TYPE.MESSAGE,
+        frontendUserMessage: true,
         attachmentMetas: userMessageAttachmentMetas,
         dialogProcessId,
         parentDialogProcessId,

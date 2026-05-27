@@ -43,6 +43,7 @@ export class SessionMessageService {
     parentSessionId = "",
     injectedMessage = false,
     injectedBy = "",
+    frontendUserMessage = false,
   }) {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
@@ -88,6 +89,7 @@ export class SessionMessageService {
       modelResponseMetadata,
       injectedMessage: injectedMessage === true,
       injectedBy: String(injectedBy || "").trim(),
+      frontendUserMessage: frontendUserMessage === true,
       ts: this.now(),
     }, this.now);
 

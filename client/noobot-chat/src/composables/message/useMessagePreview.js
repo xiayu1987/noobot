@@ -464,6 +464,24 @@ export function useMessagePreview({
     });
   }
 
+  async function onCopyMessageMarkdownRich({
+    textContent = "",
+    renderedPreviewHtml = "",
+  } = {}) {
+    await copyMarkdownFromText({
+      textContent,
+      renderedPreviewHtml,
+      rich: true,
+    });
+  }
+
+  async function onCopyMessageMarkdownText(textContent = "") {
+    await copyMarkdownFromText({
+      textContent,
+      rich: false,
+    });
+  }
+
   onBeforeUnmount(() => {
     cleanupPreviewImageUrl();
     resetAttachmentPreviewState();
@@ -498,5 +516,7 @@ export function useMessagePreview({
     onCopyMarkdownText,
     onCopyAttachmentMarkdownRich,
     onCopyAttachmentMarkdownText,
+    onCopyMessageMarkdownRich,
+    onCopyMessageMarkdownText,
   };
 }

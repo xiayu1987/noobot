@@ -29,10 +29,16 @@ import {
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { buildSemanticValidationPromptPayload } from "./report-builder.js";
 import {
+  buildAllPhaseAcceptanceReportSystemContents,
+  buildAllSummaryReportSystemContents,
   buildAcceptanceMainPlanContextPromptText,
   buildAcceptanceValidationRequestPromptText,
+  buildPhaseAcceptanceRequestPromptText,
+  getAllPhaseAcceptanceReportsMarker,
+  getAllSummaryReportsMarker,
   getAcceptanceMainPlanContextMarker,
   getAcceptanceSemanticValidationMarker,
+  getPhaseAcceptanceRequestMarker,
 } from "../shared/workflow-prompts.js";
 import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
 
@@ -110,6 +116,397 @@ function resolveAcceptanceValidationRequestPayload(promptPayload = {}) {
   };
 }
 
+function buildFinalAcceptanceSemanticValidationMessages({
+  locale = LOCALE.ZH_CN,
+  planContextContent = "",
+  phaseReportsContents = [],
+  requestContent = "",
+} = {}) {
+  const messages = [];
+  if (String(planContextContent || "").trim()) {
+    messages.push({ role: "system", content: String(planContextContent || "").trim() });
+  }
+  for (const item of Array.isArray(phaseReportsContents) ? phaseReportsContents : []) {
+    const content = String(item || "").trim();
+    if (!content) continue;
+    messages.push({ role: "system", content });
+  }
+  if (String(requestContent || "").trim()) {
+    messages.push({ role: "user", content: String(requestContent || "").trim() });
+  }
+  void locale;
+  return messages;
+}
+
+function buildPhaseAcceptanceRequestPayload({ bucket = {}, state = {} } = {}) {
+  return {
+    acceptanceType: "phase",
+    phaseIndex: Array.isArray(bucket?.phaseAcceptanceReports)
+      ? bucket.phaseAcceptanceReports.length + 1
+      : 1,
+    summaryText: String(bucket?.summaryText || "").trim(),
+    toolSignals: state?.signals || {},
+  };
+}
+
+function appendPhaseAcceptanceReport(bucket = {}, content = "", { planText = "" } = {}) {
+  if (!bucket || typeof bucket !== "object") return null;
+  if (!Array.isArray(bucket.phaseAcceptanceReports)) bucket.phaseAcceptanceReports = [];
+  const report = {
+    type: "phase",
+    acceptedAt: new Date().toISOString(),
+    planText: String(planText || bucket?.planText || "").trim(),
+    content: String(content || "").trim(),
+  };
+  bucket.phaseAcceptanceReports.push(report);
+  if (bucket.phaseAcceptanceReports.length > 50) {
+    bucket.phaseAcceptanceReports.splice(0, bucket.phaseAcceptanceReports.length - 50);
+  }
+  bucket.lastPhaseAcceptanceReport = report;
+  return report;
+}
+
+function buildFinalOutputFallbackPhaseAcceptanceText(locale = LOCALE.ZH_CN, bucket = {}, state = {}) {
+  const checklistCount = Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist.length : 0;
+  const signalCount = Number(state?.signals?.successfulToolCount || 0);
+  if (locale === LOCALE.EN_US) {
+    return `Phase acceptance before final acceptance: checklistCount=${checklistCount}, successfulToolCount=${signalCount}.`;
+  }
+  return `总体验收前阶段验收：checklistCount=${checklistCount}，successfulToolCount=${signalCount}。`;
+}
+
+function pushRoleMessage(messages = [], role = "system", content = "") {
+  const normalizedContent = String(content || "").trim();
+  if (!Array.isArray(messages) || !normalizedContent) return false;
+  messages.push({ role: String(role || "system").trim() || "system", content: normalizedContent });
+  return true;
+}
+
+function buildAcceptancePromptParts({
+  bucket = {},
+  state = {},
+  locale = LOCALE.ZH_CN,
+  requestPayload = {},
+  phase = false,
+} = {}) {
+  const mainPlanContext = resolveAcceptanceMainPlanContext(
+    {
+      planText: String(bucket?.planText || "").trim(),
+      finalPlanChecklist: Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist : [],
+    },
+    bucket,
+    locale,
+  );
+  const planContextContent = buildAcceptanceMainPlanContextPromptText({
+    locale,
+    marker: getAcceptanceMainPlanContextMarker(locale),
+    data: { mainPlanContext },
+  });
+  const phaseReportsContents = buildAllPhaseAcceptanceReportSystemContents({
+    locale,
+    marker: getAllPhaseAcceptanceReportsMarker(locale),
+    data: { phaseAcceptanceReports: bucket?.phaseAcceptanceReports || [] },
+  });
+  const summaryReportsContents = buildAllSummaryReportSystemContents({
+    locale,
+    marker: getAllSummaryReportsMarker(locale),
+    data: { summaryText: String(bucket?.summaryText || "").trim() },
+  });
+  const requestContent = phase
+    ? buildPhaseAcceptanceRequestPromptText({
+        locale,
+        marker: getPhaseAcceptanceRequestMarker(locale),
+        data: { requestPayload },
+      })
+    : buildAcceptanceValidationRequestPromptText({
+        locale,
+        marker: getAcceptanceSemanticValidationMarker(locale),
+        data: { requestPayload },
+      });
+  void state;
+  return { planContextContent, summaryReportsContents, phaseReportsContents, requestContent };
+}
+
+function buildPhaseAcceptanceMessages({
+  agentMessages = [],
+  summaryReportsContents = [],
+  planContextContent = "",
+  phaseReportsContents = [],
+  requestContent = "",
+} = {}) {
+  const messages = [];
+  for (const item of Array.isArray(agentMessages) ? agentMessages : []) {
+    if (item && typeof item === "object") messages.push(item);
+  }
+  for (const item of Array.isArray(summaryReportsContents) ? summaryReportsContents : []) {
+    const content = String(item || "").trim();
+    if (!content) continue;
+    messages.push({ role: "system", content });
+  }
+  if (String(planContextContent || "").trim()) {
+    messages.push({ role: "system", content: String(planContextContent || "").trim() });
+  }
+  for (const item of Array.isArray(phaseReportsContents) ? phaseReportsContents : []) {
+    const content = String(item || "").trim();
+    if (!content) continue;
+    messages.push({ role: "system", content });
+  }
+  if (String(requestContent || "").trim()) {
+    messages.push({ role: "user", content: String(requestContent || "").trim() });
+  }
+  return messages;
+}
+
+export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  if (state.pending.phaseAcceptance !== true) return false;
+  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
+  if (!messages) return false;
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
+    bucket,
+    state,
+    locale,
+    phase: true,
+    requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
+  });
+  for (const content of summaryReportsContents) {
+    pushRoleMessage(messages, "system", content);
+  }
+  pushRoleMessage(messages, "system", planContextContent);
+  for (const content of phaseReportsContents) {
+    pushRoleMessage(messages, "system", content);
+  }
+  pushRoleMessage(messages, "user", requestContent);
+  setPendingStateWithMeta(state, "phaseAcceptance", false);
+  setCaptureFlagStateWithMeta(state, "phaseAcceptanceCapturePending", true);
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    event: "phase_acceptance_prompt_injected",
+  });
+  return true;
+}
+
+export function maybeCapturePhaseAcceptanceByInject(ctx = {}) {
+  return captureInjectedResult(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    completedEvent: "phase_acceptance_completed_inject",
+    failedEvent: "phase_acceptance_capture_failed_inject",
+    isCapturePending: ({ state }) => state.flags.phaseAcceptanceCapturePending === true,
+    consumeCaptureMeta: ({ state }) => {
+      setCaptureFlagStateWithMeta(state, "phaseAcceptanceCapturePending", false);
+      return {};
+    },
+    applyCaptureResult: ({ bucket, responseText }) => {
+      const text = String(responseText || "").trim();
+      if (!text) return { applied: false, detail: { reason: "empty_phase_acceptance_output" } };
+      const report = appendPhaseAcceptanceReport(bucket, text);
+      return {
+        applied: Boolean(report),
+        detail: { phaseAcceptanceCount: Array.isArray(bucket.phaseAcceptanceReports) ? bucket.phaseAcceptanceReports.length : 0 },
+      };
+    },
+  });
+}
+
+export async function runPhaseAcceptanceBySeparateModel(ctx = {}, meta = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  if (state.pending.phaseAcceptance !== true) return false;
+  const invoker = resolveCapabilityModelInvoker(meta);
+  if (!invoker) return maybeInjectPhaseAcceptancePrompt(ctx);
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
+    bucket,
+    state,
+    locale,
+    phase: true,
+    requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
+  });
+  const agentMessages = resolveCapabilityModelMessages(meta, {
+    ctx,
+    purpose: "phase_acceptance",
+  });
+  setPendingStateWithMeta(state, "phaseAcceptance", false);
+  let response = null;
+  try {
+    response = await invokeWithReasoningRetry({
+      invoker,
+      invokePayload: {
+        purpose: "phase_acceptance",
+        promptVersion: PROMPT_ENVELOPE.VERSION,
+        envelopeType: PROMPT_ENVELOPE.TYPE,
+        domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+        model: resolveCapabilityModelName(meta, {
+          purpose: "phase_acceptance",
+          domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+        }),
+        locale,
+        prompt: "",
+        messages: buildPhaseAcceptanceMessages({
+          agentMessages: buildCapabilityModelMessages({
+            locale,
+            agentMessages,
+            constraints: [],
+            task: "",
+          }),
+          summaryReportsContents,
+          planContextContent,
+          phaseReportsContents,
+          requestContent,
+        }),
+        ctx,
+        toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance"),
+      },
+      maxReasoningRetries: 1,
+      purpose: "phase_acceptance",
+      domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      appendCapabilityLog,
+      appendModelTrace: async (retryResponse = null) => {
+        await appendCapabilityModelTraceLog(ctx, meta, {
+          domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+          purpose: "phase_acceptance",
+          response: retryResponse,
+        });
+      },
+      ctx,
+      meta,
+    });
+  } catch (error) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      event: "phase_acceptance_failed",
+      detail: { error: String(error?.message || error || "") },
+    });
+    return false;
+  }
+  const responseText =
+    extractRawTextContent(response?.content) ||
+    String(response?.text || response?.output || "").trim();
+  if (!responseText) return false;
+  appendPhaseAcceptanceReport(bucket, responseText);
+  const attachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+    purpose: "phase_acceptance",
+    content: responseText,
+    generationSource: "harness_phase_acceptance",
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+  });
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "phase_acceptance",
+    content: responseText,
+    dedupe: true,
+    attachmentMetas,
+  });
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    event: "phase_acceptance_completed",
+    detail: { phaseAcceptanceCount: bucket.phaseAcceptanceReports.length },
+  });
+  return true;
+}
+
+export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  if (state?.flags?.acceptanceRequested === true) return false;
+  if (Array.isArray(bucket?.phaseAcceptanceReports) && bucket.phaseAcceptanceReports.length > 0) {
+    return false;
+  }
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const requestPayload = buildPhaseAcceptanceRequestPayload({ bucket, state });
+  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
+    bucket,
+    state,
+    locale,
+    phase: true,
+    requestPayload,
+  });
+  const invoker = resolveCapabilityModelInvoker(meta);
+  if (!invoker) {
+    const fallbackText = buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
+    const report = appendPhaseAcceptanceReport(bucket, fallbackText);
+    if (!report) return false;
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      event: "phase_acceptance_generated_before_final_output_fallback",
+      detail: { phaseAcceptanceCount: bucket.phaseAcceptanceReports.length },
+    });
+    return true;
+  }
+  let response = null;
+  try {
+    response = await invokeWithReasoningRetry({
+      invoker,
+      invokePayload: {
+        purpose: "phase_acceptance_before_final",
+        promptVersion: PROMPT_ENVELOPE.VERSION,
+        envelopeType: PROMPT_ENVELOPE.TYPE,
+        domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+        model: resolveCapabilityModelName(meta, {
+          purpose: "phase_acceptance_before_final",
+          domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+        }),
+        locale,
+        prompt: "",
+        messages: buildPhaseAcceptanceMessages({
+          agentMessages: buildCapabilityModelMessages({
+            locale,
+            agentMessages: resolveCapabilityModelMessages(meta, {
+              ctx,
+              purpose: "phase_acceptance_before_final",
+            }),
+            constraints: [],
+            task: "",
+          }),
+          summaryReportsContents,
+          planContextContent,
+          phaseReportsContents,
+          requestContent,
+        }),
+        ctx,
+        toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance_before_final"),
+      },
+      maxReasoningRetries: 1,
+      purpose: "phase_acceptance_before_final",
+      domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      appendCapabilityLog,
+      appendModelTrace: async (retryResponse = null) => {
+        await appendCapabilityModelTraceLog(ctx, meta, {
+          domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+          purpose: "phase_acceptance_before_final",
+          response: retryResponse,
+        });
+      },
+      ctx,
+      meta,
+    });
+  } catch (error) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      event: "phase_acceptance_before_final_failed",
+      detail: { error: String(error?.message || error || "") },
+    });
+    return false;
+  }
+  const responseText =
+    extractRawTextContent(response?.content) ||
+    String(response?.text || response?.output || "").trim();
+  const reportText = responseText || buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
+  const report = appendPhaseAcceptanceReport(bucket, reportText);
+  if (!report) return false;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+    event: "phase_acceptance_generated_before_final_output",
+    detail: { phaseAcceptanceCount: bucket.phaseAcceptanceReports.length },
+  });
+  return true;
+}
+
 export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseReport = null) {
   if (!baseReport) return false;
   return scheduleInjectTask(ctx, {
@@ -161,6 +558,11 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
     marker: getAcceptanceMainPlanContextMarker(locale),
     data: { mainPlanContext },
   });
+  const phaseReportsContents = buildAllPhaseAcceptanceReportSystemContents({
+    locale,
+    marker: getAllPhaseAcceptanceReportsMarker(locale),
+    data: { phaseAcceptanceReports: bucket?.phaseAcceptanceReports || [] },
+  });
   const requestContent = buildAcceptanceValidationRequestPromptText({
     locale,
     marker: getAcceptanceSemanticValidationMarker(locale),
@@ -174,6 +576,15 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
     avoidBreakToolCallContinuity: false,
   });
   if (!systemInjection.injected) return false;
+  for (const content of phaseReportsContents) {
+    injectMessageWithPolicy(ctx, {
+      role: "system",
+      content,
+      injectAt: "append",
+      dedupe: false,
+      avoidBreakToolCallContinuity: false,
+    });
+  }
   const userInjection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: requestContent,
@@ -267,9 +678,21 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
       requestPayload,
     },
   });
-  const agentMessages = resolveCapabilityModelMessages(meta, {
-    ctx,
-    purpose: "acceptance_semantic_validation",
+  const mainPlanContextPrompt = buildAcceptanceMainPlanContextPromptText({
+    locale,
+    marker: getAcceptanceMainPlanContextMarker(locale),
+    data: { mainPlanContext },
+  });
+  const phaseReportsPrompts = buildAllPhaseAcceptanceReportSystemContents({
+    locale,
+    marker: getAllPhaseAcceptanceReportsMarker(locale),
+    data: { phaseAcceptanceReports: bucket?.phaseAcceptanceReports || [] },
+  });
+  const semanticValidationMessages = buildFinalAcceptanceSemanticValidationMessages({
+    locale,
+    planContextContent: mainPlanContextPrompt,
+    phaseReportsContents: phaseReportsPrompts,
+    requestContent: prompt,
   });
   let response = null;
   try {
@@ -286,18 +709,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
         }),
         locale,
         prompt: "",
-        messages: buildCapabilityModelMessages({
-          locale,
-          agentMessages,
-          constraints: [
-            buildAcceptanceMainPlanContextPromptText({
-              locale,
-              marker: getAcceptanceMainPlanContextMarker(locale),
-              data: { mainPlanContext },
-            }),
-          ],
-          task: prompt,
-        }),
+        messages: semanticValidationMessages,
         ctx,
         baseReport,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "acceptance_semantic_validation"),
