@@ -14,8 +14,10 @@ Agent 主流程给模型的消息以当次 context 构建结果为准。
    - 按 `dialogProcessId` 过滤不属于当前对话链路的 injected 消息；
    - 保持 tool-call / tool-result pair 合法性；
    - 构建当前用户消息及用户元信息消息。
-3. agent 主模型传模链路默认不启用 recent window（不按 `recentMessageLimit` 截断）。
-4. `recentMessageLimit` 主要用于 session context service（例如 `getRecentSessionMessages`）以及插件注入的 separate-model resolver，不是 `agent.main` 主链路的默认行为。
+3. agent 主模型传模链路支持 recent window 配置，默认启用。
+4. agent 主模型 recent window 配置项：
+   - `context.main_model_recent_window`（默认 `true`）
+   - `context.main_model_recent_limit`（默认 `15`）
 5. 插件不得自己复制一套 agent 主流程消息构建逻辑。
 6. 插件只能调用 agent 注入给插件的方法来应用 agent 消息策略。
 
@@ -29,7 +31,7 @@ Agent 主流程给模型的消息以当次 context 构建结果为准。
 4. `buildContinueContext` 对记录做会话级标准化后，写入 `agentContext.payload.messages.history`。
 5. 真正传模前，`buildContextMessages` 会再次调用 `resolveModelContextMessages` 得到 `effectiveHistoryMessages`，再组装最终模型 `messages`。
 
-结论：continue 模式通常是“两段过滤/规范化”，并且 `agent.main` 主链路这一段默认不做 recent window 截断。
+结论：continue 模式通常是“两段过滤/规范化”，并且 `agent.main` 主链路这一段会按 `context.main_model_recent_window/main_model_recent_limit` 配置决定是否做 recent window 截断。
 
 ## 1.2 Agent 与插件裁剪/过滤差异
 
@@ -40,8 +42,8 @@ Agent 主流程给模型的消息以当次 context 构建结果为准。
 | 调用位置 | `agent/core/context/message-builder.js` | `session-execution-engine.js` 注入给 harness 的 `resolveModelMessages` |
 | 底层方法 | `resolveModelContextMessages()` | `resolveModelContextMessages()` |
 | mode | `"agent"` | `"agent"` |
-| 是否 recent window | 否 | 是 |
-| recentLimit | 不限制（默认 `Infinity`） | `session.recentMessageLimit`（默认 20） |
+| 是否 recent window | 是（可配置） | 是 |
+| recentLimit | `context.main_model_recent_limit`（默认 15） | `session.recent_message_limit`（默认 20） |
 | startIndex / limit | 默认 `0 / Infinity` | 不用，改用 recent window |
 | summarized 过滤 | 会过滤 | 会过滤 |
 | harness injected 按 dialog 过滤 | 会过滤 | 会过滤 |
@@ -52,7 +54,7 @@ Agent 主流程给模型的消息以当次 context 构建结果为准。
 
 补充说明：
 
-1. agent 侧是“过滤优先，不做 recent window 截断”。
+1. agent 侧是“过滤优先 + 可配置 recent window 截断（默认启用）”。
 2. 插件侧是“recent window 截断 + 过滤 + 能力改写”。
 3. 插件侧若出现“工具调用看不全”，常见原因是 recent window 截断后，tool-call pair 在合法性过滤阶段被移除。
 

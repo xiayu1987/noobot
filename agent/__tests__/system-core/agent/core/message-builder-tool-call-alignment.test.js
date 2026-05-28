@@ -91,3 +91,64 @@ test("buildContextMessages filters injected messages from non-current dialog", (
   assert.equal(messages.length, 1);
   assert.equal(messages[0]?.content, "当前对话注入");
 });
+
+test("buildContextMessages applies main model recent window by default", () => {
+  const history = Array.from({ length: 20 }, (_, index) => ({
+    role: "assistant",
+    content: `m-${index + 1}`,
+  }));
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {},
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history,
+        },
+      },
+    },
+    { currentUserMessage: "" },
+  );
+
+  assert.equal(messages.length, 15);
+  assert.equal(messages[0]?.content, "m-6");
+  assert.equal(messages[messages.length - 1]?.content, "m-20");
+});
+
+test("buildContextMessages can disable main model recent window via context config", () => {
+  const history = Array.from({ length: 20 }, (_, index) => ({
+    role: "assistant",
+    content: `m-${index + 1}`,
+  }));
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            globalConfig: {
+              context: {
+                mainModelRecentWindow: false,
+                mainModelRecentLimit: 15,
+              },
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history,
+        },
+      },
+    },
+    { currentUserMessage: "" },
+  );
+
+  assert.equal(messages.length, 20);
+  assert.equal(messages[0]?.content, "m-1");
+  assert.equal(messages[messages.length - 1]?.content, "m-20");
+});

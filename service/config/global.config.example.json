@@ -4,6 +4,10 @@
   "default_provider": "qwen3_6_plus_2026_04_02",
   "memory_max_items": 50,
   "max_tool_loop_turns": 200,
+  "context": {
+    "main_model_recent_window": true,
+    "main_model_recent_limit": 15
+  },
   "session": {
     "recent_message_limit": 15,
     "use_last_running_task_range": true,

@@ -11,6 +11,8 @@ export const SNAKE_TO_CANONICAL_KEY_MAP = {
   memory_max_items: "memoryMaxItems",
   max_tool_loop_turns: "maxToolLoopTurns",
   recent_message_limit: "recentMessageLimit",
+  main_model_recent_window: "mainModelRecentWindow",
+  main_model_recent_limit: "mainModelRecentLimit",
   use_last_running_task_range: "useLastRunningTaskRange",
   use_last_completed_task_range: "useLastCompletedTaskRange",
   switch_web_mode: "switchWebMode",
