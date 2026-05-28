@@ -5,6 +5,7 @@
  */
 import { resolveCapabilityProfile } from "../capabilities/profile.js";
 import { HARNESS_LIMITS } from "./constants.js";
+import { WORKFLOW_PARAMS } from "./workflow-params.js";
 import { z } from "zod";
 
 export const DEFAULT_OPTIONS = Object.freeze({
@@ -29,6 +30,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   capabilityToolAllowlistByPurpose: Object.freeze({}),
   miniRunnerMaxTurns: 5,
   miniRunnerToolAllowlist: [],
+  contextWindowRecentMessageLimit: WORKFLOW_PARAMS.contextWindow.recentMessageLimit,
   acceptance: Object.freeze({
     semanticValidation: true,
   }),
@@ -72,6 +74,12 @@ const HarnessOptionsSchema = z
     capabilityToolAllowlistByPurpose: z.record(z.any()).default({}),
     miniRunnerMaxTurns: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.miniRunnerMaxTurns),
     miniRunnerToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.miniRunnerToolAllowlist),
+    contextWindowRecentMessageLimit: z.coerce
+      .number()
+      .int()
+      .finite()
+      .positive()
+      .default(DEFAULT_OPTIONS.contextWindowRecentMessageLimit),
     acceptance: z.record(z.any()).optional(),
     review: z.record(z.any()).optional(),
     pendingTtlHookTurns: z.coerce.number().int().finite().nonnegative().default(DEFAULT_OPTIONS.pendingTtlHookTurns),
@@ -178,6 +186,7 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     miniRunnerToolAllowlist: Array.isArray(safe.miniRunnerToolAllowlist)
       ? safe.miniRunnerToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
       : DEFAULT_OPTIONS.miniRunnerToolAllowlist,
+    contextWindowRecentMessageLimit: safe.contextWindowRecentMessageLimit,
     acceptance: {
       ...(DEFAULT_OPTIONS.acceptance || {}),
       ...(safe.acceptance && typeof safe.acceptance === "object" ? safe.acceptance : {}),

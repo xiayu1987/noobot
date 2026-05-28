@@ -566,12 +566,10 @@ export class SessionExecutionEngine {
     }, {});
   }
 
-  _createHarnessResolveModelMessages({ effectiveConfig = {} } = {}) {
-    const sessionConfig =
-      effectiveConfig?.session && typeof effectiveConfig.session === "object"
-        ? effectiveConfig.session
-        : {};
-    const recentLimit = Number(sessionConfig.recentMessageLimit || 20);
+  _createHarnessResolveModelMessages({ harnessOptions = {} } = {}) {
+    const recentLimit = Number(
+      harnessOptions?.contextWindowRecentMessageLimit || 20,
+    );
     return ({ messages = [], ctx = {} } = {}) => {
       const explicitMessages = Array.isArray(messages) ? messages : [];
       const source = explicitMessages.length
@@ -686,7 +684,7 @@ export class SessionExecutionEngine {
           : "";
     const next = { ...options, enabled: true, mode: "on", basePath };
     next.resolveModelMessages = this._createHarnessResolveModelMessages({
-      effectiveConfig,
+      harnessOptions: next,
     });
     next.markMessagesSummarized = this._createHarnessMarkMessagesSummarized();
     next.miniRunnerMaxTurns =

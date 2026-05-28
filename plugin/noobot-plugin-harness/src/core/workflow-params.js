@@ -101,6 +101,11 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
     },
   },
+  contextWindow: {
+    // Harness-side model context clipping window size (recent messages).
+    // This replaces agent session.recentMessageLimit for harness flow.
+    recentMessageLimit: 20,
+  },
   planning: {
     summary: {
       turnsThreshold: 8,

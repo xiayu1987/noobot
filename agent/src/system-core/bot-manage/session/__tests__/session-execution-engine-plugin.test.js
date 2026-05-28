@@ -161,13 +161,7 @@ test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning
 });
 
 test("SessionExecutionEngine injects plugin resolveModelMessages with recent window", async () => {
-  const engine = new SessionExecutionEngine({
-    globalConfig: {
-      session: {
-        recentMessageLimit: 3,
-      },
-    },
-  });
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
 
   const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
@@ -176,6 +170,7 @@ test("SessionExecutionEngine injects plugin resolveModelMessages with recent win
         harness: {
           enabled: true,
           mode: "on",
+          contextWindowRecentMessageLimit: 3,
         },
       },
     },
