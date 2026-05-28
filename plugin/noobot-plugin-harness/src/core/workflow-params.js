@@ -113,7 +113,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     },
     planUpdate: {
       maxAttempts: 5,
-      triggerTurnsThreshold: 10,
+      triggerTurnsThreshold: 6,
     },
     capture: {
       maxAttempts: 2,

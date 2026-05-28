@@ -11,11 +11,50 @@ Agent 主流程给模型的消息以当次 context 构建结果为准。
 1. context 中已经存在的消息，就是 agent 主流程当前准备给模型的消息基础。
 2. agent 主流程有自己的消息策略，包括但不限于：
    - 过滤 `summarized: true` 的历史消息；
-   - 只保留最近窗口，默认 `recentMessageLimit = 20`；
+   - 按 `dialogProcessId` 过滤不属于当前对话链路的 injected 消息；
    - 保持 tool-call / tool-result pair 合法性；
    - 构建当前用户消息及用户元信息消息。
-3. 插件不得自己复制一套 agent 主流程消息构建逻辑。
-4. 插件只能调用 agent 注入给插件的方法来应用 agent 消息策略。
+3. agent 主模型传模链路默认不启用 recent window（不按 `recentMessageLimit` 截断）。
+4. `recentMessageLimit` 主要用于 session context service（例如 `getRecentSessionMessages`）以及插件注入的 separate-model resolver，不是 `agent.main` 主链路的默认行为。
+5. 插件不得自己复制一套 agent 主流程消息构建逻辑。
+6. 插件只能调用 agent 注入给插件的方法来应用 agent 消息策略。
+
+## 1.1 确定调用链（continue 模式）
+
+为避免“可能/大概”式描述，下面是 continue 模式下的确定调用顺序：
+
+1. `SessionExecutionRunner` 根据 session 是否存在设置 `mode=continue`。
+2. `ContextBuilder.buildContinueContext` 调用 `_resolveSessionRecords` 拉取会话记录。
+3. `_resolveSessionRecords -> sessionManager.getContextRecords`，由 session context service 选择记录范围（completed/running/recent）。
+4. `buildContinueContext` 对记录做会话级标准化后，写入 `agentContext.payload.messages.history`。
+5. 真正传模前，`buildContextMessages` 会再次调用 `resolveModelContextMessages` 得到 `effectiveHistoryMessages`，再组装最终模型 `messages`。
+
+结论：continue 模式通常是“两段过滤/规范化”，并且 `agent.main` 主链路这一段默认不做 recent window 截断。
+
+## 1.2 Agent 与插件裁剪/过滤差异
+
+两边使用同一个底层函数 `resolveModelContextMessages()`，但参数不同，因此行为不同。
+
+| 项目 | agent 侧主模型 | 插件侧模型 |
+| --- | --- | --- |
+| 调用位置 | `agent/core/context/message-builder.js` | `session-execution-engine.js` 注入给 harness 的 `resolveModelMessages` |
+| 底层方法 | `resolveModelContextMessages()` | `resolveModelContextMessages()` |
+| mode | `"agent"` | `"agent"` |
+| 是否 recent window | 否 | 是 |
+| recentLimit | 不限制（默认 `Infinity`） | `session.recentMessageLimit`（默认 20） |
+| startIndex / limit | 默认 `0 / Infinity` | 不用，改用 recent window |
+| summarized 过滤 | 会过滤 | 会过滤 |
+| harness injected 按 dialog 过滤 | 会过滤 | 会过滤 |
+| tool_call pair 合法性过滤 | 会过滤 | 会过滤 |
+| 消息标准化 | 不传 `normalizeMessage` | 传 `normalizeMessageForHarness` |
+| 后续能力改写 | 无 | 有，`buildCapabilityModelMessages()` |
+| 最终效果 | 尽量保留完整 agent 历史 | 只取最近窗口 + 能力专用上下文 |
+
+补充说明：
+
+1. agent 侧是“过滤优先，不做 recent window 截断”。
+2. 插件侧是“recent window 截断 + 过滤 + 能力改写”。
+3. 插件侧若出现“工具调用看不全”，常见原因是 recent window 截断后，tool-call pair 在合法性过滤阶段被移除。
 
 ## 2. 小结后的 agent 主流程消息规则
 
