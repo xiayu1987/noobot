@@ -9,8 +9,8 @@ import {
   HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
   HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
   HARNESS_INJECTION_MESSAGE_ROLE,
-} from "./constants.js";
-import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
+} from "../constants.js";
+import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
 
 export function buildHarnessInjectedMessage(
   content = "",

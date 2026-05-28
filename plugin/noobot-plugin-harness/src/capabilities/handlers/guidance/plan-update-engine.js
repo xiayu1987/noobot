@@ -8,6 +8,9 @@ import {
   appendCapabilityLog,
 } from "./deps.js";
 import { PLAN_UPDATE_POLICY } from "../../../core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+
+const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
 export function normalizePlanUpdateStage(stage = "") {
   return String(stage || "").trim().toLowerCase() === "revision" ? "revision" : "refinement";
@@ -41,7 +44,7 @@ export function canAttemptPlanUpdate(
   if (current >= PLAN_UPDATE_POLICY.MAX_ATTEMPTS) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_revision_skipped_by_max_attempts",
+      event: GUIDANCE_EVENTS.revisionSkippedByMaxAttempts,
       detail: {
         stage: normalizedStage,
         current,

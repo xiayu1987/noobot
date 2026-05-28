@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export * from "./shared/index.js";
+export { createPlanningHandler } from "./controller.js";

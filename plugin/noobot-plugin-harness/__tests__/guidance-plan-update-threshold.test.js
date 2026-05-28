@@ -54,7 +54,7 @@ function createPlanningAgentContext({ counters = {} } = {}) {
   };
 }
 
-test("inject mode: when summary and revision are both pending, summary prompt is injected first", async () => {
+test("inject mode: when turn-summary and revision are both pending, revision prompt is injected first", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({
     pending: {
@@ -68,26 +68,41 @@ test("inject mode: when summary and revision are both pending, summary prompt is
 
   const firstCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "before_llm_call", ctx: firstCtx, meta });
+  const decisionLog = agentContext.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "workflow_priority_decision",
+  );
+  const executionLog = agentContext.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "workflow_execution_result",
+  );
+  assert.equal(Boolean(decisionLog), true);
+  assert.equal(Boolean(executionLog), true);
+  assert.equal(decisionLog?.detail?.chosenAction, "plan_update_revision");
+  assert.equal(decisionLog?.detail?.mode, "inject");
+  assert.equal(executionLog?.detail?.requestedAction, "plan_update_revision");
+  assert.equal(executionLog?.detail?.executedPrimary, true);
+  assert.equal(executionLog?.detail?.mode, "inject");
+  assert.equal(Number.isFinite(Number(executionLog?.detail?.durationMs)), true);
+  assert.equal(executionLog?.detail?.retryCount, 0);
   assert.equal(
     firstCtx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
-    true,
+    false,
   );
   assert.equal(
     firstCtx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
-    false,
+    true,
   );
-  assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
 
   const secondCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "before_llm_call", ctx: secondCtx, meta });
   assert.equal(
-    secondCtx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    secondCtx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
     true,
   );
 });
 
-test("separate_model mode: when summary and revision are both pending, summary is executed before planning_revision", async () => {
+test("separate_model mode: when turn-summary and revision are both pending, planning_revision runs before summary", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const agentContext = createAgentContext({
@@ -111,10 +126,36 @@ test("separate_model mode: when summary and revision are both pending, summary i
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
   assert.equal(invocations.length >= 1, true);
-  assert.equal(invocations[0]?.purpose, "summary");
+  assert.equal(invocations[0]?.purpose, "planning_revision");
   assert.equal(invocations.some((item = {}) => item.purpose === "planning_revision"), true);
+  assert.equal(invocations.some((item = {}) => item.purpose === "summary"), true);
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(
+    ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    false,
+  );
+});
+
+test("inject mode: overflow summary keeps higher priority than revision", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({
+    pending: {
+      summary: true,
+      planUpdate: true,
+      planUpdateStage: "revision",
+      planUpdateContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
+    },
+  });
+  agentContext.payload.harness.state.flags.summaryByCharsPrompted = true;
+  const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
+
+  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  assert.equal(
+    ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
+    true,
+  );
   assert.equal(
     ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
     false,
@@ -152,6 +193,34 @@ test("separate_model mode: pending revision runs by separate model without promp
   assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
 });
 
+test("workflow_execution_result captures errorCode when separate_model guidance fails", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({
+    pending: {
+      guidance: "consecutive_failures",
+    },
+  });
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => {
+        throw new Error("model down");
+      },
+    },
+  };
+
+  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+
+  const executionLog = agentContext.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "workflow_execution_result",
+  );
+  assert.equal(Boolean(executionLog), true);
+  assert.equal(executionLog?.detail?.mode, "separate_model");
+  assert.equal(executionLog?.detail?.chosenAction, "guidance");
+  assert.equal(executionLog?.detail?.errorCode, "GUIDANCE_SEPARATE_MODEL_CALL_FAILED");
+});
+
 test("revision and refinement share the same MAX_PLAN_UPDATE_ATTEMPTS budget", () => {
   const state = {
     counters: {
@@ -175,6 +244,15 @@ test("planning summary threshold by turns is independent from plan update attemp
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.summary, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
+  const planningLogs = agentContext.payload.harness.logs.planning;
+  assert.equal(
+    planningLogs.some((item = {}) => item?.event === "workflow_priority_decision"),
+    true,
+  );
+  assert.equal(
+    planningLogs.some((item = {}) => item?.event === "workflow_execution_result"),
+    true,
+  );
 });
 
 test("planning summary threshold by chars is independent from plan update attempts", async () => {

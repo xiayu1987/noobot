@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ensureHarnessBucket } from "./deps.js";
-import { mergeSummaryText } from "../shared/summary-text-protocol.js";
+import { mergeSummaryText } from "../shared/plan/summary-text-protocol.js";
 
 export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   const holder = ensureHarnessBucket(ctx);

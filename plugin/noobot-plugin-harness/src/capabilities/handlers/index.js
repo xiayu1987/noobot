@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { HARNESS_ENGINEERING_CAPABILITIES } from "../profile.js";
-import { createAcceptanceHandler } from "./acceptance.js";
-import { createGuidanceHandler } from "./guidance.js";
-import { createPlanningHandler } from "./planning.js";
-import { createReviewHandler } from "./review.js";
-import { shouldProcessPrimaryToolHooks } from "./shared.js";
+import { createAcceptanceHandler } from "./acceptance/index.js";
+import { createGuidanceHandler } from "./guidance/index.js";
+import { createPlanningHandler } from "./planning/index.js";
+import { createReviewHandler } from "./review/index.js";
+import { shouldProcessPrimaryToolHooks } from "./shared/index.js";
 
 function createNoopHandler(capability = "") {
   return async ({ point = "" } = {}) => ({

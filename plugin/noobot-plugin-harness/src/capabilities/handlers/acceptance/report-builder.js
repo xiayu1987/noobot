@@ -13,7 +13,7 @@ import {
 } from "./deps.js";
 import { resolveFirstMatchedRuleResult } from "../shared/rule-table-utils.js";
 import { buildStatusSummary, nowIsoTimestamp } from "../shared/report-utils.js";
-import { parsePlanDocumentFromText } from "../shared/plan-text-protocol.js";
+import { parsePlanDocumentFromText } from "../shared/plan/text-protocol.js";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",

@@ -9,6 +9,7 @@ import {
   LLM_SUMMARY_OVERFLOW_POLICY,
   LLM_SUMMARY_THRESHOLD,
 } from "../../../core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 
 export {
   FAILURE_THRESHOLD,
@@ -99,7 +100,7 @@ export const PROMPT_JSON_FORMAT_EXAMPLES = Object.freeze({
     '{"status":"pass|warn|fail","consistent":true,"missingItems":[],"unsupportedClaims":[],"checklistCoverage":[{"index":1,"task":"...","covered":true,"evidence":"...","risk":"low"}],"suggestions":[]}',
 });
 
-// Prompt texts are managed in `shared/workflow-prompts.js`.
+// Prompt texts are managed in `shared/workflow/prompts.js`.
 // Keep constants.js focused on non-prompt i18n copy (tool copy + runtime labels).
 const I18N_TOOL_COPY = Object.freeze({
   [LOCALE.ZH_CN]: Object.freeze({
@@ -149,14 +150,13 @@ export const I18N_TEXT = Object.freeze({
 });
 
 export const BLOCKED_AGENT_TOOL_NAMES = new Set([
-  TOOL_NAME_SET.PLAN_MULTI_TASK_COLLABORATION,
-  "task_summary",
+  ...WORKFLOW_PARAMS.acceptance.guards.blockedAgentToolNames,
 ]);
 
-export const GUIDANCE_WEB_SERVICE_NAME = "web_search_service";
-export const GUIDANCE_WEB_TOOL_NAMES = [TOOL_NAME_SET.CALL_SERVICE];
-export const TASK_ACCEPTANCE_TOOL_NAME = "request_task_acceptance";
-export const PLAN_REFINEMENT_TOOL_NAME = "request_plan_refinement";
+export const GUIDANCE_WEB_SERVICE_NAME = WORKFLOW_PARAMS.guidance.web.serviceName;
+export const GUIDANCE_WEB_TOOL_NAMES = [...WORKFLOW_PARAMS.guidance.web.toolNames];
+export const TASK_ACCEPTANCE_TOOL_NAME = WORKFLOW_PARAMS.acceptance.tools.taskAcceptanceToolName;
+export const PLAN_REFINEMENT_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.planRefinementToolName;
 
 export const HARNESS_BUCKET_VERSION = 3;
 

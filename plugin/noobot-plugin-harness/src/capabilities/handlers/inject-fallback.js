@@ -5,10 +5,10 @@
  */
 import {
   CAPABILITY_DOMAIN,
-  appendCapabilityLog,
-  ensureHarnessBucket,
-  extractRawTextContent,
-} from "./shared.js";
+} from "./shared/constants.js";
+import { ensureHarnessBucket } from "./shared/bucket-utils.js";
+import { appendCapabilityLog } from "./shared/attachment-log-utils.js";
+import { extractRawTextContent } from "./shared/message/utils.js";
 
 export function scheduleInjectTask(
   ctx = {},

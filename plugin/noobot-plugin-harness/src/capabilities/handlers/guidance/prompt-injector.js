@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -10,14 +11,16 @@ import {
   ensureHarnessBucket,
 } from "./deps.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
-import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
-import { buildPlanChecklistSystemContent } from "../shared/plan-checklist-context.js";
+import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
+import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
 import {
   buildGuidanceFailurePromptText,
   buildGuidanceSummaryPromptText,
   getGuidanceMarker,
   getGuidanceSummaryMarker,
-} from "../shared/workflow-prompts.js";
+} from "../shared/workflow/prompts.js";
+
+const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
 export function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", { includeMarker = false } = {}) {
   return buildGuidanceFailurePromptText({
@@ -66,7 +69,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
     state.flags.guidanceSummaryMarkPending = true;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: "summary_prompt_injected",
+      event: GUIDANCE_EVENTS.summaryPromptInjected,
     });
     return true;
   }
@@ -84,7 +87,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   state.counters.totalToolFailures = 0;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.GUIDANCE,
-    event: "guidance_prompt_injected",
+    event: GUIDANCE_EVENTS.guidancePromptInjected,
     detail: { reason },
   });
   return true;

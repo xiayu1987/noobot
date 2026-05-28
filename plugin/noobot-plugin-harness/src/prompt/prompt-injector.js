@@ -9,7 +9,7 @@ import {
 import {
   buildHarnessInjectedMessage,
   persistHarnessMessageToCurrentTurn,
-} from "../capabilities/handlers/shared/injected-message-utils.js";
+} from "../capabilities/handlers/shared/message/injected-message-utils.js";
 const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility only
 
 // P2#5: Injected prompt ID cache per messages array reference for O(1) lookup

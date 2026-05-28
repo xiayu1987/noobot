@@ -12,6 +12,7 @@ import {
   PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
 } from "../../../core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   appendCapabilityLog,
@@ -25,6 +26,14 @@ import { ensurePlanRefinementTool } from "./tool-injector.js";
 import { maybeInjectPlanningPrompt } from "./prompt-builder.js";
 import { maybeCapturePlanningResult, runPlanningBySeparateModel } from "./capture-runner.js";
 import { canAttemptPlanUpdate, setPendingPlanUpdate } from "../guidance/plan-update-engine.js";
+import {
+  appendWorkflowExecutionResult,
+  appendWorkflowPriorityDecision,
+  captureWorkflowLogCursor,
+  resolveWorkflowExecutionMetrics,
+  resolveWorkflowMode,
+} from "../shared/workflow/pattern.js";
+import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
 function isMessageSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -40,7 +49,10 @@ function resolveUnsummarizedMessageChars(messages = []) {
   }, 0);
 }
 
-const TASK_SUMMARY_TOOL_NAME = "task_summary";
+const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
+const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
+const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
+const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
 function getMessageToolCalls(messageItem = {}) {
   if (Array.isArray(messageItem?.tool_calls)) return messageItem.tool_calls;
@@ -145,7 +157,15 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       return { capability, point, status: "active", changed: false };
     }
     if (point === "before_llm_call") {
+      changed = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.PLANNING }) || changed;
       const holder = ensureHarnessBucket(ctx);
+      const mode = resolveWorkflowMode(meta);
+      const startedAt = Date.now();
+      const logCursor = captureWorkflowLogCursor(ctx, CAPABILITY_DOMAIN.PLANNING);
+      let decisionReason = PLANNING_DECISION.reason.idle;
+      const blockedActions = [];
+      let planningPrimaryChanged = false;
+      let planningPrimaryExecuted = false;
       if (holder) {
         holder.state.counters.llmTurns += 1;
         holder.state.counters.planUpdateTurns = Number(holder.state.counters.planUpdateTurns || 0) + 1;
@@ -190,6 +210,9 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           setPendingStateWithMeta(holder.state, "summary", true);
           if (reachedCharsSummary) {
             holder.state.flags.summaryByCharsPrompted = true;
+            decisionReason = PLANNING_DECISION.reason.summaryThresholdChars;
+          } else if (decisionReason === PLANNING_DECISION.reason.idle) {
+            decisionReason = PLANNING_DECISION.reason.summaryThresholdTurns;
           }
         } else {
           holder.state.flags.summaryByCharsPrompted = false;
@@ -209,12 +232,15 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
             });
             appendCapabilityLog(ctx, {
               domain: CAPABILITY_DOMAIN.PLANNING,
-              event: "planning_revision_scheduled_by_turn_threshold",
+              event: PLANNING_EVENTS.revisionScheduledByTurnThreshold,
               detail: {
                 triggerTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
                 summaryPending: holder.state.pending?.summary === true,
               },
             });
+            if (decisionReason === PLANNING_DECISION.reason.idle) {
+              decisionReason = PLANNING_DECISION.reason.planUpdateThreshold;
+            }
           }
         }
 
@@ -231,7 +257,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
             phaseAcceptanceScheduled = true;
             appendCapabilityLog(ctx, {
               domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-              event: "phase_acceptance_scheduled_by_turn_threshold",
+              event: ACCEPTANCE_EVENTS.phaseAcceptanceScheduledByTurnThreshold,
               detail: {
                 triggerTurns: PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
                 summaryPending: holder.state.pending?.summary === true,
@@ -242,26 +268,96 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           }
           if (phaseAcceptanceScheduled) {
             holder.state.counters.phaseAcceptanceTurns = 0;
+            if (decisionReason === "planning_idle") {
+              decisionReason = "phase_acceptance_threshold";
+            }
           } else {
             // Keep threshold pressure when blocked by higher-priority flows
             // (summary/guidance/plan-update), so phase acceptance can be
             // scheduled immediately after they are cleared.
             holder.state.counters.phaseAcceptanceTurns = PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD;
+            blockedActions.push("phase_acceptance");
           }
         }
+
+        appendWorkflowPriorityDecision(ctx, {
+          domain: CAPABILITY_DOMAIN.PLANNING,
+          point: "before_llm_call",
+          mode,
+          chosenAction: "planning_bootstrap",
+          chosenReason: decisionReason,
+          blockedActions,
+          pending: {
+            summary: holder.state.pending?.summary === true,
+            summaryByCharsPrompted: holder.state.flags?.summaryByCharsPrompted === true,
+            guidance: holder.state.pending?.guidance || null,
+            planUpdate: holder.state.pending?.planUpdate === true,
+            phaseAcceptance: holder.state.pending?.phaseAcceptance === true,
+            planningCaptured: holder.state.flags?.planningCaptured === true,
+          },
+        });
       }
       changed = sanitizeInternalMessages(ctx) || changed;
       changed = disableBlockedToolsInRegistry(ctx) || changed;
       changed = ensureTaskAcceptanceTool(ctx, meta) || changed;
       changed = ensurePlanRefinementTool(ctx, meta) || changed;
       if (shouldUseSeparateModel(meta)) {
-        changed = (await runPlanningBySeparateModel(ctx, meta)) || changed;
+        planningPrimaryChanged = (await runPlanningBySeparateModel(ctx, meta)) || false;
+        planningPrimaryExecuted = planningPrimaryChanged === true;
+        changed = planningPrimaryChanged || changed;
       } else {
-        changed = maybeInjectPlanningPrompt(ctx, meta) || changed;
+        planningPrimaryChanged = maybeInjectPlanningPrompt(ctx, meta) || false;
+        planningPrimaryExecuted = planningPrimaryChanged === true;
+        changed = planningPrimaryChanged || changed;
       }
+      const metrics = resolveWorkflowExecutionMetrics(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        startCursor: logCursor,
+      });
+      appendWorkflowExecutionResult(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        point: "before_llm_call",
+        mode,
+        chosenAction: "planning_bootstrap",
+        chosenReason: decisionReason,
+        requestedAction: mode === "separate_model" ? "planning_separate_model" : "planning_inject",
+        executedPrimary: planningPrimaryExecuted,
+        changed,
+        durationMs: Date.now() - startedAt,
+        retryCount: metrics.retryCount,
+        errorCode: metrics.errorCode,
+      });
     }
     if (point === "after_llm_call") {
-      changed = (await maybeCapturePlanningResult(ctx, meta)) || changed;
+      const mode = resolveWorkflowMode(meta);
+      const startedAt = Date.now();
+      const logCursor = captureWorkflowLogCursor(ctx, CAPABILITY_DOMAIN.PLANNING);
+      const captureChanged = (await maybeCapturePlanningResult(ctx, meta)) || false;
+      changed = captureChanged || changed;
+      appendWorkflowPriorityDecision(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        point: "after_llm_call",
+        mode,
+        chosenAction: "planning_capture",
+        chosenReason: "after_llm_capture",
+      });
+      const metrics = resolveWorkflowExecutionMetrics(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        startCursor: logCursor,
+      });
+      appendWorkflowExecutionResult(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        point: "after_llm_call",
+        mode,
+        chosenAction: "planning_capture",
+        chosenReason: "after_llm_capture",
+        requestedAction: "planning_capture",
+        executedPrimary: captureChanged === true,
+        changed: captureChanged,
+        durationMs: Date.now() - startedAt,
+        retryCount: metrics.retryCount,
+        errorCode: metrics.errorCode,
+      });
     }
     return { capability, point, status: "active", changed };
   };

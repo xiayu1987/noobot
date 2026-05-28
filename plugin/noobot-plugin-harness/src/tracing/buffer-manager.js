@@ -34,7 +34,7 @@ import {
   normalizeFsmState,
   statusToFsmState,
 } from "../fsm/transitions.js";
-import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/dialog-process-id.js";
+import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 
 function resolveFlushReasonByPoint(point = "") {
   if (

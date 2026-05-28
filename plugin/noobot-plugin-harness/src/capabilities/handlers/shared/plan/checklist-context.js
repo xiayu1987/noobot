@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LOCALE } from "./constants.js";
-import { parsePlanDocumentFromText, renderPlanDocument } from "./plan-text-protocol.js";
+import { LOCALE } from "../constants.js";
+import { parsePlanDocumentFromText, renderPlanDocument } from "./text-protocol.js";
 
 function buildMainPlanTextFromChecklist(checklist = []) {
   const source = Array.isArray(checklist) ? checklist : [];

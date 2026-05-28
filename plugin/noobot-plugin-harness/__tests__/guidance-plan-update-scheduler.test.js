@@ -7,11 +7,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  resolveGuidancePriorityDecision,
   resolveNextGuidanceAction,
   resolvePendingPlanUpdate,
 } from "../src/capabilities/handlers/guidance/plan-update-scheduler.js";
 
-test("scheduler priority: summary > guidance > revision > refinement", () => {
+test("scheduler priority: overflow-summary > guidance > revision > refinement > turn-summary", () => {
+  assert.deepEqual(
+    resolveNextGuidanceAction({
+      flags: { summaryByCharsPrompted: true },
+      pending: {
+        summary: true,
+        guidance: "consecutive_failures",
+        planUpdate: true,
+        planUpdateStage: "revision",
+      },
+    }),
+    { action: "summary", stage: "", reason: "pending_summary_overflow" },
+  );
+
   assert.deepEqual(
     resolveNextGuidanceAction({
       pending: {
@@ -21,7 +35,7 @@ test("scheduler priority: summary > guidance > revision > refinement", () => {
         planUpdateStage: "revision",
       },
     }),
-    { action: "summary", stage: "", reason: "pending_summary" },
+    { action: "guidance", stage: "", reason: "pending_guidance" },
   );
 
   assert.deepEqual(
@@ -49,6 +63,13 @@ test("scheduler priority: summary > guidance > revision > refinement", () => {
     }),
     { action: "plan_update", stage: "refinement", reason: "pending_refinement" },
   );
+
+  assert.deepEqual(
+    resolveNextGuidanceAction({
+      pending: { summary: true, guidance: null, planUpdate: false },
+    }),
+    { action: "summary", stage: "", reason: "pending_summary_turns" },
+  );
 });
 
 test("scheduler supports legacy planRevision pending fields", () => {
@@ -73,3 +94,23 @@ test("scheduler supports legacy planRevision pending fields", () => {
   });
 });
 
+test("priority decision snapshot exposes chosen and blocked actions", () => {
+  const decision = resolveGuidancePriorityDecision({
+    pending: {
+      summary: true,
+      guidance: null,
+      planUpdate: true,
+      planUpdateStage: "revision",
+      phaseAcceptance: true,
+    },
+    flags: {
+      summaryByCharsPrompted: false,
+    },
+  });
+  assert.equal(decision.chosenAction, "plan_update_revision");
+  assert.equal(decision.chosenReason, "pending_revision");
+  assert.deepEqual(decision.blockedActions, ["summary_turns", "phase_acceptance"]);
+  assert.equal(decision.pendingSnapshot.summary, true);
+  assert.equal(decision.pendingSnapshot.summaryByCharsPrompted, false);
+  assert.equal(decision.pendingSnapshot.phaseAcceptance, true);
+});

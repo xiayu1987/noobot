@@ -2,17 +2,38 @@
 
 Hook-based Harness Engineering plugin for Noobot.
 
+Workflow orchestration reference:
+
+- `docs/workflow-orchestration.md` (English: concurrent trigger priority, threshold triggers, model message order)
+- `docs/workflow-orchestration.zh-CN.md` (中文：并发触发优先级、触发阈值、模型消息顺序)
+- `docs/architecture.md` (module-level architecture)
+
 Current architecture split:
 - `src/data/record-builders.js`: trace/snapshot/prompt record generation
 - `src/core/`: plugin composition (`plugin.js`), hook wiring (`hooks.js`), runtime context (`context.js`), options/constants/thresholds
+- `src/core/workflow-params.js`: single parameter center for workflow orchestration (planning/guidance/acceptance)
+  - canonical shape: `WORKFLOW_PARAMS.{workflow,planning,guidance,acceptance}.*`
+  - capability log event names are centralized at `WORKFLOW_PARAMS.logging.events.*`
 - `src/capabilities/profile.js`: capability contract profile (planning/guidance/assistance/memory/synthesis/supervision/review)
 - `src/capabilities/hook-map.js`: capability to lifecycle hook mapping
 - `src/capabilities/handlers/index.js`: capability handler skeleton (default noop planned handlers)
 - `src/capabilities/runtime.js`: capability runtime dispatcher (runs mapped handlers on hook points)
+- `src/capabilities/handlers/shared/`: semantic subfolders by concern
+  - `workflow/`, `model/`, `message/`, `plan/`, `runtime/`
 - `src/prompt/`: prompt injection helpers
 - `src/store/`: manifest/jsonl buffered persistence
 - `src/utils/`: cleanup helpers
 - `src/index.js`: public entry and exports
+
+Handler export convention (Facade + semantic subdirectories):
+
+| Layer | Purpose | Files |
+| --- | --- | --- |
+| Facade (stable import) | External/runtime stable entry | `src/capabilities/handlers/{planning,guidance,acceptance,review}.js` |
+| Domain semantic entry | Domain-local export aggregation | `src/capabilities/handlers/{planning,guidance,acceptance,review}/index.js` |
+| Domain implementation | Controller/deps/prompt/runner details | `src/capabilities/handlers/<domain>/*.js` |
+| Shared facade | Backward-compatible shared aggregate export | `src/capabilities/handlers/shared.js` |
+| Shared semantic entry | Canonical shared export map | `src/capabilities/handlers/shared/index.js` |
 
 The plugin is non-invasive: it is attached through Noobot hooks, and hook errors are captured by Noobot's hook manager instead of breaking the main agent flow.
 

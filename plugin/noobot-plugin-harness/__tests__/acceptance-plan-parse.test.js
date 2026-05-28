@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildAcceptanceReport } from "../src/capabilities/handlers/acceptance/report-builder.js";
-import { resolvePlanChecklistText } from "../src/capabilities/handlers/shared/plan-checklist-context.js";
+import { resolvePlanChecklistText } from "../src/capabilities/handlers/shared/plan/checklist-context.js";
 
 test("acceptance report checklist includes first-level sub plans from planText", () => {
   const report = buildAcceptanceReport({
@@ -47,4 +47,3 @@ test("plan checklist context strips refinement patch appendix when plan text is 
   assert.doesNotMatch(String(text), /planning_refinement/);
   assert.doesNotMatch(String(text), /^ADD /m);
 });
-

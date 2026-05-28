@@ -17,7 +17,7 @@ import { inferFsmTarget, HARNESS_FSM_STATES } from "../src/fsm/transitions.js";
 import { buildEvent } from "../src/data/record-builders.js";
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
-import { invokeWithReasoningRetry } from "../src/capabilities/handlers/shared/model-invocation-utils.js";
+import { invokeWithReasoningRetry } from "../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
   markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,

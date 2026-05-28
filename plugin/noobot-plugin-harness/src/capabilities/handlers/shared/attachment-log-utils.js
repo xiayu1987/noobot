@@ -3,12 +3,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
 import { translateI18nText } from "./i18n.js";
-import { injectMessageWithPolicy } from "./message-injection-utils.js";
-import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
-import { buildHarnessInjectedMessage, resolveCurrentTurnMessagesStore } from "./injected-message-utils.js";
+import { injectMessageWithPolicy } from "./message/injection-utils.js";
+import { resolveDialogProcessIdFromContext } from "./runtime/dialog-process-id.js";
+import {
+  buildHarnessInjectedMessage,
+  resolveCurrentTurnMessagesStore,
+} from "./message/injected-message-utils.js";
+
+const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 
 export function mergeAttachmentMetas(existing = [], incoming = []) {
   const current = Array.isArray(existing) ? existing : [];
@@ -175,7 +181,7 @@ export async function saveCapabilityOutputAsAttachmentMetas(
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain,
-      event: "capability_output_attachment_save_failed",
+      event: SHARED_EVENTS.capabilityOutputAttachmentSaveFailed,
       detail: {
         purpose: String(purpose || "").trim() || "unknown",
         error: String(error?.message || error || ""),
@@ -219,14 +225,14 @@ export function relaySeparateModelOutputAsUserMessage(
     }
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_separate_model_relay_skipped_duplicate",
+      event: SHARED_EVENTS.separateModelRelaySkippedDuplicate,
     });
     return false;
   }
   if (!injection.injected && injection.blockedByTurnEnded === true) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_separate_model_relay_skipped_turn_ended",
+      event: SHARED_EVENTS.separateModelRelaySkippedTurnEnded,
       detail: { purpose: String(purpose || "").trim() || "unknown" },
     });
     return false;
@@ -234,7 +240,7 @@ export function relaySeparateModelOutputAsUserMessage(
   if (injection.injected && injection.target === "agent_system") {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_separate_model_relay_injected_as_system_context",
+      event: SHARED_EVENTS.separateModelRelayInjectedAsSystemContext,
       detail: { purpose: String(purpose || "").trim() || "unknown" },
     });
   }
@@ -257,7 +263,7 @@ export async function appendCapabilityModelTraceLog(
   };
   const log = {
     domain,
-    event: "capability_model_trace",
+    event: SHARED_EVENTS.capabilityModelTrace,
     detail,
   };
   appendCapabilityLog(ctx, log);

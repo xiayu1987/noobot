@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LOCALE } from "./constants.js";
-import { resolvePlanChecklistText } from "./plan-checklist-context.js";
-import { parseSummaryItemsFromText } from "./summary-text-protocol.js";
-import { PLAN_UPDATE_POLICY } from "../../../core/thresholds.js";
+import { LOCALE } from "../constants.js";
+import { resolvePlanChecklistText } from "../plan/checklist-context.js";
+import { parseSummaryItemsFromText } from "../plan/summary-text-protocol.js";
+import { PLAN_UPDATE_POLICY } from "../../../../core/thresholds.js";
 import {
   buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText,
   buildPlanningRefinementPatchProtocolText as buildPlanningRefinementPatchProtocolCoreText,
   buildPlanningRevisionPatchProtocolText as buildPlanningRevisionPatchProtocolCoreText,
   buildSummaryPatchProtocolText as buildSummaryPatchProtocolCoreText,
-} from "./workflow-protocols.js";
+} from "./protocols.js";
 
 function normalizePromptOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
