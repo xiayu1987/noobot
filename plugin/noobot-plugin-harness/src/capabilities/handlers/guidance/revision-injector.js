@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -15,8 +16,8 @@ import {
   scheduleInjectTask,
 } from "../inject-fallback.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
-import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
-import { buildPlanChecklistSystemContent } from "../shared/plan-checklist-context.js";
+import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
+import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
 import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import {
   canAttemptPlanUpdate,
@@ -33,6 +34,8 @@ import {
   resolveRefinementTargetMainSteps,
 } from "./revision-engine.js";
 
+const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
+
 export function schedulePlanUpdateByInject(ctx = {}, summaryText = "", stage = "revision") {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -46,7 +49,7 @@ export function schedulePlanUpdateByInject(ctx = {}, summaryText = "", stage = "
   if (normalizedStage === "refinement" && !targetMainSteps.length) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_refinement_converged_no_target_main_step",
+      event: GUIDANCE_EVENTS.refinementConvergedNoTargetMainStep,
     });
     return false;
   }
@@ -57,8 +60,8 @@ export function schedulePlanUpdateByInject(ctx = {}, summaryText = "", stage = "
     domain: CAPABILITY_DOMAIN.PLANNING,
     scheduledEvent:
       normalizedStage === "revision"
-        ? "planning_revision_scheduled_by_inject"
-        : "planning_refinement_scheduled_by_inject",
+        ? GUIDANCE_EVENTS.revisionScheduledByInject
+        : GUIDANCE_EVENTS.refinementScheduledByInject,
     setPendingData: ({ state }) => {
       setPendingStateWithMeta(state, "planUpdate", true);
       const normalizedTargetMainStepIndexes =
@@ -122,7 +125,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
   writePlanUpdateCaptureContext(state, pendingData);
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "planning_plan_update_prompt_injected",
+    event: GUIDANCE_EVENTS.planUpdatePromptInjected,
   });
   return true;
 }
@@ -130,8 +133,8 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
 export async function maybeCapturePlanUpdateByInject(ctx = {}) {
   return captureInjectedResult(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    completedEvent: "planning_plan_update_capture_completed_inject",
-    failedEvent: "planning_plan_update_capture_failed_inject",
+    completedEvent: GUIDANCE_EVENTS.planUpdateCaptureCompletedInject,
+    failedEvent: GUIDANCE_EVENTS.planUpdateCaptureFailedInject,
     isCapturePending: ({ state }) => state.flags.planUpdateCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
       const { stage, summaryText, targetMainStepIndexes } = readPlanUpdateCaptureContext(state);
@@ -169,7 +172,7 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
         if (!mainPlanChanged && applied) {
           appendCapabilityLog(currentCtx, {
             domain: CAPABILITY_DOMAIN.PLANNING,
-            event: "planning_refinement_skipped_no_main_plan_change",
+            event: GUIDANCE_EVENTS.refinementSkippedNoMainPlanChange,
           });
         }
         return {

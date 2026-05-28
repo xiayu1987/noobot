@@ -6,9 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveCapabilityModelMessages } from "../src/capabilities/handlers/shared/model-utils.js";
-import { buildHarnessInjectedMessage } from "../src/capabilities/handlers/shared/injected-message-utils.js";
-import { resolveDialogProcessIdFromContext } from "../src/capabilities/handlers/shared/dialog-process-id.js";
+import { resolveCapabilityModelMessages } from "../src/capabilities/handlers/shared/model/utils.js";
+import { buildHarnessInjectedMessage } from "../src/capabilities/handlers/shared/message/injected-message-utils.js";
+import { resolveDialogProcessIdFromContext } from "../src/capabilities/handlers/shared/runtime/dialog-process-id.js";
 
 test("resolveCapabilityModelMessages respects empty array from resolver", () => {
   const result = resolveCapabilityModelMessages(

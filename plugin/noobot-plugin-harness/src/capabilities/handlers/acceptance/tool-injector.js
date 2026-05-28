@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   ACCEPTANCE_MODE,
   CAPABILITY_DOMAIN,
@@ -17,6 +18,8 @@ import {
 import { buildAcceptanceReport } from "./report-builder.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
 import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
+
+const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
 function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, meta = {} } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
@@ -67,7 +70,7 @@ export function ensureTaskAcceptanceTool(ctx = {}, meta = {}) {
   registry.push(createRequestTaskAcceptanceTool({ bucket, state, ctx, meta }));
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "task_acceptance_tool_injected",
+    event: ACCEPTANCE_EVENTS.taskAcceptanceToolInjected,
   });
   return true;
 }

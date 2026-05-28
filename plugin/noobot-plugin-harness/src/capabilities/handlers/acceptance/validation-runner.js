@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -39,8 +40,10 @@ import {
   getAcceptanceMainPlanContextMarker,
   getAcceptanceSemanticValidationMarker,
   getPhaseAcceptanceRequestMarker,
-} from "../shared/workflow-prompts.js";
-import { injectMessageWithPolicy } from "../shared/message-injection-utils.js";
+} from "../shared/workflow/prompts.js";
+import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
+
+const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
 function buildTextAcceptanceValidationResult(text = "") {
   const raw = String(text || "").trim();
@@ -284,7 +287,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
   setCaptureFlagStateWithMeta(state, "phaseAcceptanceCapturePending", true);
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    event: "phase_acceptance_prompt_injected",
+    event: ACCEPTANCE_EVENTS.phaseAcceptancePromptInjected,
   });
   return true;
 }
@@ -292,8 +295,8 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
 export function maybeCapturePhaseAcceptanceByInject(ctx = {}) {
   return captureInjectedResult(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    completedEvent: "phase_acceptance_completed_inject",
-    failedEvent: "phase_acceptance_capture_failed_inject",
+    completedEvent: ACCEPTANCE_EVENTS.phaseAcceptanceCompletedInject,
+    failedEvent: ACCEPTANCE_EVENTS.phaseAcceptanceCaptureFailedInject,
     isCapturePending: ({ state }) => state.flags.phaseAcceptanceCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
       setCaptureFlagStateWithMeta(state, "phaseAcceptanceCapturePending", false);
@@ -378,7 +381,7 @@ export async function runPhaseAcceptanceBySeparateModel(ctx = {}, meta = {}) {
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      event: "phase_acceptance_failed",
+      event: ACCEPTANCE_EVENTS.phaseAcceptanceFailed,
       detail: { error: String(error?.message || error || "") },
     });
     return false;
@@ -403,7 +406,7 @@ export async function runPhaseAcceptanceBySeparateModel(ctx = {}, meta = {}) {
   });
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    event: "phase_acceptance_completed",
+    event: ACCEPTANCE_EVENTS.phaseAcceptanceCompleted,
     detail: { phaseAcceptanceCount: bucket.phaseAcceptanceReports.length },
   });
   return true;
@@ -433,7 +436,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     if (!report) return false;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      event: "phase_acceptance_generated_before_final_output_fallback",
+      event: ACCEPTANCE_EVENTS.phaseAcceptanceGeneratedBeforeFinalOutputFallback,
       detail: { phaseAcceptanceCount: bucket.phaseAcceptanceReports.length },
     });
     return true;
@@ -488,7 +491,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      event: "phase_acceptance_before_final_failed",
+      event: ACCEPTANCE_EVENTS.phaseAcceptanceBeforeFinalFailed,
       detail: { error: String(error?.message || error || "") },
     });
     return false;
@@ -501,7 +504,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   if (!report) return false;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    event: "phase_acceptance_generated_before_final_output",
+    event: ACCEPTANCE_EVENTS.phaseAcceptanceGeneratedBeforeFinalOutput,
     detail: { phaseAcceptanceCount: bucket.phaseAcceptanceReports.length },
   });
   return true;
@@ -511,7 +514,7 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
   if (!baseReport) return false;
   return scheduleInjectTask(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    scheduledEvent: "acceptance_semantic_validation_scheduled_by_inject",
+    scheduledEvent: ACCEPTANCE_EVENTS.semanticValidationScheduledByInject,
     setPendingData: ({ bucket, state }) => {
       const locale = state?.locale || LOCALE.ZH_CN;
       const finalOutput = String(ctx?.result?.output || "").trim();
@@ -598,7 +601,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   state.flags.acceptanceSemanticValidationCaptureReportIndex = Number(pendingData.reportIndex);
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    event: "acceptance_semantic_validation_prompt_injected",
+    event: ACCEPTANCE_EVENTS.semanticValidationPromptInjected,
   });
   return true;
 }
@@ -606,8 +609,8 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
 export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
   return captureInjectedResult(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    completedEvent: "acceptance_semantic_validation_completed_inject",
-    failedEvent: "acceptance_semantic_validation_capture_failed_inject",
+    completedEvent: ACCEPTANCE_EVENTS.semanticValidationCompletedInject,
+    failedEvent: ACCEPTANCE_EVENTS.semanticValidationCaptureFailedInject,
     isCapturePending: ({ state }) => state.flags.acceptanceSemanticValidationCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
       const reportIndex = Number(state.flags.acceptanceSemanticValidationCaptureReportIndex);
@@ -731,7 +734,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      event: "acceptance_semantic_validation_failed",
+      event: ACCEPTANCE_EVENTS.semanticValidationFailed,
       detail: { error: String(error?.message || error || "") },
     });
     return false;
@@ -756,7 +759,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   if (!parsed) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      event: "acceptance_semantic_validation_empty_output",
+      event: ACCEPTANCE_EVENTS.semanticValidationEmptyOutput,
     });
     return false;
   }
@@ -764,7 +767,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   bucket.lastAcceptanceReport = baseReport;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    event: "acceptance_semantic_validation_completed",
+    event: ACCEPTANCE_EVENTS.semanticValidationCompleted,
     detail: { status: baseReport.semanticValidation?.status, consistent: baseReport.semanticValidation?.consistent },
   });
   return true;

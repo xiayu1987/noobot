@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { extractRawTextContent } from "./message-utils.js";
+import { extractRawTextContent } from "../message/utils.js";
 
 function resolveCompatibleRole(message = {}) {
   const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();

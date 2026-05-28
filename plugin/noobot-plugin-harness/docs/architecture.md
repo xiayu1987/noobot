@@ -7,6 +7,7 @@
   - `hooks.js`: hook point policy + hook registration
   - `context.js`: runtime/hook context resolution
   - `options.js`: option schema + normalization
+  - `workflow-params.js`: single source of truth for workflow params (thresholds, enums, event names)
   - `thresholds.js`: shared thresholds and retry limits
   - `constants.js`: plugin metadata + hook constants
 - `src/capabilities/`: capability profile, hook map, runtime dispatcher, handlers

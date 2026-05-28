@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -19,7 +20,9 @@ import {
   getPlanningPromptMarker,
   getPlanningPromptToolsHeader,
   getPlanningToolContextMarker,
-} from "../shared/workflow-prompts.js";
+} from "../shared/workflow/prompts.js";
+
+const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
 function isHarnessInjectedMessage(message = {}) {
   return (
@@ -200,7 +203,7 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
   state.flags.planningPromptInjected = true;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "planning_prompt_injected",
+    event: PLANNING_EVENTS.promptInjected,
   });
   return true;
 }

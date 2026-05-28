@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildCapabilityModelMessages } from "../src/capabilities/handlers/shared/model-message-factory.js";
+import { buildCapabilityModelMessages } from "../src/capabilities/handlers/shared/model/message-factory.js";
 
 test("buildCapabilityModelMessages rewrites assistant tool_calls into semantic user message", () => {
   const output = buildCapabilityModelMessages({

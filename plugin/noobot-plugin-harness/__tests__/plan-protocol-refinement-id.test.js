@@ -9,8 +9,8 @@ import assert from "node:assert/strict";
 import {
   applyPatchCommandsToPlanDocument,
   parsePatchCommands,
-} from "../src/capabilities/handlers/shared/plan-text-protocol.js";
-import { buildPlanningRefinementPromptText } from "../src/capabilities/handlers/shared/workflow-prompts.js";
+} from "../src/capabilities/handlers/shared/plan/text-protocol.js";
+import { buildPlanningRefinementPromptText } from "../src/capabilities/handlers/shared/workflow/prompts.js";
 
 test("refinement patch parser ignores two-level sub-plan ids like 1.1.1", () => {
   const patchText = [
@@ -51,4 +51,3 @@ test("refinement prompt explicitly forbids two-level sub-plan ids", () => {
   });
   assert.match(String(prompt), /禁止输出 1\.1\.1/);
 });
-

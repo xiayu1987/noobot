@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LOCALE } from "./constants.js";
+import { LOCALE } from "../constants.js";
 
 function resolveLocale(locale = LOCALE.ZH_CN) {
   return locale === LOCALE.EN_US ? LOCALE.EN_US : LOCALE.ZH_CN;
@@ -114,4 +114,3 @@ export function buildAcceptancePatchProtocolText({
     "evidence 必须简短，并来自上下文、工具结果或最终输出；不要编造证据。",
   ].join("\n");
 }
-

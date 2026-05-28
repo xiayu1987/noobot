@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { MAX_PLANNING_CAPTURE_ATTEMPTS } from "../../../core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -15,7 +16,9 @@ import {
   parseMainPlansFromPlanText,
   parsePlanDocumentFromText,
   renderPlanDocument,
-} from "../shared/plan-text-protocol.js";
+} from "../shared/plan/text-protocol.js";
+
+const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
 function increasePlanningCaptureAttempts(state = {}) {
   if (!state || typeof state !== "object") return 1;
@@ -69,7 +72,7 @@ function applyDefaultPlanText(ctx = {}, locale = LOCALE.ZH_CN, reason = "") {
   if (!applied) return false;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "planning_default_checklist_applied",
+    event: PLANNING_EVENTS.defaultChecklistApplied,
     detail: { reason: String(reason || "").trim() || "planning_empty_response" },
   });
   return true;

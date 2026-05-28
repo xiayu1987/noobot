@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ensureHarnessBucket } from "./bucket-utils.js";
+import { ensureHarnessBucket } from "../bucket-utils.js";
 import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
 
 const TURN_END_POINTS = new Set(["after_turn", "on_abort", "on_error"]);

@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isHarnessAgentTurnEnded } from "./lifecycle-utils.js";
+import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 import {
   persistHarnessMessageToCurrentTurn,
   buildHarnessInjectedMessage,
 } from "./injected-message-utils.js";
-import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
+import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
 
 function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;

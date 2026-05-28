@@ -29,14 +29,14 @@ export {
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
   shouldUseSeparateModel,
-} from "../shared/model-utils.js";
+} from "../shared/model/utils.js";
 
 export {
   extractRawTextContent,
   markMessagesSummarized,
   resolveInjectedMessageSummarizer,
-} from "../shared/message-utils.js";
-export { buildCapabilityModelMessages } from "../shared/model-message-factory.js";
-export { invokeWithReasoningRetry } from "../shared/model-invocation-utils.js";
+} from "../shared/message/utils.js";
+export { buildCapabilityModelMessages } from "../shared/model/message-factory.js";
+export { invokeWithReasoningRetry } from "../shared/model/invocation-utils.js";
 
 export { translateI18nText } from "../shared/i18n.js";

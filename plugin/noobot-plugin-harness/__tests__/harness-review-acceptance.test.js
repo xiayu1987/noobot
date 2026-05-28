@@ -56,6 +56,14 @@ test("harness review generates review report at final output", async () => {
     agentContext.payload.harness.lastReviewReport.summary.issues.includes("planning_not_captured"),
     true,
   );
+  assert.equal(
+    agentContext.payload.harness.logs.review.some((item = {}) => item?.event === "workflow_priority_decision"),
+    true,
+  );
+  assert.equal(
+    agentContext.payload.harness.logs.review.some((item = {}) => item?.event === "workflow_execution_result"),
+    true,
+  );
 });
 
 test("harness before_final_output capability runtime runs once", async () => {
@@ -162,6 +170,15 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     ctx.result.turnMessages[0].attachmentMetas.map((item = {}) => item.attachmentId),
     ["att_plan", "att_report"],
   );
+  const acceptanceLogs = ctx.agentContext.payload.harness.logs.acceptance;
+  assert.equal(
+    acceptanceLogs.some((item = {}) => item?.event === "workflow_priority_decision"),
+    true,
+  );
+  assert.equal(
+    acceptanceLogs.some((item = {}) => item?.event === "workflow_execution_result"),
+    true,
+  );
 });
 
 test("harness finalResponseGuard false skips final policy injection but keeps review", async () => {
@@ -223,7 +240,10 @@ test("harness review records reports on error and abort hooks", async () => {
   assert.equal(agentContext.payload.harness.reviewReports.length, 2);
   assert.equal(agentContext.payload.harness.reviewReports[0].status, "error");
   assert.equal(agentContext.payload.harness.reviewReports[1].status, "abort");
-  assert.equal(agentContext.payload.harness.logs.review.length, 2);
+  assert.equal(
+    agentContext.payload.harness.logs.review.filter((item = {}) => item?.event === "review_report_generated").length,
+    2,
+  );
 });
 
 test("harness full engineering capability flow plans, guides, accepts and reviews", async () => {
@@ -355,7 +375,10 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
   assert.doesNotMatch(String(result.output), /Harness-Review/);
   assert.match(String(result.output), /Harness-Forced-Acceptance/);
   assert.equal(agentContext.payload.harness.reviewReports.length, 1);
-  assert.equal(agentContext.payload.harness.logs.review.length, 1);
+  assert.equal(
+    agentContext.payload.harness.logs.review.filter((item = {}) => item?.event === "review_report_generated").length,
+    1,
+  );
 });
 
 test("harness forced acceptance is owned by acceptance and appended once", async () => {

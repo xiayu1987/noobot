@@ -11,10 +11,11 @@ import {
   PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS,
   PLANNING_CONTEXT_GOAL_MAX_CHARS,
 } from "../../../core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   resolveDialogProcessId,
   resolveMessageDialogProcessId,
-} from "../shared/dialog-process-id.js";
+} from "../shared/runtime/dialog-process-id.js";
 import { processPlanningResult } from "./result-pipeline.js";
 import {
   buildPlanningPromptBase,
@@ -42,7 +43,9 @@ import {
 import {
   getPlanningContextSummaryHeader,
   getPlanningSeparateModelEmptyRelay,
-} from "../shared/workflow-prompts.js";
+} from "../shared/workflow/prompts.js";
+
+const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
 function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
   const raw = String(text || "").replace(/\s+/g, " ").trim();
@@ -75,7 +78,7 @@ export function recordPlanningRawOutput(
   bucket.lastPlanningRawOutput = entry;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "planning_raw_output_recorded",
+    event: PLANNING_EVENTS.rawOutputRecorded,
     detail: {
       source: entry.source,
       chars: rawText.length,
@@ -252,7 +255,7 @@ function shouldBlockToolCallOnlyTurn(meta = {}) {
 }
 
 function logPlanningCaptureResult(ctx = {}, processed = {}, {
-  event = "planning_checklist_captured",
+  event = PLANNING_EVENTS.checklistCaptured,
   defaultSource = "default",
 } = {}) {
   appendCapabilityLog(ctx, {
@@ -270,7 +273,7 @@ function handleAfterLlmPlanningProcessResult(ctx = {}, processed = {}, state = {
   if (processed.sourceType === "model") {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_checklist_captured",
+      event: PLANNING_EVENTS.checklistCaptured,
       detail: {
         checklistCount: processed.checklistCount,
         source: processed.sourceType,
@@ -283,7 +286,7 @@ function handleAfterLlmPlanningProcessResult(ctx = {}, processed = {}, state = {
     state.flags.planningPromptInjected = false;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_checklist_retry_scheduled",
+      event: PLANNING_EVENTS.checklistRetryScheduled,
       detail: {
         attempts: processed.attempts,
         maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS,
@@ -294,7 +297,7 @@ function handleAfterLlmPlanningProcessResult(ctx = {}, processed = {}, state = {
   }
 
   logPlanningCaptureResult(ctx, processed, {
-    event: "planning_checklist_captured",
+    event: PLANNING_EVENTS.checklistCaptured,
     defaultSource: "default",
   });
   return true;
@@ -323,7 +326,7 @@ async function handleSeparateModelPlanningProcessResult(
     });
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_checklist_retry_scheduled_by_separate_model",
+      event: PLANNING_EVENTS.checklistRetryScheduledBySeparateModel,
       detail: { attempts: processed.attempts, maxAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS },
     });
     return true;
@@ -337,7 +340,7 @@ async function handleSeparateModelPlanningProcessResult(
     attachmentMetas,
   });
   logPlanningCaptureResult(ctx, processed, {
-    event: "planning_checklist_captured_by_separate_model",
+    event: PLANNING_EVENTS.checklistCapturedBySeparateModel,
     defaultSource: "unknown",
   });
   return true;
@@ -351,7 +354,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   if (state.flags.planningSeparateModelInFlight === true) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_separate_model_skipped_inflight",
+      event: PLANNING_EVENTS.separateModelSkippedInflight,
     });
     return false;
   }
@@ -403,7 +406,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
     } catch (error) {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.PLANNING,
-        event: "planning_separate_model_call_failed",
+        event: PLANNING_EVENTS.separateModelCallFailed,
         detail: { error: String(error?.message || error || "") },
       });
       return false;
@@ -437,13 +440,13 @@ export async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     if (!shouldBlockToolCallOnlyTurn(meta)) {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.PLANNING,
-        event: "planning_capture_skipped_for_tool_call_turn",
+        event: PLANNING_EVENTS.captureSkippedForToolCallTurn,
       });
       return false;
     }
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_capture_blocked_for_tool_call_turn",
+      event: PLANNING_EVENTS.captureBlockedForToolCallTurn,
     });
     const locale = state?.locale || LOCALE.ZH_CN;
     const processed = await processPlanningResult(ctx, meta, {

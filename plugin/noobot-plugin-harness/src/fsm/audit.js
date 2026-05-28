@@ -7,7 +7,7 @@ import { nowIso } from "../data/record-builders.js";
 import { appendJsonlBuffered } from "../store/store.js";
 import { HARNESS_FLUSH_REASONS } from "../core/constants.js";
 import { HARNESS_FSM_EFFECTS } from "./transitions.js";
-import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/dialog-process-id.js";
+import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 
 export async function appendFsmAudit(paths, ctx = {}, payload = {}, options = {}) {
   if (!paths?.stateCommits || !payload?.type) return;

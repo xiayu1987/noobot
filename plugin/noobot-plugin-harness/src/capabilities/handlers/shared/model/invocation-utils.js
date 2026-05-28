@@ -3,10 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ensureHarnessBucket } from "./bucket-utils.js";
-import { isHarnessAgentTurnEnded } from "./lifecycle-utils.js";
+import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
+import { ensureHarnessBucket } from "../bucket-utils.js";
+import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 
 const THINK_BLOCK_RE = /<think>([\s\S]*?)<\/think>/gi;
+const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
+const WORKFLOW_EVENTS = WORKFLOW_PARAMS.workflow.events;
 
 function extractTextContent(content = "") {
   if (typeof content === "string") return content;
@@ -126,7 +129,7 @@ export async function invokeWithReasoningRetry({
     if (typeof appendCapabilityLog === "function") {
       appendCapabilityLog(ctx, {
         domain,
-        event: "capability_reasoning_captured",
+        event: SHARED_EVENTS.capabilityReasoningCaptured,
         detail: {
           purpose,
           attempt: attempt + 1,
@@ -138,7 +141,7 @@ export async function invokeWithReasoningRetry({
       if (typeof appendCapabilityLog === "function") {
         appendCapabilityLog(ctx, {
           domain,
-          event: "capability_reasoning_retry_exhausted_error",
+          event: SHARED_EVENTS.capabilityReasoningRetryExhaustedError,
           detail: {
             purpose,
             attempt: attempt + 1,
@@ -163,7 +166,7 @@ export async function invokeWithReasoningRetry({
     if (typeof appendCapabilityLog === "function") {
       appendCapabilityLog(ctx, {
         domain,
-        event: "capability_reasoning_retry_scheduled",
+        event: WORKFLOW_EVENTS.reasoningRetryScheduled,
         detail: {
           purpose,
           attempt: attempt + 1,

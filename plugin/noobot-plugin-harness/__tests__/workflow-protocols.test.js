@@ -11,7 +11,7 @@ import {
   buildPlanningRefinementPatchProtocolText,
   buildPlanningRevisionPatchProtocolText,
   buildSummaryPatchProtocolText,
-} from "../src/capabilities/handlers/shared/workflow-protocols.js";
+} from "../src/capabilities/handlers/shared/workflow/protocols.js";
 
 test("workflow protocols are split and reusable by flow", () => {
   assert.match(String(buildPlanningRevisionPatchProtocolText("zh-CN")), /ADD \[新整数ID\]/);
@@ -26,4 +26,3 @@ test("workflow protocols are split and reusable by flow", () => {
     /验收 ID\+PATCH 协议：acceptance_patch_v1 \/ 阶段验收/,
   );
 });
-

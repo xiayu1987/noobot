@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -20,8 +21,10 @@ import {
   resolveCapabilityModelMessages,
   resolveCapabilityToolAllowlist,
 } from "./deps.js";
-import { createPlanRevisionHelpers } from "../shared/plan-revision-helpers.js";
-import { buildPlanChecklistContextMessages } from "../shared/plan-checklist-context.js";
+import { createPlanRevisionHelpers } from "../shared/plan/revision-helpers.js";
+import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
+
+const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
 const planRevisionHelpers = createPlanRevisionHelpers({
   CAPABILITY_DOMAIN,
@@ -47,7 +50,7 @@ export async function runPlanningRefinementBySeparateModel(
   if (!invoker) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_refinement_invoker_missing",
+      event: PLANNING_EVENTS.refinementInvokerMissing,
     });
     return { applied: false, status: "invoker_missing" };
   }
@@ -56,7 +59,7 @@ export async function runPlanningRefinementBySeparateModel(
   if (!refinementTargetMainSteps.length) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_refinement_converged_no_target_main_step",
+      event: PLANNING_EVENTS.refinementConvergedNoTargetMainStep,
     });
     return { applied: false, status: "converged" };
   }
@@ -123,7 +126,7 @@ export async function runPlanningRefinementBySeparateModel(
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_refinement_model_failed",
+      event: PLANNING_EVENTS.refinementModelFailed,
       detail: { error: String(error?.message || error || "") },
     });
     return {

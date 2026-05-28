@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   ACCEPTANCE_MODE,
   CAPABILITY_DOMAIN,
@@ -16,6 +17,8 @@ import {
 } from "./deps.js";
 import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-builder.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
+
+const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
 function mergeAttachmentMetasForOutput(existing = [], incoming = []) {
   const current = Array.isArray(existing) ? existing : [];
@@ -121,7 +124,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      event: "checklist_artifact_attach_failed",
+      event: ACCEPTANCE_EVENTS.checklistArtifactAttachFailed,
       detail: { error: String(error?.message || error || "") },
     });
     return false;
@@ -146,7 +149,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   state.flags.checklistArtifactsAttached = true;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-    event: "checklist_artifacts_attached",
+    event: ACCEPTANCE_EVENTS.checklistArtifactsAttached,
     detail: { attachmentCount: metas.length },
   });
   return true;
@@ -181,7 +184,7 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
     ].filter(Boolean).join("\n");
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      event: "forced_acceptance_triggered",
+      event: ACCEPTANCE_EVENTS.forcedAcceptanceTriggered,
       detail: { forcedReason },
     });
     return true;

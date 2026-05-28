@@ -3,10 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN, appendCapabilityLog, ensureHarnessBucket } from "./deps.js";
 import { HARNESS_HOOK_POINTS, HARNESS_RUN_STATUS } from "../../../core/constants.js";
 import { collectRuleCodes } from "../shared/rule-table-utils.js";
 import { nowIsoTimestamp } from "../shared/report-utils.js";
+
+const REVIEW_EVENTS = WORKFLOW_PARAMS.logging.events.review;
 
 const REVIEW_ERROR_POINTS = new Set([
   HARNESS_HOOK_POINTS.ON_ERROR,
@@ -92,7 +95,7 @@ export function appendReviewReport(point = "", ctx = {}, report = null) {
   bucket.reviewReports.push(report);
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.REVIEW,
-    event: "review_report_generated",
+    event: REVIEW_EVENTS.reportGenerated,
     detail: { point, issues: report.summary.issues },
   });
   return true;

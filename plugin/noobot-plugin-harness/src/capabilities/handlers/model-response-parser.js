@@ -3,7 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LOCALE, extractJsonObjectFromText } from "./shared.js";
+import { LOCALE } from "./shared/constants.js";
+import { extractJsonObjectFromText } from "./shared/checklist-utils.js";
+
+const EMPTY_PLAN_METADATA = Object.freeze({
+  totalGoal: "",
+  taskOwner: "",
+  nextPhase: { objective: "", checklistIndexes: [], content: "" },
+});
 
 export function isSummaryCompletionMarked(summaryText = "", locale = LOCALE.ZH_CN) {
   const text = String(summaryText || "").trim();
@@ -26,11 +33,7 @@ export function isSummaryCompletionMarked(summaryText = "", locale = LOCALE.ZH_C
 export function extractPlanMetadataFromText(text = "") {
   const parsed = extractJsonObjectFromText(text);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return {
-      totalGoal: "",
-      taskOwner: "",
-      nextPhase: { objective: "", checklistIndexes: [], content: "" },
-    };
+    return { ...EMPTY_PLAN_METADATA, nextPhase: { ...EMPTY_PLAN_METADATA.nextPhase } };
   }
 
   const queue = [parsed];
@@ -61,13 +64,14 @@ export function extractPlanMetadataFromText(text = "") {
     selected.nextPhase && typeof selected.nextPhase === "object" && !Array.isArray(selected.nextPhase)
       ? selected.nextPhase
       : {};
+  const nextPhaseIndexes = nextPhase.checklistIndexes ?? nextPhase.indexes;
   return {
     totalGoal: String(selected.totalGoal ?? selected.goal ?? selected.objective ?? "").trim(),
     taskOwner: String(selected.taskOwner ?? selected.owner ?? "").trim(),
     nextPhase: {
       objective: String(nextPhase.objective ?? nextPhase.goal ?? nextPhase.task ?? "").trim(),
-      checklistIndexes: Array.isArray(nextPhase.checklistIndexes ?? nextPhase.indexes)
-        ? (nextPhase.checklistIndexes ?? nextPhase.indexes)
+      checklistIndexes: Array.isArray(nextPhaseIndexes)
+        ? nextPhaseIndexes
             .map((item) => Number(item))
             .filter((item) => Number.isFinite(item))
         : [],

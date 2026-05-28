@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -37,8 +38,10 @@ import { applySummaryText } from "./summary-manager.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
-} from "../shared/workflow-prompts.js";
-import { buildPlanChecklistContextMessages } from "../shared/plan-checklist-context.js";
+} from "../shared/workflow/prompts.js";
+import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
+
+const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
 export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -133,7 +136,7 @@ export async function runPlanUpdateAfterSummary(
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_revision_model_failed",
+      event: GUIDANCE_EVENTS.revisionModelFailed,
       detail: { error: String(error?.message || error || "") },
     });
     return changed;
@@ -162,7 +165,7 @@ export async function runPlanUpdateAfterSummary(
   if (!revisionApplied) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_revision_not_applied",
+      event: GUIDANCE_EVENTS.revisionNotApplied,
       detail: { hasResponseText: Boolean(revisionText) },
     });
     return changed;
@@ -178,7 +181,7 @@ export async function runPlanUpdateAfterSummary(
   if (!mainPlanChanged) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_refinement_skipped_no_main_plan_change",
+      event: GUIDANCE_EVENTS.refinementSkippedNoMainPlanChange,
     });
     return changed;
   }
@@ -186,7 +189,7 @@ export async function runPlanUpdateAfterSummary(
   if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "refinement" })) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
-      event: "planning_refinement_skipped_by_max_attempts",
+      event: GUIDANCE_EVENTS.refinementSkippedByMaxAttempts,
     });
     return changed;
   }
@@ -282,7 +285,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: "guidance_separate_model_call_failed",
+      event: GUIDANCE_EVENTS.separateModelCallFailed,
       detail: { purpose, error: String(error?.message || error || "") },
     });
     return false;
@@ -316,7 +319,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
-      event: "summary_messages_marked",
+      event: GUIDANCE_EVENTS.summaryMessagesMarked,
       detail: { markedCount },
     });
     if (isSummaryCompletionMarked(mergedSummaryText, locale)) {
@@ -324,7 +327,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     } else {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,
-        event: "summary_completion_marker_missing",
+        event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,
       });
     }
   }
@@ -332,8 +335,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     domain: CAPABILITY_DOMAIN.GUIDANCE,
     event:
       purpose === "summary"
-        ? "summary_generated_by_separate_model"
-        : "guidance_generated_by_separate_model",
+        ? GUIDANCE_EVENTS.summaryGeneratedBySeparateModel
+        : GUIDANCE_EVENTS.guidanceGeneratedBySeparateModel,
     detail: { reason: reason || undefined },
   });
   return true;

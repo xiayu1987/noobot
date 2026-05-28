@@ -4,5 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { createReviewHandler } from "./review/controller.js";
-
+export { createReviewHandler } from "./review/index.js";

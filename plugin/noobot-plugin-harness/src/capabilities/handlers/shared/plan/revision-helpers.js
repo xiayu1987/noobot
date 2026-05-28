@@ -9,11 +9,11 @@ import {
   parsePlanDocumentFromText,
   parseSubPlansFromPlanText,
   renderPlanDocument,
-} from "./plan-text-protocol.js";
+} from "./text-protocol.js";
 import {
   buildPlanningRefinementPromptText,
   getPlanningRefinementMarker,
-} from "./workflow-prompts.js";
+} from "../workflow/prompts.js";
 
 function formatMainPlansText(mainPlans = []) {
   if (!Array.isArray(mainPlans) || !mainPlans.length) return "（空）";

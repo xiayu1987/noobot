@@ -4,5 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { createGuidanceHandler } from "./guidance/controller.js";
-
+export { createGuidanceHandler } from "./guidance/index.js";

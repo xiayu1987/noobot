@@ -5,6 +5,7 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { runPlanningRefinementBySeparateModel } from "./refinement-runner.js";
 import {
   CAPABILITY_DOMAIN,
@@ -15,6 +16,8 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
+
+const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
 function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
@@ -89,7 +92,7 @@ export function ensurePlanRefinementTool(ctx = {}, meta = {}) {
   registry.push(createPlanRefinementTool({ state, ctx, meta }));
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
-    event: "planning_refinement_tool_injected",
+    event: PLANNING_EVENTS.refinementToolInjected,
   });
   return true;
 }

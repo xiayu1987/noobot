@@ -9,11 +9,11 @@ import {
   appendCapabilityLog,
   ensureHarnessBucket,
 } from "./deps.js";
-import { createPlanRevisionHelpers } from "../shared/plan-revision-helpers.js";
+import { createPlanRevisionHelpers } from "../shared/plan/revision-helpers.js";
 import {
   buildPlanningRevisionPromptText,
   getPlanningRevisionMarker,
-} from "../shared/workflow-prompts.js";
+} from "../shared/workflow/prompts.js";
 import { canAttemptPlanUpdate } from "./plan-update-engine.js";
 
 const planRevisionHelpers = createPlanRevisionHelpers({
