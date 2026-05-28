@@ -102,8 +102,6 @@ type ExecutionContext = {
   };
 
   controllers: {
-    abortSignal: AbortSignal | null;
-    parentAsyncResultContainer: Record<string, any> | null;
     runtime: RuntimeContext;
   };
 };
@@ -243,12 +241,7 @@ type SessionContext = {
 
   current: {
     id: string;
-    attachments: any[];
     connectors: Record<string, any>;
-    turnStore: {
-      currentTurnMessages: any;
-      currentTurnTasks: any;
-    };
   };
 };
 ```
@@ -260,9 +253,7 @@ type SessionContext = {
 - `parent.id`：`systemRuntime.parentSessionId` 或构建参数 `parentSessionId`。
 - `parent.caller`：`systemRuntime.caller` 或构建参数 `caller`。
 - `current.id`：`systemRuntime.sessionId` 或构建参数 `sessionId`。
-- `current.attachments`：`runtime.attachmentMetas`。
 - `current.connectors`：由 `systemRuntime.config.selectedConnectors` 归一化得到。
-- `current.turnStore`：引用 runtime 的 current-turn stores。
 
 ## 7. payload
 
@@ -277,7 +268,6 @@ type PayloadContext = {
 
   tools: {
     registry: any[];              // buildTools() 后写入
-    shared: Record<string, any>;  // runtime.sharedTools 引用/快照
   };
 
   // harness 插件运行后可能存在
@@ -303,7 +293,6 @@ type PayloadContext = {
 ```ts
 type PayloadTools = {
   registry: any[];             // 当前可用工具定义列表
-  shared: Record<string, any>; // 与 runtime.sharedTools 对应
 };
 ```
 
