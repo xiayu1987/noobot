@@ -18,17 +18,16 @@ import {
 } from "../shared/runtime/dialog-process-id.js";
 import { processPlanningResult } from "./result-pipeline.js";
 import {
-  buildPlanningPromptBase,
-  buildPlanningToolContextPrompt,
+  buildPlanningMessagePlan,
   resolveLatestUserMessageText,
 } from "./prompt-builder.js";
+import { renderMessagePlanForSeparateModel } from "../shared/model/message-plan.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
   PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
-  buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
@@ -210,14 +209,14 @@ function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOC
     ctx,
     purpose: "planning",
   });
-  const messages = buildCapabilityModelMessages({
+  const messagePlan = buildPlanningMessagePlan(locale, ctx, meta, {
+    contextSummaryContent:
+      `${getPlanningContextSummaryHeader(locale)}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
+  });
+  const messages = renderMessagePlanForSeparateModel({
     locale,
     agentMessages,
-    constraints: [
-      `${getPlanningContextSummaryHeader(locale)}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
-      buildPlanningToolContextPrompt(locale, ctx, meta),
-    ],
-    task: buildPlanningPromptBase(locale, ctx, meta),
+    plan: messagePlan,
   });
   return messages;
 }

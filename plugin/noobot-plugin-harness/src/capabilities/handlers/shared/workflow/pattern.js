@@ -19,9 +19,11 @@ export function appendWorkflowPriorityDecision(
     domain = "",
     point = "",
     mode = "",
+    category = "",
     chosenAction = "none",
     chosenReason = "idle",
     chosenStage = "",
+    triggeredActions = [],
     blockedActions = [],
     pending = {},
   } = {},
@@ -32,9 +34,11 @@ export function appendWorkflowPriorityDecision(
     detail: {
       point: String(point || "").trim() || undefined,
       mode: String(mode || "").trim() || undefined,
+      category: String(category || "").trim() || undefined,
       chosenAction,
       chosenReason,
       chosenStage: String(chosenStage || "").trim() || undefined,
+      triggeredActions: Array.isArray(triggeredActions) ? triggeredActions : [],
       blockedActions: Array.isArray(blockedActions) ? blockedActions : [],
       pending: pending && typeof pending === "object" ? pending : {},
     },
@@ -47,6 +51,7 @@ export function appendWorkflowExecutionResult(
     domain = "",
     point = "",
     mode = "",
+    category = "",
     chosenAction = "none",
     chosenReason = "idle",
     requestedAction = "none",
@@ -67,6 +72,7 @@ export function appendWorkflowExecutionResult(
     detail: {
       point: String(point || "").trim() || undefined,
       mode: String(mode || "").trim() || undefined,
+      category: String(category || "").trim() || undefined,
       chosenAction,
       chosenReason,
       requestedAction,
@@ -123,4 +129,62 @@ export function resolveWorkflowExecutionMetrics(
     }
   }
   return { retryCount, errorCode };
+}
+
+export async function runWorkflowLifecycle(
+  ctx = {},
+  {
+    domain = "",
+    point = "",
+    mode = "",
+    resolveDecision = () =>
+      ({ category: "", chosenAction: "none", chosenReason: "idle", triggeredActions: [], blockedActions: [], pending: {} }),
+    execute = async () => ({ requestedAction: "none", executedPrimary: false, executedFollowup: false, changed: false }),
+  } = {},
+) {
+  const startedAt = Date.now();
+  const logCursor = captureWorkflowLogCursor(ctx, domain);
+  const decision = resolveDecision() || {};
+  appendWorkflowPriorityDecision(ctx, {
+    domain,
+    point,
+    mode,
+    category: decision.category || "",
+    chosenAction: decision.chosenAction || "none",
+    chosenReason: decision.chosenReason || "idle",
+    chosenStage: decision.chosenStage || "",
+    triggeredActions: decision.triggeredActions || [],
+    blockedActions: decision.blockedActions || [],
+    pending: decision.pending || {},
+  });
+  const execution = (await execute(decision)) || {};
+  const metrics = resolveWorkflowExecutionMetrics(ctx, {
+    domain,
+    startCursor: logCursor,
+  });
+  appendWorkflowExecutionResult(ctx, {
+    domain,
+    point,
+    mode,
+    category: decision.category || "",
+    chosenAction: decision.chosenAction || "none",
+    chosenReason: decision.chosenReason || "idle",
+    requestedAction: execution.requestedAction || "none",
+    executedPrimary: execution.executedPrimary === true,
+    executedFollowup: execution.executedFollowup === true,
+    changed: execution.changed === true,
+    durationMs: Date.now() - startedAt,
+    retryCount: metrics.retryCount,
+    errorCode: metrics.errorCode,
+  });
+  return {
+    decision,
+    execution: {
+      requestedAction: execution.requestedAction || "none",
+      executedPrimary: execution.executedPrimary === true,
+      executedFollowup: execution.executedFollowup === true,
+      changed: execution.changed === true,
+    },
+    metrics,
+  };
 }

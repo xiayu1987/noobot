@@ -78,7 +78,7 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   assert.equal(Boolean(executionLog), true);
   assert.equal(decisionLog?.detail?.chosenAction, "plan_update_revision");
   assert.equal(decisionLog?.detail?.mode, "inject");
-  assert.equal(executionLog?.detail?.requestedAction, "plan_update_revision");
+  assert.equal(executionLog?.detail?.requestedAction, "plan_update_revision_inject");
   assert.equal(executionLog?.detail?.executedPrimary, true);
   assert.equal(executionLog?.detail?.mode, "inject");
   assert.equal(Number.isFinite(Number(executionLog?.detail?.durationMs)), true);

@@ -50,9 +50,11 @@ Hook point: `before_llm_call`
 Log detail fields:
 
 - `mode`: `inject` or `separate_model`
+- `category`: `workflow` | `guard` (semantic grouping; especially useful for acceptance flow)
 - `chosenAction`: `summary_overflow` | `guidance` | `plan_update_revision` | `plan_update_refinement` | `summary_turns` | `none`
 - `chosenReason`: scheduler reason code
 - `chosenStage`: `revision` | `refinement` | `""`
+- `triggeredActions`: scanned/triggered action set for the current turn (for example planning summary/plan-update/phase-acceptance)
 - `blockedActions`: pending flows blocked by current selected action
 - `pending`: snapshot
   - `summary`
@@ -64,6 +66,7 @@ Log detail fields:
 Execution result fields (`workflow_execution_result`):
 
 - `mode`: `inject` or `separate_model`
+- `category`
 - `chosenAction`
 - `chosenReason`
 - `requestedAction`
@@ -83,6 +86,12 @@ Notes:
 Parameter source of truth: `src/core/workflow-params.js` (`WORKFLOW_PARAMS`), including
 thresholds, tool names, scheduler order, workflow action/reason/event enums, and
 capability log event names (`logging.events.*`).
+
+Unified observation/lifecycle entry:
+
+- `src/capabilities/handlers/shared/workflow/pattern.js`
+  - `runWorkflowLifecycle(...)`: standardized `priority_decision -> execute -> execution_result`
+  - `captureWorkflowLogCursor(...)` + `resolveWorkflowExecutionMetrics(...)`: shared `retryCount/errorCode` metrics
 
 ### Planning
 
@@ -109,6 +118,23 @@ capability log event names (`logging.events.*`).
   - Consecutive failures: `CONSECUTIVE = 3`
   - Accumulated failures: `ACCUMULATED = 10`
 - When threshold hit, set `pending.guidance` and guidance flow is eligible at next `before_llm_call`.
+- `requestedAction` naming now follows `action + mode`, for example:
+  - `summary_inject` / `summary_separate_model`
+  - `guidance_inject` / `guidance_separate_model`
+  - `plan_update_revision_inject` / `plan_update_refinement_separate_model`
+  - `phase_acceptance_inject` / `phase_acceptance_separate_model`
+  - `forced_acceptance_before_tool_calls_rewrite`
+
+### Message Intermediate Representation (Message Plan)
+
+Planning inject and separate-model paths now share an intermediate message plan:
+
+- Shape: `[{ kind, injectRole, separateRole, content }]`
+- Rendering:
+  - Inject: `renderMessagePlanForInject(plan)`
+  - Separate-model: `renderMessagePlanForSeparateModel({ agentMessages, plan })`
+- Implementation:
+  - `src/capabilities/handlers/shared/model/message-plan.js`
 
 ### Plan Update (revision/refinement)
 
@@ -156,6 +182,11 @@ Notation: `existing_context` is the current main-model context; `agent_messages`
   - `src/capabilities/handlers/guidance/revision-injector.js`
 - Acceptance message composition:
   - `src/capabilities/handlers/acceptance/validation-runner.js`
+- Domain lifecycle entries (wired to `runWorkflowLifecycle`):
+  - `src/capabilities/handlers/planning/controller.js`
+  - `src/capabilities/handlers/guidance/controller.js`
+  - `src/capabilities/handlers/acceptance/controller.js`
+  - `src/capabilities/handlers/review/controller.js`
 - Threshold constants:
   - `src/core/thresholds.js`
 

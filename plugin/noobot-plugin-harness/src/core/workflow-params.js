@@ -130,12 +130,26 @@ export const WORKFLOW_PARAMS = deepFreeze({
     decisions: {
       action: {
         planningBootstrap: "planning_bootstrap",
+        planningCapture: "planning_capture",
+      },
+      label: {
+        summaryOverflow: "summary_overflow",
+        summaryTurns: "summary_turns",
+        planUpdateRevision: "plan_update_revision",
+        phaseAcceptance: "phase_acceptance",
       },
       reason: {
         idle: "planning_idle",
         summaryThresholdTurns: "summary_threshold_turns",
         summaryThresholdChars: "summary_threshold_chars",
         planUpdateThreshold: "plan_update_threshold",
+        phaseAcceptanceThreshold: "phase_acceptance_threshold",
+        afterLlmCapture: "after_llm_capture",
+      },
+      requestedAction: {
+        planningInject: "planning_inject",
+        planningSeparateModel: "planning_separate_model",
+        planningCapture: "planning_capture",
       },
     },
   },
@@ -175,6 +189,17 @@ export const WORKFLOW_PARAMS = deepFreeze({
         pendingRefinement: "pending_refinement",
         idle: "idle",
       },
+      requestedAction: {
+        none: "none",
+        summaryInject: "summary_inject",
+        summarySeparateModel: "summary_separate_model",
+        guidanceInject: "guidance_inject",
+        guidanceSeparateModel: "guidance_separate_model",
+        planUpdateRevisionInject: "plan_update_revision_inject",
+        planUpdateRevisionSeparateModel: "plan_update_revision_separate_model",
+        planUpdateRefinementInject: "plan_update_refinement_inject",
+        planUpdateRefinementSeparateModel: "plan_update_refinement_separate_model",
+      },
     },
     web: {
       serviceName: "web_search_service",
@@ -195,6 +220,10 @@ export const WORKFLOW_PARAMS = deepFreeze({
       blockedAgentToolNames: ["plan_multi_task_collaboration", "task_summary"],
     },
     decisions: {
+      category: {
+        workflow: "workflow",
+        guard: "guard",
+      },
       action: {
         phaseAcceptance: "phase_acceptance",
         forcedAcceptance: "forced_acceptance",
@@ -215,6 +244,35 @@ export const WORKFLOW_PARAMS = deepFreeze({
         finalOutputAcceptanceFallback: "final_output_acceptance_fallback",
         afterLlmCapture: "after_llm_capture",
         idle: "idle",
+      },
+      requestedAction: {
+        none: "none",
+        phaseAcceptanceInject: "phase_acceptance_inject",
+        phaseAcceptanceSeparateModel: "phase_acceptance_separate_model",
+        acceptanceSemanticValidationInject: "acceptance_semantic_validation_inject",
+        acceptanceToolGuardBeforeTurn: "acceptance_tool_guard_before_turn",
+        acceptanceToolGuardBeforeToolCalls: "acceptance_tool_guard_before_tool_calls",
+        acceptanceToolGuardBeforeToolCall: "acceptance_tool_guard_before_tool_call",
+        forcedAcceptanceBeforeLlmInject: "forced_acceptance_before_llm_inject",
+        forcedAcceptanceBeforeToolCallsRewrite: "forced_acceptance_before_tool_calls_rewrite",
+        forcedAcceptanceBeforeToolCallRewrite: "forced_acceptance_before_tool_call_rewrite",
+        finalOutputAcceptanceGuard: "final_output_acceptance_guard",
+        finalOutputOverflowGuard: "final_output_overflow_guard",
+        acceptanceCaptureInject: "acceptance_capture_inject",
+      },
+    },
+  },
+  review: {
+    decisions: {
+      action: {
+        reviewReport: "review_report",
+      },
+      reason: {
+        hookReview: "hook_review",
+      },
+      requestedAction: {
+        reportAttachOutput: "review_report_attach_output",
+        reportInternal: "review_report_internal",
       },
     },
   },
