@@ -14,10 +14,16 @@ import {
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
 const REVIEW_DECISION = WORKFLOW_PARAMS.review.decisions;
+const REVIEW_HOOKS = new Set(
+  Array.isArray(WORKFLOW_PARAMS.review?.hooks) ? WORKFLOW_PARAMS.review.hooks : ["before_final_output", "on_error", "on_abort"],
+);
 
 export function createReviewHandler() {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     const hook = String(point || "").trim();
+    if (!REVIEW_HOOKS.has(hook)) {
+      return { capability, point, status: "active", changed: false };
+    }
     const mode = resolveWorkflowMode(meta);
     enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.REVIEW });
     const reviewOptions = meta?.harness?.review && typeof meta.harness.review === "object"

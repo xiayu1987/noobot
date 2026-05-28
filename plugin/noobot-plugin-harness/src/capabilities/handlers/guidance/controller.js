@@ -134,7 +134,10 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
           chosenAction: decision.chosenAction,
           chosenReason: decision.chosenReason,
           chosenStage: decision.chosenStage,
+          candidateActions: decision.candidateActions,
+          deferredActions: decision.deferredActions,
           blockedActions: decision.blockedActions,
+          blockedReasons: decision.blockedReasons,
           pending: decision.pendingSnapshot,
         }),
         execute: async () => {

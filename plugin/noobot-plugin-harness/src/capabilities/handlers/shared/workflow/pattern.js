@@ -23,11 +23,16 @@ export function appendWorkflowPriorityDecision(
     chosenAction = "none",
     chosenReason = "idle",
     chosenStage = "",
+    candidateActions = [],
+    deferredActions = [],
     triggeredActions = [],
     blockedActions = [],
+    blockedReasons = [],
     pending = {},
   } = {},
 ) {
+  const normalizedCandidateActions = Array.isArray(candidateActions) ? candidateActions : [];
+  const normalizedTriggeredActions = Array.isArray(triggeredActions) ? triggeredActions : [];
   return appendCapabilityLog(ctx, {
     domain,
     event: WORKFLOW_EVENTS.priorityDecision,
@@ -38,8 +43,12 @@ export function appendWorkflowPriorityDecision(
       chosenAction,
       chosenReason,
       chosenStage: String(chosenStage || "").trim() || undefined,
-      triggeredActions: Array.isArray(triggeredActions) ? triggeredActions : [],
+      candidateActions: normalizedCandidateActions,
+      deferredActions: Array.isArray(deferredActions) ? deferredActions : [],
+      // Keep legacy field for downstream consumers during migration.
+      triggeredActions: normalizedTriggeredActions.length ? normalizedTriggeredActions : normalizedCandidateActions,
       blockedActions: Array.isArray(blockedActions) ? blockedActions : [],
+      blockedReasons: Array.isArray(blockedReasons) ? blockedReasons : [],
       pending: pending && typeof pending === "object" ? pending : {},
     },
   });
@@ -102,6 +111,16 @@ function resolveEventErrorCode(eventName = "") {
   return "";
 }
 
+function resolveThrownErrorCode(error = null) {
+  if (!error || typeof error !== "object") return "";
+  const code = String(error?.code || error?.name || "").trim();
+  if (!code) return "";
+  return code
+    .replaceAll(/[^a-zA-Z0-9]+/g, "_")
+    .replaceAll(/^_+|_+$/g, "")
+    .toUpperCase();
+}
+
 export function resolveWorkflowExecutionMetrics(
   ctx = {},
   { domain = "", startCursor = 0 } = {},
@@ -138,7 +157,17 @@ export async function runWorkflowLifecycle(
     point = "",
     mode = "",
     resolveDecision = () =>
-      ({ category: "", chosenAction: "none", chosenReason: "idle", triggeredActions: [], blockedActions: [], pending: {} }),
+      ({
+        category: "",
+        chosenAction: "none",
+        chosenReason: "idle",
+        candidateActions: [],
+        deferredActions: [],
+        triggeredActions: [],
+        blockedActions: [],
+        blockedReasons: [],
+        pending: {},
+      }),
     execute = async () => ({ requestedAction: "none", executedPrimary: false, executedFollowup: false, changed: false }),
   } = {},
 ) {
@@ -153,38 +182,49 @@ export async function runWorkflowLifecycle(
     chosenAction: decision.chosenAction || "none",
     chosenReason: decision.chosenReason || "idle",
     chosenStage: decision.chosenStage || "",
+    candidateActions: decision.candidateActions || [],
+    deferredActions: decision.deferredActions || [],
     triggeredActions: decision.triggeredActions || [],
     blockedActions: decision.blockedActions || [],
+    blockedReasons: decision.blockedReasons || [],
     pending: decision.pending || {},
   });
-  const execution = (await execute(decision)) || {};
-  const metrics = resolveWorkflowExecutionMetrics(ctx, {
-    domain,
-    startCursor: logCursor,
-  });
-  appendWorkflowExecutionResult(ctx, {
-    domain,
-    point,
-    mode,
-    category: decision.category || "",
-    chosenAction: decision.chosenAction || "none",
-    chosenReason: decision.chosenReason || "idle",
-    requestedAction: execution.requestedAction || "none",
-    executedPrimary: execution.executedPrimary === true,
-    executedFollowup: execution.executedFollowup === true,
-    changed: execution.changed === true,
-    durationMs: Date.now() - startedAt,
-    retryCount: metrics.retryCount,
-    errorCode: metrics.errorCode,
-  });
-  return {
-    decision,
-    execution: {
+  let execution = { requestedAction: "none", executedPrimary: false, executedFollowup: false, changed: false };
+  let caughtError = null;
+  try {
+    execution = (await execute(decision)) || execution;
+  } catch (error) {
+    caughtError = error;
+  } finally {
+    const metrics = resolveWorkflowExecutionMetrics(ctx, {
+      domain,
+      startCursor: logCursor,
+    });
+    appendWorkflowExecutionResult(ctx, {
+      domain,
+      point,
+      mode,
+      category: decision.category || "",
+      chosenAction: decision.chosenAction || "none",
+      chosenReason: decision.chosenReason || "idle",
       requestedAction: execution.requestedAction || "none",
       executedPrimary: execution.executedPrimary === true,
       executedFollowup: execution.executedFollowup === true,
       changed: execution.changed === true,
-    },
-    metrics,
-  };
+      durationMs: Date.now() - startedAt,
+      retryCount: metrics.retryCount,
+      errorCode: metrics.errorCode || resolveThrownErrorCode(caughtError),
+    });
+    if (caughtError) throw caughtError;
+    return {
+      decision,
+      execution: {
+        requestedAction: execution.requestedAction || "none",
+        executedPrimary: execution.executedPrimary === true,
+        executedFollowup: execution.executedFollowup === true,
+        changed: execution.changed === true,
+      },
+      metrics,
+    };
+  }
 }

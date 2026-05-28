@@ -263,6 +263,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     },
   },
   review: {
+    hooks: ["before_final_output", "on_error", "on_abort"],
     decisions: {
       action: {
         reviewReport: "review_report",

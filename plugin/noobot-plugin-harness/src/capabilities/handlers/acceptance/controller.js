@@ -46,69 +46,111 @@ function resolveAcceptanceDecision({
 } = {}) {
   const state = holder?.state || {};
   const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
+  const candidateActions = [];
   const blockedActions = [];
+  const blockedReasons = [];
   let category = ACCEPTANCE_DECISION.category.workflow;
   let chosenAction = ACCEPTANCE_DECISION.action.none;
   let chosenReason = ACCEPTANCE_DECISION.reason.idle;
   if (point === "before_llm_call") {
     if (forceAcceptanceDueToOverflow) {
+      candidateActions.push(ACCEPTANCE_DECISION.action.forcedAcceptance);
       chosenAction = ACCEPTANCE_DECISION.action.forcedAcceptance;
       chosenReason = ACCEPTANCE_DECISION.reason.overflowForceAcceptance;
-    } else if (pending.phaseAcceptance === true) {
-      if (hasHigherPriorityPendingForPhaseAcceptance(state)) {
-        blockedActions.push(ACCEPTANCE_DECISION.action.phaseAcceptance);
-        chosenAction = ACCEPTANCE_DECISION.action.none;
-        chosenReason = ACCEPTANCE_DECISION.reason.phaseAcceptanceBlocked;
-      } else {
-        chosenAction = ACCEPTANCE_DECISION.action.phaseAcceptance;
-        chosenReason = ACCEPTANCE_DECISION.reason.phaseAcceptancePending;
+    } else {
+      if (pending.phaseAcceptance === true) {
+        candidateActions.push(ACCEPTANCE_DECISION.action.phaseAcceptance);
+        if (hasHigherPriorityPendingForPhaseAcceptance(state)) {
+          blockedActions.push(ACCEPTANCE_DECISION.action.phaseAcceptance);
+          blockedReasons.push("phase_acceptance_blocked_by_higher_priority_pending");
+          chosenAction = ACCEPTANCE_DECISION.action.none;
+          chosenReason = ACCEPTANCE_DECISION.reason.phaseAcceptanceBlocked;
+        } else {
+          chosenAction = ACCEPTANCE_DECISION.action.phaseAcceptance;
+          chosenReason = ACCEPTANCE_DECISION.reason.phaseAcceptancePending;
+        }
       }
-    }
-    if (pending.acceptanceSemanticValidation) {
-      if (chosenAction === ACCEPTANCE_DECISION.action.none) {
-        chosenAction = ACCEPTANCE_DECISION.action.acceptanceSemanticValidation;
-        chosenReason = ACCEPTANCE_DECISION.reason.acceptanceSemanticValidationPending;
-      } else {
-        blockedActions.push(ACCEPTANCE_DECISION.action.acceptanceSemanticValidation);
+      if (pending.acceptanceSemanticValidation) {
+        candidateActions.push(ACCEPTANCE_DECISION.action.acceptanceSemanticValidation);
+        if (chosenAction === ACCEPTANCE_DECISION.action.none) {
+          chosenAction = ACCEPTANCE_DECISION.action.acceptanceSemanticValidation;
+          chosenReason = ACCEPTANCE_DECISION.reason.acceptanceSemanticValidationPending;
+        } else {
+          blockedActions.push(ACCEPTANCE_DECISION.action.acceptanceSemanticValidation);
+          blockedReasons.push("acceptance_semantic_validation_deferred_by_primary_choice");
+        }
       }
     }
   } else if (point === "before_tool_calls" || point === "before_tool_call") {
     category = ACCEPTANCE_DECISION.category.guard;
     if (forceAcceptanceDueToOverflow) {
+      candidateActions.push(ACCEPTANCE_DECISION.action.forcedAcceptance);
       chosenAction = ACCEPTANCE_DECISION.action.forcedAcceptance;
       chosenReason = ACCEPTANCE_DECISION.reason.overflowForceAcceptance;
     } else {
+      candidateActions.push(ACCEPTANCE_DECISION.action.acceptanceToolGuard);
       chosenAction = ACCEPTANCE_DECISION.action.acceptanceToolGuard;
       chosenReason = ACCEPTANCE_DECISION.reason.toolGuard;
     }
   } else if (point === "before_turn") {
     category = ACCEPTANCE_DECISION.category.guard;
+    candidateActions.push(ACCEPTANCE_DECISION.action.acceptanceToolGuard);
     chosenAction = ACCEPTANCE_DECISION.action.acceptanceToolGuard;
     chosenReason = ACCEPTANCE_DECISION.reason.beforeTurnSetup;
   } else if (point === "before_final_output") {
     category = ACCEPTANCE_DECISION.category.guard;
+    candidateActions.push(ACCEPTANCE_DECISION.action.finalOutputAcceptanceGuard);
     chosenAction = ACCEPTANCE_DECISION.action.finalOutputAcceptanceGuard;
     chosenReason = forceAcceptanceDueToOverflow
       ? ACCEPTANCE_DECISION.reason.finalOutputOverflowFallback
       : ACCEPTANCE_DECISION.reason.finalOutputAcceptanceFallback;
   } else if (point === "after_llm_call") {
+    candidateActions.push(ACCEPTANCE_DECISION.action.acceptanceCapture);
     chosenAction = ACCEPTANCE_DECISION.action.acceptanceCapture;
     chosenReason = ACCEPTANCE_DECISION.reason.afterLlmCapture;
   }
+  const planUpdateStage = String(pending?.planUpdateStage || "").trim();
+  const planUpdateContext = pending?.planUpdateContext && typeof pending.planUpdateContext === "object"
+    ? pending.planUpdateContext
+    : {};
   return {
     category,
     chosenAction,
     chosenReason,
+    candidateActions,
+    deferredActions: candidateActions.filter((item) => item !== chosenAction),
     blockedActions,
+    blockedReasons,
     pending: {
-      summary: pending.summary === true,
-      guidance: pending.guidance || null,
-      planUpdate: pending.planUpdate === true,
-      phaseAcceptance: pending.phaseAcceptance === true,
-      acceptanceSemanticValidation: Boolean(pending.acceptanceSemanticValidation),
-      planningCaptured: state?.flags?.planningCaptured === true,
-      overflowForceAcceptancePending: state?.flags?.overflowForceAcceptancePending === true,
-      acceptancePhaseBlockerKeys: ACCEPTANCE_PHASE_BLOCKER_KEYS,
+      summary: {
+        active: pending.summary === true,
+        reason: pending.summary === true
+          ? (state?.flags?.summaryByCharsPrompted === true ? "summary_overflow" : "summary_turns")
+          : "",
+      },
+      guidance: {
+        active: Boolean(pending.guidance),
+        payload: pending.guidance || null,
+      },
+      planUpdate: {
+        active: pending.planUpdate === true,
+        stage: pending.planUpdate === true ? planUpdateStage : "",
+        context: pending.planUpdate === true ? planUpdateContext : {},
+      },
+      phaseAcceptance: {
+        active: pending.phaseAcceptance === true,
+        blockedBy: hasHigherPriorityPendingForPhaseAcceptance(state)
+          ? ACCEPTANCE_PHASE_BLOCKER_KEYS
+          : [],
+      },
+      acceptanceSemanticValidation: {
+        active: Boolean(pending.acceptanceSemanticValidation),
+      },
+      flags: {
+        planningCaptured: state?.flags?.planningCaptured === true,
+        summaryByCharsPrompted: state?.flags?.summaryByCharsPrompted === true,
+        overflowForceAcceptancePending: state?.flags?.overflowForceAcceptancePending === true,
+      },
     },
   };
 }
@@ -187,21 +229,24 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
       category: decision.category,
       chosenAction: decision.chosenAction,
       chosenReason: decision.chosenReason,
+      candidateActions: decision.candidateActions,
+      deferredActions: decision.deferredActions,
       blockedActions: decision.blockedActions,
+      blockedReasons: decision.blockedReasons,
       pending: decision.pending,
     }),
     execute: async () => {
       let changed = invariantChanged;
       let executedPrimary = false;
       let executedFollowup = false;
-      if (point === "before_turn") {
+      if (point === "before_turn" && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard) {
         const step1 = disableBlockedToolsInRegistry(ctx);
         const step2 = ensureTaskAcceptanceTool(ctx, meta);
         changed = step1 || step2 || changed;
         executedPrimary = step1 === true || step2 === true;
       }
-      if (point === "before_tool_calls") {
-        if (forceAcceptanceDueToOverflow && Array.isArray(ctx?.calls) && ctx.calls.length) {
+      if (point === "before_tool_calls" && decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance) {
+        if (Array.isArray(ctx?.calls) && ctx.calls.length) {
           const firstCall = ctx.calls[0] || {};
           firstCall.name = TASK_ACCEPTANCE_TOOL_NAME;
           firstCall.args = { mode: ACCEPTANCE_MODE.FORCED };
@@ -210,24 +255,31 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
           changed = true;
           executedPrimary = true;
         }
+        const step = ensureTaskAcceptanceTool(ctx, meta);
+        changed = step || changed;
+        executedFollowup = step === true || executedFollowup;
+      } else if (point === "before_tool_calls" && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard) {
         const step1 = disableBlockedCalls(ctx?.calls || []);
         const step2 = ensureTaskAcceptanceTool(ctx, meta);
         changed = step1 || step2 || changed;
-        executedPrimary = executedPrimary || step1 === true || step2 === true;
+        executedPrimary = step1 === true || step2 === true;
       }
-      if (point === "before_tool_call" && BLOCKED_AGENT_TOOL_NAMES.has(String(ctx?.call?.name || "").trim())) {
+      if (point === "before_tool_call" && decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance) {
+        ctx.call.name = TASK_ACCEPTANCE_TOOL_NAME;
+        ctx.call.args = { mode: ACCEPTANCE_MODE.FORCED };
+        changed = true;
+        executedPrimary = true;
+      } else if (
+        point === "before_tool_call" &&
+        decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard &&
+        BLOCKED_AGENT_TOOL_NAMES.has(String(ctx?.call?.name || "").trim())
+      ) {
         ctx.call.name = TASK_ACCEPTANCE_TOOL_NAME;
         ctx.call.args = { mode: ACCEPTANCE_MODE.ACTIVE };
         changed = true;
         executedPrimary = true;
       }
-      if (point === "before_tool_call" && forceAcceptanceDueToOverflow) {
-        ctx.call.name = TASK_ACCEPTANCE_TOOL_NAME;
-        ctx.call.args = { mode: ACCEPTANCE_MODE.FORCED };
-        changed = true;
-        executedPrimary = true;
-      }
-      if (point === "before_llm_call" && forceAcceptanceDueToOverflow) {
+      if (point === "before_llm_call" && decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance) {
         if (Array.isArray(ctx?.messages)) {
           const overflowPromptTemplate =
             WORKFLOW_PARAMS.acceptance.guards.overflowForcedAcceptanceSystemPrompt;
@@ -241,7 +293,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
           executedPrimary = true;
         }
       }
-      if (point === "before_final_output") {
+      if (point === "before_final_output" && decision.chosenAction === ACCEPTANCE_DECISION.action.finalOutputAcceptanceGuard) {
         const step1 = (await ensurePhaseAcceptanceBeforeFinalAcceptance(ctx, meta)) || false;
         const step2 = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || false;
         const step3 = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || false;
@@ -253,23 +305,25 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
           changed = true;
         }
       }
-      if (point === "before_llm_call") {
-        if (holder?.state?.pending?.phaseAcceptance === true && !hasHigherPriorityPendingForPhaseAcceptance(holder.state)) {
-          if (shouldUseSeparateModel(meta)) {
-            const result = (await runPhaseAcceptanceBySeparateModel(ctx, meta)) || false;
-            changed = result || changed;
-            executedPrimary = result === true || executedPrimary;
-          } else {
-            const result = maybeInjectPhaseAcceptancePrompt(ctx) || false;
-            changed = result || changed;
-            executedPrimary = result === true || executedPrimary;
-          }
+      if (point === "before_llm_call" && decision.chosenAction === ACCEPTANCE_DECISION.action.phaseAcceptance) {
+        if (shouldUseSeparateModel(meta)) {
+          const result = (await runPhaseAcceptanceBySeparateModel(ctx, meta)) || false;
+          changed = result || changed;
+          executedPrimary = result === true || executedPrimary;
+        } else {
+          const result = maybeInjectPhaseAcceptancePrompt(ctx) || false;
+          changed = result || changed;
+          executedPrimary = result === true || executedPrimary;
         }
-        const followup = maybeInjectAcceptanceSemanticValidationPrompt(ctx) || false;
-        changed = followup || changed;
-        executedFollowup = followup === true || executedFollowup;
+      } else if (
+        point === "before_llm_call" &&
+        decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceSemanticValidation
+      ) {
+        const result = maybeInjectAcceptanceSemanticValidationPrompt(ctx) || false;
+        changed = result || changed;
+        executedPrimary = result === true || executedPrimary;
       }
-      if (point === "after_llm_call") {
+      if (point === "after_llm_call" && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceCapture) {
         const step1 = (await maybeCapturePhaseAcceptanceByInject(ctx)) || false;
         const step2 = (await maybeCaptureAcceptanceSemanticValidationByInject(ctx)) || false;
         changed = step1 || step2 || changed;

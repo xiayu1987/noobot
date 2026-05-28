@@ -15,10 +15,17 @@ Planning, guidance, acceptance, and review follow the matrix below:
 
 | Flow | Trigger | Arbitrate | Execute | Observe |
 | --- | --- | --- | --- | --- |
-| Planning | At `before_llm_call`, threshold checks update pending states (`summary`/`planUpdate`/`phaseAcceptance`) | Fixed action `planning_bootstrap` (`planning_capture` at `after_llm_call`) | Runs by mode: `runPlanningBySeparateModel` or `maybeInjectPlanningPrompt`; capture by `maybeCapturePlanningResult` | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`planning`) |
+| Planning | At `before_llm_call`, run workflow tick: threshold checks update pending states (`summary`/`planUpdate`/`phaseAcceptance`) | Fixed action `planning_bootstrap` (`planning_capture` at `after_llm_call`) | Runs by mode: `runPlanningBySeparateModel` or `maybeInjectPlanningPrompt`; capture by `maybeCapturePlanningResult` | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`planning`) |
 | Guidance | Pending states come from failure thresholds and summary/plan-update signals | `resolveNextGuidanceAction` chooses: `summary_overflow > guidance > plan_update > summary_turns` | One execution path per mode (inject/separate-model), including plan-update and summary/guidance chaining | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`guidance`) |
 | Acceptance | Multi-hook triggers from `pending.phaseAcceptance`, `pending.acceptanceSemanticValidation`, and overflow flags | `resolveAcceptanceDecision` picks `phase_acceptance` / `forced_acceptance` / `acceptance_semantic_validation` etc. | Executes phase acceptance, semantic validation, final-output guard, and tool guards by hook and mode | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`acceptance`) |
 | Review | Triggered on review hooks (`before_final_output`, `on_error`, `on_abort`, etc.) | Fixed action `review_report` | Builds report and conditionally attaches it to final output | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`review`) |
+
+Additional constraints:
+
+- `Trigger` only detects conditions and updates pending state; it should not directly execute actions in another domain.
+- `Arbitrate` only selects the primary action for this turn.
+- `Execute` should be driven by `Arbitrate.chosenAction`; avoid re-arbitration inside execution.
+- `Observe` records what was chosen, what actually ran, and why some actions were deferred/blocked.
 
 Standard events (all four domains):
 
@@ -54,8 +61,11 @@ Log detail fields:
 - `chosenAction`: `summary_overflow` | `guidance` | `plan_update_revision` | `plan_update_refinement` | `summary_turns` | `none`
 - `chosenReason`: scheduler reason code
 - `chosenStage`: `revision` | `refinement` | `""`
-- `triggeredActions`: scanned/triggered action set for the current turn (for example planning summary/plan-update/phase-acceptance)
-- `blockedActions`: pending flows blocked by current selected action
+- `candidateActions`: all candidate actions scanned in this turn
+- `deferredActions`: actions not executed this turn and deferred
+- `blockedActions`: actions blocked by explicit blockers
+- `blockedReasons`: blocker reason code list
+- `triggeredActions`: legacy field kept for compatibility (mapped from candidate actions)
 - `pending`: snapshot
   - `summary`
   - `summaryByCharsPrompted`
@@ -80,6 +90,9 @@ Execution result fields (`workflow_execution_result`):
 Notes:
 - `retryCount` is derived from newly appended `capability_reasoning_retry_scheduled` events in the same execution window.
 - `errorCode` is derived from the first newly appended `*_failed` / `*_error` event name (uppercased).
+
+Compatibility note:
+- During migration, writers may keep both legacy `triggeredActions` and new `candidateActions/deferredActions/blockedReasons`.
 
 ## Trigger Timing And Thresholds
 
@@ -148,6 +161,79 @@ Planning inject and separate-model paths now share an intermediate message plan:
 - Phase acceptance can be scheduled in planning flow when threshold reached and higher-priority pendings are clear.
 - Semantic acceptance validation is triggered by acceptance flow (active or forced), depending on mode and options.
 
+## Responsibility Matrix (Unified Semantics)
+
+| Action | Trigger owner (sets pending) | Executor | Primary hooks |
+| --- | --- | --- | --- |
+| `planning_bootstrap` | Planning | Planning | `before_llm_call` |
+| `planning_capture` | Planning | Planning | `after_llm_call` |
+| `summary` | Planning (thresholds) | Guidance | `before_llm_call` |
+| `guidance` | Guidance (failure thresholds) | Guidance | `before_llm_call` |
+| `plan_update_revision/refinement` | Planning (thresholds) / Guidance (summary-completion chaining) | Guidance | `before_llm_call` / `after_llm_call` |
+| `phase_acceptance` | Planning (thresholds) | Acceptance | `before_llm_call` |
+| `acceptance_semantic_validation` | Acceptance | Acceptance | `before_llm_call` / `after_llm_call` |
+| `review_report` | Review | Review | `before_final_output` / `on_error` / `on_abort` |
+
+Notes:
+- Planning also acts as workflow tick in `before_llm_call`; actual action execution stays in each domain controller.
+
+## Unified Pending Snapshot
+
+`workflow_priority_decision.pending` should use a consistent object shape (fields can be trimmed by domain):
+
+```json
+{
+  "summary": { "active": false, "reason": "" },
+  "guidance": { "active": false, "payload": null },
+  "planUpdate": { "active": false, "stage": "", "context": {} },
+  "phaseAcceptance": { "active": false, "blockedBy": [] },
+  "acceptanceSemanticValidation": { "active": false },
+  "flags": {
+    "planningCaptured": false,
+    "summaryByCharsPrompted": false,
+    "overflowForceAcceptancePending": false
+  }
+}
+```
+
+Benefits:
+
+- Avoid `boolean`/`object` mixed representations across domains (especially `planUpdate`).
+- Make `blockedActions`/`blockedReasons` directly explainable from snapshot fields.
+- Improve cross-domain debugging with stable log shape.
+
+## Decision-Driven Execution
+
+To keep logs explainable and deterministic:
+
+1. `resolveDecision` returns one primary `chosenAction` (plus deferred/blocked metadata).
+2. `execute(decision)` runs only the primary path for `chosenAction`.
+3. Optional follow-up work must be logged as `executedFollowup` with an explicit reason.
+
+Pseudo code:
+
+```js
+const decision = resolveDecision();
+switch (decision.chosenAction) {
+  case "forced_acceptance":
+    runForcedAcceptance();
+    break;
+  case "phase_acceptance":
+    runPhaseAcceptance();
+    break;
+  default:
+    break;
+}
+```
+
+## Lifecycle Error Observability
+
+`runWorkflowLifecycle(...)` should guarantee `workflow_execution_result` is emitted even on execution errors:
+
+- Emit `priority_decision` before execution.
+- Wrap `execute` in `try/catch/finally`.
+- Emit `workflow_execution_result` in `finally` with `errorCode` and `durationMs`.
+
 ## Message Order By Flow
 
 Notation: `existing_context` is the current main-model context; `agent_messages` is the output of `resolveCapabilityModelMessages(...)`.
@@ -187,8 +273,18 @@ Notation: `existing_context` is the current main-model context; `agent_messages`
   - `src/capabilities/handlers/guidance/controller.js`
   - `src/capabilities/handlers/acceptance/controller.js`
   - `src/capabilities/handlers/review/controller.js`
+- Review trigger implementation:
+  - `src/capabilities/handlers/review/controller.js`
 - Threshold constants:
   - `src/core/thresholds.js`
+
+## Review Hook Allowlist
+
+Review hook filtering should be explicit in controller and centralized in `WORKFLOW_PARAMS.review.hooks`:
+
+- `before_final_output`
+- `on_error`
+- `on_abort`
 
 ## Handler Export Convention (Facade + Semantic Subdirectories)
 
