@@ -6,6 +6,7 @@ import {
   BOT_HOOK_POINTS,
   createBotHookManager,
 } from "../../../../src/system-core/bot-manage/hook/index.js";
+import { warnAgentContextCompatFieldOnce } from "../../../../src/system-core/context/compatibility-deprecation.js";
 
 function createRunner({
   botHookManager = createBotHookManager(),
@@ -14,6 +15,14 @@ function createRunner({
     traces: [],
     turnMessages: [],
     turnTasks: [],
+  }),
+  prepareAgentTurnExecution = async () => ({
+    agentContext: {
+      execution: { controllers: { runtime: { attachmentMetas: [] } } },
+    },
+    runtimeAgentContext: {
+      execution: { controllers: { runtime: { attachmentMetas: [] } } },
+    },
   }),
 } = {}) {
   return new SessionExecutionRunner({
@@ -37,14 +46,7 @@ function createRunner({
       ...(payload?.runConfig || {}),
       botHookManager,
     }),
-    prepareAgentTurnExecution: async () => ({
-      agentContext: {
-        execution: { controllers: { runtime: { attachmentMetas: [] } } },
-      },
-      runtimeAgentContext: {
-        execution: { controllers: { runtime: { attachmentMetas: [] } } },
-      },
-    }),
+    prepareAgentTurnExecution,
     appendSessionTurn: async () => {},
     finalizeRunSession: async () => ({ answer: "ok" }),
     upsertParentAsyncTask: () => {},
@@ -108,4 +110,59 @@ test("SessionExecutionRunner emits bot error hooks", async () => {
     /mock agent failure/,
   );
   assert.deepEqual(events, ["agent_dispatch_error", "session_run_error"]);
+});
+
+test("SessionExecutionRunner emits compat field hit stats event", async () => {
+  const events = [];
+  const eventListener = {
+    onEvent(payload = {}) {
+      events.push(payload);
+    },
+  };
+  const runtimeAgentContext = {
+    execution: {
+      dialogProcessId: "dp1",
+      controllers: {
+        runtime: {
+          systemRuntime: {
+            sessionId: "s1",
+            dialogProcessId: "dp1",
+          },
+        },
+      },
+    },
+  };
+  const runner = createRunner({
+    prepareAgentTurnExecution: async () => ({
+      agentContext: runtimeAgentContext,
+      runtimeAgentContext,
+    }),
+    agentRunner: async () => {
+      // Simulate compatibility field access hit.
+      warnAgentContextCompatFieldOnce({
+        field: "test.compat.field",
+        replacement: "execution.controllers.runtime.test",
+      });
+      return {
+        output: "ok",
+        traces: [],
+        turnMessages: [],
+        turnTasks: [],
+      };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    runConfig: {},
+    eventListener,
+  });
+
+  const compatEvent = events.find((item) => item?.event === "agent_context_compat_field_hits");
+  assert.equal(Boolean(compatEvent), true);
+  assert.equal(compatEvent?.data?.sessionId, "s1");
+  assert.equal(compatEvent?.data?.dialogProcessId, "dp1");
+  assert.equal(compatEvent?.data?.fields?.["test.compat.field"], 1);
 });

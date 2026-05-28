@@ -9,6 +9,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { normalizeSkillAction, SKILL_ACTION } from "../../config/core/enums.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import { safeJoin } from "../../utils/fs-safe.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -17,20 +18,17 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
 
 function getBasePath(agentContext) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
   return (
     agentContext?.environment?.workspace?.basePath ||
-    agentContext?.runtime?.basePath ||
+    runtime?.basePath ||
     ""
   );
 }
 
-function getRuntime(agentContext) {
-  return agentContext?.runtime || {};
-}
-
 export function createSkillTool({ agentContext }) {
   const basePath = getBasePath(agentContext);
-  const runtime = getRuntime(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const currentTurnMessages = runtime?.currentTurnMessages || null;
   const currentTurnTasks = runtime?.currentTurnTasks || null;
   if (!basePath) return [];

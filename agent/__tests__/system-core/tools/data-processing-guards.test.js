@@ -1,0 +1,76 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { createDoc2DataTool } from "../../../src/system-core/tools/data-processing/doc2data-tool.js";
+import { createMedia2DataTool } from "../../../src/system-core/tools/data-processing/media2data-tool.js";
+import { createWeb2DataTool } from "../../../src/system-core/tools/data-processing/web2data-tool.js";
+import { ERROR_CODE } from "../../../src/system-core/error/constants.js";
+import { TOOL_NAME } from "../../../src/system-core/tools/constants/index.js";
+
+function buildAgentContext(basePath = "") {
+  return {
+    environment: {
+      workspace: { basePath },
+    },
+    execution: {
+      controllers: {
+        runtime: {
+          basePath,
+          globalConfig: {},
+          userConfig: {},
+          sharedTools: {},
+        },
+      },
+    },
+  };
+}
+
+test("doc_to_data: image input should fail fast with unsupported file type", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-"));
+  const imagePath = path.join(basePath, "runtime", "workspace", "input.png");
+  await fs.mkdir(path.dirname(imagePath), { recursive: true });
+  await fs.writeFile(imagePath, "not-a-real-png", "utf8");
+
+  const tools = createDoc2DataTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.invoke({ filePath: "runtime/workspace/input.png" }),
+    (error) => error?.code === ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
+  );
+});
+
+test("media_to_data: non-media file should fail with unsupported media file type", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-media2data-"));
+  const textPath = path.join(basePath, "runtime", "workspace", "input.txt");
+  await fs.mkdir(path.dirname(textPath), { recursive: true });
+  await fs.writeFile(textPath, "plain text", "utf8");
+
+  const tools = createMedia2DataTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.MEDIA_TO_DATA);
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.invoke({ filePath: "runtime/workspace/input.txt" }),
+    (error) => error?.code === ERROR_CODE.RECOVERABLE_UNSUPPORTED_MEDIA_FILE_TYPE,
+  );
+});
+
+test("web_to_data: empty input and urls should fail before network work", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-web2data-"));
+  const tools = createWeb2DataTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.WEB_TO_DATA);
+  assert.ok(tool);
+
+  await assert.rejects(
+    () => tool.invoke({ input: "", urls: [] }),
+    (error) =>
+      error?.code === ERROR_CODE.RECOVERABLE_WEB_TO_DATA_FAILED &&
+      Array.isArray(error?.details?.urls) &&
+      error.details.urls.length === 0,
+  );
+});

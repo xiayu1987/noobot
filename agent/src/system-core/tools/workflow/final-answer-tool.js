@@ -8,11 +8,12 @@ import { z } from "zod";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 
 export const FINAL_ANSWER_TOOL_NAME = TOOL_NAME.FINAL_ANSWER;
 
 export function createFinalAnswerTool(ctx = {}) {
-  const runtime = ctx?.agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
   const finalAnswerTool = new DynamicStructuredTool({
     name: FINAL_ANSWER_TOOL_NAME,
     description: tTool(runtime, "tools.final_answer.description"),

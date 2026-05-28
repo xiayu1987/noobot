@@ -12,6 +12,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 
 export const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
 
@@ -54,7 +55,7 @@ function markCurrentTurnMessagesSummarized(currentTurnMessages = null) {
 }
 
 export function createTaskSummaryTool(ctx = {}) {
-  const runtime = ctx?.agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
   const currentTurnMessages = runtime?.currentTurnMessages || null;
   const systemRuntime = runtime?.systemRuntime || {};
 

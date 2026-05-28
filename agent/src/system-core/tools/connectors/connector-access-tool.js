@@ -7,6 +7,10 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { mergeConfig } from "../../config/index.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -24,7 +28,7 @@ import {
 
 
 export function createConnectorAccessTool({ agentContext }) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const effectiveConfig = mergeConfig(
     runtime?.globalConfig || {},
     runtime?.userConfig || {},
@@ -38,7 +42,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const signal = runtime?.abortSignal || null;
   const userInteractionBridge = runtime?.userInteractionBridge || null;
   const userId = String(runtime?.userId || agentContext?.userId || "").trim();
-  const systemRuntime = runtime?.systemRuntime || {};
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const sessionId = String(systemRuntime?.sessionId || "").trim();
   const parentDialogProcessId = resolveDialogProcessIdFromContext({ runtime });
   const allowUserInteraction =
@@ -98,9 +102,9 @@ export function createConnectorAccessTool({ agentContext }) {
           runConfig: {
             allowUserInteraction,
             selectedConnectors:
-              runtime?.systemRuntime?.config?.selectedConnectors &&
-              typeof runtime.systemRuntime.config.selectedConnectors === "object"
-                ? runtime.systemRuntime.config.selectedConnectors
+              systemRuntime?.config?.selectedConnectors &&
+              typeof systemRuntime.config.selectedConnectors === "object"
+                ? systemRuntime.config.selectedConnectors
                 : {},
             toolPolicy: {
               mode: SANDBOX_CONFIG.TOOL_POLICY_MODE.CUSTOM_ONLY,

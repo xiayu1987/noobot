@@ -6,6 +6,7 @@
 > - `agent/src/system-core/context/formatters/agent-context-mapper.js`
 > - `agent/src/system-core/context/builders/runtime-environment-builder.js`
 > - `plugin/noobot-plugin-harness/src/capabilities/handlers/shared/bucket-utils.js`
+> - 重构跟踪（已办/代办）：[agent-context-refactor-tracker.md](./agent-context-refactor-tracker.md)
 
 ## 1. 总览
 
@@ -310,86 +311,10 @@ type PayloadTools = {
 
 ## 8. harness 插件扩展：payload.harness
 
-`payload.harness` 不是 `ContextBuilder` 初始输出的一部分，而是 harness 插件在 hook 执行期间通过 `ensureHarnessBucket(ctx)` 按需创建/补齐。
+`payload.harness` 使用独立文档维护，避免主文档过长：
 
-```ts
-type HarnessPayloadBucket = {
-  __harnessBucketVersion: number; // 当前为 3
-
-  summaryText: string;
-  planText: string;
-  taskChecklist: any[];
-
-  acceptanceReports: any[];
-  phaseAcceptanceReports: any[];
-  reviewReports: any[];
-  planningRawOutputs: any[];
-  completedDialogProcessIds: string[];
-
-  globalRevisionCount: number;
-  lastMainPlanRevisionChanged: boolean;
-  lastPlanningRawOutput: Record<string, any> | null;
-
-  logs: {
-    planning: any[];
-    guidance: any[];
-    acceptance: any[];
-    review: any[];
-  };
-
-  state: {
-    __harnessBucketVersion: number;
-    locale: string;
-
-    counters: {
-      llmTurns: number;
-      planUpdateTurns: number;
-      phaseAcceptanceTurns: number;
-      summaryRounds: number;
-      hookTurns: number;
-      consecutiveToolFailures: number;
-      totalToolFailures: number;
-      planUpdateAttempts: number;
-    };
-
-    flags: {
-      planningPromptInjected: boolean;
-      planningCaptured: boolean;
-      planningSeparateModelInFlight: boolean;
-      agentTurnEnded: boolean;
-      acceptanceRequested: boolean;
-      checklistArtifactsAttached: boolean;
-      planningForceToolTemporarilyEnabled: boolean;
-      planningForceToolOriginalSet: boolean;
-      planningForceToolOriginal: boolean;
-      guidanceSummaryMarkPending: boolean;
-      summaryByCharsPrompted: boolean;
-      overflowForceAcceptancePending: boolean;
-      planUpdateCapturePending: boolean;
-      phaseAcceptanceCapturePending: boolean;
-      acceptanceSemanticValidationCapturePending: boolean;
-    };
-
-    signals: {
-      parsedAttachment: boolean;
-      subtaskStarted: boolean;
-      subtaskWaited: boolean;
-      successfulToolCount: number;
-      activeDialogProcessId: string;
-    };
-
-    pending: {
-      guidance: any | null;
-      summary: boolean;
-      planUpdate: boolean;
-      planUpdateStage: string;
-      planUpdateContext: any | null;
-      phaseAcceptance: boolean;
-      acceptanceSemanticValidation: any | null;
-    };
-  };
-};
-```
+- 详见：[harness-payload-structure.md](./harness-payload-structure.md)
+- 主文档仅保留入口与高层约定。
 
 ## 9. 构建链路
 
@@ -429,6 +354,46 @@ AgentContextFactory.buildAgentContext(mode="continue")
 1. **runtime 读取优先级**：新代码优先读取 `agentContext.execution.controllers.runtime`。
 2. **不要把 payload.messages.history 当作最终传模消息**：最终传模前还会经过 `resolveModelContextMessages()`。
 3. **插件扩展应挂在 payload 下自己的 namespace**：例如 harness 使用 `payload.harness`，避免污染顶层。
-4. **工具共享能力放在 runtime.sharedTools**：`payload.tools.shared` 仅用于暴露共享工具引用，不应替代 runtime。
-5. **附件优先读 runtime.attachmentMetas / session.current.attachments**：LLM 生成路径可能串号，工具侧应回查 attachment metas。
+4. **工具共享能力放在 runtime.sharedTools**：`payload.tools.shared` 兼容入口已删除。
+5. **附件优先读 runtime.attachmentMetas**：`session.current.attachments` 兼容入口已删除，工具侧应回查 attachment metas。
 6. **session.root.sharedState 当前默认 `{}`**：如需跨子会话共享状态，应先定义写入/持久化策略。
+7. **优先使用 accessor 而非手写路径**：建议通过
+   `context/agent-context-accessor.js` 的 `getRuntimeFromAgentContext()`、
+   `getSystemRuntimeFromAgentContext()`、`getSessionIdsFromAgentContext()`、
+   `getBasePathFromAgentContext()`、`getDialogProcessIdFromAgentContext()` 读取核心字段。
+
+## 11. 兼容字段与收敛策略（已落地）
+
+以下字段已完成兼容收敛并删除兼容入口：
+
+1. `forceToolCall`（legacy 输入键）
+   - 真值来源：`systemRuntime.config.forceTool`
+   - 当前行为：runtime/config 中兼容入口已删除，仅在 `resolveForceToolCall()` 输入解析层保留兼容。
+2. `execution.controllers.abortSignal`
+   - 真值来源：`execution.controllers.runtime.abortSignal`
+   - 当前行为：兼容入口已删除。
+3. `execution.controllers.parentAsyncResultContainer`
+   - 真值来源：`execution.controllers.runtime.parentAsyncResultContainer`
+   - 当前行为：兼容入口已删除。
+4. `session.current.attachments`
+   - 真值来源：`execution.controllers.runtime.attachmentMetas`
+   - 当前行为：兼容入口已删除。
+5. `session.current.turnStore.currentTurnMessages/currentTurnTasks`
+   - 真值来源：`execution.controllers.runtime.currentTurnMessages/currentTurnTasks`
+   - 当前行为：兼容入口已删除。
+6. `payload.tools.shared`
+   - 真值来源：`execution.controllers.runtime.sharedTools`
+   - 当前行为：兼容入口已删除。
+
+## 12. Subagent RunConfig 透传约定（forceTool）
+
+`delegate_task_async` 在向子会话透传 runConfig 时，force-tool 字段遵循以下规则：
+
+1. 透传开关判断统一使用 `resolveForceToolCall()`：
+   - 支持 `forceTool` / `forceToolCall`（以及 snake_case 兼容键）；
+   - 任一显式为 `true` 即视为开启。
+2. 父会话 force-tool 真值统一从 `systemRuntime.config` 通过 `resolveForceToolCall()` 解析。
+3. 实际透传给子会话时同时写入：
+   - `forceTool`（canonical）
+4. 新代码统一读取 `forceTool`；`forceToolCall` 不再输出到 runtime/config/event。
+5. `resolveForceToolCall(runConfig)` 仍保留用于外部配置输入解析兼容。

@@ -20,6 +20,7 @@ import {
   invokeModelWithTextAndAttachments,
   resolveModelSpecByAlias,
 } from "../../model/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { convertDocumentToImages } from "../../utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -39,10 +40,6 @@ import {
   IMAGE_EXTENSIONS,
   TEXT_EXTENSIONS,
 } from "./file-extension-constants.js";
-
-function getRuntime(agentContext) {
-  return agentContext?.runtime || {};
-}
 
 const require = createRequire(import.meta.url);
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
@@ -206,8 +203,9 @@ function isImageInputFile(filePath = "") {
 
 function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}) {
   const normalizedInputPath = String(filePath || "").trim();
-  const runtimeAttachmentMetas = Array.isArray(agentContext?.runtime?.attachmentMetas)
-    ? agentContext.runtime.attachmentMetas
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const runtimeAttachmentMetas = Array.isArray(runtime?.attachmentMetas)
+    ? runtime.attachmentMetas
     : [];
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) return null;
   const inputBaseName = path.basename(normalizedInputPath);
@@ -449,7 +447,7 @@ async function backwriteParsedResultToSourceAttachment({
 }
 
 export function createDoc2DataTool({ agentContext }) {
-  const runtime = getRuntime(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath =
     agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};

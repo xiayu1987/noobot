@@ -49,5 +49,30 @@ test("ensureHarnessBucket migrates legacy planRevision counters and pending fiel
   });
   assert.equal(state.flags.planUpdateCapturePending, true);
   assert.equal(state.flags.planRevisionCapturePending, true);
+  assert.equal(holder.bucket.__harnessBucketVersion, 3);
   assert.equal(state.__harnessBucketVersion, 3);
+});
+
+test("ensureHarnessBucket keeps state version as alias of bucket version", () => {
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          __harnessBucketVersion: 3,
+          state: {},
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+  const holder = ensureHarnessBucket(ctx);
+  assert.ok(holder);
+  assert.equal(holder.state.__harnessBucketVersion, 3);
+  holder.state.__harnessBucketVersion = 5;
+  assert.equal(holder.bucket.__harnessBucketVersion, 5);
+  assert.equal(holder.state.__harnessBucketVersion, 5);
 });

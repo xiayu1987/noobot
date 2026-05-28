@@ -16,6 +16,7 @@ import {
   invokeModelWithTextAndAttachments,
   resolveModelSpecByAlias,
 } from "../../model/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
@@ -38,10 +39,6 @@ import {
 const FFPROBE_AMBIGUOUS_EXTENSIONS = new Set([".webm", ".ogg", ".mkv"]);
 const MODEL_READY_AUDIO_EXTENSIONS = new Set([".wav", ".mp3"]);
 
-function getRuntime(agentContext) {
-  return agentContext?.runtime || {};
-}
-
 function normalizeMediaInputPath(rawFilePath = "") {
   const normalized = String(rawFilePath || "").trim();
   if (!normalized) return "";
@@ -55,8 +52,9 @@ function normalizeMediaInputPath(rawFilePath = "") {
 
 function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = {}) {
   const normalizedInputPath = normalizeMediaInputPath(filePath);
-  const runtimeAttachmentMetas = Array.isArray(agentContext?.runtime?.attachmentMetas)
-    ? agentContext.runtime.attachmentMetas
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const runtimeAttachmentMetas = Array.isArray(runtime?.attachmentMetas)
+    ? runtime.attachmentMetas
     : [];
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) {
     return {
@@ -358,7 +356,7 @@ async function backwriteParsedResultToSourceAttachment({
 }
 
 export function createMedia2DataTool({ agentContext }) {
-  const runtime = getRuntime(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
   const basePath =

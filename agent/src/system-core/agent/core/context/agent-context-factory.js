@@ -8,6 +8,7 @@ import { ContextBuilder } from "../../../context/index.js";
 import { emitEvent } from "../../../event/index.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
+import { getRuntimeFromAgentContext } from "../../../context/agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 /**
@@ -206,11 +207,7 @@ export class AgentContextFactory {
       agentContext,
       runConfig,
     );
-    const runtime =
-      scopedAgentContext?.execution?.controllers?.runtime &&
-      typeof scopedAgentContext.execution.controllers.runtime === "object"
-        ? scopedAgentContext.execution.controllers.runtime
-        : runtimeHookCarrier;
+    const runtime = getRuntimeFromAgentContext(scopedAgentContext, runtimeHookCarrier);
     const completedAtMs = Date.now();
     await runAgentRuntimeHook({
       runtime,
@@ -236,11 +233,7 @@ export class AgentContextFactory {
   }
 
   buildRunTurnAgentContext(agentContext = {}, abortSignal = null) {
-    const runtimeRef =
-      agentContext?.execution?.controllers?.runtime &&
-      typeof agentContext.execution.controllers.runtime === "object"
-        ? agentContext.execution.controllers.runtime
-        : {};
+    const runtimeRef = getRuntimeFromAgentContext(agentContext);
     runtimeRef.abortSignal = abortSignal;
     return {
       ...agentContext,

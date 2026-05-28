@@ -10,6 +10,7 @@ function parseToolJson(text = "") {
 function createAgentContext({
   runConfigPassthrough = null,
   parentForceToolCall = false,
+  parentForceTool = null,
   parentToolPolicy = null,
 } = {}) {
   const parentSessionId = "11111111-1111-4111-8111-111111111111";
@@ -39,7 +40,9 @@ function createAgentContext({
       dialogProcessId: "dp_parent_1",
       config: {
         allowUserInteraction: true,
-        forceToolCall: parentForceToolCall,
+        ...(parentForceTool !== null
+          ? { forceTool: parentForceTool === true }
+          : { forceToolCall: parentForceToolCall }),
         ...(normalizedToolPolicy ? { toolPolicy: normalizedToolPolicy } : {}),
       },
     },
@@ -94,7 +97,7 @@ test("delegate_task_async: 默认不透传 forceToolCall/toolPolicy", async () =
   assert.equal("toolPolicy" in childRunConfig, false);
 });
 
-test("delegate_task_async: 配置后透传 forceToolCall", async () => {
+test("delegate_task_async: 配置后透传 canonical forceTool", async () => {
   const { agentContext, runCalls } = createAgentContext({
     runConfigPassthrough: { forceToolCall: true },
     parentForceToolCall: true,
@@ -103,7 +106,21 @@ test("delegate_task_async: 配置后透传 forceToolCall", async () => {
   assert.equal(payload.ok, true);
   assert.equal(runCalls.length, 1);
   const childRunConfig = runCalls[0]?.runConfig || {};
-  assert.equal(childRunConfig.forceToolCall, true);
+  assert.equal(childRunConfig.forceTool, true);
+  assert.equal("forceToolCall" in childRunConfig, false);
+});
+
+test("delegate_task_async: 支持以 forceTool 作为父配置来源", async () => {
+  const { agentContext, runCalls } = createAgentContext({
+    runConfigPassthrough: { forceTool: true },
+    parentForceTool: true,
+  });
+  const payload = await invokeDelegateTask({ agentContext });
+  assert.equal(payload.ok, true);
+  assert.equal(runCalls.length, 1);
+  const childRunConfig = runCalls[0]?.runConfig || {};
+  assert.equal(childRunConfig.forceTool, true);
+  assert.equal("forceToolCall" in childRunConfig, false);
 });
 
 test("delegate_task_async: 配置后透传 toolPolicy（拷贝）", async () => {
@@ -137,13 +154,17 @@ test("delegate_task_async: 记录 runconfig 透传事件日志", async () => {
     (item = {}) => item?.event === "subagent_runconfig_passthrough_applied",
   );
   assert.ok(passthroughEvent);
-  assert.equal(passthroughEvent.data?.passthrough?.forceToolCall, true);
+  assert.equal(passthroughEvent.data?.passthrough?.forceTool, true);
+  assert.equal("forceToolCall" in (passthroughEvent.data?.passthrough || {}), false);
   assert.equal(passthroughEvent.data?.passthrough?.toolPolicy, true);
-  assert.equal(passthroughEvent.data?.effectiveRunConfig?.forceToolCall, true);
+  assert.equal(passthroughEvent.data?.effectiveRunConfig?.forceTool, true);
+  assert.equal(
+    "forceToolCall" in (passthroughEvent.data?.effectiveRunConfig || {}),
+    false,
+  );
   assert.equal(passthroughEvent.data?.effectiveRunConfig?.hasToolPolicy, true);
   assert.deepEqual(passthroughEvent.data?.effectiveRunConfig?.toolPolicyKeys, [
     "allowToolNames",
   ]);
   assert.equal(passthroughEvent.data?.taskCount, 1);
 });
-

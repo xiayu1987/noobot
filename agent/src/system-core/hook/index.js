@@ -5,6 +5,7 @@
  */
 import { emitEvent } from "../event/index.js";
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
+import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 3000;
 const HOOK_CLIENT_BLOCKED_KEYS = new Set([
@@ -269,10 +270,7 @@ export function createAgentHookManager({
 export { resolveRuntimeHookManager };
 
 export function resolveHookRuntimeMeta(runtime = {}) {
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : {};
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
     userId: String(systemRuntime?.userId || runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
