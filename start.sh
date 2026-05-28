@@ -25,7 +25,7 @@ AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0
 CLIENT_CADDY_BIN="$CLIENT_DIR/deploy/bin/caddy"
 CLIENT_CADDY_CONFIG="$CLIENT_DIR/deploy/Caddyfile"
 CLIENT_DIST_DIR="$CLIENT_DIR/dist"
-PROJECT_LAUNCHER_SCRIPT="$SERVICE_DIR/scripts/project-launcher.js"
+PROJECT_LAUNCHER_SCRIPT="$ROOT_DIR/scripts/project-launcher.mjs"
 FRONTEND_URL_ADDR="$CADDY_ADDR"
 if [[ "$FRONTEND_URL_ADDR" == :* ]]; then
   FRONTEND_URL_ADDR="127.0.0.1$FRONTEND_URL_ADDR"
@@ -457,7 +457,7 @@ main() {
   # update_code
 
   log "$(msg step_launcher)"
-  (cd "$SERVICE_DIR" && node "./scripts/project-launcher.js")
+  (cd "$ROOT_DIR" && node "./scripts/project-launcher.mjs")
 
   log "$(msg step_install)"
   unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD || true

@@ -50,6 +50,8 @@ Based on latest examples:
 | Key | Type | Description |
 |---|---|---|
 | `session.recent_message_limit` | number | Number of recent messages in context |
+| `context.main_model_recent_window` | boolean | Whether `agent.main` uses recent-window clipping |
+| `context.main_model_recent_limit` | number | Recent-window size for `agent.main` (effective when enabled) |
 | `session.use_last_running_task_range` | boolean | Prefer context since last running task |
 | `session.use_last_completed_task_range` | boolean | Prefer context since last completed task |
 

@@ -12,6 +12,7 @@ import {
 import { tEngine } from "../i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
 import { resolveModelContextMessages } from "../../../session/utils/context-window-normalizer.js";
+import { mergeConfig } from "../../../config/index.js";
 import {
   resolveDialogProcessIdFromContext,
   resolveDialogProcessId,
@@ -23,6 +24,17 @@ export function buildContextMessages(
   { currentUserMessage = "" } = {},
 ) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
+  const contextConfig =
+    effectiveConfig?.context && typeof effectiveConfig.context === "object"
+      ? effectiveConfig.context
+      : {};
+  const mainModelRecentWindow = contextConfig.mainModelRecentWindow !== false;
+  const parsedMainModelRecentLimit = Number(contextConfig.mainModelRecentLimit);
+  const mainModelRecentLimit =
+    Number.isFinite(parsedMainModelRecentLimit) && parsedMainModelRecentLimit > 0
+      ? Math.floor(parsedMainModelRecentLimit)
+      : 15;
   
   function toLangChainToolCalls(toolCalls = []) {
     return (toolCalls || [])
@@ -160,6 +172,8 @@ export function buildContextMessages(
     sourceMessages: historyMessages,
     currentDialogProcessId: resolvedDialogProcessId,
     mode: "agent",
+    useRecentWindow: mainModelRecentWindow,
+    recentLimit: mainModelRecentLimit,
   });
   const knownHistoryToolCallIds = new Set();
 

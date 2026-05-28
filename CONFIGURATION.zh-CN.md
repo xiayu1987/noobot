@@ -50,6 +50,8 @@
 | 键名 | 类型 | 说明 |
 |---|---|---|
 | `session.recent_message_limit` | number | 上下文中最近消息数量 |
+| `context.main_model_recent_window` | boolean | `agent.main` 是否启用 recent window 截断 |
+| `context.main_model_recent_limit` | number | `agent.main` recent window 窗口大小（启用时生效） |
 | `session.use_last_running_task_range` | boolean | 优先从最近运行任务开始取上下文 |
 | `session.use_last_completed_task_range` | boolean | 优先从最近完成任务开始取上下文 |
 
