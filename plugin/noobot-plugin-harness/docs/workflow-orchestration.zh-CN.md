@@ -15,10 +15,17 @@ Planning / Guidance / Acceptance / Review 统一采用下表范式：
 
 | 流程 | Trigger（触发） | Arbitrate（裁决） | Execute（执行） | Observe（观测） |
 | --- | --- | --- | --- | --- |
-| Planning | 在 `before_llm_call` 基于轮次/字符阈值更新 `pending`（summary/planUpdate/phaseAcceptance） | 固定选择 `planning_bootstrap`（`after_llm_call` 选择 `planning_capture`） | 按模式执行：`runPlanningBySeparateModel` 或 `maybeInjectPlanningPrompt`；`after_llm_call` 捕获 `maybeCapturePlanningResult` | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`planning`） |
+| Planning | 在 `before_llm_call` 执行 workflow tick：基于轮次/字符阈值更新 `pending`（summary/planUpdate/phaseAcceptance） | 固定选择 `planning_bootstrap`（`after_llm_call` 选择 `planning_capture`） | 按模式执行：`runPlanningBySeparateModel` 或 `maybeInjectPlanningPrompt`；`after_llm_call` 捕获 `maybeCapturePlanningResult` | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`planning`） |
 | Guidance | 工具失败阈值/summary/planUpdate 形成 `pending` | `resolveNextGuidanceAction` 选择本轮动作：`summary_overflow > guidance > plan_update > summary_turns` | 统一执行入口按模式运行：inject 或 separate_model（含 plan_update 与 summary/guidance 联动） | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`guidance`） |
 | Acceptance | 在多 hook 点读取 `pending.phaseAcceptance`、`pending.acceptanceSemanticValidation`、`overflowForceAcceptancePending` | `resolveAcceptanceDecision` 根据 hook 与 pending 选择：`phase_acceptance` / `forced_acceptance` / `acceptance_semantic_validation` 等 | 按 hook 与模式执行 phase acceptance、semantic validation、final output guard、tool guard | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`acceptance`） |
 | Review | 在 review 相关 hook（如 `before_final_output`/`on_error`/`on_abort`）触发 | 固定选择 `review_report` | 生成报告并按配置决定是否附加到最终输出 | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`review`） |
+
+补充约定：
+
+- `Trigger` 只负责“发现条件达到 + 更新 pending”，不直接执行其他域动作。
+- `Arbitrate` 只负责“选出本轮主动作”。
+- `Execute` 应由 `Arbitrate` 的 `chosenAction` 驱动，避免在执行阶段二次裁决。
+- `Observe` 统一记录“选了什么 + 实际执行了什么 + 为什么没执行”。
 
 标准事件（四个域统一）：
 
@@ -54,8 +61,10 @@ Hook 点：`before_llm_call`
 - `chosenAction`: `summary_overflow` | `guidance` | `plan_update_revision` | `plan_update_refinement` | `summary_turns` | `none`
 - `chosenReason`: 调度原因码
 - `chosenStage`: `revision` | `refinement` | `""`
-- `triggeredActions`: 本轮触发扫描到的动作集合（如 planning 的 summary/plan_update/phase_acceptance）
-- `blockedActions`: 当前被阻塞的 pending 流程
+- `candidateActions`: 本轮扫描到的可候选动作集合（推荐；旧字段 `triggeredActions` 可兼容保留）
+- `deferredActions`: 本轮未执行、延后处理的动作集合（推荐）
+- `blockedActions`: 当前被显式 blocker 阻塞的动作集合
+- `blockedReasons`: blocker 原因码集合（推荐）
 - `pending`: 状态快照
   - `summary`
   - `summaryByCharsPrompted`
@@ -80,6 +89,8 @@ Hook 点：`before_llm_call`
 说明：
 - `retryCount` 来自本轮新增日志中 `capability_reasoning_retry_scheduled` 的计数。
 - `errorCode` 来自本轮新增日志中首个 `*_failed` / `*_error` 事件名（大写化）。
+
+> 兼容说明：当前代码仍在使用 `triggeredActions`，建议逐步迁移到 `candidateActions/deferredActions/blockedReasons`，迁移期可双写字段。
 
 ## 触发时机与阈值
 
@@ -149,6 +160,80 @@ Planning 注入与 separate-model 现在共享消息中间表示：
 - Phase Acceptance：由 planning 触发调度，且仅在高优先级 pending 清空时执行。
 - Semantic Validation：由 acceptance 流程触发（主动验收或兜底验收），依赖模式与配置项。
 
+## 职责归属矩阵（统一语义）
+
+| 动作 | 触发者（设置 pending） | 执行者 | 主要 hook |
+| --- | --- | --- | --- |
+| `planning_bootstrap` | Planning | Planning | `before_llm_call` |
+| `planning_capture` | Planning | Planning | `after_llm_call` |
+| `summary` | Planning（阈值） | Guidance | `before_llm_call` |
+| `guidance` | Guidance（失败阈值） | Guidance | `before_llm_call` |
+| `plan_update_revision/refinement` | Planning（阈值）/Guidance（summary 完成联动） | Guidance | `before_llm_call` / `after_llm_call` |
+| `phase_acceptance` | Planning（阈值） | Acceptance | `before_llm_call` |
+| `acceptance_semantic_validation` | Acceptance | Acceptance | `before_llm_call` / `after_llm_call` |
+| `review_report` | Review | Review | `before_final_output` / `on_error` / `on_abort` |
+
+说明：Planning 在 `before_llm_call` 同时承担 workflow tick（调度触发）职责；具体动作由对应 domain 消费 pending 并执行。
+
+## Pending 快照统一规范（推荐）
+
+建议所有 domain 在 `workflow_priority_decision.pending` 中使用统一结构（允许按需裁剪字段）：
+
+```json
+{
+  "summary": { "active": false, "reason": "" },
+  "guidance": { "active": false, "payload": null },
+  "planUpdate": { "active": false, "stage": "", "context": {} },
+  "phaseAcceptance": { "active": false, "blockedBy": [] },
+  "acceptanceSemanticValidation": { "active": false },
+  "flags": {
+    "planningCaptured": false,
+    "summaryByCharsPrompted": false,
+    "overflowForceAcceptancePending": false
+  }
+}
+```
+
+统一目标：
+
+- 避免同一字段在不同域出现 `boolean`/`object` 混用（尤其 `planUpdate`）。
+- 让 `blockedActions` 与 `blockedReasons` 可以直接映射到 pending 快照。
+- 降低跨域排障成本（日志结构一致即可横向比对）。
+
+## 决策驱动执行约束（推荐）
+
+为保证日志可解释性，建议统一为：
+
+1. `resolveDecision` 产出本轮唯一 `chosenAction`（可附带 `deferred/blocked`）。
+2. `execute(decision)` 只执行 `chosenAction` 对应主路径，不再二次裁决。
+3. 需要额外动作时，仅以 `executedFollowup` 标记，且必须在日志中可追踪其来源。
+
+推荐伪代码：
+
+```js
+const decision = resolveDecision();
+switch (decision.chosenAction) {
+  case "forced_acceptance":
+    runForcedAcceptance();
+    break;
+  case "phase_acceptance":
+    runPhaseAcceptance();
+    break;
+  default:
+    break;
+}
+```
+
+## 生命周期与异常观测（推荐）
+
+`runWorkflowLifecycle(...)` 建议保证“即使执行抛错也写 execution_result”：
+
+- `priority_decision` 在执行前写入。
+- `execute` 使用 `try/catch/finally` 包裹。
+- 在 `finally` 中统一写 `workflow_execution_result`（含 `errorCode`、`durationMs`）。
+
+这样能避免失败路径缺日志，提升可观测性完整度。
+
 ## 各流程消息顺序
 
 说明：`existing_context` 指当前主模型调用已有上下文；`agent_messages` 指 `resolveCapabilityModelMessages(...)` 的结果。
@@ -188,8 +273,20 @@ Planning 注入与 separate-model 现在共享消息中间表示：
   - `src/capabilities/handlers/guidance/controller.js`
   - `src/capabilities/handlers/acceptance/controller.js`
   - `src/capabilities/handlers/review/controller.js`
+- Review 报告触发实现：
+  - `src/capabilities/handlers/review/controller.js`
 - 阈值常量：
   - `src/core/thresholds.js`
+
+## Hook 白名单建议（Review）
+
+Review 建议在 controller 内显式限制 hook 白名单：
+
+- `before_final_output`
+- `on_error`
+- `on_abort`
+
+并将白名单配置收敛到 `WORKFLOW_PARAMS.review.hooks`，避免由外部调度器隐式保证。
 
 ## Handler 导出规范（Facade + 语义子目录）
 

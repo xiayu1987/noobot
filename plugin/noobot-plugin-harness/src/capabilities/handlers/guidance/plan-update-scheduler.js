@@ -125,22 +125,63 @@ function collectPendingActionLabels(state = {}) {
   return labels;
 }
 
+function toPendingSnapshot(state = {}) {
+  const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
+  const summaryByCharsPrompted = state?.flags?.summaryByCharsPrompted === true;
+  const planUpdate = resolvePendingPlanUpdate(state);
+  const phaseAcceptanceActive = pending.phaseAcceptance === true;
+  return {
+    summary: {
+      active: pending.summary === true,
+      reason: pending.summary === true
+        ? (summaryByCharsPrompted ? GUIDANCE_DECISION.label.summaryOverflow : GUIDANCE_DECISION.label.summaryTurns)
+        : "",
+    },
+    guidance: {
+      active: Boolean(pending.guidance),
+      payload: pending.guidance || null,
+    },
+    planUpdate: {
+      active: planUpdate.active === true,
+      stage: planUpdate.stage || "",
+      context: {
+        summaryText: planUpdate.summaryText || "",
+        targetMainStepIndexes: Array.isArray(planUpdate.targetMainStepIndexes) ? planUpdate.targetMainStepIndexes : [],
+      },
+    },
+    phaseAcceptance: {
+      active: phaseAcceptanceActive,
+      blockedBy: phaseAcceptanceActive ? ["guidance_priority_order"] : [],
+    },
+    acceptanceSemanticValidation: {
+      active: Boolean(pending.acceptanceSemanticValidation),
+    },
+    flags: {
+      summaryByCharsPrompted,
+      planningCaptured: state?.flags?.planningCaptured === true,
+      overflowForceAcceptancePending: state?.flags?.overflowForceAcceptancePending === true,
+    },
+  };
+}
+
 export function resolveGuidancePriorityDecision(state = {}) {
   const nextAction = resolveNextGuidanceAction(state);
   const chosenAction = toActionLabel(nextAction.action, nextAction.stage, nextAction.reason);
-  const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
   const pendingActionLabels = collectPendingActionLabels(state);
+  const candidateActions = pendingActionLabels;
+  const deferredActions = pendingActionLabels.filter((label) => label !== chosenAction);
+  const blockedReasons = [];
+  if (candidateActions.includes(GUIDANCE_DECISION.label.phaseAcceptance)) {
+    blockedReasons.push("phase_acceptance_deferred_by_guidance_priority");
+  }
   return {
     chosenAction,
     chosenReason: nextAction.reason,
     chosenStage: nextAction.stage || "",
-    blockedActions: pendingActionLabels.filter((label) => label !== chosenAction),
-    pendingSnapshot: {
-      summary: pending.summary === true,
-      summaryByCharsPrompted: state?.flags?.summaryByCharsPrompted === true,
-      guidance: pending.guidance || null,
-      planUpdate: resolvePendingPlanUpdate(state),
-      phaseAcceptance: pending.phaseAcceptance === true,
-    },
+    candidateActions,
+    deferredActions,
+    blockedActions: deferredActions,
+    blockedReasons,
+    pendingSnapshot: toPendingSnapshot(state),
   };
 }

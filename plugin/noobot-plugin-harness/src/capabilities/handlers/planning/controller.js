@@ -180,8 +180,9 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       const mode = resolveWorkflowMode(meta);
       let decisionReason = PLANNING_DECISION.reason.idle;
       const blockedActions = [];
-      let triggeredActions = [];
-      let pendingSnapshot = {
+      const blockedReasons = [];
+      let candidateActions = [];
+      let pendingSnapshotRaw = {
         summary: false,
         summaryByCharsPrompted: false,
         guidance: null,
@@ -300,10 +301,11 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
             // scheduled immediately after they are cleared.
             holder.state.counters.phaseAcceptanceTurns = PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD;
             blockedActions.push(WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance);
+            blockedReasons.push("phase_acceptance_blocked_by_higher_priority_pending");
           }
         }
 
-        pendingSnapshot = {
+        pendingSnapshotRaw = {
           summary: holder.state.pending?.summary === true,
           summaryByCharsPrompted: holder.state.flags?.summaryByCharsPrompted === true,
           guidance: holder.state.pending?.guidance || null,
@@ -311,13 +313,47 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           phaseAcceptance: holder.state.pending?.phaseAcceptance === true,
           planningCaptured: holder.state.flags?.planningCaptured === true,
         };
-        triggeredActions = resolvePlanningTriggeredActions({
-          summary: pendingSnapshot.summary,
-          summaryByCharsPrompted: pendingSnapshot.summaryByCharsPrompted,
-          planUpdate: pendingSnapshot.planUpdate,
-          phaseAcceptance: pendingSnapshot.phaseAcceptance,
+        candidateActions = resolvePlanningTriggeredActions({
+          summary: pendingSnapshotRaw.summary,
+          summaryByCharsPrompted: pendingSnapshotRaw.summaryByCharsPrompted,
+          planUpdate: pendingSnapshotRaw.planUpdate,
+          phaseAcceptance: pendingSnapshotRaw.phaseAcceptance,
         });
       }
+
+      const normalizedPendingSnapshot = {
+        summary: {
+          active: pendingSnapshotRaw.summary === true,
+          reason: pendingSnapshotRaw.summary === true
+            ? (pendingSnapshotRaw.summaryByCharsPrompted === true
+              ? PLANNING_DECISION.label.summaryOverflow
+              : PLANNING_DECISION.label.summaryTurns)
+            : "",
+        },
+        guidance: {
+          active: Boolean(pendingSnapshotRaw.guidance),
+          payload: pendingSnapshotRaw.guidance || null,
+        },
+        planUpdate: {
+          active: pendingSnapshotRaw.planUpdate === true,
+          stage: pendingSnapshotRaw.planUpdate === true ? "revision" : "",
+          context: {},
+        },
+        phaseAcceptance: {
+          active: pendingSnapshotRaw.phaseAcceptance === true,
+          blockedBy: blockedActions.includes(WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance)
+            ? ["summary_or_guidance_or_plan_update_or_planning_not_captured"]
+            : [],
+        },
+        acceptanceSemanticValidation: {
+          active: false,
+        },
+        flags: {
+          planningCaptured: pendingSnapshotRaw.planningCaptured === true,
+          summaryByCharsPrompted: pendingSnapshotRaw.summaryByCharsPrompted === true,
+          overflowForceAcceptancePending: holder?.state?.flags?.overflowForceAcceptancePending === true,
+        },
+      };
 
       const lifecycle = await runWorkflowLifecycle(ctx, {
         domain: CAPABILITY_DOMAIN.PLANNING,
@@ -326,9 +362,12 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         resolveDecision: () => ({
           chosenAction: PLANNING_DECISION.action.planningBootstrap,
           chosenReason: decisionReason,
-          triggeredActions,
+          candidateActions,
+          deferredActions: candidateActions,
+          triggeredActions: candidateActions,
           blockedActions,
-          pending: pendingSnapshot,
+          blockedReasons,
+          pending: normalizedPendingSnapshot,
         }),
         execute: async () => {
           let changed = setupChanged;
