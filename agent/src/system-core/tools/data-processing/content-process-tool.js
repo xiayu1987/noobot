@@ -8,6 +8,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { recoverableToolError } from "../../error/index.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { mergeConfig } from "../../config/index.js";
 import { createDoc2DataTool } from "./doc2data-tool.js";
@@ -26,7 +27,7 @@ import {
 } from "../constants/index.js";
 
 export function createContentProcessTool({ agentContext }) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const effectiveConfig = mergeConfig(
     runtime?.globalConfig || {},
     runtime?.userConfig || {},

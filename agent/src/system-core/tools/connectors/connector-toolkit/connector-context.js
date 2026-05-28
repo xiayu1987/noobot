@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig, normalizeConnectorType } from "../../../config/index.js";
+import { getRuntimeFromAgentContext } from "../../../context/agent-context-accessor.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { resolveToolLocale } from "../../core/tool-i18n.js";
 import { collectNonSensitiveDefaults } from "./connector-fields.js";
@@ -13,7 +14,7 @@ function resolveRuntimeLocale(runtime = {}) {
 }
 
 function createConnectorToolContext(agentContext = {}) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const globalConfig = runtime?.globalConfig || {};
   const userConfig = runtime?.userConfig || {};
   const effectiveConfig = mergeConfig(globalConfig, userConfig);

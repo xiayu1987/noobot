@@ -18,6 +18,7 @@ import {
 } from "../../model/index.js";
 import { runWeb2Img } from "../../utils/web/web2img.js";
 import { browseUrlHtml } from "../../utils/web/browser-simulate.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
   cleanAndDedupTextLines,
   extractReadableTextFromHtml,
@@ -42,9 +43,6 @@ const MAX_TEXT_CHARS = 12000;
 const BROWSER_RETRY_COUNT = 2;
 const DEFAULT_CONCURRENCY = 8;
 const MAX_CONCURRENCY = 60;
-function getRuntime(agentContext) {
-  return agentContext?.runtime || {};
-}
 
 function tWeb(runtime = {}, key = "", params = {}) {
   const normalizedKey = String(key || "").trim();
@@ -472,7 +470,7 @@ export async function runWebToDataPipeline({
   processMode = "",
   concurrency = DEFAULT_CONCURRENCY,
 }) {
-  const runtime = getRuntime(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath =
     agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};
@@ -638,7 +636,7 @@ export async function runWebToDataPipeline({
 }
 
 export function createWeb2DataTool({ agentContext }) {
-  const runtime = getRuntime(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath =
     agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const effectiveConfig = mergeConfig(

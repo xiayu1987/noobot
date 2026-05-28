@@ -12,6 +12,7 @@ import { normalizeToolResultAttachmentMetas } from "./turn-executor.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../../tools/workflow/final-answer-tool.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
+import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 
 export async function processToolResults({
   modelState,
@@ -23,6 +24,7 @@ export async function processToolResults({
 }) {
   const { errorLogger } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
 
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
   await runAgentRuntimeHook({
@@ -54,9 +56,9 @@ export async function processToolResults({
         eventListener,
         turn,
         errorLogger,
-        userId: runtime?.systemRuntime?.userId || runtime?.userId || "",
-        sessionId: runtime?.systemRuntime?.sessionId || "",
-        parentSessionId: runtime?.systemRuntime?.parentSessionId || "",
+        userId: systemRuntime?.userId || runtime?.userId || "",
+        sessionId: systemRuntime?.sessionId || "",
+        parentSessionId: systemRuntime?.parentSessionId || "",
         runtime,
         agentContext: modelState?.agentContext || null,
       });
@@ -92,16 +94,12 @@ export async function processToolResults({
       ? 0
       : Number(loopState.toolConsecutiveFailureCount || 0) + 1;
     loopState.toolConsecutiveFailureCount = nextFailureCount;
-    if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
-      runtime.systemRuntime.toolConsecutiveFailureCount = nextFailureCount;
-    }
+    systemRuntime.toolConsecutiveFailureCount = nextFailureCount;
   }
 
   if (hasRequestHelpCall) {
     loopState.toolConsecutiveFailureCount = 0;
-    if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
-      runtime.systemRuntime.toolConsecutiveFailureCount = 0;
-    }
+    systemRuntime.toolConsecutiveFailureCount = 0;
   }
 
   return {

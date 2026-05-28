@@ -35,6 +35,10 @@ import {
 import { resolveMessageRole } from "../../context/session/message-context-policy.js";
 import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
 import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import {
+  getRuntimeFromAgentContext,
+  getSessionIdsFromAgentContext,
+} from "../../context/agent-context-accessor.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 
@@ -388,10 +392,9 @@ export class SessionExecutionEngine {
       },
       abortSignal,
     });
-    const runtimeAttachmentMetas = Array.isArray(
-      prepared?.agentContext?.execution?.controllers?.runtime?.attachmentMetas,
-    )
-      ? prepared.agentContext.execution.controllers.runtime.attachmentMetas
+    const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
+    const runtimeAttachmentMetas = Array.isArray(preparedRuntime?.attachmentMetas)
+      ? preparedRuntime.attachmentMetas
       : [];
     return {
       ...(prepared && typeof prepared === "object" ? prepared : {}),
@@ -615,11 +618,7 @@ export class SessionExecutionEngine {
         if (!shouldMark(messageItem, normalizedTaskSummaryToolName)) continue;
         if (markMessage(messageItem)) changedCount += 1;
       }
-      const runtime =
-        ctx?.agentContext?.execution?.controllers?.runtime &&
-        typeof ctx.agentContext.execution.controllers.runtime === "object"
-          ? ctx.agentContext.execution.controllers.runtime
-          : {};
+      const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
       const currentTurnMessages = runtime?.currentTurnMessages;
       if (currentTurnMessages && typeof currentTurnMessages.updateWhere === "function") {
         changedCount += currentTurnMessages.updateWhere(
@@ -629,18 +628,17 @@ export class SessionExecutionEngine {
             shouldMark(messageItem, normalizedTaskSummaryToolName),
         );
       }
-      const systemRuntime =
-        runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-          ? runtime.systemRuntime
-          : {};
-      const userId = String(ctx?.userId || runtime?.userId || systemRuntime?.userId || "").trim();
-      const sessionId = String(ctx?.sessionId || systemRuntime?.sessionId || "").trim();
+      const sessionIds = getSessionIdsFromAgentContext(ctx?.agentContext || {}, runtime);
+      const userId = String(ctx?.userId || sessionIds.userId || "").trim();
+      const sessionId = String(ctx?.sessionId || sessionIds.sessionId || "").trim();
       if (userId && sessionId && this.session?.markSessionMessagesSummarized) {
         try {
           changedCount += await this.session.markSessionMessagesSummarized({
             userId,
             sessionId,
-            parentSessionId: String(ctx?.parentSessionId || systemRuntime?.parentSessionId || "").trim(),
+            parentSessionId: String(
+              ctx?.parentSessionId || sessionIds.parentSessionId || "",
+            ).trim(),
             shouldMark: (messageItem) => shouldMark(messageItem, normalizedTaskSummaryToolName),
           });
         } catch {

@@ -5,6 +5,11 @@
  */
 import { access } from "node:fs/promises";
 import path from "node:path";
+import {
+  getBasePathFromAgentContext,
+  getRuntimeFromAgentContext,
+  getSessionIdsFromAgentContext,
+} from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
@@ -39,10 +44,7 @@ function isWithinBasePath(basePath = "", targetPath = "") {
 }
 
 function resolveRuntimeBasePath(agentContext = {}) {
-  const runtime = agentContext?.runtime || {};
-  const basePath = String(
-    agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
-  ).trim();
+  const basePath = getBasePathFromAgentContext(agentContext);
   if (!basePath) {
     throw recoverableToolError(tCheckInput(agentContext, "runtimeBasePathMissing"), {
       code: ERROR_CODE.RECOVERABLE_RUNTIME_BASEPATH_MISSING,
@@ -56,11 +58,10 @@ function resolveUserWorkspacePath(agentContext = {}) {
 }
 
 function resolveSessionContext(agentContext = {}) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const sessionManager = runtime?.sessionManager || null;
-  const userId = String(
-    agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
-  ).trim();
+  const sessionIds = getSessionIdsFromAgentContext(agentContext, runtime);
+  const userId = String(agentContext?.userId || sessionIds.userId || "").trim();
   if (!sessionManager || !userId) {
     throw recoverableToolError(tCheckInput(agentContext, "sessionContextMissing"), {
       code: ERROR_CODE.RECOVERABLE_SESSION_CONTEXT_MISSING,

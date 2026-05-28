@@ -33,6 +33,28 @@ function fillMissingDefaults(target = {}, defaults = {}) {
   }
 }
 
+function bindStateVersionAlias(bucket = {}, state = {}) {
+  if (!bucket || typeof bucket !== "object") return;
+  if (!state || typeof state !== "object") return;
+  const bucketVersion = Number(bucket.__harnessBucketVersion);
+  if (!Number.isFinite(bucketVersion)) {
+    bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
+  }
+  Object.defineProperty(state, "__harnessBucketVersion", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      return Number(bucket.__harnessBucketVersion) || HARNESS_BUCKET_VERSION;
+    },
+    set(nextValue) {
+      const normalized = Number(nextValue);
+      bucket.__harnessBucketVersion = Number.isFinite(normalized)
+        ? normalized
+        : HARNESS_BUCKET_VERSION;
+    },
+  });
+}
+
 function migrateLegacyPlanUpdateState(state = {}) {
   if (!state || typeof state !== "object") return;
   const counters = state.counters && typeof state.counters === "object" ? state.counters : {};
@@ -85,10 +107,14 @@ export function ensureHarnessBucket(ctx = {}) {
   const payload = ensureObjectField(agentContext, "payload");
   const bucket = ensureObjectField(payload, "harness");
   const state = ensureObjectField(bucket, "state");
+  const legacyStateVersion =
+    Number.isFinite(Number(state.__harnessBucketVersion))
+      ? Number(state.__harnessBucketVersion)
+      : null;
+  bindStateVersionAlias(bucket, state);
 
   const isFastPathReady =
     bucket.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
-    state.__harnessBucketVersion === HARNESS_BUCKET_VERSION &&
     typeof bucket.planText === "string" &&
     Array.isArray(bucket.taskChecklist) &&
     Array.isArray(bucket.acceptanceReports) &&
@@ -136,7 +162,13 @@ export function ensureHarnessBucket(ctx = {}) {
     ensureArrayField(logs, "acceptance");
     ensureArrayField(logs, "review");
     bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
-    state.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
+  } else if (
+    legacyStateVersion !== null &&
+    bucket.__harnessBucketVersion !== HARNESS_BUCKET_VERSION &&
+    legacyStateVersion === HARNESS_BUCKET_VERSION
+  ) {
+    // Backward-compat recovery for payloads that only carried state version.
+    bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
   }
 
   const locale = resolveLocale(ctx);

@@ -5,6 +5,10 @@
 import { createChatModel, createChatModelByName, adaptToolsForBinding } from "../../../model/index.js";
 import { executeToolCall } from "../execution/tool-runner.js";
 import { filterForModelContext } from "../../../context/session/message-context-policy.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../../context/agent-context-accessor.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
 const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";
@@ -67,14 +71,11 @@ function normalizeTextContent(content = "") {
 }
 
 function resolveRuntime(ctx = {}) {
-  return ctx?.agentContext?.execution?.controllers?.runtime || {};
+  return getRuntimeFromAgentContext(ctx?.agentContext || {});
 }
 
 function resolveSessionMeta(ctx = {}, runtime = {}) {
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : {};
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
     userId: String(ctx?.userId || runtime?.userId || systemRuntime?.userId || "").trim(),
     sessionId: String(ctx?.sessionId || runtime?.sessionId || systemRuntime?.sessionId || "").trim(),

@@ -24,13 +24,16 @@ export function mapToAgentContextSchema({
   conversationMessages = [],
   globalConfig = {},
 } = {}) {
+  const runtimeRef = runtime && typeof runtime === "object" ? runtime : {};
   const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
+    runtimeRef?.systemRuntime && typeof runtimeRef.systemRuntime === "object"
+      ? runtimeRef.systemRuntime
       : {};
   const selectedConnectors = normalizeSelectedConnectors(
     systemRuntime?.config?.selectedConnectors || {},
   );
+  const controllers = { runtime: runtimeRef };
+  const tools = { registry: [] };
   const resolvedDialogProcessId = resolveDialogProcessId({
     ctx: {
       dialogProcessId,
@@ -76,18 +79,14 @@ export function mapToAgentContextSchema({
         maxToolLoopTurns: safeNum(systemRuntime?.config?.maxToolLoopTurns),
       },
       models: {
-        runtimeModel: String(runtime?.runtimeModel || "").trim(),
+        runtimeModel: String(runtimeRef?.runtimeModel || "").trim(),
         allEnabledProviders:
-          runtime?.allEnabledProviders &&
-          typeof runtime.allEnabledProviders === "object"
-            ? runtime.allEnabledProviders
+          runtimeRef?.allEnabledProviders &&
+          typeof runtimeRef.allEnabledProviders === "object"
+            ? runtimeRef.allEnabledProviders
             : {},
       },
-      controllers: {
-        abortSignal: runtime?.abortSignal || null,
-        parentAsyncResultContainer: runtime?.parentAsyncResultContainer || null,
-        runtime,
-      },
+      controllers,
     },
     session: {
       root: {
@@ -101,14 +100,7 @@ export function mapToAgentContextSchema({
       },
       current: {
         id: String(systemRuntime?.sessionId || sessionId || "").trim(),
-        attachments: Array.isArray(runtime?.attachmentMetas)
-          ? runtime.attachmentMetas
-          : [],
         connectors: selectedConnectors,
-        turnStore: {
-          currentTurnMessages: runtime?.currentTurnMessages || null,
-          currentTurnTasks: runtime?.currentTurnTasks || null,
-        },
       },
     },
     payload: {
@@ -116,10 +108,7 @@ export function mapToAgentContextSchema({
         system: Array.isArray(systemMessages) ? systemMessages : [],
         history: Array.isArray(conversationMessages) ? conversationMessages : [],
       },
-      tools: {
-        registry: [],
-        shared: runtime?.sharedTools || {},
-      },
+      tools,
     },
   };
 }

@@ -13,6 +13,7 @@ import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS } from "../../constants/index.js";
+import { resolveForceToolCall } from "../../../utils/shared-utils.js";
 import {
   buildDelegateTaskFailureResult,
   cloneData,
@@ -66,11 +67,11 @@ export function createDelegateTaskTool({
       emitEvent(runtimeEventListener, "subagent_runconfig_passthrough_applied", {
         sourceTool: TOOL_NAME.DELEGATE_TASK_ASYNC,
         passthrough: {
-          forceToolCall: passthroughForceToolCall,
+          forceTool: passthroughForceToolCall,
           toolPolicy: passthroughToolPolicy,
         },
         effectiveRunConfig: {
-          forceToolCall: runConfig?.forceToolCall === true,
+          forceTool: resolveForceToolCall(runConfig),
           hasToolPolicy: runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object",
           toolPolicyKeys:
             runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"

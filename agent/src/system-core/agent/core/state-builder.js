@@ -8,6 +8,10 @@ import { mergeConfig } from "../../config/index.js";
 import { emitEvent } from "../../event/index.js";
 import { buildContextMessages } from "./context/message-builder.js";
 import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { DEFAULT_MAX_TOOL_LOOP_TURNS } from "./constants/index.js";
 import {
   normalizeSystemRuntimeCounters,
@@ -33,8 +37,8 @@ export function createStateBuilder({
   resolveToolFailureHelpCountFn = resolveToolFailureHelpCount,
 } = {}) {
   return function buildAgentState({ agentContext, userMessage, errorLogger }) {
-    const runtime = agentContext?.execution?.controllers?.runtime || {};
-    const sys = runtime.systemRuntime || {};
+    const runtime = getRuntimeFromAgentContext(agentContext);
+    const sys = getSystemRuntimeFromRuntime(runtime);
     const globalConfig = runtime.globalConfig || {};
     const userConfig = runtime.userConfig || {};
     const effectiveConfig = mergeConfigFn(globalConfig, userConfig);
@@ -48,7 +52,7 @@ export function createStateBuilder({
       ? agentContext.payload.tools.registry
       : [];
 
-    normalizeSystemRuntimeCountersFn(runtime.systemRuntime, userMessage);
+    normalizeSystemRuntimeCountersFn(sys, userMessage);
 
     const selectedModelSpec = resolveEffectiveModelSpecFn({ globalConfig, userConfig });
     const maxToolLoopTurns = resolveMaxToolLoopTurnsFn({
@@ -106,9 +110,7 @@ export function createStateBuilder({
       helpPromptLoopTurns,
       toolFailureHelpCount,
       taskSummaryTriggered: false,
-      toolConsecutiveFailureCount: Number(
-        runtime?.systemRuntime?.toolConsecutiveFailureCount || 0,
-      ),
+      toolConsecutiveFailureCount: Number(sys?.toolConsecutiveFailureCount || 0),
       errorLogger,
     };
 

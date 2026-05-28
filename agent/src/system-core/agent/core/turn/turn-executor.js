@@ -28,6 +28,7 @@ import {
 import { resolveCurrentModelInfo } from "../model/model-manager.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
+import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 
 function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -57,10 +58,7 @@ function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", modelSpe
       thinking_budget: 0,
     };
   }
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : null;
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   if (!systemRuntime || systemRuntime.forceNonThinkingMode !== true) {
     if (providerFormat === "dashscope" && modelEnableThinking !== true) {
       return {
@@ -149,10 +147,7 @@ export async function invokeNoToolsTurn({
       agentContext: modelState?.agentContext || null,
     }),
   });
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : {};
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
   let modelResponse = null;
   try {
@@ -299,10 +294,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     dialogProcessId,
   } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : {};
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
 
   const adaptedBinding = adaptToolsForBinding(tools, modelState);
@@ -427,10 +419,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       }),
     });
     if (configuredToolChoice === "required" && isRequiredToolChoiceUnsupportedError(error)) {
-      if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
-        runtime.systemRuntime.toolChoiceRequiredUnsupported = true;
-        runtime.systemRuntime.forceNonThinkingMode = true;
-      }
+      const systemRuntimeForFallback = getSystemRuntimeFromRuntime(runtime);
+      systemRuntimeForFallback.toolChoiceRequiredUnsupported = true;
+      systemRuntimeForFallback.forceNonThinkingMode = true;
       const currentModelInfo = resolveCurrentModelInfo(modelState);
       emitEvent(eventListener, "tool_choice_downgraded_to_auto", {
         turn,
@@ -569,9 +560,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     hasToolCalls: Boolean(calls.length),
   });
   if (!rawCalls.length && String(adaptedBinding?.bindOptions?.tool_choice || "") === "required") {
-    if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
-      runtime.systemRuntime.toolChoiceRequiredUnsupported = true;
-    }
+    const systemRuntimeForRequired = getSystemRuntimeFromRuntime(runtime);
+    systemRuntimeForRequired.toolChoiceRequiredUnsupported = true;
     emitEvent(eventListener, "llm_tool_choice_required_not_followed", {
       turn,
       toolChoice: "required",

@@ -25,6 +25,7 @@ import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
 import { resolveForceToolCall } from "../../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
+import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
@@ -92,10 +93,7 @@ export function createTurnOrchestrator({
 
       resolveLlmForTurnFn(modelState);
 
-      const systemRuntime =
-        runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-          ? runtime.systemRuntime
-          : null;
+      const systemRuntime = getSystemRuntimeFromRuntime(runtime);
       if (systemRuntime?.phaseSummaryNoToolsNextTurn === true) {
         systemRuntime.phaseSummaryNoToolsNextTurn = false;
         emitEvent(eventListener, "phase_summary_no_tools_turn_enforced", { turn });
@@ -137,7 +135,7 @@ export function createTurnOrchestrator({
       } = withToolsResult;
 
       if (!calls.length) {
-        const forceTool = resolveForceToolCall(runtime?.systemRuntime?.config || {});
+        const forceTool = resolveForceToolCall(systemRuntime?.config || {});
         if (!forceTool) {
           loopState.toolChoiceRetryPrompted = false;
           removeToolChoiceRequiredRetryPrompts(loopState.messages);

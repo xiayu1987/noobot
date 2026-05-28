@@ -8,6 +8,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createMcpAgentTools } from "../../mcp/index.js";
 import { mergeConfig } from "../../config/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -26,7 +27,7 @@ import {
 } from "../constants/index.js";
 
 export function createMcpTool({ agentContext }) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const callMcpTaskTool = new DynamicStructuredTool({
     name: TOOL_NAME.CALL_MCP_TASK,
     description: tTool(runtime, "tools.mcp.description"),
