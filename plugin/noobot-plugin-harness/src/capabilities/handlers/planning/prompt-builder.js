@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { createMessagePlan, renderMessagePlanForInject } from "../shared/model/message-plan.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -174,6 +175,38 @@ export function resolveLatestUserMessageText(ctx = {}) {
   return "";
 }
 
+export function buildPlanningMessagePlan(
+  locale = LOCALE.ZH_CN,
+  ctx = {},
+  meta = {},
+  {
+    contextSummaryContent = "",
+    toolContextContent = "",
+    taskContent = "",
+  } = {},
+) {
+  return createMessagePlan([
+    {
+      kind: "planning_context_summary",
+      injectRole: "system",
+      separateRole: "constraint",
+      content: contextSummaryContent || buildPlanningContextSummaryPrompt(locale, ctx, meta),
+    },
+    {
+      kind: "planning_tool_context",
+      injectRole: "system",
+      separateRole: "constraint",
+      content: toolContextContent || buildPlanningToolContextPrompt(locale, ctx, meta),
+    },
+    {
+      kind: "planning_task",
+      injectRole: "user",
+      separateRole: "task",
+      content: taskContent || buildPlanningPromptBase(locale, ctx, meta),
+    },
+  ]);
+}
+
 export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -182,24 +215,16 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
   if (state.flags.planningPromptInjected === true) return false;
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
-  injectMessageWithPolicy(ctx, {
-    role: "system",
-    content: buildPlanningContextSummaryPrompt(locale, ctx, meta),
-    injectAt: "append",
-    avoidBreakToolCallContinuity: true,
-  });
-  injectMessageWithPolicy(ctx, {
-    role: "system",
-    content: buildPlanningToolContextPrompt(locale, ctx, meta),
-    injectAt: "append",
-    avoidBreakToolCallContinuity: true,
-  });
-  injectMessageWithPolicy(ctx, {
-    role: "user",
-    content: buildPlanningPromptBase(locale, ctx, meta),
-    injectAt: "append",
-    avoidBreakToolCallContinuity: true,
-  });
+  const messagePlan = buildPlanningMessagePlan(locale, ctx, meta);
+  const injectMessages = renderMessagePlanForInject(messagePlan);
+  for (const messageItem of injectMessages) {
+    injectMessageWithPolicy(ctx, {
+      role: messageItem.role,
+      content: messageItem.content,
+      injectAt: "append",
+      avoidBreakToolCallContinuity: true,
+    });
+  }
   state.flags.planningPromptInjected = true;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,

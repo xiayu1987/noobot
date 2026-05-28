@@ -106,6 +106,14 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
   assert.equal(beforeToolCallsCtx.calls.length, 1);
   assert.equal(beforeToolCallsCtx.calls[0].name, "request_task_acceptance");
   assert.deepEqual(beforeToolCallsCtx.calls[0].args, { mode: "forced" });
+  const acceptanceLogs = agentContext.payload.harness.logs.acceptance;
+  const beforeToolCallsExecutionLog = acceptanceLogs.find((item = {}) =>
+    item?.event === "workflow_execution_result" && item?.detail?.point === "before_tool_calls"
+  );
+  assert.equal(
+    beforeToolCallsExecutionLog?.detail?.requestedAction,
+    "forced_acceptance_before_tool_calls_rewrite",
+  );
 
   const beforeToolCallCtx = {
     agentContext,
@@ -119,4 +127,11 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
   });
   assert.equal(beforeToolCallCtx.call.name, "request_task_acceptance");
   assert.deepEqual(beforeToolCallCtx.call.args, { mode: "forced" });
+  const beforeToolCallExecutionLog = acceptanceLogs.find((item = {}) =>
+    item?.event === "workflow_execution_result" && item?.detail?.point === "before_tool_call"
+  );
+  assert.equal(
+    beforeToolCallExecutionLog?.detail?.requestedAction,
+    "forced_acceptance_before_tool_call_rewrite",
+  );
 });

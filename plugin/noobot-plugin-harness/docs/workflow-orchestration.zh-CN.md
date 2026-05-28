@@ -50,9 +50,11 @@ Hook 点：`before_llm_call`
 日志字段：
 
 - `mode`: `inject` 或 `separate_model`
+- `category`: `workflow` | `guard`（按流程语义分类，Acceptance 场景重点使用）
 - `chosenAction`: `summary_overflow` | `guidance` | `plan_update_revision` | `plan_update_refinement` | `summary_turns` | `none`
 - `chosenReason`: 调度原因码
 - `chosenStage`: `revision` | `refinement` | `""`
+- `triggeredActions`: 本轮触发扫描到的动作集合（如 planning 的 summary/plan_update/phase_acceptance）
 - `blockedActions`: 当前被阻塞的 pending 流程
 - `pending`: 状态快照
   - `summary`
@@ -64,6 +66,7 @@ Hook 点：`before_llm_call`
 执行结果字段（`workflow_execution_result`）：
 
 - `mode`: `inject` 或 `separate_model`
+- `category`
 - `chosenAction`
 - `chosenReason`
 - `requestedAction`
@@ -82,6 +85,12 @@ Hook 点：`before_llm_call`
 
 参数单一事实源：`src/core/workflow-params.js`（`WORKFLOW_PARAMS`），覆盖阈值、工具名、
 调度顺序、workflow 的 action/reason/event 枚举，以及 capability 日志事件名（`logging.events.*`）。
+
+统一执行观测入口：
+
+- `src/capabilities/handlers/shared/workflow/pattern.js`
+  - `runWorkflowLifecycle(...)`：统一封装 `priority_decision -> execute -> execution_result`
+  - `captureWorkflowLogCursor(...)` + `resolveWorkflowExecutionMetrics(...)`：统一统计 `retryCount/errorCode`
 
 ### Planning
 
@@ -108,6 +117,23 @@ Hook 点：`before_llm_call`
   - 连续失败：`CONSECUTIVE = 3`
   - 累计失败：`ACCUMULATED = 10`
 - 达阈值后会设置 `pending.guidance`，并在下一次 `before_llm_call` 参与调度。
+- `requestedAction` 命名统一为“动作 + 模式”，例如：
+  - `summary_inject` / `summary_separate_model`
+  - `guidance_inject` / `guidance_separate_model`
+  - `plan_update_revision_inject` / `plan_update_refinement_separate_model`
+  - `phase_acceptance_inject` / `phase_acceptance_separate_model`
+  - `forced_acceptance_before_tool_calls_rewrite`
+
+### 消息中间表示（Message Plan）
+
+Planning 注入与 separate-model 现在共享消息中间表示：
+
+- 结构：`[{ kind, injectRole, separateRole, content }]`
+- 渲染：
+  - Inject：`renderMessagePlanForInject(plan)`
+  - Separate-model：`renderMessagePlanForSeparateModel({ agentMessages, plan })`
+- 实现文件：
+  - `src/capabilities/handlers/shared/model/message-plan.js`
 
 ### Plan Update（revision/refinement）
 
@@ -157,6 +183,11 @@ Hook 点：`before_llm_call`
   - `src/capabilities/handlers/guidance/revision-injector.js`
 - Acceptance 消息组装：
   - `src/capabilities/handlers/acceptance/validation-runner.js`
+- 各域统一生命周期入口（已接入 `runWorkflowLifecycle`）：
+  - `src/capabilities/handlers/planning/controller.js`
+  - `src/capabilities/handlers/guidance/controller.js`
+  - `src/capabilities/handlers/acceptance/controller.js`
+  - `src/capabilities/handlers/review/controller.js`
 - 阈值常量：
   - `src/core/thresholds.js`
 

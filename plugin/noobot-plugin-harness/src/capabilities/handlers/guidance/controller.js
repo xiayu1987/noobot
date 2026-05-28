@@ -29,25 +29,38 @@ import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters 
 import { applySummaryText } from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import {
-  appendWorkflowExecutionResult,
-  appendWorkflowPriorityDecision,
-  captureWorkflowLogCursor,
-  resolveWorkflowExecutionMetrics,
   resolveWorkflowMode,
+  runWorkflowLifecycle,
 } from "../shared/workflow/pattern.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
+const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 
-function resolveWorkflowActionName(action = "", stage = "") {
-  if (action === "plan_update") {
-    return String(stage || "").trim().toLowerCase() === "revision"
-      ? "plan_update_revision"
-      : "plan_update_refinement";
+function resolveWorkflowActionName(action = "", stage = "", mode = "inject") {
+  const normalizedMode = String(mode || "").trim() === "separate_model" ? "separate_model" : "inject";
+  if (action === GUIDANCE_DECISION.action.planUpdate) {
+    const revisionStage = String(stage || "").trim().toLowerCase() === GUIDANCE_DECISION.stage.revision;
+    if (revisionStage) {
+      return normalizedMode === "separate_model"
+        ? GUIDANCE_DECISION.requestedAction.planUpdateRevisionSeparateModel
+        : GUIDANCE_DECISION.requestedAction.planUpdateRevisionInject;
+    }
+    return normalizedMode === "separate_model"
+      ? GUIDANCE_DECISION.requestedAction.planUpdateRefinementSeparateModel
+      : GUIDANCE_DECISION.requestedAction.planUpdateRefinementInject;
   }
-  if (action === "summary") return "summary";
-  if (action === "guidance") return "guidance";
-  return "none";
+  if (action === GUIDANCE_DECISION.action.summary) {
+    return normalizedMode === "separate_model"
+      ? GUIDANCE_DECISION.requestedAction.summarySeparateModel
+      : GUIDANCE_DECISION.requestedAction.summaryInject;
+  }
+  if (action === GUIDANCE_DECISION.action.guidance) {
+    return normalizedMode === "separate_model"
+      ? GUIDANCE_DECISION.requestedAction.guidanceSeparateModel
+      : GUIDANCE_DECISION.requestedAction.guidanceInject;
+  }
+  return GUIDANCE_DECISION.requestedAction.none;
 }
 
 async function executeGuidanceWorkflowAction({
@@ -61,14 +74,30 @@ async function executeGuidanceWorkflowAction({
   let executedFollowup = false;
 
   if (mode === "separate_model") {
-    if (nextAction.action === "plan_update") {
+    if (nextAction.action === GUIDANCE_DECISION.action.summary) {
+      const result = await runGuidanceBySeparateModel(ctx, meta);
+      changed = result || changed;
+      executedPrimary = result === true;
+    } else if (nextAction.action === GUIDANCE_DECISION.action.guidance) {
+      const result = await runGuidanceBySeparateModel(ctx, meta);
+      changed = result || changed;
+      executedPrimary = result === true;
+    } else if (nextAction.action === GUIDANCE_DECISION.action.planUpdate) {
       const firstChanged = await runPendingPlanUpdateBySeparateModel(ctx, meta);
       changed = firstChanged || changed;
       executedPrimary = firstChanged === true;
+
+      const holder = ensureHarnessBucket(ctx);
+      const pending = holder?.state?.pending && typeof holder.state.pending === "object"
+        ? holder.state.pending
+        : {};
+      const hasSummaryOrGuidancePending = pending.summary === true || Boolean(pending.guidance);
+      if (hasSummaryOrGuidancePending) {
+        const followupChanged = await runGuidanceBySeparateModel(ctx, meta);
+        changed = followupChanged || changed;
+        executedFollowup = followupChanged === true;
+      }
     }
-    const followupChanged = await runGuidanceBySeparateModel(ctx, meta);
-    changed = followupChanged || changed;
-    executedFollowup = followupChanged === true;
   } else if (nextAction.action === "summary" || nextAction.action === "guidance") {
     const result = maybeInjectGuidanceOrSummaryPrompt(ctx);
     changed = result || changed;
@@ -84,7 +113,7 @@ async function executeGuidanceWorkflowAction({
     changed,
     executedPrimary,
     executedFollowup,
-    actionName: resolveWorkflowActionName(nextAction.action, nextAction.stage),
+    actionName: resolveWorkflowActionName(nextAction.action, nextAction.stage, mode),
   };
 }
 
@@ -92,46 +121,37 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     let changed = false;
     if (point === "before_llm_call") {
-      changed = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) || changed;
+      const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
       const holder = ensureHarnessBucket(ctx);
-      const startedAt = Date.now();
-      const logCursor = captureWorkflowLogCursor(ctx, CAPABILITY_DOMAIN.GUIDANCE);
       const nextAction = resolveNextGuidanceAction(holder?.state || {});
       const decision = resolveGuidancePriorityDecision(holder?.state || {});
-      const execution = await executeGuidanceWorkflowAction({
-        nextAction,
-        ctx,
-        meta,
-      });
-      appendWorkflowPriorityDecision(ctx, {
+      const mode = resolveWorkflowMode(meta);
+      const lifecycle = await runWorkflowLifecycle(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,
         point: "before_llm_call",
-        mode: execution.mode,
-        chosenAction: decision.chosenAction,
-        chosenReason: decision.chosenReason,
-        chosenStage: decision.chosenStage,
-        blockedActions: decision.blockedActions,
-        pending: decision.pendingSnapshot,
+        mode,
+        resolveDecision: () => ({
+          chosenAction: decision.chosenAction,
+          chosenReason: decision.chosenReason,
+          chosenStage: decision.chosenStage,
+          blockedActions: decision.blockedActions,
+          pending: decision.pendingSnapshot,
+        }),
+        execute: async () => {
+          const execution = await executeGuidanceWorkflowAction({
+            nextAction,
+            ctx,
+            meta,
+          });
+          return {
+            requestedAction: execution.actionName,
+            executedPrimary: execution.executedPrimary,
+            executedFollowup: execution.executedFollowup,
+            changed: execution.changed || invariantChanged,
+          };
+        },
       });
-      const metrics = resolveWorkflowExecutionMetrics(ctx, {
-        domain: CAPABILITY_DOMAIN.GUIDANCE,
-        startCursor: logCursor,
-      });
-      appendWorkflowExecutionResult(ctx, {
-        domain: CAPABILITY_DOMAIN.GUIDANCE,
-        point: "before_llm_call",
-        mode: execution.mode,
-        chosenAction: decision.chosenAction,
-        chosenReason: decision.chosenReason,
-        requestedAction: execution.actionName,
-        executedPrimary: execution.executedPrimary,
-        executedFollowup: execution.executedFollowup,
-        changed: execution.changed,
-        durationMs: Date.now() - startedAt,
-        retryCount: metrics.retryCount,
-        errorCode: metrics.errorCode,
-      });
-      changed = execution.changed || changed;
+      changed = lifecycle.execution.changed || changed;
     }
     if (point === "after_tool_call" && shouldProcessPrimaryToolHooks(ctx)) {
       changed = markToolSignals(ctx) || changed;
