@@ -375,6 +375,89 @@ function resolveTemplateProvider(providers = {}, format = "") {
   return isPlainObject(firstProvider) ? firstProvider : null;
 }
 
+function alignInitialModelReferences({
+  globalConfig = {},
+  providerAlias = "",
+} = {}) {
+  const alias = String(providerAlias || "").trim();
+  if (!isPlainObject(globalConfig) || !alias) return globalConfig;
+
+  if (isPlainObject(globalConfig.attachments)) {
+    const attachmentModels = isPlainObject(globalConfig.attachments.attachment_models)
+      ? { ...globalConfig.attachments.attachment_models }
+      : null;
+    if (attachmentModels) {
+      for (const mediaTypeKey of ["audio", "video", "image"]) {
+        if (hasOwnProperty(attachmentModels, mediaTypeKey)) {
+          attachmentModels[mediaTypeKey] = alias;
+        }
+      }
+      globalConfig.attachments = {
+        ...globalConfig.attachments,
+        attachment_models: attachmentModels,
+      };
+    }
+  }
+
+  if (isPlainObject(globalConfig.plugins) && isPlainObject(globalConfig.plugins.harness)) {
+    const harness = { ...globalConfig.plugins.harness };
+    if (isPlainObject(harness.stepModels)) {
+      const nextStepModels = { ...harness.stepModels };
+      for (const stepKey of Object.keys(nextStepModels)) {
+        nextStepModels[stepKey] = alias;
+      }
+      harness.stepModels = nextStepModels;
+    }
+    if (isPlainObject(harness.capabilityModelByPurpose)) {
+      const nextCapabilityMap = { ...harness.capabilityModelByPurpose };
+      for (const purposeKey of Object.keys(nextCapabilityMap)) {
+        nextCapabilityMap[purposeKey] = alias;
+      }
+      harness.capabilityModelByPurpose = nextCapabilityMap;
+    }
+    globalConfig.plugins = {
+      ...globalConfig.plugins,
+      harness,
+    };
+  }
+
+  if (isPlainObject(globalConfig.scenarios) && isPlainObject(globalConfig.scenarios.definitions)) {
+    const definitions = { ...globalConfig.scenarios.definitions };
+    for (const [scenarioKey, scenarioDefinition] of Object.entries(definitions)) {
+      if (!isPlainObject(scenarioDefinition)) continue;
+      if (hasOwnProperty(scenarioDefinition, "model")) {
+        definitions[scenarioKey] = {
+          ...scenarioDefinition,
+          model: alias,
+        };
+      }
+    }
+    globalConfig.scenarios = {
+      ...globalConfig.scenarios,
+      definitions,
+    };
+  }
+
+  return globalConfig;
+}
+
+async function alignInitialModelReferencesForFile({
+  filePath = "",
+  providerAlias = "",
+} = {}) {
+  if (!filePath || !providerAlias) return;
+  if (!(await fileExists(filePath))) return;
+  const payload = await readJsonStrict(filePath, "config");
+  if (!isPlainObject(payload)) return;
+  const nextPayload = alignInitialModelReferences({
+    globalConfig: deepClone(payload),
+    providerAlias,
+  });
+  if (JSON.stringify(nextPayload) !== JSON.stringify(payload)) {
+    await writeJson(filePath, nextPayload);
+  }
+}
+
 function parseTemplateVariables(input, collector = new Set()) {
   if (typeof input === "string") {
     const pattern = /\$\{([^{}]+)\}/g;
@@ -852,6 +935,42 @@ async function syncLanguageAcrossTemplateAndUsers({
   console.log(t(locale, "logLanguageSynced", { language }));
 }
 
+async function syncInitialModelReferencesAcrossTemplateAndUsers({
+  workspaceRootAbsolutePath,
+  workspaceTemplateAbsolutePath,
+  superAdminUserId,
+  providerAlias,
+} = {}) {
+  const normalizedProviderAlias = String(providerAlias || "").trim();
+  if (!normalizedProviderAlias) return;
+
+  const templateTargets = [
+    path.join(workspaceTemplateAbsolutePath, "config.json"),
+    path.join(workspaceTemplateAbsolutePath, "config.example.json"),
+  ];
+  for (const targetPath of templateTargets) {
+    await alignInitialModelReferencesForFile({
+      filePath: targetPath,
+      providerAlias: normalizedProviderAlias,
+    });
+  }
+
+  const userIds = await collectWorkspaceUserIds({
+    workspaceRootAbsolutePath,
+    superAdminUserId,
+  });
+  for (const userId of userIds) {
+    await alignInitialModelReferencesForFile({
+      filePath: path.join(workspaceRootAbsolutePath, userId, "config.json"),
+      providerAlias: normalizedProviderAlias,
+    });
+    await alignInitialModelReferencesForFile({
+      filePath: path.join(workspaceRootAbsolutePath, userId, "config.example.json"),
+      providerAlias: normalizedProviderAlias,
+    });
+  }
+}
+
 async function collectTemplateParamKeys({ globalConfigPath, workspaceTemplateAbsolutePath } = {}) {
   const keys = new Set();
   if (await fileExists(globalConfigPath)) {
@@ -944,6 +1063,10 @@ async function initializeGlobalConfigWhenMissing({
 
   globalConfig.providers = providers;
   globalConfig.default_provider = providerAlias;
+  alignInitialModelReferences({
+    globalConfig,
+    providerAlias,
+  });
 
   await writeJson(globalConfigPath, globalConfig);
 
@@ -955,6 +1078,13 @@ async function initializeGlobalConfigWhenMissing({
     workspaceTemplateAbsolutePath,
     superAdminUserId: answers.superAdminUserId,
     locale: answers.setupLocale,
+  });
+
+  await syncInitialModelReferencesAcrossTemplateAndUsers({
+    workspaceRootAbsolutePath,
+    workspaceTemplateAbsolutePath,
+    superAdminUserId: answers.superAdminUserId,
+    providerAlias,
   });
 
   await syncLanguageAcrossTemplateAndUsers({
