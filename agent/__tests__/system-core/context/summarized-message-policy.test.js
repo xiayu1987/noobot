@@ -92,6 +92,26 @@ test("filterSummarizedMessages excludes only summarized in one policy", () => {
   ]);
 });
 
+test("filterSummarizedMessages keeps summarized current system context marker", () => {
+  const input = [
+    { role: "system", content: "old system", summarized: true },
+    {
+      role: "system",
+      content: "current system context",
+      summarized: true,
+      additional_kwargs: {
+        noobotInternalMessageType: "system_context",
+      },
+    },
+    { role: "user", content: "task" },
+  ];
+  const result = filterSummarizedMessages(input);
+  assert.deepEqual(result.map((item) => item.content), [
+    "current system context",
+    "task",
+  ]);
+});
+
 test("system is summarized while user and assistant-without-tool-calls are not", () => {
   assert.equal(
     shouldMarkCurrentTurnSummarizedMessage({ role: "system", content: "note" }),

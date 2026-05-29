@@ -38,3 +38,42 @@ test("capability runtime composes before_llm_call messages from message blocks v
     ["sys1", "h1", "h2", "u1"],
   );
 });
+
+test("capability runtime applies message blocks only once per runtime turn context", async () => {
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
+  });
+  const ctx = {
+    messages: [{ role: "assistant", content: "legacy" }],
+    messageBlocks: {
+      system: [{ role: "system", content: "sys1" }],
+      history: [{ role: "assistant", content: "h1" }],
+      incremental: [{ role: "user", content: "u1" }],
+    },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {},
+        },
+      },
+    },
+  };
+
+  await runtime.runHook("before_llm_call", ctx, {
+    harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
+  });
+  ctx.messages.push({ role: "assistant", content: "after-first-call" });
+  await runtime.runHook("before_llm_call", ctx, {
+    harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
+  });
+
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    ["sys1", "h1", "u1", "after-first-call"],
+  );
+});

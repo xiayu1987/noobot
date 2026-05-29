@@ -234,6 +234,16 @@ test("SessionExecutionEngine injects plugin resolveMessageBlock for history/incr
     ],
     ctx: { dialogProcessId: "dlg1" },
   });
+  const conversationResolved = resolver({
+    scope: "conversation",
+    messages: [
+      { role: "assistant", content: "h1" },
+      { role: "assistant", content: "h2" },
+      { role: "user", content: "u1" },
+      { role: "user", content: "u2" },
+    ],
+    ctx: { dialogProcessId: "dlg1" },
+  });
   const systemResolved = resolver({
     scope: "system",
     messages: [
@@ -244,6 +254,7 @@ test("SessionExecutionEngine injects plugin resolveMessageBlock for history/incr
   });
   assert.deepEqual(historyResolved.map((item) => item.content), ["h2", "h3"]);
   assert.deepEqual(incrementalResolved.map((item) => item.content), ["a2", "a3", "a4"]);
+  assert.deepEqual(conversationResolved.map((item) => item.content), ["u1", "u2"]);
   assert.deepEqual(systemResolved.map((item) => item.content), ["policy"]);
 });
 

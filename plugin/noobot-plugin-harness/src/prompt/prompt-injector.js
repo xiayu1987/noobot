@@ -116,6 +116,29 @@ function readLegacyPromptEntries() {
   }));
 }
 
+function resolveMessageRole(message = {}) {
+  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  if (role) return role;
+  const type = String(
+    message?.type ||
+      message?.lc_kwargs?.type ||
+      (typeof message?._getType === "function" ? message._getType() : ""),
+  )
+    .trim()
+    .toLowerCase();
+  if (type === "ai") return "assistant";
+  if (type === "human") return "user";
+  return type;
+}
+
+function findAfterLeadingSystemIndex(messages = []) {
+  let index = 0;
+  while (index < messages.length && resolveMessageRole(messages[index]) === "system") {
+    index += 1;
+  }
+  return index;
+}
+
 function persistPromptMessagesToCurrentTurn(ctx = {}, promptMessages = []) {
   let count = 0;
   for (const message of Array.isArray(promptMessages) ? promptMessages : []) {
@@ -147,6 +170,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     .sort((a, b) => b.priority - a.priority);
 
   const prependItems = [];
+  const afterSystemItems = [];
   const appendItems = [];
 
   for (const { id, content, mode } of sorted) {
@@ -166,6 +190,8 @@ export function injectSystemMessages(ctx = {}, options = {}) {
       prependItems.push(buildHarnessInjectedMessage(marker));
     } else if (mode === "append") {
       appendItems.push(buildHarnessInjectedMessage(marker));
+    } else if (mode === "after_system") {
+      afterSystemItems.push(buildHarnessInjectedMessage(marker));
     } else {
       // prepend (default)
       prependItems.push(buildHarnessInjectedMessage(marker));
@@ -178,13 +204,17 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     messages.unshift(item);
   }
 
+  for (const item of afterSystemItems.reverse()) {
+    messages.splice(findAfterLeadingSystemIndex(messages), 0, item);
+  }
+
   // Apply append items
   for (const item of appendItems) {
     messages.push(item);
   }
 
   if (injected) {
-    persistPromptMessagesToCurrentTurn(ctx, [...prependItems, ...appendItems]);
+    persistPromptMessagesToCurrentTurn(ctx, [...prependItems, ...afterSystemItems, ...appendItems]);
     // P2#5: refresh cache once to keep replace/remove semantics consistent
     rebuildInjectedPromptCache(messages);
   }

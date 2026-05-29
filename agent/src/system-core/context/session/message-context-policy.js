@@ -43,6 +43,17 @@ export function isMessageSummarized(messageItem = {}) {
   return false;
 }
 
+export function isCurrentSystemContextMessage(messageItem = {}) {
+  const marker = String(
+    messageItem?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.metadata?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.metadata?.noobotInternalMessageType ||
+      "",
+  ).trim();
+  return marker === "system_context";
+}
+
 function isInjectedMessage(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem?.injectedMessage === true) return true;
@@ -86,6 +97,13 @@ export function filterInjectedMessagesForDialog(
 }
 
 export function shouldKeepForModelContext(messageItem = {}) {
+  if (
+    isMessageSummarized(messageItem) &&
+    resolveMessageRole(messageItem) === "system" &&
+    isCurrentSystemContextMessage(messageItem)
+  ) {
+    return true;
+  }
   return !isMessageSummarized(messageItem);
 }
 

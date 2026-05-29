@@ -36,6 +36,29 @@ function resolveInternalMessageType(message = {}) {
   ).trim();
 }
 
+function resolveMessageRole(message = {}) {
+  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  if (role) return role;
+  const type = String(
+    message?.type ||
+      message?.lc_kwargs?.type ||
+      (typeof message?._getType === "function" ? message._getType() : ""),
+  )
+    .trim()
+    .toLowerCase();
+  if (type === "ai") return "assistant";
+  if (type === "human") return "user";
+  return type;
+}
+
+function findAfterLeadingSystemIndex(messages = []) {
+  let index = 0;
+  while (index < messages.length && resolveMessageRole(messages[index]) === "system") {
+    index += 1;
+  }
+  return index;
+}
+
 function removeInternalForcedMessages(messages = [], directive = {}) {
   if (!Array.isArray(messages)) return 0;
   const removeAll = directive?.cancelInternalForcedMessages === true;
@@ -61,7 +84,7 @@ function removeInternalForcedMessages(messages = [], directive = {}) {
   return removed;
 }
 
-function applyMessageArrayTakeover(messages = [], directive = {}) {
+function applyMessageArrayTakeover(messages = [], directive = {}, { preserveLeadingSystem = true } = {}) {
   if (!Array.isArray(messages)) return false;
   const removed = removeInternalForcedMessages(messages, directive);
   const content = String(
@@ -89,7 +112,11 @@ function applyMessageArrayTakeover(messages = [], directive = {}) {
     messages.push(nextMessage);
     return true;
   }
-  messages.unshift(nextMessage);
+  if (preserveLeadingSystem) {
+    messages.splice(findAfterLeadingSystemIndex(messages), 0, nextMessage);
+  } else {
+    messages.unshift(nextMessage);
+  }
   return true;
 }
 
@@ -101,7 +128,8 @@ export function applyMessageTakeover(_point = "", ctx = {}, takeover = {}) {
   if (!messageArrays.length) return false;
   let changed = false;
   for (const messages of messageArrays) {
-    changed = applyMessageArrayTakeover(messages, takeover) || changed;
+    const preserveLeadingSystem = messages === ctx?.messages;
+    changed = applyMessageArrayTakeover(messages, takeover, { preserveLeadingSystem }) || changed;
   }
   return changed;
 }

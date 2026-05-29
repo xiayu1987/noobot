@@ -147,6 +147,59 @@ test("createRegisterHarnessHooks emits hook_error and rethrows when trace handle
   assert.equal(progressEvents.at(-1)?.data?.error, "safe_error");
 });
 
+test("createRegisterHarnessHooks compacts final non-system messages after prompt injection", async () => {
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => true,
+    injectPrompt: async (_point, ctx) => {
+      ctx.messages.push({ role: "user", content: "harness prompt" });
+    },
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveMessageBlock: ({ scope, messages }) =>
+        scope === "conversation" ? messages.slice(-2) : messages,
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const ctx = {
+    messages: [
+      { role: "system", content: "system context" },
+      { role: "user", content: "h1" },
+      { role: "user", content: "h2" },
+      { role: "user", content: "h3" },
+    ],
+  };
+  await handlers.get("before_llm_call")(ctx);
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    ["system context", "h3", "harness prompt"],
+  );
+});
+
 test("createRegisterHarnessHooks skips non-primary execution scope", async () => {
   const calls = [];
   const handlers = new Map();

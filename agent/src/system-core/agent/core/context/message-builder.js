@@ -233,7 +233,14 @@ export function buildContextMessageBlocks(
   });
   const system = [];
   for (const content of systemMessages) {
-    system.push(new SystemMessage(content));
+    system.push(
+      new SystemMessage({
+        content,
+        additional_kwargs: {
+          noobotInternalMessageType: "system_context",
+        },
+      }),
+    );
   }
   const history = buildHistoryMessages({
     effectiveHistoryMessages,

@@ -54,6 +54,47 @@ export function shouldInjectPromptAtPoint(point = "", options = {}) {
   );
 }
 
+function resolveMessageRole(message = {}) {
+  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  if (role) return role;
+  const type = String(
+    message?.type ||
+      message?.lc_kwargs?.type ||
+      (typeof message?._getType === "function" ? message._getType() : ""),
+  )
+    .trim()
+    .toLowerCase();
+  if (type === "ai") return "assistant";
+  if (type === "human") return "user";
+  return type;
+}
+
+function splitLeadingSystemMessages(messages = []) {
+  let index = 0;
+  while (index < messages.length && resolveMessageRole(messages[index]) === "system") {
+    index += 1;
+  }
+  return {
+    system: messages.slice(0, index),
+    conversation: messages.slice(index),
+  };
+}
+
+function compactFinalConversationWindow(point = "", ctx = {}, options = {}) {
+  if (point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return false;
+  if (!Array.isArray(ctx?.messages)) return false;
+  if (typeof options?.resolveMessageBlock !== "function") return false;
+  const { system, conversation } = splitLeadingSystemMessages(ctx.messages);
+  const resolved = options.resolveMessageBlock({
+    scope: "conversation",
+    messages: conversation,
+    ctx,
+  });
+  if (!Array.isArray(resolved)) return false;
+  ctx.messages.splice(0, ctx.messages.length, ...system, ...resolved);
+  return true;
+}
+
 export function createRegisterHarnessHooks(deps = {}) {
   const tracePoints = deps.tracePoints || HARNESS_TRACE_POINTS;
   const flushPoints = deps.flushPoints || HARNESS_FLUSH_POINTS;
@@ -107,6 +148,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                 await injectPromptFn(point, ctx, options, plugin);
                 emitHarnessHookProgressFn(ctx, "prompt_injected", { point });
               }
+              compactFinalConversationWindow(point, ctx, options);
 
               const traceResult = await traceHookFn(point, ctx, options, plugin);
               emitHarnessHookProgressFn(ctx, "hook_end", {
