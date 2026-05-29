@@ -80,6 +80,7 @@ type HarnessPayloadBucket = {
     pending: {
       guidance: any | null;
       summary: boolean;
+      summaryCheckpointMessageCount: number | null;
       planUpdate: boolean;
       planUpdateStage: string;
       planUpdateContext: any | null;

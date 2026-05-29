@@ -11,6 +11,7 @@ Agent 先产出 messageBlocks:
   incremental（当前用户 + 插件注入增量 + 自身增量，统一过滤+裁剪）
 
 插件在 before_llm_call 基于 messageBlocks 重组 ctx.messages
+随后 hooks 层会做一次最终 conversation 压缩（system + conversation）
 最终调用前仍会执行 filterForModelContext(messages)
 ```
 
@@ -57,6 +58,7 @@ system -> history -> incremental
 - `scope=system`：仅做基础过滤，不做 recent window；
 - `scope=history`：recent window，默认 `contextWindowRecentMessageLimit=20`；
 - `scope=incremental`：recent window，默认 `incrementalRecentMessageLimit=20`（未配时回落 history limit）。
+- `scope=conversation` / `scope=non_system`：对非 system 合并窗口做 recent 过滤，默认与 history 相同（`contextWindowRecentMessageLimit`）。
 
 共同语义：
 - 过滤 `summarized: true`；
@@ -71,6 +73,7 @@ system -> history -> incremental
 2. Hook 透传：`buildHookContext(...).messageBlocks`
 3. Agent 注入统一入口：`_createHarnessResolveMessageBlock(...)`
 4. 插件重组：`capabilities/runtime.js -> applyMessageBlocksForBeforeLlmCall(...)`
+5. hooks 最终压缩：`core/hooks.js -> compactFinalConversationWindow(...)`
 
 ---
 

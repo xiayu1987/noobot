@@ -11,6 +11,10 @@ final = filterForModelContext(base)
 invoke(final)
 ```
 
+对应实现位置：
+- 基础消息构建：`agent/core/context/message-builder.js`
+- LLM 调用前过滤：`agent/core/turn/turn-executor.js`（`invoke(...filterForModelContext(messages))`）
+
 默认基础顺序：
 
 ```text
