@@ -657,18 +657,41 @@ export class SessionExecutionEngine {
       }
       return true;
     };
-    return async ({ messages = [], ctx = {}, taskSummaryToolName = "task_summary" } = {}) => {
+    return async ({
+      messages = [],
+      ctx = {},
+      taskSummaryToolName = "task_summary",
+      summaryScope = null,
+    } = {}) => {
       const source = Array.isArray(messages) ? messages : [];
       const normalizedTaskSummaryToolName =
         String(taskSummaryToolName || "").trim() || "task_summary";
+      const normalizedScope =
+        summaryScope && typeof summaryScope === "object" ? summaryScope : {};
+      const maxMessagesRaw = Number(normalizedScope?.maxMessages);
+      const hasScopedSourceLimit =
+        Number.isFinite(maxMessagesRaw) && maxMessagesRaw >= 0;
+      const scopedSourceLimit = hasScopedSourceLimit
+        ? Math.min(source.length, Math.floor(maxMessagesRaw))
+        : source.length;
+      const limitToProvidedMessagesOnly =
+        hasScopedSourceLimit &&
+        (normalizedScope?.limitToProvidedMessagesOnly === true ||
+          normalizedScope?.applyToStores === false ||
+          normalizedScope?.applyToSession === false);
       let changedCount = 0;
-      for (const messageItem of source) {
+      for (let index = 0; index < scopedSourceLimit; index += 1) {
+        const messageItem = source[index];
         if (!shouldMark(messageItem, normalizedTaskSummaryToolName)) continue;
         if (markMessage(messageItem)) changedCount += 1;
       }
       const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
       const currentTurnMessages = runtime?.currentTurnMessages;
-      if (currentTurnMessages && typeof currentTurnMessages.updateWhere === "function") {
+      if (
+        !limitToProvidedMessagesOnly &&
+        currentTurnMessages &&
+        typeof currentTurnMessages.updateWhere === "function"
+      ) {
         changedCount += currentTurnMessages.updateWhere(
           { summarized: true },
           (messageItem) =>
@@ -679,7 +702,12 @@ export class SessionExecutionEngine {
       const sessionIds = getSessionIdsFromAgentContext(ctx?.agentContext || {}, runtime);
       const userId = String(ctx?.userId || sessionIds.userId || "").trim();
       const sessionId = String(ctx?.sessionId || sessionIds.sessionId || "").trim();
-      if (userId && sessionId && this.session?.markSessionMessagesSummarized) {
+      if (
+        !limitToProvidedMessagesOnly &&
+        userId &&
+        sessionId &&
+        this.session?.markSessionMessagesSummarized
+      ) {
         try {
           changedCount += await this.session.markSessionMessagesSummarized({
             userId,

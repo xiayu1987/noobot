@@ -14,17 +14,44 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { FAILURE_THRESHOLD } from "../../../core/thresholds.js";
 
 export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  const summaryCheckpointMessageCountValue =
+    holder?.state?.pending?.summaryCheckpointMessageCount;
+  const summaryCheckpointMessageCountRaw = Number(summaryCheckpointMessageCountValue);
+  const hasSummaryCheckpoint = Number.isFinite(summaryCheckpointMessageCountRaw);
+  const hasUsableSummaryCheckpoint =
+    summaryCheckpointMessageCountValue !== null &&
+    summaryCheckpointMessageCountValue !== undefined &&
+    hasSummaryCheckpoint;
+  const summaryCheckpointMessageCount = hasSummaryCheckpoint
+    ? Math.max(0, Math.trunc(summaryCheckpointMessageCountRaw))
+    : null;
+
   const historyMessages = ctx?.agentContext?.payload?.messages?.history;
   const currentMessages = ctx?.messages;
   const injectedSummarizer = resolveInjectedMessageSummarizer(meta);
   const safeMark = async (messages = []) => {
     if (!Array.isArray(messages)) return 0;
+
+    const scopedMessages = hasUsableSummaryCheckpoint
+      ? messages.slice(0, Math.min(messages.length, summaryCheckpointMessageCount))
+      : messages;
+    if (!Array.isArray(scopedMessages) || !scopedMessages.length) return 0;
+
     if (typeof injectedSummarizer === "function") {
       try {
         const result = await injectedSummarizer({
           ctx,
-          messages,
+          messages: scopedMessages,
           taskSummaryToolName: "task_summary",
+          ...(hasUsableSummaryCheckpoint
+            ? {
+                summaryScope: {
+                  maxMessages: summaryCheckpointMessageCount,
+                  limitToProvidedMessagesOnly: true,
+                },
+              }
+            : {}),
         });
         const normalized = Number(result);
         if (Number.isFinite(normalized)) return normalized;
@@ -32,10 +59,13 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
         // fallback to local implementation
       }
     }
-    return markMessagesSummarized(messages);
+    return markMessagesSummarized(scopedMessages);
   };
   const currentMarked = await safeMark(currentMessages);
   const historyMarked = await safeMark(historyMessages);
+  if (holder?.state?.pending && hasUsableSummaryCheckpoint) {
+    holder.state.pending.summaryCheckpointMessageCount = null;
+  }
   return currentMarked + historyMarked;
 }
 

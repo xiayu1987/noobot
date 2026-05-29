@@ -200,6 +200,7 @@ export const DEFAULT_HARNESS_SIGNALS = Object.freeze({
 export const DEFAULT_HARNESS_PENDING = Object.freeze({
   guidance: null,
   summary: false,
+  summaryCheckpointMessageCount: null,
   planUpdate: false,
   planUpdateStage: "",
   planUpdateContext: null,

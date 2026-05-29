@@ -17,6 +17,7 @@ import { inferFsmTarget, HARNESS_FSM_STATES } from "../src/fsm/transitions.js";
 import { buildEvent } from "../src/data/record-builders.js";
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
+import { markGuidanceSummarizedMessages } from "../src/capabilities/handlers/guidance/signal-tracker.js";
 import { invokeWithReasoningRetry } from "../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
   markMessagesSummarized,
@@ -367,6 +368,82 @@ test("guidance summary prefers injected markMessagesSummarized from harness meta
 
   await handler({ capability: "guidance", point: "after_llm_call", ctx, meta });
   assert.ok(injectedCalled >= 1);
+});
+
+test("guidance summary checkpoint marks only messages before checkpoint", async () => {
+  let injectedCalled = 0;
+  const oldToolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "old_call", function: { name: "execute_script" } }],
+  };
+  const oldToolResult = {
+    role: "tool",
+    toolName: "execute_script",
+    tool_call_id: "old_call",
+    content: '{"toolName":"execute_script","ok":true}',
+  };
+  const newToolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "new_call", function: { name: "execute_script" } }],
+  };
+  const newToolResult = {
+    role: "tool",
+    toolName: "execute_script",
+    tool_call_id: "new_call",
+    content: '{"toolName":"execute_script","ok":true}',
+  };
+  const messages = [oldToolCall, oldToolResult, newToolCall, newToolResult];
+  const ctx = {
+    messages,
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            counters: {},
+            flags: {},
+            signals: {},
+            pending: {
+              summaryCheckpointMessageCount: 2,
+            },
+          },
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+        messages: {
+          history: messages,
+        },
+      },
+    },
+  };
+  const meta = {
+    harness: {
+      markMessagesSummarized: ({ messages: scoped = [], summaryScope = {} } = {}) => {
+        injectedCalled += 1;
+        assert.equal(Array.isArray(scoped), true);
+        assert.equal(scoped.length, 2);
+        assert.equal(summaryScope?.maxMessages, 2);
+        assert.equal(summaryScope?.limitToProvidedMessagesOnly, true);
+        for (const item of scoped) {
+          item.summarized = true;
+        }
+        return scoped.length;
+      },
+    },
+  };
+
+  const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
+  assert.equal(markedCount >= 2, true);
+  assert.equal(oldToolCall.summarized, true);
+  assert.equal(oldToolResult.summarized, true);
+  assert.equal(newToolCall.summarized, undefined);
+  assert.equal(newToolResult.summarized, undefined);
+  assert.equal(injectedCalled >= 1, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageCount, null);
 });
 
 test("invokeWithReasoningRetry throws error when reasoning-only persists after one retry", async () => {
