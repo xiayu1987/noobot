@@ -22,10 +22,14 @@ Noobot 是一个基于 **Node.js + Vue** 的前后端分离智能对话系统。
 
 ```text
 noobot/
+├── agent/                    # Agent 核心（工具、上下文、执行流）
 ├── service/                  # Node.js 后端（Express 5 + WebSocket + LangChain）
 ├── agent-proxy/              # Agent 代理网关（WebSocket 扇出、消息重放、HTTP 代理）
 ├── model-proxy/              # 模型代理层
+├── plugin/                   # 内置插件（如 harness）
+├── i18n/                     # 共享 i18n 包
 ├── client/noobot-chat/       # Vue 3 前端（Vite）
+├── docs/                     # 架构/重构文档
 ├── user-template/            # 用户工作区模板
 ├── workspace/                # 运行时用户数据（会话、文件、附件、配置参数）
 ├── start.sh                  # 一键启动/部署脚本
@@ -43,7 +47,7 @@ chmod +x start.sh
 ```
 
 说明：
-- `start.sh` 会先执行项目启动引导（`service/scripts/project-launcher.js`）。
+- `start.sh` 会先执行项目启动引导（`scripts/project-launcher.mjs`）。
 - 若 `service/config/global.config.json` 不存在，会进入交互式配置并自动生成配置文件。
 - 在非交互环境可用环境变量初始化（示例）：
 
@@ -115,11 +119,12 @@ npm run -w client/noobot-chat build
 
 - `CADDY_ADDR`（默认 `:10060`）
 - `API_UPSTREAM`（默认 `127.0.0.1:10061`）
+- `AGENT_PROXY_UPSTREAM`（默认 `127.0.0.1:10062`）
 
 示例：
 
 ```bash
-CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
+CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 AGENT_PROXY_UPSTREAM=127.0.0.1:3002 ./start.sh
 ```
 
 ## PM2（项目内）

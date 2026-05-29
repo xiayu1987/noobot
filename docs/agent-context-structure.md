@@ -382,7 +382,7 @@ AgentContextFactory.buildAgentContext(mode="continue")
    - 支持 `forceTool` / `forceToolCall`（以及 snake_case 兼容键）；
    - 任一显式为 `true` 即视为开启。
 2. 父会话 force-tool 真值统一从 `systemRuntime.config` 通过 `resolveForceToolCall()` 解析。
-3. 实际透传给子会话时同时写入：
+3. 实际透传给子会话时仅写入：
    - `forceTool`（canonical）
 4. 新代码统一读取 `forceTool`；`forceToolCall` 不再输出到 runtime/config/event。
 5. `resolveForceToolCall(runConfig)` 仍保留用于外部配置输入解析兼容。
