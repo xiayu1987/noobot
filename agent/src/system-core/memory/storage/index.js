@@ -17,6 +17,7 @@ import {
   dailySummaryDateDir,
   sessionFile,
   longMemoryModelPath,
+  longMemoryMetadataPath,
 } from "./paths.js";
 import {
   fileExists,
@@ -24,6 +25,7 @@ import {
   writeJson,
   readText,
   appendText,
+  writeText,
   ensureDir,
   safeReadDirEntries,
   removeDir,
@@ -96,6 +98,10 @@ export class StorageManager {
     return longMemoryModelPath(basePath);
   }
 
+  longMemoryMetadataPath(basePath) {
+    return longMemoryMetadataPath(basePath);
+  }
+
   async fileExists(filePath = "") {
     return fileExists(filePath);
   }
@@ -114,6 +120,10 @@ export class StorageManager {
 
   async appendText(filePath, content = "") {
     await appendText(filePath, content);
+  }
+
+  async writeText(filePath, content = "") {
+    await writeText(filePath, content);
   }
 
   async ensureDir(dirPath = "") {

@@ -22,10 +22,14 @@ Noobot is a full-stack AI chat system built with **Node.js + Vue**.
 
 ```text
 noobot/
+├── agent/                    # Agent core (tools, context, execution flow)
 ├── service/                  # Node.js backend (Express 5 + WebSocket + LangChain)
 ├── agent-proxy/              # Agent proxy gateway (WebSocket fanout, replay, HTTP proxy)
 ├── model-proxy/              # Model proxy layer
+├── plugin/                   # Built-in plugins (e.g. harness)
+├── i18n/                     # Shared i18n package
 ├── client/noobot-chat/       # Vue 3 frontend (Vite)
+├── docs/                     # Architecture / refactor docs
 ├── user-template/            # User workspace template
 ├── workspace/                # Runtime user data (sessions, files, attachments, config params)
 ├── start.sh                  # one-command startup/deploy script
@@ -43,7 +47,7 @@ chmod +x start.sh
 ```
 
 Notes:
-- `start.sh` runs the project launcher first (`service/scripts/project-launcher.js`).
+- `start.sh` runs the project launcher first (`scripts/project-launcher.mjs`).
 - If `service/config/global.config.json` does not exist, an interactive setup wizard will create it.
 - For non-interactive environments, initialize with env vars (example):
 
@@ -62,6 +66,15 @@ Default endpoints:
 - Frontend: `http://127.0.0.1:10060`
 - Backend: `http://127.0.0.1:10061`
 - Agent Proxy: `http://127.0.0.1:10062`
+- Model Proxy (DashScope): `http://127.0.0.1:12341` -> `https://dashscope.aliyuncs.com`
+- Model Proxy (Poe): `http://127.0.0.1:12342` -> `https://api.poe.com`
+
+Stop all services:
+
+```bash
+chmod +x close.sh
+./close.sh
+```
 
 ## Requirements
 
@@ -106,11 +119,12 @@ Environment variables for `start.sh`:
 
 - `CADDY_ADDR` (default `:10060`)
 - `API_UPSTREAM` (default `127.0.0.1:10061`)
+- `AGENT_PROXY_UPSTREAM` (default `127.0.0.1:10062`)
 
 Example:
 
 ```bash
-CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
+CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 AGENT_PROXY_UPSTREAM=127.0.0.1:3002 ./start.sh
 ```
 
 ## PM2 (local)
@@ -119,11 +133,20 @@ CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 ./start.sh
 > For first-time deployment or config auto-sync, use `./start.sh` first.
 
 ```bash
-cd service
-npm run pm2:list
-npm run pm2:logs
-npm run pm2:stop
-npm run pm2:delete
+cd service && npm run pm2:list
+cd service && npm run pm2:logs
+cd service && npm run pm2:stop
+cd service && npm run pm2:delete
+
+cd agent-proxy && npm run pm2:list
+cd agent-proxy && npm run pm2:logs
+cd agent-proxy && npm run pm2:stop
+cd agent-proxy && npm run pm2:delete
+
+cd model-proxy && npm run pm2:list
+cd model-proxy && npm run pm2:logs
+cd model-proxy && npm run pm2:stop
+cd model-proxy && npm run pm2:delete
 ```
 
 ## License

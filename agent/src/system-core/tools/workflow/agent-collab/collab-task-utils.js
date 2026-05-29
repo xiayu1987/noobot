@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { logError } from "../../../tracking/console/logger.js";
+import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
@@ -148,7 +149,7 @@ export function summarizeAsyncTaskResult(result = null) {
     sessionId: String(result?.sessionId || "").trim(),
     parentSessionId: String(result?.parentSessionId || "").trim(),
     parentDialogProcessId: String(result?.parentDialogProcessId || "").trim(),
-    dialogProcessId: String(result?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveMessageDialogProcessId(result),
     answer,
     hasAnswer: Boolean(answer),
     messageCount: Array.isArray(result?.messages) ? result.messages.length : 0,

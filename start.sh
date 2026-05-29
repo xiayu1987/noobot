@@ -8,11 +8,13 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLIENT_DIR="$ROOT_DIR/client/noobot-chat"
 SERVICE_DIR="$ROOT_DIR/service"
 AGENT_PROXY_DIR="$ROOT_DIR/agent-proxy"
+MODEL_PROXY_DIR="$ROOT_DIR/model-proxy"
 PM2_HOME_DIR="$ROOT_DIR/.pm2"
 PM2_CLEAN_START="${PM2_CLEAN_START:-0}"
 CLIENT_APP_NAME="noobot-client"
 SERVICE_APP_NAME="noobot-service"
 AGENT_PROXY_APP_NAME="noobot-agent-proxy"
+MODEL_PROXY_APP_NAME="noobot-model-proxy"
 CADDY_ADDR="${CADDY_ADDR:-:10060}"
 AGENT_PROXY_UPSTREAM="${AGENT_PROXY_UPSTREAM:-127.0.0.1:10062}"
 API_UPSTREAM="${API_UPSTREAM:-127.0.0.1:10061}"
@@ -23,7 +25,7 @@ AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0
 CLIENT_CADDY_BIN="$CLIENT_DIR/deploy/bin/caddy"
 CLIENT_CADDY_CONFIG="$CLIENT_DIR/deploy/Caddyfile"
 CLIENT_DIST_DIR="$CLIENT_DIR/dist"
-PROJECT_LAUNCHER_SCRIPT="$SERVICE_DIR/scripts/project-launcher.js"
+PROJECT_LAUNCHER_SCRIPT="$ROOT_DIR/scripts/project-launcher.mjs"
 FRONTEND_URL_ADDR="$CADDY_ADDR"
 if [[ "$FRONTEND_URL_ADDR" == :* ]]; then
   FRONTEND_URL_ADDR="127.0.0.1$FRONTEND_URL_ADDR"
@@ -58,6 +60,8 @@ msg() {
     service_dir_missing_en) echo "Backend directory not found: $2" ;;
     agent_proxy_dir_missing_zh) echo "代理目录不存在: $2" ;;
     agent_proxy_dir_missing_en) echo "Agent proxy directory not found: $2" ;;
+    model_proxy_dir_missing_zh) echo "模型代理目录不存在: $2" ;;
+    model_proxy_dir_missing_en) echo "Model proxy directory not found: $2" ;;
     step_launcher_zh) echo "1/5 执行项目启动引导" ;;
     step_launcher_en) echo "1/5 Run project launcher" ;;
     step_install_zh) echo "2/5 安装依赖" ;;
@@ -343,6 +347,7 @@ start_or_restart_pm2_apps() {
   local has_service_app=0
   local has_client_app=0
   local has_agent_proxy_app=0
+  local has_model_proxy_app=0
   if pm2_has_app "$SERVICE_APP_NAME"; then
     has_service_app=1
   fi
@@ -351,6 +356,9 @@ start_or_restart_pm2_apps() {
   fi
   if pm2_has_app "$AGENT_PROXY_APP_NAME"; then
     has_agent_proxy_app=1
+  fi
+  if pm2_has_app "$MODEL_PROXY_APP_NAME"; then
+    has_model_proxy_app=1
   fi
 
   export CADDY_ADDR AGENT_PROXY_UPSTREAM
@@ -364,6 +372,11 @@ start_or_restart_pm2_apps() {
     run_pm2 restart "$AGENT_PROXY_APP_NAME" --update-env
   else
     start_pm2 "$AGENT_PROXY_APP_NAME" npm --name "$AGENT_PROXY_APP_NAME" --cwd "$AGENT_PROXY_DIR" -- start
+  fi
+  if [[ "$has_model_proxy_app" -eq 1 ]]; then
+    run_pm2 restart "$MODEL_PROXY_APP_NAME" --update-env
+  else
+    start_pm2 "$MODEL_PROXY_APP_NAME" npm --name "$MODEL_PROXY_APP_NAME" --cwd "$MODEL_PROXY_DIR" -- start
   fi
   if [[ "$has_client_app" -eq 1 ]]; then
     run_pm2 restart "$CLIENT_APP_NAME" --update-env
@@ -387,7 +400,7 @@ wait_for_apps_and_ports_ready() {
     node -e '
 const fs = require("fs");
 const data = JSON.parse(fs.readFileSync(0, "utf8"));
-const required = ["noobot-service", "noobot-agent-proxy", "noobot-client"];
+const required = ["noobot-service", "noobot-agent-proxy", "noobot-model-proxy", "noobot-client"];
 const bad = required.filter((name) => !data.find((item) => item.name === name && item.pm2_env && item.pm2_env.status === "online"));
 if (bad.length) {
   console.error("PM2 apps not online:", bad.join(", "));
@@ -436,6 +449,7 @@ main() {
   [[ -d "$CLIENT_DIR" ]] || { echo "$(msg client_dir_missing "$CLIENT_DIR")" >&2; exit 1; }
   [[ -d "$SERVICE_DIR" ]] || { echo "$(msg service_dir_missing "$SERVICE_DIR")" >&2; exit 1; }
   [[ -d "$AGENT_PROXY_DIR" ]] || { echo "$(msg agent_proxy_dir_missing "$AGENT_PROXY_DIR")" >&2; exit 1; }
+  [[ -d "$MODEL_PROXY_DIR" ]] || { echo "$(msg model_proxy_dir_missing "$MODEL_PROXY_DIR")" >&2; exit 1; }
   [[ -f "$PROJECT_LAUNCHER_SCRIPT" ]] || { echo "Project launcher script not found: $PROJECT_LAUNCHER_SCRIPT" >&2; exit 1; }
   mkdir -p "$PM2_HOME_DIR"
 
@@ -443,7 +457,7 @@ main() {
   # update_code
 
   log "$(msg step_launcher)"
-  (cd "$SERVICE_DIR" && node "./scripts/project-launcher.js")
+  (cd "$ROOT_DIR" && node "./scripts/project-launcher.mjs")
 
   log "$(msg step_install)"
   unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD || true
@@ -453,6 +467,7 @@ main() {
     npm --prefix "$CLIENT_DIR" install
     npm --prefix "$SERVICE_DIR" install
     npm --prefix "$AGENT_PROXY_DIR" install
+    npm --prefix "$MODEL_PROXY_DIR" install
     npm --prefix "$SERVICE_DIR" run postinstall --if-present
   fi
 
@@ -487,6 +502,7 @@ main() {
   log "CLIENT_DIR=$CLIENT_DIR"
   log "SERVICE_DIR=$SERVICE_DIR"
   log "AGENT_PROXY_DIR=$AGENT_PROXY_DIR"
+  log "MODEL_PROXY_DIR=$MODEL_PROXY_DIR"
   log "PM2_HOME_DIR=$PM2_HOME_DIR"
   log "CLIENT_DIST_DIR=$CLIENT_DIST_DIR"
   log "CLIENT_CADDY_CONFIG=$CLIENT_CADDY_CONFIG"

@@ -7,18 +7,23 @@ import {
   updateManifestCached,
   appendJsonlBuffered,
   writeJson,
-} from "../lib/store.js";
+} from "../store/store.js";
 import {
   isHarnessPromptAlreadyInjected,
   injectSystemMessages,
-} from "../lib/prompt-injector.js";
+} from "../prompt/prompt-injector.js";
 import { nowIso, safeError } from "../data/record-builders.js";
 import {
   HARNESS_ENGINEERING_CAPABILITIES,
   resolveCapabilityProfile,
 } from "../capabilities/profile.js";
-import { HARNESS_HOOK_POINTS } from "../constants.js";
-import { createRunPaths, ensureRunDir } from "../runtime-context.js";
+import {
+  HARNESS_FLUSH_REASONS,
+  HARNESS_HOOK_POINTS,
+  HARNESS_RUN_STATUS,
+  HARNESS_TERMINAL_RUN_STATUSES,
+} from "../core/constants.js";
+import { createRunPaths, ensureRunDir } from "../core/context.js";
 import { advanceFsmState } from "../fsm/state-machine.js";
 import {
   buildTraceContextSnapshot,
@@ -29,6 +34,7 @@ import {
   normalizeFsmState,
   statusToFsmState,
 } from "../fsm/transitions.js";
+import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 
 function resolveFlushReasonByPoint(point = "") {
   if (
@@ -36,16 +42,26 @@ function resolveFlushReasonByPoint(point = "") {
     point === HARNESS_HOOK_POINTS.ON_ABORT ||
     point === HARNESS_HOOK_POINTS.ON_ERROR
   ) {
-    return "terminal";
+    return HARNESS_FLUSH_REASONS.TERMINAL;
   }
   if (
     point === HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR ||
     point === HARNESS_HOOK_POINTS.LLM_CALL_ERROR ||
     point === HARNESS_HOOK_POINTS.TOOL_CALL_ERROR
   ) {
-    return "error";
+    return HARNESS_FLUSH_REASONS.ERROR;
   }
-  return "";
+  return HARNESS_FLUSH_REASONS.NONE;
+}
+
+function resolveManifestDialogProcessId(ctx = {}, current = {}) {
+  const fromContext = resolveDialogProcessIdFromContext(ctx);
+  if (fromContext) return fromContext;
+  const fromCurrent = resolveDialogProcessIdFromContext({
+    dialogProcessId: current?.dialogProcessId,
+  });
+  if (fromCurrent) return fromCurrent;
+  return String(current?.harnessRunId || "").trim();
 }
 
 function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = null, plugin = {}) {
@@ -71,9 +87,9 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
     userId: ctx.userId || current.userId || "",
     sessionId: ctx.sessionId || current.sessionId || "",
     parentSessionId: ctx.parentSessionId || current.parentSessionId || "",
-    dialogProcessId: ctx.dialogProcessId || current.dialogProcessId || current.harnessRunId || "",
+    dialogProcessId: resolveManifestDialogProcessId(ctx, current),
     caller: ctx.caller || current.caller || "",
-    status: current.status || "running",
+    status: current.status || HARNESS_RUN_STATUS.RUNNING,
     fsmStatus: normalizeFsmState(current.fsmStatus || current?.fsm?.state || statusToFsmState(current.status)),
     startedAt: current.startedAt || ctx.startedAt || nowIso(),
     updatedAt: nowIso(),
@@ -88,7 +104,7 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
     ...current,
     ...patch,
   };
-  if (["success", "error", "abort"].includes(String(patch.status || ""))) {
+  if (HARNESS_TERMINAL_RUN_STATUSES.has(String(patch.status || ""))) {
     next.endedAt = patch.endedAt || nowIso();
   }
   return next;
@@ -121,7 +137,7 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
 
   const injected = injectSystemMessages(ctx, {
     skipIds: new Set(),
-    prompts: [{ id, content, priority: options.promptPriority, mode: "prepend" }],
+    prompts: [{ id, content, priority: options.promptPriority, mode: "after_system" }],
   });
 
   if (!injected || !options.writePrompts) return;
@@ -194,7 +210,9 @@ export async function traceHook(point, ctx, options, plugin = {}) {
         timestamp: event.timestamp,
         userId: event.userId,
         sessionId: event.sessionId,
-        dialogProcessId: event.dialogProcessId,
+        dialogProcessId: resolveDialogProcessIdFromContext({
+          dialogProcessId: event.dialogProcessId,
+        }),
         ...log,
       },
       options.jsonlFlushStrategy || options.jsonlBatchSize,
@@ -216,18 +234,18 @@ export async function traceHook(point, ctx, options, plugin = {}) {
 
   const terminalStatus =
     point === HARNESS_HOOK_POINTS.AFTER_TURN
-      ? "success"
+      ? HARNESS_RUN_STATUS.SUCCESS
       : point === HARNESS_HOOK_POINTS.ON_ERROR || point === HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR
-        ? "error"
+        ? HARNESS_RUN_STATUS.ERROR
         : point === HARNESS_HOOK_POINTS.ON_ABORT
-          ? "abort"
+          ? HARNESS_RUN_STATUS.ABORT
           : null;
 
   await updateManifest(
     paths,
     ctx,
     {
-      status: terminalStatus || "running",
+      status: terminalStatus || HARNESS_RUN_STATUS.RUNNING,
       fsmStatus: fsm.state,
       fsm: {
         state: fsm.state,

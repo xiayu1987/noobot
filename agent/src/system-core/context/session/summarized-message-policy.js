@@ -4,26 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { MESSAGE_ROLE } from "../../bot-manage/config/constants.js";
+import {
+  filterForModelContext,
+  getMessageToolCalls,
+  shouldMarkCurrentTurnSummarizedByPolicy,
+  shouldMarkCurrentTurnModelSummarizedByPolicy,
+} from "./message-context-policy.js";
 
 export const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
 
-function normalizeAiTextContent(aiContent) {
-  if (typeof aiContent === "string") return String(aiContent || "");
-  if (!Array.isArray(aiContent)) return String(aiContent || "");
-  const textParts = aiContent
-    .map((contentPart) => {
-      if (!contentPart || typeof contentPart !== "object") return "";
-      if (typeof contentPart?.text === "string") return contentPart.text;
-      if (typeof contentPart?.content === "string") return contentPart.content;
-      return "";
-    })
-    .filter(Boolean);
-  return textParts.join("\n");
-}
-
 export function getMessageRole(messageItem = {}) {
-  return String(messageItem?.role || "").trim();
+  const explicitRole = String(messageItem?.role || "").trim();
+  if (explicitRole) return explicitRole;
+  const modelType = String(getModelMessageType(messageItem) || "")
+    .trim()
+    .toLowerCase();
+  if (modelType === "ai") return "assistant";
+  if (modelType === "human") return "user";
+  if (modelType === "system") return "system";
+  if (modelType === "tool") return "tool";
+  return "";
 }
 
 export function getModelMessageType(messageItem = {}) {
@@ -60,17 +60,6 @@ export function resolveToolNamesFromToolCalls(toolCalls = []) {
     .filter(Boolean);
 }
 
-function getMessageToolCalls(messageItem = {}) {
-  if (Array.isArray(messageItem?.tool_calls)) return messageItem.tool_calls;
-  if (Array.isArray(messageItem?.lc_kwargs?.tool_calls)) {
-    return messageItem.lc_kwargs.tool_calls;
-  }
-  if (Array.isArray(messageItem?.additional_kwargs?.tool_calls)) {
-    return messageItem.additional_kwargs.tool_calls;
-  }
-  return [];
-}
-
 export function hasTaskSummaryToolCall(
   messageItem = {},
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
@@ -91,30 +80,16 @@ export function shouldMarkCurrentTurnSummarizedMessage(
   messageItem = {},
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
-  const role = getMessageRole(messageItem);
-  if (role === MESSAGE_ROLE.TOOL) {
-    return !isTaskSummaryToolMessage(messageItem, { taskSummaryToolName });
-  }
-  if (role !== MESSAGE_ROLE.ASSISTANT) return false;
-  if (hasTaskSummaryToolCall(messageItem, { taskSummaryToolName })) {
-    return false;
-  }
-  return !String(messageItem?.content || "").trim();
+  void taskSummaryToolName;
+  return shouldMarkCurrentTurnSummarizedByPolicy(messageItem);
 }
 
 export function shouldMarkCurrentTurnSummarizedModelMessage(
   messageItem = {},
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
-  const type = getModelMessageType(messageItem);
-  if (type === MESSAGE_ROLE.TOOL) {
-    return !isTaskSummaryToolMessage(messageItem, { taskSummaryToolName });
-  }
-  if (type !== "ai") return false;
-  if (hasTaskSummaryToolCall(messageItem, { taskSummaryToolName })) {
-    return false;
-  }
-  return !normalizeAiTextContent(messageItem?.content);
+  void taskSummaryToolName;
+  return shouldMarkCurrentTurnModelSummarizedByPolicy(messageItem);
 }
 
 export function markCurrentTurnStoreSummarized(
@@ -169,47 +144,5 @@ export function markCurrentTurnModelMessagesSummarized(
 }
 
 export function filterSummarizedMessages(messages = []) {
-  if (!Array.isArray(messages)) return [];
-  const baseFiltered = messages.filter((messageItem) => {
-    if (!messageItem || typeof messageItem !== "object") return true;
-    if (messageItem?.summarized === true) return false;
-    if (messageItem?.lc_kwargs?.summarized === true) return false;
-    return true;
-  });
-
-  const remainingToolResultIds = new Set();
-  for (const messageItem of baseFiltered) {
-    const modelType = getModelMessageType(messageItem);
-    const role = getMessageRole(messageItem);
-    const isToolMessage =
-      modelType === MESSAGE_ROLE.TOOL || role === MESSAGE_ROLE.TOOL;
-    if (!isToolMessage) continue;
-    const toolCallId = String(
-      messageItem?.tool_call_id ??
-        messageItem?.toolCallId ??
-        messageItem?.lc_kwargs?.tool_call_id ??
-        "",
-    ).trim();
-    if (toolCallId) remainingToolResultIds.add(toolCallId);
-  }
-
-  return baseFiltered.filter((messageItem) => {
-    if (!messageItem || typeof messageItem !== "object") return true;
-    const toolCalls = getMessageToolCalls(messageItem);
-    if (!Array.isArray(toolCalls) || !toolCalls.length) return true;
-    const toolCallIds = toolCalls
-      .map((toolCall) =>
-        String(
-          toolCall?.id ??
-            toolCall?.tool_call_id ??
-            toolCall?.toolCallId ??
-            "",
-        ).trim(),
-      )
-      .filter(Boolean);
-    if (!toolCallIds.length) return true;
-    return toolCallIds.every((toolCallId) =>
-      remainingToolResultIds.has(toolCallId),
-    );
-  });
+  return filterForModelContext(messages);
 }

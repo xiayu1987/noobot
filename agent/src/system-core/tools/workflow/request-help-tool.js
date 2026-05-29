@@ -17,6 +17,10 @@ import {
 import { TASK_STATUS } from "../../bot-manage/async/constants.js";
 import { recoverableToolError } from "../../error/index.js";
 import { invokeServiceHandler } from "../../service-invoker/index.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
@@ -35,15 +39,13 @@ const PROMISE_STATUS = Object.freeze({
   FULFILLED: TASK_STATUS.FULFILLED,
   REJECTED: TASK_STATUS.REJECTED,
 });
-const RUNTIME_KEYS = Object.freeze({
-  OBJECT: "object",
-});
 const MEMORY_PATHS = Object.freeze({
   MEMORY_DIR: "memory",
-  LONG_MEMORY: "long-memory.json",
+  LONG_MEMORY: "long-memory.md",
+  LONG_MEMORY_METADATA: "long-memory/metadata.md",
   SHORT_MEMORY: "short-memory.json",
-  LONG_MEMORY_MODEL: "long-memory-model.json",
-  EXPERIENCE_MODEL: "experience-model.json",
+  LONG_MEMORY_MODEL: "long-memory-model.md",
+  EXPERIENCE_MODEL: "experience-model.md",
   EXPERIENCE_DIR: "experience",
   DAILY_SUMMARY_DIR: "daily_summary",
   WEEKLY_SUMMARY_DIR: "weekly_summary",
@@ -77,7 +79,7 @@ function isEnabled(config = {}) {
 }
 
 function resolveHelpConfig(agentContext = {}) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const effectiveConfig = mergeConfig(
     runtime?.globalConfig || {},
     runtime?.userConfig || {},
@@ -276,7 +278,7 @@ async function invokeHelpModel({
 }
 
 function resolveMemoryHelpPaths(agentContext = {}) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath = normalizeName(
     agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
   );
@@ -286,6 +288,7 @@ function resolveMemoryHelpPaths(agentContext = {}) {
     basePath,
     memoryDir,
     longMemoryPath: path.join(memoryDir, MEMORY_PATHS.LONG_MEMORY),
+    longMemoryMetadataPath: path.join(memoryDir, MEMORY_PATHS.LONG_MEMORY_METADATA),
     shortMemoryPath: path.join(memoryDir, MEMORY_PATHS.SHORT_MEMORY),
     longMemoryModelPath: path.join(memoryDir, MEMORY_PATHS.LONG_MEMORY_MODEL),
     experienceModelPath: path.join(memoryDir, MEMORY_PATHS.EXPERIENCE_MODEL),
@@ -298,7 +301,7 @@ function resolveMemoryHelpPaths(agentContext = {}) {
 }
 
 export function createRequestHelpTool({ agentContext } = {}) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const requestHelpTool = new DynamicStructuredTool({
     name: REQUEST_HELP_TOOL_NAME,
     description: tTool(runtime, "tools.request_help.description"),
@@ -414,13 +417,8 @@ export function createRequestHelpTool({ agentContext } = {}) {
               : TOOL_RESULT_STATUS.PARTIAL
             : TOOL_RESULT_STATUS.COMPLETED
           : TOOL_RESULT_STATUS.FAILED;
-
-      if (
-        runtime?.systemRuntime &&
-        typeof runtime.systemRuntime === RUNTIME_KEYS.OBJECT
-      ) {
-        runtime.systemRuntime.toolConsecutiveFailureCount = 0;
-      }
+      const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+      systemRuntime.toolConsecutiveFailureCount = 0;
 
       if (status === TOOL_RESULT_STATUS.FAILED) {
         throw recoverableToolError(

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { executeToolCall } from "../../../../src/system-core/agent/core/execution/tool-runner.js";
-import { createHookManager, HOOK_POINTS } from "../../../../src/system-core/hook/index.js";
+import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../../src/system-core/hook/index.js";
 
 test("executeToolCall extracts attachmentMetas from multimodal tool result", async () => {
   const call = {
@@ -108,13 +108,13 @@ test("executeToolCall includes error details from recoverable error", async () =
 });
 
 test("executeToolCall hook payload includes normalized runtime meta", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const starts = [];
   const ends = [];
-  hookManager.on(HOOK_POINTS.BEFORE_TOOL_CALL, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, async (ctx = {}) => {
     starts.push(ctx);
   });
-  hookManager.on(HOOK_POINTS.AFTER_TOOL_CALL, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, async (ctx = {}) => {
     ends.push(ctx);
   });
 

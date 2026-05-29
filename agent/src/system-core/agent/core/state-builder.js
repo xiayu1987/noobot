@@ -6,13 +6,22 @@
 import { createChatModel } from "../../model/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { emitEvent } from "../../event/index.js";
-import { buildContextMessages } from "./context/message-builder.js";
+import {
+  buildContextMessages,
+  buildContextMessageBlocks,
+} from "./context/message-builder.js";
+import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { DEFAULT_MAX_TOOL_LOOP_TURNS } from "./constants/index.js";
 import {
   normalizeSystemRuntimeCounters,
   resolveEffectiveModelSpec,
   resolveHelpPromptLoopTurns,
   resolveMaxToolLoopTurns,
+  resolvePhaseSummaryMessageCharsThreshold,
   resolvePhaseSummaryLoopTurns,
   resolveToolFailureHelpCount,
 } from "./config/index.js";
@@ -22,27 +31,32 @@ export function createStateBuilder({
   mergeConfigFn = mergeConfig,
   emitEventFn = emitEvent,
   buildContextMessagesFn = buildContextMessages,
+  buildContextMessageBlocksFn = buildContextMessageBlocks,
   normalizeSystemRuntimeCountersFn = normalizeSystemRuntimeCounters,
   resolveEffectiveModelSpecFn = resolveEffectiveModelSpec,
   resolveMaxToolLoopTurnsFn = resolveMaxToolLoopTurns,
   resolvePhaseSummaryLoopTurnsFn = resolvePhaseSummaryLoopTurns,
+  resolvePhaseSummaryMessageCharsThresholdFn = resolvePhaseSummaryMessageCharsThreshold,
   resolveHelpPromptLoopTurnsFn = resolveHelpPromptLoopTurns,
   resolveToolFailureHelpCountFn = resolveToolFailureHelpCount,
 } = {}) {
   return function buildAgentState({ agentContext, userMessage, errorLogger }) {
-    const runtime = agentContext?.execution?.controllers?.runtime || {};
-    const sys = runtime.systemRuntime || {};
+    const runtime = getRuntimeFromAgentContext(agentContext);
+    const sys = getSystemRuntimeFromRuntime(runtime);
     const globalConfig = runtime.globalConfig || {};
     const userConfig = runtime.userConfig || {};
     const effectiveConfig = mergeConfigFn(globalConfig, userConfig);
     const eventListener = runtime.eventListener || null;
     const abortSignal = runtime.abortSignal || null;
-    const dialogProcessId = sys.dialogProcessId || "";
+    const dialogProcessId = resolveDialogProcessId({
+      ctx: { runtime, systemRuntime: sys, agentContext },
+      messages: agentContext?.payload?.messages?.history,
+    });
     const tools = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
       : [];
 
-    normalizeSystemRuntimeCountersFn(runtime.systemRuntime, userMessage);
+    normalizeSystemRuntimeCountersFn(sys, userMessage);
 
     const selectedModelSpec = resolveEffectiveModelSpecFn({ globalConfig, userConfig });
     const maxToolLoopTurns = resolveMaxToolLoopTurnsFn({
@@ -50,6 +64,8 @@ export function createStateBuilder({
       effectiveConfig,
     });
     const phaseSummaryLoopTurns = resolvePhaseSummaryLoopTurnsFn(effectiveConfig);
+    const phaseSummaryMessageCharsThreshold =
+      resolvePhaseSummaryMessageCharsThresholdFn(effectiveConfig);
     const helpPromptLoopTurns = resolveHelpPromptLoopTurnsFn(effectiveConfig);
     const toolFailureHelpCount = resolveToolFailureHelpCountFn(effectiveConfig);
 
@@ -63,9 +79,14 @@ export function createStateBuilder({
       model: selectedModelSpec?.model || "",
     });
 
-    const messages = buildContextMessagesFn(agentContext, {
+    const messageBlocks = buildContextMessageBlocksFn(agentContext, {
       currentUserMessage: userMessage,
     });
+    const messages = Array.isArray(messageBlocks?.messages)
+      ? messageBlocks.messages
+      : buildContextMessagesFn(agentContext, {
+          currentUserMessage: userMessage,
+        });
 
     const modelState = {
       agentContext,
@@ -83,6 +104,16 @@ export function createStateBuilder({
     const loopState = {
       tools,
       messages,
+      messageBlocks:
+        messageBlocks && typeof messageBlocks === "object"
+          ? {
+              system: Array.isArray(messageBlocks.system) ? messageBlocks.system : [],
+              history: Array.isArray(messageBlocks.history) ? messageBlocks.history : [],
+              incremental: Array.isArray(messageBlocks.incremental)
+                ? messageBlocks.incremental
+                : [],
+            }
+          : { system: [], history: [], incremental: [] },
       traces: [],
       turnMessages: [],
       turnTasks: [],
@@ -94,12 +125,11 @@ export function createStateBuilder({
           ? maxToolLoopTurns
           : DEFAULT_MAX_TOOL_LOOP_TURNS,
       phaseSummaryLoopTurns,
+      phaseSummaryMessageCharsThreshold,
       helpPromptLoopTurns,
       toolFailureHelpCount,
       taskSummaryTriggered: false,
-      toolConsecutiveFailureCount: Number(
-        runtime?.systemRuntime?.toolConsecutiveFailureCount || 0,
-      ),
+      toolConsecutiveFailureCount: Number(sys?.toolConsecutiveFailureCount || 0),
       errorLogger,
     };
 

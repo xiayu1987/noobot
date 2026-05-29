@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HARNESS_HOOK_POINTS } from "../constants.js";
+import { HARNESS_HOOK_POINTS, HARNESS_RUN_STATUS } from "../core/constants.js";
 
 export const HARNESS_FSM_STATES = Object.freeze({
   IDLE: "idle",
@@ -56,8 +56,10 @@ export function normalizeFsmState(state = "") {
 
 export function statusToFsmState(status = "") {
   const normalized = String(status || "").trim().toLowerCase();
-  if (normalized === "success") return HARNESS_FSM_STATES.DONE;
-  if (normalized === "error" || normalized === "abort") return HARNESS_FSM_STATES.FAILED;
+  if (normalized === HARNESS_RUN_STATUS.SUCCESS) return HARNESS_FSM_STATES.DONE;
+  if (normalized === HARNESS_RUN_STATUS.ERROR || normalized === HARNESS_RUN_STATUS.ABORT) {
+    return HARNESS_FSM_STATES.FAILED;
+  }
   return HARNESS_FSM_STATES.IDLE;
 }
 
@@ -67,6 +69,14 @@ export function isAllowedFsmTransition(from, to) {
 }
 
 function resolveChecklistLength(ctx = {}) {
+  const planText = String(ctx?.agentContext?.payload?.harness?.planText || "").trim();
+  if (planText) {
+    const mainLineCount = planText
+      .split(/\r?\n/)
+      .map((line) => String(line || "").trim())
+      .filter((line) => /^\d+\.\s+/.test(line)).length;
+    return mainLineCount || 1;
+  }
   return Array.isArray(ctx?.agentContext?.payload?.harness?.taskChecklist)
     ? ctx.agentContext.payload.harness.taskChecklist.length
     : 0;

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filterSummarizedMessages } from "../../../context/session/summarized-message-policy.js";
+import { filterForModelContext } from "../../../context/session/message-context-policy.js";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
@@ -20,9 +20,15 @@ import {
   extractAttachmentMetasFromToolResult,
   persistModelGeneratedArtifacts,
 } from "../media/artifact-service.js";
-import { invokeLlmWithTransientRetry, normalizeAiTextContent } from "../llm-invoker.js";
+import {
+  extractAiReasoningText,
+  invokeLlmWithTransientRetry,
+  normalizeAiTextContent,
+} from "../llm-invoker.js";
 import { resolveCurrentModelInfo } from "../model/model-manager.js";
-import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
+import { buildHookContext } from "../hook/hook-context-builder.js";
+import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 
 function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -34,8 +40,17 @@ function isRequiredToolChoiceUnsupportedError(error = null) {
   );
 }
 
-function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "") {
+function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", modelSpec = {}) {
   const normalizedToolChoice = String(toolChoice || "").trim().toLowerCase();
+  const providerFormat = String(modelSpec?.format || "").trim().toLowerCase();
+  const hasEnableThinkingConfig = Object.prototype.hasOwnProperty.call(
+    modelSpec || {},
+    "enable_thinking",
+  );
+  const modelEnableThinking =
+    hasEnableThinkingConfig && typeof modelSpec?.enable_thinking === "boolean"
+      ? modelSpec.enable_thinking
+      : undefined;
   if (normalizedToolChoice === "required") {
     return {
       enable_thinking: false,
@@ -43,11 +58,15 @@ function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "") {
       thinking_budget: 0,
     };
   }
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : null;
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   if (!systemRuntime || systemRuntime.forceNonThinkingMode !== true) {
+    if (providerFormat === "dashscope" && modelEnableThinking !== true) {
+      return {
+        enable_thinking: false,
+        preserve_thinking: false,
+        thinking_budget: 0,
+      };
+    }
     return {};
   }
   return {
@@ -82,6 +101,17 @@ function resolveLlmForRequiredToolChoice({ modelState, eventListener, turn }) {
   }
 }
 
+function buildReasoningRetrySystemMessage(reasoningText = "", locale = "zh-CN") {
+  const isEn = String(locale || "").trim().toLowerCase() === "en-us";
+  return [
+    "<!-- noobot-reasoning-retry -->",
+    isEn
+      ? "The prior model reasoning is reference-only, not final answer. Return final answer directly."
+      : "以下是上次模型返回的思考内容，仅供参考，不代表最终答案。请直接给出最终答案。",
+    String(reasoningText || "").trim(),
+  ].join("\n");
+}
+
 export async function invokeNoToolsTurn({
   modelState,
   loopState,
@@ -90,6 +120,7 @@ export async function invokeNoToolsTurn({
 }) {
   const {
     messages,
+    messageBlocks,
     traces,
     turnMessages,
     currentTurnMessages,
@@ -102,10 +133,10 @@ export async function invokeNoToolsTurn({
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.BEFORE_LLM_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "no_tools",
@@ -113,10 +144,13 @@ export async function invokeNoToolsTurn({
       startedAt: llmStartedAt,
       forceToolChoiceNone,
       messages,
+      messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
   });
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  const locale = String(systemRuntime?.locale || "zh-CN");
   let modelResponse = null;
   try {
     modelResponse = await invokeLlmWithTransientRetry({
@@ -124,17 +158,22 @@ export async function invokeNoToolsTurn({
       turn,
       mode: "no_tools",
       invoke: ({ callbacks }) =>
-        invokeLlm.invoke(filterSummarizedMessages(messages), {
+        invokeLlm.invoke(filterForModelContext(messages), {
           callbacks,
           signal: abortSignal,
           ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
+          ...resolveNonThinkingCallOverrides(
+            runtime,
+            forceToolChoiceNone ? "none" : "",
+            modelState?.defaultModelSpec || {},
+          ),
         }),
     });
   } catch (error) {
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.LLM_CALL_ERROR,
-      context: withHookRuntimeMeta(runtime, {
+      point: AGENT_HOOK_POINTS.LLM_CALL_ERROR,
+      context: buildHookContext(AGENT_HOOK_POINTS.LLM_CALL_ERROR, runtime, {
         phase: "llm_call",
         turn,
         mode: "no_tools",
@@ -144,6 +183,7 @@ export async function invokeNoToolsTurn({
         durationMs: Date.now() - llmStartedAtMs,
         error,
         messages,
+        messageBlocks,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
       }),
@@ -151,10 +191,10 @@ export async function invokeNoToolsTurn({
     throw error;
   }
   const llmEndedAtMs = Date.now();
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.AFTER_LLM_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "no_tools",
@@ -165,14 +205,47 @@ export async function invokeNoToolsTurn({
       hasToolCalls: false,
       modelResponse,
       messages,
+      messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
   });
-  const responseContentText = normalizeAiTextContent(modelResponse?.content, {
+  let responseContentText = normalizeAiTextContent(modelResponse?.content, {
     additionalKwargs: modelResponse?.additional_kwargs ?? null,
-    allowReasoningFallback: true,
+    allowReasoningFallback: false,
   });
+  const reasoningText = extractAiReasoningText(modelResponse);
+  if (!responseContentText && reasoningText) {
+    emitEvent(eventListener, "llm_reasoning_only_retry_scheduled", {
+      turn,
+      mode: "no_tools",
+      reasoningChars: reasoningText.length,
+    });
+    messages.push({
+      role: "system",
+      content: buildReasoningRetrySystemMessage(reasoningText, locale),
+    });
+    modelResponse = await invokeLlmWithTransientRetry({
+      modelState,
+      turn,
+      mode: "no_tools_reasoning_retry",
+      invoke: ({ callbacks }) =>
+        invokeLlm.invoke(filterForModelContext(messages), {
+          callbacks,
+          signal: abortSignal,
+          ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
+          ...resolveNonThinkingCallOverrides(
+            runtime,
+            forceToolChoiceNone ? "none" : "",
+            modelState?.defaultModelSpec || {},
+          ),
+        }),
+    });
+    responseContentText = normalizeAiTextContent(modelResponse?.content, {
+      additionalKwargs: modelResponse?.additional_kwargs ?? null,
+      allowReasoningFallback: false,
+    });
+  }
   messages.push(modelResponse);
 
   const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
@@ -217,6 +290,7 @@ export async function invokeNoToolsTurn({
 export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const {
     messages,
+    messageBlocks,
     traces,
     tools,
     turnMessages,
@@ -225,6 +299,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     dialogProcessId,
   } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  const locale = String(systemRuntime?.locale || "zh-CN");
 
   const adaptedBinding = adaptToolsForBinding(tools, modelState);
   const configuredToolChoice = String(adaptedBinding?.bindOptions?.tool_choice || "").trim();
@@ -295,8 +371,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
         const nonThinkingOverrides = resolveNonThinkingCallOverrides(
           runtime,
           effectiveToolChoice,
+          modelState?.defaultModelSpec || {},
         );
-        return boundLlm.invoke(filterSummarizedMessages(messages), {
+        return boundLlm.invoke(filterForModelContext(messages), {
           callbacks,
           signal: abortSignal,
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
@@ -307,10 +384,10 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.BEFORE_LLM_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "with_tools",
@@ -319,6 +396,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       toolChoice: configuredToolChoice || "",
       toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
       messages,
+      messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
@@ -328,10 +406,10 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   try {
     ai = await invokeBoundLlmWithToolChoice();
   } catch (error) {
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.LLM_CALL_ERROR,
-      context: withHookRuntimeMeta(runtime, {
+      point: AGENT_HOOK_POINTS.LLM_CALL_ERROR,
+      context: buildHookContext(AGENT_HOOK_POINTS.LLM_CALL_ERROR, runtime, {
         phase: "llm_call",
         turn,
         mode: "with_tools",
@@ -342,15 +420,15 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
         toolChoice: configuredToolChoice || "",
         error,
         messages,
+        messageBlocks,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
       }),
     });
     if (configuredToolChoice === "required" && isRequiredToolChoiceUnsupportedError(error)) {
-      if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
-        runtime.systemRuntime.toolChoiceRequiredUnsupported = true;
-        runtime.systemRuntime.forceNonThinkingMode = true;
-      }
+      const systemRuntimeForFallback = getSystemRuntimeFromRuntime(runtime);
+      systemRuntimeForFallback.toolChoiceRequiredUnsupported = true;
+      systemRuntimeForFallback.forceNonThinkingMode = true;
       const currentModelInfo = resolveCurrentModelInfo(modelState);
       emitEvent(eventListener, "tool_choice_downgraded_to_auto", {
         turn,
@@ -374,8 +452,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }
   }
 
-  const rawCalls = Array.isArray(ai?.tool_calls) ? ai.tool_calls : [];
-  const calls = rawCalls.map((call = {}) => ({
+  let rawCalls = Array.isArray(ai?.tool_calls) ? ai.tool_calls : [];
+  let calls = rawCalls.map((call = {}) => ({
     ...call,
     id: String(
       call?.id ??
@@ -387,14 +465,44 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     name: String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim(),
     args: call?.args && typeof call.args === "object" ? call.args : {},
   }));
-  const aiContentText = normalizeAiTextContent(ai.content, {
+  let aiContentText = normalizeAiTextContent(ai.content, {
     additionalKwargs: ai?.additional_kwargs ?? null,
-    allowReasoningFallback: calls.length === 0,
+    allowReasoningFallback: false,
   });
-  await runRuntimeHook({
+  const reasoningText = extractAiReasoningText(ai);
+  if (!aiContentText && !calls.length && reasoningText) {
+    emitEvent(eventListener, "llm_reasoning_only_retry_scheduled", {
+      turn,
+      mode: "with_tools",
+      reasoningChars: reasoningText.length,
+    });
+    messages.push({
+      role: "system",
+      content: buildReasoningRetrySystemMessage(reasoningText, locale),
+    });
+    ai = await invokeBoundLlmWithToolChoice();
+    rawCalls = Array.isArray(ai?.tool_calls) ? ai.tool_calls : [];
+    calls = rawCalls.map((call = {}) => ({
+      ...call,
+      id: String(
+        call?.id ??
+          call?.tool_call_id ??
+          call?.toolCallId ??
+          call?.call_id ??
+          "",
+      ).trim(),
+      name: String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim(),
+      args: call?.args && typeof call.args === "object" ? call.args : {},
+    }));
+    aiContentText = normalizeAiTextContent(ai.content, {
+      additionalKwargs: ai?.additional_kwargs ?? null,
+      allowReasoningFallback: false,
+    });
+  }
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.AFTER_LLM_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "with_tools",
@@ -407,6 +515,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       ai,
       calls,
       messages,
+      messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
@@ -459,9 +568,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     hasToolCalls: Boolean(calls.length),
   });
   if (!rawCalls.length && String(adaptedBinding?.bindOptions?.tool_choice || "") === "required") {
-    if (runtime?.systemRuntime && typeof runtime.systemRuntime === "object") {
-      runtime.systemRuntime.toolChoiceRequiredUnsupported = true;
-    }
+    const systemRuntimeForRequired = getSystemRuntimeFromRuntime(runtime);
+    systemRuntimeForRequired.toolChoiceRequiredUnsupported = true;
     emitEvent(eventListener, "llm_tool_choice_required_not_followed", {
       turn,
       toolChoice: "required",

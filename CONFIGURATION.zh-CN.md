@@ -44,12 +44,15 @@
 | `memory_max_items` | number | 短期记忆条目上限 |
 | `max_tool_loop_turns` | number | 单轮工具调用循环上限 |
 | `streaming` | boolean | 是否启用流式输出 |
+| `run_timeout_ms` | number | 单次运行超时（毫秒），如 `7200000` |
 
 ### 3.2 会话策略
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
 | `session.recent_message_limit` | number | 上下文中最近消息数量 |
+| `context.main_model_recent_window` | boolean | `agent.main` 是否启用 recent window 截断 |
+| `context.main_model_recent_limit` | number | `agent.main` recent window 窗口大小（启用时生效） |
 | `session.use_last_running_task_range` | boolean | 优先从最近运行任务开始取上下文 |
 | `session.use_last_completed_task_range` | boolean | 优先从最近完成任务开始取上下文 |
 
@@ -89,6 +92,7 @@
 | `tools.web_to_data.enabled` | boolean | 启用网页内容提取工具 |
 | `tools.web_to_data.switch_web_mode` | string | 网页提取模式（如 `browser_simulate`） |
 | `tools.doc_to_data.enabled` | boolean | 启用文档解析工具 |
+| `tools.doc_to_data.parse_engine` | string | 文档解析引擎（默认 `libreoffice`） |
 | `tools.process_content_task.enabled` | boolean | 启用内容处理工具 |
 | `tools.process_content_task.max_tool_loop_turns` | number | 内容任务内部循环上限 |
 | `tools.execute_script.enabled` | boolean | 启用脚本执行工具 |
@@ -105,6 +109,10 @@
 | `tools.process_connector_tool.enabled` | boolean | 启用连接器处理工具 |
 | `tools.process_connector_tool.max_tool_loop_turns` | number | 连接器任务内部循环上限 |
 | `tools.access_connector.enabled` | boolean | 启用连接器访问工具 |
+| `tools.access_connector.command_file.enabled` | boolean | 启用 access_connector 的 `command_file_path` 输入 |
+| `tools.access_connector.command_file.max_bytes` | number | 命令文件可读取的最大字节数 |
+| `tools.access_connector.command_file.allowed_extensions` | string[] | 命令文件后缀白名单 |
+| `tools.access_connector.command_file.allowed_roots` | string(path)[] | 命令文件路径白名单根目录（为空时默认工作区根目录） |
 | `tools.max_output_chars` | number | 工具输出清洗与截断的统一长度上限 |
 | `tools.database_connect_connector.enabled` | boolean | 启用数据库连接器工具 |
 | `tools.terminal_connect_connector.enabled` | boolean | 启用终端连接器工具 |
@@ -140,8 +148,12 @@
 | `scenarios.definitions.<name>.mcp_servers` / `mcpServers` | string[] | 情景绑定的 MCP Server 名称集合 |
 
 当前仓库默认：
-- `full`（默认）：tools/context 为空数组，表示不额外限制
+- `full`（默认）：tools/context/services/mcp_servers 为 `["*"]`，表示不额外限制
 - `programming`：model=`"qwen3_6_plus_2026_04_02"`，description=“优先分析代码结构…”，tools=`["execute_script", "task_summary", "request_help"]`，services=`["web_search_service"]`，context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
+
+内置定义键：
+- `scenarios.definitions.full`
+- `scenarios.definitions.programming`
 
 ### 3.5.1 插件配置
 
@@ -149,10 +161,18 @@
 |---|---|---|
 | `plugins.<name>.enabled` | boolean | 插件总开关。为 `false` 时前端不展示且运行时禁用。 |
 | `plugins.<name>.mode` | enum | 插件默认运行模式。目前支持 `on` / `off`（`off` 表示插件可用但默认不激活）。 |
+| `plugins.harness.stepModels.<purpose>` | string | Harness 各步骤模型别名（`planning` / `guidance` / `acceptance` / `default`）。 |
+| `plugins.harness.contextWindowRecentMessageLimit` | number | Harness 历史消息块统一过滤/裁剪入口的 recent-window 条数上限。 |
+| `plugins.harness.incrementalRecentMessageLimit` | number | Harness 增量消息块统一过滤/裁剪入口的 recent-window 条数上限。 |
 
 当前仓库插件默认值：
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
+- `plugins.harness.stepModels = { planning, guidance, acceptance, default }`（当前示例中均为 `"qwen3_6_plus"`）
+
+未配置 recent-window 限制时的运行时默认：
+- `plugins.harness.contextWindowRecentMessageLimit = 20`
+- `plugins.harness.incrementalRecentMessageLimit = 20`（未配置时回落到 history limit）
 
 ### 3.6 连接器预置
 
@@ -195,33 +215,37 @@
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
-| `enabled` | boolean | 是否启用 |
-| `used_for_conversation` | boolean | 是否可用于会话 |
-| `api_key` | string | 模型密钥（支持 `${VAR_NAME}`） |
-| `base_url` | string(url) | 模型网关地址 |
-| `model` | string | 模型名 |
-| `format` | enum | `openai_compatible` / `dashscope` |
-| `reasoning_effort` | string | 推理强度（模型支持时） |
-| `temperature` | number | 采样温度 |
-| `max_tokens` | number | 最大输出 token |
-| `preserve_thinking` | boolean | 是否保留思考（模型支持时） |
-| `thinking_budget` | number | 思考预算（模型支持时） |
-| `description` | string | 提供方说明 |
-| `multimodal_generation.support_understanding` | boolean | 是否支持多模态理解 |
-| `multimodal_generation.support_generation.enabled` | boolean | 是否支持多模态生成 |
-| `multimodal_generation.support_generation.support_scope` | string[] | 生成范围（如 `["image"]`） |
+| `providers.<alias>.enabled` | boolean | 是否启用 |
+| `providers.<alias>.used_for_conversation` | boolean | 是否可用于会话 |
+| `providers.<alias>.api_key` | string | 模型密钥（支持 `${VAR_NAME}`） |
+| `providers.<alias>.base_url` | string(url) | 模型网关地址 |
+| `providers.<alias>.model` | string | 模型名 |
+| `providers.<alias>.format` | enum | `openai_compatible` / `dashscope` |
+| `providers.<alias>.reasoning_effort` | string | 推理强度（模型支持时） |
+| `providers.<alias>.enable_thinking` | boolean | 可选思考开关（常见于 dashscope 兼容模型） |
+| `providers.<alias>.temperature` | number | 采样温度 |
+| `providers.<alias>.max_tokens` | number | 最大输出 token |
+| `providers.<alias>.top_p` | number | 可选 nucleus sampling 参数 |
+| `providers.<alias>.frequency_penalty` | number | 可选频率惩罚参数 |
+| `providers.<alias>.presence_penalty` | number | 可选存在惩罚参数 |
+| `providers.<alias>.preserve_thinking` | boolean | 是否保留思考（模型支持时） |
+| `providers.<alias>.thinking_budget` | number | 思考预算（模型支持时） |
+| `providers.<alias>.description` | string | 提供方说明 |
+| `providers.<alias>.multimodal_generation.support_understanding` | boolean | 是否支持多模态理解 |
+| `providers.<alias>.multimodal_generation.support_generation.enabled` | boolean | 是否支持多模态生成 |
+| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[] | 生成范围（如 `["image"]`） |
 
 ### 3.8 MCP 服务（`mcp_servers.<name>`）
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
-| `type` | enum | `sse` / `streamableHttp` |
-| `description` | string | 服务描述 |
-| `prompt` | string | MCP 提示词（注入系统提示块） |
-| `isActive` | boolean | 是否启用 |
-| `name` | string | 展示名称 |
-| `baseUrl` | string(url) | MCP 接口地址 |
-| `headers` | object | 请求头（支持 `${VAR_NAME}`） |
+| `mcp_servers.<name>.type` | enum | `sse` / `streamableHttp` |
+| `mcp_servers.<name>.description` | string | 服务描述 |
+| `mcp_servers.<name>.prompt` | string | MCP 提示词（注入系统提示块） |
+| `mcp_servers.<name>.isActive` | boolean | 是否启用 |
+| `mcp_servers.<name>.name` | string | 展示名称 |
+| `mcp_servers.<name>.baseUrl` | string(url) | MCP 接口地址 |
+| `mcp_servers.<name>.headers` | object | 请求头（支持 `${VAR_NAME}`） |
 
 ### 3.9 超级管理员
 
@@ -247,6 +271,7 @@
 | `services` | 用户级外部服务定义（见 §4.1） |
 | `mcp_servers` | 用户级 MCP 配置覆盖 |
 | `preferences` | 用户偏好设置（如 `language`） |
+| `preferences.language` | string | 界面/交互语言，如 `zh-CN` / `en-US` |
 | `streaming` | 用户级流式设置 |
 
 ### 4.1 外部服务（`services.<name>`）

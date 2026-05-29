@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import { resolveForceToolCall } from "../../utils/shared-utils.js";
+import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -39,7 +40,7 @@ export function buildDynamicInfo({
   runConfig = {},
   now = new Date().toISOString(),
 } = {}) {
-  const forceToolCall = resolveForceToolCall(runConfig);
+  const forceTool = resolveForceToolCall(runConfig);
   const toolPolicy =
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
       ? { ...runConfig.toolPolicy }
@@ -56,25 +57,25 @@ export function buildDynamicInfo({
       ])
       .filter(([connectorType]) => Boolean(connectorType)),
   );
+  const config = {
+    allowUserInteraction: runConfig?.allowUserInteraction !== false,
+    forceTool,
+    ...(toolPolicy ? { toolPolicy } : {}),
+    selectedConnectors,
+    ...(Number.isFinite(Number(runConfig?.maxToolLoopTurns)) &&
+    Number(runConfig?.maxToolLoopTurns) > 0
+      ? { maxToolLoopTurns: Math.floor(Number(runConfig.maxToolLoopTurns)) }
+      : {}),
+  };
   return {
     userId: String(userId || "").trim(),
     sessionId: String(sessionId || "").trim(),
     parentSessionId: String(parentSessionId || "").trim(),
     rootSessionId: String(rootSessionId || "").trim(),
     caller: String(caller || "user").trim(),
-    dialogProcessId: String(dialogProcessId || "").trim(),
+    dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
     sessionTree,
     now,
-    config: {
-      allowUserInteraction: runConfig?.allowUserInteraction !== false,
-      forceTool: forceToolCall,
-      forceToolCall,
-      ...(toolPolicy ? { toolPolicy } : {}),
-      selectedConnectors,
-      ...(Number.isFinite(Number(runConfig?.maxToolLoopTurns)) &&
-      Number(runConfig?.maxToolLoopTurns) > 0
-        ? { maxToolLoopTurns: Math.floor(Number(runConfig.maxToolLoopTurns)) }
-        : {}),
-    },
+    config,
   };
 }

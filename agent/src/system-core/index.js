@@ -14,3 +14,4 @@ export * as attach from "./attach/index.js";
 export * as context from "./context/index.js";
 export * as config from "./config/index.js";
 export * as hook from "./hook/index.js";
+export * as botHook from "./bot-manage/hook/index.js";

@@ -22,6 +22,7 @@ import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
 } from "../session/current-turn-store.js";
+import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 
 
 async function defaultSharedFetch(url, init = {}) {
@@ -199,7 +200,7 @@ function initializeConnectorRuntime(
     historyStore: connectorHistoryStore,
     rootSessionId,
     sessionId,
-    dialogProcessId: String(runtimeContext?.systemRuntime?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveDialogProcessIdFromContext({ runtime: runtimeContext }),
     allowUserInteraction: runtimeContext?.systemRuntime?.config?.allowUserInteraction !== false,
     bridge: runtimeContext?.userInteractionBridge || null,
   });

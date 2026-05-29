@@ -36,5 +36,9 @@ export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
   }
 
   systemRuntime.needsPhaseSummary = systemRuntime.needsPhaseSummary === true;
+  systemRuntime.phaseSummaryByCharsPrompted =
+    systemRuntime.phaseSummaryByCharsPrompted === true;
+  systemRuntime.phaseSummaryNoToolsNextTurn =
+    systemRuntime.phaseSummaryNoToolsNextTurn === true;
   systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
 }

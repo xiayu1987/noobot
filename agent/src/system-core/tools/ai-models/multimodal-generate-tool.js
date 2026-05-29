@@ -26,6 +26,14 @@ import {
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
 
+const MODEL_NAME_HEADER_KEY = "X-Model-Name";
+const FLOW_HEADER_KEY = "X-Harness-Flow";
+const PURPOSE_HEADER_KEY = "X-Harness-Purpose";
+const DOMAIN_HEADER_KEY = "X-Harness-Domain";
+const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
+const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
+const MULTIMODAL_DOMAIN_NAME = "tool";
+
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
 }
@@ -36,6 +44,15 @@ function resolveModelApiKey(modelSpec = {}) {
 
 function resolveModelBaseUrl(modelSpec = {}) {
   return String(modelSpec.base_url || "").trim();
+}
+
+function buildMultimodalRequestHeaders(modelName = "") {
+  return {
+    [MODEL_NAME_HEADER_KEY]: String(modelName || "").trim() || "unknown_model",
+    [FLOW_HEADER_KEY]: MULTIMODAL_FLOW_NAME,
+    [PURPOSE_HEADER_KEY]: MULTIMODAL_PURPOSE_NAME,
+    [DOMAIN_HEADER_KEY]: MULTIMODAL_DOMAIN_NAME,
+  };
 }
 
 async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
@@ -292,6 +309,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           ...(resolveModelBaseUrl(resolvedModelSpec || {})
             ? { baseURL: resolveModelBaseUrl(resolvedModelSpec || {}) }
             : {}),
+          defaultHeaders: buildMultimodalRequestHeaders(modelNameForGeneration),
         });
         const generationResult = await generateWithOpenaiResponsesApi({
           openaiClient,

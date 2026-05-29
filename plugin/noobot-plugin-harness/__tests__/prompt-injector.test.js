@@ -5,7 +5,7 @@ import {
   injectSystemMessages,
   isHarnessPromptAlreadyInjected,
   markPromptAsInjected,
-} from "../src/lib/prompt-injector.js";
+} from "../src/prompt/prompt-injector.js";
 
 test("injectSystemMessages skips already injected prompt IDs and injects missing ones", () => {
   const messages = [
@@ -55,3 +55,20 @@ test("replace mode refreshes cache after removing old harness prompts", () => {
   assert.equal(isHarnessPromptAlreadyInjected(messages, "noobot-harness-replaced"), true);
 });
 
+test("after_system mode preserves leading system messages", () => {
+  const messages = [
+    { role: "system", content: "system context" },
+    { role: "user", content: "user task" },
+  ];
+  const changed = injectSystemMessages(
+    { messages },
+    {
+      prompts: [{ id: "noobot-harness-policy", content: "policy", mode: "after_system", priority: 90 }],
+    },
+  );
+
+  assert.equal(changed, true);
+  assert.equal(messages[0]?.content, "system context");
+  assert.match(String(messages[1]?.content || ""), /noobot-harness-policy/);
+  assert.equal(messages[2]?.content, "user task");
+});

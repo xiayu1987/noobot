@@ -4,8 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig } from "../../config/index.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { tTool } from "../core/tool-i18n.js";
-import { normalizeSelectedConnectors } from "../../utils/shared-utils.js";
+import {
+  normalizeSelectedConnectors,
+  resolveForceToolCall,
+} from "../../utils/shared-utils.js";
 import { createCollabContainerStore } from "./agent-collab/collab-container-store.js";
 import { createCollabArtifactPersistor } from "./agent-collab/collab-artifact-persist.js";
 import { createDelegateTaskTool } from "./agent-collab/tool-delegate-task.js";
@@ -14,17 +22,13 @@ import { createPlanMultiTaskCollaborationTool } from "./agent-collab/tool-plan-c
 import { cloneData } from "./agent-collab/collab-task-utils.js";
 import { TOOL_NAME } from "../constants/index.js";
 
-function getRuntime(agentContext) {
-  return agentContext?.runtime || {};
-}
-
 function tAgentCollab(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.agent_collab.${String(key || "").trim()}`, params);
 }
 
 export function createAgentCollabTool({ agentContext }) {
-  const runtime = getRuntime(agentContext);
-  const systemRuntime = runtime.systemRuntime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const effectiveConfig = mergeConfig(runtime.globalConfig || {}, runtime.userConfig || {});
 
   const delegateTaskAsyncConfig =
@@ -38,11 +42,9 @@ export function createAgentCollabTool({ agentContext }) {
       ? delegateTaskAsyncConfig.runConfigPassthrough
       : {};
 
-  const passthroughForceToolCall =
-    runConfigPassthrough?.forceToolCall === true || runConfigPassthrough?.forceTool === true;
+  const passthroughForceToolCall = resolveForceToolCall(runConfigPassthrough);
   const passthroughToolPolicy = runConfigPassthrough?.toolPolicy === true;
-  const parentForceToolCall =
-    systemRuntime?.config?.forceToolCall === true || systemRuntime?.config?.forceTool === true;
+  const parentForceToolCall = resolveForceToolCall(systemRuntime?.config || {});
   const parentToolPolicy =
     systemRuntime?.config?.toolPolicy && typeof systemRuntime.config.toolPolicy === "object"
       ? cloneData(systemRuntime.config.toolPolicy)
@@ -62,7 +64,12 @@ export function createAgentCollabTool({ agentContext }) {
       runtime?.sharedTools && typeof runtime.sharedTools === "object"
         ? runtime.sharedTools
         : {},
-    ...(passthroughForceToolCall ? { forceToolCall: parentForceToolCall } : {}),
+    ...(passthroughForceToolCall
+      ? {
+          // vNext+2: only write canonical field; keep compatibility reads via resolveForceToolCall.
+          forceTool: parentForceToolCall,
+        }
+      : {}),
     ...(passthroughToolPolicy && parentToolPolicy ? { toolPolicy: parentToolPolicy } : {}),
   };
 
@@ -80,7 +87,9 @@ export function createAgentCollabTool({ agentContext }) {
   const runtimeEventListener = runtime.eventListener || null;
   const abortSignal = runtime.abortSignal || null;
   const userInteractionBridge = runtime.userInteractionBridge || null;
-  const sourceDialogProcessId = systemRuntime.dialogProcessId || "";
+  const sourceDialogProcessId = resolveDialogProcessIdFromContext({
+    runtime,
+  });
   const sourceSessionId = String(systemRuntime?.sessionId || "").trim();
   const rootSessionId = String(systemRuntime?.rootSessionId || "").trim();
   const globalConfig = runtime.globalConfig || {};

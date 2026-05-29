@@ -6,6 +6,8 @@
  * SSE log event normalization & execution event classification.
  */
 
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
+
 const TOOL_EVENT_TYPES = new Set(["tool_call", "tool_result"]);
 const ERROR_EVENT_SUFFIX_RE = /(_error|_aborted)$/i;
 
@@ -74,6 +76,9 @@ export function normalizeSseLogEvent(evt = {}) {
   }
 
   if (rawEvent === "tool_call_start") {
+    const dialogProcessId = resolveDialogProcessIdFromContext({
+      dialogProcessId: data.dialogProcessId,
+    });
     return {
       event: "thinking",
       data: {
@@ -81,7 +86,7 @@ export function normalizeSseLogEvent(evt = {}) {
         type: "tool_call",
         event: "tool_call",
         rawEvent,
-        dialogProcessId: data.dialogProcessId || "",
+        dialogProcessId,
         ts,
         turn: data.turn || 0,
         tool: data.tool || "",
@@ -92,6 +97,9 @@ export function normalizeSseLogEvent(evt = {}) {
   }
 
   if (rawEvent === "tool_call_end") {
+    const dialogProcessId = resolveDialogProcessIdFromContext({
+      dialogProcessId: data.dialogProcessId,
+    });
     return {
       event: "thinking",
       data: {
@@ -99,7 +107,7 @@ export function normalizeSseLogEvent(evt = {}) {
         type: "tool_result",
         event: "tool_result",
         rawEvent,
-        dialogProcessId: data.dialogProcessId || "",
+        dialogProcessId,
         ts,
         turn: data.turn || 0,
         tool: data.tool || "",

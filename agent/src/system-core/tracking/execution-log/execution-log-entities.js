@@ -6,12 +6,14 @@
  * Execution log entity normalization.
  */
 
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+
 export function normalizeExecutionLogEntity(
   executionLog = {},
   now = () => new Date().toISOString(),
 ) {
   return {
-    dialogProcessId: String(executionLog?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveMessageDialogProcessId(executionLog),
     event: String(executionLog?.event || "").trim(),
     category: String(executionLog?.category || "").trim(),
     type: String(executionLog?.type || "").trim(),

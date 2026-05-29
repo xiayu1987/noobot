@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createStateCommitter } from "../../../../src/system-core/agent/core/execution/state-committer.js";
-import { createHookManager, HOOK_POINTS } from "../../../../src/system-core/hook/index.js";
+import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../../src/system-core/hook/index.js";
 
 function createInMemoryTurnStore() {
   return {
@@ -18,16 +18,16 @@ function createInMemoryTurnStore() {
 
 test("state-committer emits before/after hooks for assistant message commit", async () => {
   const hookCalls = [];
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const runtime = { hookManager };
   const turnMessageStore = createInMemoryTurnStore();
 
-  hookManager.on(HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "assistant_message") return;
     hookCalls.push(`before:${ctx.commitType}`);
     ctx.payload.content = `[hooked]${ctx.payload.content}`;
   });
-  hookManager.on(HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "assistant_message") return;
     hookCalls.push(`after:${ctx.commitType}`);
   });
@@ -54,18 +54,18 @@ test("state-committer emits before/after hooks for assistant message commit", as
 
 test("state-committer emits before/after hooks for tool result commit", async () => {
   const hookCalls = [];
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const runtime = { hookManager };
   const turnMessageStore = createInMemoryTurnStore();
   const traces = [];
   const messages = [];
 
-  hookManager.on(HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "tool_result") return;
     hookCalls.push(`before:${ctx.commitType}`);
     ctx.payload.content = "tool_result_overridden_by_hook";
   });
-  hookManager.on(HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "tool_result") return;
     hookCalls.push(`after:${ctx.commitType}`);
   });
@@ -96,11 +96,11 @@ test("state-committer emits before/after hooks for tool result commit", async ()
 
 test("state-committer emits before/after hooks for attachment meta commit", async () => {
   const hookCalls = [];
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   const runtime = { hookManager, attachmentMetas: [] };
   const turnMessageStore = createInMemoryTurnStore();
 
-  hookManager.on(HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "attachment_metas") return;
     hookCalls.push(`before:${ctx.commitType}`);
     ctx.payload.attachmentMetas.push({
@@ -109,7 +109,7 @@ test("state-committer emits before/after hooks for attachment meta commit", asyn
       mimeType: "image/png",
     });
   });
-  hookManager.on(HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "attachment_metas") return;
     hookCalls.push(`after:${ctx.commitType}`);
   });

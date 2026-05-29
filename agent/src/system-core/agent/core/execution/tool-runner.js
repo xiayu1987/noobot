@@ -11,7 +11,22 @@ import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
-import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
+import { buildHookContext } from "../hook/hook-context-builder.js";
+
+function resolveToolHookMeta(runtime = {}) {
+  const runtimeMeta =
+    runtime?.hookManager?.runtime && typeof runtime.hookManager.runtime === "object"
+      ? runtime.hookManager.runtime
+      : null;
+  if (runtimeMeta) {
+    return {
+      ...runtimeMeta,
+      runtime,
+    };
+  }
+  return { runtime };
+}
 
 function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
   if (invokeError) {
@@ -58,10 +73,10 @@ export async function executeToolCall({
       tool: call?.name,
       result: String(toolResultText).slice(0, 200),
     });
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.AFTER_TOOL_CALL,
-      context: withHookRuntimeMeta(runtime, {
+      point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
+      context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, runtime, {
         phase: "tool_call",
         executionScope,
         turn,
@@ -86,10 +101,10 @@ export async function executeToolCall({
     };
   }
   let rawResult = null;
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.BEFORE_TOOL_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    point: AGENT_HOOK_POINTS.BEFORE_TOOL_CALL,
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, runtime, {
       phase: "tool_call",
       executionScope,
       turn,
@@ -105,7 +120,7 @@ export async function executeToolCall({
     rawResult = await tool.invoke(call?.args || {}, {
       signal: abortSignal,
       configurable: {
-        noobotHookContext: withHookRuntimeMeta(runtime, {
+        noobotHookContext: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, runtime, {
           phase: "tool_call",
           executionScope,
           turn,
@@ -116,7 +131,7 @@ export async function executeToolCall({
           args: call?.args || {},
           agentContext,
         }),
-        noobotHookMeta: runtime,
+        noobotHookMeta: resolveToolHookMeta(runtime),
       },
     });
     toolResultText =
@@ -137,10 +152,10 @@ export async function executeToolCall({
       },
     });
     if (isAbort || isFatal) throw error;
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.TOOL_CALL_ERROR,
-      context: withHookRuntimeMeta(runtime, {
+      point: AGENT_HOOK_POINTS.TOOL_CALL_ERROR,
+      context: buildHookContext(AGENT_HOOK_POINTS.TOOL_CALL_ERROR, runtime, {
         phase: "tool_call",
         executionScope,
         turn,
@@ -166,6 +181,10 @@ export async function executeToolCall({
       ...(errorDetails ? { details: errorDetails } : {}),
     });
     if (errorLogger && typeof errorLogger.log === "function") {
+      const normalizedCause =
+        typeof error?.cause === "string"
+          ? error.cause
+          : error?.cause?.message || "";
       void errorLogger.log({
         userId,
         sessionId,
@@ -173,7 +192,10 @@ export async function executeToolCall({
         source: "tool-runner",
         event: "tool_invoke_error",
         error,
-        extra: { toolName: call?.name || "" },
+        extra: {
+          toolName: call?.name || "",
+          ...(normalizedCause ? { cause: normalizedCause } : {}),
+        },
       });
     }
   }
@@ -188,10 +210,10 @@ export async function executeToolCall({
     result: String(toolResultText).slice(0, 200),
     success: failureState.success,
   });
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.AFTER_TOOL_CALL,
-    context: withHookRuntimeMeta(runtime, {
+    point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, runtime, {
       phase: "tool_call",
       executionScope,
       turn,

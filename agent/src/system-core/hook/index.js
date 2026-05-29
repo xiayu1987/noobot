@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../event/index.js";
+import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
+import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 3000;
 const HOOK_CLIENT_BLOCKED_KEYS = new Set([
@@ -31,7 +33,7 @@ const HOOK_PLUGIN_PROGRESS_ALLOWED_KEYS = new Set([
   "error",
 ]);
 
-export const HOOK_POINTS = Object.freeze({
+export const AGENT_HOOK_POINTS = Object.freeze({
   BEFORE_TURN: "before_turn",
   AFTER_TURN: "after_turn",
   ON_ERROR: "on_error",
@@ -96,7 +98,7 @@ function resolveRuntimeHookManager(runtime = {}) {
   return null;
 }
 
-export function createHookManager({
+export function createAgentHookManager({
   defaultTimeoutMs = DEFAULT_HOOK_TIMEOUT_MS,
   onError = null,
 } = {}) {
@@ -268,15 +270,12 @@ export function createHookManager({
 export { resolveRuntimeHookManager };
 
 export function resolveHookRuntimeMeta(runtime = {}) {
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : {};
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
     userId: String(systemRuntime?.userId || runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
     parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
-    dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
     caller: String(systemRuntime?.caller || "").trim(),
   };
 }
@@ -359,7 +358,7 @@ function withHookClientChannel(context = {}, channel = null) {
   return safeContext;
 }
 
-export async function runRuntimeHook({
+export async function runAgentRuntimeHook({
   runtime = {},
   point = "",
   context = {},

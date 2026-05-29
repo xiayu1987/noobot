@@ -44,12 +44,15 @@ Based on latest examples:
 | `memory_max_items` | number | Short-memory item limit |
 | `max_tool_loop_turns` | number | Max tool loop turns per request |
 | `streaming` | boolean | Enable SSE streaming output |
+| `run_timeout_ms` | number | Single run timeout (ms), e.g. `7200000` |
 
 ### 3.2 Session
 
 | Key | Type | Description |
 |---|---|---|
 | `session.recent_message_limit` | number | Number of recent messages in context |
+| `context.main_model_recent_window` | boolean | Whether `agent.main` uses recent-window clipping |
+| `context.main_model_recent_limit` | number | Recent-window size for `agent.main` (effective when enabled) |
 | `session.use_last_running_task_range` | boolean | Prefer context since last running task |
 | `session.use_last_completed_task_range` | boolean | Prefer context since last completed task |
 
@@ -89,6 +92,7 @@ Based on latest examples:
 | `tools.web_to_data.enabled` | boolean | Enable web content extraction tool |
 | `tools.web_to_data.switch_web_mode` | string | Web extraction mode (e.g. `browser_simulate`) |
 | `tools.doc_to_data.enabled` | boolean | Enable document parsing tool |
+| `tools.doc_to_data.parse_engine` | string | Document parsing engine (default `libreoffice`) |
 | `tools.process_content_task.enabled` | boolean | Enable content processing tool |
 | `tools.process_content_task.max_tool_loop_turns` | number | Loop cap in content task |
 | `tools.execute_script.enabled` | boolean | Enable script execution tool |
@@ -105,6 +109,10 @@ Based on latest examples:
 | `tools.process_connector_tool.enabled` | boolean | Enable connector processing tool |
 | `tools.process_connector_tool.max_tool_loop_turns` | number | Loop cap in connector task |
 | `tools.access_connector.enabled` | boolean | Enable connector access tool |
+| `tools.access_connector.command_file.enabled` | boolean | Enable `command_file_path` input for access_connector |
+| `tools.access_connector.command_file.max_bytes` | number | Max readable bytes for command file |
+| `tools.access_connector.command_file.allowed_extensions` | string[] | Allowlisted command file extensions |
+| `tools.access_connector.command_file.allowed_roots` | string(path)[] | Allowlisted root paths for command files (default workspace root when empty) |
 | `tools.max_output_chars` | number | Unified tool output cleaning/truncation length limit |
 | `tools.database_connect_connector.enabled` | boolean | Enable database connector tool |
 | `tools.terminal_connect_connector.enabled` | boolean | Enable terminal connector tool |
@@ -140,8 +148,12 @@ Notes:
 | `scenarios.definitions.<name>.mcp_servers` / `mcpServers` | string[] | Scenario-bound MCP server names |
 
 Current defaults in repo:
-- `full` (default): tools/context are empty arrays, meaning no extra restriction
+- `full` (default): tools/context/services/mcp_servers are `["*"]`, meaning no extra restriction
 - `programming`: model=`"qwen3_6_plus_2026_04_02"`, description="analyze code structure first...", tools=`["execute_script", "task_summary", "request_help"]`, services=`["web_search_service"]`, context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
+
+Built-in definition keys:
+- `scenarios.definitions.full`
+- `scenarios.definitions.programming`
 
 ### 3.5.1 Plugins
 
@@ -149,10 +161,18 @@ Current defaults in repo:
 |---|---|---|
 | `plugins.<name>.enabled` | boolean | Plugin global switch. When `false`, plugin is hidden in frontend and disabled at runtime. |
 | `plugins.<name>.mode` | enum | Default runtime mode for this plugin. Currently `on` / `off` (`off` means enabled but not active by default). |
+| `plugins.harness.stepModels.<purpose>` | string | Harness step-specific model alias (`planning` / `guidance` / `acceptance` / `default`). |
+| `plugins.harness.contextWindowRecentMessageLimit` | number | Harness history block recent-window limit used by unified clipping entry. |
+| `plugins.harness.incrementalRecentMessageLimit` | number | Harness incremental block recent-window limit used by unified clipping entry. |
 
 Current plugin defaults in repo:
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
+- `plugins.harness.stepModels = { planning, guidance, acceptance, default }` (all default to `"qwen3_6_plus"` in current example)
+
+Effective defaults when recent-window limits are not configured:
+- `plugins.harness.contextWindowRecentMessageLimit = 20`
+- `plugins.harness.incrementalRecentMessageLimit = 20` (fallback to history limit when omitted)
 
 ### 3.6 Connector Presets
 
@@ -195,33 +215,37 @@ Current plugin defaults in repo:
 
 | Key | Type | Description |
 |---|---|---|
-| `enabled` | boolean | Enable this provider |
-| `used_for_conversation` | boolean | Can be used in chat |
-| `api_key` | string | API key (`${VAR_NAME}` supported) |
-| `base_url` | string(url) | Model API base URL |
-| `model` | string | Model name |
-| `format` | enum | `openai_compatible` / `dashscope` |
-| `reasoning_effort` | string | Optional (if supported) |
-| `temperature` | number | Sampling temperature |
-| `max_tokens` | number | Max output tokens |
-| `preserve_thinking` | boolean | Optional (if supported) |
-| `thinking_budget` | number | Optional (if supported) |
-| `description` | string | Provider description |
-| `multimodal_generation.support_understanding` | boolean | Multi-modal understanding support |
-| `multimodal_generation.support_generation.enabled` | boolean | Multi-modal generation enabled |
-| `multimodal_generation.support_generation.support_scope` | string[] | e.g. `["image"]` |
+| `providers.<alias>.enabled` | boolean | Enable this provider |
+| `providers.<alias>.used_for_conversation` | boolean | Can be used in chat |
+| `providers.<alias>.api_key` | string | API key (`${VAR_NAME}` supported) |
+| `providers.<alias>.base_url` | string(url) | Model API base URL |
+| `providers.<alias>.model` | string | Model name |
+| `providers.<alias>.format` | enum | `openai_compatible` / `dashscope` |
+| `providers.<alias>.reasoning_effort` | string | Optional (if supported) |
+| `providers.<alias>.enable_thinking` | boolean | Optional thinking switch (commonly for dashscope-compatible models) |
+| `providers.<alias>.temperature` | number | Sampling temperature |
+| `providers.<alias>.max_tokens` | number | Max output tokens |
+| `providers.<alias>.top_p` | number | Optional nucleus sampling parameter |
+| `providers.<alias>.frequency_penalty` | number | Optional frequency penalty |
+| `providers.<alias>.presence_penalty` | number | Optional presence penalty |
+| `providers.<alias>.preserve_thinking` | boolean | Optional (if supported) |
+| `providers.<alias>.thinking_budget` | number | Optional (if supported) |
+| `providers.<alias>.description` | string | Provider description |
+| `providers.<alias>.multimodal_generation.support_understanding` | boolean | Multi-modal understanding support |
+| `providers.<alias>.multimodal_generation.support_generation.enabled` | boolean | Multi-modal generation enabled |
+| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[] | e.g. `["image"]` |
 
 ### 3.8 MCP Servers (`mcp_servers.<name>`)
 
 | Key | Type | Description |
 |---|---|---|
-| `type` | enum | `sse` / `streamableHttp` |
-| `description` | string | Service description |
-| `prompt` | string | MCP prompt text (injected into system prompt) |
-| `isActive` | boolean | Enable this MCP service |
-| `name` | string | Display name |
-| `baseUrl` | string(url) | MCP endpoint |
-| `headers` | object | Request headers (`${VAR_NAME}` supported) |
+| `mcp_servers.<name>.type` | enum | `sse` / `streamableHttp` |
+| `mcp_servers.<name>.description` | string | Service description |
+| `mcp_servers.<name>.prompt` | string | MCP prompt text (injected into system prompt) |
+| `mcp_servers.<name>.isActive` | boolean | Enable this MCP service |
+| `mcp_servers.<name>.name` | string | Display name |
+| `mcp_servers.<name>.baseUrl` | string(url) | MCP endpoint |
+| `mcp_servers.<name>.headers` | object | Request headers (`${VAR_NAME}` supported) |
 
 ### 3.9 Super Admin
 
@@ -247,6 +271,7 @@ User config can override global values.
 | `services` | User external service definitions (see §4.1) |
 | `mcp_servers` | User MCP override |
 | `preferences` | User preferences (e.g. `language`) |
+| `preferences.language` | string | UI/interaction language, e.g. `zh-CN` / `en-US` |
 | `streaming` | User streaming behavior |
 
 ### 4.1 External Services (`services.<name>`)

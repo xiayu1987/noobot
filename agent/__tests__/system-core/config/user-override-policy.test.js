@@ -13,12 +13,20 @@ test("sanitizeUserConfig: 应仅保留允许覆盖字段并规范化键名", () 
     run_timeout_ms: 9876,
     workspace_root: "/should-be-denied",
     providers: { openai: { model: "gpt-4o" } },
+    context: {
+      main_model_recent_window: true,
+      main_model_recent_limit: 15,
+    },
     unknownKey: "x",
   });
   assert.equal(out.defaultProvider, "openai");
   assert.equal(out.runTimeoutMs, 9876);
   assert.equal(out.workspaceRoot, undefined);
   assert.deepEqual(out.providers, { openai: { model: "gpt-4o" } });
+  assert.deepEqual(out.context, {
+    mainModelRecentWindow: true,
+    mainModelRecentLimit: 15,
+  });
   assert.equal("unknownKey" in out, false);
 });
 

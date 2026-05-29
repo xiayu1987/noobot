@@ -11,7 +11,14 @@ export const CAPABILITY_HOOK_MAP = Object.freeze({
     "tool_call_error",
     "before_final_output",
   ],
-  acceptance: ["before_turn", "before_tool_calls", "before_tool_call", "before_final_output"],
+  acceptance: [
+    "before_turn",
+    "before_tool_calls",
+    "before_tool_call",
+    "before_final_output",
+    "before_llm_call",
+    "after_llm_call",
+  ],
   review: [
     "before_final_output",
     "after_turn",

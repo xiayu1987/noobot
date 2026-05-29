@@ -22,17 +22,18 @@
 
 import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
-import { runRuntimeHook, HOOK_POINTS, withHookRuntimeMeta } from "../../hook/index.js";
+import { runAgentRuntimeHook, AGENT_HOOK_POINTS } from "../../hook/index.js";
 import { isAbortError } from "./utils/error-utils.js";
+import { buildHookContext } from "./hook/hook-context-builder.js";
 
 export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
-  await runRuntimeHook({
+  await runAgentRuntimeHook({
     runtime,
-    point: HOOK_POINTS.BEFORE_TURN,
-    context: withHookRuntimeMeta(runtime, {
+    point: AGENT_HOOK_POINTS.BEFORE_TURN,
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TURN, runtime, {
       phase: "agent_turn",
       status: "start",
       startedAt,
@@ -44,10 +45,10 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
   try {
     const result = await runFunctionCallLoop({ modelState, loopState, turn: 1 });
     const beforeFinalAtMs = Date.now();
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.BEFORE_FINAL_OUTPUT,
-      context: withHookRuntimeMeta(runtime, {
+      point: AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
+      context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT, runtime, {
         phase: "agent_turn",
         status: "success",
         startedAt,
@@ -59,10 +60,10 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
       }),
     });
     const endedAtMs = Date.now();
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.AFTER_TURN,
-      context: withHookRuntimeMeta(runtime, {
+      point: AGENT_HOOK_POINTS.AFTER_TURN,
+      context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TURN, runtime, {
         phase: "agent_turn",
         status: "success",
         startedAt,
@@ -77,10 +78,10 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
   } catch (error) {
     const failedAtMs = Date.now();
     if (isAbortError(error) || isAbortError(error?.cause)) {
-      await runRuntimeHook({
+      await runAgentRuntimeHook({
         runtime,
-        point: HOOK_POINTS.ON_ABORT,
-        context: withHookRuntimeMeta(runtime, {
+        point: AGENT_HOOK_POINTS.ON_ABORT,
+        context: buildHookContext(AGENT_HOOK_POINTS.ON_ABORT, runtime, {
           phase: "agent_turn",
           status: "abort",
           startedAt,
@@ -92,10 +93,10 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
         }),
       });
     }
-    await runRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: HOOK_POINTS.ON_ERROR,
-      context: withHookRuntimeMeta(runtime, {
+      point: AGENT_HOOK_POINTS.ON_ERROR,
+      context: buildHookContext(AGENT_HOOK_POINTS.ON_ERROR, runtime, {
         phase: "agent_turn",
         status: "error",
         startedAt,

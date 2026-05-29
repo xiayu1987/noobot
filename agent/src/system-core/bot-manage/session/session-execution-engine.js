@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { runAgentTurn } from "../../agent/index.js";
+import {
+  runAgentTurn,
+  AgentContextFactory,
+  AgentRuntimeFacade,
+} from "../../agent/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { SessionExecutionInitializer } from "../execution/initializer.js";
@@ -14,17 +18,86 @@ import { BotManageValidator } from "../config/validator.js";
 import { ParentAsyncTaskManager } from "../execution/parent-async-task-manager.js";
 import { RunConfigResolver } from "../config/run-config-resolver.js";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
-import { AgentContextFactory } from "../execution/agent-context-factory.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { createHookManager } from "../../hook/index.js";
+import { createAgentHookManager } from "../../hook/index.js";
+import { createBotHookManager } from "../hook/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
 import {
-  filterSummarizedMessages,
-  normalizeRecentWindow,
+  resolveModelContextMessages,
 } from "../../session/utils/context-window-normalizer.js";
+import {
+  shouldMarkCurrentTurnSummarizedMessage,
+  shouldMarkCurrentTurnSummarizedModelMessage,
+} from "../../context/session/summarized-message-policy.js";
+import { resolveMessageRole } from "../../context/session/message-context-policy.js";
+import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
+import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import {
+  getRuntimeFromAgentContext,
+  getSessionIdsFromAgentContext,
+} from "../../context/agent-context-accessor.js";
+import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { MIME_TYPE } from "../../constants/index.js";
+
+function normalizeMessageForHarness(messageItem = {}) {
+  const role = resolveMessageRole(messageItem);
+  if (!role) return null;
+  const content = extractMessageTextContent(
+    messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
+  );
+  const normalized = {
+    role,
+    content,
+    summarized:
+      messageItem?.summarized === true || messageItem?.lc_kwargs?.summarized === true,
+  };
+  const toolCalls = Array.isArray(messageItem?.tool_calls)
+    ? messageItem.tool_calls
+    : Array.isArray(messageItem?.lc_kwargs?.tool_calls)
+      ? messageItem.lc_kwargs.tool_calls
+      : Array.isArray(messageItem?.additional_kwargs?.tool_calls)
+        ? messageItem.additional_kwargs.tool_calls
+        : [];
+  if (toolCalls.length) normalized.tool_calls = toolCalls;
+  const toolCallId = String(
+    messageItem?.tool_call_id || messageItem?.lc_kwargs?.tool_call_id || "",
+  ).trim();
+  if (toolCallId) normalized.tool_call_id = toolCallId;
+  if (messageItem?.injectedMessage === true || messageItem?.lc_kwargs?.injectedMessage === true) {
+    normalized.injectedMessage = true;
+  }
+  const injectedBy = String(
+    messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "",
+  ).trim();
+  if (injectedBy) normalized.injectedBy = injectedBy;
+  if (
+    messageItem?.frontendUserMessage === true ||
+    messageItem?.lc_kwargs?.frontendUserMessage === true ||
+    messageItem?.additional_kwargs?.frontendUserMessage === true ||
+    messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+  ) {
+    normalized.frontendUserMessage = true;
+  }
+  return normalized;
+}
+
+function resolveCurrentTurnUserMessage(ctx = {}) {
+  const directCandidates = [
+    ctx?.userMessage,
+    ctx?.message,
+    ctx?.latestUserMessage,
+    ctx?.latestUserGoal,
+    ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.currentTurnUserMessage,
+  ];
+  for (const candidate of directCandidates) {
+    const text = String(candidate || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
 
 export class SessionExecutionEngine {
   constructor({
@@ -71,6 +144,10 @@ export class SessionExecutionEngine {
       applyRunConfigToolPolicy: (agentContext = {}, runConfig = {}) =>
         this._applyRunConfigToolPolicy(agentContext, runConfig),
     });
+    this.agentRuntimeFacade = new AgentRuntimeFacade({
+      contextFactory: this.agentContextFactory,
+      turnRunner: this.agentRunner,
+    });
     this.turnPersister = new SessionTurnPersister({
       session: this.session,
     });
@@ -91,11 +168,12 @@ export class SessionExecutionEngine {
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
       now: () => this._now(),
     });
-    this.runner = new SessionExecutionRunner({
-      agentRunner: this.agentRunner,
-      errorLogger: this.errorLogger,
+    // SessionExecutionRunner dependency wiring (grouped by concern)
+    const runnerValidationDeps = {
       normalizeRunMessage: (message) => this._normalizeRunMessage(message),
       validateRunInput: (payload = {}) => this._validateRunInput(payload),
+    };
+    const runnerRuntimeDeps = {
       ensureParentAsyncResultContainer: (payload = {}) =>
         this._ensureParentAsyncResultContainer(payload),
       initializeRunSessionRuntime: (payload = {}) =>
@@ -103,12 +181,20 @@ export class SessionExecutionEngine {
       resolveScenarioRunConfig: (runConfig = {}, userConfig = {}) =>
         this._resolveScenarioRunConfig(runConfig, userConfig),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
-      buildAgentContext: (payload = {}) => this._buildAgentContext(payload),
+      prepareAgentTurnExecution: (payload = {}) =>
+        this._prepareAgentTurnExecution(payload),
+    };
+    const runnerPersistenceDeps = {
       appendSessionTurn: (payload = {}) => this._appendSessionTurn(payload),
-      buildRunTurnAgentContext: (agentContext = {}, abortSignal = null) =>
-        this._buildRunTurnAgentContext(agentContext, abortSignal),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
+    };
+    this.runner = new SessionExecutionRunner({
+      agentRunner: (payload = {}) => this.agentRuntimeFacade.runTurn(payload),
+      errorLogger: this.errorLogger,
+      ...runnerValidationDeps,
+      ...runnerRuntimeDeps,
+      ...runnerPersistenceDeps,
       now: () => this._now(),
     });
   }
@@ -184,34 +270,6 @@ export class SessionExecutionEngine {
     });
   }
 
-  _buildContextBuilder({
-    userId,
-    sessionId,
-    caller = CALLER_ROLE.USER,
-    parentSessionId,
-    userConfig,
-    attachmentMetas,
-    eventListener,
-    userInteractionBridge = null,
-    runConfig = {},
-    abortSignal = null,
-    parentAsyncResultContainer = null,
-  }) {
-    return this.agentContextFactory.buildContextBuilder({
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
-      userConfig,
-      attachmentMetas,
-      eventListener,
-      userInteractionBridge,
-      runConfig,
-      abortSignal,
-      parentAsyncResultContainer,
-    });
-  }
-
   _resolveMemorySummaryTimeoutMs(userConfig = {}) {
     return this.memoryPostProcessService.resolveMemorySummaryTimeoutMs(userConfig);
   }
@@ -279,25 +337,28 @@ export class SessionExecutionEngine {
   }
 
   _prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    return this._prepareHarnessRunConfig({ userId, runConfig, userConfig });
+    const preparedHarnessConfig = this._prepareHarnessRunConfig({
+      userId,
+      runConfig,
+      userConfig,
+    });
+    return this._prepareBotHookRunConfig({ runConfig: preparedHarnessConfig });
   }
 
-  async _buildAgentContext({
-    mode,
+  _buildContextBuilder({
     userId,
     sessionId,
-    caller,
+    caller = CALLER_ROLE.USER,
     parentSessionId,
     userConfig,
     attachmentMetas,
     eventListener,
-    dialogProcessId = "",
     userInteractionBridge = null,
     runConfig = {},
     abortSignal = null,
     parentAsyncResultContainer = null,
   }) {
-    const contextBuilder = this._buildContextBuilder({
+    return this.agentContextFactory.buildContextBuilder({
       userId,
       sessionId,
       caller,
@@ -310,17 +371,38 @@ export class SessionExecutionEngine {
       abortSignal,
       parentAsyncResultContainer,
     });
-    return this.agentContextFactory.buildAgentContextFromBuilder({
-      mode,
-      userId,
-      sessionId,
-      caller,
-      parentSessionId,
-      eventListener,
-      dialogProcessId,
-      runConfig,
-      contextBuilder,
+  }
+
+  async _prepareAgentTurnExecution({
+    buildContextPayload = {},
+    abortSignal = null,
+  } = {}) {
+    const payload =
+      buildContextPayload && typeof buildContextPayload === "object"
+        ? buildContextPayload
+        : {};
+    const contextBuilder =
+      payload?.contextBuilder && typeof payload.contextBuilder === "object"
+        ? payload.contextBuilder
+        : this._buildContextBuilder(payload);
+    const prepared = await this.agentRuntimeFacade.prepareTurnExecution({
+      buildContextPayload: {
+        ...payload,
+        contextBuilder,
+      },
+      abortSignal,
     });
+    const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
+    const runtimeAttachmentMetas = Array.isArray(preparedRuntime?.attachmentMetas)
+      ? preparedRuntime.attachmentMetas
+      : [];
+    return {
+      ...(prepared && typeof prepared === "object" ? prepared : {}),
+      userMessageAttachmentMetas: mapAttachmentRecordsToMetas(runtimeAttachmentMetas, {
+        fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
+        userId: String(payload?.userId || "").trim(),
+      }),
+    };
   }
 
   async _appendSessionTurn({
@@ -407,13 +489,6 @@ export class SessionExecutionEngine {
     });
   }
 
-  _buildRunTurnAgentContext(agentContext = {}, abortSignal = null) {
-    return this.agentContextFactory.buildRunTurnAgentContext(
-      agentContext,
-      abortSignal,
-    );
-  }
-
   async _initializeRunSessionRuntime({
     userId,
     sessionId,
@@ -460,26 +535,194 @@ export class SessionExecutionEngine {
 
 
   _mergeHarnessPluginOptions(...items) {
+    const deepMergeKeys = new Set([
+      "stepModels",
+      "capabilityModelByPurpose",
+      "capabilityToolAllowlistByPurpose",
+      "acceptance",
+      "review",
+    ]);
     return items.reduce((acc, item) => {
       if (!item || typeof item !== "object") return acc;
-      return { ...acc, ...item };
+      const next = { ...acc };
+      for (const [key, value] of Object.entries(item)) {
+        if (
+          deepMergeKeys.has(key) &&
+          value &&
+          typeof value === "object" &&
+          !Array.isArray(value)
+        ) {
+          next[key] = {
+            ...(next[key] && typeof next[key] === "object" && !Array.isArray(next[key])
+              ? next[key]
+              : {}),
+            ...value,
+          };
+          continue;
+        }
+        next[key] = value;
+      }
+      return next;
     }, {});
   }
 
-  _createHarnessResolveModelMessages({ effectiveConfig = {} } = {}) {
-    const sessionConfig =
-      effectiveConfig?.session && typeof effectiveConfig.session === "object"
-        ? effectiveConfig.session
-        : {};
-    const recentMessageLimit = Number(sessionConfig?.recentMessageLimit || 20);
-    const normalizedLimit = Number.isFinite(recentMessageLimit)
-      ? Math.floor(recentMessageLimit)
-      : 20;
-    return ({ messages = [] } = {}) => {
+  _createHarnessResolveModelMessages({ harnessOptions = {} } = {}) {
+    const recentLimit = Number(
+      harnessOptions?.contextWindowRecentMessageLimit || 20,
+    );
+    return ({ messages = [], ctx = {} } = {}) => {
+      const explicitMessages = Array.isArray(messages) ? messages : [];
+      const source = explicitMessages.length
+        ? explicitMessages
+        : Array.isArray(ctx?.messages)
+          ? ctx.messages
+          : [];
+      const currentDialogProcessId = resolveDialogProcessId({
+        ctx,
+        messages: source,
+      });
+      return resolveModelContextMessages({
+        sourceMessages: source,
+        currentDialogProcessId,
+        mode: "agent",
+        useRecentWindow: true,
+        recentLimit,
+        normalizeMessage: (item) => normalizeMessageForHarness(item),
+      });
+    };
+  }
+
+  _createHarnessResolveMessageBlock({ harnessOptions = {} } = {}) {
+    const historyRecentLimit = Number(
+      harnessOptions?.contextWindowRecentMessageLimit || 20,
+    );
+    const incrementalRecentLimit = Number(
+      harnessOptions?.incrementalRecentMessageLimit || historyRecentLimit || 20,
+    );
+    return ({ scope = "history", messages = [], ctx = {} } = {}) => {
       const source = Array.isArray(messages) ? messages : [];
-      const filtered = filterSummarizedMessages(source);
-      if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) return [];
-      return normalizeRecentWindow(filtered, normalizedLimit);
+      const currentDialogProcessId = resolveDialogProcessId({
+        ctx,
+        messages: source,
+      });
+      const normalizedScope = String(scope || "history").trim().toLowerCase();
+      if (normalizedScope === "system") {
+        return resolveModelContextMessages({
+          sourceMessages: source,
+          currentDialogProcessId,
+          mode: "agent",
+          useRecentWindow: false,
+        });
+      }
+      if (normalizedScope === "incremental") {
+        return resolveModelContextMessages({
+          sourceMessages: source,
+          currentDialogProcessId,
+          mode: "agent",
+          useRecentWindow: true,
+          recentLimit: incrementalRecentLimit,
+        });
+      }
+      if (normalizedScope === "conversation" || normalizedScope === "non_system") {
+        return resolveModelContextMessages({
+          sourceMessages: source,
+          currentDialogProcessId,
+          mode: "agent",
+          useRecentWindow: true,
+          recentLimit: historyRecentLimit,
+        });
+      }
+      return resolveModelContextMessages({
+        sourceMessages: source,
+        currentDialogProcessId,
+        mode: "agent",
+        useRecentWindow: true,
+        recentLimit: historyRecentLimit,
+      });
+    };
+  }
+
+  _createHarnessMarkMessagesSummarized() {
+    const shouldMark = (messageItem = {}, taskSummaryToolName = "task_summary") =>
+      shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName }) ||
+      shouldMarkCurrentTurnSummarizedModelMessage(messageItem, { taskSummaryToolName });
+    const isSummarized = (messageItem = {}) =>
+      messageItem?.summarized === true || messageItem?.lc_kwargs?.summarized === true;
+    const markMessage = (messageItem = null) => {
+      if (!messageItem || typeof messageItem !== "object") return false;
+      if (isSummarized(messageItem)) return false;
+      messageItem.summarized = true;
+      if (messageItem?.lc_kwargs && typeof messageItem.lc_kwargs === "object") {
+        messageItem.lc_kwargs.summarized = true;
+      }
+      return true;
+    };
+    return async ({
+      messages = [],
+      ctx = {},
+      taskSummaryToolName = "task_summary",
+      summaryScope = null,
+    } = {}) => {
+      const source = Array.isArray(messages) ? messages : [];
+      const normalizedTaskSummaryToolName =
+        String(taskSummaryToolName || "").trim() || "task_summary";
+      const normalizedScope =
+        summaryScope && typeof summaryScope === "object" ? summaryScope : {};
+      const maxMessagesRaw = Number(normalizedScope?.maxMessages);
+      const hasScopedSourceLimit =
+        Number.isFinite(maxMessagesRaw) && maxMessagesRaw >= 0;
+      const scopedSourceLimit = hasScopedSourceLimit
+        ? Math.min(source.length, Math.floor(maxMessagesRaw))
+        : source.length;
+      const limitToProvidedMessagesOnly =
+        hasScopedSourceLimit &&
+        (normalizedScope?.limitToProvidedMessagesOnly === true ||
+          normalizedScope?.applyToStores === false ||
+          normalizedScope?.applyToSession === false);
+      let changedCount = 0;
+      for (let index = 0; index < scopedSourceLimit; index += 1) {
+        const messageItem = source[index];
+        if (!shouldMark(messageItem, normalizedTaskSummaryToolName)) continue;
+        if (markMessage(messageItem)) changedCount += 1;
+      }
+      const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
+      const currentTurnMessages = runtime?.currentTurnMessages;
+      if (
+        !limitToProvidedMessagesOnly &&
+        currentTurnMessages &&
+        typeof currentTurnMessages.updateWhere === "function"
+      ) {
+        changedCount += currentTurnMessages.updateWhere(
+          { summarized: true },
+          (messageItem) =>
+            !isSummarized(messageItem) &&
+            shouldMark(messageItem, normalizedTaskSummaryToolName),
+        );
+      }
+      const sessionIds = getSessionIdsFromAgentContext(ctx?.agentContext || {}, runtime);
+      const userId = String(ctx?.userId || sessionIds.userId || "").trim();
+      const sessionId = String(ctx?.sessionId || sessionIds.sessionId || "").trim();
+      if (
+        !limitToProvidedMessagesOnly &&
+        userId &&
+        sessionId &&
+        this.session?.markSessionMessagesSummarized
+      ) {
+        try {
+          changedCount += await this.session.markSessionMessagesSummarized({
+            userId,
+            sessionId,
+            parentSessionId: String(
+              ctx?.parentSessionId || sessionIds.parentSessionId || "",
+            ).trim(),
+            shouldMark: (messageItem) => shouldMark(messageItem, normalizedTaskSummaryToolName),
+          });
+        } catch {
+          // In-memory marking above is enough for the active turn; persistence
+          // failures should not break the model loop.
+        }
+      }
+      return changedCount;
     };
   }
 
@@ -518,9 +761,21 @@ export class SessionExecutionEngine {
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
     const next = { ...options, enabled: true, mode: "on", basePath };
+    next.incrementalRecentMessageLimit =
+      Number.isFinite(Number(next?.incrementalRecentMessageLimit)) &&
+      Number(next.incrementalRecentMessageLimit) > 0
+        ? Math.floor(Number(next.incrementalRecentMessageLimit))
+        : Number.isFinite(Number(next?.contextWindowRecentMessageLimit)) &&
+            Number(next.contextWindowRecentMessageLimit) > 0
+          ? Math.floor(Number(next.contextWindowRecentMessageLimit))
+          : 20;
     next.resolveModelMessages = this._createHarnessResolveModelMessages({
-      effectiveConfig,
+      harnessOptions: next,
     });
+    next.resolveMessageBlock = this._createHarnessResolveMessageBlock({
+      harnessOptions: next,
+    });
+    next.markMessagesSummarized = this._createHarnessMarkMessagesSummarized();
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
         ? Math.min(Number(next.miniRunnerMaxTurns), 5)
@@ -530,10 +785,10 @@ export class SessionExecutionEngine {
     }
     if (String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model") {
       const timeoutMs = Number(next?.timeoutMs);
-      // Separate-model planning performs an external model call, so 1s hook timeout
-      // is too aggressive and can cause repeated scheduling across turns.
-      if (!Number.isFinite(timeoutMs) || timeoutMs < 60_000) {
-        next.timeoutMs = 60_000;
+      // Separate-model planning performs external model calls; 1s timeout is too
+      // aggressive and causes repeated scheduling across turns.
+      if (!Number.isFinite(timeoutMs) || timeoutMs < 180_000) {
+        next.timeoutMs = 180_000;
       }
     }
     if (
@@ -542,7 +797,7 @@ export class SessionExecutionEngine {
     ) {
       next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
         maxTurns: next?.miniRunnerMaxTurns,
-        toolAllowlist: next?.miniRunnerToolAllowlist,
+        enableToolBinding: false,
       });
     }
     return next;
@@ -560,7 +815,7 @@ export class SessionExecutionEngine {
         ? runConfig.hookManager
         : runConfig?.hooks && typeof runConfig.hooks === "object" && typeof runConfig.hooks.on === "function"
           ? runConfig.hooks
-          : createHookManager();
+          : createAgentHookManager();
     if (!hookManager.__noobotHarnessPluginRegistered) {
       registerHarnessPlugin({ hookManager }, harnessOptions);
       Object.defineProperty(hookManager, "__noobotHarnessPluginRegistered", {
@@ -569,6 +824,15 @@ export class SessionExecutionEngine {
         configurable: true,
       });
     }
+    const existingRuntimeMeta =
+      hookManager.runtime && typeof hookManager.runtime === "object" ? hookManager.runtime : {};
+    hookManager.runtime = {
+      ...existingRuntimeMeta,
+      harness:
+        harnessOptions && typeof harnessOptions === "object"
+          ? harnessOptions
+          : existingRuntimeMeta.harness,
+    };
     return {
       ...runConfig,
       hookManager,
@@ -576,6 +840,21 @@ export class SessionExecutionEngine {
         ...(runConfig?.plugins || {}),
         harness: harnessOptions,
       },
+    };
+  }
+
+  _prepareBotHookRunConfig({ runConfig = {} } = {}) {
+    const botHookManager =
+      runConfig?.botHookManager && typeof runConfig.botHookManager === "object"
+        ? runConfig.botHookManager
+        : runConfig?.botHooks &&
+            typeof runConfig.botHooks === "object" &&
+            typeof runConfig.botHooks.on === "function"
+          ? runConfig.botHooks
+          : createBotHookManager();
+    return {
+      ...runConfig,
+      botHookManager,
     };
   }
 

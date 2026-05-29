@@ -17,6 +17,7 @@ import {
   SESSION_ASYNC_STATUS,
   SESSION_ASYNC_TERMINAL_STATUSES,
 } from "./constants.js";
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 
 const POLL_INTERVAL_MS = 300;
 
@@ -93,7 +94,7 @@ export class AsyncSessionRunner {
       );
 
     const answer = assistantMessage?.content || "";
-    const dialogProcessId = assistantMessage?.dialogProcessId || "";
+    const dialogProcessId = resolveMessageDialogProcessId(assistantMessage);
 
     const executionBundle = await this.session.getExecutionBundle({
       userId,

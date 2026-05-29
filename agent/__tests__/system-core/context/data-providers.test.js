@@ -5,6 +5,7 @@ import { resolveSessionTreeWithRootSessionId } from "../../../src/system-core/co
 import { resolveAttachments } from "../../../src/system-core/context/providers/attachment-resolver.js";
 import { resolveLongMemory } from "../../../src/system-core/context/providers/memory-resolver.js";
 import { toConversationMessages } from "../../../src/system-core/context/session/message-converter.js";
+import { buildDynamicInfo } from "../../../src/system-core/context/providers/environment-provider.js";
 
 test("resolveSessionTreeWithRootSessionId falls back when runtime/sessionManager missing", async () => {
   const now = "2026-05-13T00:00:00.000Z";
@@ -124,4 +125,14 @@ test("resolveLongMemory only reads static long memory payload from memoryService
     userId: "u1",
   });
   assert.equal(longMemory, "static-long-memory-only");
+});
+
+test("buildDynamicInfo only exposes canonical forceTool in config", () => {
+  const dynamic = buildDynamicInfo({
+    runConfig: {
+      forceTool: true,
+    },
+  });
+  assert.equal(dynamic.config.forceTool, true);
+  assert.equal("forceToolCall" in dynamic.config, false);
 });

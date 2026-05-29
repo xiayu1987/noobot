@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { invokeLlmWithTransientRetry } from "../../../../src/system-core/agent/core/llm-invoker.js";
+import {
+  extractAiReasoningText,
+  invokeLlmWithTransientRetry,
+  normalizeAiTextContent,
+  stripThinkingBlocks,
+} from "../../../../src/system-core/agent/core/llm-invoker.js";
 
 function createEventCollector() {
   const events = [];
@@ -116,4 +121,34 @@ test("invokeLlmWithTransientRetry: abort-like error should not retry", async () 
   assert.ok(abortEvent, "应记录 llm_call_aborted");
   assert.equal(abortEvent?.data?.abortSource, "user_stop");
   assert.equal(abortEvent?.data?.abortCode, 499);
+});
+
+test("stripThinkingBlocks removes think blocks and keeps final visible answer", () => {
+  const raw = "<think>internal reasoning</think>\n最终答案：ok";
+  assert.equal(stripThinkingBlocks(raw), "最终答案：ok");
+});
+
+test("normalizeAiTextContent strips think blocks in text parts", () => {
+  const raw = [
+    { text: "<think>step1</think>" },
+    { text: "可见输出" },
+  ];
+  assert.equal(normalizeAiTextContent(raw), "可见输出");
+});
+
+test("extractAiReasoningText reads reasoning_content when non-empty", () => {
+  const ai = {
+    additional_kwargs: {
+      reasoning_content: "这是思考内容",
+    },
+  };
+  assert.equal(extractAiReasoningText(ai), "这是思考内容");
+  assert.equal(extractAiReasoningText({ additional_kwargs: { reasoning_content: "" } }), "");
+});
+
+test("extractAiReasoningText falls back to <think> blocks in content", () => {
+  const ai = {
+    content: "<think>第一段思考</think>\n<think>第二段思考</think>\n最终答案",
+  };
+  assert.equal(extractAiReasoningText(ai), "第一段思考\n第二段思考");
 });

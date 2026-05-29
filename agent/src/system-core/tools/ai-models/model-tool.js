@@ -5,15 +5,12 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
-
-function getRuntime(agentContext) {
-  return agentContext?.runtime || {};
-}
 
 function tModel(runtime = {}, key = "", params = {}) {
   const keyMap = {
@@ -37,7 +34,7 @@ export function createModelTool({
   agentContext,
   sessionId,
 }) {
-  const runtime = getRuntime(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const allEnabledProviders = runtime.allEnabledProviders || {};
 
   const switchModelTool = new DynamicStructuredTool({

@@ -54,25 +54,88 @@ async function ensureExperienceModelIfMissing(storage, basePath = "") {
     workspaceRoot,
     workspaceTemplatePath,
     userId,
-    relativePaths: ["memory/experience-model.json"],
+    relativePaths: ["memory/experience-model.md"],
   });
   return storage.fileExists(modelPath);
+}
+
+function parseExperienceModelText(raw = "") {
+  const lines = String(raw || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n");
+  const out = {};
+  let currentDomain = "";
+  let currentCategory = "";
+  for (const rawLine of lines) {
+    const line = String(rawLine || "").trim();
+    if (!line || line.startsWith("#")) continue;
+    const domainMatched = /^DOMAIN:\s*(.+)$/i.exec(line);
+    if (domainMatched) {
+      currentDomain = sanitizeFileName(domainMatched[1], "");
+      if (!currentDomain) continue;
+      if (!out[currentDomain]) out[currentDomain] = {};
+      currentCategory = "";
+      continue;
+    }
+    const categoryMatched = /^CATEGORY:\s*(.+)$/i.exec(line);
+    if (categoryMatched) {
+      if (!currentDomain) continue;
+      currentCategory = sanitizeFileName(categoryMatched[1], "");
+      if (!currentCategory) continue;
+      if (!Array.isArray(out[currentDomain][currentCategory])) {
+        out[currentDomain][currentCategory] = [];
+      }
+      continue;
+    }
+    const subMatched = /^-\s*(.+)$/.exec(line);
+    if (subMatched) {
+      if (!currentDomain || !currentCategory) continue;
+      const subcategory = sanitizeFileName(subMatched[1], "");
+      if (!subcategory) continue;
+      if (!out[currentDomain][currentCategory].includes(subcategory)) {
+        out[currentDomain][currentCategory].push(subcategory);
+      }
+    }
+  }
+  return normalizeModelTree(out);
+}
+
+function renderExperienceModelText(modelTree = {}) {
+  const tree = normalizeModelTree(modelTree);
+  const lines = ["# experience model (text protocol)"];
+  for (const domain of Object.keys(tree).sort()) {
+    lines.push(`DOMAIN: ${domain}`);
+    const categories = tree[domain] && typeof tree[domain] === "object" ? tree[domain] : {};
+    for (const category of Object.keys(categories).sort()) {
+      lines.push(`CATEGORY: ${category}`);
+      for (const subcategory of dedupeTextList(categories[category]).sort()) {
+        lines.push(`- ${subcategory}`);
+      }
+      lines.push("");
+    }
+  }
+  return `${lines.join("\n").trim()}\n`;
 }
 
 export async function readExperienceModel(storage, basePath = "") {
   if (!basePath) return {};
   const modelPath = storage.experienceModelPath(basePath);
   await ensureExperienceModelIfMissing(storage, basePath);
-  const raw = await storage.readJson(modelPath, null);
-  if (!(raw && typeof raw === "object")) return {};
-  return normalizeModelTree(raw);
+  const rawText = await storage.readText(modelPath, "");
+  if (String(rawText || "").trim()) {
+    return parseExperienceModelText(rawText);
+  }
+  const legacyJsonPath = modelPath.replace(/\.md$/i, ".json");
+  const legacyJson = await storage.readJson(legacyJsonPath, null);
+  if (!(legacyJson && typeof legacyJson === "object")) return {};
+  return normalizeModelTree(legacyJson);
 }
 
 export async function writeExperienceModel(storage, basePath = "", payload = {}) {
   if (!basePath) return false;
   const modelPath = storage.experienceModelPath(basePath);
   await storage.ensureDir(path.dirname(modelPath));
-  await storage.writeJson(modelPath, normalizeModelTree(payload));
+  await storage.writeText(modelPath, renderExperienceModelText(payload));
   return true;
 }
 

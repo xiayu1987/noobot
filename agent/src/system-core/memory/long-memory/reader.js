@@ -30,26 +30,60 @@ async function ensureLongMemoryModelJsonIfMissing(storage, basePath = "") {
     workspaceRoot,
     workspaceTemplatePath,
     userId,
-    relativePaths: ["memory/long-memory-model.json"],
+    relativePaths: ["memory/long-memory-model.md"],
   });
   return storage.fileExists(modelPath);
 }
 
 export async function readLongMemory(storage, basePath) {
-  const longMem = await storage.readJson(storage.longPath(basePath), {});
+  const longPath = storage.longPath(basePath);
+  const text = String(await storage.readText(longPath, "") || "").trim();
+  if (text) return text;
+  const legacyJsonPath = longPath.replace(/\.md$/i, ".json");
+  const longMem = await storage.readJson(legacyJsonPath, {});
   if (typeof longMem?.staticMemory === "string") return longMem.staticMemory;
-  return longMem.memory ?? "";
+  return String(longMem?.memory || "").trim();
+}
+
+function normalizeLongMemoryMetadata(raw = null) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const items = Array.isArray(source?.items) ? source.items : [];
+  const map = new Map();
+  for (const item of items) {
+    const id = Number(item?.id);
+    const key = String(item?.key || "").trim();
+    const value = String(item?.value || "").trim();
+    if (!Number.isFinite(id) || id <= 0 || !key || !value) continue;
+    map.set(id, { id, key, value });
+  }
+  return [...map.values()].sort((a, b) => a.id - b.id);
+}
+
+export function renderLongMemoryMetadataItems(items = []) {
+  return normalizeLongMemoryMetadata({ items })
+    .map((item) => `M${item.id} key="${item.key}" value="${item.value}"`)
+    .join("\n")
+    .trim();
+}
+
+export async function readLongMemoryMetadata(storage, basePath) {
+  const metadataPath = storage.longMemoryMetadataPath(basePath);
+  const text = String(await storage.readText(metadataPath, "") || "").trim();
+  if (text) return text;
+  const legacyJsonPath = metadataPath.replace(/\.md$/i, ".json");
+  const metadata = await storage.readJson(legacyJsonPath, {});
+  return renderLongMemoryMetadataItems(metadata?.items);
 }
 
 export async function readLongMemoryModel(storage, basePath) {
   const modelPath = storage.longMemoryModelPath(basePath);
   const exists = await ensureLongMemoryModelJsonIfMissing(storage, basePath);
   if (exists) {
-    const rawJson = await storage.readJson(modelPath, null);
-    if (rawJson && typeof rawJson === "object") {
-      return JSON.stringify(rawJson, null, 2);
-    }
-    return String(await storage.readText(modelPath, "") || "").trim();
+    const text = String(await storage.readText(modelPath, "") || "").trim();
+    if (text) return text;
+    const legacyJsonPath = modelPath.replace(/\.md$/i, ".json");
+    const rawJson = await storage.readJson(legacyJsonPath, null);
+    if (rawJson && typeof rawJson === "object") return JSON.stringify(rawJson, null, 2);
   }
   return "";
 }

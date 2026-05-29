@@ -1,10 +1,71 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 
 import { createConnectorTools } from "../../../src/system-core/tools/connectors/connector-toolkit.js";
 
 function parseToolJson(raw = "") {
   return JSON.parse(String(raw || "{}"));
+}
+
+function buildAccessConnectorRuntime({
+  basePath = "",
+  connectorType = "database",
+  connectorName = "main",
+  onExecute = () => {},
+  globalConfig = {},
+} = {}) {
+  const type = String(connectorType || "").trim();
+  const name = String(connectorName || "").trim() || "main";
+  const connected = {
+    connectorName: name,
+    connectorType: type,
+    connectedAt: new Date().toISOString(),
+  };
+  const empty = [];
+  const connectors = {
+    databases: type === "database" ? [connected] : empty,
+    terminals: type === "terminal" ? [connected] : empty,
+    emails: type === "email" ? [connected] : empty,
+  };
+  return {
+    basePath,
+    systemRuntime: {
+      sessionId: "s-child",
+      rootSessionId: "s-root",
+      config: {
+        selectedConnectors: {
+          [type]: name,
+        },
+      },
+    },
+    sharedTools: {
+      connectorChannelStore: {
+        getSessionConnectors() {
+          return connectors;
+        },
+        async executeConnectorCommand(payload = {}) {
+          onExecute(payload);
+          return {
+            ok: true,
+            connector: connected,
+            output: {
+              code: 0,
+              stdout: "ok",
+              stderr: "",
+            },
+          };
+        },
+      },
+      connectorEventListener: {
+        onConnectorAccessed() {},
+      },
+    },
+    globalConfig,
+    userConfig: {},
+  };
 }
 
 test("connector-toolkit/inspect_connectors: 应返回连接器汇总", async () => {
@@ -134,4 +195,178 @@ test("connector-toolkit/database_connect_connector: 交互补全应携带 pendin
   assert.equal(String(interactionCalls[0]?.lifecycle || ""), "pending");
   assert.equal(String(interactionCalls[0]?.ackMode || ""), "manual");
   assert.equal(String(interactionCalls[0]?.resolvedBy || ""), "");
+});
+
+test("connector-toolkit/access_connector: command_file_path 应可读取文件内容并执行", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-file-"));
+  try {
+    const sqlPath = path.join(tmpRoot, "queries", "demo.sql");
+    await mkdir(path.dirname(sqlPath), { recursive: true });
+    await writeFile(sqlPath, "select 1 from dual where 1=1;", "utf8");
+    let executed = null;
+    const runtime = buildAccessConnectorRuntime({
+      basePath: tmpRoot,
+      connectorType: "database",
+      connectorName: "db-main",
+      onExecute: (payload) => {
+        executed = payload;
+      },
+    });
+    const tools = createConnectorTools({ agentContext: { runtime } });
+    const accessTool = tools.find((tool) => tool?.name === "access_connector");
+    assert.ok(accessTool, "access_connector 工具应存在");
+
+    const result = parseToolJson(await accessTool.invoke({
+      connector_type: "database",
+      command_file_path: "queries/demo.sql",
+    }));
+    assert.equal(result.ok, true);
+    assert.equal(String(executed?.command || ""), "select 1 from dual where 1=1;");
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("connector-toolkit/access_connector: command 与 command_file_path 同时传入应拒绝", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-file-"));
+  try {
+    const sqlPath = path.join(tmpRoot, "queries", "demo.sql");
+    await mkdir(path.dirname(sqlPath), { recursive: true });
+    await writeFile(sqlPath, "select 1 where 1=1;", "utf8");
+    const runtime = buildAccessConnectorRuntime({
+      basePath: tmpRoot,
+      connectorType: "database",
+      connectorName: "db-main",
+    });
+    const tools = createConnectorTools({ agentContext: { runtime } });
+    const accessTool = tools.find((tool) => tool?.name === "access_connector");
+    assert.ok(accessTool, "access_connector 工具应存在");
+
+    await assert.rejects(
+      accessTool.invoke({
+        connector_type: "database",
+        command: "select 1 where 1=1;",
+        command_file_path: "queries/demo.sql",
+      }),
+      (error) => error?.code === "RECOVERABLE_INVALID_INPUT",
+    );
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("connector-toolkit/access_connector: command_file_path 越界应拒绝", async () => {
+  const allowedRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-allowed-"));
+  const outsideRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-outside-"));
+  try {
+    const outsideSqlPath = path.join(outsideRoot, "danger.sql");
+    await writeFile(outsideSqlPath, "select 1 where 1=1;", "utf8");
+    const runtime = buildAccessConnectorRuntime({
+      basePath: allowedRoot,
+      connectorType: "database",
+      connectorName: "db-main",
+      globalConfig: {
+        tools: {
+          access_connector: {
+            enabled: true,
+            command_file: {
+              enabled: true,
+              allowed_roots: [allowedRoot],
+            },
+          },
+        },
+      },
+    });
+    const tools = createConnectorTools({ agentContext: { runtime } });
+    const accessTool = tools.find((tool) => tool?.name === "access_connector");
+    assert.ok(accessTool, "access_connector 工具应存在");
+
+    await assert.rejects(
+      accessTool.invoke({
+        connector_type: "database",
+        command_file_path: outsideSqlPath,
+      }),
+      (error) => error?.code === "RECOVERABLE_PATH_OUT_OF_SCOPE",
+    );
+  } finally {
+    await rm(allowedRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("connector-toolkit/access_connector: command_file_path 后缀不在白名单应拒绝", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-file-"));
+  try {
+    const txtPath = path.join(tmpRoot, "queries", "demo.txt");
+    await mkdir(path.dirname(txtPath), { recursive: true });
+    await writeFile(txtPath, "select 1 where 1=1;", "utf8");
+    const runtime = buildAccessConnectorRuntime({
+      basePath: tmpRoot,
+      connectorType: "database",
+      connectorName: "db-main",
+      globalConfig: {
+        tools: {
+          access_connector: {
+            enabled: true,
+            command_file: {
+              enabled: true,
+              allowed_extensions: [".sql"],
+            },
+          },
+        },
+      },
+    });
+    const tools = createConnectorTools({ agentContext: { runtime } });
+    const accessTool = tools.find((tool) => tool?.name === "access_connector");
+    assert.ok(accessTool, "access_connector 工具应存在");
+
+    await assert.rejects(
+      accessTool.invoke({
+        connector_type: "database",
+        command_file_path: "queries/demo.txt",
+      }),
+      (error) => error?.code === "RECOVERABLE_INVALID_INPUT",
+    );
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("connector-toolkit/access_connector: command_file_path 超过大小限制应拒绝", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-file-"));
+  try {
+    const sqlPath = path.join(tmpRoot, "queries", "big.sql");
+    await mkdir(path.dirname(sqlPath), { recursive: true });
+    await writeFile(sqlPath, "x".repeat(4096), "utf8");
+    const runtime = buildAccessConnectorRuntime({
+      basePath: tmpRoot,
+      connectorType: "database",
+      connectorName: "db-main",
+      globalConfig: {
+        tools: {
+          access_connector: {
+            enabled: true,
+            command_file: {
+              enabled: true,
+              max_bytes: 128,
+            },
+          },
+        },
+      },
+    });
+    const tools = createConnectorTools({ agentContext: { runtime } });
+    const accessTool = tools.find((tool) => tool?.name === "access_connector");
+    assert.ok(accessTool, "access_connector 工具应存在");
+
+    await assert.rejects(
+      accessTool.invoke({
+        connector_type: "database",
+        command_file_path: "queries/big.sql",
+      }),
+      (error) =>
+        error?.code === "RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED",
+    );
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
 });

@@ -43,6 +43,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
         "key": "tools.access_connector.fieldCommand",
         "text": "命令内容。database 为 SQL；terminal 为 shell；email 为 JSON（action 可选项：send|list|read|list_folders）。"
       },
+      "command_file_path": {
+        "key": "tools.access_connector.fieldCommandFilePath",
+        "text": "命令文件路径（可选）。与 command 二选一。仅支持 database/terminal；路径需在白名单目录内，且受后缀与大小限制。"
+      },
       "connector_name": {
         "key": "tools.access_connector.fieldConnectorName",
         "text": "连接器名称。"

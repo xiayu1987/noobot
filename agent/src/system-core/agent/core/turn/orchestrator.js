@@ -24,6 +24,8 @@ import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
 import { resolveForceToolCall } from "../../../utils/shared-utils.js";
+import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
+import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
@@ -91,6 +93,26 @@ export function createTurnOrchestrator({
 
       resolveLlmForTurnFn(modelState);
 
+      const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+      if (systemRuntime?.phaseSummaryNoToolsNextTurn === true) {
+        systemRuntime.phaseSummaryNoToolsNextTurn = false;
+        emitEvent(eventListener, "phase_summary_no_tools_turn_enforced", { turn });
+        const noToolsResult = await invokeNoToolsTurnFn({
+          modelState,
+          loopState,
+          turn,
+          forceToolChoiceNone: true,
+        });
+        return buildLoopResultFn({
+          output: noToolsResult.output,
+          traces,
+          loopState,
+          turnTaskStore: noToolsResult.turnTaskStore,
+          turnMessageStore: noToolsResult.turnMessageStore,
+          modelMessages: noToolsResult.modelMessages,
+        });
+      }
+
       if (!Array.isArray(tools) || tools.length === 0) {
         const noToolsResult = await invokeNoToolsTurnFn({ modelState, loopState, turn });
         return buildLoopResultFn({
@@ -113,7 +135,7 @@ export function createTurnOrchestrator({
       } = withToolsResult;
 
       if (!calls.length) {
-        const forceTool = resolveForceToolCall(runtime?.systemRuntime?.config || {});
+        const forceTool = resolveForceToolCall(systemRuntime?.config || {});
         if (!forceTool) {
           loopState.toolChoiceRetryPrompted = false;
           removeToolChoiceRequiredRetryPrompts(loopState.messages);
@@ -247,7 +269,7 @@ export function createTurnOrchestrator({
           hasTools: Array.isArray(tools) && tools.length > 0,
           sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
           parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
-          dialogProcessId: String(systemRuntime?.dialogProcessId || "").trim(),
+          dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
         },
       });
       throw error;

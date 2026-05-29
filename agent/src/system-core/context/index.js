@@ -271,7 +271,7 @@ export class ContextBuilder {
     return agentContext;
   }
 
-  async _resolveSessionRecords({ sessionId } = {}) {
+  async _resolveSessionRecords({ sessionId, dialogProcessId = "" } = {}) {
     const resolvedSessionId = sessionId || this.sessionId || "";
     const runtimeBasePath = this._resolveRuntimeBasePath();
     if (!this.sessionManager || !runtimeBasePath || !resolvedSessionId)
@@ -280,6 +280,7 @@ export class ContextBuilder {
       userId: this.userId,
       sessionId: resolvedSessionId,
       userConfig: this.userConfig,
+      currentDialogProcessId: dialogProcessId,
     });
   }
 
@@ -434,6 +435,7 @@ export class ContextBuilder {
   async buildContinueContext({ dialogProcessId = "" } = {}) {
     const sessionRecords = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
+      dialogProcessId,
     });
     const normalizedSessionRecords =
       this._normalizeSessionRecordsForConversation(sessionRecords);

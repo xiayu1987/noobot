@@ -43,6 +43,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
         "key": "tools.access_connector.fieldCommand",
         "text": "Command content. database uses SQL; terminal uses shell; email uses JSON (action options: send|list|read|list_folders)."
       },
+      "command_file_path": {
+        "key": "tools.access_connector.fieldCommandFilePath",
+        "text": "Command file path (optional). Use either command or command_file_path. Only database/terminal are supported; path must be inside allowlisted roots and pass extension/size limits."
+      },
       "connector_name": {
         "key": "tools.access_connector.fieldConnectorName",
         "text": "Connector name."

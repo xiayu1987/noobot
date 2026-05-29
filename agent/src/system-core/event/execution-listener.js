@@ -9,6 +9,7 @@
 
 import { createLlmDeltaVisibilityFilter } from "./llm-filter.js";
 import { classifyExecutionEvent } from "../tracking/event-log/log-normalizer.js";
+import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 
 /**
  * Enrich raw event data with resolved session/dialog identifiers.
@@ -18,9 +19,10 @@ function enrichEventData(rawData = {}, defaults = {}) {
   const eventData = rawData && typeof rawData === "object" ? rawData : {};
   return {
     ...eventData,
-    dialogProcessId: String(
-      eventData?.dialogProcessId || defaults.dialogProcessId || "",
-    ),
+    dialogProcessId: resolveDialogProcessIdFromContext({
+      dialogProcessId: eventData?.dialogProcessId,
+      currentDialogProcessId: defaults.dialogProcessId,
+    }),
     sessionId: String(eventData?.sessionId || defaults.sessionId || ""),
     parentSessionId: String(
       eventData?.parentSessionId || defaults.parentSessionId || "",
@@ -35,7 +37,7 @@ export function createExecutionEventListener({
   parentSessionId = "",
   upstream = null,
 }) {
-  const dialogProcessId = upstream?.dialogProcessId || "";
+  const dialogProcessId = resolveDialogProcessIdFromContext(upstream);
   const llmDeltaVisibilityFilter = createLlmDeltaVisibilityFilter();
   const defaults = { dialogProcessId, sessionId, parentSessionId };
 

@@ -4,13 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../data/record-builders.js";
-import { appendJsonlBuffered } from "../lib/store.js";
+import { appendJsonlBuffered } from "../store/store.js";
+import { HARNESS_FLUSH_REASONS } from "../core/constants.js";
 import { HARNESS_FSM_EFFECTS } from "./transitions.js";
+import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 
 export async function appendFsmAudit(paths, ctx = {}, payload = {}, options = {}) {
   if (!paths?.stateCommits || !payload?.type) return;
   const flushReason =
-    payload.accepted === false || String(payload.type).includes("rejected") ? "error" : "";
+    payload.accepted === false || String(payload.type).includes("rejected")
+      ? HARNESS_FLUSH_REASONS.ERROR
+      : HARNESS_FLUSH_REASONS.NONE;
   await appendJsonlBuffered(
     paths.stateCommits,
     {
@@ -22,7 +26,7 @@ export async function appendFsmAudit(paths, ctx = {}, payload = {}, options = {}
       from: payload.from,
       to: payload.to,
       reason: payload.reason,
-      dialogProcessId: ctx.dialogProcessId || ctx?.agentContext?.execution?.dialogProcessId || undefined,
+      dialogProcessId: resolveDialogProcessIdFromContext(ctx) || undefined,
       sessionId: ctx.sessionId || undefined,
       userId: ctx.userId || undefined,
     },

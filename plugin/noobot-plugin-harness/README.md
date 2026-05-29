@@ -2,13 +2,38 @@
 
 Hook-based Harness Engineering plugin for Noobot.
 
+Workflow orchestration reference:
+
+- `docs/workflow-orchestration.md` (English: concurrent trigger priority, threshold triggers, model message order)
+- `docs/workflow-orchestration.zh-CN.md` (中文：并发触发优先级、触发阈值、模型消息顺序)
+- `docs/architecture.md` (module-level architecture)
+
 Current architecture split:
 - `src/data/record-builders.js`: trace/snapshot/prompt record generation
+- `src/core/`: plugin composition (`plugin.js`), hook wiring (`hooks.js`), runtime context (`context.js`), options/constants/thresholds
+- `src/core/workflow-params.js`: single parameter center for workflow orchestration (planning/guidance/acceptance)
+  - canonical shape: `WORKFLOW_PARAMS.{workflow,planning,guidance,acceptance}.*`
+  - capability log event names are centralized at `WORKFLOW_PARAMS.logging.events.*`
 - `src/capabilities/profile.js`: capability contract profile (planning/guidance/assistance/memory/synthesis/supervision/review)
 - `src/capabilities/hook-map.js`: capability to lifecycle hook mapping
-- `src/capabilities/handlers.js`: capability handler skeleton (default noop planned handlers)
+- `src/capabilities/handlers/index.js`: capability handler skeleton (default noop planned handlers)
 - `src/capabilities/runtime.js`: capability runtime dispatcher (runs mapped handlers on hook points)
-- `src/index.js`: hook wiring + persistence orchestration
+- `src/capabilities/handlers/shared/`: semantic subfolders by concern
+  - `workflow/`, `model/`, `message/`, `plan/`, `runtime/`
+- `src/prompt/`: prompt injection helpers
+- `src/store/`: manifest/jsonl buffered persistence
+- `src/utils/`: cleanup helpers
+- `src/index.js`: public entry and exports
+
+Handler export convention (Facade + semantic subdirectories):
+
+| Layer | Purpose | Files |
+| --- | --- | --- |
+| Facade (stable import) | External/runtime stable entry | `src/capabilities/handlers/{planning,guidance,acceptance,review}.js` |
+| Domain semantic entry | Domain-local export aggregation | `src/capabilities/handlers/{planning,guidance,acceptance,review}/index.js` |
+| Domain implementation | Controller/deps/prompt/runner details | `src/capabilities/handlers/<domain>/*.js` |
+| Shared facade | Backward-compatible shared aggregate export | `src/capabilities/handlers/shared.js` |
+| Shared semantic entry | Canonical shared export map | `src/capabilities/handlers/shared/index.js` |
 
 The plugin is non-invasive: it is attached through Noobot hooks, and hook errors are captured by Noobot's hook manager instead of breaking the main agent flow.
 
@@ -108,15 +133,89 @@ runConfig: {
 | `capabilityHandlers` | built-in noop handlers | Optional capability handler overrides for each capability domain. |
 | `planningGuidanceMode` | `separate_model` | `inject` or `separate_model`. In `separate_model`, planning/guidance can call an external model invoker. |
 | `capabilityModelInvoker` | `null` | Optional async invoker used by `separate_model` mode. If the invoker returns `traces`, harness records them to `capability-traces.jsonl`. |
+| `stepModels` / `capabilityModelByPurpose` | `{}` | Per harness flow model alias. Values can be strings or `{ "model": "alias" }`. Recommended big-flow keys: `planning`, `guidance`, `acceptance`, `default`. Detailed purpose keys such as `planning_json_repair`, `summary`, `planning_revision`, `acceptance_semantic_validation` are still accepted when a fine-grained override is needed. |
 | `capabilityToolAllowlist` | `[]` | Tool allowlist passed from harness to capability invoker (all purposes). Empty means no tools. |
 | `capabilityToolAllowlistByPurpose` | `{}` | Per-purpose allowlist override, e.g. `planning`, `guidance`, `summary`, `acceptance_semantic_validation`. |
-| `acceptance.semanticValidation` | `false` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
+| `acceptance.semanticValidation` | `true` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
 | `miniRunnerMaxTurns` | `50` | Hint option for agent-side mini-runner injector (when `planningGuidanceMode=separate_model`). |
 | `miniRunnerToolAllowlist` | `[]` | Fallback allowlist used by the injected mini-runner when harness does not pass a per-call allowlist. Empty means no tools. |
 
+## Model invocation flow
+
+Harness itself only calls a model through `capabilityModelInvoker` when a capability is in `separate_model` mode or when a feature explicitly enables semantic validation. The selected model alias is resolved from `stepModels` / `capabilityModelByPurpose` and is passed to the invoker as `payload.model`.
+
+| Purpose / step | When it calls a model | Model key | Fallback behavior |
+| --- | --- | --- | --- |
+| Planning bootstrap | At `before_llm_call`, when `planningGuidanceMode=separate_model`, the current run has not captured a checklist yet, and a `capabilityModelInvoker` is available. | `planning` | If no invoker is available, separate-model planning is skipped; plugin-runtime normalization may fall back to `inject`. |
+| Planning JSON repair | After planning output is received, only when local parsing fails and the output looks like JSON. | `planning` by default; optional detail override `planning_json_repair` | If repair fails or returns unusable content, Harness applies the built-in default checklist; it does not call another synthesis model. |
+| Summary | When guidance detects the LLM turn counter exceeded the summary threshold and schedules a summary in `separate_model` mode. | `guidance` by default; optional detail override `summary` | If the model call fails, Harness keeps running without blocking the main flow. |
+| Planning revision | After a phase summary is available, Harness first asks for a revised **main plan** in `separate_model` mode. | `planning` by default; optional detail override `planning_revision` | If no invoker is available, Harness schedules an injected planning-revision prompt instead. |
+| Planning refinement | After revision succeeds, Harness asks for refinement under selected **target main step(s)**. | `planning` by default; optional detail override `planning_refinement` | If no valid target main step remains, refinement is considered converged and skipped. |
+| Guidance | When tool failure thresholds are reached and `planningGuidanceMode=separate_model`. | `guidance` | If the model call fails, Harness logs the failure and continues. |
+| Acceptance semantic validation | During forced final acceptance or active `request_task_acceptance`, only when `acceptance.semanticValidation=true`. | `acceptance` by default; optional detail override `acceptance_semantic_validation` | If validation fails to run, base rule-based acceptance remains authoritative and the main flow continues. |
+
+These steps do **not** call a separate Harness model by themselves:
+
+- `promptPolicy`: injects a system prompt into the main agent call.
+- `finalResponseGuard`: injects final-output instructions.
+- Base acceptance: rule-based checklist validation.
+- Review: rule-based report generation.
+- Planning fallback default checklist: local built-in checklist, no model call.
+
+When `planningGuidanceMode=inject`, planning/guidance prompts are injected into the **main agent model** instead of calling `capabilityModelInvoker`; in that mode `stepModels` does not select a separate Harness model for those injected prompts.
+
+## Plan revision/refinement lifecycle (latest)
+
+Harness now uses a two-stage plan update pipeline after summary:
+
+1. **Revision first** (`planning_revision`): update the main plan only (main steps).
+2. **Refinement second** (`planning_refinement`): refine only under selected target main step(s).
+
+This order is the same in both `separate_model` and `inject` modes.
+
+### Main plan vs refinement plan
+
+- **Main plan**: authoritative checklist for top-level steps.
+- **Refinement plan**: step-level refinements tied to specific main steps.
+
+Revision writes main plan; refinement does **not** overwrite main plan.
+
+### Refinement targeting and convergence
+
+- Harness computes `targetMainSteps` from unrefined main steps (prefers `nextPhase.checklistIndexes`).
+- One main step can be refined at most once until a later revision changes/removes/adds that step.
+- If no target main step exists, refinement is skipped as converged (`planning_refinement_converged_no_target_main_step`).
+
+### Hard validation for refinement output
+
+Refinement output is accepted only when items:
+
+- have `mainStepIndex`
+- belong to current `targetMainSteps`
+- are not main steps themselves (`isMainStep !== true`)
+
+Otherwise refinement is rejected (`planning_refinement_rejected_invalid_target_main_step`).
+
+### Retry/limits
+
+- Revision attempts are capped by `MAX_PLAN_REVISION_ATTEMPTS` (default `5`).
+- On each successful revision, changed/new main steps reset refinement eligibility.
+
+### Acceptance payload semantics
+
+Semantic acceptance validation now emphasizes:
+
+- `finalMainPlan` (latest revised main plan)
+- `refinementPlansForFinalMainPlan` (only refinements belonging to the same `mainPlanVersion`)
+
+Validation checklists (`taskChecklist`/`finalPlanChecklist`) are composed from:
+
+- `finalMainPlan.taskChecklist`
+- plus refinement items from `refinementPlansForFinalMainPlan`
+
 ## Acceptance semantic validation
 
-By default, acceptance is rule-based and uses the captured harness checklist plus runtime signals. To additionally verify semantic consistency between the checklist, the acceptance report, tool signals, and final output, enable:
+By default, acceptance includes semantic validation (when `capabilityModelInvoker` is available) in addition to rule-based checks. To explicitly configure it:
 
 ```json
 {
@@ -139,6 +238,7 @@ When enabled, both forced final-output acceptance and active `request_task_accep
 
 Mini runner now lives in `agent` and is injected into harness through run-time options (`capabilityModelInvoker`).
 When `planningGuidanceMode` is `separate_model`, the engine can inject the mini runner as the capability model invoker.
+When `stepModels` is set, the injected mini runner uses the configured provider alias/model name for each purpose; custom `capabilityModelInvoker` implementations receive the same value as `payload.model`.
 
 Mini-runner diagnostics are preserved when the invoker returns `traces`:
 
@@ -155,6 +255,12 @@ Example config:
       "enabled": true,
       "mode": "on",
       "planningGuidanceMode": "separate_model",
+      "stepModels": {
+        "planning": "qwen3_6_plus",
+        "guidance": "qwen3_6_plus",
+        "acceptance": "qwen3_6_plus",
+        "default": "qwen3_6_plus"
+      },
       "miniRunnerMaxTurns": 50,
       "miniRunnerToolAllowlist": ["read_context", "search_memory"]
     }
@@ -339,10 +445,10 @@ plugin/noobot-plugin-harness/examples/run-config.example.json
 Manual registration is still supported when running outside `SessionExecutionEngine.runSession()`.
 
 ```js
-import { createHookManager } from "noobot-agent/hook";
+import { createAgentHookManager } from "noobot-agent/hook";
 import { registerNoobotPlugin } from "./plugin/noobot-plugin-harness/src/index.js";
 
-const hookManager = createHookManager();
+const hookManager = createAgentHookManager();
 
 registerNoobotPlugin({ hookManager }, {
   basePath: "/path/to/workspace/user",
