@@ -29,6 +29,7 @@ test("createSessionFacade should delegate getContextRecords to sessionContextSer
     userId: "u1",
     sessionId: "s1",
     userConfig: { x: 1 },
+    currentDialogProcessId: "",
   });
   assert.deepEqual(result, [{ role: "user", content: "hi" }]);
 });
