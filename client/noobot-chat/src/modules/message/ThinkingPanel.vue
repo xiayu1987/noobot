@@ -6,13 +6,17 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useLocale } from "../../shared/i18n/useLocale";
+import { isHarnessInjectedMessage } from "../../composables/infra/messageModel";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   allMessages: { type: Array, default: () => [] },
 });
 
-const hasThinking = computed(() => hasThinkingLogs(props.messageItem));
+const injectedMessages = computed(() => getInjectedMessagesForMessage(props.messageItem));
+const hasThinking = computed(
+  () => hasThinkingLogs(props.messageItem) || injectedMessages.value.length > 0,
+);
 const { translate } = useLocale();
 const nowTick = ref(Date.now());
 let timer = null;
@@ -35,6 +39,28 @@ function hasThinkingLogs(messageItem = {}) {
   return Array.isArray(messageItem.completedToolLogs)
     ? messageItem.completedToolLogs.length > 0
     : false;
+}
+
+
+function getInjectedMessagesForMessage(messageItem = {}) {
+  if (!messageItem || messageItem.role !== "assistant") return [];
+  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
+  return candidateMessages.filter((item = {}) => {
+    if (!isHarnessInjectedMessage(item)) return false;
+    if (!dialogProcessId) return true;
+    return String(item?.dialogProcessId || "").trim() === dialogProcessId;
+  });
+}
+
+function getInjectedMessageCount() {
+  return injectedMessages.value.length;
+}
+
+function formatInjectedMessageTitle(messageItem = {}, messageIndex = 0) {
+  const timeText = String(messageItem?.ts || "").trim();
+  const sourceText = String(messageItem?.injectedBy || "harness-plugin").trim();
+  return `${messageIndex + 1}. ${sourceText}${timeText ? ` · ${timeText}` : ""}`;
 }
 
 function formatSessionGroupLabel(
@@ -347,6 +373,23 @@ onBeforeUnmount(() => {
               <div v-else class="thinking-empty">{{ translate("message.detailsAfterDone") }}</div>
             </div>
           </el-tab-pane>
+          <el-tab-pane :label="translate('message.injectedMessages', { count: getInjectedMessageCount() })">
+            <div class="thinking-body-scroll">
+              <div
+                v-for="(injectedMessage, injectedMessageIndex) in injectedMessages"
+                :key="`injected-${injectedMessageIndex}-${String(injectedMessage.ts || '')}`"
+                class="thinking-injected-message"
+              >
+                <div class="thinking-injected-title">
+                  {{ formatInjectedMessageTitle(injectedMessage, injectedMessageIndex) }}
+                </div>
+                <pre class="thinking-injected-content">{{ injectedMessage.content }}</pre>
+              </div>
+              <div v-if="!getInjectedMessageCount()" class="thinking-empty">
+                {{ translate("message.noInjectedMessages") }}
+              </div>
+            </div>
+          </el-tab-pane>
         </el-tabs>
         <div class="thinking-footer">
           <button
@@ -504,6 +547,27 @@ onBeforeUnmount(() => {
 
 .tool-step {
   border-left-color: var(--noobot-thinking-tool-border);
+}
+
+.thinking-injected-message {
+  border-left: 2px solid var(--noobot-thinking-tool-border);
+  padding-left: var(--noobot-space-sm);
+  margin-bottom: 10px;
+}
+
+.thinking-injected-title {
+  font-size: var(--noobot-msg-meta-font-size);
+  color: var(--noobot-thinking-muted);
+  margin-bottom: 4px;
+}
+
+.thinking-injected-content {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--noobot-thinking-text);
+  font: inherit;
+  line-height: 1.5;
 }
 
 .thinking-empty {

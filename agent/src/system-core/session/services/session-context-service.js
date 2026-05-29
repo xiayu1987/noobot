@@ -5,9 +5,7 @@
  */
 import { mergeConfig } from "../../config/index.js";
 import {
-  filterSummarizedMessages,
-  normalizeContextWindow,
-  normalizeRecentWindow,
+  resolveModelContextMessages,
 } from "../utils/context-window-normalizer.js";
 
 export class SessionContextService {
@@ -35,35 +33,53 @@ export class SessionContextService {
     sourceMessages = [],
     startIndex = 0,
     limit = Number.POSITIVE_INFINITY,
+    currentDialogProcessId = "",
   } = {}) {
-    return normalizeContextWindow({
+    return resolveModelContextMessages({
       sourceMessages,
+      currentDialogProcessId,
+      mode: "agent",
       startIndex,
       limit,
     });
   }
 
-  _normalizeRecentWindow(messages = [], limit = 20) {
-    return normalizeRecentWindow(messages, limit);
+  _normalizeRecentWindow(messages = [], limit = 20, currentDialogProcessId = "") {
+    return resolveModelContextMessages({
+      sourceMessages: messages,
+      currentDialogProcessId,
+      mode: "agent",
+      useRecentWindow: true,
+      recentLimit: limit,
+    });
   }
 
   async _getSessionTurns({ userId, sessionId }) {
     return this.sessionMessageService.getSessionTurns({ userId, sessionId });
   }
 
-  async getRecentSessionMessages({ userId, sessionId, limit, userConfig = {} }) {
+  async getRecentSessionMessages({
+    userId,
+    sessionId,
+    limit,
+    userConfig = {},
+    currentDialogProcessId = "",
+  }) {
     const messages = await this._getSessionTurns({ userId, sessionId });
     const resolvedLimit = Number(
       limit || this._sessionContextConfig(userConfig).recentMessageLimit || 20,
     );
     if (resolvedLimit <= 0) return [];
-    const filteredMessages = filterSummarizedMessages(messages);
-    return this._normalizeRecentWindow(filteredMessages, resolvedLimit);
+    return this._normalizeRecentWindow(messages, resolvedLimit, currentDialogProcessId);
   }
 
-  async getMessagesSinceLastRunningTask({ userId, sessionId }) {
+  async getMessagesSinceLastRunningTask({ userId, sessionId, currentDialogProcessId = "" }) {
     const messages = await this._getSessionTurns({ userId, sessionId });
-    const filteredMessages = filterSummarizedMessages(messages);
+    const filteredMessages = this._normalizeContextWindow({
+      sourceMessages: messages,
+      startIndex: 0,
+      currentDialogProcessId,
+    });
     if (!filteredMessages.length) return [];
 
     let startIndex = -1;
@@ -82,12 +98,17 @@ export class SessionContextService {
     return this._normalizeContextWindow({
       sourceMessages: filteredMessages,
       startIndex,
+      currentDialogProcessId,
     });
   }
 
-  async getMessagesSinceLastCompletedTask({ userId, sessionId }) {
+  async getMessagesSinceLastCompletedTask({ userId, sessionId, currentDialogProcessId = "" }) {
     const messages = await this._getSessionTurns({ userId, sessionId });
-    const filteredMessages = filterSummarizedMessages(messages);
+    const filteredMessages = this._normalizeContextWindow({
+      sourceMessages: messages,
+      startIndex: 0,
+      currentDialogProcessId,
+    });
     if (!filteredMessages.length) return [];
 
     let startIndex = -1;
@@ -107,16 +128,23 @@ export class SessionContextService {
     return this._normalizeContextWindow({
       sourceMessages: filteredMessages,
       startIndex,
+      currentDialogProcessId,
     });
   }
 
-  async getContextRecords({ userId, sessionId, userConfig = {} }) {
+  async getContextRecords({
+    userId,
+    sessionId,
+    userConfig = {},
+    currentDialogProcessId = "",
+  }) {
     const sessionContextConfig = this._sessionContextConfig(userConfig);
 
     if (sessionContextConfig.useLastCompletedTaskRange) {
       const messagesSinceCompletedTask = await this.getMessagesSinceLastCompletedTask({
         userId,
         sessionId,
+        currentDialogProcessId,
       });
       if (messagesSinceCompletedTask.length) return messagesSinceCompletedTask;
     }
@@ -125,6 +153,7 @@ export class SessionContextService {
       const messagesSinceRunningTask = await this.getMessagesSinceLastRunningTask({
         userId,
         sessionId,
+        currentDialogProcessId,
       });
       if (messagesSinceRunningTask.length) return messagesSinceRunningTask;
     }
@@ -134,6 +163,7 @@ export class SessionContextService {
       sessionId,
       limit: sessionContextConfig.recentMessageLimit,
       userConfig,
+      currentDialogProcessId,
     });
   }
 }

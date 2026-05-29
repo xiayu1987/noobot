@@ -20,6 +20,17 @@ export function normalizeModelSpecInput(input, fallback = {}) {
   return { ...fallback };
 }
 
+function normalizeBooleanValue(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
+  }
+  return Boolean(fallback);
+}
+
 /**
  * Parse a value to a finite number, returning fallback if not finite.
  * @param {*} value
@@ -87,6 +98,7 @@ export function hasOwnValue(spec = {}, key = "") {
  */
 export function normalizeModelSpecWithDefaults(modelSpec = {}) {
   const normalized = { ...(modelSpec || {}) };
+  const format = String(normalized?.format || "").trim().toLowerCase();
   const defaultsByFormat = getModelDefaultFields(normalized);
   for (const [fieldKey, defaultValue] of Object.entries(defaultsByFormat)) {
     if (hasOwnValue(normalized, fieldKey)) {
@@ -110,6 +122,14 @@ export function normalizeModelSpecWithDefaults(modelSpec = {}) {
       normalized.max_tokens = maxTokens;
     } else {
       delete normalized.max_tokens;
+    }
+  }
+
+  if (format === "dashscope") {
+    if (hasOwnValue(normalized, "enable_thinking")) {
+      normalized.enable_thinking = normalizeBooleanValue(normalized.enable_thinking, false);
+    } else {
+      normalized.enable_thinking = false;
     }
   }
   return normalized;

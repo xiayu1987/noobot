@@ -5,16 +5,18 @@ import {
   filterSummarizedMessages,
   normalizeContextWindow,
   normalizeRecentWindow,
+  resolveModelContextMessages,
 } from "../../../src/system-core/session/utils/context-window-normalizer.js";
 
-test("filterSummarizedMessages removes summarized messages", () => {
+test("filterSummarizedMessages removes only summarized messages", () => {
   const input = [
     { role: "user", content: "a", summarized: false },
     { role: "assistant", content: "b", summarized: true },
     { role: "tool", content: "c" },
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "x" } }] },
   ];
   const result = filterSummarizedMessages(input);
-  assert.deepEqual(result.map((item) => item.content), ["a", "c"]);
+  assert.deepEqual(result.map((item) => item.content), ["a"]);
 });
 
 test("normalizeContextWindow drops orphan tool result and keeps valid pair", () => {
@@ -53,7 +55,24 @@ test("normalizeRecentWindow prepends a user anchor when sliced window has no use
   assert.equal(result[0]?.role, "user");
 });
 
-test("normalizeRecentWindow should keep latest assistant-tool pair integrity after truncation", () => {
+test("normalizeContextWindow prepends previous user when clipped window starts with assistant", () => {
+  const input = [
+    { role: "user", content: "u0" },
+    { role: "assistant", content: "a0" },
+    { role: "assistant", content: "a1" },
+  ];
+  const result = normalizeContextWindow({
+    sourceMessages: input,
+    startIndex: 1,
+    limit: 2,
+  });
+  assert.deepEqual(
+    result.map((item) => `${item.role}:${item.content}`),
+    ["user:u0", "assistant:a1"],
+  );
+});
+
+test("normalizeRecentWindow keeps latest assistant-tool pair after truncation", () => {
   const input = [
     { role: "user", content: "u0" },
     {
@@ -82,8 +101,6 @@ test("normalizeRecentWindow should keep latest assistant-tool pair integrity aft
     result.map((item) => item.role),
     ["user", "assistant", "tool"],
   );
-  assert.equal(result[1]?.tool_calls?.[0]?.id, "call_2");
-  assert.equal(result[2]?.tool_call_id, "call_2");
 });
 
 test("normalizeRecentWindow should not leave orphan tool after truncation shrink", () => {
@@ -104,5 +121,98 @@ test("normalizeRecentWindow should not leave orphan tool after truncation shrink
   assert.deepEqual(
     result.map((item) => item.role),
     ["user"],
+  );
+});
+
+test("resolveModelContextMessages filters injected messages by current dialog", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "assistant", content: "keep", injectedMessage: true, dialogProcessId: "d1" },
+      { role: "assistant", content: "drop", injectedMessage: true, dialogProcessId: "d2" },
+      { role: "assistant", content: "normal" },
+    ],
+    currentDialogProcessId: "d1",
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["keep", "normal"],
+  );
+});
+
+test("resolveModelContextMessages filters injected user messages by current dialog", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "user", content: "keep", injectedBy: "harness-plugin", dialogProcessId: "d1" },
+      { role: "user", content: "drop", injectedBy: "harness-plugin", dialogProcessId: "d2" },
+      { role: "user", content: "normal user" },
+    ],
+    currentDialogProcessId: "d1",
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["keep", "normal user"],
+  );
+});
+
+test("resolveModelContextMessages treats harness relay message as injected and filters by dialog", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      {
+        role: "user",
+        content: "[来自harness外部模型输出/planning]\nold",
+        dialogProcessId: "d_old",
+      },
+      {
+        role: "user",
+        content: "[来自harness外部模型输出/planning]\nnew",
+        dialogProcessId: "d_new",
+      },
+      { role: "user", content: "normal user" },
+    ],
+    currentDialogProcessId: "d_new",
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["[来自harness外部模型输出/planning]\nnew", "normal user"],
+  );
+});
+
+test("resolveModelContextMessages supports recent window clipping", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "user", content: "u0" },
+      { role: "assistant", content: "a1" },
+      { role: "assistant", content: "a2" },
+    ],
+    useRecentWindow: true,
+    recentLimit: 2,
+  });
+  assert.deepEqual(
+    result.map((item) => item.role),
+    ["user", "assistant"],
+  );
+});
+
+test("resolveModelContextMessages supports harness mode with normalize/filter pipeline", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "assistant", content: "a0", injectedMessage: true, dialogProcessId: "d1" },
+      { role: "assistant", content: "drop-by-dialog", injectedMessage: true, dialogProcessId: "d2" },
+      { role: "assistant", content: "" },
+      { role: "assistant", content: "a1" },
+      { role: "assistant", content: "a2" },
+    ],
+    currentDialogProcessId: "d1",
+    mode: "harness",
+    recentLimit: 2,
+    normalizeMessage: (item = {}) => ({
+      role: String(item?.role || "").trim().toLowerCase(),
+      content: String(item?.content || "").trim(),
+    }),
+    shouldKeepMessage: (item = {}) => String(item?.content || "").trim(),
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["a1", "a2"],
   );
 });

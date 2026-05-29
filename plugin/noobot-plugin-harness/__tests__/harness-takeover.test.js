@@ -9,12 +9,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createHookManager } from "../../../agent/src/system-core/hook/index.js";
+import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
 test("harness capability hook can take over tool calls", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     {
@@ -56,7 +56,7 @@ test("harness capability hook can take over tool calls", async () => {
 });
 
 test("harness capability hook can force inject system message in mid hooks", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     {
@@ -101,7 +101,7 @@ test("harness capability hook can force inject system message in mid hooks", asy
 });
 
 test("harness capability hook can take over and remove agent internal forced messages", async () => {
-  const hookManager = createHookManager();
+  const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
     {
@@ -151,3 +151,41 @@ test("harness capability hook can take over and remove agent internal forced mes
   );
 });
 
+test("harness message takeover keeps system context before injected ctx messages", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      capabilityHandlers: {
+        guidance: async ({ point }) => {
+          if (point !== "before_llm_call") return null;
+          return {
+            messageTakeover: {
+              id: "harness-current-turn-note",
+              content: "当前轮补充提示。",
+              mode: "prepend",
+              target: "ctx_messages",
+            },
+          };
+        },
+      },
+    },
+  );
+
+  const ctx = {
+    userId: "u7",
+    sessionId: "s7",
+    dialogProcessId: "dp7",
+    messages: [
+      { role: "system", content: "system context" },
+      { role: "user", content: "real user message" },
+    ],
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+  assert.equal(ctx.messages[0]?.content, "system context");
+  assert.match(String(ctx.messages[1]?.content || ""), /harness-current-turn-note/);
+  assert.equal(ctx.messages[2]?.content, "real user message");
+});

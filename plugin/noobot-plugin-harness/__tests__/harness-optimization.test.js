@@ -9,19 +9,26 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { normalizeOptions } from "../src/options.js";
-import { appendJsonlBuffered, flushAllJsonlBuffers } from "../src/lib/store.js";
+import { normalizeOptions } from "../src/core/options.js";
+import { appendJsonlBuffered, flushAllJsonlBuffers } from "../src/store/store.js";
 import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
-import { HARNESS_HOOK_POINTS } from "../src/constants.js";
+import { HARNESS_HOOK_POINTS } from "../src/core/constants.js";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../src/fsm/transitions.js";
 import { buildEvent } from "../src/data/record-builders.js";
+import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
-import { relaySeparateModelOutputAsUserMessage } from "../src/capabilities/handlers/shared.js";
+import { markGuidanceSummarizedMessages } from "../src/capabilities/handlers/guidance/signal-tracker.js";
+import { invokeWithReasoningRetry } from "../src/capabilities/handlers/shared/model/invocation-utils.js";
+import {
+  markMessagesSummarized,
+  relaySeparateModelOutputAsUserMessage,
+} from "../src/capabilities/handlers/shared.js";
 
 test("normalizeOptions applies schema defaults and coercion", () => {
   const options = normalizeOptions({
     miniRunnerMaxTurns: "15",
     manifestDebounceMs: "0",
+    incrementalRecentMessageLimit: "11",
     jsonlFlushStrategy: { maxSize: "100", maxTime: "5000", onTerminal: false },
     fsmEnabled: false,
   });
@@ -32,6 +39,7 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(options.jsonlFlushStrategy.maxTime, 5000);
   assert.equal(options.jsonlFlushStrategy.onTerminal, false);
   assert.equal(options.jsonlFlushStrategy.onError, true);
+  assert.equal(options.incrementalRecentMessageLimit, 11);
   assert.equal(options.fsmEnabled, false);
 });
 
@@ -49,6 +57,73 @@ test("appendJsonlBuffered supports adaptive flush by reason", async () => {
   assert.match(second, /"id":2/);
 
   await flushAllJsonlBuffers();
+});
+
+test("pending states are auto-cleaned by hook turns without timers", async () => {
+  const runtime = createCapabilityRuntime({
+    handlers: {},
+  });
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            counters: {},
+            flags: {
+              planUpdateCapturePending: true,
+              acceptanceSemanticValidationCapturePending: true,
+              acceptanceSemanticValidationCaptureReportIndex: 3,
+            },
+            signals: {},
+            pending: {
+              guidance: "consecutive_failures",
+              summary: true,
+              planUpdate: true,
+              planUpdateStage: "revision",
+              planUpdateContext: { summaryText: "pending-summary", targetMainStepIndexes: [] },
+              acceptanceSemanticValidation: { reportIndex: 3 },
+            },
+          },
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          lastPlanningRawOutput: null,
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+  const meta = { harness: { pendingTtlHookTurns: 1 } };
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_TURN, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 2);
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.guidance, null);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdateContext, null);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.acceptanceSemanticValidation, null);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.acceptanceSemanticValidationCapturePending, false);
+  assert.equal(
+    "acceptanceSemanticValidationCaptureReportIndex" in ctx.agentContext.payload.harness.state.flags,
+    false,
+  );
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 3);
 });
 
 test("takeover priority pipeline keeps higher priority takeover effective", async () => {
@@ -172,6 +247,27 @@ test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when
   assert.match(String(ctx.messages[0]?.content || ""), /\[来自harness外部模型输出\/planning\]/);
 });
 
+test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", async () => {
+  const runtime = createCapabilityRuntime({ handlers: {} });
+  const ctx = {
+    dialogProcessId: "dialog-old",
+    messages: [],
+    agentContext: { payload: {} },
+  };
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_TURN, ctx, {});
+  await runtime.runHook(HARNESS_HOOK_POINTS.AFTER_TURN, ctx, {});
+
+  const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
+    purpose: "planning",
+    content: '{"taskOwner":"admin","taskChecklist":[{"index":1,"task":"x","owner":"admin"}]}',
+    dedupe: true,
+  });
+
+  assert.equal(relayed, false);
+  assert.equal(ctx.messages.length, 0);
+});
+
 test("planning separate_model uses injected resolveModelMessages from harness meta", async () => {
   const handler = createPlanningHandler();
   const ctx = {
@@ -206,4 +302,181 @@ test("planning separate_model uses injected resolveModelMessages from harness me
   assert.equal(Array.isArray(capturedMessages), true);
   assert.equal(capturedMessages.some((item = {}) => String(item?.content || "") === "drop-me"), false);
   assert.equal(capturedMessages.some((item = {}) => String(item?.content || "") === "keep-me"), true);
+});
+
+test("markMessagesSummarized keeps user/system messages unsummarized", () => {
+  const messages = [
+    { role: "system", content: "policy" },
+    { role: "user", content: "analyze harness plugin" },
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
+    { role: "tool", toolName: "execute_script", content: '{"toolName":"execute_script","ok":true}' },
+  ];
+
+  const marked = markMessagesSummarized(messages);
+  assert.equal(marked, 2);
+  assert.equal(messages[0].summarized, undefined);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, true);
+  assert.equal(messages[3].summarized, true);
+});
+
+test("markMessagesSummarized follows task_summary exclusions", () => {
+  const messages = [
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "task_summary" } }] },
+    { role: "assistant", content: "normal assistant text" },
+    { role: "tool", content: '{"toolName":"task_summary","ok":true}' },
+  ];
+
+  const marked = markMessagesSummarized(messages);
+  assert.equal(marked, 0);
+  assert.equal(messages[0].summarized, undefined);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, undefined);
+});
+
+test("guidance summary prefers injected markMessagesSummarized from harness meta", async () => {
+  const handler = createGuidanceHandler({
+    shouldProcessPrimaryToolHooks: () => true,
+  });
+  let injectedCalled = 0;
+  const ctx = {
+    messages: [{ role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] }],
+    ai: { content: "小结完成" },
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            flags: { guidanceSummaryMarkPending: true },
+            counters: {},
+            signals: {},
+            pending: {},
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+  const meta = {
+    harness: {
+      markMessagesSummarized: ({ messages = [] } = {}) => {
+        injectedCalled += 1;
+        for (const item of messages) item.summarized = true;
+        return Array.isArray(messages) ? messages.length : 0;
+      },
+    },
+  };
+
+  await handler({ capability: "guidance", point: "after_llm_call", ctx, meta });
+  assert.ok(injectedCalled >= 1);
+});
+
+test("guidance summary checkpoint marks only messages before checkpoint", async () => {
+  let injectedCalled = 0;
+  const oldToolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "old_call", function: { name: "execute_script" } }],
+  };
+  const oldToolResult = {
+    role: "tool",
+    toolName: "execute_script",
+    tool_call_id: "old_call",
+    content: '{"toolName":"execute_script","ok":true}',
+  };
+  const newToolCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "new_call", function: { name: "execute_script" } }],
+  };
+  const newToolResult = {
+    role: "tool",
+    toolName: "execute_script",
+    tool_call_id: "new_call",
+    content: '{"toolName":"execute_script","ok":true}',
+  };
+  const messages = [oldToolCall, oldToolResult, newToolCall, newToolResult];
+  const ctx = {
+    messages,
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            counters: {},
+            flags: {},
+            signals: {},
+            pending: {
+              summaryCheckpointMessageCount: 2,
+            },
+          },
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+        messages: {
+          history: messages,
+        },
+      },
+    },
+  };
+  const meta = {
+    harness: {
+      markMessagesSummarized: ({ messages: scoped = [], summaryScope = {} } = {}) => {
+        injectedCalled += 1;
+        assert.equal(Array.isArray(scoped), true);
+        assert.equal(scoped.length, 2);
+        assert.equal(summaryScope?.maxMessages, 2);
+        assert.equal(summaryScope?.limitToProvidedMessagesOnly, true);
+        for (const item of scoped) {
+          item.summarized = true;
+        }
+        return scoped.length;
+      },
+    },
+  };
+
+  const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
+  assert.equal(markedCount >= 2, true);
+  assert.equal(oldToolCall.summarized, true);
+  assert.equal(oldToolResult.summarized, true);
+  assert.equal(newToolCall.summarized, undefined);
+  assert.equal(newToolResult.summarized, undefined);
+  assert.equal(injectedCalled >= 1, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageCount, null);
+});
+
+test("invokeWithReasoningRetry throws error when reasoning-only persists after one retry", async () => {
+  let calls = 0;
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          state: { counters: {}, flags: {}, signals: {}, pending: {} },
+          taskChecklist: [],
+          acceptanceReports: [],
+          reviewReports: [],
+          planningRawOutputs: [],
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      invokeWithReasoningRetry({
+        invoker: async () => {
+          calls += 1;
+          return { content: "<think>only reasoning</think>" };
+        },
+        invokePayload: { messages: [{ role: "user", content: "x" }] },
+        maxReasoningRetries: 1,
+        purpose: "planning",
+        domain: "planning",
+        ctx,
+      }),
+    (error) => error?.code === "CAPABILITY_REASONING_RETRY_EXHAUSTED",
+  );
+  assert.equal(calls, 2);
 });

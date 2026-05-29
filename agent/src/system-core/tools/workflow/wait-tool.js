@@ -8,9 +8,10 @@ import { z } from "zod";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 
 export function createWaitTool(ctx = {}) {
-  const runtime = ctx?.agentContext?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
   const waitTool = new DynamicStructuredTool({
     name: TOOL_NAME.WAIT,
     description: tTool(runtime, "tools.wait.description"),

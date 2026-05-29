@@ -55,7 +55,11 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
   };
 }
 
-function createModelState(llm) {
+function createModelState(llm, defaultModelSpec = null) {
+  const resolvedModelSpec =
+    defaultModelSpec && typeof defaultModelSpec === "object"
+      ? defaultModelSpec
+      : { alias: "test_alias", model: "test-model" };
   return {
     llm,
     activeModelName: "test-model",
@@ -68,7 +72,7 @@ function createModelState(llm) {
     },
     globalConfig: {},
     userConfig: {},
-    defaultModelSpec: { alias: "test_alias", model: "test-model" },
+    defaultModelSpec: resolvedModelSpec,
     abortSignal: null,
   };
 }
@@ -270,6 +274,38 @@ test("final_answer tool: next model call uses tool_choice none and exits loop", 
   assert.equal(capturedInvocations.length, 2, "should do one tool turn + one final no-tool turn");
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
   assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "none");
+});
+
+test("phaseSummaryNoToolsNextTurn enforces one no-tools round even when tools are available", async () => {
+  let toolInvokeCount = 0;
+  const tool = {
+    name: "execute_script",
+    async invoke() {
+      toolInvokeCount += 1;
+      return "{\"ok\":true}";
+    },
+  };
+  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
+    {
+      content: "overflow fallback answer",
+      tool_calls: [],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+
+  const modelState = createModelState(llm);
+  modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn = true;
+  const result = await runFunctionCallLoop({
+    modelState,
+    loopState: createLoopState({ maxTurns: 3, tool }),
+    turn: 1,
+  });
+
+  assert.equal(result.output, "overflow fallback answer");
+  assert.equal(toolInvokeCount, 0);
+  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
+  assert.equal(modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn, false);
 });
 
 test("loop over max turns: next turn no-tool response will keep retrying and finally stop at limit", async () => {

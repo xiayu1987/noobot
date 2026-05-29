@@ -84,7 +84,21 @@ function emitDownloadParsedResult(attachmentItem = {}) {
         <el-icon v-else><Document /></el-icon>
       </div>
       <div class="file-meta">
-        <div class="file-name">{{ attachmentItem.name }}</div>
+        <div class="file-name-row">
+          <div class="file-name">{{ attachmentItem.name }}</div>
+          <span
+            v-if="attachmentItem.attachmentOwnerType === 'plugin'"
+            class="attachment-owner-badge is-plugin"
+          >
+            {{ translate("message.pluginAttachment") }}
+          </span>
+          <span
+            v-else-if="attachmentItem.attachmentOwnerType === 'agent'"
+            class="attachment-owner-badge is-agent"
+          >
+            {{ translate("message.agentAttachment") }}
+          </span>
+        </div>
         <div class="file-size">{{ formatFileSize(attachmentItem.size || 0) }}</div>
         <div
           v-if="attachmentItem.parsedResultAttachmentId && attachmentItem.parsedResultUrl"
@@ -184,6 +198,12 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   min-width: 0;
   flex: 1;
 }
+.file-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 .file-name {
   max-width: 260px;
   overflow: hidden;
@@ -191,6 +211,27 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   white-space: nowrap;
   font-size: var(--noobot-msg-caption-font-size);
   color: var(--noobot-msg-file-name);
+}
+.attachment-owner-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+.attachment-owner-badge.is-agent {
+  color: color-mix(in srgb, var(--el-color-primary) 78%, #fff);
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+}
+.attachment-owner-badge.is-plugin {
+  color: color-mix(in srgb, var(--el-color-warning) 80%, #fff);
+  border-color: color-mix(in srgb, var(--el-color-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--el-color-warning) 14%, transparent);
 }
 .file-size {
   font-size: var(--noobot-msg-meta-font-size);

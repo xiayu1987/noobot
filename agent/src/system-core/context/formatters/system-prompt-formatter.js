@@ -78,6 +78,17 @@ function toJsonSection(title, value, { allowEmpty = false, emptyValueText = "(no
 
 
 function hasConnectorData(connectorStatusSection = {}) {
+  const currentConnectors =
+    connectorStatusSection && typeof connectorStatusSection === "object"
+      ? connectorStatusSection.current_connectors || {}
+      : {};
+  const hasSelectedConnector = Object.values(currentConnectors).some(
+    (connectorItem) =>
+      connectorItem &&
+      typeof connectorItem === "object" &&
+      hasValue(String(connectorItem.connector_name || "").trim()),
+  );
+  if (!hasSelectedConnector) return false;
   const connectors =
     connectorStatusSection && typeof connectorStatusSection === "object"
       ? connectorStatusSection.connectors || {}
@@ -87,16 +98,35 @@ function hasConnectorData(connectorStatusSection = {}) {
     (Array.isArray(connectors?.terminals) && connectors.terminals.length > 0) ||
     (Array.isArray(connectors?.emails) && connectors.emails.length > 0);
   if (hasConnectorList) return true;
-  const currentConnectors =
-    connectorStatusSection && typeof connectorStatusSection === "object"
-      ? connectorStatusSection.current_connectors || {}
-      : {};
-  return Object.values(currentConnectors).some(
-    (connectorItem) =>
-      connectorItem &&
-      typeof connectorItem === "object" &&
-      hasValue(String(connectorItem.connector_name || "").trim()),
+  return hasSelectedConnector;
+}
+
+function stripEmptySelectedConnectors(dynamicInfo = {}) {
+  if (!dynamicInfo || typeof dynamicInfo !== "object" || Array.isArray(dynamicInfo)) {
+    return {};
+  }
+  const config =
+    dynamicInfo?.config && typeof dynamicInfo.config === "object" && !Array.isArray(dynamicInfo.config)
+      ? dynamicInfo.config
+      : null;
+  if (!config) return dynamicInfo;
+  const selectedConnectors =
+    config?.selectedConnectors &&
+    typeof config.selectedConnectors === "object" &&
+    !Array.isArray(config.selectedConnectors)
+      ? config.selectedConnectors
+      : null;
+  if (!selectedConnectors) return dynamicInfo;
+  const hasSelectedConnector = Object.values(selectedConnectors).some((connectorName) =>
+    hasValue(String(connectorName || "").trim()),
   );
+  if (hasSelectedConnector) return dynamicInfo;
+  return {
+    ...dynamicInfo,
+    config: Object.fromEntries(
+      Object.entries(config).filter(([configKey]) => configKey !== "selectedConnectors"),
+    ),
+  };
 }
 
 function hasMcpServerData(mcpServers = []) {
@@ -141,6 +171,7 @@ export function composeSystemInfoSections({
   ).trim();
   const emptyValueText = String(contextPromptI18n?.emptyValueText || "(none)").trim();
   const normalizedSystemPrompt = String(systemPrompt || "").trim();
+  const normalizedDynamicInfo = stripEmptySelectedConnectors(dynamicInfo);
   const normalizedWorkspaceSection = buildWorkspaceDirectorySection({
     workspaceDirectories,
     workspaceDirectoryDescriptions,
@@ -150,7 +181,7 @@ export function composeSystemInfoSections({
   return [
     normalizedSystemPrompt,
     toJsonSection(String(sections?.staticInfo || "").trim(), staticInfo, { emptyValueText }),
-    toJsonSection(String(sections?.dynamicInfo || "").trim(), dynamicInfo, { emptyValueText }),
+    toJsonSection(String(sections?.dynamicInfo || "").trim(), normalizedDynamicInfo, { emptyValueText }),
     toJsonSection(String(sections?.scenario || "").trim(), scenarioSection, { emptyValueText }),
     hasValue(normalizedWorkspaceSection)
       ? toSystemSection(

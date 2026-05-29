@@ -12,6 +12,7 @@
     "client/noobot-chat"
   ],
   "scripts": {
+    "project:launcher": "node ./scripts/project-launcher.mjs",
     "install:all": "npm install --workspaces",
     "build": "npm run -w client/noobot-chat build",
     "dev:service": "npm run -w service dev",

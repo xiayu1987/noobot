@@ -37,6 +37,17 @@ export const DEFAULT_MAX_TOOL_LOOP_TURNS = 4;
 export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS = 0;
 
 /**
+ * 阶段小结默认触发消息字符阈值（未 summarized 的上下文总字符数）。
+ * 可通过 tools.task_summary.phase_summary_message_chars_threshold 覆盖。
+ */
+export const DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD = 150000;
+export const PHASE_SUMMARY_OVERFLOW_POLICY = Object.freeze({
+  ENABLE_PRUNE_AFTER_SUMMARY: true,
+  PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS: 1,
+  ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW: true,
+});
+
+/**
  * 帮助提示默认循环轮数
  */
 export const DEFAULT_HELP_PROMPT_LOOP_TURNS = 50;

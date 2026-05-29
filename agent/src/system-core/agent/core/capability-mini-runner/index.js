@@ -1,11 +1,19 @@
 /*
- * Capability mini-runner for harness external model calls.
+ * Capability mini-runner for plugin-side external model calls.
  * Independent entry + reuse existing Noobot model/tool core.
  */
-import { createChatModel, adaptToolsForBinding } from "../../../model/index.js";
+import { createChatModel, createChatModelByName, adaptToolsForBinding } from "../../../model/index.js";
 import { executeToolCall } from "../execution/tool-runner.js";
+import { filterForModelContext } from "../../../context/session/message-context-policy.js";
+import {
+  getRuntimeFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../../context/agent-context-accessor.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
+const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";
+const MODEL_PURPOSE_HEADER_KEY = "X-Harness-Purpose";
+const MODEL_DOMAIN_HEADER_KEY = "X-Harness-Domain";
 
 function normalizeToolCalls(ai = {}) {
   const rawCalls = Array.isArray(ai?.tool_calls)
@@ -63,14 +71,11 @@ function normalizeTextContent(content = "") {
 }
 
 function resolveRuntime(ctx = {}) {
-  return ctx?.agentContext?.execution?.controllers?.runtime || {};
+  return getRuntimeFromAgentContext(ctx?.agentContext || {});
 }
 
 function resolveSessionMeta(ctx = {}, runtime = {}) {
-  const systemRuntime =
-    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : {};
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
     userId: String(ctx?.userId || runtime?.userId || systemRuntime?.userId || "").trim(),
     sessionId: String(ctx?.sessionId || runtime?.sessionId || systemRuntime?.sessionId || "").trim(),
@@ -98,10 +103,20 @@ function resolveToolsFromContext(ctx = {}, allowPolicy = { allowAll: false, allo
   return tools.filter((tool) => allowPolicy.allowSet.has(String(tool?.name || "").trim()));
 }
 
+function normalizeHeaderValue(input = "") {
+  return String(input || "")
+    .trim()
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120);
+}
+
 export function createAgentCapabilityModelInvoker({
   maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
   toolAllowlist = [],
+  enableToolBinding = false,
   createChatModelFn = createChatModel,
+  createChatModelByNameFn = createChatModelByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
   executeToolCallFn = executeToolCall,
 } = {}) {
@@ -147,6 +162,7 @@ export function createAgentCapabilityModelInvoker({
   return async function capabilityModelInvoker({
     purpose = "",
     domain = "",
+    model: modelName = "",
     locale = "zh-CN",
     prompt = "",
     messages = [],
@@ -156,18 +172,49 @@ export function createAgentCapabilityModelInvoker({
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
     const traces = [];
-    const runMessages = Array.isArray(messages) ? [...messages] : [];
+    const runMessages = filterForModelContext(messages);
     if (prompt) {
       runMessages.unshift({ role: "system", content: String(prompt) });
     }
 
     const globalConfig = runtime?.globalConfig || {};
     const userConfig = runtime?.userConfig || {};
-    const llm = createChatModelFn({
-      globalConfig,
-      userConfig,
-      streaming: false,
-    });
+    const normalizedModelName = String(modelName || "").trim();
+    const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
+    const normalizedDomain = normalizeHeaderValue(domain || "unknown");
+    const additionalHeaders = {
+      [MODEL_FLOW_HEADER_KEY]: `harness.${normalizedPurpose}`,
+      [MODEL_PURPOSE_HEADER_KEY]: normalizedPurpose,
+      [MODEL_DOMAIN_HEADER_KEY]: normalizedDomain,
+    };
+    const llm = normalizedModelName
+      ? createChatModelByNameFn(normalizedModelName, {
+          globalConfig,
+          userConfig,
+          streaming: false,
+          additionalHeaders,
+        })
+      : createChatModelFn({
+          globalConfig,
+          userConfig,
+          streaming: false,
+          additionalHeaders,
+        });
+
+    if (enableToolBinding !== true) {
+      const ai = await llm.invoke(runMessages, {
+        signal: runtime?.abortSignal || null,
+      });
+      const text = normalizeTextContent(ai?.content);
+      return {
+        content: text,
+        output: text,
+        traces: [],
+        turn: 1,
+        finishedReason: "tool_binding_disabled",
+        toolTurnLimitReached: false,
+      };
+    }
 
     const effectiveAllowPolicy = Array.isArray(toolAllowlistOverride)
       ? resolveAllowPolicy(toolAllowlistOverride)
@@ -206,6 +253,7 @@ export function createAgentCapabilityModelInvoker({
         turn,
         purpose,
         domain,
+        model: normalizedModelName || undefined,
         locale,
         toolCalls: calls.map((call) => ({ name: call.name, id: call.id || "", status: "pending" })),
       });

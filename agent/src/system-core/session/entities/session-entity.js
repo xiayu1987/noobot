@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
     selectedConnectors && typeof selectedConnectors === "object"
@@ -30,7 +32,7 @@ export function normalizeMessageEntity(
     role: String(message?.role || "").trim(),
     content: message?.content || "",
     type: String(message?.type || "").trim(),
-    dialogProcessId: String(message?.dialogProcessId || "").trim(),
+    dialogProcessId: resolveMessageDialogProcessId(message),
     parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
     taskId: String(message?.taskId || "").trim(),
     taskStatus: String(message?.taskStatus || "").trim(),
@@ -40,6 +42,15 @@ export function normalizeMessageEntity(
     attachmentMetas: normalizedAttachmentMetas,
     ts: String(message?.ts || "").trim() || now(),
   };
+  if (message?.injectedMessage === true) {
+    normalizedMessage.injectedMessage = true;
+  }
+  const injectedBy = String(message?.injectedBy || "").trim();
+  if (injectedBy) normalizedMessage.injectedBy = injectedBy;
+  if (message?.frontendUserMessage === true) {
+    normalizedMessage.frontendUserMessage = true;
+  }
+
   const toolCallId = String(message?.tool_call_id || "").trim();
   const toolName = String(message?.toolName || message?.tool_name || "").trim();
   if (toolCallId) normalizedMessage.tool_call_id = toolCallId;

@@ -217,25 +217,58 @@ export function createSessionFacade(runtime = {}) {
       return executionLogService.appendExecutionLog(payload);
     },
 
-    async getRecentSessionMessages({ userId, sessionId, limit, userConfig = {} }) {
+    async getRecentSessionMessages({
+      userId,
+      sessionId,
+      limit,
+      userConfig = {},
+      currentDialogProcessId = "",
+    }) {
       return sessionContextService.getRecentSessionMessages({
         userId,
         sessionId,
         limit,
         userConfig,
+        currentDialogProcessId,
       });
     },
 
-    async getMessagesSinceLastRunningTask({ userId, sessionId }) {
-      return sessionContextService.getMessagesSinceLastRunningTask({ userId, sessionId });
+    async getMessagesSinceLastRunningTask({
+      userId,
+      sessionId,
+      currentDialogProcessId = "",
+    }) {
+      return sessionContextService.getMessagesSinceLastRunningTask({
+        userId,
+        sessionId,
+        currentDialogProcessId,
+      });
     },
 
-    async getMessagesSinceLastCompletedTask({ userId, sessionId }) {
-      return sessionContextService.getMessagesSinceLastCompletedTask({ userId, sessionId });
+    async getMessagesSinceLastCompletedTask({
+      userId,
+      sessionId,
+      currentDialogProcessId = "",
+    }) {
+      return sessionContextService.getMessagesSinceLastCompletedTask({
+        userId,
+        sessionId,
+        currentDialogProcessId,
+      });
     },
 
-    async getContextRecords({ userId, sessionId, userConfig = {} }) {
-      return sessionContextService.getContextRecords({ userId, sessionId, userConfig });
+    async getContextRecords({
+      userId,
+      sessionId,
+      userConfig = {},
+      currentDialogProcessId = "",
+    }) {
+      return sessionContextService.getContextRecords({
+        userId,
+        sessionId,
+        userConfig,
+        currentDialogProcessId,
+      });
     },
 
     async startSkillTask(payload = {}) {

@@ -75,8 +75,11 @@ function createConnectorTools({ agentContext } = {}) {
       connector_type: z.string().describe(
         accessConnectorDescriptor.schemaShape.connector_type.description,
       ),
-      command: z.string().describe(
+      command: z.string().optional().describe(
         accessConnectorDescriptor.schemaShape.command.description,
+      ),
+      command_file_path: z.string().optional().describe(
+        accessConnectorDescriptor.schemaShape.command_file_path.description,
       ),
     }),
     func: accessConnectorDescriptor.func,

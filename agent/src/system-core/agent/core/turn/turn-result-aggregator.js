@@ -59,6 +59,7 @@ export function buildLoopResult({
     output,
     traces,
     turnMessages: finalTurnMessages,
+    modelMessages: Array.isArray(modelMessages) ? modelMessages : [],
     turnTasks: turnTaskStore
       ? turnTaskStore.toArray()
       : Array.isArray(loopState?.turnTasks)

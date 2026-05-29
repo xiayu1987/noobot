@@ -6,6 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { invokeServiceHandler } from "../../service-invoker/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -14,8 +15,9 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
 
 function getServices(agentContext) {
-  const globalConfig = agentContext?.runtime?.globalConfig || {};
-  const userConfig = agentContext?.runtime?.userConfig || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const globalConfig = runtime?.globalConfig || {};
+  const userConfig = runtime?.userConfig || {};
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   return effectiveConfig?.services || {};
 }
@@ -56,6 +58,7 @@ function validateCustomParam(customParam, agentContext) {
 }
 
 export function createServiceTool({ agentContext }) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const callServiceTool = new DynamicStructuredTool({
     name: TOOL_NAME.CALL_SERVICE,
     description: tTool(agentContext, "tools.service.description"),
@@ -76,11 +79,11 @@ export function createServiceTool({ agentContext }) {
       body: z.unknown().optional().describe(tTool(agentContext, "tools.service.fieldBody")),
     }),
     func: async ({ serviceName, endpointName, custom_param, queryString = {}, body }) => {
-      const globalConfig = agentContext?.runtime?.globalConfig || {};
+      const globalConfig = runtime?.globalConfig || {};
       const userId = String(
         agentContext?.userId ||
-          agentContext?.runtime?.userId ||
-          agentContext?.runtime?.systemRuntime?.userId ||
+          runtime?.userId ||
+          runtime?.systemRuntime?.userId ||
           "",
       ).trim();
       const inputErr = validateInput({

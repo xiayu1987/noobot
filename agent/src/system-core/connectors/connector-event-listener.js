@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
+import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 import { logError } from "../tracking/console/logger.js";
 import {
   CONNECTOR_TYPE,
@@ -60,7 +61,7 @@ export class ConnectorEventListener {
     this.historyStore = historyStore;
     this.rootSessionId = String(rootSessionId || "").trim();
     this.sessionId = String(sessionId || "").trim();
-    this.dialogProcessId = String(dialogProcessId || "").trim();
+    this.dialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
     this.allowUserInteraction = allowUserInteraction !== false;
     this.bridge = bridge;
   }

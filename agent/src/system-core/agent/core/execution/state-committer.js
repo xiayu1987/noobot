@@ -6,7 +6,8 @@
 import { ToolMessage } from "@langchain/core/messages";
 import { appendAttachmentMetasToRuntimeAndTurn } from "../../../attach/index.js";
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
-import { HOOK_POINTS, runRuntimeHook, withHookRuntimeMeta } from "../../../hook/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
+import { buildHookContext } from "../hook/hook-context-builder.js";
 
 export function createStateCommitter({
   messages = null,
@@ -65,10 +66,10 @@ export function createStateCommitter({
             ? modelResponseMetadata
             : null,
       };
-      await runRuntimeHook({
+      await runAgentRuntimeHook({
         runtime,
-        point: HOOK_POINTS.BEFORE_STATE_COMMIT,
-        context: withHookRuntimeMeta(runtime, {
+        point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
+        context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "assistant_message",
           status: "start",
@@ -77,10 +78,10 @@ export function createStateCommitter({
         }),
       });
       turnMessageStore.push(assistantMessage);
-      await runRuntimeHook({
+      await runAgentRuntimeHook({
         runtime,
-        point: HOOK_POINTS.AFTER_STATE_COMMIT,
-        context: withHookRuntimeMeta(runtime, {
+        point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,
+        context: buildHookContext(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "assistant_message",
           status: "success",
@@ -100,10 +101,10 @@ export function createStateCommitter({
         tool_call_id: resolvedCallId,
         toolName: resolvedCallName,
       };
-      await runRuntimeHook({
+      await runAgentRuntimeHook({
         runtime,
-        point: HOOK_POINTS.BEFORE_STATE_COMMIT,
-        context: withHookRuntimeMeta(runtime, {
+        point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
+        context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "tool_result",
           status: "start",
@@ -131,10 +132,10 @@ export function createStateCommitter({
       if (turnMessageStore?.push) {
         turnMessageStore.push(toolResultPayload);
       }
-      await runRuntimeHook({
+      await runAgentRuntimeHook({
         runtime,
-        point: HOOK_POINTS.AFTER_STATE_COMMIT,
-        context: withHookRuntimeMeta(runtime, {
+        point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,
+        context: buildHookContext(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "tool_result",
           status: "success",
@@ -146,10 +147,10 @@ export function createStateCommitter({
     },
     async appendAttachmentMetas(attachmentMetas = []) {
       if (!Array.isArray(attachmentMetas) || !attachmentMetas.length) return;
-      await runRuntimeHook({
+      await runAgentRuntimeHook({
         runtime,
-        point: HOOK_POINTS.BEFORE_STATE_COMMIT,
-        context: withHookRuntimeMeta(runtime, {
+        point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
+        context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "attachment_metas",
           status: "start",
@@ -162,10 +163,10 @@ export function createStateCommitter({
         turnMessageStore,
         attachmentMetas,
       });
-      await runRuntimeHook({
+      await runAgentRuntimeHook({
         runtime,
-        point: HOOK_POINTS.AFTER_STATE_COMMIT,
-        context: withHookRuntimeMeta(runtime, {
+        point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,
+        context: buildHookContext(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "attachment_metas",
           status: "success",

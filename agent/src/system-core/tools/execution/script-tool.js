@@ -9,6 +9,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import { normalizeSandboxProvider } from "../../config/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
   buildBubblewrapCommand,
@@ -44,10 +45,6 @@ function run(cmd, cwd, timeoutMs) {
       });
     });
   });
-}
-
-function getRuntime(agentContext) {
-  return agentContext?.runtime || {};
 }
 
 function tScript(runtime = {}, key = "", params = {}) {
@@ -334,7 +331,7 @@ function buildScriptToolDescription({
 }
 
 export function createScriptTool({ agentContext }) {
-  const runtime = getRuntime(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath =
     agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};

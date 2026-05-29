@@ -6,6 +6,7 @@
 
 import { mergeAttachmentMetas, mapAttachmentRecordsToMetas } from "./meta-ops.js";
 import { DEFAULT_MIME_TYPE } from "./constants.js";
+import { resolveMessageDialogProcessId } from "../context/session/dialog-process-id-resolver.js";
 
 /**
  * 将附件元数据追加到运行时上下文和当前 turn 中
@@ -68,7 +69,7 @@ export function appendAttachmentMetasToRuntimeAndTurn(
       existingAttachmentMetas = Array.isArray(lastItem?.attachmentMetas)
         ? lastItem.attachmentMetas
         : [];
-      lastDialogProcessId = String(lastItem?.dialogProcessId || "").trim();
+      lastDialogProcessId = resolveMessageDialogProcessId(lastItem);
     }
     const mergedAttachmentMetas = mergeAttachmentMetas(
       existingAttachmentMetas,
@@ -85,7 +86,7 @@ export function appendAttachmentMetasToRuntimeAndTurn(
         },
         (messageItem = {}) =>
           String(messageItem?.role || "").trim() === "assistant" &&
-          String(messageItem?.dialogProcessId || "").trim() === lastDialogProcessId,
+          resolveMessageDialogProcessId(messageItem) === lastDialogProcessId,
       );
     }
     return;

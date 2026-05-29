@@ -60,12 +60,21 @@ export function tailClip(input = "", maxChars = 8000) {
   const text = String(input || "");
   const limit = Math.max(256, Number(maxChars || 8000));
   if (text.length <= limit) {
-    return { text, truncated: false, originalLength: text.length };
+    return {
+      text,
+      truncated: false,
+      originalLength: text.length,
+      truncatedChars: 0,
+      truncateLimitChars: limit,
+    };
   }
+  const truncatedChars = text.length - limit;
   return {
-    text: `...[truncated head ${text.length - limit} chars]\n${text.slice(-limit)}`,
+    text: `...[truncated head ${truncatedChars} chars]\n${text.slice(-limit)}`,
     truncated: true,
     originalLength: text.length,
+    truncatedChars,
+    truncateLimitChars: limit,
   };
 }
 
@@ -82,6 +91,14 @@ export function cleanTerminalOutputForLLM(output = {}, { maxChars = 8000 } = {})
     stdout: stdout.text,
     stderr: stderr.text,
     truncated: stdout.truncated || stderr.truncated,
+    truncate_limit_chars: Math.max(
+      Number(stdout.truncateLimitChars || 0),
+      Number(stderr.truncateLimitChars || 0),
+    ),
+    stdout_truncated_chars: Number(stdout.truncatedChars || 0),
+    stderr_truncated_chars: Number(stderr.truncatedChars || 0),
+    truncated_chars_total:
+      Number(stdout.truncatedChars || 0) + Number(stderr.truncatedChars || 0),
     stdout_original_length: stdout.originalLength,
     stderr_original_length: stderr.originalLength,
   };
@@ -100,6 +117,14 @@ export function cleanDatabaseOutputForLLM(output = {}, { maxChars = 8000 } = {})
     stdout: stdout.text,
     stderr: stderr.text,
     truncated: stdout.truncated || stderr.truncated,
+    truncate_limit_chars: Math.max(
+      Number(stdout.truncateLimitChars || 0),
+      Number(stderr.truncateLimitChars || 0),
+    ),
+    stdout_truncated_chars: Number(stdout.truncatedChars || 0),
+    stderr_truncated_chars: Number(stderr.truncatedChars || 0),
+    truncated_chars_total:
+      Number(stdout.truncatedChars || 0) + Number(stderr.truncatedChars || 0),
     stdout_original_length: stdout.originalLength,
     stderr_original_length: stderr.originalLength,
   };

@@ -9,6 +9,7 @@
     "./system-core": "./src/system-core/index.js",
     "./agent": "./src/system-core/agent/index.js",
     "./bot-manage": "./src/system-core/bot-manage/index.js",
+    "./bot-manage/hook": "./src/system-core/bot-manage/hook/index.js",
     "./tools": "./src/system-core/tools/index.js",
     "./tools/connectors/connector-toolkit": "./src/system-core/tools/connectors/connector-toolkit.js",
     "./model": "./src/system-core/model/index.js",

@@ -1,0 +1,21 @@
+{
+  "proxyHost": "0.0.0.0",
+  "proxies": [
+    {
+      "localPort": 12341,
+      "targetUrl": "https://dashscope.aliyuncs.com"
+    },
+    {
+      "localPort": 12342,
+      "targetUrl": "https://api.poe.com"
+    }
+  ],
+  "logDir": "logs",
+  "logPrefix": "requests",
+  "unknownModelName": "unknown_model",
+  "unknownFlowName": "unknown_flow",
+  "modelNameHeaderKey": "x-model-name",
+  "harnessFlowHeaderKey": "x-harness-flow",
+  "maxLogFileSizeBytes": 10485760,
+  "retainMs": 3600000
+}

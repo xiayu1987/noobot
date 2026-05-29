@@ -26,6 +26,11 @@ import {
   upsertExperienceModelEntries as upsertExperienceModelEntriesInMemory,
 } from "./model/index.js";
 import { isAbortLikeError } from "./workflow.js";
+import {
+  normalizeExperienceMetadata,
+  parseExperienceMetadataText,
+  renderExperienceMetadataText,
+} from "./metadata-store.js";
 
 export class ExperienceManager {
   constructor(storage) {
@@ -33,25 +38,21 @@ export class ExperienceManager {
   }
 
   async readMetadata(basePath) {
-    let metadata = await this.storage.readJson(
-      this.storage.experienceMetadataPath(basePath),
-      null,
+    const metadataPath = this.storage.experienceMetadataPath(basePath);
+    const text = String(await this.storage.readText(metadataPath, "") || "").trim();
+    if (text) return parseExperienceMetadataText(text);
+    const legacyJsonPath = metadataPath.replace(/\.md$/i, ".json");
+    const legacyJson = await this.storage.readJson(legacyJsonPath, null);
+    return normalizeExperienceMetadata(legacyJson);
+  }
+
+  async writeMetadata(basePath, metadata = null) {
+    const metadataPath = this.storage.experienceMetadataPath(basePath);
+    await this.storage.ensureDir(this.storage.experienceDir(basePath));
+    await this.storage.writeText(
+      metadataPath,
+      renderExperienceMetadataText(metadata),
     );
-    if (!metadata || typeof metadata !== "object") {
-      metadata = null;
-    }
-    metadata = metadata && typeof metadata === "object"
-      ? metadata
-      : {
-          domainNames: [],
-          weeklyBatches: [],
-          updatedAt: "",
-        };
-    return {
-      domainNames: dedupeTextList(metadata?.domainNames),
-      weeklyBatches: Array.isArray(metadata?.weeklyBatches) ? metadata.weeklyBatches : [],
-      updatedAt: String(metadata?.updatedAt || "").trim(),
-    };
   }
 
   async appendParseErrorLog({
@@ -148,6 +149,7 @@ export class ExperienceManager {
     return appendDailyDomainResults({
       storage: this.storage,
       readMetadata: (bp) => this.readMetadata(bp),
+      writeMetadata: (bp, metadata) => this.writeMetadata(bp, metadata),
       basePath,
       results,
       createdAt,
@@ -187,6 +189,7 @@ export class ExperienceManager {
         this.normalizeWeekly(raw, fallback, options),
       saveWeeklySummary: (params) => this.saveWeeklyDomainSummary(params),
       readMetadata: (bp) => this.readMetadata(bp),
+      writeMetadata: (bp, metadata) => this.writeMetadata(bp, metadata),
       readExperienceModel: (bp) => this.readExperienceModel(bp),
       upsertModelEntries: (bp, entries) => this.upsertExperienceModelEntries(bp, entries),
     });

@@ -20,11 +20,13 @@ import {
   invokeModelWithTextAndAttachments,
   resolveModelSpecByAlias,
 } from "../../model/index.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { convertDocumentToImages } from "../../utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { logError } from "../../tracking/console/logger.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -39,33 +41,42 @@ import {
   TEXT_EXTENSIONS,
 } from "./file-extension-constants.js";
 
-function getRuntime(agentContext) {
-  return agentContext?.runtime || {};
-}
-
 const require = createRequire(import.meta.url);
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_DIRECT_TEXT_BYTES = 8 * 1024 * 1024;
 
-let libreOfficeConvertAsync = null;
+let libreOfficeConverters = null;
 
-function resolveLibreOfficeConvertAsync() {
-  if (typeof libreOfficeConvertAsync === "function") {
-    return libreOfficeConvertAsync;
+function resolveLibreOfficeConverters() {
+  if (libreOfficeConverters) {
+    return libreOfficeConverters;
   }
-  try {
-    const libreOfficeModule = require("libreoffice");
-    libreOfficeConvertAsync = promisify(libreOfficeModule.convert);
-    return libreOfficeConvertAsync;
-  } catch {
+
+  const moduleNames = ["libreoffice-convert", "libreoffice"];
+  for (const moduleName of moduleNames) {
     try {
-      const libreOfficeConvertModule = require("libreoffice-convert");
-      libreOfficeConvertAsync = promisify(libreOfficeConvertModule.convert);
-      return libreOfficeConvertAsync;
+      const libreOfficeModule = require(moduleName);
+      const convert =
+        typeof libreOfficeModule?.convert === "function"
+          ? promisify(libreOfficeModule.convert)
+          : null;
+      const convertWithOptions =
+        typeof libreOfficeModule?.convertWithOptions === "function"
+          ? promisify(libreOfficeModule.convertWithOptions)
+          : null;
+      if (convert || convertWithOptions) {
+        libreOfficeConverters = {
+          moduleName,
+          convert,
+          convertWithOptions,
+        };
+        return libreOfficeConverters;
+      }
     } catch {
-      return null;
+      // Try next libreoffice implementation.
     }
   }
+  return null;
 }
 
 function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
@@ -129,11 +140,14 @@ async function readDirectTextDocumentIfAvailable(filePath = "") {
   if (Number(fileStat.size || 0) <= 0) {
     return { text: "", bytes: 0 };
   }
-  if (Number(fileStat.size || 0) > MAX_DIRECT_TEXT_BYTES) return null;
 
   const extension = path.extname(normalizedFilePath).toLowerCase();
-  const contentBuffer = await readFile(normalizedFilePath);
   const extensionMarkedAsText = TEXT_EXTENSIONS.has(extension);
+  // For files explicitly marked as text (e.g. .txt/.md/.csv), keep parsing via
+  // direct read even when file is larger than MAX_DIRECT_TEXT_BYTES.
+  if (!extensionMarkedAsText && Number(fileStat.size || 0) > MAX_DIRECT_TEXT_BYTES) return null;
+
+  const contentBuffer = await readFile(normalizedFilePath);
   const canReadAsText = extensionMarkedAsText || isLikelyUtf8Text(contentBuffer);
   if (!canReadAsText) return null;
 
@@ -189,8 +203,9 @@ function isImageInputFile(filePath = "") {
 
 function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}) {
   const normalizedInputPath = String(filePath || "").trim();
-  const runtimeAttachmentMetas = Array.isArray(agentContext?.runtime?.attachmentMetas)
-    ? agentContext.runtime.attachmentMetas
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const runtimeAttachmentMetas = Array.isArray(runtime?.attachmentMetas)
+    ? runtime.attachmentMetas
     : [];
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) return null;
   const inputBaseName = path.basename(normalizedInputPath);
@@ -243,31 +258,80 @@ async function buildImageBatches(imagePaths) {
 async function parseDocumentToTextViaLibreOffice({
   runtime = {},
   inputFile = "",
+  sourceAttachmentMeta = null,
 }) {
-  const converter = resolveLibreOfficeConvertAsync();
-  if (!converter) {
+  const converters = resolveLibreOfficeConverters();
+  const converter = converters?.convert || null;
+  const converterWithOptions = converters?.convertWithOptions || null;
+  if (!converter && !converterWithOptions) {
     throw recoverableToolError(tTool(runtime, "tools.doc2data.libreofficeUnavailable"), {
       code: ERROR_CODE.RECOVERABLE_TOOL_ERROR,
       details: { input: inputFile },
     });
   }
+  let inputFileName = "";
+  let outputFormat = { format: "txt", filter: undefined, mode: "libreoffice_text" };
   try {
     const inputBuffer = await readFile(inputFile);
     if (!inputBuffer.length) {
       return { text: "", bytes: 0 };
     }
-    const outputBuffer = await converter(inputBuffer, ".txt", undefined);
+    // `libreoffice` / `libreoffice-convert` expect format without leading dot.
+    // Passing ".txt" makes them probe `source..txt`, which can trigger ENOENT.
+    // Also pass the original filename (with extension) when supported so soffice
+    // can infer source type correctly for binary office documents.
+    const inputPathBaseName = path.basename(String(inputFile || "").trim());
+    const sourceAttachmentName = String(sourceAttachmentMeta?.name || "").trim();
+    inputFileName =
+      path.extname(inputPathBaseName)
+        ? inputPathBaseName
+        : (path.extname(sourceAttachmentName) ? sourceAttachmentName : inputPathBaseName || "source.bin");
+    outputFormat = resolveLibreOfficeOutputFormat(inputFileName);
+    let outputBuffer = null;
+    try {
+      outputBuffer = converterWithOptions
+        ? await converterWithOptions(inputBuffer, outputFormat.format, outputFormat.filter, {
+          fileName: inputFileName,
+        })
+        : await converter(inputBuffer, outputFormat.format, outputFormat.filter);
+    } catch (primaryError) {
+      const primaryMessage = String(primaryError?.message || "");
+      if (outputFormat.format !== "txt") throw primaryError;
+      const shouldRetryWithTextFilter =
+        primaryMessage.includes("no export filter") || primaryMessage.includes("impl_store");
+      if (!shouldRetryWithTextFilter) throw primaryError;
+      outputBuffer = converterWithOptions
+        ? await converterWithOptions(inputBuffer, "txt", "Text", {
+          fileName: inputFileName,
+        })
+        : await converter(inputBuffer, "txt", "Text");
+    }
     const text = Buffer.from(outputBuffer || "").toString("utf8").replace(/^\uFEFF/, "");
     return {
       text,
       bytes: Number(outputBuffer?.length || 0),
+      mode: outputFormat.mode,
+      outputFormat: outputFormat.format,
     };
   } catch (error) {
+    logError("[doc_to_data][libreoffice_parse_failed]", {
+      input: inputFile,
+      cause: error?.message || String(error || ""),
+      stack: error?.stack || "",
+      userId: String(runtime?.userId || "").trim(),
+      sessionId: String(
+        runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
+      ).trim(),
+      parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
+      libreOfficeModule: String(converters?.moduleName || ""),
+      inputFileName,
+      libreOfficeOutputFormat: outputFormat?.format || "",
+    });
     throw recoverableToolError(tTool(runtime, "tools.doc2data.libreofficeParseFailed"), {
       code: ERROR_CODE.RECOVERABLE_TOOL_ERROR,
+      cause: error?.message || String(error || ""),
       details: {
         input: inputFile,
-        cause: error?.message || String(error || ""),
       },
     });
   }
@@ -277,6 +341,31 @@ function sanitizeArtifactBaseName(input = "", fallback = "doc2data_result") {
   const normalized = String(input || "").trim();
   if (!normalized) return fallback;
   return normalized.replace(/[^\w.-]+/g, "_");
+}
+
+function resolveLibreOfficeOutputFormat(inputFileName = "") {
+  const extension = path.extname(String(inputFileName || "").trim()).toLowerCase();
+  // Calc/Spreadsheet documents usually cannot export directly to plain txt.
+  // Use csv as a stable text representation.
+  if ([
+    ".xlsx",
+    ".xls",
+    ".xlsm",
+    ".xlsb",
+    ".ods",
+    ".csv",
+  ].includes(extension)) {
+    return {
+      format: "csv",
+      filter: undefined,
+      mode: "libreoffice_csv",
+    };
+  }
+  return {
+    format: "txt",
+    filter: undefined,
+    mode: "libreoffice_text",
+  };
 }
 
 async function persistDoc2DataTextAttachment({
@@ -358,7 +447,7 @@ async function backwriteParsedResultToSourceAttachment({
 }
 
 export function createDoc2DataTool({ agentContext }) {
-  const runtime = getRuntime(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath =
     agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};
@@ -395,6 +484,7 @@ export function createDoc2DataTool({ agentContext }) {
         Number.isFinite(normalizedDpi) && normalizedDpi > 0
           ? Math.floor(normalizedDpi)
           : 180;
+      let effectiveParseEngine = resolvedParseEngine;
       const inputFile = await assertAndResolveUserWorkspaceFilePath({
         filePath,
         agentContext,
@@ -450,43 +540,60 @@ export function createDoc2DataTool({ agentContext }) {
       }
 
       if (resolvedParseEngine === DOC2DATA_PARSE_ENGINE.LIBREOFFICE) {
-        const libreOfficeResult = await parseDocumentToTextViaLibreOffice({
-          runtime,
-          inputFile,
-        });
-        const attachmentMetas = await persistDoc2DataTextAttachment({
-          runtime,
-          inputFile,
-          text: libreOfficeResult.text,
-          mode: "libreoffice_text",
-        });
-        const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
-          runtime,
-          sourceAttachmentMeta,
-          parsedAttachmentMeta: attachmentMetas[0] || null,
-        });
-        return toToolJsonResult(
-          TOOL_NAME.DOC_TO_DATA,
-          {
-            ok: true,
-            status: TOOL_RESULT_STATUS.COMPLETED,
-            mode: "libreoffice_text",
-            input: inputFile,
+        try {
+          const libreOfficeResult = await parseDocumentToTextViaLibreOffice({
+            runtime,
+            inputFile,
+            sourceAttachmentMeta,
+          });
+          const attachmentMetas = await persistDoc2DataTextAttachment({
+            runtime,
+            inputFile,
             text: libreOfficeResult.text,
-            attachmentMetas,
-            sourceAttachmentMeta: updatedSourceAttachment || null,
-            summary: {
-              bytes: Number(libreOfficeResult.bytes || 0),
-              parse_engine: resolvedParseEngine,
-              parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-              parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
-              source_attachment_backwritten: Boolean(updatedSourceAttachment),
-              saved_attachment_count: attachmentMetas.length,
-              text_length: libreOfficeResult.text.length,
+            mode: libreOfficeResult.mode || "libreoffice_text",
+          });
+          const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
+            runtime,
+            sourceAttachmentMeta,
+            parsedAttachmentMeta: attachmentMetas[0] || null,
+          });
+          return toToolJsonResult(
+            TOOL_NAME.DOC_TO_DATA,
+            {
+              ok: true,
+              status: TOOL_RESULT_STATUS.COMPLETED,
+              mode: libreOfficeResult.mode || "libreoffice_text",
+              input: inputFile,
+              text: libreOfficeResult.text,
+              attachmentMetas,
+              sourceAttachmentMeta: updatedSourceAttachment || null,
+              summary: {
+                bytes: Number(libreOfficeResult.bytes || 0),
+                parse_engine: resolvedParseEngine,
+                libreoffice_output_format: String(libreOfficeResult.outputFormat || ""),
+                parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
+                parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
+                source_attachment_backwritten: Boolean(updatedSourceAttachment),
+                saved_attachment_count: attachmentMetas.length,
+                text_length: libreOfficeResult.text.length,
+              },
             },
-          },
-          true,
-        );
+            true,
+          );
+        } catch (libreOfficeError) {
+          // Graceful fallback: continue with vision pipeline instead of failing.
+          effectiveParseEngine = DOC2DATA_PARSE_ENGINE.VISION;
+          logError("[doc_to_data][libreoffice_fallback_to_vision]", {
+            input: inputFile,
+            cause: libreOfficeError?.message || String(libreOfficeError || ""),
+            stack: libreOfficeError?.stack || "",
+            userId: String(runtime?.userId || "").trim(),
+            sessionId: String(
+              runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
+            ).trim(),
+            parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
+          });
+        }
       }
 
       const outputRoot = path.join(
@@ -586,7 +693,7 @@ export function createDoc2DataTool({ agentContext }) {
           },
           summary: {
             batch_count: batchResults.length,
-            parse_engine: resolvedParseEngine,
+            parse_engine: effectiveParseEngine,
             parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
             parsed_result_path: String(attachmentMetas?.[0]?.path || ""),
             source_attachment_backwritten: Boolean(updatedSourceAttachment),

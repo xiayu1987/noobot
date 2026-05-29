@@ -11,6 +11,7 @@ import { formatDomainBlock } from "../../utils/format.js";
 export async function appendDailyDomainResults({
   storage,
   readMetadata,
+  writeMetadata,
   basePath = "",
   results = [],
   createdAt = "",
@@ -42,6 +43,6 @@ export async function appendDailyDomainResults({
   await storage.ensureDir(storage.experienceDir(basePath));
   metadata.domainNames = dedupeTextList([...metadata.domainNames, ...domainNames]);
   metadata.updatedAt = new Date().toISOString();
-  await storage.writeJson(storage.experienceMetadataPath(basePath), metadata);
+  await writeMetadata(basePath, metadata);
   return true;
 }
