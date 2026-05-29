@@ -291,6 +291,43 @@ test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with 
   assert.equal(messages[4].summarized, true);
 });
 
+test("SessionExecutionEngine markMessagesSummarized supports scoped marking", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+        },
+      },
+    },
+  });
+
+  const summarizer = prepared.plugins.harness.markMessagesSummarized;
+  const messages = [
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
+    { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
+    { role: "assistant", content: "", tool_calls: [{ id: "c2", function: { name: "execute_script" } }] },
+    { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
+  ];
+
+  const marked = await summarizer({
+    messages,
+    summaryScope: {
+      maxMessages: 2,
+      limitToProvidedMessagesOnly: true,
+    },
+  });
+
+  assert.equal(marked, 2);
+  assert.equal(messages[0].summarized, true);
+  assert.equal(messages[1].summarized, true);
+  assert.equal(messages[2].summarized, undefined);
+  assert.equal(messages[3].summarized, undefined);
+});
+
 test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages for plugin model", async () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {},

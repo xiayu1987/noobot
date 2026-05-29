@@ -39,6 +39,9 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   if (!messages) return false;
 
   if (state.pending.summary === true) {
+    // Freeze the summary scope at injection time so later tool calls in the same
+    // loop are never treated as "already summarized".
+    state.pending.summaryCheckpointMessageCount = messages.length;
     const checklistContent = buildPlanChecklistSystemContent({
       locale,
       planText: bucket?.planText || "",
