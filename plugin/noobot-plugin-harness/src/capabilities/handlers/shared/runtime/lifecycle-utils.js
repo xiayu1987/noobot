@@ -26,6 +26,11 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
 
   if (TURN_START_POINTS.has(normalizedPoint)) {
     state.flags.agentTurnEnded = false;
+    // Per-turn acceptance/final-output guards should be reset at turn start.
+    // Otherwise a previous turn that requested acceptance could suppress
+    // final-output fallback acceptance in subsequent turns.
+    state.flags.acceptanceRequested = false;
+    state.flags.checklistArtifactsAttached = false;
     if (dialogProcessId) {
       state.signals.activeDialogProcessId = dialogProcessId;
       const index = completedIds.indexOf(dialogProcessId);

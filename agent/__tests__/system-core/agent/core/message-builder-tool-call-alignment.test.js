@@ -156,6 +156,43 @@ test("buildContextMessages can disable main model recent window via context conf
   assert.equal(messages[messages.length - 1]?.content, "m-20");
 });
 
+test("buildContextMessages uses harness history recent limit when harness plugin is enabled", () => {
+  const history = Array.from({ length: 30 }, (_, index) => ({
+    role: "assistant",
+    content: `m-${index + 1}`,
+  }));
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            globalConfig: {
+              plugins: {
+                harness: {
+                  enabled: true,
+                  mode: "on",
+                  contextWindowRecentMessageLimit: 20,
+                },
+              },
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history,
+        },
+      },
+    },
+    { currentUserMessage: "" },
+  );
+
+  assert.equal(messages.length, 20);
+  assert.equal(messages[0]?.content, "m-11");
+  assert.equal(messages[messages.length - 1]?.content, "m-30");
+});
+
 test("buildContextMessageBlocks splits system/history/incremental and preserves concat order", () => {
   const blocks = buildContextMessageBlocks(
     {

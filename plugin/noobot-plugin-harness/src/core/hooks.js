@@ -80,10 +80,135 @@ function splitLeadingSystemMessages(messages = []) {
   };
 }
 
+function normalizeMessageBlockList(value = []) {
+  return Array.isArray(value) ? value : [];
+}
+
+function resolveMessageBlocks(ctx = {}) {
+  if (!ctx?.messageBlocks || typeof ctx.messageBlocks !== "object") return null;
+  return {
+    system: normalizeMessageBlockList(ctx.messageBlocks.system),
+    history: normalizeMessageBlockList(ctx.messageBlocks.history),
+    incremental: normalizeMessageBlockList(ctx.messageBlocks.incremental),
+  };
+}
+
+function resolveIsFrontendUserMessage(message = {}) {
+  if (!message || typeof message !== "object") return false;
+  if (message?.frontendUserMessage === true) return true;
+  if (message?.additional_kwargs?.frontendUserMessage === true) return true;
+  if (message?.lc_kwargs?.frontendUserMessage === true) return true;
+  if (message?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true) return true;
+  return false;
+}
+
+function mergeUniqueByReference(primary = [], extras = []) {
+  const merged = [];
+  const seenRef = new Set();
+  const seenSignature = new Set();
+  for (const item of [...primary, ...extras]) {
+    if (!item || typeof item !== "object") {
+      merged.push(item);
+      continue;
+    }
+    if (seenRef.has(item)) continue;
+    const role = resolveMessageRole(item);
+    const content = String(item?.content || "");
+    const toolCallId = String(item?.tool_call_id || item?.toolCallId || "").trim();
+    const signature = [role, content, toolCallId].join("::");
+    if (seenSignature.has(signature)) continue;
+    seenRef.add(item);
+    seenSignature.add(signature);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function resolveFrontendUserAnchoredIncremental(source = [], resolved = []) {
+  const sourceList = Array.isArray(source) ? source : [];
+  const resolvedList = Array.isArray(resolved) ? resolved : [];
+  const anchor = sourceList.find((message) => resolveIsFrontendUserMessage(message));
+  if (!anchor) return resolvedList;
+  if (resolvedList.includes(anchor)) return resolvedList;
+  return [anchor, ...resolvedList];
+}
+
+function compactFinalMessageBlocks(point = "", ctx = {}, options = {}) {
+  if (point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return null;
+  const blocks = resolveMessageBlocks(ctx);
+  if (!blocks) return null;
+  if (typeof options?.resolveMessageBlock !== "function") return null;
+  const allMessages = Array.isArray(ctx?.messages) ? ctx.messages : [];
+  const knownRefs = new Set([
+    ...normalizeMessageBlockList(blocks.system),
+    ...normalizeMessageBlockList(blocks.history),
+    ...normalizeMessageBlockList(blocks.incremental),
+  ]);
+  const extras = allMessages.filter((message) => !knownRefs.has(message));
+  const extraSystem = extras.filter((message) => resolveMessageRole(message) === "system");
+  const extraIncremental = extras.filter((message) => resolveMessageRole(message) !== "system");
+
+  const systemSource = mergeUniqueByReference(blocks.system, extraSystem);
+  const historySource = normalizeMessageBlockList(blocks.history);
+  const incrementalSource = mergeUniqueByReference(blocks.incremental, extraIncremental);
+
+  const systemResolved = options.resolveMessageBlock({
+    scope: "system",
+    messages: systemSource,
+    ctx,
+  });
+  const historyResolved = options.resolveMessageBlock({
+    scope: "history",
+    messages: historySource,
+    ctx,
+  });
+  const incrementalResolved = options.resolveMessageBlock({
+    scope: "incremental",
+    messages: incrementalSource,
+    ctx,
+  });
+
+  const system = Array.isArray(systemResolved) ? systemResolved : systemSource;
+  const history = Array.isArray(historyResolved) ? historyResolved : historySource;
+  const incrementalBase = resolveFrontendUserAnchoredIncremental(
+    incrementalSource,
+    Array.isArray(incrementalResolved) ? incrementalResolved : incrementalSource,
+  );
+  const conversationResolved = options.resolveMessageBlock({
+    scope: "conversation",
+    messages: [...history, ...incrementalBase],
+    ctx,
+  });
+  const conversation = resolveFrontendUserAnchoredIncremental(
+    incrementalSource,
+    Array.isArray(conversationResolved)
+      ? conversationResolved
+      : [...history, ...incrementalBase],
+  );
+  return { system, history, incremental: incrementalBase, conversation };
+}
+
 function compactFinalConversationWindow(point = "", ctx = {}, options = {}) {
   if (point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return false;
   if (!Array.isArray(ctx?.messages)) return false;
   if (typeof options?.resolveMessageBlock !== "function") return false;
+  const compactedBlocks = compactFinalMessageBlocks(point, ctx, options);
+  if (compactedBlocks) {
+    const conversation = Array.isArray(compactedBlocks.conversation)
+      ? compactedBlocks.conversation
+      : [...compactedBlocks.history, ...compactedBlocks.incremental];
+    const composed = [
+      ...compactedBlocks.system,
+      ...conversation,
+    ];
+    ctx.messages.splice(0, ctx.messages.length, ...composed);
+    ctx.messageBlocks = {
+      system: compactedBlocks.system,
+      history: compactedBlocks.history,
+      incremental: compactedBlocks.incremental,
+    };
+    return true;
+  }
   const { system, conversation } = splitLeadingSystemMessages(ctx.messages);
   const resolved = options.resolveMessageBlock({
     scope: "conversation",
