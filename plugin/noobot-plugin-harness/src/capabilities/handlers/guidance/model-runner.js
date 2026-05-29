@@ -214,6 +214,12 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   let reason = "";
   if (state.pending.summary === true) {
     purpose = "summary";
+    // Snapshot current message boundary for summary marking. In separate_model
+    // mode, marking happens later (after external model returns), so without
+    // this checkpoint newly appended turns may be summarized by mistake.
+    state.pending.summaryCheckpointMessageCount = Array.isArray(ctx?.messages)
+      ? ctx.messages.length
+      : null;
     prompt = buildGuidanceSummaryPromptText({ locale });
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;

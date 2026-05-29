@@ -137,6 +137,43 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
   );
 });
 
+test("separate_model summary uses checkpointed summary scope when marking messages", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  let markedCalled = 0;
+  const agentContext = createAgentContext({
+    pending: {
+      summary: true,
+    },
+  });
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => ({ content: "小结完成" }),
+      markMessagesSummarized: ({ messages = [], summaryScope = {} } = {}) => {
+        markedCalled += 1;
+        assert.equal(Array.isArray(messages), true);
+        assert.equal(messages.length, 2);
+        assert.equal(summaryScope?.maxMessages, 2);
+        assert.equal(summaryScope?.limitToProvidedMessagesOnly, true);
+        for (const item of messages) {
+          item.summarized = true;
+        }
+        return messages.length;
+      },
+    },
+  };
+
+  const ctx = {
+    messages: [
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
+      { role: "tool", content: '{"toolName":"execute_script","ok":true}', tool_call_id: "c1", toolName: "execute_script" },
+    ],
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  assert.equal(markedCalled >= 1, true);
+});
+
 test("inject mode: overflow summary keeps higher priority than revision", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({

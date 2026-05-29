@@ -115,7 +115,15 @@ function mergeUniqueByReference(primary = [], extras = []) {
     const role = resolveMessageRole(item);
     const content = String(item?.content || "");
     const toolCallId = String(item?.tool_call_id || item?.toolCallId || "").trim();
-    const signature = [role, content, toolCallId].join("::");
+    const assistantToolCallIds = Array.isArray(item?.tool_calls)
+      ? item.tool_calls
+          .map((call = {}) =>
+            String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim(),
+          )
+          .filter(Boolean)
+          .join(",")
+      : "";
+    const signature = [role, content, toolCallId, assistantToolCallIds].join("::");
     if (seenSignature.has(signature)) continue;
     seenRef.add(item);
     seenSignature.add(signature);
