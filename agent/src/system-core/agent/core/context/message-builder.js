@@ -122,15 +122,29 @@ function resolveMainModelWindowConfig(runtime = {}) {
     effectiveConfig?.context && typeof effectiveConfig.context === "object"
       ? effectiveConfig.context
       : {};
+  const harnessConfig =
+    effectiveConfig?.plugins?.harness && typeof effectiveConfig.plugins.harness === "object"
+      ? effectiveConfig.plugins.harness
+      : {};
+  const harnessEnabled = harnessConfig.enabled === true;
+  const harnessMode = String(harnessConfig.mode || "").trim().toLowerCase();
+  const harnessActive = harnessEnabled && harnessMode !== "off" && harnessMode !== "disabled";
   const mainModelRecentWindow = contextConfig.mainModelRecentWindow !== false;
   const parsedMainModelRecentLimit = Number(contextConfig.mainModelRecentLimit);
   const mainModelRecentLimit =
     Number.isFinite(parsedMainModelRecentLimit) && parsedMainModelRecentLimit > 0
       ? Math.floor(parsedMainModelRecentLimit)
       : 15;
+  const parsedHarnessRecentLimit = Number(harnessConfig.contextWindowRecentMessageLimit);
+  const harnessRecentLimit =
+    Number.isFinite(parsedHarnessRecentLimit) && parsedHarnessRecentLimit > 0
+      ? Math.floor(parsedHarnessRecentLimit)
+      : 20;
   return {
     mainModelRecentWindow,
     mainModelRecentLimit,
+    harnessActive,
+    harnessRecentLimit,
   };
 }
 
@@ -192,7 +206,12 @@ export function buildContextMessageBlocks(
   { currentUserMessage = "" } = {},
 ) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
-  const { mainModelRecentWindow, mainModelRecentLimit } = resolveMainModelWindowConfig(runtime);
+  const {
+    mainModelRecentWindow,
+    mainModelRecentLimit,
+    harnessActive,
+    harnessRecentLimit,
+  } = resolveMainModelWindowConfig(runtime);
   const systemRuntime = runtime?.systemRuntime || {};
   const fallbackUserMeta = {
     userName: String(runtime?.userId || "").trim(),
@@ -229,7 +248,7 @@ export function buildContextMessageBlocks(
     currentDialogProcessId: resolvedDialogProcessId,
     mode: "agent",
     useRecentWindow: mainModelRecentWindow,
-    recentLimit: mainModelRecentLimit,
+    recentLimit: harnessActive ? harnessRecentLimit : mainModelRecentLimit,
   });
   const system = [];
   for (const content of systemMessages) {

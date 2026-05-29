@@ -200,6 +200,80 @@ test("createRegisterHarnessHooks compacts final non-system messages after prompt
   );
 });
 
+test("createRegisterHarnessHooks compacts by message blocks and preserves frontend incremental anchor", async () => {
+  const calls = [];
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => true,
+    injectPrompt: async (_point, ctx) => {
+      ctx.messages.push({ role: "user", content: "injected incremental" });
+    },
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveMessageBlock: ({ scope, messages }) => {
+        calls.push(scope);
+        if (scope === "history") return messages.slice(-1);
+        if (scope === "incremental") return messages.slice(-1);
+        return messages;
+      },
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const frontendUser = {
+    role: "user",
+    content: "real user message",
+    additional_kwargs: { frontendUserMessage: true },
+  };
+  const ctx = {
+    messages: [
+      { role: "system", content: "system context" },
+      { role: "user", content: "history-1" },
+      { role: "assistant", content: "history-2" },
+      frontendUser,
+    ],
+    messageBlocks: {
+      system: [{ role: "system", content: "system context" }],
+      history: [
+        { role: "user", content: "history-1" },
+        { role: "assistant", content: "history-2" },
+      ],
+      incremental: [frontendUser],
+    },
+  };
+
+  await handlers.get("before_llm_call")(ctx);
+
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    ["system context", "history-2", "real user message", "injected incremental"],
+  );
+  assert.deepEqual(calls, ["system", "history", "incremental", "conversation"]);
+});
+
 test("createRegisterHarnessHooks skips non-primary execution scope", async () => {
   const calls = [];
   const handlers = new Map();

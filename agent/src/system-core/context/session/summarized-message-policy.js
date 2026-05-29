@@ -14,7 +14,16 @@ import {
 export const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
 
 export function getMessageRole(messageItem = {}) {
-  return String(messageItem?.role || "").trim();
+  const explicitRole = String(messageItem?.role || "").trim();
+  if (explicitRole) return explicitRole;
+  const modelType = String(getModelMessageType(messageItem) || "")
+    .trim()
+    .toLowerCase();
+  if (modelType === "ai") return "assistant";
+  if (modelType === "human") return "user";
+  if (modelType === "system") return "system";
+  if (modelType === "tool") return "tool";
+  return "";
 }
 
 export function getModelMessageType(messageItem = {}) {

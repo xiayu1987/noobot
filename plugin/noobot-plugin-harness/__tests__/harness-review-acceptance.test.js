@@ -381,6 +381,45 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
   );
 });
 
+test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn start", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+
+  const agentContext = {
+    payload: {
+      messages: { system: [], history: [] },
+      harness: {
+        state: {
+          flags: {
+            planningCaptured: true,
+            acceptanceRequested: true,
+            checklistArtifactsAttached: true,
+          },
+          counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          signals: {
+            parsedAttachment: false,
+            subtaskStarted: false,
+            subtaskWaited: false,
+            successfulToolCount: 0,
+          },
+          pending: { guidance: null, summary: false },
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+
+  await hookManager.emit("before_turn", {
+    userId: "u17-reset",
+    sessionId: "s17-reset",
+    dialogProcessId: "dp17-reset",
+    agentContext,
+  });
+
+  assert.equal(agentContext.payload.harness.state.flags.acceptanceRequested, false);
+  assert.equal(agentContext.payload.harness.state.flags.checklistArtifactsAttached, false);
+});
+
 test("harness forced acceptance is owned by acceptance and appended once", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
