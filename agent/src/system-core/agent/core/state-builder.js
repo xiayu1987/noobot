@@ -6,7 +6,10 @@
 import { createChatModel } from "../../model/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { emitEvent } from "../../event/index.js";
-import { buildContextMessages } from "./context/message-builder.js";
+import {
+  buildContextMessages,
+  buildContextMessageBlocks,
+} from "./context/message-builder.js";
 import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import {
   getRuntimeFromAgentContext,
@@ -28,6 +31,7 @@ export function createStateBuilder({
   mergeConfigFn = mergeConfig,
   emitEventFn = emitEvent,
   buildContextMessagesFn = buildContextMessages,
+  buildContextMessageBlocksFn = buildContextMessageBlocks,
   normalizeSystemRuntimeCountersFn = normalizeSystemRuntimeCounters,
   resolveEffectiveModelSpecFn = resolveEffectiveModelSpec,
   resolveMaxToolLoopTurnsFn = resolveMaxToolLoopTurns,
@@ -75,9 +79,14 @@ export function createStateBuilder({
       model: selectedModelSpec?.model || "",
     });
 
-    const messages = buildContextMessagesFn(agentContext, {
+    const messageBlocks = buildContextMessageBlocksFn(agentContext, {
       currentUserMessage: userMessage,
     });
+    const messages = Array.isArray(messageBlocks?.messages)
+      ? messageBlocks.messages
+      : buildContextMessagesFn(agentContext, {
+          currentUserMessage: userMessage,
+        });
 
     const modelState = {
       agentContext,
@@ -95,6 +104,16 @@ export function createStateBuilder({
     const loopState = {
       tools,
       messages,
+      messageBlocks:
+        messageBlocks && typeof messageBlocks === "object"
+          ? {
+              system: Array.isArray(messageBlocks.system) ? messageBlocks.system : [],
+              history: Array.isArray(messageBlocks.history) ? messageBlocks.history : [],
+              incremental: Array.isArray(messageBlocks.incremental)
+                ? messageBlocks.incremental
+                : [],
+            }
+          : { system: [], history: [], incremental: [] },
       traces: [],
       turnMessages: [],
       turnTasks: [],

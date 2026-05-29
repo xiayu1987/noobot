@@ -155,10 +155,14 @@
 |---|---|---|
 | `plugins.<name>.enabled` | boolean | 插件总开关。为 `false` 时前端不展示且运行时禁用。 |
 | `plugins.<name>.mode` | enum | 插件默认运行模式。目前支持 `on` / `off`（`off` 表示插件可用但默认不激活）。 |
+| `plugins.harness.contextWindowRecentMessageLimit` | number | Harness 历史消息块统一过滤/裁剪入口的 recent-window 条数上限。 |
+| `plugins.harness.incrementalRecentMessageLimit` | number | Harness 增量消息块统一过滤/裁剪入口的 recent-window 条数上限。 |
 
 当前仓库插件默认值：
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
+- `plugins.harness.contextWindowRecentMessageLimit = 20`
+- `plugins.harness.incrementalRecentMessageLimit = 20`
 
 ### 3.6 连接器预置
 

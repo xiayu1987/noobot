@@ -155,10 +155,14 @@ Current defaults in repo:
 |---|---|---|
 | `plugins.<name>.enabled` | boolean | Plugin global switch. When `false`, plugin is hidden in frontend and disabled at runtime. |
 | `plugins.<name>.mode` | enum | Default runtime mode for this plugin. Currently `on` / `off` (`off` means enabled but not active by default). |
+| `plugins.harness.contextWindowRecentMessageLimit` | number | Harness history block recent-window limit used by unified clipping entry. |
+| `plugins.harness.incrementalRecentMessageLimit` | number | Harness incremental block recent-window limit used by unified clipping entry. |
 
 Current plugin defaults in repo:
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
+- `plugins.harness.contextWindowRecentMessageLimit = 20`
+- `plugins.harness.incrementalRecentMessageLimit = 20`
 
 ### 3.6 Connector Presets
 

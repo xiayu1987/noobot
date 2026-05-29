@@ -592,6 +592,47 @@ export class SessionExecutionEngine {
     };
   }
 
+  _createHarnessResolveMessageBlock({ harnessOptions = {} } = {}) {
+    const historyRecentLimit = Number(
+      harnessOptions?.contextWindowRecentMessageLimit || 20,
+    );
+    const incrementalRecentLimit = Number(
+      harnessOptions?.incrementalRecentMessageLimit || historyRecentLimit || 20,
+    );
+    return ({ scope = "history", messages = [], ctx = {} } = {}) => {
+      const source = Array.isArray(messages) ? messages : [];
+      const currentDialogProcessId = resolveDialogProcessId({
+        ctx,
+        messages: source,
+      });
+      const normalizedScope = String(scope || "history").trim().toLowerCase();
+      if (normalizedScope === "system") {
+        return resolveModelContextMessages({
+          sourceMessages: source,
+          currentDialogProcessId,
+          mode: "agent",
+          useRecentWindow: false,
+        });
+      }
+      if (normalizedScope === "incremental") {
+        return resolveModelContextMessages({
+          sourceMessages: source,
+          currentDialogProcessId,
+          mode: "agent",
+          useRecentWindow: true,
+          recentLimit: incrementalRecentLimit,
+        });
+      }
+      return resolveModelContextMessages({
+        sourceMessages: source,
+        currentDialogProcessId,
+        mode: "agent",
+        useRecentWindow: true,
+        recentLimit: historyRecentLimit,
+      });
+    };
+  }
+
   _createHarnessMarkMessagesSummarized() {
     const shouldMark = (messageItem = {}, taskSummaryToolName = "task_summary") =>
       shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName }) ||
@@ -683,7 +724,18 @@ export class SessionExecutionEngine {
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
     const next = { ...options, enabled: true, mode: "on", basePath };
+    next.incrementalRecentMessageLimit =
+      Number.isFinite(Number(next?.incrementalRecentMessageLimit)) &&
+      Number(next.incrementalRecentMessageLimit) > 0
+        ? Math.floor(Number(next.incrementalRecentMessageLimit))
+        : Number.isFinite(Number(next?.contextWindowRecentMessageLimit)) &&
+            Number(next.contextWindowRecentMessageLimit) > 0
+          ? Math.floor(Number(next.contextWindowRecentMessageLimit))
+          : 20;
     next.resolveModelMessages = this._createHarnessResolveModelMessages({
+      harnessOptions: next,
+    });
+    next.resolveMessageBlock = this._createHarnessResolveMessageBlock({
       harnessOptions: next,
     });
     next.markMessagesSummarized = this._createHarnessMarkMessagesSummarized();

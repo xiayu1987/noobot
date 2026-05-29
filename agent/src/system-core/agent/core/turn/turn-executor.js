@@ -120,6 +120,7 @@ export async function invokeNoToolsTurn({
 }) {
   const {
     messages,
+    messageBlocks,
     traces,
     turnMessages,
     currentTurnMessages,
@@ -143,6 +144,7 @@ export async function invokeNoToolsTurn({
       startedAt: llmStartedAt,
       forceToolChoiceNone,
       messages,
+      messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
@@ -181,6 +183,7 @@ export async function invokeNoToolsTurn({
         durationMs: Date.now() - llmStartedAtMs,
         error,
         messages,
+        messageBlocks,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
       }),
@@ -202,6 +205,7 @@ export async function invokeNoToolsTurn({
       hasToolCalls: false,
       modelResponse,
       messages,
+      messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
@@ -286,6 +290,7 @@ export async function invokeNoToolsTurn({
 export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const {
     messages,
+    messageBlocks,
     traces,
     tools,
     turnMessages,
@@ -391,6 +396,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       toolChoice: configuredToolChoice || "",
       toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
       messages,
+      messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
@@ -414,6 +420,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
         toolChoice: configuredToolChoice || "",
         error,
         messages,
+        messageBlocks,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
       }),
@@ -508,6 +515,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       ai,
       calls,
       messages,
+      messageBlocks,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
