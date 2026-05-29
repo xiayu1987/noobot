@@ -197,6 +197,56 @@ test("SessionExecutionEngine injects plugin resolveModelMessages with recent win
   ]);
 });
 
+test("SessionExecutionEngine injects plugin resolveMessageBlock for history/incremental unified filtering", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+          contextWindowRecentMessageLimit: 2,
+          incrementalRecentMessageLimit: 3,
+        },
+      },
+    },
+  });
+  const resolver = prepared.plugins.harness.resolveMessageBlock;
+  assert.equal(typeof resolver, "function");
+
+  const historyResolved = resolver({
+    scope: "history",
+    messages: [
+      { role: "assistant", content: "h1" },
+      { role: "assistant", content: "h2" },
+      { role: "assistant", content: "h3" },
+    ],
+    ctx: { dialogProcessId: "dlg1" },
+  });
+  const incrementalResolved = resolver({
+    scope: "incremental",
+    messages: [
+      { role: "assistant", content: "a1" },
+      { role: "assistant", content: "a2" },
+      { role: "assistant", content: "a3" },
+      { role: "assistant", content: "a4" },
+    ],
+    ctx: { dialogProcessId: "dlg1" },
+  });
+  const systemResolved = resolver({
+    scope: "system",
+    messages: [
+      { role: "system", content: "policy" },
+      { role: "assistant", content: "a", summarized: true },
+    ],
+    ctx: { dialogProcessId: "dlg1" },
+  });
+  assert.deepEqual(historyResolved.map((item) => item.content), ["h2", "h3"]);
+  assert.deepEqual(incrementalResolved.map((item) => item.content), ["a2", "a3", "a4"]);
+  assert.deepEqual(systemResolved.map((item) => item.content), ["policy"]);
+});
+
 test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with agent summary policy", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const prepared = engine._prepareHarnessRunConfig({

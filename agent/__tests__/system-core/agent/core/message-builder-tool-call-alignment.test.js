@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ToolMessage } from "@langchain/core/messages";
 
-import { buildContextMessages } from "../../../../src/system-core/agent/core/context/message-builder.js";
+import {
+  buildContextMessages,
+  buildContextMessageBlocks,
+} from "../../../../src/system-core/agent/core/context/message-builder.js";
 
 test("buildContextMessages drops orphan tool results without matching assistant tool_call", () => {
   const messages = buildContextMessages(
@@ -151,4 +154,40 @@ test("buildContextMessages can disable main model recent window via context conf
   assert.equal(messages.length, 20);
   assert.equal(messages[0]?.content, "m-1");
   assert.equal(messages[messages.length - 1]?.content, "m-20");
+});
+
+test("buildContextMessageBlocks splits system/history/incremental and preserves concat order", () => {
+  const blocks = buildContextMessageBlocks(
+    {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "u1",
+            systemRuntime: {
+              sessionId: "s1",
+              dialogProcessId: "dlg1",
+            },
+          },
+        },
+      },
+      payload: {
+        messages: {
+          system: ["sys-1"],
+          history: [{ role: "assistant", content: "h-1" }],
+        },
+      },
+    },
+    { currentUserMessage: "u-1" },
+  );
+
+  assert.equal(Array.isArray(blocks.system), true);
+  assert.equal(Array.isArray(blocks.history), true);
+  assert.equal(Array.isArray(blocks.incremental), true);
+  assert.equal(blocks.system.length, 1);
+  assert.equal(blocks.history.length, 1);
+  assert.equal(blocks.incremental.length, 2);
+  assert.equal(blocks.messages.length, 4);
+  assert.equal(blocks.messages[0]?.content, "sys-1");
+  assert.equal(blocks.messages[1]?.content, "h-1");
+  assert.equal(blocks.messages[2]?.content, "u-1");
 });

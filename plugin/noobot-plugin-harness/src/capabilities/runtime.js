@@ -13,6 +13,67 @@ import { resolveTakeoverPriority, sortTakeovers } from "./takeover/priority.js";
 import { cleanupExpiredPendingOnHook } from "./pending-cleanup.js";
 import { markHarnessTurnLifecycle } from "./handlers/shared/runtime/lifecycle-utils.js";
 
+function normalizeBlockList(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function resolveMessageBlocks(ctx = {}) {
+  const messageBlocks =
+    ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+  if (!messageBlocks) return null;
+  return {
+    system: normalizeBlockList(messageBlocks.system),
+    history: normalizeBlockList(messageBlocks.history),
+    incremental: normalizeBlockList(messageBlocks.incremental),
+  };
+}
+
+function resolveFilteredBlock({
+  resolver = null,
+  scope = "history",
+  messages = [],
+  ctx = {},
+} = {}) {
+  const source = normalizeBlockList(messages);
+  if (typeof resolver !== "function") return source;
+  try {
+    const resolved = resolver({ scope, messages: source, ctx });
+    return Array.isArray(resolved) ? resolved : source;
+  } catch {
+    return source;
+  }
+}
+
+function applyMessageBlocksForBeforeLlmCall(point = "", ctx = {}, meta = {}) {
+  if (String(point || "").trim().toLowerCase() !== "before_llm_call") return;
+  const blocks = resolveMessageBlocks(ctx);
+  if (!blocks) return;
+  const resolver = meta?.harness?.resolveMessageBlock;
+  const system = resolveFilteredBlock({
+    resolver,
+    scope: "system",
+    messages: blocks.system,
+    ctx,
+  });
+  const history = resolveFilteredBlock({
+    resolver,
+    scope: "history",
+    messages: blocks.history,
+    ctx,
+  });
+  const incremental = resolveFilteredBlock({
+    resolver,
+    scope: "incremental",
+    messages: blocks.incremental,
+    ctx,
+  });
+  const composed = [...system, ...history, ...incremental];
+  const target = Array.isArray(ctx?.messages) ? ctx.messages : [];
+  target.splice(0, target.length, ...composed);
+  ctx.messages = target;
+  ctx.messageBlocks = { system, history, incremental };
+}
+
 function resolveTakeoverDirectives(result = {}) {
   return {
     tool:
@@ -62,6 +123,7 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
     async runHook(point = "", ctx = {}, meta = {}) {
       markHarnessTurnLifecycle(point, ctx);
       cleanupExpiredPendingOnHook(point, ctx, meta);
+      applyMessageBlocksForBeforeLlmCall(point, ctx, meta);
       const capabilities = this.resolveByHook(point);
       const results = [];
       const pendingToolTakeovers = [];

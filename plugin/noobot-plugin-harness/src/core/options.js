@@ -31,6 +31,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   miniRunnerMaxTurns: 5,
   miniRunnerToolAllowlist: [],
   contextWindowRecentMessageLimit: WORKFLOW_PARAMS.contextWindow.recentMessageLimit,
+  incrementalRecentMessageLimit: WORKFLOW_PARAMS.contextWindow.incrementalRecentMessageLimit,
   acceptance: Object.freeze({
     semanticValidation: true,
   }),
@@ -80,6 +81,12 @@ const HarnessOptionsSchema = z
       .finite()
       .positive()
       .default(DEFAULT_OPTIONS.contextWindowRecentMessageLimit),
+    incrementalRecentMessageLimit: z.coerce
+      .number()
+      .int()
+      .finite()
+      .positive()
+      .default(DEFAULT_OPTIONS.incrementalRecentMessageLimit),
     acceptance: z.record(z.any()).optional(),
     review: z.record(z.any()).optional(),
     pendingTtlHookTurns: z.coerce.number().int().finite().nonnegative().default(DEFAULT_OPTIONS.pendingTtlHookTurns),
@@ -187,6 +194,7 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       ? safe.miniRunnerToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
       : DEFAULT_OPTIONS.miniRunnerToolAllowlist,
     contextWindowRecentMessageLimit: safe.contextWindowRecentMessageLimit,
+    incrementalRecentMessageLimit: safe.incrementalRecentMessageLimit,
     acceptance: {
       ...(DEFAULT_OPTIONS.acceptance || {}),
       ...(safe.acceptance && typeof safe.acceptance === "object" ? safe.acceptance : {}),

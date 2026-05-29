@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { withHookRuntimeMeta } from "../../../hook/index.js";
-import { buildContextMessages } from "../context/message-builder.js";
+import {
+  buildContextMessages,
+  buildContextMessageBlocks,
+} from "../context/message-builder.js";
 import { emitEvent } from "../../../event/index.js";
 
 function asObject(value = null) {
@@ -19,6 +22,23 @@ function resolveHookMessages(raw = {}) {
   if (!raw?.agentContext) return null;
   try {
     return buildContextMessages(raw.agentContext, {
+      currentUserMessage: String(raw?.userMessage || ""),
+    });
+  } catch {
+    return null;
+  }
+}
+
+function resolveHookMessageBlocks(raw = {}) {
+  if (raw?.messageBlocks && typeof raw.messageBlocks === "object") {
+    return raw.messageBlocks;
+  }
+  if (raw?.loopState?.messageBlocks && typeof raw.loopState.messageBlocks === "object") {
+    return raw.loopState.messageBlocks;
+  }
+  if (!raw?.agentContext) return null;
+  try {
+    return buildContextMessageBlocks(raw.agentContext, {
       currentUserMessage: String(raw?.userMessage || ""),
     });
   } catch {
@@ -54,6 +74,7 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
     durationMs: Number.isFinite(Number(safeRaw?.durationMs)) ? Number(safeRaw.durationMs) : null,
     agentContext: safeRaw?.agentContext ?? null,
     messages: resolveHookMessages(safeRaw),
+    messageBlocks: resolveHookMessageBlocks(safeRaw),
     result: safeRaw?.result ?? null,
     error: safeRaw?.error ?? null,
     turn: Number.isFinite(Number(safeRaw?.turn)) ? Number(safeRaw.turn) : null,
