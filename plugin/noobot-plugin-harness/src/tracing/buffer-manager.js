@@ -137,7 +137,7 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
 
   const injected = injectSystemMessages(ctx, {
     skipIds: new Set(),
-    prompts: [{ id, content, priority: options.promptPriority, mode: "prepend" }],
+    prompts: [{ id, content, priority: options.promptPriority, mode: "after_system" }],
   });
 
   if (!injected || !options.writePrompts) return;

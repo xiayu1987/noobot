@@ -623,6 +623,15 @@ export class SessionExecutionEngine {
           recentLimit: incrementalRecentLimit,
         });
       }
+      if (normalizedScope === "conversation" || normalizedScope === "non_system") {
+        return resolveModelContextMessages({
+          sourceMessages: source,
+          currentDialogProcessId,
+          mode: "agent",
+          useRecentWindow: true,
+          recentLimit: historyRecentLimit,
+        });
+      }
       return resolveModelContextMessages({
         sourceMessages: source,
         currentDialogProcessId,

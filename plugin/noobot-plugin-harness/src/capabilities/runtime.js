@@ -46,6 +46,12 @@ function resolveFilteredBlock({
 
 function applyMessageBlocksForBeforeLlmCall(point = "", ctx = {}, meta = {}) {
   if (String(point || "").trim().toLowerCase() !== "before_llm_call") return;
+  const runtime =
+    ctx?.agentContext?.execution?.controllers?.runtime &&
+    typeof ctx.agentContext.execution.controllers.runtime === "object"
+      ? ctx.agentContext.execution.controllers.runtime
+      : null;
+  if (runtime?.__harnessMessageBlocksApplied === true) return;
   const blocks = resolveMessageBlocks(ctx);
   if (!blocks) return;
   const resolver = meta?.harness?.resolveMessageBlock;
@@ -72,6 +78,7 @@ function applyMessageBlocksForBeforeLlmCall(point = "", ctx = {}, meta = {}) {
   target.splice(0, target.length, ...composed);
   ctx.messages = target;
   ctx.messageBlocks = { system, history, incremental };
+  if (runtime) runtime.__harnessMessageBlocksApplied = true;
 }
 
 function resolveTakeoverDirectives(result = {}) {
