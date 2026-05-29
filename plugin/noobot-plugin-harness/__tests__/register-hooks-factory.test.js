@@ -274,6 +274,70 @@ test("createRegisterHarnessHooks compacts by message blocks and preserves fronte
   assert.deepEqual(calls, ["system", "history", "incremental", "conversation"]);
 });
 
+test("createRegisterHarnessHooks keeps multiple empty assistant tool-call messages with different call ids", async () => {
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => false,
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveMessageBlock: ({ messages = [] }) => messages,
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const assistant1 = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_a", type: "function", function: { name: "execute_script" } }],
+  };
+  const tool1 = { role: "tool", content: "{\"ok\":false}", tool_call_id: "call_a" };
+  const assistant2 = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_b", type: "function", function: { name: "execute_script" } }],
+  };
+  const tool2 = { role: "tool", content: "{\"ok\":false}", tool_call_id: "call_b" };
+
+  const ctx = {
+    messages: [{ role: "system", content: "system" }, assistant1, tool1, assistant2, tool2],
+    messageBlocks: {
+      system: [{ role: "system", content: "system" }],
+      history: [],
+      incremental: [assistant1, tool1, assistant2, tool2],
+    },
+  };
+
+  await handlers.get("before_llm_call")(ctx);
+
+  const assistantIds = ctx.messages
+    .filter((item) => item.role === "assistant")
+    .map((item) => item.tool_calls?.[0]?.id);
+  assert.deepEqual(assistantIds, ["call_a", "call_b"]);
+});
+
 test("createRegisterHarnessHooks skips non-primary execution scope", async () => {
   const calls = [];
   const handlers = new Map();
