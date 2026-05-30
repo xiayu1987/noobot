@@ -169,8 +169,8 @@ export function ensureHarnessBucket(ctx = {}) {
     if (typeof bucket.summaryText !== "string") bucket.summaryText = "";
     if (typeof bucket.planText !== "string") bucket.planText = "";
     if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
-    if (typeof bucket.lastMainPlanRevisionChanged !== "boolean") {
-      bucket.lastMainPlanRevisionChanged = false;
+    if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes)) {
+      bucket.lastRevisionChangedMainStepIndexes = [];
     }
     if (
       !("lastPlanningRawOutput" in bucket) ||

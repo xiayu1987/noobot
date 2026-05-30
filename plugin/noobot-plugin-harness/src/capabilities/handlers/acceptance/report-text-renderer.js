@@ -13,6 +13,7 @@ function hasRecognitionFailure(report = {}) {
   if ("summaryDetailPaths" in report && !Array.isArray(report.summaryDetailPaths)) return true;
   if ("summary" in report && (report.summary === null || typeof report.summary !== "object" || Array.isArray(report.summary))) return true;
   if ("semanticValidation" in report && report.semanticValidation && typeof report.semanticValidation !== "object") return true;
+  if ("modelAcceptance" in report && report.modelAcceptance && typeof report.modelAcceptance !== "object") return true;
 
   const checklist = Array.isArray(report.finalPlanChecklist) ? report.finalPlanChecklist : [];
   for (const item of checklist) {
@@ -30,6 +31,9 @@ function hasRecognitionFailure(report = {}) {
   if (report?.semanticValidation?.content !== undefined && typeof report.semanticValidation.content !== "string") {
     return true;
   }
+  if (report?.modelAcceptance?.rawContent !== undefined && typeof report.modelAcceptance.rawContent !== "string") {
+    return true;
+  }
   return false;
 }
 
@@ -43,6 +47,9 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
   const semanticValidation = data?.semanticValidation && typeof data.semanticValidation === "object"
     ? data.semanticValidation
+    : null;
+  const modelAcceptance = data?.modelAcceptance && typeof data.modelAcceptance === "object"
+    ? data.modelAcceptance
     : null;
   const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
   const lines = [
@@ -68,6 +75,9 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
     semanticValidation?.content
       ? `${locale === LOCALE.EN_US ? "semanticValidation" : "语义验收"}:\n${String(semanticValidation.content)}`
       : "",
+    modelAcceptance?.rawContent
+      ? `${locale === LOCALE.EN_US ? "modelAcceptance" : "模型验收"}:\n${String(modelAcceptance.rawContent)}`
+      : "",
     summaryDetailPaths.length
       ? `${
         locale === LOCALE.EN_US ? "summaryDetailPaths" : "小结明细路径"
@@ -88,6 +98,9 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
   const semanticValidation = data?.semanticValidation && typeof data.semanticValidation === "object"
     ? data.semanticValidation
     : null;
+  const modelAcceptance = data?.modelAcceptance && typeof data.modelAcceptance === "object"
+    ? data.modelAcceptance
+    : null;
   const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
   const title = locale === LOCALE.EN_US ? "[Harness-Acceptance]" : "[Harness-验收]";
   const modeLabel = locale === LOCALE.EN_US ? "Mode" : "模式";
@@ -97,6 +110,7 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
   const checklistLabel = locale === LOCALE.EN_US ? "Acceptance checklist" : "验收清单";
   const summaryLabel = locale === LOCALE.EN_US ? "Summary" : "汇总";
   const semanticLabel = locale === LOCALE.EN_US ? "Semantic validation" : "语义验收";
+  const modelAcceptanceLabel = locale === LOCALE.EN_US ? "Model acceptance" : "模型验收结果";
   const detailPathLabel = locale === LOCALE.EN_US ? "Summary detail paths" : "小结明细路径";
 
   const summaryCompleted = Number(summary?.completed || 0);
@@ -131,6 +145,9 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
     semanticValidation?.content
       ? ["", `## ${semanticLabel}`, String(semanticValidation.content)].join("\n")
       : "",
+    modelAcceptance?.rawContent
+      ? ["", `## ${modelAcceptanceLabel}`, String(modelAcceptance.rawContent)].join("\n")
+      : "",
     summaryDetailPaths.length
       ? ["", `## ${detailPathLabel}`, ...summaryDetailPaths.map((item) => `- ${String(item || "").trim()}`)].join("\n")
       : "",
@@ -146,4 +163,3 @@ export function renderAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
 }
 
 export { renderBeautifiedAcceptanceReportText, renderRawAcceptanceReportText };
-

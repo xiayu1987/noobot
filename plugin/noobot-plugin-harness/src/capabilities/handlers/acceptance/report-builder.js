@@ -22,6 +22,74 @@ const TASK_STATUS = Object.freeze({
   PENDING: "pending",
 });
 
+const MODEL_ACCEPTANCE_LINE_RE = /^\s*(ADD|UPDATE)\s+A([A-Za-z0-9._-]+)\s+(.+?)\s*$/i;
+
+function parseModelAcceptanceItemsFromText(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return [];
+  const lines = raw.replace(/\r\n?/g, "\n").split("\n");
+  const items = [];
+  for (const line of lines) {
+    const match = String(line || "").trim().match(MODEL_ACCEPTANCE_LINE_RE);
+    if (!match) continue;
+    const tail = String(match[3] || "").trim();
+    const planMatch = tail.match(/(?:^|\s)plan=([0-9]+(?:\.[0-9]+)?)/i);
+    const statusMatch = tail.match(/(?:^|\s)status=(pass|warn|fail)/i);
+    const riskMatch = tail.match(/(?:^|\s)risk=(low|medium|high)/i);
+    const evidencePos = tail.search(/(?:^|\s)evidence=/i);
+    let evidence = "";
+    if (evidencePos >= 0) {
+      const evidenceStart = tail.slice(0, evidencePos).length + (tail.slice(evidencePos).startsWith("evidence=") ? 9 : 10);
+      const evidenceTail = tail.slice(evidenceStart).trim();
+      const conclusionStart = evidenceTail.search(/\s+\[[^\]]+\]\s*$/);
+      evidence = (conclusionStart >= 0 ? evidenceTail.slice(0, conclusionStart) : evidenceTail).trim();
+    }
+    const conclusionMatch = tail.match(/\[([^\]]+)\]\s*$/);
+    const planId = String(planMatch?.[1] || "").trim();
+    const status = String(statusMatch?.[1] || "").trim().toLowerCase();
+    if (!planId || !status) continue;
+    items.push({
+      action: String(match[1] || "").trim().toUpperCase(),
+      acceptanceId: `A${String(match[2] || "").trim()}`,
+      planId,
+      status,
+      risk: String(riskMatch?.[1] || "").trim().toLowerCase(),
+      evidence,
+      conclusion: String(conclusionMatch?.[1] || "").trim(),
+      raw: String(line || "").trim(),
+    });
+  }
+  return items;
+}
+
+function mapModelAcceptanceStatusToTaskStatus(status = "") {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "pass") return TASK_STATUS.COMPLETED;
+  if (normalized === "warn") return TASK_STATUS.IN_PROGRESS;
+  if (normalized === "fail") return TASK_STATUS.PENDING;
+  return "";
+}
+
+function resolveLatestModelAcceptance(bucket = {}) {
+  const reports = Array.isArray(bucket?.phaseAcceptanceReports) ? bucket.phaseAcceptanceReports : [];
+  const latest = reports.length ? reports[reports.length - 1] : null;
+  const content = String(latest?.content || "").trim();
+  const items = parseModelAcceptanceItemsFromText(content);
+  const byPlan = {};
+  for (const item of items) {
+    const key = String(item?.planId || "").trim();
+    if (!key) continue;
+    byPlan[key] = item;
+  }
+  return {
+    source: latest ? "phase_acceptance" : "",
+    acceptedAt: String(latest?.acceptedAt || "").trim(),
+    rawContent: content,
+    items,
+    byPlan,
+  };
+}
+
 const ACCEPTANCE_TASK_STATUS_RULES = Object.freeze([
   {
     matches: ({ text = "" } = {}) => text.includes("附件") || text.includes("attachment"),
@@ -132,11 +200,28 @@ export function buildAcceptanceReport({
       : Array.isArray(bucket.taskChecklist) && bucket.taskChecklist.length
         ? bucket.taskChecklist
         : defaultTaskChecklist(locale);
+  const latestModelAcceptance = resolveLatestModelAcceptance(bucket);
+  const modelAcceptanceByPlan =
+    latestModelAcceptance?.byPlan && typeof latestModelAcceptance.byPlan === "object"
+      ? latestModelAcceptance.byPlan
+      : {};
   const items = checklist.map((task, index) => {
     const normalized = normalizeChecklistItem(task, index, locale);
+    const modelAcceptance = modelAcceptanceByPlan[String(normalized?.index ?? "").trim()] || null;
+    const modelMappedStatus = mapModelAcceptanceStatusToTaskStatus(modelAcceptance?.status);
+    const baseStatus = evaluateTaskStatus(normalized, state);
     return {
       ...normalized,
-      status: evaluateTaskStatus(normalized, state),
+      status: modelMappedStatus || baseStatus,
+      modelAcceptance: modelAcceptance
+        ? {
+          acceptanceId: modelAcceptance.acceptanceId,
+          status: modelAcceptance.status,
+          risk: modelAcceptance.risk,
+          evidence: modelAcceptance.evidence,
+          conclusion: modelAcceptance.conclusion,
+        }
+        : undefined,
     };
   });
   const plan = buildPlanSnapshot(bucket, locale);
@@ -151,6 +236,13 @@ export function buildAcceptanceReport({
     finalPlanChecklist: items,
     plan,
     summaryDetailPaths: buildSummaryDetailPaths(bucket),
+    modelAcceptance: latestModelAcceptance.items.length
+      ? {
+        source: latestModelAcceptance.source,
+        acceptedAt: latestModelAcceptance.acceptedAt,
+        rawContent: latestModelAcceptance.rawContent,
+      }
+      : null,
   };
 }
 

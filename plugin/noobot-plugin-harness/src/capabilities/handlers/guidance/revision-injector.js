@@ -31,12 +31,18 @@ import {
   buildNextPhaseRelayContent,
   buildPlanningRefinementPrompt,
   buildPlanningRevisionPrompt,
+  resolveRefinementTargetMainStepIndexesAfterRevision,
   resolveRefinementTargetMainSteps,
 } from "./revision-engine.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
-export function schedulePlanUpdateByInject(ctx = {}, summaryText = "", stage = "revision") {
+export function schedulePlanUpdateByInject(
+  ctx = {},
+  summaryText = "",
+  stage = "revision",
+  { targetMainStepIndexes = [] } = {},
+) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -44,8 +50,15 @@ export function schedulePlanUpdateByInject(ctx = {}, summaryText = "", stage = "
     String(stage || "revision").trim().toLowerCase() === "revision"
       ? "revision"
       : "refinement";
+  const normalizedPreferredTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
+    ? targetMainStepIndexes.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
+    : [];
   const targetMainSteps =
-    normalizedStage === "refinement" ? resolveRefinementTargetMainSteps(bucket, state) : [];
+    normalizedStage === "refinement"
+      ? resolveRefinementTargetMainSteps(bucket, state, {
+          preferredTargetMainStepIndexes: normalizedPreferredTargetMainStepIndexes,
+        })
+      : [];
   if (normalizedStage === "refinement" && !targetMainSteps.length) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
@@ -79,6 +92,8 @@ export function schedulePlanUpdateByInject(ctx = {}, summaryText = "", stage = "
       hasSummaryText: Boolean(
         state.pending?.planUpdateContext?.summaryText || state.pending.summaryText,
       ),
+      refinementTargetMainStepIndexes:
+        normalizedStage === "refinement" ? targetMainSteps.map((item = {}) => Number(item?.index)) : [],
       checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
     }),
   });
@@ -165,23 +180,25 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
         });
       }
       if (stage === "revision") {
-        const mainPlanChanged = bucket?.lastMainPlanRevisionChanged === true;
-        const scheduled = mainPlanChanged
-          ? schedulePlanUpdateByInject(currentCtx, captureMeta?.summaryText || "", "refinement")
+        const refinementTargetMainStepIndexes = resolveRefinementTargetMainStepIndexesAfterRevision(
+          bucket,
+          state,
+        );
+        const scheduled = applied
+          ? schedulePlanUpdateByInject(
+            currentCtx,
+            captureMeta?.summaryText || "",
+            "refinement",
+            { targetMainStepIndexes: refinementTargetMainStepIndexes },
+          )
           : false;
-        if (!mainPlanChanged && applied) {
-          appendCapabilityLog(currentCtx, {
-            domain: CAPABILITY_DOMAIN.PLANNING,
-            event: GUIDANCE_EVENTS.refinementSkippedNoMainPlanChange,
-          });
-        }
         return {
           applied: applied || scheduled,
           detail: {
             stage,
             revisionApplied: applied === true,
             refinementScheduled: scheduled === true,
-            mainPlanChanged,
+            refinementTargetMainStepIndexes,
             checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
           },
         };
@@ -190,6 +207,9 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
         applied,
         detail: {
           stage,
+          refinementTargetMainStepIndexes: Array.isArray(captureMeta?.targetMainStepIndexes)
+            ? captureMeta.targetMainStepIndexes
+            : [],
           checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
         },
       };

@@ -498,7 +498,7 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
 });
 
 
-test("separate_model skips refinement when revision did not change main plans", async () => {
+test("separate_model still runs refinement when revision has no main-plan diff but sub-steps are missing", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const agentContext = createAgentContext({
@@ -512,6 +512,7 @@ test("separate_model skips refinement when revision did not change main plans", 
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
         if (payload.purpose === "planning_revision") return { content: "{}" };
+        if (payload.purpose === "planning_refinement") return { content: "ADD 1.1 细化步骤A" };
         return { content: "" };
       },
     },
@@ -522,9 +523,8 @@ test("separate_model skips refinement when revision did not change main plans", 
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });
-  assert.deepEqual(invocations.map((item = {}) => item.purpose), ["summary", "planning_revision"]);
-  assert.equal(
-    agentContext.payload.harness.logs.planning.some((item = {}) => item.event === "planning_refinement_skipped_no_main_plan_change"),
-    true,
+  assert.deepEqual(
+    invocations.map((item = {}) => item.purpose),
+    ["summary", "planning_revision", "planning_refinement"],
   );
 });

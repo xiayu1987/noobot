@@ -65,6 +65,9 @@ export async function runPlanningRefinementBySeparateModel(
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: PLANNING_EVENTS.refinementConvergedNoTargetMainStep,
+      detail: {
+        requestedTargetMainStepIndexes: explicitTargetIndexes,
+      },
     });
     return { applied: false, status: "converged" };
   }

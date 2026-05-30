@@ -314,13 +314,21 @@ export function maybeCapturePhaseAcceptanceByInject(ctx = {}) {
   });
 }
 
-export async function runPhaseAcceptanceBySeparateModel(ctx = {}, meta = {}) {
+export async function runPhaseAcceptanceBySeparateModel(
+  ctx = {},
+  meta = {},
+  { forceRun = false } = {},
+) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  if (state.pending.phaseAcceptance !== true) return false;
+  const shouldRunFromPending = state.pending.phaseAcceptance === true;
+  const shouldRun = forceRun === true || shouldRunFromPending;
+  if (!shouldRun) return false;
   const invoker = resolveCapabilityModelInvoker(meta);
-  if (!invoker) return maybeInjectPhaseAcceptancePrompt(ctx);
+  if (!invoker) {
+    return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx);
+  }
   const locale = state?.locale || LOCALE.ZH_CN;
   const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
     bucket,
@@ -333,7 +341,9 @@ export async function runPhaseAcceptanceBySeparateModel(ctx = {}, meta = {}) {
     ctx,
     purpose: "phase_acceptance",
   });
-  setPendingStateWithMeta(state, "phaseAcceptance", false);
+  if (shouldRunFromPending) {
+    setPendingStateWithMeta(state, "phaseAcceptance", false);
+  }
   let response = null;
   try {
     response = await invokeWithReasoningRetry({

@@ -24,6 +24,8 @@ const planRevisionHelpers = createPlanRevisionHelpers({
 });
 
 export const resolveRefinementTargetMainSteps = planRevisionHelpers.resolveRefinementTargetMainSteps;
+export const resolveRefinementTargetMainStepIndexesAfterRevision =
+  planRevisionHelpers.resolveRefinementTargetMainStepIndexesAfterRevision;
 export const applyRevisedPlanFromText = planRevisionHelpers.applyRevisedPlanFromText;
 export const buildPlanningRefinementPrompt = planRevisionHelpers.buildPlanningRefinementPrompt;
 export const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayContent;
