@@ -189,6 +189,7 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
   planUpdateCapturePending: false,
   phaseAcceptanceCapturePending: false,
   acceptanceSemanticValidationCapturePending: false,
+  acceptanceReportAppendedToFinalOutput: false,
 });
 
 export const DEFAULT_HARNESS_SIGNALS = Object.freeze({

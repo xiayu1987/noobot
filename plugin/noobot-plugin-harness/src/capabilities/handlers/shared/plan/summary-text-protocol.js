@@ -7,6 +7,8 @@
 const SUMMARY_LINE_RE = /^\s*(\d+)\.\s+(.+?)\s*$/;
 const PATCH_ADD_UPDATE_RE = /^\s*(ADD|UPDATE)\s+(\d+)\s+(.+?)\s*$/i;
 const PATCH_DELETE_RE = /^\s*(DELETE)\s+(\d+)\s*$/i;
+const SUMMARY_OVERVIEW_BLOCK_RE = /\[SUMMARY_OVERVIEW\]([\s\S]*?)(?=\[SUMMARY_DETAIL\]|\[SUMMARY_END\]|$)/i;
+const SUMMARY_DETAIL_BLOCK_RE = /\[SUMMARY_DETAIL\]([\s\S]*?)(?=\[SUMMARY_END\]|$)/i;
 
 function splitLines(text = "") {
   return String(text || "")
@@ -97,4 +99,21 @@ export function mergeSummaryText(existingText = "", incomingText = "") {
   }
 
   return [current, incoming].filter(Boolean).join("\n");
+}
+
+export function parseSummaryOverviewAndDetailFromText(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return { overviewText: "", detailText: "", usedV2: false };
+  const overviewMatch = raw.match(SUMMARY_OVERVIEW_BLOCK_RE);
+  const detailMatch = raw.match(SUMMARY_DETAIL_BLOCK_RE);
+  if (!overviewMatch && !detailMatch) {
+    return { overviewText: raw, detailText: "", usedV2: false };
+  }
+  const overviewText = String(overviewMatch?.[1] || "").trim();
+  const detailText = String(detailMatch?.[1] || "").trim();
+  return {
+    overviewText: overviewText || raw,
+    detailText,
+    usedV2: true,
+  };
 }

@@ -112,10 +112,14 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 2);
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 3);
+
+  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.guidance, null);
   assert.equal(ctx.agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, false);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdateContext, null);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
   assert.equal(ctx.agentContext.payload.harness.state.pending.acceptanceSemanticValidation, null);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
   assert.equal(ctx.agentContext.payload.harness.state.flags.acceptanceSemanticValidationCapturePending, false);
@@ -123,7 +127,7 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
     "acceptanceSemanticValidationCaptureReportIndex" in ctx.agentContext.payload.harness.state.flags,
     false,
   );
-  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 3);
+  assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 4);
 });
 
 test("takeover priority pipeline keeps higher priority takeover effective", async () => {

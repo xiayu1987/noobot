@@ -15,13 +15,6 @@ import {
   getPlanningRefinementMarker,
 } from "../workflow/prompts.js";
 
-function formatMainPlansText(mainPlans = []) {
-  if (!Array.isArray(mainPlans) || !mainPlans.length) return "（空）";
-  return mainPlans
-    .map((item = {}) => `${Number(item.id)}. ${String(item.content || "").trim()}`)
-    .join("\n");
-}
-
 function formatSubPlansText(subPlans = [], targetId = 0) {
   if (!Array.isArray(subPlans) || !subPlans.length) return "（空）";
   return subPlans
@@ -54,10 +47,53 @@ export function createPlanRevisionHelpers({
     return bucket;
   }
 
-  function resolveRefinementTargetMainSteps(bucket = {}, _state = {}) {
+  function resolveRefinementTargetMainSteps(bucket = {}, state = {}, { preferredTargetMainStepIndexes = [] } = {}) {
     const normalizedBucket = ensurePlanTextBucket(bucket);
     const mainPlans = parseMainPlansFromPlanText(normalizedBucket.planText);
     if (!mainPlans.length) return [];
+    const mainPlanMap = new Map(
+      mainPlans.map((item = {}) => [Number(item.id), { index: Number(item.id), task: String(item.content || "").trim() }]),
+    );
+    const preferredTargets = Array.isArray(preferredTargetMainStepIndexes)
+      ? preferredTargetMainStepIndexes
+      : [];
+    const normalizedPreferredTargets = preferredTargets
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item) && mainPlanMap.has(item));
+    if (normalizedPreferredTargets.length) {
+      return normalizedPreferredTargets.map((item) => mainPlanMap.get(item));
+    }
+
+    const pendingTargetIndexes = Array.isArray(state?.pending?.planUpdateContext?.targetMainStepIndexes)
+      ? state.pending.planUpdateContext.targetMainStepIndexes
+      : [];
+    const normalizedPendingTargets = pendingTargetIndexes
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item) && mainPlanMap.has(item));
+    if (normalizedPendingTargets.length) {
+      return normalizedPendingTargets.map((item) => mainPlanMap.get(item));
+    }
+
+    const nextPhaseTargetIndexes = Array.isArray(normalizedBucket?.nextPhase?.checklistIndexes)
+      ? normalizedBucket.nextPhase.checklistIndexes
+      : [];
+    const normalizedNextPhaseTargets = nextPhaseTargetIndexes
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item) && mainPlanMap.has(item));
+    if (normalizedNextPhaseTargets.length) {
+      return normalizedNextPhaseTargets.map((item) => mainPlanMap.get(item));
+    }
+
+    const doc = parsePlanDocumentFromText(normalizedBucket.planText);
+    const targetsWithoutSubPlans = mainPlans
+      .filter((item = {}) => {
+        const id = Number(item?.id);
+        const subPlans = Array.isArray(doc?.subPlansByMainId?.[String(id)]) ? doc.subPlansByMainId[String(id)] : [];
+        return subPlans.length === 0;
+      })
+      .map((item = {}) => ({ index: Number(item.id), task: String(item.content || "").trim() }));
+    if (targetsWithoutSubPlans.length) return targetsWithoutSubPlans;
+
     const target = mainPlans[0] || null;
     if (!target) return [];
     return [{ index: Number(target.id), task: String(target.content || "").trim() }];
@@ -168,20 +204,38 @@ export function createPlanRevisionHelpers({
     return true;
   }
 
-  function buildPlanningRefinementPrompt(locale = LOCALE?.ZH_CN, bucket = {}, state = {}, summaryText = "") {
-    const targets = resolveRefinementTargetMainSteps(bucket, state);
-    const target = targets[0] || { index: 1, task: "" };
-    const existingSubPlans = formatSubPlansText(
-      parseSubPlansFromPlanText(bucket.planText, Number(target.index)),
-      Number(target.index),
-    );
+  function buildPlanningRefinementPrompt(
+    locale = LOCALE?.ZH_CN,
+    bucket = {},
+    state = {},
+    summaryText = "",
+    { targetMainStepIndexes = [] } = {},
+  ) {
+    const targets = resolveRefinementTargetMainSteps(bucket, state, {
+      preferredTargetMainStepIndexes: targetMainStepIndexes,
+    });
+    const targetIds = targets
+      .map((item = {}) => Number(item?.index))
+      .filter((item) => Number.isFinite(item) && item > 0);
+    const targetPlans = targets
+      .map((item = {}) => `${Number(item?.index)}. ${String(item?.task || "").trim()}`.trim())
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+    const existingSubPlansSections = targetIds
+      .map((id) => {
+        const existingSubPlans = formatSubPlansText(parseSubPlansFromPlanText(bucket.planText, Number(id)), Number(id));
+        return `主计划 ${id}:\n${existingSubPlans}`;
+      })
+      .join("\n\n")
+      .trim();
     return buildPlanningRefinementPromptText({
       locale,
       marker: getPlanningRefinementMarker(locale),
       data: {
-        targetId: Number(target.index),
-        targetContent: String(target.task || "").trim(),
-        existingSubPlansText: existingSubPlans,
+        targetIds,
+        targetPlansText: targetPlans,
+        existingSubPlansText: existingSubPlansSections,
         feedback: String(summaryText || "").trim(),
       },
     });

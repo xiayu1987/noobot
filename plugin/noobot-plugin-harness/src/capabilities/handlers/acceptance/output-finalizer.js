@@ -56,6 +56,39 @@ function attachMetasToFinalOutputTurn(ctx = {}, metas = []) {
   return true;
 }
 
+function syncFinalOutputToTurnMessages(ctx = {}, nextOutput = "") {
+  const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
+  if (!result) return false;
+  const output = String(nextOutput || "").trim();
+  if (!output) return false;
+  const turnMessages = Array.isArray(result.turnMessages) ? result.turnMessages : [];
+  for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
+    const item = turnMessages[index] || {};
+    if (String(item?.role || "").trim() !== "assistant") continue;
+    turnMessages[index] = {
+      ...item,
+      content: output,
+    };
+    return true;
+  }
+  return false;
+}
+
+function buildOutputWithAcceptanceSection({
+  original = "",
+  locale = LOCALE.ZH_CN,
+  reportText = "",
+  includeForcedHeader = false,
+} = {}) {
+  const originalText = String(original || "").trim();
+  const rendered = String(reportText || "").trim();
+  if (!rendered) return originalText;
+  const divider = "\n\n---\n";
+  const forcedHeader = includeForcedHeader ? translateI18nText(locale, "forcedAcceptanceHeader") : "";
+  const acceptanceSection = [forcedHeader, rendered].filter(Boolean).join("\n");
+  return [originalText, acceptanceSection].filter(Boolean).join(divider).trim();
+}
+
 export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
@@ -176,12 +209,15 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
     await runAcceptanceBySeparateModel(ctx, meta, report);
     const locale = state?.locale || LOCALE.ZH_CN;
     const original = String(ctx.result.output || "").trim();
-    ctx.result.output = [
+    const nextOutput = buildOutputWithAcceptanceSection({
       original,
-      "",
-      translateI18nText(locale, "forcedAcceptanceHeader"),
-      renderAcceptanceReportText(report, locale),
-    ].filter(Boolean).join("\n");
+      locale,
+      reportText: renderAcceptanceReportText(report, locale),
+      includeForcedHeader: true,
+    });
+    ctx.result.output = nextOutput;
+    syncFinalOutputToTurnMessages(ctx, nextOutput);
+    state.flags.acceptanceReportAppendedToFinalOutput = true;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       event: ACCEPTANCE_EVENTS.forcedAcceptanceTriggered,
@@ -190,4 +226,31 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
     return true;
   }
   return false;
+}
+
+export function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  if (state?.flags?.acceptanceReportAppendedToFinalOutput === true) return false;
+  if (!ctx?.result || typeof ctx.result !== "object") return false;
+  const report =
+    bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
+      ? bucket.lastAcceptanceReport
+      : null;
+  if (!report) return false;
+  const locale = state?.locale || LOCALE.ZH_CN;
+  const original = String(ctx.result.output || "").trim();
+  const rendered = renderAcceptanceReportText(report, locale);
+  if (!rendered) return false;
+  const nextOutput = buildOutputWithAcceptanceSection({
+    original,
+    locale,
+    reportText: rendered,
+    includeForcedHeader: false,
+  });
+  ctx.result.output = nextOutput;
+  syncFinalOutputToTurnMessages(ctx, nextOutput);
+  state.flags.acceptanceReportAppendedToFinalOutput = true;
+  return true;
 }
