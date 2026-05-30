@@ -4,10 +4,11 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { computed, ref, watch } from "vue";
 import { Document, Download } from "@element-plus/icons-vue";
 import { useLocale } from "../../shared/i18n/useLocale";
 
-defineProps({
+const props = defineProps({
   attachments: { type: Array, default: () => [] },
   isImageMime: { type: Function, required: true },
   canPreviewAttachment: { type: Function, required: true },
@@ -16,6 +17,32 @@ defineProps({
 
 const emit = defineEmits(["preview", "download"]);
 const { translate } = useLocale();
+const attachments = computed(() =>
+  (Array.isArray(props.attachments) ? props.attachments : []),
+);
+const isImageMime = (...args) => props.isImageMime(...args);
+const canPreviewAttachment = (...args) => props.canPreviewAttachment(...args);
+const formatFileSize = (...args) => props.formatFileSize(...args);
+const pluginAttachmentsCollapsed = ref(true);
+const normalAttachments = computed(() =>
+  attachments.value.filter(
+    (item = {}) => item?.attachmentOwnerType !== "plugin",
+  ),
+);
+const pluginAttachments = computed(() =>
+  attachments.value.filter(
+    (item = {}) => item?.attachmentOwnerType === "plugin",
+  ),
+);
+
+watch(
+  () => pluginAttachments.value.length,
+  (nextCount, prevCount) => {
+    if (nextCount > 0 && prevCount === 0) pluginAttachmentsCollapsed.value = true;
+    if (nextCount <= 0) pluginAttachmentsCollapsed.value = true;
+  },
+  { immediate: true },
+);
 
 function emitPreviewParsedResult(attachmentItem = {}) {
   const url = String(attachmentItem?.parsedResultUrl || "").trim();
@@ -49,7 +76,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
 <template>
   <div v-if="attachments.length" class="msg-attachments">
     <div
-      v-for="(attachmentItem, attachmentIndex) in attachments"
+      v-for="(attachmentItem, attachmentIndex) in normalAttachments"
       :key="attachmentIndex"
       class="file-card noobot-flat-card"
     >
@@ -132,6 +159,76 @@ function emitDownloadParsedResult(attachmentItem = {}) {
         <el-icon><Download /></el-icon>
       </button>
     </div>
+
+    <div v-if="pluginAttachments.length" class="plugin-attachments-wrap noobot-flat-card">
+      <button
+        type="button"
+        class="plugin-attachments-toggle noobot-flat-soft-btn"
+        @click="pluginAttachmentsCollapsed = !pluginAttachmentsCollapsed"
+      >
+        <span class="plugin-attachments-title">
+          {{ translate("message.pluginAttachment") }} ({{ pluginAttachments.length }})
+        </span>
+        <span class="plugin-attachments-action">
+          {{ pluginAttachmentsCollapsed ? translate("composer.expand") : translate("message.collapse") }}
+        </span>
+      </button>
+      <div v-if="!pluginAttachmentsCollapsed" class="plugin-attachments-list">
+        <div
+          v-for="(attachmentItem, attachmentIndex) in pluginAttachments"
+          :key="`plugin-${attachmentIndex}`"
+          class="file-card noobot-flat-card"
+        >
+          <button
+            v-if="isImageMime(attachmentItem.mimeType || '') && attachmentItem.previewUrl && canPreviewAttachment(attachmentItem)"
+            type="button"
+            class="attachment-preview-btn"
+            :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
+            @click="emit('preview', attachmentItem)"
+          >
+            <img :src="attachmentItem.previewUrl" :alt="attachmentItem.name" class="file-thumb" />
+          </button>
+          <button
+            v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && attachmentItem.previewUrl && canPreviewAttachment(attachmentItem)"
+            type="button"
+            class="attachment-preview-btn"
+            :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
+            @click="emit('preview', attachmentItem)"
+          >
+            <video class="file-thumb" :src="attachmentItem.previewUrl" muted preload="metadata" />
+          </button>
+          <div v-else class="file-icon">
+            <button
+              v-if="canPreviewAttachment(attachmentItem)"
+              type="button"
+              class="attachment-preview-btn file-icon-button"
+              :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
+              @click="emit('preview', attachmentItem)"
+            >
+              <el-icon><Document /></el-icon>
+            </button>
+            <el-icon v-else><Document /></el-icon>
+          </div>
+          <div class="file-meta">
+            <div class="file-name-row">
+              <div class="file-name">{{ attachmentItem.name }}</div>
+              <span class="attachment-owner-badge is-plugin">
+                {{ translate("message.pluginAttachment") }}
+              </span>
+            </div>
+            <div class="file-size">{{ formatFileSize(attachmentItem.size || 0) }}</div>
+          </div>
+          <button
+            type="button"
+            class="attachment-download-btn noobot-flat-icon-btn"
+            :title="translate('message.downloadFile', { name: attachmentItem.name || '' })"
+            @click="emit('download', attachmentItem)"
+          >
+            <el-icon><Download /></el-icon>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -149,6 +246,35 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   align-items: center;
   gap: var(--noobot-space-sm);
   padding: var(--noobot-space-xs) var(--noobot-space-sm);
+}
+.plugin-attachments-wrap {
+  padding: 6px;
+}
+.plugin-attachments-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: var(--noobot-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 38%, transparent);
+  background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent);
+  padding: 6px 8px;
+}
+.plugin-attachments-title,
+.plugin-attachments-action {
+  font-size: var(--noobot-msg-meta-font-size);
+}
+.plugin-attachments-title {
+  color: var(--noobot-text-secondary);
+}
+.plugin-attachments-action {
+  color: var(--noobot-text-main);
+}
+.plugin-attachments-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--noobot-space-xs);
 }
 .file-thumb {
   width: var(--noobot-msg-file-thumb-size);

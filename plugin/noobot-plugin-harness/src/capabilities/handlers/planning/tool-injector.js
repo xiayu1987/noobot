@@ -29,6 +29,10 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
         .string()
         .optional()
         .describe(translateI18nText(locale, "planRefinementToolSummaryDescription")),
+      targetMainStepIndexes: z
+        .array(z.number().int().positive())
+        .optional()
+        .describe("可选：指定要细化的主计划 ID 列表，如 [2,3]。"),
     }),
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
@@ -48,6 +52,9 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
         {
           summaryText,
           source: "planning_refinement_tool",
+          targetMainStepIndexes: Array.isArray(args?.targetMainStepIndexes)
+            ? args.targetMainStepIndexes
+            : [],
         },
       );
       if (refinementResult?.status === "converged") {

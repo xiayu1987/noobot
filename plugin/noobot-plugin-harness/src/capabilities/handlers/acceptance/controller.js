@@ -22,7 +22,11 @@ import {
   maybeInjectPhaseAcceptancePrompt,
   runPhaseAcceptanceBySeparateModel,
 } from "./validation-runner.js";
-import { maybeAttachChecklistArtifactsAtFinalOutput, maybeForceAcceptanceAtFinalOutput } from "./output-finalizer.js";
+import {
+  maybeAppendAcceptanceReportAtFinalOutput,
+  maybeAttachChecklistArtifactsAtFinalOutput,
+  maybeForceAcceptanceAtFinalOutput,
+} from "./output-finalizer.js";
 import { ensureTaskAcceptanceTool } from "./tool-injector.js";
 import { shouldUseSeparateModel } from "../shared/model/utils.js";
 import {
@@ -240,6 +244,9 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
       let executedPrimary = false;
       let executedFollowup = false;
       if (point === "before_turn" && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard) {
+        if (holder?.state?.flags) {
+          holder.state.flags.acceptanceReportAppendedToFinalOutput = false;
+        }
         const step1 = disableBlockedToolsInRegistry(ctx);
         const step2 = ensureTaskAcceptanceTool(ctx, meta);
         changed = step1 || step2 || changed;
@@ -297,9 +304,10 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
         const step1 = (await ensurePhaseAcceptanceBeforeFinalAcceptance(ctx, meta)) || false;
         const step2 = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || false;
         const step3 = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || false;
-        changed = step1 || step2 || step3 || changed;
+        const step4 = maybeAppendAcceptanceReportAtFinalOutput(ctx) || false;
+        changed = step1 || step2 || step3 || step4 || changed;
         executedPrimary = step1 === true || step2 === true;
-        executedFollowup = step3 === true;
+        executedFollowup = step3 === true || step4 === true;
         if (holder?.state?.flags?.overflowForceAcceptancePending === true) {
           holder.state.flags.overflowForceAcceptancePending = false;
           changed = true;

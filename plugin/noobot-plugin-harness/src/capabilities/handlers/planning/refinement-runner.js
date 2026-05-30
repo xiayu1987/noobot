@@ -41,7 +41,7 @@ const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayConten
 export async function runPlanningRefinementBySeparateModel(
   ctx = {},
   meta = {},
-  { summaryText = "", source = "planning_refinement", baseMessages = null } = {},
+  { summaryText = "", source = "planning_refinement", baseMessages = null, targetMainStepIndexes = [] } = {},
 ) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return { applied: false, status: "missing_harness_bucket" };
@@ -55,7 +55,12 @@ export async function runPlanningRefinementBySeparateModel(
     return { applied: false, status: "invoker_missing" };
   }
   const locale = state?.locale || LOCALE.ZH_CN;
-  const refinementTargetMainSteps = resolveRefinementTargetMainSteps(bucket, state);
+  const explicitTargetIndexes = Array.isArray(targetMainStepIndexes)
+    ? targetMainStepIndexes.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
+    : [];
+  const refinementTargetMainSteps = resolveRefinementTargetMainSteps(bucket, state, {
+    preferredTargetMainStepIndexes: explicitTargetIndexes,
+  });
   if (!refinementTargetMainSteps.length) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
@@ -69,6 +74,7 @@ export async function runPlanningRefinementBySeparateModel(
     bucket,
     state,
     String(summaryText || "").trim(),
+    { targetMainStepIndexes: refinementTargetMainSteps.map((item) => item.index) },
   );
   const agentMessagesBase = Array.isArray(baseMessages)
     ? baseMessages

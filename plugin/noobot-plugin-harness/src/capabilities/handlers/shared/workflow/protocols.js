@@ -31,7 +31,7 @@ export function buildPlanningRefinementPatchProtocolText(locale = LOCALE.ZH_CN) 
   const normalizedLocale = resolveLocale(locale);
   if (normalizedLocale === LOCALE.EN_US) {
     return [
-      "[ID+PATCH Syntax] (sub-plan ID format: [main-id].[sub-id], and [main-id] must equal target main plan ID)",
+      "[ID+PATCH Syntax] (sub-plan ID format: [main-id].[sub-id], and [main-id] must belong to target main plan IDs)",
       "ADD [main-id].[sub-id] [content]",
       "UPDATE [main-id].[sub-id] [updated content]",
       "DELETE [main-id].[sub-id]",
@@ -39,7 +39,7 @@ export function buildPlanningRefinementPatchProtocolText(locale = LOCALE.ZH_CN) 
     ].join("\n");
   }
   return [
-    "【ID+PATCH 协议语法】(子计划 ID 格式固定为 [主序号].[子序号]，且 [主序号] 必须等于目标主计划 ID)",
+    "【ID+PATCH 协议语法】(子计划 ID 格式固定为 [主序号].[子序号]，且 [主序号] 必须属于目标主计划 ID 集合)",
     "ADD [主序号].[子序号] [细化内容]",
     "UPDATE [主序号].[子序号] [修改后的内容]",
     "DELETE [主序号].[子序号]",

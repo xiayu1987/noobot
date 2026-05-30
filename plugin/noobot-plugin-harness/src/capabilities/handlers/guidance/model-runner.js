@@ -34,7 +34,8 @@ import { schedulePlanUpdateByInject } from "./revision-injector.js";
 import { buildGuidancePromptContent } from "./prompt-injector.js";
 import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages } from "./signal-tracker.js";
-import { applySummaryText } from "./summary-manager.js";
+import { applySummaryText, recordSummaryDetailAttachmentMetas } from "./summary-manager.js";
+import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
@@ -42,6 +43,41 @@ import {
 import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
+
+function resolveDetailPath(meta = {}) {
+  const relativePath = String(meta?.relativePath || "").trim();
+  if (relativePath) return relativePath;
+  const path = String(meta?.path || "").trim();
+  if (path) return path;
+  const name = String(meta?.name || "").trim();
+  return name;
+}
+
+function buildSummaryRelayContent({
+  locale = LOCALE.ZH_CN,
+  overviewText = "",
+  detailAttachmentMetas = [],
+} = {}) {
+  const overview = String(overviewText || "").trim();
+  const metas = Array.isArray(detailAttachmentMetas) ? detailAttachmentMetas : [];
+  if (!metas.length) return overview;
+  const lines = metas
+    .map((item = {}) => resolveDetailPath(item))
+    .filter(Boolean);
+  if (!lines.length) return overview;
+  const header = locale === LOCALE.EN_US
+    ? "[SUMMARY_DETAIL_PATHS]"
+    : "【SUMMARY_DETAIL_PATHS】";
+  const footer = locale === LOCALE.EN_US
+    ? "[SUMMARY_DETAIL_PATHS_END]"
+    : "【SUMMARY_DETAIL_PATHS_END】";
+  const pathBlock = [
+    header,
+    ...lines.map((item) => `DETAIL_PATH: ${item}`),
+    footer,
+  ].join("\n");
+  return [overview, pathBlock].filter(Boolean).join("\n\n").trim();
+}
 
 export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -299,12 +335,37 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   const responseText =
     extractRawTextContent(response?.content) ||
     String(response?.text || response?.output || "").trim();
-  const responseAttachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
-    purpose,
-    content: responseText,
-    generationSource: `harness_${String(purpose || "").trim() || "guidance"}`,
-    domain: CAPABILITY_DOMAIN.GUIDANCE,
-  });
+  let relayText = responseText;
+  let relayAttachmentMetas = [];
+  let summaryMergeText = responseText;
+  if (purpose === "summary") {
+    const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
+    const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || responseText;
+    summaryMergeText = summaryOverviewText;
+    const summaryDetailText = String(parsedSummary?.detailText || "").trim();
+    const summaryDetailAttachmentMetas = summaryDetailText
+      ? await saveCapabilityOutputAsAttachmentMetas(ctx, {
+        purpose: "summary_detail",
+        content: summaryDetailText,
+        generationSource: "harness_summary_detail",
+        domain: CAPABILITY_DOMAIN.GUIDANCE,
+      })
+      : [];
+    recordSummaryDetailAttachmentMetas(ctx, summaryDetailAttachmentMetas);
+    relayText = buildSummaryRelayContent({
+      locale,
+      overviewText: summaryOverviewText,
+      detailAttachmentMetas: summaryDetailAttachmentMetas,
+    });
+    relayAttachmentMetas = summaryDetailAttachmentMetas;
+  } else {
+    relayAttachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+      purpose,
+      content: responseText,
+      generationSource: `harness_${String(purpose || "").trim() || "guidance"}`,
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+    });
+  }
   if (!Array.isArray(bucket.guidanceOutputs)) {
     bucket.guidanceOutputs = [];
   }
@@ -317,11 +378,11 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose,
-    content: responseText,
-    attachmentMetas: responseAttachmentMetas,
+    content: relayText,
+    attachmentMetas: relayAttachmentMetas,
   });
   if (purpose === "summary") {
-    const mergedSummaryText = applySummaryText(ctx, responseText);
+    const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
     const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,

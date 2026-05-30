@@ -199,21 +199,38 @@ export function buildPlanningRevisionPromptText(options = {}) {
 
 export function buildPlanningRefinementPromptText(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const targetId = data.targetId ?? options?.targetId ?? 1;
+  const targetIdsRaw = Array.isArray(data.targetIds)
+    ? data.targetIds
+    : Array.isArray(options?.targetIds)
+      ? options.targetIds
+      : [];
+  const targetIds = targetIdsRaw
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && item > 0);
+  const targetPlansText = data.targetPlansText ?? options?.targetPlansText ?? "";
+  const targetId = data.targetId ?? options?.targetId ?? targetIds[0] ?? 1;
   const targetContent = data.targetContent ?? options?.targetContent ?? "";
   const existingSubPlansText = data.existingSubPlansText ?? options?.existingSubPlansText ?? "";
   const feedback = data.feedback ?? options?.feedback ?? "";
   const id = Number.isFinite(Number(targetId)) ? Number(targetId) : 1;
   const content = String(targetContent || "").trim();
+  const targetIdListText = targetIds.length ? `[${targetIds.join(",")}]` : `[${id}]`;
+  const targetPlans = String(targetPlansText || "").trim() || `${id}. ${content}`.trim();
   const subPlans = String(existingSubPlansText || "").trim() || (locale === LOCALE.EN_US ? "(empty)" : "（空）");
   const latestFeedback = String(feedback || "").trim() || (locale === LOCALE.EN_US ? "N/A" : "（无）");
   if (locale === LOCALE.EN_US) {
     return [
       String(marker || "").trim(),
-      "Goal: Decompose and refine the target main plan into executable sub-steps.",
+      "Goal: Decompose and refine specific target main plans into executable sub-steps.",
       "",
-      "[Current Task]",
-      `Target main plan: ID=${id} | Content: ${content}`,
+      "[Revised Main Plan Targets]",
+      targetPlans || "(empty)",
+      "",
+      "[Target Main Plan IDs]",
+      targetIdListText,
+      "",
+      "Only refine the target IDs listed above. Do not refine any other main-plan ID.",
+      "",
       "Existing sub-steps:",
       subPlans,
       "",
@@ -225,10 +242,16 @@ export function buildPlanningRefinementPromptText(options = {}) {
   }
   return [
     String(marker || "").trim(),
-    "目标：拆解并细化指定的主计划，生成具体可执行的子步骤。",
+    "目标：基于修正后的主计划，仅细化指定主计划ID，生成具体可执行的子步骤。",
     "",
-    "【当前任务】",
-    `目标主计划：ID=${id} | 内容：${content}`,
+    "【修正后的主计划（目标项）】",
+    targetPlans || "（空）",
+    "",
+    "【本次需要细化的主计划ID】",
+    targetIdListText,
+    "",
+    "仅允许细化上述目标ID，禁止输出其他主计划ID下的子计划。",
+    "",
     "已有子步骤：",
     subPlans,
     "",
@@ -249,12 +272,28 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     return [
       String(marker || "").trim(),
       "Provide a guidance summary of completed items and risks.",
+      "Use plain-text summary_text_v2 blocks:",
+      "[SUMMARY_OVERVIEW]",
+      "1. [plan=2][status=done] ...",
+      "[SUMMARY_DETAIL]",
+      "## Detailed notes",
+      "- evidence / logs / risk analysis ...",
+      "[SUMMARY_END]",
+      "Rules: SUMMARY_OVERVIEW should be short and action-oriented for main agent context; SUMMARY_DETAIL contains detailed evidence and can be longer.",
       buildSummaryPatchProtocolCoreText(locale),
     ].filter(Boolean).join("\n");
   }
   return [
     String(marker || "").trim(),
     "请先对已完成内容进行小结（注意是小结，不是总结）。",
+    "请优先使用纯文本 summary_text_v2 协议：",
+    "[SUMMARY_OVERVIEW]",
+    "1. [plan=2][status=done] ...",
+    "[SUMMARY_DETAIL]",
+    "## 详细明细",
+    "- 证据/日志/风险分析 ...",
+    "[SUMMARY_END]",
+    "要求：SUMMARY_OVERVIEW 保持简短、面向主流程决策；SUMMARY_DETAIL 写充分细节。",
     buildSummaryPatchProtocolCoreText(locale),
   ].filter(Boolean).join("\n");
 }

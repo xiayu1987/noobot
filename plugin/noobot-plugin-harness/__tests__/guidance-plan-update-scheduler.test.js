@@ -110,7 +110,7 @@ test("priority decision snapshot exposes chosen and blocked actions", () => {
   assert.equal(decision.chosenAction, "plan_update_revision");
   assert.equal(decision.chosenReason, "pending_revision");
   assert.deepEqual(decision.blockedActions, ["summary_turns", "phase_acceptance"]);
-  assert.equal(decision.pendingSnapshot.summary, true);
-  assert.equal(decision.pendingSnapshot.summaryByCharsPrompted, false);
-  assert.equal(decision.pendingSnapshot.phaseAcceptance, true);
+  assert.equal(decision.pendingSnapshot.summary?.active, true);
+  assert.equal(decision.pendingSnapshot.flags?.summaryByCharsPrompted, false);
+  assert.equal(decision.pendingSnapshot.phaseAcceptance?.active, true);
 });

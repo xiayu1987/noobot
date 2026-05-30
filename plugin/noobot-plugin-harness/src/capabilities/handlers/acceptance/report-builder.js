@@ -14,6 +14,7 @@ import {
 import { resolveFirstMatchedRuleResult } from "../shared/rule-table-utils.js";
 import { buildStatusSummary, nowIsoTimestamp } from "../shared/report-utils.js";
 import { parsePlanDocumentFromText } from "../shared/plan/text-protocol.js";
+import { renderAcceptanceReportText } from "./report-text-renderer.js";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -98,6 +99,23 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
   return checklist;
 }
 
+function buildSummaryDetailPaths(bucket = {}) {
+  const directPaths = Array.isArray(bucket?.summaryDetailPaths) ? bucket.summaryDetailPaths : [];
+  const metas = Array.isArray(bucket?.summaryDetailAttachmentMetas) ? bucket.summaryDetailAttachmentMetas : [];
+  const metaPaths = metas
+    .map((item = {}) => String(item?.relativePath || item?.path || item?.name || "").trim())
+    .filter(Boolean);
+  const merged = [...directPaths, ...metaPaths].map((item) => String(item || "").trim()).filter(Boolean);
+  const out = [];
+  const seen = new Set();
+  for (const item of merged) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  return out;
+}
+
 export function buildAcceptanceReport({
   bucket = {},
   state = {},
@@ -132,6 +150,7 @@ export function buildAcceptanceReport({
     taskChecklist: items,
     finalPlanChecklist: items,
     plan,
+    summaryDetailPaths: buildSummaryDetailPaths(bucket),
   };
 }
 
@@ -329,40 +348,4 @@ export function buildSemanticValidationPromptPayload({
   };
 }
 
-export function renderAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
-  const data = report && typeof report === "object" ? report : {};
-  const mode = String(data.mode || "").trim() || "active";
-  const forcedReason = String(data.forcedReason || "").trim();
-  const acceptedAt = String(data.acceptedAt || "").trim() || "";
-  const planText = String(data.planText || data?.plan?.planText || "").trim();
-  const checklist = Array.isArray(data.finalPlanChecklist) ? data.finalPlanChecklist : [];
-  const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
-  const semanticValidation = data?.semanticValidation && typeof data.semanticValidation === "object"
-    ? data.semanticValidation
-    : null;
-  const lines = [
-    locale === LOCALE.EN_US ? "[Harness-Acceptance]" : "[Harness-验收]",
-    `mode: ${mode}`,
-    mode === ACCEPTANCE_MODE.FORCED && forcedReason
-      ? `${locale === LOCALE.EN_US ? "forcedReason" : "强制原因"}: ${forcedReason}`
-      : "",
-    acceptedAt ? `acceptedAt: ${acceptedAt}` : "",
-    planText
-      ? `${locale === LOCALE.EN_US ? "planText" : "计划文本"}:\n${planText}`
-      : "",
-    locale === LOCALE.EN_US ? "Acceptance Checklist:" : "验收清单：",
-    ...checklist.map((item = {}) => {
-      const index = String(item?.index ?? "").trim();
-      const task = String(item?.task || "").trim();
-      const status = String(item?.status || "").trim() || "pending";
-      return `${index}. [${status}] ${task}`;
-    }),
-    Object.keys(summary).length
-      ? `${locale === LOCALE.EN_US ? "summary" : "汇总"}: ${JSON.stringify(summary)}`
-      : "",
-    semanticValidation?.content
-      ? `${locale === LOCALE.EN_US ? "semanticValidation" : "语义验收"}:\n${String(semanticValidation.content)}`
-      : "",
-  ].filter(Boolean);
-  return lines.join("\n").trim();
-}
+export { renderAcceptanceReportText };

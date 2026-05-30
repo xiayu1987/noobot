@@ -7,12 +7,15 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
+  saveCapabilityOutputAsAttachmentMetas,
+  relaySeparateModelOutputAsUserMessage,
   ensureHarnessBucket,
   extractRawTextContent,
   resolveCapabilityModelInvoker,
   shouldUseSeparateModel,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
+import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
 import {
   schedulePlanUpdateByInject,
   maybeInjectPlanUpdatePrompt,
@@ -27,6 +30,7 @@ import {
 import { resolveGuidancePriorityDecision, resolveNextGuidanceAction } from "./plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters } from "./signal-tracker.js";
 import { applySummaryText } from "./summary-manager.js";
+import { recordSummaryDetailAttachmentMetas } from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import {
   resolveWorkflowMode,
@@ -36,6 +40,32 @@ import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
+
+function resolveDetailPath(meta = {}) {
+  const relativePath = String(meta?.relativePath || "").trim();
+  if (relativePath) return relativePath;
+  const path = String(meta?.path || "").trim();
+  if (path) return path;
+  return String(meta?.name || "").trim();
+}
+
+function buildSummaryDetailPathRelayContent(locale = LOCALE.ZH_CN, detailAttachmentMetas = []) {
+  const metas = Array.isArray(detailAttachmentMetas) ? detailAttachmentMetas : [];
+  if (!metas.length) return "";
+  const lines = metas.map((item = {}) => resolveDetailPath(item)).filter(Boolean);
+  if (!lines.length) return "";
+  const header = locale === LOCALE.EN_US
+    ? "[SUMMARY_DETAIL_PATHS]"
+    : "【SUMMARY_DETAIL_PATHS】";
+  const footer = locale === LOCALE.EN_US
+    ? "[SUMMARY_DETAIL_PATHS_END]"
+    : "【SUMMARY_DETAIL_PATHS_END】";
+  return [
+    header,
+    ...lines.map((item) => `DETAIL_PATH: ${item}`),
+    footer,
+  ].join("\n");
+}
 
 function resolveWorkflowActionName(action = "", stage = "", mode = "inject") {
   const normalizedMode = String(mode || "").trim() === "separate_model" ? "separate_model" : "inject";
@@ -175,8 +205,30 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
           detail: { markedCount },
         });
         const rawSummaryText = extractRawTextContent(ctx?.ai?.content) || extractRawTextContent(ctx?.modelResponse?.content) || "";
-        const summaryText = applySummaryText(ctx, rawSummaryText);
         const locale = holder.state?.locale || LOCALE.ZH_CN;
+        const parsedSummary = parseSummaryOverviewAndDetailFromText(rawSummaryText);
+        const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || rawSummaryText;
+        const summaryDetailText = String(parsedSummary?.detailText || "").trim();
+        const detailAttachmentMetas = summaryDetailText
+          ? await saveCapabilityOutputAsAttachmentMetas(ctx, {
+            purpose: "summary_detail",
+            content: summaryDetailText,
+            generationSource: "harness_summary_detail",
+            domain: CAPABILITY_DOMAIN.GUIDANCE,
+          })
+          : [];
+        recordSummaryDetailAttachmentMetas(ctx, detailAttachmentMetas);
+        const detailPathRelay = buildSummaryDetailPathRelayContent(locale, detailAttachmentMetas);
+        if (detailPathRelay) {
+          relaySeparateModelOutputAsUserMessage(ctx, {
+            locale,
+            purpose: "summary_detail_path",
+            content: detailPathRelay,
+            dedupe: true,
+            attachmentMetas: detailAttachmentMetas,
+          });
+        }
+        const summaryText = applySummaryText(ctx, summaryOverviewText);
         if (isSummaryCompletionMarked(summaryText, locale)) {
           if (!shouldUseSeparateModel(meta) && !resolveCapabilityModelInvoker(meta)) {
             changed = schedulePlanUpdateByInject(ctx, summaryText) || changed;
