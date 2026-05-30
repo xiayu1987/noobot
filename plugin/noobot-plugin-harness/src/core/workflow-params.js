@@ -110,7 +110,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
   },
   planning: {
     summary: {
-      turnsThreshold: 8,
+      turnsThreshold: 6,
       messageCharsThreshold: 150000,
       overflowPolicy: {
         enablePruneAfterSummary: true,
@@ -120,7 +120,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     },
     planUpdate: {
       maxAttempts: 5,
-      triggerTurnsThreshold: 6,
+      triggerTurnsThreshold: 3,
     },
     capture: {
       maxAttempts: 2,
@@ -215,7 +215,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
   },
   acceptance: {
     phase: {
-      triggerTurnsThreshold: 10,
+      triggerTurnsThreshold: 9,
       blockerKeys: ["summary", "guidance", "planUpdate", "planningCaptured"],
     },
     tools: {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { createChatModel, createChatModelByName } from "../model/index.js";
+import { createChatModel, createChatModelByName, normalizeToolCalls } from "../model/index.js";
 import { recoverableToolError } from "../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { getMcpServerByName, createMcpClient } from "./client-factory.js";
@@ -113,7 +113,7 @@ export async function executeMcpTask({
       signal: signal || undefined,
     });
     messages.push(ai);
-    const calls = Array.isArray(ai?.tool_calls) ? ai.tool_calls : [];
+    const { calls } = normalizeToolCalls(ai);
     if (!calls.length) {
       return {
         ok: true,

@@ -2,7 +2,12 @@
  * Capability mini-runner for plugin-side external model calls.
  * Independent entry + reuse existing Noobot model/tool core.
  */
-import { createChatModel, createChatModelByName, adaptToolsForBinding } from "../../../model/index.js";
+import {
+  createChatModel,
+  createChatModelByName,
+  adaptToolsForBinding,
+  normalizeToolCalls,
+} from "../../../model/index.js";
 import { executeToolCall } from "../execution/tool-runner.js";
 import { filterForModelContext } from "../../../context/session/message-context-policy.js";
 import {
@@ -14,46 +19,6 @@ const MAX_MINI_RUNNER_TOOL_TURNS = 5;
 const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";
 const MODEL_PURPOSE_HEADER_KEY = "X-Harness-Purpose";
 const MODEL_DOMAIN_HEADER_KEY = "X-Harness-Domain";
-
-function normalizeToolCalls(ai = {}) {
-  const rawCalls = Array.isArray(ai?.tool_calls)
-    ? ai.tool_calls
-    : Array.isArray(ai?.toolCalls)
-      ? ai.toolCalls
-      : Array.isArray(ai?.additional_kwargs?.tool_calls)
-        ? ai.additional_kwargs.tool_calls
-        : [];
-  return rawCalls
-    .map((call = {}) => ({
-      id: String(
-        call?.id ??
-          call?.tool_call_id ??
-          call?.toolCallId ??
-          call?.call_id ??
-          "",
-      ).trim(),
-      name: String(
-        call?.name ??
-          call?.tool_name ??
-          call?.toolName ??
-          call?.function?.name ??
-          "",
-      ).trim(),
-      args: normalizeToolArgs(call?.args ?? call?.function?.arguments),
-    }))
-    .filter((call) => call.name);
-}
-
-function normalizeToolArgs(args = {}) {
-  if (args && typeof args === "object" && !Array.isArray(args)) return args;
-  if (typeof args !== "string") return {};
-  try {
-    const parsed = JSON.parse(args);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
 
 function normalizeTextContent(content = "") {
   if (typeof content === "string") return content;
@@ -248,7 +213,7 @@ export function createAgentCapabilityModelInvoker({
       });
       const text = normalizeTextContent(ai?.content);
       lastAssistantText = text;
-      const calls = normalizeToolCalls(ai);
+      const { calls } = normalizeToolCalls(ai);
       traces.push({
         turn,
         purpose,

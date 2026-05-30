@@ -12,7 +12,11 @@ import {
   adaptToolsForBinding,
   appendToolCompatibilityLog,
   createChatModelFromSpec,
+  normalizeToolCalls,
+  registerToolCallStreamingMismatch,
+  resolveRetryInvokeLlm,
   resolveInvokeLlm,
+  shouldRetryToolCallStreamingMismatch,
 } from "../../../model/index.js";
 import { emitEvent } from "../../../event/index.js";
 import { createStateCommitter } from "../execution/state-committer.js";
@@ -348,11 +352,15 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools" });
 
-  const invokeBoundLlmWithToolChoice = async (toolChoiceOverride = "") =>
+  const invokeBoundLlmWithToolChoice = async (
+    toolChoiceOverride = "",
+    llmOverride = null,
+    invokeMode = "with_tools",
+  ) =>
     invokeLlmWithTransientRetry({
       modelState,
       turn,
-      mode: "with_tools",
+      mode: invokeMode,
       invoke: ({ callbacks }) => {
         const baseBindOptions =
           adaptedBinding?.bindOptions && typeof adaptedBinding.bindOptions === "object"
@@ -365,9 +373,10 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
           ...baseBindOptions,
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
         };
+        const targetLlm = llmOverride || invokeLlm;
         const boundLlm = Object.keys(effectiveBindOptions).length
-          ? invokeLlm.bindTools(boundTools, effectiveBindOptions)
-          : invokeLlm.bindTools(boundTools);
+          ? targetLlm.bindTools(boundTools, effectiveBindOptions)
+          : targetLlm.bindTools(boundTools);
         const nonThinkingOverrides = resolveNonThinkingCallOverrides(
           runtime,
           effectiveToolChoice,
@@ -452,19 +461,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }
   }
 
-  let rawCalls = Array.isArray(ai?.tool_calls) ? ai.tool_calls : [];
-  let calls = rawCalls.map((call = {}) => ({
-    ...call,
-    id: String(
-      call?.id ??
-        call?.tool_call_id ??
-        call?.toolCallId ??
-        call?.call_id ??
-        "",
-    ).trim(),
-    name: String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim(),
-    args: call?.args && typeof call.args === "object" ? call.args : {},
-  }));
+  let { rawCalls, calls } = normalizeToolCalls(ai);
   let aiContentText = normalizeAiTextContent(ai.content, {
     additionalKwargs: ai?.additional_kwargs ?? null,
     allowReasoningFallback: false,
@@ -481,19 +478,27 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       content: buildReasoningRetrySystemMessage(reasoningText, locale),
     });
     ai = await invokeBoundLlmWithToolChoice();
-    rawCalls = Array.isArray(ai?.tool_calls) ? ai.tool_calls : [];
-    calls = rawCalls.map((call = {}) => ({
-      ...call,
-      id: String(
-        call?.id ??
-          call?.tool_call_id ??
-          call?.toolCallId ??
-          call?.call_id ??
-          "",
-      ).trim(),
-      name: String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim(),
-      args: call?.args && typeof call.args === "object" ? call.args : {},
-    }));
+    ({ rawCalls, calls } = normalizeToolCalls(ai));
+    aiContentText = normalizeAiTextContent(ai.content, {
+      additionalKwargs: ai?.additional_kwargs ?? null,
+      allowReasoningFallback: false,
+    });
+  }
+  if (shouldRetryToolCallStreamingMismatch({ ai, calls })) {
+    registerToolCallStreamingMismatch(modelState, {
+      mode: "with_tools",
+      reason: "finish_reason_tool_calls_but_no_calls_detected",
+    });
+    const retryLlm = resolveRetryInvokeLlm(modelState, {
+      mode: "with_tools",
+      reason: "finish_reason_tool_calls_but_no_calls_detected",
+    });
+    ai = await invokeBoundLlmWithToolChoice(
+      "",
+      retryLlm,
+      "with_tools_non_streaming_retry",
+    );
+    ({ rawCalls, calls } = normalizeToolCalls(ai));
     aiContentText = normalizeAiTextContent(ai.content, {
       additionalKwargs: ai?.additional_kwargs ?? null,
       allowReasoningFallback: false,

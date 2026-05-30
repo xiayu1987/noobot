@@ -244,9 +244,10 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         }
 
         if (reachedPlanUpdateTurns) {
-          holder.state.counters.planUpdateTurns = 0;
+          const blockedByPendingPlanUpdate = holder.state.pending?.planUpdate === true;
+          let planUpdateScheduled = false;
           if (
-            holder.state.pending?.planUpdate !== true &&
+            !blockedByPendingPlanUpdate &&
             canAttemptPlanUpdate(ctx, holder.state, { increment: false, stage: "revision" })
           ) {
             setPendingPlanUpdate(holder.state, {
@@ -262,9 +263,20 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
                 summaryPending: holder.state.pending?.summary === true,
               },
             });
+            planUpdateScheduled = true;
             if (decisionReason === PLANNING_DECISION.reason.idle) {
               decisionReason = PLANNING_DECISION.reason.planUpdateThreshold;
             }
+          }
+          if (planUpdateScheduled) {
+            holder.state.counters.planUpdateTurns = 0;
+          } else if (blockedByPendingPlanUpdate) {
+            // Keep threshold pressure while a prior plan-update is still pending.
+            holder.state.counters.planUpdateTurns = PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD;
+            blockedActions.push(PLANNING_DECISION.label.planUpdateRevision);
+            blockedReasons.push("plan_update_blocked_by_pending_plan_update");
+          } else {
+            holder.state.counters.planUpdateTurns = 0;
           }
         }
 

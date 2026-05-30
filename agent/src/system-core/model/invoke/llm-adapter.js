@@ -3,21 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  *
- * LLM adapter for invocation: Gemini non-streaming workaround with caching.
+ * LLM adapter for invocation and streaming fallback helpers.
  */
 import { emitEvent } from "../../event/index.js";
 import { createChatModel, createChatModelByName } from "../factory/chat-model.js";
 
-/**
- * Check if the active model is Gemini-like.
- * @param {object} modelState
- * @returns {boolean}
- */
-function isGeminiLikeModel(modelState = {}) {
-  const alias = String(modelState?.activeModelAlias || "").toLowerCase();
-  const name = String(modelState?.activeModelName || "").toLowerCase();
-  return `${alias} ${name}`.includes("gemini");
-}
+const STREAMING_TOOL_CALL_MISMATCH_THRESHOLD = 2;
 
 /**
  * Get or create a cached non-streaming LLM instance.
@@ -50,24 +41,79 @@ function getNonStreamingInvokeLlm(modelState = {}) {
   return llm;
 }
 
+function resolveFinishReason(ai = {}) {
+  const candidates = [
+    ai?.response_metadata?.finish_reason,
+    ai?.response_metadata?.finishReason,
+    ai?.additional_kwargs?.finish_reason,
+    ai?.additional_kwargs?.finishReason,
+    ai?.finish_reason,
+    ai?.finishReason,
+  ];
+  for (const candidate of candidates) {
+    const normalized = String(candidate || "").trim().toLowerCase();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+export function shouldRetryToolCallStreamingMismatch({ ai = {}, calls = [] } = {}) {
+  if (Array.isArray(calls) && calls.length) return false;
+  return resolveFinishReason(ai) === "tool_calls";
+}
+
+export function registerToolCallStreamingMismatch(modelState = {}, { mode = "", reason = "" } = {}) {
+  const currentCount = Number(modelState?.__toolCallStreamingMismatchCount || 0);
+  const nextCount = Number.isFinite(currentCount) ? currentCount + 1 : 1;
+  modelState.__toolCallStreamingMismatchCount = nextCount;
+  emitEvent(modelState?.eventListener, "llm_tool_call_streaming_mismatch_detected", {
+    mode,
+    reason: String(reason || "").trim(),
+    mismatchCount: nextCount,
+    forceNonStreamingFromNow: nextCount >= STREAMING_TOOL_CALL_MISMATCH_THRESHOLD,
+    modelAlias: String(modelState?.activeModelAlias || "").trim(),
+    modelName: String(modelState?.activeModelName || "").trim(),
+  });
+  return nextCount;
+}
+
+function shouldForceNonStreamingByMismatchBudget(modelState = {}) {
+  const mismatchCount = Number(modelState?.__toolCallStreamingMismatchCount || 0);
+  return Number.isFinite(mismatchCount) && mismatchCount >= STREAMING_TOOL_CALL_MISMATCH_THRESHOLD;
+}
+
+export function resolveRetryInvokeLlm(modelState = {}, { mode = "", reason = "" } = {}) {
+  const nonStreamingLlm = getNonStreamingInvokeLlm(modelState);
+  emitEvent(modelState?.eventListener, "llm_streaming_retry_downgraded_to_non_streaming", {
+    mode,
+    reason: String(reason || "").trim(),
+    modelAlias: String(modelState?.activeModelAlias || "").trim(),
+    modelName: String(modelState?.activeModelName || "").trim(),
+  });
+  return nonStreamingLlm;
+}
+
 /**
  * Resolve the LLM instance to use for invocation.
- * For Gemini models, returns a non-streaming instance with a one-time event.
+ * Default keeps streaming behavior for all models.
  * @param {object} modelState
  * @param {string} mode
  * @returns {object}
  */
 export function resolveInvokeLlm(modelState = {}, mode = "") {
-  if (!isGeminiLikeModel(modelState)) return modelState.llm;
-  const nonStreamingLlm = getNonStreamingInvokeLlm(modelState);
-  if (modelState.__geminiStreamingDisableLogged !== true) {
-    emitEvent(modelState?.eventListener, "llm_streaming_temporarily_disabled", {
-      mode,
-      modelAlias: String(modelState?.activeModelAlias || "").trim(),
-      modelName: String(modelState?.activeModelName || "").trim(),
-      reason: "gemini_stability_workaround",
-    });
-    modelState.__geminiStreamingDisableLogged = true;
+  if (shouldForceNonStreamingByMismatchBudget(modelState)) {
+    const nonStreamingLlm = getNonStreamingInvokeLlm(modelState);
+    if (modelState.__streamingDisabledByMismatchLogged !== true) {
+      emitEvent(modelState?.eventListener, "llm_streaming_disabled_after_repeated_tool_call_mismatch", {
+        mode,
+        mismatchCount: Number(modelState?.__toolCallStreamingMismatchCount || 0),
+        threshold: STREAMING_TOOL_CALL_MISMATCH_THRESHOLD,
+        modelAlias: String(modelState?.activeModelAlias || "").trim(),
+        modelName: String(modelState?.activeModelName || "").trim(),
+      });
+      modelState.__streamingDisabledByMismatchLogged = true;
+    }
+    return nonStreamingLlm;
   }
-  return nonStreamingLlm;
+  return modelState.llm;
 }
