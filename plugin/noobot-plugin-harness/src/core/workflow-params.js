@@ -52,7 +52,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
         revisionNotApplied: "planning_revision_not_applied",
         revisionSkippedByMaxAttempts: "planning_revision_skipped_by_max_attempts",
         refinementConvergedNoTargetMainStep: "planning_refinement_converged_no_target_main_step",
-        refinementSkippedNoMainPlanChange: "planning_refinement_skipped_no_main_plan_change",
         refinementSkippedByMaxAttempts: "planning_refinement_skipped_by_max_attempts",
         planUpdatePromptInjected: "planning_plan_update_prompt_injected",
         separateModelCallFailed: "guidance_separate_model_call_failed",

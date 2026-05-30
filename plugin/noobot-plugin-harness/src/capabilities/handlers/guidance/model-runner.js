@@ -28,6 +28,7 @@ import {
   applyRevisedPlanFromText,
   buildNextPhaseRelayContent,
   buildPlanningRevisionPrompt,
+  resolveRefinementTargetMainStepIndexesAfterRevision,
 } from "./revision-engine.js";
 import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
 import { schedulePlanUpdateByInject } from "./revision-injector.js";
@@ -213,19 +214,18 @@ export async function runPlanUpdateAfterSummary(
     dedupe: true,
   });
   changed = true;
-  const mainPlanChanged = bucket?.lastMainPlanRevisionChanged === true;
-  if (!mainPlanChanged) {
-    appendCapabilityLog(ctx, {
-      domain: CAPABILITY_DOMAIN.PLANNING,
-      event: GUIDANCE_EVENTS.refinementSkippedNoMainPlanChange,
-    });
-    return changed;
-  }
+  const refinementTargetMainStepIndexes = resolveRefinementTargetMainStepIndexesAfterRevision(
+    bucket,
+    state,
+  );
 
   if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "refinement" })) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: GUIDANCE_EVENTS.refinementSkippedByMaxAttempts,
+      detail: {
+        refinementTargetMainStepIndexes,
+      },
     });
     return changed;
   }
@@ -233,6 +233,7 @@ export async function runPlanUpdateAfterSummary(
     summaryText,
     source: "planning_refinement",
     baseMessages: modelMessages,
+    targetMainStepIndexes: refinementTargetMainStepIndexes,
   });
   return refinementResult.applied === true ? true : changed;
 }

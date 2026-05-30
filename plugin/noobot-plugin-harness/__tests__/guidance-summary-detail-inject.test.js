@@ -21,6 +21,7 @@ test("inject-mode summary saves detail as attachment and injects detail path to 
       content: [
         "[SUMMARY_OVERVIEW]",
         "1. [plan=2][status=done] 完成模块分析",
+        "2. [plan=8][status=todo][risk=高] 文档缺口风险，影响后续交付，建议优先补齐",
         "",
         "[SUMMARY_DETAIL]",
         "## 详细明细",
@@ -88,4 +89,9 @@ test("inject-mode summary saves detail as attachment and injects detail path to 
   assert.ok(injectedDetailPathMessage);
   assert.equal(Array.isArray(injectedDetailPathMessage?.attachmentMetas), true);
   assert.equal(injectedDetailPathMessage.attachmentMetas.length, 1);
+
+  assert.doesNotMatch(
+    ctx.messages.map((item = {}) => String(item?.content || "")).join("\n"),
+    /summary_pending/,
+  );
 });

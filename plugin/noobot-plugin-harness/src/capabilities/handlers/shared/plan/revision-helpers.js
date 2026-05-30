@@ -23,9 +23,35 @@ function formatSubPlansText(subPlans = [], targetId = 0) {
     .join("\n") || "（空）";
 }
 
-function normalizeMainPlanText(text = "") {
-  const plans = parseMainPlansFromPlanText(text);
-  return plans.map((item = {}) => `${item.id}. ${item.content}`).join("\n").trim();
+function normalizeMainStepIndexes(indexes = []) {
+  return [...new Set(
+    (Array.isArray(indexes) ? indexes : [])
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item) && item > 0),
+  )].sort((a, b) => a - b);
+}
+
+function extractChangedMainStepIndexes(previousDocument = {}, nextDocument = {}) {
+  const previousMainPlans = Array.isArray(previousDocument?.mainPlans) ? previousDocument.mainPlans : [];
+  const nextMainPlans = Array.isArray(nextDocument?.mainPlans) ? nextDocument.mainPlans : [];
+  const previousMap = new Map(
+    previousMainPlans
+      .map((item = {}) => [Number(item.id), String(item.content || "").trim()])
+      .filter(([id, content]) => Number.isFinite(id) && id > 0 && content),
+  );
+  const nextMap = new Map(
+    nextMainPlans
+      .map((item = {}) => [Number(item.id), String(item.content || "").trim()])
+      .filter(([id, content]) => Number.isFinite(id) && id > 0 && content),
+  );
+  const changed = new Set();
+  for (const id of previousMap.keys()) {
+    if (!nextMap.has(id)) changed.add(id);
+  }
+  for (const [id, content] of nextMap.entries()) {
+    if (!previousMap.has(id) || previousMap.get(id) !== content) changed.add(id);
+  }
+  return [...changed].sort((a, b) => a - b);
 }
 
 export function createPlanRevisionHelpers({
@@ -38,9 +64,7 @@ export function createPlanRevisionHelpers({
     if (!bucket || typeof bucket !== "object") return {};
     if (typeof bucket.planText !== "string") bucket.planText = "";
     if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
-    if (typeof bucket.lastMainPlanRevisionChanged !== "boolean") {
-      bucket.lastMainPlanRevisionChanged = false;
-    }
+    if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes)) bucket.lastRevisionChangedMainStepIndexes = [];
     if (!bucket.planDocument || typeof bucket.planDocument !== "object") {
       bucket.planDocument = parsePlanDocumentFromText(bucket.planText);
     }
@@ -125,8 +149,9 @@ export function createPlanRevisionHelpers({
       String(stage || source || "revision").toLowerCase().includes("refinement")
         ? "refinement"
         : "revision";
+    const normalizedTargetMainStepIndexes = normalizeMainStepIndexes(targetMainStepIndexes);
     let applied = false;
-    const previousMainPlanText = normalizeMainPlanText(bucket.planText);
+    const previousDocument = parsePlanDocumentFromText(bucket.planText);
 
     if (normalizedStage === "revision") {
       const nextDocument = parsePlanDocumentFromText(bucket.planText);
@@ -164,7 +189,7 @@ export function createPlanRevisionHelpers({
         stage: "refinement",
         refinedAt: new Date().toISOString(),
         summary: String(summary || "").trim() || undefined,
-        targetMainStepIndexes: Array.isArray(targetMainStepIndexes) ? targetMainStepIndexes : [],
+        targetMainStepIndexes: normalizedTargetMainStepIndexes,
         patchText: payloadText,
         planText: bucket.planText,
       });
@@ -174,9 +199,9 @@ export function createPlanRevisionHelpers({
     }
 
     if (!applied) return false;
-    const nextMainPlanText = normalizeMainPlanText(bucket.planText);
+    const nextDocument = parsePlanDocumentFromText(bucket.planText);
     if (normalizedStage === "revision") {
-      bucket.lastMainPlanRevisionChanged = nextMainPlanText !== previousMainPlanText;
+      bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(previousDocument, nextDocument);
     }
     state.flags.planningCaptured = String(bucket.planText || "").trim().length > 0;
     if (!Array.isArray(bucket.planRevisions)) bucket.planRevisions = [];
@@ -198,10 +223,25 @@ export function createPlanRevisionHelpers({
       detail: {
         stage: normalizedStage,
         checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
-        mainPlanChanged: normalizedStage === "revision" ? bucket.lastMainPlanRevisionChanged === true : undefined,
+        revisionChangedMainStepIndexes:
+          normalizedStage === "revision"
+            ? normalizeMainStepIndexes(bucket.lastRevisionChangedMainStepIndexes)
+            : undefined,
+        refinementTargetMainStepIndexes:
+          normalizedStage === "refinement" ? normalizedTargetMainStepIndexes : undefined,
       },
     });
     return true;
+  }
+
+  function resolveRefinementTargetMainStepIndexesAfterRevision(bucket = {}, state = {}) {
+    const normalizedBucket = ensurePlanTextBucket(bucket);
+    const preferredTargetMainStepIndexes = normalizeMainStepIndexes(
+      normalizedBucket.lastRevisionChangedMainStepIndexes,
+    );
+    return resolveRefinementTargetMainSteps(normalizedBucket, state, {
+      preferredTargetMainStepIndexes,
+    }).map((item = {}) => Number(item.index)).filter((item) => Number.isFinite(item) && item > 0);
   }
 
   function buildPlanningRefinementPrompt(
@@ -257,6 +297,7 @@ export function createPlanRevisionHelpers({
 
   return {
     resolveRefinementTargetMainSteps,
+    resolveRefinementTargetMainStepIndexesAfterRevision,
     applyRevisedPlanFromText,
     buildPlanningRefinementPrompt,
     buildNextPhaseRelayContent,

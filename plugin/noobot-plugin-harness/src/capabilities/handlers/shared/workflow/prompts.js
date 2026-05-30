@@ -275,11 +275,12 @@ export function buildGuidanceSummaryPromptText(options = {}) {
       "Use plain-text summary_text_v2 blocks:",
       "[SUMMARY_OVERVIEW]",
       "1. [plan=2][status=done] ...",
+      "2. [plan=8][status=todo][risk=high] ...",
       "[SUMMARY_DETAIL]",
       "## Detailed notes",
       "- evidence / logs / risk analysis ...",
       "[SUMMARY_END]",
-      "Rules: SUMMARY_OVERVIEW should be short and action-oriented for main agent context; SUMMARY_DETAIL contains detailed evidence and can be longer.",
+      "Rules: SUMMARY_OVERVIEW should be short and action-oriented for main agent context, and must include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer.",
       buildSummaryPatchProtocolCoreText(locale),
     ].filter(Boolean).join("\n");
   }
@@ -289,11 +290,12 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     "请优先使用纯文本 summary_text_v2 协议：",
     "[SUMMARY_OVERVIEW]",
     "1. [plan=2][status=done] ...",
+    "2. [plan=8][status=todo][risk=高] ...",
     "[SUMMARY_DETAIL]",
     "## 详细明细",
     "- 证据/日志/风险分析 ...",
     "[SUMMARY_END]",
-    "要求：SUMMARY_OVERVIEW 保持简短、面向主流程决策；SUMMARY_DETAIL 写充分细节。",
+    "要求：SUMMARY_OVERVIEW 保持简短、面向主流程决策，并且用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节。",
     buildSummaryPatchProtocolCoreText(locale),
   ].filter(Boolean).join("\n");
 }

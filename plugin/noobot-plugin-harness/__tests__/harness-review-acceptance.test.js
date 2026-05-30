@@ -812,11 +812,13 @@ test("harness active request_task_acceptance semantic validation receives agent 
   const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
   const raw = await tool.invoke({ mode: "active" }, { configurable: { noobotHookContext: { agentContext, result: { output: "done" } }, noobotHookMeta: hookManager.runtime } });
   const result = typeof raw === "string" ? JSON.parse(raw) : raw;
-  assert.equal(invocations.length, 1);
-  assert.equal(invocations[0].purpose, "acceptance_semantic_validation");
-  assert.equal(invocations[0].promptVersion, "v1");
-  assert.equal(invocations[0].envelopeType, "structured_v1");
-  assertFlatCapabilityMessages(invocations[0].messages);
+  assert.equal(invocations.length, 2);
+  assert.equal(invocations[0].purpose, "phase_acceptance");
+  assert.equal(invocations[1].purpose, "acceptance_semantic_validation");
+  assert.equal(invocations[1].promptVersion, "v1");
+  assert.equal(invocations[1].envelopeType, "structured_v1");
+  assertFlatCapabilityMessages(invocations[1].messages);
+  assert.equal(result.phaseAcceptanceTriggered, true);
   assert.equal(result.report.semanticValidation.status, "pass");
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
 });
@@ -872,8 +874,10 @@ test("harness active request_task_acceptance falls back to closure meta when con
     },
   );
   const result = typeof raw === "string" ? JSON.parse(raw) : raw;
-  assert.equal(invocations.length, 1);
-  assert.equal(invocations[0].purpose, "acceptance_semantic_validation");
+  assert.equal(invocations.length, 2);
+  assert.equal(invocations[0].purpose, "phase_acceptance");
+  assert.equal(invocations[1].purpose, "acceptance_semantic_validation");
+  assert.equal(result.phaseAcceptanceTriggered, true);
   assert.equal(result.report.semanticValidation.status, "pass");
 });
 
@@ -915,7 +919,9 @@ test("harness acceptance semantic validation failure does not block active accep
   const result = typeof raw === "string" ? JSON.parse(raw) : raw;
 
   assert.equal(result.ok, true);
+  assert.equal(result.phaseAcceptanceTriggered, false);
   assert.equal(result.report.semanticValidation, undefined);
+  assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "phase_acceptance_failed"), true);
   assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "acceptance_semantic_validation_failed"), true);
 });
 
@@ -1469,7 +1475,7 @@ test("guidance handler inject mode can schedule and capture planning revision wi
   await handler({ capability: "guidance", point: "after_llm_call", ctx: revisionCtx, meta });
   assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
   assert.equal(
-    agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_refinement_skipped_no_main_plan_change"),
+    agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_refinement_converged_no_target_main_step"),
     true,
   );
   assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, true);

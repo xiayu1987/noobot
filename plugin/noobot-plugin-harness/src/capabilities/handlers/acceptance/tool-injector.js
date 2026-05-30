@@ -16,7 +16,7 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { buildAcceptanceReport } from "./report-builder.js";
-import { runAcceptanceBySeparateModel } from "./validation-runner.js";
+import { runAcceptanceBySeparateModel, runPhaseAcceptanceBySeparateModel } from "./validation-runner.js";
 import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
@@ -44,6 +44,11 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
             ? "上下文溢出_流程内强制验收 | Context overflow (in-flow forced acceptance)"
             : "工具主动请求强制验收 | Tool-requested forced acceptance"
           : "";
+      const phaseAcceptanceTriggered = await runPhaseAcceptanceBySeparateModel(
+        toolCtx,
+        toolMeta,
+        { forceRun: true },
+      );
       const report = buildAcceptanceReport({ bucket, state, mode, forcedReason });
       bucket.lastAcceptanceReport = report;
       bucket.acceptanceReports.push(report);
@@ -52,6 +57,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         ok: true,
         status: "completed",
         tool: TASK_ACCEPTANCE_TOOL_NAME,
+        phaseAcceptanceTriggered,
         report,
       };
     },

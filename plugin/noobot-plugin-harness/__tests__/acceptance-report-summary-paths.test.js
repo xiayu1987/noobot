@@ -88,3 +88,30 @@ test("renderAcceptanceReportText falls back to raw text when recognition fails",
   assert.match(String(text), /mode: active/);
   assert.doesNotMatch(String(text), /## 模式/);
 });
+
+test("acceptance report maps latest model phase acceptance to checklist status and appends model result", () => {
+  const report = buildAcceptanceReport({
+    bucket: {
+      planText: "1. 确认用户意图与需求\n2. 提供相应的帮助与回应",
+      phaseAcceptanceReports: [
+        {
+          acceptedAt: "2026-05-30T12:00:00.000Z",
+          content: [
+            "ADD A1 plan=1 status=pass risk=low evidence=用户打招呼\"你好\"，意图明确 [确认用户意图与需求：通过]",
+            "ADD A2 plan=2 status=pass risk=low evidence=已给出回应 [提供相应的帮助与回应：通过]",
+          ].join("\n"),
+        },
+      ],
+    },
+    state: { locale: "zh-CN", signals: {} },
+  });
+  const checklist = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
+  assert.equal(checklist.length >= 2, true);
+  assert.equal(checklist[0]?.status, "completed");
+  assert.equal(checklist[1]?.status, "completed");
+  assert.match(String(report?.modelAcceptance?.rawContent || ""), /ADD A1 plan=1 status=pass/);
+
+  const text = renderAcceptanceReportText(report, "zh-CN");
+  assert.match(String(text), /## 模型验收结果/);
+  assert.match(String(text), /ADD A2 plan=2 status=pass/);
+});

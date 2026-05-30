@@ -13,7 +13,7 @@ test("summary_text_v2 parser extracts overview and detail blocks", () => {
     "<!-- harness-guidance-summary-v2 -->",
     "[SUMMARY_OVERVIEW]",
     "1. [plan=2][status=done] 完成核心架构梳理",
-    "2. [plan=3][status=risk] 发现容器并发冲突风险",
+    "2. [plan=8][status=todo][risk=高] 并发冲突风险，影响任务稳定性，建议先加互斥锁与回归验证",
     "",
     "[SUMMARY_DETAIL]",
     "## 详细明细",
@@ -25,6 +25,7 @@ test("summary_text_v2 parser extracts overview and detail blocks", () => {
   const parsed = parseSummaryOverviewAndDetailFromText(text);
   assert.equal(parsed.usedV2, true);
   assert.match(String(parsed.overviewText || ""), /\[plan=2\]\[status=done\]/);
+  assert.match(String(parsed.overviewText || ""), /\[plan=8\]\[status=todo\]\[risk=高\]/);
   assert.match(String(parsed.detailText || ""), /^## 详细明细/m);
 });
 
@@ -35,4 +36,3 @@ test("summary parser falls back to plain text when blocks missing", () => {
   assert.equal(parsed.overviewText, text);
   assert.equal(parsed.detailText, "");
 });
-
