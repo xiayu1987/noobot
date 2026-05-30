@@ -63,12 +63,34 @@ function migrateLegacyPlanUpdateState(state = {}) {
 
   const hasUnifiedAttempts = Number.isFinite(Number(counters.planUpdateAttempts));
   const normalizedUnifiedAttempts = hasUnifiedAttempts ? Number(counters.planUpdateAttempts) : 0;
-  const legacyAttempts = Number.isFinite(Number(counters.planRevisionAttempts))
-    ? Number(counters.planRevisionAttempts)
-    : 0;
-  if (!hasUnifiedAttempts || (normalizedUnifiedAttempts === 0 && legacyAttempts > 0)) {
-    counters.planUpdateAttempts = legacyAttempts;
+  const hasRevisionAttempts = Number.isFinite(Number(counters.planRevisionAttempts));
+  const hasRefinementAttempts = Number.isFinite(Number(counters.planRefinementAttempts));
+  const normalizedRevisionAttempts = hasRevisionAttempts ? Number(counters.planRevisionAttempts) : 0;
+  const normalizedRefinementAttempts = hasRefinementAttempts ? Number(counters.planRefinementAttempts) : 0;
+
+  if (
+    hasUnifiedAttempts &&
+    normalizedUnifiedAttempts > 0 &&
+    normalizedRevisionAttempts === 0 &&
+    normalizedRefinementAttempts === 0
+  ) {
+    counters.planRevisionAttempts = normalizedUnifiedAttempts;
+  } else if (!hasRevisionAttempts && hasUnifiedAttempts) {
+    counters.planRevisionAttempts = normalizedUnifiedAttempts;
+  } else if (!hasRevisionAttempts) {
+    counters.planRevisionAttempts = 0;
   }
+  if (!hasRefinementAttempts) {
+    counters.planRefinementAttempts = 0;
+  }
+
+  const revisionAttempts = Number.isFinite(Number(counters.planRevisionAttempts))
+    ? Number(counters.planRevisionAttempts)
+    : normalizedRevisionAttempts;
+  const refinementAttempts = Number.isFinite(Number(counters.planRefinementAttempts))
+    ? Number(counters.planRefinementAttempts)
+    : normalizedRefinementAttempts;
+  counters.planUpdateAttempts = revisionAttempts + refinementAttempts;
 
   const normalizedLegacyStage =
     String(pending.planRevisionStage || "").trim().toLowerCase() === "revision"

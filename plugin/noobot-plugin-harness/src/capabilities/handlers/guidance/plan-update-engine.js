@@ -16,20 +16,41 @@ export function normalizePlanUpdateStage(stage = "") {
   return String(stage || "").trim().toLowerCase() === "revision" ? "revision" : "refinement";
 }
 
-export function resolvePlanUpdateAttempts(state = {}) {
-  if (!state || typeof state !== "object") return 0;
-  if (!state.counters || typeof state.counters !== "object") state.counters = {};
-  return Number.isFinite(Number(state.counters.planUpdateAttempts))
-    ? Number(state.counters.planUpdateAttempts)
-    : Number.isFinite(Number(state.counters.planRevisionAttempts))
-      ? Number(state.counters.planRevisionAttempts)
-      : 0;
+function resolveStageAttemptCounterKey(stage = "revision") {
+  return normalizePlanUpdateStage(stage) === "revision"
+    ? "planRevisionAttempts"
+    : "planRefinementAttempts";
 }
 
-function syncPlanUpdateAttempts(state = {}, next = 0) {
+export function resolvePlanUpdateAttempts(state = {}, { stage = "revision" } = {}) {
+  if (!state || typeof state !== "object") return 0;
+  if (!state.counters || typeof state.counters !== "object") state.counters = {};
+  const normalizedStage = normalizePlanUpdateStage(stage);
+  const stageKey = resolveStageAttemptCounterKey(normalizedStage);
+  if (Number.isFinite(Number(state.counters[stageKey]))) {
+    return Number(state.counters[stageKey]);
+  }
+  // Legacy fallback: old sessions only had unified planUpdateAttempts.
+  if (normalizedStage === "revision" && Number.isFinite(Number(state.counters.planUpdateAttempts))) {
+    return Number(state.counters.planUpdateAttempts);
+  }
+  return 0;
+}
+
+function syncPlanUpdateAttempts(state = {}, { stage = "revision", next = 0 } = {}) {
   if (!state || typeof state !== "object") return;
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
-  state.counters.planUpdateAttempts = next;
+  const normalizedStage = normalizePlanUpdateStage(stage);
+  const stageKey = resolveStageAttemptCounterKey(normalizedStage);
+  state.counters[stageKey] = next;
+  const revisionAttempts = Number.isFinite(Number(state.counters.planRevisionAttempts))
+    ? Number(state.counters.planRevisionAttempts)
+    : 0;
+  const refinementAttempts = Number.isFinite(Number(state.counters.planRefinementAttempts))
+    ? Number(state.counters.planRefinementAttempts)
+    : 0;
+  // Keep unified field for compatibility/observability.
+  state.counters.planUpdateAttempts = revisionAttempts + refinementAttempts;
 }
 
 export function canAttemptPlanUpdate(
@@ -40,7 +61,7 @@ export function canAttemptPlanUpdate(
   if (!state || typeof state !== "object") return false;
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
   const normalizedStage = normalizePlanUpdateStage(stage);
-  const current = resolvePlanUpdateAttempts(state);
+  const current = resolvePlanUpdateAttempts(state, { stage: normalizedStage });
   if (current >= PLAN_UPDATE_POLICY.MAX_ATTEMPTS) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
@@ -54,7 +75,7 @@ export function canAttemptPlanUpdate(
     return false;
   }
   if (increment) {
-    syncPlanUpdateAttempts(state, current + 1);
+    syncPlanUpdateAttempts(state, { stage: normalizedStage, next: current + 1 });
   }
   return true;
 }

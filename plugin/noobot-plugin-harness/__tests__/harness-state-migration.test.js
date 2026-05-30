@@ -41,6 +41,7 @@ test("ensureHarnessBucket migrates legacy planRevision counters and pending fiel
   const { state } = holder;
   assert.equal(state.counters.planUpdateAttempts, 3);
   assert.equal(state.counters.planRevisionAttempts, 3);
+  assert.equal(state.counters.planRefinementAttempts, 0);
   assert.equal(state.pending.planUpdate, true);
   assert.equal(state.pending.planUpdateStage, "revision");
   assert.deepEqual(state.pending.planUpdateContext, {
@@ -49,8 +50,8 @@ test("ensureHarnessBucket migrates legacy planRevision counters and pending fiel
   });
   assert.equal(state.flags.planUpdateCapturePending, true);
   assert.equal(state.flags.planRevisionCapturePending, true);
-  assert.equal(holder.bucket.__harnessBucketVersion, 3);
-  assert.equal(state.__harnessBucketVersion, 3);
+  assert.equal(holder.bucket.__harnessBucketVersion, 4);
+  assert.equal(state.__harnessBucketVersion, 4);
 });
 
 test("ensureHarnessBucket keeps state version as alias of bucket version", () => {
@@ -71,7 +72,7 @@ test("ensureHarnessBucket keeps state version as alias of bucket version", () =>
   };
   const holder = ensureHarnessBucket(ctx);
   assert.ok(holder);
-  assert.equal(holder.state.__harnessBucketVersion, 3);
+  assert.equal(holder.state.__harnessBucketVersion, 4);
   holder.state.__harnessBucketVersion = 5;
   assert.equal(holder.bucket.__harnessBucketVersion, 5);
   assert.equal(holder.state.__harnessBucketVersion, 5);

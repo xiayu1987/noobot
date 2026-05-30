@@ -54,9 +54,19 @@ export { resolveApiKey, buildModelKwargs, resolveUseResponsesApi } from "./facto
 
 // ── Invocation ──
 export { invokeModelWithTextAndAttachments } from "./invoke/invoker.js";
+export {
+  normalizeToolCallArgs,
+  resolveRawToolCalls,
+  normalizeToolCalls,
+} from "./invoke/tool-call-normalizer.js";
 
 // ── LLM adapter ──
-export { resolveInvokeLlm } from "./invoke/llm-adapter.js";
+export {
+  resolveInvokeLlm,
+  resolveRetryInvokeLlm,
+  registerToolCallStreamingMismatch,
+  shouldRetryToolCallStreamingMismatch,
+} from "./invoke/llm-adapter.js";
 
 // ── Attachment formatting ──
 export {

@@ -325,6 +325,42 @@ function tryParseJson(text = '') {
   }
 }
 
+function normalizeToolCallItem(toolCallItem = {}) {
+  if (!toolCallItem || typeof toolCallItem !== 'object') return null;
+  const normalizedFunction = toolCallItem.function && typeof toolCallItem.function === 'object'
+    ? {
+        name: String(toolCallItem.function.name || '').trim(),
+        arguments: String(toolCallItem.function.arguments || ''),
+      }
+    : {};
+  const normalized = {
+    id: String(toolCallItem.id || '').trim(),
+    type: String(toolCallItem.type || '').trim() || 'function',
+    function: normalizedFunction,
+  };
+  if (!normalized.id && !normalized.function?.name && !normalized.function?.arguments) return null;
+  return normalized;
+}
+
+function extractToolCallsFromJsonPayload(payloadObject = null) {
+  if (!payloadObject || typeof payloadObject !== 'object') return [];
+  const choices = Array.isArray(payloadObject?.choices) ? payloadObject.choices : [];
+  const firstChoice = choices[0] && typeof choices[0] === 'object' ? choices[0] : null;
+  const messageToolCalls = Array.isArray(firstChoice?.message?.tool_calls)
+    ? firstChoice.message.tool_calls
+    : [];
+  if (messageToolCalls.length) {
+    return messageToolCalls.map((item) => normalizeToolCallItem(item)).filter(Boolean);
+  }
+  const deltaToolCalls = Array.isArray(firstChoice?.delta?.tool_calls)
+    ? firstChoice.delta.tool_calls
+    : [];
+  if (deltaToolCalls.length) {
+    return deltaToolCalls.map((item) => normalizeToolCallItem(item)).filter(Boolean);
+  }
+  return [];
+}
+
 function extractFinalTextFromJsonPayload(payloadObject = null) {
   if (!payloadObject || typeof payloadObject !== 'object') return '';
 
@@ -346,6 +382,18 @@ function extractFinalTextFromJsonPayload(payloadObject = null) {
     if (joinedOutputText) return joinedOutputText;
   }
 
+  const toolCalls = extractToolCallsFromJsonPayload(payloadObject);
+  if (toolCalls.length) {
+    return JSON.stringify(
+      {
+        type: 'tool_calls',
+        tool_calls: toolCalls,
+      },
+      null,
+      2,
+    );
+  }
+
   return '';
 }
 
@@ -361,6 +409,35 @@ function extractFinalTextFromSseBody(sseText = '') {
 
   let deltaTextBuffer = '';
   let latestResolvedText = '';
+  const toolCallBufferByIndex = new Map();
+
+  function upsertToolCallDelta(deltaToolCallItem = {}, fallbackIndex = 0) {
+    if (!deltaToolCallItem || typeof deltaToolCallItem !== 'object') return;
+    const index = Number.isInteger(deltaToolCallItem.index)
+      ? deltaToolCallItem.index
+      : fallbackIndex;
+    const existed = toolCallBufferByIndex.get(index) || {
+      id: '',
+      type: 'function',
+      function: { name: '', arguments: '' },
+    };
+    const normalizedType = String(deltaToolCallItem.type || '').trim();
+    if (normalizedType) existed.type = normalizedType;
+    const normalizedId = String(deltaToolCallItem.id || '').trim();
+    if (normalizedId) existed.id = normalizedId;
+
+    const fn = deltaToolCallItem.function && typeof deltaToolCallItem.function === 'object'
+      ? deltaToolCallItem.function
+      : null;
+    if (fn) {
+      const namePart = String(fn.name || '');
+      if (namePart) existed.function.name = `${existed.function.name || ''}${namePart}`;
+      const argsPart = String(fn.arguments || '');
+      if (argsPart) existed.function.arguments = `${existed.function.arguments || ''}${argsPart}`;
+    }
+    toolCallBufferByIndex.set(index, existed);
+  }
+
   for (const payloadText of dataPayloads) {
     const payloadObject = tryParseJson(payloadText);
     if (!payloadObject) {
@@ -380,9 +457,34 @@ function extractFinalTextFromSseBody(sseText = '') {
     if (hasDeltaContent) {
       deltaTextBuffer += String(firstChoice?.delta?.content || '');
       latestResolvedText = deltaTextBuffer;
-      continue;
+    } else {
+      latestResolvedText = payloadResolvedText;
     }
-    latestResolvedText = payloadResolvedText;
+
+    const deltaToolCalls = Array.isArray(firstChoice?.delta?.tool_calls)
+      ? firstChoice.delta.tool_calls
+      : [];
+    if (deltaToolCalls.length) {
+      deltaToolCalls.forEach((item, idx) => upsertToolCallDelta(item, idx));
+      if (!latestResolvedText) latestResolvedText = '[tool_calls_streaming]';
+    }
+  }
+
+  if (toolCallBufferByIndex.size && !String(latestResolvedText || '').trim()) {
+    const toolCalls = Array.from(toolCallBufferByIndex.entries())
+      .sort((left, right) => left[0] - right[0])
+      .map(([, item]) => normalizeToolCallItem(item))
+      .filter(Boolean);
+    if (toolCalls.length) {
+      return JSON.stringify(
+        {
+          type: 'tool_calls',
+          tool_calls: toolCalls,
+        },
+        null,
+        2,
+      );
+    }
   }
 
   return latestResolvedText || dataPayloads[dataPayloads.length - 1];
