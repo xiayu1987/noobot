@@ -62,12 +62,27 @@ function parseModelAcceptanceItemsFromText(text = "") {
   return items;
 }
 
+function parseSemanticAcceptanceItemsFromText(text = "") {
+  return parseModelAcceptanceItemsFromText(text);
+}
+
 function mapModelAcceptanceStatusToTaskStatus(status = "") {
   const normalized = String(status || "").trim().toLowerCase();
   if (normalized === "pass") return TASK_STATUS.COMPLETED;
   if (normalized === "warn") return TASK_STATUS.IN_PROGRESS;
   if (normalized === "fail") return TASK_STATUS.PENDING;
   return "";
+}
+
+function resolveAcceptanceStatusForChecklistItem(item = {}, byPlan = {}) {
+  const map = byPlan && typeof byPlan === "object" ? byPlan : {};
+  const exactKey = String(item?.index ?? "").trim();
+  if (exactKey && map[exactKey]) return map[exactKey];
+  const isMainStep = item?.isMainStep !== false;
+  if (isMainStep) return null;
+  const parentKey = String(item?.mainStepIndex ?? "").trim();
+  if (parentKey && map[parentKey]) return map[parentKey];
+  return null;
 }
 
 function resolveModelAcceptanceForChecklistItem(normalized = {}, modelAcceptanceByPlan = {}) {
@@ -384,6 +399,75 @@ function buildPlansInOrder(bucket = {}, locale = LOCALE.ZH_CN) {
     order: index + 1,
     ...buildOrderedPlanRecord(plan, bucket, locale),
   }));
+}
+
+export function applySemanticAcceptanceToReport(report = {}) {
+  const data = report && typeof report === "object" ? report : null;
+  if (!data) return false;
+  const semanticValidation =
+    data.semanticValidation && typeof data.semanticValidation === "object"
+      ? data.semanticValidation
+      : null;
+  const semanticRaw = String(semanticValidation?.content || "").trim();
+  if (!semanticRaw) return false;
+  const semanticItems = parseSemanticAcceptanceItemsFromText(semanticRaw);
+  if (!semanticItems.length) return false;
+  const semanticByPlan = {};
+  for (const item of semanticItems) {
+    const key = String(item?.planId || "").trim();
+    if (!key) continue;
+    semanticByPlan[key] = item;
+  }
+  if (!Object.keys(semanticByPlan).length) return false;
+
+  const checklist = Array.isArray(data.finalPlanChecklist)
+    ? data.finalPlanChecklist
+    : Array.isArray(data.taskChecklist)
+      ? data.taskChecklist
+      : [];
+  if (!checklist.length) return false;
+
+  const nextChecklist = checklist.map((item = {}) => {
+    const semanticAcceptance = resolveAcceptanceStatusForChecklistItem(item, semanticByPlan);
+    const semanticMappedStatus = mapModelAcceptanceStatusToTaskStatus(semanticAcceptance?.status);
+    const phaseMappedStatus = mapModelAcceptanceStatusToTaskStatus(item?.modelAcceptance?.status);
+    const phaseStatus = String(item?.phaseStatus || "").trim() || phaseMappedStatus || "";
+    const fallbackStatus = String(item?.status || "").trim() || "pending";
+    const effectiveStatus = semanticMappedStatus || phaseStatus || fallbackStatus;
+    const statusSource = semanticMappedStatus
+      ? "semantic"
+      : phaseStatus
+        ? "phase"
+        : "signal";
+    return {
+      ...item,
+      phaseStatus: phaseStatus || "",
+      semanticStatus: semanticMappedStatus || "",
+      effectiveStatus,
+      statusSource,
+      status: effectiveStatus,
+      semanticAcceptance: semanticAcceptance
+        ? {
+          acceptanceId: semanticAcceptance.acceptanceId,
+          status: semanticAcceptance.status,
+          risk: semanticAcceptance.risk,
+          evidence: semanticAcceptance.evidence,
+          conclusion: semanticAcceptance.conclusion,
+        }
+        : item?.semanticAcceptance,
+    };
+  });
+
+  data.finalPlanChecklist = nextChecklist;
+  data.taskChecklist = nextChecklist;
+  data.summary = buildAcceptanceSummary(nextChecklist);
+  data.semanticAcceptance = {
+    source: "acceptance_semantic_validation",
+    acceptedAt: String(data?.acceptedAt || "").trim(),
+    rawContent: semanticRaw,
+  };
+  data.statusAuthority = "semantic_over_phase_over_signal";
+  return true;
 }
 
 export function buildSemanticValidationPromptPayload({

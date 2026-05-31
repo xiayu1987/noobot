@@ -28,7 +28,10 @@ import {
   scheduleInjectTask,
 } from "../inject-fallback.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
-import { buildSemanticValidationPromptPayload } from "./report-builder.js";
+import {
+  applySemanticAcceptanceToReport,
+  buildSemanticValidationPromptPayload,
+} from "./report-builder.js";
 import {
   buildAllPhaseAcceptanceReportSystemContents,
   buildAllSummaryReportSystemContents,
@@ -664,6 +667,7 @@ export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
         return { applied: false, detail: { reportIndex, reason: "empty_validation_output" } };
       }
       targetReport.semanticValidation = parsed;
+      applySemanticAcceptanceToReport(targetReport);
       bucket.lastAcceptanceReport = targetReport;
       return {
         applied: true,
@@ -798,6 +802,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     return false;
   }
   baseReport.semanticValidation = parsed;
+  applySemanticAcceptanceToReport(baseReport);
   bucket.lastAcceptanceReport = baseReport;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
