@@ -33,7 +33,7 @@ function parseModelAcceptanceItemsFromText(text = "") {
     const match = String(line || "").trim().match(MODEL_ACCEPTANCE_LINE_RE);
     if (!match) continue;
     const tail = String(match[3] || "").trim();
-    const planMatch = tail.match(/(?:^|\s)plan=([0-9]+(?:\.[0-9]+)?)/i);
+    const planMatch = tail.match(/(?:^|\s)plan=\[?([0-9]+(?:\.[0-9]+)?)\]?/i);
     const statusMatch = tail.match(/(?:^|\s)status=(pass|warn|fail)/i);
     const riskMatch = tail.match(/(?:^|\s)risk=(low|medium|high)/i);
     const evidencePos = tail.search(/(?:^|\s)evidence=/i);

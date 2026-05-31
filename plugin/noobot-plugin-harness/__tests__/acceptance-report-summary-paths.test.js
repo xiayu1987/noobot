@@ -141,6 +141,28 @@ test("acceptance report inherits main-plan model status to sub-plans when sub-pl
   assert.equal(checklist[2]?.status, "completed");
 });
 
+test("acceptance report accepts bracketed plan id in model acceptance text", () => {
+  const report = buildAcceptanceReport({
+    bucket: {
+      planText: [
+        "1. 主计划一",
+        "1.1 子计划一",
+      ].join("\n"),
+      phaseAcceptanceReports: [
+        {
+          acceptedAt: "2026-05-31T00:00:00.000Z",
+          content: "ADD A1 plan=[1.1] status=pass risk=low evidence=子计划一完成 [通过]",
+        },
+      ],
+    },
+    state: { locale: "zh-CN", signals: {} },
+  });
+  const checklist = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
+  assert.equal(checklist.length, 2);
+  assert.equal(checklist[0]?.status, "pending");
+  assert.equal(checklist[1]?.status, "completed");
+});
+
 test("semantic acceptance overrides phase checklist status and updates summary", () => {
   const report = buildAcceptanceReport({
     bucket: {
