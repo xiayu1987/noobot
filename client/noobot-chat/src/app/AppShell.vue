@@ -55,6 +55,7 @@ const allowUserInteraction = ref(
   localStorage.getItem("noobot_allow_user_interaction") !== "false",
 );
 const forceTool = ref(localStorage.getItem("noobot_force_tool") === "true");
+const streamOutput = ref(localStorage.getItem("noobot_stream_output") !== "false");
 const botScenario = ref(
   String(localStorage.getItem("noobot_bot_scenario") || "").trim(),
 );
@@ -420,6 +421,7 @@ const {
   apiKey,
   allowUserInteraction,
   forceTool,
+  streamOutput,
   botScenario,
   selectedPlugins,
   connected,
@@ -640,6 +642,11 @@ function onForceToolUpdate(value) {
   localStorage.setItem("noobot_force_tool", forceTool.value ? "true" : "false");
 }
 
+function onStreamOutputUpdate(value) {
+  streamOutput.value = Boolean(value);
+  localStorage.setItem("noobot_stream_output", streamOutput.value ? "true" : "false");
+}
+
 function onBotScenarioUpdate(value = "") {
   const nextScenario = String(value || "").trim();
   const availableScenarioKeySet = new Set(
@@ -813,6 +820,7 @@ const drawerPanels = computed(() => [
         :connected="connected"
         :allow-user-interaction="allowUserInteraction"
         :force-tool="forceTool"
+        :stream-output="streamOutput"
         :bot-scenario="botScenario"
         :scenario-options="availableBotScenarios"
         :available-plugins="availablePlugins"
@@ -822,6 +830,7 @@ const drawerPanels = computed(() => [
         @append-uploads="appendUploads"
         @update:allow-user-interaction="onAllowUserInteractionUpdate"
         @update:force-tool="onForceToolUpdate"
+        @update:stream-output="onStreamOutputUpdate"
         @update:bot-scenario="onBotScenarioUpdate"
         @update:selected-plugins="onSelectedPluginsUpdate"
         @clear-uploads="clearUploads"

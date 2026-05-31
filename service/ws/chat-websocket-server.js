@@ -343,52 +343,55 @@ export function registerChatWebSocketServer(
           dialogProcessId: "",
         };
 
-        const eventListener = {
-          onEvent: (eventPayload) => {
-            const eventName = eventPayload?.event || "thinking";
-            const eventData = eventPayload?.data || {};
-            const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();
-            if (eventDialogProcessId && currentRunMeta) {
-              currentRunMeta.dialogProcessId = eventDialogProcessId;
-            }
-            if (eventName === "llm_delta") {
-              const currentEventSessionId = String(eventData?.sessionId || "").trim();
-              const currentSubAgentSessionId = String(
-                eventData?.subAgentSessionId || "",
-              ).trim();
-              const rootSessionId = String(sessionId || "").trim();
-              const isSubTaskDelta =
-                eventData?.subAgentCall ||
-                (currentSubAgentSessionId &&
-                  currentSubAgentSessionId !== rootSessionId) ||
-                (currentEventSessionId &&
-                  currentEventSessionId !== rootSessionId);
-              if (isSubTaskDelta) {
-                const normalizedEvent = normalizeSseLogEvent({
-                  ...eventPayload,
-                  event: "subagent_llm_delta",
-                  data: {
-                    ...eventData,
-                    category: "system",
-                    type: "subagent_delta",
-                    event: "subagent_delta",
-                    text: String(eventData.text || ""),
-                  },
-                });
-                sendEvent(normalizedEvent.event, {
-                  ...normalizedEvent.data,
-                  dialogProcessId: String(eventData?.dialogProcessId || ""),
-                  sessionId: String(sessionId || ""),
-                });
-                return;
-              }
-              sendEvent("delta", { text: String(eventData.text || ""), dialogProcessId: String(eventData?.dialogProcessId || ""), sessionId: String(sessionId || "") });
-              return;
-            }
-            const normalizedEvent = normalizeSseLogEvent(eventPayload);
-            sendEvent(normalizedEvent.event, normalizedEvent.data);
-          },
-        };
+        const eventListener =
+          normalizedRunConfig?.streaming === false
+            ? null
+            : {
+                onEvent: (eventPayload) => {
+                  const eventName = eventPayload?.event || "thinking";
+                  const eventData = eventPayload?.data || {};
+                  const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();
+                  if (eventDialogProcessId && currentRunMeta) {
+                    currentRunMeta.dialogProcessId = eventDialogProcessId;
+                  }
+                  if (eventName === "llm_delta") {
+                    const currentEventSessionId = String(eventData?.sessionId || "").trim();
+                    const currentSubAgentSessionId = String(
+                      eventData?.subAgentSessionId || "",
+                    ).trim();
+                    const rootSessionId = String(sessionId || "").trim();
+                    const isSubTaskDelta =
+                      eventData?.subAgentCall ||
+                      (currentSubAgentSessionId &&
+                        currentSubAgentSessionId !== rootSessionId) ||
+                      (currentEventSessionId &&
+                        currentEventSessionId !== rootSessionId);
+                    if (isSubTaskDelta) {
+                      const normalizedEvent = normalizeSseLogEvent({
+                        ...eventPayload,
+                        event: "subagent_llm_delta",
+                        data: {
+                          ...eventData,
+                          category: "system",
+                          type: "subagent_delta",
+                          event: "subagent_delta",
+                          text: String(eventData.text || ""),
+                        },
+                      });
+                      sendEvent(normalizedEvent.event, {
+                        ...normalizedEvent.data,
+                        dialogProcessId: String(eventData?.dialogProcessId || ""),
+                        sessionId: String(sessionId || ""),
+                      });
+                      return;
+                    }
+                    sendEvent("delta", { text: String(eventData.text || ""), dialogProcessId: String(eventData?.dialogProcessId || ""), sessionId: String(sessionId || "") });
+                    return;
+                  }
+                  const normalizedEvent = normalizeSseLogEvent(eventPayload);
+                  sendEvent(normalizedEvent.event, normalizedEvent.data);
+                },
+              };
 
         const result = await activeBot.runSession({
           userId,
@@ -398,7 +401,7 @@ export function registerChatWebSocketServer(
           caller: "user",
           message,
           attachments,
-          eventListener,
+          ...(eventListener ? { eventListener } : {}),
           abortSignal,
           userInteractionBridge,
           runConfig: normalizedRunConfig,
