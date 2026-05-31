@@ -54,6 +54,22 @@ function extractChangedMainStepIndexes(previousDocument = {}, nextDocument = {})
   return [...changed].sort((a, b) => a - b);
 }
 
+function cloneSubPlansForMainId(subPlans = [], mainId = 0) {
+  return (Array.isArray(subPlans) ? subPlans : [])
+    .map((item = {}) => {
+      const subIndex = Number(item?.subIndex);
+      const content = String(item?.content || "").trim();
+      if (!Number.isFinite(subIndex) || subIndex <= 0 || !content) return null;
+      return {
+        id: `${mainId}.${subIndex}`,
+        mainId: Number(mainId),
+        subIndex,
+        content,
+      };
+    })
+    .filter(Boolean);
+}
+
 export function createPlanRevisionHelpers({
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -166,6 +182,17 @@ export function createPlanRevisionHelpers({
           const replaced = parsePlanDocumentFromText(
             fullMainPlans.map((item = {}) => `${item.id}. ${item.content}`).join("\n"),
           );
+          const previousSubPlansByMainId =
+            previousDocument?.subPlansByMainId && typeof previousDocument.subPlansByMainId === "object"
+              ? previousDocument.subPlansByMainId
+              : {};
+          for (const mainPlan of replaced.mainPlans) {
+            const mainId = Number(mainPlan?.id);
+            if (!Number.isFinite(mainId) || mainId <= 0) continue;
+            const key = String(mainId);
+            const copiedSubPlans = cloneSubPlansForMainId(previousSubPlansByMainId[key], mainId);
+            if (copiedSubPlans.length) replaced.subPlansByMainId[key] = copiedSubPlans;
+          }
           bucket.planDocument = replaced;
           bucket.planText = renderPlanDocument(replaced);
           applied = true;

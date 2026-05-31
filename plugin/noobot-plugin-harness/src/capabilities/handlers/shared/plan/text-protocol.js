@@ -6,8 +6,8 @@
 
 const MAIN_PLAN_LINE = /^\s*(\d+)\.\s+(.+?)\s*$/;
 const SUB_PLAN_LINE = /^\s*(\d+)\.(\d+)\.?\s+(.+?)\s*$/;
-const PATCH_ADD_UPDATE = /^\s*(ADD|UPDATE)\s+(\d+(?:\.\d+)*)\s+(.+?)\s*$/i;
-const PATCH_DELETE = /^\s*(DELETE)\s+(\d+(?:\.\d+)*)\s*$/i;
+const PATCH_ADD_UPDATE = /^\s*(ADD|UPDATE)\s+([[\]\d.\s]+)\s+(.+?)\s*$/i;
+const PATCH_DELETE = /^\s*(DELETE)\s+([[\]\d.\s]+)\s*$/i;
 
 function normalizeText(text = "") {
   return String(text || "")
@@ -59,7 +59,11 @@ function normalizeSubPlans(subPlans = [], mainId = 0) {
 }
 
 function parseId(rawId = "") {
-  const text = String(rawId || "").trim();
+  const raw = String(rawId || "").trim();
+  if (/\]\s*\.\s*\[/.test(raw)) return null;
+  const text = String(rawId || "")
+    .trim()
+    .replace(/[\[\]\s]/g, "");
   if (!text) return null;
   const parts = text.split(".");
   if (parts.length === 0) return null;

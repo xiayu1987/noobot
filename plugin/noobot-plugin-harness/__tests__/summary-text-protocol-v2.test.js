@@ -6,7 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseSummaryOverviewAndDetailFromText } from "../src/capabilities/handlers/shared/plan/summary-text-protocol.js";
+import {
+  parseSummaryOverviewAndDetailFromText,
+  parseSummaryPatchCommands,
+} from "../src/capabilities/handlers/shared/plan/summary-text-protocol.js";
 
 test("summary_text_v2 parser extracts overview and detail blocks", () => {
   const text = [
@@ -35,4 +38,18 @@ test("summary parser falls back to plain text when blocks missing", () => {
   assert.equal(parsed.usedV2, false);
   assert.equal(parsed.overviewText, text);
   assert.equal(parsed.detailText, "");
+});
+
+test("summary patch parser accepts protocol IDs with S prefix and bracketed numbers", () => {
+  const commands = parseSummaryPatchCommands([
+    "ADD S1 plan=1 status=done 完成主计划一",
+    "UPDATE S[2] status=todo 存在风险",
+    "DELETE S3",
+    "ADD 4 plan=4 status=done 兼容旧格式",
+  ].join("\n"));
+  assert.equal(commands.length, 4);
+  assert.deepEqual(commands.map((item) => item.id), [1, 2, 3, 4]);
+  assert.equal(commands[0].action, "ADD");
+  assert.equal(commands[1].action, "UPDATE");
+  assert.equal(commands[2].action, "DELETE");
 });

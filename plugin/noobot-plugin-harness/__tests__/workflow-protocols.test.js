@@ -14,7 +14,7 @@ import {
 } from "../src/capabilities/handlers/shared/workflow/protocols.js";
 
 test("workflow protocols are split and reusable by flow", () => {
-  assert.match(String(buildPlanningRevisionPatchProtocolText("zh-CN")), /ADD \[新整数ID\]/);
+  assert.match(String(buildPlanningRevisionPatchProtocolText("zh-CN")), /ADD \[新主计划ID\]/);
   assert.match(String(buildPlanningRefinementPatchProtocolText("zh-CN")), /禁止输出 1\.1\.1/);
   assert.match(String(buildSummaryPatchProtocolText("zh-CN")), /summary_patch_v1/);
   assert.match(
