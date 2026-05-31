@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  applySemanticAcceptanceToReport,
   buildAcceptanceReport,
   renderAcceptanceReportText,
 } from "../src/capabilities/handlers/acceptance/report-builder.js";
@@ -138,4 +139,89 @@ test("acceptance report inherits main-plan model status to sub-plans when sub-pl
   assert.equal(checklist[0]?.status, "completed");
   assert.equal(checklist[1]?.status, "completed");
   assert.equal(checklist[2]?.status, "completed");
+});
+
+test("semantic acceptance overrides phase checklist status and updates summary", () => {
+  const report = buildAcceptanceReport({
+    bucket: {
+      planText: [
+        "1. 主计划一",
+        "1.1 子计划一",
+        "2. 主计划二",
+      ].join("\n"),
+      phaseAcceptanceReports: [
+        {
+          acceptedAt: "2026-05-31T00:00:00.000Z",
+          content: [
+            "ADD A1 plan=1 status=pass risk=low evidence=主计划一完成 [通过]",
+            "ADD A2 plan=2 status=fail risk=high evidence=主计划二未完成 [未通过]",
+          ].join("\n"),
+        },
+      ],
+    },
+    state: { locale: "zh-CN", signals: {} },
+  });
+
+  const before = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
+  assert.equal(before.length, 3);
+  assert.equal(before[0]?.status, "completed");
+  assert.equal(before[1]?.status, "completed");
+  assert.equal(before[2]?.status, "pending");
+  assert.equal(report?.summary?.completed, 2);
+  assert.equal(report?.summary?.pending, 1);
+
+  report.semanticValidation = {
+    status: "pass",
+    consistent: true,
+    protocol: "text_patch",
+    content: [
+      "ADD A10 plan=1 status=fail risk=medium evidence=语义校验认为主计划一不满足 [未通过]",
+      "ADD A11 plan=2 status=pass risk=low evidence=语义校验认为主计划二已满足 [通过]",
+    ].join("\n"),
+  };
+  const applied = applySemanticAcceptanceToReport(report);
+  assert.equal(applied, true);
+
+  const after = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
+  assert.equal(after.length, 3);
+  // semantic > phase：主计划1由 completed -> pending
+  assert.equal(after[0]?.status, "pending");
+  assert.equal(after[0]?.effectiveStatus, "pending");
+  assert.equal(after[0]?.statusSource, "semantic");
+  // 子计划1.1 继承主计划1的语义状态
+  assert.equal(after[1]?.status, "pending");
+  assert.equal(after[1]?.statusSource, "semantic");
+  // 主计划2由 pending -> completed
+  assert.equal(after[2]?.status, "completed");
+  assert.equal(after[2]?.statusSource, "semantic");
+
+  assert.equal(report?.summary?.total, 3);
+  assert.equal(report?.summary?.completed, 1);
+  assert.equal(report?.summary?.pending, 2);
+  assert.equal(report?.statusAuthority, "semantic_over_phase_over_signal");
+});
+
+test("semantic acceptance fallback keeps phase/signal status when semantic text has no patch lines", () => {
+  const report = buildAcceptanceReport({
+    bucket: {
+      planText: "1. 主计划一",
+      phaseAcceptanceReports: [
+        {
+          acceptedAt: "2026-05-31T00:00:00.000Z",
+          content: "ADD A1 plan=1 status=pass risk=low evidence=主计划完成 [通过]",
+        },
+      ],
+    },
+    state: { locale: "zh-CN", signals: {} },
+  });
+  report.semanticValidation = {
+    status: "pass",
+    consistent: true,
+    protocol: "text_patch",
+    content: "语义一致，无需修改。",
+  };
+  const applied = applySemanticAcceptanceToReport(report);
+  assert.equal(applied, false);
+  const checklist = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
+  assert.equal(checklist[0]?.status, "completed");
 });
