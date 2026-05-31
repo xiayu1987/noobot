@@ -422,9 +422,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       event: GUIDANCE_EVENTS.summaryMessagesMarked,
       detail: { markedCount },
     });
-    if (isSummaryCompletionMarked(mergedSummaryText, locale)) {
-      await runPlanUpdateAfterSummary(ctx, meta, mergedSummaryText, { baseMessages: modelMessages });
-    } else {
+    if (!isSummaryCompletionMarked(mergedSummaryText, locale)) {
       appendCapabilityLog(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,
         event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,

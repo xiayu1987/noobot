@@ -158,9 +158,9 @@ Planning 注入与 separate-model 现在共享消息中间表示：
 - 触发来源：
   - Planning 轮次阈值达到（`planUpdateTurns >= 10`）
   - Summary 完成后触发联动更新
-- 共享重试预算：
-  - `PLAN_UPDATE_POLICY.MAX_ATTEMPTS = 5`
-  - `revision` 与 `refinement` 共用同一预算
+- 独立重试预算：
+  - `PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION = 10`
+  - `PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REFINEMENT = 10`
 
 ### Acceptance
 
@@ -175,7 +175,7 @@ Planning 注入与 separate-model 现在共享消息中间表示：
 | `planning_capture` | Planning | Planning | `after_llm_call` |
 | `summary` | Planning（阈值） | Guidance | `before_llm_call` |
 | `guidance` | Guidance（失败阈值） | Guidance | `before_llm_call` |
-| `plan_update_revision/refinement` | Planning（阈值）/Guidance（summary 完成联动） | Guidance | `before_llm_call` / `after_llm_call` |
+| `plan_update_revision/refinement` | Planning（阈值） | Guidance | `before_llm_call` / `after_llm_call` |
 | `phase_acceptance` | Planning（阈值） | Acceptance | `before_llm_call` |
 | `acceptance_semantic_validation` | Acceptance | Acceptance | `before_llm_call` / `after_llm_call` |
 | `review_report` | Review | Review | `before_final_output` / `on_error` / `on_abort` |
@@ -250,7 +250,7 @@ switch (decision.chosenAction) {
 | 计划生成（Planning bootstrap） | `existing_context -> 规划输入上下文摘要(system) -> 可用工具+allowlist(system) -> 计划请求(user)` | `agent_messages -> 规划输入上下文摘要(constraint) -> 可用工具+allowlist(constraint) -> 计划请求(task)` | `maybeInjectPlanningPrompt` / `buildPlanningMessagesForSeparateModel` |
 | 小结（Summary） | `existing_context -> 计划清单上下文(system, 可选) -> 小结请求(user)` | `agent_messages -> 计划清单上下文(附加消息) -> 小结请求(task)` | `maybeInjectGuidanceOrSummaryPrompt` / `runGuidanceBySeparateModel(purpose=summary)` |
 | 失败指导（Guidance） | `失败指导提示(system, prepend) -> existing_context` | `agent_messages -> 失败指导提示(task)` | `maybeInjectGuidanceOrSummaryPrompt` / `runGuidanceBySeparateModel(purpose=guidance)` |
-| 计划修订（Plan update） | `existing_context -> 计划清单上下文(system, 可选) -> revision/refinement请求(user)` | `Revision: agent_messages -> 计划清单上下文(附加) -> revision请求(task); Refinement: agent_messages -> refinement请求(task)` | `maybeInjectPlanUpdatePrompt` / `runPendingPlanUpdateBySeparateModel` / `runPlanUpdateAfterSummary` |
+| 计划修订（Plan update） | `existing_context -> 计划清单上下文(system, 可选) -> revision/refinement请求(user)` | `Revision: agent_messages -> 计划清单上下文(附加) -> revision请求(task); Refinement: agent_messages -> refinement请求(task)` | `maybeInjectPlanUpdatePrompt` / `runPendingPlanUpdateBySeparateModel` |
 | 阶段验收（Phase acceptance） | `existing_context -> summary reports(system, N条) -> 主计划上下文(system) -> phase acceptance历史(system, N条) -> 阶段验收请求(user)` | `agent_messages -> summary reports(system, N条) -> 主计划上下文(system) -> phase acceptance历史(system, N条) -> 阶段验收请求(user)` | `maybeInjectPhaseAcceptancePrompt` / `runPhaseAcceptanceBySeparateModel` |
 | 验收语义校验（Acceptance semantic validation） | `existing_context -> 主计划上下文(system) -> phase acceptance历史(system, N条) -> 语义校验请求(user)` | `主计划上下文(system) -> phase acceptance历史(system, N条) -> 语义校验请求(user)` | `maybeInjectAcceptanceSemanticValidationPrompt` / `runAcceptanceBySeparateModel` |
 

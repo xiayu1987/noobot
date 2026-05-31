@@ -39,6 +39,7 @@ Current summary-driven plan update pipeline:
 - Each main step can be refined once, until a later revision changes/removes/adds that step.
 - If no valid target main step remains, refinement converges and is skipped.
 - Revision attempts are capped by `MAX_PLAN_REVISION_ATTEMPTS`.
+- Refinement attempts are capped by `MAX_PLAN_REFINEMENT_ATTEMPTS`.
 
 ### Persistence model (harness bucket)
 

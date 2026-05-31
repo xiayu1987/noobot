@@ -34,24 +34,25 @@ test("canAttemptPlanUpdate increments revision/refinement counters independently
   assert.equal(state.counters.planUpdateAttempts, 2);
 });
 
-test("canAttemptPlanUpdate respects PLAN_UPDATE_POLICY.MAX_ATTEMPTS", () => {
+test("canAttemptPlanUpdate respects stage-specific max attempts", () => {
   const state = {
     counters: {
-      planRevisionAttempts: PLAN_UPDATE_POLICY.MAX_ATTEMPTS,
-      planRefinementAttempts: PLAN_UPDATE_POLICY.MAX_ATTEMPTS,
+      planRevisionAttempts: PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION,
+      planRefinementAttempts: PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REFINEMENT,
     },
   };
   assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "revision" }), false);
   assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "refinement" }), false);
 });
 
-test("legacy unified attempts still block revision fallback", () => {
+test("unified attempts no longer block revision/refinement", () => {
   const state = {
     counters: {
-      planUpdateAttempts: PLAN_UPDATE_POLICY.MAX_ATTEMPTS,
+      planUpdateAttempts: Number.MAX_SAFE_INTEGER,
     },
   };
-  assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "revision" }), false);
+  assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "revision" }), true);
+  assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "refinement" }), true);
 });
 
 test("setPendingPlanUpdate syncs and clears unified + legacy pending fields", () => {

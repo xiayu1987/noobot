@@ -73,6 +73,8 @@ export const WORKFLOW_PARAMS = deepFreeze({
           "phase_acceptance_generated_before_final_output_fallback",
         phaseAcceptanceBeforeFinalFailed: "phase_acceptance_before_final_failed",
         phaseAcceptanceGeneratedBeforeFinalOutput: "phase_acceptance_generated_before_final_output",
+        phaseAcceptanceSkippedBeforeFinalOutputSameTurn:
+          "phase_acceptance_skipped_before_final_output_same_turn",
         semanticValidationPromptInjected: "acceptance_semantic_validation_prompt_injected",
         semanticValidationScheduledByInject: "acceptance_semantic_validation_scheduled_by_inject",
         semanticValidationCompletedInject: "acceptance_semantic_validation_completed_inject",
@@ -118,7 +120,8 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
     },
     planUpdate: {
-      maxAttempts: 5,
+      revisionMaxAttempts: 10,
+      refinementMaxAttempts: 10,
       triggerTurnsThreshold: 3,
     },
     capture: {

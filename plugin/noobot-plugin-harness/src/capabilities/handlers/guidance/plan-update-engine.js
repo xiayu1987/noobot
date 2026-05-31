@@ -22,6 +22,13 @@ function resolveStageAttemptCounterKey(stage = "revision") {
     : "planRefinementAttempts";
 }
 
+function resolveStageAttemptLimit(stage = "revision") {
+  const normalizedStage = normalizePlanUpdateStage(stage);
+  return normalizedStage === "revision"
+    ? Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION)
+    : Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REFINEMENT);
+}
+
 export function resolvePlanUpdateAttempts(state = {}, { stage = "revision" } = {}) {
   if (!state || typeof state !== "object") return 0;
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
@@ -29,10 +36,6 @@ export function resolvePlanUpdateAttempts(state = {}, { stage = "revision" } = {
   const stageKey = resolveStageAttemptCounterKey(normalizedStage);
   if (Number.isFinite(Number(state.counters[stageKey]))) {
     return Number(state.counters[stageKey]);
-  }
-  // Legacy fallback: old sessions only had unified planUpdateAttempts.
-  if (normalizedStage === "revision" && Number.isFinite(Number(state.counters.planUpdateAttempts))) {
-    return Number(state.counters.planUpdateAttempts);
   }
   return 0;
 }
@@ -62,14 +65,15 @@ export function canAttemptPlanUpdate(
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
   const normalizedStage = normalizePlanUpdateStage(stage);
   const current = resolvePlanUpdateAttempts(state, { stage: normalizedStage });
-  if (current >= PLAN_UPDATE_POLICY.MAX_ATTEMPTS) {
+  const stageLimit = resolveStageAttemptLimit(normalizedStage);
+  if (current >= stageLimit) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: GUIDANCE_EVENTS.revisionSkippedByMaxAttempts,
       detail: {
         stage: normalizedStage,
         current,
-        limit: PLAN_UPDATE_POLICY.MAX_ATTEMPTS,
+        limit: stageLimit,
       },
     });
     return false;

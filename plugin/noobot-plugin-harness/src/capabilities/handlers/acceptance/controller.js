@@ -246,6 +246,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
       if (point === "before_turn" && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard) {
         if (holder?.state?.flags) {
           holder.state.flags.acceptanceReportAppendedToFinalOutput = false;
+          holder.state.flags.phaseAcceptanceTriggeredThisTurn = false;
         }
         const step1 = disableBlockedToolsInRegistry(ctx);
         const step2 = ensureTaskAcceptanceTool(ctx, meta);
