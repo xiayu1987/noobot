@@ -155,6 +155,50 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
   return lines.join("\n").trim();
 }
 
+function renderAcceptanceDigestReportText(report = {}, locale = LOCALE.ZH_CN) {
+  const data = report && typeof report === "object" ? report : {};
+  const mode = String(data.mode || "").trim() || "active";
+  const acceptedAt = String(data.acceptedAt || "").trim() || "";
+  const planText = String(data.planText || data?.plan?.planText || "").trim();
+  const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
+  const semanticValidation = data?.semanticValidation && typeof data.semanticValidation === "object"
+    ? data.semanticValidation
+    : null;
+  const semanticValidationRaw = semanticValidation
+    ? String(semanticValidation?.content || "").trim() || JSON.stringify(semanticValidation, null, 2)
+    : "";
+  const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
+  const isEn = locale === LOCALE.EN_US;
+  const safeCodeBlock = (value = "") => String(value || "").replaceAll("```", "'''");
+
+  const lines = [
+    isEn ? "### [Harness-Acceptance]" : "### [Harness-验收]",
+    `- **${isEn ? "Mode" : "模式"}**: \`${mode}\``,
+    `- **${isEn ? "Accepted At" : "验收时间"}**: ${acceptedAt || "-"}`,
+    "",
+    `#### ${isEn ? "Plan Text" : "计划文本"}`,
+    "```text",
+    safeCodeBlock(planText || "-"),
+    "```",
+    "",
+    `#### ${isEn ? "Summary" : "汇总"}`,
+    "| total | completed | inProgress | pending |",
+    "| --- | --- | --- | --- |",
+    `| ${Number(summary?.total || 0)} | ${Number(summary?.completed || 0)} | ${Number(summary?.inProgress || 0)} | ${Number(summary?.pending || 0)} |`,
+    "",
+    `#### ${isEn ? "Semantic Validation" : "语义验收"}`,
+    "```text",
+    safeCodeBlock(semanticValidationRaw || "-"),
+    "```",
+    "",
+    `#### ${isEn ? "Summary Detail Paths" : "小结明细路径"}`,
+    ...(summaryDetailPaths.length
+      ? summaryDetailPaths.map((item) => `- ${String(item || "").trim()}`)
+      : [isEn ? "-" : "（无）"]),
+  ];
+  return lines.join("\n").trim();
+}
+
 export function renderAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   if (hasRecognitionFailure(report)) {
     return renderRawAcceptanceReportText(report, locale);
@@ -162,4 +206,8 @@ export function renderAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   return renderBeautifiedAcceptanceReportText(report, locale);
 }
 
-export { renderBeautifiedAcceptanceReportText, renderRawAcceptanceReportText };
+export {
+  renderAcceptanceDigestReportText,
+  renderBeautifiedAcceptanceReportText,
+  renderRawAcceptanceReportText,
+};
