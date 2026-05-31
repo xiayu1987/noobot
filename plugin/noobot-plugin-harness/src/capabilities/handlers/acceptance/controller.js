@@ -26,6 +26,7 @@ import {
   maybeAppendAcceptanceReportAtFinalOutput,
   maybeAttachChecklistArtifactsAtFinalOutput,
   maybeForceAcceptanceAtFinalOutput,
+  maybeRefreshAcceptanceReportBeforeFinalOutput,
 } from "./output-finalizer.js";
 import { ensureTaskAcceptanceTool } from "./tool-injector.js";
 import { shouldUseSeparateModel } from "../shared/model/utils.js";
@@ -303,12 +304,15 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
       }
       if (point === "before_final_output" && decision.chosenAction === ACCEPTANCE_DECISION.action.finalOutputAcceptanceGuard) {
         const step1 = (await ensurePhaseAcceptanceBeforeFinalAcceptance(ctx, meta)) || false;
-        const step2 = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || false;
-        const step3 = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || false;
-        const step4 = maybeAppendAcceptanceReportAtFinalOutput(ctx) || false;
-        changed = step1 || step2 || step3 || step4 || changed;
-        executedPrimary = step1 === true || step2 === true;
-        executedFollowup = step3 === true || step4 === true;
+        const step2 = (await maybeRefreshAcceptanceReportBeforeFinalOutput(ctx, meta, {
+          phaseAcceptanceChanged: step1 === true,
+        })) || false;
+        const step3 = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || false;
+        const step4 = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || false;
+        const step5 = maybeAppendAcceptanceReportAtFinalOutput(ctx) || false;
+        changed = step1 || step2 || step3 || step4 || step5 || changed;
+        executedPrimary = step1 === true || step2 === true || step3 === true;
+        executedFollowup = step4 === true || step5 === true;
         if (holder?.state?.flags?.overflowForceAcceptancePending === true) {
           holder.state.flags.overflowForceAcceptancePending = false;
           changed = true;

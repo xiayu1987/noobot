@@ -432,7 +432,6 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  if (state?.flags?.acceptanceRequested === true) return false;
   if (state?.flags?.phaseAcceptanceTriggeredThisTurn === true) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
