@@ -90,7 +90,7 @@ export function schedulePlanUpdateByInject(
     buildScheduledDetail: ({ bucket, state }) => ({
       stage: normalizedStage,
       hasSummaryText: Boolean(
-        state.pending?.planUpdateContext?.summaryText || state.pending.summaryText,
+        state.pending?.planUpdateContext?.summaryText,
       ),
       refinementTargetMainStepIndexes:
         normalizedStage === "refinement" ? targetMainSteps.map((item = {}) => Number(item?.index)) : [],
@@ -135,7 +135,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
   });
   if (!userInjection.injected) return false;
   setPendingStateWithMeta(state, "planUpdate", false);
-  setPendingPlanUpdate(state, { active: false });
+  setPendingPlanUpdate(state, { active: false, stage: pendingData.stage });
   setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", true);
   writePlanUpdateCaptureContext(state, pendingData);
   appendCapabilityLog(ctx, {

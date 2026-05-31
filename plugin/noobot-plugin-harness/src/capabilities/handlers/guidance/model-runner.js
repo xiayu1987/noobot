@@ -23,6 +23,7 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
+import { runPlanningRefinementBySeparateModel } from "../planning/refinement-runner.js";
 import {
   applyRevisedPlanFromText,
   buildNextPhaseRelayContent,
@@ -43,6 +44,7 @@ import {
 import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
+const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 
 function resolveDetailPath(meta = {}) {
   const relativePath = String(meta?.relativePath || "").trim();
@@ -90,9 +92,31 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
 
   // Consume pending revision/refinement once dispatched to avoid repeated replay.
   setPendingStateWithMeta(state, "planUpdate", false);
-  setPendingPlanUpdate(state, { active: false });
+  setPendingPlanUpdate(state, { active: false, stage: pendingData.stage });
 
   const summaryText = String(pendingData.summaryText || "").trim();
+  if (pendingData.stage === GUIDANCE_DECISION.stage.refinement) {
+    if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "refinement" })) {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.PLANNING,
+        event: GUIDANCE_EVENTS.refinementSkippedByMaxAttempts,
+        detail: {
+          refinementTargetMainStepIndexes: Array.isArray(pendingData.targetMainStepIndexes)
+            ? pendingData.targetMainStepIndexes
+            : [],
+        },
+      });
+      return false;
+    }
+    const refinementResult = await runPlanningRefinementBySeparateModel(ctx, meta, {
+      summaryText,
+      source: "planning_refinement",
+      targetMainStepIndexes: Array.isArray(pendingData.targetMainStepIndexes)
+        ? pendingData.targetMainStepIndexes
+        : [],
+    });
+    return refinementResult.applied === true;
+  }
   return runPlanUpdateAfterSummary(ctx, meta, summaryText);
 }
 
@@ -108,6 +132,10 @@ export async function runPlanUpdateAfterSummary(
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) {
     return schedulePlanUpdateByInject(ctx, summaryText, "revision");
+  }
+  const pendingPlanUpdate = resolvePendingPlanUpdate(state);
+  if (pendingPlanUpdate?.active) {
+    return false;
   }
   const locale = state?.locale || LOCALE.ZH_CN;
   const fallbackMessages = resolveCapabilityModelMessages(meta, {

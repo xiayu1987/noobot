@@ -92,10 +92,58 @@ export function setPendingPlanUpdate(
   if (!state || typeof state !== "object") return false;
   if (!state.pending || typeof state.pending !== "object") state.pending = {};
   const pending = state.pending;
-  if (active !== true) {
+  const syncUnifiedFromIndependent = () => {
+    const revisionActive = pending.planRevision === true;
+    const refinementActive = pending.planRefinement === true;
+    if (revisionActive) {
+      const revisionContext =
+        pending.planRevisionContext && typeof pending.planRevisionContext === "object"
+          ? pending.planRevisionContext
+          : {};
+      pending.planUpdate = true;
+      pending.planUpdateStage = "revision";
+      pending.planUpdateContext = {
+        summaryText: String(revisionContext.summaryText || "").trim(),
+        targetMainStepIndexes: Array.isArray(revisionContext.targetMainStepIndexes)
+          ? revisionContext.targetMainStepIndexes
+          : [],
+      };
+      return;
+    }
+    if (refinementActive) {
+      const refinementContext =
+        pending.planRefinementContext && typeof pending.planRefinementContext === "object"
+          ? pending.planRefinementContext
+          : {};
+      pending.planUpdate = true;
+      pending.planUpdateStage = "refinement";
+      pending.planUpdateContext = {
+        summaryText: String(refinementContext.summaryText || "").trim(),
+        targetMainStepIndexes: Array.isArray(refinementContext.targetMainStepIndexes)
+          ? refinementContext.targetMainStepIndexes
+          : [],
+      };
+      return;
+    }
     pending.planUpdate = false;
     pending.planUpdateStage = "";
     pending.planUpdateContext = null;
+  };
+  if (active !== true) {
+    const stageText = String(stage || "").trim().toLowerCase();
+    if (stageText === "revision") {
+      pending.planRevision = false;
+      pending.planRevisionContext = null;
+    } else if (stageText === "refinement") {
+      pending.planRefinement = false;
+      pending.planRefinementContext = null;
+    } else {
+      pending.planRevision = false;
+      pending.planRevisionContext = null;
+      pending.planRefinement = false;
+      pending.planRefinementContext = null;
+    }
+    syncUnifiedFromIndependent();
     return true;
   }
   const normalizedStage = normalizePlanUpdateStage(stage);
@@ -103,12 +151,18 @@ export function setPendingPlanUpdate(
   const normalizedTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes
     : [];
-  pending.planUpdate = true;
-  pending.planUpdateStage = normalizedStage;
-  pending.planUpdateContext = {
+  const normalizedContext = {
     summaryText: normalizedSummaryText,
     targetMainStepIndexes: normalizedTargetMainStepIndexes,
   };
+  if (normalizedStage === "revision") {
+    pending.planRevision = true;
+    pending.planRevisionContext = normalizedContext;
+  } else {
+    pending.planRefinement = true;
+    pending.planRefinementContext = normalizedContext;
+  }
+  syncUnifiedFromIndependent();
   return true;
 }
 

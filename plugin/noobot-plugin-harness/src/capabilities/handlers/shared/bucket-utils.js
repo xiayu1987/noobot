@@ -61,6 +61,19 @@ function migrateLegacyPlanUpdateState(state = {}) {
   const pending = state.pending && typeof state.pending === "object" ? state.pending : {};
   const flags = state.flags && typeof state.flags === "object" ? state.flags : {};
 
+  if (
+    pending.planUpdate === false &&
+    pending.planRevision !== true &&
+    pending.planRefinement !== true
+  ) {
+    pending.planRevision = false;
+    pending.planRevisionContext = null;
+    pending.planRefinement = false;
+    pending.planRefinementContext = null;
+    pending.planUpdateStage = "";
+    pending.planUpdateContext = null;
+  }
+
   const hasUnifiedAttempts = Number.isFinite(Number(counters.planUpdateAttempts));
   const normalizedUnifiedAttempts = hasUnifiedAttempts ? Number(counters.planUpdateAttempts) : 0;
   const hasRevisionAttempts = Number.isFinite(Number(counters.planRevisionAttempts));
@@ -92,34 +105,57 @@ function migrateLegacyPlanUpdateState(state = {}) {
     : normalizedRefinementAttempts;
   counters.planUpdateAttempts = revisionAttempts + refinementAttempts;
 
-  const normalizedLegacyStage =
-    String(pending.planRevisionStage || "").trim().toLowerCase() === "revision"
-      ? "revision"
-      : String(pending.planRevisionStage || "").trim()
-        ? "refinement"
-        : "";
   if (pending.planUpdate !== true && pending.planRevision === true) {
     pending.planUpdate = true;
   }
-  if (!String(pending.planUpdateStage || "").trim() && normalizedLegacyStage) {
-    pending.planUpdateStage = normalizedLegacyStage;
-  }
-  if (
-    (pending.planUpdateContext === null || pending.planUpdateContext === undefined) &&
-    (String(pending.summaryText || "").trim() ||
-      Array.isArray(pending.planRevisionTargetMainStepIndexes))
-  ) {
-    pending.planUpdateContext = {
-      summaryText: String(pending.summaryText || "").trim(),
-      targetMainStepIndexes: Array.isArray(pending.planRevisionTargetMainStepIndexes)
-        ? pending.planRevisionTargetMainStepIndexes
+
+  if (pending.planRevision === true) {
+    const revisionContext =
+      pending.planRevisionContext && typeof pending.planRevisionContext === "object"
+        ? pending.planRevisionContext
+        : pending.planUpdateContext && typeof pending.planUpdateContext === "object"
+          ? pending.planUpdateContext
+        : {};
+    const normalizedRevisionContext = {
+      summaryText: String(revisionContext.summaryText || "").trim(),
+      targetMainStepIndexes: Array.isArray(revisionContext.targetMainStepIndexes)
+        ? revisionContext.targetMainStepIndexes
         : [],
     };
+    pending.planRevisionContext = normalizedRevisionContext;
+    pending.planUpdate = true;
+    pending.planUpdateStage = "revision";
+    pending.planUpdateContext = normalizedRevisionContext;
+  } else if (pending.planRefinement === true) {
+    const refinementContext =
+      pending.planRefinementContext && typeof pending.planRefinementContext === "object"
+        ? pending.planRefinementContext
+        : pending.planUpdateContext && typeof pending.planUpdateContext === "object"
+          ? pending.planUpdateContext
+        : {};
+    const normalizedRefinementContext = {
+      summaryText: String(refinementContext.summaryText || "").trim(),
+      targetMainStepIndexes: Array.isArray(refinementContext.targetMainStepIndexes)
+        ? refinementContext.targetMainStepIndexes
+        : [],
+    };
+    pending.planRefinementContext = normalizedRefinementContext;
+    pending.planUpdate = true;
+    pending.planUpdateStage = "refinement";
+    pending.planUpdateContext = normalizedRefinementContext;
   }
 
-  if (flags.planUpdateCapturePending !== true && flags.planRevisionCapturePending === true) {
-    flags.planUpdateCapturePending = true;
+  if ("planRevisionStage" in pending) delete pending.planRevisionStage;
+  if ("planRevisionTargetMainStepIndexes" in pending) delete pending.planRevisionTargetMainStepIndexes;
+  if ("summaryText" in pending) delete pending.summaryText;
+
+  if ("planRevisionCapturePending" in flags) delete flags.planRevisionCapturePending;
+  if ("planRevisionCaptureStage" in flags) delete flags.planRevisionCaptureStage;
+  if ("planRevisionCaptureSummaryText" in flags) delete flags.planRevisionCaptureSummaryText;
+  if ("planRevisionCaptureTargetMainStepIndexes" in flags) {
+    delete flags.planRevisionCaptureTargetMainStepIndexes;
   }
+  if (flags.planUpdateCapturePending !== true) flags.planUpdateCapturePending = false;
 }
 
 export function ensureHarnessBucket(ctx = {}) {

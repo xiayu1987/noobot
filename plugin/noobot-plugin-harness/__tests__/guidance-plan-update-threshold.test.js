@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
 import { canAttemptPlanRevision } from "../src/capabilities/handlers/guidance/revision-engine.js";
+import { runPlanUpdateAfterSummary } from "../src/capabilities/handlers/guidance/model-runner.js";
 import {
   LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
   LLM_SUMMARY_THRESHOLD,
@@ -371,6 +372,72 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   await handler({ capability: "guidance", point: "after_llm_call", ctx: afterCtx, meta });
   assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 1);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 1);
+});
+
+test("separate_model refinement-only flow runs planning_refinement directly", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const agentContext = createAgentContext({
+    planText: "1. 主任务\n",
+    pending: {
+      planUpdate: true,
+      planUpdateStage: "refinement",
+      planUpdateContext: { summaryText: "针对 1 细化", targetMainStepIndexes: [1] },
+    },
+    counters: { planRevisionAttempts: 0, planRefinementAttempts: 0, planUpdateAttempts: 0 },
+  });
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        if (payload.purpose === "planning_refinement") return { content: "ADD 1.1 细化步骤A" };
+        return { content: "" };
+      },
+    },
+  };
+
+  await handler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
+    meta,
+  });
+
+  assert.deepEqual(
+    invocations.map((item = {}) => item.purpose),
+    ["planning_refinement"],
+  );
+  assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
+  assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 1);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+});
+
+test("runPlanUpdateAfterSummary does not start revision when refinement is already pending", async () => {
+  const invocations = [];
+  const ctx = {
+    agentContext: createAgentContext({
+      pending: {
+        planUpdate: true,
+        planUpdateStage: "refinement",
+        planUpdateContext: { summaryText: "待细化", targetMainStepIndexes: [1] },
+      },
+    }),
+    messages: [{ role: "user", content: "继续" }],
+  };
+  const meta = {
+    harness: {
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        return { content: "" };
+      },
+    },
+  };
+  const changed = await runPlanUpdateAfterSummary(ctx, meta, "小结完成");
+  assert.equal(changed, false);
+  assert.deepEqual(invocations.map((item = {}) => item.purpose), []);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdateStage, "refinement");
 });
 
 test("separate_model skips planning_revision when revision attempts already reached max", async () => {
