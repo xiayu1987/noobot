@@ -115,3 +115,27 @@ test("acceptance report maps latest model phase acceptance to checklist status a
   assert.match(String(text), /## 模型验收结果/);
   assert.match(String(text), /ADD A2 plan=2 status=pass/);
 });
+
+test("acceptance report inherits main-plan model status to sub-plans when sub-plan status missing", () => {
+  const report = buildAcceptanceReport({
+    bucket: {
+      planText: [
+        "1. 主计划一",
+        "1.1 子计划一",
+        "1.2 子计划二",
+      ].join("\n"),
+      phaseAcceptanceReports: [
+        {
+          acceptedAt: "2026-05-31T00:00:00.000Z",
+          content: "ADD A1 plan=1 status=pass risk=low evidence=主计划完成 [主计划一：通过]",
+        },
+      ],
+    },
+    state: { locale: "zh-CN", signals: {} },
+  });
+  const checklist = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
+  assert.equal(checklist.length, 3);
+  assert.equal(checklist[0]?.status, "completed");
+  assert.equal(checklist[1]?.status, "completed");
+  assert.equal(checklist[2]?.status, "completed");
+});

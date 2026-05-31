@@ -24,15 +24,21 @@ test("planning result pipeline captures plan text directly", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
     source: "after_llm_call",
-    rawText: "1. 解析附件",
+    rawText: "1. 解析附件\n2. 执行核心任务",
     locale: LOCALE.ZH_CN,
   });
 
   assert.equal(result.captured, true);
   assert.equal(result.sourceType, "plan_text");
-  assert.equal(result.checklistCount, 1);
+  assert.equal(result.checklistCount, 2);
   assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdateStage, "refinement");
+  assert.deepEqual(
+    ctx.agentContext.payload.harness.state.pending.planUpdateContext.targetMainStepIndexes,
+    [1, 2],
+  );
 });
 
 test("planning result pipeline treats malformed text as plan text when non-empty", async () => {

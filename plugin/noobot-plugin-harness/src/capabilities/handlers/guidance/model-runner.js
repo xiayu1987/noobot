@@ -23,7 +23,6 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
-import { runPlanningRefinementBySeparateModel } from "../planning/refinement-runner.js";
 import {
   applyRevisedPlanFromText,
   buildNextPhaseRelayContent,
@@ -218,8 +217,10 @@ export async function runPlanUpdateAfterSummary(
     bucket,
     state,
   );
-
-  if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "refinement" })) {
+  if (!refinementTargetMainStepIndexes.length) {
+    return changed;
+  }
+  if (!canAttemptPlanUpdate(ctx, state, { increment: false, stage: "refinement" })) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: GUIDANCE_EVENTS.refinementSkippedByMaxAttempts,
@@ -229,13 +230,13 @@ export async function runPlanUpdateAfterSummary(
     });
     return changed;
   }
-  const refinementResult = await runPlanningRefinementBySeparateModel(ctx, meta, {
+  setPendingPlanUpdate(state, {
+    active: true,
+    stage: "refinement",
     summaryText,
-    source: "planning_refinement",
-    baseMessages: modelMessages,
     targetMainStepIndexes: refinementTargetMainStepIndexes,
   });
-  return refinementResult.applied === true ? true : changed;
+  return true;
 }
 
 export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {

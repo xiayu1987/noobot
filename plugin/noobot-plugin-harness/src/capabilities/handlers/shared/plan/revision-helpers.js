@@ -236,12 +236,17 @@ export function createPlanRevisionHelpers({
 
   function resolveRefinementTargetMainStepIndexesAfterRevision(bucket = {}, state = {}) {
     const normalizedBucket = ensurePlanTextBucket(bucket);
-    const preferredTargetMainStepIndexes = normalizeMainStepIndexes(
+    const changedTargetMainStepIndexes = normalizeMainStepIndexes(
       normalizedBucket.lastRevisionChangedMainStepIndexes,
     );
-    return resolveRefinementTargetMainSteps(normalizedBucket, state, {
-      preferredTargetMainStepIndexes,
-    }).map((item = {}) => Number(item.index)).filter((item) => Number.isFinite(item) && item > 0);
+    if (!changedTargetMainStepIndexes.length) return [];
+    const existingMainPlanIds = new Set(
+      parseMainPlansFromPlanText(normalizedBucket.planText)
+        .map((item = {}) => Number(item?.id))
+        .filter((item) => Number.isFinite(item) && item > 0),
+    );
+    void state;
+    return changedTargetMainStepIndexes.filter((item) => existingMainPlanIds.has(Number(item)));
   }
 
   function buildPlanningRefinementPrompt(

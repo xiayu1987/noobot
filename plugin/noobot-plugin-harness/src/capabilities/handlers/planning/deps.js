@@ -33,6 +33,7 @@ export {
 export { buildCapabilityModelMessages } from "../shared/model/message-factory.js";
 export { invokeWithReasoningRetry } from "../shared/model/invocation-utils.js";
 export { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
+export { canAttemptPlanUpdate, setPendingPlanUpdate } from "../guidance/plan-update-engine.js";
 
 
 export { disableBlockedToolsInRegistry, resolveSceneToolNames } from "../shared/tool-utils.js";
