@@ -172,6 +172,29 @@ function allocateNextSubPlanIndex(doc = {}, mainId = 0) {
 export function parsePlanDocumentFromText(text = "") {
   const doc = ensurePlanDocumentShape({});
   for (const line of splitLines(text)) {
+    const addOrUpdate = line.match(PATCH_ADD_UPDATE);
+    if (addOrUpdate) {
+      const action = String(addOrUpdate[1] || "").trim().toUpperCase();
+      const target = parseId(addOrUpdate[2]);
+      const content = String(addOrUpdate[3] || "").trim();
+      if (!target || !content) continue;
+      if (target.isSub) {
+        if (action === "ADD" || action === "UPDATE") {
+          upsertSubPlan(doc, Number(target.mainId), Number(target.subIndex), content);
+        }
+      } else if (action === "ADD" || action === "UPDATE") {
+        upsertMainPlan(doc, Number(target.mainId), content);
+      }
+      continue;
+    }
+    const del = line.match(PATCH_DELETE);
+    if (del) {
+      const target = parseId(del[2]);
+      if (!target) continue;
+      if (target.isSub) deleteSubPlan(doc, Number(target.mainId), Number(target.subIndex));
+      else deleteMainPlan(doc, Number(target.mainId));
+      continue;
+    }
     const subMatch = line.match(SUB_PLAN_LINE);
     if (subMatch) {
       const [, mainRaw, subRaw, contentRaw] = subMatch;

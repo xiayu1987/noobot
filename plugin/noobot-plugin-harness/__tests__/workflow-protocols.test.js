@@ -8,12 +8,20 @@ import assert from "node:assert/strict";
 
 import {
   buildAcceptancePatchProtocolText,
+  buildPlanningMainPatchProtocolText,
   buildPlanningRefinementPatchProtocolText,
   buildPlanningRevisionPatchProtocolText,
   buildSummaryPatchProtocolText,
 } from "../src/capabilities/handlers/shared/workflow/protocols.js";
 
 test("workflow protocols are split and reusable by flow", () => {
+  assert.match(String(buildPlanningMainPatchProtocolText("zh-CN")), /ADD \[新主计划ID\]/);
+  const planningMainAddOnly = String(
+    buildPlanningMainPatchProtocolText({ locale: "zh-CN", actions: ["ADD"] }),
+  );
+  assert.match(planningMainAddOnly, /ADD \[新主计划ID\]/);
+  assert.doesNotMatch(planningMainAddOnly, /UPDATE \[已有主计划ID\]/);
+  assert.doesNotMatch(planningMainAddOnly, /DELETE \[已有主计划ID\]/);
   assert.match(String(buildPlanningRevisionPatchProtocolText("zh-CN")), /ADD \[新主计划ID\]/);
   assert.match(String(buildPlanningRefinementPatchProtocolText("zh-CN")), /禁止输出 1\.1\.1/);
   assert.match(String(buildSummaryPatchProtocolText("zh-CN")), /summary_patch_v1/);

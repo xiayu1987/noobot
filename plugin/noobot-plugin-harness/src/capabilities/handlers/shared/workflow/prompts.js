@@ -9,6 +9,7 @@ import { parseSummaryItemsFromText } from "../plan/summary-text-protocol.js";
 import { PLAN_UPDATE_POLICY } from "../../../../core/thresholds.js";
 import {
   buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText,
+  buildPlanningMainPatchProtocolText as buildPlanningMainPatchProtocolCoreText,
   buildPlanningRefinementPatchProtocolText as buildPlanningRefinementPatchProtocolCoreText,
   buildPlanningRevisionPatchProtocolText as buildPlanningRevisionPatchProtocolCoreText,
   buildSummaryPatchProtocolText as buildSummaryPatchProtocolCoreText,
@@ -124,15 +125,10 @@ export function buildPlanningMainPrompt(options = {}) {
       "[User Goal]",
       goal,
       "",
-      "[Output Format]",
-      "Plain-text list, one item per line.",
-      "Format: [main_plan_id]. [Main plan content]",
-      "Requirement: main_plan_id must start at 1 and increase sequentially.",
+      buildPlanningMainPatchProtocolCoreText({ locale, actions: ["ADD"] }),
       "",
       "[Example]",
-      "1. Requirement analysis and technical solution",
-      "2. Database schema design",
-      "3. Core business logic development",
+      "ADD [main_plan_id] [main plan content]",
     ].filter(Boolean).join("\n");
   }
   return [
@@ -142,15 +138,10 @@ export function buildPlanningMainPrompt(options = {}) {
     "【用户目标】",
     goal,
     "",
-    "【输出格式】",
-    "纯文本列表，每行一条。",
-    "格式：[主计划ID]. [主计划内容]",
-    "要求：主计划ID 必须从 1 开始递增。",
+    buildPlanningMainPatchProtocolCoreText({ locale, actions: ["ADD"] }),
     "",
     "【输出示例】",
-    "1. 需求分析与技术选型",
-    "2. 数据库结构设计",
-    "3. 核心业务逻辑开发",
+    "ADD [主计划ID] [主计划内容]",
   ].filter(Boolean).join("\n");
 }
 
