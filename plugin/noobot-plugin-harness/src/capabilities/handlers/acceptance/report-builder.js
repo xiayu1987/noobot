@@ -70,6 +70,19 @@ function mapModelAcceptanceStatusToTaskStatus(status = "") {
   return "";
 }
 
+function resolveModelAcceptanceForChecklistItem(normalized = {}, modelAcceptanceByPlan = {}) {
+  const byPlan = modelAcceptanceByPlan && typeof modelAcceptanceByPlan === "object"
+    ? modelAcceptanceByPlan
+    : {};
+  const exactKey = String(normalized?.index ?? "").trim();
+  if (exactKey && byPlan[exactKey]) return byPlan[exactKey];
+  const isMainStep = normalized?.isMainStep !== false;
+  if (isMainStep) return null;
+  const parentKey = String(normalized?.mainStepIndex ?? "").trim();
+  if (parentKey && byPlan[parentKey]) return byPlan[parentKey];
+  return null;
+}
+
 function resolveLatestModelAcceptance(bucket = {}) {
   const reports = Array.isArray(bucket?.phaseAcceptanceReports) ? bucket.phaseAcceptanceReports : [];
   const latest = reports.length ? reports[reports.length - 1] : null;
@@ -207,7 +220,7 @@ export function buildAcceptanceReport({
       : {};
   const items = checklist.map((task, index) => {
     const normalized = normalizeChecklistItem(task, index, locale);
-    const modelAcceptance = modelAcceptanceByPlan[String(normalized?.index ?? "").trim()] || null;
+    const modelAcceptance = resolveModelAcceptanceForChecklistItem(normalized, modelAcceptanceByPlan);
     const modelMappedStatus = mapModelAcceptanceStatusToTaskStatus(modelAcceptance?.status);
     const baseStatus = evaluateTaskStatus(normalized, state);
     return {

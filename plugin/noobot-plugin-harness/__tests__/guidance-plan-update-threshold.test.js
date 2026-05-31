@@ -308,7 +308,7 @@ test("legacy unified attempts can still block revision scheduling in planning ha
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
-test("separate_model summary -> revision -> refinement consumes two stage attempts", async () => {
+test("separate_model summary -> revision schedules refinement and consumes revision attempt", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const agentContext = createAgentContext({
@@ -322,7 +322,6 @@ test("separate_model summary -> revision -> refinement consumes two stage attemp
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
         if (payload.purpose === "planning_revision") return { content: "UPDATE 1 修复后的主任务" };
-        if (payload.purpose === "planning_refinement") return { content: "ADD 1.1 细化步骤A" };
         return { content: "" };
       },
     },
@@ -336,11 +335,17 @@ test("separate_model summary -> revision -> refinement consumes two stage attemp
   });
   assert.deepEqual(
     invocations.map((item = {}) => item.purpose),
-    ["summary", "planning_revision", "planning_refinement"],
+    ["summary", "planning_revision"],
   );
   assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 1);
-  assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 1);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 2);
+  assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 0);
+  assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 1);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdateStage, "refinement");
+  assert.deepEqual(
+    agentContext.payload.harness.state.pending.planUpdateContext.targetMainStepIndexes,
+    [1],
+  );
 });
 
 test("inject refinement-only flow consumes refinement attempts", async () => {
@@ -498,7 +503,7 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
 });
 
 
-test("separate_model still runs refinement when revision has no main-plan diff but sub-steps are missing", async () => {
+test("separate_model does not auto-run refinement when revision has no main-plan diff", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const agentContext = createAgentContext({
@@ -512,7 +517,6 @@ test("separate_model still runs refinement when revision has no main-plan diff b
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
         if (payload.purpose === "planning_revision") return { content: "{}" };
-        if (payload.purpose === "planning_refinement") return { content: "ADD 1.1 细化步骤A" };
         return { content: "" };
       },
     },
@@ -525,6 +529,6 @@ test("separate_model still runs refinement when revision has no main-plan diff b
   });
   assert.deepEqual(
     invocations.map((item = {}) => item.purpose),
-    ["summary", "planning_revision", "planning_refinement"],
+    ["summary", "planning_revision"],
   );
 });

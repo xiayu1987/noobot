@@ -1117,7 +1117,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
         taskChecklist: [{ index: 1, task: "完成初始检查", owner: "primary_task_owner" }],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          counters: { llmTurns: 16, planUpdateTurns: -100, consecutiveToolFailures: 0, totalToolFailures: 0 },
           signals: { successfulToolCount: 1 },
           pending: { summary: true, guidance: null },
         },
@@ -1214,6 +1214,7 @@ test("planning_revision reuses summary model messages in separate_model flow", a
     payload: {
       messages: { system: [], history: [] },
       harness: {
+        planText: "1. 初始计划",
         taskChecklist: [{ index: 1, task: "初始计划", owner: "primary_task_owner" }],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
@@ -1262,7 +1263,7 @@ test("planning_revision reuses summary model messages in separate_model flow", a
   );
 });
 
-test("planning_refinement receives planning_revision model output in its base messages", async () => {
+test("planning_refinement is scheduled independently after revision main-plan change", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
@@ -1275,7 +1276,7 @@ test("planning_refinement receives planning_revision model output in its base me
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
         if (payload.purpose === "planning_revision") {
-          return { content: "UPDATE 1 修复后的主计划" };
+          return { content: "1. 修复后的主计划\n2. 新增主任务" };
         }
         if (payload.purpose === "planning_refinement") {
           return { content: "ADD 1.1 细化修复后的主计划" };
@@ -1293,10 +1294,11 @@ test("planning_refinement receives planning_revision model output in its base me
     payload: {
       messages: { system: [], history: [] },
       harness: {
+        planText: "1. 初始计划",
         taskChecklist: [{ index: 1, task: "初始计划", owner: "primary_task_owner" }],
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
-          counters: { llmTurns: 16, consecutiveToolFailures: 0, totalToolFailures: 0 },
+          counters: { llmTurns: 16, planUpdateTurns: -100, consecutiveToolFailures: 0, totalToolFailures: 0 },
           signals: { successfulToolCount: 1 },
           pending: { summary: true, guidance: null },
         },
@@ -1310,25 +1312,14 @@ test("planning_refinement receives planning_revision model output in its base me
   assert.deepEqual(invocations.map((item = {}) => item.purpose), [
     "summary",
     "planning_revision",
-    "planning_refinement",
   ]);
-  const refinementInvocation = invocations.find((item = {}) => item.purpose === "planning_refinement");
-  assert.equal(Array.isArray(refinementInvocation?.messages), true);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdateStage, "refinement");
+  assert.equal(Array.isArray(agentContext.payload.harness.state.pending.planUpdateContext?.targetMainStepIndexes), true);
   assert.equal(
-    refinementInvocation.messages.some((item = {}) => String(item?.content || "").includes("harness-plan-checklist-context")),
+    agentContext.payload.harness.state.pending.planUpdateContext.targetMainStepIndexes.length > 0,
     true,
   );
-  const refinementMessages = refinementInvocation.messages;
-  const checklistContextIndex = refinementMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("harness-plan-checklist-context"),
-  );
-  assert.equal(checklistContextIndex >= 0, true);
-  assert.equal(
-    String(refinementMessages[checklistContextIndex]?.role || ""),
-    "system",
-  );
-  assert.equal(refinementMessages.some((item = {}) => String(item?.content || "").includes("harness-main-plan-context")), false);
-  assert.equal(refinementMessages.some((item = {}) => String(item?.content || "").includes("harness-plan-revision-context")), false);
 });
 
 test("harness summary without completion marker still triggers planning revision", async () => {
