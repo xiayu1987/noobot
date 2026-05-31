@@ -9,24 +9,59 @@ function resolveLocale(locale = LOCALE.ZH_CN) {
   return locale === LOCALE.EN_US ? LOCALE.EN_US : LOCALE.ZH_CN;
 }
 
-export function buildPlanningRevisionPatchProtocolText(locale = LOCALE.ZH_CN) {
-  const normalizedLocale = resolveLocale(locale);
+function normalizePatchActions(actions = []) {
+  const allowed = ["ADD", "UPDATE", "DELETE"];
+  const picked = [...new Set(
+    (Array.isArray(actions) ? actions : [])
+      .map((item) => String(item || "").trim().toUpperCase())
+      .filter((item) => allowed.includes(item)),
+  )];
+  return picked.length ? picked : allowed;
+}
+
+function resolvePlanningMainPatchOptions(input = LOCALE.ZH_CN) {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    return {
+      locale: resolveLocale(input.locale),
+      actions: normalizePatchActions(input.actions),
+    };
+  }
+  return {
+    locale: resolveLocale(input),
+    actions: normalizePatchActions([]),
+  };
+}
+
+export function buildPlanningMainPatchProtocolText(options = LOCALE.ZH_CN) {
+  const { locale: normalizedLocale, actions } = resolvePlanningMainPatchOptions(options);
+  const actionLines = [];
   if (normalizedLocale === LOCALE.EN_US) {
+    if (actions.includes("ADD")) actionLines.push("ADD [new_main_plan_id] [main plan content]");
+    if (actions.includes("UPDATE")) actionLines.push("UPDATE [existing_main_plan_id] [updated content]");
+    if (actions.includes("DELETE")) actionLines.push("DELETE [existing_main_plan_id]");
+    const canonical = actions.map((item) => `${item} [main_plan_id] ...`).join(" / ");
     return [
       "[ID+PATCH Syntax]",
-      "ADD [new_main_plan_id] [main plan content]",
-      "UPDATE [existing_main_plan_id] [updated content]",
-      "DELETE [existing_main_plan_id]",
-      "Canonical output style (recommended): ADD [main_plan_id] ... / UPDATE [main_plan_id] ... / DELETE [main_plan_id]",
+      ...actionLines,
+      `Canonical output style (recommended): ${canonical}`,
     ].join("\n");
   }
+  if (actions.includes("ADD")) actionLines.push("ADD [新主计划ID] [主计划内容]");
+  if (actions.includes("UPDATE")) actionLines.push("UPDATE [已有主计划ID] [修改后的内容]");
+  if (actions.includes("DELETE")) actionLines.push("DELETE [已有主计划ID]");
+  const canonical = actions.map((item) => `${item} [主计划ID] ...`).join(" / ");
   return [
     "【ID+PATCH 协议语法】",
-    "ADD [新主计划ID] [主计划内容]",
-    "UPDATE [已有主计划ID] [修改后的内容]",
-    "DELETE [已有主计划ID]",
-    "推荐统一输出风格：ADD [主计划ID] ... / UPDATE [主计划ID] ... / DELETE [主计划ID]",
+    ...actionLines,
+    `推荐统一输出风格：${canonical}`,
   ].join("\n");
+}
+
+export function buildPlanningRevisionPatchProtocolText(locale = LOCALE.ZH_CN) {
+  return buildPlanningMainPatchProtocolText({
+    locale,
+    actions: ["ADD", "UPDATE", "DELETE"],
+  });
 }
 
 export function buildPlanningRefinementPatchProtocolText(locale = LOCALE.ZH_CN) {

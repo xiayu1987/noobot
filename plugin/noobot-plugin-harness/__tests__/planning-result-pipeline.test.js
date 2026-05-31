@@ -41,6 +41,21 @@ test("planning result pipeline captures plan text directly", async () => {
   );
 });
 
+test("planning result pipeline supports ID+PATCH main plan text", async () => {
+  const ctx = createCtx();
+  const result = await processPlanningResult(ctx, {}, {
+    source: "after_llm_call",
+    rawText: "ADD [1] 解析附件\nADD [2] 执行核心任务",
+    locale: LOCALE.ZH_CN,
+  });
+
+  assert.equal(result.captured, true);
+  assert.equal(result.sourceType, "plan_text");
+  assert.equal(result.checklistCount, 2);
+  assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^1\. 解析附件/m);
+  assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^2\. 执行核心任务/m);
+});
+
 test("planning result pipeline treats malformed text as plan text when non-empty", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {

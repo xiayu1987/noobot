@@ -38,6 +38,10 @@ const WEB_SEARCH_I18N = {
     "zh-CN": "关键词",
     "en-US": "keyword",
   },
+  "resultContentLimited": {
+    "zh-CN": "搜索内容有限，请减少关键字，扩大范围搜索",
+    "en-US": "Limited search content. Please reduce keywords and broaden your search scope.",
+  },
 };
 
 function tWebSearch(locale = "zh-CN", key = "") {
@@ -124,7 +128,10 @@ async function getRemoteSearxInstances(fetcher) {
   }
 }
 
-async function parseResponseData(res, { textCleaner = null, requestUrl = "" } = {}) {
+async function parseResponseData(
+  res,
+  { textCleaner = null, requestUrl = "", locale = "zh-CN" } = {},
+) {
   const contentType = res.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
   if (isJson) return await res.json();
@@ -132,12 +139,21 @@ async function parseResponseData(res, { textCleaner = null, requestUrl = "" } = 
   const cleaned = textCleaner?.cleanAny
     ? textCleaner.cleanAny(text, { contentType, url: requestUrl })
     : text;
-  if (cleaned === text) return text;
+
+  const cleanedText = String(cleaned || "");
+  const appendLimitedHint = cleanedText.length < 2000;
+  const finalText = appendLimitedHint
+    ? `${cleanedText}
+
+${tWebSearch(locale, "resultContentLimited")}`
+    : cleanedText;
+
+  if (cleaned === text) return finalText;
   return {
     type: "cleaned_text",
-    text: String(cleaned || ""),
+    text: finalText,
     original_length: text.length,
-    cleaned_length: String(cleaned || "").length,
+    cleaned_length: finalText.length,
     content_type: contentType,
   };
 }
@@ -166,6 +182,7 @@ async function requestWithFallback({
         data: await parseResponseData(res, {
           textCleaner,
           requestUrl: primaryUrl,
+          locale,
         }),
         source: "primary",
       };
@@ -179,6 +196,7 @@ async function requestWithFallback({
         data: await parseResponseData(res, {
           textCleaner,
           requestUrl: primaryUrl,
+          locale,
         }),
         source: "primary",
       };
@@ -228,6 +246,7 @@ async function requestWithFallback({
       const data = await parseResponseData(res, {
         textCleaner,
         requestUrl: target.toString(),
+        locale,
       });
       if (res.ok) {
         return {
