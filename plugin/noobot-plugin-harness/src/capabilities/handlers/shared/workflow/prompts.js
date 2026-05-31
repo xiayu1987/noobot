@@ -126,8 +126,8 @@ export function buildPlanningMainPrompt(options = {}) {
       "",
       "[Output Format]",
       "Plain-text list, one item per line.",
-      "Format: [Integer ID]. [Main plan content]",
-      "Requirement: IDs must start at 1 and increase sequentially.",
+      "Format: [main_plan_id]. [Main plan content]",
+      "Requirement: main_plan_id must start at 1 and increase sequentially.",
       "",
       "[Example]",
       "1. Requirement analysis and technical solution",
@@ -144,8 +144,8 @@ export function buildPlanningMainPrompt(options = {}) {
     "",
     "【输出格式】",
     "纯文本列表，每行一条。",
-    "格式：[整数ID]. [主计划内容]",
-    "要求：ID 必须从 1 开始递增。",
+    "格式：[主计划ID]. [主计划内容]",
+    "要求：主计划ID 必须从 1 开始递增。",
     "",
     "【输出示例】",
     "1. 需求分析与技术选型",
@@ -167,7 +167,7 @@ export function buildPlanningRevisionPromptText(options = {}) {
     const currentPlanSection = includeCurrentMainPlans === false ? [] : ["Current main plan:", mainPlansText];
     return [
       String(marker || "").trim(),
-      "Goal: Revise the high-level main plan based on latest feedback. Only operate on main plan IDs; do not include sub-steps.",
+      "Goal: Revise the high-level main plan based on latest feedback. Only operate on main_plan_id; do not include sub-steps.",
       "",
       "[Current Status]",
       `Revision count: ${revisionCount}/${Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION)}`,
@@ -181,7 +181,7 @@ export function buildPlanningRevisionPromptText(options = {}) {
   const currentPlanSection = includeCurrentMainPlans === false ? [] : ["当前主计划：", mainPlansText];
   return [
     String(marker || "").trim(),
-    "目标：基于最新反馈修正宏观主计划。仅限操作主计划（整数ID），严禁涉及子计划。",
+    "目标：基于最新反馈修正宏观主计划。仅限操作主计划ID，严禁涉及子计划。",
     "",
     "【当前状态】",
     `已修正次数：${revisionCount}/${Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION)}`,
@@ -192,8 +192,8 @@ export function buildPlanningRevisionPromptText(options = {}) {
     buildPlanningRevisionPatchProtocolCoreText(locale),
     "",
     "【输出示例】",
-    "UPDATE 2 数据库及缓存架构设计",
-    "ADD 4 部署上线",
+    "UPDATE [主计划ID] [修改后的主计划内容]",
+    "ADD [主计划ID] [新增主计划内容]",
   ].filter(Boolean).join("\n");
 }
 
@@ -261,8 +261,8 @@ export function buildPlanningRefinementPromptText(options = {}) {
     latestFeedback,
     "",
     "【输出示例】",
-    "ADD [主序号].[子序号] [抽象子步骤内容A]",
-    "UPDATE [主序号].[子序号] [抽象子步骤内容B]",
+    "ADD [主序号.子序号] [抽象子步骤内容A]",
+    "UPDATE [主序号.子序号] [抽象子步骤内容B]",
   ].filter(Boolean).join("\n");
 }
 

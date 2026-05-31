@@ -14,16 +14,18 @@ export function buildPlanningRevisionPatchProtocolText(locale = LOCALE.ZH_CN) {
   if (normalizedLocale === LOCALE.EN_US) {
     return [
       "[ID+PATCH Syntax]",
-      "ADD [new integer ID] [main plan content]",
-      "UPDATE [existing integer ID] [updated content]",
-      "DELETE [existing integer ID]",
+      "ADD [new_main_plan_id] [main plan content]",
+      "UPDATE [existing_main_plan_id] [updated content]",
+      "DELETE [existing_main_plan_id]",
+      "Canonical output style (recommended): ADD [main_plan_id] ... / UPDATE [main_plan_id] ... / DELETE [main_plan_id]",
     ].join("\n");
   }
   return [
     "【ID+PATCH 协议语法】",
-    "ADD [新整数ID] [主计划内容]",
-    "UPDATE [已有整数ID] [修改后的内容]",
-    "DELETE [已有整数ID]",
+    "ADD [新主计划ID] [主计划内容]",
+    "UPDATE [已有主计划ID] [修改后的内容]",
+    "DELETE [已有主计划ID]",
+    "推荐统一输出风格：ADD [主计划ID] ... / UPDATE [主计划ID] ... / DELETE [主计划ID]",
   ].join("\n");
 }
 
@@ -31,19 +33,21 @@ export function buildPlanningRefinementPatchProtocolText(locale = LOCALE.ZH_CN) 
   const normalizedLocale = resolveLocale(locale);
   if (normalizedLocale === LOCALE.EN_US) {
     return [
-      "[ID+PATCH Syntax] (sub-plan ID format: [main-id].[sub-id], and [main-id] must belong to target main plan IDs)",
-      "ADD [main-id].[sub-id] [content]",
-      "UPDATE [main-id].[sub-id] [updated content]",
-      "DELETE [main-id].[sub-id]",
+      "[ID+PATCH Syntax] (sub-plan ID format: [main-id.sub-id], and [main-id] must belong to target main plan IDs)",
+      "ADD [main-id.sub-id] [content]",
+      "UPDATE [main-id.sub-id] [updated content]",
+      "DELETE [main-id.sub-id]",
       "Constraint: only one-level sub-plan IDs are allowed. Do not output IDs like 1.1.1.",
+      "Canonical output style (recommended): ADD [main-id.sub-id] ... / UPDATE [main-id.sub-id] ... / DELETE [main-id.sub-id] ...",
     ].join("\n");
   }
   return [
-    "【ID+PATCH 协议语法】(子计划 ID 格式固定为 [主序号].[子序号]，且 [主序号] 必须属于目标主计划 ID 集合)",
-    "ADD [主序号].[子序号] [细化内容]",
-    "UPDATE [主序号].[子序号] [修改后的内容]",
-    "DELETE [主序号].[子序号]",
+    "【ID+PATCH 协议语法】(子计划 ID 格式固定为 [主序号.子序号]，且 [主序号] 必须属于目标主计划 ID 集合)",
+    "ADD [主序号.子序号] [细化内容]",
+    "UPDATE [主序号.子序号] [修改后的内容]",
+    "DELETE [主序号.子序号]",
     "约束：仅允许一级子计划 ID，禁止输出 1.1.1 这类二级子计划 ID。",
+    "推荐统一输出风格：ADD [主序号.子序号] ... / UPDATE [主序号.子序号] ... / DELETE [主序号.子序号] ...",
   ].join("\n");
 }
 
@@ -53,18 +57,18 @@ export function buildSummaryPatchProtocolText(locale = LOCALE.ZH_CN) {
     return [
       "Prefer summary_patch_v1 (independent from plan patch protocol).",
       "Syntax:",
-      "ADD S[integer] plan=[main_plan_id] status=[done|in_progress|risk|todo] [summary content]",
-      "UPDATE S[integer] status=[done|in_progress|risk|todo] [summary content]",
-      "DELETE S[integer]",
+      "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] [summary content]",
+      "UPDATE S[summary_id] status=[done|in_progress|risk|todo] [summary content]",
+      "DELETE S[summary_id]",
       "If protocol cannot be followed, any non-empty text is acceptable. Then continue with the task.",
     ].join("\n");
   }
   return [
     "建议使用 summary_patch_v1（与计划 patch 协议独立）。",
     "语法：",
-    "ADD S[整数] plan=[主计划ID] status=[done|in_progress|risk|todo] [小结内容]",
-    "UPDATE S[整数] status=[done|in_progress|risk|todo] [小结内容]",
-    "DELETE S[整数]",
+    "ADD S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] [小结内容]",
+    "UPDATE S[小结ID] status=[done|in_progress|risk|todo] [小结内容]",
+    "DELETE S[小结ID]",
     "若无法按协议输出，返回非空文本也可。小结后请继续任务，输出已完成项及问题说明。",
   ].join("\n");
 }

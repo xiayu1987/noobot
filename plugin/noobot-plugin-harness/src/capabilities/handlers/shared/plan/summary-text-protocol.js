@@ -5,8 +5,8 @@
  */
 
 const SUMMARY_LINE_RE = /^\s*(\d+)\.\s+(.+?)\s*$/;
-const PATCH_ADD_UPDATE_RE = /^\s*(ADD|UPDATE)\s+(\d+)\s+(.+?)\s*$/i;
-const PATCH_DELETE_RE = /^\s*(DELETE)\s+(\d+)\s*$/i;
+const PATCH_ADD_UPDATE_RE = /^\s*(ADD|UPDATE)\s+(?:S\s*)?\[?(\d+)\]?\s+(.+?)\s*$/i;
+const PATCH_DELETE_RE = /^\s*(DELETE)\s+(?:S\s*)?\[?(\d+)\]?\s*$/i;
 const SUMMARY_OVERVIEW_BLOCK_RE = /\[SUMMARY_OVERVIEW\]([\s\S]*?)(?=\[SUMMARY_DETAIL\]|\[SUMMARY_END\]|$)/i;
 const SUMMARY_DETAIL_BLOCK_RE = /\[SUMMARY_DETAIL\]([\s\S]*?)(?=\[SUMMARY_END\]|$)/i;
 const SUMMARY_END_MARKER_RE = /\[SUMMARY_END\]/i;

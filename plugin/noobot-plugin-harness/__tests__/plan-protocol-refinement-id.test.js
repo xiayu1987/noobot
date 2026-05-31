@@ -24,6 +24,19 @@ test("refinement patch parser accepts deep ids like 1.1.1 for flatten fallback",
   assert.equal(String(commands[1]?.target?.raw || ""), "1.1");
 });
 
+test("refinement patch parser accepts canonical bracketed ids from prompt examples", () => {
+  const patchText = [
+    "ADD [1.1] 子计划A",
+    "UPDATE [1.2] 子计划B",
+    "DELETE [1.3]",
+  ].join("\n");
+  const commands = parsePatchCommands(patchText);
+  assert.equal(commands.length, 3);
+  assert.equal(String(commands[0]?.target?.raw || ""), "1.1");
+  assert.equal(String(commands[1]?.target?.raw || ""), "1.2");
+  assert.equal(String(commands[2]?.target?.raw || ""), "1.3");
+});
+
 test("refinement apply patch flattens deep sub-plan ids into one-level sub-plans", () => {
   const doc = {
     mainPlans: [{ id: 1, content: "主步骤一" }],
