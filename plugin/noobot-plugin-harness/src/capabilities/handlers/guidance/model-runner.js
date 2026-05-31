@@ -36,7 +36,10 @@ import { buildGuidancePromptContent } from "./prompt-injector.js";
 import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages } from "./signal-tracker.js";
 import { applySummaryText, recordSummaryDetailAttachmentMetas } from "./summary-manager.js";
-import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
+import {
+  parseSummaryOverviewAndDetailFromText,
+  resolveSummaryDetailAttachmentText,
+} from "../shared/plan/summary-text-protocol.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
@@ -372,11 +375,11 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
     const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || responseText;
     summaryMergeText = summaryOverviewText;
-    const summaryDetailText = String(parsedSummary?.detailText || "").trim();
-    const summaryDetailAttachmentMetas = summaryDetailText
+    const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
+    const summaryDetailAttachmentMetas = summaryDetailAttachmentText
       ? await saveCapabilityOutputAsAttachmentMetas(ctx, {
         purpose: "summary_detail",
-        content: summaryDetailText,
+        content: summaryDetailAttachmentText,
         generationSource: "harness_summary_detail",
         domain: CAPABILITY_DOMAIN.GUIDANCE,
       })

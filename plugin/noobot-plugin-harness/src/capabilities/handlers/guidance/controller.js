@@ -15,7 +15,10 @@ import {
   shouldUseSeparateModel,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
-import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
+import {
+  parseSummaryOverviewAndDetailFromText,
+  resolveSummaryDetailAttachmentText,
+} from "../shared/plan/summary-text-protocol.js";
 import {
   schedulePlanUpdateByInject,
   maybeInjectPlanUpdatePrompt,
@@ -208,11 +211,11 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         const locale = holder.state?.locale || LOCALE.ZH_CN;
         const parsedSummary = parseSummaryOverviewAndDetailFromText(rawSummaryText);
         const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || rawSummaryText;
-        const summaryDetailText = String(parsedSummary?.detailText || "").trim();
-        const detailAttachmentMetas = summaryDetailText
+        const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
+        const detailAttachmentMetas = summaryDetailAttachmentText
           ? await saveCapabilityOutputAsAttachmentMetas(ctx, {
             purpose: "summary_detail",
-            content: summaryDetailText,
+            content: summaryDetailAttachmentText,
             generationSource: "harness_summary_detail",
             domain: CAPABILITY_DOMAIN.GUIDANCE,
           })
