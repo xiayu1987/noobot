@@ -43,6 +43,7 @@ export function buildPlanningMainPatchProtocolText(options = LOCALE.ZH_CN) {
     return [
       "[ID+PATCH Syntax]",
       ...actionLines,
+      "Hard constraint: main_plan_id must be Arabic digits only (1,2,3...). Do NOT use P1/A1/Step1/Chinese numerals.",
       `Canonical output style (recommended): ${canonical}`,
     ].join("\n");
   }
@@ -53,6 +54,7 @@ export function buildPlanningMainPatchProtocolText(options = LOCALE.ZH_CN) {
   return [
     "【ID+PATCH 协议语法】",
     ...actionLines,
+    "硬性约束：主计划ID只能使用阿拉伯数字正整数（1,2,3...），禁止使用 P1/A1/Step1/一/第一步 等非纯数字 ID。",
     `推荐统一输出风格：${canonical}`,
   ].join("\n");
 }
@@ -72,6 +74,7 @@ export function buildPlanningRefinementPatchProtocolText(locale = LOCALE.ZH_CN) 
       "ADD [main-id.sub-id] [content]",
       "UPDATE [main-id.sub-id] [updated content]",
       "DELETE [main-id.sub-id]",
+      "Hard constraint: main-id and sub-id must be Arabic digits only (e.g., 1.1, 2.3). Do NOT use P1.1/A2.3/Chinese numerals.",
       "Constraint: only one-level sub-plan IDs are allowed. Do not output IDs like 1.1.1.",
       "Canonical output style (recommended): ADD [main-id.sub-id] ... / UPDATE [main-id.sub-id] ... / DELETE [main-id.sub-id] ...",
     ].join("\n");
@@ -81,6 +84,7 @@ export function buildPlanningRefinementPatchProtocolText(locale = LOCALE.ZH_CN) 
     "ADD [主序号.子序号] [细化内容]",
     "UPDATE [主序号.子序号] [修改后的内容]",
     "DELETE [主序号.子序号]",
+    "硬性约束：主序号与子序号都必须是阿拉伯数字正整数（如 1.1、2.3），禁止 P1.1/A2.3/一.一 等非纯数字形式。",
     "约束：仅允许一级子计划 ID，禁止输出 1.1.1 这类二级子计划 ID。",
     "推荐统一输出风格：ADD [主序号.子序号] ... / UPDATE [主序号.子序号] ... / DELETE [主序号.子序号] ...",
   ].join("\n");

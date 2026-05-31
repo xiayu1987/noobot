@@ -23,6 +23,10 @@ import {
 } from "./deps.js";
 import { createPlanRevisionHelpers } from "../shared/plan/revision-helpers.js";
 import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
+import {
+  buildPostPlanUserFollowupPrompt,
+  buildWorkflowResponsibilityConstraintUserPrompt,
+} from "../shared/workflow/prompts.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -97,6 +101,9 @@ export async function runPlanningRefinementBySeparateModel(
     locale,
     agentMessages,
     task: refinementTask,
+    postTaskMessages: [
+      buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement"),
+    ],
   });
 
   let refinementResponse = null;
@@ -171,6 +178,12 @@ export async function runPlanningRefinementBySeparateModel(
       locale,
       purpose: "next_phase_plan_refinement",
       content: buildNextPhaseRelayContent(bucket, locale, "refinement"),
+      dedupe: true,
+    });
+    relaySeparateModelOutputAsUserMessage(ctx, {
+      locale,
+      purpose: "next_phase_plan_refinement_followup",
+      content: buildPostPlanUserFollowupPrompt(locale, "refinement"),
       dedupe: true,
     });
     return {

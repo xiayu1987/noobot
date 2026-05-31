@@ -10,19 +10,42 @@ function resolveErrorStatus(error = {}) {
   const rawStatus =
     error?.status ??
     error?.statusCode ??
+    error?.error?.status ??
     error?.response?.status ??
     error?.cause?.status ??
-    error?.cause?.statusCode;
+    error?.cause?.statusCode ??
+    error?.cause?.error?.status;
   const status = Number(rawStatus);
   return Number.isFinite(status) ? status : undefined;
+}
+
+function resolveHeaderValue(headers = null, name = "") {
+  if (!headers || !name) return undefined;
+  const normalizedName = String(name || "").trim();
+  if (!normalizedName) return undefined;
+  if (typeof headers?.get === "function") {
+    return (
+      headers.get(normalizedName) ||
+      headers.get(normalizedName.toLowerCase()) ||
+      undefined
+    );
+  }
+  return (
+    headers?.[normalizedName] ??
+    headers?.[normalizedName.toLowerCase()] ??
+    undefined
+  );
 }
 
 function resolveRequestId(error = {}) {
   return (
     error?.request_id ??
     error?.requestId ??
-    error?.headers?.["x-request-id"] ??
-    error?.response?.headers?.["x-request-id"] ??
+    error?.requestID ??
+    resolveHeaderValue(error?.headers, "x-request-id") ??
+    resolveHeaderValue(error?.response?.headers, "x-request-id") ??
+    resolveHeaderValue(error?.cause?.headers, "x-request-id") ??
+    resolveHeaderValue(error?.cause?.response?.headers, "x-request-id") ??
     undefined
   );
 }
@@ -35,8 +58,18 @@ export function buildEngineErrorPayload({
   const normalizedClassification =
     classification || classifyEngineError(error);
   const status = resolveErrorStatus(error);
-  const code = error?.code ?? error?.cause?.code ?? undefined;
-  const type = error?.type ?? error?.cause?.type ?? undefined;
+  const code =
+    error?.code ??
+    error?.error?.code ??
+    error?.cause?.code ??
+    error?.cause?.error?.code ??
+    undefined;
+  const type =
+    error?.type ??
+    error?.error?.type ??
+    error?.cause?.type ??
+    error?.cause?.error?.type ??
+    undefined;
   const name = String(error?.name || error?.cause?.name || "").trim();
   const message = String(error?.message || error || "").trim();
   const requestId = resolveRequestId(error);

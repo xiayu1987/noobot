@@ -16,6 +16,7 @@ import {
   resolveSceneToolNames,
 } from "./deps.js";
 import {
+  buildWorkflowResponsibilityConstraintUserPrompt,
   buildPlanningMainPrompt,
   getPlanningContextSummaryHeader,
   getPlanningPromptMarker,
@@ -203,6 +204,12 @@ export function buildPlanningMessagePlan(
       injectRole: "user",
       separateRole: "task",
       content: taskContent || buildPlanningPromptBase(locale, ctx, meta),
+    },
+    {
+      kind: "planning_responsibility_constraint",
+      injectRole: "user",
+      separateRole: "task",
+      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "planning"),
     },
   ]);
 }

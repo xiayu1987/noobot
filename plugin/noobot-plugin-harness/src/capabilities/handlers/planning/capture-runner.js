@@ -40,6 +40,7 @@ import {
   resolveSceneToolNames,
 } from "./deps.js";
 import {
+  buildPostPlanUserFollowupPrompt,
   getPlanningContextSummaryHeader,
   getPlanningSeparateModelEmptyRelay,
 } from "../shared/workflow/prompts.js";
@@ -337,6 +338,12 @@ async function handleSeparateModelPlanningProcessResult(
     content: relayText,
     dedupe: true,
     attachmentMetas,
+  });
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "planning_followup",
+    content: buildPostPlanUserFollowupPrompt(locale, "planning"),
+    dedupe: true,
   });
   logPlanningCaptureResult(ctx, processed, {
     event: PLANNING_EVENTS.checklistCapturedBySeparateModel,

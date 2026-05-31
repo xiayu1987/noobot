@@ -163,8 +163,8 @@ test("harness planning captures checklist and forces acceptance at final output"
     result,
     agentContext,
   });
-  assert.match(String(result.output), /Harness-Forced-Acceptance/);
-  assert.match(String(result.output), /"mode": "forced"/);
+  assert.match(String(result.output), /Harness-验收/);
+  assert.match(String(result.output), /模式.*forced/);
 });
 
 test("harness planning injects refinement tool and tool call runs plugin-side refinement directly", async () => {

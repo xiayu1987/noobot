@@ -37,6 +37,7 @@ import {
   buildAllSummaryReportSystemContents,
   buildAcceptanceMainPlanContextPromptText,
   buildAcceptanceValidationRequestPromptText,
+  buildWorkflowResponsibilityConstraintUserPrompt,
   buildPhaseAcceptanceRequestPromptText,
   getAllPhaseAcceptanceReportsMarker,
   getAllSummaryReportsMarker,
@@ -139,8 +140,11 @@ function buildFinalAcceptanceSemanticValidationMessages({
   }
   if (String(requestContent || "").trim()) {
     messages.push({ role: "user", content: String(requestContent || "").trim() });
+    messages.push({
+      role: "user",
+      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance"),
+    });
   }
-  void locale;
   return messages;
 }
 
@@ -234,6 +238,7 @@ function buildAcceptancePromptParts({
 }
 
 function buildPhaseAcceptanceMessages({
+  locale = LOCALE.ZH_CN,
   agentMessages = [],
   summaryReportsContents = [],
   planContextContent = "",
@@ -259,6 +264,10 @@ function buildPhaseAcceptanceMessages({
   }
   if (String(requestContent || "").trim()) {
     messages.push({ role: "user", content: String(requestContent || "").trim() });
+    messages.push({
+      role: "user",
+      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance"),
+    });
   }
   return messages;
 }
@@ -286,6 +295,11 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
     pushRoleMessage(messages, "system", content);
   }
   pushRoleMessage(messages, "user", requestContent);
+  pushRoleMessage(
+    messages,
+    "user",
+    buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance"),
+  );
   setPendingStateWithMeta(state, "phaseAcceptance", false);
   setCaptureFlagStateWithMeta(state, "phaseAcceptanceCapturePending", true);
   appendCapabilityLog(ctx, {
@@ -366,6 +380,7 @@ export async function runPhaseAcceptanceBySeparateModel(
         locale,
         prompt: "",
         messages: buildPhaseAcceptanceMessages({
+          locale,
           agentMessages: buildCapabilityModelMessages({
             locale,
             agentMessages,
@@ -488,6 +503,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
         locale,
         prompt: "",
         messages: buildPhaseAcceptanceMessages({
+          locale,
           agentMessages: buildCapabilityModelMessages({
             locale,
             agentMessages: resolveCapabilityModelMessages(meta, {
@@ -630,6 +646,13 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
     avoidBreakToolCallContinuity: false,
   });
   if (!userInjection.injected) return false;
+  injectMessageWithPolicy(ctx, {
+    role: "user",
+    content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance"),
+    injectAt: "append",
+    dedupe: false,
+    avoidBreakToolCallContinuity: false,
+  });
   setPendingStateWithMeta(state, "acceptanceSemanticValidation", null);
   setCaptureFlagStateWithMeta(state, "acceptanceSemanticValidationCapturePending", true);
   state.flags.acceptanceSemanticValidationCaptureReportIndex = Number(pendingData.reportIndex);

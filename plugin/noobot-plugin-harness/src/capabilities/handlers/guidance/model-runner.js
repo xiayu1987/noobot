@@ -43,6 +43,8 @@ import {
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
+  buildPostPlanUserFollowupPrompt,
+  buildWorkflowResponsibilityConstraintUserPrompt,
 } from "../shared/workflow/prompts.js";
 import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
 
@@ -166,6 +168,9 @@ export async function runPlanUpdateAfterSummary(
     locale,
     agentMessages: revisionBaseMessages,
     task: revisionTask,
+    postTaskMessages: [
+      buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision"),
+    ],
   });
   let revisionResponse = null;
   try {
@@ -241,6 +246,12 @@ export async function runPlanUpdateAfterSummary(
     locale,
     purpose: "next_phase_plan",
     content: buildNextPhaseRelayContent(bucket, locale, "revision"),
+    dedupe: true,
+  });
+  relaySeparateModelOutputAsUserMessage(ctx, {
+    locale,
+    purpose: "next_phase_plan_followup",
+    content: buildPostPlanUserFollowupPrompt(locale, "revision"),
     dedupe: true,
   });
   changed = true;
@@ -322,6 +333,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     locale,
     agentMessages: modelMessagesWithChecklist,
     task: prompt,
+    postTaskMessages:
+      purpose === "summary"
+        ? [buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary")]
+        : [],
   });
 
   let response = null;
