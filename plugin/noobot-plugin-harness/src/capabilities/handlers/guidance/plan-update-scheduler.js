@@ -16,16 +16,43 @@ function normalizePlanUpdateStage(raw = "") {
 
 export function resolvePendingPlanUpdate(state = {}) {
   const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
+  if (pending.planRevision === true) {
+    const context =
+      pending.planRevisionContext && typeof pending.planRevisionContext === "object"
+        ? pending.planRevisionContext
+        : pending.planUpdateContext && typeof pending.planUpdateContext === "object"
+          ? pending.planUpdateContext
+        : {};
+    return {
+      active: true,
+      stage: GUIDANCE_DECISION.stage.revision,
+      summaryText: String(context.summaryText || "").trim(),
+      targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
+        ? context.targetMainStepIndexes
+        : [],
+    };
+  }
+  if (pending.planRefinement === true) {
+    const context =
+      pending.planRefinementContext && typeof pending.planRefinementContext === "object"
+        ? pending.planRefinementContext
+        : pending.planUpdateContext && typeof pending.planUpdateContext === "object"
+          ? pending.planUpdateContext
+        : {};
+    return {
+      active: true,
+      stage: GUIDANCE_DECISION.stage.refinement,
+      summaryText: String(context.summaryText || "").trim(),
+      targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
+        ? context.targetMainStepIndexes
+        : [],
+    };
+  }
   const hasUnifiedPending = pending.planUpdate === true;
-  const hasLegacyPending = pending.planRevision === true;
-  if (!hasUnifiedPending && !hasLegacyPending) {
+  if (!hasUnifiedPending) {
     return { active: false, stage: "", summaryText: "", targetMainStepIndexes: [] };
   }
-  const stage = normalizePlanUpdateStage(
-    pending.planUpdateStage ||
-      pending.planRevisionStage ||
-      "",
-  );
+  const stage = normalizePlanUpdateStage(pending.planUpdateStage || "");
   const context =
     pending.planUpdateContext && typeof pending.planUpdateContext === "object"
       ? pending.planUpdateContext
@@ -33,12 +60,10 @@ export function resolvePendingPlanUpdate(state = {}) {
   return {
     active: true,
     stage,
-    summaryText: String(context.summaryText || pending.summaryText || "").trim(),
+    summaryText: String(context.summaryText || "").trim(),
     targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
       ? context.targetMainStepIndexes
-      : Array.isArray(pending.planRevisionTargetMainStepIndexes)
-        ? pending.planRevisionTargetMainStepIndexes
-        : [],
+      : [],
   };
 }
 

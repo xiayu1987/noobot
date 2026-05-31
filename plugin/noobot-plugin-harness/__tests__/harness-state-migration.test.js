@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
 
-test("ensureHarnessBucket migrates legacy planRevision counters and pending fields", () => {
+test("ensureHarnessBucket normalizes plan-update counters and pending fields", () => {
   const ctx = {
     agentContext: {
       payload: {
@@ -19,9 +19,10 @@ test("ensureHarnessBucket migrates legacy planRevision counters and pending fiel
             signals: {},
             pending: {
               planRevision: true,
-              planRevisionStage: "revision",
-              summaryText: "legacy-summary",
-              planRevisionTargetMainStepIndexes: [1],
+              planRevisionContext: {
+                summaryText: "revision-summary",
+                targetMainStepIndexes: [1],
+              },
             },
             __harnessBucketVersion: 2,
           },
@@ -45,11 +46,11 @@ test("ensureHarnessBucket migrates legacy planRevision counters and pending fiel
   assert.equal(state.pending.planUpdate, true);
   assert.equal(state.pending.planUpdateStage, "revision");
   assert.deepEqual(state.pending.planUpdateContext, {
-    summaryText: "legacy-summary",
+    summaryText: "revision-summary",
     targetMainStepIndexes: [1],
   });
-  assert.equal(state.flags.planUpdateCapturePending, true);
-  assert.equal(state.flags.planRevisionCapturePending, true);
+  assert.equal(state.flags.planUpdateCapturePending, false);
+  assert.equal("planRevisionCapturePending" in state.flags, false);
   assert.equal(holder.bucket.__harnessBucketVersion, 4);
   assert.equal(state.__harnessBucketVersion, 4);
 });

@@ -23,33 +23,50 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
   let changed = false;
   const violations = [];
 
-  if (state.pending.planUpdate !== true && state.pending.planRevision === true) {
+  if (state.pending.planUpdate === false) {
+    if (state.pending.planRevision === true || state.pending.planRevisionContext) {
+      state.pending.planRevision = false;
+      state.pending.planRevisionContext = null;
+      changed = true;
+      violations.push("pending.planRevision_cleared_by_planUpdate_false");
+    }
+    if (state.pending.planRefinement === true || state.pending.planRefinementContext) {
+      state.pending.planRefinement = false;
+      state.pending.planRefinementContext = null;
+      changed = true;
+      violations.push("pending.planRefinement_cleared_by_planUpdate_false");
+    }
+    if (String(state.pending.planUpdateStage || "").trim()) {
+      state.pending.planUpdateStage = "";
+      changed = true;
+      violations.push("pending.planUpdateStage_cleared_by_planUpdate_false");
+    }
+    if (state.pending.planUpdateContext) {
+      state.pending.planUpdateContext = null;
+      changed = true;
+      violations.push("pending.planUpdateContext_cleared_by_planUpdate_false");
+    }
+  } else if (
+    state.pending.planUpdate !== true &&
+    (state.pending.planRevision === true || state.pending.planRefinement === true)
+  ) {
     state.pending.planUpdate = true;
     changed = true;
-    violations.push("pending.planRevision_migrated_to_planUpdate");
-  }
-  if (!String(state.pending.planUpdateStage || "").trim() && String(state.pending.planRevisionStage || "").trim()) {
-    state.pending.planUpdateStage = state.pending.planRevisionStage;
-    changed = true;
-    violations.push("pending.planRevisionStage_migrated_to_planUpdateStage");
-  }
-  if (
-    (state.pending.planUpdateContext === null || state.pending.planUpdateContext === undefined) &&
-    (String(state.pending.summaryText || "").trim() ||
-      Array.isArray(state.pending.planRevisionTargetMainStepIndexes))
-  ) {
-    state.pending.planUpdateContext = {
-      summaryText: String(state.pending.summaryText || "").trim(),
-      targetMainStepIndexes: state.pending.planRevisionTargetMainStepIndexes,
-    };
-    changed = true;
-    violations.push("pending.planRevisionTargetMainStepIndexes_migrated_to_planUpdateContext");
+    violations.push("pending.plan_update_stage_migrated_to_planUpdate");
   }
 
   if (state.pending.planUpdate === true) {
     const stageRaw = String(state.pending.planUpdateStage || "").trim().toLowerCase();
-    if (stageRaw !== GUIDANCE_DECISION.stage.revision && stageRaw !== GUIDANCE_DECISION.stage.refinement) {
-      state.pending.planUpdateStage = GUIDANCE_DECISION.stage.revision;
+    const stageNormalized =
+      state.pending.planRevision === true
+        ? GUIDANCE_DECISION.stage.revision
+        : state.pending.planRefinement === true
+          ? GUIDANCE_DECISION.stage.refinement
+          : stageRaw === GUIDANCE_DECISION.stage.refinement
+            ? GUIDANCE_DECISION.stage.refinement
+            : GUIDANCE_DECISION.stage.revision;
+    if (stageRaw !== stageNormalized) {
+      state.pending.planUpdateStage = stageNormalized;
       changed = true;
       violations.push("pending.planUpdateStage_missing_or_invalid");
     }
@@ -60,11 +77,6 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
     }
   }
 
-  if ("planRevision" in state.pending) {
-    delete state.pending.planRevision;
-    changed = true;
-    violations.push("pending.planRevision_removed");
-  }
   if ("planRevisionStage" in state.pending) {
     delete state.pending.planRevisionStage;
     changed = true;
@@ -76,20 +88,9 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
     violations.push("pending.planRevisionTargetMainStepIndexes_removed");
   }
   if ("summaryText" in state.pending) {
-    const hasPlanUpdateContext = Boolean(
-      state.pending.planUpdateContext && typeof state.pending.planUpdateContext === "object",
-    );
-    if (hasPlanUpdateContext) {
-      delete state.pending.summaryText;
-      changed = true;
-      violations.push("pending.summaryText_removed");
-    }
-  }
-
-  if (state.flags.planUpdateCapturePending !== true && state.flags.planRevisionCapturePending === true) {
-    state.flags.planUpdateCapturePending = true;
+    delete state.pending.summaryText;
     changed = true;
-    violations.push("flags.planRevisionCapturePending_migrated_to_planUpdateCapturePending");
+    violations.push("pending.summaryText_removed");
   }
   if ("planRevisionCapturePending" in state.flags) {
     delete state.flags.planRevisionCapturePending;
