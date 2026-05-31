@@ -53,6 +53,23 @@ function mergeAssistantContents(assistantMessages = []) {
   return contentList.join("\n\n");
 }
 
+function normalizeExecutionLogForRealtime(logItem = {}) {
+  const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
+  const rawEvent = String(logItem?.event || "").trim();
+  const text = String(data?.text || "").trim();
+  return {
+    ...data,
+    event: String(data?.event || rawEvent || "system").trim() || "system",
+    type: String(data?.type || logItem?.type || "system").trim() || "system",
+    category: String(data?.category || logItem?.category || "system").trim() || "system",
+    dialogProcessId: String(
+      data?.dialogProcessId || logItem?.dialogProcessId || "",
+    ).trim(),
+    ts: String(data?.ts || logItem?.ts || "").trim() || new Date().toISOString(),
+    text: text || (rawEvent ? `[${rawEvent}]` : ""),
+  };
+}
+
 export function useChatEngine({
   userId,
   allowUserInteraction,
@@ -482,6 +499,7 @@ export function useChatEngine({
       clearUploads();
       const attachments = await serializeAttachments(filesToSend);
       let finalDoneEventData = null;
+      const requestedTextStreaming = streamOutput?.value !== false;
 
       const payload = {
         userId: userId.value,
@@ -491,7 +509,7 @@ export function useChatEngine({
         config: {
           allowUserInteraction: allowUserInteraction?.value === false ? false : true,
           forceTool: forceTool?.value === true,
-          streaming: streamOutput?.value !== false,
+          streaming: requestedTextStreaming,
           ...(String(botScenario?.value || "").trim()
             ? { scenario: String(botScenario?.value || "").trim() }
             : {}),
@@ -558,6 +576,33 @@ export function useChatEngine({
           clearPendingInteraction();
           finalDoneEventData = data || {};
           botMsg.dialogProcessId = data.dialogProcessId || botMsg.dialogProcessId || "";
+          if (!requestedTextStreaming && Array.isArray(data?.executionLogs)) {
+            const doneRealtimeLogs = data.executionLogs
+              .map((executionLogItem) =>
+                classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
+              )
+              .filter(Boolean);
+            if (doneRealtimeLogs.length) {
+              botMsg.realtimeLogs = [...(botMsg.realtimeLogs || []), ...doneRealtimeLogs].slice(
+                -10,
+              );
+              botMsg.executionLogTotal = Math.max(
+                Number(botMsg.executionLogTotal || 0),
+                doneRealtimeLogs.length,
+                Number(data?.executionLogs?.length || 0),
+              );
+              if (!String(botMsg.dialogProcessId || "").trim()) {
+                const latestDialogProcessId = [...doneRealtimeLogs]
+                  .reverse()
+                  .map((logItem) => String(logItem?.dialogProcessId || "").trim())
+                  .find(Boolean);
+                if (latestDialogProcessId) {
+                  botMsg.dialogProcessId = latestDialogProcessId;
+                }
+              }
+              scrollOnFirstResponseOnce();
+            }
+          }
           const returnedId = data.sessionId || activeSession.value.backendSessionId;
           if (returnedId) {
             activeSession.value.loaded = true;

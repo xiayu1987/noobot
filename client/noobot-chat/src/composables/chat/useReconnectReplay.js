@@ -34,6 +34,23 @@ import {
   resolveConnectorStatusPayload,
 } from "./interactionPayload";
 
+function normalizeExecutionLogForRealtime(logItem = {}) {
+  const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
+  const rawEvent = String(logItem?.event || "").trim();
+  const text = String(data?.text || "").trim();
+  return {
+    ...data,
+    event: String(data?.event || rawEvent || "system").trim() || "system",
+    type: String(data?.type || logItem?.type || "system").trim() || "system",
+    category: String(data?.category || logItem?.category || "system").trim() || "system",
+    dialogProcessId: String(
+      data?.dialogProcessId || logItem?.dialogProcessId || "",
+    ).trim(),
+    ts: String(data?.ts || logItem?.ts || "").trim() || new Date().toISOString(),
+    text: text || (rawEvent ? `[${rawEvent}]` : ""),
+  };
+}
+
 export function useReconnectReplay({
   sessions,
   activeSession,
@@ -721,6 +738,36 @@ export function useReconnectReplay({
     const doneEnvelopeWithMessages = findReconnectDoneEnvelopeWithMessages(nextMessages);
     if (doneEnvelopeWithMessages) {
       applyDoneMessagesFromReconnect(doneEnvelopeWithMessages.data || {});
+      const doneData = doneEnvelopeWithMessages.data || {};
+      if (Array.isArray(doneData?.executionLogs) && doneData.executionLogs.length) {
+        const doneRealtimeLogs = doneData.executionLogs
+          .map((executionLogItem) =>
+            classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
+          )
+          .filter(Boolean);
+        if (doneRealtimeLogs.length) {
+          const messageList = Array.isArray(activeSession.value?.messages)
+            ? activeSession.value.messages
+            : [];
+          const targetMessage = [...messageList].reverse().find((messageItem) => {
+            if (String(messageItem?.role || "").trim() !== RoleEnum.ASSISTANT) return false;
+            if (!normalizedDpId) return true;
+            const itemDpId = String(messageItem?.dialogProcessId || "").trim();
+            return !itemDpId || itemDpId === normalizedDpId;
+          });
+          if (targetMessage) {
+            targetMessage.executionLogTotal = Math.max(
+              Number(targetMessage.executionLogTotal || 0),
+              doneRealtimeLogs.length,
+              Number(doneData?.executionLogs?.length || 0),
+            );
+            targetMessage.realtimeLogs = [
+              ...(targetMessage.realtimeLogs || []),
+              ...doneRealtimeLogs,
+            ].slice(-10);
+          }
+        }
+      }
       markReconnectSequenceApplied(normalizedDpId, maxSequence);
       scrollBottom();
       return;
@@ -782,6 +829,33 @@ export function useReconnectReplay({
         }
       } else if (eventName === StreamEventEnum.DONE) {
         terminalDialogProcessIdSet.add(normalizedDpId);
+        if (Array.isArray(eventData?.executionLogs) && eventData.executionLogs.length) {
+          const doneRealtimeLogs = eventData.executionLogs
+            .map((executionLogItem) =>
+              classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
+            )
+            .filter(Boolean);
+          if (doneRealtimeLogs.length) {
+            targetMessage.executionLogTotal = Math.max(
+              Number(targetMessage.executionLogTotal || 0),
+              doneRealtimeLogs.length,
+              Number(eventData?.executionLogs?.length || 0),
+            );
+            targetMessage.realtimeLogs = [
+              ...(targetMessage.realtimeLogs || []),
+              ...doneRealtimeLogs,
+            ].slice(-10);
+            if (!String(targetMessage?.dialogProcessId || "").trim()) {
+              const latestDialogProcessId = [...doneRealtimeLogs]
+                .reverse()
+                .map((logItem) => String(logItem?.dialogProcessId || "").trim())
+                .find(Boolean);
+              if (latestDialogProcessId) {
+                targetMessage.dialogProcessId = latestDialogProcessId;
+              }
+            }
+          }
+        }
         if (Array.isArray(eventData?.messages) && eventData.messages.length) {
           applyDoneMessagesFromReconnect(eventData);
         }
