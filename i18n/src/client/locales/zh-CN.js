@@ -232,6 +232,8 @@ export const zhCNMessages = {
     "disallowInteraction": "禁止交互",
     "forceTool": "强制工具",
     "notForceTool": "非强制工具",
+    "streaming": "流式",
+    "nonStreaming": "非流式",
     "botScenario": "Bot情景",
     "availablePlugins": "可用插件",
     "selectedPlugins": "已选插件",

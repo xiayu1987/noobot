@@ -25,6 +25,7 @@ const props = defineProps({
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
   forceTool: { type: Boolean, default: false },
+  streamOutput: { type: Boolean, default: true },
   botScenario: { type: String, default: "" },
   scenarioOptions: { type: Array, default: () => [] },
   availablePlugins: { type: Array, default: () => [] },
@@ -37,6 +38,7 @@ const emit = defineEmits([
   "update:modelValue",
   "update:allowUserInteraction",
   "update:forceTool",
+  "update:streamOutput",
   "update:botScenario",
   "update:selectedPlugins",
   "upload-change",
@@ -229,6 +231,10 @@ function onAllowUserInteractionChange(value) {
 
 function onForceToolChange(value) {
   emit("update:forceTool", Boolean(value));
+}
+
+function onStreamOutputChange(value) {
+  emit("update:streamOutput", Boolean(value));
 }
 
 function onProgrammingScenarioToggle() {
@@ -583,6 +589,14 @@ defineExpose({
                   :active-text="translate('composer.forceTool')"
                   :inactive-text="translate('composer.notForceTool')"
                   @update:model-value="onForceToolChange"
+                  class="interaction-switch"
+                />
+                <el-switch
+                  :model-value="streamOutput"
+                  inline-prompt
+                  :active-text="translate('composer.streaming')"
+                  :inactive-text="translate('composer.nonStreaming')"
+                  @update:model-value="onStreamOutputChange"
                   class="interaction-switch"
                 />
                 <div class="scenario-selector">

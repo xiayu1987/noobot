@@ -232,6 +232,8 @@ export const enUSMessages = {
     "disallowInteraction": "Disallow Interaction",
     "forceTool": "Force Tools",
     "notForceTool": "Optional Tools",
+    "streaming": "Streaming",
+    "nonStreaming": "Non-Streaming",
     "botScenario": "Bot Scenario",
     "availablePlugins": "Available plugins",
     "selectedPlugins": "Selected plugins",

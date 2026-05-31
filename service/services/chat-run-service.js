@@ -73,11 +73,14 @@ export function createChatRunService({
     const locale = normalizeLocale(input?.locale || defaultLocale);
     const hasScenarioField = Object.prototype.hasOwnProperty.call(source, "scenario");
     const scenario = hasScenarioField ? String(source?.scenario || "").trim() : undefined;
+    const hasStreamingField = Object.prototype.hasOwnProperty.call(source, "streaming");
+    const streaming = hasStreamingField ? Boolean(source?.streaming) : undefined;
     const runTimeoutRaw = source?.runTimeoutMs ?? source?.run_timeout_ms;
     const runTimeoutMs = Number(runTimeoutRaw);
     return {
       allowUserInteraction,
       forceTool,
+      ...(hasStreamingField ? { streaming } : {}),
       locale,
       scenario,
       ...(Number.isFinite(runTimeoutMs) && runTimeoutMs > 0

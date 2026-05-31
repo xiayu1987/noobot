@@ -57,6 +57,7 @@ export function useChatEngine({
   userId,
   allowUserInteraction,
   forceTool,
+  streamOutput,
   botScenario,
   selectedPlugins,
   isImageMime,
@@ -490,6 +491,7 @@ export function useChatEngine({
         config: {
           allowUserInteraction: allowUserInteraction?.value === false ? false : true,
           forceTool: forceTool?.value === true,
+          streaming: streamOutput?.value !== false,
           ...(String(botScenario?.value || "").trim()
             ? { scenario: String(botScenario?.value || "").trim() }
             : {}),
