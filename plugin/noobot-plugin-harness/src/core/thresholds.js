@@ -28,7 +28,8 @@ export const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = SUMMARY_POLICY.MESSAGE_CHARS_
 export const LLM_SUMMARY_OVERFLOW_POLICY = SUMMARY_POLICY.OVERFLOW_POLICY;
 
 export const PLAN_UPDATE_POLICY = Object.freeze({
-  MAX_ATTEMPTS: WORKFLOW_PARAMS.planning.planUpdate.maxAttempts,
+  MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
+  MAX_ATTEMPTS_REFINEMENT: WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts,
   TRIGGER_TURNS_THRESHOLD: WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold,
 });
 
@@ -36,12 +37,12 @@ export const ACCEPTANCE_POLICY = Object.freeze({
   PHASE_TRIGGER_TURNS_THRESHOLD: WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold,
 });
 
-// Legacy exports for backward compatibility.
-export const MAX_PLAN_UPDATE_ATTEMPTS = PLAN_UPDATE_POLICY.MAX_ATTEMPTS;
+// Shared threshold exports.
+export const MAX_PLAN_UPDATE_ATTEMPTS = PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION;
 export const PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = PLAN_UPDATE_POLICY.TRIGGER_TURNS_THRESHOLD;
 export const PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD = ACCEPTANCE_POLICY.PHASE_TRIGGER_TURNS_THRESHOLD;
-// Backward compatibility alias (revision + refinement now share one unified threshold).
-export const MAX_PLAN_REVISION_ATTEMPTS = MAX_PLAN_UPDATE_ATTEMPTS;
+export const MAX_PLAN_REVISION_ATTEMPTS = PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION;
+export const MAX_PLAN_REFINEMENT_ATTEMPTS = PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REFINEMENT;
 
 // Retry at most once after the first failed planning capture.
 export const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;

@@ -11,8 +11,6 @@ import {
   relaySeparateModelOutputAsUserMessage,
   ensureHarnessBucket,
   extractRawTextContent,
-  resolveCapabilityModelInvoker,
-  shouldUseSeparateModel,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
 import {
@@ -20,14 +18,12 @@ import {
   resolveSummaryDetailAttachmentText,
 } from "../shared/plan/summary-text-protocol.js";
 import {
-  schedulePlanUpdateByInject,
   maybeInjectPlanUpdatePrompt,
   maybeCapturePlanUpdateByInject,
 } from "./revision-injector.js";
 import { maybeInjectGuidanceOrSummaryPrompt } from "./prompt-injector.js";
 import {
   runPendingPlanUpdateBySeparateModel,
-  runPlanUpdateAfterSummary,
   runGuidanceBySeparateModel,
 } from "./model-runner.js";
 import { resolveGuidancePriorityDecision, resolveNextGuidanceAction } from "./plan-update-scheduler.js";
@@ -232,13 +228,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
           });
         }
         const summaryText = applySummaryText(ctx, summaryOverviewText);
-        if (isSummaryCompletionMarked(summaryText, locale)) {
-          if (!shouldUseSeparateModel(meta) && !resolveCapabilityModelInvoker(meta)) {
-            changed = schedulePlanUpdateByInject(ctx, summaryText) || changed;
-          } else {
-            changed = (await runPlanUpdateAfterSummary(ctx, meta, summaryText)) || changed;
-          }
-        } else {
+        if (!isSummaryCompletionMarked(summaryText, locale)) {
           appendCapabilityLog(ctx, {
             domain: CAPABILITY_DOMAIN.GUIDANCE,
             event: GUIDANCE_EVENTS.summaryCompletionMarkerMissing,

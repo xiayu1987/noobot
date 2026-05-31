@@ -74,23 +74,12 @@ function migrateLegacyPlanUpdateState(state = {}) {
     pending.planUpdateContext = null;
   }
 
-  const hasUnifiedAttempts = Number.isFinite(Number(counters.planUpdateAttempts));
-  const normalizedUnifiedAttempts = hasUnifiedAttempts ? Number(counters.planUpdateAttempts) : 0;
   const hasRevisionAttempts = Number.isFinite(Number(counters.planRevisionAttempts));
   const hasRefinementAttempts = Number.isFinite(Number(counters.planRefinementAttempts));
   const normalizedRevisionAttempts = hasRevisionAttempts ? Number(counters.planRevisionAttempts) : 0;
   const normalizedRefinementAttempts = hasRefinementAttempts ? Number(counters.planRefinementAttempts) : 0;
 
-  if (
-    hasUnifiedAttempts &&
-    normalizedUnifiedAttempts > 0 &&
-    normalizedRevisionAttempts === 0 &&
-    normalizedRefinementAttempts === 0
-  ) {
-    counters.planRevisionAttempts = normalizedUnifiedAttempts;
-  } else if (!hasRevisionAttempts && hasUnifiedAttempts) {
-    counters.planRevisionAttempts = normalizedUnifiedAttempts;
-  } else if (!hasRevisionAttempts) {
+  if (!hasRevisionAttempts) {
     counters.planRevisionAttempts = 0;
   }
   if (!hasRefinementAttempts) {

@@ -151,10 +151,10 @@ Planning inject and separate-model paths now share an intermediate message plan:
 
 ### Plan Update (revision/refinement)
 
-- Scheduled when planning threshold is reached (`planUpdateTurns >= 10`) or when summary completion triggers update chaining.
-- Shared retry budget:
-  - `PLAN_UPDATE_POLICY.MAX_ATTEMPTS = 5`
-  - Shared between `revision` and `refinement`.
+- Scheduled when planning threshold is reached (`planUpdateTurns >= 10`).
+- Independent retry budgets:
+  - `PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION = 10`
+  - `PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REFINEMENT = 10`
 
 ### Acceptance
 
@@ -169,7 +169,7 @@ Planning inject and separate-model paths now share an intermediate message plan:
 | `planning_capture` | Planning | Planning | `after_llm_call` |
 | `summary` | Planning (thresholds) | Guidance | `before_llm_call` |
 | `guidance` | Guidance (failure thresholds) | Guidance | `before_llm_call` |
-| `plan_update_revision/refinement` | Planning (thresholds) / Guidance (summary-completion chaining) | Guidance | `before_llm_call` / `after_llm_call` |
+| `plan_update_revision/refinement` | Planning (thresholds) | Guidance | `before_llm_call` / `after_llm_call` |
 | `phase_acceptance` | Planning (thresholds) | Acceptance | `before_llm_call` |
 | `acceptance_semantic_validation` | Acceptance | Acceptance | `before_llm_call` / `after_llm_call` |
 | `review_report` | Review | Review | `before_final_output` / `on_error` / `on_abort` |
@@ -243,7 +243,7 @@ Notation: `existing_context` is the current main-model context; `agent_messages`
 | Planning bootstrap | `existing_context -> planning context summary(system) -> available tools+allowlist(system) -> planning request(user)` | `agent_messages -> planning context summary(constraint) -> available tools+allowlist(constraint) -> planning request(task)` | `maybeInjectPlanningPrompt` / `buildPlanningMessagesForSeparateModel` |
 | Summary | `existing_context -> plan checklist context(system, optional) -> summary request(user)` | `agent_messages -> plan checklist context(extra messages) -> summary request(task)` | `maybeInjectGuidanceOrSummaryPrompt` / `runGuidanceBySeparateModel(purpose=summary)` |
 | Guidance (failure analysis) | `guidance failure prompt(system, prepend) -> existing_context` | `agent_messages -> guidance failure prompt(task)` | `maybeInjectGuidanceOrSummaryPrompt` / `runGuidanceBySeparateModel(purpose=guidance)` |
-| Plan update | `existing_context -> plan checklist context(system, optional) -> revision/refinement request(user)` | `Revision: agent_messages -> plan checklist context(extra) -> revision request(task); Refinement: agent_messages -> refinement request(task)` | `maybeInjectPlanUpdatePrompt` / `runPendingPlanUpdateBySeparateModel` / `runPlanUpdateAfterSummary` |
+| Plan update | `existing_context -> plan checklist context(system, optional) -> revision/refinement request(user)` | `Revision: agent_messages -> plan checklist context(extra) -> revision request(task); Refinement: agent_messages -> refinement request(task)` | `maybeInjectPlanUpdatePrompt` / `runPendingPlanUpdateBySeparateModel` |
 | Phase acceptance | `existing_context -> summary reports(system, N) -> main plan context(system) -> phase acceptance history(system, N) -> phase acceptance request(user)` | `agent_messages -> summary reports(system, N) -> main plan context(system) -> phase acceptance history(system, N) -> phase acceptance request(user)` | `maybeInjectPhaseAcceptancePrompt` / `runPhaseAcceptanceBySeparateModel` |
 | Acceptance semantic validation | `existing_context -> main plan context(system) -> phase acceptance history(system, N) -> semantic validation request(user)` | `main plan context(system) -> phase acceptance history(system, N) -> semantic validation request(user)` | `maybeInjectAcceptanceSemanticValidationPrompt` / `runAcceptanceBySeparateModel` |
 

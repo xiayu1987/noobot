@@ -302,10 +302,13 @@ export function maybeCapturePhaseAcceptanceByInject(ctx = {}) {
       setCaptureFlagStateWithMeta(state, "phaseAcceptanceCapturePending", false);
       return {};
     },
-    applyCaptureResult: ({ bucket, responseText }) => {
+    applyCaptureResult: ({ bucket, responseText, state }) => {
       const text = String(responseText || "").trim();
       if (!text) return { applied: false, detail: { reason: "empty_phase_acceptance_output" } };
       const report = appendPhaseAcceptanceReport(bucket, text);
+      if (report && state?.flags && typeof state.flags === "object") {
+        state.flags.phaseAcceptanceTriggeredThisTurn = true;
+      }
       return {
         applied: Boolean(report),
         detail: { phaseAcceptanceCount: Array.isArray(bucket.phaseAcceptanceReports) ? bucket.phaseAcceptanceReports.length : 0 },
@@ -401,6 +404,9 @@ export async function runPhaseAcceptanceBySeparateModel(
     String(response?.text || response?.output || "").trim();
   if (!responseText) return false;
   appendPhaseAcceptanceReport(bucket, responseText);
+  if (state?.flags && typeof state.flags === "object") {
+    state.flags.phaseAcceptanceTriggeredThisTurn = true;
+  }
   const attachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
     purpose: "phase_acceptance",
     content: responseText,
@@ -427,7 +433,17 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   if (!holder) return false;
   const { bucket, state } = holder;
   if (state?.flags?.acceptanceRequested === true) return false;
-  if (Array.isArray(bucket?.phaseAcceptanceReports) && bucket.phaseAcceptanceReports.length > 0) {
+  if (state?.flags?.phaseAcceptanceTriggeredThisTurn === true) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+      event: ACCEPTANCE_EVENTS.phaseAcceptanceSkippedBeforeFinalOutputSameTurn,
+      detail: {
+        reason: "phase_acceptance_already_triggered_this_turn",
+        phaseAcceptanceCount: Array.isArray(bucket?.phaseAcceptanceReports)
+          ? bucket.phaseAcceptanceReports.length
+          : 0,
+      },
+    });
     return false;
   }
   const locale = state?.locale || LOCALE.ZH_CN;
@@ -444,6 +460,9 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     const fallbackText = buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
     const report = appendPhaseAcceptanceReport(bucket, fallbackText);
     if (!report) return false;
+    if (state?.flags && typeof state.flags === "object") {
+      state.flags.phaseAcceptanceTriggeredThisTurn = true;
+    }
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       event: ACCEPTANCE_EVENTS.phaseAcceptanceGeneratedBeforeFinalOutputFallback,
@@ -512,6 +531,9 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   const reportText = responseText || buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
   const report = appendPhaseAcceptanceReport(bucket, reportText);
   if (!report) return false;
+  if (state?.flags && typeof state.flags === "object") {
+    state.flags.phaseAcceptanceTriggeredThisTurn = true;
+  }
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
     event: ACCEPTANCE_EVENTS.phaseAcceptanceGeneratedBeforeFinalOutput,
@@ -665,7 +687,10 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   const acceptanceOptions = meta?.harness?.acceptance && typeof meta.harness.acceptance === "object"
     ? meta.harness.acceptance
     : {};
-  if (acceptanceOptions.semanticValidation !== true) return false;
+  const semanticValidationEnabled = acceptanceOptions.semanticValidation === undefined
+    ? WORKFLOW_PARAMS.acceptance.semanticValidation.enabled === true
+    : acceptanceOptions.semanticValidation === true;
+  if (!semanticValidationEnabled) return false;
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) {
     if (resolvePlanningGuidanceMode(meta) === "inject") {

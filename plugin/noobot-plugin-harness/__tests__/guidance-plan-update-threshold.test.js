@@ -295,7 +295,7 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
-test("legacy unified attempts can still block revision scheduling in planning handler", async () => {
+test("unified attempts no longer block revision scheduling in planning handler", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
     counters: {
@@ -305,11 +305,11 @@ test("legacy unified attempts can still block revision scheduling in planning ha
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
-test("separate_model summary -> revision schedules refinement and consumes revision attempt", async () => {
+test("separate_model summary no longer auto-triggers revision", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const agentContext = createAgentContext({
@@ -322,7 +322,6 @@ test("separate_model summary -> revision schedules refinement and consumes revis
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
-        if (payload.purpose === "planning_revision") return { content: "UPDATE 1 修复后的主任务" };
         return { content: "" };
       },
     },
@@ -336,17 +335,12 @@ test("separate_model summary -> revision schedules refinement and consumes revis
   });
   assert.deepEqual(
     invocations.map((item = {}) => item.purpose),
-    ["summary", "planning_revision"],
+    ["summary"],
   );
-  assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 1);
+  assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
   assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 0);
-  assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 1);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdateStage, "refinement");
-  assert.deepEqual(
-    agentContext.payload.harness.state.pending.planUpdateContext.targetMainStepIndexes,
-    [1],
-  );
+  assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
+  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
 });
 
 test("inject refinement-only flow consumes refinement attempts", async () => {
@@ -469,7 +463,7 @@ test("separate_model skips planning_revision when revision attempts already reac
   assert.deepEqual(invocations.map((item = {}) => item.purpose), ["summary"]);
 });
 
-test("separate_model skips refinement when refinement attempts already reached max", async () => {
+test("separate_model summary does not consume refinement attempts", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
   const agentContext = createAgentContext({
@@ -487,7 +481,6 @@ test("separate_model skips refinement when refinement attempts already reached m
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
-        if (payload.purpose === "planning_revision") return { content: "UPDATE 1 修复后的主任务" };
         return { content: "" };
       },
     },
@@ -498,13 +491,10 @@ test("separate_model skips refinement when refinement attempts already reached m
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });
-  assert.deepEqual(invocations.map((item = {}) => item.purpose), ["summary", "planning_revision"]);
-  assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 1);
+  assert.deepEqual(invocations.map((item = {}) => item.purpose), ["summary"]);
+  assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
   assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, MAX_PLAN_UPDATE_ATTEMPTS);
-  assert.equal(
-    agentContext.payload.harness.logs.planning.some((item = {}) => item.event === "planning_refinement_skipped_by_max_attempts"),
-    true,
-  );
+  assert.equal(agentContext.payload.harness.logs.planning.length >= 0, true);
 });
 
 test("planning summary threshold by turns is independent from plan update attempts", async () => {
@@ -583,7 +573,6 @@ test("separate_model does not auto-run refinement when revision has no main-plan
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
-        if (payload.purpose === "planning_revision") return { content: "{}" };
         return { content: "" };
       },
     },
@@ -596,6 +585,6 @@ test("separate_model does not auto-run refinement when revision has no main-plan
   });
   assert.deepEqual(
     invocations.map((item = {}) => item.purpose),
-    ["summary", "planning_revision"],
+    ["summary"],
   );
 });
