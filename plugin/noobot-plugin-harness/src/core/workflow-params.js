@@ -213,6 +213,9 @@ export const WORKFLOW_PARAMS = deepFreeze({
     },
   },
   acceptance: {
+    semanticValidation: {
+      enabled: true,
+    },
     phase: {
       triggerTurnsThreshold: 9,
       blockerKeys: ["summary", "guidance", "planUpdate", "planningCaptured"],

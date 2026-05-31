@@ -33,7 +33,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   contextWindowRecentMessageLimit: WORKFLOW_PARAMS.contextWindow.recentMessageLimit,
   incrementalRecentMessageLimit: WORKFLOW_PARAMS.contextWindow.incrementalRecentMessageLimit,
   acceptance: Object.freeze({
-    semanticValidation: false,
+    semanticValidation: WORKFLOW_PARAMS.acceptance.semanticValidation.enabled,
   }),
   review: Object.freeze({
     attachToFinalOutput: true,
