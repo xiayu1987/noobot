@@ -228,6 +228,47 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   return false;
 }
 
+export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
+  ctx = {},
+  meta = {},
+  { phaseAcceptanceChanged = false } = {},
+) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  const { bucket, state } = holder;
+  if (state?.flags?.acceptanceRequested !== true) return false;
+  const lastReport =
+    bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
+      ? bucket.lastAcceptanceReport
+      : null;
+  if (!lastReport) return false;
+
+  const latestPhaseReport = Array.isArray(bucket?.phaseAcceptanceReports)
+    ? bucket.phaseAcceptanceReports[bucket.phaseAcceptanceReports.length - 1] || null
+    : null;
+  const latestPhaseAcceptedAt = String(latestPhaseReport?.acceptedAt || "").trim();
+  const reportPhaseAcceptedAt = String(lastReport?.modelAcceptance?.acceptedAt || "").trim();
+  const shouldRefresh =
+    phaseAcceptanceChanged === true ||
+    (latestPhaseAcceptedAt && latestPhaseAcceptedAt !== reportPhaseAcceptedAt);
+  if (!shouldRefresh) return false;
+
+  const refreshedReport = buildAcceptanceReport({
+    bucket,
+    state,
+    mode: lastReport?.mode || ACCEPTANCE_MODE.ACTIVE,
+    forcedReason: String(lastReport?.forcedReason || "").trim(),
+  });
+  bucket.lastAcceptanceReport = refreshedReport;
+  if (Array.isArray(bucket.acceptanceReports) && bucket.acceptanceReports.length) {
+    bucket.acceptanceReports[bucket.acceptanceReports.length - 1] = refreshedReport;
+  } else {
+    bucket.acceptanceReports = [refreshedReport];
+  }
+  await runAcceptanceBySeparateModel(ctx, meta, refreshedReport);
+  return true;
+}
+
 export function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
