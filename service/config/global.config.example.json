@@ -413,7 +413,7 @@
       "enabled": true,
       "api_key": "",
       "handler": "web-search-service-handler",
-      "prompt": "优先用于补充实时或外部网页信息，先检索再回答。",
+      "prompt": "优先用于补充实时或外部网页信息，优先关键词搜索，再精确搜索，最后再回答。",
       "endpoints": {
         "search": {
           "description": "搜索网页",
