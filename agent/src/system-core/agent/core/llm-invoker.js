@@ -29,11 +29,44 @@ function getLlmErrorStatus(error = {}) {
   const rawStatus =
     error?.status ??
     error?.statusCode ??
+    error?.error?.status ??
     error?.response?.status ??
     error?.cause?.status ??
-    error?.cause?.statusCode;
+    error?.cause?.statusCode ??
+    error?.cause?.error?.status;
   const status = Number(rawStatus);
   return Number.isFinite(status) ? status : 0;
+}
+
+function getHeaderValue(headers = null, name = "") {
+  if (!headers || !name) return undefined;
+  const normalizedName = String(name || "").trim();
+  if (!normalizedName) return undefined;
+  if (typeof headers?.get === "function") {
+    return (
+      headers.get(normalizedName) ||
+      headers.get(normalizedName.toLowerCase()) ||
+      undefined
+    );
+  }
+  return (
+    headers?.[normalizedName] ??
+    headers?.[normalizedName.toLowerCase()] ??
+    undefined
+  );
+}
+
+function getLlmErrorRequestId(error = {}) {
+  return (
+    error?.request_id ??
+    error?.requestId ??
+    error?.requestID ??
+    getHeaderValue(error?.headers, "x-request-id") ??
+    getHeaderValue(error?.response?.headers, "x-request-id") ??
+    getHeaderValue(error?.cause?.headers, "x-request-id") ??
+    getHeaderValue(error?.cause?.response?.headers, "x-request-id") ??
+    undefined
+  );
 }
 
 function isAbortLikeError(error = {}) {
@@ -92,14 +125,19 @@ function normalizeLlmError(error = {}, modelState = {}, { turn = 0, mode = "" } 
     message: String(error?.message || error || "").trim(),
     name: String(error?.name || "").trim(),
     status: getLlmErrorStatus(error) || undefined,
-    code: error?.code ?? error?.cause?.code ?? undefined,
-    type: error?.type ?? error?.cause?.type ?? undefined,
-    requestId:
-      error?.request_id ??
-      error?.requestId ??
-      error?.headers?.["x-request-id"] ??
-      error?.response?.headers?.["x-request-id"] ??
+    code:
+      error?.code ??
+      error?.error?.code ??
+      error?.cause?.code ??
+      error?.cause?.error?.code ??
       undefined,
+    type:
+      error?.type ??
+      error?.error?.type ??
+      error?.cause?.type ??
+      error?.cause?.error?.type ??
+      undefined,
+    requestId: getLlmErrorRequestId(error),
     abortSource: normalizedAbortSource,
     abortCode: normalizedAbortCode,
     abortReason: normalizedAbortReason || undefined,

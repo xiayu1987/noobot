@@ -22,5 +22,22 @@ export function classifyEngineError(error = null) {
     return "retryable";
   }
 
+  const message = String(
+    error?.message ??
+      error?.error?.message ??
+      error?.cause?.message ??
+      "",
+  ).toLowerCase();
+  if (
+    message.includes("internal server error") ||
+    message.includes("server error") ||
+    message.includes("temporarily unavailable") ||
+    message.includes("timeout") ||
+    message.includes("timed out") ||
+    message.includes("rate limit")
+  ) {
+    return "retryable";
+  }
+
   return "fatal";
 }

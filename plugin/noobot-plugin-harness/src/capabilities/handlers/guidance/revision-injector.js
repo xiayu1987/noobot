@@ -34,6 +34,10 @@ import {
   resolveRefinementTargetMainStepIndexesAfterRevision,
   resolveRefinementTargetMainSteps,
 } from "./revision-engine.js";
+import {
+  buildPostPlanUserFollowupPrompt,
+  buildWorkflowResponsibilityConstraintUserPrompt,
+} from "../shared/workflow/prompts.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
@@ -134,6 +138,16 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
     avoidBreakToolCallContinuity: true,
   });
   if (!userInjection.injected) return false;
+  injectMessageWithPolicy(ctx, {
+    role: "user",
+    content: buildWorkflowResponsibilityConstraintUserPrompt(
+      locale,
+      pendingData.stage === "revision" ? "revision" : "refinement",
+    ),
+    injectAt: "append",
+    dedupe: false,
+    avoidBreakToolCallContinuity: true,
+  });
   setPendingStateWithMeta(state, "planUpdate", false);
   setPendingPlanUpdate(state, { active: false, stage: pendingData.stage });
   setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", true);
@@ -176,6 +190,15 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
           locale,
           purpose: stage === "revision" ? "next_phase_plan" : "next_phase_plan_refinement",
           content: buildNextPhaseRelayContent(bucket, locale, stage),
+          dedupe: true,
+        });
+        relaySeparateModelOutputAsUserMessage(currentCtx, {
+          locale,
+          purpose:
+            stage === "revision"
+              ? "next_phase_plan_followup"
+              : "next_phase_plan_refinement_followup",
+          content: buildPostPlanUserFollowupPrompt(locale, stage),
           dedupe: true,
         });
       }

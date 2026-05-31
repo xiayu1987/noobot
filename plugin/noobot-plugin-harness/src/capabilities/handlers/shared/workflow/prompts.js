@@ -48,6 +48,64 @@ export function getPlanningSeparateModelEmptyRelay(locale = LOCALE.ZH_CN) {
   return locale === LOCALE.EN_US ? "None" : "无";
 }
 
+export function buildPostPlanUserFollowupPrompt(
+  locale = LOCALE.ZH_CN,
+  stage = "planning",
+) {
+  const normalizedStage = String(stage || "planning").trim().toLowerCase();
+  const isRefinement = normalizedStage.includes("refinement");
+  const isRevision = normalizedStage.includes("revision");
+  if (locale === LOCALE.EN_US) {
+    if (isRefinement) {
+      return "Plan refinement is done. Continue the task step by step with tools.";
+    }
+    if (isRevision) {
+      return "Plan revision is done. Continue the task step by step with tools.";
+    }
+    return "Plan is ready. Continue the task step by step with tools.";
+  }
+  if (isRefinement) {
+    return "计划细化已完成。请调用工具，严格按照计划顺序执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。";
+  }
+  if (isRevision) {
+    return "计划修正已完成。请调用工具，严格按照计划顺序执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。";
+  }
+  return "计划已完成。请调用工具，严格按照计划顺序执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。";
+}
+
+export function buildWorkflowResponsibilityConstraintUserPrompt(
+  locale = LOCALE.ZH_CN,
+  stage = "planning",
+) {
+  const normalizedStage = String(stage || "planning").trim().toLowerCase();
+  const stageLabelEn = (() => {
+    if (normalizedStage.includes("revision")) return "plan revision";
+    if (normalizedStage.includes("refinement")) return "plan refinement";
+    if (normalizedStage.includes("summary")) return "summary";
+    if (normalizedStage.includes("phase_acceptance")) return "phase acceptance";
+    if (
+      normalizedStage.includes("acceptance_semantic_validation") ||
+      normalizedStage.includes("final_acceptance")
+    ) return "final acceptance";
+    return "planning";
+  })();
+  const stageLabelZh = (() => {
+    if (normalizedStage.includes("revision")) return "计划修正";
+    if (normalizedStage.includes("refinement")) return "计划细化";
+    if (normalizedStage.includes("summary")) return "小结";
+    if (normalizedStage.includes("phase_acceptance")) return "阶段验收";
+    if (
+      normalizedStage.includes("acceptance_semantic_validation") ||
+      normalizedStage.includes("final_acceptance")
+    ) return "总体验收";
+    return "规划";
+  })();
+  if (locale === LOCALE.EN_US) {
+    return `Responsibility constraint: You are only responsible for ${stageLabelEn}. Do only this scope; do not perform out-of-scope tasks.`;
+  }
+  return `职责约束：你当前仅负责「${stageLabelZh}」。只做该职责范围内的事，禁止越权。`;
+}
+
 export function getPlanningRevisionMarker(locale = LOCALE.ZH_CN) {
   void locale;
   return "<!-- harness-planning-revision -->";
@@ -127,6 +185,8 @@ export function buildPlanningMainPrompt(options = {}) {
       "",
       buildPlanningMainPatchProtocolCoreText({ locale, actions: ["ADD"] }),
       "",
+      "Constraint: main_plan_id must be numeric (Arabic digits only).",
+      "",
       "[Example]",
       "ADD [main_plan_id] [main plan content]",
     ].filter(Boolean).join("\n");
@@ -139,6 +199,8 @@ export function buildPlanningMainPrompt(options = {}) {
     goal,
     "",
     buildPlanningMainPatchProtocolCoreText({ locale, actions: ["ADD"] }),
+    "",
+    "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
     "",
     "【输出示例】",
     "ADD [主计划ID] [主计划内容]",
@@ -181,6 +243,8 @@ export function buildPlanningRevisionPromptText(options = {}) {
     latestFeedback,
     "",
     buildPlanningRevisionPatchProtocolCoreText(locale),
+    "",
+    "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
     "",
     "【输出示例】",
     "UPDATE [主计划ID] [修改后的主计划内容]",

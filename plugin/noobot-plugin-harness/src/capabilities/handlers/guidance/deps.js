@@ -28,7 +28,6 @@ export {
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
   resolveCapabilityToolAllowlist,
-  shouldUseSeparateModel,
 } from "../shared/model/utils.js";
 
 export {

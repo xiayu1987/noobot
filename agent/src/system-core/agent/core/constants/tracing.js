@@ -13,5 +13,5 @@ export const TOOL_RESULT_TRACE_TRUNCATE_LENGTH = 1000;
 /**
  * LLM transient retry configuration.
  */
-export const TRANSIENT_LLM_MAX_ATTEMPTS = 3;
+export const TRANSIENT_LLM_MAX_ATTEMPTS = 2;
 export const TRANSIENT_LLM_RETRY_BASE_DELAY_MS = 500;

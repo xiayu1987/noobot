@@ -45,6 +45,7 @@ export function renderMessagePlanForSeparateModel({
     locale,
     agentMessages,
     constraints,
-    task: tasks.join("\n\n"),
+    task: tasks[0] || "",
+    postTaskMessages: tasks.slice(1),
   });
 }

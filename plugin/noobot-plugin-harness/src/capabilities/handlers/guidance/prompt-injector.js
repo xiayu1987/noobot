@@ -14,6 +14,7 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
 import {
+  buildWorkflowResponsibilityConstraintUserPrompt,
   buildGuidanceFailurePromptText,
   buildGuidanceSummaryPromptText,
   getGuidanceMarker,
@@ -67,6 +68,13 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
       avoidBreakToolCallContinuity: true,
     });
     if (!userInjection.injected) return false;
+    injectMessageWithPolicy(ctx, {
+      role: "user",
+      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary"),
+      injectAt: "append",
+      dedupe: false,
+      avoidBreakToolCallContinuity: true,
+    });
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
     state.flags.guidanceSummaryMarkPending = true;

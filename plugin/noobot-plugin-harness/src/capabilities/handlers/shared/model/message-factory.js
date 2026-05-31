@@ -138,8 +138,12 @@ export function buildCapabilityModelMessages({
   agentMessages = [],
   constraints = [],
   task = "",
+  postTaskMessages = [],
 } = {}) {
   const normalizedTask = String(task || "").trim();
+  const normalizedPostTaskMessages = (Array.isArray(postTaskMessages) ? postTaskMessages : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
   const flattenedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
     .map((item = {}) => rewriteMessageForCapabilityContext(item, locale))
     .filter((item) => item && String(item.content || "").trim());
@@ -150,6 +154,9 @@ export function buildCapabilityModelMessages({
   const output = [...flattenedAgentMessages, ...constraintMessages];
   if (normalizedTask) {
     output.push({ role: "user", content: normalizedTask });
+  }
+  for (const content of normalizedPostTaskMessages) {
+    output.push({ role: "user", content });
   }
   return output;
 }
