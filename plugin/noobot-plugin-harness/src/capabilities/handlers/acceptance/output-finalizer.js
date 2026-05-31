@@ -16,6 +16,7 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-builder.js";
+import { renderAcceptanceDigestReportText } from "./report-text-renderer.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
@@ -209,11 +210,12 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
     await runAcceptanceBySeparateModel(ctx, meta, report);
     const locale = state?.locale || LOCALE.ZH_CN;
     const original = String(ctx.result.output || "").trim();
+    const compactText = renderAcceptanceDigestReportText(report, locale);
     const nextOutput = buildOutputWithAcceptanceSection({
       original,
       locale,
-      reportText: renderAcceptanceReportText(report, locale),
-      includeForcedHeader: true,
+      reportText: compactText,
+      includeForcedHeader: false,
     });
     ctx.result.output = nextOutput;
     syncFinalOutputToTurnMessages(ctx, nextOutput);
@@ -282,12 +284,11 @@ export function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
   if (!report) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
   const original = String(ctx.result.output || "").trim();
-  const rendered = renderAcceptanceReportText(report, locale);
-  if (!rendered) return false;
+  const compactText = renderAcceptanceDigestReportText(report, locale);
   const nextOutput = buildOutputWithAcceptanceSection({
     original,
     locale,
-    reportText: rendered,
+    reportText: compactText,
     includeForcedHeader: false,
   });
   ctx.result.output = nextOutput;
