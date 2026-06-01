@@ -35,10 +35,10 @@ test("planning result pipeline captures plan text directly", async () => {
   assert.equal(result.checklistCount, 2);
   assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdateStage, "refinement");
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
   assert.deepEqual(
-    ctx.agentContext.payload.harness.state.pending.planUpdateContext.targetMainStepIndexes,
+    ctx.agentContext.payload.harness.state.pending.planRefinementContext.targetMainStepIndexes,
     [1, 2],
   );
 });

@@ -99,43 +99,6 @@ export function setPendingPlanUpdate(
   if (!state || typeof state !== "object") return false;
   if (!state.pending || typeof state.pending !== "object") state.pending = {};
   const pending = state.pending;
-  const syncUnifiedFromIndependent = () => {
-    const revisionActive = pending.planRevision === true;
-    const refinementActive = pending.planRefinement === true;
-    if (revisionActive) {
-      const revisionContext =
-        pending.planRevisionContext && typeof pending.planRevisionContext === "object"
-          ? pending.planRevisionContext
-          : {};
-      pending.planUpdate = true;
-      pending.planUpdateStage = "revision";
-      pending.planUpdateContext = {
-        summaryText: String(revisionContext.summaryText || "").trim(),
-        targetMainStepIndexes: Array.isArray(revisionContext.targetMainStepIndexes)
-          ? revisionContext.targetMainStepIndexes
-          : [],
-      };
-      return;
-    }
-    if (refinementActive) {
-      const refinementContext =
-        pending.planRefinementContext && typeof pending.planRefinementContext === "object"
-          ? pending.planRefinementContext
-          : {};
-      pending.planUpdate = true;
-      pending.planUpdateStage = "refinement";
-      pending.planUpdateContext = {
-        summaryText: String(refinementContext.summaryText || "").trim(),
-        targetMainStepIndexes: Array.isArray(refinementContext.targetMainStepIndexes)
-          ? refinementContext.targetMainStepIndexes
-          : [],
-      };
-      return;
-    }
-    pending.planUpdate = false;
-    pending.planUpdateStage = "";
-    pending.planUpdateContext = null;
-  };
   if (active !== true) {
     const stageText = String(stage || "").trim().toLowerCase();
     if (stageText === "revision") {
@@ -150,7 +113,9 @@ export function setPendingPlanUpdate(
       pending.planRefinement = false;
       pending.planRefinementContext = null;
     }
-    syncUnifiedFromIndependent();
+    delete pending.planUpdate;
+    delete pending.planUpdateStage;
+    delete pending.planUpdateContext;
     return true;
   }
   const normalizedStage = normalizePlanUpdateStage(stage);
@@ -165,11 +130,17 @@ export function setPendingPlanUpdate(
   if (normalizedStage === "revision") {
     pending.planRevision = true;
     pending.planRevisionContext = normalizedContext;
+    pending.planRefinement = false;
+    pending.planRefinementContext = null;
   } else {
     pending.planRefinement = true;
     pending.planRefinementContext = normalizedContext;
+    pending.planRevision = false;
+    pending.planRevisionContext = null;
   }
-  syncUnifiedFromIndependent();
+  delete pending.planUpdate;
+  delete pending.planUpdateStage;
+  delete pending.planUpdateContext;
   return true;
 }
 
@@ -192,17 +163,11 @@ export function writePlanUpdateCaptureContext(
 
 export function readPlanUpdateCaptureContext(state = {}) {
   const flags = state?.flags && typeof state.flags === "object" ? state.flags : {};
-  const stage = normalizePlanUpdateStage(
-    flags.planUpdateCaptureStage || flags.planRevisionCaptureStage || "refinement",
-  );
-  const summaryText = String(
-    flags.planUpdateCaptureSummaryText || flags.planRevisionCaptureSummaryText || "",
-  ).trim();
+  const stage = normalizePlanUpdateStage(flags.planUpdateCaptureStage || "refinement");
+  const summaryText = String(flags.planUpdateCaptureSummaryText || "").trim();
   const targetMainStepIndexes = Array.isArray(flags.planUpdateCaptureTargetMainStepIndexes)
     ? flags.planUpdateCaptureTargetMainStepIndexes
-    : Array.isArray(flags.planRevisionCaptureTargetMainStepIndexes)
-      ? flags.planRevisionCaptureTargetMainStepIndexes
-      : [];
+    : [];
   return { stage, summaryText, targetMainStepIndexes };
 }
 

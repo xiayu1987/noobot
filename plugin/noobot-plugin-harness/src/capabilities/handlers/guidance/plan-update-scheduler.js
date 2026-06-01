@@ -8,20 +8,12 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 
-function normalizePlanUpdateStage(raw = "") {
-  return String(raw || "").trim().toLowerCase() === GUIDANCE_DECISION.stage.revision
-    ? GUIDANCE_DECISION.stage.revision
-    : GUIDANCE_DECISION.stage.refinement;
-}
-
 export function resolvePendingPlanUpdate(state = {}) {
   const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
   if (pending.planRevision === true) {
     const context =
       pending.planRevisionContext && typeof pending.planRevisionContext === "object"
         ? pending.planRevisionContext
-        : pending.planUpdateContext && typeof pending.planUpdateContext === "object"
-          ? pending.planUpdateContext
         : {};
     return {
       active: true,
@@ -36,8 +28,6 @@ export function resolvePendingPlanUpdate(state = {}) {
     const context =
       pending.planRefinementContext && typeof pending.planRefinementContext === "object"
         ? pending.planRefinementContext
-        : pending.planUpdateContext && typeof pending.planUpdateContext === "object"
-          ? pending.planUpdateContext
         : {};
     return {
       active: true,
@@ -48,23 +38,7 @@ export function resolvePendingPlanUpdate(state = {}) {
         : [],
     };
   }
-  const hasUnifiedPending = pending.planUpdate === true;
-  if (!hasUnifiedPending) {
-    return { active: false, stage: "", summaryText: "", targetMainStepIndexes: [] };
-  }
-  const stage = normalizePlanUpdateStage(pending.planUpdateStage || "");
-  const context =
-    pending.planUpdateContext && typeof pending.planUpdateContext === "object"
-      ? pending.planUpdateContext
-      : {};
-  return {
-    active: true,
-    stage,
-    summaryText: String(context.summaryText || "").trim(),
-    targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
-      ? context.targetMainStepIndexes
-      : [],
-  };
+  return { active: false, stage: "", summaryText: "", targetMainStepIndexes: [] };
 }
 
 export function resolveNextGuidanceAction(state = {}) {

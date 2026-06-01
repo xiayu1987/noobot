@@ -1297,7 +1297,8 @@ test("planning_refinement is scheduled independently after revision main-plan ch
   await hookManager.emit("before_llm_call", { messages, agentContext });
 
   assert.deepEqual(invocations.map((item = {}) => item.purpose), ["summary"]);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
 });
 
 test("harness summary without completion marker still triggers planning revision", async () => {
@@ -1396,7 +1397,8 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     agentContext,
   };
   await handler({ capability: "guidance", point: "after_llm_call", ctx: summaryCtx, meta });
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(
     agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_revision_scheduled_by_inject"),
     false,
@@ -1442,7 +1444,8 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     agentContext,
   };
   await handler({ capability: "guidance", point: "after_llm_call", ctx: revisionCtx, meta });
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(
     agentContext.payload.harness.logs.planning.some((item) => item.event === "planning_refinement_converged_no_target_main_step"),
     false,

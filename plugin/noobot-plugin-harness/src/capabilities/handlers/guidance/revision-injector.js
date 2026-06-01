@@ -80,7 +80,6 @@ export function schedulePlanUpdateByInject(
         ? GUIDANCE_EVENTS.revisionScheduledByInject
         : GUIDANCE_EVENTS.refinementScheduledByInject,
     setPendingData: ({ state }) => {
-      setPendingStateWithMeta(state, "planUpdate", true);
       const normalizedTargetMainStepIndexes =
         normalizedStage === "refinement" ? targetMainSteps.map((item) => item.index) : [];
       setPendingPlanUpdate(state, {
@@ -89,13 +88,16 @@ export function schedulePlanUpdateByInject(
         summaryText,
         targetMainStepIndexes: normalizedTargetMainStepIndexes,
       });
+      setPendingStateWithMeta(
+        state,
+        normalizedStage === "revision" ? "planRevision" : "planRefinement",
+        true,
+      );
       return true;
     },
     buildScheduledDetail: ({ bucket, state }) => ({
       stage: normalizedStage,
-      hasSummaryText: Boolean(
-        state.pending?.planUpdateContext?.summaryText,
-      ),
+      hasSummaryText: Boolean(String(summaryText || "").trim()),
       refinementTargetMainStepIndexes:
         normalizedStage === "refinement" ? targetMainSteps.map((item = {}) => Number(item?.index)) : [],
       checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
@@ -148,7 +150,11 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
     dedupe: false,
     avoidBreakToolCallContinuity: true,
   });
-  setPendingStateWithMeta(state, "planUpdate", false);
+  setPendingStateWithMeta(
+    state,
+    pendingData.stage === "revision" ? "planRevision" : "planRefinement",
+    false,
+  );
   setPendingPlanUpdate(state, { active: false, stage: pendingData.stage });
   setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", true);
   writePlanUpdateCaptureContext(state, pendingData);

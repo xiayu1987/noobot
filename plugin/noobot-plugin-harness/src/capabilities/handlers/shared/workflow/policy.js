@@ -16,10 +16,11 @@ export const ACCEPTANCE_PHASE_BLOCKER_KEYS = Object.freeze([
 
 export function hasAcceptancePhaseBlockers(state = {}) {
   const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
+  const hasPlanUpdatePending = pending.planRevision === true || pending.planRefinement === true;
   return (
     pending.summary === true ||
     Boolean(pending.guidance) ||
-    pending.planUpdate === true ||
+    hasPlanUpdatePending ||
     state?.flags?.planningCaptured !== true
   );
 }

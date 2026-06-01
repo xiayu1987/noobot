@@ -78,9 +78,8 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
             pending: {
               guidance: "consecutive_failures",
               summary: true,
-              planUpdate: true,
-              planUpdateStage: "revision",
-              planUpdateContext: { summaryText: "pending-summary", targetMainStepIndexes: [] },
+              planRevision: true,
+              planRevisionContext: { summaryText: "pending-summary", targetMainStepIndexes: [] },
               acceptanceSemanticValidation: { reportIndex: 3 },
             },
           },
@@ -97,29 +96,29 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
   const meta = { harness: { pendingTtlHookTurns: 1 } };
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_TURN, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 2);
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 3);
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.guidance, null);
   assert.equal(ctx.agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(ctx.agentContext.payload.harness.state.pending.acceptanceSemanticValidation, null);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
   assert.equal(ctx.agentContext.payload.harness.state.flags.acceptanceSemanticValidationCapturePending, false);

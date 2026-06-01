@@ -96,7 +96,11 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   if (!pendingData?.active) return false;
 
   // Consume pending revision/refinement once dispatched to avoid repeated replay.
-  setPendingStateWithMeta(state, "planUpdate", false);
+  if (pendingData.stage === GUIDANCE_DECISION.stage.revision) {
+    setPendingStateWithMeta(state, "planRevision", false);
+  } else {
+    setPendingStateWithMeta(state, "planRefinement", false);
+  }
   setPendingPlanUpdate(state, { active: false, stage: pendingData.stage });
 
   const summaryText = String(pendingData.summaryText || "").trim();

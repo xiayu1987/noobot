@@ -61,17 +61,11 @@ function migrateLegacyPlanUpdateState(state = {}) {
   const pending = state.pending && typeof state.pending === "object" ? state.pending : {};
   const flags = state.flags && typeof state.flags === "object" ? state.flags : {};
 
-  if (
-    pending.planUpdate === false &&
-    pending.planRevision !== true &&
-    pending.planRefinement !== true
-  ) {
+  if (pending.planRevision !== true && pending.planRefinement !== true) {
     pending.planRevision = false;
     pending.planRevisionContext = null;
     pending.planRefinement = false;
     pending.planRefinementContext = null;
-    pending.planUpdateStage = "";
-    pending.planUpdateContext = null;
   }
 
   const hasRevisionAttempts = Number.isFinite(Number(counters.planRevisionAttempts));
@@ -94,16 +88,31 @@ function migrateLegacyPlanUpdateState(state = {}) {
     : normalizedRefinementAttempts;
   counters.planUpdateAttempts = revisionAttempts + refinementAttempts;
 
-  if (pending.planUpdate !== true && pending.planRevision === true) {
-    pending.planUpdate = true;
+  const legacyPlanUpdateActive = pending.planUpdate === true;
+  const legacyPlanUpdateStage = String(pending.planUpdateStage || "").trim().toLowerCase();
+  const legacyPlanUpdateContext =
+    pending.planUpdateContext && typeof pending.planUpdateContext === "object"
+      ? pending.planUpdateContext
+      : null;
+
+  if (
+    legacyPlanUpdateActive &&
+    pending.planRevision !== true &&
+    pending.planRefinement !== true
+  ) {
+    if (legacyPlanUpdateStage === "refinement") {
+      pending.planRefinement = true;
+      pending.planRefinementContext = legacyPlanUpdateContext;
+    } else {
+      pending.planRevision = true;
+      pending.planRevisionContext = legacyPlanUpdateContext;
+    }
   }
 
   if (pending.planRevision === true) {
     const revisionContext =
       pending.planRevisionContext && typeof pending.planRevisionContext === "object"
         ? pending.planRevisionContext
-        : pending.planUpdateContext && typeof pending.planUpdateContext === "object"
-          ? pending.planUpdateContext
         : {};
     const normalizedRevisionContext = {
       summaryText: String(revisionContext.summaryText || "").trim(),
@@ -112,15 +121,10 @@ function migrateLegacyPlanUpdateState(state = {}) {
         : [],
     };
     pending.planRevisionContext = normalizedRevisionContext;
-    pending.planUpdate = true;
-    pending.planUpdateStage = "revision";
-    pending.planUpdateContext = normalizedRevisionContext;
   } else if (pending.planRefinement === true) {
     const refinementContext =
       pending.planRefinementContext && typeof pending.planRefinementContext === "object"
         ? pending.planRefinementContext
-        : pending.planUpdateContext && typeof pending.planUpdateContext === "object"
-          ? pending.planUpdateContext
         : {};
     const normalizedRefinementContext = {
       summaryText: String(refinementContext.summaryText || "").trim(),
@@ -129,10 +133,11 @@ function migrateLegacyPlanUpdateState(state = {}) {
         : [],
     };
     pending.planRefinementContext = normalizedRefinementContext;
-    pending.planUpdate = true;
-    pending.planUpdateStage = "refinement";
-    pending.planUpdateContext = normalizedRefinementContext;
   }
+
+  if ("planUpdate" in pending) delete pending.planUpdate;
+  if ("planUpdateStage" in pending) delete pending.planUpdateStage;
+  if ("planUpdateContext" in pending) delete pending.planUpdateContext;
 
   if ("planRevisionStage" in pending) delete pending.planRevisionStage;
   if ("planRevisionTargetMainStepIndexes" in pending) delete pending.planRevisionTargetMainStepIndexes;

@@ -19,6 +19,7 @@ import { ensurePlanRefinementTool } from "./tool-injector.js";
 import { maybeInjectPlanningPrompt } from "./prompt-builder.js";
 import { maybeCapturePlanningResult, runPlanningBySeparateModel } from "./capture-runner.js";
 import { canAttemptPlanUpdate, setPendingPlanUpdate } from "../guidance/plan-update-engine.js";
+import { resolvePendingPlanUpdate } from "../guidance/plan-update-scheduler.js";
 import {
   resolveWorkflowMode,
   runWorkflowLifecycle,
@@ -249,7 +250,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         }
 
         if (reachedPlanUpdateTurns) {
-          const blockedByPendingPlanUpdate = holder.state.pending?.planUpdate === true;
+          const blockedByPendingPlanUpdate = resolvePendingPlanUpdate(holder.state).active === true;
           let planUpdateScheduled = false;
           if (
             !blockedByPendingPlanUpdate &&
@@ -260,6 +261,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               stage: "revision",
               summaryText: String(holder.bucket?.summaryText || "").trim(),
             });
+            setPendingStateWithMeta(holder.state, "planRevision", true);
             appendCapabilityLog(ctx, {
               domain: CAPABILITY_DOMAIN.PLANNING,
               event: PLANNING_EVENTS.revisionScheduledByTurnThreshold,
@@ -292,7 +294,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
             holder.state.pending?.phaseAcceptance !== true &&
             holder.state.pending?.summary !== true &&
             !holder.state.pending?.guidance &&
-            holder.state.pending?.planUpdate !== true
+            resolvePendingPlanUpdate(holder.state).active !== true
           ) {
             setPendingStateWithMeta(holder.state, "phaseAcceptance", true);
             phaseAcceptanceScheduled = true;
@@ -303,7 +305,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
                 triggerTurns: PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
                 summaryPending: holder.state.pending?.summary === true,
                 guidancePending: Boolean(holder.state.pending?.guidance),
-                planUpdatePending: holder.state.pending?.planUpdate === true,
+                planUpdatePending: resolvePendingPlanUpdate(holder.state).active === true,
               },
             });
           }
@@ -326,7 +328,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           summary: holder.state.pending?.summary === true,
           summaryByCharsPrompted: holder.state.flags?.summaryByCharsPrompted === true,
           guidance: holder.state.pending?.guidance || null,
-          planUpdate: holder.state.pending?.planUpdate === true,
+          planUpdate: resolvePendingPlanUpdate(holder.state).active === true,
           phaseAcceptance: holder.state.pending?.phaseAcceptance === true,
           planningCaptured: holder.state.flags?.planningCaptured === true,
         };
@@ -338,6 +340,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         });
       }
 
+      const planUpdateSnapshot = resolvePendingPlanUpdate(holder?.state || {});
       const normalizedPendingSnapshot = {
         summary: {
           active: pendingSnapshotRaw.summary === true,
@@ -352,9 +355,14 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           payload: pendingSnapshotRaw.guidance || null,
         },
         planUpdate: {
-          active: pendingSnapshotRaw.planUpdate === true,
-          stage: pendingSnapshotRaw.planUpdate === true ? "revision" : "",
-          context: {},
+          active: planUpdateSnapshot.active === true,
+          stage: planUpdateSnapshot.stage || "",
+          context: {
+            summaryText: planUpdateSnapshot.summaryText || "",
+            targetMainStepIndexes: Array.isArray(planUpdateSnapshot.targetMainStepIndexes)
+              ? planUpdateSnapshot.targetMainStepIndexes
+              : [],
+          },
         },
         phaseAcceptance: {
           active: pendingSnapshotRaw.phaseAcceptance === true,

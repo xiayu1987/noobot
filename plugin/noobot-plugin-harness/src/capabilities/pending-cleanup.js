@@ -11,7 +11,8 @@ const WARN_COOLDOWN_TURNS = 3;
 const TRACKED_PENDING_KEYS = Object.freeze([
   "guidance",
   "summary",
-  "planUpdate",
+  "planRevision",
+  "planRefinement",
   "phaseAcceptance",
   "acceptanceSemanticValidation",
 ]);
@@ -54,7 +55,12 @@ function resolveCurrentHookTurn(state = {}) {
 }
 
 function isPendingKeyActive(key = "", value = null) {
-  if (key === "summary" || key === "planUpdate" || key === "phaseAcceptance") return value === true;
+  if (
+    key === "summary" ||
+    key === "planRevision" ||
+    key === "planRefinement" ||
+    key === "phaseAcceptance"
+  ) return value === true;
   if (key === "guidance" || key === "acceptanceSemanticValidation") return value !== null && value !== undefined;
   return Boolean(value);
 }
@@ -64,10 +70,6 @@ export function setPendingStateWithMeta(state = {}, key = "", value = null) {
   if (!state.pending || typeof state.pending !== "object") state.pending = {};
   const pendingMeta = ensurePendingMeta(state);
   state.pending[key] = value;
-  if (key === "planUpdate" && value !== true) {
-    state.pending.planUpdateStage = "";
-    state.pending.planUpdateContext = null;
-  }
   if (isPendingKeyActive(key, value)) {
     pendingMeta.pending[key] = resolveCurrentHookTurn(state);
   } else {
@@ -136,7 +138,12 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
     setPendingStateWithMeta(
       state,
       key,
-      key === "summary" || key === "planUpdate" || key === "phaseAcceptance" ? false : null,
+      key === "summary" ||
+      key === "planRevision" ||
+      key === "planRefinement" ||
+      key === "phaseAcceptance"
+        ? false
+        : null,
     );
     clearedCount += 1;
     clearedPendingKeys.push(key);

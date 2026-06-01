@@ -33,7 +33,15 @@ function createAgentContext({
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0, ...counters },
           signals: { successfulToolCount: 1 },
-          pending: { summary: false, guidance: null, planUpdate: false, ...pending },
+          pending: {
+            summary: false,
+            guidance: null,
+            planRevision: false,
+            planRevisionContext: null,
+            planRefinement: false,
+            planRefinementContext: null,
+            ...pending,
+          },
         },
         logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
@@ -49,7 +57,14 @@ function createPlanningAgentContext({ counters = {} } = {}) {
       harness: {
         state: {
           counters: { llmTurns: 0, planUpdateAttempts: 0, ...counters },
-          pending: { summary: false, guidance: null, planUpdate: false },
+          pending: {
+            summary: false,
+            guidance: null,
+            planRevision: false,
+            planRevisionContext: null,
+            planRefinement: false,
+            planRefinementContext: null,
+          },
         },
       },
     },
@@ -61,9 +76,8 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   const agentContext = createAgentContext({
     pending: {
       summary: true,
-      planUpdate: true,
-      planUpdateStage: "revision",
-      planUpdateContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
+      planRevision: true,
+      planRevisionContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
     },
   });
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
@@ -94,7 +108,8 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
     true,
   );
   assert.equal(agentContext.payload.harness.state.pending.summary, true);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
 
   const secondCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "before_llm_call", ctx: secondCtx, meta });
@@ -110,9 +125,8 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
   const agentContext = createAgentContext({
     pending: {
       summary: true,
-      planUpdate: true,
-      planUpdateStage: "revision",
-      planUpdateContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
+      planRevision: true,
+      planRevisionContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
     },
   });
   const meta = {
@@ -132,7 +146,8 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
   assert.equal(invocations.some((item = {}) => item.purpose === "planning_revision"), true);
   assert.equal(invocations.some((item = {}) => item.purpose === "summary"), true);
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(
     ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
     false,
@@ -181,9 +196,8 @@ test("inject mode: overflow summary keeps higher priority than revision", async 
   const agentContext = createAgentContext({
     pending: {
       summary: true,
-      planUpdate: true,
-      planUpdateStage: "revision",
-      planUpdateContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
+      planRevision: true,
+      planRevisionContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
     },
   });
   agentContext.payload.harness.state.flags.summaryByCharsPrompted = true;
@@ -206,9 +220,8 @@ test("separate_model mode: pending revision runs by separate model without promp
   const invocations = [];
   const agentContext = createAgentContext({
     pending: {
-      planUpdate: true,
-      planUpdateStage: "revision",
-      planUpdateContext: { summaryText: "", targetMainStepIndexes: [] },
+      planRevision: true,
+      planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
     },
   });
   const meta = {
@@ -229,7 +242,8 @@ test("separate_model mode: pending revision runs by separate model without promp
     ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
     false,
   );
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
 });
 
 test("workflow_execution_result captures errorCode when separate_model guidance fails", async () => {
@@ -280,7 +294,11 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
   const agentContext = createPlanningAgentContext({
     counters: { planUpdateTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1 },
   });
-  agentContext.payload.harness.state.pending.planUpdate = true;
+  agentContext.payload.harness.state.pending.planRevision = true;
+  agentContext.payload.harness.state.pending.planRevisionContext = {
+    summaryText: "pending-summary",
+    targetMainStepIndexes: [],
+  };
 
   const blockedCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx: blockedCtx, meta: {} });
@@ -289,10 +307,11 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
     PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   );
 
-  agentContext.payload.harness.state.pending.planUpdate = false;
+  agentContext.payload.harness.state.pending.planRevision = false;
+  agentContext.payload.harness.state.pending.planRevisionContext = null;
   const unblockedCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx: unblockedCtx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
@@ -306,7 +325,7 @@ test("unified attempts no longer block revision scheduling in planning handler",
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
@@ -341,7 +360,8 @@ test("separate_model summary no longer auto-triggers revision", async () => {
   assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
   assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 0);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
 });
 
 test("inject refinement-only flow consumes refinement attempts", async () => {
@@ -349,9 +369,8 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   const agentContext = createAgentContext({
     planText: "1. 主任务\n",
     pending: {
-      planUpdate: true,
-      planUpdateStage: "refinement",
-      planUpdateContext: { summaryText: "针对 1 细化", targetMainStepIndexes: [1] },
+      planRefinement: true,
+      planRefinementContext: { summaryText: "针对 1 细化", targetMainStepIndexes: [1] },
     },
     counters: { planRevisionAttempts: 0, planRefinementAttempts: 0, planUpdateAttempts: 0 },
   });
@@ -375,9 +394,8 @@ test("separate_model refinement-only flow runs planning_refinement directly", as
   const agentContext = createAgentContext({
     planText: "1. 主任务\n",
     pending: {
-      planUpdate: true,
-      planUpdateStage: "refinement",
-      planUpdateContext: { summaryText: "针对 1 细化", targetMainStepIndexes: [1] },
+      planRefinement: true,
+      planRefinementContext: { summaryText: "针对 1 细化", targetMainStepIndexes: [1] },
     },
     counters: { planRevisionAttempts: 0, planRefinementAttempts: 0, planUpdateAttempts: 0 },
   });
@@ -405,7 +423,8 @@ test("separate_model refinement-only flow runs planning_refinement directly", as
   );
   assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
   assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 1);
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
+  assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
 });
 
 test("runPlanUpdateAfterSummary does not start revision when refinement is already pending", async () => {
@@ -413,9 +432,8 @@ test("runPlanUpdateAfterSummary does not start revision when refinement is alrea
   const ctx = {
     agentContext: createAgentContext({
       pending: {
-        planUpdate: true,
-        planUpdateStage: "refinement",
-        planUpdateContext: { summaryText: "待细化", targetMainStepIndexes: [1] },
+        planRefinement: true,
+        planRefinementContext: { summaryText: "待细化", targetMainStepIndexes: [1] },
       },
     }),
     messages: [{ role: "user", content: "继续" }],
@@ -431,8 +449,8 @@ test("runPlanUpdateAfterSummary does not start revision when refinement is alrea
   const changed = await runPlanUpdateAfterSummary(ctx, meta, "小结完成");
   assert.equal(changed, false);
   assert.deepEqual(invocations.map((item = {}) => item.purpose), []);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdate, true);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planUpdateStage, "refinement");
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
 });
 
 test("separate_model skips planning_revision when revision attempts already reached max", async () => {
@@ -546,14 +564,15 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
 
   const firstCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx: firstCtx, meta: {} });
-  assert.equal(agentContext.payload.harness.state.pending.planUpdate, true);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(agentContext.payload.harness.state.pending.phaseAcceptance, false);
   assert.equal(
     agentContext.payload.harness.state.counters.phaseAcceptanceTurns,
     PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   );
 
-  agentContext.payload.harness.state.pending.planUpdate = false;
+  agentContext.payload.harness.state.pending.planRevision = false;
+  agentContext.payload.harness.state.pending.planRevisionContext = null;
   const secondCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx: secondCtx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.phaseAcceptance, true);

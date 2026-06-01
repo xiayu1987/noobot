@@ -212,9 +212,6 @@ export const DEFAULT_HARNESS_PENDING = Object.freeze({
   planRevisionContext: null,
   planRefinement: false,
   planRefinementContext: null,
-  planUpdate: false,
-  planUpdateStage: "",
-  planUpdateContext: null,
   phaseAcceptance: false,
   acceptanceSemanticValidation: null,
 });
