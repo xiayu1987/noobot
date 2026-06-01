@@ -22,7 +22,6 @@ import {
   normalizeDockerContainerScope,
 } from "../../sandbox/docker-sandbox.js";
 import { buildFirejailCommand } from "../../sandbox/firejail-sandbox.js";
-import { cleanTerminalOutputForLLM } from "../../utils/cleaners/output-cleaner.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
@@ -30,7 +29,7 @@ import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
 
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
 const DEFAULT_TIMEOUT = 120000;
-const DEFAULT_MAX_OUTPUT_CHARS = 20000;
+const MAX_SCRIPT_COMMAND_CHARS = 8000;
 const SANDBOX_PROVIDER_NAME = SANDBOX_CONFIG.PROVIDERS;
 const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
 const SANDBOX_COMMAND = SANDBOX_CONFIG.COMMANDS;
@@ -109,53 +108,24 @@ function resolveScriptOutputPolicy(toolsConfig = {}) {
     toolsConfig && typeof toolsConfig === "object" && !Array.isArray(toolsConfig)
       ? toolsConfig
       : {};
-  const maxOutputChars = toSafePositiveInt(
-    toolsCfg?.maxOutputChars,
-    DEFAULT_MAX_OUTPUT_CHARS,
-    256,
-  );
+  const configured = Number(toolsCfg?.maxOutputChars);
+  const maxOutputChars = Number.isFinite(configured) && configured > 0
+    ? toSafePositiveInt(configured, 0, 256)
+    : undefined;
   return {
     maxOutputChars,
   };
 }
 
-function shouldCleanScriptOutput(r = {}, policy = {}) {
-  const stdout = String(r?.stdout || "");
-  const stderr = String(r?.stderr || "");
-  const maxChars = toSafePositiveInt(
-    policy?.maxOutputChars,
-    DEFAULT_MAX_OUTPUT_CHARS,
-    256,
-  );
-  return stdout.length > maxChars || stderr.length > maxChars;
-}
-
-function normalizeScriptOutput(r = {}, policy = {}) {
-  if (!shouldCleanScriptOutput(r, policy)) return { normalized: r, cleaned: false };
-  const maxChars = toSafePositiveInt(
-    policy?.maxOutputChars,
-    DEFAULT_MAX_OUTPUT_CHARS,
-    256,
-  );
-  const cleanedResult = cleanTerminalOutputForLLM(r, { maxChars });
-  return {
-    normalized: {
-      ...r,
-      ...cleanedResult,
-    },
-    cleaned: true,
-  };
-}
-
 function toolExecResult(mode, r = {}, extra = {}, outputPolicy = {}) {
-  const { normalized, cleaned } = normalizeScriptOutput(r, outputPolicy);
   return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
-    ok: Number(normalized?.code || 0) === 0,
+    ok: Number(r?.code || 0) === 0,
     mode,
-    output_cleaned: cleaned,
-    __max_output_chars: outputPolicy?.maxOutputChars,
+    ...(Number.isFinite(outputPolicy?.maxOutputChars)
+      ? { __max_output_chars: outputPolicy.maxOutputChars }
+      : {}),
     ...extra,
-    ...normalized,
+    ...r,
   });
 }
 
@@ -367,10 +337,17 @@ export function createScriptTool({ agentContext }) {
       command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
     }),
     func: async ({ command }) => {
+      const normalizedCommand = String(command || "");
+      if (normalizedCommand.length > MAX_SCRIPT_COMMAND_CHARS) {
+        return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
+          ok: false,
+          message: tTool(runtime, "tools.script.commandTooLong"),
+        });
+      }
       const timeout = Number(scriptConfig?.scriptTimeoutMs || DEFAULT_TIMEOUT);
 
       if (!sandboxEnabled) {
-        const runResult = await run(command, workspace, timeout);
+        const runResult = await run(normalizedCommand, workspace, timeout);
         return toolExecResult("local", runResult, {}, scriptOutputPolicy);
       }
 
@@ -393,7 +370,7 @@ export function createScriptTool({ agentContext }) {
           const fallbackResult = await tryDockerFallback({
             userRoot,
             userId,
-            command,
+            command: normalizedCommand,
             workspace,
             timeout,
             scriptConfig: dockerConfig,
@@ -411,7 +388,7 @@ export function createScriptTool({ agentContext }) {
           });
         }
 
-        const built = buildBubblewrapCommand({ userRoot, command });
+        const built = buildBubblewrapCommand({ userRoot, command: normalizedCommand });
         try {
           await ensureBubblewrapOverlayReady({
             overlayUpper: built.overlayUpper,
@@ -453,7 +430,7 @@ export function createScriptTool({ agentContext }) {
           );
         }
 
-        const built = buildFirejailCommand({ userRoot, command });
+        const built = buildFirejailCommand({ userRoot, command: normalizedCommand });
         sandboxCmd = built.cmd;
         mode = SANDBOX_PROVIDER_NAME.FIREJAIL;
         extra = { sandboxHome: built.homeDir, persistDir: built.persistDir };
@@ -469,7 +446,7 @@ export function createScriptTool({ agentContext }) {
         const built = buildDockerCommand({
           userRoot,
           userId,
-          command,
+          command: normalizedCommand,
           scriptConfig: dockerConfig,
         });
         sandboxCmd = built.cmd;
@@ -505,7 +482,7 @@ export function createScriptTool({ agentContext }) {
         const fallbackResult = await tryDockerFallback({
           userRoot,
           userId,
-          command,
+          command: normalizedCommand,
           workspace,
           timeout,
           scriptConfig: dockerConfig,

@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { mkdir, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../../event/index.js";
 import { isFatalError } from "../../../error/index.js";
 import { toToolJsonResult } from "../../../tools/core/tool-json-result.js";
@@ -13,6 +17,167 @@ import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
+
+const DEFAULT_MAX_TOOL_RESULT_CHARS = 10000;
+
+function toSafePositiveInt(value, fallback = DEFAULT_MAX_TOOL_RESULT_CHARS, min = 512) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
+  return Math.max(min, Math.floor(parsed));
+}
+
+function resolveToolResultLengthLimit(runtime = {}) {
+  const userLimit = runtime?.userConfig?.tools?.maxToolResultChars;
+  const globalLimit = runtime?.globalConfig?.tools?.maxToolResultChars;
+  return toSafePositiveInt(userLimit ?? globalLimit, DEFAULT_MAX_TOOL_RESULT_CHARS, 512);
+}
+
+function normalizeSlashPath(value = "") {
+  return String(value || "").trim().replaceAll("\\", "/");
+}
+
+function resolveSandboxPathMappings(runtime = {}) {
+  const systemRuntimeMappings = runtime?.systemRuntime?.config?.sandboxPathMappings;
+  const userMappings = runtime?.userConfig?.tools?.sandboxPathMappings;
+  const globalMappings = runtime?.globalConfig?.tools?.sandboxPathMappings;
+  const mappings = Array.isArray(systemRuntimeMappings)
+    ? systemRuntimeMappings
+    : (Array.isArray(userMappings) ? userMappings : globalMappings);
+  if (!Array.isArray(mappings)) return [];
+  return mappings
+    .map((item) => (item && typeof item === "object" ? item : {}))
+    .map((item) => ({
+      source: normalizeSlashPath(item?.source || item?.hostPath || item?.host || ""),
+      target: normalizeSlashPath(item?.target || item?.sandboxPath || item?.sandbox || ""),
+    }))
+    .filter((item) => Boolean(item.source && item.target))
+    .sort((leftItem, rightItem) => rightItem.source.length - leftItem.source.length);
+}
+
+function mapPathByMappings(filePath = "", mappings = []) {
+  const normalizedFilePath = normalizeSlashPath(filePath);
+  if (!normalizedFilePath || !Array.isArray(mappings) || !mappings.length) return "";
+  for (const mapping of mappings) {
+    const source = normalizeSlashPath(mapping?.source || "");
+    const target = normalizeSlashPath(mapping?.target || "");
+    if (!source || !target) continue;
+    if (normalizedFilePath === source) return target;
+    if (normalizedFilePath.startsWith(`${source}/`)) {
+      return `${target}${normalizedFilePath.slice(source.length)}`;
+    }
+  }
+  return "";
+}
+
+function resolveOverflowSandboxFilePath({
+  overflowPath = "",
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  const pathResolverCandidates = [
+    runtime?.sharedTools?.resolveSandboxPath,
+    runtime?.sharedTools?.toSandboxPath,
+    runtime?.sharedTools?.pathMapper?.toSandboxPath,
+  ];
+  for (const resolver of pathResolverCandidates) {
+    if (typeof resolver !== "function") continue;
+    try {
+      const resolved = String(
+        resolver({
+          path: overflowPath,
+          hostPath: overflowPath,
+          runtime,
+          agentContext,
+          purpose: "tool_result_overflow",
+        }) || "",
+      ).trim();
+      if (resolved) return resolved;
+    } catch {
+      // Fallback to static mapping resolution below.
+    }
+  }
+  const mappedByConfig = mapPathByMappings(overflowPath, resolveSandboxPathMappings(runtime));
+  return String(mappedByConfig || "").trim();
+}
+
+function resolveOverflowOutputDir({ runtime = {}, agentContext = null } = {}) {
+  const basePath = String(
+    agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
+  ).trim();
+  if (basePath) {
+    return path.join(basePath, "runtime", "workspace", ".tool-result-overflow");
+  }
+  return path.join(os.tmpdir(), "noobot-tool-result-overflow");
+}
+
+async function persistToolResultOverflow({
+  call = {},
+  toolResultText = "",
+  maxChars = DEFAULT_MAX_TOOL_RESULT_CHARS,
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  const outputDir = resolveOverflowOutputDir({ runtime, agentContext });
+  await mkdir(outputDir, { recursive: true });
+  const outputPath = path.join(outputDir, `${Date.now()}-${randomUUID()}.json`);
+  const payload = {
+    toolName: String(call?.name || "").trim(),
+    toolCallId: String(call?.id || "").trim(),
+    createdAt: new Date().toISOString(),
+    originalLength: String(toolResultText || "").length,
+    maxChars: Number(maxChars || DEFAULT_MAX_TOOL_RESULT_CHARS),
+    result: String(toolResultText || ""),
+  };
+  await writeFile(outputPath, JSON.stringify(payload, null, 2), "utf8");
+  return outputPath;
+}
+
+async function normalizeToolResultOverflow({
+  call = {},
+  toolResultText = "",
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  const rawText = String(toolResultText || "");
+  const maxChars = resolveToolResultLengthLimit(runtime);
+  if (rawText.length <= maxChars) {
+    return { toolResultText: rawText, overflowed: false };
+  }
+
+  const overflowPath = await persistToolResultOverflow({
+    call,
+    toolResultText: rawText,
+    maxChars,
+    runtime,
+    agentContext,
+  });
+  const overflowSandboxPath = resolveOverflowSandboxFilePath({
+    overflowPath,
+    runtime,
+    agentContext,
+  });
+  const parsed = parseJsonObjectSafely(rawText);
+  const ok = parsed && typeof parsed.ok === "boolean" ? parsed.ok : true;
+  const status = String(parsed?.status || "").trim();
+  const originalMessage = String(parsed?.message || "").trim();
+  const normalized = toToolJsonResult(call?.name, {
+    ok,
+    ...(status ? { status } : {}),
+    ...(ok ? {} : { error: String(parsed?.error || "").trim() || "tool result overflowed" }),
+    message:
+      originalMessage ||
+      `工具返回内容过长(${rawText.length}字符)，已保存到文件，请按路径分批读取。`,
+    overflowed: true,
+    overflow_reason: `tool result length ${rawText.length} exceeds limit ${maxChars}`,
+    overflow_file_path: overflowPath,
+    ...(overflowSandboxPath ? { overflow_file_sandbox_path: overflowSandboxPath } : {}),
+    summary: {
+      original_length: rawText.length,
+      max_length: maxChars,
+    },
+  });
+  return { toolResultText: normalized, overflowed: true };
+}
 
 function resolveToolHookMeta(runtime = {}) {
   const runtimeMeta =
@@ -101,6 +266,7 @@ export async function executeToolCall({
     };
   }
   let rawResult = null;
+  let rawToolResultText = "";
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.BEFORE_TOOL_CALL,
@@ -136,6 +302,7 @@ export async function executeToolCall({
     });
     toolResultText =
       typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
+    rawToolResultText = toolResultText;
   } catch (error) {
     const isAbort = isAbortError(error);
     const isFatal = isFatalError(error);
@@ -180,6 +347,7 @@ export async function executeToolCall({
       error: error?.message || String(error),
       ...(errorDetails ? { details: errorDetails } : {}),
     });
+    rawToolResultText = toolResultText;
     if (errorLogger && typeof errorLogger.log === "function") {
       const normalizedCause =
         typeof error?.cause === "string"
@@ -201,9 +369,16 @@ export async function executeToolCall({
   }
   const failureState = detectToolCallFailure({
     rawResult,
-    toolResultText,
+    toolResultText: rawToolResultText || toolResultText,
     invokeError,
   });
+  const overflowNormalized = await normalizeToolResultOverflow({
+    call,
+    toolResultText,
+    runtime,
+    agentContext,
+  });
+  toolResultText = overflowNormalized.toolResultText;
   emitEvent(eventListener, "tool_call_end", {
     turn,
     tool: call?.name,

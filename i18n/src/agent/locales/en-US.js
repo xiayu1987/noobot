@@ -117,6 +117,9 @@ export default {
   "model.nameRequired": "model name is required",
   "model.notConversationModel": (params = {}) =>
     `model is not available for conversation switch: ${String(params.alias || "").trim()}`,
+  "tools.script.commandTooLong": "Script content is too long. Please execute in batches or split the script/text and try again.",
+  "tools.file.writeContentTooLong": "File content is too long. Please write in batches.",
+  "tools.file.readContentTooLong": "File content is too long. Please read in batches.",
   "services.handlerModuleNotFound": "service handler module not found",
   "services.handlerNotFound": "service handler not found",
   "services.handlerRequired": "service handler required",
