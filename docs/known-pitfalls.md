@@ -46,9 +46,9 @@
 ## 3) 重构前后回归检查建议
 
 每次改动以下文件后，至少跑一次针对性验证：
-- `service/system-core/model/invoke/invoker.js`
-- `service/system-core/model/attachment/formatter.js`
-- `service/system-core/tools/data-processing/media2data-tool.js`
+- `agent/src/system-core/model/invoke/invoker.js`
+- `agent/src/system-core/model/attachment/formatter.js`
+- `agent/src/system-core/tools/data-processing/media2data-tool.js`
 
 建议最小回归：
 1. 上传 `webm` 音频走 `media_to_data`。

@@ -6,9 +6,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { MAX_PLANNING_CAPTURE_ATTEMPTS } from "../src/core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
 import { LOCALE } from "../src/capabilities/handlers/shared.js";
 import { processPlanningResult } from "../src/capabilities/handlers/planning/result-pipeline.js";
+
+const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
 
 function createCtx() {
   return {

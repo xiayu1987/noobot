@@ -282,8 +282,8 @@ switch (decision.chosenAction) {
   - `src/capabilities/handlers/review/controller.js`
 - Review 报告触发实现：
   - `src/capabilities/handlers/review/controller.js`
-- 阈值常量：
-  - `src/core/thresholds.js`
+- 阈值与策略来源：
+  - `src/core/workflow-params.js`
 
 ## Hook 白名单建议（Review）
 

@@ -275,8 +275,8 @@ Notation: `existing_context` is the current main-model context; `agent_messages`
   - `src/capabilities/handlers/review/controller.js`
 - Review trigger implementation:
   - `src/capabilities/handlers/review/controller.js`
-- Threshold constants:
-  - `src/core/thresholds.js`
+- Threshold and policy source:
+  - `src/core/workflow-params.js`
 
 ## Review Hook Allowlist
 

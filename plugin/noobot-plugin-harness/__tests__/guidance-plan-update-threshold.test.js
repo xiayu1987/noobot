@@ -10,13 +10,14 @@ import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js"
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
 import { canAttemptPlanRevision } from "../src/capabilities/handlers/guidance/revision-engine.js";
 import { runPlanUpdateAfterSummary } from "../src/capabilities/handlers/guidance/model-runner.js";
-import {
-  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-  LLM_SUMMARY_THRESHOLD,
-  MAX_PLAN_UPDATE_ATTEMPTS,
-  PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-} from "../src/core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
+
+const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
+const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
+const MAX_PLAN_UPDATE_ATTEMPTS = WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts;
+const PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
+const PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
 
 function createAgentContext({
   planText = "1. 主任务\n",

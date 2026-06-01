@@ -3,14 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  MAX_PLANNING_CAPTURE_ATTEMPTS,
-  PLANNING_RAW_OUTPUT_LIMIT,
-  PLANNING_SUMMARY_MAX_ITEMS,
-  PLANNING_COMPACT_TEXT_MAX_CHARS,
-  PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS,
-  PLANNING_CONTEXT_GOAL_MAX_CHARS,
-} from "../../../core/thresholds.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   resolveDialogProcessId,
@@ -46,6 +38,13 @@ import {
 } from "../shared/workflow/prompts.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
+const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
+const PLANNING_RAW_OUTPUT_LIMIT = WORKFLOW_PARAMS.planning.capture.rawOutputLimit;
+const PLANNING_SUMMARY_MAX_ITEMS = WORKFLOW_PARAMS.planning.capture.summaryMaxItems;
+const PLANNING_COMPACT_TEXT_MAX_CHARS = WORKFLOW_PARAMS.planning.capture.compactTextMaxChars;
+const PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS =
+  WORKFLOW_PARAMS.planning.capture.rawOutputPreviewMaxChars;
+const PLANNING_CONTEXT_GOAL_MAX_CHARS = WORKFLOW_PARAMS.planning.capture.contextGoalMaxChars;
 
 function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
   const raw = String(text || "").replace(/\s+/g, " ").trim();
