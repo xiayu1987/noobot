@@ -289,8 +289,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
     ai: {
-      content:
-        '{"totalGoal":"完成任务","taskChecklist":[{"index":1,"task":"解析附件","owner":"owner","input":"附件","output":"解析结果","files":{"create":[],"modify":[],"delete":[]}},{"index":2,"task":"执行核心任务","owner":"owner","input":"需求","output":"执行结果","files":{"create":[],"modify":[],"delete":[]}}]}',
+      content: "1. 解析附件\n2. 执行核心任务",
     },
     agentContext,
   });

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   applyPatchCommandsToPlanDocument,
+  parseMainPlansFromPlanText,
   parsePatchCommands,
 } from "../src/capabilities/handlers/shared/plan/text-protocol.js";
 import { buildPlanningRefinementPromptText } from "../src/capabilities/handlers/shared/workflow/prompts.js";
@@ -97,4 +98,14 @@ test("refinement prompt supports multiple target main plan ids", () => {
   });
   assert.match(String(prompt), /本次需要细化的主计划ID/);
   assert.match(String(prompt), /\[2,3\]/);
+});
+
+test("main-plan parser does not synthesize placeholder main steps from sub-plan-only patch lines", () => {
+  const parsed = parseMainPlansFromPlanText([
+    "UPDATE 2.8 标记完成",
+    "UPDATE 2.9 标记完成",
+    "UPDATE 2.10 标记完成",
+  ].join("\n"));
+  assert.equal(Array.isArray(parsed), true);
+  assert.equal(parsed.length, 0);
 });

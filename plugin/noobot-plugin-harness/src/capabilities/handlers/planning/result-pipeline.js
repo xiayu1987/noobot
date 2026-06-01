@@ -16,8 +16,8 @@ import {
 import {
   parseMainPlansFromPlanText,
   parsePlanDocumentFromText,
-  renderPlanDocument,
 } from "../shared/plan/text-protocol.js";
+import { executePlanMutation } from "../shared/plan/mutation-facade.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -61,10 +61,22 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
   const normalized = String(rawText || "").trim();
   if (!normalized) return false;
   const previousDocument = parsePlanDocumentFromText(bucket.planText);
-  const parsed = parsePlanDocumentFromText(normalized);
-  bucket.planDocument = parsed;
-  bucket.planText = renderPlanDocument(parsed) || normalized;
-  bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(previousDocument, parsed);
+  const appliedMutation = executePlanMutation({
+    appendCapabilityLog,
+    ctx,
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    stage: "planning_capture",
+    source,
+    currentPlanText: bucket.planText,
+    mutationText: normalized,
+    policy: { allowRawAppendFallback: false },
+  });
+  if (!appliedMutation.applied) {
+    return false;
+  }
+  bucket.planDocument = appliedMutation.nextDocument;
+  bucket.planText = appliedMutation.nextPlanText;
+  bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(previousDocument, bucket.planDocument);
   bucket.taskChecklist = [];
   bucket.taskChecklistSource = "plan_text";
   bucket.taskOwner = bucket.taskOwner || getDefaultTaskOwner(state?.locale || LOCALE.ZH_CN);
@@ -144,7 +156,32 @@ export async function processPlanningResult(
   const { bucket, state } = holder;
   const responseText = String(rawText || "").trim();
   if (responseText) {
-    applyPlanText(ctx, bucket, state, responseText, source);
+    const applied = applyPlanText(ctx, bucket, state, responseText, source);
+    if (!applied) {
+      const attempts = increasePlanningCaptureAttempts(state);
+      const shouldRetry = attempts < MAX_PLANNING_CAPTURE_ATTEMPTS;
+      if (shouldRetry) {
+        return {
+          captured: false,
+          retryScheduled: true,
+          sourceType: "none",
+          checklistCount: 0,
+          attempts,
+          emptyResponse: false,
+          jsonRepairAttempted: false,
+        };
+      }
+      applyDefaultPlanText(ctx, locale, "planning_invalid_nonempty_response");
+      return {
+        captured: true,
+        retryScheduled: false,
+        sourceType: "default",
+        checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
+        attempts,
+        emptyResponse: false,
+        jsonRepairAttempted: false,
+      };
+    }
     return {
       captured: true,
       retryScheduled: false,

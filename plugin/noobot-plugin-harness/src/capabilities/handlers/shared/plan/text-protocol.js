@@ -114,13 +114,21 @@ function ensureMainPlanPlaceholder(doc = {}, mainId = 0) {
   return upsertMainPlan(doc, mainId, `主计划 ${mainId}`);
 }
 
-function upsertSubPlan(doc = {}, mainId = 0, subIndex = 0, content = "") {
+function upsertSubPlan(
+  doc = {},
+  mainId = 0,
+  subIndex = 0,
+  content = "",
+  { ensureMainPlaceholder = true } = {},
+) {
   const normalizedContent = String(content || "").trim();
   if (!Number.isFinite(mainId) || mainId <= 0 || !Number.isFinite(subIndex) || subIndex <= 0 || !normalizedContent) {
     return false;
   }
   const current = ensurePlanDocumentShape(doc);
-  ensureMainPlanPlaceholder(current, mainId);
+  if (ensureMainPlaceholder) {
+    ensureMainPlanPlaceholder(current, mainId);
+  }
   const key = String(mainId);
   const currentList = Array.isArray(current.subPlansByMainId[key]) ? current.subPlansByMainId[key] : [];
   const index = currentList.findIndex((item = {}) => Number(item.subIndex) === Number(subIndex));
@@ -180,7 +188,9 @@ export function parsePlanDocumentFromText(text = "") {
       if (!target || !content) continue;
       if (target.isSub) {
         if (action === "ADD" || action === "UPDATE") {
-          upsertSubPlan(doc, Number(target.mainId), Number(target.subIndex), content);
+          upsertSubPlan(doc, Number(target.mainId), Number(target.subIndex), content, {
+            ensureMainPlaceholder: false,
+          });
         }
       } else if (action === "ADD" || action === "UPDATE") {
         upsertMainPlan(doc, Number(target.mainId), content);
@@ -198,7 +208,9 @@ export function parsePlanDocumentFromText(text = "") {
     const subMatch = line.match(SUB_PLAN_LINE);
     if (subMatch) {
       const [, mainRaw, subRaw, contentRaw] = subMatch;
-      upsertSubPlan(doc, Number(mainRaw), Number(subRaw), contentRaw);
+      upsertSubPlan(doc, Number(mainRaw), Number(subRaw), contentRaw, {
+        ensureMainPlaceholder: false,
+      });
       continue;
     }
     const mainMatch = line.match(MAIN_PLAN_LINE);
