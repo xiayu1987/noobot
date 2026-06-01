@@ -11,7 +11,12 @@ import {
   resolveInjectedMessageSummarizer,
 } from "./deps.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
-import { FAILURE_THRESHOLD } from "../../../core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+
+const FAILURE_THRESHOLD = Object.freeze({
+  CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
+  ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
+});
 
 export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);

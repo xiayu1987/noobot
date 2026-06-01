@@ -7,10 +7,13 @@ import {
   CAPABILITY_DOMAIN,
   appendCapabilityLog,
 } from "./deps.js";
-import { PLAN_UPDATE_POLICY } from "../../../core/thresholds.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
+const PLAN_UPDATE_POLICY = Object.freeze({
+  MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
+  MAX_ATTEMPTS_REFINEMENT: WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts,
+});
 
 export function normalizePlanUpdateStage(stage = "") {
   return String(stage || "").trim().toLowerCase() === "revision" ? "revision" : "refinement";

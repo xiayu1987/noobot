@@ -6,7 +6,7 @@
 import { LOCALE } from "../constants.js";
 import { resolvePlanChecklistText } from "../plan/checklist-context.js";
 import { parseSummaryItemsFromText } from "../plan/summary-text-protocol.js";
-import { PLAN_UPDATE_POLICY } from "../../../../core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import {
   buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText,
   buildPlanningMainPatchProtocolText as buildPlanningMainPatchProtocolCoreText,
@@ -14,6 +14,10 @@ import {
   buildPlanningRevisionPatchProtocolText as buildPlanningRevisionPatchProtocolCoreText,
   buildSummaryPatchProtocolText as buildSummaryPatchProtocolCoreText,
 } from "./protocols.js";
+
+const PLAN_UPDATE_POLICY = Object.freeze({
+  MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
+});
 
 function normalizePromptOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};

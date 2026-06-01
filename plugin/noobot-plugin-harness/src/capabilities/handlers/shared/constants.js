@@ -3,20 +3,23 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  FAILURE_THRESHOLD,
-  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-  LLM_SUMMARY_OVERFLOW_POLICY,
-  LLM_SUMMARY_THRESHOLD,
-} from "../../../core/thresholds.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 
-export {
-  FAILURE_THRESHOLD,
-  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-  LLM_SUMMARY_OVERFLOW_POLICY,
-  LLM_SUMMARY_THRESHOLD,
-};
+export const FAILURE_THRESHOLD = Object.freeze({
+  CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
+  ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
+});
+
+export const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
+export const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD =
+  WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
+export const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
+  ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.planning.summary.overflowPolicy.enablePruneAfterSummary,
+  PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS:
+    WORKFLOW_PARAMS.planning.summary.overflowPolicy.pruneTriggerAfterCharSummaryRounds,
+  FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
+    WORKFLOW_PARAMS.planning.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
+});
 
 export const LOCALE = Object.freeze({
   ZH_CN: "zh-CN",

@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MAX_PLANNING_CAPTURE_ATTEMPTS } from "../../../core/thresholds.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
@@ -21,6 +20,7 @@ import {
 } from "../shared/plan/text-protocol.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
+const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
 
 function extractChangedMainStepIndexes(previousDocument = {}, nextDocument = {}) {
   const previousMainPlans = Array.isArray(previousDocument?.mainPlans) ? previousDocument.mainPlans : [];

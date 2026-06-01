@@ -15,7 +15,12 @@ import {
   setPendingPlanUpdate,
   writePlanUpdateCaptureContext,
 } from "../src/capabilities/handlers/guidance/plan-update-engine.js";
-import { PLAN_UPDATE_POLICY } from "../src/core/thresholds.js";
+import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
+
+const PLAN_UPDATE_POLICY = Object.freeze({
+  MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
+  MAX_ATTEMPTS_REFINEMENT: WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts,
+});
 
 test("normalizePlanUpdateStage keeps revision and defaults others to refinement", () => {
   assert.equal(normalizePlanUpdateStage("revision"), "revision");
