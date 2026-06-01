@@ -16,6 +16,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
 
 const MAX_FILE_CONTENT_CHARS = 8000;
+const MAX_FILE_CONTENT_BYTES_PRECHECK = 20000;
 
 export function createFileTool({ agentContext }) {
   const readFileTool = new DynamicStructuredTool({
@@ -33,7 +34,7 @@ export function createFileTool({ agentContext }) {
         mustExist: true,
       });
       const fileStat = await stat(resolvedPath);
-      if (Number(fileStat?.size || 0) > MAX_FILE_CONTENT_CHARS) {
+      if (Number(fileStat?.size || 0) > MAX_FILE_CONTENT_BYTES_PRECHECK) {
         return toToolJsonResult(TOOL_NAME.READ_FILE, {
           ok: false,
           message: tTool(agentContext, "tools.file.readContentTooLong"),
