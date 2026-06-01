@@ -104,8 +104,8 @@ export function createPlanRevisionHelpers({
       return normalizedPreferredTargets.map((item) => mainPlanMap.get(item));
     }
 
-    const pendingTargetIndexes = Array.isArray(state?.pending?.planUpdateContext?.targetMainStepIndexes)
-      ? state.pending.planUpdateContext.targetMainStepIndexes
+    const pendingTargetIndexes = Array.isArray(state?.pending?.planRefinementContext?.targetMainStepIndexes)
+      ? state.pending.planRefinementContext.targetMainStepIndexes
       : [];
     const normalizedPendingTargets = pendingTargetIndexes
       .map((item) => Number(item))

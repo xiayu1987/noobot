@@ -21,7 +21,10 @@ function createAgentContext({
           pending: {
             summary: false,
             guidance: null,
-            planUpdate: false,
+            planRevision: false,
+            planRevisionContext: null,
+            planRefinement: false,
+            planRefinementContext: null,
             phaseAcceptance: false,
             acceptanceSemanticValidation: null,
             ...pending,
@@ -45,8 +48,8 @@ test("golden: summary_overflow outranks guidance and plan_update", () => {
     pending: {
       summary: true,
       guidance: { reason: "tool_failures" },
-      planUpdate: true,
-      planUpdateStage: "revision",
+      planRevision: true,
+      planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
     },
     flags: {
       summaryByCharsPrompted: true,
@@ -60,8 +63,8 @@ test("golden: guidance outranks plan_update", () => {
     pending: {
       summary: false,
       guidance: { reason: "tool_failures" },
-      planUpdate: true,
-      planUpdateStage: "revision",
+      planRevision: true,
+      planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
     },
     flags: {
       summaryByCharsPrompted: false,

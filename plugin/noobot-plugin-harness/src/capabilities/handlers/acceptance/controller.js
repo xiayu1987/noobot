@@ -44,6 +44,43 @@ function hasHigherPriorityPendingForPhaseAcceptance(state = {}) {
   return hasAcceptancePhaseBlockers(state);
 }
 
+function resolvePendingPlanUpdateSnapshot(state = {}) {
+  const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
+  if (pending.planRevision === true) {
+    const context =
+      pending.planRevisionContext && typeof pending.planRevisionContext === "object"
+        ? pending.planRevisionContext
+        : {};
+    return {
+      active: true,
+      stage: "revision",
+      context: {
+        summaryText: String(context.summaryText || "").trim(),
+        targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
+          ? context.targetMainStepIndexes
+          : [],
+      },
+    };
+  }
+  if (pending.planRefinement === true) {
+    const context =
+      pending.planRefinementContext && typeof pending.planRefinementContext === "object"
+        ? pending.planRefinementContext
+        : {};
+    return {
+      active: true,
+      stage: "refinement",
+      context: {
+        summaryText: String(context.summaryText || "").trim(),
+        targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
+          ? context.targetMainStepIndexes
+          : [],
+      },
+    };
+  }
+  return { active: false, stage: "", context: {} };
+}
+
 function resolveAcceptanceDecision({
   point = "",
   holder = null,
@@ -114,10 +151,7 @@ function resolveAcceptanceDecision({
     chosenAction = ACCEPTANCE_DECISION.action.acceptanceCapture;
     chosenReason = ACCEPTANCE_DECISION.reason.afterLlmCapture;
   }
-  const planUpdateStage = String(pending?.planUpdateStage || "").trim();
-  const planUpdateContext = pending?.planUpdateContext && typeof pending.planUpdateContext === "object"
-    ? pending.planUpdateContext
-    : {};
+  const planUpdateSnapshot = resolvePendingPlanUpdateSnapshot(state);
   return {
     category,
     chosenAction,
@@ -138,9 +172,9 @@ function resolveAcceptanceDecision({
         payload: pending.guidance || null,
       },
       planUpdate: {
-        active: pending.planUpdate === true,
-        stage: pending.planUpdate === true ? planUpdateStage : "",
-        context: pending.planUpdate === true ? planUpdateContext : {},
+        active: planUpdateSnapshot.active === true,
+        stage: planUpdateSnapshot.stage,
+        context: planUpdateSnapshot.context,
       },
       phaseAcceptance: {
         active: pending.phaseAcceptance === true,

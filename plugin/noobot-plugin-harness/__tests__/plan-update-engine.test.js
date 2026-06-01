@@ -60,7 +60,7 @@ test("unified attempts no longer block revision/refinement", () => {
   assert.equal(canAttemptPlanUpdate({}, state, { increment: false, stage: "refinement" }), true);
 });
 
-test("setPendingPlanUpdate syncs and clears unified + legacy pending fields", () => {
+test("setPendingPlanUpdate manages independent revision/refinement pending fields", () => {
   const state = { pending: {} };
   setPendingPlanUpdate(state, {
     active: true,
@@ -68,17 +68,22 @@ test("setPendingPlanUpdate syncs and clears unified + legacy pending fields", ()
     summaryText: "summary",
     targetMainStepIndexes: [1],
   });
-  assert.equal(state.pending.planUpdate, true);
-  assert.equal(state.pending.planUpdateStage, "revision");
-  assert.deepEqual(state.pending.planUpdateContext, {
+  assert.equal(state.pending.planRevision, true);
+  assert.deepEqual(state.pending.planRevisionContext, {
     summaryText: "summary",
     targetMainStepIndexes: [1],
   });
+  assert.equal(state.pending.planRefinement, false);
+  assert.equal(state.pending.planRefinementContext, null);
+  assert.equal("planUpdate" in state.pending, false);
+  assert.equal("planUpdateStage" in state.pending, false);
+  assert.equal("planUpdateContext" in state.pending, false);
 
-  setPendingPlanUpdate(state, { active: false });
-  assert.equal(state.pending.planUpdate, false);
-  assert.equal(state.pending.planUpdateStage, "");
-  assert.equal(state.pending.planUpdateContext, null);
+  setPendingPlanUpdate(state, { active: false, stage: "revision" });
+  assert.equal(state.pending.planRevision, false);
+  assert.equal(state.pending.planRevisionContext, null);
+  assert.equal(state.pending.planRefinement, false);
+  assert.equal(state.pending.planRefinementContext, null);
 });
 
 test("plan update capture context helpers support unified + legacy fields", () => {

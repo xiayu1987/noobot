@@ -7,7 +7,6 @@ import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { appendCapabilityLog } from "../attachment-log-utils.js";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
-const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 
 function ensureObject(source = {}) {
   return source && typeof source === "object" ? source : {};
@@ -23,58 +22,64 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
   let changed = false;
   const violations = [];
 
-  if (state.pending.planUpdate === false) {
-    if (state.pending.planRevision === true || state.pending.planRevisionContext) {
-      state.pending.planRevision = false;
-      state.pending.planRevisionContext = null;
+  if (state.pending.planRevision === true) {
+    const revisionContext =
+      state.pending.planRevisionContext && typeof state.pending.planRevisionContext === "object"
+        ? state.pending.planRevisionContext
+        : {};
+    const normalizedRevisionContext = {
+      summaryText: String(revisionContext.summaryText || "").trim(),
+      targetMainStepIndexes: Array.isArray(revisionContext.targetMainStepIndexes)
+        ? revisionContext.targetMainStepIndexes
+        : [],
+    };
+    if (state.pending.planRevisionContext !== normalizedRevisionContext) {
+      state.pending.planRevisionContext = normalizedRevisionContext;
       changed = true;
-      violations.push("pending.planRevision_cleared_by_planUpdate_false");
+      violations.push("pending.planRevisionContext_normalized");
     }
-    if (state.pending.planRefinement === true || state.pending.planRefinementContext) {
-      state.pending.planRefinement = false;
-      state.pending.planRefinementContext = null;
-      changed = true;
-      violations.push("pending.planRefinement_cleared_by_planUpdate_false");
-    }
-    if (String(state.pending.planUpdateStage || "").trim()) {
-      state.pending.planUpdateStage = "";
-      changed = true;
-      violations.push("pending.planUpdateStage_cleared_by_planUpdate_false");
-    }
-    if (state.pending.planUpdateContext) {
-      state.pending.planUpdateContext = null;
-      changed = true;
-      violations.push("pending.planUpdateContext_cleared_by_planUpdate_false");
-    }
-  } else if (
-    state.pending.planUpdate !== true &&
-    (state.pending.planRevision === true || state.pending.planRefinement === true)
-  ) {
-    state.pending.planUpdate = true;
+  } else if (state.pending.planRevisionContext) {
+    state.pending.planRevisionContext = null;
     changed = true;
-    violations.push("pending.plan_update_stage_migrated_to_planUpdate");
+    violations.push("pending.planRevisionContext_cleared_without_pending");
   }
 
-  if (state.pending.planUpdate === true) {
-    const stageRaw = String(state.pending.planUpdateStage || "").trim().toLowerCase();
-    const stageNormalized =
-      state.pending.planRevision === true
-        ? GUIDANCE_DECISION.stage.revision
-        : state.pending.planRefinement === true
-          ? GUIDANCE_DECISION.stage.refinement
-          : stageRaw === GUIDANCE_DECISION.stage.refinement
-            ? GUIDANCE_DECISION.stage.refinement
-            : GUIDANCE_DECISION.stage.revision;
-    if (stageRaw !== stageNormalized) {
-      state.pending.planUpdateStage = stageNormalized;
+  if (state.pending.planRefinement === true) {
+    const refinementContext =
+      state.pending.planRefinementContext && typeof state.pending.planRefinementContext === "object"
+        ? state.pending.planRefinementContext
+        : {};
+    const normalizedRefinementContext = {
+      summaryText: String(refinementContext.summaryText || "").trim(),
+      targetMainStepIndexes: Array.isArray(refinementContext.targetMainStepIndexes)
+        ? refinementContext.targetMainStepIndexes
+        : [],
+    };
+    if (state.pending.planRefinementContext !== normalizedRefinementContext) {
+      state.pending.planRefinementContext = normalizedRefinementContext;
       changed = true;
-      violations.push("pending.planUpdateStage_missing_or_invalid");
+      violations.push("pending.planRefinementContext_normalized");
     }
-    if (!state.pending.planUpdateContext || typeof state.pending.planUpdateContext !== "object") {
-      state.pending.planUpdateContext = { summaryText: "", targetMainStepIndexes: [] };
-      changed = true;
-      violations.push("pending.planUpdateContext_missing");
-    }
+  } else if (state.pending.planRefinementContext) {
+    state.pending.planRefinementContext = null;
+    changed = true;
+    violations.push("pending.planRefinementContext_cleared_without_pending");
+  }
+
+  if ("planUpdate" in state.pending) {
+    delete state.pending.planUpdate;
+    changed = true;
+    violations.push("pending.planUpdate_removed");
+  }
+  if ("planUpdateStage" in state.pending) {
+    delete state.pending.planUpdateStage;
+    changed = true;
+    violations.push("pending.planUpdateStage_removed");
+  }
+  if ("planUpdateContext" in state.pending) {
+    delete state.pending.planUpdateContext;
+    changed = true;
+    violations.push("pending.planUpdateContext_removed");
   }
 
   if ("planRevisionStage" in state.pending) {
