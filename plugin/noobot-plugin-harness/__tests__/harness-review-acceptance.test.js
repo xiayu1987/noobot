@@ -278,7 +278,11 @@ test("harness full engineering capability flow plans, guides, accepts and review
     messages,
     agentContext,
   });
-  assert.match(String(messages.at(-1)?.content || ""), /harness-planning-bootstrap/);
+  const planningPromptMessage = messages.find((item = {}) =>
+    /harness-planning-bootstrap/.test(String(item?.content || "")),
+  );
+  assert.equal(String(planningPromptMessage?.role || ""), "user");
+  assert.match(String(planningPromptMessage?.content || ""), /harness-planning-bootstrap/);
 
   await hookManager.emit("after_llm_call", {
     userId: "flow-user",
@@ -613,14 +617,26 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   });
 
   assert.equal(before.changed, true);
-  assert.equal(ctx.messages.at(-2).role, "system");
-  assert.match(String(ctx.messages.at(-2).content), /计划清单上下文|Plan checklist context/);
-  assert.match(String(ctx.messages.at(-2).content), /核心实现/);
-  assert.equal(ctx.messages.at(-1).role, "user");
-  assert.match(String(ctx.messages.at(-1).content), /harness-phase-acceptance-request/);
-  assert.match(String(ctx.messages.at(-1).content), /acceptance_patch_v1/);
-  assert.match(String(ctx.messages.at(-1).content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
-  assert.match(String(ctx.messages.at(-1).content), /evidence=\[简短证据\]/);
+  const planContextIndex = ctx.messages.findIndex((item = {}) =>
+    /harness-acceptance-main-plan/.test(String(item?.content || "")),
+  );
+  const requestIndex = ctx.messages.findIndex((item = {}) =>
+    /harness-phase-acceptance-request/.test(String(item?.content || "")),
+  );
+  const responsibilityIndex = ctx.messages.findIndex((item = {}) =>
+    /职责约束：你当前仅负责「阶段验收」/.test(String(item?.content || "")),
+  );
+  assert.equal(ctx.messages[planContextIndex].role, "system");
+  assert.match(String(ctx.messages[planContextIndex].content), /计划清单上下文|Plan checklist context/);
+  assert.match(String(ctx.messages[planContextIndex].content), /核心实现/);
+  assert.equal(ctx.messages[requestIndex].role, "user");
+  assert.match(String(ctx.messages[requestIndex].content), /acceptance_patch_v1/);
+  assert.match(String(ctx.messages[requestIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
+  assert.match(String(ctx.messages[requestIndex].content), /evidence=\[简短证据\]/);
+  assert.equal(
+    planContextIndex > -1 && requestIndex > planContextIndex && responsibilityIndex > requestIndex,
+    true,
+  );
   assert.equal(ctx.agentContext.payload.harness.state.pending.phaseAcceptance, false);
   assert.equal(ctx.agentContext.payload.harness.state.flags.phaseAcceptanceCapturePending, true);
 
