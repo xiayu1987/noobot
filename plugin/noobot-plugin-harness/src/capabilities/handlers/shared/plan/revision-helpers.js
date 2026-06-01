@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  applyPatchCommandsToPlanDocument,
   parseMainPlansFromPlanText,
   parsePlanDocumentFromText,
   parseSubPlansFromPlanText,
-  renderPlanDocument,
 } from "./text-protocol.js";
+import { executePlanMutation } from "./mutation-facade.js";
+import {
+  emitPlanMutationApplied,
+  emitPlanMutationRejected,
+} from "./mutation-observability.js";
 import {
   buildPlanningRefinementPromptText,
   getPlanningRefinementMarker,
@@ -169,47 +172,51 @@ export function createPlanRevisionHelpers({
     let applied = false;
     const previousDocument = parsePlanDocumentFromText(bucket.planText);
 
-    if (normalizedStage === "revision") {
-      const nextDocument = parsePlanDocumentFromText(bucket.planText);
-      const patchApplied = applyPatchCommandsToPlanDocument(nextDocument, payloadText, { stage: "revision" });
-      if (patchApplied.changed) {
-        bucket.planDocument = nextDocument;
-        bucket.planText = renderPlanDocument(nextDocument);
-        applied = true;
-      } else {
-        const fullMainPlans = parseMainPlansFromPlanText(payloadText);
-        if (fullMainPlans.length) {
-          const replaced = parsePlanDocumentFromText(
-            fullMainPlans.map((item = {}) => `${item.id}. ${item.content}`).join("\n"),
-          );
-          const previousSubPlansByMainId =
-            previousDocument?.subPlansByMainId && typeof previousDocument.subPlansByMainId === "object"
-              ? previousDocument.subPlansByMainId
-              : {};
-          for (const mainPlan of replaced.mainPlans) {
-            const mainId = Number(mainPlan?.id);
-            if (!Number.isFinite(mainId) || mainId <= 0) continue;
-            const key = String(mainId);
-            const copiedSubPlans = cloneSubPlansForMainId(previousSubPlansByMainId[key], mainId);
-            if (copiedSubPlans.length) replaced.subPlansByMainId[key] = copiedSubPlans;
-          }
-          bucket.planDocument = replaced;
-          bucket.planText = renderPlanDocument(replaced);
-          applied = true;
-        }
+    const mutationResult = executePlanMutation({
+      appendCapabilityLog,
+      ctx,
+      domain: CAPABILITY_DOMAIN?.PLANNING,
+      stage: normalizedStage,
+      source,
+      currentPlanText: bucket.planText,
+      mutationText: payloadText,
+      policy: {
+        allowRevisionSubPatchCompatibility: true,
+        allowRawAppendFallback: normalizedStage !== "planning_capture",
+      },
+      emitRejectedWhenNotApplied: false,
+    });
+    if (mutationResult.applied) {
+      bucket.planDocument = mutationResult.nextDocument;
+      bucket.planText = mutationResult.nextPlanText;
+      applied = true;
+    } else if (mutationResult.shouldRawAppendFallback) {
+      applied = appendRawPatchText(bucket, payloadText, source);
+      if (applied) {
+        emitPlanMutationApplied({
+          appendCapabilityLog,
+          ctx,
+          domain: CAPABILITY_DOMAIN?.PLANNING,
+          stage: normalizedStage,
+          source,
+          mutationResult,
+          mode: "raw_append_fallback",
+        });
       }
-      if (!applied) applied = appendRawPatchText(bucket, payloadText, source);
+    } else {
+      emitPlanMutationRejected({
+        appendCapabilityLog,
+        ctx,
+        domain: CAPABILITY_DOMAIN?.PLANNING,
+        stage: normalizedStage,
+        source,
+        mutationResult,
+      });
+    }
+
+    if (normalizedStage === "revision") {
       if (applied) bucket.globalRevisionCount = Number(bucket.globalRevisionCount || 0) + 1;
     } else {
-      const nextDocument = parsePlanDocumentFromText(bucket.planText);
-      const patchApplied = applyPatchCommandsToPlanDocument(nextDocument, payloadText, { stage: "refinement" });
-      if (patchApplied.changed) {
-        bucket.planDocument = nextDocument;
-        bucket.planText = renderPlanDocument(nextDocument);
-        applied = true;
-      } else {
-        applied = appendRawPatchText(bucket, payloadText, source);
-      }
       if (!Array.isArray(bucket.planRefinementRecords)) bucket.planRefinementRecords = [];
       bucket.planRefinementRecords.push({
         source,

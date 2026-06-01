@@ -58,7 +58,7 @@ test("planning result pipeline supports ID+PATCH main plan text", async () => {
   assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^2\. 执行核心任务/m);
 });
 
-test("planning result pipeline treats malformed text as plan text when non-empty", async () => {
+test("planning result pipeline schedules retry when payload has no main plan", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
     source: "after_llm_call",
@@ -66,23 +66,23 @@ test("planning result pipeline treats malformed text as plan text when non-empty
     locale: LOCALE.ZH_CN,
   });
 
-  assert.equal(result.captured, true);
+  assert.equal(result.captured, false);
+  assert.equal(result.retryScheduled, true);
   assert.equal(result.jsonRepairAttempted, false);
-  assert.equal(result.sourceType, "plan_text");
+  assert.equal(result.sourceType, "none");
 });
 
-test("planning result pipeline captures non-empty payload without retry", async () => {
+test("planning result pipeline rejects sub-plan-only patch payload", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
     source: "after_llm_call",
-    rawText: '{"taskChecklist":[{"index":1,"task":"解析附件","owner":"primary_task_owner"}]}',
+    rawText: "UPDATE 2.8 标记完成\nUPDATE 2.9 标记完成",
     locale: LOCALE.ZH_CN,
   });
 
-  assert.equal(result.captured, true);
-  assert.equal(result.retryScheduled, false);
-  assert.equal(result.sourceType, "plan_text");
-  assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
+  assert.equal(result.captured, false);
+  assert.equal(result.retryScheduled, true);
+  assert.equal(result.sourceType, "none");
 });
 
 test("planning result pipeline applies default checklist when retry exhausted", async () => {
@@ -105,7 +105,7 @@ test("planning result pipeline applies default checklist when retry exhausted", 
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
 });
 
-test("planning result pipeline keeps malformed json text when non-empty", async () => {
+test("planning result pipeline keeps waiting when malformed payload is non-empty", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
     source: "after_llm_call",
@@ -114,7 +114,6 @@ test("planning result pipeline keeps malformed json text when non-empty", async 
   });
 
   assert.equal(result.jsonRepairAttempted, false);
-  assert.equal(result.retryScheduled, false);
-  assert.equal(result.sourceType, "plan_text");
-  assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
+  assert.equal(result.retryScheduled, true);
+  assert.equal(result.sourceType, "none");
 });

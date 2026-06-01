@@ -146,8 +146,7 @@ test("harness planning captures checklist and forces acceptance at final output"
     sessionId: "s11",
     dialogProcessId: "dp11",
     ai: {
-      content:
-        "{\"totalGoal\":\"完成任务\",\"taskChecklist\":[{\"index\":1,\"task\":\"解析附件\",\"owner\":\"任务负责者1\",\"input\":\"附件\",\"output\":\"解析结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}},{\"index\":2,\"task\":\"等待子任务结果\",\"owner\":\"任务负责者1\",\"input\":\"子任务句柄\",\"output\":\"子任务结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}}]}",
+      content: "1. 解析附件\n2. 等待子任务结果",
     },
     agentContext,
   });
@@ -159,7 +158,7 @@ test("harness planning captures checklist and forces acceptance at final output"
   assert.equal(agentContext.payload.harness.planningRawOutputs.length >= 1, true);
   assert.match(
     String(agentContext.payload.harness.lastPlanningRawOutput?.content || ""),
-    /taskChecklist/,
+    /解析附件/,
   );
 
   const result = { output: "done" };
@@ -336,16 +335,19 @@ test("harness planning retries injection when first response has no checklist", 
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, true);
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
+  assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, false);
   assert.equal(agentContext.execution.controllers.runtime.systemRuntime.config.forceTool, undefined);
 
   const secondMessages = [{ role: "user", content: "继续" }];
   await hookManager.emit("before_llm_call", { messages: secondMessages, agentContext });
-  assert.doesNotMatch(String(secondMessages.at(-1)?.content || ""), /harness-planning-bootstrap/);
+  assert.equal(
+    secondMessages.some((item = {}) => /harness-planning-bootstrap/.test(String(item?.content || ""))),
+    true,
+  );
 
   await hookManager.emit("after_llm_call", {
-    ai: { content: "{\"totalGoal\":\"完成任务\",\"taskChecklist\":[{\"index\":1,\"task\":\"解析附件\",\"input\":\"附件\",\"output\":\"解析结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}},{\"index\":2,\"task\":\"执行核心任务\",\"input\":\"需求\",\"output\":\"执行结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}}]}" },
+    ai: { content: "1. 解析附件\n2. 执行核心任务" },
     agentContext,
   });
 
@@ -382,7 +384,7 @@ test("harness planning does not mutate runtime forceTool config", async () => {
     agentContext,
   });
   await hookManager.emit("after_llm_call", {
-    ai: { content: "{\"totalGoal\":\"完成任务\",\"taskChecklist\":[{\"index\":1,\"task\":\"执行核心任务\",\"input\":\"需求\",\"output\":\"执行结果\",\"files\":{\"create\":[],\"modify\":[],\"delete\":[]}}]}" },
+    ai: { content: "1. 执行核心任务" },
     agentContext,
   });
   assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
@@ -493,7 +495,7 @@ test("harness planning accepts numbered plain-text plan output", async () => {
   assert.match(String(agentContext.payload.harness.planText || ""), /1\. 解析附件/);
 });
 
-test("harness planning keeps wrapped payload text when response is non-empty", async () => {
+test("harness planning ignores wrapped non-plan payload even when non-empty", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
@@ -539,11 +541,11 @@ test("harness planning keeps wrapped payload text when response is non-empty", a
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.match(String(agentContext.payload.harness.planText || ""), /toolName/);
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
+  assert.equal(String(agentContext.payload.harness.planText || "").trim(), "");
 });
 
-test("harness planning accepts malformed json text when response is non-empty", async () => {
+test("harness planning rejects malformed non-plan json text", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
@@ -564,8 +566,8 @@ test("harness planning accepts malformed json text when response is non-empty", 
     agentContext,
   });
 
-  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
-  assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, true);
+  assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
+  assert.equal(String(agentContext.payload.harness.planText || "").trim(), "");
 });
 
 test("harness planning uses plan text flow without json repair", async () => {
@@ -580,7 +582,7 @@ test("harness planning uses plan text flow without json repair", async () => {
       capabilityModelInvoker: async ({ purpose }) => {
         purposes.push(purpose);
         if (purpose === "planning_json_repair") return { content: "{}" };
-        return { content: '{"taskChecklist":[{bad json}]' };
+        return { content: "1. 解析附件\n2. 执行核心任务" };
       },
     },
   );
@@ -599,7 +601,8 @@ test("harness planning uses plan text flow without json repair", async () => {
 
   await hookManager.emit("before_llm_call", ctx);
 
-  assert.deepEqual(purposes, ["planning"]);
+  assert.equal(purposes.includes("planning"), true);
+  assert.equal(purposes.includes("planning_json_repair"), false);
   assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
   assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, true);
 });
@@ -756,7 +759,7 @@ test("harness planning separate model keeps latest user goal in planning context
   assert.doesNotMatch(allMessagesText, /重新查找最适合AI开发的人/);
 });
 
-test("harness planning only checks non-empty plan text payload", async () => {
+test("harness planning requires parseable main plan payload", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
   registerNoobotPlugin(
@@ -789,8 +792,8 @@ test("harness planning only checks non-empty plan text payload", async () => {
   assert.equal(invocations.length >= 1, true);
   assertFlatCapabilityMessages(invocations[0].messages);
 
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, false);
   assert.equal(Array.isArray(ctx.agentContext.payload.harness.taskChecklist), true);
   assert.equal(ctx.agentContext.payload.harness.taskChecklist.length, 0);
-  assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, true);
+  assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, false);
 });

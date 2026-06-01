@@ -42,6 +42,11 @@ export const WORKFLOW_PARAMS = deepFreeze({
         refinementInvokerMissing: "planning_refinement_invoker_missing",
         refinementConvergedNoTargetMainStep: "planning_refinement_converged_no_target_main_step",
         refinementModelFailed: "planning_refinement_model_failed",
+        planMutationParsed: "planning_plan_mutation_parsed",
+        planMutationApplied: "planning_plan_mutation_applied",
+        planMutationRejected: "planning_plan_mutation_rejected",
+        planMutationInvariantBlocked: "planning_plan_mutation_invariant_blocked",
+        planMutationStageMismatchAutocoerced: "planning_plan_mutation_stage_mismatch_autocoerced",
       },
       guidance: {
         summaryPromptInjected: "summary_prompt_injected",
