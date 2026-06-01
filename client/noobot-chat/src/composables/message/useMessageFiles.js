@@ -127,6 +127,28 @@ function isLikelyFilePath(pathValue = "") {
   return true;
 }
 
+function stripWorkspaceLikePrefix(pathValue = "", userId = "") {
+  const normalizedPath = String(pathValue || "").trim();
+  const normalizedUserId = String(userId || "").trim();
+  const prefixedCandidates = normalizedUserId
+    ? [
+        `workspace/${normalizedUserId}/`,
+        `workplace/${normalizedUserId}/`,
+      ]
+    : [];
+  for (const prefix of prefixedCandidates) {
+    if (normalizedPath.startsWith(prefix)) {
+      return normalizedPath.slice(prefix.length);
+    }
+  }
+  for (const prefix of ["workspace/", "workplace/"]) {
+    if (normalizedPath.startsWith(prefix)) {
+      return normalizedPath.slice(prefix.length);
+    }
+  }
+  return "";
+}
+
 export function useMessageFiles({
   getMessageItem = () => ({}),
   getAllMessages = () => [],
@@ -182,23 +204,11 @@ export function useMessageFiles({
         fileName: resolveBaseName(relativePath),
       };
     }
-    const workspacePrefix = normalizedUserId ? `workspace/${normalizedUserId}/` : "";
-    if (workspacePrefix && normalizedPath.startsWith(workspacePrefix)) {
-      const relativePath = sanitizeWorkspaceRelativePath(
-        normalizedPath.slice(workspacePrefix.length),
-      );
-      if (!relativePath || !isLikelyFilePath(relativePath)) return null;
-      return {
-        resolvedPath: normalizedPath,
-        relativePath,
-        fileName: resolveBaseName(relativePath),
-      };
-    }
-    const genericWorkspacePrefix = "workspace/";
-    if (normalizedPath.startsWith(genericWorkspacePrefix)) {
-      const relativePath = sanitizeWorkspaceRelativePath(
-        normalizedPath.slice(genericWorkspacePrefix.length),
-      );
+    const workspaceLikeRelativePath = sanitizeWorkspaceRelativePath(
+      stripWorkspaceLikePrefix(normalizedPath, normalizedUserId),
+    );
+    if (workspaceLikeRelativePath) {
+      const relativePath = workspaceLikeRelativePath;
       if (!relativePath || !isLikelyFilePath(relativePath)) return null;
       return {
         resolvedPath: normalizedPath,

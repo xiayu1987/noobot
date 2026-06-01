@@ -117,6 +117,9 @@ export default {
   "model.nameRequired": "模型名称必填",
   "model.notConversationModel": (params = {}) =>
     `该模型不支持会话切换: ${String(params.alias || "").trim()}`,
+  "tools.script.commandTooLong": "脚本内容过长，请分批执行或拆分脚本/文本后重试",
+  "tools.file.writeContentTooLong": "文件内容过长，请分批写入",
+  "tools.file.readContentTooLong": "文件内容过长，请分批读取",
   "services.handlerModuleNotFound": "未找到 service handler 模块",
   "services.handlerNotFound": "未找到 service handler",
   "services.handlerRequired": "service handler 必填",

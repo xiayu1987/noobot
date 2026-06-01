@@ -6,7 +6,7 @@
 import { isPlainObject } from "../../utils/shared-utils.js";
 import { sanitizeToolPayloadOutput } from "./tool-output-sanitizer.js";
 
-const DEFAULT_MAX_OUTPUT_CHARS = 20000;
+const DEFAULT_MAX_OUTPUT_CHARS = 10000;
 
 function normalizeString(value = "") {
   return String(value || "").trim();

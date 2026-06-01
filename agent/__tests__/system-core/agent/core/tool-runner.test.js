@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { executeToolCall } from "../../../../src/system-core/agent/core/execution/tool-runner.js";
 import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../../src/system-core/hook/index.js";
@@ -151,4 +154,93 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
   assert.equal(typeof starts[0].startedAt, "string");
   assert.equal(ends[0].status, "success");
   assert.equal(Number.isFinite(ends[0].durationMs), true);
+});
+
+test("executeToolCall: tool result too long should be persisted and return overflow file path", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-"));
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "demo_tool",
+        ok: true,
+        text: "x".repeat(500),
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_overflow", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+    runtime: {
+      basePath,
+      globalConfig: {
+        tools: {
+          maxToolResultChars: 120,
+        },
+      },
+      userConfig: {},
+    },
+    agentContext: {
+      environment: {
+        workspace: { basePath },
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.overflowed, true);
+  assert.equal(typeof payload.overflow_file_path, "string");
+  assert.equal(payload.overflow_file_path.includes(".tool-result-overflow"), true);
+
+  const overflowFileContent = await fs.readFile(payload.overflow_file_path, "utf8");
+  const overflowPayload = JSON.parse(overflowFileContent);
+  assert.equal(overflowPayload.toolName, "demo_tool");
+  assert.equal(typeof overflowPayload.result, "string");
+  assert.equal(overflowPayload.result.includes("\"text\""), true);
+});
+
+test("executeToolCall: overflow result should include sandbox path when resolver is provided", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-sandbox-"));
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "demo_tool",
+        ok: true,
+        text: "x".repeat(500),
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_overflow_sandbox", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+    runtime: {
+      basePath,
+      globalConfig: {
+        tools: {
+          maxToolResultChars: 120,
+        },
+      },
+      userConfig: {},
+      sharedTools: {
+        resolveSandboxPath({ hostPath }) {
+          return String(hostPath || "").replace(basePath, "/workspace/admin");
+        },
+      },
+    },
+    agentContext: {
+      environment: {
+        workspace: { basePath },
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.overflowed, true);
+  assert.equal(typeof payload.overflow_file_sandbox_path, "string");
+  assert.equal(
+    payload.overflow_file_sandbox_path.startsWith("/workspace/admin/runtime/workspace/.tool-result-overflow/"),
+    true,
+  );
 });
