@@ -18,14 +18,14 @@ import {
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
-import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
+import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import {
   canAttemptPlanUpdate,
   clearPlanUpdateCaptureContext,
   readPlanUpdateCaptureContext,
   setPendingPlanUpdate,
   writePlanUpdateCaptureContext,
-} from "./plan-update-engine.js";
+} from "../planning/plan-update-engine.js";
 import {
   applyRevisedPlanFromText,
   buildNextPhaseRelayContent,
@@ -33,7 +33,7 @@ import {
   buildPlanningRevisionPrompt,
   resolveRefinementTargetMainStepIndexesAfterRevision,
   resolveRefinementTargetMainSteps,
-} from "./revision-engine.js";
+} from "../planning/revision-engine.js";
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,

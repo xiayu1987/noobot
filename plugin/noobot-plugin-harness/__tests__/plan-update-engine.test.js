@@ -14,7 +14,7 @@ import {
   resolvePlanUpdateAttempts,
   setPendingPlanUpdate,
   writePlanUpdateCaptureContext,
-} from "../src/capabilities/handlers/guidance/plan-update-engine.js";
+} from "../src/capabilities/handlers/planning/plan-update-engine.js";
 import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
 
 const PLAN_UPDATE_POLICY = Object.freeze({

@@ -26,7 +26,7 @@ import {
   runPendingPlanUpdateBySeparateModel,
   runGuidanceBySeparateModel,
 } from "./model-runner.js";
-import { resolveGuidancePriorityDecision, resolveNextGuidanceAction } from "./plan-update-scheduler.js";
+import { resolveGuidancePriorityDecision, resolveNextGuidanceAction } from "../planning/plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters } from "./signal-tracker.js";
 import { applySummaryText } from "./summary-manager.js";
 import { recordSummaryDetailAttachmentMetas } from "./summary-manager.js";

@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
-import { canAttemptPlanRevision } from "../src/capabilities/handlers/guidance/revision-engine.js";
+import { canAttemptPlanRevision } from "../src/capabilities/handlers/planning/revision-engine.js";
 import { runPlanUpdateAfterSummary } from "../src/capabilities/handlers/guidance/model-runner.js";
 import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
 

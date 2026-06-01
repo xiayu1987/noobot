@@ -29,11 +29,11 @@ import {
   buildNextPhaseRelayContent,
   buildPlanningRevisionPrompt,
   resolveRefinementTargetMainStepIndexesAfterRevision,
-} from "./revision-engine.js";
-import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
+} from "../planning/revision-engine.js";
+import { canAttemptPlanUpdate, setPendingPlanUpdate } from "../planning/plan-update-engine.js";
 import { schedulePlanUpdateByInject } from "./revision-injector.js";
 import { buildGuidancePromptContent } from "./prompt-injector.js";
-import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
+import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages } from "./signal-tracker.js";
 import { applySummaryText, recordSummaryDetailAttachmentMetas } from "./summary-manager.js";
 import {
