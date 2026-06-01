@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveGuidancePriorityDecision } from "../src/capabilities/handlers/guidance/plan-update-scheduler.js";
+import { resolveGuidancePriorityDecision } from "../src/capabilities/handlers/planning/plan-update-scheduler.js";
 import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
 
 function createAgentContext({

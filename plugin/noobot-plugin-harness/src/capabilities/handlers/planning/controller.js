@@ -18,8 +18,8 @@ import {
 import { ensurePlanRefinementTool } from "./tool-injector.js";
 import { maybeInjectPlanningPrompt } from "./prompt-builder.js";
 import { maybeCapturePlanningResult, runPlanningBySeparateModel } from "./capture-runner.js";
-import { canAttemptPlanUpdate, setPendingPlanUpdate } from "../guidance/plan-update-engine.js";
-import { resolvePendingPlanUpdate } from "../guidance/plan-update-scheduler.js";
+import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
+import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import {
   resolveWorkflowMode,
   runWorkflowLifecycle,
