@@ -45,7 +45,7 @@ test("execute_script: command 超过 8000 字符时应直接返回长度错误",
 
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, false);
-  assert.equal(result.message, "脚本太长请分批或分脚本或分文本或追加执行");
+  assert.equal(result.message, "脚本内容过长，请分批执行或拆分脚本/文本后重试");
 });
 
 test("write_file: content 超过 8000 字符时应直接返回长度错误且不写入", async () => {
@@ -60,7 +60,7 @@ test("write_file: content 超过 8000 字符时应直接返回长度错误且不
 
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, false);
-  assert.equal(result.message, "文件内容太长请分批写入");
+  assert.equal(result.message, "文件内容过长，请分批写入");
 
   await assert.rejects(() => fs.access(path.join(basePath, filePath)));
 });
@@ -78,6 +78,5 @@ test("read_file: 文件内容超过 8000 字符时应直接返回长度错误", 
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, false);
-  assert.equal(result.message, "文件内容太长请分批读取");
+  assert.equal(result.message, "文件内容过长，请分批读取");
 });
-
