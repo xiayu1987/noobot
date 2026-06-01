@@ -43,8 +43,8 @@ function resolveBaseName(filePath = "") {
 function trimPathToken(token = "") {
   return String(token || "")
     .trim()
-    .replace(/^[`"'“”‘’<>()\[\]{}]+/, "")
-    .replace(/[`"'“”‘’<>()\[\]{}.,;:!?]+$/, "")
+    .replace(/^[`"'“”‘’<>()\[\]{}（）【】《》]+/, "")
+    .replace(/[`"'“”‘’<>()\[\]{}（）【】《》.,;:!?，。！？；：]+$/, "")
     .trim();
 }
 
@@ -62,7 +62,7 @@ function extractCandidatePathsFromText(content = "") {
   const text = String(content || "");
   if (!text) return [];
   const pathMatchRegex =
-    /(?:^|[\s`"'“”‘’<>()\[\]{}])([./~]?[^\s`"'“”‘’<>()\[\]{}]+\/[^\s`"'“”‘’<>()\[\]{}]+)(?=$|[\s`"'“”‘’<>()\[\]{}.,;:!?])/g;
+    /(?:^|[\s`"'“”‘’<>()\[\]{}（）【】《》.,;:!?，。！？；：])([./~]?[^\s`"'“”‘’<>()\[\]{}（）【】《》,;:!?，。！？；：]+\/[^\s`"'“”‘’<>()\[\]{}（）【】《》,;:!?，。！？；：]+)(?=$|[\s`"'“”‘’<>()\[\]{}（）【】《》.,;:!?，。！？；：])/g;
   const out = [];
   let match = null;
   while ((match = pathMatchRegex.exec(text))) {
@@ -106,6 +106,17 @@ function sanitizeWorkspaceRelativePath(pathValue = "") {
   return normalized;
 }
 
+function trimPathByFileExtension(pathValue = "") {
+  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  if (!normalized) return "";
+  const slashIndex = normalized.lastIndexOf("/");
+  const prefix = slashIndex >= 0 ? normalized.slice(0, slashIndex + 1) : "";
+  const baseName = slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized;
+  const matched = baseName.match(/^(.+?\.[a-zA-Z0-9]{1,16}).*$/);
+  if (!matched?.[1]) return normalized;
+  return `${prefix}${matched[1]}`;
+}
+
 function isLikelyFilePath(pathValue = "") {
   const baseName = resolveBaseName(pathValue);
   if (!baseName || baseName === "." || baseName === "..") return false;
@@ -143,7 +154,7 @@ export function useMessageFiles({
 
   function normalizeRecognizedFilePath(pathToken = "") {
     const normalizedUserId = String(getUserId() || "").trim();
-    const normalizedPath = String(pathToken || "").trim().replaceAll("\\", "/");
+    const normalizedPath = trimPathByFileExtension(pathToken);
     if (!normalizedPath) return null;
     const marker = normalizedUserId ? `/workspace/${normalizedUserId}/` : "";
     const markerIndex = marker ? normalizedPath.indexOf(marker) : -1;
