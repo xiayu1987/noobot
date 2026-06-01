@@ -83,7 +83,7 @@ test("_prepareHarnessRunConfig registers harness plugin and resolves basePath fr
   });
 
   assert.equal(messages[0].role, "user");
-  assert.match(messages[0].content, /Noobot Harness/);
+  assert.equal(messages[0].content, "hello");
 
   const eventsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "events.jsonl");
   const promptsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "prompts.jsonl");

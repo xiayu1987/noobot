@@ -99,12 +99,15 @@ test("harness planning prompt includes current tool names and descriptions", asy
   };
 
   await hookManager.emit("before_llm_call", ctx);
-  const planningPrompt = String(messages.at(-1)?.content || "");
+  const planningPromptMessage = messages.find((item = {}) =>
+    /harness-planning-bootstrap/.test(String(item?.content || "")),
+  );
+  const planningPrompt = String(planningPromptMessage?.content || "");
   const toolsPrompt = messages.find((item = {}) =>
     /harness-planning-tools/.test(String(item?.content || "")),
   );
   const toolsPromptText = String(toolsPrompt?.content || "");
-  assert.equal(String(messages.at(-1)?.role || ""), "user");
+  assert.equal(String(planningPromptMessage?.role || ""), "user");
   assert.match(planningPrompt, /harness-planning-bootstrap/);
   assert.match(toolsPromptText, /可用工具（name\/description）/);
   assert.match(toolsPromptText, /"name": "read_file"/);
@@ -132,7 +135,11 @@ test("harness planning captures checklist and forces acceptance at final output"
     messages,
     agentContext,
   });
-  assert.match(String(messages.at(-1)?.content || ""), /harness-planning-bootstrap/);
+  const planningPromptMessage = messages.find((item = {}) =>
+    /harness-planning-bootstrap/.test(String(item?.content || "")),
+  );
+  assert.equal(String(planningPromptMessage?.role || ""), "user");
+  assert.match(String(planningPromptMessage?.content || ""), /harness-planning-bootstrap/);
 
   await hookManager.emit("after_llm_call", {
     userId: "u11",
