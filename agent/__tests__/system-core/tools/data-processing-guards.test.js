@@ -39,7 +39,7 @@ test("doc_to_data: image input should fail fast with unsupported file type", asy
   assert.ok(tool);
 
   await assert.rejects(
-    () => tool.invoke({ filePath: "runtime/workspace/input.png" }),
+    () => tool.invoke({ filePath: "runtime/ops_workdir/input.png" }),
     (error) => error?.code === ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
   );
 });
@@ -55,7 +55,7 @@ test("media_to_data: non-media file should fail with unsupported media file type
   assert.ok(tool);
 
   await assert.rejects(
-    () => tool.invoke({ filePath: "runtime/workspace/input.txt" }),
+    () => tool.invoke({ filePath: "runtime/ops_workdir/input.txt" }),
     (error) => error?.code === ERROR_CODE.RECOVERABLE_UNSUPPORTED_MEDIA_FILE_TYPE,
   );
 });

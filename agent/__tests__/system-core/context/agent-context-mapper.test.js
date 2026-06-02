@@ -9,7 +9,7 @@ test("mapToAgentContextSchema maps runtime/session/payload fields correctly", ()
       userId: "u1",
       cwd: "/workspace",
       basePath: "/workspace/u1",
-      workspaceDirectories: ["runtime/session", "runtime/workspace"],
+      workspaceDirectories: ["runtime/session", "runtime/ops_workdir"],
       platform: "linux",
       arch: "x64",
       nodeVersion: "v20.0.0",

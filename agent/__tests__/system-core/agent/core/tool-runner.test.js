@@ -176,6 +176,15 @@ test("executeToolCall: tool result too long should be persisted and return overf
       globalConfig: {
         tools: {
           maxToolResultChars: 120,
+          execute_script: {
+            sandboxMode: true,
+            sandboxProvider: {
+              default: "docker",
+              docker: {
+                dockerContainerScope: "global",
+              },
+            },
+          },
         },
       },
       userConfig: {},
@@ -220,6 +229,9 @@ test("executeToolCall: overflow result should include sandbox path when resolver
       globalConfig: {
         tools: {
           maxToolResultChars: 120,
+          execute_script: {
+            sandboxMode: true,
+          },
         },
       },
       userConfig: {},
@@ -240,7 +252,7 @@ test("executeToolCall: overflow result should include sandbox path when resolver
   assert.equal(payload.overflowed, true);
   assert.equal(typeof payload.overflow_file_sandbox_path, "string");
   assert.equal(
-    payload.overflow_file_sandbox_path.startsWith("/workspace/admin/runtime/workspace/.tool-result-overflow/"),
+    payload.overflow_file_sandbox_path.startsWith("/workspace/admin/runtime/ops_workdir/.tool-result-overflow/"),
     true,
   );
 });

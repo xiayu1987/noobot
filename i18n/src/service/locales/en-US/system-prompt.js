@@ -26,7 +26,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       "runtime/connectors":
         "Connector runtime/history info (e.g. connector-history.json)",
       "runtime/session": "Session and execution records",
-      "runtime/workspace": "Script execution and intermediate workspace",
+      "runtime/ops_workdir": "Script execution and intermediate workspace",
       "runtime/memory": "Short-term/long-term memory data",
       skills: "Skills directory",
     },

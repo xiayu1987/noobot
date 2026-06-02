@@ -408,8 +408,12 @@ export const TOOL_SCHEMA_BY_TOOL = {
     `${String(params.commandName || "").trim()} is not installed. Please install ${String(params.commandName || "").trim()} first.`,
       "tools.script.concise.lineWorkdir": (params = {}) =>
     `Default working directory: ${String(params.workdir || "").trim()}`,
+      "tools.script.concise.lineRelativeBase": (params = {}) =>
+    `Relative paths are resolved from: ${String(params.workdir || "").trim()}`,
       "tools.script.concise.linePaths": (params = {}) =>
     `Use only paths under ${String(params.root || "").trim()} (or relative paths).`,
+      "tools.script.concise.lineExtraRoots": (params = {}) =>
+    `Extra mounted roots: ${String(params.roots || "").trim()}`,
       "tools.script.commonUserInstallHint": "- For persistent software install, prefer user-space methods: npm --prefix \"$HOME/.npm-global\", pip install --user, or put binaries in $HOME/bin",
       "tools.script.docker.reuse": "- Container is auto-created on first run and reused later (not removed), so installed software can accumulate",
       "tools.script.docker.scope.global": "one shared container for all users (default)",
@@ -436,8 +440,8 @@ export const TOOL_SCHEMA_BY_TOOL = {
     `${String(params.stderr || "")}\nCurrent system does not support bubblewrap overlay(userxattr). Use tools.execute_script.sandbox_provider.default=docker, or upgrade kernel with CONFIG_OVERLAY_FS_USERXATTR enabled.`,
       "tools.script.workdir.bubblewrap.line1": "- Default working directory: /workspace/runtime/sandbox/persist",
       "tools.script.workdir.commonPathHint": "Use relative paths under this directory or paths under /workspace for input/output files.",
-      "tools.script.workdir.docker.global.line1": "- Default working directory: /workspace/<userId>/runtime/workspace",
-      "tools.script.workdir.docker.user.line1": "- Default working directory: /workspace/runtime/workspace",
+      "tools.script.workdir.docker.global.line1": "- Default working directory: /workspace/<userId>/runtime/ops_workdir",
+      "tools.script.workdir.docker.user.line1": "- Default working directory: /workspace/runtime/ops_workdir",
       "tools.script.workdir.firejail.line1": "- Default working directory: $HOME/runtime/sandbox/persist",
       "tools.script.workdir.firejail.line2": "Use relative paths under this directory or paths under $HOME for input/output files."
     }

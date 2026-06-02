@@ -24,7 +24,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       "runtime/attach/scoped": "附件作用域目录：scoped/<sessionId>/<source>/attachments.json",
       "runtime/connectors": "连接器运行与历史信息（如 connector-history.json）",
       "runtime/session": "会话与执行记录",
-      "runtime/workspace": "脚本执行与中间工作区",
+      "runtime/ops_workdir": "脚本执行与中间工作区",
       "runtime/memory": "短期/长期记忆数据",
       skills: "技能目录",
     },
