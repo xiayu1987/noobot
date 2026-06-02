@@ -143,7 +143,7 @@
         "docker": {
           "docker_container_scope": "global",
           "docker_container_name": "noobot-script-sandbox",
-          "docker_image": "nikolaik/python-nodejs:python3.12-nodejs22-bookworm"
+          "docker_image": "nikolaik/python-nodejs:python3.12-nodejs26-bookworm"
         },
         "bubblewrap": {},
         "firejail": {}
