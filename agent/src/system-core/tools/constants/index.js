@@ -13,7 +13,7 @@ export const SANDBOX_CONFIG = Object.freeze({
   DOCKER: Object.freeze({
     DEFAULT_CONTAINER_SCOPE: "global",
     DEFAULT_CONTAINER_NAME: "noobot-script-sandbox",
-    DEFAULT_IMAGE: "nikolaik/python-nodejs:python3.12-nodejs22-bookworm",
+    DEFAULT_IMAGE: "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
   }),
   COMMANDS: Object.freeze({
     DOCKER: "docker",
