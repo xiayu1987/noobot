@@ -448,6 +448,7 @@ export function createScriptTool({ agentContext }) {
       let sandboxCmd = "";
       let mode = SANDBOX_PROVIDER_NAME.DOCKER;
       let extra = {};
+      let dockerRunInput = null;
 
       if (sandboxProvider === SANDBOX_PROVIDER_NAME.BUBBLEWRAP) {
         const bwrapInstalled = await hasCommand(SANDBOX_COMMAND.BUBBLEWRAP);
@@ -537,13 +538,22 @@ export function createScriptTool({ agentContext }) {
             runtime,
           );
         }
-        const built = buildDockerCommand({
+        dockerRunInput = {
           userRoot,
           userId,
           command: normalizedCommand,
+          workspace,
+          timeout,
           scriptConfig: dockerConfig,
-        });
-        sandboxCmd = built.cmd;
+        };
+      }
+
+      let runResult = null;
+      if (mode === SANDBOX_PROVIDER_NAME.DOCKER && dockerRunInput) {
+        const { result: dockerResult, docker: built } = await runDockerCommand(
+          dockerRunInput,
+        );
+        runResult = dockerResult;
         extra = {
           containerName: built.containerName,
           containerScope: built.scope,
@@ -563,9 +573,9 @@ export function createScriptTool({ agentContext }) {
               : "",
           containerWorkdir: built.workdir,
         };
+      } else {
+        runResult = await run(sandboxCmd, workspace, timeout);
       }
-
-      let runResult = await run(sandboxCmd, workspace, timeout);
       if (
         mode === SANDBOX_PROVIDER_NAME.BUBBLEWRAP &&
         Number(runResult?.code || 0) !== 0 &&
