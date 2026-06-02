@@ -75,7 +75,9 @@ export function buildDockerCommand({
   scriptConfig = {},
 }) {
   const scope = normalizeDockerContainerScope(scriptConfig);
-  const image = String(scriptConfig?.dockerImage || "node:20").trim() || "node:20";
+  const image =
+    String(scriptConfig?.dockerImage || "nikolaik/python-nodejs:python3.12-nodejs22-bookworm").trim() ||
+    "nikolaik/python-nodejs:python3.12-nodejs22-bookworm";
   const baseContainerName = sanitizeDockerNamePart(
     scriptConfig?.dockerContainerName || "noobot-script-sandbox",
   );
