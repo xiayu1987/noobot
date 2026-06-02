@@ -18,7 +18,6 @@ import {
 } from "../../sandbox/bubblewrap-sandbox.js";
 import {
   buildDockerCommand,
-  normalizeDockerMounts,
   normalizeDockerContainerScope,
 } from "../../sandbox/docker-sandbox.js";
 import { buildFirejailCommand } from "../../sandbox/firejail-sandbox.js";
@@ -315,82 +314,40 @@ function buildScriptToolDescription({
   sandboxProvider,
   workspace,
   dockerConfig = {},
+  userId = "",
 }) {
   if (!sandboxEnabled) {
     return [
       tTool(runtime, "tools.script.localModeTitle"),
-      `${tTool(runtime, "tools.script.localModeWorkspacePrefix")}${workspace}`,
+      tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: workspace }),
       tTool(runtime, "tools.script.localModePathHint"),
     ].join("\n");
   }
 
   const dockerScope = normalizeDockerContainerScope(dockerConfig);
-  const dockerMounts = normalizeDockerMounts(dockerConfig);
-  const dockerMountDescriptionLines = dockerMounts.length
-    ? [
-        tTool(runtime, "tools.script.docker.mounts.title"),
-        ...dockerMounts.map((item) =>
-          tTool(runtime, "tools.script.docker.mounts.item", {
-            source: item.source,
-            target: item.target,
-            description: item.description,
-          }),
-        ),
-      ]
-    : [tTool(runtime, "tools.script.docker.mounts.none")];
-  const providerDescriptionMap = {
-    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: [
-      tTool(runtime, "tools.script.bubblewrap.title"),
-      tTool(runtime, "tools.script.bubblewrap.line1"),
-      tTool(runtime, "tools.script.bubblewrap.line2"),
-      tTool(runtime, "tools.script.bubblewrap.line3"),
-      tTool(runtime, "tools.script.commonUserInstallHint"),
-    ],
-    [SANDBOX_PROVIDER_NAME.FIREJAIL]: [
-      tTool(runtime, "tools.script.firejail.title"),
-      tTool(runtime, "tools.script.firejail.line1"),
-      tTool(runtime, "tools.script.firejail.line2"),
-      tTool(runtime, "tools.script.commonUserInstallHint"),
-    ],
-    [SANDBOX_PROVIDER_NAME.DOCKER]: [
-      tTool(runtime, "tools.script.docker.title"),
-      `- ${
-        dockerScope === "user"
-          ? tTool(runtime, "tools.script.docker.scope.user")
-          : tTool(runtime, "tools.script.docker.scope.global")
-      }`,
-      tTool(runtime, "tools.script.docker.reuse"),
-      ...dockerMountDescriptionLines,
-    ],
-  };
-
-  const workdirDescriptionMap = {
-    [SANDBOX_PROVIDER_NAME.FIREJAIL]: [
-      tTool(runtime, "tools.script.workdir.firejail.line1"),
-      tTool(runtime, "tools.script.workdir.firejail.line2"),
-    ],
-    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: [
-      tTool(runtime, "tools.script.workdir.bubblewrap.line1"),
-      tTool(runtime, "tools.script.workdir.commonPathHint"),
-    ],
+  const normalizedUserId = String(userId || "").trim().replace(/[^a-zA-Z0-9_.-]/g, "-") || "<userId>";
+  const sandboxWorkdirMap = {
+    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: "/workspace/runtime/sandbox/persist",
+    [SANDBOX_PROVIDER_NAME.FIREJAIL]: "$HOME/runtime/sandbox/persist",
     [SANDBOX_PROVIDER_NAME.DOCKER]:
       dockerScope === "user"
-        ? [
-            tTool(runtime, "tools.script.workdir.docker.user.line1"),
-            tTool(runtime, "tools.script.workdir.commonPathHint"),
-          ]
-        : [
-            tTool(runtime, "tools.script.workdir.docker.global.line1"),
-            tTool(runtime, "tools.script.workdir.commonPathHint"),
-          ],
+        ? "/workspace/runtime/workspace"
+        : `/workspace/${normalizedUserId}/runtime/workspace`,
   };
+  const sandboxRootMap = {
+    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: "/workspace",
+    [SANDBOX_PROVIDER_NAME.FIREJAIL]: "$HOME",
+    [SANDBOX_PROVIDER_NAME.DOCKER]: "/workspace",
+  };
+  const sandboxWorkdir =
+    sandboxWorkdirMap[sandboxProvider] || sandboxWorkdirMap[SANDBOX_PROVIDER_NAME.DOCKER];
+  const sandboxRoot =
+    sandboxRootMap[sandboxProvider] || sandboxRootMap[SANDBOX_PROVIDER_NAME.DOCKER];
 
   return [
     `${tTool(runtime, "tools.script.sandboxModeTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.sandboxModeTitleSuffix")}`,
-    ...(providerDescriptionMap[sandboxProvider] ||
-      providerDescriptionMap[SANDBOX_PROVIDER_NAME.DOCKER]),
-    ...(workdirDescriptionMap[sandboxProvider] ||
-      workdirDescriptionMap[SANDBOX_PROVIDER_NAME.DOCKER]),
+    tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: sandboxWorkdir }),
+    tTool(runtime, "tools.script.concise.linePaths", { root: sandboxRoot }),
   ].join("\n");
 }
 
@@ -422,6 +379,7 @@ export function createScriptTool({ agentContext }) {
     sandboxProvider,
     workspace,
     dockerConfig,
+    userId,
   });
 
   const execute_script = new DynamicStructuredTool({

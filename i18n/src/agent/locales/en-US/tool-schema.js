@@ -406,6 +406,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.script.bubblewrap.title": "Bubblewrap + overlayfs notes:",
       "tools.script.commandNotInstalled": (params = {}) =>
     `${String(params.commandName || "").trim()} is not installed. Please install ${String(params.commandName || "").trim()} first.`,
+      "tools.script.concise.lineWorkdir": (params = {}) =>
+    `Default working directory: ${String(params.workdir || "").trim()}`,
+      "tools.script.concise.linePaths": (params = {}) =>
+    `Use only paths under ${String(params.root || "").trim()} (or relative paths).`,
       "tools.script.commonUserInstallHint": "- For persistent software install, prefer user-space methods: npm --prefix \"$HOME/.npm-global\", pip install --user, or put binaries in $HOME/bin",
       "tools.script.docker.reuse": "- Container is auto-created on first run and reused later (not removed), so installed software can accumulate",
       "tools.script.docker.scope.global": "one shared container for all users (default)",
