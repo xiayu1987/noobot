@@ -102,6 +102,7 @@ Based on latest examples:
 | `tools.execute_script.sandbox_provider.docker.docker_container_scope` | enum | `global` / `user` |
 | `tools.execute_script.sandbox_provider.docker.docker_container_name` | string | Docker sandbox container base name |
 | `tools.execute_script.sandbox_provider.docker.docker_image` | string | Docker image for sandbox |
+| `tools.execute_script.sandbox_provider.docker.docker_lock_wait_timeout_ms` | number | Max queue wait time (ms) when concurrent calls share one Docker container name |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts` | object[] | Extra host->container mount list (optional) |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].source` | string(path) | Host path to mount |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].target` | string(path) | Container target path (auto-normalized to `/xxx`) |

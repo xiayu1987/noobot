@@ -27,6 +27,7 @@ export const SNAKE_TO_CANONICAL_KEY_MAP = {
   mount_description: "mountDescription",
   docker_project_mount_source: "dockerProjectMountSource",
   docker_project_mount_target: "dockerProjectMountTarget",
+  docker_lock_wait_timeout_ms: "dockerLockWaitTimeoutMs",
   wait_timeout_ms: "waitTimeoutMs",
   poll_interval_ms: "pollIntervalMs",
   max_sub_agent_depth: "maxSubAgentDepth",
