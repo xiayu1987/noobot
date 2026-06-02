@@ -26,13 +26,16 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
+import { logDebug, logWarn } from "../../tracking/console/logger.js";
 
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
 const DEFAULT_TIMEOUT = 120000;
 const MAX_SCRIPT_COMMAND_CHARS = 8000;
+const DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS = 15000;
 const SANDBOX_PROVIDER_NAME = SANDBOX_CONFIG.PROVIDERS;
 const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
 const SANDBOX_COMMAND = SANDBOX_CONFIG.COMMANDS;
+const dockerContainerQueueMap = new Map();
 
 function run(cmd, cwd, timeoutMs) {
   return new Promise((resolve) => {
@@ -56,6 +59,61 @@ function hasCommand(commandName = "") {
       resolve(!error);
     });
   });
+}
+
+function enqueueDockerContainerTask({
+  containerName = "",
+  task = async () => ({}),
+  lockWaitTimeoutMs = DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+} = {}) {
+  const key = String(containerName || "").trim() || "__default__";
+  const previousTail = dockerContainerQueueMap.get(key) || Promise.resolve();
+  const queueDepthBefore = dockerContainerQueueMap.has(key) ? 1 : 0;
+  const waitStartedAt = Date.now();
+  const waitForPrevious = previousTail.catch(() => undefined);
+  const waitTimeout = Number.isFinite(Number(lockWaitTimeoutMs))
+    ? toSafePositiveInt(lockWaitTimeoutMs, DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS, 100)
+    : DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS;
+  const waitPromise = Promise.race([
+    waitForPrevious,
+    new Promise((_, reject) => {
+      const timer = setTimeout(() => {
+        reject(
+          Object.assign(new Error("docker container queue lock wait timeout"), {
+            code: "DOCKER_CONTAINER_QUEUE_LOCK_TIMEOUT",
+            details: {
+              containerName: key,
+              lockWaitTimeoutMs: waitTimeout,
+            },
+          }),
+        );
+      }, waitTimeout);
+      waitForPrevious.finally(() => clearTimeout(timer));
+    }),
+  ]);
+  if (queueDepthBefore > 0) {
+    logDebug("[execute_script][docker_queue_waiting]", {
+      containerName: key,
+      lockWaitTimeoutMs: waitTimeout,
+    });
+  }
+  const runPromise = waitPromise.then(async () => {
+    const waitedMs = Date.now() - waitStartedAt;
+    if (waitedMs > 0) {
+      logDebug("[execute_script][docker_queue_acquired]", {
+        containerName: key,
+        waitedMs,
+      });
+    }
+    return task();
+  });
+  const tailPromise = runPromise.finally(() => {
+    if (dockerContainerQueueMap.get(key) === tailPromise) {
+      dockerContainerQueueMap.delete(key);
+    }
+  });
+  dockerContainerQueueMap.set(key, tailPromise);
+  return runPromise;
 }
 
 
@@ -94,6 +152,10 @@ function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
     ).trim(),
     dockerProjectMountTarget:
       String(providerDetail?.dockerProjectMountTarget || "").trim() || "/project",
+    dockerLockWaitTimeoutMs:
+      providerDetail?.dockerLockWaitTimeoutMs ||
+      providerDetail?.docker_lock_wait_timeout_ms ||
+      DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   };
 }
 
@@ -162,7 +224,39 @@ async function runDockerCommand({
   scriptConfig = {},
 }) {
   const built = buildDockerCommand({ userRoot, userId, command, scriptConfig });
-  const result = await run(built.cmd, workspace, timeout);
+  let result = null;
+  try {
+    result = await enqueueDockerContainerTask({
+      containerName: built.containerName,
+      task: async () => run(built.cmd, workspace, timeout),
+      lockWaitTimeoutMs:
+        scriptConfig?.dockerLockWaitTimeoutMs ||
+        scriptConfig?.docker_lock_wait_timeout_ms ||
+        DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+    });
+  } catch (error) {
+    if (String(error?.code || "") === "DOCKER_CONTAINER_QUEUE_LOCK_TIMEOUT") {
+      logWarn("[execute_script][docker_queue_timeout]", {
+        containerName: built.containerName,
+        lockWaitTimeoutMs:
+          error?.details?.lockWaitTimeoutMs || DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+      });
+      throw scriptRuntimeError(
+        `Docker container lock wait timeout (${error?.details?.lockWaitTimeoutMs || DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS}ms): ${built.containerName}`,
+        {
+          code: ERROR_CODE.RECOVERABLE_SCRIPT_RUNTIME_ERROR,
+          details: {
+            mode: SANDBOX_PROVIDER_NAME.DOCKER,
+            reason: "container_lock_wait_timeout",
+            containerName: built.containerName,
+            lockWaitTimeoutMs:
+              error?.details?.lockWaitTimeoutMs || DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+          },
+        },
+      );
+    }
+    throw error;
+  }
   return { result, docker: built };
 }
 

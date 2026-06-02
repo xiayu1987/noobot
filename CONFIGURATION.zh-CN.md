@@ -102,6 +102,7 @@
 | `tools.execute_script.sandbox_provider.docker.docker_container_scope` | enum | `global` / `user` |
 | `tools.execute_script.sandbox_provider.docker.docker_container_name` | string | Docker 沙箱容器名基础前缀 |
 | `tools.execute_script.sandbox_provider.docker.docker_image` | string | Docker 沙箱镜像 |
+| `tools.execute_script.sandbox_provider.docker.docker_lock_wait_timeout_ms` | number | 并发复用同名 Docker 容器时的最大排队等待时长（毫秒） |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts` | object[] | 额外目录映射列表（可选） |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].source` | string(path) | 宿主机目录 |
 | `tools.execute_script.sandbox_provider.docker.docker_mounts[].target` | string(path) | 容器内目录（会自动规范成 `/xxx`） |
