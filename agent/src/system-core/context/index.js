@@ -10,6 +10,7 @@ import { getConnectorHistoryStore } from "../connectors/index.js";
 import {
   resolveRuntimeBasePath,
   buildStaticInfo,
+  buildSandboxViewStaticInfo,
   buildDynamicInfo,
 } from "./providers/environment-provider.js";
 import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
@@ -376,10 +377,11 @@ export class ContextBuilder {
       : {};
 
     const staticInfo = includeSystemRuntime
-      ? buildStaticInfo({
+      ? buildSandboxViewStaticInfo({
           runtimeBasePath,
           userId: this.userId,
           globalConfig: this.globalConfig,
+          effectiveConfig,
         })
       : {};
     const dynamicInfo = includeSystemRuntime

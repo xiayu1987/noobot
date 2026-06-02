@@ -406,6 +406,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "tools.script.bubblewrap.title": "Bubblewrap + overlayfs 说明：",
       "tools.script.commandNotInstalled": (params = {}) =>
     `${String(params.commandName || "").trim()} 未安装，请先安装 ${String(params.commandName || "").trim()}`,
+      "tools.script.concise.lineWorkdir": (params = {}) =>
+    `默认工作目录：${String(params.workdir || "").trim()}`,
+      "tools.script.concise.linePaths": (params = {}) =>
+    `仅使用 ${String(params.root || "").trim()} 下路径（或相对路径）。`,
       "tools.script.commonUserInstallHint": "- 软件累加建议使用用户态安装：如 npm --prefix \"$HOME/.npm-global\"、pip install --user、将二进制放到 $HOME/bin",
       "tools.script.docker.reuse": "- 首次执行会自动创建容器，后续复用同一容器（不删除），可累加安装软件",
       "tools.script.docker.scope.global": "所有用户共用同一容器（默认）",
