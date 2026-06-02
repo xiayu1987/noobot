@@ -38,6 +38,29 @@ function sanitizeDockerUserPart(input = "") {
     .replace(/-+$/, "");
 }
 
+function normalizeContainerTarget(target = "") {
+  const normalized = String(target || "").trim();
+  if (!normalized) return "";
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+function resolveDockerExtraMountTargets(providerDetail = {}) {
+  const dockerMounts = Array.isArray(providerDetail?.dockerMounts)
+    ? providerDetail.dockerMounts
+    : [];
+  const extraTargets = dockerMounts
+    .map((item) => (item && typeof item === "object" ? item : {}))
+    .map((item) => normalizeContainerTarget(item?.target || item?.mountTarget || ""))
+    .filter(Boolean);
+  if (extraTargets.length) {
+    return Array.from(new Set(extraTargets));
+  }
+  const legacyTarget = normalizeContainerTarget(
+    providerDetail?.dockerProjectMountTarget || "",
+  );
+  return legacyTarget ? [legacyTarget] : [];
+}
+
 function resolveSandboxPromptView({
   userId = "",
   effectiveConfig = {},
@@ -76,6 +99,7 @@ function resolveSandboxPromptView({
       provider,
       cwd: "$HOME/runtime/sandbox/persist",
       basePath: "$HOME",
+      allowedRoots: ["$HOME"],
     };
   }
 
@@ -84,16 +108,26 @@ function resolveSandboxPromptView({
       provider,
       cwd: "/workspace/runtime/sandbox/persist",
       basePath: "/workspace",
+      allowedRoots: ["/workspace"],
     };
   }
+
+  const dockerExtraTargets = resolveDockerExtraMountTargets(providerDetail);
+  const dockerAllowedRoots = Array.from(
+    new Set(["/workspace", ...dockerExtraTargets]),
+  );
 
   return {
     provider,
     cwd:
       dockerScope === "user"
-        ? "/workspace/runtime/workspace"
-        : `/workspace/${normalizedUserPart}/runtime/workspace`,
+        ? "/workspace/runtime/ops_workdir"
+        : `/workspace/${normalizedUserPart}/runtime/ops_workdir`,
     basePath: "/workspace",
+    allowedRoots: dockerAllowedRoots,
+    ...(dockerExtraTargets.length
+      ? { extraMountTargets: dockerExtraTargets }
+      : {}),
   };
 }
 
@@ -110,17 +144,30 @@ export function buildSandboxViewStaticInfo({
   });
   if (!sandboxView) return hostStaticInfo;
   return {
-    ...hostStaticInfo,
-    cwd: sandboxView.cwd,
-    basePath: sandboxView.basePath,
+    userId: hostStaticInfo.userId,
+    platform: hostStaticInfo.platform,
+    arch: hostStaticInfo.arch,
+    nodeVersion: hostStaticInfo.nodeVersion,
+    timezone: hostStaticInfo.timezone,
+    defaultWorkdir: sandboxView.cwd,
+    sandboxRoot: sandboxView.basePath,
+    relativePathBase: "defaultWorkdir",
     globalDefaults: {
       workspaceRoot: sandboxView.basePath,
     },
     sandbox: {
       enabled: true,
       provider: sandboxView.provider,
-      cwd: sandboxView.cwd,
-      basePath: sandboxView.basePath,
+      defaultWorkdir: sandboxView.cwd,
+      sandboxRoot: sandboxView.basePath,
+      relativePathBase: "defaultWorkdir",
+      allowedRoots: Array.isArray(sandboxView.allowedRoots)
+        ? sandboxView.allowedRoots
+        : [sandboxView.basePath],
+      ...(Array.isArray(sandboxView.extraMountTargets) &&
+      sandboxView.extraMountTargets.length
+        ? { extraMountTargets: sandboxView.extraMountTargets }
+        : {}),
       hostPathHidden: true,
     },
   };

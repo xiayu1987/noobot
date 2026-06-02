@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { exec } from "node:child_process";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import {
 } from "../../sandbox/bubblewrap-sandbox.js";
 import {
   buildDockerCommand,
+  normalizeDockerMounts,
   normalizeDockerContainerScope,
 } from "../../sandbox/docker-sandbox.js";
 import { buildFirejailCommand } from "../../sandbox/firejail-sandbox.js";
@@ -331,8 +333,8 @@ function buildScriptToolDescription({
     [SANDBOX_PROVIDER_NAME.FIREJAIL]: "$HOME/runtime/sandbox/persist",
     [SANDBOX_PROVIDER_NAME.DOCKER]:
       dockerScope === "user"
-        ? "/workspace/runtime/workspace"
-        : `/workspace/${normalizedUserId}/runtime/workspace`,
+        ? "/workspace/runtime/ops_workdir"
+        : `/workspace/${normalizedUserId}/runtime/ops_workdir`,
   };
   const sandboxRootMap = {
     [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: "/workspace",
@@ -343,11 +345,31 @@ function buildScriptToolDescription({
     sandboxWorkdirMap[sandboxProvider] || sandboxWorkdirMap[SANDBOX_PROVIDER_NAME.DOCKER];
   const sandboxRoot =
     sandboxRootMap[sandboxProvider] || sandboxRootMap[SANDBOX_PROVIDER_NAME.DOCKER];
+  const extraMountRoots =
+    sandboxProvider === SANDBOX_PROVIDER_NAME.DOCKER
+      ? Array.from(
+          new Set(
+            normalizeDockerMounts(dockerConfig)
+              .map((item) => String(item?.target || "").trim())
+              .filter(Boolean)
+              .filter((target) => target !== sandboxRoot),
+          ),
+        )
+      : [];
+  const allowedRoots = Array.from(new Set([sandboxRoot, ...extraMountRoots]));
 
   return [
     `${tTool(runtime, "tools.script.sandboxModeTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.sandboxModeTitleSuffix")}`,
     tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: sandboxWorkdir }),
+    tTool(runtime, "tools.script.concise.lineRelativeBase", { workdir: sandboxWorkdir }),
     tTool(runtime, "tools.script.concise.linePaths", { root: sandboxRoot }),
+    ...(extraMountRoots.length
+      ? [
+          tTool(runtime, "tools.script.concise.lineExtraRoots", {
+            roots: allowedRoots.join(", "),
+          }),
+        ]
+      : []),
   ].join("\n");
 }
 
@@ -359,7 +381,7 @@ export function createScriptTool({ agentContext }) {
   const effectiveConfig = mergeConfig(globalConfig, runtime.userConfig || {});
   if (!basePath) return [];
 
-  const workspace = path.join(basePath, "runtime/workspace");
+  const workspace = path.join(basePath, "runtime/ops_workdir");
   const userRoot = basePath;
   const userId = String(runtime?.userId || "").trim();
   const scriptConfig =
@@ -389,6 +411,7 @@ export function createScriptTool({ agentContext }) {
       command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
     }),
     func: async ({ command }) => {
+      await mkdir(workspace, { recursive: true });
       const normalizedCommand = String(command || "");
       if (normalizedCommand.length > MAX_SCRIPT_COMMAND_CHARS) {
         return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {

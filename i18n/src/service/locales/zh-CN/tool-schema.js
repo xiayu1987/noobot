@@ -408,8 +408,12 @@ export const TOOL_SCHEMA_BY_TOOL = {
     `${String(params.commandName || "").trim()} 未安装，请先安装 ${String(params.commandName || "").trim()}`,
       "tools.script.concise.lineWorkdir": (params = {}) =>
     `默认工作目录：${String(params.workdir || "").trim()}`,
+      "tools.script.concise.lineRelativeBase": (params = {}) =>
+    `相对路径基准：${String(params.workdir || "").trim()}`,
       "tools.script.concise.linePaths": (params = {}) =>
     `仅使用 ${String(params.root || "").trim()} 下路径（或相对路径）。`,
+      "tools.script.concise.lineExtraRoots": (params = {}) =>
+    `额外挂载可用根目录：${String(params.roots || "").trim()}`,
       "tools.script.commonUserInstallHint": "- 软件累加建议使用用户态安装：如 npm --prefix \"$HOME/.npm-global\"、pip install --user、将二进制放到 $HOME/bin",
       "tools.script.docker.reuse": "- 首次执行会自动创建容器，后续复用同一容器（不删除），可累加安装软件",
       "tools.script.docker.scope.global": "所有用户共用同一容器（默认）",
@@ -436,8 +440,8 @@ export const TOOL_SCHEMA_BY_TOOL = {
     `${String(params.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 tools.execute_script.sandbox_provider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
       "tools.script.workdir.bubblewrap.line1": "- 命令默认工作目录为 /workspace/runtime/sandbox/persist",
       "tools.script.workdir.commonPathHint": "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
-      "tools.script.workdir.docker.global.line1": "- 命令默认工作目录为 /workspace/<userId>/runtime/workspace",
-      "tools.script.workdir.docker.user.line1": "- 命令默认工作目录为 /workspace/runtime/workspace",
+      "tools.script.workdir.docker.global.line1": "- 命令默认工作目录为 /workspace/<userId>/runtime/ops_workdir",
+      "tools.script.workdir.docker.user.line1": "- 命令默认工作目录为 /workspace/runtime/ops_workdir",
       "tools.script.workdir.firejail.line1": "- 命令默认工作目录为 $HOME/runtime/sandbox/persist",
       "tools.script.workdir.firejail.line2": "输入输出文件请使用该目录相对路径或 $HOME 下路径。"
     }

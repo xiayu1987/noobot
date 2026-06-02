@@ -108,8 +108,8 @@ export function buildDockerCommand({
     .join(" && ");
   const workdir =
     scope === "user"
-      ? "/workspace/runtime/workspace"
-      : `/workspace/${userPart}/runtime/workspace`;
+      ? "/workspace/runtime/ops_workdir"
+      : `/workspace/${userPart}/runtime/ops_workdir`;
   const encodedCommand = Buffer.from(String(command || ""), "utf8").toString(
     "base64",
   );

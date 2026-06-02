@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../../event/index.js";
 import { isFatalError } from "../../../error/index.js";
 import { toToolJsonResult } from "../../../tools/core/tool-json-result.js";
+import { normalizeSandboxProvider } from "../../../config/index.js";
 import { extractAttachmentMetasFromToolResult } from "../media/artifact-service.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
@@ -54,6 +55,68 @@ function resolveSandboxPathMappings(runtime = {}) {
     .sort((leftItem, rightItem) => rightItem.source.length - leftItem.source.length);
 }
 
+function sanitizeSandboxUserPart(input = "") {
+  return String(input || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "");
+}
+
+function resolveExecuteScriptConfig(runtime = {}) {
+  const globalCfg =
+    runtime?.globalConfig?.tools?.execute_script &&
+    typeof runtime.globalConfig.tools.execute_script === "object"
+      ? runtime.globalConfig.tools.execute_script
+      : {};
+  const userCfg =
+    runtime?.userConfig?.tools?.execute_script &&
+    typeof runtime.userConfig.tools.execute_script === "object"
+      ? runtime.userConfig.tools.execute_script
+      : {};
+  return {
+    ...globalCfg,
+    ...userCfg,
+  };
+}
+
+function resolveSandboxUserRoot(runtime = {}) {
+  const scriptConfig = resolveExecuteScriptConfig(runtime);
+  const sandboxMode =
+    scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+  if (!sandboxMode) return "";
+  const sandboxProviderCfg =
+    ((scriptConfig?.sandboxProvider &&
+      typeof scriptConfig.sandboxProvider === "object"
+      ? scriptConfig.sandboxProvider
+      : null) ||
+      (scriptConfig?.sandbox_provider &&
+      typeof scriptConfig.sandbox_provider === "object"
+        ? scriptConfig.sandbox_provider
+        : null) ||
+      {})
+      ;
+  const provider = normalizeSandboxProvider(
+    sandboxProviderCfg?.default || "docker",
+  );
+  if (provider === "firejail") return "$HOME";
+  if (provider === "bubblewrap") return "/workspace";
+  const providerDetail =
+    sandboxProviderCfg?.[provider] && typeof sandboxProviderCfg[provider] === "object"
+      ? sandboxProviderCfg[provider]
+      : {};
+  const scope = String(
+    providerDetail?.dockerContainerScope ||
+      providerDetail?.docker_container_scope ||
+      "global",
+  )
+    .trim()
+    .toLowerCase();
+  if (scope === "user") return "/workspace";
+  const userPart = sanitizeSandboxUserPart(runtime?.userId || "user") || "user";
+  return `/workspace/${userPart}`;
+}
+
 function mapPathByMappings(filePath = "", mappings = []) {
   const normalizedFilePath = normalizeSlashPath(filePath);
   if (!normalizedFilePath || !Array.isArray(mappings) || !mappings.length) return "";
@@ -74,6 +137,8 @@ function resolveOverflowSandboxFilePath({
   runtime = {},
   agentContext = null,
 } = {}) {
+  const sandboxUserRoot = resolveSandboxUserRoot(runtime);
+  if (!sandboxUserRoot) return "";
   const pathResolverCandidates = [
     runtime?.sharedTools?.resolveSandboxPath,
     runtime?.sharedTools?.toSandboxPath,
@@ -97,7 +162,18 @@ function resolveOverflowSandboxFilePath({
     }
   }
   const mappedByConfig = mapPathByMappings(overflowPath, resolveSandboxPathMappings(runtime));
-  return String(mappedByConfig || "").trim();
+  if (mappedByConfig) return String(mappedByConfig || "").trim();
+  const hostBasePath = String(
+    runtime?.basePath || agentContext?.environment?.workspace?.basePath || "",
+  ).trim();
+  if (!hostBasePath) return "";
+  const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
+  const normalizedOverflowPath = normalizeSlashPath(overflowPath);
+  if (normalizedOverflowPath === normalizedHostBasePath) return sandboxUserRoot;
+  if (normalizedOverflowPath.startsWith(`${normalizedHostBasePath}/`)) {
+    return `${sandboxUserRoot}${normalizedOverflowPath.slice(normalizedHostBasePath.length)}`;
+  }
+  return "";
 }
 
 function resolveOverflowOutputDir({ runtime = {}, agentContext = null } = {}) {
@@ -105,7 +181,7 @@ function resolveOverflowOutputDir({ runtime = {}, agentContext = null } = {}) {
     agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
   ).trim();
   if (basePath) {
-    return path.join(basePath, "runtime", "workspace", ".tool-result-overflow");
+    return path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");
   }
   return path.join(os.tmpdir(), "noobot-tool-result-overflow");
 }
