@@ -40,7 +40,7 @@
     "better-sqlite3": "^12.10.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "imapflow": "^1.3.5",
+    "imapflow": "^1.3.4",
     "jscpd": "^4.2.4",
     "jsdom": "^29.1.1",
     "libreoffice": "^0.4.5",
@@ -48,6 +48,8 @@
     "mysql2": "^3.22.4",
     "node-poppler": "^9.1.2",
     "nodemailer": "^8.0.10",
+    "noobot-agent": "file:../agent",
+    "noobot-i18n": "file:../i18n",
     "openai": "^6.41.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.21.0",
@@ -59,9 +61,7 @@
     "uuid": "^14.0.0",
     "ws": "^8.21.0",
     "yazl": "^3.3.1",
-    "zod": "^4.4.3",
-    "noobot-agent": "file:../agent",
-    "noobot-i18n": "file:../i18n"
+    "zod": "^4.4.3"
   },
   "overrides": {
     "systeminformation": "^5.31.6"
