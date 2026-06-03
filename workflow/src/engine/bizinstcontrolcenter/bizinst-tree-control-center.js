@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-var BizinstTreeRecord = require('../bizinst/bizinst-tree-record');
-var StartAction = require('../bizinst/action/start-action');
-var BizinstBoxFactory = require('../bizinst/box/bizinstbox/bizinst-box-factory');
-var BizinstFlowEngine = require('./bizinst-flow-engine');
-var BizinstTreeFlowControler = require('./bizinst-tree-flow-controller');
-var BizinstTreeModelChangeControler = require('./bizinst-tree-model-change-controller');
-var StartBizinstInfo = require('./start-bizinst-info');
+import BizinstTreeRecord from '../bizinst/bizinst-tree-record.js';
+import StartAction from '../bizinst/action/start-action.js';
+import BizinstBoxFactory from '../bizinst/box/bizinstbox/bizinst-box-factory.js';
+import BizinstFlowEngine from './bizinst-flow-engine.js';
+import BizinstTreeFlowControler from './bizinst-tree-flow-controller.js';
+import BizinstTreeModelChangeControler from './bizinst-tree-model-change-controller.js';
+import StartBizinstInfo from './start-bizinst-info.js';
 
 class BizinstTreeControlCenter {
   constructor() {
@@ -71,4 +71,4 @@ class BizinstTreeControlCenter {
   }
 }
 
-module.exports = BizinstTreeControlCenter;
+export default  BizinstTreeControlCenter;

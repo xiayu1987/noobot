@@ -4,9 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IFlowto = require('../../../../../design/model/flowto/interfaces/flowto');
-var INode = require('../../../../../design/model/node/interfaces/node');
-var INodeState = require('../../../state/modelstate/interfaces/node-state');
-var IPathState = require('../../../state/modelstate/interfaces/path-state');
+import IFlowto from '../../../../../design/model/flowto/interfaces/flowto.js';
+import INode from '../../../../../design/model/node/interfaces/node.js';
+import INodeState from '../../../state/modelstate/interfaces/node-state.js';
+import IPathState from '../../../state/modelstate/interfaces/path-state.js';
 
-// TODO: Unable to auto-convert this file.
+class INodeStateBox {
+  setNodeState(nodeState) {}
+  getNodeState() {}
+  getNode() {}
+  getNodeStartFlowtos() {}
+  getNodeEndFlowtos() {}
+  getToThisPathState() {}
+}
+
+export default INodeStateBox;

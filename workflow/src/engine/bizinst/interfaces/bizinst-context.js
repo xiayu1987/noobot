@@ -7,4 +7,4 @@
 class IBizinstContext {
 }
 
-module.exports = IBizinstContext;
+export default  IBizinstContext;

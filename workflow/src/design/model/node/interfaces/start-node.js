@@ -7,4 +7,4 @@
 class IStartNode {
 }
 
-module.exports = IStartNode;
+export default  IStartNode;

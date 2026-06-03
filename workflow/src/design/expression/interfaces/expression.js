@@ -7,4 +7,4 @@
 class IExpression {
 }
 
-module.exports = IExpression;
+export default  IExpression;

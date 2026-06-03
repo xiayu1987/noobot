@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IStateNode = require('../../../../../design/model/node/interfaces/state-node');
-var IBizinst = require('../../../interfaces/bizinst');
-var IBizinstModel = require('../../../state/modelstate/interfaces/bizinst-model');
-var IStateNodeState = require('../../../state/modelstate/interfaces/state-node-state');
+import IStateNode from '../../../../../design/model/node/interfaces/state-node.js';
+import IBizinst from '../../../interfaces/bizinst.js';
+import IBizinstModel from '../../../state/modelstate/interfaces/bizinst-model.js';
+import IStateNodeState from '../../../state/modelstate/interfaces/state-node-state.js';
 
 class IStateNodeBox {
   canForwardChange(bizinst) {}
@@ -16,4 +16,4 @@ class IStateNodeBox {
   createNodeState(bizinstModel) {}
 }
 
-module.exports = IStateNodeBox;
+export default  IStateNodeBox;

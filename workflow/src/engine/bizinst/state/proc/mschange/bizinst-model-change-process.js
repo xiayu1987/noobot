@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../../../can-persistence-base');
+import CanPersistenceBase from '../../../../../can-persistence-base.js';
 
 class BizinstModelChangeProcess extends CanPersistenceBase {
   constructor() {
@@ -20,4 +20,4 @@ class BizinstModelChangeProcess extends CanPersistenceBase {
   }
 }
 
-module.exports = BizinstModelChangeProcess;
+export default  BizinstModelChangeProcess;

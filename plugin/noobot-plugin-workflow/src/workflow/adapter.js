@@ -1,32 +1,51 @@
-import { createRequire } from "node:module";
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+import {
+  startWorkflowInstanceById,
+  getWorkflowInstanceSnapshot as getWorkflowInstanceSnapshotById,
+  advanceWorkflowInstanceById,
+  releaseWorkflowInstance as releaseWorkflowInstanceById,
+} from "workflow";
 import { parseWorkflowDslText } from "../protocol/text-protocol.js";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../core/constants.js";
-
-const require = createRequire(import.meta.url);
-
-function loadWorkflowLib() {
-  const workflow = require("workflow");
-  if (!workflow || typeof workflow.executeWorkflowSemantic !== "function") {
-    throw new Error("workflow lib missing executeWorkflowSemantic facade");
-  }
-  return workflow;
-}
+import { mountConditionModelBoxFactory } from "../extensions/workflow/condition-model-box-factory.js";
 
 export function executeWorkflowText({ semanticText = "", options = {} } = {}) {
-  const workflow = loadWorkflowLib();
   const semantic = parseWorkflowDslText(semanticText);
-  const execution = workflow.executeWorkflowSemantic({
+  return { semantic };
+}
+
+export function createWorkflowInstance({ instanceId = "", semantic = {}, options = {}, meta = {} } = {}) {
+  mountConditionModelBoxFactory();
+  return startWorkflowInstanceById({
+    instanceId,
     semantic,
     options: {
-      autoSubmit: options?.autoSubmit !== false,
       maxAutoTransitions:
         Number.isFinite(Number(options?.maxAutoTransitions)) && Number(options.maxAutoTransitions) > 0
           ? Math.floor(Number(options.maxAutoTransitions))
           : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS,
+      conditionContext:
+        options?.conditionContext && typeof options.conditionContext === "object"
+          ? options.conditionContext
+          : undefined,
     },
+    meta,
   });
-  return {
-    semantic,
-    execution,
-  };
+}
+
+export function getWorkflowInstanceSnapshot({ instanceId = "" } = {}) {
+  return getWorkflowInstanceSnapshotById({ instanceId });
+}
+
+export function advanceWorkflowInstance({ instanceId = "", action = { type: "submit", stepIndex: 0 } } = {}) {
+  return advanceWorkflowInstanceById({ instanceId, action });
+}
+
+export function releaseWorkflowInstance({ instanceId = "" } = {}) {
+  return releaseWorkflowInstanceById({ instanceId });
 }

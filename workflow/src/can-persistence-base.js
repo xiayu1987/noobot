@@ -16,4 +16,4 @@ class CanPersistenceBase {
   }
 }
 
-module.exports = CanPersistenceBase;
+export default  CanPersistenceBase;

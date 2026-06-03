@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../interfaces/can-persistence');
-var IProcess = require('../state/interfaces/process');
+import ICanPersistence from '../../../interfaces/can-persistence.js';
+import IProcess from '../state/interfaces/process.js';
 
 class IProcessRecord {
   setProcess(process) {}
@@ -14,4 +14,4 @@ class IProcessRecord {
   getBizinst() {}
 }
 
-module.exports = IProcessRecord;
+export default  IProcessRecord;

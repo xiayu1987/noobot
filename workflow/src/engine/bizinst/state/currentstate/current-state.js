@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../../can-persistence-base');
-var EFlowDirection = require('../../enums/flow-direction');
-var IStateNodeState = require('../modelstate/interfaces/state-node-state');
-var IStepState = require('../modelstate/interfaces/step-state');
+import CanPersistenceBase from '../../../../can-persistence-base.js';
+import EFlowDirection from '../../enums/flow-direction.js';
+import IStateNodeState from '../modelstate/interfaces/state-node-state.js';
+import IStepState from '../modelstate/interfaces/step-state.js';
 
 class CurrentState extends CanPersistenceBase {
   constructor() {
@@ -52,4 +52,4 @@ class CurrentState extends CanPersistenceBase {
   }
 }
 
-module.exports = CurrentState;
+export default  CurrentState;

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActionNode = require('../../../../../design/model/node/interfaces/action-node');
+import IActionNode from '../../../../../design/model/node/interfaces/action-node.js';
 
 class IActionNodeState {
   setStepStates(stepStates) {}
   getStepStates() {}
 }
 
-module.exports = IActionNodeState;
+export default  IActionNodeState;

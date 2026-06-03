@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../../interfaces/can-persistence');
-var IFlowto = require('../../../../../design/model/flowto/interfaces/flowto');
+import ICanPersistence from '../../../../../interfaces/can-persistence.js';
+import IFlowto from '../../../../../design/model/flowto/interfaces/flowto.js';
 
 class IFlowtoState {
   setFlowto(flowto) {}
@@ -14,4 +14,4 @@ class IFlowtoState {
   getBizinstModel() {}
 }
 
-module.exports = IFlowtoState;
+export default  IFlowtoState;

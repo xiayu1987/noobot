@@ -9,4 +9,4 @@ class IAction {
   getName() {}
 }
 
-module.exports = IAction;
+export default  IAction;

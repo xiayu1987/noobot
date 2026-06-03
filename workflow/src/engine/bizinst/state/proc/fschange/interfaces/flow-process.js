@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../../../interfaces/can-persistence');
+import ICanPersistence from '../../../../../../interfaces/can-persistence.js';
 
 class IFlowProcess {
   setDiscoverModelStateProcesses(discoverModelStateProcesses) {}
@@ -19,4 +19,4 @@ class IFlowProcess {
   getPathStateProcesses() {}
 }
 
-module.exports = IFlowProcess;
+export default  IFlowProcess;

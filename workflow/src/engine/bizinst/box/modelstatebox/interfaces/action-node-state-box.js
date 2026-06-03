@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActionNode = require('../../../../../design/model/node/interfaces/action-node');
-var INodeState = require('../../../state/modelstate/interfaces/node-state');
-var IStepState = require('../../../state/modelstate/interfaces/step-state');
+import IActionNode from '../../../../../design/model/node/interfaces/action-node.js';
+import INodeState from '../../../state/modelstate/interfaces/node-state.js';
+import IStepState from '../../../state/modelstate/interfaces/step-state.js';
 
 class IActionNodeStateBox {
   getFirstStepState() {}
@@ -15,4 +15,4 @@ class IActionNodeStateBox {
   addStepState(stepState, index) {}
 }
 
-module.exports = IActionNodeStateBox;
+export default  IActionNodeStateBox;

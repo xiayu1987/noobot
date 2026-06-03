@@ -7,4 +7,4 @@
 class IModelType {
 }
 
-module.exports = IModelType;
+export default  IModelType;

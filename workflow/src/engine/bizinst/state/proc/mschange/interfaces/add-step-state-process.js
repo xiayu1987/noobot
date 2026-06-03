@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../../../interfaces/can-persistence');
-var IActionNodeState = require('../../../modelstate/interfaces/action-node-state');
-var IStepState = require('../../../modelstate/interfaces/step-state');
+import ICanPersistence from '../../../../../../interfaces/can-persistence.js';
+import IActionNodeState from '../../../modelstate/interfaces/action-node-state.js';
+import IStepState from '../../../modelstate/interfaces/step-state.js';
 
 class IAddStepStateProcess {
   setIndex(index) {}
@@ -19,4 +19,4 @@ class IAddStepStateProcess {
   getHandleStepState() {}
 }
 
-module.exports = IAddStepStateProcess;
+export default  IAddStepStateProcess;

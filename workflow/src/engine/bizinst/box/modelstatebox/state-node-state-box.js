@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var NodeStateBoxBase = require('./node-state-box-base');
+import NodeStateBoxBase from './node-state-box-base.js';
 
 class StateNodeStateBox extends NodeStateBoxBase {
   canForwardChange(bizinst) {
@@ -32,4 +32,4 @@ class StateNodeStateBox extends NodeStateBoxBase {
   }
 }
 
-module.exports = StateNodeStateBox;
+export default  StateNodeStateBox;

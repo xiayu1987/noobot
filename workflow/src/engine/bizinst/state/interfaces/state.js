@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../interfaces/can-persistence');
-var IBizinst = require('../../interfaces/bizinst');
-var ICurrentState = require('../currentstate/interfaces/current-state');
-var IBizinstModel = require('../modelstate/interfaces/bizinst-model');
+import ICanPersistence from '../../../../interfaces/can-persistence.js';
+import IBizinst from '../../interfaces/bizinst.js';
+import ICurrentState from '../currentstate/interfaces/current-state.js';
+import IBizinstModel from '../modelstate/interfaces/bizinst-model.js';
 
 class IState {
   setBizinst(bizinst) {}
@@ -18,4 +18,4 @@ class IState {
   getCurrentState() {}
 }
 
-module.exports = IState;
+export default  IState;

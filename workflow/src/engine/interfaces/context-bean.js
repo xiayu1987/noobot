@@ -7,4 +7,4 @@
 class IContextBean {
 }
 
-module.exports = IContextBean;
+export default  IContextBean;

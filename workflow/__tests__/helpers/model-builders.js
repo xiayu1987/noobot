@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-const Model = require('../../src/design/model/model');
-const Flowto = require('../../src/design/model/flowto/flowto');
-const NodeLineRLAT = require('../../src/design/model/flowto/node-line-rlat');
-const ActionNode = require('../../src/design/model/node/action-node');
-const CompositeNode = require('../../src/design/model/node/composite-node');
-const StateNode = require('../../src/design/model/node/state-node');
-const ENodeType = require('../../src/design/model/node/enums/node-type');
+import Model from '../../src/design/model/model.js';
+import Flowto from '../../src/design/model/flowto/flowto.js';
+import NodeLineRLAT from '../../src/design/model/flowto/node-line-rlat.js';
+import ActionNode from '../../src/design/model/node/action-node.js';
+import CompositeNode from '../../src/design/model/node/composite-node.js';
+import StateNode from '../../src/design/model/node/state-node.js';
+import ENodeType from '../../src/design/model/node/enums/node-type.js';
 
 function linkFlow(flowName, fromNode, toNode) {
   const flow = new Flowto();
@@ -244,7 +244,17 @@ function buildParentChildCompositeModel() {
   return model;
 }
 
-module.exports = {
+export {
+  buildSimpleModel,
+  buildActionModel,
+  buildBranchingActionModel,
+  buildTwoActionModel,
+  buildThreeActionModel,
+  buildParallelActionModel,
+  buildParentChildCompositeModel,
+};
+
+export default {
   buildSimpleModel,
   buildActionModel,
   buildBranchingActionModel,

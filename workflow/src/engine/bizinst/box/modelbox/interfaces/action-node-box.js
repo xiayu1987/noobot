@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActionNode = require('../../../../../design/model/node/interfaces/action-node');
-var IActionNodeState = require('../../../state/modelstate/interfaces/action-node-state');
-var IBizinstModel = require('../../../state/modelstate/interfaces/bizinst-model');
+import IActionNode from '../../../../../design/model/node/interfaces/action-node.js';
+import IActionNodeState from '../../../state/modelstate/interfaces/action-node-state.js';
+import IBizinstModel from '../../../state/modelstate/interfaces/bizinst-model.js';
 
 class IActionNodeBox {
   createNodeState(bizinstModel) {}
 }
 
-module.exports = IActionNodeBox;
+export default  IActionNodeBox;

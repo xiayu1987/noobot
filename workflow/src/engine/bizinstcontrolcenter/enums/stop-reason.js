@@ -34,4 +34,4 @@ Object.defineProperty(EStopReason, 'DESCRIPTIONS', {
   enumerable: false,
 });
 
-module.exports = Object.freeze(EStopReason);
+export default  Object.freeze(EStopReason);

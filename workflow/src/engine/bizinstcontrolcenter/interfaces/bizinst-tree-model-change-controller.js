@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IModelStateChangeAction = require('../../bizinst/action/interfaces/model-state-change-action');
-var IBizinstTreeBox = require('../../bizinst/box/bizinstbox/interfaces/bizinst-tree-box');
-var IStepState = require('../../bizinst/state/modelstate/interfaces/step-state');
+import IModelStateChangeAction from '../../bizinst/action/interfaces/model-state-change-action.js';
+import IBizinstTreeBox from '../../bizinst/box/bizinstbox/interfaces/bizinst-tree-box.js';
+import IStepState from '../../bizinst/state/modelstate/interfaces/step-state.js';
 
 class IBizinstTreeModelChangeControler {
   execAction(modelStateChangeAction, bizinstTreeBox, stepState) {}
 }
 
-module.exports = IBizinstTreeModelChangeControler;
+export default  IBizinstTreeModelChangeControler;

@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-const Model = require("../design/model/model");
-const Flowto = require("../design/model/flowto/flowto");
-const NodeLineRLAT = require("../design/model/flowto/node-line-rlat");
-const StateNode = require("../design/model/node/state-node");
-const ActionNode = require("../design/model/node/action-node");
-const ENodeType = require("../design/model/node/enums/node-type");
+import Model from '../design/model/model.js';
+import Flowto from '../design/model/flowto/flowto.js';
+import NodeLineRLAT from '../design/model/flowto/node-line-rlat.js';
+import StateNode from '../design/model/node/state-node.js';
+import ActionNode from '../design/model/node/action-node.js';
+import CompositeNode from '../design/model/node/composite-node.js';
+import ENodeType from '../design/model/node/enums/node-type.js';
 
 function toStateType(value = "") {
   const key = String(value || "").trim().toLowerCase();
@@ -41,17 +42,20 @@ function ensureNodeDefinitions(input = {}) {
   return { nodes, flowtos };
 }
 
-function compileWorkflowSemantic(semantic = {}) {
+export function compileWorkflowSemantic(semantic = {}) {
   const { nodes: nodeDefs, flowtos: flowDefs } = ensureNodeDefinitions(semantic);
   const model = new Model();
   const nodeMap = new Map();
 
   for (const nodeDef of nodeDefs) {
     const isAction = String(nodeDef?.type || "state").trim().toLowerCase() === "action";
-    const node = isAction ? new ActionNode() : new StateNode();
+    const isComposite = String(nodeDef?.type || "state").trim().toLowerCase() === "composite";
+    const node = isAction ? new ActionNode() : isComposite ? new CompositeNode() : new StateNode();
     node.setName(String(nodeDef?.name || nodeDef?.id || "节点").trim());
-    node.setNodeType(isAction ? ENodeType.ActionNode : ENodeType.StateNode);
-    if (!isAction) {
+    node.setNodeType(
+      isAction ? ENodeType.ActionNode : isComposite ? ENodeType.CompositeNode : ENodeType.StateNode,
+    );
+    if (!isAction && !isComposite) {
       node.setStateType(toStateType(nodeDef?.stateType));
     }
     node.setModel(model);
@@ -67,6 +71,9 @@ function compileWorkflowSemantic(semantic = {}) {
 
     const flowto = new Flowto();
     flowto.setName(String(flowDef?.name || `流向${index + 1}`).trim());
+    if (typeof flowDef?.condition === "string" && flowDef.condition.trim()) {
+      flowto.setCondition(flowDef.condition.trim());
+    }
     flowto.setStartNode(startNode);
     flowto.setEndNode(endNode);
     flowtos.push(flowto);
@@ -90,6 +97,6 @@ function compileWorkflowSemantic(semantic = {}) {
   return model;
 }
 
-module.exports = {
+export default {
   compileWorkflowSemantic,
 };

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../interfaces/can-persistence');
-var ICurrentState = require('../state/currentstate/interfaces/current-state');
+import ICanPersistence from '../../../interfaces/can-persistence.js';
+import ICurrentState from '../state/currentstate/interfaces/current-state.js';
 
 class ICurrentStateRecord {
   setCurrentState(currentState) {}
@@ -14,4 +14,4 @@ class ICurrentStateRecord {
   getBizinst() {}
 }
 
-module.exports = ICurrentStateRecord;
+export default  ICurrentStateRecord;

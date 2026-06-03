@@ -4,10 +4,35 @@
  * SPDX-License-Identifier: MIT
  */
 
-module.exports = {
-  // Stable facade API (recommended for integrations/plugins)
-  compileWorkflowSemantic: require("./lib/compiler").compileWorkflowSemantic,
-  startWorkflowInstance: require("./lib/runtime").startWorkflowInstance,
-  advanceWorkflowInstance: require("./lib/runtime").advanceWorkflowInstance,
-  executeWorkflowSemantic: require("./lib/runtime").executeWorkflowSemantic,
+import { compileWorkflowSemantic } from "./lib/compiler.js";
+import {
+  startWorkflowInstance,
+  advanceWorkflowInstance,
+  executeWorkflowSemantic,
+  startWorkflowInstanceById,
+  getWorkflowInstanceSnapshot,
+  advanceWorkflowInstanceById,
+  releaseWorkflowInstance,
+} from "./lib/runtime.js";
+
+export {
+  compileWorkflowSemantic,
+  startWorkflowInstance,
+  advanceWorkflowInstance,
+  executeWorkflowSemantic,
+  startWorkflowInstanceById,
+  getWorkflowInstanceSnapshot,
+  advanceWorkflowInstanceById,
+  releaseWorkflowInstance,
+};
+
+export default {
+  compileWorkflowSemantic,
+  startWorkflowInstance,
+  advanceWorkflowInstance,
+  executeWorkflowSemantic,
+  startWorkflowInstanceById,
+  getWorkflowInstanceSnapshot,
+  advanceWorkflowInstanceById,
+  releaseWorkflowInstance,
 };

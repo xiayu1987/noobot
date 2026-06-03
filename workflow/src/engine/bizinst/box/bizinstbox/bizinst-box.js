@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-var Bizinst = require('../../bizinst');
-var Process = require('../../state/process');
-var ProcessChain = require('../../state/process-chain');
-var State = require('../../state/state');
-var SourceInfo = require('../../state/currentstate/source-info');
-var ECurrentStateSourceType = require('../../state/currentstate/enums/current-state-source-type');
-var EModelStateType = require('../../state/modelstate/enums/model-state-type');
-var EActionNodeStateProcessHandleWay = require('../../state/proc/fschange/enums/action-node-state-process-handle-way');
-var ECompositeNodeStateProcessHandleWay = require('../../state/proc/fschange/enums/composite-node-state-process-handle-way');
-var EStateNodeStateProcessHandleWay = require('../../state/proc/fschange/enums/state-node-state-process-handle-way');
+import Bizinst from '../../bizinst.js';
+import Process from '../../state/process.js';
+import ProcessChain from '../../state/process-chain.js';
+import State from '../../state/state.js';
+import SourceInfo from '../../state/currentstate/source-info.js';
+import ECurrentStateSourceType from '../../state/currentstate/enums/current-state-source-type.js';
+import EModelStateType from '../../state/modelstate/enums/model-state-type.js';
+import EActionNodeStateProcessHandleWay from '../../state/proc/fschange/enums/action-node-state-process-handle-way.js';
+import ECompositeNodeStateProcessHandleWay from '../../state/proc/fschange/enums/composite-node-state-process-handle-way.js';
+import EStateNodeStateProcessHandleWay from '../../state/proc/fschange/enums/state-node-state-process-handle-way.js';
 
 class BizinstBox {
   constructor() {
@@ -182,4 +182,4 @@ class BizinstBox {
   }
 }
 
-module.exports = BizinstBox;
+export default  BizinstBox;

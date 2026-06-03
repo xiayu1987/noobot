@@ -7,4 +7,4 @@
 class ICombineNode {
 }
 
-module.exports = ICombineNode;
+export default  ICombineNode;

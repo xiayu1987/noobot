@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActor = require('../actor/interfaces/actor');
-var IContent = require('../content/interfaces/content');
+import IActor from '../actor/interfaces/actor.js';
+import IContent from '../content/interfaces/content.js';
 
 class IActionNode {
   setNodeContent(nodeContent) {}
@@ -14,4 +14,4 @@ class IActionNode {
   getNodeActor() {}
 }
 
-module.exports = IActionNode;
+export default  IActionNode;

@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-const Business = require("../engine/bizinst/business");
-const BizinstTreeControlCenter = require("../engine/bizinstcontrolcenter/bizinst-tree-control-center");
-const SubmitAction = require("../engine/bizinst/action/submit-action");
-const AuditAction = require("../engine/bizinst/action/audit-action");
-const BackAction = require("../engine/bizinst/action/back-action");
-const StopAction = require("../engine/bizinst/action/stop-action");
-const { compileWorkflowSemantic } = require("./compiler");
+import Business from '../engine/bizinst/business.js';
+import BizinstTreeControlCenter from '../engine/bizinstcontrolcenter/bizinst-tree-control-center.js';
+import SubmitAction from '../engine/bizinst/action/submit-action.js';
+import AuditAction from '../engine/bizinst/action/audit-action.js';
+import BackAction from '../engine/bizinst/action/back-action.js';
+import StopAction from '../engine/bizinst/action/stop-action.js';
+import { compileWorkflowSemantic } from './compiler.js';
+const WORKFLOW_INSTANCE_STORE = new Map();
 
 function createActionByType(type = "") {
   const key = String(type || "submit").trim().toLowerCase();
@@ -37,8 +38,11 @@ function summarizeActionRecords(treeRecord = null) {
   });
 }
 
-function startWorkflowInstance({ model = null } = {}) {
+export function startWorkflowInstance({ model = null, conditionContext = null } = {}) {
   const business = new Business();
+  if (conditionContext && typeof conditionContext === "object") {
+    business.conditionContext = { ...conditionContext };
+  }
   const controlCenter = new BizinstTreeControlCenter();
   const startResult = controlCenter.startBizinst(business, model);
   return {
@@ -50,7 +54,7 @@ function startWorkflowInstance({ model = null } = {}) {
   };
 }
 
-function advanceWorkflowInstance({
+export function advanceWorkflowInstance({
   bizinst = null,
   treeRecord = null,
   controlCenter = null,
@@ -102,7 +106,7 @@ function advanceWorkflowInstance({
   };
 }
 
-function executeWorkflowSemantic({ semantic = {}, options = {} } = {}) {
+export function executeWorkflowSemantic({ semantic = {}, options = {} } = {}) {
   const model = compileWorkflowSemantic(semantic);
   const started = startWorkflowInstance({ model });
   const progress = advanceWorkflowInstance({
@@ -118,8 +122,112 @@ function executeWorkflowSemantic({ semantic = {}, options = {} } = {}) {
   };
 }
 
-module.exports = {
+function resolveInstanceId(input = "") {
+  const normalized = String(input || "").trim();
+  if (normalized) return normalized;
+  return `wf_inst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function describePendingSteps(bizinst = null) {
+  const steps = snapshotCurrentSteps(bizinst);
+  return steps.map((stepState, index) => {
+    const actionNodeState = stepState?.getActionNodeState?.();
+    const node = actionNodeState?.getNode?.();
+    return {
+      index,
+      nodeName: String(node?.getName?.() || "").trim(),
+      nodeType: Number(node?.getNodeType?.()),
+    };
+  });
+}
+
+export function startWorkflowInstanceById({ instanceId = "", semantic = {}, options = {}, meta = {} } = {}) {
+  const id = resolveInstanceId(instanceId);
+  const model = compileWorkflowSemantic(semantic);
+  const conditionContext =
+    options?.conditionContext && typeof options.conditionContext === "object"
+      ? options.conditionContext
+      : meta?.conditionContext && typeof meta.conditionContext === "object"
+        ? meta.conditionContext
+        : null;
+  const started = startWorkflowInstance({ model, conditionContext });
+  const record = {
+    instanceId: id,
+    semantic,
+    options,
+    meta,
+    createdAt: new Date().toISOString(),
+    business: started.business,
+    controlCenter: started.controlCenter,
+    startResult: started.startResult,
+    bizinst: started.bizinst,
+    treeRecord: started.treeRecord,
+    transitions: 0,
+  };
+  if (conditionContext) {
+    record.business.conditionContext = {
+      ...(record.business.conditionContext && typeof record.business.conditionContext === "object"
+        ? record.business.conditionContext
+        : {}),
+      ...conditionContext,
+    };
+  }
+  WORKFLOW_INSTANCE_STORE.set(id, record);
+  return getWorkflowInstanceSnapshot({ instanceId: id });
+}
+
+function getWorkflowInstanceRecord({ instanceId = "" } = {}) {
+  const id = String(instanceId || "").trim();
+  if (!id) return null;
+  return WORKFLOW_INSTANCE_STORE.get(id) || null;
+}
+
+export function getWorkflowInstanceSnapshot({ instanceId = "" } = {}) {
+  const record = getWorkflowInstanceRecord({ instanceId });
+  if (!record) return null;
+  const pendingSteps = describePendingSteps(record.bizinst);
+  return {
+    instanceId: record.instanceId,
+    createdAt: record.createdAt,
+    transitions: record.transitions,
+    completed: pendingSteps.length === 0,
+    pendingStepCount: pendingSteps.length,
+    pendingSteps,
+    actionRecords: summarizeActionRecords(record.treeRecord),
+  };
+}
+
+export function advanceWorkflowInstanceById({
+  instanceId = "",
+  action = { type: "submit", stepIndex: 0 },
+} = {}) {
+  const record = getWorkflowInstanceRecord({ instanceId });
+  if (!record) {
+    throw new Error(`workflow instance not found: ${String(instanceId || "").trim()}`);
+  }
+  const steps = snapshotCurrentSteps(record.bizinst);
+  if (!steps.length) return getWorkflowInstanceSnapshot({ instanceId: record.instanceId });
+  const rawStepIndex = Number(action?.stepIndex);
+  const stepIndex = Number.isFinite(rawStepIndex) ? Math.max(0, Math.floor(rawStepIndex)) : 0;
+  const safeIndex = Math.min(stepIndex, steps.length - 1);
+  const runtimeAction = createActionByType(action?.type);
+  record.controlCenter.execAction(runtimeAction, record.bizinst, steps[safeIndex], record.treeRecord);
+  record.transitions += 1;
+  return getWorkflowInstanceSnapshot({ instanceId: record.instanceId });
+}
+
+export function releaseWorkflowInstance({ instanceId = "" } = {}) {
+  const id = String(instanceId || "").trim();
+  if (!id) return false;
+  return WORKFLOW_INSTANCE_STORE.delete(id);
+}
+
+export default {
   startWorkflowInstance,
   advanceWorkflowInstance,
   executeWorkflowSemantic,
+  startWorkflowInstanceById,
+  getWorkflowInstanceSnapshot,
+  advanceWorkflowInstanceById,
+  releaseWorkflowInstance,
 };

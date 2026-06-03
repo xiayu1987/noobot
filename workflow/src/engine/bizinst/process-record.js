@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../can-persistence-base');
-var IProcess = require('./state/interfaces/process');
+import CanPersistenceBase from '../../can-persistence-base.js';
+import IProcess from './state/interfaces/process.js';
 
 class ProcessRecord extends CanPersistenceBase {
   constructor() {
@@ -27,4 +27,4 @@ class ProcessRecord extends CanPersistenceBase {
   }
 }
 
-module.exports = ProcessRecord;
+export default  ProcessRecord;

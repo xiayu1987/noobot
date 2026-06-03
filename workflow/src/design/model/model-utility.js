@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IFlowto = require('./flowto/interfaces/flowto');
-var INodeLineRLAT = require('./flowto/interfaces/node-line-rlat');
-var INode = require('./node/interfaces/node');
-var IStateNode = require('./node/interfaces/state-node');
+import IFlowto from './flowto/interfaces/flowto.js';
+import INodeLineRLAT from './flowto/interfaces/node-line-rlat.js';
+import INode from './node/interfaces/node.js';
+import IStateNode from './node/interfaces/state-node.js';
 
 class ModelUtility {
   constructor() {
@@ -42,4 +42,4 @@ class ModelUtility {
   }
 }
 
-module.exports = ModelUtility;
+export default  ModelUtility;

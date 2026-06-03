@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../can-persistence-base');
-var IFlowto = require('./flowto/interfaces/flowto');
-var INodeLineRLAT = require('./flowto/interfaces/node-line-rlat');
-var INode = require('./node/interfaces/node');
+import CanPersistenceBase from '../../can-persistence-base.js';
+import IFlowto from './flowto/interfaces/flowto.js';
+import INodeLineRLAT from './flowto/interfaces/node-line-rlat.js';
+import INode from './node/interfaces/node.js';
 
 class Model extends CanPersistenceBase {
   constructor() {
@@ -36,4 +36,4 @@ class Model extends CanPersistenceBase {
   }
 }
 
-module.exports = Model;
+export default  Model;

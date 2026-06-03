@@ -7,4 +7,4 @@
 class ISplitNode {
 }
 
-module.exports = ISplitNode;
+export default  ISplitNode;

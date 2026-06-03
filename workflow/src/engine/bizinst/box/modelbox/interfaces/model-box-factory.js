@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IModel = require('../../../../../design/model/interfaces/model');
-var IFlowto = require('../../../../../design/model/flowto/interfaces/flowto');
-var IActionNode = require('../../../../../design/model/node/interfaces/action-node');
-var ICompositeNode = require('../../../../../design/model/node/interfaces/composite-node');
-var IStateNode = require('../../../../../design/model/node/interfaces/state-node');
-var IContextBean = require('../../../../interfaces/context-bean');
+import IModel from '../../../../../design/model/interfaces/model.js';
+import IFlowto from '../../../../../design/model/flowto/interfaces/flowto.js';
+import IActionNode from '../../../../../design/model/node/interfaces/action-node.js';
+import ICompositeNode from '../../../../../design/model/node/interfaces/composite-node.js';
+import IStateNode from '../../../../../design/model/node/interfaces/state-node.js';
+import IContextBean from '../../../../interfaces/context-bean.js';
 
 class IModelBoxFactory {
   getModelBox(model) {}
@@ -19,4 +19,4 @@ class IModelBoxFactory {
   getStateNodeBox(stateNode) {}
 }
 
-module.exports = IModelBoxFactory;
+export default  IModelBoxFactory;

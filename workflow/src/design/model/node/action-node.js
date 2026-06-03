@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActor = require('./actor/interfaces/actor');
-var IContent = require('./content/interfaces/content');
-var NodeBase = require('./node-base');
+import IActor from './actor/interfaces/actor.js';
+import IContent from './content/interfaces/content.js';
+import NodeBase from './node-base.js';
 
 class ActionNode extends NodeBase {
   constructor() {
@@ -28,4 +28,4 @@ class ActionNode extends NodeBase {
   }
 }
 
-module.exports = ActionNode;
+export default  ActionNode;

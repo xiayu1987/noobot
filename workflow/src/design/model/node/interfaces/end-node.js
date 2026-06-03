@@ -7,4 +7,4 @@
 class IEndNode {
 }
 
-module.exports = IEndNode;
+export default  IEndNode;

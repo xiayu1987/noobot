@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IModel = require('../../../../design/model/interfaces/model');
-var INode = require('../../../../design/model/node/interfaces/node');
-var IStateNode = require('../../../../design/model/node/interfaces/state-node');
+import IModel from '../../../../design/model/interfaces/model.js';
+import INode from '../../../../design/model/node/interfaces/node.js';
+import IStateNode from '../../../../design/model/node/interfaces/state-node.js';
 
 class ModelBox {
   constructor() {
@@ -40,4 +40,4 @@ class ModelBox {
   }
 }
 
-module.exports = ModelBox;
+export default  ModelBox;

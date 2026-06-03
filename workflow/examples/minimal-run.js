@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-const Model = require('../src/design/model/model');
-const Flowto = require('../src/design/model/flowto/flowto');
-const NodeLineRLAT = require('../src/design/model/flowto/node-line-rlat');
-const StateNode = require('../src/design/model/node/state-node');
-const ENodeType = require('../src/design/model/node/enums/node-type');
-const Business = require('../src/engine/bizinst/business');
-const BizinstTreeControlCenter = require('../src/engine/bizinstcontrolcenter/bizinst-tree-control-center');
+import Model from '../src/design/model/model.js';
+import Flowto from '../src/design/model/flowto/flowto.js';
+import NodeLineRLAT from '../src/design/model/flowto/node-line-rlat.js';
+import StateNode from '../src/design/model/node/state-node.js';
+import ENodeType from '../src/design/model/node/enums/node-type.js';
+import Business from '../src/engine/bizinst/business.js';
+import BizinstTreeControlCenter from '../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js';
 
 function buildSimpleModel() {
   const model = new Model();

@@ -7,4 +7,4 @@
 class IActor {
 }
 
-module.exports = IActor;
+export default  IActor;

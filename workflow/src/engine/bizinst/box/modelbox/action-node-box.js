@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActionNode = require('../../../../design/model/node/interfaces/action-node');
-var WorkFlowContext = require('../../../work-flow-context');
-var IActionNodeStateBox = require('../modelstatebox/interfaces/action-node-state-box');
-var IModelStateBoxFactory = require('../modelstatebox/interfaces/model-state-box-factory');
-var ActionNodeState = require('../../state/modelstate/action-node-state');
-var IActionNodeState = require('../../state/modelstate/interfaces/action-node-state');
-var IBizinstModel = require('../../state/modelstate/interfaces/bizinst-model');
-var IStepState = require('../../state/modelstate/interfaces/step-state');
-var ModelStateBoxFactory = require('../modelstatebox/model-state-box-factory');
-var NodeBoxBase = require('./node-box-base');
+import IActionNode from '../../../../design/model/node/interfaces/action-node.js';
+import WorkFlowContext from '../../../work-flow-context.js';
+import IActionNodeStateBox from '../modelstatebox/interfaces/action-node-state-box.js';
+import IModelStateBoxFactory from '../modelstatebox/interfaces/model-state-box-factory.js';
+import ActionNodeState from '../../state/modelstate/action-node-state.js';
+import IActionNodeState from '../../state/modelstate/interfaces/action-node-state.js';
+import IBizinstModel from '../../state/modelstate/interfaces/bizinst-model.js';
+import IStepState from '../../state/modelstate/interfaces/step-state.js';
+import ModelStateBoxFactory from '../modelstatebox/model-state-box-factory.js';
+import NodeBoxBase from './node-box-base.js';
 
 class ActionNodeBox extends NodeBoxBase {
   constructor() {
@@ -33,4 +33,4 @@ class ActionNodeBox extends NodeBoxBase {
   }
 }
 
-module.exports = ActionNodeBox;
+export default  ActionNodeBox;

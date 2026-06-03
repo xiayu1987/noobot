@@ -44,4 +44,4 @@ class NodeBoxBase {
   }
 }
 
-module.exports = NodeBoxBase;
+export default  NodeBoxBase;

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IModel = require('../../../design/model/interfaces/model');
-var IBizinst = require('../../bizinst/interfaces/bizinst');
-var IBusiness = require('../../bizinst/interfaces/business');
-var IStepState = require('../../bizinst/state/modelstate/interfaces/step-state');
-var FlowException = require('../../exception/flow-exception');
+import IModel from '../../../design/model/interfaces/model.js';
+import IBizinst from '../../bizinst/interfaces/bizinst.js';
+import IBusiness from '../../bizinst/interfaces/business.js';
+import IStepState from '../../bizinst/state/modelstate/interfaces/step-state.js';
+import FlowException from '../../exception/flow-exception.js';
 
 class IBizinstFlowEngine {
   createBizinst(business, model) {}
@@ -19,4 +19,4 @@ class IBizinstFlowEngine {
   goPre(bizinst, currentStepState, flowListener) {}
 }
 
-module.exports = IBizinstFlowEngine;
+export default  IBizinstFlowEngine;

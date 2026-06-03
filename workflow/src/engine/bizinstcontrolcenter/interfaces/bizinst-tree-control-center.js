@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IModel = require('../../../design/model/interfaces/model');
-var IActionRecord = require('../../bizinst/interfaces/action-record');
-var IBizinst = require('../../bizinst/interfaces/bizinst');
-var IBizinstTreeRecord = require('../../bizinst/interfaces/bizinst-tree-record');
-var IBusiness = require('../../bizinst/interfaces/business');
-var IAction = require('../../bizinst/action/interfaces/action');
-var IStepState = require('../../bizinst/state/modelstate/interfaces/step-state');
-var FlowException = require('../../exception/flow-exception');
+import IModel from '../../../design/model/interfaces/model.js';
+import IActionRecord from '../../bizinst/interfaces/action-record.js';
+import IBizinst from '../../bizinst/interfaces/bizinst.js';
+import IBizinstTreeRecord from '../../bizinst/interfaces/bizinst-tree-record.js';
+import IBusiness from '../../bizinst/interfaces/business.js';
+import IAction from '../../bizinst/action/interfaces/action.js';
+import IStepState from '../../bizinst/state/modelstate/interfaces/step-state.js';
+import FlowException from '../../exception/flow-exception.js';
 
 class IBizinstTreeControlCenter {
   startBizinst(business, model) {}
   execAction(action, bizinst, stepState, bizinstTreeRecord) {}
 }
 
-module.exports = IBizinstTreeControlCenter;
+export default  IBizinstTreeControlCenter;

@@ -8,4 +8,4 @@ class IStartAction {
   exec(bizinst, stepState, flowListener) {}
 }
 
-module.exports = IStartAction;
+export default  IStartAction;

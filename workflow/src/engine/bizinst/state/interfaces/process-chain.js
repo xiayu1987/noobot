@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../interfaces/can-persistence');
-var IBizinst = require('../../interfaces/bizinst');
+import ICanPersistence from '../../../../interfaces/can-persistence.js';
+import IBizinst from '../../interfaces/bizinst.js';
 
 class IProcessChain {
   setBizinst(bizinst) {}
@@ -14,4 +14,4 @@ class IProcessChain {
   getProcesses() {}
 }
 
-module.exports = IProcessChain;
+export default  IProcessChain;

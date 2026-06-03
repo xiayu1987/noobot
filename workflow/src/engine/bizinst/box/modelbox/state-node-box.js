@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IStateNode = require('../../../../design/model/node/interfaces/state-node');
-var IBizinst = require('../../interfaces/bizinst');
-var IBizinstModel = require('../../state/modelstate/interfaces/bizinst-model');
-var IStateNodeState = require('../../state/modelstate/interfaces/state-node-state');
-var StateNodeState = require('../../state/modelstate/state-node-state');
-var NodeBoxBase = require('./node-box-base');
+import IStateNode from '../../../../design/model/node/interfaces/state-node.js';
+import IBizinst from '../../interfaces/bizinst.js';
+import IBizinstModel from '../../state/modelstate/interfaces/bizinst-model.js';
+import IStateNodeState from '../../state/modelstate/interfaces/state-node-state.js';
+import StateNodeState from '../../state/modelstate/state-node-state.js';
+import NodeBoxBase from './node-box-base.js';
 
 class StateNodeBox extends NodeBoxBase {
   constructor() {
@@ -37,4 +37,4 @@ class StateNodeBox extends NodeBoxBase {
   }
 }
 
-module.exports = StateNodeBox;
+export default  StateNodeBox;

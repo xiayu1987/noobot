@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IBizinst = require('../bizinst/interfaces/bizinst');
-var IBizinstTreeBox = require('../bizinst/box/bizinstbox/interfaces/bizinst-tree-box');
-var IProcess = require('../bizinst/state/interfaces/process');
-var IActionNodeState = require('../bizinst/state/modelstate/interfaces/action-node-state');
-var IStepState = require('../bizinst/state/modelstate/interfaces/step-state');
-var AddStepStateProcess = require('../bizinst/state/proc/mschange/add-step-state-process');
-var IAddStepStateProcess = require('../bizinst/state/proc/mschange/interfaces/add-step-state-process');
+import IBizinst from '../bizinst/interfaces/bizinst.js';
+import IBizinstTreeBox from '../bizinst/box/bizinstbox/interfaces/bizinst-tree-box.js';
+import IProcess from '../bizinst/state/interfaces/process.js';
+import IActionNodeState from '../bizinst/state/modelstate/interfaces/action-node-state.js';
+import IStepState from '../bizinst/state/modelstate/interfaces/step-state.js';
+import AddStepStateProcess from '../bizinst/state/proc/mschange/add-step-state-process.js';
+import IAddStepStateProcess from '../bizinst/state/proc/mschange/interfaces/add-step-state-process.js';
 
 class ModelStateListener {
   constructor() {
@@ -37,4 +37,4 @@ class ModelStateListener {
   }
 }
 
-module.exports = ModelStateListener;
+export default  ModelStateListener;

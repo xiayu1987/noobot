@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICompositeNode = require('../../../../../design/model/node/interfaces/composite-node');
-var IBizinst = require('../../../interfaces/bizinst');
-var NodeStateProcessBase = require('./node-state-process-base');
+import ICompositeNode from '../../../../../design/model/node/interfaces/composite-node.js';
+import IBizinst from '../../../interfaces/bizinst.js';
+import NodeStateProcessBase from './node-state-process-base.js';
 
 class CompositeNodeStateProcess extends NodeStateProcessBase {
   constructor() {
@@ -42,4 +42,4 @@ class CompositeNodeStateProcess extends NodeStateProcessBase {
   }
 }
 
-module.exports = CompositeNodeStateProcess;
+export default  CompositeNodeStateProcess;

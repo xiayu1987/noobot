@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IFlowto = require('../../../../../design/model/flowto/interfaces/flowto');
-var IBizinst = require('../../../interfaces/bizinst');
-var IFlowtoState = require('../../../state/modelstate/interfaces/flowto-state');
-var IBizinstModel = require('../../../state/modelstate/interfaces/bizinst-model');
+import IFlowto from '../../../../../design/model/flowto/interfaces/flowto.js';
+import IBizinst from '../../../interfaces/bizinst.js';
+import IFlowtoState from '../../../state/modelstate/interfaces/flowto-state.js';
+import IBizinstModel from '../../../state/modelstate/interfaces/bizinst-model.js';
 
 class IFlowtoBox {
   setFlowto(flowto) {}
@@ -16,4 +16,4 @@ class IFlowtoBox {
   canFlow(bizinst) {}
 }
 
-module.exports = IFlowtoBox;
+export default  IFlowtoBox;

@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-var EModelStateType = require('../bizinst/state/modelstate/enums/model-state-type');
-var ActionNodeStateProcess = require('../bizinst/state/proc/fschange/action-node-state-process');
-var CompositeNodeStateProcess = require('../bizinst/state/proc/fschange/composite-node-state-process');
-var DiscoverModelStateProcess = require('../bizinst/state/proc/fschange/discover-model-state-process');
-var EActionNodeStateProcessHandleWay = require('../bizinst/state/proc/fschange/enums/action-node-state-process-handle-way');
-var ECompositeNodeStateProcessHandleWay = require('../bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way');
-var EStateNodeStateProcessHandleWay = require('../bizinst/state/proc/fschange/enums/state-node-state-process-handle-way');
-var PathStateProcess = require('../bizinst/state/proc/fschange/path-state-process');
-var StateNodeStateProcess = require('../bizinst/state/proc/fschange/state-node-state-process');
+import EModelStateType from '../bizinst/state/modelstate/enums/model-state-type.js';
+import ActionNodeStateProcess from '../bizinst/state/proc/fschange/action-node-state-process.js';
+import CompositeNodeStateProcess from '../bizinst/state/proc/fschange/composite-node-state-process.js';
+import DiscoverModelStateProcess from '../bizinst/state/proc/fschange/discover-model-state-process.js';
+import EActionNodeStateProcessHandleWay from '../bizinst/state/proc/fschange/enums/action-node-state-process-handle-way.js';
+import ECompositeNodeStateProcessHandleWay from '../bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way.js';
+import EStateNodeStateProcessHandleWay from '../bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js';
+import PathStateProcess from '../bizinst/state/proc/fschange/path-state-process.js';
+import StateNodeStateProcess from '../bizinst/state/proc/fschange/state-node-state-process.js';
 
 class FlowListener {
   constructor() {
@@ -206,4 +206,4 @@ class FlowListener {
   }
 }
 
-module.exports = FlowListener;
+export default  FlowListener;

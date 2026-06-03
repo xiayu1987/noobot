@@ -37,4 +37,4 @@ Object.defineProperty(EActionNodeStateProcessHandleWay, 'DESCRIPTIONS', {
   enumerable: false,
 });
 
-module.exports = Object.freeze(EActionNodeStateProcessHandleWay);
+export default  Object.freeze(EActionNodeStateProcessHandleWay);

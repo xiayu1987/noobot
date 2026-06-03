@@ -52,4 +52,4 @@ class NodeStateBoxBase {
   }
 }
 
-module.exports = NodeStateBoxBase;
+export default  NodeStateBoxBase;
