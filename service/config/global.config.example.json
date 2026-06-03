@@ -10,8 +10,8 @@
   },
   "session": {
     "recent_message_limit": 15,
-    "use_last_running_task_range": true,
-    "use_last_completed_task_range": true
+    "use_last_running_task_range": false,
+    "use_last_completed_task_range": false
   },
   "attachments": {
     "max_file_count": 8,
