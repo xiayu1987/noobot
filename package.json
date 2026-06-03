@@ -8,7 +8,9 @@
     "agent-proxy",
     "model-proxy",
     "i18n",
+    "workflow",
     "plugin/noobot-plugin-harness",
+    "plugin/noobot-plugin-workflow",
     "client/noobot-chat"
   ],
   "scripts": {

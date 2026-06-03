@@ -1,0 +1,16 @@
+{
+  "name": "workflow",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js",
+    "demo:minimal": "node examples/minimal-run.js",
+    "demo:action-flow": "node examples/action-flow.js",
+    "demo:parallel-flow": "node examples/parallel-flow.js"
+  }
+}

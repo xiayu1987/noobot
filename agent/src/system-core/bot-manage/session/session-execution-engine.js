@@ -24,6 +24,7 @@ import { createAgentHookManager } from "../../hook/index.js";
 import { createBotHookManager } from "../hook/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
+import { registerNoobotPlugin as registerWorkflowPlugin } from "../../../../../plugin/noobot-plugin-workflow/src/index.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
 import {
   resolveModelContextMessages,
@@ -342,7 +343,14 @@ export class SessionExecutionEngine {
       runConfig,
       userConfig,
     });
-    return this._prepareBotHookRunConfig({ runConfig: preparedHarnessConfig });
+    const preparedBotHookConfig = this._prepareBotHookRunConfig({
+      runConfig: preparedHarnessConfig,
+    });
+    return this._prepareWorkflowRunConfig({
+      userId,
+      runConfig: preparedBotHookConfig,
+      userConfig,
+    });
   }
 
   _buildContextBuilder({
@@ -839,6 +847,102 @@ export class SessionExecutionEngine {
       plugins: {
         ...(runConfig?.plugins || {}),
         harness: harnessOptions,
+      },
+    };
+  }
+
+  _resolveWorkflowPluginOptions({ runConfig = {}, userConfig = {} } = {}) {
+    const effectiveConfig = mergeConfig(
+      this.globalConfig || {},
+      userConfig && typeof userConfig === "object" ? userConfig : {},
+    );
+    const effectiveWorkflow =
+      effectiveConfig?.plugins?.workflow && typeof effectiveConfig.plugins.workflow === "object"
+        ? effectiveConfig.plugins.workflow
+        : {};
+    if (effectiveWorkflow?.enabled === false) return { enabled: false, mode: "off" };
+    const runWorkflow =
+      runConfig?.plugins?.workflow && typeof runConfig.plugins.workflow === "object"
+        ? runConfig.plugins.workflow
+        : {};
+    if (runWorkflow?.enabled === false) return { enabled: false, mode: "off" };
+    const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
+      ? runConfig.selectedPlugins
+      : [];
+    const workflowSelected = selectedPlugins.includes("workflow");
+    const options = {
+      ...(effectiveWorkflow && typeof effectiveWorkflow === "object" ? effectiveWorkflow : {}),
+      ...(runWorkflow && typeof runWorkflow === "object" ? runWorkflow : {}),
+    };
+    const normalizedMode = String(workflowSelected ? "on" : options?.mode ?? "off")
+      .trim()
+      .toLowerCase();
+    const resolvedMode = normalizedMode === "on" ? "on" : "off";
+    if (resolvedMode !== "on") return { enabled: false, mode: "off" };
+    const next = { ...options, enabled: true, mode: "on" };
+    next.miniRunnerMaxTurns =
+      Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
+        ? Math.min(Number(next.miniRunnerMaxTurns), 5)
+        : 3;
+    next.maxAutoTransitions =
+      Number.isFinite(Number(next?.maxAutoTransitions)) && Number(next.maxAutoTransitions) > 0
+        ? Math.floor(Number(next.maxAutoTransitions))
+        : 10;
+    if (!String(next?.semanticMode || "").trim()) {
+      next.semanticMode = "separate_model";
+    }
+    if (
+      String(next?.semanticMode || "").trim().toLowerCase() === "separate_model" &&
+      typeof next?.capabilityModelInvoker !== "function"
+    ) {
+      next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
+        maxTurns: next?.miniRunnerMaxTurns,
+        enableToolBinding: false,
+      });
+    }
+    return next;
+  }
+
+  _prepareWorkflowRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    const workflowOptions = this._resolveWorkflowPluginOptions({
+      userId,
+      runConfig,
+      userConfig,
+    });
+    if (!workflowOptions.enabled) return runConfig;
+    const botHookManager =
+      runConfig?.botHookManager && typeof runConfig.botHookManager === "object"
+        ? runConfig.botHookManager
+        : runConfig?.botHooks &&
+            typeof runConfig.botHooks === "object" &&
+            typeof runConfig.botHooks.on === "function"
+          ? runConfig.botHooks
+          : createBotHookManager();
+    if (!botHookManager.__noobotWorkflowPluginRegistered) {
+      registerWorkflowPlugin({ botHookManager }, workflowOptions);
+      Object.defineProperty(botHookManager, "__noobotWorkflowPluginRegistered", {
+        value: true,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    const existingRuntimeMeta =
+      botHookManager.runtime && typeof botHookManager.runtime === "object"
+        ? botHookManager.runtime
+        : {};
+    botHookManager.runtime = {
+      ...existingRuntimeMeta,
+      workflow:
+        workflowOptions && typeof workflowOptions === "object"
+          ? workflowOptions
+          : existingRuntimeMeta.workflow,
+    };
+    return {
+      ...runConfig,
+      botHookManager,
+      plugins: {
+        ...(runConfig?.plugins || {}),
+        workflow: workflowOptions,
       },
     };
   }
