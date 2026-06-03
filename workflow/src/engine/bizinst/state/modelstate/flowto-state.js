@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../../can-persistence-base');
-var IFlowto = require('../../../../design/model/flowto/interfaces/flowto');
+import CanPersistenceBase from '../../../../can-persistence-base.js';
+import IFlowto from '../../../../design/model/flowto/interfaces/flowto.js';
 
 class FlowtoState extends CanPersistenceBase {
   constructor() {
@@ -27,4 +27,4 @@ class FlowtoState extends CanPersistenceBase {
   }
 }
 
-module.exports = FlowtoState;
+export default  FlowtoState;

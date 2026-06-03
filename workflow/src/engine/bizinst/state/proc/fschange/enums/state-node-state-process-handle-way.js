@@ -49,4 +49,4 @@ Object.defineProperty(EStateNodeStateProcessHandleWay, 'DESCRIPTIONS', {
   enumerable: false,
 });
 
-module.exports = Object.freeze(EStateNodeStateProcessHandleWay);
+export default  Object.freeze(EStateNodeStateProcessHandleWay);

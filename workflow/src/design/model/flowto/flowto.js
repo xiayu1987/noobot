@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../can-persistence-base');
-var INode = require('../node/interfaces/node');
+import CanPersistenceBase from '../../../can-persistence-base.js';
+import INode from '../node/interfaces/node.js';
 
 class Flowto extends CanPersistenceBase {
   constructor() {
@@ -13,6 +13,7 @@ class Flowto extends CanPersistenceBase {
     this.startNode = null;
     this.endNode = null;
     this.name = null;
+    this.condition = "";
   }
   getStartNode() {
     return this.startNode;
@@ -32,6 +33,12 @@ class Flowto extends CanPersistenceBase {
   getName() {
     return this.name;
   }
+  setCondition(condition) {
+    this.condition = condition;
+  }
+  getCondition() {
+    return this.condition;
+  }
 }
 
-module.exports = Flowto;
+export default  Flowto;

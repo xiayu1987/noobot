@@ -7,4 +7,4 @@
 class ILogicExpression {
 }
 
-module.exports = ILogicExpression;
+export default  ILogicExpression;

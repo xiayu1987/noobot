@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
 import {
   WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_PHASE_STATUS,
@@ -23,13 +29,15 @@ function createInteractionId(ctx = {}) {
   return `wf_${userId}_${sessionId}_${ts}_${rand}`;
 }
 
-function resolveRunMeta(ctx = {}) {
+function resolveRunMeta(ctx = {}, options = {}) {
   return {
     userId: normalizeMetaValue(ctx?.userId),
     sessionId: normalizeMetaValue(ctx?.sessionId),
     parentSessionId: normalizeMetaValue(ctx?.parentSessionId),
     dialogProcessId: normalizeMetaValue(ctx?.dialogProcessId),
-    hookPoint: WORKFLOW_BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH,
+    hookPoint:
+      String(options?.hookPoint || WORKFLOW_BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH).trim() ||
+      WORKFLOW_BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH,
     locale: normalizeMetaValue(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE),
   };
 }
@@ -66,7 +74,7 @@ export function buildWorkflowOrchestrationPayload({
     status: success ? WORKFLOW_PHASE_STATUS.SUCCEEDED : WORKFLOW_PHASE_STATUS.FAILED,
     timestamp: now,
     interactionId,
-    runMeta: resolveRunMeta(ctx),
+    runMeta: resolveRunMeta(ctx, options),
     orchestration: {
       mode,
       semanticPurpose: WORKFLOW_SEMANTIC.PURPOSE,

@@ -5,8 +5,9 @@
 1. 监听 bot hook（默认 `after_agent_dispatch`）
 2. 通过模型调用把“自然语言工作流语义”转换为文本协议（DSL，非 JSON）
 3. 插件侧完成文本协议解析，生成语义对象
-4. 调用 `workflow` lib facade 完成：编译模型 -> 启动实例 -> 流转
-5. 插件仅负责编排与交互上下文处理，不承载工作流核心逻辑
+4. 调用 `workflow` lib facade 按 `instanceId` 启动/推进实例
+5. 每个节点通过 hook `workflow_node_agent_execute` 派发 agent 执行
+6. workflow 侧仅管理实例流转，不负责节点 agent 编排
 
 ## DSL 协议（v1）
 
@@ -15,11 +16,15 @@ WORKFLOW_DSL/1
 NODE id=start type=state stateType=start name="开始"
 NODE id=audit type=action name="审批"
 NODE id=end type=state stateType=end name="结束"
-EDGE from=start to=audit name="开始到审批"
-EDGE from=audit to=end name="审批到结束"
+EDGE from=start to=audit name="开始到审批" when="gte(order.amount,100)"
+EDGE from=audit to=end name="审批到结束" when="always"
 AUTO type=submit stepIndex=0
 END
 ```
+
+`EDGE when` 支持：`always/never/exists(path)/eq/ne/gt/gte/lt/lte/in`。
+
+条件求值上下文可通过 `runConfig.workflowConditionContext` 传入（例如 `{"order":{"amount":120}}`）。
 
 ## 编排产物（统一 payload）
 
@@ -79,6 +84,27 @@ END
 }
 ```
 
+## 当前有效配置项（2026-06-04）
+
+仅以下配置会被插件读取：
+
+- `enabled: boolean`（默认 `true`）
+- `mode: "on" | "off"`（默认 `off`）
+- `hookPoint: "after_agent_dispatch"`（默认该值）
+- `semanticPrompt: string`（可覆盖默认 DSL 提示词）
+- `semanticModel: string`（语义模型名）
+- `maxAutoTransitions: number`（默认 `10`）
+- `priority: number`（默认 `10`）
+- `timeoutMs: number`（默认 `180000`）
+- `capabilityModelInvoker: function`（可选，语义模型调用器）
+
+已移除/不再生效的旧字段：
+
+- `semanticMode`
+- `workflowProjectPath`
+- `miniRunnerMaxTurns`
+- `autoSubmit`
+
 ## 开启方式
 
 ```json
@@ -86,7 +112,12 @@ END
   "plugins": {
     "workflow": {
       "enabled": true,
-      "mode": "on"
+      "mode": "on",
+      "hookPoint": "after_agent_dispatch",
+      "semanticModel": "qwen3_6_plus",
+      "maxAutoTransitions": 10,
+      "priority": 10,
+      "timeoutMs": 180000
     }
   },
   "selectedPlugins": ["workflow"]

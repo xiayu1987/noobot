@@ -1,5 +1,13 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
 import {
+  WORKFLOW_ACTION,
   WORKFLOW_BOT_HOOK_POINTS,
+  WORKFLOW_HOOKS,
   WORKFLOW_PHASE_STATUS,
   WORKFLOW_PHASES,
   WORKFLOW_PLUGIN_DEFAULTS,
@@ -7,7 +15,12 @@ import {
   WORKFLOW_SEMANTIC,
   WORKFLOW_TRACE,
 } from "./constants.js";
-import { executeWorkflowText } from "../workflow/adapter.js";
+import {
+  advanceWorkflowInstance,
+  createWorkflowInstance,
+  executeWorkflowText,
+  releaseWorkflowInstance,
+} from "../workflow/adapter.js";
 import { buildWorkflowOrchestrationPayload } from "./orchestration-payload.js";
 
 function resolveAssistantOutput(agentResult = {}) {
@@ -106,13 +119,53 @@ function createPhaseTracker() {
   };
 }
 
+function resolveWorkflowInstanceId(ctx = {}) {
+  const provided = String(
+    ctx?.workflowInstanceId ||
+      ctx?.runConfig?.workflowInstanceId ||
+      "",
+  ).trim();
+  if (provided) return provided;
+  const base = String(ctx?.dialogProcessId || ctx?.sessionId || "session").trim() || "session";
+  return `wf_inst_${base}_${Date.now()}`;
+}
+
+async function runNodeAgent({
+  hookManager,
+  ctx = {},
+  instanceId = "",
+  pendingStep = {},
+  semantic = {},
+  transition = 0,
+} = {}) {
+  const hookPayload = {
+    ...ctx,
+    workflow: {
+      instanceId,
+      pendingStep,
+      transition,
+      semantic,
+    },
+    agentInstruction: `请执行工作流节点任务：${pendingStep?.nodeName || ""}`,
+    proposedAction: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
+  };
+  const emitResult = await hookManager.emit(WORKFLOW_BOT_HOOK_POINTS.NODE_AGENT_EXECUTE, hookPayload);
+  const results = Array.isArray(emitResult?.results) ? emitResult.results : [];
+  for (const item of results) {
+    if (!item?.ok) continue;
+    const action = item?.result?.action;
+    if (action && typeof action === "object") return action;
+  }
+  return { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) };
+}
+
 export function createRegisterWorkflowHooks() {
   return function registerWorkflowHooks({ hookManager, options }) {
     const disposers = [];
 
     disposers.push(
       hookManager.on(
-        WORKFLOW_BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH,
+        options?.hookPoint || WORKFLOW_BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH,
         async (ctx = {}) => {
           const agentResult = ctx?.agentResult && typeof ctx.agentResult === "object" ? ctx.agentResult : {};
           const phaseTracker = createPhaseTracker();
@@ -146,18 +199,81 @@ export function createRegisterWorkflowHooks() {
             );
             const semanticText = String(semanticResolution?.text || "").trim();
             phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
-            const { semantic, execution } = executeWorkflowText({
+            const { semantic } = executeWorkflowText({
               semanticText,
               options,
             });
-            phaseTracker.end(
-              WORKFLOW_PHASES.WORKFLOW_EXECUTION,
-              WORKFLOW_PHASE_STATUS.SUCCEEDED,
-              {
-              completed: execution?.completed === true,
-              pendingStepCount: Number(execution?.pendingStepCount || 0),
+            const instanceId = resolveWorkflowInstanceId(ctx);
+            const conditionContext =
+              ctx?.runConfig?.workflowConditionContext &&
+              typeof ctx.runConfig.workflowConditionContext === "object"
+                ? ctx.runConfig.workflowConditionContext
+                : ctx?.workflowConditionContext && typeof ctx.workflowConditionContext === "object"
+                  ? ctx.workflowConditionContext
+                  : null;
+            const effectiveOptions = conditionContext
+              ? {
+                  ...options,
+                  conditionContext,
+                }
+              : options;
+            let snapshot = createWorkflowInstance({
+              instanceId,
+              semantic,
+              options: effectiveOptions,
+              meta: {
+                userId: String(ctx?.userId || "").trim(),
+                sessionId: String(ctx?.sessionId || "").trim(),
+                dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+                ...(conditionContext ? { conditionContext } : {}),
               },
-            );
+            });
+            const maxTransitions = Number.isFinite(Number(options?.maxAutoTransitions))
+              ? Math.max(1, Math.floor(Number(options.maxAutoTransitions)))
+              : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS;
+            const nodeAgentRuns = [];
+            let transitions = 0;
+            while (snapshot && snapshot.completed !== true && transitions < maxTransitions) {
+              const pending = Array.isArray(snapshot.pendingSteps) ? snapshot.pendingSteps : [];
+              if (!pending.length) break;
+              const nextStep = pending[0];
+              const action = await runNodeAgent({
+                hookManager,
+                ctx,
+                instanceId,
+                pendingStep: nextStep,
+                semantic,
+                transition: transitions + 1,
+              });
+              snapshot = advanceWorkflowInstance({
+                instanceId,
+                action,
+              });
+              transitions += 1;
+              nodeAgentRuns.push({
+                transition: transitions,
+                step: nextStep,
+                action,
+                pendingStepCount: Number(snapshot?.pendingStepCount || 0),
+              });
+            }
+            const execution = {
+              started: true,
+              instanceId,
+              autoTransitions: transitions,
+              completed: snapshot?.completed === true,
+              pendingStepCount: Number(snapshot?.pendingStepCount || 0),
+              actionRecords: Array.isArray(snapshot?.actionRecords) ? snapshot.actionRecords : [],
+              nodeAgentRuns,
+            };
+            if (execution.completed) {
+              releaseWorkflowInstance({ instanceId });
+            }
+            phaseTracker.end(WORKFLOW_PHASES.WORKFLOW_EXECUTION, WORKFLOW_PHASE_STATUS.SUCCEEDED, {
+              completed: execution.completed,
+              pendingStepCount: execution.pendingStepCount,
+              instanceId,
+            });
             retryMeta.history.push({
               attempt: 1,
               status: WORKFLOW_PHASE_STATUS.SUCCEEDED,
@@ -223,7 +339,7 @@ export function createRegisterWorkflowHooks() {
           }
         },
         {
-          id: "workflow_after_agent_dispatch",
+          id: WORKFLOW_HOOKS.AFTER_AGENT_DISPATCH_LISTENER_ID,
           priority: Number(options?.priority) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_PRIORITY,
           timeoutMs:
             Number(options?.timeoutMs) > 0

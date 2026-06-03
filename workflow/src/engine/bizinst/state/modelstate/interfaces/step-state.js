@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../../interfaces/can-persistence');
+import ICanPersistence from '../../../../../interfaces/can-persistence.js';
 
 class IStepState {
   setActionNodeState(actionNodeState) {}
@@ -13,4 +13,4 @@ class IStepState {
   getIndex() {}
 }
 
-module.exports = IStepState;
+export default  IStepState;

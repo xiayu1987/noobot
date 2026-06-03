@@ -7,4 +7,4 @@
 class IModelState {
 }
 
-module.exports = IModelState;
+export default  IModelState;

@@ -1,8 +1,23 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
 export const PLUGIN_NAME = "noobot-plugin-workflow";
 export const PLUGIN_VERSION = "0.1.0";
 
 export const WORKFLOW_BOT_HOOK_POINTS = Object.freeze({
   AFTER_AGENT_DISPATCH: "after_agent_dispatch",
+  NODE_AGENT_EXECUTE: "workflow_node_agent_execute",
+});
+
+export const WORKFLOW_HOOKS = Object.freeze({
+  AFTER_AGENT_DISPATCH_LISTENER_ID: "workflow_after_agent_dispatch",
+});
+
+export const WORKFLOW_ACTION = Object.freeze({
+  SUBMIT: "submit",
 });
 
 export const WORKFLOW_PLUGIN_DEFAULTS = Object.freeze({
@@ -12,7 +27,6 @@ export const WORKFLOW_PLUGIN_DEFAULTS = Object.freeze({
   DEFAULT_TIMEOUT_MS: 180000,
   DEFAULT_PRIORITY: 10,
   DEFAULT_MAX_AUTO_TRANSITIONS: 10,
-  DEFAULT_MINI_RUNNER_MAX_TURNS: 3,
 });
 
 export const WORKFLOW_SEMANTIC = Object.freeze({

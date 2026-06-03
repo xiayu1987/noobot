@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActionNode = require('../../../../../design/model/node/interfaces/action-node');
-var IStepState = require('../../modelstate/interfaces/step-state');
-var NodeStateProcessBase = require('./node-state-process-base');
+import IActionNode from '../../../../../design/model/node/interfaces/action-node.js';
+import IStepState from '../../modelstate/interfaces/step-state.js';
+import NodeStateProcessBase from './node-state-process-base.js';
 
 class ActionNodeStateProcess extends NodeStateProcessBase {
   constructor() {
@@ -28,4 +28,4 @@ class ActionNodeStateProcess extends NodeStateProcessBase {
   }
 }
 
-module.exports = ActionNodeStateProcess;
+export default  ActionNodeStateProcess;

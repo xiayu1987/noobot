@@ -1,8 +1,15 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
 import { normalizeOptions } from "./options.js";
+import { formatWorkflowCoreError } from "./error-messages.js";
 
 export function assertHookManager(hookManager = null) {
   if (!hookManager || typeof hookManager.on !== "function") {
-    throw new Error("workflow plugin requires a bot hook manager with on()");
+    throw new Error(formatWorkflowCoreError("HOOK_MANAGER_REQUIRED"));
   }
 }
 

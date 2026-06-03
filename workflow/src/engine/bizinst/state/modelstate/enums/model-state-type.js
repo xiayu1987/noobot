@@ -43,4 +43,4 @@ Object.defineProperty(EModelStateType, 'DESCRIPTIONS', {
   enumerable: false,
 });
 
-module.exports = Object.freeze(EModelStateType);
+export default  Object.freeze(EModelStateType);

@@ -37,4 +37,4 @@ Object.defineProperty(ENodeType, 'DESCRIPTIONS', {
   enumerable: false,
 });
 
-module.exports = Object.freeze(ENodeType);
+export default  Object.freeze(ENodeType);

@@ -11,4 +11,4 @@ class FlowException extends Error {
   }
 }
 
-module.exports = FlowException;
+export default  FlowException;

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var EModelStateType = require('../../modelstate/enums/model-state-type');
-var IModelState = require('../../modelstate/interfaces/model-state');
+import EModelStateType from '../../modelstate/enums/model-state-type.js';
+import IModelState from '../../modelstate/interfaces/model-state.js';
 
 class DiscoverModelStateProcess {
   constructor() {
@@ -24,4 +24,4 @@ class DiscoverModelStateProcess {
   }
 }
 
-module.exports = DiscoverModelStateProcess;
+export default  DiscoverModelStateProcess;

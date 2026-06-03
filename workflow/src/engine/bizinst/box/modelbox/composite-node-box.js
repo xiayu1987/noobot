@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICompositeNode = require('../../../../design/model/node/interfaces/composite-node');
-var IBizinst = require('../../interfaces/bizinst');
-var BizinstBox = require('../bizinstbox/bizinst-box');
-var CompositeNodeState = require('../../state/modelstate/composite-node-state');
-var ICompositeNodeState = require('../../state/modelstate/interfaces/composite-node-state');
-var IBizinstModel = require('../../state/modelstate/interfaces/bizinst-model');
-var NodeBoxBase = require('./node-box-base');
+import ICompositeNode from '../../../../design/model/node/interfaces/composite-node.js';
+import IBizinst from '../../interfaces/bizinst.js';
+import BizinstBox from '../bizinstbox/bizinst-box.js';
+import CompositeNodeState from '../../state/modelstate/composite-node-state.js';
+import ICompositeNodeState from '../../state/modelstate/interfaces/composite-node-state.js';
+import IBizinstModel from '../../state/modelstate/interfaces/bizinst-model.js';
+import NodeBoxBase from './node-box-base.js';
 
 class CompositeNodeBox extends NodeBoxBase {
   constructor() {
@@ -27,4 +27,4 @@ class CompositeNodeBox extends NodeBoxBase {
   }
 }
 
-module.exports = CompositeNodeBox;
+export default  CompositeNodeBox;

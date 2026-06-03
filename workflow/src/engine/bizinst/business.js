@@ -16,4 +16,4 @@ class Business {
   }
 }
 
-module.exports = Business;
+export default  Business;

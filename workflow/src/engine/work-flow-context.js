@@ -25,4 +25,4 @@ class WorkFlowContext {
   }
 }
 
-module.exports = WorkFlowContext;
+export default  WorkFlowContext;

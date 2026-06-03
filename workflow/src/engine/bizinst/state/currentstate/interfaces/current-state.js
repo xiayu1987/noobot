@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../../interfaces/can-persistence');
-var IStateNodeState = require('../../modelstate/interfaces/state-node-state');
-var IStepState = require('../../modelstate/interfaces/step-state');
+import ICanPersistence from '../../../../../interfaces/can-persistence.js';
+import IStateNodeState from '../../modelstate/interfaces/state-node-state.js';
+import IStepState from '../../modelstate/interfaces/step-state.js';
 
 class ICurrentState {
   setCurrentStateSourceType(currentStateSourceType) {}
@@ -21,4 +21,4 @@ class ICurrentState {
   getStateNodeStates() {}
 }
 
-module.exports = ICurrentState;
+export default  ICurrentState;

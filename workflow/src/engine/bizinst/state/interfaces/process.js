@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../interfaces/can-persistence');
-var IFlowProcess = require('../proc/fschange/interfaces/flow-process');
-var IBizinstModelChangeProcess = require('../proc/mschange/interfaces/bizinst-model-change-process');
+import ICanPersistence from '../../../../interfaces/can-persistence.js';
+import IFlowProcess from '../proc/fschange/interfaces/flow-process.js';
+import IBizinstModelChangeProcess from '../proc/mschange/interfaces/bizinst-model-change-process.js';
 
 class IProcess {
   setProcessChain(processChain) {}
@@ -17,4 +17,4 @@ class IProcess {
   getBizinstModelChangeProcess() {}
 }
 
-module.exports = IProcess;
+export default  IProcess;

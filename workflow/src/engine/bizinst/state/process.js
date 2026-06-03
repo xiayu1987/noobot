@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../can-persistence-base');
-var FlowProcess = require('./proc/fschange/flow-process');
-var IFlowProcess = require('./proc/fschange/interfaces/flow-process');
-var BizinstModelChangeProcess = require('./proc/mschange/bizinst-model-change-process');
-var IBizinstModelChangeProcess = require('./proc/mschange/interfaces/bizinst-model-change-process');
+import CanPersistenceBase from '../../../can-persistence-base.js';
+import FlowProcess from './proc/fschange/flow-process.js';
+import IFlowProcess from './proc/fschange/interfaces/flow-process.js';
+import BizinstModelChangeProcess from './proc/mschange/bizinst-model-change-process.js';
+import IBizinstModelChangeProcess from './proc/mschange/interfaces/bizinst-model-change-process.js';
 
 class Process extends CanPersistenceBase {
   constructor() {
@@ -39,4 +39,4 @@ class Process extends CanPersistenceBase {
   }
 }
 
-module.exports = Process;
+export default  Process;

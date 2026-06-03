@@ -16,4 +16,4 @@ class ActionBase {
   }
 }
 
-module.exports = ActionBase;
+export default  ActionBase;

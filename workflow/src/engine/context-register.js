@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ModelBoxFactory = require('./bizinst/box/modelbox/model-box-factory');
-var ModelStateBoxFactory = require('./bizinst/box/modelstatebox/model-state-box-factory');
-var WorkFlowContext = require('./work-flow-context');
+import ModelBoxFactory from './bizinst/box/modelbox/model-box-factory.js';
+import ModelStateBoxFactory from './bizinst/box/modelstatebox/model-state-box-factory.js';
+import WorkFlowContext from './work-flow-context.js';
 
 class ContextRegister {
   constructor() {}
@@ -22,4 +22,4 @@ ContextRegister.instance = new ContextRegister();
 ContextRegister.instance.regist(WorkFlowContext.MODELBOXFACTORYNAME, ModelBoxFactory.getInstance());
 ContextRegister.instance.regist(WorkFlowContext.MODELSTATEBOXFACTORYNAME, ModelStateBoxFactory.getInstance());
 
-module.exports = ContextRegister;
+export default  ContextRegister;

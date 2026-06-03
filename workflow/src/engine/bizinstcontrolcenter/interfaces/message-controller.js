@@ -7,4 +7,4 @@
 class IMessageControler {
 }
 
-module.exports = IMessageControler;
+export default  IMessageControler;

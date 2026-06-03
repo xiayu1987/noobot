@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IFlowtoState = require('../../../state/modelstate/interfaces/flowto-state');
-var IBizinstModel = require('../../../state/modelstate/interfaces/bizinst-model');
-var INodeState = require('../../../state/modelstate/interfaces/node-state');
-var IPathState = require('../../../state/modelstate/interfaces/path-state');
+import IFlowtoState from '../../../state/modelstate/interfaces/flowto-state.js';
+import IBizinstModel from '../../../state/modelstate/interfaces/bizinst-model.js';
+import INodeState from '../../../state/modelstate/interfaces/node-state.js';
+import IPathState from '../../../state/modelstate/interfaces/path-state.js';
 
 class IFlowtoStateBox {
   setFlowtoState(flowtoState) {}
@@ -15,4 +15,4 @@ class IFlowtoStateBox {
   createPathState(bizinstModel, startNodeState, endNodeState) {}
 }
 
-module.exports = IFlowtoStateBox;
+export default  IFlowtoStateBox;

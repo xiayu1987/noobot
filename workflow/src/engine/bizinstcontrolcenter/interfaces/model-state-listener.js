@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IBizinst = require('../../bizinst/interfaces/bizinst');
-var IActionNodeState = require('../../bizinst/state/modelstate/interfaces/action-node-state');
-var IStepState = require('../../bizinst/state/modelstate/interfaces/step-state');
+import IBizinst from '../../bizinst/interfaces/bizinst.js';
+import IActionNodeState from '../../bizinst/state/modelstate/interfaces/action-node-state.js';
+import IStepState from '../../bizinst/state/modelstate/interfaces/step-state.js';
 
 class IModelStateListener {
   addStepState(bizinst, handleStepState, actionNodeState, stepState, index) {}
 }
 
-module.exports = IModelStateListener;
+export default  IModelStateListener;

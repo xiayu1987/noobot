@@ -7,4 +7,4 @@
 class ICurrentStateListener {
 }
 
-module.exports = ICurrentStateListener;
+export default  ICurrentStateListener;

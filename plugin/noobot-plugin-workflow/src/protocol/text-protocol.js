@@ -1,4 +1,16 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
 import { DSL_DEFAULTS, DSL_ERROR, DSL_PROTOCOL, DSL_TYPES } from "./constants.js";
+import {
+  DSL_ERROR_MESSAGE,
+  dslEdgeUndefinedNode,
+  dslError,
+  dslLineError,
+} from "./error-messages.js";
 
 function stripCodeFence(text = "") {
   const trimmed = String(text || "").trim();
@@ -47,14 +59,14 @@ function toStateType(value = "") {
 }
 
 function fail(lineNo = 0, message = "") {
-  throw new Error(`${DSL_ERROR.PREFIX} (line ${lineNo}): ${String(message || "").trim()}`);
+  throw new Error(dslLineError(lineNo, message));
 }
 
 export function parseWorkflowDslText(text = "") {
   const normalized = stripCodeFence(text);
-  if (!normalized) throw new Error(`${DSL_ERROR.PREFIX}: empty text`);
+  if (!normalized) throw new Error(dslError(DSL_ERROR_MESSAGE.EMPTY_TEXT));
   if (/^\s*[\[{]/.test(normalized)) {
-    throw new Error(`${DSL_ERROR.PREFIX}: ${DSL_ERROR.JSON_NOT_ALLOWED}`);
+    throw new Error(dslError(DSL_ERROR.JSON_NOT_ALLOWED));
   }
 
   const lines = normalized
@@ -88,10 +100,10 @@ export function parseWorkflowDslText(text = "") {
       const id = String(attrs.id || "").trim();
       const type = String(attrs.type || DSL_TYPES.NODE_STATE).trim().toLowerCase();
       const name = String(attrs.name || id).trim();
-      if (!id) fail(lineNo, "NODE requires id=<id>");
+      if (!id) fail(lineNo, DSL_ERROR_MESSAGE.NODE_ID_REQUIRED);
       if (nodeSet.has(id)) fail(lineNo, `duplicate NODE id: ${id}`);
-      if (![DSL_TYPES.NODE_STATE, DSL_TYPES.NODE_ACTION].includes(type)) {
-        fail(lineNo, `NODE type must be state/action, got: ${type}`);
+      if (![DSL_TYPES.NODE_STATE, DSL_TYPES.NODE_ACTION, DSL_TYPES.NODE_COMPOSITE].includes(type)) {
+        fail(lineNo, `NODE type must be state/action/composite, got: ${type}`);
       }
       nodeSet.add(id);
       semantic.nodes.push({
@@ -107,12 +119,14 @@ export function parseWorkflowDslText(text = "") {
       const attrs = parseAttrs(tokens.slice(1));
       const from = String(attrs.from || "").trim();
       const to = String(attrs.to || "").trim();
-      if (!from || !to) fail(lineNo, "EDGE requires from=<id> to=<id>");
+      if (!from || !to) fail(lineNo, DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED);
       edgeIndex += 1;
+      const condition = String(attrs.when || attrs.condition || "").trim();
       semantic.flowtos.push({
         from,
         to,
         name: String(attrs.name || `${from}->${to}#${edgeIndex}`).trim(),
+        ...(condition ? { condition } : {}),
       });
       continue;
     }
@@ -133,15 +147,15 @@ export function parseWorkflowDslText(text = "") {
   }
 
   if (!headerSeen) {
-    throw new Error(`${DSL_ERROR.PREFIX}: missing protocol header '${DSL_PROTOCOL.HEADER}'`);
+    throw new Error(dslError(DSL_ERROR_MESSAGE.MISSING_HEADER));
   }
 
-  if (!semantic.nodes.length) throw new Error(`${DSL_ERROR.PREFIX}: no NODE`);
-  if (!semantic.flowtos.length) throw new Error(`${DSL_ERROR.PREFIX}: no EDGE`);
+  if (!semantic.nodes.length) throw new Error(dslError(DSL_ERROR_MESSAGE.NO_NODE));
+  if (!semantic.flowtos.length) throw new Error(dslError(DSL_ERROR_MESSAGE.NO_EDGE));
 
   for (const edge of semantic.flowtos) {
     if (!nodeSet.has(edge.from) || !nodeSet.has(edge.to)) {
-      throw new Error(`${DSL_ERROR.PREFIX}: EDGE references undefined node (${edge.from} -> ${edge.to})`);
+      throw new Error(dslError(dslEdgeUndefinedNode(edge.from, edge.to)));
     }
   }
 

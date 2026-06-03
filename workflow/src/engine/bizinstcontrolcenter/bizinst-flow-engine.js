@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-var WorkFlowContext = require('../work-flow-context');
-var BizinstBox = require('../bizinst/box/bizinstbox/bizinst-box');
-var ModelBoxFactory = require('../bizinst/box/modelbox/model-box-factory');
-var ModelStateBoxFactory = require('../bizinst/box/modelstatebox/model-state-box-factory');
-var ENodeType = require('../../design/model/node/enums/node-type');
-var CantFlowException = require('../exception/cant-flow-exception');
-var FlowPolicyException = require('../exception/flow-policy-exception');
+import WorkFlowContext from '../work-flow-context.js';
+import BizinstBox from '../bizinst/box/bizinstbox/bizinst-box.js';
+import ModelBoxFactory from '../bizinst/box/modelbox/model-box-factory.js';
+import ModelStateBoxFactory from '../bizinst/box/modelstatebox/model-state-box-factory.js';
+import ENodeType from '../../design/model/node/enums/node-type.js';
+import CantFlowException from '../exception/cant-flow-exception.js';
+import FlowPolicyException from '../exception/flow-policy-exception.js';
 
 class BizinstFlowEngine {
   static instance = new BizinstFlowEngine();
@@ -212,4 +212,4 @@ class BizinstFlowEngine {
   }
 }
 
-module.exports = BizinstFlowEngine;
+export default  BizinstFlowEngine;

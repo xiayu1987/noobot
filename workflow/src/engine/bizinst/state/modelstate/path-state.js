@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../../can-persistence-base');
-var IFlowtoState = require('./interfaces/flowto-state');
-var INodeState = require('./interfaces/node-state');
+import CanPersistenceBase from '../../../../can-persistence-base.js';
+import IFlowtoState from './interfaces/flowto-state.js';
+import INodeState from './interfaces/node-state.js';
 
 class PathState extends CanPersistenceBase {
   constructor() {
@@ -42,4 +42,4 @@ class PathState extends CanPersistenceBase {
   }
 }
 
-module.exports = PathState;
+export default  PathState;

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IStepState = require('../../../state/modelstate/interfaces/step-state');
+import IStepState from '../../../state/modelstate/interfaces/step-state.js';
 
 class IStepStateBox {
   setStepState(stepState) {}
@@ -13,4 +13,4 @@ class IStepStateBox {
   getNextStepState() {}
 }
 
-module.exports = IStepStateBox;
+export default  IStepStateBox;

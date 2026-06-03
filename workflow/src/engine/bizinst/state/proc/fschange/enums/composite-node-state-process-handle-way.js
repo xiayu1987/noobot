@@ -37,4 +37,4 @@ Object.defineProperty(ECompositeNodeStateProcessHandleWay, 'DESCRIPTIONS', {
   enumerable: false,
 });
 
-module.exports = Object.freeze(ECompositeNodeStateProcessHandleWay);
+export default  Object.freeze(ECompositeNodeStateProcessHandleWay);

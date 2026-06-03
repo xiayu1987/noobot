@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IStateNode = require('../../../../design/model/node/interfaces/state-node');
-var NodeStateBase = require('./node-state-base');
+import IStateNode from '../../../../design/model/node/interfaces/state-node.js';
+import NodeStateBase from './node-state-base.js';
 
 class StateNodeState extends NodeStateBase {
   constructor() {
@@ -13,4 +13,4 @@ class StateNodeState extends NodeStateBase {
   }
 }
 
-module.exports = StateNodeState;
+export default  StateNodeState;

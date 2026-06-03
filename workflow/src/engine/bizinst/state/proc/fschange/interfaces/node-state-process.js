@@ -11,4 +11,4 @@ class INodeStateProcess {
   getHandleWay() {}
 }
 
-module.exports = INodeStateProcess;
+export default  INodeStateProcess;

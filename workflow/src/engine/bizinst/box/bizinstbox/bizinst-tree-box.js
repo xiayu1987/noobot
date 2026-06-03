@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ActionRecord = require('../../action-record');
-var ProcessRecord = require('../../process-record');
-var BizinstBox = require('./bizinst-box');
-var ECompositeNodeStateProcessHandleWay = require('../../state/proc/fschange/enums/composite-node-state-process-handle-way');
+import ActionRecord from '../../action-record.js';
+import ProcessRecord from '../../process-record.js';
+import BizinstBox from './bizinst-box.js';
+import ECompositeNodeStateProcessHandleWay from '../../state/proc/fschange/enums/composite-node-state-process-handle-way.js';
 
 class BizinstTreeBox {
   constructor() {
@@ -124,4 +124,4 @@ class BizinstTreeBox {
   }
 }
 
-module.exports = BizinstTreeBox;
+export default  BizinstTreeBox;

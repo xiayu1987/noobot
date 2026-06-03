@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IBizinst = require('../interfaces/bizinst');
-var IStepState = require('../state/modelstate/interfaces/step-state');
-var BizinstFlowEngine = require('../../bizinstcontrolcenter/bizinst-flow-engine');
-var IFlowListener = require('../../bizinstcontrolcenter/interfaces/flow-listener');
-var FlowException = require('../../exception/flow-exception');
-var ActionBase = require('./action-base');
+import IBizinst from '../interfaces/bizinst.js';
+import IStepState from '../state/modelstate/interfaces/step-state.js';
+import BizinstFlowEngine from '../../bizinstcontrolcenter/bizinst-flow-engine.js';
+import IFlowListener from '../../bizinstcontrolcenter/interfaces/flow-listener.js';
+import FlowException from '../../exception/flow-exception.js';
+import ActionBase from './action-base.js';
 
 class StartAction extends ActionBase {
   constructor() {
@@ -23,4 +23,4 @@ class StartAction extends ActionBase {
   }
 }
 
-module.exports = StartAction;
+export default  StartAction;

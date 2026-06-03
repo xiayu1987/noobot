@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IFlowAction = require('../../bizinst/action/interfaces/flow-action');
-var IBizinstTreeBox = require('../../bizinst/box/bizinstbox/interfaces/bizinst-tree-box');
-var IStepState = require('../../bizinst/state/modelstate/interfaces/step-state');
-var FlowException = require('../../exception/flow-exception');
+import IFlowAction from '../../bizinst/action/interfaces/flow-action.js';
+import IBizinstTreeBox from '../../bizinst/box/bizinstbox/interfaces/bizinst-tree-box.js';
+import IStepState from '../../bizinst/state/modelstate/interfaces/step-state.js';
+import FlowException from '../../exception/flow-exception.js';
 
 class IBizinstTreeFlowControler {
   execAction(flowAction, bizinstTreeBox, stepState) {}
 }
 
-module.exports = IBizinstTreeFlowControler;
+export default  IBizinstTreeFlowControler;

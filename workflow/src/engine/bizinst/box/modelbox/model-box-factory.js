@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IModel = require('../../../../design/model/interfaces/model');
-var IFlowto = require('../../../../design/model/flowto/interfaces/flowto');
-var IActionNode = require('../../../../design/model/node/interfaces/action-node');
-var ICompositeNode = require('../../../../design/model/node/interfaces/composite-node');
-var IStateNode = require('../../../../design/model/node/interfaces/state-node');
-var ModelBox = require('./model-box');
-var FlowtoBox = require('./flowto-box');
-var ActionNodeBox = require('./action-node-box');
-var CompositeNodeBox = require('./composite-node-box');
-var StateNodeBox = require('./state-node-box');
+import IModel from '../../../../design/model/interfaces/model.js';
+import IFlowto from '../../../../design/model/flowto/interfaces/flowto.js';
+import IActionNode from '../../../../design/model/node/interfaces/action-node.js';
+import ICompositeNode from '../../../../design/model/node/interfaces/composite-node.js';
+import IStateNode from '../../../../design/model/node/interfaces/state-node.js';
+import ModelBox from './model-box.js';
+import FlowtoBox from './flowto-box.js';
+import ActionNodeBox from './action-node-box.js';
+import CompositeNodeBox from './composite-node-box.js';
+import StateNodeBox from './state-node-box.js';
 
 class ModelBoxFactory {
   constructor() {
@@ -50,4 +50,4 @@ class ModelBoxFactory {
 }
 ModelBoxFactory.instance = new ModelBoxFactory();
 
-module.exports = ModelBoxFactory;
+export default  ModelBoxFactory;

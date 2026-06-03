@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var FlowException = require('./flow-exception');
+import FlowException from './flow-exception.js';
 
 class CantFlowException extends FlowException {
   constructor(msg = 'CantFlowException') {
@@ -13,4 +13,4 @@ class CantFlowException extends FlowException {
   }
 }
 
-module.exports = CantFlowException;
+export default  CantFlowException;

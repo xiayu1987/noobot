@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICompositeNode = require('../../../../../design/model/node/interfaces/composite-node');
-var ICompositeNodeState = require('../../../state/modelstate/interfaces/composite-node-state');
-var IBizinstModel = require('../../../state/modelstate/interfaces/bizinst-model');
+import ICompositeNode from '../../../../../design/model/node/interfaces/composite-node.js';
+import ICompositeNodeState from '../../../state/modelstate/interfaces/composite-node-state.js';
+import IBizinstModel from '../../../state/modelstate/interfaces/bizinst-model.js';
 
 class ICompositeNodeBox {
   createNodeState(bizinstModel) {}
 }
 
-module.exports = ICompositeNodeBox;
+export default  ICompositeNodeBox;

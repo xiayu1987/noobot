@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var NodeBase = require('./node-base');
+import NodeBase from './node-base.js';
 
 class StateNode extends NodeBase {
   constructor() {
@@ -19,4 +19,4 @@ class StateNode extends NodeBase {
   }
 }
 
-module.exports = StateNode;
+export default  StateNode;

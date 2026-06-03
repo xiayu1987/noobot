@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../../interfaces/can-persistence');
-var IState = require('../../interfaces/state');
+import ICanPersistence from '../../../../../interfaces/can-persistence.js';
+import IState from '../../interfaces/state.js';
 
 class IBizinstModel {
   setState(state) {}
@@ -22,4 +22,4 @@ class IBizinstModel {
   getPathStates() {}
 }
 
-module.exports = IBizinstModel;
+export default  IBizinstModel;

@@ -4,26 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const Business = require('../src/engine/bizinst/business');
-const BackAction = require('../src/engine/bizinst/action/back-action');
-const StopAction = require('../src/engine/bizinst/action/stop-action');
-const SubmitAction = require('../src/engine/bizinst/action/submit-action');
-const NextAddStepAction = require('../src/engine/bizinst/action/next-add-step-action');
-const BizinstTreeControlCenter = require('../src/engine/bizinstcontrolcenter/bizinst-tree-control-center');
-const CantFlowException = require('../src/engine/exception/cant-flow-exception');
-const FlowPolicyException = require('../src/engine/exception/flow-policy-exception');
-const ECurrentStateSourceType = require('../src/engine/bizinst/state/currentstate/enums/current-state-source-type');
-const EModelStateType = require('../src/engine/bizinst/state/modelstate/enums/model-state-type');
-const ENodeType = require('../src/design/model/node/enums/node-type');
-const EFlowDirection = require('../src/engine/bizinst/enums/flow-direction');
-const EActionNodeStateProcessHandleWay = require('../src/engine/bizinst/state/proc/fschange/enums/action-node-state-process-handle-way');
-const ECompositeNodeStateProcessHandleWay = require('../src/engine/bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way');
-const EStateNodeStateProcessHandleWay = require('../src/engine/bizinst/state/proc/fschange/enums/state-node-state-process-handle-way');
-const EStopReason = require('../src/engine/bizinstcontrolcenter/enums/stop-reason');
-const {
+import Business from '../src/engine/bizinst/business.js';
+import BackAction from '../src/engine/bizinst/action/back-action.js';
+import StopAction from '../src/engine/bizinst/action/stop-action.js';
+import SubmitAction from '../src/engine/bizinst/action/submit-action.js';
+import NextAddStepAction from '../src/engine/bizinst/action/next-add-step-action.js';
+import BizinstTreeControlCenter from '../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js';
+import CantFlowException from '../src/engine/exception/cant-flow-exception.js';
+import FlowPolicyException from '../src/engine/exception/flow-policy-exception.js';
+import ECurrentStateSourceType from '../src/engine/bizinst/state/currentstate/enums/current-state-source-type.js';
+import EModelStateType from '../src/engine/bizinst/state/modelstate/enums/model-state-type.js';
+import ENodeType from '../src/design/model/node/enums/node-type.js';
+import EFlowDirection from '../src/engine/bizinst/enums/flow-direction.js';
+import EActionNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/fschange/enums/action-node-state-process-handle-way.js';
+import ECompositeNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way.js';
+import EStateNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js';
+import EStopReason from '../src/engine/bizinstcontrolcenter/enums/stop-reason.js';
+import {
   buildSimpleModel,
   buildActionModel,
   buildBranchingActionModel,
@@ -31,7 +31,7 @@ const {
   buildThreeActionModel,
   buildParallelActionModel,
   buildParentChildCompositeModel,
-} = require('./helpers/model-builders');
+} from './helpers/model-builders.js';
 
 test('startBizinst: simple model can start successfully', () => {
   const business = new Business();

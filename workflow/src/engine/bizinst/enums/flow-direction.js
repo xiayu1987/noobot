@@ -34,4 +34,4 @@ Object.defineProperty(EFlowDirection, 'DESCRIPTIONS', {
   enumerable: false,
 });
 
-module.exports = Object.freeze(EFlowDirection);
+export default  Object.freeze(EFlowDirection);

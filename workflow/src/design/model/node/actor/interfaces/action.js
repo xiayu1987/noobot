@@ -9,4 +9,4 @@ class IAction {
   getActorAction() {}
 }
 
-module.exports = IAction;
+export default  IAction;

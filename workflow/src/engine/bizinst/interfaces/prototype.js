@@ -4,4 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-// TODO: Unable to auto-convert this file.
+class IPrototype {
+  clone() {}
+}
+
+export default IPrototype;

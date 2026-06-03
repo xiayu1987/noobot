@@ -7,4 +7,4 @@
 class IContent {
 }
 
-module.exports = IContent;
+export default  IContent;

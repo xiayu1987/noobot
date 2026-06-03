@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var NodeStateBoxBase = require('./node-state-box-base');
+import NodeStateBoxBase from './node-state-box-base.js';
 
 class CompositeNodeStateBox extends NodeStateBoxBase {}
 
-module.exports = CompositeNodeStateBox;
+export default  CompositeNodeStateBox;

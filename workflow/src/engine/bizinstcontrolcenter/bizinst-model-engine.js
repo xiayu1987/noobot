@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-var WorkFlowContext = require('../work-flow-context');
-var IBizinst = require('../bizinst/interfaces/bizinst');
-var IActionNodeStateBox = require('../bizinst/box/modelstatebox/interfaces/action-node-state-box');
-var IModelStateBoxFactory = require('../bizinst/box/modelstatebox/interfaces/model-state-box-factory');
-var IActionNodeState = require('../bizinst/state/modelstate/interfaces/action-node-state');
-var IStepState = require('../bizinst/state/modelstate/interfaces/step-state');
-var ModelStateBoxFactory = require('../bizinst/box/modelstatebox/model-state-box-factory');
+import WorkFlowContext from '../work-flow-context.js';
+import IBizinst from '../bizinst/interfaces/bizinst.js';
+import IActionNodeStateBox from '../bizinst/box/modelstatebox/interfaces/action-node-state-box.js';
+import IModelStateBoxFactory from '../bizinst/box/modelstatebox/interfaces/model-state-box-factory.js';
+import IActionNodeState from '../bizinst/state/modelstate/interfaces/action-node-state.js';
+import IStepState from '../bizinst/state/modelstate/interfaces/step-state.js';
+import ModelStateBoxFactory from '../bizinst/box/modelstatebox/model-state-box-factory.js';
 
 class BizinstModelEngine {
   constructor() {}
@@ -28,4 +28,4 @@ class BizinstModelEngine {
 }
 BizinstModelEngine.instance = new BizinstModelEngine();
 
-module.exports = BizinstModelEngine;
+export default  BizinstModelEngine;

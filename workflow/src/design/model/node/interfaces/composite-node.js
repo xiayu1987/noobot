@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IModel = require('../../interfaces/model');
+import IModel from '../../interfaces/model.js';
 
 class ICompositeNode {
 }
 
-module.exports = ICompositeNode;
+export default  ICompositeNode;

@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../interfaces/can-persistence');
-var IFlowto = require('../flowto/interfaces/flowto');
-var INodeLineRLAT = require('../flowto/interfaces/node-line-rlat');
-var INode = require('../node/interfaces/node');
+import ICanPersistence from '../../../interfaces/can-persistence.js';
+import IFlowto from '../flowto/interfaces/flowto.js';
+import INodeLineRLAT from '../flowto/interfaces/node-line-rlat.js';
+import INode from '../node/interfaces/node.js';
 
 class IModel {
   getNodes() {}
@@ -18,4 +18,4 @@ class IModel {
   setNodeLineRLATs(nodeLineRLAT) {}
 }
 
-module.exports = IModel;
+export default  IModel;

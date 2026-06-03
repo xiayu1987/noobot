@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../can-persistence-base');
+import CanPersistenceBase from '../../can-persistence-base.js';
 
 class BizinstTreeRecord extends CanPersistenceBase {
   constructor() {
@@ -27,4 +27,4 @@ class BizinstTreeRecord extends CanPersistenceBase {
   }
 }
 
-module.exports = BizinstTreeRecord;
+export default  BizinstTreeRecord;

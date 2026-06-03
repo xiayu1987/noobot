@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../../can-persistence-base');
+import CanPersistenceBase from '../../../../can-persistence-base.js';
 
 class NodeStateBase extends CanPersistenceBase {
   constructor() {
@@ -30,4 +30,4 @@ class NodeStateBase extends CanPersistenceBase {
   }
 }
 
-module.exports = NodeStateBase;
+export default  NodeStateBase;

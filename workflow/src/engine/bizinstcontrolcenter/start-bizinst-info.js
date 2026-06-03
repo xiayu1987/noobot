@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActionRecord = require('../bizinst/interfaces/action-record');
-var IBizinst = require('../bizinst/interfaces/bizinst');
-var IBizinstTreeRecord = require('../bizinst/interfaces/bizinst-tree-record');
+import IActionRecord from '../bizinst/interfaces/action-record.js';
+import IBizinst from '../bizinst/interfaces/bizinst.js';
+import IBizinstTreeRecord from '../bizinst/interfaces/bizinst-tree-record.js';
 
 class StartBizinstInfo {
   constructor() {
@@ -34,4 +34,4 @@ class StartBizinstInfo {
   }
 }
 
-module.exports = StartBizinstInfo;
+export default  StartBizinstInfo;

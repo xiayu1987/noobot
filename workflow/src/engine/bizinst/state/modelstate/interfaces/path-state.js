@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../../interfaces/can-persistence');
-var IFlowtoState = require('../flowto-state');
-var INodeState = require('./node-state');
+import ICanPersistence from '../../../../../interfaces/can-persistence.js';
+import IFlowtoState from '../flowto-state.js';
+import INodeState from './node-state.js';
 
 class IPathState {
   setBizinstModel(bizinstModel) {}
@@ -19,4 +19,4 @@ class IPathState {
   getFlowtoState() {}
 }
 
-module.exports = IPathState;
+export default  IPathState;

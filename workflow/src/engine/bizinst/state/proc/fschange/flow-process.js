@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../../../can-persistence-base');
+import CanPersistenceBase from '../../../../../can-persistence-base.js';
 
 class FlowProcess extends CanPersistenceBase {
   constructor() {
@@ -52,4 +52,4 @@ class FlowProcess extends CanPersistenceBase {
   }
 }
 
-module.exports = FlowProcess;
+export default  FlowProcess;

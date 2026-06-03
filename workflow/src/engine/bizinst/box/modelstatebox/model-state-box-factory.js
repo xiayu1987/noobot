@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IActionNodeState = require('../../state/modelstate/interfaces/action-node-state');
-var ICompositeNodeState = require('../../state/modelstate/interfaces/composite-node-state');
-var IFlowtoState = require('../../state/modelstate/interfaces/flowto-state');
-var IStateNodeState = require('../../state/modelstate/interfaces/state-node-state');
-var IStepState = require('../../state/modelstate/interfaces/step-state');
-var FlowtoStateBox = require('./flowto-state-box');
-var ActionNodeStateBox = require('./action-node-state-box');
-var CompositeNodeStateBox = require('./composite-node-state-box');
-var StateNodeStateBox = require('./state-node-state-box');
-var StepStateBox = require('./step-state-box');
+import IActionNodeState from '../../state/modelstate/interfaces/action-node-state.js';
+import ICompositeNodeState from '../../state/modelstate/interfaces/composite-node-state.js';
+import IFlowtoState from '../../state/modelstate/interfaces/flowto-state.js';
+import IStateNodeState from '../../state/modelstate/interfaces/state-node-state.js';
+import IStepState from '../../state/modelstate/interfaces/step-state.js';
+import FlowtoStateBox from './flowto-state-box.js';
+import ActionNodeStateBox from './action-node-state-box.js';
+import CompositeNodeStateBox from './composite-node-state-box.js';
+import StateNodeStateBox from './state-node-state-box.js';
+import StepStateBox from './step-state-box.js';
 
 class ModelStateBoxFactory {
   constructor() {
@@ -50,4 +50,4 @@ class ModelStateBoxFactory {
 }
 ModelStateBoxFactory.instance = new ModelStateBoxFactory();
 
-module.exports = ModelStateBoxFactory;
+export default  ModelStateBoxFactory;

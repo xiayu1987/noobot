@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var StepState = require('../../state/modelstate/step-state');
-var NodeStateBoxBase = require('./node-state-box-base');
+import StepState from '../../state/modelstate/step-state.js';
+import NodeStateBoxBase from './node-state-box-base.js';
 
 class ActionNodeStateBox extends NodeStateBoxBase {
   getFirstStepState() {
@@ -28,4 +28,4 @@ class ActionNodeStateBox extends NodeStateBoxBase {
   }
 }
 
-module.exports = ActionNodeStateBox;
+export default  ActionNodeStateBox;

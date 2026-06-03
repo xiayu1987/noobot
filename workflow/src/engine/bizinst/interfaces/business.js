@@ -9,4 +9,4 @@ class IBusiness {
   getBizinst() {}
 }
 
-module.exports = IBusiness;
+export default  IBusiness;

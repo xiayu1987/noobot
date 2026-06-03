@@ -4,7 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../../interfaces/can-persistence');
-var INode = require('../../../../../design/model/node/interfaces/node');
+import ICanPersistence from '../../../../../interfaces/can-persistence.js';
+import INode from '../../../../../design/model/node/interfaces/node.js';
 
-// TODO: Unable to auto-convert this file.
+class INodeState {
+  setNode(node) {}
+  getNode() {}
+  setBizinstModel(bizinstModel) {}
+  getBizinstModel() {}
+}
+
+export default INodeState;

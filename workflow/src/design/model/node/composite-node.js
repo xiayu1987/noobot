@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IFlowto = require('../flowto/interfaces/flowto');
-var INodeLineRLAT = require('../flowto/interfaces/node-line-rlat');
-var NodeBase = require('./node-base');
+import IFlowto from '../flowto/interfaces/flowto.js';
+import INodeLineRLAT from '../flowto/interfaces/node-line-rlat.js';
+import NodeBase from './node-base.js';
 
 class CompositeNode extends NodeBase {
   constructor() {
@@ -35,4 +35,4 @@ class CompositeNode extends NodeBase {
   }
 }
 
-module.exports = CompositeNode;
+export default  CompositeNode;

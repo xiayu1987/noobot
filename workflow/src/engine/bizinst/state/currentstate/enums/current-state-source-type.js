@@ -34,4 +34,4 @@ Object.defineProperty(ECurrentStateSourceType, 'DESCRIPTIONS', {
   enumerable: false,
 });
 
-module.exports = Object.freeze(ECurrentStateSourceType);
+export default  Object.freeze(ECurrentStateSourceType);

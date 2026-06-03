@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var IBizinst = require('../interfaces/bizinst');
-var IActionNodeState = require('../state/modelstate/interfaces/action-node-state');
-var IStepState = require('../state/modelstate/interfaces/step-state');
-var BizinstModelEngine = require('../../bizinstcontrolcenter/bizinst-model-engine');
-var IModelStateListener = require('../../bizinstcontrolcenter/interfaces/model-state-listener');
-var ActionBase = require('./action-base');
+import IBizinst from '../interfaces/bizinst.js';
+import IActionNodeState from '../state/modelstate/interfaces/action-node-state.js';
+import IStepState from '../state/modelstate/interfaces/step-state.js';
+import BizinstModelEngine from '../../bizinstcontrolcenter/bizinst-model-engine.js';
+import IModelStateListener from '../../bizinstcontrolcenter/interfaces/model-state-listener.js';
+import ActionBase from './action-base.js';
 
 class NextAddStepAction extends ActionBase {
   constructor() {
@@ -25,4 +25,4 @@ class NextAddStepAction extends ActionBase {
   }
 }
 
-module.exports = NextAddStepAction;
+export default  NextAddStepAction;

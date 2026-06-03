@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-var ICanPersistence = require('../../../../interfaces/can-persistence');
-var INode = require('../../node/interfaces/node');
+import ICanPersistence from '../../../../interfaces/can-persistence.js';
+import INode from '../../node/interfaces/node.js';
 
 class IFlowto {
   getStartNode() {}
@@ -16,4 +16,4 @@ class IFlowto {
   getName() {}
 }
 
-module.exports = IFlowto;
+export default  IFlowto;

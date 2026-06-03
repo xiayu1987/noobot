@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-var CanPersistenceBase = require('../../../can-persistence-base');
-var IBizinst = require('../interfaces/bizinst');
-var CurrentState = require('./currentstate/current-state');
-var ICurrentState = require('./currentstate/interfaces/current-state');
-var IBizinstModel = require('./modelstate/interfaces/bizinst-model');
-var BizinstModel = require('./modelstate/bizinst-model');
+import CanPersistenceBase from '../../../can-persistence-base.js';
+import IBizinst from '../interfaces/bizinst.js';
+import CurrentState from './currentstate/current-state.js';
+import ICurrentState from './currentstate/interfaces/current-state.js';
+import IBizinstModel from './modelstate/interfaces/bizinst-model.js';
+import BizinstModel from './modelstate/bizinst-model.js';
 
 class State extends CanPersistenceBase {
   constructor() {
@@ -41,4 +41,4 @@ class State extends CanPersistenceBase {
   }
 }
 
-module.exports = State;
+export default  State;
