@@ -1,0 +1,12 @@
+export {
+  PLUGIN_NAME,
+  PLUGIN_VERSION,
+  WORKFLOW_BOT_HOOK_POINTS,
+} from "./core/constants.js";
+export { registerNoobotPlugin, createRegisterNoobotPlugin } from "./core/plugin.js";
+export { registerWorkflowHooks, createRegisterWorkflowHooks } from "./core/hooks.js";
+export { normalizeOptions } from "./core/options.js";
+export { buildWorkflowOrchestrationPayload } from "./core/orchestration-payload.js";
+export { parseWorkflowDslText } from "./protocol/text-protocol.js";
+
+export { createWorkflowPlugin as default } from "./core/plugin.js";

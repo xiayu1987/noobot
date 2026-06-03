@@ -1,0 +1,17 @@
+{
+  "name": "noobot-plugin-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\""
+  },
+  "dependencies": {
+    "workflow": "*"
+  }
+}
