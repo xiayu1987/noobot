@@ -23,9 +23,9 @@ export class SessionContextService {
     const sessionConfig = effectiveConfig?.session || {};
     return {
       recentMessageLimit: Number(sessionConfig.recentMessageLimit || 20),
-      useLastRunningTaskRange: sessionConfig.useLastRunningTaskRange !== false,
+      useLastRunningTaskRange: sessionConfig.useLastRunningTaskRange === true,
       useLastCompletedTaskRange:
-        sessionConfig.useLastCompletedTaskRange !== false,
+        sessionConfig.useLastCompletedTaskRange === true,
     };
   }
 
