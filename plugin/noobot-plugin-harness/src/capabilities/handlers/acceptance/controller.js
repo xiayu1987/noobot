@@ -36,6 +36,7 @@ import {
 } from "../shared/workflow/pattern.js";
 import { ACCEPTANCE_PHASE_BLOCKER_KEYS, hasAcceptancePhaseBlockers } from "../shared/workflow/policy.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
+import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 
 const ACCEPTANCE_DECISION = WORKFLOW_PARAMS.acceptance.decisions;
 const ACCEPTANCE_REQUESTED_ACTION = ACCEPTANCE_DECISION.requestedAction;
@@ -328,10 +329,9 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
             WORKFLOW_PARAMS.acceptance.guards.overflowForcedAcceptanceSystemPrompt;
           const overflowPrompt = String(overflowPromptTemplate || "")
             .replaceAll("{tool}", TASK_ACCEPTANCE_TOOL_NAME);
-          ctx.messages.unshift({
-            role: "system",
-            content: overflowPrompt,
-          });
+          ctx.messages.unshift(
+            buildHarnessInjectedMessage(overflowPrompt, { role: "system" }),
+          );
           changed = true;
           executedPrimary = true;
         }

@@ -116,6 +116,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
       : buildAcceptanceReport({
         bucket,
         state,
+        ctx,
         mode: ACCEPTANCE_MODE.FORCED,
         forcedReason: "补建验收报告_用于附件生成 | Rebuilt acceptance report for artifact generation",
       });
@@ -201,6 +202,7 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   const report = buildAcceptanceReport({
     bucket,
     state,
+    ctx,
     mode: ACCEPTANCE_MODE.FORCED,
     forcedReason,
   });
@@ -258,6 +260,7 @@ export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
   const refreshedReport = buildAcceptanceReport({
     bucket,
     state,
+    ctx,
     mode: lastReport?.mode || ACCEPTANCE_MODE.ACTIVE,
     forcedReason: String(lastReport?.forcedReason || "").trim(),
   });

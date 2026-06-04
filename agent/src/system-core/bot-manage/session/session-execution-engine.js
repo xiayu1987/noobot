@@ -519,6 +519,21 @@ export class SessionExecutionEngine {
     if (Array.isArray(message?.attachmentMetas) && message.attachmentMetas.length) {
       normalized.attachmentMetas = message.attachmentMetas;
     }
+    if (message?.injectedMessage === true || message?.lc_kwargs?.injectedMessage === true) {
+      normalized.injectedMessage = true;
+    }
+    const injectedBy = String(
+      message?.injectedBy || message?.lc_kwargs?.injectedBy || "",
+    ).trim();
+    if (injectedBy) normalized.injectedBy = injectedBy;
+    if (
+      message?.frontendUserMessage === true ||
+      message?.lc_kwargs?.frontendUserMessage === true ||
+      message?.additional_kwargs?.frontendUserMessage === true ||
+      message?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+    ) {
+      normalized.frontendUserMessage = true;
+    }
     return normalized;
   }
 
@@ -691,6 +706,39 @@ export class SessionExecutionEngine {
     };
   }
 
+  _createGeneratedArtifactPersister() {
+    return async ({
+      userId = "",
+      sessionId = "",
+      attachmentSource = "model",
+      generationSource = "generated_artifact",
+      artifacts = [],
+      fallbackMimeType = MIME_TYPE.APPLICATION_OCTET_STREAM,
+    } = {}) => {
+      const attachmentService = this.attach;
+      if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
+        return [];
+      }
+      const normalizedUserId = String(userId || "").trim();
+      const normalizedSessionId = String(sessionId || "").trim();
+      if (!normalizedUserId || !normalizedSessionId) return [];
+      const artifactList = Array.isArray(artifacts) ? artifacts : [];
+      if (!artifactList.length) return [];
+      const normalizedGenerationSource = String(generationSource || "generated_artifact").trim();
+      const records = await attachmentService.ingestGeneratedArtifacts({
+        userId: normalizedUserId,
+        sessionId: normalizedSessionId,
+        attachmentSource: String(attachmentSource || "model").trim() || "model",
+        generationSource: normalizedGenerationSource,
+        artifacts: artifactList,
+      });
+      return mapAttachmentRecordsToMetas(records, {
+        fallbackMimeType,
+        fallbackGenerationSource: normalizedGenerationSource,
+      });
+    };
+  }
+
   _createBotSubSessionRunner() {
     return async ({
       parentContext = {},
@@ -801,6 +849,16 @@ export class SessionExecutionEngine {
           runtimeAgentContext?.payload?.runtime?.systemRuntime?.dialogProcessId ||
           "",
       ).trim();
+      const turnMessages = Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
+        ? agentResult.turnMessages
+        : [
+            {
+              role: "assistant",
+              content: String(agentResult?.output || "").trim(),
+              type: "message",
+              dialogProcessId,
+            },
+          ];
       const resolvedOutputDir = this._resolveWorkflowScopedDir({
         userId,
         relativeDir: strategy?.relativeDir || "",
@@ -817,16 +875,6 @@ export class SessionExecutionEngine {
           data: runtimePluginState,
           ts: now,
         };
-        const turnMessages = Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
-          ? agentResult.turnMessages
-          : [
-              {
-                role: "assistant",
-                content: String(agentResult?.output || "").trim(),
-                type: "message",
-                dialogProcessId,
-              },
-            ];
         const normalizedTurnMessages = turnMessages.map((item = {}) =>
           this._normalizeDetachedSubSessionMessage(item, now),
         );
@@ -891,7 +939,7 @@ export class SessionExecutionEngine {
           caller: CALLER_ROLE.BOT,
           answer: String(agentResult?.output || "").trim(),
           traces: Array.isArray(agentResult?.traces) ? agentResult.traces : [],
-          messages: Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [],
+          messages: turnMessages,
           turnTasks: Array.isArray(agentResult?.turnTasks) ? agentResult.turnTasks : [],
           executionLogs: [],
           dialogProcessId,
@@ -1469,6 +1517,9 @@ export class SessionExecutionEngine {
     }
     if (typeof next?.subSessionRunner !== "function") {
       next.subSessionRunner = this._createBotSubSessionRunner();
+    }
+    if (typeof next?.generatedArtifactPersister !== "function") {
+      next.generatedArtifactPersister = this._createGeneratedArtifactPersister();
     }
     if (typeof next?.workflowDialogPersister !== "function") {
       next.workflowDialogPersister = this._createWorkflowScopedJsonWriter();

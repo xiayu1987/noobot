@@ -45,6 +45,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
+  const generatedArtifactCalls = [];
   const planningPersistCalls = [];
   const eventLogCalls = [];
 
@@ -61,8 +62,8 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A" task="请输出：节点A执行完成"',
           'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=act when="always"',
-          'EDGE from=act to=end when="always"',
+          'EDGE from=start to=act',
+          'EDGE from=act to=end',
           "END",
         ].join("\n"),
         traces: [{ id: "semantic_trace_1" }],
@@ -73,8 +74,24 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
           sessionId: "wf-node-session-1",
           dialogProcessId: "wf_node_dialog_1",
           persisted: { outputDir: "/tmp/noobot/workflow/s1/node1" },
-          result: { answer: "node-done" },
+          result: {
+            answer: "answer-node-done\n\n[Harness-Review]\n{\"status\":\"pass\"}",
+            messages: [
+              { role: "assistant", content: "message-node-done", type: "message" },
+            ],
+          },
         };
+      },
+      generatedArtifactPersister: async (payload = {}) => {
+        generatedArtifactCalls.push(payload);
+        return [
+          {
+            attachmentId: "wf-node-result-1",
+            name: String(payload?.artifacts?.[0]?.name || "workflow-node-1-result.md"),
+            mimeType: "text/markdown",
+            path: "/attachments/s1/workflow-node-1-result.md",
+          },
+        ];
       },
       workflowDialogPersister: async (payload = {}) => {
         planningPersistCalls.push(payload);
@@ -107,6 +124,21 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     runConfig: {
       locale: "zh-CN",
     },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            sharedTools: {
+              resolveSandboxPath({ hostPath = "" } = {}) {
+                const normalized = String(hostPath || "").trim();
+                if (!normalized) return "";
+                return `/workspace${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
+              },
+            },
+          },
+        },
+      },
+    },
     eventListener: {
       onEvent() {},
     },
@@ -117,6 +149,16 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.ok(agentResult);
 
   assert.equal(subSessionCalls.length, 1);
+  assert.equal(generatedArtifactCalls.length, 1);
+  assert.equal(generatedArtifactCalls[0]?.sessionId, "s1");
+  assert.equal(generatedArtifactCalls[0]?.generationSource, "workflow_node_agent_result");
+  const savedArtifactText = Buffer.from(
+    String(generatedArtifactCalls[0]?.artifacts?.[0]?.contentBase64 || ""),
+    "base64",
+  ).toString("utf8");
+  assert.match(savedArtifactText, /message-node-done/);
+  assert.equal(savedArtifactText.includes("answer-node-done"), false);
+  assert.equal(savedArtifactText.includes("[Harness-Review]"), false);
   assert.equal(planningPersistCalls.length, 1);
   assert.equal(eventLogCalls.length > 0, true);
   assert.equal(planningPersistCalls[0]?.relativeDir, "runtime/workflow/planning/s1/d1");
@@ -149,12 +191,19 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(agentResult.workflow.nodeSessions.length, 1);
   assert.equal(agentResult.workflow.nodeSessions[0]?.rootSessionId, "s1");
   assert.equal(agentResult.workflow.nodeSessions[0]?.sessionId, "wf-node-session-1");
+  assert.equal(agentResult.workflow.nodeSessions[0]?.attachmentMetas?.[0]?.attachmentId, "wf-node-result-1");
+  assert.equal(agentResult.workflow.attachmentMetas?.[0]?.attachmentId, "wf-node-result-1");
 
   const workflowTurn = (agentResult.turnMessages || []).find(
     (item) => item?.workflowMessage === true,
   );
   assert.ok(workflowTurn);
   assert.equal(workflowTurn?.type, "workflow");
+  assert.equal(workflowTurn?.attachmentMetas?.[0]?.attachmentId, "wf-node-result-1");
+  assert.match(
+    String(workflowTurn?.content || ""),
+    /\/workspace\/attachments\/s1\/workflow-node-1-result\.md/,
+  );
   assert.equal(workflowTurn?.workflowMeta?.source, "workflow-plugin");
   const hasPayloadBuiltEvent = eventLogCalls.some(
     (item) => String(item?.event?.event || "").trim() === "workflow_payload_build_succeeded",

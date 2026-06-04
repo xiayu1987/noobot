@@ -36,8 +36,8 @@ const statusClass = computed(() => {
 <style scoped>
 .workflow-node-status {
   border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 12px;
+  padding: 2px 6px;
+  font-size: 10px;
   border: 1px solid transparent;
   flex-shrink: 0;
   white-space: nowrap;

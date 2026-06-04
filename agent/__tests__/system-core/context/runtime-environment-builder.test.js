@@ -50,6 +50,9 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.equal(typeof runtime.sharedTools.fetch, "function");
   assert.equal(typeof runtime.sharedTools.textCleaner?.cleanText, "function");
   assert.equal(typeof runtime.sharedTools.textCleaner?.cleanHtml, "function");
+  assert.equal(typeof runtime.sharedTools.resolveSandboxPath, "function");
+  assert.equal(typeof runtime.sharedTools.toSandboxPath, "function");
+  assert.equal(typeof runtime.sharedTools.pathMapper?.toSandboxPath, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.encryptBySessionId, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.decryptBySessionId, "function");
   const encrypted = runtime.sharedTools.sessionCrypto.encryptBySessionId({ ok: true }, "s1");

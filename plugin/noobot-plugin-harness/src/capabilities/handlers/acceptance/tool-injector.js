@@ -49,7 +49,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         toolMeta,
         { forceRun: true },
       );
-      const report = buildAcceptanceReport({ bucket, state, mode, forcedReason });
+      const report = buildAcceptanceReport({ bucket, state, ctx: toolCtx, mode, forcedReason });
       bucket.lastAcceptanceReport = report;
       bucket.acceptanceReports.push(report);
       await runAcceptanceBySeparateModel(toolCtx, toolMeta, report);

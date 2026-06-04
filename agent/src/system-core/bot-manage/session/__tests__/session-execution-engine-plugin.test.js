@@ -11,6 +11,24 @@ function createWorkspaceService(basePath) {
   return { getWorkspacePath: () => basePath };
 }
 
+test("SessionExecutionEngine preserves injected flags in detached sub-session messages", () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const normalized = engine._normalizeDetachedSubSessionMessage(
+    {
+      role: "user",
+      content: "injected prompt",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      frontendUserMessage: true,
+    },
+    "2026-06-04T00:00:00.000Z",
+  );
+
+  assert.equal(normalized.injectedMessage, true);
+  assert.equal(normalized.injectedBy, "harness-plugin");
+  assert.equal(normalized.frontendUserMessage, true);
+});
+
 test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plugin separate_model", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-engine-plugin-"));
   const engine = new SessionExecutionEngine({

@@ -39,19 +39,36 @@ function draw() {
     const toX = Number(segment?.toX || 0);
     const toY = Number(segment?.toY || 0);
     const highlighted = segment?.highlighted === true;
-    const midY = fromY + (toY - fromY) * 0.45;
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
     context.strokeStyle = highlighted
       ? "rgba(109, 74, 255, 0.9)"
       : "rgba(109, 74, 255, 0.38)";
     context.beginPath();
     context.moveTo(fromX, fromY);
-    context.bezierCurveTo(fromX, midY, toX, midY, toX, toY - 4);
+    if (horizontal) {
+      const midX = fromX + dx * 0.5;
+      context.bezierCurveTo(midX, fromY, midX, toY, toX, toY);
+    } else {
+      const midY = fromY + dy * 0.45;
+      context.bezierCurveTo(fromX, midY, toX, midY, toX, toY);
+    }
     context.stroke();
 
+    const angle = Math.atan2(dy, dx);
+    const arrowLength = 8;
+    const arrowWidth = 5;
+    const tipX = toX;
+    const tipY = toY;
+    const leftX = tipX - arrowLength * Math.cos(angle) + arrowWidth * Math.sin(angle);
+    const leftY = tipY - arrowLength * Math.sin(angle) - arrowWidth * Math.cos(angle);
+    const rightX = tipX - arrowLength * Math.cos(angle) - arrowWidth * Math.sin(angle);
+    const rightY = tipY - arrowLength * Math.sin(angle) + arrowWidth * Math.cos(angle);
     context.beginPath();
-    context.moveTo(toX, toY - 4);
-    context.lineTo(toX - 5, toY - 11);
-    context.lineTo(toX + 5, toY - 11);
+    context.moveTo(tipX, tipY);
+    context.lineTo(leftX, leftY);
+    context.lineTo(rightX, rightY);
     context.closePath();
     context.fillStyle = highlighted
       ? "rgba(109, 74, 255, 0.95)"

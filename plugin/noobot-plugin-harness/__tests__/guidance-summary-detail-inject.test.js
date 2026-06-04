@@ -35,6 +35,13 @@ test("inject-mode summary saves detail as attachment and injects detail path to 
         controllers: {
           runtime: {
             systemRuntime: { userId: "admin", sessionId: "s1" },
+            sharedTools: {
+              resolveSandboxPath({ hostPath = "" } = {}) {
+                const normalized = String(hostPath || "").trim();
+                if (!normalized) return "";
+                return normalized.replace("/workspace/admin", "/sandbox/admin");
+              },
+            },
             attachmentService: {
               async ingestGeneratedArtifacts() {
                 return [
@@ -83,8 +90,8 @@ test("inject-mode summary saves detail as attachment and injects detail path to 
       (item = {}) =>
         String(item?.role || "").trim() === "user" &&
         String(item?.content || "").includes("summary_detail_path") &&
-        String(item?.content || "").includes("DETAIL_PATH: runtime/summary-detail.md") &&
-        String(item?.content || "").includes("runtime/summary-detail.md"),
+        String(item?.content || "").includes("DETAIL_PATH: /sandbox/admin/runtime/summary-detail.md") &&
+        String(item?.content || "").includes("/sandbox/admin/runtime/summary-detail.md"),
     );
   assert.ok(injectedDetailPathMessage);
   assert.equal(Array.isArray(injectedDetailPathMessage?.attachmentMetas), true);

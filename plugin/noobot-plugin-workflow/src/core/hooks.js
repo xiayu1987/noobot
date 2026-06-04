@@ -51,6 +51,183 @@ function ensureTurnMessages(agentResult = {}) {
   return turnMessages;
 }
 
+function mergeAttachmentMetas(existing = [], incoming = []) {
+  const merged = Array.isArray(existing) ? existing.slice() : [];
+  const seen = new Set(
+    merged
+      .map((item = {}) => String(item?.attachmentId || item?.path || item?.relativePath || "").trim())
+      .filter(Boolean),
+  );
+  for (const item of Array.isArray(incoming) ? incoming : []) {
+    if (!item || typeof item !== "object") continue;
+    const key = String(item?.attachmentId || item?.path || item?.relativePath || "").trim();
+    if (key && seen.has(key)) continue;
+    merged.push(item);
+    if (key) seen.add(key);
+  }
+  return merged;
+}
+
+function sanitizeArtifactFileNamePart(input = "", fallback = "result") {
+  const normalized = String(input || "")
+    .trim()
+    .replaceAll(/[^a-zA-Z0-9\u4e00-\u9fa5_-]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return normalized || fallback;
+}
+
+function resolveSubSessionFinalOutput(subSession = {}) {
+  const result = subSession?.result && typeof subSession.result === "object" ? subSession.result : {};
+  const messages = Array.isArray(result?.messages) ? result.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const messageItem = messages[index] || {};
+    const role = String(messageItem?.role || "").trim().toLowerCase();
+    if (role && role !== "assistant") continue;
+    const content = String(messageItem?.content || "").trim();
+    if (content) return content;
+  }
+  const direct = String(result?.answer || result?.output || "").trim();
+  if (direct) return direct;
+  return "";
+}
+
+function stripHarnessReviewAppendix(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const markerIndex = raw.search(/(?:^|\n)\s*\[Harness-Review\]\s*(?:\n|$)/);
+  if (markerIndex < 0) return raw;
+  return raw.slice(0, markerIndex).trim();
+}
+
+function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
+  const metaSandboxPath = String(
+    meta?.sandboxPath || meta?.sandboxViewPath || meta?.sandbox_file_path || "",
+  ).trim();
+  if (metaSandboxPath) return metaSandboxPath;
+  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
+  const hostPath = String(meta?.path || "").trim();
+  const relativePath = String(meta?.relativePath || "").trim();
+  const resolverCandidates = [
+    runtime?.sharedTools?.resolveSandboxPath,
+    runtime?.sharedTools?.toSandboxPath,
+    runtime?.sharedTools?.pathMapper?.toSandboxPath,
+  ];
+  for (const resolver of resolverCandidates) {
+    if (typeof resolver !== "function") continue;
+    try {
+      const resolved = String(
+        resolver({
+          path: hostPath,
+          hostPath,
+          relativePath,
+          runtime,
+          agentContext: ctx?.agentContext || null,
+          purpose: "workflow_attachment_display_path",
+        }) || "",
+      ).trim();
+      if (resolved) return resolved;
+    } catch {
+      // Fallback to meta path below.
+    }
+  }
+  return String(relativePath || hostPath || meta?.name || "").trim();
+}
+
+function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx = {}) {
+  const lines = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+    .map((item = {}, index) => {
+      const label = String(item?.name || `附件${index + 1}`).trim();
+      const path = resolveAttachmentDisplayPath(item, ctx);
+      if (!path) return "";
+      return `- ${label}: ${path}`;
+    })
+    .filter(Boolean);
+  if (!lines.length) return "";
+  return ["", "## 工作流节点结果附件", "", ...lines].join("\n");
+}
+
+async function persistWorkflowNodeResultAttachment({
+  options = {},
+  ctx = {},
+  subSession = null,
+  pendingStep = {},
+  transition = 0,
+} = {}) {
+  const persister = typeof options?.generatedArtifactPersister === "function"
+    ? options.generatedArtifactPersister
+    : null;
+  if (!persister || !subSession) return [];
+  const output = resolveSubSessionFinalOutput(subSession);
+  const cleanOutput = stripHarnessReviewAppendix(output);
+  if (!cleanOutput) return [];
+  const userId = String(ctx?.userId || "").trim();
+  const sessionId = String(ctx?.sessionId || "").trim();
+  if (!userId || !sessionId) return [];
+  const nodeName = String(pendingStep?.nodeName || pendingStep?.nodeId || "workflow-node").trim();
+  const nodeId = String(pendingStep?.nodeId || "").trim();
+  const normalizedTransition = Number.isFinite(Number(transition)) ? Math.floor(Number(transition)) : 0;
+  const artifactName = [
+    "workflow-node",
+    normalizedTransition > 0 ? String(normalizedTransition) : "",
+    sanitizeArtifactFileNamePart(nodeName, "node"),
+    "result.md",
+  ]
+    .filter(Boolean)
+    .join("-");
+  const body = [
+    "# 工作流节点执行结果",
+    "",
+    `- 节点: ${nodeName || "未命名节点"}`,
+    `- 节点ID: ${nodeId || "-"}`,
+    `- 子会话: ${String(subSession?.sessionId || "").trim() || "-"}`,
+    `- 对话: ${String(subSession?.dialogProcessId || "").trim() || "-"}`,
+    "",
+    "## 最终输出",
+    "",
+    cleanOutput,
+    "",
+  ].join("\n");
+  try {
+    const attachmentMetas = await persister({
+      userId,
+      sessionId,
+      attachmentSource: "model",
+      generationSource: "workflow_node_agent_result",
+      fallbackMimeType: "text/markdown",
+      artifacts: [
+        {
+          name: artifactName,
+          mimeType: "text/markdown",
+          contentBase64: Buffer.from(body, "utf8").toString("base64"),
+        },
+      ],
+    });
+    const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+    if (!metas.length) return [];
+    if (subSession.result && typeof subSession.result === "object") {
+      subSession.result.attachmentMetas = mergeAttachmentMetas(
+        Array.isArray(subSession.result.attachmentMetas) ? subSession.result.attachmentMetas : [],
+        metas,
+      );
+      if (Array.isArray(subSession.result.messages) && subSession.result.messages.length) {
+        const lastIndex = subSession.result.messages.length - 1;
+        const lastMessage = subSession.result.messages[lastIndex] || {};
+        subSession.result.messages[lastIndex] = {
+          ...lastMessage,
+          attachmentMetas: mergeAttachmentMetas(
+            Array.isArray(lastMessage?.attachmentMetas) ? lastMessage.attachmentMetas : [],
+            metas,
+          ),
+        };
+      }
+    }
+    return metas;
+  } catch {
+    return [];
+  }
+}
+
 function appendWorkflowPlanningMessage({
   options = {},
   agentResult = {},
@@ -59,16 +236,23 @@ function appendWorkflowPlanningMessage({
   semanticText = "",
   semanticResolution = {},
   workflowPayload = null,
+  attachmentMetas = [],
 } = {}) {
   const turnMessages = ensureTurnMessages(agentResult);
+  const attachmentPathBlock = buildWorkflowAttachmentPathBlockWithContext(attachmentMetas, ctx);
+  const content = [semanticText || sourceText || "", attachmentPathBlock]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
   turnMessages.push({
     role: "assistant",
     type: "workflow",
-    content: semanticText || sourceText || "",
+    content,
     dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
     modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     summarized: false,
+    attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
     workflowMessage: true,
     workflowMeta: {
       source: "workflow-plugin",
@@ -140,6 +324,21 @@ function resolveNodeTaskForPendingStep({ semantic = {}, pendingStep = {} } = {})
       matchedNode?.mission ||
       "",
   ).trim();
+}
+
+function resolveSemanticNodeForPendingStep({ semantic = {}, pendingStep = {} } = {}) {
+  const pendingNodeId = String(pendingStep?.nodeId || "").trim();
+  const pendingNodeName = String(pendingStep?.nodeName || "").trim();
+  const nodes = Array.isArray(semantic?.nodes) ? semantic.nodes : [];
+  return (
+    nodes.find((node = {}) => {
+      const nodeId = String(node?.id || "").trim();
+      const nodeName = String(node?.name || "").trim();
+      if (pendingNodeId && nodeId && pendingNodeId === nodeId) return true;
+      if (pendingNodeName && nodeName && pendingNodeName === nodeName) return true;
+      return false;
+    }) || null
+  );
 }
 
 function withTimeout(promise, timeoutMs, message = "") {
@@ -469,6 +668,15 @@ async function runNodeAgent({
       });
       subSession = null;
     }
+    if (subSession) {
+      await persistWorkflowNodeResultAttachment({
+        options,
+        ctx,
+        subSession,
+        pendingStep,
+        transition,
+      });
+    }
   }
   if (typeof options?.nodeAgentExecutor === "function") {
     const directAction = await options.nodeAgentExecutor(hookPayload);
@@ -622,28 +830,14 @@ export function createRegisterWorkflowHooks() {
               options,
             });
             const instanceId = resolveWorkflowInstanceId(ctx);
-            const conditionContext =
-              ctx?.runConfig?.workflowConditionContext &&
-              typeof ctx.runConfig.workflowConditionContext === "object"
-                ? ctx.runConfig.workflowConditionContext
-                : ctx?.workflowConditionContext && typeof ctx.workflowConditionContext === "object"
-                  ? ctx.workflowConditionContext
-                  : null;
-            const effectiveOptions = conditionContext
-              ? {
-                  ...options,
-                  conditionContext,
-                }
-              : options;
             let snapshot = createWorkflowInstance({
               instanceId,
               semantic,
-              options: effectiveOptions,
+              options,
               meta: {
                 userId: String(ctx?.userId || "").trim(),
                 sessionId: String(ctx?.sessionId || "").trim(),
                 dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-                ...(conditionContext ? { conditionContext } : {}),
               },
             });
             const maxTransitions = Number.isFinite(Number(options?.maxAutoTransitions))
@@ -707,6 +901,9 @@ export function createRegisterWorkflowHooks() {
                   nodeDialogId: String(item?.nodeDialogId || "").trim(),
                   nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
                   nodeSessionPersistedPath: String(item?.subSession?.persisted?.outputDir || "").trim(),
+                  nodeResultAttachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
+                    ? item.subSession.result.attachmentMetas
+                    : [],
                   parallelWave: parallelEnabled ? Math.floor((transitions - 1) / Math.max(1, waveSize)) + 1 : 0,
                   waveOrder: Number(item?.order ?? 0),
                   pendingStepCount: Number(snapshot?.pendingStepCount || 0),
@@ -776,17 +973,45 @@ export function createRegisterWorkflowHooks() {
               storageFile: String(planningPersistResult?.outputFile || "").trim(),
             };
             workflowPayload.nodeSessions = nodeAgentRuns
-              .map((item = {}) => ({
-                transition: Number(item?.transition || 0),
-                nodeName: String(item?.step?.nodeName || "").trim(),
-                nodeId: String(item?.step?.nodeId || "").trim(),
-                rootSessionId: String(ctx?.sessionId || "").trim(),
-                dialogId: String(item?.nodeDialogId || "").trim(),
-                sessionId: String(item?.nodeSessionId || "").trim(),
-                parallelWave: Number(item?.parallelWave || 0),
-                waveOrder: Number(item?.waveOrder || 0),
-              }))
+              .map((item = {}) => {
+                const semanticNode = resolveSemanticNodeForPendingStep({
+                  semantic,
+                  pendingStep: item?.step || {},
+                });
+                return {
+                  transition: Number(item?.transition || 0),
+                  nodeName: String(item?.step?.nodeName || semanticNode?.name || "").trim(),
+                  nodeId: String(item?.step?.nodeId || semanticNode?.id || "").trim(),
+                  nodeType: Number.isFinite(Number(item?.step?.nodeType))
+                    ? Number(item.step.nodeType)
+                    : undefined,
+                  type: String(semanticNode?.type || "").trim(),
+                  stateType:
+                    semanticNode && Number.isFinite(Number(semanticNode?.stateType))
+                      ? Number(semanticNode.stateType)
+                      : undefined,
+                  rootSessionId: String(ctx?.sessionId || "").trim(),
+                  dialogId: String(item?.nodeDialogId || "").trim(),
+                  sessionId: String(item?.nodeSessionId || "").trim(),
+                  attachmentMetas: Array.isArray(item?.nodeResultAttachmentMetas)
+                    ? item.nodeResultAttachmentMetas
+                    : [],
+                  parallelWave: Number(item?.parallelWave || 0),
+                  waveOrder: Number(item?.waveOrder || 0),
+                };
+              })
               .filter((item) => item.dialogId || item.sessionId);
+            const workflowAttachmentMetas = nodeAgentRuns.reduce(
+              (acc, item = {}) =>
+                mergeAttachmentMetas(
+                  acc,
+                  Array.isArray(item?.nodeResultAttachmentMetas)
+                    ? item.nodeResultAttachmentMetas
+                    : [],
+                ),
+              [],
+            );
+            workflowPayload.attachmentMetas = workflowAttachmentMetas;
 
             agentResult.workflow = workflowPayload;
             appendWorkflowPlanningMessage({
@@ -797,6 +1022,7 @@ export function createRegisterWorkflowHooks() {
               semanticText,
               semanticResolution,
               workflowPayload,
+              attachmentMetas: workflowAttachmentMetas,
             });
             appendWorkflowTrace(agentResult, {
               stage: WORKFLOW_TRACE.STAGE_EXECUTED,

@@ -628,10 +628,14 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   assert.equal(ctx.messages[planContextIndex].role, "system");
   assert.match(String(ctx.messages[planContextIndex].content), /计划清单上下文|Plan checklist context/);
   assert.match(String(ctx.messages[planContextIndex].content), /核心实现/);
+  assert.equal(ctx.messages[planContextIndex].injectedMessage, true);
+  assert.equal(ctx.messages[planContextIndex].injectedBy, "harness-plugin");
   assert.equal(ctx.messages[requestIndex].role, "user");
   assert.match(String(ctx.messages[requestIndex].content), /acceptance_patch_v1/);
   assert.match(String(ctx.messages[requestIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
   assert.match(String(ctx.messages[requestIndex].content), /evidence=\[简短证据\]/);
+  assert.equal(ctx.messages[requestIndex].injectedMessage, true);
+  assert.equal(ctx.messages[requestIndex].injectedBy, "harness-plugin");
   assert.equal(
     planContextIndex > -1 && requestIndex > planContextIndex && responsibilityIndex > requestIndex,
     true,
