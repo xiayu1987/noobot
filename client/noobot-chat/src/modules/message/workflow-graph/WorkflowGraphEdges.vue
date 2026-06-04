@@ -39,15 +39,24 @@ function draw() {
     const toX = Number(segment?.toX || 0);
     const toY = Number(segment?.toY || 0);
     const highlighted = segment?.highlighted === true;
+    const busXRaw = Number(segment?.busX);
+    const hasBusX = Number.isFinite(busXRaw);
     const dx = toX - fromX;
     const dy = toY - fromY;
     const horizontal = Math.abs(dx) >= Math.abs(dy);
     context.strokeStyle = highlighted
       ? "rgba(109, 74, 255, 0.9)"
       : "rgba(109, 74, 255, 0.38)";
+    context.lineJoin = "round";
+    context.lineCap = "round";
     context.beginPath();
     context.moveTo(fromX, fromY);
-    if (horizontal) {
+    if (hasBusX) {
+      const busX = busXRaw;
+      context.lineTo(busX, fromY);
+      context.lineTo(busX, toY);
+      context.lineTo(toX, toY);
+    } else if (horizontal) {
       const midX = fromX + dx * 0.5;
       context.bezierCurveTo(midX, fromY, midX, toY, toX, toY);
     } else {
@@ -56,7 +65,7 @@ function draw() {
     }
     context.stroke();
 
-    const angle = Math.atan2(dy, dx);
+    const angle = hasBusX ? Math.atan2(0, toX - busXRaw) : Math.atan2(dy, dx);
     const arrowLength = 8;
     const arrowWidth = 5;
     const tipX = toX;

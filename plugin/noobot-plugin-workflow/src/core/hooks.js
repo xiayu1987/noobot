@@ -147,6 +147,32 @@ function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx =
   return ["", "## 工作流节点结果附件", "", ...lines].join("\n");
 }
 
+function truncateWorkflowResultText(text = "", maxLength = 1800) {
+  const raw = String(text || "").trim();
+  const limit = Number.isFinite(Number(maxLength)) ? Math.max(200, Number(maxLength)) : 1800;
+  if (raw.length <= limit) return raw;
+  return `${raw.slice(0, limit).trim()}\n\n...`;
+}
+
+function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
+  if (!workflowPayload || typeof workflowPayload !== "object") return null;
+  let payload = null;
+  try {
+    payload = JSON.parse(JSON.stringify(workflowPayload));
+  } catch {
+    return null;
+  }
+  const nodeAgentRuns = Array.isArray(payload?.execution?.nodeAgentRuns)
+    ? payload.execution.nodeAgentRuns
+    : [];
+  for (const item of nodeAgentRuns) {
+    if (!item || typeof item !== "object") continue;
+    // 子 agent 的执行消息/结果正文不落到主 session，只保留附件元信息与会话定位信息。
+    delete item.nodeResultText;
+  }
+  return payload;
+}
+
 async function persistWorkflowNodeResultAttachment({
   options = {},
   ctx = {},
@@ -244,6 +270,7 @@ function appendWorkflowPlanningMessage({
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join("\n\n");
+  const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(workflowPayload);
   turnMessages.push({
     role: "assistant",
     type: "workflow",
@@ -260,10 +287,7 @@ function appendWorkflowPlanningMessage({
       semanticInvokerUsed: semanticResolution?.invoked === true,
       sourceTextPreview: String(sourceText || "").slice(0, 800),
       semanticTextPreview: String(semanticText || "").slice(0, 2000),
-      payload:
-        workflowPayload && typeof workflowPayload === "object"
-          ? workflowPayload
-          : null,
+      payload: sessionWorkflowPayload,
     },
   });
 }
@@ -901,6 +925,12 @@ export function createRegisterWorkflowHooks() {
                   nodeDialogId: String(item?.nodeDialogId || "").trim(),
                   nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
                   nodeSessionPersistedPath: String(item?.subSession?.persisted?.outputDir || "").trim(),
+                  nodeResultText: truncateWorkflowResultText(
+                    stripHarnessReviewAppendix(
+                      resolveSubSessionFinalOutput(item?.subSession || {}),
+                    ),
+                    4000,
+                  ),
                   nodeResultAttachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
                     ? item.subSession.result.attachmentMetas
                     : [],

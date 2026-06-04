@@ -87,6 +87,37 @@ export function normalizeMessagesEntity(
   );
 }
 
+export function normalizeSessionEntity(
+  session = {},
+  {
+    now = () => new Date().toISOString(),
+    sessionId = "",
+    parentSessionId = "",
+  } = {},
+) {
+  const nowValue = now();
+  const normalizedSessionId = String(session?.sessionId || sessionId || "").trim();
+  const normalizedParentSessionId = String(
+    session?.parentSessionId || parentSessionId || "",
+  ).trim();
+  const normalizedShortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
+  return {
+    ...(session && typeof session === "object" ? session : {}),
+    sessionId: normalizedSessionId,
+    parentSessionId: normalizedParentSessionId,
+    caller: String(session?.caller || "user").trim() || "user",
+    modelAlias: String(session?.modelAlias || ""),
+    currentTaskId: String(session?.currentTaskId || "").trim(),
+    shortMemoryCheckpoint: Number.isFinite(normalizedShortMemoryCheckpoint)
+      ? normalizedShortMemoryCheckpoint
+      : 0,
+    messages: normalizeMessagesEntity(session?.messages || [], now),
+    selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
+    createdAt: String(session?.createdAt || "").trim() || nowValue,
+    updatedAt: String(session?.updatedAt || "").trim() || nowValue,
+  };
+}
+
 export function normalizeSessionTreeEntity(
   tree = {},
   now = () => new Date().toISOString(),

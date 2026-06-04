@@ -19,6 +19,7 @@ const hasThinking = computed(
 );
 const { translate } = useLocale();
 const nowTick = ref(Date.now());
+const detailExpansionTick = ref(0);
 let timer = null;
 
 function getRealtimeLogs(messageItem = {}) {
@@ -36,9 +37,7 @@ function hasThinkingLogs(messageItem = {}) {
     ? messageItem.realtimeLogs.length > 0
     : false;
   if (hasRealtimeLogs) return true;
-  return Array.isArray(messageItem.completedToolLogs)
-    ? messageItem.completedToolLogs.length > 0
-    : false;
+  return getCompletedToolLogsForMessage(messageItem).length > 0;
 }
 
 
@@ -51,6 +50,115 @@ function getInjectedMessagesForMessage(messageItem = {}) {
     if (!dialogProcessId) return true;
     return String(item?.dialogProcessId || "").trim() === dialogProcessId;
   });
+}
+
+function getScopedMessagesForMessage(messageItem = {}) {
+  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
+  if (!dialogProcessId) return candidateMessages;
+  return candidateMessages.filter(
+    (item = {}) => String(item?.dialogProcessId || "").trim() === dialogProcessId,
+  );
+}
+
+function isToolRelatedMessage(messageItem = {}) {
+  const role = String(messageItem?.role || "").trim().toLowerCase();
+  const type = String(messageItem?.type || "").trim().toLowerCase();
+  const toolCalls = Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls : [];
+  if (toolCalls.length > 0) return true;
+  if (role === "tool") return true;
+  if (type === "tool_call" || type === "tool_result") return true;
+  return false;
+}
+
+function stringifyJson(value) {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function buildToolCallText(toolCall = {}, fallbackIndex = 0) {
+  const toolName = String(
+    toolCall?.function?.name || toolCall?.name || `tool_${fallbackIndex + 1}`,
+  ).trim();
+  const argsText = stringifyJson(toolCall?.function?.arguments ?? toolCall?.args ?? "");
+  const normalizedArgs = String(argsText || "").trim();
+  if (!normalizedArgs) return toolName;
+  const shortArgs =
+    normalizedArgs.length > 180 ? `${normalizedArgs.slice(0, 180)}...` : normalizedArgs;
+  return `${toolName}(${shortArgs})`;
+}
+
+function buildToolResultText(messageItem = {}) {
+  const contentText = String(messageItem?.content || "").trim();
+  if (!contentText) return "tool_result";
+  try {
+    const parsed = JSON.parse(contentText);
+    const toolName = String(parsed?.toolName || parsed?.name || "").trim();
+    const status = String(parsed?.status || "").trim();
+    const okText = typeof parsed?.ok === "boolean" ? `ok=${parsed.ok}` : "";
+    return [toolName || "tool_result", status, okText].filter(Boolean).join(" ");
+  } catch {
+    const shortText = contentText.length > 180 ? `${contentText.slice(0, 180)}...` : contentText;
+    return shortText;
+  }
+}
+
+function buildFallbackCompletedToolLogs(messageItem = {}) {
+  const scopedMessages = getScopedMessagesForMessage(messageItem);
+  const fallbackToolLogs = [];
+  for (const item of scopedMessages) {
+    if (!isToolRelatedMessage(item)) continue;
+    const sessionId = String(item?.sessionId || messageItem?.sessionId || "");
+    const dialogProcessId = String(
+      item?.dialogProcessId || messageItem?.dialogProcessId || "",
+    ).trim();
+    const timestamp = item?.ts || messageItem?.ts || "";
+    const itemType = String(item?.type || "").trim().toLowerCase();
+    const itemRole = String(item?.role || "").trim().toLowerCase();
+    const itemToolCalls = Array.isArray(item?.tool_calls) ? item.tool_calls : [];
+
+    if (itemToolCalls.length > 0 || itemType === "tool_call") {
+      const toolCalls = itemToolCalls.length > 0 ? itemToolCalls : [{}];
+      toolCalls.forEach((toolCall, toolCallIndex) => {
+        fallbackToolLogs.push({
+          sessionId,
+          depth: 1,
+          dialogProcessId,
+          type: "tool_call",
+          event: "tool_call",
+          text: buildToolCallText(toolCall, toolCallIndex),
+          ts: timestamp,
+        });
+      });
+      continue;
+    }
+
+    if (itemRole === "tool" || itemType === "tool_result") {
+      fallbackToolLogs.push({
+        sessionId,
+        depth: 1,
+        dialogProcessId,
+        type: "tool_result",
+        event: "tool_result",
+        text: buildToolResultText(item),
+        ts: timestamp,
+      });
+    }
+  }
+  return fallbackToolLogs;
+}
+
+function getCompletedToolLogsForMessage(messageItem = {}) {
+  const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
+    ? messageItem.completedToolLogs
+    : [];
+  if (completedToolLogs.length > 0) return completedToolLogs;
+  return buildFallbackCompletedToolLogs(messageItem);
 }
 
 function getInjectedMessageCount() {
@@ -87,9 +195,7 @@ function formatSessionGroupLabel(
 }
 
 function groupCompletedToolLogs(messageItem = {}) {
-  const toolLogs = Array.isArray(messageItem?.completedToolLogs)
-    ? messageItem.completedToolLogs
-    : [];
+  const toolLogs = getCompletedToolLogsForMessage(messageItem);
   const groupedMap = new Map();
   const groupedList = [];
 
@@ -125,6 +231,10 @@ function getThinkingDetailItemKey(groupedToolLogs, toolLogItem, toolLogIndex) {
 }
 
 function isThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
+  // Some callers (workflow node drawer) pass computed/plain message objects,
+  // not Pinia/reactive store objects. Track this tick so click-to-expand still
+  // forces a render after mutating expandedDetailLogKeys.
+  detailExpansionTick.value;
   return Array.isArray(messageItem?.expandedDetailLogKeys)
     ? messageItem.expandedDetailLogKeys.includes(detailItemKey)
     : false;
@@ -139,9 +249,11 @@ function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
     messageItem.expandedDetailLogKeys = currentKeys.filter(
       (itemKey) => itemKey !== detailItemKey,
     );
+    detailExpansionTick.value += 1;
     return;
   }
   messageItem.expandedDetailLogKeys = [...currentKeys, detailItemKey];
+  detailExpansionTick.value += 1;
 }
 
 function getExecutionLogCount(messageItem = {}) {
@@ -156,10 +268,7 @@ function getExecutionLogs(messageItem = {}) {
 }
 
 function getThinkingDetailCount(messageItem = {}) {
-  const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
-    ? messageItem.completedToolLogs
-    : [];
-  return completedToolLogs.length;
+  return getCompletedToolLogsForMessage(messageItem).length;
 }
 
 function getThinkingTreePrefix(toolLogItem = {}) {
@@ -218,9 +327,7 @@ function getThinkingDurationMs(messageItem = {}) {
   const startedAt = parseTimeMs(messageItem?.thinkingStartedAt);
   const finishedAt = parseTimeMs(messageItem?.thinkingFinishedAt);
   const realtimeLogs = getAllRealtimeLogs(messageItem);
-  const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
-    ? messageItem.completedToolLogs
-    : [];
+  const completedToolLogs = getCompletedToolLogsForMessage(messageItem);
   const logTimes = [...realtimeLogs, ...completedToolLogs]
     .map((logItem) => parseTimeMs(logItem?.ts))
     .filter((timeValue) => timeValue > 0);
@@ -366,7 +473,7 @@ onBeforeUnmount(() => {
                     </span>
                   </div>
                 </div>
-                <div v-if="!(messageItem.completedToolLogs || []).length" class="thinking-empty">
+                <div v-if="!getThinkingDetailCount(messageItem)" class="thinking-empty">
                   {{ translate("message.noToolCalls") }}
                 </div>
               </template>

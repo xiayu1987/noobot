@@ -67,10 +67,30 @@ function buildWorkflowMessageSignature(messageItem = {}) {
   ).trim();
   return [
     String(messageItem?.dialogProcessId || "").trim(),
-    String(messageItem?.ts || "").trim(),
     String(messageItem?.content || "").trim(),
     semanticPreview,
   ].join("|");
+}
+
+function patchAssistantFromWorkflowMessage(targetMessage = null, workflowMessageItem = {}) {
+  if (!targetMessage || !workflowMessageItem) return false;
+  const previousPending = Boolean(targetMessage.pending);
+  const previousStatusLabel = String(targetMessage.statusLabel || "");
+  const previousRealtimeLogs = Array.isArray(targetMessage.realtimeLogs)
+    ? targetMessage.realtimeLogs
+    : [];
+  const previousExecutionLogTotal = Number(targetMessage.executionLogTotal || 0);
+  Object.assign(targetMessage, workflowMessageItem);
+  targetMessage.pending = previousPending;
+  targetMessage.statusLabel = previousStatusLabel;
+  targetMessage.realtimeLogs = previousRealtimeLogs;
+  targetMessage.executionLogTotal = Math.max(
+    previousExecutionLogTotal,
+    Number(workflowMessageItem?.executionLogTotal || 0),
+    previousRealtimeLogs.length,
+  );
+  targetMessage.workflowMessage = true;
+  return true;
 }
 
 function normalizeExecutionLogForRealtime(logItem = {}) {
@@ -648,31 +668,37 @@ export function useChatEngine({
             const normalAssistants = assistantMessagesForCurrentTurn.filter(
               (messageItem) => messageItem?.workflowMessage !== true,
             );
-            const patchAssistants = normalAssistants.length
-              ? normalAssistants
-              : assistantMessagesForCurrentTurn;
-            const lastAssistant = patchAssistants[patchAssistants.length - 1];
-            if (lastAssistant) {
-              const mergedAssistantContent = mergeAssistantContents(patchAssistants);
-              const lastAssistantType = String(lastAssistant.type || "");
-              if (lastAssistantType && lastAssistantType !== "tool_call") {
-                botMsg.type = lastAssistantType;
-              }
-              botMsg.tool_calls = Array.isArray(lastAssistant.tool_calls)
-                ? lastAssistant.tool_calls
-                : [];
-              botMsg.dialogProcessId = lastAssistant.dialogProcessId || botMsg.dialogProcessId;
-              botMsg.content = String(mergedAssistantContent || botMsg.content || "");
-              botMsg.modelAlias = String(lastAssistant.modelAlias || "").trim();
-              botMsg.modelName = String(lastAssistant.modelName || "").trim();
-              if (Array.isArray(lastAssistant.modelRuns)) {
-                botMsg.modelRuns = lastAssistant.modelRuns;
-              }
-              if (Array.isArray(lastAssistant.attachmentMetas)) {
-                botMsg.attachmentMetas = lastAssistant.attachmentMetas;
+            const latestWorkflowAssistant = workflowAssistants[workflowAssistants.length - 1] || null;
+            const patchedWorkflowMessage = latestWorkflowAssistant
+              ? patchAssistantFromWorkflowMessage(botMsg, makeViewMessage(latestWorkflowAssistant))
+              : false;
+            if (!patchedWorkflowMessage) {
+              const patchAssistants = normalAssistants.length
+                ? normalAssistants
+                : assistantMessagesForCurrentTurn;
+              const lastAssistant = patchAssistants[patchAssistants.length - 1];
+              if (lastAssistant) {
+                const mergedAssistantContent = mergeAssistantContents(patchAssistants);
+                const lastAssistantType = String(lastAssistant.type || "");
+                if (lastAssistantType && lastAssistantType !== "tool_call") {
+                  botMsg.type = lastAssistantType;
+                }
+                botMsg.tool_calls = Array.isArray(lastAssistant.tool_calls)
+                  ? lastAssistant.tool_calls
+                  : [];
+                botMsg.dialogProcessId = lastAssistant.dialogProcessId || botMsg.dialogProcessId;
+                botMsg.content = String(mergedAssistantContent || botMsg.content || "");
+                botMsg.modelAlias = String(lastAssistant.modelAlias || "").trim();
+                botMsg.modelName = String(lastAssistant.modelName || "").trim();
+                if (Array.isArray(lastAssistant.modelRuns)) {
+                  botMsg.modelRuns = lastAssistant.modelRuns;
+                }
+                if (Array.isArray(lastAssistant.attachmentMetas)) {
+                  botMsg.attachmentMetas = lastAssistant.attachmentMetas;
+                }
               }
             }
-            if (workflowAssistants.length && Array.isArray(activeSession.value?.messages)) {
+            if (!patchedWorkflowMessage && workflowAssistants.length && Array.isArray(activeSession.value?.messages)) {
               const sessionMessages = activeSession.value.messages;
               const existingWorkflowSignatures = new Set(
                 sessionMessages

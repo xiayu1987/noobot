@@ -7,6 +7,7 @@ import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";
 import { fsMkdir, fsReaddir, fsRm } from "../../store/fs-adapter.js";
+import { normalizeSessionEntity } from "../entities/session-entity.js";
 
 export class FileSystemSessionRepository {
   constructor({
@@ -183,18 +184,22 @@ export class FileSystemSessionRepository {
     await fsMkdir(sessionDir, { recursive: true });
 
     if (!(await this.storageService.exists(sessionFile))) {
-      await this.storageService.writeJson(sessionFile, {
-        sessionId,
-        parentSessionId: resolvedParentSessionId || "",
-        caller: meta?.caller || "user",
-        modelAlias: meta?.modelAlias || "",
-        currentTaskId: "",
-        shortMemoryCheckpoint: 0,
-        messages: [],
-        selectedConnectors: {},
-        createdAt: this.now(),
-        updatedAt: this.now(),
-      });
+      await this.storageService.writeJson(
+        sessionFile,
+        normalizeSessionEntity(
+          {
+            sessionId,
+            parentSessionId: resolvedParentSessionId || "",
+            caller: meta?.caller || "user",
+            modelAlias: meta?.modelAlias || "",
+            currentTaskId: "",
+            shortMemoryCheckpoint: 0,
+            messages: [],
+            selectedConnectors: {},
+          },
+          { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
+        ),
+      );
     }
     return true;
   }
@@ -235,18 +240,17 @@ export class FileSystemSessionRepository {
       sessionId,
       parentSessionId || session?.parentSessionId || "",
     );
-    const payload = {
-      ...session,
-      sessionId,
-      parentSessionId: String(
-        session?.parentSessionId || resolvedParentSessionId || "",
-      ).trim(),
-      messages: this.normalizeMessages(session?.messages || []),
-      selectedConnectors: this.normalizeSelectedConnectors(
-        session?.selectedConnectors || {},
-      ),
-      updatedAt: this.now(),
-    };
+    const payload = normalizeSessionEntity(
+      {
+        ...session,
+        sessionId,
+        parentSessionId: String(
+          session?.parentSessionId || resolvedParentSessionId || "",
+        ).trim(),
+        updatedAt: this.now(),
+      },
+      { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
+    );
     await this.storageService.writeJson(sessionFile, payload);
     return true;
   }
