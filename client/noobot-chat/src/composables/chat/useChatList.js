@@ -43,6 +43,27 @@ export function useChatList({
   notify = () => {},
 } = {}) {
   const { translate } = useLocale();
+
+  function buildWorkflowMessageSignature(messageItem = {}) {
+    const workflowMeta =
+      messageItem?.workflowMeta &&
+      typeof messageItem.workflowMeta === "object" &&
+      !Array.isArray(messageItem.workflowMeta)
+        ? messageItem.workflowMeta
+        : {};
+    const semanticPreview = String(
+      workflowMeta?.semanticTextPreview ||
+        workflowMeta?.payload?.interaction?.semanticTextPreview ||
+        "",
+    ).trim();
+    return [
+      String(messageItem?.dialogProcessId || "").trim(),
+      String(messageItem?.ts || "").trim(),
+      String(messageItem?.content || "").trim(),
+      semanticPreview,
+    ].join("|");
+  }
+
   function buildChildAttachmentMetasByParentDialogProcessId(
     sessionDocs = [],
     rootSessionId = "",
@@ -282,6 +303,27 @@ export function useChatList({
         if (!dialogProcessId) continue;
         if (openThinkingDialogProcessIds.has(dialogProcessId)) {
           messageItem.thinkingOpenNames = ["thinking-panel"];
+        }
+      }
+    } else {
+      const foldedDetailMessages = foldMessagesForView(mainSessionDoc.messages || []);
+      const workflowMessages = foldedDetailMessages.filter(
+        (messageItem) =>
+          String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
+          messageItem?.workflowMessage === true,
+      );
+      if (workflowMessages.length) {
+        const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
+        const existingWorkflowSignatures = new Set(
+          existingMessages
+            .filter((messageItem) => messageItem?.workflowMessage === true)
+            .map((messageItem) => buildWorkflowMessageSignature(messageItem)),
+        );
+        for (const workflowMessageItem of workflowMessages) {
+          const signature = buildWorkflowMessageSignature(workflowMessageItem);
+          if (!signature || existingWorkflowSignatures.has(signature)) continue;
+          existingMessages.push(workflowMessageItem);
+          existingWorkflowSignatures.add(signature);
         }
       }
     }

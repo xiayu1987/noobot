@@ -106,11 +106,15 @@ export function parseWorkflowDslText(text = "") {
         fail(lineNo, `NODE type must be state/action/composite, got: ${type}`);
       }
       nodeSet.add(id);
+      const task = String(
+        attrs.task || attrs.taskText || attrs.instruction || attrs.mission || "",
+      ).trim();
       semantic.nodes.push({
         id,
         name: name || id,
         type,
         stateType: toStateType(attrs.stateType || attrs.state || ""),
+        ...(task ? { task } : {}),
       });
       continue;
     }

@@ -220,6 +220,19 @@ export class SessionExecutionRunner {
       resolvedUsedSessionId = usedSessionId;
       resolvedDialogProcessId = dialogProcessId;
       resolvedRuntimeEventListener = runtimeEventListener;
+      emitEvent(runtimeEventListener, "plugin_runtime_resolved", {
+        selectedPlugins: Array.isArray(resolvedRunConfig?.selectedPlugins)
+          ? resolvedRunConfig.selectedPlugins
+          : [],
+        harness: {
+          enabled: resolvedRunConfig?.plugins?.harness?.enabled === true,
+          mode: String(resolvedRunConfig?.plugins?.harness?.mode || "").trim().toLowerCase(),
+        },
+        workflow: {
+          enabled: resolvedRunConfig?.plugins?.workflow?.enabled === true,
+          mode: String(resolvedRunConfig?.plugins?.workflow?.mode || "").trim().toLowerCase(),
+        },
+      });
       await runBotRuntimeHook({
         runtime: botHookRuntime,
         point: BOT_HOOK_POINTS.BEFORE_SESSION_RUN,
@@ -271,36 +284,59 @@ export class SessionExecutionRunner {
         eventListener: runtimeEventListener,
       });
 
-      await runBotRuntimeHook({
+      const beforeAgentDispatchContext = {
+        ...botHookBase,
+        userMessage: normalizedMessage,
+        agentContextSummary,
+        eventListener: runtimeEventListener,
+      };
+      const beforeAgentDispatchResult = await runBotRuntimeHook({
         runtime: botHookRuntime,
         point: BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH,
-        context: {
-          ...botHookBase,
-          userMessage: normalizedMessage,
-          agentContextSummary,
-        },
+        context: beforeAgentDispatchContext,
         eventListener: runtimeEventListener,
       });
       let agentResult = null;
-      try {
-        agentResult = await this.agentRunner({
-          errorLogger: this.errorLogger,
-          agentContext: runtimeAgentContext,
-          userMessage: normalizedMessage,
-        });
-      } catch (error) {
-        await runBotRuntimeHook({
-          runtime: botHookRuntime,
-          point: BOT_HOOK_POINTS.AGENT_DISPATCH_ERROR,
-          context: {
-            ...botHookBase,
+      const effectiveBeforeAgentDispatchContext =
+        beforeAgentDispatchResult?.context &&
+        typeof beforeAgentDispatchResult.context === "object"
+          ? beforeAgentDispatchResult.context
+          : beforeAgentDispatchContext;
+      const skipAgentDispatch = effectiveBeforeAgentDispatchContext?.skipAgentDispatch === true;
+      if (skipAgentDispatch) {
+        const override =
+          effectiveBeforeAgentDispatchContext?.overrideAgentResult &&
+          typeof effectiveBeforeAgentDispatchContext.overrideAgentResult === "object"
+            ? effectiveBeforeAgentDispatchContext.overrideAgentResult
+            : {};
+        agentResult = {
+          output: String(override?.output || ""),
+          traces: Array.isArray(override?.traces) ? override.traces : [],
+          turnMessages: Array.isArray(override?.turnMessages) ? override.turnMessages : [],
+          turnTasks: Array.isArray(override?.turnTasks) ? override.turnTasks : [],
+          ...(override && typeof override === "object" ? override : {}),
+        };
+      } else {
+        try {
+          agentResult = await this.agentRunner({
+            errorLogger: this.errorLogger,
+            agentContext: runtimeAgentContext,
             userMessage: normalizedMessage,
-            agentContextSummary,
-            error,
-          },
-          eventListener: runtimeEventListener,
-        });
-        throw error;
+          });
+        } catch (error) {
+          await runBotRuntimeHook({
+            runtime: botHookRuntime,
+            point: BOT_HOOK_POINTS.AGENT_DISPATCH_ERROR,
+            context: {
+              ...botHookBase,
+              userMessage: normalizedMessage,
+              agentContextSummary,
+              error,
+            },
+            eventListener: runtimeEventListener,
+          });
+          throw error;
+        }
       }
       await runBotRuntimeHook({
         runtime: botHookRuntime,

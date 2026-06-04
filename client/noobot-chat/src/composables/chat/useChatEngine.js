@@ -53,6 +53,26 @@ function mergeAssistantContents(assistantMessages = []) {
   return contentList.join("\n\n");
 }
 
+function buildWorkflowMessageSignature(messageItem = {}) {
+  const workflowMeta =
+    messageItem?.workflowMeta &&
+    typeof messageItem.workflowMeta === "object" &&
+    !Array.isArray(messageItem.workflowMeta)
+      ? messageItem.workflowMeta
+      : {};
+  const semanticPreview = String(
+    workflowMeta?.semanticTextPreview ||
+      workflowMeta?.payload?.interaction?.semanticTextPreview ||
+      "",
+  ).trim();
+  return [
+    String(messageItem?.dialogProcessId || "").trim(),
+    String(messageItem?.ts || "").trim(),
+    String(messageItem?.content || "").trim(),
+    semanticPreview,
+  ].join("|");
+}
+
 function normalizeExecutionLogForRealtime(logItem = {}) {
   const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
   const rawEvent = String(logItem?.event || "").trim();
@@ -622,12 +642,18 @@ export function useChatEngine({
               foldedMessages: folded,
               dialogProcessId: botMsg.dialogProcessId || data.dialogProcessId,
             });
-            const lastAssistant =
-              assistantMessagesForCurrentTurn[assistantMessagesForCurrentTurn.length - 1];
+            const workflowAssistants = assistantMessagesForCurrentTurn.filter(
+              (messageItem) => messageItem?.workflowMessage === true,
+            );
+            const normalAssistants = assistantMessagesForCurrentTurn.filter(
+              (messageItem) => messageItem?.workflowMessage !== true,
+            );
+            const patchAssistants = normalAssistants.length
+              ? normalAssistants
+              : assistantMessagesForCurrentTurn;
+            const lastAssistant = patchAssistants[patchAssistants.length - 1];
             if (lastAssistant) {
-              const mergedAssistantContent = mergeAssistantContents(
-                assistantMessagesForCurrentTurn,
-              );
+              const mergedAssistantContent = mergeAssistantContents(patchAssistants);
               const lastAssistantType = String(lastAssistant.type || "");
               if (lastAssistantType && lastAssistantType !== "tool_call") {
                 botMsg.type = lastAssistantType;
@@ -644,6 +670,29 @@ export function useChatEngine({
               }
               if (Array.isArray(lastAssistant.attachmentMetas)) {
                 botMsg.attachmentMetas = lastAssistant.attachmentMetas;
+              }
+            }
+            if (workflowAssistants.length && Array.isArray(activeSession.value?.messages)) {
+              const sessionMessages = activeSession.value.messages;
+              const existingWorkflowSignatures = new Set(
+                sessionMessages
+                  .filter((messageItem) => messageItem?.workflowMessage === true)
+                  .map((messageItem) => buildWorkflowMessageSignature(messageItem)),
+              );
+              let appendedCount = 0;
+              for (const workflowMessageItem of workflowAssistants) {
+                const signature = buildWorkflowMessageSignature(workflowMessageItem);
+                if (!signature || existingWorkflowSignatures.has(signature)) continue;
+                const viewWorkflowMessage = makeViewMessage(workflowMessageItem);
+                viewWorkflowMessage.pending = false;
+                sessionMessages.push(viewWorkflowMessage);
+                existingWorkflowSignatures.add(signature);
+                appendedCount += 1;
+              }
+              if (appendedCount > 0) {
+                activeSession.value.messageCount = sessionMessages.length;
+                activeSession.value.lastMessage = sessionMessages[sessionMessages.length - 1] || null;
+                activeSession.value.updatedAt = new Date().toISOString();
               }
             }
           }

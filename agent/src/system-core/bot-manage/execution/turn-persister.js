@@ -59,6 +59,8 @@ export class SessionTurnPersister {
     injectedMessage = false,
     injectedBy = "",
     frontendUserMessage = false,
+    workflowMessage = false,
+    workflowMeta = null,
   }) {
     const fullTurnPayload = {
       role,
@@ -88,6 +90,13 @@ export class SessionTurnPersister {
       injectedMessage: injectedMessage === true,
       injectedBy: String(injectedBy || "").trim(),
       frontendUserMessage: frontendUserMessage === true,
+      workflowMessage: workflowMessage === true,
+      workflowMeta:
+        workflowMeta &&
+        typeof workflowMeta === "object" &&
+        !Array.isArray(workflowMeta)
+          ? workflowMeta
+          : null,
       modelResponseMetadata:
         modelResponseMetadata &&
         typeof modelResponseMetadata === "object" &&
@@ -133,6 +142,8 @@ export class SessionTurnPersister {
       injectedMessage,
       injectedBy,
       frontendUserMessage,
+      workflowMessage,
+      workflowMeta,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -186,6 +197,13 @@ export class SessionTurnPersister {
         injectedMessage: messageItem.injectedMessage === true,
         injectedBy: String(messageItem.injectedBy || "").trim(),
         frontendUserMessage: messageItem.frontendUserMessage === true,
+        workflowMessage: messageItem.workflowMessage === true,
+        workflowMeta:
+          messageItem.workflowMeta &&
+          typeof messageItem.workflowMeta === "object" &&
+          !Array.isArray(messageItem.workflowMeta)
+            ? messageItem.workflowMeta
+            : null,
         modelResponseMetadata:
           messageItem.modelResponseMetadata &&
           typeof messageItem.modelResponseMetadata === "object" &&

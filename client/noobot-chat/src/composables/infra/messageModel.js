@@ -122,6 +122,13 @@ function createMessageModel(messageItem = {}) {
     taskId: messageItem.taskId || "",
     injectedMessage: messageItem.injectedMessage === true,
     injectedBy: String(messageItem.injectedBy || "").trim(),
+    workflowMessage: messageItem.workflowMessage === true,
+    workflowMeta:
+      messageItem?.workflowMeta &&
+      typeof messageItem.workflowMeta === "object" &&
+      !Array.isArray(messageItem.workflowMeta)
+        ? messageItem.workflowMeta
+        : null,
   };
 }
 
@@ -186,6 +193,8 @@ function foldConversationMessages(messages = [], buildView) {
       previousMessage &&
       currentRole === "assistant" &&
       previousRole === "assistant" &&
+      previousMessage?.workflowMessage !== true &&
+      currentMessage?.workflowMessage !== true &&
       currentDialogProcessId &&
       previousDialogProcessId &&
       currentDialogProcessId === previousDialogProcessId;

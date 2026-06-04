@@ -129,6 +129,49 @@ test("globalConfig.plugins.harness.mode=on enables harness by default", () => {
   assert.equal(prepared.plugins.harness.basePath, path.join(tempRoot, "u2"));
 });
 
+test("_resolveWorkflowPluginOptions keeps workflow on when user/global config is on", () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: { plugins: { workflow: { enabled: true, mode: "off" } } },
+    workspaceService: createWorkspaceService("/tmp/noobot-workflow-test"),
+  });
+  const options = engine._resolveWorkflowPluginOptions({
+    runConfig: {
+      plugins: {
+        workflow: { mode: "off" },
+      },
+    },
+    userConfig: {
+      plugins: {
+        workflow: { enabled: true, mode: "on", semanticModel: "GLM_5_1" },
+      },
+    },
+  });
+  assert.equal(options.enabled, true);
+  assert.equal(options.mode, "on");
+  assert.equal(options.semanticModel, "GLM_5_1");
+});
+
+test("_resolveWorkflowPluginOptions respects explicit enabled=false in runConfig", () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: { plugins: { workflow: { enabled: true, mode: "on" } } },
+    workspaceService: createWorkspaceService("/tmp/noobot-workflow-test"),
+  });
+  const options = engine._resolveWorkflowPluginOptions({
+    runConfig: {
+      plugins: {
+        workflow: { enabled: false, mode: "off" },
+      },
+    },
+    userConfig: {
+      plugins: {
+        workflow: { enabled: true, mode: "on" },
+      },
+    },
+  });
+  assert.equal(options.enabled, false);
+  assert.equal(options.mode, "off");
+});
+
 test("runSession smoke writes harness artifacts through full execution pipeline", async () => {
   const tempRoot = await createTempRoot();
   const persistedTurns = [];
