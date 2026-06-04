@@ -22,15 +22,30 @@ const hostWidth = ref(0);
 const zoomScale = ref(1);
 const innerSelectedDialogId = ref("");
 
-const NODE_WIDTH = 192;
-const NODE_HEIGHT = 58;
-const NODE_GAP_Y = 22;
+const DESKTOP_NODE_WIDTH = 192;
+const COMPACT_MIN_NODE_WIDTH = 148;
 const NODE_GAP_X = 34;
-const PARALLEL_RAIL_WIDTH = 72;
-const PADDING_TOP = 12;
-const PADDING_BOTTOM = 12;
-const PADDING_LEFT = 12;
-const PADDING_RIGHT = 12;
+
+const isCompactGraph = computed(() => Number(hostWidth.value || 0) > 0 && Number(hostWidth.value || 0) <= 480);
+const nodeHeight = computed(() => (isCompactGraph.value ? 54 : 58));
+const nodeGapY = computed(() => (isCompactGraph.value ? 16 : 22));
+const parallelRailWidth = computed(() => {
+  if (!isCompactGraph.value) return 72;
+  const width = Math.max(0, Number(hostWidth.value || 0));
+  if (!width) return 46;
+  return Math.max(32, Math.min(52, Math.floor((width - COMPACT_MIN_NODE_WIDTH - 16) / 2)));
+});
+const paddingTop = computed(() => (isCompactGraph.value ? 8 : 12));
+const paddingBottom = computed(() => (isCompactGraph.value ? 8 : 12));
+const paddingLeft = computed(() => (isCompactGraph.value ? 8 : 12));
+const paddingRight = computed(() => (isCompactGraph.value ? 8 : 12));
+const nodeWidth = computed(() => {
+  if (!isCompactGraph.value) return DESKTOP_NODE_WIDTH;
+  const width = Math.max(0, Number(hostWidth.value || 0));
+  if (!width) return DESKTOP_NODE_WIDTH;
+  const available = width - paddingLeft.value - paddingRight.value - parallelRailWidth.value * 2;
+  return Math.max(COMPACT_MIN_NODE_WIDTH, Math.min(DESKTOP_NODE_WIDTH, available));
+});
 
 const normalizedNodes = computed(() => {
   const baseNodes = (Array.isArray(props.nodes) ? props.nodes : []).map((nodeItem = {}, index) => {
@@ -255,16 +270,18 @@ const flattenedNodes = computed(() => {
 
 const graphHeight = computed(() => {
   const nodeCount = Math.max(1, flattenedNodes.value.length);
-  return PADDING_TOP + PADDING_BOTTOM + nodeCount * NODE_HEIGHT + Math.max(0, nodeCount - 1) * NODE_GAP_Y;
+  return paddingTop.value + paddingBottom.value + nodeCount * nodeHeight.value + Math.max(0, nodeCount - 1) * nodeGapY.value;
 });
 
-const graphWidth = computed(() => PADDING_LEFT + PADDING_RIGHT + PARALLEL_RAIL_WIDTH + NODE_WIDTH);
+const graphWidth = computed(() => paddingLeft.value + paddingRight.value + parallelRailWidth.value * 2 + nodeWidth.value);
+
+const stageWidth = computed(() => Math.max(hostWidth.value, graphWidth.value, nodeWidth.value + 24));
 
 const positionedNodes = computed(() => {
   const positioned = [];
-  const stageWidth = Math.max(hostWidth.value, graphWidth.value, NODE_WIDTH + PARALLEL_RAIL_WIDTH + 24);
-  const centeredX = Math.round((stageWidth - NODE_WIDTH + PARALLEL_RAIL_WIDTH / 2) / 2);
-  const x = Math.max(PADDING_LEFT + PARALLEL_RAIL_WIDTH, centeredX);
+  const currentStageWidth = stageWidth.value;
+  const centeredX = Math.round((currentStageWidth - nodeWidth.value) / 2);
+  const x = Math.max(paddingLeft.value + Math.round(parallelRailWidth.value * 0.52), centeredX);
   let nodeIndex = 0;
   layoutRows.value.forEach((row = {}, rankIndex) => {
     const rowNodes = Array.isArray(row?.nodes) ? row.nodes : [];
@@ -276,7 +293,7 @@ const positionedNodes = computed(() => {
         _rankSize: rowNodes.length,
         _colIndex: colIndex,
         _x: x,
-        _y: PADDING_TOP + nodeIndex * (NODE_HEIGHT + NODE_GAP_Y),
+        _y: paddingTop.value + nodeIndex * (nodeHeight.value + nodeGapY.value),
       });
       nodeIndex += 1;
     });
@@ -313,7 +330,7 @@ const hostStyle = computed(() => ({
 const stageStyle = computed(() => ({
   transform: `scale(${zoomScale.value})`,
   transformOrigin: "top left",
-  width: `${Math.max(hostWidth.value, graphWidth.value, NODE_WIDTH + 24)}px`,
+  width: `${Math.max(stageWidth.value, 1)}px`,
   height: `${Math.max(graphHeight.value, 1)}px`,
 }));
 
@@ -321,8 +338,8 @@ function getNodeStyle(nodeItem = {}) {
   return {
     left: `${Math.round(Number(nodeItem?._x || 0))}px`,
     top: `${Math.round(Number(nodeItem?._y || 0))}px`,
-    width: `${NODE_WIDTH}px`,
-    height: `${NODE_HEIGHT}px`,
+    width: `${nodeWidth.value}px`,
+    height: `${nodeHeight.value}px`,
   };
 }
 
@@ -350,9 +367,9 @@ function isActionNode(nodeItem = {}) {
 
 function buildCenterSegment({ fromNode = {}, toNode = {}, highlighted = false } = {}) {
   return {
-    fromX: Number(fromNode?._x || 0) + NODE_WIDTH / 2,
-    fromY: Number(fromNode?._y || 0) + NODE_HEIGHT,
-    toX: Number(toNode?._x || 0) + NODE_WIDTH / 2,
+    fromX: Number(fromNode?._x || 0) + nodeWidth.value / 2,
+    fromY: Number(fromNode?._y || 0) + nodeHeight.value,
+    toX: Number(toNode?._x || 0) + nodeWidth.value / 2,
     toY: Number(toNode?._y || 0),
     highlighted,
   };
@@ -361,16 +378,16 @@ function buildCenterSegment({ fromNode = {}, toNode = {}, highlighted = false } 
 function buildSideRailSegment({ fromNode = {}, toNode = {}, side = "left", highlighted = false } = {}) {
   const fromLeftX = Number(fromNode?._x || 0);
   const toLeftX = Number(toNode?._x || 0);
-  const fromRightX = fromLeftX + NODE_WIDTH;
-  const toRightX = toLeftX + NODE_WIDTH;
+  const fromRightX = fromLeftX + nodeWidth.value;
+  const toRightX = toLeftX + nodeWidth.value;
   const isRight = String(side || "left") === "right";
   const fromX = isRight ? fromRightX : fromLeftX;
   const toX = isRight ? toRightX : toLeftX;
-  const fromY = Number(fromNode?._y || 0) + NODE_HEIGHT / 2;
-  const toY = Number(toNode?._y || 0) + NODE_HEIGHT / 2;
+  const fromY = Number(fromNode?._y || 0) + nodeHeight.value / 2;
+  const toY = Number(toNode?._y || 0) + nodeHeight.value / 2;
   const busX = isRight
-    ? Math.max(fromRightX, toRightX) + Math.round(PARALLEL_RAIL_WIDTH * 0.48)
-    : Math.min(fromLeftX, toLeftX) - Math.round(PARALLEL_RAIL_WIDTH * 0.48);
+    ? Math.max(fromRightX, toRightX) + Math.round(parallelRailWidth.value * 0.48)
+    : Math.min(fromLeftX, toLeftX) - Math.round(parallelRailWidth.value * 0.48);
   return {
     fromX,
     fromY,
@@ -524,7 +541,7 @@ function handleNodeClick(nodeItem = {}) {
   <div ref="hostRef" class="workflow-canvas-graph" :style="hostStyle">
     <div class="workflow-stage" :style="stageStyle">
       <WorkflowGraphEdges
-        :width="Math.max(hostWidth, graphWidth, NODE_WIDTH + 24)"
+        :width="Math.max(stageWidth, 1)"
         :height="Math.max(graphHeight, 1)"
         :segments="edgeSegments"
       />
@@ -543,7 +560,7 @@ function handleNodeClick(nodeItem = {}) {
         @click="handleNodeClick"
       />
 
-      <div class="workflow-minimap" v-if="layoutRows.length">
+      <div class="workflow-minimap" v-if="layoutRows.length && !isCompactGraph">
         <div class="workflow-minimap-inner">
           <div
             v-for="(row, rowIndex) in layoutRows"
@@ -611,8 +628,11 @@ function handleNodeClick(nodeItem = {}) {
 .workflow-canvas-graph {
   position: relative;
   min-height: 1px;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .workflow-stage {
@@ -665,5 +685,41 @@ function handleNodeClick(nodeItem = {}) {
 
 .workflow-minimap-node.running {
   background: rgba(122, 75, 244, 0.72);
+}
+
+@media (max-width: 480px) {
+  .workflow-toolbar {
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .workflow-toolbar-title {
+    display: none;
+  }
+
+  .workflow-toolbar-actions {
+    margin-left: auto;
+    gap: 4px;
+  }
+
+  .workflow-zoom-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .workflow-zoom-reset {
+    height: 28px;
+    padding: 0 7px;
+  }
+
+  .workflow-zoom-text {
+    min-width: 38px;
+    font-size: 11px;
+  }
+
+  .workflow-canvas-graph {
+    width: 100%;
+  }
 }
 </style>

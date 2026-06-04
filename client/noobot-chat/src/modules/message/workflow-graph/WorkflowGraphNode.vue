@@ -266,4 +266,42 @@ function handleClick(nodeItem = {}, clickable = true) {
     box-shadow: 0 0 0 6px rgba(122, 75, 244, 0.08);
   }
 }
+
+@media (max-width: 480px) {
+  .workflow-node {
+    padding: 6px;
+    gap: 5px;
+    border-radius: 10px;
+  }
+
+  .workflow-node.is-state-node {
+    padding-inline: 8px;
+  }
+
+  .workflow-node-index,
+  .workflow-node-state-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+
+  .workflow-node-name {
+    font-size: 11px;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .workflow-node-parallel,
+  .workflow-node-kind {
+    display: none;
+  }
+
+  :deep(.workflow-node-status) {
+    padding: 1px 5px;
+    font-size: 9px;
+  }
+}
 </style>
