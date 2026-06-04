@@ -7,7 +7,10 @@
 import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { getWorkflowSessionDetailApi } from "../../services/api/chatApi";
+import { applyCompletedToolLogsToMessages } from "../../composables/infra/sessionToolLogs";
+import { buildViewMessage, foldConversationMessages } from "../../composables/infra/messageModel";
 import { WorkflowCanvasGraph } from "./workflow-graph";
+import ChatMessageItem from "./ChatMessageItem.vue";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
@@ -15,6 +18,8 @@ const props = defineProps({
   authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
+  formatFileSize: { type: Function, default: (value = 0) => `${Number(value || 0)} B` },
+  isImageMime: { type: Function, default: (mimeType = "") => String(mimeType || "").startsWith("image/") },
 });
 
 const viewerVisible = ref(false);
@@ -24,7 +29,6 @@ const selectedNode = ref(null);
 const selectedNodeMessages = ref([]);
 const selectedNodeSessionId = ref("");
 const selectedGraphDialogId = ref("");
-const activeMessageTab = ref("primary");
 const semanticPreviewExpanded = ref(false);
 
 const workflowMeta = computed(() =>
@@ -49,6 +53,12 @@ const nodeSessions = computed(() => {
     : [];
   return fromPayload;
 });
+
+const semanticFlowtos = computed(() =>
+  Array.isArray(workflowPayload.value?.semantic?.flowtos)
+    ? workflowPayload.value.semantic.flowtos
+    : [],
+);
 
 const semanticNodeMap = computed(() => {
   const map = new Map();
@@ -85,6 +95,17 @@ const nodeRunByDialogId = computed(() => {
   return map;
 });
 
+const nodeSessionBySemanticKey = computed(() => {
+  const map = new Map();
+  for (const item of nodeSessions.value) {
+    const nodeId = String(item?.nodeId || "").trim();
+    const nodeName = String(item?.nodeName || "").trim();
+    if (nodeId) map.set(`id:${nodeId}`, item);
+    if (nodeName) map.set(`name:${nodeName}`, item);
+  }
+  return map;
+});
+
 function resolveNodeStatus(nodeItem = {}) {
   const explicit = String(nodeItem?.status || "").trim().toLowerCase();
   if (explicit) return explicit;
@@ -98,29 +119,81 @@ function resolveNodeStatus(nodeItem = {}) {
   return "pending";
 }
 
-const flowNodes = computed(() =>
-  nodeSessions.value
-    .map((item = {}, index) => {
-      const semanticNode =
-        semanticNodeMap.value.get(`id:${String(item?.nodeId || "").trim()}`) ||
-        semanticNodeMap.value.get(`name:${String(item?.nodeName || "").trim()}`) ||
-        null;
-      return {
-        ...item,
-        type: String(item?.type || semanticNode?.type || "").trim(),
-        stateType: Number.isFinite(Number(item?.stateType))
-          ? Number(item.stateType)
-          : Number.isFinite(Number(semanticNode?.stateType))
-            ? Number(semanticNode.stateType)
-            : undefined,
-        status: resolveNodeStatus(item),
-        _order: Number.isFinite(Number(item?.transition))
-          ? Number(item.transition)
-          : index + 1,
-      };
-    })
-    .sort((left, right) => Number(left?._order || 0) - Number(right?._order || 0)),
-);
+function buildFlowNodeFromSession(item = {}, index = 0) {
+  const semanticNode =
+    semanticNodeMap.value.get(`id:${String(item?.nodeId || "").trim()}`) ||
+    semanticNodeMap.value.get(`name:${String(item?.nodeName || "").trim()}`) ||
+    null;
+  return {
+    ...item,
+    type: String(item?.type || semanticNode?.type || "").trim(),
+    stateType: Number.isFinite(Number(item?.stateType))
+      ? Number(item.stateType)
+      : Number.isFinite(Number(semanticNode?.stateType))
+        ? Number(semanticNode.stateType)
+        : undefined,
+    status: resolveNodeStatus(item),
+    _order: Number.isFinite(Number(item?.transition))
+      ? Number(item.transition)
+      : index + 1,
+  };
+}
+
+function buildFlowNodeFromSemantic(nodeItem = {}, index = 0) {
+  const nodeId = String(nodeItem?.id || "").trim();
+  const nodeName = String(nodeItem?.name || nodeId || "").trim();
+  const matchedSession =
+    nodeSessionBySemanticKey.value.get(`id:${nodeId}`) ||
+    nodeSessionBySemanticKey.value.get(`name:${nodeName}`) ||
+    null;
+  const completed = executionMeta.value?.completed === true;
+  const nodeType = String(nodeItem?.type || "").trim().toLowerCase();
+  const isAction = nodeType === "action";
+  const hasRunRecord = matchedSession && (
+    String(matchedSession?.dialogId || "").trim() ||
+    String(matchedSession?.sessionId || "").trim()
+  );
+  return {
+    ...(matchedSession || {}),
+    nodeId,
+    nodeName,
+    nodeType: isAction ? 2 : 0,
+    type: String(nodeItem?.type || "").trim(),
+    stateType: Number.isFinite(Number(nodeItem?.stateType))
+      ? Number(nodeItem.stateType)
+      : undefined,
+    rootSessionId: String(
+      matchedSession?.rootSessionId ||
+        workflowPayload.value?.planningDialog?.sessionId ||
+        workflowPayload.value?.runMeta?.sessionId ||
+        "",
+    ).trim(),
+    status: matchedSession
+      ? resolveNodeStatus(matchedSession)
+      : isAction
+        ? (hasRunRecord ? "success" : "pending")
+        : completed
+          ? "success"
+          : "pending",
+    _order: Number.isFinite(Number(matchedSession?.transition))
+      ? Number(matchedSession.transition)
+      : index + 1,
+  };
+}
+
+const flowNodes = computed(() => {
+  const semanticNodes = Array.isArray(workflowPayload.value?.semantic?.nodes)
+    ? workflowPayload.value.semantic.nodes
+    : [];
+  if (semanticNodes.length) {
+    return semanticNodes
+      .map((item, index) => buildFlowNodeFromSemantic(item, index))
+      .sort((left, right) => Number(left?._order || 0) - Number(right?._order || 0));
+  }
+  return nodeSessions.value
+    .map((item = {}, index) => buildFlowNodeFromSession(item, index))
+    .sort((left, right) => Number(left?._order || 0) - Number(right?._order || 0));
+});
 
 const semanticPreview = computed(
   () =>
@@ -163,7 +236,7 @@ function isPrimaryCandidateMessage(messageItem = {}) {
 }
 
 const primaryNodeMessages = computed(() => {
-  const source = Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : [];
+  const source = Array.isArray(normalizedNodeSessionMessages.value) ? normalizedNodeSessionMessages.value : [];
   const firstUser = source.find((messageItem = {}) => {
     if (!isPrimaryCandidateMessage(messageItem)) return false;
     return String(messageItem?.role || "").trim().toLowerCase() === "user";
@@ -182,16 +255,62 @@ const primaryNodeMessages = computed(() => {
   return result;
 });
 
-const toolNodeMessages = computed(() =>
-  (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).filter(
-    (messageItem = {}) => isToolRelatedMessage(messageItem) && !isInjectedMessage(messageItem),
+function normalizeNodeMessageForDisplay(messageItem = {}) {
+  const item = messageItem && typeof messageItem === "object" ? messageItem : {};
+  const content = String(item?.content || "").trim();
+  return {
+    ...item,
+    workflowMessage: false,
+    content: content || renderableMessageContent(item),
+  };
+}
+
+function buildNodeViewMessage(messageItem = {}) {
+  return normalizeNodeMessageForDisplay(
+    buildViewMessage(messageItem, {
+      userId: props.userId,
+      apiKey: "",
+      isImageMime: props.isImageMime,
+    }),
+  );
+}
+
+const selectedNodeSessionDocs = computed(() => {
+  const sessionId = String(selectedNodeSessionId.value || selectedNode.value?.sessionId || "").trim();
+  if (!sessionId) return [];
+  return [
+    {
+      sessionId,
+      parentSessionId: String(selectedNode.value?.rootSessionId || "").trim(),
+      caller: "bot",
+      depth: 1,
+      messages: Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : [],
+    },
+  ];
+});
+
+const rawNodeSessionMessages = computed(() =>
+  (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(
+    (messageItem = {}) => buildNodeViewMessage(messageItem),
   ),
 );
 
-const injectedNodeMessages = computed(() =>
-  (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).filter(
-    (messageItem = {}) => isInjectedMessage(messageItem),
-  ),
+const normalizedNodeSessionMessages = computed(() => {
+  const sessionDocs = selectedNodeSessionDocs.value;
+  const mainSessionDoc = sessionDocs[0] || {};
+  const foldedMessages = foldConversationMessages(
+    Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : [],
+    buildNodeViewMessage,
+  );
+  applyCompletedToolLogsToMessages(foldedMessages, sessionDocs);
+  return foldedMessages;
+});
+
+const displayNodeMessages = computed(() =>
+  (Array.isArray(normalizedNodeSessionMessages.value)
+    ? normalizedNodeSessionMessages.value
+    : []
+  ).map((messageItem = {}) => normalizeNodeMessageForDisplay(messageItem)),
 );
 
 function stringifyJson(value = null) {
@@ -246,7 +365,6 @@ async function openNodeSession(nodeItem = {}) {
   selectedNode.value = nodeItem;
   selectedNodeMessages.value = [];
   selectedNodeSessionId.value = "";
-  activeMessageTab.value = "primary";
   try {
     const response = await getWorkflowSessionDetailApi(
       {
@@ -306,6 +424,7 @@ function handleSelectedDialogUpdate(dialogId = "") {
       <div class="workflow-node-title">工作流节点（组件化流程）</div>
       <WorkflowCanvasGraph
         :nodes="flowNodes"
+        :flowtos="semanticFlowtos"
         :selected-dialog-id="selectedGraphDialogId"
         @update:selected-dialog-id="handleSelectedDialogUpdate"
         @node-click="openNodeSession"
@@ -331,68 +450,21 @@ function handleSelectedDialogUpdate(dialogId = "") {
         show-icon
       />
       <template v-else>
-        <el-tabs v-model="activeMessageTab" class="workflow-node-tabs">
-          <el-tab-pane
-            :label="`主消息 (${primaryNodeMessages.length})`"
-            name="primary"
-          >
-            <div
-              v-for="(messageItem, messageIndex) in primaryNodeMessages"
-              :key="`primary-${String(messageItem?.ts || '')}-${messageIndex}`"
-              class="workflow-node-message"
-            >
-              <div class="workflow-node-message-header">
-                <span>{{ messageItem?.role || "assistant" }}</span>
-                <span>{{ formatTime(messageItem?.ts || "") }}</span>
-              </div>
-              <div class="workflow-node-message-content" v-html="renderMarkdown(renderableMessageContent(messageItem))" />
-            </div>
-            <div v-if="!primaryNodeMessages.length" class="workflow-node-empty">
-              暂无主消息
-            </div>
-          </el-tab-pane>
-
-          <el-tab-pane
-            :label="`工具请求/调用 (${toolNodeMessages.length})`"
-            name="tool"
-          >
-            <div
-              v-for="(messageItem, messageIndex) in toolNodeMessages"
-              :key="`tool-${String(messageItem?.ts || '')}-${messageIndex}`"
-              class="workflow-node-message"
-            >
-              <div class="workflow-node-message-header">
-                <span>{{ messageItem?.role || "assistant" }}</span>
-                <span>{{ formatTime(messageItem?.ts || "") }}</span>
-              </div>
-              <div class="workflow-node-message-content" v-html="renderMarkdown(renderableMessageContent(messageItem))" />
-            </div>
-            <div v-if="!toolNodeMessages.length" class="workflow-node-empty">
-              暂无工具请求/调用消息
-            </div>
-          </el-tab-pane>
-
-          <el-tab-pane
-            :label="`注入消息 (${injectedNodeMessages.length})`"
-            name="injected"
-          >
-            <div
-              v-for="(messageItem, messageIndex) in injectedNodeMessages"
-              :key="`injected-${String(messageItem?.ts || '')}-${messageIndex}`"
-              class="workflow-node-message"
-            >
-              <div class="workflow-node-message-header">
-                <span>{{ messageItem?.role || "assistant" }}</span>
-                <span>{{ formatTime(messageItem?.ts || "") }}</span>
-              </div>
-              <div class="workflow-node-message-content" v-html="renderMarkdown(renderableMessageContent(messageItem))" />
-            </div>
-            <div v-if="!injectedNodeMessages.length" class="workflow-node-empty">
-              暂无注入消息
-            </div>
-          </el-tab-pane>
-        </el-tabs>
-        <div v-if="!selectedNodeMessages.length && !viewerLoading" class="workflow-node-empty">
+        <ChatMessageItem
+          v-for="(messageItem, messageIndex) in displayNodeMessages"
+          :key="`thinking-${String(messageItem?.ts || '')}-${messageIndex}`"
+          class="workflow-node-chat-item"
+          :message-item="messageItem"
+          :all-messages="rawNodeSessionMessages"
+          :session-docs="[]"
+          :user-id="userId"
+          :auth-fetch="authFetch"
+          :render-markdown="renderMarkdown"
+          :format-time="formatTime"
+          :format-file-size="formatFileSize"
+          :is-image-mime="isImageMime"
+        />
+        <div v-if="!displayNodeMessages.length && !viewerLoading" class="workflow-node-empty">
           暂无节点会话内容
         </div>
       </template>
@@ -495,26 +567,6 @@ function handleSelectedDialogUpdate(dialogId = "") {
   color: var(--noobot-text-secondary);
 }
 
-.workflow-node-tabs {
-  width: 100%;
-}
-
-.workflow-node-message {
-  border: 1px solid var(--noobot-msg-assistant-border);
-  border-radius: var(--noobot-radius-md);
-  padding: 10px;
-  margin-bottom: 10px;
-  background: var(--noobot-msg-assistant-bg);
-}
-
-.workflow-node-message-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--noobot-text-secondary);
-  margin-bottom: 6px;
-}
-
 .workflow-node-empty {
   color: var(--noobot-text-secondary);
   font-size: 13px;
@@ -535,8 +587,11 @@ function handleSelectedDialogUpdate(dialogId = "") {
   border-bottom: 1px solid var(--noobot-msg-assistant-border) !important;
 }
 
-:deep(.workflow-node-tabs .el-tabs__content) {
-  padding-top: 4px;
-  background: var(--noobot-msg-assistant-bg);
+:deep(.workflow-node-chat-item.msg-wrapper) {
+  margin-bottom: 12px;
+}
+
+:deep(.workflow-node-chat-item .msg-content) {
+  max-width: 100%;
 }
 </style>

@@ -138,6 +138,8 @@ async function handleCopyAssistantMessageText() {
           :auth-fetch="authFetch"
           :render-markdown="renderMarkdown"
           :format-time="formatTime"
+          :format-file-size="formatFileSize"
+          :is-image-mime="isImageMime"
         />
 
         <div v-if="messageItem.error" class="error-alert">

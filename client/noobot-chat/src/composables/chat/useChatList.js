@@ -58,10 +58,21 @@ export function useChatList({
     ).trim();
     return [
       String(messageItem?.dialogProcessId || "").trim(),
-      String(messageItem?.ts || "").trim(),
       String(messageItem?.content || "").trim(),
       semanticPreview,
     ].join("|");
+  }
+
+  function patchExistingWorkflowMessage(existingMessage = null, workflowMessageItem = {}) {
+    if (!existingMessage || !workflowMessageItem) return false;
+    const thinkingOpenNames = Array.isArray(existingMessage?.thinkingOpenNames)
+      ? existingMessage.thinkingOpenNames
+      : [];
+    Object.assign(existingMessage, workflowMessageItem);
+    existingMessage.pending = false;
+    existingMessage.workflowMessage = true;
+    if (thinkingOpenNames.length) existingMessage.thinkingOpenNames = thinkingOpenNames;
+    return true;
   }
 
   function buildChildAttachmentMetasByParentDialogProcessId(
@@ -322,6 +333,20 @@ export function useChatList({
         for (const workflowMessageItem of workflowMessages) {
           const signature = buildWorkflowMessageSignature(workflowMessageItem);
           if (!signature || existingWorkflowSignatures.has(signature)) continue;
+          const workflowDialogProcessId = String(
+            workflowMessageItem?.dialogProcessId || "",
+          ).trim();
+          const existingAssistantForDialog = existingMessages.find(
+            (messageItem) =>
+              String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
+              messageItem?.workflowMessage !== true &&
+              workflowDialogProcessId &&
+              String(messageItem?.dialogProcessId || "").trim() === workflowDialogProcessId,
+          );
+          if (patchExistingWorkflowMessage(existingAssistantForDialog, workflowMessageItem)) {
+            existingWorkflowSignatures.add(signature);
+            continue;
+          }
           existingMessages.push(workflowMessageItem);
           existingWorkflowSignatures.add(signature);
         }

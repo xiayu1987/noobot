@@ -204,7 +204,13 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     String(workflowTurn?.content || ""),
     /\/workspace\/attachments\/s1\/workflow-node-1-result\.md/,
   );
+  assert.equal(String(workflowTurn?.content || "").includes("message-node-done"), false);
+  assert.equal(String(workflowTurn?.content || "").includes("answer-node-done"), false);
   assert.equal(workflowTurn?.workflowMeta?.source, "workflow-plugin");
+  assert.equal(
+    workflowTurn?.workflowMeta?.payload?.execution?.nodeAgentRuns?.[0]?.nodeResultText,
+    undefined,
+  );
   const hasPayloadBuiltEvent = eventLogCalls.some(
     (item) => String(item?.event?.event || "").trim() === "workflow_payload_build_succeeded",
   );

@@ -10,6 +10,7 @@ import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
+  flowtos: { type: Array, default: () => [] },
   selectedDialogId: { type: String, default: "" },
 });
 
@@ -24,8 +25,8 @@ const innerSelectedDialogId = ref("");
 const NODE_WIDTH = 192;
 const NODE_HEIGHT = 58;
 const NODE_GAP_Y = 22;
-const NODE_GAP_X = 28;
-const PARALLEL_RAIL_WIDTH = 104;
+const NODE_GAP_X = 34;
+const PARALLEL_RAIL_WIDTH = 72;
 const PADDING_TOP = 12;
 const PADDING_BOTTOM = 12;
 const PADDING_LEFT = 12;
@@ -35,14 +36,26 @@ const normalizedNodes = computed(() => {
   const baseNodes = (Array.isArray(props.nodes) ? props.nodes : []).map((nodeItem = {}, index) => {
     const status = String(nodeItem?.status || nodeItem?._status || "").trim().toLowerCase();
     const resolvedStatus = status || "pending";
+    const dialogId = String(nodeItem?.dialogId || "").trim();
+    const sessionId = String(nodeItem?.sessionId || "").trim();
+    const hasSessionRef = Boolean(dialogId || sessionId);
     return {
       ...nodeItem,
       _index: index,
       _status: resolvedStatus,
-      _hasSession: resolvedStatus === "success" || Boolean(String(nodeItem?.sessionId || "").trim()),
+      _hasSession: hasSessionRef,
     };
   });
   if (!baseNodes.length) return [];
+
+  const hasStartBoundary = baseNodes.some((item) => {
+    const nodeId = String(item?.nodeId || item?.id || "").trim().toLowerCase();
+    return Number(item?.stateType) === 0 && nodeId === "start";
+  });
+  const hasEndBoundary = baseNodes.some((item) => {
+    const nodeId = String(item?.nodeId || item?.id || "").trim().toLowerCase();
+    return Number(item?.stateType) === 1 && nodeId === "end";
+  });
 
   const maxTransition = baseNodes.reduce((acc, item) => {
     const t = Number(item?.transition || 0);
@@ -84,13 +97,124 @@ const normalizedNodes = computed(() => {
     _hasSession: allFinished,
     _virtualBoundary: "end",
   };
-  return [startNode, ...baseNodes, endNode];
+  return [
+    ...(hasStartBoundary ? [] : [startNode]),
+    ...baseNodes,
+    ...(hasEndBoundary ? [] : [endNode]),
+  ];
 });
 
+function resolveSemanticNodeId(nodeItem = {}) {
+  return String(nodeItem?.nodeId || nodeItem?.id || "").trim();
+}
+
+function buildTopologyRows(nodes = [], flowtos = []) {
+  const nodeList = Array.isArray(nodes) ? nodes : [];
+  const edgeList = (Array.isArray(flowtos) ? flowtos : [])
+    .map((flowto = {}, index) => ({
+      from: String(flowto?.from || "").trim(),
+      to: String(flowto?.to || "").trim(),
+      index,
+    }))
+    .filter((flowto) => flowto.from && flowto.to);
+  if (!nodeList.length || !edgeList.length) return [];
+
+  const nodeById = new Map();
+  const orderById = new Map();
+  nodeList.forEach((nodeItem = {}, index) => {
+    const id = resolveSemanticNodeId(nodeItem);
+    if (!id || nodeById.has(id)) return;
+    nodeById.set(id, nodeItem);
+    orderById.set(id, index);
+  });
+  if (!nodeById.size) return [];
+
+  const outgoing = new Map();
+  const indegree = new Map();
+  const firstIncomingEdgeOrder = new Map();
+  for (const id of nodeById.keys()) indegree.set(id, 0);
+  for (const edge of edgeList) {
+    if (!nodeById.has(edge.from) || !nodeById.has(edge.to)) continue;
+    if (!outgoing.has(edge.from)) outgoing.set(edge.from, []);
+    outgoing.get(edge.from).push(edge);
+    indegree.set(edge.to, Number(indegree.get(edge.to) || 0) + 1);
+    if (!firstIncomingEdgeOrder.has(edge.to)) firstIncomingEdgeOrder.set(edge.to, edge.index);
+  }
+  for (const list of outgoing.values()) {
+    list.sort((left, right) => Number(left.index || 0) - Number(right.index || 0));
+  }
+
+  const queue = Array.from(nodeById.keys())
+    .filter((id) => Number(indegree.get(id) || 0) === 0)
+    .sort((left, right) => Number(orderById.get(left) || 0) - Number(orderById.get(right) || 0));
+  const indegreeWork = new Map(indegree);
+  const rankById = new Map(Array.from(nodeById.keys()).map((id) => [id, 0]));
+  const visited = new Set();
+
+  while (queue.length) {
+    const id = queue.shift();
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const currentRank = Number(rankById.get(id) || 0);
+    for (const edge of outgoing.get(id) || []) {
+      rankById.set(edge.to, Math.max(Number(rankById.get(edge.to) || 0), currentRank + 1));
+      indegreeWork.set(edge.to, Math.max(0, Number(indegreeWork.get(edge.to) || 0) - 1));
+      if (Number(indegreeWork.get(edge.to) || 0) === 0) queue.push(edge.to);
+    }
+    queue.sort((left, right) => {
+      const rankDelta = Number(rankById.get(left) || 0) - Number(rankById.get(right) || 0);
+      if (rankDelta) return rankDelta;
+      return Number(orderById.get(left) || 0) - Number(orderById.get(right) || 0);
+    });
+  }
+
+  // 有环或孤立节点时，仍按原始顺序追加，避免节点丢失。
+  let fallbackRank = Math.max(0, ...Array.from(rankById.values()).map((value) => Number(value || 0)));
+  for (const id of nodeById.keys()) {
+    if (visited.has(id)) continue;
+    fallbackRank += 1;
+    rankById.set(id, fallbackRank);
+  }
+
+  const rowMap = new Map();
+  for (const [id, nodeItem] of nodeById.entries()) {
+    const rank = Number(rankById.get(id) || 0);
+    if (!rowMap.has(rank)) rowMap.set(rank, []);
+    rowMap.get(rank).push(nodeItem);
+  }
+
+  return Array.from(rowMap.entries())
+    .sort((left, right) => Number(left[0] || 0) - Number(right[0] || 0))
+    .map(([rank, rowNodes]) => ({
+      key: `rank_${rank}`,
+      nodes: rowNodes.slice().sort((left, right) => {
+        const leftId = resolveSemanticNodeId(left);
+        const rightId = resolveSemanticNodeId(right);
+        const incomingDelta =
+          Number(firstIncomingEdgeOrder.get(leftId) ?? Number.MAX_SAFE_INTEGER) -
+          Number(firstIncomingEdgeOrder.get(rightId) ?? Number.MAX_SAFE_INTEGER);
+        if (incomingDelta) return incomingDelta;
+        return Number(orderById.get(leftId) || 0) - Number(orderById.get(rightId) || 0);
+      }),
+    }));
+}
+
 const layoutRows = computed(() => {
+  const topologyRows = buildTopologyRows(normalizedNodes.value, props.flowtos);
+  if (topologyRows.length) return topologyRows;
+
   const sorted = normalizedNodes.value
     .slice()
-    .sort((left, right) => Number(left?.transition || 0) - Number(right?.transition || 0));
+    .sort((left, right) => {
+      const lt = Number(left?.transition);
+      const rt = Number(right?.transition);
+      const hasLt = Number.isFinite(lt);
+      const hasRt = Number.isFinite(rt);
+      if (hasLt && hasRt && lt !== rt) return lt - rt;
+      if (hasLt && !hasRt) return -1;
+      if (!hasLt && hasRt) return 1;
+      return Number(left?._index || 0) - Number(right?._index || 0);
+    });
   const rows = [];
   const waveMap = new Map();
   for (const nodeItem of sorted) {
@@ -106,7 +230,7 @@ const layoutRows = computed(() => {
       continue;
     }
     rows.push({
-      key: `serial_${String(nodeItem?.dialogId || nodeItem?._index || rows.length)}`,
+      key: `serial_${String(nodeItem?.dialogId || nodeItem?.nodeId || nodeItem?._index || rows.length)}`,
       nodes: [nodeItem],
     });
   }
@@ -130,31 +254,31 @@ const flattenedNodes = computed(() => {
 });
 
 const graphHeight = computed(() => {
-  const maxCount = Math.max(1, flattenedNodes.value.length);
-  return (
-    PADDING_TOP +
-    PADDING_BOTTOM +
-    maxCount * NODE_HEIGHT +
-    Math.max(0, maxCount - 1) * NODE_GAP_Y
-  );
+  const nodeCount = Math.max(1, flattenedNodes.value.length);
+  return PADDING_TOP + PADDING_BOTTOM + nodeCount * NODE_HEIGHT + Math.max(0, nodeCount - 1) * NODE_GAP_Y;
 });
 
-const graphWidth = computed(() => {
-  return PADDING_LEFT + PADDING_RIGHT + PARALLEL_RAIL_WIDTH + NODE_WIDTH;
-});
+const graphWidth = computed(() => PADDING_LEFT + PADDING_RIGHT + PARALLEL_RAIL_WIDTH + NODE_WIDTH);
 
 const positionedNodes = computed(() => {
   const positioned = [];
-  const stageWidth = Math.max(hostWidth.value, graphWidth.value, NODE_WIDTH + 24);
-  const centeredX = Math.round((stageWidth - NODE_WIDTH) / 2);
+  const stageWidth = Math.max(hostWidth.value, graphWidth.value, NODE_WIDTH + PARALLEL_RAIL_WIDTH + 24);
+  const centeredX = Math.round((stageWidth - NODE_WIDTH + PARALLEL_RAIL_WIDTH / 2) / 2);
   const x = Math.max(PADDING_LEFT + PARALLEL_RAIL_WIDTH, centeredX);
-  flattenedNodes.value.forEach((nodeItem, nodeIndex) => {
-    positioned.push({
-      ...nodeItem,
-      _rowIndex: nodeIndex,
-      _colIndex: 0,
-      _x: x,
-      _y: PADDING_TOP + nodeIndex * (NODE_HEIGHT + NODE_GAP_Y),
+  let nodeIndex = 0;
+  layoutRows.value.forEach((row = {}, rankIndex) => {
+    const rowNodes = Array.isArray(row?.nodes) ? row.nodes : [];
+    rowNodes.forEach((nodeItem = {}, colIndex) => {
+      positioned.push({
+        ...nodeItem,
+        _rowIndex: nodeIndex,
+        _rankIndex: rankIndex,
+        _rankSize: rowNodes.length,
+        _colIndex: colIndex,
+        _x: x,
+        _y: PADDING_TOP + nodeIndex * (NODE_HEIGHT + NODE_GAP_Y),
+      });
+      nodeIndex += 1;
     });
   });
   return positioned;
@@ -218,58 +342,98 @@ function resolveStatusClass(nodeItem = {}) {
   return "pending";
 }
 
+function isActionNode(nodeItem = {}) {
+  const type = String(nodeItem?.type || "").trim().toLowerCase();
+  if (type) return type === "action";
+  return Number(nodeItem?.nodeType) === 2;
+}
+
+function buildCenterSegment({ fromNode = {}, toNode = {}, highlighted = false } = {}) {
+  return {
+    fromX: Number(fromNode?._x || 0) + NODE_WIDTH / 2,
+    fromY: Number(fromNode?._y || 0) + NODE_HEIGHT,
+    toX: Number(toNode?._x || 0) + NODE_WIDTH / 2,
+    toY: Number(toNode?._y || 0),
+    highlighted,
+  };
+}
+
+function buildSideRailSegment({ fromNode = {}, toNode = {}, side = "left", highlighted = false } = {}) {
+  const fromLeftX = Number(fromNode?._x || 0);
+  const toLeftX = Number(toNode?._x || 0);
+  const fromRightX = fromLeftX + NODE_WIDTH;
+  const toRightX = toLeftX + NODE_WIDTH;
+  const isRight = String(side || "left") === "right";
+  const fromX = isRight ? fromRightX : fromLeftX;
+  const toX = isRight ? toRightX : toLeftX;
+  const fromY = Number(fromNode?._y || 0) + NODE_HEIGHT / 2;
+  const toY = Number(toNode?._y || 0) + NODE_HEIGHT / 2;
+  const busX = isRight
+    ? Math.max(fromRightX, toRightX) + Math.round(PARALLEL_RAIL_WIDTH * 0.48)
+    : Math.min(fromLeftX, toLeftX) - Math.round(PARALLEL_RAIL_WIDTH * 0.48);
+  return {
+    fromX,
+    fromY,
+    toX,
+    toY,
+    busX,
+    highlighted,
+  };
+}
+
+function buildWorkflowEdgeSegment({ fromNode = {}, toNode = {}, highlighted = false } = {}) {
+  const fromRankSize = Number(fromNode?._rankSize || 1);
+  const toRankSize = Number(toNode?._rankSize || 1);
+  if (toRankSize > 1 && fromRankSize <= 1) {
+    return buildSideRailSegment({ fromNode, toNode, side: "left", highlighted });
+  }
+  if (fromRankSize > 1 && toRankSize <= 1) {
+    return buildSideRailSegment({ fromNode, toNode, side: "right", highlighted });
+  }
+  return buildCenterSegment({ fromNode, toNode, highlighted });
+}
+
 const edgeSegments = computed(() => {
   const segments = [];
   if (positionedNodes.value.length <= 1) return segments;
+  const flowtos = Array.isArray(props.flowtos) ? props.flowtos : [];
   const selectedRowIndex = Number(selectedNode.value?._rowIndex ?? -1);
+  if (flowtos.length) {
+    const nodeBySemanticId = new Map();
+    for (const nodeItem of positionedNodes.value) {
+      const semanticId = String(nodeItem?.nodeId || nodeItem?.id || "").trim();
+      if (!semanticId) continue;
+      nodeBySemanticId.set(semanticId, nodeItem);
+    }
+    for (const flowto of flowtos) {
+      const fromId = String(flowto?.from || "").trim();
+      const toId = String(flowto?.to || "").trim();
+      const fromNode = nodeBySemanticId.get(fromId);
+      const toNode = nodeBySemanticId.get(toId);
+      if (!fromNode || !toNode) continue;
+      const fromRow = Number(fromNode?._rowIndex ?? -1);
+      const toRow = Number(toNode?._rowIndex ?? -1);
+      const minRow = Math.min(fromRow, toRow);
+      segments.push(buildWorkflowEdgeSegment({
+        fromNode,
+        toNode,
+        highlighted: selectedRowIndex >= 0 && minRow >= 0 && minRow < selectedRowIndex,
+      }));
+    }
+    return segments;
+  }
+
   for (let rowIndex = 0; rowIndex < positionedNodes.value.length - 1; rowIndex += 1) {
     const fromNode = positionedNodes.value[rowIndex];
     const toNode = positionedNodes.value[rowIndex + 1];
-    segments.push({
-      fromX: Number(fromNode?._x || 0) + NODE_WIDTH / 2,
-      fromY: Number(fromNode?._y || 0) + NODE_HEIGHT,
-      toX: Number(toNode?._x || 0) + NODE_WIDTH / 2,
-      toY: Number(toNode?._y || 0),
+    segments.push(buildWorkflowEdgeSegment({
+      fromNode,
+      toNode,
       highlighted: selectedRowIndex >= 0 && rowIndex < selectedRowIndex,
-    });
+    }));
   }
   return segments;
 });
-
-const parallelGroups = computed(() => {
-  const map = new Map();
-  for (const nodeItem of positionedNodes.value) {
-    if (nodeItem?._virtualBoundary) continue;
-    const wave = Number(nodeItem?.parallelWave || 0);
-    if (wave <= 0) continue;
-    if (!map.has(wave)) {
-      map.set(wave, {
-        wave,
-        count: 0,
-        minY: Number.POSITIVE_INFINITY,
-        maxY: Number.NEGATIVE_INFINITY,
-        x: Number(nodeItem?._x || 0),
-      });
-    }
-    const group = map.get(wave);
-    group.count += 1;
-    group.minY = Math.min(group.minY, Number(nodeItem?._y || 0));
-    group.maxY = Math.max(group.maxY, Number(nodeItem?._y || 0) + NODE_HEIGHT);
-    group.x = Number(nodeItem?._x || 0);
-  }
-  return Array.from(map.values())
-    .filter((group) => Number(group?.count || 0) > 1)
-    .sort((a, b) => Number(a.wave || 0) - Number(b.wave || 0));
-});
-
-function getParallelGroupStyle(group = {}) {
-  return {
-    left: `${Math.round(Number(group?.x || 0) - PARALLEL_RAIL_WIDTH + 12)}px`,
-    top: `${Math.round(Number(group?.minY || 0) + 2)}px`,
-    width: `${PARALLEL_RAIL_WIDTH - 24}px`,
-    height: `${Math.max(28, Number(group?.maxY || 0) - Number(group?.minY || 0) - 4)}px`,
-  };
-}
 
 function refreshSize() {
   const host = hostRef.value;
@@ -337,7 +501,10 @@ watch(
 
 function handleNodeClick(nodeItem = {}) {
   if (nodeItem?._virtualBoundary) return;
+  if (!isActionNode(nodeItem)) return;
+  if (nodeItem?._hasSession !== true) return;
   const dialogId = String(nodeItem?.dialogId || "").trim();
+  if (!dialogId) return;
   innerSelectedDialogId.value = dialogId;
   emit("update:selectedDialogId", dialogId);
   emit("node-click", nodeItem);
@@ -362,24 +529,15 @@ function handleNodeClick(nodeItem = {}) {
         :segments="edgeSegments"
       />
 
-      <div
-        v-for="group in parallelGroups"
-        :key="`parallel-group-${Number(group?.wave || 0)}`"
-        class="workflow-parallel-group"
-        :style="getParallelGroupStyle(group)"
-      >
-        <div class="workflow-parallel-group-label">
-          并发波次 {{ Number(group?.wave || 0) }}（{{ Number(group?.count || 0) }}节点）
-        </div>
-      </div>
+
 
       <WorkflowGraphNode
         v-for="(nodeItem, nodeIndex) in positionedNodes"
-        :key="`${String(nodeItem?.dialogId || '')}-${nodeIndex}`"
+        :key="`${String(nodeItem?.nodeId || nodeItem?.dialogId || nodeItem?.sessionId || '')}-${nodeIndex}`"
         :node-item="nodeItem"
         :node-index="nodeIndex"
         :style-obj="getNodeStyle(nodeItem)"
-        :clickable="!nodeItem?._virtualBoundary"
+        :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem) && nodeItem?._hasSession === true"
         :boundary-type="String(nodeItem?._virtualBoundary || '')"
         :selected="String(nodeItem?.dialogId || '').trim() === effectiveSelectedDialogId"
         @click="handleNodeClick"
@@ -464,36 +622,6 @@ function handleNodeClick(nodeItem = {}) {
 :deep(.workflow-canvas) {
   position: relative;
   z-index: 0;
-}
-
-.workflow-parallel-group {
-  position: absolute;
-  border-left: 3px solid rgba(109, 74, 255, 0.45);
-  border-radius: 8px;
-  background: linear-gradient(
-    90deg,
-    rgba(109, 74, 255, 0.09),
-    rgba(109, 74, 255, 0.02)
-  );
-  pointer-events: none;
-  z-index: 1;
-}
-
-.workflow-parallel-group-label {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  right: 8px;
-  padding: 4px 6px;
-  line-height: 1.25;
-  border-radius: 6px;
-  font-size: 10px;
-  font-weight: 600;
-  color: color-mix(in srgb, #6d4aff 78%, var(--noobot-text-secondary) 22%);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 88%, #6d4aff 12%);
-  border: 1px solid rgba(109, 74, 255, 0.22);
-  text-align: center;
-  word-break: keep-all;
 }
 
 .workflow-minimap {

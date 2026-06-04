@@ -27,10 +27,13 @@ function isStateNode(nodeItem = {}, boundaryType = "") {
 function resolveStateTypeKey(nodeItem = {}, boundaryType = "") {
   if (boundaryType === "start") return "start";
   if (boundaryType === "end") return "end";
+  const nodeId = String(nodeItem?.nodeId || nodeItem?.id || "").trim().toLowerCase();
+  const nodeName = String(nodeItem?.nodeName || nodeItem?.name || "").trim();
   const stateType = Number(nodeItem?.stateType);
-  if (stateType === 1) return "end";
+  if (stateType === 1 || nodeId === "end" || nodeName === "结束") return "end";
   if (stateType === 2) return "branch";
   if (stateType === 3) return "merge";
+  if (stateType === 0 && (nodeId === "start" || nodeName === "开始")) return "start";
   return "normal";
 }
 
@@ -41,6 +44,11 @@ function resolveStateTypeLabel(nodeItem = {}, boundaryType = "") {
   if (key === "branch") return "分叉";
   if (key === "merge") return "汇聚";
   return "状态";
+}
+
+function isActionNode(nodeItem = {}, boundaryType = "") {
+  if (boundaryType) return false;
+  return !isStateNode(nodeItem, boundaryType);
 }
 
 function handleClick(nodeItem = {}, clickable = true) {
@@ -59,11 +67,23 @@ function handleClick(nodeItem = {}, clickable = true) {
       'is-state-node': isStateNode(nodeItem, boundaryType),
       [`state-${resolveStateTypeKey(nodeItem, boundaryType)}`]: isStateNode(nodeItem, boundaryType),
       [`boundary-${String(boundaryType || '').trim()}`]: Boolean(boundaryType),
+      'is-clickable': clickable,
     }"
     :style="styleObj"
     @click="handleClick(nodeItem, clickable)"
   >
-    <div v-if="!boundaryType" class="workflow-node-index">{{ nodeIndex + 1 }}</div>
+    <div v-if="isActionNode(nodeItem, boundaryType)" class="workflow-node-index">{{ nodeIndex + 1 }}</div>
+    <div
+      v-else-if="isStateNode(nodeItem, boundaryType)"
+      class="workflow-node-state-icon"
+      :class="`state-icon-${resolveStateTypeKey(nodeItem, boundaryType)}`"
+    >
+      <span v-if="resolveStateTypeKey(nodeItem, boundaryType) === 'start'">▶</span>
+      <span v-else-if="resolveStateTypeKey(nodeItem, boundaryType) === 'end'">●</span>
+      <span v-else-if="resolveStateTypeKey(nodeItem, boundaryType) === 'branch'">◇</span>
+      <span v-else-if="resolveStateTypeKey(nodeItem, boundaryType) === 'merge'">◆</span>
+      <span v-else>•</span>
+    </div>
     <div class="workflow-node-main">
       <div class="workflow-node-name">
         {{ nodeItem?.nodeName || nodeItem?.nodeId || `节点${nodeIndex + 1}` }}
@@ -96,48 +116,42 @@ function handleClick(nodeItem = {}, clickable = true) {
   display: flex;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
+  cursor: default;
   transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 .workflow-node.is-state-node {
-  border-radius: 999px;
+  border-radius: 16px;
   padding-inline: 10px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 92%, #18a058 8%);
-  border-color: color-mix(in srgb, var(--noobot-status-success) 32%, var(--noobot-msg-assistant-border) 68%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--noobot-msg-assistant-bg) 92%, #18a058 8%),
+    color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, #18a058 2%)
+  );
+  border-color: color-mix(in srgb, var(--noobot-status-success) 34%, var(--noobot-msg-assistant-border) 66%);
+}
+
+.workflow-node.is-state-node.state-start,
+.workflow-node.is-state-node.state-end,
+.workflow-node.is-boundary {
+  border-radius: 999px;
 }
 
 .workflow-node.is-state-node.state-branch,
 .workflow-node.is-state-node.state-merge {
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 91%, #6d4aff 9%);
-  border-color: rgba(109, 74, 255, 0.42);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--noobot-msg-assistant-bg) 88%, #6d4aff 12%),
+    color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, #6d4aff 2%)
+  );
+  border-color: rgba(109, 74, 255, 0.45);
 }
 
-.workflow-node.is-state-node.state-branch::before,
-.workflow-node.is-state-node.state-merge::before,
-.workflow-node.is-state-node.state-branch::after,
-.workflow-node.is-state-node.state-merge::after {
-  content: "";
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  width: 3px;
-  border-radius: 999px;
-  background: rgba(109, 74, 255, 0.48);
+.workflow-node.is-clickable {
+  cursor: pointer;
 }
 
-.workflow-node.is-state-node.state-branch::before,
-.workflow-node.is-state-node.state-merge::before {
-  left: 6px;
-}
-
-.workflow-node.is-state-node.state-branch::after,
-.workflow-node.is-state-node.state-merge::after {
-  right: 6px;
-}
-
-.workflow-node:hover {
+.workflow-node.is-clickable:hover {
   border-color: color-mix(in srgb, #6d4aff 54%, var(--noobot-msg-assistant-border) 46%);
   box-shadow: 0 6px 14px rgba(109, 74, 255, 0.12);
 }
@@ -163,25 +177,46 @@ function handleClick(nodeItem = {}, clickable = true) {
   background: color-mix(in srgb, var(--noobot-status-success) 12%, var(--noobot-msg-assistant-bg) 88%);
   border-color: color-mix(in srgb, var(--noobot-status-success) 36%, var(--noobot-msg-assistant-border) 64%);
   border-radius: 999px;
+  clip-path: none;
 }
 
 .workflow-node.boundary-end {
   background: color-mix(in srgb, #6d4aff 12%, var(--noobot-msg-assistant-bg) 88%);
   border-color: color-mix(in srgb, #6d4aff 40%, var(--noobot-msg-assistant-border) 60%);
   border-radius: 999px;
+  clip-path: none;
 }
 
-.workflow-node-index {
-  width: 18px;
-  height: 18px;
+.workflow-node-index,
+.workflow-node-state-icon {
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
-  background: color-mix(in srgb, #6d4aff 74%, #fff 26%);
   color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.workflow-node-index {
+  background: color-mix(in srgb, #6d4aff 74%, #fff 26%);
+}
+
+.workflow-node-state-icon {
+  background: color-mix(in srgb, var(--noobot-status-success) 74%, #fff 26%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+}
+
+.workflow-node-state-icon.state-icon-branch,
+.workflow-node-state-icon.state-icon-merge {
+  background: color-mix(in srgb, #6d4aff 76%, #fff 24%);
+}
+
+.workflow-node-state-icon.state-icon-end {
+  background: color-mix(in srgb, #64748b 70%, #fff 30%);
 }
 
 .workflow-node-main {

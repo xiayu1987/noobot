@@ -46,6 +46,7 @@ import {
 } from "../../context/agent-context-accessor.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
+import { normalizeSessionEntity } from "../../session/entities/session-entity.js";
 
 function normalizeMessageForHarness(messageItem = {}) {
   const role = resolveMessageRole(messageItem);
@@ -545,12 +546,16 @@ export class SessionExecutionEngine {
     metadata = null,
   } = {}) {
     if (!outputDir) return null;
+    const normalizedSessionPayload = normalizeSessionEntity(
+      sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {},
+      { now: () => this._now() },
+    );
     await mkdir(outputDir, { recursive: true });
     await Promise.all([
       writeFile(
         path.join(outputDir, "session.json"),
         `${JSON.stringify(
-          sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {},
+          normalizedSessionPayload,
           null,
           2,
         )}\n`,

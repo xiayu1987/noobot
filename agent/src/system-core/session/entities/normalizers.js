@@ -7,6 +7,7 @@
 export {
   normalizeMessageEntity,
   normalizeMessagesEntity,
+  normalizeSessionEntity,
   normalizeSelectedConnectors,
   normalizeSessionTreeEntity,
 } from "./session-entity.js";
