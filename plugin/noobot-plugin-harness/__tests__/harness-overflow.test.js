@@ -134,4 +134,25 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
     beforeToolCallExecutionLog?.detail?.requestedAction,
     "forced_acceptance_before_tool_call_rewrite",
   );
+
+  const beforeLlmCallCtx = {
+    agentContext,
+    messages: [{ role: "user", content: "继续处理" }],
+  };
+  await acceptanceHandler({
+    capability: "acceptance",
+    point: "before_llm_call",
+    ctx: beforeLlmCallCtx,
+    meta: {},
+  });
+  assert.equal(beforeLlmCallCtx.messages[0]?.role, "system");
+  assert.equal(beforeLlmCallCtx.messages[0]?.injectedMessage, true);
+  assert.equal(beforeLlmCallCtx.messages[0]?.injectedBy, "harness-plugin");
+  const beforeLlmCallExecutionLog = acceptanceLogs.find((item = {}) =>
+    item?.event === "workflow_execution_result" && item?.detail?.point === "before_llm_call"
+  );
+  assert.equal(
+    beforeLlmCallExecutionLog?.detail?.requestedAction,
+    "forced_acceptance_before_llm_inject",
+  );
 });

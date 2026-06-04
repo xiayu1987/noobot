@@ -31,3 +31,4 @@ export function getWorkflowExtensionApi() {
   cached = normalized;
   return cached;
 }
+

@@ -49,6 +49,20 @@ test("normalizeOptions keeps injected strategy functions", () => {
   assert.equal(options.workflowEventLogger, workflowEventLogger);
 });
 
+test("normalizeOptions keeps workflow extension hooks", () => {
+  const workflowExtensionMounter = () => undefined;
+  const extensionA = () => undefined;
+  const extensionB = () => undefined;
+  const options = normalizeOptions({
+    enabled: true,
+    mode: "on",
+    workflowExtensionMounter,
+    workflowExtensions: [extensionA, null, "x", extensionB],
+  });
+  assert.equal(options.workflowExtensionMounter, workflowExtensionMounter);
+  assert.deepEqual(options.workflowExtensions, [extensionA, extensionB]);
+});
+
 test("parseWorkflowDslText keeps action node task field", () => {
   const semantic = parseWorkflowDslText(
     [
@@ -56,13 +70,68 @@ test("parseWorkflowDslText keeps action node task field", () => {
       'NODE id=start type=state stateType=start name="开始"',
       'NODE id=act type=action name="节点A" task="请输出节点A完成"',
       'NODE id=end type=state stateType=end name="结束"',
-      "EDGE from=start to=act when=\"always\"",
-      "EDGE from=act to=end when=\"always\"",
+      "EDGE from=start to=act",
+      "EDGE from=act to=end",
       "END",
     ].join("\n"),
   );
   const actionNode = (semantic?.nodes || []).find((item) => String(item?.id || "") === "act");
   assert.equal(actionNode?.task, "请输出节点A完成");
+});
+
+test("parseWorkflowDslText rejects composite nodes", () => {
+  assert.throws(
+    () =>
+      parseWorkflowDslText(
+        [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=sub type=composite name="子流程"',
+          'NODE id=end type=state stateType=end name="结束"',
+          'EDGE from=start to=sub',
+          'EDGE from=sub to=end',
+          "END",
+        ].join("\n"),
+      ),
+    /NODE type must be state\/action/,
+  );
+});
+
+test("parseWorkflowDslText rejects edge conditions", () => {
+  assert.throws(
+    () =>
+      parseWorkflowDslText(
+        [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=act type=action name="节点A" task="执行A"',
+          'NODE id=end type=state stateType=end name="结束"',
+          'EDGE from=start to=act when="always"',
+          "EDGE from=act to=end",
+          "END",
+        ].join("\n"),
+      ),
+    /EDGE condition is not supported/,
+  );
+});
+
+test("parseWorkflowDslText normalizes multi-outgoing start as branch", () => {
+  const semantic = parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=start type=state stateType=start name="开始"',
+      'NODE id=a type=action name="节点A" task="执行A"',
+      'NODE id=b type=action name="节点B" task="执行B"',
+      'NODE id=merge type=state stateType=merge name="汇聚"',
+      'EDGE from=start to=a',
+      'EDGE from=start to=b',
+      'EDGE from=a to=merge',
+      'EDGE from=b to=merge',
+      "END",
+    ].join("\n"),
+  );
+  const start = (semantic?.nodes || []).find((item) => String(item?.id || "") === "start");
+  assert.equal(start?.stateType, 2);
 });
 
 test("createRegisterNoobotPlugin returns empty disposers when workflow disabled", () => {
@@ -144,8 +213,8 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A"',
           'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=act when="always"',
-          'EDGE from=act to=end when="always"',
+          'EDGE from=start to=act',
+          'EDGE from=act to=end',
           "END",
         ].join("\n"),
       }),

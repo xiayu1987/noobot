@@ -14,10 +14,11 @@ import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.
 
 export function buildHarnessInjectedMessage(
   content = "",
-  { attachmentMetas = [], dialogProcessId = "" } = {},
+  { role = "", attachmentMetas = [], dialogProcessId = "" } = {},
 ) {
+  const normalizedRole = String(role || "").trim().toLowerCase();
   const message = {
-    role: HARNESS_INJECTION_MESSAGE_ROLE,
+    role: normalizedRole || HARNESS_INJECTION_MESSAGE_ROLE,
     content: String(content || ""),
     [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
     [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,

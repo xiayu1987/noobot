@@ -5,6 +5,7 @@
  */
 import { ensureHarnessBucket } from "./deps.js";
 import { mergeSummaryText } from "../shared/plan/summary-text-protocol.js";
+import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 
 export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   const holder = ensureHarnessBucket(ctx);
@@ -17,12 +18,8 @@ export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   return bucket.summaryText;
 }
 
-function resolveAttachmentPath(meta = {}) {
-  const relativePath = String(meta?.relativePath || "").trim();
-  if (relativePath) return relativePath;
-  const path = String(meta?.path || "").trim();
-  if (path) return path;
-  return String(meta?.name || "").trim();
+function resolveAttachmentPath(meta = {}, ctx = {}) {
+  return resolveAttachmentDisplayPath(meta, ctx);
 }
 
 export function recordSummaryDetailAttachmentMetas(ctx = {}, metas = []) {
@@ -44,7 +41,7 @@ export function recordSummaryDetailAttachmentMetas(ctx = {}, metas = []) {
     if (key) seen.add(key);
   }
   bucket.summaryDetailPaths = bucket.summaryDetailAttachmentMetas
-    .map((item = {}) => resolveAttachmentPath(item))
+    .map((item = {}) => resolveAttachmentPath(item, ctx))
     .filter(Boolean);
   return bucket.summaryDetailPaths;
 }

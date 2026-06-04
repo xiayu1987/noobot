@@ -12,7 +12,7 @@ import {
 } from "workflow";
 import { parseWorkflowDslText } from "../protocol/text-protocol.js";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../core/constants.js";
-import { mountConditionModelBoxFactory } from "../extensions/workflow/condition-model-box-factory.js";
+import { mountWorkflowExtensions } from "../extensions/workflow/runtime.js";
 
 export function executeWorkflowText({ semanticText = "", options = {} } = {}) {
   const semantic = parseWorkflowDslText(semanticText);
@@ -20,7 +20,7 @@ export function executeWorkflowText({ semanticText = "", options = {} } = {}) {
 }
 
 export function createWorkflowInstance({ instanceId = "", semantic = {}, options = {}, meta = {} } = {}) {
-  mountConditionModelBoxFactory();
+  mountWorkflowExtensions({ options, meta });
   return startWorkflowInstanceById({
     instanceId,
     semantic,
@@ -29,10 +29,6 @@ export function createWorkflowInstance({ instanceId = "", semantic = {}, options
         Number.isFinite(Number(options?.maxAutoTransitions)) && Number(options.maxAutoTransitions) > 0
           ? Math.floor(Number(options.maxAutoTransitions))
           : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS,
-      conditionContext:
-        options?.conditionContext && typeof options.conditionContext === "object"
-          ? options.conditionContext
-          : undefined,
     },
     meta,
   });

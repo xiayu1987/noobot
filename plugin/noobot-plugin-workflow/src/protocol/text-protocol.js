@@ -102,8 +102,8 @@ export function parseWorkflowDslText(text = "") {
       const name = String(attrs.name || id).trim();
       if (!id) fail(lineNo, DSL_ERROR_MESSAGE.NODE_ID_REQUIRED);
       if (nodeSet.has(id)) fail(lineNo, `duplicate NODE id: ${id}`);
-      if (![DSL_TYPES.NODE_STATE, DSL_TYPES.NODE_ACTION, DSL_TYPES.NODE_COMPOSITE].includes(type)) {
-        fail(lineNo, `NODE type must be state/action/composite, got: ${type}`);
+      if (![DSL_TYPES.NODE_STATE, DSL_TYPES.NODE_ACTION].includes(type)) {
+        fail(lineNo, `NODE type must be state/action, got: ${type}`);
       }
       nodeSet.add(id);
       const task = String(
@@ -124,13 +124,14 @@ export function parseWorkflowDslText(text = "") {
       const from = String(attrs.from || "").trim();
       const to = String(attrs.to || "").trim();
       if (!from || !to) fail(lineNo, DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED);
+      if (String(attrs.when || attrs.condition || "").trim()) {
+        fail(lineNo, "EDGE condition is not supported");
+      }
       edgeIndex += 1;
-      const condition = String(attrs.when || attrs.condition || "").trim();
       semantic.flowtos.push({
         from,
         to,
         name: String(attrs.name || `${from}->${to}#${edgeIndex}`).trim(),
-        ...(condition ? { condition } : {}),
       });
       continue;
     }
@@ -160,6 +161,30 @@ export function parseWorkflowDslText(text = "") {
   for (const edge of semantic.flowtos) {
     if (!nodeSet.has(edge.from) || !nodeSet.has(edge.to)) {
       throw new Error(dslError(dslEdgeUndefinedNode(edge.from, edge.to)));
+    }
+  }
+
+  // Robustness for LLM generated DSL: the workflow engine only allows multiple
+  // simultaneously valid outgoing edges from a branch state (stateType=2), and
+  // multi-branch joins should be represented as merge states (stateType=3).
+  // Normalize common valid-intent DSL such as `start -> taskA` and `start -> taskB`
+  // where the model forgot to mark `start` as branch.
+  const outgoingCount = new Map();
+  const incomingCount = new Map();
+  for (const edge of semantic.flowtos) {
+    outgoingCount.set(edge.from, Number(outgoingCount.get(edge.from) || 0) + 1);
+    incomingCount.set(edge.to, Number(incomingCount.get(edge.to) || 0) + 1);
+  }
+  for (const node of semantic.nodes) {
+    if (String(node?.type || DSL_TYPES.NODE_STATE).trim().toLowerCase() !== DSL_TYPES.NODE_STATE) {
+      continue;
+    }
+    const id = String(node?.id || "").trim();
+    if (Number(outgoingCount.get(id) || 0) > 1 && Number(node.stateType) === 0) {
+      node.stateType = 2;
+    }
+    if (Number(incomingCount.get(id) || 0) > 1 && Number(node.stateType) === 1) {
+      node.stateType = 3;
     }
   }
 

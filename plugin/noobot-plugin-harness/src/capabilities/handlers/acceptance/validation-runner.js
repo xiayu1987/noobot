@@ -46,6 +46,7 @@ import {
   getPhaseAcceptanceRequestMarker,
 } from "../shared/workflow/prompts.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
+import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -188,7 +189,11 @@ function buildFinalOutputFallbackPhaseAcceptanceText(locale = LOCALE.ZH_CN, buck
 function pushRoleMessage(messages = [], role = "system", content = "") {
   const normalizedContent = String(content || "").trim();
   if (!Array.isArray(messages) || !normalizedContent) return false;
-  messages.push({ role: String(role || "system").trim() || "system", content: normalizedContent });
+  messages.push(
+    buildHarnessInjectedMessage(normalizedContent, {
+      role: String(role || "system").trim() || "system",
+    }),
+  );
   return true;
 }
 

@@ -45,8 +45,9 @@ export function normalizeMessageEntity(
   if (message?.injectedMessage === true) {
     normalizedMessage.injectedMessage = true;
   }
-  const injectedBy = String(message?.injectedBy || "").trim();
-  if (injectedBy) normalizedMessage.injectedBy = injectedBy;
+  if (String(message?.injectedBy || "").trim()) {
+    normalizedMessage.injectedBy = String(message.injectedBy || "").trim();
+  }
   if (message?.frontendUserMessage === true) {
     normalizedMessage.frontendUserMessage = true;
   }

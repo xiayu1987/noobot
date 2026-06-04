@@ -10,7 +10,6 @@ import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../../event/index.js";
 import { isFatalError } from "../../../error/index.js";
 import { toToolJsonResult } from "../../../tools/core/tool-json-result.js";
-import { normalizeSandboxProvider } from "../../../config/index.js";
 import { extractAttachmentMetasFromToolResult } from "../media/artifact-service.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
@@ -18,6 +17,7 @@ import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
+import { resolveSandboxPath as resolveSandboxPathByAgent } from "../../../utils/sandbox-path-resolver.js";
 
 const DEFAULT_MAX_TOOL_RESULT_CHARS = 10000;
 
@@ -33,112 +33,11 @@ function resolveToolResultLengthLimit(runtime = {}) {
   return toSafePositiveInt(userLimit ?? globalLimit, DEFAULT_MAX_TOOL_RESULT_CHARS, 512);
 }
 
-function normalizeSlashPath(value = "") {
-  return String(value || "").trim().replaceAll("\\", "/");
-}
-
-function resolveSandboxPathMappings(runtime = {}) {
-  const systemRuntimeMappings = runtime?.systemRuntime?.config?.sandboxPathMappings;
-  const userMappings = runtime?.userConfig?.tools?.sandboxPathMappings;
-  const globalMappings = runtime?.globalConfig?.tools?.sandboxPathMappings;
-  const mappings = Array.isArray(systemRuntimeMappings)
-    ? systemRuntimeMappings
-    : (Array.isArray(userMappings) ? userMappings : globalMappings);
-  if (!Array.isArray(mappings)) return [];
-  return mappings
-    .map((item) => (item && typeof item === "object" ? item : {}))
-    .map((item) => ({
-      source: normalizeSlashPath(item?.source || item?.hostPath || item?.host || ""),
-      target: normalizeSlashPath(item?.target || item?.sandboxPath || item?.sandbox || ""),
-    }))
-    .filter((item) => Boolean(item.source && item.target))
-    .sort((leftItem, rightItem) => rightItem.source.length - leftItem.source.length);
-}
-
-function sanitizeSandboxUserPart(input = "") {
-  return String(input || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]/g, "-")
-    .replace(/^-+/, "")
-    .replace(/-+$/, "");
-}
-
-function resolveExecuteScriptConfig(runtime = {}) {
-  const globalCfg =
-    runtime?.globalConfig?.tools?.execute_script &&
-    typeof runtime.globalConfig.tools.execute_script === "object"
-      ? runtime.globalConfig.tools.execute_script
-      : {};
-  const userCfg =
-    runtime?.userConfig?.tools?.execute_script &&
-    typeof runtime.userConfig.tools.execute_script === "object"
-      ? runtime.userConfig.tools.execute_script
-      : {};
-  return {
-    ...globalCfg,
-    ...userCfg,
-  };
-}
-
-function resolveSandboxUserRoot(runtime = {}) {
-  const scriptConfig = resolveExecuteScriptConfig(runtime);
-  const sandboxMode =
-    scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
-  if (!sandboxMode) return "";
-  const sandboxProviderCfg =
-    ((scriptConfig?.sandboxProvider &&
-      typeof scriptConfig.sandboxProvider === "object"
-      ? scriptConfig.sandboxProvider
-      : null) ||
-      (scriptConfig?.sandbox_provider &&
-      typeof scriptConfig.sandbox_provider === "object"
-        ? scriptConfig.sandbox_provider
-        : null) ||
-      {})
-      ;
-  const provider = normalizeSandboxProvider(
-    sandboxProviderCfg?.default || "docker",
-  );
-  if (provider === "firejail") return "$HOME";
-  if (provider === "bubblewrap") return "/workspace";
-  const providerDetail =
-    sandboxProviderCfg?.[provider] && typeof sandboxProviderCfg[provider] === "object"
-      ? sandboxProviderCfg[provider]
-      : {};
-  const scope = String(
-    providerDetail?.dockerContainerScope ||
-      providerDetail?.docker_container_scope ||
-      "global",
-  )
-    .trim()
-    .toLowerCase();
-  if (scope === "user") return "/workspace";
-  const userPart = sanitizeSandboxUserPart(runtime?.userId || "user") || "user";
-  return `/workspace/${userPart}`;
-}
-
-function mapPathByMappings(filePath = "", mappings = []) {
-  const normalizedFilePath = normalizeSlashPath(filePath);
-  if (!normalizedFilePath || !Array.isArray(mappings) || !mappings.length) return "";
-  for (const mapping of mappings) {
-    const source = normalizeSlashPath(mapping?.source || "");
-    const target = normalizeSlashPath(mapping?.target || "");
-    if (!source || !target) continue;
-    if (normalizedFilePath === source) return target;
-    if (normalizedFilePath.startsWith(`${source}/`)) {
-      return `${target}${normalizedFilePath.slice(source.length)}`;
-    }
-  }
-  return "";
-}
-
 function resolveOverflowSandboxFilePath({
   overflowPath = "",
   runtime = {},
   agentContext = null,
 } = {}) {
-  const sandboxUserRoot = resolveSandboxUserRoot(runtime);
-  if (!sandboxUserRoot) return "";
   const pathResolverCandidates = [
     runtime?.sharedTools?.resolveSandboxPath,
     runtime?.sharedTools?.toSandboxPath,
@@ -158,22 +57,17 @@ function resolveOverflowSandboxFilePath({
       ).trim();
       if (resolved) return resolved;
     } catch {
-      // Fallback to static mapping resolution below.
+      // Fallback to agent shared resolver below.
     }
   }
-  const mappedByConfig = mapPathByMappings(overflowPath, resolveSandboxPathMappings(runtime));
-  if (mappedByConfig) return String(mappedByConfig || "").trim();
-  const hostBasePath = String(
-    runtime?.basePath || agentContext?.environment?.workspace?.basePath || "",
+  return String(
+    resolveSandboxPathByAgent({
+      path: overflowPath,
+      hostPath: overflowPath,
+      runtime,
+      agentContext,
+    }) || "",
   ).trim();
-  if (!hostBasePath) return "";
-  const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
-  const normalizedOverflowPath = normalizeSlashPath(overflowPath);
-  if (normalizedOverflowPath === normalizedHostBasePath) return sandboxUserRoot;
-  if (normalizedOverflowPath.startsWith(`${normalizedHostBasePath}/`)) {
-    return `${sandboxUserRoot}${normalizedOverflowPath.slice(normalizedHostBasePath.length)}`;
-  }
-  return "";
 }
 
 function resolveOverflowOutputDir({ runtime = {}, agentContext = null } = {}) {

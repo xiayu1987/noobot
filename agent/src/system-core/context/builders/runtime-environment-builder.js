@@ -23,6 +23,7 @@ import {
   createCurrentTurnTasksStore,
 } from "../session/current-turn-store.js";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
+import { resolveSandboxPath } from "../../utils/sandbox-path-resolver.js";
 
 
 async function defaultSharedFetch(url, init = {}) {
@@ -160,6 +161,39 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
   };
 }
 
+function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
+  const existingResolver =
+    typeof sharedTools.resolveSandboxPath === "function" ? sharedTools.resolveSandboxPath : null;
+  const resolver =
+    existingResolver ||
+    ((payload = {}) =>
+      resolveSandboxPath({
+        ...payload,
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }));
+  sharedTools.resolveSandboxPath = resolver;
+  if (typeof sharedTools.toSandboxPath !== "function") {
+    sharedTools.toSandboxPath = (payload = {}) =>
+      resolver(
+        payload && typeof payload === "object"
+          ? payload
+          : { path: String(payload || "") },
+      );
+  }
+  const currentPathMapper =
+    sharedTools.pathMapper && typeof sharedTools.pathMapper === "object"
+      ? sharedTools.pathMapper
+      : {};
+  sharedTools.pathMapper = {
+    ...currentPathMapper,
+    toSandboxPath:
+      typeof currentPathMapper.toSandboxPath === "function"
+        ? currentPathMapper.toSandboxPath
+        : sharedTools.toSandboxPath,
+  };
+}
+
 function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools = {}) {
   const bridge = runtimeContext?.userInteractionBridge;
   if (!bridge || typeof bridge.requestUserInteraction !== "function") return;
@@ -229,6 +263,7 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   initializeSharedFetch(sharedTools);
   initializeTextCleaner(sharedTools);
   initializeSessionCrypto(sharedTools, { sessionId });
+  initializeSandboxPathResolver(runtimeContext, sharedTools);
   initializeUserInteractionBridgeCrypto(runtimeContext, sharedTools);
   initializeConnectorRuntime(runtimeContext, sharedTools, { rootSessionId, sessionId });
   await initializeBrowserRuntime(runtimeContext, sharedTools);

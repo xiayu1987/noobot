@@ -15,6 +15,7 @@ import { resolveFirstMatchedRuleResult } from "../shared/rule-table-utils.js";
 import { buildStatusSummary, nowIsoTimestamp } from "../shared/report-utils.js";
 import { parsePlanDocumentFromText } from "../shared/plan/text-protocol.js";
 import { renderAcceptanceReportText } from "./report-text-renderer.js";
+import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -195,11 +196,11 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
   return checklist;
 }
 
-function buildSummaryDetailPaths(bucket = {}) {
+function buildSummaryDetailPaths(bucket = {}, ctx = {}) {
   const directPaths = Array.isArray(bucket?.summaryDetailPaths) ? bucket.summaryDetailPaths : [];
   const metas = Array.isArray(bucket?.summaryDetailAttachmentMetas) ? bucket.summaryDetailAttachmentMetas : [];
   const metaPaths = metas
-    .map((item = {}) => String(item?.relativePath || item?.path || item?.name || "").trim())
+    .map((item = {}) => resolveAttachmentDisplayPath(item, ctx))
     .filter(Boolean);
   const merged = [...directPaths, ...metaPaths].map((item) => String(item || "").trim()).filter(Boolean);
   const out = [];
@@ -215,6 +216,7 @@ function buildSummaryDetailPaths(bucket = {}) {
 export function buildAcceptanceReport({
   bucket = {},
   state = {},
+  ctx = {},
   mode = ACCEPTANCE_MODE.ACTIVE,
   forcedReason = "",
 } = {}) {
@@ -263,7 +265,7 @@ export function buildAcceptanceReport({
     taskChecklist: items,
     finalPlanChecklist: items,
     plan,
-    summaryDetailPaths: buildSummaryDetailPaths(bucket),
+    summaryDetailPaths: buildSummaryDetailPaths(bucket, ctx),
     modelAcceptance: latestModelAcceptance.items.length
       ? {
         source: latestModelAcceptance.source,

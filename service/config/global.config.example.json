@@ -291,7 +291,9 @@
       "enabled": true,
       "mode": "off",
       "semanticModel": "qwen3_6_plus",
-      "maxAutoTransitions": 10
+      "maxAutoTransitions": 10,
+      "parallelNodeExecution": true,
+      "maxParallelNodeAgents": 4
     }
   },
   "preferences": {

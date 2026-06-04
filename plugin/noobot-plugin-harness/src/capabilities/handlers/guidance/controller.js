@@ -31,6 +31,7 @@ import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters 
 import { applySummaryText } from "./summary-manager.js";
 import { recordSummaryDetailAttachmentMetas } from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
+import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 import {
   resolveWorkflowMode,
   runWorkflowLifecycle,
@@ -40,18 +41,14 @@ import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 
-function resolveDetailPath(meta = {}) {
-  const relativePath = String(meta?.relativePath || "").trim();
-  if (relativePath) return relativePath;
-  const path = String(meta?.path || "").trim();
-  if (path) return path;
-  return String(meta?.name || "").trim();
+function resolveDetailPath(meta = {}, ctx = {}) {
+  return resolveAttachmentDisplayPath(meta, ctx);
 }
 
-function buildSummaryDetailPathRelayContent(locale = LOCALE.ZH_CN, detailAttachmentMetas = []) {
+function buildSummaryDetailPathRelayContent(ctx = {}, locale = LOCALE.ZH_CN, detailAttachmentMetas = []) {
   const metas = Array.isArray(detailAttachmentMetas) ? detailAttachmentMetas : [];
   if (!metas.length) return "";
-  const lines = metas.map((item = {}) => resolveDetailPath(item)).filter(Boolean);
+  const lines = metas.map((item = {}) => resolveDetailPath(item, ctx)).filter(Boolean);
   if (!lines.length) return "";
   const header = locale === LOCALE.EN_US
     ? "[SUMMARY_DETAIL_PATHS]"
@@ -217,7 +214,11 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
           })
           : [];
         recordSummaryDetailAttachmentMetas(ctx, detailAttachmentMetas);
-        const detailPathRelay = buildSummaryDetailPathRelayContent(locale, detailAttachmentMetas);
+        const detailPathRelay = buildSummaryDetailPathRelayContent(
+          ctx,
+          locale,
+          detailAttachmentMetas,
+        );
         if (detailPathRelay) {
           relaySeparateModelOutputAsUserMessage(ctx, {
             locale,
