@@ -90,6 +90,16 @@ export async function getSessionDetailApi(
   );
 }
 
+export async function getWorkflowSessionDetailApi(
+  { userId = "", sessionId = "", dialogId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogId)}`,
+  );
+}
+
 export async function deleteSessionApi(
   { userId = "", sessionId = "" },
   { fetcher } = {},

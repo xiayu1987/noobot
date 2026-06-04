@@ -7,6 +7,8 @@ import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../plugin/noobot-plugin-harness/src/index.js";
+import path from "node:path";
+import { readFile } from "node:fs/promises";
 
 async function emitAfterSessionDeleteHook({
   bot = null,
@@ -56,6 +58,15 @@ export function registerSessionRoutes(
   } = {},
 ) {
   const jsonRoute = createJsonRouteWrapper({ translateText });
+
+  async function readJsonFileSafe(filePath = "") {
+    try {
+      const raw = await readFile(filePath, "utf8");
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
 
   app.get(
     "/internal/session/:userId/:sessionId",
@@ -145,6 +156,49 @@ export function registerSessionRoutes(
       const { userId } = req.params;
       const sessions = await bot.session.getAllSessionsData({ userId });
       res.json({ ok: true, userId, sessions });
+    }),
+  );
+
+  app.get(
+    "/internal/workflow/session/:userId/:sessionId/:dialogId",
+    jsonRoute(async (req, res) => {
+      const { userId, sessionId, dialogId } = req.params;
+      const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
+      if (!workspacePath) throw new Error(translateText("common.notFound", req.locale));
+      const workflowDir = path.resolve(
+        workspacePath,
+        "runtime/workflow/session",
+        String(sessionId || "").trim(),
+        String(dialogId || "").trim(),
+      );
+      const workspaceResolved = path.resolve(workspacePath);
+      const workflowRelative = path.relative(workspaceResolved, workflowDir);
+      if (
+        !workflowRelative ||
+        workflowRelative.startsWith("..") ||
+        path.isAbsolute(workflowRelative)
+      ) {
+        throw new Error(translateText("common.notFound", req.locale));
+      }
+      const [session, task, execution, meta] = await Promise.all([
+        readJsonFileSafe(path.join(workflowDir, "session.json")),
+        readJsonFileSafe(path.join(workflowDir, "task.json")),
+        readJsonFileSafe(path.join(workflowDir, "execution.json")),
+        readJsonFileSafe(path.join(workflowDir, "meta.json")),
+      ]);
+      res.json({
+        ok: true,
+        userId: String(userId || "").trim(),
+        sessionId: String(sessionId || "").trim(),
+        dialogId: String(dialogId || "").trim(),
+        workflowSession: {
+          session,
+          task,
+          execution,
+          meta,
+          dir: workflowDir,
+        },
+      });
     }),
   );
 

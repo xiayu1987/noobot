@@ -270,6 +270,12 @@
         "acceptance": "qwen3_6_plus",
         "default": "qwen3_6_plus"
       }
+    },
+    "workflow": {
+      "enabled": true,
+      "mode": "off",
+      "semanticModel": "qwen3_6_plus",
+      "maxAutoTransitions": 10
     }
   },
   "providers": {

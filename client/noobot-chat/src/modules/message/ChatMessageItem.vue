@@ -13,6 +13,7 @@ import MessageHeader from "./MessageHeader.vue";
 import MessageStatusRow from "./MessageStatusRow.vue";
 import MessageWrittenFiles from "./MessageWrittenFiles.vue";
 import MessageAttachments from "./MessageAttachments.vue";
+import WorkflowMessageCard from "./WorkflowMessageCard.vue";
 import { useMessagePreview } from "../../composables/message/useMessagePreview";
 import { useMessageFiles } from "../../composables/message/useMessageFiles";
 import { useMessageMeta } from "../../composables/message/useMessageMeta";
@@ -129,6 +130,15 @@ async function handleCopyAssistantMessageText() {
         />
 
         <ThinkingPanel :message-item="messageItem" :all-messages="allMessages" />
+
+        <WorkflowMessageCard
+          v-if="messageItem.workflowMessage === true"
+          :message-item="messageItem"
+          :user-id="userId"
+          :auth-fetch="authFetch"
+          :render-markdown="renderMarkdown"
+          :format-time="formatTime"
+        />
 
         <div v-if="messageItem.error" class="error-alert">
           <el-icon class="error-icon"><WarningFilled /></el-icon>

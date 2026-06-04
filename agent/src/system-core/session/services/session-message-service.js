@@ -44,6 +44,8 @@ export class SessionMessageService {
     injectedMessage = false,
     injectedBy = "",
     frontendUserMessage = false,
+    workflowMessage = false,
+    workflowMeta = null,
   }) {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
@@ -90,6 +92,13 @@ export class SessionMessageService {
       injectedMessage: injectedMessage === true,
       injectedBy: String(injectedBy || "").trim(),
       frontendUserMessage: frontendUserMessage === true,
+      workflowMessage: workflowMessage === true,
+      workflowMeta:
+        workflowMeta &&
+        typeof workflowMeta === "object" &&
+        !Array.isArray(workflowMeta)
+          ? workflowMeta
+          : null,
       ts: this.now(),
     }, this.now);
 

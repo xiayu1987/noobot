@@ -35,9 +35,7 @@ function resolveRunMeta(ctx = {}, options = {}) {
     sessionId: normalizeMetaValue(ctx?.sessionId),
     parentSessionId: normalizeMetaValue(ctx?.parentSessionId),
     dialogProcessId: normalizeMetaValue(ctx?.dialogProcessId),
-    hookPoint:
-      String(options?.hookPoint || WORKFLOW_BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH).trim() ||
-      WORKFLOW_BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH,
+    hookPoint: WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH,
     locale: normalizeMetaValue(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE),
   };
 }

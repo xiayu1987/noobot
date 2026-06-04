@@ -8,6 +8,7 @@ export const PLUGIN_NAME = "noobot-plugin-workflow";
 export const PLUGIN_VERSION = "0.1.0";
 
 export const WORKFLOW_BOT_HOOK_POINTS = Object.freeze({
+  BEFORE_AGENT_DISPATCH: "before_agent_dispatch",
   AFTER_AGENT_DISPATCH: "after_agent_dispatch",
   NODE_AGENT_EXECUTE: "workflow_node_agent_execute",
 });
@@ -27,6 +28,8 @@ export const WORKFLOW_PLUGIN_DEFAULTS = Object.freeze({
   DEFAULT_TIMEOUT_MS: 180000,
   DEFAULT_PRIORITY: 10,
   DEFAULT_MAX_AUTO_TRANSITIONS: 10,
+  DEFAULT_MAX_PARALLEL_NODE_AGENTS: 4,
+  DEFAULT_NODE_AGENT_TIMEOUT_MS: 60000,
 });
 
 export const WORKFLOW_SEMANTIC = Object.freeze({

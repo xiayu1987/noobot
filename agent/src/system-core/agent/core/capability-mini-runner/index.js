@@ -80,6 +80,11 @@ export function createAgentCapabilityModelInvoker({
   maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
   toolAllowlist = [],
   enableToolBinding = false,
+  headerNamespace = "harness",
+  flowPrefix = "",
+  includeHarnessCompatHeaders = true,
+  fallbackGlobalConfig = null,
+  fallbackUserConfig = null,
   createChatModelFn = createChatModel,
   createChatModelByNameFn = createChatModelByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
@@ -133,6 +138,8 @@ export function createAgentCapabilityModelInvoker({
     messages = [],
     ctx = {},
     toolAllowlist: toolAllowlistOverride = undefined,
+    headerNamespace: headerNamespaceOverride = "",
+    flowPrefix: flowPrefixOverride = "",
   } = {}) {
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
@@ -142,15 +149,42 @@ export function createAgentCapabilityModelInvoker({
       runMessages.unshift({ role: "system", content: String(prompt) });
     }
 
-    const globalConfig = runtime?.globalConfig || {};
-    const userConfig = runtime?.userConfig || {};
+    const globalConfig =
+      runtime?.globalConfig && typeof runtime.globalConfig === "object"
+        ? runtime.globalConfig
+        : fallbackGlobalConfig && typeof fallbackGlobalConfig === "object"
+          ? fallbackGlobalConfig
+          : {};
+    const userConfig =
+      runtime?.userConfig && typeof runtime.userConfig === "object"
+        ? runtime.userConfig
+        : fallbackUserConfig && typeof fallbackUserConfig === "object"
+          ? fallbackUserConfig
+          : {};
     const normalizedModelName = String(modelName || "").trim();
     const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
     const normalizedDomain = normalizeHeaderValue(domain || "unknown");
+    const resolvedHeaderNamespace = normalizeHeaderValue(
+      headerNamespaceOverride || headerNamespace || "harness",
+    ).toLowerCase() || "harness";
+    const resolvedFlowPrefix = normalizeHeaderValue(
+      flowPrefixOverride || flowPrefix || resolvedHeaderNamespace,
+    ).toLowerCase() || resolvedHeaderNamespace;
+    const customFlowHeaderKey = `X-${resolvedHeaderNamespace}-Flow`;
+    const customPurposeHeaderKey = `X-${resolvedHeaderNamespace}-Purpose`;
+    const customDomainHeaderKey = `X-${resolvedHeaderNamespace}-Domain`;
+    const flowValue = `${resolvedFlowPrefix}.${normalizedPurpose}`;
     const additionalHeaders = {
-      [MODEL_FLOW_HEADER_KEY]: `harness.${normalizedPurpose}`,
-      [MODEL_PURPOSE_HEADER_KEY]: normalizedPurpose,
-      [MODEL_DOMAIN_HEADER_KEY]: normalizedDomain,
+      [customFlowHeaderKey]: flowValue,
+      [customPurposeHeaderKey]: normalizedPurpose,
+      [customDomainHeaderKey]: normalizedDomain,
+      ...((includeHarnessCompatHeaders === true || resolvedHeaderNamespace === "harness")
+        ? {
+            [MODEL_FLOW_HEADER_KEY]: flowValue,
+            [MODEL_PURPOSE_HEADER_KEY]: normalizedPurpose,
+            [MODEL_DOMAIN_HEADER_KEY]: normalizedDomain,
+          }
+        : {}),
     };
     const llm = normalizedModelName
       ? createChatModelByNameFn(normalizedModelName, {

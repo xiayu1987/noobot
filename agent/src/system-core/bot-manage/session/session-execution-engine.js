@@ -8,6 +8,10 @@ import {
   AgentContextFactory,
   AgentRuntimeFacade,
 } from "../../agent/index.js";
+import path from "node:path";
+import { mkdir, writeFile, appendFile, access } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { emitEvent } from "../../event/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { SessionExecutionInitializer } from "../execution/initializer.js";
@@ -351,6 +355,549 @@ export class SessionExecutionEngine {
       runConfig: preparedBotHookConfig,
       userConfig,
     });
+  }
+
+  _mergeRunConfigWithPluginStrategy({
+    baseRunConfig = {},
+    runConfigPatch = {},
+    disabledPlugins = [],
+  } = {}) {
+    const merged = {
+      ...(baseRunConfig && typeof baseRunConfig === "object" ? baseRunConfig : {}),
+      ...(runConfigPatch && typeof runConfigPatch === "object" ? runConfigPatch : {}),
+    };
+    const disabledSet = new Set(
+      (Array.isArray(disabledPlugins) ? disabledPlugins : [])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean),
+    );
+    if (!disabledSet.size) return merged;
+    const selectedPlugins = Array.isArray(merged?.selectedPlugins)
+      ? merged.selectedPlugins
+      : [];
+    merged.selectedPlugins = selectedPlugins
+      .map((item) => String(item || "").trim())
+      .filter((item) => item && !disabledSet.has(item));
+    const plugins = merged?.plugins && typeof merged.plugins === "object" ? merged.plugins : {};
+    const nextPlugins = { ...plugins };
+    for (const pluginName of disabledSet) {
+      const current =
+        nextPlugins?.[pluginName] && typeof nextPlugins[pluginName] === "object"
+          ? nextPlugins[pluginName]
+          : {};
+      nextPlugins[pluginName] = {
+        ...current,
+        enabled: false,
+        mode: "off",
+      };
+    }
+    merged.plugins = nextPlugins;
+    return merged;
+  }
+
+  _resolveWorkflowScopedDir({
+    userId = "",
+    relativeDir = "",
+    absoluteDir = "",
+  } = {}) {
+    const workspacePath = this.workspaceService.getWorkspacePath(userId);
+    const resolvedWorkspacePath = path.resolve(workspacePath);
+    if (absoluteDir && String(absoluteDir || "").trim()) {
+      const resolvedAbsoluteDir = path.resolve(String(absoluteDir || "").trim());
+      const relativeFromWorkspace = path.relative(
+        resolvedWorkspacePath,
+        resolvedAbsoluteDir,
+      );
+      if (
+        !relativeFromWorkspace ||
+        relativeFromWorkspace.startsWith("..") ||
+        path.isAbsolute(relativeFromWorkspace)
+      ) {
+        throw new Error("workflow scoped output path must be inside workspace");
+      }
+      return resolvedAbsoluteDir;
+    }
+    const normalizedRelativeDir = String(relativeDir || "").trim().replaceAll("\\", "/");
+    if (!normalizedRelativeDir) return "";
+    const resolvedDir = path.resolve(resolvedWorkspacePath, normalizedRelativeDir);
+    const relativeFromWorkspace = path.relative(resolvedWorkspacePath, resolvedDir);
+    if (
+      !relativeFromWorkspace ||
+      relativeFromWorkspace.startsWith("..") ||
+      path.isAbsolute(relativeFromWorkspace)
+    ) {
+      throw new Error("workflow scoped output path must be inside workspace");
+    }
+    return resolvedDir;
+  }
+
+  async _persistSubSessionSnapshot({
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    outputDir = "",
+    metadata = null,
+  } = {}) {
+    if (!userId || !sessionId || !outputDir) return null;
+    const sessionBundle = await this.session.getSessionBundle({
+      userId,
+      sessionId,
+      parentSessionId,
+    });
+    const executionBundle = await this.session.getExecutionBundle({
+      userId,
+      sessionId,
+    });
+    const session = sessionBundle?.session && typeof sessionBundle.session === "object"
+      ? sessionBundle.session
+      : null;
+    const tasks = Array.isArray(sessionBundle?.turnTasks) ? sessionBundle.turnTasks : [];
+    const execution = executionBundle && typeof executionBundle === "object"
+      ? executionBundle
+      : { sessionId, logs: [] };
+    await mkdir(outputDir, { recursive: true });
+    await Promise.all([
+      writeFile(
+        path.join(outputDir, "session.json"),
+        `${JSON.stringify(session || { sessionId, messages: [] }, null, 2)}\n`,
+        "utf8",
+      ),
+      writeFile(
+        path.join(outputDir, "task.json"),
+        `${JSON.stringify(
+          { sessionId, currentTaskId: "", tasks, updatedAt: new Date().toISOString() },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      ),
+      writeFile(
+        path.join(outputDir, "execution.json"),
+        `${JSON.stringify(execution, null, 2)}\n`,
+        "utf8",
+      ),
+      writeFile(
+        path.join(outputDir, "meta.json"),
+        `${JSON.stringify(
+          metadata && typeof metadata === "object" ? metadata : {},
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      ),
+    ]);
+    return {
+      outputDir,
+      files: {
+        session: path.join(outputDir, "session.json"),
+        task: path.join(outputDir, "task.json"),
+        execution: path.join(outputDir, "execution.json"),
+        meta: path.join(outputDir, "meta.json"),
+      },
+    };
+  }
+
+  _normalizeDetachedSubSessionMessage(message = {}, now = "") {
+    const ts = String(now || this._now()).trim() || this._now();
+    const normalized = {
+      role: String(message?.role || "").trim() || "assistant",
+      content: message?.content || "",
+      type: String(message?.type || "").trim(),
+      dialogProcessId: String(message?.dialogProcessId || "").trim(),
+      parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
+      taskId: String(message?.taskId || "").trim(),
+      taskStatus: String(message?.taskStatus || "").trim(),
+      modelAlias: String(message?.modelAlias || "").trim(),
+      modelName: String(message?.modelName || "").trim(),
+      summarized: message?.summarized === true,
+      ts,
+    };
+    if (Array.isArray(message?.tool_calls)) normalized.tool_calls = message.tool_calls;
+    if (String(message?.tool_call_id || "").trim()) {
+      normalized.tool_call_id = String(message.tool_call_id || "").trim();
+    }
+    if (Array.isArray(message?.attachmentMetas) && message.attachmentMetas.length) {
+      normalized.attachmentMetas = message.attachmentMetas;
+    }
+    return normalized;
+  }
+
+  async _persistDetachedSubSessionSnapshot({
+    outputDir = "",
+    sessionPayload = {},
+    taskPayload = {},
+    executionPayload = {},
+    metadata = null,
+  } = {}) {
+    if (!outputDir) return null;
+    await mkdir(outputDir, { recursive: true });
+    await Promise.all([
+      writeFile(
+        path.join(outputDir, "session.json"),
+        `${JSON.stringify(
+          sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {},
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      ),
+      writeFile(
+        path.join(outputDir, "task.json"),
+        `${JSON.stringify(
+          taskPayload && typeof taskPayload === "object" ? taskPayload : {},
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      ),
+      writeFile(
+        path.join(outputDir, "execution.json"),
+        `${JSON.stringify(
+          executionPayload && typeof executionPayload === "object" ? executionPayload : {},
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      ),
+      writeFile(
+        path.join(outputDir, "meta.json"),
+        `${JSON.stringify(
+          metadata && typeof metadata === "object" ? metadata : {},
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      ),
+    ]);
+    return {
+      outputDir,
+      files: {
+        session: path.join(outputDir, "session.json"),
+        task: path.join(outputDir, "task.json"),
+        execution: path.join(outputDir, "execution.json"),
+        meta: path.join(outputDir, "meta.json"),
+      },
+    };
+  }
+
+  async _assertDetachedSubSessionIsolation({
+    userId = "",
+    sessionId = "",
+    eventListener = null,
+    scope = "sub_session",
+  } = {}) {
+    if (!userId || !sessionId) return true;
+    const workspacePath = this.workspaceService.getWorkspacePath(userId);
+    const leakedMainSessionFile = path.resolve(
+      workspacePath,
+      "runtime/session",
+      sessionId,
+      "session.json",
+    );
+    try {
+      await access(leakedMainSessionFile);
+    } catch {
+      return true;
+    }
+    const payload = {
+      scope,
+      userId,
+      sessionId,
+      leakedMainSessionFile,
+      message: "detached sub session leaked into runtime/session main tree",
+    };
+    emitEvent(
+      typeof eventListener === "function" ? eventListener : null,
+      "workflow_subsession_persistence_leak",
+      payload,
+    );
+    // Runtime assertion log for easier tracing in non-event environments.
+    console.warn("[workflow-subsession-leak]", JSON.stringify(payload));
+    return false;
+  }
+
+  _createWorkflowScopedJsonWriter() {
+    return async ({
+      userId = "",
+      relativeDir = "",
+      absoluteDir = "",
+      fileName = "payload.json",
+      payload = {},
+    } = {}) => {
+      const normalizedUserId = String(userId || "").trim();
+      if (!normalizedUserId) throw new Error("workflow scoped writer requires userId");
+      const outputDir = this._resolveWorkflowScopedDir({
+        userId: normalizedUserId,
+        relativeDir,
+        absoluteDir,
+      });
+      if (!outputDir) throw new Error("workflow scoped writer requires output directory");
+      const normalizedFileName = String(fileName || "payload.json").trim() || "payload.json";
+      if (normalizedFileName.includes("/") || normalizedFileName.includes("\\")) {
+        throw new Error("workflow scoped writer fileName must be plain file name");
+      }
+      await mkdir(outputDir, { recursive: true });
+      const outputFile = path.join(outputDir, normalizedFileName);
+      await writeFile(
+        outputFile,
+        `${JSON.stringify(
+          payload && typeof payload === "object" ? payload : { value: payload },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+      return {
+        outputDir,
+        outputFile,
+      };
+    };
+  }
+
+  _createWorkflowScopedEventLogger() {
+    return async ({
+      userId = "",
+      relativeDir = "",
+      absoluteDir = "",
+      fileName = "events.jsonl",
+      event = {},
+    } = {}) => {
+      const normalizedUserId = String(userId || "").trim();
+      if (!normalizedUserId) throw new Error("workflow event logger requires userId");
+      const outputDir = this._resolveWorkflowScopedDir({
+        userId: normalizedUserId,
+        relativeDir,
+        absoluteDir,
+      });
+      if (!outputDir) throw new Error("workflow event logger requires output directory");
+      const normalizedFileName = String(fileName || "events.jsonl").trim() || "events.jsonl";
+      if (normalizedFileName.includes("/") || normalizedFileName.includes("\\")) {
+        throw new Error("workflow event logger fileName must be plain file name");
+      }
+      const outputFile = path.join(outputDir, normalizedFileName);
+      await mkdir(outputDir, { recursive: true });
+      await appendFile(
+        outputFile,
+        `${JSON.stringify({
+          timestamp: this._now(),
+          ...(event && typeof event === "object" ? event : { value: event }),
+        })}\n`,
+        "utf8",
+      );
+      return {
+        outputDir,
+        outputFile,
+      };
+    };
+  }
+
+  _createBotSubSessionRunner() {
+    return async ({
+      parentContext = {},
+      message = "",
+      runConfigPatch = {},
+      strategy = {},
+      metadata = {},
+      eventListener = null,
+    } = {}) => {
+      const sourceContext =
+        parentContext && typeof parentContext === "object" ? parentContext : {};
+      const userId = String(
+        strategy?.userId || sourceContext?.userId || "",
+      ).trim();
+      const parentSessionId = String(
+        strategy?.parentSessionId || sourceContext?.sessionId || "",
+      ).trim();
+      const parentDialogProcessId = String(
+        strategy?.parentDialogProcessId || sourceContext?.dialogProcessId || "",
+      ).trim();
+      if (!userId || !parentSessionId) {
+        throw new Error("sub-session runner requires userId and parentSessionId");
+      }
+      const subSessionId = String(strategy?.sessionId || "").trim() || randomUUID();
+      const subDialogProcessId = String(
+        strategy?.dialogProcessId || metadata?.workflowDialogId || parentDialogProcessId || subSessionId,
+      ).trim();
+      const mergedRunConfig = this._mergeRunConfigWithPluginStrategy({
+        baseRunConfig: sourceContext?.runConfig || {},
+        runConfigPatch,
+        disabledPlugins: strategy?.disabledPlugins || [],
+      });
+      // 子会话为 detached 执行，不能复用父会话的 hook manager（会把父插件/hook 链一并带入）。
+      // 否则即便 selectedPlugins 关闭，也可能继续触发已注册的 harness/workflow hooks。
+      delete mergedRunConfig.hookManager;
+      delete mergedRunConfig.hooks;
+      delete mergedRunConfig.botHookManager;
+      delete mergedRunConfig.botHooks;
+      let subSessionUserConfig = {};
+      try {
+        const workspacePath = this.workspaceService.getWorkspacePath(userId);
+        subSessionUserConfig = await this.configService.loadUserConfig(workspacePath);
+      } catch {
+        subSessionUserConfig = {};
+      }
+      const effectiveRunConfig = this._prepareRunConfig({
+        userId,
+        runConfig: mergedRunConfig,
+        userConfig: subSessionUserConfig,
+      });
+      const selectedPlugins = Array.isArray(effectiveRunConfig?.selectedPlugins)
+        ? effectiveRunConfig.selectedPlugins.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      const runtimePluginState = {
+        selectedPlugins,
+        harness: {
+          enabled: effectiveRunConfig?.plugins?.harness?.enabled === true,
+          mode: String(effectiveRunConfig?.plugins?.harness?.mode || "").trim().toLowerCase(),
+          hookManagerReady: Boolean(effectiveRunConfig?.hookManager),
+        },
+        workflow: {
+          enabled: effectiveRunConfig?.plugins?.workflow?.enabled === true,
+          mode: String(effectiveRunConfig?.plugins?.workflow?.mode || "").trim().toLowerCase(),
+          botHookManagerReady: Boolean(effectiveRunConfig?.botHookManager),
+        },
+        disabledPlugins: Array.isArray(strategy?.disabledPlugins)
+          ? strategy.disabledPlugins.map((item) => String(item || "").trim()).filter(Boolean)
+          : [],
+        scope: "detached_sub_session",
+      };
+      emitEvent(eventListener, "plugin_runtime_resolved", runtimePluginState);
+      const preparedAgentTurnExecution = await this._prepareAgentTurnExecution({
+        buildContextPayload: {
+          mode: "initial",
+          userId,
+          sessionId: subSessionId,
+          caller: CALLER_ROLE.BOT,
+          parentSessionId,
+          dialogProcessId: subDialogProcessId || subSessionId,
+          userConfig: subSessionUserConfig,
+          attachmentMetas: [],
+          eventListener:
+            eventListener &&
+            typeof eventListener === "object" &&
+            typeof eventListener.onEvent === "function"
+              ? eventListener
+              : null,
+          runConfig: effectiveRunConfig,
+          parentAsyncResultContainer: null,
+        },
+        abortSignal: null,
+      });
+      const runtimeAgentContext =
+        preparedAgentTurnExecution?.runtimeAgentContext &&
+        typeof preparedAgentTurnExecution.runtimeAgentContext === "object"
+          ? preparedAgentTurnExecution.runtimeAgentContext
+          : preparedAgentTurnExecution?.agentContext &&
+              typeof preparedAgentTurnExecution.agentContext === "object"
+            ? preparedAgentTurnExecution.agentContext
+            : {};
+      const agentResult = await this.agentRuntimeFacade.runTurn({
+        errorLogger: this.errorLogger,
+        agentContext: runtimeAgentContext,
+        userMessage: String(message || "").trim(),
+      });
+      const dialogProcessId = String(
+        agentResult?.dialogProcessId ||
+          runtimeAgentContext?.payload?.runtime?.systemRuntime?.dialogProcessId ||
+          "",
+      ).trim();
+      const resolvedOutputDir = this._resolveWorkflowScopedDir({
+        userId,
+        relativeDir: strategy?.relativeDir || "",
+        absoluteDir: strategy?.absoluteDir || "",
+      });
+      let persisted = null;
+      if (resolvedOutputDir) {
+        const now = this._now();
+        const pluginRuntimeResolvedLog = {
+          dialogProcessId: subDialogProcessId || subSessionId,
+          event: "plugin_runtime_resolved",
+          category: "system",
+          type: "system",
+          data: runtimePluginState,
+          ts: now,
+        };
+        const turnMessages = Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
+          ? agentResult.turnMessages
+          : [
+              {
+                role: "assistant",
+                content: String(agentResult?.output || "").trim(),
+                type: "message",
+                dialogProcessId,
+              },
+            ];
+        const normalizedTurnMessages = turnMessages.map((item = {}) =>
+          this._normalizeDetachedSubSessionMessage(item, now),
+        );
+        const userTurn = this._normalizeDetachedSubSessionMessage(
+          {
+            role: "user",
+            content: String(message || "").trim(),
+            type: "message",
+            dialogProcessId,
+            parentDialogProcessId,
+            frontendUserMessage: false,
+          },
+          now,
+        );
+        persisted = await this._persistDetachedSubSessionSnapshot({
+          outputDir: resolvedOutputDir,
+          sessionPayload: {
+            sessionId: subSessionId,
+            parentSessionId,
+            caller: CALLER_ROLE.BOT,
+            modelAlias: "",
+            currentTaskId: "",
+            shortMemoryCheckpoint: 0,
+            messages: [userTurn, ...normalizedTurnMessages],
+          },
+          taskPayload: {
+            sessionId: subSessionId,
+            currentTaskId: "",
+            tasks: Array.isArray(agentResult?.turnTasks) ? agentResult.turnTasks : [],
+            updatedAt: now,
+          },
+          executionPayload: {
+            sessionId: subSessionId,
+            logs: [pluginRuntimeResolvedLog],
+          },
+          metadata: {
+            userId,
+            sessionId: subSessionId,
+            parentSessionId,
+            parentDialogProcessId,
+            dialogProcessId,
+            ...(metadata && typeof metadata === "object" ? metadata : {}),
+          },
+        });
+      }
+      await this._assertDetachedSubSessionIsolation({
+        userId,
+        sessionId: subSessionId,
+        eventListener,
+        scope: "workflow_node_subsession",
+      });
+      return {
+        userId,
+        sessionId: subSessionId,
+        parentSessionId,
+        dialogProcessId,
+        persisted,
+        result: {
+          sessionId: subSessionId,
+          parentSessionId,
+          parentDialogProcessId,
+          caller: CALLER_ROLE.BOT,
+          answer: String(agentResult?.output || "").trim(),
+          traces: Array.isArray(agentResult?.traces) ? agentResult.traces : [],
+          messages: Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [],
+          turnTasks: Array.isArray(agentResult?.turnTasks) ? agentResult.turnTasks : [],
+          executionLogs: [],
+          dialogProcessId,
+        },
+      };
+    };
   }
 
   _buildContextBuilder({
@@ -825,7 +1372,14 @@ export class SessionExecutionEngine {
           ? runConfig.hooks
           : createAgentHookManager();
     if (!hookManager.__noobotHarnessPluginRegistered) {
-      registerHarnessPlugin({ hookManager }, harnessOptions);
+      registerHarnessPlugin(
+        this._buildPluginRegisterApi({
+          manager: hookManager,
+          pluginName: "harness",
+          options: harnessOptions,
+        }),
+        harnessOptions,
+      );
       Object.defineProperty(hookManager, "__noobotHarnessPluginRegistered", {
         value: true,
         enumerable: false,
@@ -870,15 +1424,23 @@ export class SessionExecutionEngine {
       ? runConfig.selectedPlugins
       : [];
     const workflowSelected = selectedPlugins.includes("workflow");
+    const normalizedEffectiveMode = String(effectiveWorkflow?.mode ?? "off")
+      .trim()
+      .toLowerCase();
+    const normalizedRunMode = String(runWorkflow?.mode ?? "")
+      .trim()
+      .toLowerCase();
+    // keep user/global on as baseline; runConfig should primarily elevate workflow,
+    // unless it explicitly disables plugin via enabled=false (used by node sub-session strategy)
+    const resolvedMode =
+      workflowSelected || normalizedRunMode === "on" || normalizedEffectiveMode === "on"
+        ? "on"
+        : "off";
+    if (resolvedMode !== "on") return { enabled: false, mode: "off" };
     const options = {
       ...(effectiveWorkflow && typeof effectiveWorkflow === "object" ? effectiveWorkflow : {}),
       ...(runWorkflow && typeof runWorkflow === "object" ? runWorkflow : {}),
     };
-    const normalizedMode = String(workflowSelected ? "on" : options?.mode ?? "off")
-      .trim()
-      .toLowerCase();
-    const resolvedMode = normalizedMode === "on" ? "on" : "off";
-    if (resolvedMode !== "on") return { enabled: false, mode: "off" };
     const next = { ...options, enabled: true, mode: "on" };
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
@@ -898,7 +1460,21 @@ export class SessionExecutionEngine {
       next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
         maxTurns: next?.miniRunnerMaxTurns,
         enableToolBinding: false,
+        headerNamespace: "workflow",
+        flowPrefix: "workflow",
+        includeHarnessCompatHeaders: true,
+        fallbackGlobalConfig: this.globalConfig || {},
+        fallbackUserConfig: userConfig && typeof userConfig === "object" ? userConfig : {},
       });
+    }
+    if (typeof next?.subSessionRunner !== "function") {
+      next.subSessionRunner = this._createBotSubSessionRunner();
+    }
+    if (typeof next?.workflowDialogPersister !== "function") {
+      next.workflowDialogPersister = this._createWorkflowScopedJsonWriter();
+    }
+    if (typeof next?.workflowEventLogger !== "function") {
+      next.workflowEventLogger = this._createWorkflowScopedEventLogger();
     }
     return next;
   }
@@ -919,7 +1495,14 @@ export class SessionExecutionEngine {
           ? runConfig.botHooks
           : createBotHookManager();
     if (!botHookManager.__noobotWorkflowPluginRegistered) {
-      registerWorkflowPlugin({ botHookManager }, workflowOptions);
+      registerWorkflowPlugin(
+        this._buildPluginRegisterApi({
+          manager: botHookManager,
+          pluginName: "workflow",
+          options: workflowOptions,
+        }),
+        workflowOptions,
+      );
       Object.defineProperty(botHookManager, "__noobotWorkflowPluginRegistered", {
         value: true,
         enumerable: false,
@@ -959,6 +1542,27 @@ export class SessionExecutionEngine {
     return {
       ...runConfig,
       botHookManager,
+    };
+  }
+
+  _buildPluginRegisterApi({ manager = null, pluginName = "", options = {} } = {}) {
+    const hookManager = manager && typeof manager === "object" ? manager : null;
+    const safePluginName = String(pluginName || "").trim();
+    const safeOptions = options && typeof options === "object" ? options : {};
+    return {
+      hookManager,
+      hooks: hookManager,
+      botHookManager: hookManager,
+      botHooks: hookManager,
+      runtime: {
+        plugin: safePluginName,
+        options: safeOptions,
+      },
+      runConfig: {
+        plugins: {
+          [safePluginName]: safeOptions,
+        },
+      },
     };
   }
 
