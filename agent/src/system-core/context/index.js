@@ -185,7 +185,7 @@ export class ContextBuilder {
     sessionTree = {},
     rootSessionId = "",
   } = {}) {
-    return buildDynamicInfo({
+    const dynamicInfo = buildDynamicInfo({
       userId: this.userId,
       sessionId: this.sessionId,
       caller: this.caller,
@@ -196,6 +196,11 @@ export class ContextBuilder {
       rootSessionId,
       parentSessionId: this.parentSessionId,
     });
+    const systemRuntimePatch =
+      this.runConfig?.systemRuntimePatch && typeof this.runConfig.systemRuntimePatch === "object"
+        ? this.runConfig.systemRuntimePatch
+        : null;
+    return systemRuntimePatch ? { ...dynamicInfo, ...systemRuntimePatch } : dynamicInfo;
   }
 
   async _buildAgentContext(

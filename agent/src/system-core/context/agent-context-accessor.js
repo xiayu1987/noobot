@@ -47,6 +47,16 @@ export function getSessionIdsFromAgentContext(agentContext = {}, fallbackRuntime
   };
 }
 
+export function resolveChildRunParentSessionIdFromRuntime(runtime = {}) {
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  return String(
+    systemRuntime?.childRunParentSessionId ||
+      systemRuntime?.durableParentSessionId ||
+      systemRuntime?.sessionId ||
+      "",
+  ).trim();
+}
+
 export function getBasePathFromAgentContext(agentContext = {}, fallbackRuntime = null) {
   const context = asObject(agentContext) || {};
   const runtime = getRuntimeFromAgentContext(context, fallbackRuntime);

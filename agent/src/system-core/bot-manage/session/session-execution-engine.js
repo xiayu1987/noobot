@@ -748,6 +748,7 @@ export class SessionExecutionEngine {
     return async ({
       parentContext = {},
       message = "",
+      attachmentMetas = [],
       runConfigPatch = {},
       systemMessages = [],
       strategy = {},
@@ -777,6 +778,7 @@ export class SessionExecutionEngine {
         runConfigPatch,
         disabledPlugins: strategy?.disabledPlugins || [],
       });
+      const subSessionAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
       // 子会话为 detached 执行，不能复用父会话的 hook manager（会把父插件/hook 链一并带入）。
       // 否则即便 selectedPlugins 关闭，也可能继续触发已注册的 harness/workflow hooks。
       delete mergedRunConfig.hookManager;
@@ -795,6 +797,15 @@ export class SessionExecutionEngine {
         runConfig: mergedRunConfig,
         userConfig: subSessionUserConfig,
       });
+      effectiveRunConfig.systemRuntimePatch = {
+        ...(effectiveRunConfig?.systemRuntimePatch &&
+        typeof effectiveRunConfig.systemRuntimePatch === "object"
+          ? effectiveRunConfig.systemRuntimePatch
+          : {}),
+        childRunParentSessionId: parentSessionId,
+        durableParentSessionId: parentSessionId,
+        detachedSessionScope: "workflow_node",
+      };
       const selectedPlugins = Array.isArray(effectiveRunConfig?.selectedPlugins)
         ? effectiveRunConfig.selectedPlugins.map((item) => String(item || "").trim()).filter(Boolean)
         : [];
@@ -825,7 +836,7 @@ export class SessionExecutionEngine {
           parentSessionId,
           dialogProcessId: subDialogProcessId || subSessionId,
           userConfig: subSessionUserConfig,
-          attachmentMetas: [],
+          attachmentMetas: subSessionAttachmentMetas,
           systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
           eventListener:
             eventListener &&
@@ -893,6 +904,7 @@ export class SessionExecutionEngine {
             dialogProcessId,
             parentDialogProcessId,
             frontendUserMessage: false,
+            attachmentMetas: subSessionAttachmentMetas,
           },
           now,
         );

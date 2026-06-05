@@ -82,6 +82,26 @@ test("parseWorkflowDslText keeps action node task field", () => {
   assert.equal(actionNode?.task, "请输出节点A完成");
 });
 
+test("parseWorkflowDslText keeps action node attachment refs", () => {
+  const semantic = parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'ATTACHMENT id="att-1" name="合同.pdf" path="/workspace/attachments/contract.pdf" mimeType="application/pdf"',
+      'NODE id=start type=state stateType=start name="开始"',
+      'NODE id=act type=action name="节点A" task="请分析附件" attachments="att-1"',
+      'NODE id=end type=state stateType=end name="结束"',
+      "EDGE from=start to=act",
+      "EDGE from=act to=end",
+      "END",
+    ].join("\n"),
+  );
+  const actionNode = (semantic?.nodes || []).find((item) => String(item?.id || "") === "act");
+  assert.deepEqual(actionNode?.attachments, ["att-1"]);
+  assert.equal(semantic?.attachments?.[0]?.id, "att-1");
+  assert.equal(semantic?.attachments?.[0]?.path, "/workspace/attachments/contract.pdf");
+  assert.equal(semantic?.attachmentMap?.["att-1"]?.name, "合同.pdf");
+});
+
 test("parseWorkflowDslText rejects composite nodes", () => {
   assert.throws(
     () =>

@@ -288,6 +288,8 @@ export class SessionExecutionRunner {
         ...botHookBase,
         userMessage: normalizedMessage,
         agentContextSummary,
+        attachmentMetas: userMessageAttachmentMetas,
+        userMessageAttachmentMetas,
         eventListener: runtimeEventListener,
       };
       const beforeAgentDispatchResult = await runBotRuntimeHook({

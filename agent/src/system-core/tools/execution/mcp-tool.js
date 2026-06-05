@@ -8,7 +8,10 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createMcpAgentTools } from "../../mcp/index.js";
 import { mergeConfig } from "../../config/index.js";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  getRuntimeFromAgentContext,
+  resolveChildRunParentSessionIdFromRuntime,
+} from "../../context/agent-context-accessor.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -67,7 +70,7 @@ export function createMcpTool({ agentContext }) {
       const workspaceRoot = String(globalConfig?.workspaceRoot || "").trim();
       const userId = String(runtime?.userId || agentContext?.userId || "").trim();
       const sessionId = String(systemRuntime?.sessionId || "").trim();
-      const parentSessionId = sessionId;
+      const parentSessionId = resolveChildRunParentSessionIdFromRuntime(runtime);
       const parentDialogProcessId = resolveDialogProcessIdFromContext({
         runtime,
       });

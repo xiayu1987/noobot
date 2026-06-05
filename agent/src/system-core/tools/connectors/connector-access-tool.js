@@ -10,6 +10,7 @@ import { mergeConfig } from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
+  resolveChildRunParentSessionIdFromRuntime,
 } from "../../context/agent-context-accessor.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
@@ -44,6 +45,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const userId = String(runtime?.userId || agentContext?.userId || "").trim();
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const sessionId = String(systemRuntime?.sessionId || "").trim();
+  const parentSessionId = resolveChildRunParentSessionIdFromRuntime(runtime);
   const parentDialogProcessId = resolveDialogProcessIdFromContext({ runtime });
   const allowUserInteraction =
     systemRuntime?.config?.allowUserInteraction !== false;
@@ -95,7 +97,7 @@ export function createConnectorAccessTool({ agentContext }) {
           sessionId: subSessionId,
           message: normalizedTask,
           caller: TOOL_CALLER.BOT,
-          parentSessionId: sessionId,
+          parentSessionId,
           parentDialogProcessId,
           eventListener,
           userInteractionBridge,
@@ -138,7 +140,7 @@ export function createConnectorAccessTool({ agentContext }) {
             ok: true,
             status: TOOL_RESULT_STATUS.COMPLETED,
             sessionId: subSessionId,
-            parentSessionId: sessionId,
+            parentSessionId,
             answer,
             tools: subTools.map((item) => item?.name).filter(Boolean),
             summary: {
