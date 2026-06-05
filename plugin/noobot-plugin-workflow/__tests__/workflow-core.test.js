@@ -5,6 +5,9 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { normalizeOptions } from "../src/core/options.js";
 import { createRegisterNoobotPlugin } from "../src/core/plugin.js";
@@ -239,4 +242,43 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     ),
     true,
   );
+});
+
+test("workflow plugin cleans workflow runtime dirs when session is deleted", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+    },
+  });
+  const cleanupHook = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.AFTER_SESSION_DELETE);
+  assert.ok(cleanupHook?.handler);
+
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-plugin-cleanup-"));
+  const planningDir = path.join(tempRoot, "runtime/workflow/planning/s-delete/dialog-1");
+  const sessionDir = path.join(tempRoot, "runtime/workflow/session/s-delete/wf_node_1");
+  const untouchedDir = path.join(tempRoot, "runtime/workflow/planning/s-keep/dialog-2");
+  await fs.mkdir(planningDir, { recursive: true });
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.mkdir(untouchedDir, { recursive: true });
+  await fs.writeFile(path.join(planningDir, "planning.json"), "{\"ok\":true}\n", "utf8");
+  await fs.writeFile(path.join(sessionDir, "events.jsonl"), "{\"event\":\"ok\"}\n", "utf8");
+  await fs.writeFile(path.join(untouchedDir, "planning.json"), "{\"keep\":true}\n", "utf8");
+
+  try {
+    await cleanupHook.handler({
+      sessionId: "s-delete",
+      deletedSessionIds: ["s-delete"],
+      basePath: tempRoot,
+    });
+
+    await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-delete")));
+    await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/session/s-delete")));
+    await fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-keep"));
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
 });

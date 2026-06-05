@@ -7,6 +7,7 @@ import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin as registerHarnessPlugin } from "../../plugin/noobot-plugin-harness/src/index.js";
+import { registerNoobotPlugin as registerWorkflowPlugin } from "../../plugin/noobot-plugin-workflow/src/index.js";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
@@ -33,6 +34,15 @@ async function emitAfterSessionDeleteHook({
       writeContextSnapshot: false,
       writePrompts: false,
       finalResponseGuard: false,
+    },
+  );
+  registerWorkflowPlugin(
+    { hookManager },
+    {
+      enabled: true,
+      mode: "on",
+      priority: 10,
+      timeoutMs: 5000,
     },
   );
 
