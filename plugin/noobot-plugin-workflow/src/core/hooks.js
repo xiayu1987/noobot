@@ -15,6 +15,7 @@ import {
   WORKFLOW_SEMANTIC,
   WORKFLOW_TRACE,
 } from "./constants.js";
+import { cleanupWorkflowBySessionIds } from "../utils/cleanup.js";
 import {
   advanceWorkflowInstance,
   createWorkflowInstance,
@@ -904,6 +905,7 @@ export function createRegisterWorkflowHooks() {
   return function registerWorkflowHooks({ hookManager, options }) {
     const disposers = [];
     const hookPoint = WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH;
+    const sessionCleanupPoint = WORKFLOW_BOT_HOOK_POINTS.AFTER_SESSION_DELETE;
 
     disposers.push(
       hookManager.on(
@@ -1345,6 +1347,35 @@ export function createRegisterWorkflowHooks() {
         },
         {
           id: WORKFLOW_HOOKS.AFTER_AGENT_DISPATCH_LISTENER_ID,
+          priority: Number(options?.priority) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_PRIORITY,
+          timeoutMs:
+            Number(options?.timeoutMs) > 0
+              ? Number(options.timeoutMs)
+              : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_TIMEOUT_MS,
+        },
+      ),
+    );
+
+    disposers.push(
+      hookManager.on(
+        sessionCleanupPoint,
+        async (ctx = {}) => {
+          const deletedSessionIds = Array.isArray(ctx?.deletedSessionIds)
+            ? ctx.deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
+            : [];
+          const fallbackSessionId = String(ctx?.sessionId || "").trim();
+          const sessionIds = deletedSessionIds.length
+            ? deletedSessionIds
+            : fallbackSessionId
+              ? [fallbackSessionId]
+              : [];
+          if (!sessionIds.length) return;
+          const basePath = String(ctx?.basePath || "").trim();
+          if (!basePath) return;
+          await cleanupWorkflowBySessionIds(basePath, sessionIds);
+        },
+        {
+          id: WORKFLOW_HOOKS.AFTER_SESSION_DELETE_LISTENER_ID,
           priority: Number(options?.priority) || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_PRIORITY,
           timeoutMs:
             Number(options?.timeoutMs) > 0

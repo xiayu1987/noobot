@@ -11,10 +11,12 @@ export const WORKFLOW_BOT_HOOK_POINTS = Object.freeze({
   BEFORE_AGENT_DISPATCH: "before_agent_dispatch",
   AFTER_AGENT_DISPATCH: "after_agent_dispatch",
   NODE_AGENT_EXECUTE: "workflow_node_agent_execute",
+  AFTER_SESSION_DELETE: "after_session_delete",
 });
 
 export const WORKFLOW_HOOKS = Object.freeze({
   AFTER_AGENT_DISPATCH_LISTENER_ID: "workflow_after_agent_dispatch",
+  AFTER_SESSION_DELETE_LISTENER_ID: "workflow_after_session_delete",
 });
 
 export const WORKFLOW_ACTION = Object.freeze({
