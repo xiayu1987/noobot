@@ -20,6 +20,7 @@ import {
   createWorkflowInstance,
   executeWorkflowText,
   releaseWorkflowInstance,
+  resolveWorkflowUpstreamActionSteps,
 } from "../workflow/adapter.js";
 import { buildWorkflowOrchestrationPayload } from "./orchestration-payload.js";
 
@@ -145,6 +146,116 @@ function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx =
     .filter(Boolean);
   if (!lines.length) return "";
   return ["", "## 工作流节点结果附件", "", ...lines].join("\n");
+}
+
+function buildWorkflowUpstreamAttachmentResults({
+  upstreamActionSteps = [],
+  completedStepResults = new Map(),
+} = {}) {
+  return (Array.isArray(upstreamActionSteps) ? upstreamActionSteps : [])
+    .map((upstreamStep = {}) => {
+      const upstreamNodeId = String(upstreamStep?.nodeId || "").trim();
+      if (!upstreamNodeId) return null;
+      const upstreamStepId = String(upstreamStep?.stepId || "").trim();
+      const completed = completedStepResults.get(upstreamStepId) || {};
+      const attachmentMetas = Array.isArray(completed?.attachmentMetas)
+        ? completed.attachmentMetas
+        : [];
+      const stepStatus = String(completed?.stepStatus || upstreamStep?.stepStatus || "").trim();
+      const stepFailure =
+        completed?.stepFailure && typeof completed.stepFailure === "object"
+          ? completed.stepFailure
+          : upstreamStep?.stepFailure && typeof upstreamStep.stepFailure === "object"
+            ? upstreamStep.stepFailure
+          : null;
+      if (!attachmentMetas.length && stepStatus !== "failed" && !stepFailure) return null;
+      return {
+        nodeId: upstreamNodeId,
+        nodeName: String(completed?.nodeName || upstreamStep?.nodeName || upstreamNodeId).trim(),
+        actionNodeStateId: String(
+          completed?.actionNodeStateId || upstreamStep?.actionNodeStateId || "",
+        ).trim(),
+        stepId: upstreamStepId,
+        stepIndex: Number.isFinite(Number(completed?.stepIndex ?? upstreamStep?.stepIndex))
+          ? Number(completed?.stepIndex ?? upstreamStep?.stepIndex)
+          : -1,
+        transition: Number(completed?.transition || 0),
+        nodeDialogId: String(completed?.nodeDialogId || "").trim(),
+        nodeSessionId: String(completed?.nodeSessionId || "").trim(),
+        stepStatus,
+        stepFailure,
+        attachmentMetas,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildWorkflowUpstreamAttachmentSystemMessage({
+  options = {},
+  ctx = {},
+  pendingStep = {},
+  upstreamNodeResults = [],
+} = {}) {
+  const normalizedResults = Array.isArray(upstreamNodeResults) ? upstreamNodeResults : [];
+  const allAttachmentMetas = normalizedResults.reduce(
+    (acc, item = {}) => mergeAttachmentMetas(acc, item?.attachmentMetas || []),
+    [],
+  );
+  const failedResults = normalizedResults.filter((item = {}) => {
+    const status = String(item?.stepStatus || "").trim();
+    return status === "failed" || (item?.stepFailure && typeof item.stepFailure === "object");
+  });
+  if (!allAttachmentMetas.length && !failedResults.length) return "";
+  if (typeof options?.workflowNodeSystemMessageBuilder === "function") {
+    try {
+      const customMessage = String(
+        options.workflowNodeSystemMessageBuilder({
+          ctx,
+          pendingStep,
+          upstreamNodeResults: normalizedResults,
+          attachmentMetas: allAttachmentMetas,
+        }) || "",
+      ).trim();
+      if (customMessage) return customMessage;
+    } catch {
+      // Fall back to the built-in message.
+    }
+  }
+
+  const lines = [];
+  const failureLines = [];
+  for (const result of normalizedResults) {
+    const nodeLabel = String(result?.nodeName || result?.nodeId || "上游节点").trim();
+    if (
+      String(result?.stepStatus || "").trim() === "failed" ||
+      (result?.stepFailure && typeof result.stepFailure === "object")
+    ) {
+      const failureMessage = String(result?.stepFailure?.message || "子 agent 执行失败").trim();
+      failureLines.push(`- ${nodeLabel}: ${failureMessage}`);
+    }
+    const metas = Array.isArray(result?.attachmentMetas) ? result.attachmentMetas : [];
+    for (const [index, meta] of metas.entries()) {
+      const attachmentLabel = String(meta?.name || `附件${index + 1}`).trim();
+      const path = resolveAttachmentDisplayPath(meta, ctx);
+      if (!path) continue;
+      lines.push(`- ${nodeLabel} / ${attachmentLabel}: ${path}`);
+    }
+  }
+  if (!lines.length && !failureLines.length) return "";
+  const pendingName = String(pendingStep?.nodeName || pendingStep?.nodeId || "当前节点").trim();
+  return [
+    "# 上游工作流节点结果附件",
+    "",
+    `当前节点：${pendingName}`,
+    "",
+    "以下信息来自直接上游动作节点。请在执行当前任务前先读取/参考可用附件；如果上游节点失败且无附件，请基于失败信息继续完成当前节点可完成的部分，并明确说明受影响范围。",
+    "",
+    failureLines.length ? "## 上游失败节点" : "",
+    ...failureLines,
+    failureLines.length && lines.length ? "" : "",
+    lines.length ? "## 上游结果附件" : "",
+    ...lines,
+  ].join("\n");
 }
 
 function truncateWorkflowResultText(text = "", maxLength = 1800) {
@@ -573,6 +684,7 @@ async function runNodeAgent({
   pendingStep = {},
   semantic = {},
   transition = 0,
+  upstreamNodeResults = [],
 } = {}) {
   const nodeDialogId = `wf_node_${String(instanceId || "inst").replaceAll(/[^a-zA-Z0-9_-]/g, "_")}_${String(transition || 0)}`;
   await emitWorkflowRuntimeEvent({
@@ -601,7 +713,23 @@ async function runNodeAgent({
     }),
     proposedAction: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
   };
+  const upstreamAttachmentSystemMessage = buildWorkflowUpstreamAttachmentSystemMessage({
+    options,
+    ctx,
+    pendingStep,
+    upstreamNodeResults,
+  });
+  const subSessionSystemMessages = upstreamAttachmentSystemMessage
+    ? [upstreamAttachmentSystemMessage]
+    : [];
+  hookPayload.workflow.upstreamNodeResults = upstreamNodeResults;
+  hookPayload.workflow.upstreamAttachmentMetas = upstreamNodeResults.reduce(
+    (acc, item = {}) => mergeAttachmentMetas(acc, item?.attachmentMetas || []),
+    [],
+  );
+  hookPayload.workflow.upstreamAttachmentSystemMessage = upstreamAttachmentSystemMessage;
   let subSession = null;
+  let subSessionFailure = null;
   if (typeof options?.subSessionRunner === "function") {
     const parentRunConfig =
       ctx?.runConfig && typeof ctx.runConfig === "object" ? ctx.runConfig : {};
@@ -643,6 +771,7 @@ async function runNodeAgent({
           parentContext: ctx,
           message: hookPayload.agentInstruction,
           runConfigPatch: subSessionRunConfigPatch,
+          systemMessages: subSessionSystemMessages,
           eventListener:
             ctx?.eventListener && typeof ctx.eventListener?.onEvent === "function"
               ? ctx.eventListener
@@ -662,6 +791,7 @@ async function runNodeAgent({
             transition: Number(transition || 0),
             workflowSessionId: String(ctx?.sessionId || "").trim(),
             workflowDialogId: nodeDialogId,
+            upstreamWorkflowNodeResults: upstreamNodeResults,
           },
         }),
         nodeAgentTimeoutMs,
@@ -678,7 +808,13 @@ async function runNodeAgent({
           persistedDir: String(subSession?.persisted?.outputDir || "").trim(),
         },
       });
-    } catch {
+    } catch (error) {
+      const failureMessage = String(error?.message || error || "workflow node sub-session failed").trim();
+      subSessionFailure = {
+        source: "workflow_node_agent",
+        code: String(error?.code || "WORKFLOW_NODE_SUBSESSION_FAILED").trim(),
+        message: failureMessage,
+      };
       await emitWorkflowRuntimeEvent({
         options,
         ctx,
@@ -688,6 +824,7 @@ async function runNodeAgent({
         data: {
           instanceId: String(instanceId || "").trim(),
           nodeId: String(pendingStep?.nodeId || "").trim(),
+          message: failureMessage,
         },
       });
       subSession = null;
@@ -701,6 +838,19 @@ async function runNodeAgent({
         transition,
       });
     }
+  }
+  if (subSessionFailure) {
+    return {
+      action: {
+        type: WORKFLOW_ACTION.SUBMIT,
+        stepIndex: Number(pendingStep?.index || 0),
+        stepFailure: subSessionFailure,
+      },
+      subSession,
+      nodeDialogId,
+      stepStatus: "failed",
+      stepFailure: subSessionFailure,
+    };
   }
   if (typeof options?.nodeAgentExecutor === "function") {
     const directAction = await options.nodeAgentExecutor(hookPayload);
@@ -872,6 +1022,7 @@ export function createRegisterWorkflowHooks() {
               : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS;
             const parallelEnabled = options?.parallelNodeExecution === true;
             const nodeAgentRuns = [];
+            const completedStepResults = new Map();
             let transitions = 0;
             while (snapshot && snapshot.completed !== true && transitions < maxTransitions) {
               const pending = Array.isArray(snapshot.pendingSteps) ? snapshot.pendingSteps : [];
@@ -880,6 +1031,14 @@ export function createRegisterWorkflowHooks() {
               const waveSteps = pending.slice(0, waveSize);
               const waveResults = await Promise.all(
                 waveSteps.map(async (step, idx) => {
+                  const upstreamActionSteps = resolveWorkflowUpstreamActionSteps({
+                    instanceId,
+                    pendingStep: step,
+                  });
+                  const upstreamNodeResults = buildWorkflowUpstreamAttachmentResults({
+                    upstreamActionSteps,
+                    completedStepResults,
+                  });
                   const action = await runNodeAgent({
                     hookManager,
                     options,
@@ -888,12 +1047,14 @@ export function createRegisterWorkflowHooks() {
                     pendingStep: step,
                     semantic,
                     transition: transitions + idx + 1,
+                    upstreamNodeResults,
                   });
                   return {
                     step,
                     action: action?.action || null,
                     subSession: action?.subSession || null,
                     nodeDialogId: String(action?.nodeDialogId || "").trim(),
+                    upstreamNodeResults,
                     order: idx,
                   };
                 }),
@@ -912,6 +1073,9 @@ export function createRegisterWorkflowHooks() {
                 const effectiveAction = {
                   type: String(item?.action?.type || WORKFLOW_ACTION.SUBMIT).trim().toLowerCase(),
                   stepIndex: resolvedStepIndex,
+                  ...(item?.action?.stepFailure && typeof item.action.stepFailure === "object"
+                    ? { stepFailure: item.action.stepFailure }
+                    : {}),
                 };
                 snapshot = advanceWorkflowInstance({
                   instanceId,
@@ -925,6 +1089,11 @@ export function createRegisterWorkflowHooks() {
                   nodeDialogId: String(item?.nodeDialogId || "").trim(),
                   nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
                   nodeSessionPersistedPath: String(item?.subSession?.persisted?.outputDir || "").trim(),
+                  actionNodeStateId: String(item?.step?.actionNodeStateId || "").trim(),
+                  stepId: String(item?.step?.stepId || "").trim(),
+                  stepIndex: Number.isFinite(Number(item?.step?.stepIndex))
+                    ? Number(item.step.stepIndex)
+                    : -1,
                   nodeResultText: truncateWorkflowResultText(
                     stripHarnessReviewAppendix(
                       resolveSubSessionFinalOutput(item?.subSession || {}),
@@ -934,10 +1103,50 @@ export function createRegisterWorkflowHooks() {
                   nodeResultAttachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
                     ? item.subSession.result.attachmentMetas
                     : [],
+                  stepStatus: item?.action?.stepFailure ? "failed" : "",
+                  stepFailure:
+                    item?.action?.stepFailure && typeof item.action.stepFailure === "object"
+                      ? item.action.stepFailure
+                      : null,
+                  upstreamNodeResults: Array.isArray(item?.upstreamNodeResults)
+                    ? item.upstreamNodeResults
+                    : [],
                   parallelWave: parallelEnabled ? Math.floor((transitions - 1) / Math.max(1, waveSize)) + 1 : 0,
                   waveOrder: Number(item?.order ?? 0),
                   pendingStepCount: Number(snapshot?.pendingStepCount || 0),
                 });
+                const completedSemanticNode = resolveSemanticNodeForPendingStep({
+                  semantic,
+                  pendingStep: item?.step || {},
+                });
+                const completedStepId = String(item?.step?.stepId || "").trim();
+                const completedNodeId = String(
+                  item?.step?.nodeId || completedSemanticNode?.id || "",
+                ).trim();
+                if (completedStepId) {
+                  completedStepResults.set(completedStepId, {
+                    transition: transitions,
+                    nodeId: completedNodeId,
+                    nodeName: String(
+                      item?.step?.nodeName || completedSemanticNode?.name || completedNodeId,
+                    ).trim(),
+                    actionNodeStateId: String(item?.step?.actionNodeStateId || "").trim(),
+                    stepId: completedStepId,
+                    stepIndex: Number.isFinite(Number(item?.step?.stepIndex))
+                      ? Number(item.step.stepIndex)
+                      : -1,
+                    nodeDialogId: String(item?.nodeDialogId || "").trim(),
+                    nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
+                    stepStatus: item?.action?.stepFailure ? "failed" : "",
+                    stepFailure:
+                      item?.action?.stepFailure && typeof item.action.stepFailure === "object"
+                        ? item.action.stepFailure
+                        : null,
+                    attachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
+                      ? item.subSession.result.attachmentMetas
+                      : [],
+                  });
+                }
               }
             }
             const execution = {
@@ -1015,6 +1224,11 @@ export function createRegisterWorkflowHooks() {
                   nodeType: Number.isFinite(Number(item?.step?.nodeType))
                     ? Number(item.step.nodeType)
                     : undefined,
+                  actionNodeStateId: String(item?.actionNodeStateId || item?.step?.actionNodeStateId || "").trim(),
+                  stepId: String(item?.stepId || item?.step?.stepId || "").trim(),
+                  stepIndex: Number.isFinite(Number(item?.stepIndex ?? item?.step?.stepIndex))
+                    ? Number(item?.stepIndex ?? item?.step?.stepIndex)
+                    : undefined,
                   type: String(semanticNode?.type || "").trim(),
                   stateType:
                     semanticNode && Number.isFinite(Number(semanticNode?.stateType))
@@ -1026,6 +1240,11 @@ export function createRegisterWorkflowHooks() {
                   attachmentMetas: Array.isArray(item?.nodeResultAttachmentMetas)
                     ? item.nodeResultAttachmentMetas
                     : [],
+                  stepStatus: String(item?.stepStatus || "").trim(),
+                  stepFailure:
+                    item?.stepFailure && typeof item.stepFailure === "object"
+                      ? item.stepFailure
+                      : null,
                   parallelWave: Number(item?.parallelWave || 0),
                   waveOrder: Number(item?.waveOrder || 0),
                 };

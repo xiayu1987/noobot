@@ -13,6 +13,7 @@ defineProps({
   styleObj: { type: Object, default: () => ({}) },
   clickable: { type: Boolean, default: true },
   boundaryType: { type: String, default: "" },
+  expanded: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["click"]);
@@ -68,6 +69,7 @@ function handleClick(nodeItem = {}, clickable = true) {
       [`state-${resolveStateTypeKey(nodeItem, boundaryType)}`]: isStateNode(nodeItem, boundaryType),
       [`boundary-${String(boundaryType || '').trim()}`]: Boolean(boundaryType),
       'is-clickable': clickable,
+      'is-expanded': expanded,
     }"
     :style="styleObj"
     @click="handleClick(nodeItem, clickable)"
@@ -95,6 +97,12 @@ function handleClick(nodeItem = {}, clickable = true) {
         并发#{{ Number(nodeItem?.parallelWave || 0) }} · 序{{ Number(nodeItem?.waveOrder || 0) + 1 }}
       </div>
       <div
+        v-if="!boundaryType && isActionNode(nodeItem, boundaryType) && Array.isArray(nodeItem?.actionNodeStates) && nodeItem.actionNodeStates.length"
+        class="workflow-node-runtime-hint"
+      >
+        {{ expanded ? "收起" : "展开" }} · {{ nodeItem.actionNodeStates.length }} 节点Box
+      </div>
+      <div
         v-if="!boundaryType && isStateNode(nodeItem, boundaryType)"
         class="workflow-node-kind"
       >
@@ -102,6 +110,10 @@ function handleClick(nodeItem = {}, clickable = true) {
       </div>
     </div>
     <WorkflowGraphStatusBadge v-if="!boundaryType" :status="nodeItem?._status || 'pending'" />
+    <span
+      v-if="!boundaryType && isActionNode(nodeItem, boundaryType) && Array.isArray(nodeItem?.actionNodeStates) && nodeItem.actionNodeStates.length"
+      class="workflow-node-expand-icon"
+    >{{ expanded ? "⌃" : "⌄" }}</span>
   </div>
 </template>
 
@@ -156,7 +168,8 @@ function handleClick(nodeItem = {}, clickable = true) {
   box-shadow: 0 6px 14px rgba(109, 74, 255, 0.12);
 }
 
-.workflow-node.is-selected {
+.workflow-node.is-selected,
+.workflow-node.is-expanded {
   z-index: 3;
   border-color: rgba(109, 74, 255, 0.95);
   box-shadow: 0 0 0 2px rgba(109, 74, 255, 0.2), 0 8px 20px rgba(109, 74, 255, 0.18);
@@ -238,6 +251,21 @@ function handleClick(nodeItem = {}, clickable = true) {
   line-height: 1.2;
 }
 
+.workflow-node-runtime-hint {
+  margin-top: 2px;
+  font-size: 10px;
+  color: color-mix(in srgb, #6d4aff 82%, var(--noobot-text-secondary) 18%);
+  line-height: 1.2;
+}
+
+.workflow-node-expand-icon {
+  position: absolute;
+  right: 6px;
+  bottom: 2px;
+  font-size: 10px;
+  color: color-mix(in srgb, #6d4aff 80%, var(--noobot-text-secondary) 20%);
+}
+
 .workflow-node-kind {
   display: inline-flex;
   align-items: center;
@@ -295,6 +323,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   }
 
   .workflow-node-parallel,
+  .workflow-node-runtime-hint,
   .workflow-node-kind {
     display: none;
   }

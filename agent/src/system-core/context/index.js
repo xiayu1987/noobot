@@ -40,6 +40,13 @@ import {
   normalizeContextWindow,
 } from "../session/utils/context-window-normalizer.js";
 
+function normalizeAdditionalSystemMessages(input = []) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
 export class ContextBuilder {
   constructor(input = {}) {
     const hasContainerShape =
@@ -72,6 +79,7 @@ export class ContextBuilder {
       botManager = null,
       userInteractionBridge = null,
       runConfig = {},
+      systemMessages = [],
       abortSignal = null,
       parentAsyncResultContainer = null,
     } = normalized;
@@ -90,6 +98,7 @@ export class ContextBuilder {
     this.botManager = botManager;
     this.userInteractionBridge = userInteractionBridge;
     this.runConfig = runConfig;
+    this.additionalSystemMessages = normalizeAdditionalSystemMessages(systemMessages);
     this.abortSignal = abortSignal;
     this.parentAsyncResultContainer = parentAsyncResultContainer;
     this._effectiveConfigCache = null;
@@ -200,6 +209,10 @@ export class ContextBuilder {
       attachmentMetas = [],
     } = {},
   ) {
+    const effectiveSystemMessages = [
+      ...(Array.isArray(systemMessages) ? systemMessages : []),
+      ...this.additionalSystemMessages,
+    ];
     const resolvedRuntimeBasePath =
       runtimeBasePath || this._resolveRuntimeBasePath();
     const { sessionTree: resolvedSessionTree, rootSessionId: resolvedRootSessionId } =
@@ -254,7 +267,7 @@ export class ContextBuilder {
       parentSessionId: this.parentSessionId,
       caller: this.caller,
       now: this._now(),
-      systemMessages,
+      systemMessages: effectiveSystemMessages,
       conversationMessages,
       globalConfig: this.globalConfig,
     });

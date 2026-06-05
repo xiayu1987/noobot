@@ -96,7 +96,10 @@ class BizinstFlowEngine {
 
       const currentNode = currentNodeState.getNode?.();
       const currentStateType = currentNode?.getStateType?.();
-      if (!(currentStateType === 2) && canFlowtoCount > 1) {
+      const currentNodeType = currentNode?.getNodeType?.();
+      const currentNodeAllowsParallelOutgoing =
+        currentStateType === 2 || currentNodeType === ENodeType.ActionNode;
+      if (!currentNodeAllowsParallelOutgoing && canFlowtoCount > 1) {
         throw new FlowPolicyException('存在多个符合条件的流向。');
       }
 
@@ -140,9 +143,14 @@ class BizinstFlowEngine {
 
       if (nextStateNodeStateBox.canForwardChange(bizinst)) {
         const stateType = nextStateNodeState.getNode().getStateType();
-        if (stateType === 1 || stateType === 3) {
+        const hasOutgoingFlowto =
+          this.getModelBoxFactory()
+            .getStateNodeBox(nextStateNodeState.getNode())
+            .getNodeStartFlowtos().length > 0;
+        if (stateType === 1 || (stateType === 3 && !hasOutgoingFlowto)) {
           flowListener.end(bizinst, nextStateNodeState);
         } else {
+          this._goNextFromNodeState(bizinst, nextStateNodeState, flowListener);
           flowListener.forwardStateNodeStateChange(bizinst, nextStateNodeState);
         }
       }

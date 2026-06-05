@@ -88,27 +88,148 @@ const nodeRunByDialogId = computed(() => {
     ? executionMeta.value.nodeAgentRuns
     : [];
   for (const runItem of runs) {
-    const dialogId = String(runItem?.nodeDialogId || "").trim();
-    if (!dialogId) continue;
-    map.set(dialogId, runItem);
+    const dialogIds = [runItem?.nodeDialogId, runItem?.dialogId]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    for (const dialogId of dialogIds) map.set(dialogId, runItem);
   }
   return map;
 });
 
-const nodeSessionBySemanticKey = computed(() => {
+function normalizeStatus(value = "") {
+  const status = String(value || "").trim().toLowerCase();
+  if (status === "error") return "failed";
+  if (status === "done" || status === "completed") return "success";
+  return status;
+}
+
+function resolveStepStatus(stepItem = {}) {
+  const failure = stepItem?.stepFailure;
+  if (failure && typeof failure === "object") {
+    if (String(failure?.message || failure?.error || "").trim()) return "failed";
+  } else if (String(failure || "").trim()) {
+    return "failed";
+  }
+  const explicit = normalizeStatus(stepItem?.stepStatus || stepItem?.status || stepItem?._status || "");
+  if (explicit) return explicit;
+  const dialogId = String(stepItem?.dialogId || "").trim();
+  const runItem = dialogId ? nodeRunByDialogId.value.get(dialogId) : null;
+  if (runItem?.stepFailure) return "failed";
+  const runStatus = normalizeStatus(runItem?.stepStatus || runItem?.status || "");
+  if (runStatus) return runStatus;
+  if (String(stepItem?.sessionId || "").trim() || dialogId) return "success";
+  return "pending";
+}
+
+function resolveActionRuntimeStatus(actionNodeStates = []) {
+  const steps = [];
+  for (const stateBox of Array.isArray(actionNodeStates) ? actionNodeStates : []) {
+    for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) steps.push(stepItem);
+  }
+  if (!steps.length) return "pending";
+  const statuses = steps.map((stepItem) => resolveStepStatus(stepItem));
+  if (statuses.some((status) => status === "running")) return "running";
+  if (statuses.some((status) => status === "failed" || status === "error")) return "failed";
+  if (statuses.every((status) => status === "success")) return "success";
+  if (statuses.some((status) => status === "success")) return "success";
+  return "pending";
+}
+
+function makeRuntimeStep(item = {}, index = 0) {
+  const dialogId = String(item?.dialogId || "").trim();
+  const runItem = dialogId ? nodeRunByDialogId.value.get(dialogId) : null;
+  const stepId = String(item?.stepId || runItem?.stepId || dialogId || item?.sessionId || `step_${index + 1}`).trim();
+  const stepIndex = Number.isFinite(Number(item?.stepIndex ?? runItem?.stepIndex))
+    ? Number(item?.stepIndex ?? runItem?.stepIndex)
+    : index;
+  const merged = {
+    ...runItem,
+    ...item,
+    dialogId,
+    stepId,
+    stepIndex,
+    rootSessionId: String(
+      item?.rootSessionId ||
+        workflowPayload.value?.planningDialog?.sessionId ||
+        workflowPayload.value?.runMeta?.sessionId ||
+        "",
+    ).trim(),
+  };
+  return {
+    ...merged,
+    _boxType: "step",
+    _status: resolveStepStatus(merged),
+  };
+}
+
+function makeActionStateKey(item = {}, index = 0) {
+  return String(
+    item?.actionNodeStateId ||
+      item?.nodeStateId ||
+      item?.actionStateId ||
+      item?.nodeBoxId ||
+      item?.dialogId ||
+      item?.sessionId ||
+      `node_box_${index + 1}`,
+  ).trim();
+}
+
+const actionRuntimeBySemanticKey = computed(() => {
   const map = new Map();
-  for (const item of nodeSessions.value) {
+  const ensureNodeRuntime = (item = {}) => {
     const nodeId = String(item?.nodeId || "").trim();
     const nodeName = String(item?.nodeName || "").trim();
-    if (nodeId) map.set(`id:${nodeId}`, item);
-    if (nodeName) map.set(`name:${nodeName}`, item);
+    const primaryKey = nodeId ? `id:${nodeId}` : nodeName ? `name:${nodeName}` : "";
+    if (!primaryKey) return null;
+    if (!map.has(primaryKey)) {
+      const runtime = {
+        nodeId,
+        nodeName,
+        actionNodeStates: [],
+        _stateMap: new Map(),
+      };
+      map.set(primaryKey, runtime);
+      if (nodeId) map.set(`id:${nodeId}`, runtime);
+      if (nodeName) map.set(`name:${nodeName}`, runtime);
+    }
+    return map.get(primaryKey);
+  };
+
+  nodeSessions.value.forEach((item = {}, index) => {
+    const runtime = ensureNodeRuntime(item);
+    if (!runtime) return;
+    const stateKey = makeActionStateKey(item, index);
+    if (!runtime._stateMap.has(stateKey)) {
+      runtime._stateMap.set(stateKey, {
+        actionNodeStateId: stateKey,
+        nodeId: String(item?.nodeId || runtime.nodeId || "").trim(),
+        nodeName: String(item?.nodeName || runtime.nodeName || "").trim(),
+        steps: [],
+      });
+      runtime.actionNodeStates.push(runtime._stateMap.get(stateKey));
+    }
+    runtime._stateMap.get(stateKey).steps.push(makeRuntimeStep(item, index));
+  });
+
+  for (const runtime of new Set(map.values())) {
+    runtime.actionNodeStates.sort((left, right) => {
+      const leftOrder = Number(left?.steps?.[0]?.transition ?? left?.steps?.[0]?.stepIndex ?? 0);
+      const rightOrder = Number(right?.steps?.[0]?.transition ?? right?.steps?.[0]?.stepIndex ?? 0);
+      return leftOrder - rightOrder;
+    });
+    for (const stateBox of runtime.actionNodeStates) {
+      stateBox.steps.sort((left, right) => Number(left?.stepIndex || 0) - Number(right?.stepIndex || 0));
+    }
   }
   return map;
 });
 
+
 function resolveNodeStatus(nodeItem = {}) {
-  const explicit = String(nodeItem?.status || "").trim().toLowerCase();
+  const explicit = normalizeStatus(nodeItem?.status || nodeItem?._status || "");
   if (explicit) return explicit;
+  const runtimeStatus = resolveActionRuntimeStatus(nodeItem?.actionNodeStates || []);
+  if (runtimeStatus !== "pending") return runtimeStatus;
   const completed = executionMeta.value?.completed === true;
   if (completed) return "success";
   const workflowFailed = String(workflowPayload.value?.status || "").trim().toLowerCase() === "failed";
@@ -119,42 +240,69 @@ function resolveNodeStatus(nodeItem = {}) {
   return "pending";
 }
 
-function buildFlowNodeFromSession(item = {}, index = 0) {
+function stripRuntimeInternal(runtime = {}) {
+  return {
+    nodeId: String(runtime?.nodeId || "").trim(),
+    nodeName: String(runtime?.nodeName || "").trim(),
+    actionNodeStates: Array.isArray(runtime?.actionNodeStates)
+      ? runtime.actionNodeStates.map((stateBox = {}, stateIndex) => ({
+          actionNodeStateId: String(stateBox?.actionNodeStateId || `node_box_${stateIndex + 1}`).trim(),
+          nodeId: String(stateBox?.nodeId || runtime?.nodeId || "").trim(),
+          nodeName: String(stateBox?.nodeName || runtime?.nodeName || "").trim(),
+          steps: Array.isArray(stateBox?.steps) ? stateBox.steps : [],
+        }))
+      : [],
+  };
+}
+
+function firstRuntimeStep(actionNodeStates = []) {
+  for (const stateBox of Array.isArray(actionNodeStates) ? actionNodeStates : []) {
+    const stepItem = Array.isArray(stateBox?.steps) ? stateBox.steps[0] : null;
+    if (stepItem) return stepItem;
+  }
+  return null;
+}
+
+function buildFlowNodeFromRuntime(runtime = {}, index = 0) {
+  const cleanRuntime = stripRuntimeInternal(runtime);
+  const firstStep = firstRuntimeStep(cleanRuntime.actionNodeStates) || {};
   const semanticNode =
-    semanticNodeMap.value.get(`id:${String(item?.nodeId || "").trim()}`) ||
-    semanticNodeMap.value.get(`name:${String(item?.nodeName || "").trim()}`) ||
+    semanticNodeMap.value.get(`id:${cleanRuntime.nodeId}`) ||
+    semanticNodeMap.value.get(`name:${cleanRuntime.nodeName}`) ||
     null;
   return {
-    ...item,
-    type: String(item?.type || semanticNode?.type || "").trim(),
-    stateType: Number.isFinite(Number(item?.stateType))
-      ? Number(item.stateType)
+    ...firstStep,
+    nodeId: cleanRuntime.nodeId || String(firstStep?.nodeId || "").trim(),
+    nodeName: cleanRuntime.nodeName || String(firstStep?.nodeName || firstStep?.nodeId || "").trim(),
+    nodeType: 2,
+    type: String(firstStep?.type || semanticNode?.type || "action").trim(),
+    stateType: Number.isFinite(Number(firstStep?.stateType))
+      ? Number(firstStep.stateType)
       : Number.isFinite(Number(semanticNode?.stateType))
         ? Number(semanticNode.stateType)
         : undefined,
-    status: resolveNodeStatus(item),
-    _order: Number.isFinite(Number(item?.transition))
-      ? Number(item.transition)
-      : index + 1,
+    actionNodeStates: cleanRuntime.actionNodeStates,
+    runtimeBoxes: cleanRuntime.actionNodeStates,
+    status: resolveActionRuntimeStatus(cleanRuntime.actionNodeStates),
+    _order: Number.isFinite(Number(firstStep?.transition)) ? Number(firstStep.transition) : index + 1,
   };
 }
 
 function buildFlowNodeFromSemantic(nodeItem = {}, index = 0) {
   const nodeId = String(nodeItem?.id || "").trim();
   const nodeName = String(nodeItem?.name || nodeId || "").trim();
-  const matchedSession =
-    nodeSessionBySemanticKey.value.get(`id:${nodeId}`) ||
-    nodeSessionBySemanticKey.value.get(`name:${nodeName}`) ||
+  const matchedRuntime =
+    actionRuntimeBySemanticKey.value.get(`id:${nodeId}`) ||
+    actionRuntimeBySemanticKey.value.get(`name:${nodeName}`) ||
     null;
+  const cleanRuntime = matchedRuntime ? stripRuntimeInternal(matchedRuntime) : { actionNodeStates: [] };
+  const firstStep = firstRuntimeStep(cleanRuntime.actionNodeStates) || {};
   const completed = executionMeta.value?.completed === true;
   const nodeType = String(nodeItem?.type || "").trim().toLowerCase();
   const isAction = nodeType === "action";
-  const hasRunRecord = matchedSession && (
-    String(matchedSession?.dialogId || "").trim() ||
-    String(matchedSession?.sessionId || "").trim()
-  );
+  const runtimeStatus = resolveActionRuntimeStatus(cleanRuntime.actionNodeStates);
   return {
-    ...(matchedSession || {}),
+    ...firstStep,
     nodeId,
     nodeName,
     nodeType: isAction ? 2 : 0,
@@ -163,20 +311,20 @@ function buildFlowNodeFromSemantic(nodeItem = {}, index = 0) {
       ? Number(nodeItem.stateType)
       : undefined,
     rootSessionId: String(
-      matchedSession?.rootSessionId ||
+      firstStep?.rootSessionId ||
         workflowPayload.value?.planningDialog?.sessionId ||
         workflowPayload.value?.runMeta?.sessionId ||
         "",
     ).trim(),
-    status: matchedSession
-      ? resolveNodeStatus(matchedSession)
-      : isAction
-        ? (hasRunRecord ? "success" : "pending")
-        : completed
-          ? "success"
-          : "pending",
-    _order: Number.isFinite(Number(matchedSession?.transition))
-      ? Number(matchedSession.transition)
+    actionNodeStates: isAction ? cleanRuntime.actionNodeStates : [],
+    runtimeBoxes: isAction ? cleanRuntime.actionNodeStates : [],
+    status: isAction
+      ? runtimeStatus
+      : completed
+        ? "success"
+        : "pending",
+    _order: Number.isFinite(Number(firstStep?.transition))
+      ? Number(firstStep.transition)
       : index + 1,
   };
 }
@@ -190,8 +338,9 @@ const flowNodes = computed(() => {
       .map((item, index) => buildFlowNodeFromSemantic(item, index))
       .sort((left, right) => Number(left?._order || 0) - Number(right?._order || 0));
   }
-  return nodeSessions.value
-    .map((item = {}, index) => buildFlowNodeFromSession(item, index))
+  const uniqueRuntimes = Array.from(new Set(actionRuntimeBySemanticKey.value.values()));
+  return uniqueRuntimes
+    .map((runtime, index) => buildFlowNodeFromRuntime(runtime, index))
     .sort((left, right) => Number(left?._order || 0) - Number(right?._order || 0));
 });
 
@@ -427,7 +576,7 @@ function handleSelectedDialogUpdate(dialogId = "") {
         :flowtos="semanticFlowtos"
         :selected-dialog-id="selectedGraphDialogId"
         @update:selected-dialog-id="handleSelectedDialogUpdate"
-        @node-click="openNodeSession"
+        @step-click="openNodeSession"
       />
     </div>
   </div>

@@ -51,6 +51,7 @@ export function compileWorkflowSemantic(semantic = {}) {
     const isAction = String(nodeDef?.type || "state").trim().toLowerCase() === "action";
     const isComposite = String(nodeDef?.type || "state").trim().toLowerCase() === "composite";
     const node = isAction ? new ActionNode() : isComposite ? new CompositeNode() : new StateNode();
+    node.workflowNodeId = String(nodeDef?.id || "").trim();
     node.setName(String(nodeDef?.name || nodeDef?.id || "节点").trim());
     node.setNodeType(
       isAction ? ENodeType.ActionNode : isComposite ? ENodeType.CompositeNode : ENodeType.StateNode,
