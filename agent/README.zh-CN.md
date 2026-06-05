@@ -72,3 +72,14 @@ import { runAgentTurn } from "noobot-agent/agent";
 - 默认行为尽量保持与原 `system-core` 一致。
 - 若你准备发布 npm 包，建议下一步补充：版本策略、变更日志、最小示例工程。
 
+## 插件策略 API（registerNoobotPlugin）
+
+Agent 在插件注册时会注入统一策略 API（`api.policy`），用于插件侧声明运行时工具策略：
+
+- `appendDenyToolNames(names: string[])`
+- `setToolPolicy(patch: object)`
+- `getToolPolicy(): object`
+
+约定：Agent 负责规范与合并，插件只声明策略（例如追加 `denyToolNames`）。
+
+详细契约文档：`../docs/plugin-policy-contract.md`

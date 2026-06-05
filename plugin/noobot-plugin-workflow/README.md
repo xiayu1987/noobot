@@ -102,6 +102,7 @@ END
 - `timeoutMs: number`（默认 `180000`）
 - `capabilityModelInvoker: function`（可选，语义模型调用器）
 - `nodeAgentExecutor: function`（可选，直接执行节点 agent；返回 action）
+- `denyToolNames: string[]`（可选；插件侧声明应禁用的工具名列表，默认值为多 agent 协作三件套）
 
 已移除/不再生效的旧字段：
 
@@ -126,10 +127,59 @@ END
 - 节点子会话采用 detached 执行与 scoped 落盘，不写入 `runtime/session` 主树。
 - 节点子会话会自动禁用 `workflow` 插件（`mode=off`）避免递归触发。
 
+## Tool policy 统一字段（与 harness 共用）
+
+Workflow 节点子会话的工具收敛通过 agent 统一字段传递：
+
+- `runConfig.toolPolicy.denyToolNames: string[]`
+
+Workflow 默认会向该字段追加多 agent 协作工具（避免节点子会话再触发并发协作回路）：
+
+- `delegate_task_async`
+- `wait_async_task_result`
+- `plan_multi_task_collaboration`
+
+旧字段仅保留兼容，不建议继续使用。
+
+### 迁移说明（自 2026-06-05 起）
+
+工作流与 harness 已统一到同一套运行时字段，请优先使用：
+
+- `runConfig.toolPolicy.denyToolNames`
+
+兼容但已废弃（不建议新增使用）：
+
+- `runConfig.toolPolicy.disableAgentCollabTools`
+- `runConfig.toolPolicy.disable_agent_collab_tools`
+- `runConfig.toolPolicy.deny_tool_names`
+
+### 插件注册 API（policy 契约）
+
+Agent 在插件注册时会注入统一策略 API（`registerNoobotPlugin(api, options)` 的 `api.policy`）：
+
+- `api.policy.appendDenyToolNames(names: string[])`
+- `api.policy.setToolPolicy(patch: object)`
+- `api.policy.getToolPolicy(): object`
+
+Workflow 插件只需要声明策略并调用 API，不需要改 agent 侧逻辑。例如：
+
+```js
+if (api?.policy?.appendDenyToolNames && Array.isArray(options?.denyToolNames)) {
+  api.policy.appendDenyToolNames(options.denyToolNames);
+}
+```
+
 ## 开启方式
 
 ```json
 {
+  "toolPolicy": {
+    "denyToolNames": [
+      "delegate_task_async",
+      "wait_async_task_result",
+      "plan_multi_task_collaboration"
+    ]
+  },
   "plugins": {
     "workflow": {
       "enabled": true,

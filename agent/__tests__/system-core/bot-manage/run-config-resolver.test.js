@@ -46,3 +46,50 @@ test("applyRunConfigToolPolicy should not force keep final_answer tool when forc
 
   assert.deepEqual(toolNames, ["wait"]);
 });
+
+test("applyRunConfigToolPolicy should support denyToolNames as unified runtime field", () => {
+  const resolver = new RunConfigResolver();
+  const agentContext = {
+    payload: {
+      tools: {
+        registry: [
+          { name: "wait" },
+          { name: "read_file" },
+          { name: "delegate_task_async" },
+        ],
+      },
+    },
+  };
+  const runConfig = {
+    toolPolicy: {
+      denyToolNames: ["delegate_task_async", "wait"],
+    },
+  };
+
+  const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
+  const toolNames = (nextContext?.payload?.tools?.registry || []).map((tool) => tool.name);
+
+  assert.deepEqual(toolNames, ["read_file"]);
+});
+
+test("applyRunConfigToolPolicy denyToolNames should override allowToolNames", () => {
+  const resolver = new RunConfigResolver();
+  const agentContext = {
+    payload: {
+      tools: {
+        registry: [{ name: "wait" }, { name: "read_file" }],
+      },
+    },
+  };
+  const runConfig = {
+    toolPolicy: {
+      allowToolNames: ["wait", "read_file"],
+      denyToolNames: ["wait"],
+    },
+  };
+
+  const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
+  const toolNames = (nextContext?.payload?.tools?.registry || []).map((tool) => tool.name);
+
+  assert.deepEqual(toolNames, ["read_file"]);
+});

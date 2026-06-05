@@ -41,6 +41,14 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(options.jsonlFlushStrategy.onError, true);
   assert.equal(options.incrementalRecentMessageLimit, 11);
   assert.equal(options.fsmEnabled, false);
+  assert.deepEqual(options.denyToolNames, []);
+});
+
+test("normalizeOptions keeps custom harness denyToolNames", () => {
+  const options = normalizeOptions({
+    denyToolNames: ["plan_multi_task_collaboration", "", "plan_multi_task_collaboration"],
+  });
+  assert.deepEqual(options.denyToolNames, ["plan_multi_task_collaboration"]);
 });
 
 test("appendJsonlBuffered supports adaptive flush by reason", async () => {

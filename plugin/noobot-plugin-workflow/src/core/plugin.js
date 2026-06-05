@@ -20,6 +20,14 @@ export function createRegisterNoobotPlugin(deps = {}) {
     if (!options.enabled || options.mode !== "on") {
       return { name: PLUGIN_NAME, version: PLUGIN_VERSION, disposers: [] };
     }
+    if (
+      api?.policy &&
+      typeof api.policy.appendDenyToolNames === "function" &&
+      Array.isArray(options?.denyToolNames) &&
+      options.denyToolNames.length
+    ) {
+      api.policy.appendDenyToolNames(options.denyToolNames);
+    }
 
     const disposers = registerWorkflowHooksFn({
       hookManager,

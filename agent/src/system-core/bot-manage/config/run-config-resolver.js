@@ -72,6 +72,20 @@ export class RunConfigResolver {
         allowSet.has(String(toolItem?.name || "")),
       );
     }
+    // Canonical field: toolPolicy.denyToolNames
+    // Legacy aliases remain for backward compatibility during migration.
+    const denyToolNames = Array.from(
+      new Set([
+        ...this.normalizeStringArray(toolPolicy?.denyToolNames),
+        ...this.normalizeStringArray(toolPolicy?.deny_tool_names),
+      ]),
+    );
+    if (denyToolNames.length) {
+      const denySet = new Set(denyToolNames);
+      nextTools = nextTools.filter(
+        (toolItem) => !denySet.has(String(toolItem?.name || "")),
+      );
+    }
 
     const dedupedTools = [];
     const seenNames = new Set();

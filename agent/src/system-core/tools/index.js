@@ -36,9 +36,55 @@ const DEFAULT_MAX_SUB_AGENT_DEPTH = 1;
 const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
   TOOL_NAME.DELEGATE_TASK_ASYNC,
   TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
+  TOOL_NAME.PLAN_MULTI_TASK_COLLABORATION,
   "delegateTaskAsync",
   "waitAsyncTaskResult",
+  "planMultiTaskCollaboration",
 ]);
+
+function isAgentCollabDisabledByRuntimePolicy(runtime = {}) {
+  const runConfig =
+    runtime?.runConfig && typeof runtime.runConfig === "object"
+      ? runtime.runConfig
+      : {};
+  const toolPolicy =
+    runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
+      ? runConfig.toolPolicy
+      : {};
+  return (
+    toolPolicy?.disableAgentCollabTools === true ||
+    toolPolicy?.disable_agent_collab_tools === true
+  );
+}
+
+function normalizeToolNameList(input = []) {
+  return Array.isArray(input)
+    ? input.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+}
+
+function resolveDeniedToolNamesByRuntimePolicy(runtime = {}) {
+  const runConfig =
+    runtime?.runConfig && typeof runtime.runConfig === "object"
+      ? runtime.runConfig
+      : {};
+  const toolPolicy =
+    runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
+      ? runConfig.toolPolicy
+      : {};
+  // Canonical field: runConfig.toolPolicy.denyToolNames
+  // Legacy aliases are accepted for transition compatibility.
+  const denyToolNames = new Set([
+    ...normalizeToolNameList(toolPolicy?.denyToolNames),
+    ...normalizeToolNameList(toolPolicy?.deny_tool_names),
+  ]);
+  if (isAgentCollabDisabledByRuntimePolicy(runtime)) {
+    for (const toolName of BLOCKED_AGENT_COLLAB_TOOL_NAMES) {
+      denyToolNames.add(toolName);
+    }
+  }
+  return denyToolNames;
+}
 
 function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled = true) {
   const normalized = String(toolName || "").trim();
@@ -217,12 +263,35 @@ async function filterToolsByRuntimePolicy({
   const userId = String(runtime?.userId || "").trim();
   const sessionManager = runtime?.sessionManager || null;
   const maxSubAgentDepth = resolveMaxSubAgentDepth(effectiveConfig);
+  const depthTargetSessionId = sessionId || parentSessionId;
+  const collabDisabledByLegacyPolicy = isAgentCollabDisabledByRuntimePolicy(runtime);
+  const deniedToolNames = resolveDeniedToolNamesByRuntimePolicy(runtime);
+
+  if (deniedToolNames.size) {
+    const filteredTools = sourceTools.filter(
+      (toolDefinition) => !deniedToolNames.has(normalizeToolName(toolDefinition)),
+    );
+    if (filteredTools.length !== sourceTools.length) {
+      emitEvent(eventListener, "tools_disabled_by_runtime_policy", {
+        sessionId: depthTargetSessionId,
+        parentSessionId,
+        disabledTools: Array.from(deniedToolNames),
+      });
+      if (collabDisabledByLegacyPolicy) {
+        emitEvent(eventListener, "agent_collab_tools_disabled_by_runtime_policy", {
+          sessionId: depthTargetSessionId,
+          parentSessionId,
+          disabledTools: Array.from(BLOCKED_AGENT_COLLAB_TOOL_NAMES),
+        });
+      }
+    }
+    return filteredTools;
+  }
 
   if (!sessionManager || !userId) {
     return sourceTools;
   }
 
-  const depthTargetSessionId = sessionId || parentSessionId;
   if (!depthTargetSessionId) return sourceTools;
 
   let currentDepth = 0;

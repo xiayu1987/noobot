@@ -21,6 +21,14 @@ export function createRegisterNoobotPlugin(deps = {}) {
     const { options, hookManager, capabilityRuntime } = createPluginRuntimeContextFn(api, userOptions);
     assertHookManagerFn(hookManager);
     if (!options.enabled) return { name: PLUGIN_NAME, version: PLUGIN_VERSION, disposers: [] };
+    if (
+      api?.policy &&
+      typeof api.policy.appendDenyToolNames === "function" &&
+      Array.isArray(options?.denyToolNames) &&
+      options.denyToolNames.length
+    ) {
+      api.policy.appendDenyToolNames(options.denyToolNames);
+    }
 
     const basePath = extractBasePathFn({}, options);
     if (basePath) {

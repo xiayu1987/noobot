@@ -8,6 +8,13 @@ import { HARNESS_LIMITS } from "./constants.js";
 import { WORKFLOW_PARAMS } from "./workflow-params.js";
 import { z } from "zod";
 
+export function resolveHarnessDenyToolNames(input = null) {
+  if (!Array.isArray(input)) return [];
+  return Array.from(
+    new Set(input.map((item) => String(item || "").trim()).filter(Boolean)),
+  );
+}
+
 export const DEFAULT_OPTIONS = Object.freeze({
   enabled: true,
   trace: true,
@@ -226,5 +233,6 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     maxRunAgeDays: safe.maxRunAgeDays,
     cleanupGraceMs: safe.cleanupGraceMs,
     fsmEnabled: safe.fsmEnabled !== false,
+    denyToolNames: resolveHarnessDenyToolNames(safe?.denyToolNames),
   };
 }

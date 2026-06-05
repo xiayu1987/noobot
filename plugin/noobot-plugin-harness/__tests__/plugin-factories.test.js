@@ -42,7 +42,14 @@ test("createPluginRuntimeContextFactory wires injected deps and normalizes plann
     createCapabilityRuntime,
   });
 
-  const api = { hookManager };
+  const api = {
+    hookManager,
+    policy: {
+      appendDenyToolNames: (toolNames = []) => {
+        calls.push(["appendDenyToolNames", toolNames]);
+      },
+    },
+  };
   const userOptions = { enabled: true };
   const result = createPluginRuntimeContext(api, userOptions);
 
@@ -126,6 +133,30 @@ test("createRegisterNoobotPlugin uses injected collaborators on happy path", asy
     "cleanupOldRuns",
     "registerHarnessHooks",
   ]);
+});
+
+test("createRegisterNoobotPlugin appends denyToolNames via unified policy api", () => {
+  const calls = [];
+  const registerNoobotPlugin = createRegisterNoobotPlugin({
+    createPluginRuntimeContext: () => ({
+      options: { enabled: true, denyToolNames: ["plan_multi_task_collaboration"] },
+      hookManager: { on() {} },
+      capabilityRuntime: {},
+    }),
+    assertHookManager: () => {},
+    extractBasePath: () => "",
+    cleanupOldRuns: async () => {},
+    registerHarnessHooks: () => [],
+  });
+
+  const result = registerNoobotPlugin({
+    policy: {
+      appendDenyToolNames: (toolNames = []) => calls.push([...(toolNames || [])]),
+    },
+  });
+
+  assert.equal(result.name, PLUGIN_NAME);
+  assert.deepEqual(calls, [["plan_multi_task_collaboration"]]);
 });
 
 test("createHarnessPluginFactory binds normalized options into register", () => {
