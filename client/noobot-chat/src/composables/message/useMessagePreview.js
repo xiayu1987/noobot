@@ -148,6 +148,7 @@ async function handleCopyMarkdown({ textContent, renderMarkdown, translate, noti
 
 export function useMessagePreview({
   userId = "",
+  apiKey = "",
   authFetch = null,
   isImageMime = () => false,
   renderMarkdown = () => "",
@@ -209,6 +210,7 @@ export function useMessagePreview({
         buildAttachmentUrl({
           userId: String(userId || "").trim(),
           attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+          apiKey: String(apiKey || "").trim(),
           sessionId: String(attachmentItem?.sessionId || "").trim(),
           attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
         }) || "",
