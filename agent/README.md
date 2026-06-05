@@ -63,3 +63,15 @@ import { runAgentTurn } from "noobot-agent/agent";
 
 - Default behavior is kept aligned with the original `system-core`.
 - Public APIs are narrowed via `exports`; avoid deep-importing internal files.
+
+## Plugin policy API (registerNoobotPlugin)
+
+Agent injects a unified `api.policy` contract when registering plugins:
+
+- `appendDenyToolNames(names: string[])`
+- `setToolPolicy(patch: object)`
+- `getToolPolicy(): object`
+
+Contract: agent owns policy normalization/merge; plugins only declare policy intents (for example appending `denyToolNames`).
+
+Detailed contract: `../docs/plugin-policy-contract.md`

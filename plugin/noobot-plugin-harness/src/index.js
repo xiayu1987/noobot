@@ -8,6 +8,7 @@ export { createPluginRuntimeContext, createPluginRuntimeContextFactory } from ".
 export { registerNoobotPlugin, createRegisterNoobotPlugin } from "./core/plugin.js";
 export { createHarnessPlugin, createHarnessPluginFactory } from "./core/plugin.js";
 export { registerHarnessHooks, createRegisterHarnessHooks } from "./core/hooks.js";
+export { resolveHarnessDenyToolNames } from "./core/options.js";
 export { applyTakeover, registerTakeover } from "./takeover/dispatcher.js";
 
 export { createHarnessPlugin as default } from "./core/plugin.js";

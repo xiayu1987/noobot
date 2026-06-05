@@ -8,6 +8,23 @@ import {
   WORKFLOW_PLUGIN_DEFAULTS,
 } from "./constants.js";
 
+export const DEFAULT_WORKFLOW_DENY_TOOL_NAMES = Object.freeze([
+  "delegate_task_async",
+  "wait_async_task_result",
+  "plan_multi_task_collaboration",
+]);
+
+function normalizeToolNameList(input = []) {
+  if (!Array.isArray(input)) return [];
+  return input.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+export function resolveWorkflowDenyToolNames(input = null) {
+  const normalized = normalizeToolNameList(input);
+  if (normalized.length) return Array.from(new Set(normalized));
+  return [...DEFAULT_WORKFLOW_DENY_TOOL_NAMES];
+}
+
 const DEFAULT_SEMANTIC_PROMPT = [
   "你是工作流语义编译器。",
   "将用户需求转换为 WORKFLOW_DSL/1 纯文本。",
@@ -124,5 +141,6 @@ export function normalizeOptions(input = {}) {
     workflowExtensionMounter:
       typeof source?.workflowExtensionMounter === "function" ? source.workflowExtensionMounter : null,
     workflowExtensions: normalizeWorkflowExtensions(source?.workflowExtensions),
+    denyToolNames: resolveWorkflowDenyToolNames(source?.denyToolNames),
   };
 }

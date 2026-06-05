@@ -66,6 +66,27 @@ test("normalizeOptions keeps workflow extension hooks", () => {
   assert.deepEqual(options.workflowExtensions, [extensionA, extensionB]);
 });
 
+test("normalizeOptions provides default workflow denyToolNames", () => {
+  const options = normalizeOptions({
+    enabled: true,
+    mode: "on",
+  });
+  assert.deepEqual(options.denyToolNames, [
+    "delegate_task_async",
+    "wait_async_task_result",
+    "plan_multi_task_collaboration",
+  ]);
+});
+
+test("normalizeOptions keeps custom denyToolNames from workflow plugin config", () => {
+  const options = normalizeOptions({
+    enabled: true,
+    mode: "on",
+    denyToolNames: ["request_help", "", "request_help"],
+  });
+  assert.deepEqual(options.denyToolNames, ["request_help"]);
+});
+
 test("parseWorkflowDslText keeps action node task field", () => {
   const semantic = parseWorkflowDslText(
     [
@@ -167,6 +188,30 @@ test("createRegisterNoobotPlugin returns empty disposers when workflow disabled"
   const result = registerNoobotPlugin({}, {});
   assert.equal(result?.name, PLUGIN_NAME);
   assert.deepEqual(result?.disposers || [], []);
+});
+
+test("createRegisterNoobotPlugin appends denyToolNames via unified policy api", () => {
+  const registerNoobotPlugin = createRegisterNoobotPlugin({
+    createPluginRuntimeContext: () => ({
+      options: {
+        enabled: true,
+        mode: "on",
+        denyToolNames: ["delegate_task_async"],
+      },
+      hookManager: createMockBotHookManager(),
+    }),
+    assertHookManager: () => {},
+    registerWorkflowHooks: () => [],
+  });
+  const calls = [];
+  const result = registerNoobotPlugin({
+    policy: {
+      appendDenyToolNames: (names = []) => calls.push([...(names || [])]),
+    },
+  });
+
+  assert.equal(result?.name, PLUGIN_NAME);
+  assert.deepEqual(calls, [["delegate_task_async"]]);
 });
 
 test("workflow hook skips when source text is empty", async () => {

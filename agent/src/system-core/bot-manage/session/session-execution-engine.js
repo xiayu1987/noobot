@@ -47,6 +47,11 @@ import {
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { normalizeSessionEntity } from "../../session/entities/session-entity.js";
+import {
+  createPluginPolicyApi,
+  hasToolPolicyPatchContent,
+  mergeToolPolicyPatch,
+} from "./plugin-policy-api.js";
 
 function normalizeMessageForHarness(messageItem = {}) {
   const role = resolveMessageRole(messageItem);
@@ -1457,13 +1462,16 @@ export class SessionExecutionEngine {
         : runConfig?.hooks && typeof runConfig.hooks === "object" && typeof runConfig.hooks.on === "function"
           ? runConfig.hooks
           : createAgentHookManager();
-    if (!hookManager.__noobotHarnessPluginRegistered) {
+    const pluginApi = this._buildPluginRegisterApi({
+      manager: hookManager,
+      pluginName: "harness",
+      options: harnessOptions,
+      runConfig,
+    });
+    const harnessAlreadyRegistered = hookManager.__noobotHarnessPluginRegistered === true;
+    if (!harnessAlreadyRegistered) {
       registerHarnessPlugin(
-        this._buildPluginRegisterApi({
-          manager: hookManager,
-          pluginName: "harness",
-          options: harnessOptions,
-        }),
+        pluginApi,
         harnessOptions,
       );
       Object.defineProperty(hookManager, "__noobotHarnessPluginRegistered", {
@@ -1471,6 +1479,9 @@ export class SessionExecutionEngine {
         enumerable: false,
         configurable: true,
       });
+    } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
+      // Keep per-run policy patch behavior even when hook registration is reused.
+      pluginApi.policy.appendDenyToolNames(harnessOptions?.denyToolNames || []);
     }
     const existingRuntimeMeta =
       hookManager.runtime && typeof hookManager.runtime === "object" ? hookManager.runtime : {};
@@ -1481,9 +1492,25 @@ export class SessionExecutionEngine {
           ? harnessOptions
           : existingRuntimeMeta.harness,
     };
+    const pluginToolPolicyPatch = pluginApi?.policy?.getToolPolicyPatch?.() || {};
+    const shouldAttachToolPolicy =
+      (runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object") ||
+      hasToolPolicyPatchContent({
+        toolPolicyPatch: pluginToolPolicyPatch,
+        normalizeStringArray: (input) => this._normalizeStringArray(input),
+      });
     return {
       ...runConfig,
       hookManager,
+      ...(shouldAttachToolPolicy
+        ? {
+            toolPolicy: mergeToolPolicyPatch({
+              baseToolPolicy: runConfig?.toolPolicy,
+              toolPolicyPatch: pluginToolPolicyPatch,
+              normalizeStringArray: (input) => this._normalizeStringArray(input),
+            }),
+          }
+        : {}),
       plugins: {
         ...(runConfig?.plugins || {}),
         harness: harnessOptions,
@@ -1583,13 +1610,16 @@ export class SessionExecutionEngine {
             typeof runConfig.botHooks.on === "function"
           ? runConfig.botHooks
           : createBotHookManager();
-    if (!botHookManager.__noobotWorkflowPluginRegistered) {
+    const pluginApi = this._buildPluginRegisterApi({
+      manager: botHookManager,
+      pluginName: "workflow",
+      options: workflowOptions,
+      runConfig,
+    });
+    const workflowAlreadyRegistered = botHookManager.__noobotWorkflowPluginRegistered === true;
+    if (!workflowAlreadyRegistered) {
       registerWorkflowPlugin(
-        this._buildPluginRegisterApi({
-          manager: botHookManager,
-          pluginName: "workflow",
-          options: workflowOptions,
-        }),
+        pluginApi,
         workflowOptions,
       );
       Object.defineProperty(botHookManager, "__noobotWorkflowPluginRegistered", {
@@ -1597,6 +1627,9 @@ export class SessionExecutionEngine {
         enumerable: false,
         configurable: true,
       });
+    } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
+      // Keep per-run policy patch behavior even when hook registration is reused.
+      pluginApi.policy.appendDenyToolNames(workflowOptions?.denyToolNames || []);
     }
     const existingRuntimeMeta =
       botHookManager.runtime && typeof botHookManager.runtime === "object"
@@ -1609,9 +1642,25 @@ export class SessionExecutionEngine {
           ? workflowOptions
           : existingRuntimeMeta.workflow,
     };
+    const pluginToolPolicyPatch = pluginApi?.policy?.getToolPolicyPatch?.() || {};
+    const shouldAttachToolPolicy =
+      (runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object") ||
+      hasToolPolicyPatchContent({
+        toolPolicyPatch: pluginToolPolicyPatch,
+        normalizeStringArray: (input) => this._normalizeStringArray(input),
+      });
     return {
       ...runConfig,
       botHookManager,
+      ...(shouldAttachToolPolicy
+        ? {
+            toolPolicy: mergeToolPolicyPatch({
+              baseToolPolicy: runConfig?.toolPolicy,
+              toolPolicyPatch: pluginToolPolicyPatch,
+              normalizeStringArray: (input) => this._normalizeStringArray(input),
+            }),
+          }
+        : {}),
       plugins: {
         ...(runConfig?.plugins || {}),
         workflow: workflowOptions,
@@ -1634,15 +1683,20 @@ export class SessionExecutionEngine {
     };
   }
 
-  _buildPluginRegisterApi({ manager = null, pluginName = "", options = {} } = {}) {
+  _buildPluginRegisterApi({ manager = null, pluginName = "", options = {}, runConfig = {} } = {}) {
     const hookManager = manager && typeof manager === "object" ? manager : null;
     const safePluginName = String(pluginName || "").trim();
     const safeOptions = options && typeof options === "object" ? options : {};
+    const policy = createPluginPolicyApi({
+      baseToolPolicy: runConfig?.toolPolicy,
+      normalizeStringArray: (input) => this._normalizeStringArray(input),
+    });
     return {
       hookManager,
       hooks: hookManager,
       botHookManager: hookManager,
       botHooks: hookManager,
+      policy,
       runtime: {
         plugin: safePluginName,
         options: safeOptions,

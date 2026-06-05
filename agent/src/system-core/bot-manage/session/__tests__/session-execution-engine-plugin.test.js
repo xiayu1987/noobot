@@ -81,6 +81,51 @@ test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", 
   assert.equal(prepared.plugins.harness.capabilityModelInvoker, explicitInvoker);
 });
 
+test("SessionExecutionEngine harness plugin does not force-inject denyToolNames by default", () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: {
+      plugins: {
+        harness: { enabled: true, mode: "on" },
+      },
+    },
+  });
+
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["harness"],
+      plugins: {
+        harness: { enabled: true, mode: "on" },
+      },
+    },
+  });
+
+  assert.equal(prepared?.plugins?.harness?.enabled, true);
+  assert.equal(prepared?.toolPolicy, undefined);
+});
+
+test("SessionExecutionEngine harness plugin can inject denyToolNames from harness options", () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: {
+      plugins: {
+        harness: { enabled: true, mode: "on", denyToolNames: ["plan_multi_task_collaboration"] },
+      },
+    },
+  });
+
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["harness"],
+      plugins: {
+        harness: { enabled: true, mode: "on" },
+      },
+    },
+  });
+
+  assert.deepEqual(prepared?.toolPolicy?.denyToolNames, ["plan_multi_task_collaboration"]);
+});
+
 test("SessionExecutionEngine deep-merges plugin step model config", async () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
@@ -440,4 +485,118 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
     },
     { role: "assistant", content: "normal response", summarized: false },
   ]);
+});
+
+test("SessionExecutionEngine workflow plugin injects unified denyToolNames policy", () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: {
+      plugins: {
+        workflow: { enabled: true, mode: "on" },
+      },
+    },
+  });
+  const prepared = engine._prepareWorkflowRunConfig({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["workflow"],
+      toolPolicy: {
+        mode: "append_custom",
+      },
+      plugins: {
+        workflow: { enabled: true, mode: "on" },
+      },
+    },
+    userConfig: {},
+  });
+
+  assert.equal(prepared?.plugins?.workflow?.enabled, true);
+  assert.equal(prepared?.plugins?.workflow?.mode, "on");
+  assert.equal(prepared?.toolPolicy?.mode, "append_custom");
+  assert.deepEqual(prepared?.toolPolicy?.denyToolNames, [
+    "delegate_task_async",
+    "wait_async_task_result",
+    "plan_multi_task_collaboration",
+  ]);
+});
+
+test("SessionExecutionEngine workflow plugin merges existing denyToolNames", () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: {
+      plugins: {
+        workflow: { enabled: true, mode: "on" },
+      },
+    },
+  });
+  const prepared = engine._prepareWorkflowRunConfig({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["workflow"],
+      toolPolicy: {
+        denyToolNames: ["request_help", "delegate_task_async"],
+      },
+      plugins: {
+        workflow: { enabled: true, mode: "on" },
+      },
+    },
+    userConfig: {},
+  });
+
+  assert.deepEqual(prepared?.toolPolicy?.denyToolNames, [
+    "request_help",
+    "delegate_task_async",
+    "wait_async_task_result",
+    "plan_multi_task_collaboration",
+  ]);
+});
+
+test("SessionExecutionEngine workflow plugin denyToolNames comes from workflow plugin options", () => {
+  const engine = new SessionExecutionEngine({
+    globalConfig: {
+      plugins: {
+        workflow: {
+          enabled: true,
+          mode: "on",
+          denyToolNames: ["request_help"],
+        },
+      },
+    },
+  });
+  const prepared = engine._prepareWorkflowRunConfig({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["workflow"],
+      plugins: {
+        workflow: { enabled: true, mode: "on" },
+      },
+    },
+    userConfig: {},
+  });
+
+  assert.deepEqual(prepared?.toolPolicy?.denyToolNames, ["request_help"]);
+});
+
+test("SessionExecutionEngine plugin register api exposes unified policy helpers", () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const pluginApi = engine._buildPluginRegisterApi({
+    manager: { on: () => () => {} },
+    pluginName: "workflow",
+    options: { enabled: true, mode: "on" },
+    runConfig: {
+      toolPolicy: {
+        mode: "append_custom",
+      },
+    },
+  });
+
+  assert.equal(typeof pluginApi?.policy?.appendDenyToolNames, "function");
+  assert.equal(typeof pluginApi?.policy?.setToolPolicy, "function");
+  assert.equal(typeof pluginApi?.policy?.getToolPolicy, "function");
+
+  pluginApi.policy.appendDenyToolNames(["delegate_task_async"]);
+  pluginApi.policy.setToolPolicy({ forceIncludeUserInteraction: false });
+  const toolPolicy = pluginApi.policy.getToolPolicy();
+
+  assert.equal(toolPolicy?.mode, "append_custom");
+  assert.equal(toolPolicy?.forceIncludeUserInteraction, false);
+  assert.deepEqual(toolPolicy?.denyToolNames, ["delegate_task_async"]);
 });
