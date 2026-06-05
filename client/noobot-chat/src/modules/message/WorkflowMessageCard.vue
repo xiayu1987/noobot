@@ -15,7 +15,6 @@ import ChatMessageItem from "./ChatMessageItem.vue";
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   userId: { type: String, default: "" },
-  apiKey: { type: String, default: "" },
   authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -419,7 +418,6 @@ function buildNodeViewMessage(messageItem = {}) {
   return normalizeNodeMessageForDisplay(
     buildViewMessage(messageItem, {
       userId: props.userId,
-      apiKey: props.apiKey,
       isImageMime: props.isImageMime,
     }),
   );
@@ -608,7 +606,6 @@ function handleSelectedDialogUpdate(dialogId = "") {
           :all-messages="rawNodeSessionMessages"
           :session-docs="[]"
           :user-id="userId"
-          :api-key="apiKey"
           :auth-fetch="authFetch"
           :render-markdown="renderMarkdown"
           :format-time="formatTime"

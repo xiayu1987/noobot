@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import { AttachmentService } from "../../../src/system-core/attach/service/attachment-service.js";
 import {
@@ -52,6 +52,84 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
     assert.equal(loaded.attachmentId, saved[0].attachmentId);
     assert.equal(loaded.size, Buffer.from("hello-attach", "utf8").length);
     assert.ok(String(loaded.absolutePath).includes(path.join("runtime", "attach", "scoped", "s1", "user")));
+  });
+});
+
+test("AttachmentService.linkParsedResultToAttachment syncs runtime and workflow snapshots", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const userId = "u1";
+    const rootSessionId = "root_s1";
+    const workflowDialogId = "wf_d1";
+    const sourceContent = Buffer.from("source-attach", "utf8").toString("base64");
+    const parsedContent = Buffer.from("# parsed", "utf8").toString("base64");
+
+    const [sourceAttachment] = await service.ingest({
+      userId,
+      sessionId: rootSessionId,
+      attachmentSource: "user",
+      attachments: [{ name: "raw.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", contentBase64: sourceContent }],
+    });
+    const [parsedAttachment] = await service.ingestGeneratedArtifacts({
+      userId,
+      sessionId: "node_child_s1",
+      attachmentSource: "model",
+      artifacts: [{ name: "raw.md", mimeType: "text/markdown", contentBase64: parsedContent }],
+    });
+
+    const basePath = path.join(workspaceRoot, userId);
+    const runtimeSessionFile = path.join(basePath, "runtime/session", rootSessionId, "session.json");
+    const workflowSessionFile = path.join(
+      basePath,
+      "runtime/workflow/session",
+      rootSessionId,
+      workflowDialogId,
+      "session.json",
+    );
+    const snapshotPayload = {
+      sessionId: rootSessionId,
+      messages: [
+        {
+          role: "user",
+          content: "test",
+          attachmentMetas: [
+            {
+              attachmentId: sourceAttachment.attachmentId,
+              path: sourceAttachment.path,
+              relativePath: sourceAttachment.relativePath,
+              sessionId: sourceAttachment.sessionId,
+              attachmentSource: sourceAttachment.attachmentSource,
+            },
+          ],
+        },
+      ],
+    };
+    await mkdir(path.dirname(runtimeSessionFile), { recursive: true });
+    await writeFile(runtimeSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
+    await mkdir(path.dirname(workflowSessionFile), { recursive: true });
+    await writeFile(workflowSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
+
+    const linked = await service.linkParsedResultToAttachment({
+      userId,
+      sourceAttachmentId: sourceAttachment.attachmentId,
+      parsedAttachmentMeta: parsedAttachment,
+      toolName: "doc_to_data",
+      sourceSessionId: rootSessionId,
+      sourceAttachmentSource: "user",
+      sourceAttachmentPath: sourceAttachment.path,
+    });
+
+    assert.ok(linked);
+    assert.equal(linked.parsedResultAttachmentId, parsedAttachment.attachmentId);
+
+    const runtimeSnapshot = JSON.parse(await readFile(runtimeSessionFile, "utf8"));
+    const workflowSnapshot = JSON.parse(await readFile(workflowSessionFile, "utf8"));
+    const runtimeAttachment = runtimeSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
+    const workflowAttachment = workflowSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
+    assert.equal(runtimeAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
+    assert.equal(workflowAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
+    assert.equal(runtimeAttachment.parsedResultTool, "doc_to_data");
+    assert.equal(workflowAttachment.parsedResultTool, "doc_to_data");
   });
 });
 

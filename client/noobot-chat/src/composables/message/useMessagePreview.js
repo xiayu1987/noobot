@@ -148,7 +148,6 @@ async function handleCopyMarkdown({ textContent, renderMarkdown, translate, noti
 
 export function useMessagePreview({
   userId = "",
-  apiKey = "",
   authFetch = null,
   isImageMime = () => false,
   renderMarkdown = () => "",
@@ -177,6 +176,7 @@ export function useMessagePreview({
     error: ref(""),
     textContent: ref(""),
   };
+  let attachmentObjectUrl = "";
 
   function cleanupPreviewImageUrl() {
     if (!filePreview.imageUrl.value) return;
@@ -195,6 +195,10 @@ export function useMessagePreview({
   }
 
   function resetAttachmentPreviewState() {
+    if (attachmentObjectUrl) {
+      URL.revokeObjectURL(attachmentObjectUrl);
+      attachmentObjectUrl = "";
+    }
     attachmentPreview.visible.value = false;
     attachmentPreview.type.value = "";
     attachmentPreview.url.value = "";
@@ -210,7 +214,6 @@ export function useMessagePreview({
         buildAttachmentUrl({
           userId: String(userId || "").trim(),
           attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-          apiKey: String(apiKey || "").trim(),
           sessionId: String(attachmentItem?.sessionId || "").trim(),
           attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
         }) || "",
@@ -381,6 +384,7 @@ export function useMessagePreview({
   }
 
   async function openAttachmentPreview(attachmentItem = {}) {
+    resetAttachmentPreviewState();
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
     const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
@@ -393,13 +397,24 @@ export function useMessagePreview({
     const isVideo = !officeLike && mimeType.startsWith("video/");
     const isAudio = !officeLike && isAudioPreviewMime(mimeType);
     if (isImage || isVideo || isAudio) {
-      attachmentPreview.type.value = isImage ? "image" : isVideo ? "video" : "audio";
-      attachmentPreview.url.value = targetUrl;
-      attachmentPreview.name.value = name;
-      attachmentPreview.error.value = "";
-      attachmentPreview.textContent.value = "";
-      attachmentPreview.loading.value = false;
       attachmentPreview.visible.value = true;
+      attachmentPreview.loading.value = true;
+      attachmentPreview.type.value = isImage ? "image" : isVideo ? "video" : "audio";
+      attachmentPreview.name.value = name;
+      try {
+        const runFetch = authFetch || fetch;
+        const response = await runFetch(targetUrl);
+        if (!response?.ok) {
+          throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
+        }
+        const blob = await response.blob();
+        attachmentObjectUrl = URL.createObjectURL(blob);
+        attachmentPreview.url.value = attachmentObjectUrl;
+      } catch (error) {
+        attachmentPreview.error.value = error?.message || translate("message.attachmentPreviewFailed");
+      } finally {
+        attachmentPreview.loading.value = false;
+      }
       return;
     }
     const markdownMode = officeLike

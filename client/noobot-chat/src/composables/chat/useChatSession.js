@@ -155,7 +155,6 @@ export function useChatSession({
     return reactive(
       buildViewMessage(messageItem, {
         userId: userId.value,
-        apiKey: apiKey.value,
         isImageMime,
       }),
     );

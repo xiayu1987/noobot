@@ -794,7 +794,6 @@ const drawerPanels = computed(() => [
         :active-session="activeSession || {}"
         :should-render-message-in-chat="shouldRenderMessageInChat"
         :user-id="userId"
-        :api-key="apiKey"
         :auth-fetch="authFetch"
         :render-markdown="renderMarkdown"
         :format-time="formatTime"
