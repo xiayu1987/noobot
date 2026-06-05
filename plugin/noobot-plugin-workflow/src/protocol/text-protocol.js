@@ -46,6 +46,16 @@ function parseAttrs(tokens = []) {
   return attrs;
 }
 
+function parseAttachmentRefs(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+  if (["none", "null", "[]"].includes(raw.toLowerCase())) return [];
+  return raw
+    .split(/[,;，；]/)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
 function toStateType(value = "") {
   const key = String(value || "").trim().toLowerCase();
   if (key === "start") return 0;
@@ -75,6 +85,8 @@ export function parseWorkflowDslText(text = "") {
     .filter((item) => item.text && !item.text.startsWith("#") && !item.text.startsWith("//"));
 
   const semantic = { nodes: [], flowtos: [], autoActions: [] };
+  const attachmentDeclarations = [];
+  const attachmentMap = {};
   const nodeSet = new Set();
   let edgeIndex = 0;
   let headerSeen = false;
@@ -95,6 +107,24 @@ export function parseWorkflowDslText(text = "") {
     }
     if (head === DSL_PROTOCOL.CMD_END) break;
 
+    if (head === DSL_PROTOCOL.CMD_ATTACHMENT) {
+      const attrs = parseAttrs(tokens.slice(1));
+      const id = String(attrs.id || attrs.attachmentId || "").trim();
+      if (!id) fail(lineNo, "ATTACHMENT requires id=<id>");
+      if (attachmentMap[id]) fail(lineNo, `duplicate ATTACHMENT id: ${id}`);
+      const attachment = {
+        id,
+        attachmentId: String(attrs.attachmentId || id).trim(),
+        name: String(attrs.name || attrs.fileName || id).trim(),
+        path: String(attrs.path || "").trim(),
+        relativePath: String(attrs.relativePath || attrs.relative || "").trim(),
+        mimeType: String(attrs.mimeType || attrs.type || "").trim(),
+      };
+      attachmentDeclarations.push(attachment);
+      attachmentMap[id] = attachment;
+      continue;
+    }
+
     if (head === DSL_PROTOCOL.CMD_NODE) {
       const attrs = parseAttrs(tokens.slice(1));
       const id = String(attrs.id || "").trim();
@@ -109,12 +139,16 @@ export function parseWorkflowDslText(text = "") {
       const task = String(
         attrs.task || attrs.taskText || attrs.instruction || attrs.mission || "",
       ).trim();
+      const attachments = parseAttachmentRefs(
+        attrs.attachments || attrs.inputAttachments || attrs.attachmentIds || attrs.files || "",
+      );
       semantic.nodes.push({
         id,
         name: name || id,
         type,
         stateType: toStateType(attrs.stateType || attrs.state || ""),
         ...(task ? { task } : {}),
+        ...(attachments.length ? { attachments } : {}),
       });
       continue;
     }
@@ -157,6 +191,11 @@ export function parseWorkflowDslText(text = "") {
 
   if (!semantic.nodes.length) throw new Error(dslError(DSL_ERROR_MESSAGE.NO_NODE));
   if (!semantic.flowtos.length) throw new Error(dslError(DSL_ERROR_MESSAGE.NO_EDGE));
+
+  if (attachmentDeclarations.length) {
+    semantic.attachments = attachmentDeclarations;
+    semantic.attachmentMap = attachmentMap;
+  }
 
   for (const edge of semantic.flowtos) {
     if (!nodeSet.has(edge.from) || !nodeSet.has(edge.to)) {

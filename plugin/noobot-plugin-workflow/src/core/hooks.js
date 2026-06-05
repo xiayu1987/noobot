@@ -70,6 +70,85 @@ function mergeAttachmentMetas(existing = [], incoming = []) {
   return merged;
 }
 
+function resolveWorkflowInputAttachmentMetas(ctx = {}) {
+  const candidates = [
+    ctx?.attachmentMetas,
+    ctx?.userMessageAttachmentMetas,
+    ctx?.agentContext?.session?.current?.attachments,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length) return candidate;
+  }
+  return [];
+}
+
+function normalizeAttachmentRefs(input = []) {
+  const source = Array.isArray(input) ? input : String(input || "").split(/[,;，；]/);
+  return source.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function isAllUserAttachmentRef(ref = "") {
+  const normalized = String(ref || "").trim().toLowerCase();
+  return ["*", "all", "user:*", "user:all", "用户:*", "用户:全部"].includes(normalized);
+}
+
+function resolveSemanticAttachmentDeclarationMap(semantic = {}) {
+  if (semantic?.attachmentMap && typeof semantic.attachmentMap === "object") {
+    return semantic.attachmentMap;
+  }
+  const map = {};
+  for (const item of Array.isArray(semantic?.attachments) ? semantic.attachments : []) {
+    const id = String(item?.id || item?.attachmentId || "").trim();
+    if (!id) continue;
+    map[id] = item;
+  }
+  return map;
+}
+
+function resolveNodeInputAttachmentMetas({ ctx = {}, semanticNode = {}, semantic = {} } = {}) {
+  const userAttachmentMetas = resolveWorkflowInputAttachmentMetas(ctx);
+  if (!userAttachmentMetas.length) return [];
+  const refs = normalizeAttachmentRefs(
+    semanticNode?.attachments || semanticNode?.inputAttachments || semanticNode?.attachmentIds || [],
+  );
+  if (!refs.length) return [];
+  if (refs.some(isAllUserAttachmentRef)) return userAttachmentMetas;
+  const semanticAttachmentMap = resolveSemanticAttachmentDeclarationMap(semantic);
+  const expandedRefs = refs.flatMap((ref) => {
+    const normalizedRef = String(ref || "").trim();
+    const declared = semanticAttachmentMap[normalizedRef] || null;
+    if (!declared || typeof declared !== "object") return [normalizedRef];
+    return [
+      normalizedRef,
+      declared?.id,
+      declared?.attachmentId,
+      declared?.name,
+      declared?.fileName,
+      declared?.path,
+      declared?.relativePath,
+    ];
+  });
+  const refSet = new Set(expandedRefs.map((item) => String(item || "").trim()).filter(Boolean));
+  if (!refSet.size) return [];
+  return userAttachmentMetas.filter((meta = {}) => {
+    const keys = [
+      meta?.attachmentId,
+      meta?.id,
+      meta?.name,
+      meta?.fileName,
+      meta?.path,
+      meta?.relativePath,
+      resolveAttachmentDisplayPath(meta, ctx),
+      meta?.parsedResultAttachmentId,
+      meta?.parsedResultPath,
+      meta?.parsedResultRelativePath,
+    ]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+    return keys.some((key) => refSet.has(key));
+  });
+}
+
 function sanitizeArtifactFileNamePart(input = "", fallback = "result") {
   const normalized = String(input || "")
     .trim()
@@ -147,6 +226,62 @@ function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx =
     .filter(Boolean);
   if (!lines.length) return "";
   return ["", "## 工作流节点结果附件", "", ...lines].join("\n");
+}
+
+function buildWorkflowInputAttachmentPlanningBlock(attachmentMetas = [], ctx = {}) {
+  const lines = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+    .map((item = {}, index) => {
+      const attachmentId = String(item?.attachmentId || item?.id || "").trim();
+      const name = String(item?.name || item?.fileName || `附件${index + 1}`).trim();
+      const mimeType = String(item?.mimeType || "").trim();
+      const path = resolveAttachmentDisplayPath(item, ctx);
+      const parts = [
+        attachmentId ? `attachmentId=${attachmentId}` : "",
+        name ? `name=${name}` : "",
+        mimeType ? `mimeType=${mimeType}` : "",
+        path ? `path=${path}` : "",
+      ].filter(Boolean);
+      return parts.length ? `- ${parts.join("; ")}` : "";
+    })
+    .filter(Boolean);
+  if (!lines.length) return "";
+  return [
+    "用户附件:",
+    ...lines,
+    "",
+    "规划工作流时，如果某个 action 节点需要使用用户附件，请先在 DSL 中输出 ATTACHMENT 映射行，再在该 NODE 上添加 attachments 字段引用附件 id。",
+    "ATTACHMENT 格式：ATTACHMENT id=\"attachmentId\" name=\"附件名\" path=\"可读路径\" mimeType=\"MIME\"。",
+    "可用格式：attachments=\"user:*\" 表示使用全部用户附件；attachments=\"attachmentId1,attachmentId2\" 表示使用指定附件。",
+    "不要把附件路径硬编码进 task；task 只描述任务，附件 id/path 映射写 ATTACHMENT，节点依赖只写 attachments。",
+  ].join("\n");
+}
+
+function buildWorkflowInputAttachmentSystemMessage({
+  ctx = {},
+  attachmentMetas = [],
+  semanticNode = {},
+} = {}) {
+  const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  const lines = metas
+    .map((item = {}, index) => {
+      const label = String(item?.name || item?.fileName || `附件${index + 1}`).trim();
+      const attachmentId = String(item?.attachmentId || item?.id || "").trim();
+      const path = resolveAttachmentDisplayPath(item, ctx);
+      if (!path && !attachmentId) return "";
+      return `- ${label}${attachmentId ? ` (${attachmentId})` : ""}: ${path || attachmentId}`;
+    })
+    .filter(Boolean);
+  if (!lines.length) return "";
+  const nodeName = String(semanticNode?.name || semanticNode?.id || "当前节点").trim();
+  return [
+    "# 用户原始附件",
+    "",
+    `当前节点：${nodeName}`,
+    "",
+    "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。执行任务时请按需读取/参考这些附件。",
+    "",
+    ...lines,
+  ].join("\n");
 }
 
 function buildWorkflowUpstreamAttachmentResults({
@@ -587,10 +722,19 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
   }
   const userMessage = String(ctx?.userMessage || "").trim();
   const locale = String(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE).trim();
+  const userAttachmentMetas = resolveWorkflowInputAttachmentMetas(ctx);
+  const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachmentMetas, ctx);
   const semanticMessages = [
     {
       role: "user",
-      content: `用户输入:\n${userMessage || "(empty)"}\n\n主模型回复:\n${sourceText || "(empty)"}`,
+      content: [
+        `用户输入:\n${userMessage || "(empty)"}`,
+        attachmentPlanningBlock,
+        `主模型回复:\n${sourceText || "(empty)"}`,
+      ]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .join("\n\n"),
     },
   ];
   const result = await options.capabilityModelInvoker({
@@ -700,6 +844,12 @@ async function runNodeAgent({
       nodeName: String(pendingStep?.nodeName || "").trim(),
     },
   });
+  const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
+  const nodeInputAttachmentMetas = resolveNodeInputAttachmentMetas({
+    ctx,
+    semanticNode,
+    semantic,
+  });
   const hookPayload = {
     ...ctx,
     workflow: {
@@ -707,6 +857,7 @@ async function runNodeAgent({
       pendingStep,
       transition,
       semantic,
+      semanticNode,
     },
     agentInstruction: buildWorkflowNodeInstruction({
       ...pendingStep,
@@ -714,20 +865,28 @@ async function runNodeAgent({
     }),
     proposedAction: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
   };
+  const inputAttachmentSystemMessage = buildWorkflowInputAttachmentSystemMessage({
+    ctx,
+    attachmentMetas: nodeInputAttachmentMetas,
+    semanticNode,
+  });
   const upstreamAttachmentSystemMessage = buildWorkflowUpstreamAttachmentSystemMessage({
     options,
     ctx,
     pendingStep,
     upstreamNodeResults,
   });
-  const subSessionSystemMessages = upstreamAttachmentSystemMessage
-    ? [upstreamAttachmentSystemMessage]
-    : [];
+  const subSessionSystemMessages = [
+    inputAttachmentSystemMessage,
+    upstreamAttachmentSystemMessage,
+  ].filter(Boolean);
   hookPayload.workflow.upstreamNodeResults = upstreamNodeResults;
   hookPayload.workflow.upstreamAttachmentMetas = upstreamNodeResults.reduce(
     (acc, item = {}) => mergeAttachmentMetas(acc, item?.attachmentMetas || []),
     [],
   );
+  hookPayload.workflow.inputAttachmentMetas = nodeInputAttachmentMetas;
+  hookPayload.workflow.inputAttachmentSystemMessage = inputAttachmentSystemMessage;
   hookPayload.workflow.upstreamAttachmentSystemMessage = upstreamAttachmentSystemMessage;
   let subSession = null;
   let subSessionFailure = null;
@@ -771,6 +930,7 @@ async function runNodeAgent({
         options.subSessionRunner({
           parentContext: ctx,
           message: hookPayload.agentInstruction,
+          attachmentMetas: nodeInputAttachmentMetas,
           runConfigPatch: subSessionRunConfigPatch,
           systemMessages: subSessionSystemMessages,
           eventListener:
@@ -792,6 +952,10 @@ async function runNodeAgent({
             transition: Number(transition || 0),
             workflowSessionId: String(ctx?.sessionId || "").trim(),
             workflowDialogId: nodeDialogId,
+            inputAttachmentRefs: normalizeAttachmentRefs(
+              semanticNode?.attachments || semanticNode?.inputAttachments || semanticNode?.attachmentIds || [],
+            ),
+            inputAttachmentMetas: nodeInputAttachmentMetas,
             upstreamWorkflowNodeResults: upstreamNodeResults,
           },
         }),
