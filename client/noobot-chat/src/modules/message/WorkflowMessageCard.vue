@@ -720,26 +720,24 @@ function handleSelectedDialogUpdate(dialogId = "") {
   font-size: 13px;
 }
 
-:deep(.workflow-node-session-drawer .el-drawer__body) {
-  padding-top: 10px;
-  background: var(--noobot-msg-assistant-bg);
-}
-
-:deep(.workflow-node-session-drawer .el-drawer) {
-  background: var(--noobot-msg-assistant-bg) !important;
-  border-left: 1px solid var(--noobot-msg-assistant-border) !important;
-}
-
-:deep(.workflow-node-session-drawer .el-drawer__header) {
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #e5e7eb 6%) !important;
-  border-bottom: 1px solid var(--noobot-msg-assistant-border) !important;
-}
-
 :deep(.workflow-node-chat-item.msg-wrapper) {
   margin-bottom: 12px;
 }
 
 :deep(.workflow-node-chat-item .msg-content) {
   max-width: 100%;
+}
+</style>
+
+<style>
+.workflow-node-session-drawer {
+  --noobot-panel-bg: var(--noobot-msg-assistant-bg);
+  --noobot-panel-border: var(--noobot-msg-assistant-border);
+  --noobot-panel-head-bg: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #e5e7eb 6%);
+}
+
+.workflow-node-session-drawer .el-drawer__body {
+  padding-top: 10px;
+  background: var(--noobot-panel-bg);
 }
 </style>
