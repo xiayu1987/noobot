@@ -33,7 +33,7 @@ test("createPluginPolicyApi appends deny tool names without dropping base policy
   const policyApi = createPluginPolicyApi({
     baseToolPolicy: {
       mode: "append_custom",
-      allowToolNames: ["wait"],
+      allowToolNames: ["read_file"],
     },
     normalizeStringArray,
   });
@@ -41,7 +41,7 @@ test("createPluginPolicyApi appends deny tool names without dropping base policy
   const merged = policyApi.getToolPolicy();
 
   assert.equal(merged.mode, "append_custom");
-  assert.deepEqual(merged.allowToolNames, ["wait"]);
+  assert.deepEqual(merged.allowToolNames, ["read_file"]);
   assert.deepEqual(merged.denyToolNames, ["delegate_task_async"]);
 });
 

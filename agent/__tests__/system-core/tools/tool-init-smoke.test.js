@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createWaitTool } from "../../../src/system-core/tools/workflow/wait-tool.js";
 import { createContentProcessTool } from "../../../src/system-core/tools/data-processing/content-process-tool.js";
 import { createModelTool } from "../../../src/system-core/tools/ai-models/model-tool.js";
 import { createServiceTool } from "../../../src/system-core/tools/execution/service-tool.js";
 import { createConnectorAccessTool } from "../../../src/system-core/tools/connectors/connector-access-tool.js";
+import { createFileTool } from "../../../src/system-core/tools/execution/file-tool.js";
 
 function buildAgentContext(runtime = {}) {
   return {
@@ -25,8 +25,9 @@ function buildAgentContext(runtime = {}) {
 }
 
 test("工具初始化 smoke: workflow/data-processing/ai/execution/connectors", async () => {
-  const waitTools = createWaitTool(buildAgentContext());
-  assert.equal(waitTools[0]?.name, "wait");
+  const fileTools = createFileTool(buildAgentContext());
+  assert.equal(fileTools[0]?.name, "read_file");
+  assert.equal(fileTools[1]?.name, "write_file");
 
   const contentTools = createContentProcessTool(buildAgentContext());
   assert.equal(contentTools[0]?.name, "process_content_task");

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { createFileTool } from "./execution/file-tool.js";
-import { createWaitTool } from "./workflow/wait-tool.js";
 import { createScriptTool } from "./execution/script-tool.js";
 import { createSkillTool } from "./execution/skill-tool.js";
 import { createContentProcessTool } from "./data-processing/content-process-tool.js";
@@ -101,7 +100,6 @@ function normalizeToolName(toolDefinition = {}) {
 const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.READ_FILE]: [TOOL_NAME.READ_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
   [TOOL_NAME.WRITE_FILE]: [TOOL_NAME.WRITE_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
-  [TOOL_NAME.WAIT]: [TOOL_NAME.WAIT],
   [TOOL_NAME.EXECUTE_SCRIPT]: [TOOL_NAME.EXECUTE_SCRIPT],
   [TOOL_NAME.LIST_SKILLS]: [TOOL_NAME.LIST_SKILLS, TOOL_CONFIG_ALIAS_KEY.SKILL],
   [TOOL_NAME.SET_SKILL_TASK]: [TOOL_NAME.SET_SKILL_TASK, TOOL_CONFIG_ALIAS_KEY.SKILL],
@@ -212,7 +210,6 @@ async function buildToolsDefault(ctx) {
     effectiveConfig,
   );
   const baseTools = [
-    ...createWaitTool(ctx),
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
     ...createSkillTool(ctx),
