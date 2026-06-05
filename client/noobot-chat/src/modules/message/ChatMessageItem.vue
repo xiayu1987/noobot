@@ -25,6 +25,7 @@ const props = defineProps({
   allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
+  apiKey: { type: String, default: "" },
   authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -62,6 +63,7 @@ const {
   onCopyMessageMarkdownText,
 } = useMessagePreview({
   userId: props.userId,
+  apiKey: props.apiKey,
   authFetch: props.authFetch,
   isImageMime: props.isImageMime,
   renderMarkdown: props.renderMarkdown,
@@ -135,6 +137,7 @@ async function handleCopyAssistantMessageText() {
           v-if="messageItem.workflowMessage === true"
           :message-item="messageItem"
           :user-id="userId"
+          :api-key="apiKey"
           :auth-fetch="authFetch"
           :render-markdown="renderMarkdown"
           :format-time="formatTime"
