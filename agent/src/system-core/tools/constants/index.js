@@ -50,7 +50,6 @@ export const CONNECTOR_TYPE = Object.freeze({
 export const TOOL_NAME = Object.freeze({
   READ_FILE: "read_file",
   WRITE_FILE: "write_file",
-  WAIT: "wait",
   EXECUTE_SCRIPT: "execute_script",
   LIST_SKILLS: "list_skills",
   SET_SKILL_TASK: "set_skill_task",

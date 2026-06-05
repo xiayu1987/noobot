@@ -62,7 +62,7 @@ test("adaptToolsForBinding downgrades strict when call_service is present", () =
 });
 
 test("adaptToolsForBinding defaults tool_choice to auto when tools exist", () => {
-  const adapted = adaptToolsForBinding([{ name: "wait" }], {
+  const adapted = adaptToolsForBinding([{ name: "read_file" }], {
     activeModelName: "gpt-4o-mini",
     activeModelAlias: "default",
     globalConfig: {},
@@ -73,7 +73,7 @@ test("adaptToolsForBinding defaults tool_choice to auto when tools exist", () =>
 });
 
 test("adaptToolsForBinding keeps tool_choice as auto even when runtime marks required unsupported", () => {
-  const adapted = adaptToolsForBinding([{ name: "wait" }], {
+  const adapted = adaptToolsForBinding([{ name: "read_file" }], {
     activeModelName: "gpt-4o-mini",
     activeModelAlias: "default",
     runtime: {

@@ -25,7 +25,6 @@ test("buildTools: 重组后应注册关键工具", async () => {
   const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
 
   const expected = [
-    "wait",
     "read_file",
     "write_file",
     "call_service",
@@ -51,7 +50,6 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
     createContext({
       globalConfig: {
         tools: {
-          wait: { enabled: false },
           service: { enabled: false },
           model: { enabled: false },
           process_content_task: { enabled: false },
@@ -66,7 +64,6 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
   const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
 
   const shouldBeDisabled = [
-    "wait",
     "call_service",
     "switch_model",
     "process_content_task",
