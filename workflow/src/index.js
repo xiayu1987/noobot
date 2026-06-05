@@ -11,6 +11,8 @@ import {
   executeWorkflowSemantic,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,
+  resolveWorkflowUpstreamActionNodes,
+  resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
 } from "./lib/runtime.js";
@@ -22,6 +24,8 @@ export {
   executeWorkflowSemantic,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,
+  resolveWorkflowUpstreamActionNodes,
+  resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
 };
@@ -33,6 +37,8 @@ export default {
   executeWorkflowSemantic,
   startWorkflowInstanceById,
   getWorkflowInstanceSnapshot,
+  resolveWorkflowUpstreamActionNodes,
+  resolveWorkflowUpstreamActionSteps,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
 };

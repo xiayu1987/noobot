@@ -14,7 +14,6 @@ import SubmitAction from '../src/engine/bizinst/action/submit-action.js';
 import NextAddStepAction from '../src/engine/bizinst/action/next-add-step-action.js';
 import BizinstTreeControlCenter from '../src/engine/bizinstcontrolcenter/bizinst-tree-control-center.js';
 import CantFlowException from '../src/engine/exception/cant-flow-exception.js';
-import FlowPolicyException from '../src/engine/exception/flow-policy-exception.js';
 import ECurrentStateSourceType from '../src/engine/bizinst/state/currentstate/enums/current-state-source-type.js';
 import EModelStateType from '../src/engine/bizinst/state/modelstate/enums/model-state-type.js';
 import ENodeType from '../src/design/model/node/enums/node-type.js';
@@ -23,6 +22,13 @@ import EActionNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/f
 import ECompositeNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/fschange/enums/composite-node-state-process-handle-way.js';
 import EStateNodeStateProcessHandleWay from '../src/engine/bizinst/state/proc/fschange/enums/state-node-state-process-handle-way.js';
 import EStopReason from '../src/engine/bizinstcontrolcenter/enums/stop-reason.js';
+import {
+  advanceWorkflowInstanceById,
+  releaseWorkflowInstance,
+  resolveWorkflowUpstreamActionNodes,
+  resolveWorkflowUpstreamActionSteps,
+  startWorkflowInstanceById,
+} from '../src/lib/runtime.js';
 import {
   buildSimpleModel,
   buildActionModel,
@@ -144,7 +150,7 @@ test('model-change action: next-add-step appends a new step and replaces current
   assert.notEqual(currentSteps[0], oldCurrentStep);
 });
 
-test('branching action model: submit throws FlowPolicyException on multiple valid flowtos', () => {
+test('branching action model: submit fans out to multiple outgoing action steps', () => {
   const business = new Business();
   const model = buildBranchingActionModel();
   const controlCenter = new BizinstTreeControlCenter();
@@ -156,9 +162,9 @@ test('branching action model: submit throws FlowPolicyException on multiple vali
   assert.ok(currentStep);
 
   const submitAction = new SubmitAction();
-  assert.throws(() => {
-    controlCenter.execAction(submitAction, bizinst, currentStep, treeRecord);
-  }, (err) => err instanceof FlowPolicyException);
+  controlCenter.execAction(submitAction, bizinst, currentStep, treeRecord);
+  const currentSteps = bizinst.getState().getCurrentState().getCurrentStepStates();
+  assert.equal(currentSteps.length, 0);
 });
 
 test('complex flow: two-action chain supports submit/back/submit and reaches end', () => {
@@ -367,6 +373,128 @@ test('composite flow: parent starts child bizinst and child sub-flow reaches its
   const actionRecords = treeRecord.getActionRecords();
   assert.equal(actionRecords.length, 1);
   assert.equal(actionRecords[0].getProcessRecords().length, 2);
+});
+
+test('runtime relation API resolves nearest upstream action nodes across branch and merge states', () => {
+  const semantic = {
+    nodes: [
+      { id: 'start', type: 'state', stateType: 0, name: '开始' },
+      { id: 'a', type: 'action', name: '节点A' },
+      { id: 'branch', type: 'state', stateType: 2, name: '并发分叉' },
+      { id: 'b', type: 'action', name: '节点B' },
+      { id: 'c', type: 'action', name: '节点C' },
+      { id: 'merge', type: 'state', stateType: 3, name: '汇聚' },
+      { id: 'd', type: 'action', name: '节点D' },
+      { id: 'branch2', type: 'state', stateType: 2, name: '汇聚后并发分叉' },
+      { id: 'e', type: 'action', name: '节点E' },
+      { id: 'f', type: 'action', name: '节点F' },
+      { id: 'end', type: 'state', stateType: 1, name: '结束' },
+    ],
+    flowtos: [
+      { from: 'start', to: 'a' },
+      { from: 'a', to: 'branch' },
+      { from: 'branch', to: 'b' },
+      { from: 'branch', to: 'c' },
+      { from: 'b', to: 'merge' },
+      { from: 'c', to: 'merge' },
+      { from: 'merge', to: 'd' },
+      { from: 'd', to: 'end' },
+      { from: 'merge', to: 'branch2' },
+      { from: 'branch2', to: 'e' },
+      { from: 'branch2', to: 'f' },
+      { from: 'e', to: 'end' },
+      { from: 'f', to: 'end' },
+    ],
+  };
+
+  assert.deepEqual(
+    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: 'b' }).map((node) => node.nodeId),
+    ['a'],
+  );
+  assert.deepEqual(
+    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: 'd' })
+      .map((node) => node.nodeId)
+      .sort(),
+    ['b', 'c'],
+  );
+  assert.deepEqual(
+    resolveWorkflowUpstreamActionNodes({ semantic, nodeId: 'e' })
+      .map((node) => node.nodeId)
+      .sort(),
+    ['b', 'c'],
+  );
+});
+
+test('runtime relation API resolves upstream action steps from actual runtime merge state', () => {
+  const semantic = {
+    nodes: [
+      { id: 'start', type: 'state', stateType: 0, name: '开始' },
+      { id: 'a', type: 'action', name: '节点A' },
+      { id: 'branch', type: 'state', stateType: 2, name: '并发分叉' },
+      { id: 'b', type: 'action', name: '节点B' },
+      { id: 'c', type: 'action', name: '节点C' },
+      { id: 'merge', type: 'state', stateType: 3, name: '汇聚' },
+      { id: 'branch2', type: 'state', stateType: 2, name: '汇聚后并发分叉' },
+      { id: 'd', type: 'action', name: '节点D' },
+      { id: 'e', type: 'action', name: '节点E' },
+      { id: 'end', type: 'state', stateType: 1, name: '结束' },
+    ],
+    flowtos: [
+      { from: 'start', to: 'a' },
+      { from: 'a', to: 'branch' },
+      { from: 'branch', to: 'b' },
+      { from: 'branch', to: 'c' },
+      { from: 'b', to: 'merge' },
+      { from: 'c', to: 'merge' },
+      { from: 'merge', to: 'branch2' },
+      { from: 'branch2', to: 'd' },
+      { from: 'branch2', to: 'e' },
+      { from: 'd', to: 'end' },
+      { from: 'e', to: 'end' },
+    ],
+  };
+  const instanceId = `test_runtime_steps_${Date.now()}`;
+  try {
+    let snapshot = startWorkflowInstanceById({ instanceId, semantic });
+    assert.deepEqual(snapshot.pendingSteps.map((step) => step.nodeId), ['a']);
+
+    snapshot = advanceWorkflowInstanceById({
+      instanceId,
+      action: { type: 'submit', stepIndex: 0 },
+    });
+    assert.deepEqual(
+      snapshot.pendingSteps.map((step) => step.nodeId).sort(),
+      ['b', 'c'],
+    );
+
+    snapshot = advanceWorkflowInstanceById({
+      instanceId,
+      action: { type: 'submit', stepIndex: 1 },
+    });
+    assert.deepEqual(snapshot.pendingSteps.map((step) => step.nodeId), ['b']);
+
+    snapshot = advanceWorkflowInstanceById({
+      instanceId,
+      action: { type: 'submit', stepIndex: 0 },
+    });
+    assert.deepEqual(
+      snapshot.pendingSteps.map((step) => step.nodeId).sort(),
+      ['d', 'e'],
+    );
+
+    const dStep = snapshot.pendingSteps.find((step) => step.nodeId === 'd');
+    const upstreamSteps = resolveWorkflowUpstreamActionSteps({
+      instanceId,
+      pendingStep: dStep,
+    });
+    assert.deepEqual(
+      upstreamSteps.map((step) => step.nodeId).sort(),
+      ['b', 'c'],
+    );
+    assert.equal(upstreamSteps.every((step) => String(step.stepId || '').trim()), true);
+  } finally {
+    releaseWorkflowInstance({ instanceId });
+  }
 });
 
 test('node type: provides readable name and description', () => {

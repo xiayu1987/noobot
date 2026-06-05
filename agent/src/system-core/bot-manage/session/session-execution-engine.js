@@ -749,6 +749,7 @@ export class SessionExecutionEngine {
       parentContext = {},
       message = "",
       runConfigPatch = {},
+      systemMessages = [],
       strategy = {},
       metadata = {},
       eventListener = null,
@@ -825,6 +826,7 @@ export class SessionExecutionEngine {
           dialogProcessId: subDialogProcessId || subSessionId,
           userConfig: subSessionUserConfig,
           attachmentMetas: [],
+          systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
           eventListener:
             eventListener &&
             typeof eventListener === "object" &&
@@ -894,6 +896,23 @@ export class SessionExecutionEngine {
           },
           now,
         );
+        const systemTurns = (Array.isArray(systemMessages) ? systemMessages : [])
+          .map((content) => String(content || "").trim())
+          .filter(Boolean)
+          .map((content) =>
+            this._normalizeDetachedSubSessionMessage(
+              {
+                role: "system",
+                content,
+                type: "system",
+                dialogProcessId,
+                parentDialogProcessId,
+                injectedMessage: true,
+                injectedBy: "workflow",
+              },
+              now,
+            ),
+          );
         persisted = await this._persistDetachedSubSessionSnapshot({
           outputDir: resolvedOutputDir,
           sessionPayload: {
@@ -903,7 +922,7 @@ export class SessionExecutionEngine {
             modelAlias: "",
             currentTaskId: "",
             shortMemoryCheckpoint: 0,
-            messages: [userTurn, ...normalizedTurnMessages],
+            messages: [...systemTurns, userTurn, ...normalizedTurnMessages],
           },
           taskPayload: {
             sessionId: subSessionId,
@@ -960,6 +979,7 @@ export class SessionExecutionEngine {
     parentSessionId,
     userConfig,
     attachmentMetas,
+    systemMessages = [],
     eventListener,
     userInteractionBridge = null,
     runConfig = {},
@@ -973,6 +993,7 @@ export class SessionExecutionEngine {
       parentSessionId,
       userConfig,
       attachmentMetas,
+      systemMessages,
       eventListener,
       userInteractionBridge,
       runConfig,

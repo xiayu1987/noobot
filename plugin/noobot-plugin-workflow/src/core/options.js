@@ -110,6 +110,10 @@ export function normalizeOptions(input = {}) {
       typeof source?.workflowDialogPersister === "function" ? source.workflowDialogPersister : null,
     workflowEventLogger:
       typeof source?.workflowEventLogger === "function" ? source.workflowEventLogger : null,
+    workflowNodeSystemMessageBuilder:
+      typeof source?.workflowNodeSystemMessageBuilder === "function"
+        ? source.workflowNodeSystemMessageBuilder
+        : null,
     workflowExtensionMounter:
       typeof source?.workflowExtensionMounter === "function" ? source.workflowExtensionMounter : null,
     workflowExtensions: normalizeWorkflowExtensions(source?.workflowExtensions),

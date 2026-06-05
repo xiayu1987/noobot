@@ -14,17 +14,17 @@ const props = defineProps({
   selectedDialogId: { type: String, default: "" },
 });
 
-const emit = defineEmits(["node-click", "update:selectedDialogId"]);
+const emit = defineEmits(["node-click", "step-click", "update:selectedDialogId"]);
 
 const hostRef = ref(null);
 const resizeObserverRef = ref(null);
 const hostWidth = ref(0);
 const zoomScale = ref(1);
 const innerSelectedDialogId = ref("");
+const expandedNodeKey = ref("");
 
 const DESKTOP_NODE_WIDTH = 192;
 const COMPACT_MIN_NODE_WIDTH = 148;
-const NODE_GAP_X = 34;
 
 const isCompactGraph = computed(() => Number(hostWidth.value || 0) > 0 && Number(hostWidth.value || 0) <= 480);
 const nodeHeight = computed(() => (isCompactGraph.value ? 54 : 58));
@@ -53,12 +53,28 @@ const normalizedNodes = computed(() => {
     const resolvedStatus = status || "pending";
     const dialogId = String(nodeItem?.dialogId || "").trim();
     const sessionId = String(nodeItem?.sessionId || "").trim();
-    const hasSessionRef = Boolean(dialogId || sessionId);
+    const actionNodeStates = Array.isArray(nodeItem?.actionNodeStates)
+      ? nodeItem.actionNodeStates
+      : Array.isArray(nodeItem?.runtimeBoxes)
+        ? nodeItem.runtimeBoxes
+        : [];
+    const stepDialogIds = [];
+    for (const stateBox of actionNodeStates) {
+      for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
+        const stepDialogId = String(stepItem?.dialogId || "").trim();
+        if (stepDialogId) stepDialogIds.push(stepDialogId);
+      }
+    }
+    const hasSessionRef = Boolean(dialogId || sessionId || stepDialogIds.length);
     return {
       ...nodeItem,
+      actionNodeStates,
+      runtimeBoxes: actionNodeStates,
       _index: index,
       _status: resolvedStatus,
       _hasSession: hasSessionRef,
+      _hasRuntimeBoxes: actionNodeStates.length > 0,
+      _stepDialogIds: stepDialogIds,
     };
   });
   if (!baseNodes.length) return [];
@@ -268,6 +284,44 @@ const flattenedNodes = computed(() => {
   return result;
 });
 
+function resolveNodeKey(nodeItem = {}) {
+  return String(
+    nodeItem?.nodeId ||
+      nodeItem?.id ||
+      nodeItem?.dialogId ||
+      nodeItem?.sessionId ||
+      nodeItem?._index ||
+      "",
+  ).trim();
+}
+
+function isNodeExpanded(nodeItem = {}) {
+  const key = resolveNodeKey(nodeItem);
+  return Boolean(key && key === expandedNodeKey.value);
+}
+
+function resolveRuntimeBoxes(nodeItem = {}) {
+  return Array.isArray(nodeItem?.actionNodeStates)
+    ? nodeItem.actionNodeStates
+    : Array.isArray(nodeItem?.runtimeBoxes)
+      ? nodeItem.runtimeBoxes
+      : [];
+}
+
+function nodeContainsDialogId(nodeItem = {}, dialogId = "") {
+  const selected = String(dialogId || "").trim();
+  if (!selected) return false;
+  if (String(nodeItem?.dialogId || "").trim() === selected) return true;
+  if (Array.isArray(nodeItem?._stepDialogIds) && nodeItem._stepDialogIds.includes(selected)) return true;
+  for (const stateBox of resolveRuntimeBoxes(nodeItem)) {
+    for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
+      if (String(stepItem?.dialogId || "").trim() === selected) return true;
+    }
+  }
+  return false;
+}
+
+
 const graphHeight = computed(() => {
   const nodeCount = Math.max(1, flattenedNodes.value.length);
   return paddingTop.value + paddingBottom.value + nodeCount * nodeHeight.value + Math.max(0, nodeCount - 1) * nodeGapY.value;
@@ -294,6 +348,7 @@ const positionedNodes = computed(() => {
         _colIndex: colIndex,
         _x: x,
         _y: paddingTop.value + nodeIndex * (nodeHeight.value + nodeGapY.value),
+        _expanded: isNodeExpanded(nodeItem),
       });
       nodeIndex += 1;
     });
@@ -316,11 +371,11 @@ const effectiveSelectedDialogId = computed(
 );
 
 const selectedNode = computed(() =>
-  positionedNodes.value.find(
-    (nodeItem) =>
-      String(nodeItem?.dialogId || "").trim() &&
-      String(nodeItem?.dialogId || "").trim() === effectiveSelectedDialogId.value,
-  ) || null,
+  positionedNodes.value.find((nodeItem) => nodeContainsDialogId(nodeItem, effectiveSelectedDialogId.value)) || null,
+);
+
+const expandedRuntimeNode = computed(() =>
+  positionedNodes.value.find((nodeItem) => nodeItem?._expanded && resolveRuntimeBoxes(nodeItem).length) || null,
 );
 
 const hostStyle = computed(() => ({
@@ -501,7 +556,7 @@ watch(
     normalizedNodes.value
       .map(
         (item) =>
-          `${item.dialogId}|${item.sessionId}|${item._status}|${item.parallelWave}|${item.waveOrder}`,
+          `${item.dialogId}|${item.sessionId}|${item._status}|${item.parallelWave}|${item.waveOrder}|${resolveRuntimeBoxes(item).length}|${(item?._stepDialogIds || []).join(",")}`,
       )
       .join("||"),
   async () => {
@@ -516,15 +571,43 @@ watch(
   },
 );
 
+function resolveStepLabel(stepItem = {}, stepIndex = 0) {
+  const order = Number.isFinite(Number(stepItem?.stepIndex)) ? Number(stepItem.stepIndex) + 1 : stepIndex + 1;
+  return `步骤Box #${order}`;
+}
+
+function resolveStateBoxLabel(stateBox = {}, stateIndex = 0) {
+  const id = String(stateBox?.actionNodeStateId || "").trim();
+  if (!id) return `节点Box #${stateIndex + 1}`;
+  return `节点Box ${id}`;
+}
+
+function stepHasSession(stepItem = {}) {
+  return Boolean(String(stepItem?.dialogId || "").trim());
+}
+
+function toggleNodeExpanded(nodeItem = {}) {
+  const key = resolveNodeKey(nodeItem);
+  if (!key) return;
+  expandedNodeKey.value = expandedNodeKey.value === key ? "" : key;
+}
+
 function handleNodeClick(nodeItem = {}) {
   if (nodeItem?._virtualBoundary) return;
   if (!isActionNode(nodeItem)) return;
-  if (nodeItem?._hasSession !== true) return;
-  const dialogId = String(nodeItem?.dialogId || "").trim();
-  if (!dialogId) return;
-  innerSelectedDialogId.value = dialogId;
-  emit("update:selectedDialogId", dialogId);
+  if (nodeItem?._hasRuntimeBoxes !== true) return;
+  toggleNodeExpanded(nodeItem);
   emit("node-click", nodeItem);
+}
+
+function handleStepClick(stepItem = {}) {
+  if (!stepHasSession(stepItem)) return;
+  const dialogId = String(stepItem?.dialogId || "").trim();
+  if (dialogId) {
+    innerSelectedDialogId.value = dialogId;
+    emit("update:selectedDialogId", dialogId);
+  }
+  emit("step-click", stepItem);
 }
 </script>
 
@@ -554,9 +637,10 @@ function handleNodeClick(nodeItem = {}) {
         :node-item="nodeItem"
         :node-index="nodeIndex"
         :style-obj="getNodeStyle(nodeItem)"
-        :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem) && nodeItem?._hasSession === true"
+        :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem) && nodeItem?._hasRuntimeBoxes === true"
         :boundary-type="String(nodeItem?._virtualBoundary || '')"
-        :selected="String(nodeItem?.dialogId || '').trim() === effectiveSelectedDialogId"
+        :selected="nodeContainsDialogId(nodeItem, effectiveSelectedDialogId)"
+        :expanded="nodeItem?._expanded === true"
         @click="handleNodeClick"
       />
 
@@ -575,6 +659,49 @@ function handleNodeClick(nodeItem = {}) {
             />
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="expandedRuntimeNode" class="workflow-runtime-inspector">
+    <div class="workflow-runtime-inspector-header">
+      <div>
+        <div class="workflow-runtime-inspector-title">
+          {{ expandedRuntimeNode?.nodeName || expandedRuntimeNode?.nodeId || "动作节点" }} · 运行态
+        </div>
+        <div class="workflow-runtime-inspector-subtitle">节点Box / 步骤Box，点击步骤Box查看子 agent session</div>
+      </div>
+      <button type="button" class="workflow-runtime-close" @click="expandedNodeKey = ''">收起</button>
+    </div>
+    <div class="workflow-runtime-inspector-body">
+      <div
+        v-for="(stateBox, stateIndex) in resolveRuntimeBoxes(expandedRuntimeNode)"
+        :key="`${resolveNodeKey(expandedRuntimeNode)}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
+        class="workflow-runtime-state-box"
+      >
+        <div class="workflow-runtime-state-title">
+          <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
+          <span class="workflow-runtime-state-count">{{ (stateBox?.steps || []).length }} 步</span>
+        </div>
+        <button
+          v-for="(stepItem, stepIndex) in (stateBox?.steps || [])"
+          :key="`${String(stepItem?.stepId || stepItem?.dialogId || stepIndex)}-${stepIndex}`"
+          type="button"
+          class="workflow-runtime-step-box"
+          :class="[
+            resolveStatusClass(stepItem),
+            {
+              'is-selected': String(stepItem?.dialogId || '').trim() === effectiveSelectedDialogId,
+              'is-disabled': !stepHasSession(stepItem),
+            },
+          ]"
+          :disabled="!stepHasSession(stepItem)"
+          @click.stop="handleStepClick(stepItem)"
+        >
+          <span class="workflow-runtime-step-name">{{ resolveStepLabel(stepItem, stepIndex) }}</span>
+          <span class="workflow-runtime-step-status">{{ resolveStatusLabel(stepItem) }}</span>
+        </button>
+        <div v-if="!(stateBox?.steps || []).length" class="workflow-runtime-step-empty">暂无步骤Box</div>
       </div>
     </div>
   </div>
@@ -643,6 +770,146 @@ function handleNodeClick(nodeItem = {}) {
   position: relative;
   z-index: 0;
 }
+
+.workflow-runtime-inspector {
+  margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 72%, #6d4aff 28%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 95%, #6d4aff 5%);
+  box-shadow: 0 8px 20px rgba(109, 74, 255, 0.08);
+  overflow: hidden;
+  font-size: 11px;
+}
+
+.workflow-runtime-inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 82%, #6d4aff 18%);
+}
+
+.workflow-runtime-inspector-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--noobot-text-primary);
+}
+
+.workflow-runtime-inspector-subtitle {
+  margin-top: 2px;
+  color: var(--noobot-text-secondary);
+}
+
+.workflow-runtime-close {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 72%, #6d4aff 28%);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, #6d4aff 4%);
+  color: var(--noobot-text-primary);
+  cursor: pointer;
+}
+
+.workflow-runtime-inspector-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.workflow-runtime-state-box {
+  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 72%, #6d4aff 28%);
+  border-radius: 10px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #6d4aff 6%);
+  box-shadow: 0 8px 18px rgba(109, 74, 255, 0.1);
+}
+
+.workflow-runtime-state-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+  margin-bottom: 5px;
+  color: color-mix(in srgb, #6d4aff 78%, var(--noobot-text-primary) 22%);
+  font-weight: 700;
+}
+
+.workflow-runtime-state-count {
+  flex: 0 0 auto;
+  color: var(--noobot-text-secondary);
+  font-weight: 500;
+}
+
+.workflow-runtime-step-box {
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--noobot-msg-assistant-border);
+  border-radius: 8px;
+  padding: 0 8px;
+  margin-top: 5px;
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, #000 2%);
+  color: var(--noobot-text-primary);
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.workflow-runtime-step-box:hover:not(.is-disabled) {
+  border-color: color-mix(in srgb, #6d4aff 58%, var(--noobot-msg-assistant-border) 42%);
+  box-shadow: 0 5px 12px rgba(109, 74, 255, 0.12);
+}
+
+.workflow-runtime-step-box.is-selected {
+  border-color: rgba(109, 74, 255, 0.95);
+  box-shadow: 0 0 0 2px rgba(109, 74, 255, 0.16);
+}
+
+.workflow-runtime-step-box.is-disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.workflow-runtime-step-box.success {
+  border-color: color-mix(in srgb, var(--noobot-status-success) 35%, var(--noobot-msg-assistant-border) 65%);
+}
+
+.workflow-runtime-step-box.failed {
+  border-color: rgba(199, 59, 59, 0.55);
+}
+
+.workflow-runtime-step-box.running {
+  border-color: rgba(122, 75, 244, 0.6);
+}
+
+.workflow-runtime-step-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.workflow-runtime-step-status {
+  flex: 0 0 auto;
+  color: var(--noobot-text-secondary);
+}
+
+.workflow-runtime-step-empty {
+  padding: 7px 8px;
+  color: var(--noobot-text-secondary);
+  border: 1px dashed var(--noobot-msg-assistant-border);
+  border-radius: 8px;
+}
+
 
 .workflow-minimap {
   position: absolute;
