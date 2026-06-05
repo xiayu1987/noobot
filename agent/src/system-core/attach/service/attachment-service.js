@@ -314,14 +314,28 @@ export class AttachmentService {
     }
 
     if (updatedRecord) {
-      await this._syncParsedResultToSessionSnapshots({
-        basePath,
-        sourceAttachmentId: sourceId,
-        sourceAttachmentPath:
-          safeStr(updatedRecord?.path) || normalizedSourcePath,
-        updatedSourceAttachment: updatedRecord,
-        sessionIdHint: normalizedSessionId || safeStr(updatedRecord?.sessionId),
-      });
+      const resolvedSessionIdHint =
+        normalizedSessionId || safeStr(updatedRecord?.sessionId);
+      const resolvedSourcePath =
+        safeStr(updatedRecord?.path) || normalizedSourcePath;
+      await Promise.all([
+        this._syncParsedResultToSessionSnapshots({
+          basePath,
+          sourceAttachmentId: sourceId,
+          sourceAttachmentPath: resolvedSourcePath,
+          updatedSourceAttachment: updatedRecord,
+          sessionIdHint: resolvedSessionIdHint,
+          sessionRoot: path.join(basePath, "runtime/session"),
+        }),
+        this._syncParsedResultToSessionSnapshots({
+          basePath,
+          sourceAttachmentId: sourceId,
+          sourceAttachmentPath: resolvedSourcePath,
+          updatedSourceAttachment: updatedRecord,
+          sessionIdHint: resolvedSessionIdHint,
+          sessionRoot: path.join(basePath, "runtime/workflow/session"),
+        }),
+      ]);
     }
 
     return updatedRecord || null;
@@ -449,13 +463,15 @@ export class AttachmentService {
     sourceAttachmentPath = "",
     updatedSourceAttachment = {},
     sessionIdHint = "",
+    sessionRoot = "",
   } = {}) {
     const normalizedAttachmentId = safeStr(sourceAttachmentId);
     if (!normalizedAttachmentId) return;
 
-    const sessionRoot = path.join(basePath, "runtime/session");
+    const resolvedSessionRoot =
+      safeStr(sessionRoot) || path.join(basePath, "runtime/session");
     const sessionJsonFiles = await this._collectSessionJsonFiles({
-      sessionRoot,
+      sessionRoot: resolvedSessionRoot,
       sessionIdHint,
     });
     if (!sessionJsonFiles.length) return;

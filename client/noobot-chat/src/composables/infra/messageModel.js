@@ -28,7 +28,7 @@ function buildModelRunLabel(messageItem = {}) {
 
 function normalizeAttachment(
   attachmentItem = {},
-  { userId = "", apiKey = "", isImageMime = () => false } = {},
+  { userId = "", isImageMime = () => false } = {},
 ) {
   const attachmentId = String(attachmentItem?.attachmentId || "").trim();
   const mimeType = String(
@@ -40,7 +40,6 @@ function normalizeAttachment(
     ? buildAttachmentUrl({
         userId,
         attachmentId,
-        apiKey,
         sessionId,
         attachmentSource,
       })
@@ -56,7 +55,6 @@ function normalizeAttachment(
     ? buildAttachmentUrl({
         userId,
         attachmentId: parsedResultAttachmentId,
-        apiKey,
       })
     : "";
   const parsedResultName =
@@ -69,11 +67,7 @@ function normalizeAttachment(
     attachmentSource,
     mimeType,
     previewUrl:
-      String(attachmentItem?.previewUrl || "") ||
-      (attachmentUrl &&
-      (isImageMime(mimeType) || mimeType.startsWith("video/"))
-        ? attachmentUrl
-        : ""),
+      String(attachmentItem?.previewUrl || ""),
     parsedResultAttachmentId,
     parsedResultPath,
     parsedResultRelativePath,
@@ -144,7 +138,7 @@ function buildAppendMessage(role, content = "", attachmentMetas = []) {
 
 function buildViewMessage(
   messageItem = {},
-  { userId = "", apiKey = "", isImageMime = () => false } = {},
+  { userId = "", isImageMime = () => false } = {},
 ) {
   const sourceAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
@@ -153,7 +147,7 @@ function buildViewMessage(
       : [];
   const normalizedAttachments = normalizeArray(sourceAttachmentMetas).map(
     (attachmentItem) =>
-      normalizeAttachment(attachmentItem, { userId, apiKey, isImageMime }),
+      normalizeAttachment(attachmentItem, { userId, isImageMime }),
   );
   return createMessageModel({
     ...messageItem,

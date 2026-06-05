@@ -14,9 +14,9 @@ import {
   Key,
 } from "@element-plus/icons-vue";
 import {
-  buildWorkspaceAllDownloadUrl,
-  buildWorkspaceDownloadUrl,
   getConfigParamCatalogApi,
+  downloadWorkspaceAllFileApi,
+  downloadWorkspaceFileApi,
   getWorkspaceAllFileApi,
   getWorkspaceAllTreeApi,
   getWorkspaceFileApi,
@@ -128,6 +128,31 @@ function authFetch(url, options = {}) {
     ...options,
     headers: authHeaders(options.headers || {}),
   });
+}
+
+function parseContentDisposition(contentDisposition = "") {
+  if (!contentDisposition) return "";
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(String(utf8Match[1]).trim());
+    } catch {
+      return String(utf8Match[1]).trim();
+    }
+  }
+  const basicMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+  return String(basicMatch?.[1] || "").trim();
+}
+
+async function triggerBlobDownload(blob, fileName = "download") {
+  const downloadUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = downloadUrl;
+  anchor.download = String(fileName || "download");
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(downloadUrl);
 }
 
 async function loadTree() {
@@ -275,21 +300,36 @@ async function saveFile() {
   }
 }
 
-function downloadFile() {
-  if (!props.connected || !activePath.value || !props.userId || !props.apiKey)
-    return;
-  const downloadUrl =
-    activePathSource.value === "all"
-      ? buildWorkspaceAllDownloadUrl({
-          path: activePath.value,
-          apiKey: props.apiKey,
-        })
-      : buildWorkspaceDownloadUrl({
-          userId: props.userId,
-          path: activePath.value,
-          apiKey: props.apiKey,
-        });
-  window.open(downloadUrl, "_blank");
+async function downloadFile() {
+  if (!props.connected || !activePath.value || !props.userId || !props.apiKey) return;
+  try {
+    const response =
+      activePathSource.value === "all"
+        ? await downloadWorkspaceAllFileApi(
+            { path: activePath.value },
+            { fetcher: authFetch },
+          )
+        : await downloadWorkspaceFileApi(
+            { userId: props.userId, path: activePath.value },
+            { fetcher: authFetch },
+          );
+    if (!response?.ok) {
+      let errorText = translate("settings.readFileFailed");
+      try {
+        const data = await response.json();
+        if (data?.error) errorText = String(data.error);
+      } catch {}
+      throw new Error(errorText);
+    }
+    const fileName =
+      parseContentDisposition(response.headers?.get("content-disposition") || "") ||
+      String(activePath.value || "").split("/").pop() ||
+      "download";
+    const blob = await response.blob();
+    await triggerBlobDownload(blob, fileName);
+  } catch (error) {
+    ElMessage.error(error.message || translate("settings.readFileFailed"));
+  }
 }
 
 async function resetWorkspace() {

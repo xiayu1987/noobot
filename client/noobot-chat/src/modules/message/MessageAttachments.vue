@@ -4,15 +4,18 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Document, Download } from "@element-plus/icons-vue";
 import { useLocale } from "../../shared/i18n/useLocale";
+import { buildAttachmentUrl } from "../../services/api/chatApi";
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
   isImageMime: { type: Function, required: true },
   canPreviewAttachment: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
+  userId: { type: String, default: "" },
+  authFetch: { type: Function, default: null },
 });
 
 const emit = defineEmits(["preview", "download"]);
@@ -34,6 +37,96 @@ const pluginAttachments = computed(() =>
     (item = {}) => item?.attachmentOwnerType === "plugin",
   ),
 );
+const thumbnailUrlByKey = ref({});
+const thumbnailAttemptedKeys = new Set();
+
+function makeAttachmentKey(attachmentItem = {}, attachmentIndex = 0) {
+  return String(
+    attachmentItem?.attachmentId ||
+      `${attachmentItem?.sessionId || ""}|${attachmentItem?.attachmentSource || ""}|${attachmentItem?.name || ""}|${attachmentItem?.size || 0}|${attachmentIndex}`,
+  ).trim();
+}
+
+function setThumbnailUrl(key = "", url = "") {
+  if (!key) return;
+  const nextMap = { ...(thumbnailUrlByKey.value || {}) };
+  nextMap[key] = url;
+  thumbnailUrlByKey.value = nextMap;
+}
+
+function clearThumbnailUrl(key = "") {
+  if (!key) return;
+  const existingUrl = String(thumbnailUrlByKey.value?.[key] || "").trim();
+  if (existingUrl.startsWith("blob:")) URL.revokeObjectURL(existingUrl);
+  const nextMap = { ...(thumbnailUrlByKey.value || {}) };
+  delete nextMap[key];
+  thumbnailUrlByKey.value = nextMap;
+}
+
+function clearAllThumbnailUrls() {
+  const current = thumbnailUrlByKey.value || {};
+  for (const url of Object.values(current)) {
+    const normalized = String(url || "").trim();
+    if (normalized.startsWith("blob:")) URL.revokeObjectURL(normalized);
+  }
+  thumbnailUrlByKey.value = {};
+  thumbnailAttemptedKeys.clear();
+}
+
+function resolveAttachmentFetchUrl(attachmentItem = {}) {
+  const directUrl = String(attachmentItem?.previewUrl || "").trim();
+  if (directUrl) return directUrl;
+  const attachmentId = String(attachmentItem?.attachmentId || "").trim();
+  if (!attachmentId) return "";
+  return buildAttachmentUrl({
+    userId: String(props.userId || "").trim(),
+    attachmentId,
+    sessionId: String(attachmentItem?.sessionId || "").trim(),
+    attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
+  });
+}
+
+function isMediaThumbnailCandidate(attachmentItem = {}) {
+  const mimeType = String(attachmentItem?.mimeType || "").trim();
+  const isImage = isImageMime(mimeType);
+  const isVideo = mimeType.startsWith("video/");
+  return (isImage || isVideo) && canPreviewAttachment(attachmentItem);
+}
+
+function resolveThumbnailUrl(attachmentItem = {}, attachmentIndex = 0) {
+  const key = makeAttachmentKey(attachmentItem, attachmentIndex);
+  return String(thumbnailUrlByKey.value?.[key] || "").trim();
+}
+
+async function ensureThumbnailUrl(attachmentItem = {}, attachmentIndex = 0) {
+  if (!isMediaThumbnailCandidate(attachmentItem)) return;
+  const key = makeAttachmentKey(attachmentItem, attachmentIndex);
+  if (!key || thumbnailAttemptedKeys.has(key) || resolveThumbnailUrl(attachmentItem, attachmentIndex)) return;
+  thumbnailAttemptedKeys.add(key);
+  const sourceUrl = resolveAttachmentFetchUrl(attachmentItem);
+  if (!sourceUrl) return;
+
+  if (sourceUrl.startsWith("blob:") || sourceUrl.startsWith("data:")) {
+    setThumbnailUrl(key, sourceUrl);
+    return;
+  }
+
+  try {
+    const runFetch = props.authFetch || fetch;
+    const response = await runFetch(sourceUrl);
+    if (!response?.ok) return;
+    const blob = await response.blob();
+    setThumbnailUrl(key, URL.createObjectURL(blob));
+  } catch {
+    // Ignore thumbnail fetch failures; preview/download remains available.
+  }
+}
+
+function scheduleThumbnailPrefetch(list = []) {
+  for (const [index, attachmentItem] of list.entries()) {
+    void ensureThumbnailUrl(attachmentItem, index);
+  }
+}
 
 watch(
   () => pluginAttachments.value.length,
@@ -43,6 +136,31 @@ watch(
   },
   { immediate: true },
 );
+
+watch(
+  attachments,
+  (nextList = [], prevList = []) => {
+    const nextKeys = new Set(
+      (Array.isArray(nextList) ? nextList : []).map((item = {}, index) =>
+        makeAttachmentKey(item, index),
+      ),
+    );
+    const prevKeys = new Set(
+      (Array.isArray(prevList) ? prevList : []).map((item = {}, index) =>
+        makeAttachmentKey(item, index),
+      ),
+    );
+    for (const key of prevKeys) {
+      if (!nextKeys.has(key)) clearThumbnailUrl(key);
+    }
+    scheduleThumbnailPrefetch(Array.isArray(nextList) ? nextList : []);
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  clearAllThumbnailUrls();
+});
 
 function emitPreviewParsedResult(attachmentItem = {}) {
   const url = String(attachmentItem?.parsedResultUrl || "").trim();
@@ -81,22 +199,22 @@ function emitDownloadParsedResult(attachmentItem = {}) {
       class="file-card noobot-flat-card"
     >
       <button
-        v-if="isImageMime(attachmentItem.mimeType || '') && attachmentItem.previewUrl && canPreviewAttachment(attachmentItem)"
+        v-if="isImageMime(attachmentItem.mimeType || '') && resolveThumbnailUrl(attachmentItem, attachmentIndex)"
         type="button"
         class="attachment-preview-btn"
         :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
         @click="emit('preview', attachmentItem)"
       >
-        <img :src="attachmentItem.previewUrl" :alt="attachmentItem.name" class="file-thumb" />
+        <img :src="resolveThumbnailUrl(attachmentItem, attachmentIndex)" :alt="attachmentItem.name" class="file-thumb" />
       </button>
       <button
-        v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && attachmentItem.previewUrl && canPreviewAttachment(attachmentItem)"
+        v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && resolveThumbnailUrl(attachmentItem, attachmentIndex)"
         type="button"
         class="attachment-preview-btn"
         :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
         @click="emit('preview', attachmentItem)"
       >
-        <video class="file-thumb" :src="attachmentItem.previewUrl" muted preload="metadata" />
+        <video class="file-thumb" :src="resolveThumbnailUrl(attachmentItem, attachmentIndex)" muted preload="metadata" />
       </button>
       <div v-else class="file-icon">
         <button
@@ -180,22 +298,22 @@ function emitDownloadParsedResult(attachmentItem = {}) {
           class="file-card noobot-flat-card"
         >
           <button
-            v-if="isImageMime(attachmentItem.mimeType || '') && attachmentItem.previewUrl && canPreviewAttachment(attachmentItem)"
+            v-if="isImageMime(attachmentItem.mimeType || '') && resolveThumbnailUrl(attachmentItem, attachmentIndex)"
             type="button"
             class="attachment-preview-btn"
             :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
             @click="emit('preview', attachmentItem)"
           >
-            <img :src="attachmentItem.previewUrl" :alt="attachmentItem.name" class="file-thumb" />
+            <img :src="resolveThumbnailUrl(attachmentItem, attachmentIndex)" :alt="attachmentItem.name" class="file-thumb" />
           </button>
           <button
-            v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && attachmentItem.previewUrl && canPreviewAttachment(attachmentItem)"
+            v-else-if="String(attachmentItem.mimeType || '').startsWith('video/') && resolveThumbnailUrl(attachmentItem, attachmentIndex)"
             type="button"
             class="attachment-preview-btn"
             :title="translate('message.previewFile', { name: attachmentItem.name || '' })"
             @click="emit('preview', attachmentItem)"
           >
-            <video class="file-thumb" :src="attachmentItem.previewUrl" muted preload="metadata" />
+            <video class="file-thumb" :src="resolveThumbnailUrl(attachmentItem, attachmentIndex)" muted preload="metadata" />
           </button>
           <div v-else class="file-icon">
             <button

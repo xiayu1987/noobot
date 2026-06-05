@@ -10,7 +10,6 @@ function resolveFetcher(fetcher) {
 export function buildAttachmentUrl({
   userId = "",
   attachmentId = "",
-  apiKey = "",
   sessionId = "",
   attachmentSource = "",
 }) {
@@ -19,7 +18,6 @@ export function buildAttachmentUrl({
     String(attachmentId || "").trim(),
   );
   const queryParams = [];
-  if (apiKey) queryParams.push(`apikey=${encodeURIComponent(apiKey)}`);
   if (sessionId)
     queryParams.push(`sessionId=${encodeURIComponent(String(sessionId || "").trim())}`);
   if (attachmentSource)
@@ -210,6 +208,16 @@ export async function downloadWorkspaceFileApi(
   );
 }
 
+export async function downloadWorkspaceAllFileApi(
+  { path = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(
+    `/api/internal/admin/workspace-all/download?path=${encodeURIComponent(path)}`,
+  );
+}
+
 export async function putWorkspaceFileApi(
   { userId = "", path = "", content = "" },
   { fetcher } = {},
@@ -287,15 +295,10 @@ export async function putConfigParamsApi(
 export function buildWorkspaceDownloadUrl({
   userId = "",
   path = "",
-  apiKey = "",
 }) {
-  const baseUrl = `/api/internal/workspace/${encodeURIComponent(userId)}/download?path=${encodeURIComponent(path)}`;
-  return apiKey
-    ? `${baseUrl}&apikey=${encodeURIComponent(apiKey)}`
-    : baseUrl;
+  return `/api/internal/workspace/${encodeURIComponent(userId)}/download?path=${encodeURIComponent(path)}`;
 }
 
-export function buildWorkspaceAllDownloadUrl({ path = "", apiKey = "" }) {
-  const baseUrl = `/api/internal/admin/workspace-all/download?path=${encodeURIComponent(path)}`;
-  return apiKey ? `${baseUrl}&apikey=${encodeURIComponent(apiKey)}` : baseUrl;
+export function buildWorkspaceAllDownloadUrl({ path = "" }) {
+  return `/api/internal/admin/workspace-all/download?path=${encodeURIComponent(path)}`;
 }
