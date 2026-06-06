@@ -33,7 +33,7 @@ import { resolveCurrentModelInfo } from "../model/model-manager.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
-import { mergeConfig } from "../../../config/index.js";
+import { mergeConfig, normalizeBooleanLike, resolveRunConfigValue } from "../../../config/index.js";
 
 function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -106,28 +106,24 @@ function resolveLlmForRequiredToolChoice({ modelState, eventListener, turn }) {
   }
 }
 
-function normalizeBooleanLike(value, fallback = false) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") {
-    const normalized = String(value || "").trim().toLowerCase();
-    if (["true", "1", "yes", "on"].includes(normalized)) return true;
-    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
-  }
-  return Boolean(fallback);
-}
-
 function shouldUseFinalStreaming(modelState = {}) {
   if (!modelState?.eventListener?.onEvent) return false;
   const runtime = modelState?.runtime || {};
+  const runConfig =
+    runtime?.runConfig && typeof runtime.runConfig === "object" && !Array.isArray(runtime.runConfig)
+      ? runtime.runConfig
+      : {};
   const effectiveConfig = mergeConfig(
     modelState?.globalConfig || {},
     modelState?.userConfig || {},
   );
-  return (
-    normalizeBooleanLike(runtime?.runConfig?.streaming, false) ||
-    normalizeBooleanLike(effectiveConfig?.streaming, false)
-  );
+  return resolveRunConfigValue({
+    runConfig,
+    config: effectiveConfig,
+    key: "streaming",
+    normalize: (value) => normalizeBooleanLike(value, false),
+    fallback: false,
+  });
 }
 
 function createFinalStreamingLlm(modelState = {}) {
@@ -208,6 +204,7 @@ async function maybeInvokeFinalStreamingNoTools({
       ai: streamedAi,
       text: streamedText || String(fallbackText || ""),
       streamed: true,
+      mode,
     };
   } catch (error) {
     emitEvent(eventListener, "llm_final_stream_failed_fallback_non_streaming", {
@@ -418,6 +415,15 @@ export async function invokeNoToolsTurn({
     turnTaskStore,
     turnMessageStore,
     modelMessages: messages,
+    finalStreaming: finalStreamResult.streamed
+      ? {
+          streamed: true,
+          output: responseContentText,
+          mode:
+            finalStreamResult.mode ||
+            (forceToolChoiceNone ? "final_stream_no_tools_forced_none" : "final_stream_no_tools"),
+        }
+      : null,
   };
 }
 
@@ -655,8 +661,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       agentContext: modelState?.agentContext || null,
     }),
   });
+  let finalStreamResult = null;
   if (!calls.length) {
-    const finalStreamResult = await maybeInvokeFinalStreamingNoTools({
+    finalStreamResult = await maybeInvokeFinalStreamingNoTools({
       modelState,
       baseMessages: messages,
       fallbackAi: ai,
@@ -740,6 +747,13 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     turnMessageStore,
     turnTaskStore,
     traces,
+    finalStreaming: finalStreamResult?.streamed
+      ? {
+          streamed: true,
+          output: aiContentText,
+          mode: finalStreamResult.mode || "final_stream_after_tools_no_calls",
+        }
+      : null,
   };
 }
 

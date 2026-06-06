@@ -22,9 +22,58 @@
 
 import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
+import { readFinalStreamingResultMeta } from "./turn/turn-result-aggregator.js";
 import { runAgentRuntimeHook, AGENT_HOOK_POINTS } from "../../hook/index.js";
 import { isAbortError } from "./utils/error-utils.js";
 import { buildHookContext } from "./hook/hook-context-builder.js";
+import { emitEvent } from "../../event/index.js";
+import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
+import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
+
+export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
+  const meta = readFinalStreamingResultMeta(result);
+  if (meta?.streamed !== true) return false;
+
+  const streamedOutput = String(meta?.output || "");
+  const finalOutput = String(result?.output || "");
+  if (!streamedOutput || finalOutput.length <= streamedOutput.length) return false;
+
+  const eventListener = runtime?.eventListener || null;
+  if (!eventListener?.onEvent) return false;
+
+  const comparablePrefixes = [streamedOutput, streamedOutput.trim()]
+    .filter(Boolean)
+    .filter((item, index, list) => list.indexOf(item) === index);
+  const matchedPrefix = comparablePrefixes.find((prefix) => finalOutput.startsWith(prefix));
+  if (!matchedPrefix) {
+    emitEvent(eventListener, "llm_final_stream_append_delta_skipped", {
+      reason: "final_output_not_prefixed_by_streamed_output",
+      streamedChars: streamedOutput.length,
+      finalChars: finalOutput.length,
+      mode: String(meta?.mode || ""),
+    });
+    return false;
+  }
+
+  const appendedText = finalOutput.slice(matchedPrefix.length);
+  if (!appendedText) return false;
+
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  emitEvent(eventListener, "llm_delta", {
+    text: appendedText,
+    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
+    sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
+    category: "model",
+    type: "final_output_append_delta",
+    source: "before_final_output_append",
+  });
+  emitEvent(eventListener, "llm_final_stream_append_delta_emitted", {
+    appendedChars: appendedText.length,
+    finalChars: finalOutput.length,
+    mode: String(meta?.mode || ""),
+  });
+  return true;
+}
 
 export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
@@ -59,6 +108,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
         result,
       }),
     });
+    emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
     const endedAtMs = Date.now();
     await runAgentRuntimeHook({
       runtime,

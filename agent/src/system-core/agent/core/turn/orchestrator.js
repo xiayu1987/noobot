@@ -110,6 +110,7 @@ export function createTurnOrchestrator({
           turnTaskStore: noToolsResult.turnTaskStore,
           turnMessageStore: noToolsResult.turnMessageStore,
           modelMessages: noToolsResult.modelMessages,
+          finalStreaming: noToolsResult.finalStreaming,
         });
       }
 
@@ -122,6 +123,7 @@ export function createTurnOrchestrator({
           turnTaskStore: noToolsResult.turnTaskStore,
           turnMessageStore: noToolsResult.turnMessageStore,
           modelMessages: noToolsResult.modelMessages,
+          finalStreaming: noToolsResult.finalStreaming,
         });
       }
 
@@ -146,6 +148,7 @@ export function createTurnOrchestrator({
             turnTaskStore,
             turnMessageStore,
             modelMessages: loopState.messages,
+            finalStreaming: withToolsResult.finalStreaming,
           });
         }
         if (loopState?.toolChoiceRetryPrompted === true) {
@@ -157,6 +160,7 @@ export function createTurnOrchestrator({
             turnTaskStore,
             turnMessageStore,
             modelMessages: loopState.messages,
+            finalStreaming: withToolsResult.finalStreaming,
           });
         }
         if (Array.isArray(loopState?.messages)) {
@@ -252,6 +256,7 @@ export function createTurnOrchestrator({
           turnTaskStore: finalResult.turnTaskStore,
           turnMessageStore: finalResult.turnMessageStore,
           modelMessages: finalResult.modelMessages,
+          finalStreaming: finalResult.finalStreaming,
         });
       }
 

@@ -6,7 +6,14 @@
 import { randomBytes } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "#agent/event";
-import { mergeConfig, normalizeTimeMs, resolveTimeMs } from "#agent/config";
+import {
+  hasOwnConfigKey,
+  mergeConfig,
+  normalizeBooleanLike,
+  normalizeTimeMs,
+  resolveRunConfigValue,
+  resolveTimeMs,
+} from "#agent/config";
 import { logError } from "#agent/tracking";
 import { HTTP_STATUS } from "#agent/constants";
 
@@ -37,17 +44,6 @@ function resolveConfigRunTimeoutMs(config = {}) {
     min: MIN_RUN_TIMEOUT_MS,
     max: MAX_RUN_TIMEOUT_MS,
   });
-}
-
-function normalizeBooleanLike(value, fallback = false) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") {
-    const normalized = String(value || "").trim().toLowerCase();
-    if (["true", "1", "yes", "on"].includes(normalized)) return true;
-    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
-  }
-  return Boolean(fallback);
 }
 
 async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} } = {}) {
@@ -83,13 +79,29 @@ async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} }
 }
 
 async function resolveEffectiveStreamingEnabled({ bot, userId = "", runConfig = {} } = {}) {
-  if (normalizeBooleanLike(runConfig?.streaming, false)) return true;
+  const runConfigSource =
+    runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
+  if (hasOwnConfigKey(runConfigSource, "streaming")) {
+    return resolveRunConfigValue({
+      runConfig: runConfigSource,
+      config: {},
+      key: "streaming",
+      normalize: (value) => normalizeBooleanLike(value, false),
+      fallback: false,
+    });
+  }
 
   const normalizedUserId = String(userId || "").trim();
   const globalConfig =
     bot?.globalConfig && typeof bot.globalConfig === "object" ? bot.globalConfig : {};
   if (!normalizedUserId || typeof bot?.loadUserConfig !== "function") {
-    return normalizeBooleanLike(globalConfig?.streaming, false);
+    return resolveRunConfigValue({
+      runConfig: {},
+      config: globalConfig,
+      key: "streaming",
+      normalize: (value) => normalizeBooleanLike(value, false),
+      fallback: false,
+    });
   }
 
   let userConfig = {};
@@ -108,7 +120,13 @@ async function resolveEffectiveStreamingEnabled({ bot, userId = "", runConfig = 
     userConfig = {};
   }
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
-  return normalizeBooleanLike(effectiveConfig?.streaming, false);
+  return resolveRunConfigValue({
+    runConfig: {},
+    config: effectiveConfig,
+    key: "streaming",
+    normalize: (value) => normalizeBooleanLike(value, false),
+    fallback: false,
+  });
 }
 
 function sendUpgradeError(
