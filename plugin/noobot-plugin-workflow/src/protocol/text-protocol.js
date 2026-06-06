@@ -33,13 +33,14 @@ function unquote(value = "") {
   return raw;
 }
 
-function parseAttrs(tokens = []) {
+function parseAttrs(input = "") {
+  const source = Array.isArray(input) ? String(input.join(" ") || "") : String(input || "");
   const attrs = {};
-  for (const token of tokens) {
-    const idx = String(token).indexOf("=");
-    if (idx <= 0) continue;
-    const key = String(token.slice(0, idx)).trim();
-    const value = unquote(String(token.slice(idx + 1)).trim());
+  const matcher = /([A-Za-z_][A-Za-z0-9_-]*)\s*=\s*("[^"]*"|'[^']*'|[^\s]+)/g;
+  let match = null;
+  while ((match = matcher.exec(source))) {
+    const key = String(match[1] || "").trim();
+    const value = unquote(String(match[2] || "").trim());
     if (!key) continue;
     attrs[key] = value;
   }
@@ -108,7 +109,7 @@ export function parseWorkflowDslText(text = "") {
     if (head === DSL_PROTOCOL.CMD_END) break;
 
     if (head === DSL_PROTOCOL.CMD_ATTACHMENT) {
-      const attrs = parseAttrs(tokens.slice(1));
+      const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const id = String(attrs.id || attrs.attachmentId || "").trim();
       if (!id) fail(lineNo, "ATTACHMENT requires id=<id>");
       if (attachmentMap[id]) fail(lineNo, `duplicate ATTACHMENT id: ${id}`);
@@ -126,7 +127,7 @@ export function parseWorkflowDslText(text = "") {
     }
 
     if (head === DSL_PROTOCOL.CMD_NODE) {
-      const attrs = parseAttrs(tokens.slice(1));
+      const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const id = String(attrs.id || "").trim();
       const type = String(attrs.type || DSL_TYPES.NODE_STATE).trim().toLowerCase();
       const name = String(attrs.name || id).trim();
@@ -154,7 +155,7 @@ export function parseWorkflowDslText(text = "") {
     }
 
     if (head === DSL_PROTOCOL.CMD_EDGE) {
-      const attrs = parseAttrs(tokens.slice(1));
+      const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const from = String(attrs.from || "").trim();
       const to = String(attrs.to || "").trim();
       if (!from || !to) fail(lineNo, DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED);
@@ -171,7 +172,7 @@ export function parseWorkflowDslText(text = "") {
     }
 
     if (head === DSL_PROTOCOL.CMD_AUTO) {
-      const attrs = parseAttrs(tokens.slice(1));
+      const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const type = String(attrs.type || DSL_TYPES.AUTO_SUBMIT).trim().toLowerCase();
       if (![DSL_TYPES.AUTO_SUBMIT, DSL_TYPES.AUTO_AUDIT, DSL_TYPES.AUTO_BACK, DSL_TYPES.AUTO_STOP].includes(type)) {
         fail(lineNo, `AUTO type invalid: ${type}`);
