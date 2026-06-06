@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { sanitizeUserConfig } from "../../../src/system-core/config/core/user-override-policy.js";
 import {
   applySessionModelOverride,
+  hasOwnConfigKey,
   mergeConfig,
+  normalizeBooleanLike,
+  resolveRunConfigValue,
 } from "../../../src/system-core/config/core/config-merge.js";
 
 test("sanitizeUserConfig: 应仅保留允许覆盖字段并规范化键名", () => {
@@ -87,4 +90,52 @@ test("applySessionModelOverride: 传入 alias 时应覆盖 defaultProvider", () 
 test("applySessionModelOverride: 空 alias 应保持原样", () => {
   const out = applySessionModelOverride({ defaultProvider: "openai" }, "");
   assert.equal(out.defaultProvider, "openai");
+});
+
+
+test("resolveRunConfigValue: 显式 runConfig 值应覆盖配置默认值", () => {
+  assert.equal(
+    resolveRunConfigValue({
+      runConfig: { streaming: false },
+      config: { streaming: true },
+      key: "streaming",
+      normalize: (value) => normalizeBooleanLike(value, false),
+      fallback: false,
+    }),
+    false,
+  );
+  assert.equal(
+    resolveRunConfigValue({
+      runConfig: { streaming: "true" },
+      config: { streaming: false },
+      key: "streaming",
+      normalize: (value) => normalizeBooleanLike(value, false),
+      fallback: false,
+    }),
+    true,
+  );
+});
+
+test("resolveRunConfigValue: runConfig 未传字段时才复用配置默认值", () => {
+  assert.equal(
+    resolveRunConfigValue({
+      runConfig: {},
+      config: { streaming: "true" },
+      key: "streaming",
+      normalize: (value) => normalizeBooleanLike(value, false),
+      fallback: false,
+    }),
+    true,
+  );
+  assert.equal(
+    resolveRunConfigValue({
+      runConfig: {},
+      config: {},
+      key: "streaming",
+      normalize: (value) => normalizeBooleanLike(value, false),
+      fallback: false,
+    }),
+    false,
+  );
+  assert.equal(hasOwnConfigKey({ streaming: false }, "streaming"), true);
 });

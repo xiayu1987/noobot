@@ -167,3 +167,43 @@ test("chat-websocket-server: global streaming=true should allow delta", async ()
     await closeServer(server);
   }
 });
+
+
+test("chat-websocket-server: explicit streaming=false should override global streaming=true", async () => {
+  const server = await startServerWithWs({
+    bot: {
+      globalConfig: { streaming: true },
+      runSession: async ({ eventListener }) => {
+        eventListener?.onEvent?.({
+          event: "llm_delta",
+          data: { text: "delta-token", dialogProcessId: "dp-1" },
+        });
+        return {
+          sessionId: "s1",
+          dialogProcessId: "dp-1",
+          answer: "done",
+          messages: [],
+          traces: [],
+          executionLogs: [],
+        };
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        config: { streaming: false, locale: "zh-CN" },
+      },
+    });
+    const names = events.map((item) => String(item?.event || ""));
+    assert.equal(names.includes("delta"), false);
+    assert.equal(names.includes("done"), true);
+  } finally {
+    await closeServer(server);
+  }
+});

@@ -310,12 +310,22 @@ function stripHarnessReviewAppendix(text = "") {
   return raw.slice(0, markerIndex).trim();
 }
 
+function resolveWorkflowRuntimeFromContext(ctx = {}) {
+  const candidates = [
+    ctx?.agentContext?.execution?.controllers?.runtime,
+    ctx?.agentContext?.runtime,
+    ctx?.execution?.controllers?.runtime,
+    ctx?.runtime,
+  ];
+  return candidates.find((item) => item && typeof item === "object") || null;
+}
+
 function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   const metaSandboxPath = String(
     meta?.sandboxPath || meta?.sandboxViewPath || meta?.sandbox_file_path || "",
   ).trim();
   if (metaSandboxPath) return metaSandboxPath;
-  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const hostPath = String(meta?.path || "").trim();
   const relativePath = String(meta?.relativePath || "").trim();
   const resolverCandidates = [

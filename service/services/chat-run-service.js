@@ -5,7 +5,7 @@
  */
 import { resolveForceToolCall } from "#agent/utils";
 import { HTTP_STATUS } from "#agent/constants";
-import { resolveTimeMs } from "#agent/config";
+import { hasOwnConfigKey, normalizeBooleanLike, resolveTimeMs } from "#agent/config";
 
 export function createChatRunService({
   getBot,
@@ -13,17 +13,6 @@ export function createChatRunService({
   defaultLocale,
   translateText,
 } = {}) {
-  function normalizeBooleanLike(value, fallback = false) {
-    if (typeof value === "boolean") return value;
-    if (typeof value === "number") return value !== 0;
-    if (typeof value === "string") {
-      const normalized = String(value || "").trim().toLowerCase();
-      if (["true", "1", "yes", "on"].includes(normalized)) return true;
-      if (["false", "0", "no", "off", ""].includes(normalized)) return false;
-    }
-    return Boolean(fallback);
-  }
-
   function normalizeSelectedConnectors(input = {}) {
     const source = input && typeof input === "object" ? input : {};
     const normalizeConnectorName = (value = "") => String(value || "").trim();
@@ -85,7 +74,10 @@ export function createChatRunService({
     const locale = normalizeLocale(input?.locale || defaultLocale);
     const hasScenarioField = Object.prototype.hasOwnProperty.call(source, "scenario");
     const scenario = hasScenarioField ? String(source?.scenario || "").trim() : undefined;
-    const streaming = normalizeBooleanLike(source?.streaming, false);
+    const hasStreamingField = hasOwnConfigKey(source, "streaming");
+    const streaming = hasStreamingField
+      ? normalizeBooleanLike(source?.streaming, false)
+      : undefined;
     const hasRunTimeout =
       Object.prototype.hasOwnProperty.call(source, "runTimeoutMs") ||
       Object.prototype.hasOwnProperty.call(source, "run_timeout_ms");
@@ -102,7 +94,7 @@ export function createChatRunService({
     return {
       allowUserInteraction,
       forceTool,
-      streaming,
+      ...(hasStreamingField ? { streaming } : {}),
       locale,
       scenario,
       ...(Number.isFinite(runTimeoutMs) && runTimeoutMs > 0

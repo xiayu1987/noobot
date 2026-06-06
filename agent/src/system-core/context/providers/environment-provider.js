@@ -47,10 +47,14 @@ function normalizeContainerTarget(target = "") {
 function resolveDockerExtraMountTargets(providerDetail = {}) {
   const dockerMounts = Array.isArray(providerDetail?.dockerMounts)
     ? providerDetail.dockerMounts
-    : [];
+    : Array.isArray(providerDetail?.docker_mounts)
+      ? providerDetail.docker_mounts
+      : [];
   const extraTargets = dockerMounts
     .map((item) => (item && typeof item === "object" ? item : {}))
-    .map((item) => normalizeContainerTarget(item?.target || item?.mountTarget || ""))
+    .map((item) => normalizeContainerTarget(
+      item?.target || item?.mountTarget || item?.mount_target || "",
+    ))
     .filter(Boolean);
   if (extraTargets.length) {
     return Array.from(new Set(extraTargets));
@@ -73,14 +77,18 @@ function resolveSandboxPromptView({
     toolsConfig?.execute_script && typeof toolsConfig.execute_script === "object"
       ? toolsConfig.execute_script
       : {};
-  const sandboxEnabled = executeScriptConfig?.sandboxMode === true;
+  const sandboxEnabled =
+    executeScriptConfig?.sandboxMode === true || executeScriptConfig?.sandbox_mode === true;
   if (!sandboxEnabled) return null;
 
   const sandboxProviderConfig =
     executeScriptConfig?.sandboxProvider &&
     typeof executeScriptConfig.sandboxProvider === "object"
       ? executeScriptConfig.sandboxProvider
-      : {};
+      : executeScriptConfig?.sandbox_provider &&
+          typeof executeScriptConfig.sandbox_provider === "object"
+        ? executeScriptConfig.sandbox_provider
+        : {};
   const provider = normalizeSandboxProvider(
     sandboxProviderConfig?.default || "docker",
   );
@@ -90,7 +98,9 @@ function resolveSandboxPromptView({
       ? sandboxProviderConfig[provider]
       : {};
   const dockerScope = String(
-    providerDetail?.dockerContainerScope || "global",
+    providerDetail?.dockerContainerScope ||
+      providerDetail?.docker_container_scope ||
+      "global",
   ).trim().toLowerCase();
   const normalizedUserPart = sanitizeDockerUserPart(userId || "user") || "user";
 

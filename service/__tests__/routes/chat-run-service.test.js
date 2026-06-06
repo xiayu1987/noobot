@@ -48,3 +48,15 @@ test("chat-run-service: normalizeRunConfig should parse streaming boolean string
   assert.equal(service.normalizeRunConfig({ streaming: "true" }).streaming, true);
   assert.equal(service.normalizeRunConfig({ streaming: "1" }).streaming, true);
 });
+
+
+test("chat-run-service: normalizeRunConfig should omit streaming when not provided", () => {
+  const service = createChatRunService({
+    getBot: () => ({}),
+    normalizeLocale: (locale = "") => String(locale || "").trim() || "zh-CN",
+    defaultLocale: "zh-CN",
+    translateText: (key = "") => String(key || ""),
+  });
+
+  assert.equal(Object.prototype.hasOwnProperty.call(service.normalizeRunConfig({}), "streaming"), false);
+});

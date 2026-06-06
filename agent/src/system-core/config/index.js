@@ -16,6 +16,9 @@ export {
 export {
   mergeConfig,
   applySessionModelOverride,
+  hasOwnConfigKey,
+  normalizeBooleanLike,
+  resolveRunConfigValue,
 } from "./core/config-merge.js";
 export { createGlobalConfigBuilder } from "./core/global-config-builder.js";
 export { ConfigService } from "./core/config-service.js";
