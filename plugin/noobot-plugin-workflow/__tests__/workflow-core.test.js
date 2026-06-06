@@ -103,6 +103,25 @@ test("parseWorkflowDslText keeps action node task field", () => {
   assert.equal(actionNode?.task, "请输出节点A完成");
 });
 
+test("parseWorkflowDslText keeps quoted task when value contains spaces", () => {
+  const semantic = parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=start type=state stateType=start name="开始"',
+      'NODE id=act type=action name="节点A" task="编写新增表单页面组件，使用Element Plus的表单组件实现表单新增功能，并配置登录成功后的路由跳转"',
+      'NODE id=end type=state stateType=end name="结束"',
+      "EDGE from=start to=act",
+      "EDGE from=act to=end",
+      "END",
+    ].join("\n"),
+  );
+  const actionNode = (semantic?.nodes || []).find((item) => String(item?.id || "") === "act");
+  assert.equal(
+    actionNode?.task,
+    "编写新增表单页面组件，使用Element Plus的表单组件实现表单新增功能，并配置登录成功后的路由跳转",
+  );
+});
+
 test("parseWorkflowDslText keeps action node attachment refs", () => {
   const semantic = parseWorkflowDslText(
     [
