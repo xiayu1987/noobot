@@ -27,8 +27,12 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { createAgentHookManager } from "../../hook/index.js";
 import { createBotHookManager } from "../hook/index.js";
 import { mergeConfig } from "../../config/index.js";
-import { registerNoobotPlugin as registerHarnessPlugin } from "../../../../../plugin/noobot-plugin-harness/src/index.js";
-import { registerNoobotPlugin as registerWorkflowPlugin } from "../../../../../plugin/noobot-plugin-workflow/src/index.js";
+import {
+  getNoobotPluginRuntime,
+  resolveFirstLoadedNoobotPluginByCapability,
+  resolvePluginRegisterByCapability,
+} from "../../plugin/plugin-loader.js";
+import { PLUGIN_CAPABILITY } from "../../plugin/capabilities.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
 import {
   resolveModelContextMessages,
@@ -52,6 +56,60 @@ import {
   hasToolPolicyPatchContent,
   mergeToolPolicyPatch,
 } from "./plugin-policy-api.js";
+
+const loadedDynamicPlugins = await getNoobotPluginRuntime({
+  requiredApiVersion: "1",
+}).catch(() => ({
+  pluginRootDir: "",
+  requiredApiVersion: "1",
+  discoveredCount: 0,
+  loadedCount: 0,
+  registry: new Map(),
+  errors: [],
+}));
+
+function resolvePluginKeyByCapability(
+  loadedPlugins = null,
+  capability = "",
+  fallbackKey = "",
+) {
+  const matched = resolveFirstLoadedNoobotPluginByCapability(loadedPlugins, capability);
+  const pluginKey = String(matched?.manifest?.pluginKey || matched?.manifest?.id || "").trim();
+  return pluginKey || String(fallbackKey || "").trim();
+}
+
+function normalizePluginSelectorSet(keys = []) {
+  return new Set(
+    (Array.isArray(keys) ? keys : [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean),
+  );
+}
+
+const HARNESS_PLUGIN_KEY = resolvePluginKeyByCapability(
+  loadedDynamicPlugins,
+  PLUGIN_CAPABILITY.AGENT_REGISTER,
+  "harness",
+);
+const WORKFLOW_PLUGIN_KEY = resolvePluginKeyByCapability(
+  loadedDynamicPlugins,
+  PLUGIN_CAPABILITY.BOT_REGISTER,
+  "workflow",
+);
+const HARNESS_PLUGIN_SELECTORS = normalizePluginSelectorSet([HARNESS_PLUGIN_KEY, "harness"]);
+const WORKFLOW_PLUGIN_SELECTORS = normalizePluginSelectorSet([WORKFLOW_PLUGIN_KEY, "workflow"]);
+
+function resolvePluginOptionsFromConfig(sourceConfig = {}, pluginSelectors = new Set()) {
+  const plugins =
+    sourceConfig?.plugins && typeof sourceConfig.plugins === "object" ? sourceConfig.plugins : {};
+  const merged = {};
+  for (const selector of pluginSelectors) {
+    const item = plugins?.[selector];
+    if (!item || typeof item !== "object") continue;
+    Object.assign(merged, item);
+  }
+  return merged;
+}
 
 function normalizeMessageForHarness(messageItem = {}) {
   const role = resolveMessageRole(messageItem);
@@ -817,13 +875,37 @@ export class SessionExecutionEngine {
       const runtimePluginState = {
         selectedPlugins,
         harness: {
-          enabled: effectiveRunConfig?.plugins?.harness?.enabled === true,
-          mode: String(effectiveRunConfig?.plugins?.harness?.mode || "").trim().toLowerCase(),
+          pluginKey: HARNESS_PLUGIN_KEY,
+          enabled:
+            resolvePluginOptionsFromConfig(
+              effectiveRunConfig,
+              HARNESS_PLUGIN_SELECTORS,
+            )?.enabled === true,
+          mode: String(
+            resolvePluginOptionsFromConfig(
+              effectiveRunConfig,
+              HARNESS_PLUGIN_SELECTORS,
+            )?.mode || "",
+          )
+            .trim()
+            .toLowerCase(),
           hookManagerReady: Boolean(effectiveRunConfig?.hookManager),
         },
         workflow: {
-          enabled: effectiveRunConfig?.plugins?.workflow?.enabled === true,
-          mode: String(effectiveRunConfig?.plugins?.workflow?.mode || "").trim().toLowerCase(),
+          pluginKey: WORKFLOW_PLUGIN_KEY,
+          enabled:
+            resolvePluginOptionsFromConfig(
+              effectiveRunConfig,
+              WORKFLOW_PLUGIN_SELECTORS,
+            )?.enabled === true,
+          mode: String(
+            resolvePluginOptionsFromConfig(
+              effectiveRunConfig,
+              WORKFLOW_PLUGIN_SELECTORS,
+            )?.mode || "",
+          )
+            .trim()
+            .toLowerCase(),
           botHookManagerReady: Boolean(effectiveRunConfig?.botHookManager),
         },
         disabledPlugins: Array.isArray(strategy?.disabledPlugins)
@@ -1377,20 +1459,22 @@ export class SessionExecutionEngine {
       this.globalConfig || {},
       userConfig && typeof userConfig === "object" ? userConfig : {},
     );
-    const effectiveHarness =
-      effectiveConfig?.plugins?.harness && typeof effectiveConfig.plugins.harness === "object"
-        ? effectiveConfig.plugins.harness
-        : {};
+    const effectiveHarness = resolvePluginOptionsFromConfig(
+      effectiveConfig,
+      HARNESS_PLUGIN_SELECTORS,
+    );
     if (effectiveHarness?.enabled === false) return { enabled: false, mode: "off" };
-    const runHarness =
-      runConfig?.plugins?.harness && typeof runConfig.plugins.harness === "object"
-        ? runConfig.plugins.harness
-        : {};
+    const runHarness = resolvePluginOptionsFromConfig(
+      runConfig,
+      HARNESS_PLUGIN_SELECTORS,
+    );
     if (runHarness?.enabled === false) return { enabled: false, mode: "off" };
     const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
       ? runConfig.selectedPlugins
       : [];
-    const harnessSelected = selectedPlugins.includes("harness");
+    const harnessSelected = selectedPlugins.some((item) =>
+      HARNESS_PLUGIN_SELECTORS.has(String(item || "").trim()),
+    );
     const options = this._mergeHarnessPluginOptions(
       effectiveHarness,
       runHarness,
@@ -1464,21 +1548,27 @@ export class SessionExecutionEngine {
           : createAgentHookManager();
     const pluginApi = this._buildPluginRegisterApi({
       manager: hookManager,
-      pluginName: "harness",
+      pluginName: HARNESS_PLUGIN_KEY,
       options: harnessOptions,
       runConfig,
     });
     const harnessAlreadyRegistered = hookManager.__noobotHarnessPluginRegistered === true;
     if (!harnessAlreadyRegistered) {
-      registerHarnessPlugin(
-        pluginApi,
-        harnessOptions,
+      const registerHarness = resolvePluginRegisterByCapability(
+        loadedDynamicPlugins,
+        PLUGIN_CAPABILITY.AGENT_REGISTER,
       );
-      Object.defineProperty(hookManager, "__noobotHarnessPluginRegistered", {
-        value: true,
-        enumerable: false,
-        configurable: true,
-      });
+      if (typeof registerHarness === "function") {
+        registerHarness(
+          pluginApi,
+          harnessOptions,
+        );
+        Object.defineProperty(hookManager, "__noobotHarnessPluginRegistered", {
+          value: true,
+          enumerable: false,
+          configurable: true,
+        });
+      }
     } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
       // Keep per-run policy patch behavior even when hook registration is reused.
       pluginApi.policy.appendDenyToolNames(harnessOptions?.denyToolNames || []);
@@ -1513,7 +1603,7 @@ export class SessionExecutionEngine {
         : {}),
       plugins: {
         ...(runConfig?.plugins || {}),
-        harness: harnessOptions,
+        [HARNESS_PLUGIN_KEY]: harnessOptions,
       },
     };
   }
@@ -1524,19 +1614,23 @@ export class SessionExecutionEngine {
       userConfig && typeof userConfig === "object" ? userConfig : {},
     );
     const effectiveWorkflow =
-      effectiveConfig?.plugins?.workflow && typeof effectiveConfig.plugins.workflow === "object"
-        ? effectiveConfig.plugins.workflow
-        : {};
+      resolvePluginOptionsFromConfig(
+        effectiveConfig,
+        WORKFLOW_PLUGIN_SELECTORS,
+      );
     if (effectiveWorkflow?.enabled === false) return { enabled: false, mode: "off" };
     const runWorkflow =
-      runConfig?.plugins?.workflow && typeof runConfig.plugins.workflow === "object"
-        ? runConfig.plugins.workflow
-        : {};
+      resolvePluginOptionsFromConfig(
+        runConfig,
+        WORKFLOW_PLUGIN_SELECTORS,
+      );
     if (runWorkflow?.enabled === false) return { enabled: false, mode: "off" };
     const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
       ? runConfig.selectedPlugins
       : [];
-    const workflowSelected = selectedPlugins.includes("workflow");
+    const workflowSelected = selectedPlugins.some((item) =>
+      WORKFLOW_PLUGIN_SELECTORS.has(String(item || "").trim()),
+    );
     const normalizedEffectiveMode = String(effectiveWorkflow?.mode ?? "off")
       .trim()
       .toLowerCase();
@@ -1563,6 +1657,14 @@ export class SessionExecutionEngine {
       Number.isFinite(Number(next?.maxAutoTransitions)) && Number(next.maxAutoTransitions) > 0
         ? Math.floor(Number(next.maxAutoTransitions))
         : 10;
+    next.contextWindowRecentMessageLimit =
+      Number.isFinite(Number(next?.contextWindowRecentMessageLimit)) &&
+      Number(next.contextWindowRecentMessageLimit) > 0
+        ? Math.floor(Number(next.contextWindowRecentMessageLimit))
+        : 20;
+    next.resolveModelMessages = this._createHarnessResolveModelMessages({
+      harnessOptions: next,
+    });
     if (!String(next?.semanticMode || "").trim()) {
       next.semanticMode = "separate_model";
     }
@@ -1612,21 +1714,27 @@ export class SessionExecutionEngine {
           : createBotHookManager();
     const pluginApi = this._buildPluginRegisterApi({
       manager: botHookManager,
-      pluginName: "workflow",
+      pluginName: WORKFLOW_PLUGIN_KEY,
       options: workflowOptions,
       runConfig,
     });
     const workflowAlreadyRegistered = botHookManager.__noobotWorkflowPluginRegistered === true;
     if (!workflowAlreadyRegistered) {
-      registerWorkflowPlugin(
-        pluginApi,
-        workflowOptions,
+      const registerWorkflow = resolvePluginRegisterByCapability(
+        loadedDynamicPlugins,
+        PLUGIN_CAPABILITY.BOT_REGISTER,
       );
-      Object.defineProperty(botHookManager, "__noobotWorkflowPluginRegistered", {
-        value: true,
-        enumerable: false,
-        configurable: true,
-      });
+      if (typeof registerWorkflow === "function") {
+        registerWorkflow(
+          pluginApi,
+          workflowOptions,
+        );
+        Object.defineProperty(botHookManager, "__noobotWorkflowPluginRegistered", {
+          value: true,
+          enumerable: false,
+          configurable: true,
+        });
+      }
     } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
       // Keep per-run policy patch behavior even when hook registration is reused.
       pluginApi.policy.appendDenyToolNames(workflowOptions?.denyToolNames || []);
@@ -1663,7 +1771,7 @@ export class SessionExecutionEngine {
         : {}),
       plugins: {
         ...(runConfig?.plugins || {}),
-        workflow: workflowOptions,
+        [WORKFLOW_PLUGIN_KEY]: workflowOptions,
       },
     };
   }

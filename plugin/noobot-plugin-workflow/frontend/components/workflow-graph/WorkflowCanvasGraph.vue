@@ -4,7 +4,11 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import {
+  BaseEmptyHint,
+  BaseZoomControls,
+} from "../../../../../client/noobot-chat/src/shared/ui";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
 
@@ -356,16 +360,6 @@ const positionedNodes = computed(() => {
   return positioned;
 });
 
-const rowNodeMap = computed(() => {
-  const map = new Map();
-  for (const nodeItem of positionedNodes.value) {
-    const rowIndex = Number(nodeItem?._rowIndex || 0);
-    if (!map.has(rowIndex)) map.set(rowIndex, []);
-    map.get(rowIndex).push(nodeItem);
-  }
-  return map;
-});
-
 const effectiveSelectedDialogId = computed(
   () => String(props.selectedDialogId || innerSelectedDialogId.value || "").trim(),
 );
@@ -551,26 +545,6 @@ function zoomReset() {
   zoomScale.value = 1;
 }
 
-watch(
-  () =>
-    normalizedNodes.value
-      .map(
-        (item) =>
-          `${item.dialogId}|${item.sessionId}|${item._status}|${item.parallelWave}|${item.waveOrder}|${resolveRuntimeBoxes(item).length}|${(item?._stepDialogIds || []).join(",")}`,
-      )
-      .join("||"),
-  async () => {
-    await nextTick();
-  },
-);
-
-watch(
-  () => effectiveSelectedDialogId.value,
-  async () => {
-    await nextTick();
-  },
-);
-
 function resolveStepLabel(stepItem = {}, stepIndex = 0) {
   const order = Number.isFinite(Number(stepItem?.stepIndex)) ? Number(stepItem.stepIndex) + 1 : stepIndex + 1;
   return `步骤Box #${order}`;
@@ -612,144 +586,122 @@ function handleStepClick(stepItem = {}) {
 </script>
 
 <template>
-  <div class="workflow-toolbar">
-    <div class="workflow-toolbar-title">Canvas流程图</div>
-    <div class="workflow-toolbar-actions">
-      <button type="button" class="workflow-zoom-btn" @click="zoomOut">-</button>
-      <span class="workflow-zoom-text">{{ Math.round(zoomScale * 100) }}%</span>
-      <button type="button" class="workflow-zoom-btn" @click="zoomIn">+</button>
-      <button type="button" class="workflow-zoom-reset" @click="zoomReset">重置</button>
-    </div>
-  </div>
-  <div ref="hostRef" class="workflow-canvas-graph" :style="hostStyle">
-    <div class="workflow-stage" :style="stageStyle">
-      <WorkflowGraphEdges
-        :width="Math.max(stageWidth, 1)"
-        :height="Math.max(graphHeight, 1)"
-        :segments="edgeSegments"
-      />
+  <div class="workflow-canvas-root">
+    <BaseZoomControls
+      title="Canvas流程图"
+      :scale="zoomScale"
+      reset-label="重置"
+      @zoom-in="zoomIn"
+      @zoom-out="zoomOut"
+      @zoom-reset="zoomReset"
+    />
+    <div ref="hostRef" class="workflow-canvas-graph" :style="hostStyle">
+      <div class="workflow-stage" :style="stageStyle">
+        <WorkflowGraphEdges
+          :width="Math.max(stageWidth, 1)"
+          :height="Math.max(graphHeight, 1)"
+          :segments="edgeSegments"
+        />
 
 
 
-      <WorkflowGraphNode
-        v-for="(nodeItem, nodeIndex) in positionedNodes"
-        :key="`${String(nodeItem?.nodeId || nodeItem?.dialogId || nodeItem?.sessionId || '')}-${nodeIndex}`"
-        :node-item="nodeItem"
-        :node-index="nodeIndex"
-        :style-obj="getNodeStyle(nodeItem)"
-        :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem) && nodeItem?._hasRuntimeBoxes === true"
-        :boundary-type="String(nodeItem?._virtualBoundary || '')"
-        :selected="nodeContainsDialogId(nodeItem, effectiveSelectedDialogId)"
-        :expanded="nodeItem?._expanded === true"
-        @click="handleNodeClick"
-      />
+        <WorkflowGraphNode
+          v-for="(nodeItem, nodeIndex) in positionedNodes"
+          :key="`${String(nodeItem?.nodeId || nodeItem?.dialogId || nodeItem?.sessionId || '')}-${nodeIndex}`"
+          :node-item="nodeItem"
+          :node-index="nodeIndex"
+          :style-obj="getNodeStyle(nodeItem)"
+          :clickable="!nodeItem?._virtualBoundary && isActionNode(nodeItem) && nodeItem?._hasRuntimeBoxes === true"
+          :boundary-type="String(nodeItem?._virtualBoundary || '')"
+          :selected="nodeContainsDialogId(nodeItem, effectiveSelectedDialogId)"
+          :expanded="nodeItem?._expanded === true"
+          @click="handleNodeClick"
+        />
 
-      <div class="workflow-minimap" v-if="layoutRows.length && !isCompactGraph">
-        <div class="workflow-minimap-inner">
-          <div
-            v-for="(row, rowIndex) in layoutRows"
-            :key="`${row.key}-${rowIndex}`"
-            class="workflow-minimap-row"
-          >
-            <span
-              v-for="(nodeItem, colIndex) in row.nodes"
-              :key="`${String(nodeItem?.dialogId || '')}-${colIndex}`"
-              class="workflow-minimap-node"
-              :class="resolveStatusClass(nodeItem)"
-            />
+        <div class="workflow-minimap" v-if="layoutRows.length && !isCompactGraph">
+          <div class="workflow-minimap-inner">
+            <div
+              v-for="(row, rowIndex) in layoutRows"
+              :key="`${row.key}-${rowIndex}`"
+              class="workflow-minimap-row"
+            >
+              <span
+                v-for="(nodeItem, colIndex) in row.nodes"
+                :key="`${String(nodeItem?.dialogId || '')}-${colIndex}`"
+                class="workflow-minimap-node"
+                :class="resolveStatusClass(nodeItem)"
+              />
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div v-if="expandedRuntimeNode" class="workflow-runtime-inspector">
-    <div class="workflow-runtime-inspector-header">
-      <div>
-        <div class="workflow-runtime-inspector-title">
-          {{ expandedRuntimeNode?.nodeName || expandedRuntimeNode?.nodeId || "动作节点" }} · 运行态
+    <div v-if="expandedRuntimeNode" class="workflow-runtime-inspector">
+      <div class="workflow-runtime-inspector-header">
+        <div>
+          <div class="workflow-runtime-inspector-title">
+            {{ expandedRuntimeNode?.nodeName || expandedRuntimeNode?.nodeId || "动作节点" }} · 运行态
+          </div>
+          <div class="workflow-runtime-inspector-subtitle">节点Box / 步骤Box，点击步骤Box查看子 agent session</div>
         </div>
-        <div class="workflow-runtime-inspector-subtitle">节点Box / 步骤Box，点击步骤Box查看子 agent session</div>
+        <button type="button" class="workflow-runtime-close" @click="expandedNodeKey = ''">收起</button>
       </div>
-      <button type="button" class="workflow-runtime-close" @click="expandedNodeKey = ''">收起</button>
-    </div>
-    <div class="workflow-runtime-inspector-body">
-      <div
-        v-for="(stateBox, stateIndex) in resolveRuntimeBoxes(expandedRuntimeNode)"
-        :key="`${resolveNodeKey(expandedRuntimeNode)}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
-        class="workflow-runtime-state-box"
-      >
-        <div class="workflow-runtime-state-title">
-          <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
-          <span class="workflow-runtime-state-count">{{ (stateBox?.steps || []).length }} 步</span>
-        </div>
-        <button
-          v-for="(stepItem, stepIndex) in (stateBox?.steps || [])"
-          :key="`${String(stepItem?.stepId || stepItem?.dialogId || stepIndex)}-${stepIndex}`"
-          type="button"
-          class="workflow-runtime-step-box"
-          :class="[
-            resolveStatusClass(stepItem),
-            {
-              'is-selected': String(stepItem?.dialogId || '').trim() === effectiveSelectedDialogId,
-              'is-disabled': !stepHasSession(stepItem),
-            },
-          ]"
-          :disabled="!stepHasSession(stepItem)"
-          @click.stop="handleStepClick(stepItem)"
+      <div class="workflow-runtime-inspector-body">
+        <div
+          v-for="(stateBox, stateIndex) in resolveRuntimeBoxes(expandedRuntimeNode)"
+          :key="`${resolveNodeKey(expandedRuntimeNode)}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
+          class="workflow-runtime-state-box"
         >
-          <span class="workflow-runtime-step-name">{{ resolveStepLabel(stepItem, stepIndex) }}</span>
-          <span class="workflow-runtime-step-status">{{ resolveStatusLabel(stepItem) }}</span>
-        </button>
-        <div v-if="!(stateBox?.steps || []).length" class="workflow-runtime-step-empty">暂无步骤Box</div>
+          <div class="workflow-runtime-state-title">
+            <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
+            <span class="workflow-runtime-state-count">{{ (stateBox?.steps || []).length }} 步</span>
+          </div>
+          <button
+            v-for="(stepItem, stepIndex) in (stateBox?.steps || [])"
+            :key="`${String(stepItem?.stepId || stepItem?.dialogId || stepIndex)}-${stepIndex}`"
+            type="button"
+            class="workflow-runtime-step-box"
+            :class="[
+              resolveStatusClass(stepItem),
+              {
+                'is-selected': String(stepItem?.dialogId || '').trim() === effectiveSelectedDialogId,
+                'is-disabled': !stepHasSession(stepItem),
+              },
+            ]"
+            :disabled="!stepHasSession(stepItem)"
+            @click.stop="handleStepClick(stepItem)"
+          >
+            <span class="workflow-runtime-step-name">{{ resolveStepLabel(stepItem, stepIndex) }}</span>
+            <span class="workflow-runtime-step-status">{{ resolveStatusLabel(stepItem) }}</span>
+          </button>
+          <BaseEmptyHint
+            v-if="!(stateBox?.steps || []).length"
+            class="workflow-runtime-step-empty"
+            text="暂无步骤Box"
+          />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.workflow-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.workflow-toolbar-title {
-  font-size: 13px;
-  color: var(--noobot-text-secondary);
-}
-
-.workflow-toolbar-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.workflow-zoom-btn,
-.workflow-zoom-reset {
-  border: 1px solid var(--noobot-msg-assistant-border);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, #6d4aff 4%);
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--noobot-text-primary);
-}
-
-.workflow-zoom-btn {
-  width: 24px;
-  height: 24px;
-}
-
-.workflow-zoom-reset {
-  padding: 0 8px;
-  height: 24px;
-}
-
-.workflow-zoom-text {
-  font-size: 12px;
-  color: var(--noobot-text-secondary);
-  min-width: 44px;
-  text-align: center;
+.workflow-canvas-root {
+  --workflow-accent-rgb: 109, 74, 255;
+  --workflow-accent-strong-rgb: 122, 75, 244;
+  --workflow-success-rgb: 31, 143, 74;
+  --workflow-failed-rgb: 199, 59, 59;
+  --workflow-space-xs: 6px;
+  --workflow-space-sm: 8px;
+  --workflow-space-md: 10px;
+  --workflow-radius-sm: 6px;
+  --workflow-radius-md: 8px;
+  --workflow-radius-lg: 10px;
+  --workflow-radius-xl: 12px;
+  --workflow-shadow-soft: 0 8px 20px rgba(var(--workflow-accent-rgb), 0.08);
+  --workflow-shadow-card: 0 8px 18px rgba(var(--workflow-accent-rgb), 0.1);
+  --workflow-shadow-hover: 0 5px 12px rgba(var(--workflow-accent-rgb), 0.12);
 }
 
 .workflow-canvas-graph {
@@ -772,11 +724,19 @@ function handleStepClick(stepItem = {}) {
 }
 
 .workflow-runtime-inspector {
-  margin-top: 8px;
-  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 72%, #6d4aff 28%);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 95%, #6d4aff 5%);
-  box-shadow: 0 8px 20px rgba(109, 74, 255, 0.08);
+  margin-top: var(--workflow-space-sm);
+  border: 1px solid color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-border) 72%,
+    rgb(var(--workflow-accent-rgb)) 28%
+  );
+  border-radius: var(--workflow-radius-xl);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 95%,
+    rgb(var(--workflow-accent-rgb)) 5%
+  );
+  box-shadow: var(--workflow-shadow-soft);
   overflow: hidden;
   font-size: 11px;
 }
@@ -786,8 +746,12 @@ function handleStepClick(stepItem = {}) {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 82%, #6d4aff 18%);
+  padding: 9px var(--workflow-space-md);
+  border-bottom: 1px solid color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-border) 82%,
+    rgb(var(--workflow-accent-rgb)) 18%
+  );
 }
 
 .workflow-runtime-inspector-title {
@@ -804,10 +768,18 @@ function handleStepClick(stepItem = {}) {
 .workflow-runtime-close {
   flex: 0 0 auto;
   height: 24px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 72%, #6d4aff 28%);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, #6d4aff 4%);
+  padding: 0 var(--workflow-space-sm);
+  border: 1px solid color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-border) 72%,
+    rgb(var(--workflow-accent-rgb)) 28%
+  );
+  border-radius: calc(var(--workflow-radius-sm) + 1px);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 96%,
+    rgb(var(--workflow-accent-rgb)) 4%
+  );
   color: var(--noobot-text-primary);
   cursor: pointer;
 }
@@ -815,18 +787,26 @@ function handleStepClick(stepItem = {}) {
 .workflow-runtime-inspector-body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
+  gap: var(--workflow-space-sm);
   max-height: 280px;
   overflow: auto;
-  padding: 8px;
+  padding: var(--workflow-space-sm);
 }
 
 .workflow-runtime-state-box {
-  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 72%, #6d4aff 28%);
-  border-radius: 10px;
-  padding: 6px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #6d4aff 6%);
-  box-shadow: 0 8px 18px rgba(109, 74, 255, 0.1);
+  border: 1px solid color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-border) 72%,
+    rgb(var(--workflow-accent-rgb)) 28%
+  );
+  border-radius: var(--workflow-radius-lg);
+  padding: var(--workflow-space-xs);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 94%,
+    rgb(var(--workflow-accent-rgb)) 6%
+  );
+  box-shadow: var(--workflow-shadow-card);
 }
 
 .workflow-runtime-state-title {
@@ -836,7 +816,7 @@ function handleStepClick(stepItem = {}) {
   gap: 8px;
   min-height: 18px;
   margin-bottom: 5px;
-  color: color-mix(in srgb, #6d4aff 78%, var(--noobot-text-primary) 22%);
+  color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 78%, var(--noobot-text-primary) 22%);
   font-weight: 700;
 }
 
@@ -854,8 +834,8 @@ function handleStepClick(stepItem = {}) {
   justify-content: space-between;
   gap: 8px;
   border: 1px solid var(--noobot-msg-assistant-border);
-  border-radius: 8px;
-  padding: 0 8px;
+  border-radius: var(--workflow-radius-md);
+  padding: 0 var(--workflow-space-sm);
   margin-top: 5px;
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, #000 2%);
   color: var(--noobot-text-primary);
@@ -864,13 +844,17 @@ function handleStepClick(stepItem = {}) {
 }
 
 .workflow-runtime-step-box:hover:not(.is-disabled) {
-  border-color: color-mix(in srgb, #6d4aff 58%, var(--noobot-msg-assistant-border) 42%);
-  box-shadow: 0 5px 12px rgba(109, 74, 255, 0.12);
+  border-color: color-mix(
+    in srgb,
+    rgb(var(--workflow-accent-rgb)) 58%,
+    var(--noobot-msg-assistant-border) 42%
+  );
+  box-shadow: var(--workflow-shadow-hover);
 }
 
 .workflow-runtime-step-box.is-selected {
-  border-color: rgba(109, 74, 255, 0.95);
-  box-shadow: 0 0 0 2px rgba(109, 74, 255, 0.16);
+  border-color: rgba(var(--workflow-accent-rgb), 0.95);
+  box-shadow: 0 0 0 2px rgba(var(--workflow-accent-rgb), 0.16);
 }
 
 .workflow-runtime-step-box.is-disabled {
@@ -883,11 +867,11 @@ function handleStepClick(stepItem = {}) {
 }
 
 .workflow-runtime-step-box.failed {
-  border-color: rgba(199, 59, 59, 0.55);
+  border-color: rgba(var(--workflow-failed-rgb), 0.55);
 }
 
 .workflow-runtime-step-box.running {
-  border-color: rgba(122, 75, 244, 0.6);
+  border-color: rgba(var(--workflow-accent-strong-rgb), 0.6);
 }
 
 .workflow-runtime-step-name {
@@ -904,10 +888,10 @@ function handleStepClick(stepItem = {}) {
 }
 
 .workflow-runtime-step-empty {
-  padding: 7px 8px;
+  padding: 7px var(--workflow-space-sm);
   color: var(--noobot-text-secondary);
   border: 1px dashed var(--noobot-msg-assistant-border);
-  border-radius: 8px;
+  border-radius: var(--workflow-radius-md);
 }
 
 
@@ -916,8 +900,8 @@ function handleStepClick(stepItem = {}) {
   right: 10px;
   bottom: 10px;
   border: 1px solid var(--noobot-msg-assistant-border);
-  border-radius: 8px;
-  padding: 6px;
+  border-radius: var(--workflow-radius-md);
+  padding: var(--workflow-space-xs);
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #000 6%);
   opacity: 0.72;
   z-index: 4;
@@ -943,48 +927,18 @@ function handleStepClick(stepItem = {}) {
 }
 
 .workflow-minimap-node.success {
-  background: rgba(31, 143, 74, 0.65);
+  background: rgba(var(--workflow-success-rgb), 0.65);
 }
 
 .workflow-minimap-node.failed {
-  background: rgba(199, 59, 59, 0.72);
+  background: rgba(var(--workflow-failed-rgb), 0.72);
 }
 
 .workflow-minimap-node.running {
-  background: rgba(122, 75, 244, 0.72);
+  background: rgba(var(--workflow-accent-strong-rgb), 0.72);
 }
 
 @media (max-width: 480px) {
-  .workflow-toolbar {
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-  }
-
-  .workflow-toolbar-title {
-    display: none;
-  }
-
-  .workflow-toolbar-actions {
-    margin-left: auto;
-    gap: 4px;
-  }
-
-  .workflow-zoom-btn {
-    width: 28px;
-    height: 28px;
-  }
-
-  .workflow-zoom-reset {
-    height: 28px;
-    padding: 0 7px;
-  }
-
-  .workflow-zoom-text {
-    min-width: 38px;
-    font-size: 11px;
-  }
-
   .workflow-canvas-graph {
     width: 100%;
   }

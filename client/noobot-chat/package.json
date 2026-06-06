@@ -4,6 +4,9 @@
   "version": "1.1.0",
   "type": "module",
   "scripts": {
+    "generate:frontend-plugin-entries": "node scripts/generate-frontend-plugin-entries.mjs",
+    "check:plugin-frontend-reverse-deps": "node scripts/check-plugin-frontend-reverse-deps.mjs",
+    "prebuild": "npm run -s generate:frontend-plugin-entries",
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
@@ -12,7 +15,7 @@
     "serve:caddy": "bash ./deploy/run-caddy.sh",
     "serve:caddy:restart": "bash ./deploy/restart-caddy.sh",
     "check:i18n-imports": "node ../../scripts/check-i18n-imports.mjs --project=client",
-    "pretest": "npm run -s check:i18n-imports"
+    "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:plugin-frontend-reverse-deps && npm run -s check:i18n-imports"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

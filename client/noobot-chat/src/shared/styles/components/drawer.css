@@ -1,0 +1,78 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+/*
+ * Shared right-side drawer shell.
+ * Use `class="noobot-side-drawer"` on el-drawer so app panels and plugins share
+ * the same header/body treatment. `workspace-drawer` is kept as a compatibility
+ * alias for the built-in workspace drawer.
+ */
+.noobot-side-drawer .el-drawer,
+.workspace-drawer .el-drawer {
+  background: var(--noobot-panel-bg);
+}
+
+.noobot-side-drawer .el-drawer__header,
+.workspace-drawer .el-drawer__header,
+.noobot-side-drawer__header {
+  margin-bottom: 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--noobot-divider);
+  background: var(--noobot-panel-head-bg);
+  backdrop-filter: blur(10px);
+  color: var(--noobot-text-strong);
+}
+
+.noobot-side-drawer .el-drawer__title,
+.workspace-drawer .el-drawer__title,
+.noobot-side-drawer__title {
+  color: var(--noobot-text-strong);
+  font-weight: 600;
+}
+
+.noobot-side-drawer .el-drawer__body,
+.workspace-drawer .el-drawer__body,
+.noobot-side-drawer__body {
+  background: var(--noobot-panel-bg);
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.noobot-side-drawer-modal,
+.workspace-drawer-modal {
+  background: var(--noobot-mask-bg);
+}
+
+@media (max-width: 720px) {
+  .noobot-side-drawer,
+  .workspace-drawer {
+    width: 100% !important;
+  }
+
+  .noobot-side-drawer .el-drawer,
+  .workspace-drawer .el-drawer {
+    height: 100svh !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .noobot-side-drawer .el-drawer__header,
+  .workspace-drawer .el-drawer__header,
+  .noobot-side-drawer__header {
+    flex: 0 0 auto;
+  }
+
+  .noobot-side-drawer .el-drawer__body,
+  .workspace-drawer .el-drawer__body,
+  .noobot-side-drawer__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 !important;
+  }
+}

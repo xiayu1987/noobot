@@ -47,6 +47,135 @@ function resolveWorkflowSourceText(ctx = {}, agentResult = {}, hookPoint = "") {
   return String(ctx?.userMessage || "").trim();
 }
 
+function extractWorkflowMessageTextContent(content = "") {
+  if (content === undefined || content === null) return "";
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((item = {}) => {
+        if (typeof item === "string") return item;
+        if (!item || typeof item !== "object") return "";
+        return String(item?.text || item?.content || item?.value || "").trim();
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  if (typeof content === "object") {
+    return String(content?.text || content?.content || content?.value || "").trim();
+  }
+  return String(content || "").trim();
+}
+
+function resolveWorkflowCompatibleRole(message = {}) {
+  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  if (role === "human") return "user";
+  if (role === "ai") return "assistant";
+  if (role) return role;
+  const type = String(message?.type || message?.lc_kwargs?.type || "").trim().toLowerCase();
+  if (type === "human") return "user";
+  if (type === "ai") return "assistant";
+  if (type === "system") return "system";
+  if (type === "tool") return "tool";
+  if (type) return type;
+  return "";
+}
+
+function resolveWorkflowToolCallName(toolCall = {}) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  const fnName = String(toolCall?.function?.name || "").trim();
+  if (fnName) return fnName;
+  return String(toolCall?.name || "").trim();
+}
+
+function resolveWorkflowToolCallArguments(toolCall = {}) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  const fnArgs = toolCall?.function?.arguments;
+  if (typeof fnArgs === "string") return fnArgs.trim();
+  if (fnArgs && typeof fnArgs === "object") {
+    try {
+      return JSON.stringify(fnArgs);
+    } catch {
+      return String(fnArgs);
+    }
+  }
+  const args = toolCall?.args;
+  if (typeof args === "string") return args.trim();
+  if (args && typeof args === "object") {
+    try {
+      return JSON.stringify(args);
+    } catch {
+      return String(args);
+    }
+  }
+  return "";
+}
+
+function buildWorkflowToolCallSemanticText(toolCalls = [], locale = "zh-CN") {
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  if (!calls.length) return "";
+  const isEnglish = String(locale || "").trim().toLowerCase() === "en-us";
+  return calls
+    .map((toolCall = {}) => {
+      const name = resolveWorkflowToolCallName(toolCall) || (isEnglish ? "unknown_script" : "未知脚本");
+      const args = resolveWorkflowToolCallArguments(toolCall) || (isEnglish ? "none" : "无参数");
+      return isEnglish
+        ? `Semantic execution: run ${name} script with arguments ${args}`
+        : `语义执行 ${name}脚本,参数${args}`;
+    })
+    .join("\n");
+}
+
+function normalizeWorkflowSemanticContextMessage(message = {}, locale = "zh-CN") {
+  const role = resolveWorkflowCompatibleRole(message);
+  if (!role) return null;
+  const content = extractWorkflowMessageTextContent(
+    message?.content ?? message?.lc_kwargs?.content ?? message,
+  );
+  const toolCalls = Array.isArray(message?.tool_calls)
+    ? message.tool_calls
+    : Array.isArray(message?.toolCalls)
+      ? message.toolCalls
+      : Array.isArray(message?.additional_kwargs?.tool_calls)
+        ? message.additional_kwargs.tool_calls
+        : Array.isArray(message?.lc_kwargs?.tool_calls)
+          ? message.lc_kwargs.tool_calls
+          : [];
+  if (role === "tool") {
+    return content ? { role: "assistant", content } : null;
+  }
+  if ((role === "assistant" || role === "ai") && toolCalls.length) {
+    const semanticContent = buildWorkflowToolCallSemanticText(toolCalls, locale);
+    return semanticContent ? { role: "user", content: semanticContent } : null;
+  }
+  if (!content) return null;
+  if (!["system", "user", "assistant"].includes(role)) return null;
+  return { role, content };
+}
+
+function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {}, locale = "zh-CN" } = {}) {
+  const fallbackMessages = Array.isArray(ctx?.messages) ? ctx.messages : [];
+  if (typeof options?.resolveModelMessages === "function") {
+    try {
+      const resolved = options.resolveModelMessages({
+        ctx,
+        purpose: WORKFLOW_SEMANTIC.PURPOSE,
+        messages: fallbackMessages,
+      });
+      if (Array.isArray(resolved)) {
+        return resolved
+          .map((item = {}) => normalizeWorkflowSemanticContextMessage(item, locale))
+          .filter((item) => item && String(item.content || "").trim());
+      }
+    } catch {
+      // Fall through to local ctx.messages compatibility fallback.
+    }
+  }
+  return fallbackMessages
+    .map((item = {}) => normalizeWorkflowSemanticContextMessage(item, locale))
+    .filter((item) => item && String(item.content || "").trim());
+}
+
 function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
   agentResult.turnMessages = turnMessages;
@@ -724,19 +853,20 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
   const locale = String(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE).trim();
   const userAttachmentMetas = resolveWorkflowInputAttachmentMetas(ctx);
   const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachmentMetas, ctx);
-  const semanticMessages = [
-    {
-      role: "user",
-      content: [
-        `用户输入:\n${userMessage || "(empty)"}`,
-        attachmentPlanningBlock,
-        `主模型回复:\n${sourceText || "(empty)"}`,
-      ]
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-        .join("\n\n"),
-    },
-  ];
+  const contextMessages = resolveWorkflowSemanticContextMessages({ options, ctx, locale });
+  const semanticTaskMessage = {
+    role: "user",
+    content: [
+      "请基于以上会话上下文和以下当前用户消息规划工作流。",
+      `当前用户消息:\n${userMessage || "(empty)"}`,
+      attachmentPlanningBlock,
+      `主模型回复/工作流源输入:\n${sourceText || "(empty)"}`,
+    ]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .join("\n\n"),
+  };
+  const semanticMessages = [...contextMessages, semanticTaskMessage];
   const result = await options.capabilityModelInvoker({
     purpose: WORKFLOW_SEMANTIC.PURPOSE,
     domain: WORKFLOW_SEMANTIC.DOMAIN,

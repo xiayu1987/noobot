@@ -67,7 +67,23 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     events.push("after_agent_dispatch"),
   );
   botHookManager.on(BOT_HOOK_POINTS.AFTER_SESSION_RUN, () => events.push("after_session_run"));
-  const runner = createRunner({ botHookManager });
+  const runner = createRunner({
+    botHookManager,
+    prepareAgentTurnExecution: async () => {
+      const runtimeAgentContext = {
+        payload: {
+          messages: {
+            history: [
+              { role: "user", content: "history user" },
+              { role: "assistant", content: "history assistant" },
+            ],
+          },
+        },
+        execution: { controllers: { runtime: { attachmentMetas: [] } } },
+      };
+      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+    },
+  });
 
   const result = await runner.runSession({
     userId: "u1",
@@ -85,6 +101,10 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   ]);
   assert.equal(Boolean(beforeDispatchContext?.agentContext), false);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");
+  assert.deepEqual(beforeDispatchContext?.messages, [
+    { role: "user", content: "history user" },
+    { role: "assistant", content: "history assistant" },
+  ]);
 });
 
 test("SessionExecutionRunner emits bot error hooks", async () => {

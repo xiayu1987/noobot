@@ -77,6 +77,39 @@ test("session-routes: 会话查询异常返回 400 + 标准错误体", async () 
   });
 });
 
+test("session-routes: 插件诊断接口返回发现/加载/错误信息", async () => {
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/plugins`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(typeof payload?.plugins?.discoveredCount, "number");
+    assert.equal(typeof payload?.plugins?.loadedCount, "number");
+    assert.equal(typeof payload?.plugins?.skippedCount, "number");
+    assert.ok(Array.isArray(payload?.plugins?.pluginIds));
+    assert.ok(Array.isArray(payload?.plugins?.loaded));
+    assert.ok(Array.isArray(payload?.plugins?.skipped));
+    assert.ok(Array.isArray(payload?.plugins?.errors));
+  });
+});
+
 test("session-routes: 删除 session 时清理 harness 运行记录", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-route-harness-"));
   const runsDir = path.join(basePath, "runtime", "harness", "runs");

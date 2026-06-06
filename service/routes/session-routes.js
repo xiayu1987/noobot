@@ -5,57 +5,11 @@
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
-import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../agent/src/system-core/hook/index.js";
-import { registerNoobotPlugin as registerHarnessPlugin } from "../../plugin/noobot-plugin-harness/src/index.js";
-import { registerNoobotPlugin as registerWorkflowPlugin } from "../../plugin/noobot-plugin-workflow/src/index.js";
+import { createServicePluginHost } from "../services/service-plugin-host.js";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
-async function emitAfterSessionDeleteHook({
-  bot = null,
-  userId = "",
-  sessionId = "",
-  deletedSessionIds = [],
-} = {}) {
-  const basePath =
-    bot && typeof bot.getWorkspacePath === "function"
-      ? String(bot.getWorkspacePath(userId) || "").trim()
-      : "";
-  if (!basePath) return;
-
-  const hookManager = createAgentHookManager();
-  registerHarnessPlugin(
-    { hookManager },
-    {
-      enabled: true,
-      basePath,
-      trace: false,
-      promptPolicy: false,
-      writeContextSnapshot: false,
-      writePrompts: false,
-      finalResponseGuard: false,
-    },
-  );
-  registerWorkflowPlugin(
-    { hookManager },
-    {
-      enabled: true,
-      mode: "on",
-      priority: 10,
-      timeoutMs: 5000,
-    },
-  );
-
-  await hookManager.emit(AGENT_HOOK_POINTS.AFTER_SESSION_DELETE, {
-    userId: String(userId || "").trim(),
-    sessionId: String(sessionId || "").trim(),
-    deletedSessionIds: Array.isArray(deletedSessionIds)
-      ? deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
-      : [],
-    basePath,
-    executionScope: "primary",
-  });
-}
+const servicePluginHost = createServicePluginHost();
 
 export function registerSessionRoutes(
   app,
@@ -77,6 +31,19 @@ export function registerSessionRoutes(
       return null;
     }
   }
+
+  app.get(
+    "/internal/plugins",
+    jsonRoute(async (req, res) => {
+      const refresh =
+        String(req.query?.refresh || "").trim().toLowerCase() === "1" ||
+        String(req.query?.refresh || "").trim().toLowerCase() === "true";
+      res.json({
+        ok: true,
+        plugins: await servicePluginHost.getPluginDiagnostics({ refresh }),
+      });
+    }),
+  );
 
   app.get(
     "/internal/session/:userId/:sessionId",
@@ -122,7 +89,7 @@ export function registerSessionRoutes(
         userId,
         sessionId,
       });
-      await emitAfterSessionDeleteHook({
+      await servicePluginHost.emitAfterSessionDelete({
         bot,
         userId,
         sessionId: normalizedSessionId,

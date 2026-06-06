@@ -1,0 +1,28 @@
+{
+  "id": "harness",
+  "pluginKey": "harness",
+  "name": "noobot-plugin-harness",
+  "version": "1.1.0",
+  "capabilities": [
+    "agent.harness",
+    "service.after_session_delete",
+    "agent.register"
+  ],
+  "runtimeOptions": {
+    "service.after_session_delete": {
+      "enabled": true,
+      "trace": false,
+      "promptPolicy": false,
+      "writeContextSnapshot": false,
+      "writePrompts": false,
+      "finalResponseGuard": false
+    }
+  },
+  "apiVersion": "1",
+  "entry": "src/index.js",
+  "frontend": {
+    "apiVersion": "1",
+    "entry": "frontend/index.js"
+  },
+  "enabledByDefault": true
+}

@@ -854,7 +854,7 @@ const drawerPanels = computed(() => [
         :title="drawer.title"
         :size="drawerSize"
         destroy-on-close
-        class="workspace-drawer"
+        class="workspace-drawer noobot-side-drawer"
       >
         <component
           :is="drawer.component"
@@ -896,29 +896,6 @@ const drawerPanels = computed(() => [
   background: var(--noobot-panel-bg);
   min-width: 0;
 }
-
-:deep(.workspace-drawer .el-drawer) {
-  background: var(--noobot-panel-bg);
-}
-
-:deep(.workspace-drawer .el-drawer__header) {
-  margin-bottom: 0;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--noobot-divider);
-  background: var(--noobot-panel-head-bg);
-  backdrop-filter: blur(10px);
-  color: var(--noobot-text-strong);
-}
-
-:deep(.workspace-drawer .el-drawer__body) {
-  background: var(--noobot-panel-bg);
-  padding: 8px;
-  box-sizing: border-box;
-  overflow: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
 :deep(.workspace-drawer .el-tree) {
   --el-tree-node-hover-bg-color: var(--noobot-surface-item-hover);
   --el-tree-text-color: var(--noobot-text-main);
@@ -938,27 +915,6 @@ const drawerPanels = computed(() => [
     background: var(--noobot-mask-bg);
     z-index: 18;
   }
-
-  :deep(.workspace-drawer) {
-    width: 100% !important;
-  }
-
-  :deep(.workspace-drawer .el-drawer) {
-    height: 100svh !important;
-    display: flex;
-    flex-direction: column;
-  }
-
-  :deep(.workspace-drawer .el-drawer__header) {
-    flex: 0 0 auto;
-  }
-
-  :deep(.workspace-drawer .el-drawer__body) {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: 0 !important;
-  }
-
   .app-shell-root { min-height: 100svh; }
 
 }

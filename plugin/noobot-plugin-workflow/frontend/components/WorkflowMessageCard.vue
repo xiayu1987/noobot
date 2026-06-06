@@ -6,11 +6,15 @@
 <script setup>
 import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { getWorkflowSessionDetailApi } from "../../services/api/chatApi";
-import { applyCompletedToolLogsToMessages } from "../../composables/infra/sessionToolLogs";
-import { buildViewMessage, foldConversationMessages } from "../../composables/infra/messageModel";
+import { getWorkflowSessionDetailApi } from "../../../../client/noobot-chat/src/services/api/chatApi";
+import { applyCompletedToolLogsToMessages } from "../../../../client/noobot-chat/src/composables/infra/sessionToolLogs";
+import { buildViewMessage, foldConversationMessages } from "../../../../client/noobot-chat/src/composables/infra/messageModel";
+import {
+  BaseEmptyHint,
+  BaseMessageErrorAlert,
+} from "../../../../client/noobot-chat/src/shared/ui";
 import { WorkflowCanvasGraph } from "./workflow-graph";
-import ChatMessageItem from "./ChatMessageItem.vue";
+import WorkflowSessionMessageItem from "./WorkflowSessionMessageItem.vue";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
@@ -461,6 +465,10 @@ const displayNodeMessages = computed(() =>
   ).map((messageItem = {}) => normalizeNodeMessageForDisplay(messageItem)),
 );
 
+const nodeSessionAllMessages = computed(() =>
+  Array.isArray(rawNodeSessionMessages.value) ? rawNodeSessionMessages.value : [],
+);
+
 function stringifyJson(value = null) {
   if (value === undefined) return "";
   if (typeof value === "string") return value;
@@ -578,6 +586,11 @@ function handleSelectedDialogUpdate(dialogId = "") {
         @step-click="openNodeSession"
       />
     </div>
+    <BaseEmptyHint
+      v-else
+      class="workflow-node-empty"
+      text="暂无工作流节点"
+    />
   </div>
 
   <el-drawer
@@ -587,34 +600,41 @@ function handleSelectedDialogUpdate(dialogId = "") {
     destroy-on-close
     :append-to-body="true"
     :title="`节点会话 ${selectedNodeSessionId || ''}`"
-    class="workflow-node-session-drawer"
+    modal-class="workflow-node-session-modal noobot-side-drawer-modal"
+    body-class="workflow-node-session-drawer__body noobot-side-drawer__body"
+    header-class="workflow-node-session-drawer__header noobot-side-drawer__header"
+    class="workflow-node-session-drawer noobot-side-drawer"
   >
-    <div v-loading="viewerLoading">
-      <el-alert
-        v-if="viewerError"
-        :title="viewerError"
-        type="error"
-        :closable="false"
-        show-icon
-      />
-      <template v-else>
-        <ChatMessageItem
+    <div
+      v-loading="viewerLoading"
+      class="workflow-node-session-content"
+      element-loading-text="正在加载节点会话..."
+      element-loading-background="var(--noobot-panel-bg)"
+    >
+      <BaseMessageErrorAlert :error="viewerError" />
+      <template v-if="!viewerError">
+        <div
           v-for="(messageItem, messageIndex) in displayNodeMessages"
           :key="`thinking-${String(messageItem?.ts || '')}-${messageIndex}`"
-          class="workflow-node-chat-item"
-          :message-item="messageItem"
-          :all-messages="rawNodeSessionMessages"
-          :session-docs="[]"
-          :user-id="userId"
-          :auth-fetch="authFetch"
-          :render-markdown="renderMarkdown"
-          :format-time="formatTime"
-          :format-file-size="formatFileSize"
-          :is-image-mime="isImageMime"
-        />
-        <div v-if="!displayNodeMessages.length && !viewerLoading" class="workflow-node-empty">
-          暂无节点会话内容
+          class="workflow-node-session-item"
+        >
+          <WorkflowSessionMessageItem
+            :message-item="messageItem"
+            :all-messages="nodeSessionAllMessages"
+            :session-docs="selectedNodeSessionDocs"
+            :user-id="userId"
+            :auth-fetch="authFetch"
+            :render-markdown="renderMarkdown"
+            :format-time="formatTime"
+            :format-file-size="formatFileSize"
+            :is-image-mime="isImageMime"
+          />
         </div>
+        <BaseEmptyHint
+          v-if="!displayNodeMessages.length && !viewerLoading"
+          class="workflow-node-empty"
+          text="暂无节点会话内容"
+        />
       </template>
     </div>
   </el-drawer>
@@ -622,20 +642,25 @@ function handleSelectedDialogUpdate(dialogId = "") {
 
 <style scoped>
 .workflow-card {
+  --noobot-text-primary: var(--noobot-text-main);
+  --workflow-card-space-sm: 10px;
+  --workflow-card-space-md: 12px;
+  --workflow-card-radius-sm: 7px;
+  --workflow-card-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--noobot-radius-md);
-  padding: 12px;
-  margin-bottom: 10px;
+  padding: var(--workflow-card-space-md);
+  margin-bottom: var(--workflow-card-space-sm);
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, #6d4aff 4%);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--workflow-card-shadow);
 }
 
 .workflow-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--workflow-card-space-md);
+  margin-bottom: var(--workflow-card-space-sm);
 }
 
 .workflow-card-title {
@@ -652,9 +677,9 @@ function handleSelectedDialogUpdate(dialogId = "") {
 .workflow-preview-toggle {
   flex: 0 0 auto;
   height: 26px;
-  padding: 0 10px;
+  padding: 0 var(--workflow-card-space-sm);
   border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 76%, #6d4aff 24%);
-  border-radius: 7px;
+  border-radius: var(--workflow-card-radius-sm);
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #6d4aff 6%);
   color: var(--noobot-text-primary);
   font-size: 12px;
@@ -697,7 +722,7 @@ function handleSelectedDialogUpdate(dialogId = "") {
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--workflow-card-space-sm) var(--workflow-card-space-md);
   color: var(--noobot-text-primary);
   font-size: 12px;
   line-height: 1.55;
@@ -706,7 +731,7 @@ function handleSelectedDialogUpdate(dialogId = "") {
 }
 
 .workflow-node-list {
-  margin-top: 10px;
+  margin-top: var(--workflow-card-space-sm);
 }
 
 .workflow-node-title {
@@ -720,24 +745,44 @@ function handleSelectedDialogUpdate(dialogId = "") {
   font-size: 13px;
 }
 
-:deep(.workflow-node-chat-item.msg-wrapper) {
+.workflow-node-session-item {
   margin-bottom: 12px;
 }
 
-:deep(.workflow-node-chat-item .msg-content) {
-  max-width: 100%;
+.workflow-node-session-item:last-child {
+  margin-bottom: 0;
 }
 </style>
 
 <style>
 .workflow-node-session-drawer {
-  --noobot-panel-bg: var(--noobot-msg-assistant-bg);
-  --noobot-panel-border: var(--noobot-msg-assistant-border);
-  --noobot-panel-head-bg: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #e5e7eb 6%);
+  --noobot-text-primary: var(--noobot-text-main);
 }
 
-.workflow-node-session-drawer .el-drawer__body {
-  padding-top: 10px;
-  background: var(--noobot-panel-bg);
+.workflow-node-session-drawer__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.workflow-node-session-content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 260px;
+}
+
+.workflow-node-session-content .el-loading-mask {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workflow-node-session-content .el-loading-spinner {
+  top: auto;
+  margin-top: 0;
+}
+
+.workflow-node-session-drawer__body .workflow-node-empty {
+  color: var(--noobot-text-secondary);
+  font-size: 13px;
 }
 </style>

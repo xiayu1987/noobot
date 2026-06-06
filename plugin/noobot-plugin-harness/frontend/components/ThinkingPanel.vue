@@ -5,8 +5,18 @@
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useLocale } from "../../shared/i18n/useLocale";
-import { isHarnessInjectedMessage } from "../../composables/infra/messageModel";
+import { useLocale } from "../../../../client/noobot-chat/src/shared/i18n/useLocale";
+import { isHarnessInjectedMessage } from "../../../../client/noobot-chat/src/composables/infra/messageModel";
+import {
+  BaseEmptyHint,
+  BaseMetaLabel,
+  BaseNoteBlock,
+  BasePillButton,
+  BaseSectionHeader,
+  BaseTabPanelBody,
+  BaseThinkingLogLine,
+  BaseThinkingPanelShell,
+} from "../../../../client/noobot-chat/src/shared/ui";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
@@ -386,79 +396,73 @@ onBeforeUnmount(() => {
 
 <template>
   <template v-if="hasThinking">
-      <el-collapse
+      <BaseThinkingPanelShell
         v-model="messageItem.thinkingOpenNames"
-        class="thinking-collapse noobot-flat-card"
+        item-name="thinking-panel"
       >
-      <el-collapse-item name="thinking-panel">
         <template #title>
-          <div class="thinking-title-row">
-            <span class="thinking-title-text noobot-flat-chip">{{ translate("message.thinkingExpand") }}</span>
-            <span class="thinking-elapsed noobot-flat-chip">
-              {{ translate("message.thinkingElapsed", { duration: getThinkingDurationLabel(messageItem) }) }}
-            </span>
-          </div>
+          <BaseSectionHeader :title="translate('message.thinkingExpand')" class="thinking-title-row">
+            <template #extra>
+              <span class="thinking-elapsed noobot-flat-chip">
+                {{ translate("message.thinkingElapsed", { duration: getThinkingDurationLabel(messageItem) }) }}
+              </span>
+            </template>
+          </BaseSectionHeader>
         </template>
-        <el-tabs class="thinking-tabs">
+        <el-tabs>
           <el-tab-pane :label="translate('message.executionProcess', { count: getExecutionLogCount(messageItem) })">
-            <div class="thinking-body-scroll">
+            <BaseTabPanelBody>
               <div
                 v-for="(logItem, logIndex) in getExecutionLogs(messageItem)"
                 :key="`realtime-${logIndex}`"
-                class="thinking-step thinking-single-line"
               >
-                <span class="thinking-event">[{{ logItem.type || logItem.event }}]</span>
-                <span class="thinking-line-text">{{ logItem.text }}</span>
+                <BaseThinkingLogLine
+                  :event-text="logItem.type || logItem.event"
+                  :content-text="logItem.text"
+                />
               </div>
-              <div
+              <BaseEmptyHint
                 v-if="!getExecutionLogCount(messageItem) && messageItem.pending"
-                class="thinking-empty"
-              >
-                {{ translate("message.waitingRealtimeLog") }}
-              </div>
-              <div
+                :text="translate('message.waitingRealtimeLog')"
+              />
+              <BaseEmptyHint
                 v-if="!getExecutionLogCount(messageItem) && !messageItem.pending"
-                class="thinking-empty"
-              >
-                {{ translate("message.noExecutionLogs") }}
-              </div>
-            </div>
+                :text="translate('message.noExecutionLogs')"
+              />
+            </BaseTabPanelBody>
           </el-tab-pane>
           <el-tab-pane :label="translate('message.thinkingDetails', { count: getThinkingDetailCount(messageItem) })">
-            <div class="thinking-body-scroll">
+            <BaseTabPanelBody>
               <template v-if="!messageItem.pending">
                 <div
                   v-for="(groupedToolLogs, groupedToolLogsIndex) in groupCompletedToolLogs(messageItem)"
                   :key="`tool-group-${groupedToolLogsIndex}`"
                   class="thinking-group"
                 >
-                  <div class="thinking-group-title">
-                    {{ groupedToolLogs.label }}
-                  </div>
+                  <BaseMetaLabel class="thinking-group-title" :text="groupedToolLogs.label" />
                   <div
                     v-for="(toolLogItem, toolLogIndex) in groupedToolLogs.items"
                     :key="`tool-log-${groupedToolLogsIndex}-${toolLogIndex}`"
-                    class="thinking-step tool-step thinking-detail-step thinking-single-line"
-                    :style="{ marginLeft: `${toolLogItem.indent || 0}px` }"
                   >
-                    <span class="thinking-tree-prefix">
-                      {{ getThinkingTreePrefix(toolLogItem) }}
-                    </span>
-                    <span class="thinking-event">[{{ toolLogItem.type || toolLogItem.event }}]</span>
-                    <span
-                      class="thinking-detail-text thinking-line-text is-expandable"
-                      :class="{
-                        'is-expanded': isThinkingDetailExpanded(
+                    <BaseThinkingLogLine
+                      :indent="Number(toolLogItem.indent || 0)"
+                      :prefix-text="getThinkingTreePrefix(toolLogItem)"
+                      :event-text="toolLogItem.type || toolLogItem.event"
+                      :content-text="toolLogItem.text"
+                      :tool="true"
+                      :expandable="true"
+                      :expanded="
+                        isThinkingDetailExpanded(
                           messageItem,
                           getThinkingDetailItemKey(
                             groupedToolLogs,
                             toolLogItem,
                             toolLogIndex,
                           ),
-                        ),
-                      }"
-                      :title="toolLogItem.text || ''"
-                      @click="
+                        )
+                      "
+                      :title-text="toolLogItem.text || ''"
+                      @toggle="
                         toggleThinkingDetailExpanded(
                           messageItem,
                           getThinkingDetailItemKey(
@@ -468,84 +472,51 @@ onBeforeUnmount(() => {
                           ),
                         )
                       "
-                    >
-                      {{ toolLogItem.text }}
-                    </span>
+                    />
                   </div>
                 </div>
-                <div v-if="!getThinkingDetailCount(messageItem)" class="thinking-empty">
-                  {{ translate("message.noToolCalls") }}
-                </div>
+                <BaseEmptyHint
+                  v-if="!getThinkingDetailCount(messageItem)"
+                  :text="translate('message.noToolCalls')"
+                />
               </template>
-              <div v-else class="thinking-empty">{{ translate("message.detailsAfterDone") }}</div>
-            </div>
+              <BaseEmptyHint v-else :text="translate('message.detailsAfterDone')" />
+            </BaseTabPanelBody>
           </el-tab-pane>
           <el-tab-pane :label="translate('message.injectedMessages', { count: getInjectedMessageCount() })">
-            <div class="thinking-body-scroll">
-              <div
+            <BaseTabPanelBody>
+              <BaseNoteBlock
                 v-for="(injectedMessage, injectedMessageIndex) in injectedMessages"
                 :key="`injected-${injectedMessageIndex}-${String(injectedMessage.ts || '')}`"
-                class="thinking-injected-message"
-              >
-                <div class="thinking-injected-title">
-                  {{ formatInjectedMessageTitle(injectedMessage, injectedMessageIndex) }}
-                </div>
-                <pre class="thinking-injected-content">{{ injectedMessage.content }}</pre>
-              </div>
-              <div v-if="!getInjectedMessageCount()" class="thinking-empty">
-                {{ translate("message.noInjectedMessages") }}
-              </div>
-            </div>
+                :title="formatInjectedMessageTitle(injectedMessage, injectedMessageIndex)"
+                :content="String(injectedMessage.content || '')"
+              />
+              <BaseEmptyHint
+                v-if="!getInjectedMessageCount()"
+                :text="translate('message.noInjectedMessages')"
+              />
+            </BaseTabPanelBody>
           </el-tab-pane>
         </el-tabs>
-        <div class="thinking-footer">
-          <button
-            type="button"
-            class="thinking-footer-btn noobot-flat-chip"
+        <template #footer>
+          <BasePillButton
+            :label="translate('message.collapse')"
             @click="collapseThinkingPanel(messageItem)"
-          >
-            {{ translate("message.collapse") }}
-          </button>
-        </div>
-      </el-collapse-item>
-    </el-collapse>
+          />
+        </template>
+      </BaseThinkingPanelShell>
   </template>
 </template>
 
 <style scoped>
-.thinking-collapse {
-  border: none;
-  margin-bottom: var(--noobot-space-md);
-  background: var(--noobot-thinking-bg);
-  border-radius: var(--noobot-radius-xs);
-  overflow: hidden;
-}
-
-.thinking-collapse :deep(.el-collapse-item__header) {
-  height: 36px;
-  line-height: 36px;
-  background: transparent;
-  border-bottom: none;
-  padding: 0 var(--noobot-space-md);
-  font-size: var(--noobot-msg-caption-font-size);
-  color: var(--noobot-thinking-header);
-}
 
 .thinking-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   width: 100%;
-  gap: var(--noobot-space-sm);
 }
 
-.thinking-title-text {
+.thinking-title-row :deep(.base-section-header__title) {
   color: var(--noobot-thinking-header);
   font-weight: 600;
-  padding: 0 6px;
-  min-height: 20px;
-  line-height: 1.2;
-  border-radius: 999px !important;
 }
 
 .thinking-elapsed {
@@ -555,29 +526,7 @@ onBeforeUnmount(() => {
   padding: 0 6px;
   min-height: 20px;
   line-height: 1.2;
-  border-radius: 999px !important;
-}
-
-.thinking-collapse :deep(.el-collapse-item__wrap) {
-  background: transparent;
-  border-bottom: none;
-}
-
-.thinking-collapse :deep(.el-collapse-item__content) {
-  padding: 0 var(--noobot-space-md) var(--noobot-space-md);
-}
-
-.thinking-body-scroll {
-  overflow: visible;
-  padding-right: 4px;
-}
-
-.thinking-step {
-  font-size: var(--noobot-msg-caption-font-size);
-  color: var(--noobot-thinking-text);
-  margin-bottom: 6px;
-  padding-left: var(--noobot-space-sm);
-  border-left: 2px solid var(--noobot-thinking-line-border);
+  border-radius: 999px;
 }
 
 .thinking-group {
@@ -585,140 +534,7 @@ onBeforeUnmount(() => {
 }
 
 .thinking-group-title {
-  font-size: var(--noobot-msg-meta-font-size);
-  color: var(--noobot-thinking-muted);
   margin: 8px 0 6px;
 }
 
-.thinking-event {
-  color: var(--noobot-thinking-event);
-  margin-right: 6px;
-}
-
-.thinking-single-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.thinking-single-line .thinking-event {
-  flex: 0 0 auto;
-  margin-right: 0;
-}
-
-.thinking-line-text {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.thinking-detail-step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.thinking-tree-prefix {
-  flex: 0 0 auto;
-  color: var(--noobot-thinking-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-.thinking-detail-step .thinking-event {
-  flex: 0 0 auto;
-  margin-right: 0;
-}
-
-.thinking-detail-text {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.thinking-detail-text.is-expandable {
-  cursor: pointer;
-}
-
-.thinking-detail-text.is-expanded {
-  overflow: visible;
-  text-overflow: unset;
-  white-space: normal;
-  word-break: break-word;
-}
-
-.tool-step {
-  border-left-color: var(--noobot-thinking-tool-border);
-}
-
-.thinking-injected-message {
-  border-left: 2px solid var(--noobot-thinking-tool-border);
-  padding-left: var(--noobot-space-sm);
-  margin-bottom: 10px;
-}
-
-.thinking-injected-title {
-  font-size: var(--noobot-msg-meta-font-size);
-  color: var(--noobot-thinking-muted);
-  margin-bottom: 4px;
-}
-
-.thinking-injected-content {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--noobot-thinking-text);
-  font: inherit;
-  line-height: 1.5;
-}
-
-.thinking-empty {
-  font-size: 12px;
-  color: var(--noobot-thinking-muted);
-  padding: 6px 2px 2px;
-}
-
-.thinking-tabs :deep(.el-tabs__header) {
-  margin-bottom: 8px;
-}
-
-.thinking-tabs :deep(.el-tabs__item) {
-  color: var(--noobot-thinking-tab);
-  font-size: var(--noobot-msg-meta-font-size);
-}
-
-.thinking-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--noobot-thinking-tab-active);
-}
-
-.thinking-tabs :deep(.el-tabs__active-bar) {
-  background: var(--noobot-thinking-tab-bar);
-}
-
-.thinking-footer {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
-.thinking-footer-btn {
-  appearance: none;
-  -webkit-appearance: none;
-  border: none;
-  cursor: pointer;
-  height: 20px;
-  padding: 0 6px;
-  font-size: 11px;
-  line-height: 1.2;
-  border-radius: 999px !important;
-}
-
-.thinking-footer-btn:hover {
-  filter: brightness(1.08);
-}
 </style>

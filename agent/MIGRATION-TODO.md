@@ -59,3 +59,28 @@
   - [x] `service/__tests__/connectors/*`
 - [x] Trim service npm test scripts to non-legacy scope (`routes` + `check-openai-tool-schema-script`).
 - [x] Remove legacy implementation directory `service/system-core`.
+
+## Plugin dynamic discovery / decoupling migration notes
+
+- [x] Dynamic plugin loading pipeline is now enabled:
+  - scan `plugin/*`
+  - read/validate `manifest.json`
+  - dynamic `import(entry)`
+  - register exported `registerNoobotPlugin`
+  - expose diagnostics via `/internal/plugins`
+- [x] Service side no longer statically imports harness/workflow plugin entry points.
+- [x] Service hook registration now resolves plugins by service event capability (`service.after_session_delete`), not plugin id.
+- [x] Agent side no longer statically imports harness/workflow plugin entry points.
+- [x] Agent capability registration uses generic capability keys:
+  - `agent.register`
+  - `bot.register`
+- [x] Runtime plugin options are read from manifest `runtimeOptions` (for service event path).
+- [x] `session-execution-engine` plugin option read/write supports dynamic plugin keys.
+  - read path: resolve by loaded plugin key (with compatibility selectors)
+  - write path: store to `runConfig.plugins[resolvedPluginKey]`
+- [x] Compatibility kept for legacy config keys during migration:
+  - `runConfig.plugins.harness`
+  - `runConfig.plugins.workflow`
+  - `selectedPlugins` still accepts `harness` / `workflow` aliases
+- [ ] Next step (optional): publish a formal deprecation window for legacy aliases
+      (`harness`/`workflow`) and add startup warnings before removal.

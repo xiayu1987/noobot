@@ -564,3 +564,65 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   assert.match(semanticPrompt, /ATTACHMENT id=/);
   assert.match(semanticPrompt, /attachments="user:\*"/);
 });
+
+test("workflow semantic planning passes conversation context before current user task", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const invokerCalls = [];
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      semanticModel: "semantic-model",
+      semanticPrompt: "emit workflow dsl",
+      resolveModelMessages: ({ messages = [] } = {}) => messages.slice(0, 2),
+      capabilityModelInvoker: async (payload = {}) => {
+        invokerCalls.push(payload);
+        return {
+          output: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=act type=action name="节点A" task="执行当前请求"',
+            'NODE id=end type=state stateType=end name="结束"',
+            'EDGE from=start to=act',
+            'EDGE from=act to=end',
+            "END",
+          ].join("\n"),
+        };
+      },
+      subSessionRunner: async () => ({
+        sessionId: "wf-node-session-context",
+        dialogProcessId: "wf_node_dialog_context",
+        result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
+      }),
+      generatedArtifactPersister: async () => [],
+      workflowDialogPersister: async () => null,
+      workflowEventLogger: async () => null,
+    },
+  });
+
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  await beforeDispatch.handler({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "d1",
+    userMessage: "请基于前文生成工作流",
+    runConfig: { locale: "zh-CN" },
+    messages: [
+      { role: "user", content: "前文：我要处理报销审批" },
+      { role: "assistant", content: "已记录报销审批背景" },
+      { role: "user", content: "请基于前文生成工作流", frontendUserMessage: true },
+    ],
+  });
+
+  assert.equal(invokerCalls.length, 1);
+  const semanticMessages = invokerCalls[0]?.messages || [];
+  assert.equal(semanticMessages[0]?.role, "user");
+  assert.equal(semanticMessages[0]?.content, "前文：我要处理报销审批");
+  assert.equal(semanticMessages[1]?.role, "assistant");
+  assert.equal(semanticMessages[1]?.content, "已记录报销审批背景");
+  assert.equal(semanticMessages.at(-1)?.role, "user");
+  assert.match(semanticMessages.at(-1)?.content || "", /当前用户消息:\n请基于前文生成工作流/);
+});

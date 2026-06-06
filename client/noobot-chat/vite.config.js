@@ -5,6 +5,7 @@
  */
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
+import path from "node:path";
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -22,6 +23,9 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "0.0.0.0", // 允许局域网访问，可改成具体 IP
       port: 10060, // 指定端口
+      fs: {
+        allow: [path.resolve(process.cwd(), "../..")],
+      },
       proxy: {
         "/api/internal/connect": {
           target: "http://localhost:10062",

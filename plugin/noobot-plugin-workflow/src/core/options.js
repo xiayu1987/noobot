@@ -122,6 +122,8 @@ export function normalizeOptions(input = {}) {
     timeoutMs: normalizeTimeoutMs(source?.timeoutMs),
     capabilityModelInvoker:
       typeof source?.capabilityModelInvoker === "function" ? source.capabilityModelInvoker : null,
+    resolveModelMessages:
+      typeof source?.resolveModelMessages === "function" ? source.resolveModelMessages : null,
     nodeAgentExecutor:
       typeof source?.nodeAgentExecutor === "function" ? source.nodeAgentExecutor : null,
     subSessionRunner:
