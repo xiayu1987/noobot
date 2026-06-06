@@ -99,12 +99,13 @@ export function buildDockerCommand({
     })),
   ];
   const mountValidationExpr = expectedMountPairs
-    .map(
-      (item) =>
-        `echo "$_NOOBOT_MOUNT_LINES" | grep -Fqx ${JSON.stringify(
-          `${item.source} => ${item.target}`,
-        )}`,
-    )
+    .map((item, index) => {
+      const marker = `__NOOBOT_MOUNT_${index}__`;
+      const inspectTemplate = `{{range .Mounts}}{{if and (eq .Source ${JSON.stringify(
+        item.source,
+      )}) (eq .Destination ${JSON.stringify(item.target)})}}${marker}{{end}}{{end}}`;
+      return `docker inspect --format ${JSON.stringify(inspectTemplate)} ${JSON.stringify(containerName)} 2>/dev/null | grep -Fqx ${JSON.stringify(marker)}`;
+    })
     .join(" && ");
   const workdir =
     scope === "user"
@@ -120,7 +121,6 @@ export function buildDockerCommand({
     `(${createContainerCmdRaw} >/dev/null 2>&1 || docker container inspect ${JSON.stringify(containerName)} >/dev/null 2>&1)`;
   const ensureContainerCmd = [
     `if docker container inspect ${JSON.stringify(containerName)} >/dev/null 2>&1; then`,
-    `_NOOBOT_MOUNT_LINES="$(docker inspect --format '{{range .Mounts}}{{println .Source " => " .Destination}}{{end}}' ${JSON.stringify(containerName)} 2>/dev/null || true)"`,
     `if ! { ${mountValidationExpr}; }; then`,
     `docker rm -f ${JSON.stringify(containerName)} >/dev/null 2>&1 || true`,
     createContainerCmd,
