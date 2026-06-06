@@ -16,6 +16,8 @@ logs/
 !.env.example
 
 # local tools/binaries
+service/vendor/openvscode-server/
+service/.tmp-openvscode-install/
 client/noobot-chat/deploy/bin/caddy
 
 # editor / system

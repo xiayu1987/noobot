@@ -40,6 +40,7 @@ export default {
   "attach.sessionIdRequiredForPersistence": "sessionId required for attachment persistence",
   "attach.totalSizeExceedsLimit": "attachments total size exceeds limit",
   "auth.forbiddenUserScope": "forbidden user scope",
+  "auth.ideAccessDenied": "this user is not allowed to use OpenVSCode",
   "auth.missingApiKey": "missing or invalid apiKey",
   "auth.missingUserAuth": "missing user auth",
   "auth.superAdminRequired": "super admin required",

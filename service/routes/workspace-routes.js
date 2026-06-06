@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { logError } from "#agent/tracking";
-import { mkdir, readdir } from "node:fs/promises";
+import path from "node:path";
+import { access, mkdir, readdir } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";

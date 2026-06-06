@@ -9,6 +9,11 @@ CLIENT_DIR="$ROOT_DIR/client/noobot-chat"
 SERVICE_DIR="$ROOT_DIR/service"
 AGENT_PROXY_DIR="$ROOT_DIR/agent-proxy"
 MODEL_PROXY_DIR="$ROOT_DIR/model-proxy"
+OPENVSCODE_SERVER_BIN="$SERVICE_DIR/vendor/openvscode-server/bin/openvscode-server"
+OPENVSCODE_SERVER_AUTO_DOWNLOAD="${OPENVSCODE_SERVER_AUTO_DOWNLOAD:-1}"
+OPENVSCODE_SERVER_REQUIRED="${OPENVSCODE_SERVER_REQUIRED:-0}"
+OPENVSCODE_SERVER_CHECK_UPDATE="${OPENVSCODE_SERVER_CHECK_UPDATE:-1}"
+OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE="${OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE:-1}"
 PM2_HOME_DIR="$ROOT_DIR/.pm2"
 PM2_CLEAN_START="${PM2_CLEAN_START:-0}"
 CLIENT_APP_NAME="noobot-client"
@@ -66,6 +71,14 @@ msg() {
     step_launcher_en) echo "1/5 Run project launcher" ;;
     step_install_zh) echo "2/5 安装依赖" ;;
     step_install_en) echo "2/5 Install dependencies" ;;
+    step_openvscode_zh) echo "准备 OpenVSCode Server 二进制" ;;
+    step_openvscode_en) echo "Prepare OpenVSCode Server binary" ;;
+    openvscode_skip_zh) echo "跳过 OpenVSCode Server 自动下载" ;;
+    openvscode_skip_en) echo "Skip OpenVSCode Server auto-download" ;;
+    openvscode_ready_zh) echo "OpenVSCode Server 二进制已存在: $2" ;;
+    openvscode_ready_en) echo "OpenVSCode Server binary already exists: $2" ;;
+    openvscode_failed_zh) echo "OpenVSCode Server 二进制准备失败（聊天服务仍会继续启动）: $2" ;;
+    openvscode_failed_en) echo "Failed to prepare OpenVSCode Server binary (chat service will still start): $2" ;;
     step_build_zh) echo "3/5 构建前端" ;;
     step_build_en) echo "3/5 Build frontend" ;;
     step_rebuild_zh) echo "4/5 重建 PM2 服务" ;;
@@ -306,6 +319,32 @@ is_truthy() {
   esac
 }
 
+ensure_openvscode_server_binary() {
+  if ! is_truthy "$OPENVSCODE_SERVER_AUTO_DOWNLOAD"; then
+    log "$(msg openvscode_skip)"
+    return 0
+  fi
+
+  if [[ -x "$OPENVSCODE_SERVER_BIN" ]] && ! is_truthy "$OPENVSCODE_SERVER_CHECK_UPDATE"; then
+    log "$(msg openvscode_ready "$OPENVSCODE_SERVER_BIN")"
+    return 0
+  fi
+
+  log "$(msg step_openvscode)"
+  if OPENVSCODE_SERVER_CHECK_UPDATE="$OPENVSCODE_SERVER_CHECK_UPDATE" \
+     OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE="$OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE" \
+     npm --prefix "$SERVICE_DIR" run install:openvscode-server; then
+    return 0
+  fi
+
+  local exit_code=$?
+  if is_truthy "$OPENVSCODE_SERVER_REQUIRED"; then
+    return "$exit_code"
+  fi
+  log "$(msg openvscode_failed "exit_code=$exit_code")"
+  return 0
+}
+
 clean_pm2_cache() {
   log "$(msg step_clean_pm2)"
   run_pm2 delete all >/dev/null 2>&1 || true
@@ -470,6 +509,8 @@ main() {
     npm --prefix "$MODEL_PROXY_DIR" install
     npm --prefix "$SERVICE_DIR" run postinstall --if-present
   fi
+
+  ensure_openvscode_server_binary
 
   log "$(msg step_build)"
   npm --prefix "$CLIENT_DIR" run build

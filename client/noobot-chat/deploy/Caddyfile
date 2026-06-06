@@ -12,6 +12,11 @@ http://:10060 {
       }
     }
 
+    @ide path /ide /ide/*
+    handle @ide {
+      reverse_proxy 127.0.0.1:10062
+    }
+
     @connect_direct path /internal/connect
     handle @connect_direct {
       reverse_proxy 127.0.0.1:10062 {

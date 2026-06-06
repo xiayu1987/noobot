@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import http from "node:http";
+import https from "node:https";
 import { randomUUID } from "node:crypto";
 import { config } from "./src/config.js";
 import { ChannelManager } from "./src/channel-manager.js";
@@ -51,6 +52,60 @@ const wsRateLimiter = createFixedWindowRateLimiter({
   windowMs: config.wsRateLimitWindowMs,
   maxRequests: config.wsRateLimitMaxUpgrades,
 });
+const ideWsRateLimiter = createFixedWindowRateLimiter({
+  windowMs: config.ideWsRateLimitWindowMs,
+  maxRequests: config.ideWsRateLimitMaxUpgrades,
+});
+const ideHttpRateLimiter = createFixedWindowRateLimiter({
+  windowMs: config.ideHttpRateLimitWindowMs,
+  maxRequests: config.ideHttpRateLimitMaxRequests,
+});
+
+function isIdeProxyPath(pathname = "") {
+  const normalizedPathname = String(pathname || "").trim();
+  return normalizedPathname === "/ide" || normalizedPathname.startsWith("/ide/");
+}
+
+function proxyUpgradeToHttpUpstream(request, socket, head) {
+  let upstreamUrl = null;
+  try {
+    upstreamUrl = new URL(request?.url || "/", config.upstreamHttpBase);
+  } catch {
+    socket.destroy();
+    return;
+  }
+  const isHttps = upstreamUrl.protocol === "https:";
+  const transport = isHttps ? https : http;
+  const requestHeaders = { ...(request?.headers || {}) };
+  requestHeaders.host = `${upstreamUrl.hostname}${upstreamUrl.port ? `:${upstreamUrl.port}` : ""}`;
+  const upstreamRequest = transport.request({
+    protocol: upstreamUrl.protocol,
+    hostname: upstreamUrl.hostname,
+    port: upstreamUrl.port,
+    method: request?.method || "GET",
+    path: `${upstreamUrl.pathname}${upstreamUrl.search}`,
+    headers: requestHeaders,
+    timeout: config.httpUpstreamTimeoutMs,
+  });
+  upstreamRequest.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
+    socket.write(
+      `HTTP/1.1 ${upstreamResponse.statusCode || 101} ${upstreamResponse.statusMessage || "Switching Protocols"}\r\n` +
+        Object.entries(upstreamResponse.headers || {})
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+          .join("\r\n") +
+        "\r\n\r\n",
+    );
+    if (upstreamHead?.length) socket.write(upstreamHead);
+    upstreamSocket.pipe(socket).pipe(upstreamSocket);
+  });
+  upstreamRequest.on("timeout", () => {
+    upstreamRequest.destroy(new Error("upstream timeout"));
+  });
+  upstreamRequest.on("error", () => {
+    socket.destroy();
+  });
+  upstreamRequest.end(head);
+}
 
 // ---- HTTP Server ----
 const httpServer = http.createServer((request, response) => {
@@ -68,7 +123,13 @@ const httpServer = http.createServer((request, response) => {
     return;
   }
   if (config.httpRateLimitEnabled) {
-    const rateLimited = httpRateLimiter.check(clientIp || "unknown-ip");
+    const isIdePath = isIdeProxyPath(pathname);
+    const rateLimited =
+      isIdePath && config.ideHttpRateLimitEnabled
+        ? ideHttpRateLimiter.check(clientIp || "unknown-ip")
+        : !isIdePath
+          ? httpRateLimiter.check(clientIp || "unknown-ip")
+          : { ok: true, retryAfterSec: 0 };
     if (!rateLimited.ok) {
       response.writeHead(
         429,
@@ -120,15 +181,27 @@ httpServer.on("upgrade", (request, socket, head) => {
   const { pathname } = parseRequestQuery(request);
   const clientIp = getClientIp(request);
   const requestOrigin = String(request?.headers?.origin || "").trim();
-  if (!config.wsPaths.includes(pathname)) {
-    socket.destroy();
-    return;
-  }
   if (!isIpTrusted(clientIp, config.trustedIps)) {
     socket.destroy();
     return;
   }
   if (requestOrigin && !isOriginTrusted(requestOrigin, config.trustedOrigins)) {
+    socket.destroy();
+    return;
+  }
+  if (isIdeProxyPath(pathname)) {
+    if (config.ideWsRateLimitEnabled) {
+      const ideRateLimited = ideWsRateLimiter.check(clientIp || "unknown-ip");
+      if (!ideRateLimited.ok) {
+        socket.destroy();
+        return;
+      }
+    }
+    proxyUpgradeToHttpUpstream(request, socket, head);
+    return;
+  }
+
+  if (!config.wsPaths.includes(pathname)) {
     socket.destroy();
     return;
   }
@@ -191,6 +264,8 @@ const cleanupTimer = setInterval(() => {
   channelManager.cleanupExpiredChannels();
   httpRateLimiter.cleanup(config.httpRateLimitWindowMs * 3);
   wsRateLimiter.cleanup(config.wsRateLimitWindowMs * 3);
+  ideWsRateLimiter.cleanup(config.ideWsRateLimitWindowMs * 3);
+  ideHttpRateLimiter.cleanup(config.ideHttpRateLimitWindowMs * 3);
 }, config.cleanupIntervalMs);
 
 cleanupTimer.unref?.();

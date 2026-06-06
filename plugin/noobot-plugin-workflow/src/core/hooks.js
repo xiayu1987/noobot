@@ -641,17 +641,18 @@ function appendWorkflowPlanningMessage({
   attachmentMetas = [],
 } = {}) {
   const turnMessages = ensureTurnMessages(agentResult);
+  const dialogProcessId = String(ctx?.dialogProcessId || "").trim();
   const attachmentPathBlock = buildWorkflowAttachmentPathBlockWithContext(attachmentMetas, ctx);
   const content = [semanticText || sourceText || "", attachmentPathBlock]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join("\n\n");
   const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(workflowPayload);
-  turnMessages.push({
+  const workflowMessage = {
     role: "assistant",
     type: "workflow",
     content,
-    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    dialogProcessId,
     modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     summarized: false,
@@ -665,7 +666,21 @@ function appendWorkflowPlanningMessage({
       semanticTextPreview: String(semanticText || "").slice(0, 2000),
       payload: sessionWorkflowPayload,
     },
+  };
+  const existing = turnMessages.find((messageItem = {}) => {
+    if (messageItem?.workflowMessage !== true) return false;
+    if (String(messageItem?.dialogProcessId || "").trim() !== dialogProcessId) return false;
+    const meta = messageItem?.workflowMeta && typeof messageItem.workflowMeta === "object"
+      ? messageItem.workflowMeta
+      : {};
+    return String(meta?.source || "").trim() === "workflow-plugin";
   });
+  if (existing) {
+    Object.assign(existing, workflowMessage);
+    return existing;
+  }
+  turnMessages.push(workflowMessage);
+  return workflowMessage;
 }
 
 function buildWorkflowDialogRelativeDir({
@@ -1289,15 +1304,60 @@ export function createRegisterWorkflowHooks() {
                 outputFile: String(planningPersistResult?.outputFile || "").trim(),
               },
             });
+            const { semantic } = executeWorkflowText({
+              semanticText,
+              options,
+            });
+            const planningWorkflowPayload = buildWorkflowOrchestrationPayload({
+              ctx,
+              options,
+              sourceText,
+              semanticText,
+              semantic,
+              execution: {
+                started: false,
+                instanceId: "",
+                autoTransitions: 0,
+                completed: false,
+                pendingStepCount: 0,
+                actionRecords: [],
+                nodeAgentRuns: [],
+              },
+              semanticResolution,
+              phaseTimeline: phaseTracker.list(),
+              retryMeta,
+            });
+            planningWorkflowPayload.planningDialog = {
+              dialogId: String(ctx?.dialogProcessId || "").trim(),
+              sessionId: String(ctx?.sessionId || "").trim(),
+              storagePath: String(planningPersistResult?.outputDir || "").trim(),
+              storageFile: String(planningPersistResult?.outputFile || "").trim(),
+            };
+            planningWorkflowPayload.nodeSessions = [];
+            planningWorkflowPayload.attachmentMetas = [];
+            appendWorkflowPlanningMessage({
+              options,
+              agentResult,
+              ctx,
+              sourceText,
+              semanticText,
+              semanticResolution,
+              workflowPayload: planningWorkflowPayload,
+              attachmentMetas: [],
+            });
+            await emitWorkflowRuntimeEvent({
+              options,
+              ctx,
+              event: "workflow_planning_message_prepared",
+              data: {
+                dialogId: String(ctx?.dialogProcessId || "").trim(),
+              },
+            });
             phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
             await emitWorkflowRuntimeEvent({
               options,
               ctx,
               event: "workflow_execution_started",
-            });
-            const { semantic } = executeWorkflowText({
-              semanticText,
-              options,
             });
             const instanceId = resolveWorkflowInstanceId(ctx);
             let snapshot = createWorkflowInstance({
