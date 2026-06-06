@@ -39,6 +39,17 @@ function resolveConfigRunTimeoutMs(config = {}) {
   });
 }
 
+function normalizeBooleanLike(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
+  }
+  return Boolean(fallback);
+}
+
 async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} } = {}) {
   const normalizedUserId = String(userId || "").trim();
   const runConfigTimeoutMs = resolveConfigRunTimeoutMs(runConfig);
@@ -69,6 +80,35 @@ async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} }
   }
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
   return resolveRunTimeoutMs(resolveConfigRunTimeoutMs(effectiveConfig));
+}
+
+async function resolveEffectiveStreamingEnabled({ bot, userId = "", runConfig = {} } = {}) {
+  if (normalizeBooleanLike(runConfig?.streaming, false)) return true;
+
+  const normalizedUserId = String(userId || "").trim();
+  const globalConfig =
+    bot?.globalConfig && typeof bot.globalConfig === "object" ? bot.globalConfig : {};
+  if (!normalizedUserId || typeof bot?.loadUserConfig !== "function") {
+    return normalizeBooleanLike(globalConfig?.streaming, false);
+  }
+
+  let userConfig = {};
+  try {
+    const workspacePath =
+      typeof bot?.getWorkspacePath === "function" ? bot.getWorkspacePath(normalizedUserId) : "";
+    userConfig =
+      workspacePath && typeof workspacePath === "string"
+        ? (await bot.loadUserConfig(workspacePath)) || {}
+        : {};
+  } catch (error) {
+    logError("[ws][chat-websocket-server] load user config failed when resolving streaming", {
+      userId: normalizedUserId,
+      error: error?.message || String(error),
+    });
+    userConfig = {};
+  }
+  const effectiveConfig = mergeConfig(globalConfig, userConfig);
+  return normalizeBooleanLike(effectiveConfig?.streaming, false);
 }
 
 function sendUpgradeError(
@@ -362,7 +402,11 @@ export function registerChatWebSocketServer(
           dialogProcessId: "",
         };
 
-        const textStreamingEnabled = normalizedRunConfig?.streaming !== false;
+        const textStreamingEnabled = await resolveEffectiveStreamingEnabled({
+          bot: activeBot,
+          userId,
+          runConfig: normalizedRunConfig,
+        });
         const eventListener = {
           onEvent: (eventPayload) => {
             const eventName = eventPayload?.event || "thinking";

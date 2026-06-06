@@ -72,7 +72,7 @@ export function createStateBuilder({
     const llm = createChatModelFn({
       globalConfig,
       userConfig,
-      streaming: Boolean(eventListener?.onEvent),
+      streaming: false,
     });
     emitEventFn(eventListener, "model_selected", {
       alias: selectedModelSpec?.alias || "",
