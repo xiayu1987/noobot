@@ -93,6 +93,7 @@ function normalizeUsers(list = []) {
     .map((item) => ({
       userId: String(item?.userId || "").trim(),
       connectCode: String(item?.connectCode || "").trim(),
+      allowIDE: item?.allowIDE === true || item?.allowIde === true || item?.allow_ide === true,
     }))
     .filter((item) => item.userId || item.connectCode);
 }
@@ -236,7 +237,7 @@ function handleTemplateEditorAction(command = "") {
 }
 
 function addUserRow() {
-  users.value.push({ userId: "", connectCode: "" });
+  users.value.push({ userId: "", connectCode: "", allowIDE: false });
 }
 
 function removeUserRow(index) {
@@ -263,6 +264,7 @@ function generateConnectCodesForEmptyOnly() {
       return {
         userId: String(item.userId || "").trim(),
         connectCode: currentCode || generateUuid(),
+        allowIDE: item.allowIDE === true,
       };
     });
     usersJsonDraft.value = buildUsersJsonText(users.value);
@@ -285,6 +287,7 @@ function forceRegenerateAllConnectCodes() {
     users.value = targetUsers.map((item) => ({
       userId: String(item.userId || "").trim(),
       connectCode: generateUuid(),
+      allowIDE: item.allowIDE === true,
     }));
     usersJsonDraft.value = buildUsersJsonText(users.value);
     jsonParseError.value = "";
@@ -414,6 +417,10 @@ watch(
                     <el-input v-model="item.connectCode" placeholder="connectCode" clearable class="row-input" />
                     <el-button class="dark-btn action-btn noobot-action-btn noobot-flat-soft-btn" @click="regenerateSingleUserConnectCode(idx)" :title="translate('settings.regenerateConnectCode')">↻</el-button>
                   </div>
+                  <div class="allow-ide-row">
+                    <span class="allow-ide-label">{{ translate("settings.allowIDE") }}</span>
+                    <el-switch v-model="item.allowIDE" />
+                  </div>
                 </div>
                 <div v-if="!users.length" class="empty-tip list-empty-tip">
                   <div class="empty-icon">👥</div>
@@ -436,10 +443,10 @@ watch(
             </template>
           </SettingsPanelHeader>
           <div class="panel-body noobot-workspace-body editor-body">
-            <SettingsJsonEditor
-              v-model="usersJsonText"
-              :parse-error="jsonParseError"
-              placeholder='{"users":[{"userId":"user-001","connectCode":"..."}]}'
+              <SettingsJsonEditor
+                v-model="usersJsonText"
+                :parse-error="jsonParseError"
+              placeholder='{"users":[{"userId":"user-001","connectCode":"...","allowIDE":false}]}'
             />
           </div>
         </SettingsWorkspacePanel>
@@ -557,6 +564,17 @@ watch(
 
 .action-btn {
   padding: 8px 12px;
+}
+
+.allow-ide-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.allow-ide-label {
+  color: var(--noobot-text-secondary);
+  font-size: 12px;
 }
 
 .list-empty-tip {

@@ -23,6 +23,7 @@ import { useMarkdownRenderer } from "../composables/infra/useMarkdownRenderer";
 import { useReconnect } from "../composables/infra/useReconnect";
 import { usePanelState } from "../composables/infra/usePanelState";
 import { frontendConfig } from "../shared/config/frontendConfig";
+import { postOpenVSCodeServerApi } from "../services/api/chatApi";
 
 // --- Markdown rendering (module-level singleton) ---
 const { renderMarkdown } = useMarkdownRenderer();
@@ -87,6 +88,7 @@ const {
   apiRole,
   scenarioConfig,
   isSuperAdmin,
+  canUseIDE,
   connecting,
   connected,
   ensureConnected,
@@ -520,6 +522,45 @@ async function openUserSettings() {
   });
 }
 
+async function openOpenVSCode() {
+  if (!ensureConnected()) return;
+  if (!canUseIDE.value && !isSuperAdmin.value) {
+    notifyUi({ type: "warning", message: translate("infra.ideAccessDenied") });
+    return;
+  }
+  const openInCurrentTab = shouldOpenOpenVSCodeInCurrentTab();
+  const popupWindow = openInCurrentTab ? null : window.open("about:blank", "_blank");
+  try {
+    if (popupWindow) popupWindow.opener = null;
+    const res = await postOpenVSCodeServerApi(
+      { userId: userId.value },
+      { fetcher: authFetch },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok || !data.url) {
+      throw new Error(data.error || translate("infra.openVSCodeFailed"));
+    }
+    const ideUrl = new URL(String(data.url || ""), window.location.origin).toString();
+    if (openInCurrentTab) {
+      window.location.assign(ideUrl);
+      return;
+    }
+    if (popupWindow && !popupWindow.closed) {
+      popupWindow.location.replace(ideUrl);
+    } else {
+      window.open(ideUrl, "_blank", "noopener,noreferrer");
+    }
+  } catch (error) {
+    if (popupWindow && !popupWindow.closed) popupWindow.close();
+    notifyUi({ type: "error", message: error.message || translate("infra.openVSCodeFailed") });
+  }
+}
+
+function shouldOpenOpenVSCodeInCurrentTab() {
+  const userAgent = typeof navigator === "undefined" ? "" : String(navigator.userAgent || "");
+  return isMobile.value || /Android/i.test(userAgent);
+}
+
 function openConfigParams() {
   if (!ensureConnected()) return;
   openConfigParamsRaw();
@@ -782,7 +823,9 @@ const drawerPanels = computed(() => [
         :title="activeSession?.title || translate('common.session')"
         :user-id="userId"
         :is-super-admin="isSuperAdmin"
+        :can-use-ide="canUseIDE"
         @toggle-sidebar="handleToggleSidebar"
+        @open-openvscode="openOpenVSCode"
         @open-workspace="openWorkspace"
         @open-user-settings="openUserSettings"
         @open-config-params="openConfigParams"

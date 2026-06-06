@@ -11,6 +11,15 @@ export function createWorkspaceUsersService({
   workspaceRootPath,
   defaultWorkspaceUsersConfig = { users: [] },
 } = {}) {
+  function normalizeAllowIDE(userItem = {}) {
+    return (
+      userItem?.allowIDE === true ||
+      userItem?.allowIde === true ||
+      userItem?.allow_ide === true ||
+      userItem?.ideEnabled === true
+    );
+  }
+
   function normalizeWorkspaceUsersConfig(input) {
     const sourceItems = Array.isArray(input)
       ? input
@@ -21,6 +30,7 @@ export function createWorkspaceUsersService({
       .map((userItem) => ({
         userId: String(userItem?.userId || "").trim(),
         connectCode: String(userItem?.connectCode || userItem?.code || "").trim(),
+        allowIDE: normalizeAllowIDE(userItem),
       }))
       .filter((userItem) => userItem.userId && userItem.connectCode);
     return { users };
@@ -65,6 +75,7 @@ export function createWorkspaceUsersService({
       .map((userItem) => ({
         userId: String(userItem?.userId || "").trim(),
         connectCode: String(userItem?.connectCode || userItem?.code || "").trim(),
+        allowIDE: normalizeAllowIDE(userItem),
       }))
       .filter((userItem) => userItem.userId && userItem.connectCode);
   }

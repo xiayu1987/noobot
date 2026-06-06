@@ -44,6 +44,7 @@ const {
   workspaceRootPath,
   getBot,
   buildHttpModuleDependencies,
+  openVSCodeService,
 } = appDependencies;
 
 registerGlobalMiddlewares(app, {
@@ -58,6 +59,22 @@ registerHttpModules(app, buildHttpModuleDependencies());
 
 app.get("/health", (_, res) => res.json({ ok: true }));
 
+openVSCodeService?.startLifecycleManager?.();
+
+function stopManagedOpenVSCodeInstances() {
+  openVSCodeService?.stopLifecycleManager?.({ stopInstances: true });
+}
+
+process.once("SIGINT", () => {
+  stopManagedOpenVSCodeInstances();
+  process.exit(0);
+});
+
+process.once("SIGTERM", () => {
+  stopManagedOpenVSCodeInstances();
+  process.exit(0);
+});
+
 startHttpServer({
   app,
   getBot,
@@ -68,4 +85,5 @@ startHttpServer({
   normalizeLocale,
   defaultLocale,
   translateText,
+  openVSCodeService,
 });

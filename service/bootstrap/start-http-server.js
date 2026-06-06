@@ -16,9 +16,20 @@ export function startHttpServer({
   normalizeLocale,
   defaultLocale,
   translateText,
+  openVSCodeService,
   port = process.env.PORT || 10061,
 } = {}) {
   const server = createServer(app);
+  server.on("upgrade", (request, socket, head) => {
+    if (
+      openVSCodeService &&
+      typeof openVSCodeService.canHandleRequest === "function" &&
+      openVSCodeService.canHandleRequest(request?.url || "")
+    ) {
+      openVSCodeService.proxyUpgrade(request, socket, head);
+    }
+  });
+
   registerChatWebSocketServer(server, {
     getBot,
     resolveRequestLocale,

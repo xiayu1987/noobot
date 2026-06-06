@@ -291,6 +291,7 @@
       "enabled": true,
       "mode": "off",
       "semanticModel": "qwen3_6_plus",
+      "timeoutMs": 18000000,
       "maxAutoTransitions": 10,
       "parallelNodeExecution": true,
       "maxParallelNodeAgents": 4

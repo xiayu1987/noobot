@@ -40,6 +40,7 @@ export default {
   "attach.sessionIdRequiredForPersistence": "附件持久化需要 sessionId",
   "attach.totalSizeExceedsLimit": "附件总大小超出限制",
   "auth.forbiddenUserScope": "无权访问该用户范围",
+  "auth.ideAccessDenied": "当前用户未被授权使用 OpenVSCode",
   "auth.missingApiKey": "缺少或无效的 apiKey",
   "auth.missingUserAuth": "缺少用户认证信息",
   "auth.superAdminRequired": "需要超级管理员权限",

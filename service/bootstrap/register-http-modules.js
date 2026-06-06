@@ -8,11 +8,13 @@ import { registerConfigAndTemplateRoutes } from "../routes/config-template-route
 import { registerConnectorRoutes } from "../routes/connectors-routes.js";
 import { registerSessionRoutes } from "../routes/session-routes.js";
 import { registerWorkspaceRoutes } from "../routes/workspace-routes.js";
+import { registerIdeRoutes } from "../routes/ide-routes.js";
 
 export function registerHttpModules(
   app,
   {
     bot,
+    openVSCodeService,
     globalConfigProvider,
     issueApiKey,
     readWorkspaceUsers,
@@ -73,7 +75,7 @@ export function registerHttpModules(
   });
 
   app.use((req, res, next) => {
-    if (req.path === "/health" || req.path === "/internal/connect") {
+    if (req.path === "/health" || req.path === "/internal/connect" || req.path === "/ide" || req.path.startsWith("/ide/")) {
       next();
       return;
     }
@@ -104,6 +106,12 @@ export function registerHttpModules(
     getConnectorChannelStore,
     getConnectorHistoryStore,
     normalizeSelectedConnectors,
+    translateText,
+  });
+
+  registerIdeRoutes(app, {
+    openVSCodeService,
+    readWorkspaceUsers,
     translateText,
   });
 

@@ -31,7 +31,9 @@
     "lint:tools-constants": "eslint .",
     "lint:service-constants": "eslint .",
     "check:i18n-imports": "node ../scripts/check-i18n-imports.mjs --project=service",
-    "pretest": "npm run -s check:i18n-imports"
+    "pretest": "npm run -s check:i18n-imports",
+    "install:openvscode-server": "node scripts/install-openvscode-server.mjs",
+    "ensure:openvscode-server": "node scripts/install-openvscode-server.mjs"
   },
   "dependencies": {
     "@langchain/core": "^1.1.48",

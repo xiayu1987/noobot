@@ -107,6 +107,10 @@ export function registerChatWebSocketServer(
       return;
     }
 
+    if (requestPathname.startsWith("/ide/")) {
+      return;
+    }
+
     if (requestPathname !== "/chat/ws") {
       socket.destroy();
       return;

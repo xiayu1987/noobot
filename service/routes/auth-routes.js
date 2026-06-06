@@ -95,7 +95,7 @@ function resolveMergedPlugins(globalPlugins = {}, userPlugins = {}) {
   return mergedPlugins;
 }
 
-function buildClientPermissions(role = "user") {
+function buildClientPermissions(role = "user", { canUseIDE = false } = {}) {
   const normalizedRole = String(role || "user").trim() || "user";
   const isSuperAdmin = normalizedRole === "super_admin";
   return {
@@ -107,6 +107,7 @@ function buildClientPermissions(role = "user") {
     canManageUsers: isSuperAdmin,
     canManageTemplate: isSuperAdmin,
     canManageSystemConfigParams: isSuperAdmin,
+    canUseIDE: isSuperAdmin || canUseIDE === true,
   };
 }
 
@@ -173,7 +174,7 @@ export function registerAuthRoutes(
           role: "super_admin",
           userId,
           apiKey,
-          permissions: buildClientPermissions("super_admin"),
+          permissions: buildClientPermissions("super_admin", { canUseIDE: true }),
           scenarios: superAdminScenarios,
           plugins: superAdminPlugins,
         });
@@ -209,7 +210,9 @@ export function registerAuthRoutes(
         role: "user",
         userId,
         apiKey,
-        permissions: buildClientPermissions("user"),
+        permissions: buildClientPermissions("user", {
+          canUseIDE: matchedUser?.allowIDE === true,
+        }),
         scenarios: mergedScenarios,
         plugins: mergedPlugins,
       });

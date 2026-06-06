@@ -116,6 +116,17 @@ export function buildChatWebSocketUrl({ apiKey = "" } = {}) {
   return `${protocol}//${host}/api/agent-proxy/ws${query}`;
 }
 
+
+export async function postOpenVSCodeServerApi(
+  { userId = "" },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  return runFetch(`/api/internal/ide/open/${encodeURIComponent(userId)}`, {
+    method: "POST",
+  });
+}
+
 export async function getWorkspaceTreeApi({ userId = "" }, { fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch(`/api/internal/workspace/${encodeURIComponent(userId)}/tree`);

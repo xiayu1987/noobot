@@ -20,6 +20,7 @@ import { createRequestContextService } from "../services/request-context-service
 import { createRuntimeConfigService } from "../services/runtime-config-service.js";
 import { createWorkspacePathService } from "../services/workspace-path-service.js";
 import { createWorkspaceUsersService } from "../services/workspace-users-service.js";
+import { createOpenVSCodeService } from "../services/openvscode-service.js";
 
 const DEFAULT_WORKSPACE_USERS_CONFIG = {
   users: [
@@ -131,6 +132,15 @@ export async function createAppDependencies({
     buildScopedConfigParamsResponse,
   } = configScopeService;
 
+  const openVSCodeService = createOpenVSCodeService({
+    getGlobalConfig: () => globalConfig,
+    workspaceRootPath,
+    ensureUserWorkspace: async (userId = "") => {
+      if (!bot || typeof bot.ensureUserWorkspace !== "function") return "";
+      return bot.ensureUserWorkspace(userId);
+    },
+  });
+
   const runtimeConfigService = createRuntimeConfigService({
     readWorkspaceConfigParams,
     globalConfigBuilder: configBuilder,
@@ -162,8 +172,10 @@ export async function createAppDependencies({
     isForbiddenUserScope,
     workspaceRootPath,
     getBot: () => bot,
+    openVSCodeService,
     buildHttpModuleDependencies: () => ({
       bot,
+      openVSCodeService,
       globalConfigProvider: () => globalConfig,
       issueApiKey,
       readWorkspaceUsers,

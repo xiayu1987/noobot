@@ -32,11 +32,16 @@ import { logDebug, logWarn } from "../../tracking/console/logger.js";
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
 const DEFAULT_TIMEOUT = 120000;
 const MAX_SCRIPT_COMMAND_CHARS = 8000;
-const DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS = 15000;
+const DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS = 3600000;
 const SANDBOX_PROVIDER_NAME = SANDBOX_CONFIG.PROVIDERS;
 const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
 const SANDBOX_COMMAND = SANDBOX_CONFIG.COMMANDS;
 const dockerContainerQueueMap = new Map();
+const ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS = toSafePositiveInt(
+  process.env.NOOBOT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+  DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+  100,
+);
 
 function run(cmd, cwd, timeoutMs) {
   return new Promise((resolve) => {
@@ -65,7 +70,7 @@ function hasCommand(commandName = "") {
 function enqueueDockerContainerTask({
   containerName = "",
   task = async () => ({}),
-  lockWaitTimeoutMs = DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+  lockWaitTimeoutMs = ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
 } = {}) {
   const key = String(containerName || "").trim() || "__default__";
   const previousTail = dockerContainerQueueMap.get(key) || Promise.resolve();
@@ -108,11 +113,13 @@ function enqueueDockerContainerTask({
     }
     return task();
   });
-  const tailPromise = runPromise.finally(() => {
+  const tailPromise = runPromise
+    .catch(() => undefined)
+    .finally(() => {
     if (dockerContainerQueueMap.get(key) === tailPromise) {
       dockerContainerQueueMap.delete(key);
     }
-  });
+    });
   dockerContainerQueueMap.set(key, tailPromise);
   return runPromise;
 }
@@ -156,7 +163,7 @@ function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
     dockerLockWaitTimeoutMs:
       providerDetail?.dockerLockWaitTimeoutMs ||
       providerDetail?.docker_lock_wait_timeout_ms ||
-      DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+      ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   };
 }
 

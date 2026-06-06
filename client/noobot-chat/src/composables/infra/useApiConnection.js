@@ -22,6 +22,9 @@ export function useApiConnection({
     definitions: {},
     plugins: {},
   });
+  const permissions = ref({
+    canUseIDE: false,
+  });
   const connecting = ref(false);
 
   const connected = computed(
@@ -32,6 +35,9 @@ export function useApiConnection({
   );
   const isSuperAdmin = computed(
     () => connected.value && String(apiRole.value || "") === "super_admin",
+  );
+  const canUseIDE = computed(
+    () => connected.value && (isSuperAdmin.value || permissions.value.canUseIDE === true),
   );
 
   function persistApiAuth() {
@@ -69,6 +75,9 @@ export function useApiConnection({
       default: "",
       definitions: {},
       plugins: {},
+    };
+    permissions.value = {
+      canUseIDE: false,
     };
     persistApiAuth();
   }
@@ -195,6 +204,11 @@ export function useApiConnection({
         ...(data?.scenarios || {}),
         plugins: data?.plugins || data?.scenarios?.plugins || {},
       });
+      permissions.value = {
+        canUseIDE:
+          String(data?.role || "").trim() === "super_admin" ||
+          data?.permissions?.canUseIDE === true,
+      };
       persistApiAuth();
       persistConnectProfile();
       if (!silent) {
@@ -230,9 +244,11 @@ export function useApiConnection({
     apiKey,
     apiRole,
     scenarioConfig,
+    permissions,
     connecting,
     connected,
     isSuperAdmin,
+    canUseIDE,
     ensureConnected,
     authFetch,
     connectBackend,

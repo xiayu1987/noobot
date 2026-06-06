@@ -150,6 +150,40 @@ export const config = {
     80,
     5,
   ),
+  ideWsRateLimitEnabled: envBoolean(
+    "AGENT_PROXY_IDE_WS_RATE_LIMIT_ENABLED",
+    "ideWsRateLimitEnabled",
+    true,
+  ),
+  ideWsRateLimitWindowMs: envNumber(
+    "AGENT_PROXY_IDE_WS_RATE_LIMIT_WINDOW_MS",
+    "ideWsRateLimitWindowMs",
+    60_000,
+    1_000,
+  ),
+  ideWsRateLimitMaxUpgrades: envNumber(
+    "AGENT_PROXY_IDE_WS_RATE_LIMIT_MAX_UPGRADES",
+    "ideWsRateLimitMaxUpgrades",
+    60,
+    5,
+  ),
+  ideHttpRateLimitEnabled: envBoolean(
+    "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_ENABLED",
+    "ideHttpRateLimitEnabled",
+    true,
+  ),
+  ideHttpRateLimitWindowMs: envNumber(
+    "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_WINDOW_MS",
+    "ideHttpRateLimitWindowMs",
+    60_000,
+    1_000,
+  ),
+  ideHttpRateLimitMaxRequests: envNumber(
+    "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_MAX_REQUESTS",
+    "ideHttpRateLimitMaxRequests",
+    2000,
+    50,
+  ),
   exposeUpstreamErrorDetail: envBoolean(
     "AGENT_PROXY_EXPOSE_UPSTREAM_ERROR_DETAIL",
     "exposeUpstreamErrorDetail",
