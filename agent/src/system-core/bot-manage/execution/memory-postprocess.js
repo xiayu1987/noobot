@@ -6,6 +6,7 @@
 
 import { emitEvent } from "../../event/index.js";
 import { mergeConfig } from "../../config/index.js";
+import { normalizeTimeMs, resolveTimeMs } from "../../config/index.js";
 import {
   BOT_MANAGE_LOG_EVENT,
   BOT_MANAGE_LOG_SOURCE,
@@ -41,19 +42,39 @@ export class MemoryPostProcessService {
   }
 
   resolveMemorySummaryTimeoutMs(userConfig = {}) {
-    const configured = Number(
-      userConfig?.memory?.summarize_timeout_ms ??
-        userConfig?.memory?.summarizeTimeoutMs ??
-        userConfig?.memorySummarizeTimeoutMs ??
-        this.globalConfig?.memory?.summarize_timeout_ms ??
-        this.globalConfig?.memory?.summarizeTimeoutMs ??
-        this.globalConfig?.memorySummarizeTimeoutMs ??
-        DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS,
-    );
-    if (!Number.isFinite(configured) || configured <= 0) {
-      return DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS;
-    }
-    return Math.floor(configured);
+    const userMemoryTimeout = resolveTimeMs(userConfig?.memory, {
+      key: "summarizeTimeoutMs",
+      legacyKeys: ["summarize_timeout_ms"],
+      sourceTag: "agent.memory.summary.user",
+      warnLegacy: true,
+      fallback: 0,
+      min: 1,
+    });
+    if (userMemoryTimeout > 0) return userMemoryTimeout;
+
+    const userFlatTimeout = normalizeTimeMs(userConfig?.memorySummarizeTimeoutMs, {
+      fallback: 0,
+      min: 1,
+    });
+    if (userFlatTimeout > 0) return userFlatTimeout;
+
+    const globalMemoryTimeout = resolveTimeMs(this.globalConfig?.memory, {
+      key: "summarizeTimeoutMs",
+      legacyKeys: ["summarize_timeout_ms"],
+      sourceTag: "agent.memory.summary.global",
+      warnLegacy: true,
+      fallback: 0,
+      min: 1,
+    });
+    if (globalMemoryTimeout > 0) return globalMemoryTimeout;
+
+    const globalFlatTimeout = normalizeTimeMs(this.globalConfig?.memorySummarizeTimeoutMs, {
+      fallback: 0,
+      min: 1,
+    });
+    if (globalFlatTimeout > 0) return globalFlatTimeout;
+
+    return DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS;
   }
 
   resolveMemorySummaryAsyncEnabled(userConfig = {}) {
@@ -82,15 +103,14 @@ export class MemoryPostProcessService {
 
   resolveExecutionBundleTimeoutMs(userConfig = {}) {
     const effectiveConfig = mergeConfig(this.globalConfig || {}, userConfig || {});
-    const configured = Number(
-      effectiveConfig?.session?.execution_bundle_timeout_ms ??
-        effectiveConfig?.session?.executionBundleTimeoutMs ??
-        DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS,
-    );
-    if (!Number.isFinite(configured) || configured <= 0) {
-      return DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS;
-    }
-    return Math.floor(configured);
+    return resolveTimeMs(effectiveConfig?.session, {
+      key: "executionBundleTimeoutMs",
+      legacyKeys: ["execution_bundle_timeout_ms"],
+      sourceTag: "agent.memory.execution-bundle",
+      warnLegacy: true,
+      fallback: DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS,
+      min: 1,
+    });
   }
 
   async runMemorySummarizeFlow({

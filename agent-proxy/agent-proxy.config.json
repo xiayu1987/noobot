@@ -3,6 +3,7 @@
   "proxyHost": "0.0.0.0",
   "upstreamWsUrl": "ws://127.0.0.1:10061/chat/ws",
   "upstreamHttpBase": "http://127.0.0.1:10061",
+  "httpUpstreamTimeoutMs": 60000,
   "connectTokenHeader": "x-proxy-token",
   "connectToken": "5fd50423-d915-49d7-8e9a-62d93f33777b",
   "connectTokenAllowLoopback": true,

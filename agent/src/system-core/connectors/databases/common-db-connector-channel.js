@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveTimeMs } from "../../config/core/time-config-normalizer.js";
 
 export function normalizeConnectionSource(connectionInfo = {}) {
   return connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
@@ -55,7 +56,14 @@ export function resolveHostPortUserPasswordDatabase({
 }
 
 export function normalizeTimeoutMs(source = {}, fallback = 30000) {
-  return Math.max(1000, Number(source?.timeout_ms || source?.timeoutMs || fallback));
+  return resolveTimeMs(source, {
+    key: "timeoutMs",
+    legacyKeys: ["timeout_ms"],
+    sourceTag: "connectors.database",
+    warnLegacy: true,
+    fallback,
+    min: 1000,
+  });
 }
 
 export async function importDefaultOrModule(moduleName = "") {

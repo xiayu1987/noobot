@@ -7,7 +7,7 @@ test("normalizeKnownConfigKeys: 应将已知 snake_case 键转换为 camelCase",
   const input = {
     workspace_root: "/tmp/workspace",
     default_provider: "openai",
-    run_timeout_ms: 120000,
+    runTimeoutMs: 120000,
     nested: {
       max_tool_loop_turns: 8,
     },

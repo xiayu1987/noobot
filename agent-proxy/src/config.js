@@ -31,8 +31,24 @@ function getRawConfigValue(envName, fileKey, defaultValue) {
   return defaultValue;
 }
 
-function envNumber(name, fileKey, defaultValue, min = 0) {
-  return Math.max(min, Number(getRawConfigValue(name, fileKey, defaultValue)));
+function normalizeNumber(value, defaultValue, { min = 0, max = Number.POSITIVE_INFINITY } = {}) {
+  const fallback = Number(defaultValue);
+  const parsed = Number(value);
+  const base = Number.isFinite(parsed) ? parsed : (Number.isFinite(fallback) ? fallback : 0);
+  return Math.min(max, Math.max(min, base));
+}
+
+function envNumber(name, fileKey, defaultValue, min = 0, max = Number.POSITIVE_INFINITY) {
+  return normalizeNumber(getRawConfigValue(name, fileKey, defaultValue), defaultValue, { min, max });
+}
+
+function envTimeMs(name, fileKey, defaultValue, min = 0, max = Number.POSITIVE_INFINITY) {
+  return Math.floor(
+    normalizeNumber(getRawConfigValue(name, fileKey, defaultValue), defaultValue, {
+      min,
+      max,
+    }),
+  );
 }
 
 function envString(name, fileKey, defaultValue) {
@@ -80,20 +96,20 @@ export const config = {
     "connectTokenAllowLoopback",
     true,
   ),
-  channelRetentionMs: envNumber(
+  channelRetentionMs: envTimeMs(
     "AGENT_PROXY_CHANNEL_RETENTION_MS",
     "channelRetentionMs",
     10 * 60 * 1000,
     10_000,
   ),
-  apiKeyRetentionMs: envNumber(
+  apiKeyRetentionMs: envTimeMs(
     "AGENT_PROXY_API_KEY_RETENTION_MS",
     "apiKeyRetentionMs",
     24 * 60 * 60 * 1000,
     60_000,
   ),
   maxChannelEvents: envNumber("AGENT_PROXY_MAX_CHANNEL_EVENTS", "maxChannelEvents", 2000, 100),
-  cleanupIntervalMs: envNumber(
+  cleanupIntervalMs: envTimeMs(
     "AGENT_PROXY_CLEANUP_INTERVAL_MS",
     "cleanupIntervalMs",
     15_000,
@@ -106,16 +122,16 @@ export const config = {
     10 * 1024 * 1024,
     1024 * 1024,
   ),
-  requestIdTtlMs: envNumber(
+  requestIdTtlMs: envTimeMs(
     "AGENT_PROXY_REQUEST_ID_TTL_MS",
     "requestIdTtlMs",
     11 * 60 * 1000,
     5_000,
   ),
-  httpUpstreamTimeoutMs: envNumber(
+  httpUpstreamTimeoutMs: envTimeMs(
     "AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS",
     "httpUpstreamTimeoutMs",
-    30_000,
+    60_000,
     5_000,
   ),
   trustedOrigins: envList("AGENT_PROXY_TRUSTED_ORIGINS", "trustedOrigins", ""),
@@ -126,7 +142,7 @@ export const config = {
     true,
   ),
   wsRateLimitEnabled: envBoolean("AGENT_PROXY_WS_RATE_LIMIT_ENABLED", "wsRateLimitEnabled", true),
-  httpRateLimitWindowMs: envNumber(
+  httpRateLimitWindowMs: envTimeMs(
     "AGENT_PROXY_HTTP_RATE_LIMIT_WINDOW_MS",
     "httpRateLimitWindowMs",
     60_000,
@@ -138,7 +154,7 @@ export const config = {
     180,
     10,
   ),
-  wsRateLimitWindowMs: envNumber(
+  wsRateLimitWindowMs: envTimeMs(
     "AGENT_PROXY_WS_RATE_LIMIT_WINDOW_MS",
     "wsRateLimitWindowMs",
     60_000,
@@ -155,7 +171,7 @@ export const config = {
     "ideWsRateLimitEnabled",
     true,
   ),
-  ideWsRateLimitWindowMs: envNumber(
+  ideWsRateLimitWindowMs: envTimeMs(
     "AGENT_PROXY_IDE_WS_RATE_LIMIT_WINDOW_MS",
     "ideWsRateLimitWindowMs",
     60_000,
@@ -172,7 +188,7 @@ export const config = {
     "ideHttpRateLimitEnabled",
     true,
   ),
-  ideHttpRateLimitWindowMs: envNumber(
+  ideHttpRateLimitWindowMs: envTimeMs(
     "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_WINDOW_MS",
     "ideHttpRateLimitWindowMs",
     60_000,

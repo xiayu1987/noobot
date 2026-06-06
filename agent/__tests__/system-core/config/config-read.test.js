@@ -20,7 +20,7 @@ test("loadGlobalConfig: 应读取并规范化 snake_case 配置键", async () =>
       JSON.stringify({
         workspace_root: "/tmp/workspace",
         default_provider: "openai",
-        run_timeout_ms: 12345,
+        runTimeoutMs: 12345,
         mcp_servers: {
           local_server: {
             keep_snake_key: true,

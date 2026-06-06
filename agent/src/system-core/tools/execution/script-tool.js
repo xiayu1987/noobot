@@ -8,8 +8,12 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { mergeConfig } from "../../config/index.js";
-import { normalizeSandboxProvider } from "../../config/index.js";
+import {
+  mergeConfig,
+  normalizeSandboxProvider,
+  normalizeTimeMs,
+  resolveTimeMs,
+} from "../../config/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
@@ -30,17 +34,19 @@ import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
 import { logDebug, logWarn } from "../../tracking/console/logger.js";
 
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
-const DEFAULT_TIMEOUT = 120000;
+const DEFAULT_TIMEOUT = 300000;
 const MAX_SCRIPT_COMMAND_CHARS = 8000;
 const DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS = 3600000;
 const SANDBOX_PROVIDER_NAME = SANDBOX_CONFIG.PROVIDERS;
 const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
 const SANDBOX_COMMAND = SANDBOX_CONFIG.COMMANDS;
 const dockerContainerQueueMap = new Map();
-const ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS = toSafePositiveInt(
+const ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS = normalizeTimeMs(
   process.env.NOOBOT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
-  DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
-  100,
+  {
+    fallback: DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+    min: 100,
+  },
 );
 
 function run(cmd, cwd, timeoutMs) {
@@ -77,9 +83,10 @@ function enqueueDockerContainerTask({
   const queueDepthBefore = dockerContainerQueueMap.has(key) ? 1 : 0;
   const waitStartedAt = Date.now();
   const waitForPrevious = previousTail.catch(() => undefined);
-  const waitTimeout = Number.isFinite(Number(lockWaitTimeoutMs))
-    ? toSafePositiveInt(lockWaitTimeoutMs, DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS, 100)
-    : DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS;
+  const waitTimeout = normalizeTimeMs(lockWaitTimeoutMs, {
+    fallback: DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+    min: 100,
+  });
   const waitPromise = Promise.race([
     waitForPrevious,
     new Promise((_, reject) => {
@@ -160,10 +167,14 @@ function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
     ).trim(),
     dockerProjectMountTarget:
       String(providerDetail?.dockerProjectMountTarget || "").trim() || "/project",
-    dockerLockWaitTimeoutMs:
-      providerDetail?.dockerLockWaitTimeoutMs ||
-      providerDetail?.docker_lock_wait_timeout_ms ||
-      ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+    dockerLockWaitTimeoutMs: resolveTimeMs(providerDetail, {
+      key: "dockerLockWaitTimeoutMs",
+      legacyKeys: ["docker_lock_wait_timeout_ms"],
+      sourceTag: "tools.execute_script",
+      warnLegacy: true,
+      fallback: ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
+      min: 100,
+    }),
   };
 }
 
@@ -239,7 +250,6 @@ async function runDockerCommand({
       task: async () => run(built.cmd, workspace, timeout),
       lockWaitTimeoutMs:
         scriptConfig?.dockerLockWaitTimeoutMs ||
-        scriptConfig?.docker_lock_wait_timeout_ms ||
         DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
     });
   } catch (error) {
@@ -426,7 +436,10 @@ export function createScriptTool({ agentContext }) {
           message: tTool(runtime, "tools.script.commandTooLong"),
         });
       }
-      const timeout = Number(scriptConfig?.scriptTimeoutMs || DEFAULT_TIMEOUT);
+      const timeout = normalizeTimeMs(scriptConfig?.scriptTimeoutMs, {
+        fallback: DEFAULT_TIMEOUT,
+        min: 1000,
+      });
 
       if (!sandboxEnabled) {
         const runResult = await run(normalizedCommand, workspace, timeout);

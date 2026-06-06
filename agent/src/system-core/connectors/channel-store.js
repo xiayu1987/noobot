@@ -15,6 +15,7 @@ import {
   CONNECTOR_TYPE,
   normalizeConnectorType,
 } from "../config/core/enums.js";
+import { normalizeTimeMs } from "../config/core/time-config-normalizer.js";
 import {
   CONNECTOR_RUNTIME_STATUS,
   CONNECTOR_STATUS_CODE,
@@ -286,6 +287,10 @@ class ConnectorChannelStore {
     timeoutMs = 30000,
     emailAttachmentHandler = null,
   } = {}) {
+    const resolvedTimeoutMs = normalizeTimeMs(timeoutMs, {
+      fallback: 30000,
+      min: 1000,
+    });
     const channel = this._getChannel({ sessionId, connectorName, connectorType });
     const normalizedType = normalizeConnectorType(connectorType);
     const cmd = String(command || "").trim();
@@ -304,8 +309,8 @@ class ConnectorChannelStore {
         connectorName: String(connectorName || "").trim(),
         connectionInfo:
           channel?.connectionInfo && typeof channel.connectionInfo === "object"
-            ? { ...channel.connectionInfo, timeout_ms: timeoutMs }
-            : { timeout_ms: timeoutMs },
+            ? { ...channel.connectionInfo, timeout_ms: resolvedTimeoutMs }
+            : { timeout_ms: resolvedTimeoutMs },
       });
       return {
         ok: execution.ok,
@@ -371,6 +376,10 @@ class ConnectorChannelStore {
     sessionId = "",
     timeoutMs = 6000,
   } = {}) {
+    const resolvedTimeoutMs = normalizeTimeMs(timeoutMs, {
+      fallback: 6000,
+      min: 1000,
+    });
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
       return {
@@ -417,7 +426,7 @@ class ConnectorChannelStore {
           connectorName,
           connectorType,
           command: healthCommand,
-          timeoutMs,
+          timeoutMs: resolvedTimeoutMs,
         });
         const executionCode = Number(executionResult?.output?.code ?? 0);
         const executionOk = executionResult?.ok === true;
@@ -500,6 +509,10 @@ class ConnectorChannelStore {
     connectorType = "",
     timeoutMs = 6000,
   } = {}) {
+    const resolvedTimeoutMs = normalizeTimeMs(timeoutMs, {
+      fallback: 6000,
+      min: 1000,
+    });
     const normalizedSessionId = String(sessionId || "").trim();
     const normalizedConnectorName = String(connectorName || "").trim();
     const normalizedConnectorType = normalizeConnectorType(connectorType);
@@ -523,7 +536,7 @@ class ConnectorChannelStore {
     }
     const inspected = await this.inspectSessionConnectors({
       sessionId: normalizedSessionId,
-      timeoutMs,
+      timeoutMs: resolvedTimeoutMs,
     });
     const bucketName =
       normalizedConnectorType === CONNECTOR_TYPE.DATABASE

@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { isFatalError, recoverableToolError } from "../../../error/index.js";
+import { normalizeTimeMs } from "../../../config/index.js";
 import { assertValidParentSessionId } from "../../core/check-tool-input.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { isPlainObject } from "../../../utils/shared-utils.js";
@@ -72,19 +73,16 @@ export function createWaitAsyncTaskResultTool({
         );
       }
 
-      const normalizedTimeoutMs = Number(timeoutMs);
-      const resolvedTimeoutMs =
-        Number.isFinite(normalizedTimeoutMs) && normalizedTimeoutMs > 0
-          ? Math.floor(normalizedTimeoutMs)
-          : defaultWaitMs;
+      const resolvedTimeoutMs = normalizeTimeMs(timeoutMs, {
+        fallback: defaultWaitMs,
+        min: 1000,
+      });
+      const resolvedPollIntervalMs = normalizeTimeMs(pollIntervalMs, {
+        fallback: defaultPollIntervalMs || 5000,
+        min: 1000,
+      });
 
-      const normalizedPollIntervalMs = Number(pollIntervalMs);
-      const resolvedPollIntervalMs =
-        Number.isFinite(normalizedPollIntervalMs) && normalizedPollIntervalMs > 0
-          ? Math.floor(normalizedPollIntervalMs)
-          : Math.max(1000, Math.floor(defaultPollIntervalMs || 5000));
-
-      const singleWaitMs = Math.max(1000, resolvedTimeoutMs);
+      const singleWaitMs = resolvedTimeoutMs;
       const containerResults = await Promise.all(
         containers.map(async (containerItem = {}) => {
           const containerId = String(containerItem?.id || "").trim();

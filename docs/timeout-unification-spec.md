@@ -43,7 +43,7 @@
 |---|---:|---|
 | Request Timeout | 30000 | 网络/连接器常规请求 |
 | Interaction Timeout | 600000 | 用户交互等待（10 分钟） |
-| Run Timeout (default) | 7200000 | run 默认 2 小时 |
+| Run Timeout (default) | 18000000 | run 默认 5 小时 |
 | Run Timeout (min) | 10000 | run 最小保护 |
 | Run Timeout (max) | 43200000 | run 最大 12 小时 |
 | Idle Timeout | 10800000 | 3 小时空闲回收 |
@@ -72,6 +72,27 @@
 | `requestIdTtlMs` | `requestIdTtlMs` | 已 canonical |
 | `channelRetentionMs` | `channelRetentionMs` | 已 canonical |
 | `poll_interval_ms` | `pollIntervalMs` | 建议统一处理层转化 |
+
+### 4.1 当前落地状态（2026-06-06）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| 统一归一化工具 `time-config-normalizer` | ✅ 已完成 | 已提供 `normalizeTimeMs`、`resolveTimeMs`。 |
+| run timeout 归一化（service/ws） | ✅ 已完成 | `chat-websocket-server.js` 已接入 clamp/fallback。 |
+| openvscode 时间参数归一化 | ✅ 已完成 | `openvscode-service.js` 已统一 parse/normalize。 |
+| user override 的 `runTimeoutMs` 校验 | ✅ 已完成 | `user-override-policy.js` 已改为统一归一化。 |
+| connector timeout 归一化 | ✅ 已完成 | `channel-store`、DB/SSH connector 链路已接入。 |
+| script timeout / docker lock wait 归一化 | ✅ 已完成 | `script-tool.js` 已接入统一工具。 |
+| agent-collab wait/poll 归一化 | ✅ 已完成 | `agent-collab-tool` 与 `tool-wait-async-result` 已接入。 |
+| browser simulate / web2data 归一化 | ✅ 已完成 | `browser-simulate.js`、`web2data-tool.js` 已接入。 |
+| web2img runtime 默认值统一入口 | ✅ 已完成 | `normalizeWeb2ImgRuntimeDefaults` 已落地并补测。 |
+| auth API key TTL 归一化 | ✅ 已完成 | `auth-service.js` 已接入统一归一化。 |
+| agent-proxy 时间配置归一化 | ✅ 已完成 | `agent-proxy/src/config.js` 已统一 `envTimeMs`。 |
+| 旧字段读到时 deprecation warn | ✅ 已完成 | `resolveTimeMs` 已支持 legacy 告警；已覆盖 DB/SSH、chat run、ws runTimeout、openvscode、memory-postprocess、script docker lock timeout。 |
+| CI 守卫：禁止直接读取 legacy 时间键 | ✅ 已完成 | 新增 `scripts/check-legacy-time-keys.mjs`，并提供 `npm run check:legacy-time-keys`。 |
+| 配置示例与配置文档 canonical 化 | ✅ 已完成 | `global/user-template/workspace` 配置样例及 `CONFIGURATION*.md` 已改为 camelCase 时间字段。 |
+| Phase 3 预备（legacy 移除清单） | ✅ 已完成 | 已新增 `docs/timeout-legacy-removal-checklist.md`。 |
+| snake_case 时间字段移除 | ⏸ 暂不执行 | 配置约定以 snake_case 为默认，运行时保留 snake_case -> canonical 归一化。 |
 
 ---
 
@@ -125,10 +146,10 @@
 
 ## 8. 验收标准
 
-- [ ] 时间字段命名统一到 canonical 风格
-- [ ] 关键路径（run、interaction、proxy、connector、script）支持 clamp
-- [ ] 无新增 snake_case 时间字段
-- [ ] inventory 文档与规范文档可互相追溯
+- [x] 时间字段命名统一到 canonical 风格（运行时内部）
+- [x] 关键路径（run、interaction、proxy、connector、script）支持 clamp
+- [x] 无新增“运行时代码直接读取”snake_case 时间字段（配置层按约定保留 snake_case）
+- [x] inventory 文档与规范文档可互相追溯
 
 
 
@@ -138,3 +159,4 @@
 
 - 现状盘点：[`docs/timeout-inventory.md`](./timeout-inventory.md)
 - 统一时建议以 inventory 为迁移输入清单。
+- Phase 3 预备清单：[`docs/timeout-legacy-removal-checklist.md`](./timeout-legacy-removal-checklist.md)

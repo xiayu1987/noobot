@@ -12,10 +12,10 @@ function createTestManager(overrides = {}) {
 test("_normalizeWaitAsyncTimeout enforces minimum and default", () => {
   const manager = createTestManager();
 
-  assert.equal(manager._normalizeWaitAsyncTimeout(0), 120000);
+  assert.equal(manager._normalizeWaitAsyncTimeout(0), 300000);
   assert.equal(manager._normalizeWaitAsyncTimeout(1), 1000);
   assert.equal(manager._normalizeWaitAsyncTimeout(-10), 1000);
-  assert.equal(manager._normalizeWaitAsyncTimeout(undefined), 120000);
+  assert.equal(manager._normalizeWaitAsyncTimeout(undefined), 300000);
   assert.equal(manager._normalizeWaitAsyncTimeout(5000), 5000);
 });
 

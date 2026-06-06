@@ -86,7 +86,7 @@ export const ASYNC_JOB_TYPES = {
   CUSTOM: "custom",
 };
 
-export const DEFAULT_WAIT_ASYNC_TIMEOUT_MS = 120000;
+export const DEFAULT_WAIT_ASYNC_TIMEOUT_MS = 300000;
 export const MIN_WAIT_ASYNC_TIMEOUT_MS = 1000;
 export const ASYNC_JOB_FAST_CLEANUP_MS = 1000;
 export const ASYNC_JOB_RETENTION_MS = 5 * 60 * 1000;

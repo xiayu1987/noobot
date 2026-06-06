@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeKnownConfigKeys } from "./key-normalizer.js";
+import { normalizeTimeMs } from "./time-config-normalizer.js";
 import { isPlainObject } from "../../utils/shared-utils.js";
 
 // 用户可覆盖策略（只允许这些键被 user config 覆盖）
@@ -72,9 +73,12 @@ function cloneAllowedValue(key, value) {
     return typeof value === "string" ? value : undefined;
   }
   if (mode === "replace_number") {
-    const normalizedNumber = Number(value);
+    const normalizedNumber = normalizeTimeMs(value, {
+      fallback: Number.NaN,
+      min: 1,
+    });
     return Number.isFinite(normalizedNumber) && normalizedNumber > 0
-      ? Math.floor(normalizedNumber)
+      ? normalizedNumber
       : undefined;
   }
   return isPlainObject(value) ? stripDeniedPaths(key, { ...value }) : undefined;

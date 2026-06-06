@@ -17,6 +17,7 @@
     "project:launcher": "node ./scripts/project-launcher.mjs",
     "install:all": "npm install --workspaces",
     "build": "npm run -w client/noobot-chat build",
+    "check:legacy-time-keys": "node ./scripts/check-legacy-time-keys.mjs",
     "dev:service": "npm run -w service dev",
     "dev:agent-proxy": "npm run -w agent-proxy dev",
     "dev:client": "npm run -w client/noobot-chat dev",

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig } from "../../config/index.js";
+import { mergeConfig, normalizeTimeMs } from "../../config/index.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import {
   getRuntimeFromAgentContext,
@@ -73,13 +73,20 @@ export function createAgentCollabTool({ agentContext }) {
     ...(passthroughToolPolicy && parentToolPolicy ? { toolPolicy: parentToolPolicy } : {}),
   };
 
-  const defaultWaitMs = Number(
-    effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.waitTimeoutMs ?? 120000,
+  const defaultWaitMs = normalizeTimeMs(
+    effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.waitTimeoutMs,
+    {
+      fallback: 300000,
+      min: 1000,
+    },
   );
-  const defaultPollIntervalMs = Number(
+  const defaultPollIntervalMs = normalizeTimeMs(
     effectiveConfig?.tools?.[TOOL_NAME.WAIT_ASYNC_TASK_RESULT]?.pollIntervalMs ??
-      effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.pollIntervalMs ??
-      5000,
+      effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.pollIntervalMs,
+    {
+      fallback: 5000,
+      min: 1000,
+    },
   );
 
   const botManager = runtime.botManager || null;

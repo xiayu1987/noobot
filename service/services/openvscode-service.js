@@ -11,11 +11,12 @@ import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { normalizeTimeMs, resolveTimeMs } from "#agent/config";
 
 const DEFAULT_COMMAND = "openvscode-server";
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_START_TIMEOUT_MS = 30_000;
+const DEFAULT_START_TIMEOUT_MS = 60_000;
 const DEFAULT_IDLE_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 const DEFAULT_CLEANUP_INTERVAL_MS = 60_000;
 const DEFAULT_SHUTDOWN_GRACE_MS = 5_000;
@@ -52,13 +53,34 @@ function resolveManagedOpenVSCodeCommand() {
 }
 
 function parsePositiveNumber(value, fallback, min = 0) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(min, parsed);
+  return normalizeTimeMs(value, {
+    fallback,
+    min,
+    allowZero: min <= 0,
+  });
 }
 
-function firstDefined(...values) {
-  return values.find((value) => value !== undefined && value !== null && value !== "");
+function resolveOpenVSCodeTimeMs({
+  envName = "",
+  source = {},
+  key = "",
+  legacyKey = "",
+  fallback = 0,
+  min = 0,
+} = {}) {
+  const envRaw = process.env[String(envName || "").trim()];
+  if (envRaw !== undefined) {
+    return parsePositiveNumber(envRaw, fallback, min);
+  }
+  return resolveTimeMs(source, {
+    key,
+    legacyKeys: legacyKey ? [legacyKey] : [],
+    sourceTag: "service.openvscode",
+    warnLegacy: true,
+    fallback,
+    min,
+    allowZero: min <= 0,
+  });
 }
 
 function getOpenVSCodeConfig(globalConfig = {}) {
@@ -74,42 +96,38 @@ function getOpenVSCodeConfig(globalConfig = {}) {
   return {
     command: configuredCommand || resolveManagedOpenVSCodeCommand() || DEFAULT_COMMAND,
     host: String(process.env.OPENVSCODE_SERVER_HOST || source.host || DEFAULT_HOST).trim() || DEFAULT_HOST,
-    startTimeoutMs: parsePositiveNumber(
-      firstDefined(
-        process.env.OPENVSCODE_SERVER_START_TIMEOUT_MS,
-        source.startTimeoutMs,
-        source.start_timeout_ms,
-      ),
-      DEFAULT_START_TIMEOUT_MS,
-      1_000,
-    ),
-    idleTimeoutMs: parsePositiveNumber(
-      firstDefined(
-        process.env.OPENVSCODE_SERVER_IDLE_TIMEOUT_MS,
-        source.idleTimeoutMs,
-        source.idle_timeout_ms,
-      ),
-      DEFAULT_IDLE_TIMEOUT_MS,
-      0,
-    ),
-    cleanupIntervalMs: parsePositiveNumber(
-      firstDefined(
-        process.env.OPENVSCODE_SERVER_CLEANUP_INTERVAL_MS,
-        source.cleanupIntervalMs,
-        source.cleanup_interval_ms,
-      ),
-      DEFAULT_CLEANUP_INTERVAL_MS,
-      1_000,
-    ),
-    shutdownGraceMs: parsePositiveNumber(
-      firstDefined(
-        process.env.OPENVSCODE_SERVER_SHUTDOWN_GRACE_MS,
-        source.shutdownGraceMs,
-        source.shutdown_grace_ms,
-      ),
-      DEFAULT_SHUTDOWN_GRACE_MS,
-      0,
-    ),
+    startTimeoutMs: resolveOpenVSCodeTimeMs({
+      envName: "OPENVSCODE_SERVER_START_TIMEOUT_MS",
+      source,
+      key: "startTimeoutMs",
+      legacyKey: "start_timeout_ms",
+      fallback: DEFAULT_START_TIMEOUT_MS,
+      min: 1_000,
+    }),
+    idleTimeoutMs: resolveOpenVSCodeTimeMs({
+      envName: "OPENVSCODE_SERVER_IDLE_TIMEOUT_MS",
+      source,
+      key: "idleTimeoutMs",
+      legacyKey: "idle_timeout_ms",
+      fallback: DEFAULT_IDLE_TIMEOUT_MS,
+      min: 0,
+    }),
+    cleanupIntervalMs: resolveOpenVSCodeTimeMs({
+      envName: "OPENVSCODE_SERVER_CLEANUP_INTERVAL_MS",
+      source,
+      key: "cleanupIntervalMs",
+      legacyKey: "cleanup_interval_ms",
+      fallback: DEFAULT_CLEANUP_INTERVAL_MS,
+      min: 1_000,
+    }),
+    shutdownGraceMs: resolveOpenVSCodeTimeMs({
+      envName: "OPENVSCODE_SERVER_SHUTDOWN_GRACE_MS",
+      source,
+      key: "shutdownGraceMs",
+      legacyKey: "shutdown_grace_ms",
+      fallback: DEFAULT_SHUTDOWN_GRACE_MS,
+      min: 0,
+    }),
     extraArgs: Array.isArray(source.extraArgs)
       ? source.extraArgs.map((item) => String(item || "").trim()).filter(Boolean)
       : envArgs
