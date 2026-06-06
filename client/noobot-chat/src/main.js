@@ -9,8 +9,10 @@ import ElementPlus from "element-plus";
 import "element-plus/dist/index.css";
 import App from "./App.vue";
 import "./shared/styles/style.css";
+import { registerExternalFrontendPlugins } from "./plugins/auto-register";
 
 const app = createApp(App);
 app.use(createPinia());
 app.use(ElementPlus);
+registerExternalFrontendPlugins();
 app.mount("#app");

@@ -1,7 +1,12 @@
+<!--
+  Copyright (c) 2026 xiayu
+  Contact: 126240622+xiayu1987@users.noreply.github.com
+  SPDX-License-Identifier: MIT
+-->
 <script setup>
 import { computed, watch, nextTick, ref } from "vue";
-import { renderMermaidInElement } from "../../shared/utils/mermaid-renderer";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { renderMermaidInElement } from "../utils/mermaid-renderer";
+import { useLocale } from "../i18n/useLocale";
 
 const props = defineProps({
   contentType: { type: String, default: "file" }, // file | attachment
@@ -44,10 +49,7 @@ const resolvedPreviewName = computed(() =>
   isAttachment.value ? props.attachmentPreviewName : props.previewFileName,
 );
 const showCopyActions = computed(
-  () =>
-    resolvedPreviewMode.value === "markdown" &&
-    !resolvedLoading.value &&
-    !resolvedError.value,
+  () => resolvedPreviewMode.value === "markdown" && !resolvedLoading.value && !resolvedError.value,
 );
 
 function emitCopyMarkdownRich() {
@@ -56,11 +58,7 @@ function emitCopyMarkdownRich() {
 }
 
 watch(
-  () => [
-    props.active,
-    resolvedPreviewText.value,
-    resolvedPreviewMode.value,
-  ],
+  () => [props.active, resolvedPreviewText.value, resolvedPreviewMode.value],
   async ([active, content, mode]) => {
     const isMarkdown = mode === "markdown" && Boolean(content);
     if (!active || !isMarkdown) return;
@@ -78,8 +76,12 @@ watch(
 <template>
   <div class="preview-body" v-loading="resolvedLoading">
     <div v-if="showCopyActions" class="preview-copy-actions">
-      <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">{{ translate("message.copyFormat") }}</el-button>
-      <el-button size="small" @click="emit('copy-markdown-text')">{{ translate("message.copyText") }}</el-button>
+      <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">{{
+        translate("message.copyFormat")
+      }}</el-button>
+      <el-button size="small" @click="emit('copy-markdown-text')">{{
+        translate("message.copyText")
+      }}</el-button>
     </div>
     <div v-if="resolvedError" class="preview-error">{{ resolvedError }}</div>
     <img
@@ -113,7 +115,6 @@ watch(
 </template>
 
 <style scoped>
-/* ==================== 基础容器样式 ==================== */
 .preview-body {
   min-height: 240px;
   max-height: 68vh;
@@ -128,7 +129,6 @@ watch(
   transition: all 0.3s ease;
 }
 
-/* 自定义滚动条 */
 .preview-body::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -193,7 +193,6 @@ watch(
   line-height: 1.6;
 }
 
-/* ==================== Markdown 核心排版样式 ==================== */
 .preview-markdown {
   color: var(--noobot-preview-text);
   font-size: 15px;
@@ -201,65 +200,159 @@ watch(
   word-wrap: break-word;
 }
 
-/* 段落与基础元素 */
-.preview-markdown :deep(p) { margin-top: 0; margin-bottom: 16px; }
-.preview-markdown :deep(a) { color: var(--noobot-text-accent); text-decoration: none; }
-.preview-markdown :deep(a:hover) { text-decoration: underline; }
-.preview-markdown :deep(hr) { height: 1px; padding: 0; margin: 24px 0; background-color: var(--noobot-divider); border: 0; }
-
-/* 标题 */
-.preview-markdown :deep(h1), .preview-markdown :deep(h2), .preview-markdown :deep(h3),
-.preview-markdown :deep(h4), .preview-markdown :deep(h5), .preview-markdown :deep(h6) {
-  margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; color: var(--noobot-preview-text);
+.preview-markdown :deep(p) {
+  margin-top: 0;
+  margin-bottom: 16px;
 }
-.preview-markdown :deep(h1) { font-size: 1.8em; padding-bottom: 0.3em; border-bottom: 1px solid var(--noobot-divider); }
-.preview-markdown :deep(h2) { font-size: 1.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--noobot-divider); }
-.preview-markdown :deep(h3) { font-size: 1.25em; }
-.preview-markdown :deep(h4) { font-size: 1em; }
+.preview-markdown :deep(a) {
+  color: var(--noobot-text-accent);
+  text-decoration: none;
+}
+.preview-markdown :deep(a:hover) {
+  text-decoration: underline;
+}
+.preview-markdown :deep(hr) {
+  height: 1px;
+  padding: 0;
+  margin: 24px 0;
+  background-color: var(--noobot-divider);
+  border: 0;
+}
 
-/* 引用块 */
+.preview-markdown :deep(h1),
+.preview-markdown :deep(h2),
+.preview-markdown :deep(h3),
+.preview-markdown :deep(h4),
+.preview-markdown :deep(h5),
+.preview-markdown :deep(h6) {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--noobot-preview-text);
+}
+.preview-markdown :deep(h1) {
+  font-size: 1.8em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--noobot-divider);
+}
+.preview-markdown :deep(h2) {
+  font-size: 1.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--noobot-divider);
+}
+.preview-markdown :deep(h3) {
+  font-size: 1.25em;
+}
+.preview-markdown :deep(h4) {
+  font-size: 1em;
+}
+
 .preview-markdown :deep(blockquote) {
-  margin: 16px 0; padding: 12px 16px; color: var(--noobot-preview-text); background-color: var(--noobot-panel-muted);
-  border-left: 4px solid var(--noobot-panel-border); border-radius: 0 6px 6px 0; font-style: italic;
+  margin: 16px 0;
+  padding: 12px 16px;
+  color: var(--noobot-preview-text);
+  background-color: var(--noobot-panel-muted);
+  border-left: 4px solid var(--noobot-panel-border);
+  border-radius: 0 6px 6px 0;
+  font-style: italic;
 }
-.preview-markdown :deep(blockquote p:last-child) { margin-bottom: 0; }
+.preview-markdown :deep(blockquote p:last-child) {
+  margin-bottom: 0;
+}
 
-/* 列表 */
-.preview-markdown :deep(ul), .preview-markdown :deep(ol) { margin-top: 0; margin-bottom: 16px; padding-left: 2em; }
-.preview-markdown :deep(li) { margin: 4px 0; }
-.preview-markdown :deep(li > p) { margin-top: 16px; }
-.preview-markdown :deep(ul li::marker) { color: var(--noobot-text-muted); }
-.preview-markdown :deep(ol li::marker) { color: var(--noobot-text-secondary); font-weight: 500; }
+.preview-markdown :deep(ul),
+.preview-markdown :deep(ol) {
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding-left: 2em;
+}
+.preview-markdown :deep(li) {
+  margin: 4px 0;
+}
+.preview-markdown :deep(li > p) {
+  margin-top: 16px;
+}
+.preview-markdown :deep(ul li::marker) {
+  color: var(--noobot-text-muted);
+}
+.preview-markdown :deep(ol li::marker) {
+  color: var(--noobot-text-secondary);
+  font-weight: 500;
+}
 
-/* 行内代码 */
 .preview-markdown :deep(code) {
-  background-color: var(--noobot-msg-inline-code-bg); color: var(--noobot-msg-inline-code-text); padding: 0.2em 0.4em; border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em;
+  background-color: var(--noobot-msg-inline-code-bg);
+  color: var(--noobot-msg-inline-code-text);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
 }
 
-/* 多行代码块 */
 .preview-markdown :deep(pre) {
-  background-color: var(--noobot-msg-code-block-bg); color: var(--noobot-msg-code-block-text); border-radius: 8px; padding: 16px;
-  overflow-x: auto; margin-bottom: 16px;
+  background-color: var(--noobot-msg-code-block-bg);
+  color: var(--noobot-msg-code-block-text);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  margin-bottom: 16px;
 }
-.preview-markdown :deep(pre code) { background-color: transparent; color: inherit; padding: 0; font-size: 13.5px; border-radius: 0; }
+.preview-markdown :deep(pre code) {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: 13.5px;
+  border-radius: 0;
+}
 
-/* 表格 */
-.preview-markdown :deep(table) { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
-.preview-markdown :deep(th), .preview-markdown :deep(td) { border: 1px solid var(--noobot-panel-border); padding: 10px 14px; text-align: left; }
-.preview-markdown :deep(th) { background-color: var(--noobot-panel-muted); font-weight: 600; color: var(--noobot-preview-text); }
-.preview-markdown :deep(tr:nth-child(even)) { background-color: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent); }
-.preview-markdown :deep(tr:hover) { background-color: var(--noobot-accent-soft); }
+.preview-markdown :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.preview-markdown :deep(th),
+.preview-markdown :deep(td) {
+  border: 1px solid var(--noobot-panel-border);
+  padding: 10px 14px;
+  text-align: left;
+}
+.preview-markdown :deep(th) {
+  background-color: var(--noobot-panel-muted);
+  font-weight: 600;
+  color: var(--noobot-preview-text);
+}
+.preview-markdown :deep(tr:nth-child(even)) {
+  background-color: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent);
+}
+.preview-markdown :deep(tr:hover) {
+  background-color: var(--noobot-accent-soft);
+}
 
-/* Mermaid 图表 */
 .preview-markdown :deep(.mermaid) {
-  margin: 20px 0; padding: 16px; border: 1px solid var(--noobot-preview-border); border-radius: 8px;
-  background: var(--noobot-preview-bg); overflow-x: auto; display: flex; justify-content: center;
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid var(--noobot-preview-border);
+  border-radius: 8px;
+  background: var(--noobot-preview-bg);
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
   box-shadow: 0 1px 4px color-mix(in srgb, var(--noobot-panel-border) 45%, transparent);
 }
-.preview-markdown :deep(.mermaid svg) { max-width: 100% !important; height: auto !important; display: block; }
+.preview-markdown :deep(.mermaid svg) {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+}
 .preview-markdown :deep(.mermaid-render-error) {
-  color: var(--noobot-preview-danger-text); background: var(--noobot-preview-danger-bg); border: 1px solid var(--noobot-preview-danger-border); border-radius: 8px;
-  padding: 12px; white-space: pre-wrap; font-family: monospace;
+  color: var(--noobot-preview-danger-text);
+  background: var(--noobot-preview-danger-bg);
+  border: 1px solid var(--noobot-preview-danger-border);
+  border-radius: 8px;
+  padding: 12px;
+  white-space: pre-wrap;
+  font-family: monospace;
 }
 </style>

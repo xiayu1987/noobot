@@ -223,6 +223,39 @@ test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning
   assert.equal(prepared.plugins.harness.timeoutMs, 180_000);
 });
 
+test("SessionExecutionEngine injects workflow resolveModelMessages with recent window", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+
+  const prepared = engine._prepareWorkflowRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        workflow: {
+          enabled: true,
+          mode: "on",
+          contextWindowRecentMessageLimit: 2,
+        },
+      },
+    },
+  });
+
+  const resolver = prepared.plugins.workflow.resolveModelMessages;
+  assert.equal(typeof resolver, "function");
+  const resolved = resolver({
+    messages: [
+      { role: "system", content: "policy" },
+      { role: "user", content: "old" },
+      { role: "assistant", content: "a1" },
+      { role: "user", content: "current", frontendUserMessage: true },
+    ],
+  });
+
+  assert.deepEqual(resolved, [
+    { role: "user", content: "old", summarized: false },
+    { role: "user", content: "current", summarized: false, frontendUserMessage: true },
+  ]);
+});
+
 test("SessionExecutionEngine injects plugin resolveModelMessages with recent window", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 

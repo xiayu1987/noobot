@@ -269,6 +269,9 @@ export class SessionExecutionRunner {
       const { agentContext, runtimeAgentContext, userMessageAttachmentMetas } =
         this._normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
       const agentContextSummary = this._buildAgentContextSummary(runtimeAgentContext);
+      const dispatchContextMessages = Array.isArray(runtimeAgentContext?.payload?.messages?.history)
+        ? runtimeAgentContext.payload.messages.history
+        : [];
 
       await this.appendSessionTurn({
         userId,
@@ -288,6 +291,7 @@ export class SessionExecutionRunner {
         ...botHookBase,
         userMessage: normalizedMessage,
         agentContextSummary,
+        messages: dispatchContextMessages,
         attachmentMetas: userMessageAttachmentMetas,
         userMessageAttachmentMetas,
         eventListener: runtimeEventListener,

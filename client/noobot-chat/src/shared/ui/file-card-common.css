@@ -1,0 +1,81 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+.file-thumb {
+  width: var(--noobot-msg-file-thumb-size);
+  height: var(--noobot-msg-file-thumb-size);
+  border-radius: var(--noobot-radius-xs);
+  object-fit: cover;
+}
+
+.attachment-preview-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  border-radius: var(--noobot-radius-xs);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.attachment-preview-btn:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.file-icon {
+  width: var(--noobot-msg-file-thumb-size);
+  height: var(--noobot-msg-file-thumb-size);
+  border-radius: var(--noobot-radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--noobot-msg-file-icon-bg);
+  color: var(--noobot-text-strong);
+}
+
+.file-icon-button {
+  width: var(--noobot-msg-file-thumb-size);
+  height: var(--noobot-msg-file-thumb-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--noobot-text-strong);
+  background: color-mix(in srgb, var(--noobot-text-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-text-accent) 26%, transparent);
+  border-radius: var(--noobot-radius-xs);
+}
+
+.file-icon-button:hover {
+  background: color-mix(in srgb, var(--noobot-text-accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-text-accent) 38%, transparent);
+}
+
+.file-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.file-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.file-name {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--noobot-msg-caption-font-size);
+  color: var(--noobot-msg-file-name);
+}
+
+.attachment-download-btn {
+  border-radius: var(--noobot-radius-xs);
+  color: var(--noobot-msg-file-name);
+}

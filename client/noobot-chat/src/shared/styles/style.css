@@ -8,6 +8,7 @@
 @import "./tokens/theme-light.css";
 @import "./global/base.css";
 @import "./components/app-shell.css";
+@import "./components/drawer.css";
 @import "./components/preview.css";
 @import "./components/buttons.css";
 @import "./components/workspace.css";

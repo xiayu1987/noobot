@@ -6,24 +6,24 @@
 <script setup>
 import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { useMessagePreview } from "../../composables/message/useMessagePreview";
-import { useMessageFiles } from "../../composables/message/useMessageFiles";
-import { useMessageMeta } from "../../composables/message/useMessageMeta";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../../../client/noobot-chat/src/shared/i18n/useLocale";
+import { useMessageFiles } from "../../../../client/noobot-chat/src/composables/message/useMessageFiles";
+import { useMessageMeta } from "../../../../client/noobot-chat/src/composables/message/useMessageMeta";
+import { useMessagePreview } from "../../../../client/noobot-chat/src/composables/message/useMessagePreview";
 import {
   BaseMarkdownContent,
   BaseMessageErrorAlert,
   BaseMessageShell,
   BaseMessageTypeTag,
   BasePreviewContent,
-} from "../../shared/ui";
+} from "../../../../client/noobot-chat/src/shared/ui";
 import {
-  resolveMessageCardRenderers,
-  resolveMessageCardListeners,
-  resolveMessageCardProps,
   resolveMessageActionProps,
   resolveMessageActionRenderers,
-} from "../../plugins/frontend-plugin-registry";
+  resolveMessageCardListeners,
+  resolveMessageCardProps,
+  resolveMessageCardRenderers,
+} from "../../../../client/noobot-chat/src/plugins/frontend-plugin-registry";
 
 const props = defineProps({
   messageItem: { type: Object, required: true },
@@ -36,6 +36,9 @@ const props = defineProps({
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
 });
+
+const messageMarkdownRef = ref(null);
+const { translate } = useLocale();
 
 const {
   previewVisible,
@@ -89,9 +92,6 @@ const { messageModelLabel, showSubTaskActivity, subTaskStatusText } = useMessage
   getMessageItem: () => props.messageItem,
 });
 
-const messageMarkdownRef = ref(null);
-const { translate } = useLocale();
-
 const preMessageCardRenderers = computed(() =>
   resolveMessageCardRenderers(props.messageItem, { slot: "pre" }),
 );
@@ -101,10 +101,6 @@ const postMessageCardRenderers = computed(() =>
 const messageActionRenderers = computed(() =>
   resolveMessageActionRenderers(props.messageItem),
 );
-
-function resolveRendererProps(renderer = {}) {
-  return resolveMessageCardProps(renderer, resolveRendererContext());
-}
 
 function resolveRendererContext() {
   return {
@@ -129,6 +125,10 @@ function resolveRendererContext() {
     onOpenAttachmentPreview: openAttachmentPreview,
     onDownloadAttachment,
   };
+}
+
+function resolveRendererProps(renderer = {}) {
+  return resolveMessageCardProps(renderer, resolveRendererContext());
 }
 
 function resolveRendererListeners(renderer = {}) {
@@ -160,6 +160,7 @@ async function handleCopyAssistantMessageText() {
     :model-label="messageModelLabel"
   >
     <BaseMessageTypeTag :type="messageItem.type" />
+
     <component
       :is="renderer.component"
       v-for="renderer in preMessageCardRenderers"
@@ -192,13 +193,12 @@ async function handleCopyAssistantMessageText() {
     />
   </BaseMessageShell>
 
-  <!-- 弹窗部分保持不变 -->
   <el-dialog
     v-model="attachmentPreviewVisible"
     :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
     width="72%"
     top="6vh"
-    class="attachment-preview-dialog"
+    class="workflow-session-preview-dialog"
     destroy-on-close
     @closed="closeAttachmentPreview"
   >
@@ -222,7 +222,7 @@ async function handleCopyAssistantMessageText() {
     :title="translate('message.filePreviewTitle', { name: previewFileName || '' })"
     width="72%"
     top="6vh"
-    class="generated-file-preview-dialog"
+    class="workflow-session-preview-dialog"
     destroy-on-close
     @closed="closePreviewDialog"
   >
