@@ -6,22 +6,37 @@
 import { randomBytes } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "#agent/event";
-import { mergeConfig } from "#agent/config";
+import { mergeConfig, normalizeTimeMs, resolveTimeMs } from "#agent/config";
 import { logError } from "#agent/tracking";
 import { HTTP_STATUS } from "#agent/constants";
 
-const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
 const MIN_RUN_TIMEOUT_MS = 10000;
 const MAX_RUN_TIMEOUT_MS = 12 * 60 * 60 * 1000;
 
 function resolveRunTimeoutMs(rawValue) {
-  const parsed = Number(rawValue);
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_RUN_TIMEOUT_MS;
-  return Math.min(MAX_RUN_TIMEOUT_MS, Math.max(MIN_RUN_TIMEOUT_MS, Math.floor(parsed)));
+  return normalizeTimeMs(rawValue, {
+    fallback: DEFAULT_RUN_TIMEOUT_MS,
+    min: MIN_RUN_TIMEOUT_MS,
+    max: MAX_RUN_TIMEOUT_MS,
+  });
 }
 
 function resolveConfigRunTimeoutMs(config = {}) {
-  return config?.runTimeoutMs ?? config?.run_timeout_ms;
+  const source =
+    config && typeof config === "object" && !Array.isArray(config) ? config : {};
+  const hasCanonical = Object.prototype.hasOwnProperty.call(source, "runTimeoutMs");
+  const hasLegacy = Object.prototype.hasOwnProperty.call(source, "run_timeout_ms");
+  if (!hasCanonical && !hasLegacy) return undefined;
+  return resolveTimeMs(source, {
+    key: "runTimeoutMs",
+    legacyKeys: ["run_timeout_ms"],
+    sourceTag: "service.ws.chat-websocket-server",
+    warnLegacy: true,
+    fallback: DEFAULT_RUN_TIMEOUT_MS,
+    min: MIN_RUN_TIMEOUT_MS,
+    max: MAX_RUN_TIMEOUT_MS,
+  });
 }
 
 async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} } = {}) {

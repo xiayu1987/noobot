@@ -9,6 +9,11 @@ export {
 } from "./core/template-resolver.js";
 export { sanitizeUserConfig } from "./core/user-override-policy.js";
 export {
+  normalizeTimeMs,
+  resolveTimeMs,
+  getLegacyTimeKeyUsageStats,
+} from "./core/time-config-normalizer.js";
+export {
   mergeConfig,
   applySessionModelOverride,
 } from "./core/config-merge.js";

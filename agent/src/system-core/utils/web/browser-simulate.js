@@ -6,6 +6,7 @@
 import { chromium } from "playwright";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { logger } from "../../tracking/index.js";
+import { normalizeTimeMs } from "../../config/core/time-config-normalizer.js";
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -100,6 +101,14 @@ export async function browseUrlHtml({
   networkIdleTimeout = 4500,
   runtimeContext = null,
 } = {}) {
+  const resolvedTimeoutMs = normalizeTimeMs(timeout, {
+    fallback: 30000,
+    min: 1000,
+  });
+  const resolvedNetworkIdleTimeoutMs = normalizeTimeMs(networkIdleTimeout, {
+    fallback: 4500,
+    min: 500,
+  });
   const targetUrl = String(url || "").trim();
   if (!/^https?:\/\//i.test(targetUrl)) {
     return {
@@ -144,16 +153,16 @@ export async function browseUrlHtml({
         });
         const response = await page.goto(targetUrl, {
           waitUntil,
-          timeout,
+          timeout: resolvedTimeoutMs,
         });
         await page
           .waitForFunction(() => document.readyState === "complete", null, {
-            timeout: Math.min(timeout, 20000),
+            timeout: Math.min(resolvedTimeoutMs, 20000),
           })
           .catch(() => {});
         try {
           await page.waitForLoadState("networkidle", {
-            timeout: networkIdleTimeout,
+            timeout: resolvedNetworkIdleTimeoutMs,
           });
         } catch {
           // Some pages never reach networkidle; continue with current DOM snapshot.

@@ -7,4 +7,6 @@
 export {
   createGlobalConfigBuilder,
   mergeConfig,
+  normalizeTimeMs,
+  resolveTimeMs,
 } from "noobot-agent/config";

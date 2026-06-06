@@ -10,7 +10,7 @@ import {
 test("sanitizeUserConfig: 应仅保留允许覆盖字段并规范化键名", () => {
   const out = sanitizeUserConfig({
     default_provider: "openai",
-    run_timeout_ms: 9876,
+    runTimeoutMs: 9876,
     workspace_root: "/should-be-denied",
     providers: { openai: { model: "gpt-4o" } },
     context: {
@@ -32,7 +32,7 @@ test("sanitizeUserConfig: 应仅保留允许覆盖字段并规范化键名", () 
 
 test("sanitizeUserConfig: runTimeoutMs 非法值应被过滤", () => {
   const out = sanitizeUserConfig({
-    run_timeout_ms: -1,
+    runTimeoutMs: -1,
   });
   assert.equal("runTimeoutMs" in out, false);
 });

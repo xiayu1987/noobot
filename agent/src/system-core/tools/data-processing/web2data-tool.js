@@ -10,6 +10,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
+import { normalizeTimeMs } from "../../config/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
   createChatModelByName,
@@ -43,6 +44,14 @@ const MAX_TEXT_CHARS = 12000;
 const BROWSER_RETRY_COUNT = 2;
 const DEFAULT_CONCURRENCY = 8;
 const MAX_CONCURRENCY = 60;
+const BROWSER_SIMULATE_TIMEOUT_MS = normalizeTimeMs(45000, {
+  fallback: 45000,
+  min: 1000,
+});
+const BROWSER_SIMULATE_NETWORK_IDLE_TIMEOUT_MS = normalizeTimeMs(10000, {
+  fallback: 10000,
+  min: 500,
+});
 
 function tWeb(runtime = {}, key = "", params = {}) {
   const normalizedKey = String(key || "").trim();
@@ -314,8 +323,8 @@ async function runBrowserSimulateExtract(
           loaded = await browseUrlHtml({
             url,
             waitUntil: "domcontentloaded",
-            timeout: 45000,
-            networkIdleTimeout: 10000,
+            timeout: BROWSER_SIMULATE_TIMEOUT_MS,
+            networkIdleTimeout: BROWSER_SIMULATE_NETWORK_IDLE_TIMEOUT_MS,
             runtimeContext,
           });
           const blocked = looksBlockedPage({

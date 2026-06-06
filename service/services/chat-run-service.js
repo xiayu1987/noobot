@@ -5,6 +5,7 @@
  */
 import { resolveForceToolCall } from "#agent/utils";
 import { HTTP_STATUS } from "#agent/constants";
+import { resolveTimeMs } from "#agent/config";
 
 export function createChatRunService({
   getBot,
@@ -75,8 +76,19 @@ export function createChatRunService({
     const scenario = hasScenarioField ? String(source?.scenario || "").trim() : undefined;
     const hasStreamingField = Object.prototype.hasOwnProperty.call(source, "streaming");
     const streaming = hasStreamingField ? Boolean(source?.streaming) : undefined;
-    const runTimeoutRaw = source?.runTimeoutMs ?? source?.run_timeout_ms;
-    const runTimeoutMs = Number(runTimeoutRaw);
+    const hasRunTimeout =
+      Object.prototype.hasOwnProperty.call(source, "runTimeoutMs") ||
+      Object.prototype.hasOwnProperty.call(source, "run_timeout_ms");
+    const runTimeoutMs = hasRunTimeout
+      ? resolveTimeMs(source, {
+          key: "runTimeoutMs",
+          legacyKeys: ["run_timeout_ms"],
+          sourceTag: "service.chat-run-service",
+          warnLegacy: true,
+          fallback: 0,
+          min: 1,
+        })
+      : 0;
     return {
       allowUserInteraction,
       forceTool,

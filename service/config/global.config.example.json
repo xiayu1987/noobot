@@ -102,7 +102,7 @@
     },
     "delegate_task_async": {
       "enabled": true,
-      "wait_timeout_ms": 120000,
+      "wait_timeout_ms": 300000,
       "max_sub_agent_depth": 3,
       "poll_interval_ms": 5000
     },
@@ -151,7 +151,7 @@
         "bubblewrap": {},
         "firejail": {}
       },
-      "script_timeout_ms": 120000
+      "script_timeout_ms": 300000
     },
     "process_connector_tool": {
       "enabled": true,
@@ -291,7 +291,7 @@
       "enabled": true,
       "mode": "off",
       "semanticModel": "qwen3_6_plus",
-      "timeoutMs": 18000000,
+      "timeout_ms": 18000000,
       "maxAutoTransitions": 10,
       "parallelNodeExecution": true,
       "maxParallelNodeAgents": 4
@@ -469,5 +469,8 @@
     "user_id": "admin",
     "connect_code": "change-your-connect-code"
   },
-  "run_timeout_ms": 7200000
+  "run_timeout_ms": 18000000,
+  "openvscode": {
+    "start_timeout_ms": 60000
+  }
 }

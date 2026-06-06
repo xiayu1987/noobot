@@ -6,6 +6,7 @@
 import { createRequire } from "node:module";
 import { isReadabilityExtractorReady } from "../text-cleaner.js";
 import { deepMerge, isPlainObject } from "../../shared-utils.js";
+import { normalizeTimeMs } from "../../../config/core/time-config-normalizer.js";
 
 const require = createRequire(import.meta.url);
 
@@ -48,7 +49,7 @@ const DEFAULT_CONFIG = {
   },
 };
 
-const WEB2IMG_RUNTIME_DEFAULTS = {
+const WEB2IMG_RUNTIME_DEFAULTS_RAW = {
   page: {
     loadTimeoutMs: 45000,
     readyStateTimeoutMs: 20000,
@@ -75,6 +76,49 @@ const WEB2IMG_RUNTIME_DEFAULTS = {
   },
 };
 
+function normalizeInteger(value, fallback, min = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return Math.max(min, Math.floor(Number(fallback || 0)));
+  return Math.max(min, Math.floor(parsed));
+}
+
+function normalizeWeb2ImgRuntimeDefaults(runtimeDefaults = WEB2IMG_RUNTIME_DEFAULTS_RAW) {
+  const source = isPlainObject(runtimeDefaults) ? runtimeDefaults : {};
+  const page = isPlainObject(source.page) ? source.page : {};
+  const expand = isPlainObject(source.expand) ? source.expand : {};
+  const scroll = isPlainObject(source.scroll) ? source.scroll : {};
+  const textStable = isPlainObject(source.textStable) ? source.textStable : {};
+
+  return {
+    page: {
+      loadTimeoutMs: normalizeTimeMs(page.loadTimeoutMs, { fallback: 45000, min: 1000 }),
+      readyStateTimeoutMs: normalizeTimeMs(page.readyStateTimeoutMs, { fallback: 20000, min: 1000 }),
+      networkIdleTimeoutMs: normalizeTimeMs(page.networkIdleTimeoutMs, { fallback: 12000, min: 500 }),
+      readyPostWaitMs: normalizeTimeMs(page.readyPostWaitMs, { fallback: 800, min: 0, allowZero: true }),
+      gotoTimeoutMs: normalizeTimeMs(page.gotoTimeoutMs, { fallback: 45000, min: 1000 }),
+    },
+    expand: {
+      maxMatchCount: normalizeInteger(expand.maxMatchCount, 20, 0),
+      visibleTimeoutMs: normalizeTimeMs(expand.visibleTimeoutMs, { fallback: 500, min: 0, allowZero: true }),
+      clickTimeoutMs: normalizeTimeMs(expand.clickTimeoutMs, { fallback: 800, min: 0, allowZero: true }),
+      postClickWaitMs: normalizeTimeMs(expand.postClickWaitMs, { fallback: 150, min: 0, allowZero: true }),
+    },
+    scroll: {
+      maxSteps: normalizeInteger(scroll.maxSteps, 35, 0),
+      stepPx: normalizeInteger(scroll.stepPx, 1400, 0),
+      waitMs: normalizeTimeMs(scroll.waitMs, { fallback: 450, min: 0, allowZero: true }),
+      finalTopWaitMs: normalizeTimeMs(scroll.finalTopWaitMs, { fallback: 300, min: 0, allowZero: true }),
+    },
+    textStable: {
+      rounds: normalizeInteger(textStable.rounds, 10, 0),
+      intervalMs: normalizeTimeMs(textStable.intervalMs, { fallback: 700, min: 0, allowZero: true }),
+      stableThreshold: normalizeInteger(textStable.stableThreshold, 3, 1),
+    },
+  };
+}
+
+const WEB2IMG_RUNTIME_DEFAULTS = normalizeWeb2ImgRuntimeDefaults();
+
 function getSharp() {
   return sharpModule;
 }
@@ -87,6 +131,7 @@ function mergeWeb2ImgConfig(config) {
 export {
   DEFAULT_CONFIG,
   WEB2IMG_RUNTIME_DEFAULTS,
+  normalizeWeb2ImgRuntimeDefaults,
   HAS_SHARP,
   HAS_READABILITY,
   getSharp,

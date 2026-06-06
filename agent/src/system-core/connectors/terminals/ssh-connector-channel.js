@@ -4,19 +4,27 @@
  * SPDX-License-Identifier: MIT
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
+import { normalizeTimeMs, resolveTimeMs } from "../../config/core/time-config-normalizer.js";
 
 function resolveSshConnection(connectionInfo = {}) {
   const source =
     connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
   return {
     host: String(source?.host || source?.ip || "").trim(),
-    port: Math.max(1, Number(source?.port || 22)),
+    port: normalizeTimeMs(source?.port, {
+      fallback: 22,
+      min: 1,
+    }),
     username: String(source?.username || source?.user || "").trim(),
     password: String(source?.password || "").trim(),
-    timeoutMs: Math.max(
-      1000,
-      Number(source?.timeout_ms || source?.timeoutMs || 30000),
-    ),
+    timeoutMs: resolveTimeMs(source, {
+      key: "timeoutMs",
+      legacyKeys: ["timeout_ms"],
+      sourceTag: "connectors.terminal.ssh",
+      warnLegacy: true,
+      fallback: 30000,
+      min: 1000,
+    }),
   };
 }
 
@@ -190,9 +198,13 @@ function runSshShellCommand(state, command = "", timeoutMs = 30000) {
     stream.on("data", onStdout);
     if (stream?.stderr?.on) stream.stderr.on("data", onStderr);
 
+    const effectiveTimeoutMs = normalizeTimeMs(timeoutMs, {
+      fallback: 30000,
+      min: 1000,
+    });
     const timer = setTimeout(() => {
-      done(null, new Error(`ssh command timeout after ${timeoutMs}ms`));
-    }, Math.max(1000, Number(timeoutMs || 30000)));
+      done(null, new Error(`ssh command timeout after ${effectiveTimeoutMs}ms`));
+    }, effectiveTimeoutMs);
 
     stream.write(buildCommandEnvelope(command, marker), (error) => {
       if (error) done(null, error);

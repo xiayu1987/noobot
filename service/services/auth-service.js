@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { logError } from "#agent/tracking";
+import { normalizeTimeMs } from "#agent/config";
 import { randomBytes } from "node:crypto";
 import { HTTP_STATUS } from "#agent/constants";
 
@@ -14,10 +15,16 @@ export function createAuthService({
   translateText,
 } = {}) {
   const apiKeyStore = new Map();
-  let apiKeyTtlMs = Number(initialApiKeyTtlMs || DEFAULT_API_KEY_TTL_MS);
+  let apiKeyTtlMs = normalizeTimeMs(initialApiKeyTtlMs, {
+    fallback: DEFAULT_API_KEY_TTL_MS,
+    min: 1000,
+  });
 
   function setApiKeyTtlMs(nextApiKeyTtlMs = DEFAULT_API_KEY_TTL_MS) {
-    apiKeyTtlMs = Number(nextApiKeyTtlMs || DEFAULT_API_KEY_TTL_MS);
+    apiKeyTtlMs = normalizeTimeMs(nextApiKeyTtlMs, {
+      fallback: DEFAULT_API_KEY_TTL_MS,
+      min: 1000,
+    });
   }
 
   function issueApiKey({ userId, role = "user" }) {
