@@ -4,14 +4,14 @@ import { createServer } from "node:http";
 import { WebSocket } from "ws";
 import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
 
-async function startServerWithWs({ runSession = async () => ({}) } = {}) {
+async function startServerWithWs({ runSession = async () => ({}), bot = null } = {}) {
   const server = createServer((_req, res) => {
     res.statusCode = 404;
     res.end("not-found");
   });
 
   registerChatWebSocketServer(server, {
-    getBot: () => ({ runSession }),
+    getBot: () => bot || ({ runSession }),
     resolveRequestLocale: () => "zh-CN",
     resolveAuthByApiKey: () => ({ userId: "admin" }),
     isForbiddenUserScope: () => false,
@@ -119,6 +119,45 @@ test("chat-websocket-server: streaming=true 保持 delta 推送", async () => {
         sessionId: "s1",
         message: "hello",
         config: { streaming: true, locale: "zh-CN" },
+      },
+    });
+    const names = events.map((item) => String(item?.event || ""));
+    assert.equal(names.includes("delta"), true);
+    assert.equal(names.includes("done"), true);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: global streaming=true should allow delta", async () => {
+  const server = await startServerWithWs({
+    bot: {
+      globalConfig: { streaming: true },
+      runSession: async ({ eventListener }) => {
+        eventListener?.onEvent?.({
+          event: "llm_delta",
+          data: { text: "delta-token", dialogProcessId: "dp-1" },
+        });
+        return {
+          sessionId: "s1",
+          dialogProcessId: "dp-1",
+          answer: "done",
+          messages: [],
+          traces: [],
+          executionLogs: [],
+        };
+      },
+    },
+  });
+  try {
+    const { port } = server.address();
+    const events = await callChatWs({
+      port,
+      payload: {
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        config: { locale: "zh-CN" },
       },
     });
     const names = events.map((item) => String(item?.event || ""));

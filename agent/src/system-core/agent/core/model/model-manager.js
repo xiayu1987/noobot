@@ -54,12 +54,12 @@ export function resolveLlmForTurn(modelState) {
       ? createChatModelByName(runtimeModel, {
           globalConfig,
           userConfig,
-          streaming: Boolean(eventListener?.onEvent),
+          streaming: false,
         })
       : createChatModel({
           globalConfig,
           userConfig,
-          streaming: Boolean(eventListener?.onEvent),
+          streaming: false,
         });
   }
 

@@ -33,6 +33,7 @@ import { resolveCurrentModelInfo } from "../model/model-manager.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
+import { mergeConfig } from "../../../config/index.js";
 
 function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -93,7 +94,7 @@ function resolveLlmForRequiredToolChoice({ modelState, eventListener, turn }) {
           : {}),
       },
       {
-        streaming: Boolean(eventListener?.onEvent),
+        streaming: false,
       },
     );
   } catch {
@@ -102,6 +103,123 @@ function resolveLlmForRequiredToolChoice({ modelState, eventListener, turn }) {
       reason: "model_create_failed_fallback_to_current",
     });
     return resolveInvokeLlm(modelState, "with_tools");
+  }
+}
+
+function normalizeBooleanLike(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
+  }
+  return Boolean(fallback);
+}
+
+function shouldUseFinalStreaming(modelState = {}) {
+  if (!modelState?.eventListener?.onEvent) return false;
+  const runtime = modelState?.runtime || {};
+  const effectiveConfig = mergeConfig(
+    modelState?.globalConfig || {},
+    modelState?.userConfig || {},
+  );
+  return (
+    normalizeBooleanLike(runtime?.runConfig?.streaming, false) ||
+    normalizeBooleanLike(effectiveConfig?.streaming, false)
+  );
+}
+
+function createFinalStreamingLlm(modelState = {}) {
+  return createChatModelFromSpec(
+    {
+      ...(modelState?.defaultModelSpec || {}),
+      ...(modelState?.activeModelName
+        ? { model: String(modelState.activeModelName || "").trim() }
+        : {}),
+      ...(modelState?.activeModelAlias
+        ? { alias: String(modelState.activeModelAlias || "").trim() }
+        : {}),
+    },
+    { streaming: true },
+  );
+}
+
+async function maybeInvokeFinalStreamingNoTools({
+  modelState,
+  baseMessages = [],
+  fallbackAi = null,
+  fallbackText = "",
+  turn,
+  mode = "final_stream_no_tools",
+} = {}) {
+  if (!shouldUseFinalStreaming(modelState)) {
+    return {
+      ai: fallbackAi,
+      text: String(fallbackText || ""),
+      streamed: false,
+    };
+  }
+
+  const { eventListener, runtime, abortSignal } = modelState;
+  let streamingLlm = null;
+  try {
+    streamingLlm = createFinalStreamingLlm(modelState);
+  } catch (error) {
+    emitEvent(eventListener, "llm_final_stream_create_failed_fallback_non_streaming", {
+      turn,
+      mode,
+      error: error?.message || String(error),
+    });
+    return {
+      ai: fallbackAi,
+      text: String(fallbackText || ""),
+      streamed: false,
+    };
+  }
+
+  emitEvent(eventListener, "llm_final_stream_start", { turn, mode });
+  try {
+    const streamedAi = await invokeLlmWithTransientRetry({
+      modelState,
+      turn,
+      mode,
+      invoke: ({ callbacks }) =>
+        streamingLlm.invoke(filterForModelContext(baseMessages), {
+          callbacks,
+          signal: abortSignal,
+          ...resolveNonThinkingCallOverrides(
+            runtime,
+            "none",
+            modelState?.defaultModelSpec || {},
+          ),
+        }),
+    });
+    const streamedText = normalizeAiTextContent(streamedAi?.content, {
+      additionalKwargs: streamedAi?.additional_kwargs ?? null,
+      allowReasoningFallback: false,
+    });
+    emitEvent(eventListener, "llm_final_stream_end", {
+      turn,
+      mode,
+      textChars: streamedText.length,
+    });
+    return {
+      ai: streamedAi,
+      text: streamedText || String(fallbackText || ""),
+      streamed: true,
+    };
+  } catch (error) {
+    emitEvent(eventListener, "llm_final_stream_failed_fallback_non_streaming", {
+      turn,
+      mode,
+      error: error?.message || String(error),
+    });
+    return {
+      ai: fallbackAi,
+      text: String(fallbackText || ""),
+      streamed: false,
+    };
   }
 }
 
@@ -250,6 +368,18 @@ export async function invokeNoToolsTurn({
       allowReasoningFallback: false,
     });
   }
+  const finalStreamResult = await maybeInvokeFinalStreamingNoTools({
+    modelState,
+    baseMessages: messages,
+    fallbackAi: modelResponse,
+    fallbackText: responseContentText,
+    turn,
+    mode: forceToolChoiceNone
+      ? "final_stream_no_tools_forced_none"
+      : "final_stream_no_tools",
+  });
+  modelResponse = finalStreamResult.ai || modelResponse;
+  responseContentText = finalStreamResult.text || responseContentText;
   messages.push(modelResponse);
 
   const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
@@ -525,6 +655,18 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       agentContext: modelState?.agentContext || null,
     }),
   });
+  if (!calls.length) {
+    const finalStreamResult = await maybeInvokeFinalStreamingNoTools({
+      modelState,
+      baseMessages: messages,
+      fallbackAi: ai,
+      fallbackText: aiContentText,
+      turn,
+      mode: "final_stream_after_tools_no_calls",
+    });
+    ai = finalStreamResult.ai || ai;
+    aiContentText = finalStreamResult.text || aiContentText;
+  }
   messages.push(ai);
 
   const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);

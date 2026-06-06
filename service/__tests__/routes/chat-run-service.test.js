@@ -34,3 +34,17 @@ test("chat-run-service: normalizeRunConfig should keep canonical runTimeoutMs", 
 
   assert.equal(normalized.runTimeoutMs, 23456);
 });
+
+test("chat-run-service: normalizeRunConfig should parse streaming boolean strings", () => {
+  const service = createChatRunService({
+    getBot: () => ({}),
+    normalizeLocale: (locale = "") => String(locale || "").trim() || "zh-CN",
+    defaultLocale: "zh-CN",
+    translateText: (key = "") => String(key || ""),
+  });
+
+  assert.equal(service.normalizeRunConfig({ streaming: "false" }).streaming, false);
+  assert.equal(service.normalizeRunConfig({ streaming: "0" }).streaming, false);
+  assert.equal(service.normalizeRunConfig({ streaming: "true" }).streaming, true);
+  assert.equal(service.normalizeRunConfig({ streaming: "1" }).streaming, true);
+});
