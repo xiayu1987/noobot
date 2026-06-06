@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { ElMessage } from "element-plus";
 import { getWorkflowSessionDetailApi } from "../../../../client/noobot-chat/src/services/api/chatApi";
 import { applyCompletedToolLogsToMessages } from "../../../../client/noobot-chat/src/composables/infra/sessionToolLogs";
@@ -34,6 +34,12 @@ const selectedNodeMessages = ref([]);
 const selectedNodeSessionId = ref("");
 const selectedGraphDialogId = ref("");
 const semanticPreviewExpanded = ref(false);
+const applyingWorkflowDrawerHistory = ref(false);
+
+const PSEUDO_ROUTE_PANEL_KEY = "panel";
+const PSEUDO_ROUTE_WORKFLOW_PANEL = "workflow-node-session";
+const PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY = "workflowDialogId";
+const PSEUDO_ROUTE_WORKFLOW_ROOT_KEY = "workflowRootSessionId";
 
 const workflowMeta = computed(() =>
   props.messageItem?.workflowMeta &&
@@ -502,20 +508,123 @@ function renderableMessageContent(messageItem = {}) {
   return "（空）";
 }
 
-async function openNodeSession(nodeItem = {}) {
-  selectedGraphDialogId.value = String(nodeItem?.dialogId || "").trim();
-  const dialogId = String(nodeItem?.dialogId || "").trim();
-  const rootSessionId = String(
-    nodeItem?.rootSessionId ||
-      workflowPayload.value?.planningDialog?.sessionId ||
-      workflowPayload.value?.runMeta?.sessionId ||
-      "",
+function buildWorkflowDrawerRoute(nodeItem = {}, patch = {}) {
+  const dialogId = String(
+    Object.prototype.hasOwnProperty.call(patch, "dialogId")
+      ? patch.dialogId
+      : nodeItem?.dialogId || "",
   ).trim();
+  const rootSessionId = String(
+    Object.prototype.hasOwnProperty.call(patch, "rootSessionId")
+      ? patch.rootSessionId
+      : nodeItem?.rootSessionId ||
+          workflowPayload.value?.planningDialog?.sessionId ||
+          workflowPayload.value?.runMeta?.sessionId ||
+          "",
+  ).trim();
+  return { dialogId, rootSessionId };
+}
+
+function writeWorkflowDrawerHistory(route = {}, { mode = "replace" } = {}) {
+  const dialogId = String(route?.dialogId || "").trim();
+  const rootSessionId = String(route?.rootSessionId || "").trim();
+  const params = new URLSearchParams(window.location.search || "");
+  if (dialogId && rootSessionId) {
+    params.set(PSEUDO_ROUTE_PANEL_KEY, PSEUDO_ROUTE_WORKFLOW_PANEL);
+    params.set(PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY, dialogId);
+    params.set(PSEUDO_ROUTE_WORKFLOW_ROOT_KEY, rootSessionId);
+  } else if (params.get(PSEUDO_ROUTE_PANEL_KEY) === PSEUDO_ROUTE_WORKFLOW_PANEL) {
+    params.delete(PSEUDO_ROUTE_PANEL_KEY);
+    params.delete(PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY);
+    params.delete(PSEUDO_ROUTE_WORKFLOW_ROOT_KEY);
+  }
+  const query = params.toString();
+  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash || ""}`;
+  const nextState = {
+    ...(history.state && typeof history.state === "object" ? history.state : {}),
+    noobotWorkflowNodeSession:
+      dialogId && rootSessionId ? { dialogId, rootSessionId } : null,
+  };
+  if (mode === "push") {
+    history.pushState(nextState, "", nextUrl);
+    return;
+  }
+  history.replaceState(nextState, "", nextUrl);
+}
+
+function pushWorkflowDrawerHistory(route = {}) {
+  if (applyingWorkflowDrawerHistory.value) return;
+  writeWorkflowDrawerHistory(route, { mode: "push" });
+}
+
+function replaceWorkflowDrawerHistory(route = {}) {
+  if (applyingWorkflowDrawerHistory.value) return;
+  writeWorkflowDrawerHistory(route, { mode: "replace" });
+}
+
+function parseWorkflowDrawerRoute(eventState = null) {
+  const routeFromState =
+    eventState && typeof eventState === "object"
+      ? eventState.noobotWorkflowNodeSession
+      : null;
+  if (routeFromState && typeof routeFromState === "object") {
+    const dialogId = String(routeFromState?.dialogId || "").trim();
+    const rootSessionId = String(routeFromState?.rootSessionId || "").trim();
+    if (dialogId && rootSessionId) return { dialogId, rootSessionId };
+  }
+  const params = new URLSearchParams(window.location.search || "");
+  if (params.get(PSEUDO_ROUTE_PANEL_KEY) !== PSEUDO_ROUTE_WORKFLOW_PANEL) {
+    return { dialogId: "", rootSessionId: "" };
+  }
+  return {
+    dialogId: String(params.get(PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY) || "").trim(),
+    rootSessionId: String(params.get(PSEUDO_ROUTE_WORKFLOW_ROOT_KEY) || "").trim(),
+  };
+}
+
+function collectWorkflowSessionTargets() {
+  const targets = [];
+  for (const nodeItem of Array.isArray(flowNodes.value) ? flowNodes.value : []) {
+    if (nodeItem?.dialogId) targets.push(nodeItem);
+    for (const stateBox of Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : []) {
+      for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
+        if (stepItem?.dialogId) targets.push(stepItem);
+      }
+    }
+  }
+  return targets;
+}
+
+function findWorkflowSessionTarget(route = {}) {
+  const dialogId = String(route?.dialogId || "").trim();
+  const rootSessionId = String(route?.rootSessionId || "").trim();
+  if (!dialogId || !rootSessionId) return null;
+  return (
+    collectWorkflowSessionTargets().find((target = {}) => {
+      const targetDialogId = String(target?.dialogId || "").trim();
+      const targetRootSessionId = String(
+        target?.rootSessionId ||
+          workflowPayload.value?.planningDialog?.sessionId ||
+          workflowPayload.value?.runMeta?.sessionId ||
+          "",
+      ).trim();
+      return targetDialogId === dialogId && targetRootSessionId === rootSessionId;
+    }) || null
+  );
+}
+
+async function openNodeSession(nodeItem = {}, options = {}) {
+  const { fromHistory = false } = options || {};
+  selectedGraphDialogId.value = String(nodeItem?.dialogId || "").trim();
+  const { dialogId, rootSessionId } = buildWorkflowDrawerRoute(nodeItem);
   if (!props.userId || !rootSessionId || !dialogId) {
     ElMessage.warning("工作流节点会话标识缺失");
     return;
   }
   viewerVisible.value = true;
+  if (!fromHistory) {
+    pushWorkflowDrawerHistory({ dialogId, rootSessionId });
+  }
   viewerLoading.value = true;
   viewerError.value = "";
   selectedNode.value = nodeItem;
@@ -547,6 +656,44 @@ async function openNodeSession(nodeItem = {}) {
 function handleSelectedDialogUpdate(dialogId = "") {
   selectedGraphDialogId.value = String(dialogId || "").trim();
 }
+
+async function applyWorkflowDrawerRoute(route = {}) {
+  const target = findWorkflowSessionTarget(route);
+  applyingWorkflowDrawerHistory.value = true;
+  try {
+    if (target) {
+      await openNodeSession(target, { fromHistory: true });
+      return;
+    }
+    viewerVisible.value = false;
+  } finally {
+    applyingWorkflowDrawerHistory.value = false;
+  }
+}
+
+async function handleWorkflowDrawerPopState(event) {
+  await applyWorkflowDrawerRoute(parseWorkflowDrawerRoute(event?.state));
+}
+
+onMounted(() => {
+  window.addEventListener("popstate", handleWorkflowDrawerPopState);
+  const initialRoute = parseWorkflowDrawerRoute(history.state);
+  if (initialRoute.dialogId && initialRoute.rootSessionId) {
+    applyWorkflowDrawerRoute(initialRoute);
+  }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("popstate", handleWorkflowDrawerPopState);
+});
+
+watch(
+  () => viewerVisible.value,
+  (visible) => {
+    if (visible || applyingWorkflowDrawerHistory.value) return;
+    replaceWorkflowDrawerHistory({ dialogId: "", rootSessionId: "" });
+  },
+);
 </script>
 
 <template>
