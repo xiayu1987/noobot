@@ -32,6 +32,15 @@ export function registerSessionRoutes(
     }
   }
 
+  function resolveDeletedSessionIds(result = {}, fallbackSessionId = "") {
+    const fromResult = Array.isArray(result?.deletedSessionIds)
+      ? result.deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
+      : [];
+    if (fromResult.length) return fromResult;
+    const fallback = String(fallbackSessionId || "").trim();
+    return fallback ? [fallback] : [];
+  }
+
   app.get(
     "/internal/plugins",
     jsonRoute(async (req, res) => {
@@ -89,17 +98,25 @@ export function registerSessionRoutes(
         userId,
         sessionId,
       });
+      const deletedSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
       await servicePluginHost.emitAfterSessionDelete({
         bot,
         userId,
         sessionId: normalizedSessionId,
-        deletedSessionIds: result?.deletedSessionIds || [normalizedSessionId],
+        deletedSessionIds,
       });
       const deletedAttachments =
         typeof bot.deleteScopedAttachmentsBySessionIds === "function"
           ? await bot.deleteScopedAttachmentsBySessionIds({
               userId,
-              sessionIds: result?.deletedSessionIds || [normalizedSessionId],
+              sessionIds: deletedSessionIds,
+            })
+          : { deletedSessionIds: [], deletedCount: 0 };
+      const deletedToolResultOverflow =
+        typeof bot.deleteToolResultOverflowBySessionIds === "function"
+          ? await bot.deleteToolResultOverflowBySessionIds({
+              userId,
+              sessionIds: deletedSessionIds,
             })
           : { deletedSessionIds: [], deletedCount: 0 };
       let deletedConnectorHistory = false;
@@ -119,6 +136,7 @@ export function registerSessionRoutes(
         ok: true,
         ...result,
         deletedAttachments,
+        deletedToolResultOverflow,
         releasedConnectors,
         deletedConnectorHistory,
       });
