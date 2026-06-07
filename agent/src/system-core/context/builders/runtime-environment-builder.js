@@ -102,6 +102,10 @@ export function buildRuntimeContext({
     userInteractionBridge,
     abortSignal: abortSignal || null,
     runtimeModel: String(runtimeModel || "").trim(),
+    runConfig:
+      runConfig && typeof runConfig === "object" && !Array.isArray(runConfig)
+        ? runConfig
+        : {},
     allEnabledProviders:
       allEnabledProviders && typeof allEnabledProviders === "object"
         ? allEnabledProviders

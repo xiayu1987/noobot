@@ -6,7 +6,11 @@
 import path from "node:path";
 import { resolveForceToolCall } from "../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
-import { normalizeSandboxProvider } from "../../config/index.js";
+import {
+  hasOwnConfigKey,
+  normalizeBooleanLike,
+  normalizeSandboxProvider,
+} from "../../config/index.js";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -214,6 +218,9 @@ export function buildDynamicInfo({
   const config = {
     allowUserInteraction: runConfig?.allowUserInteraction !== false,
     forceTool,
+    ...(hasOwnConfigKey(runConfig, "streaming")
+      ? { streaming: normalizeBooleanLike(runConfig?.streaming, false) }
+      : {}),
     ...(toolPolicy ? { toolPolicy } : {}),
     selectedConnectors,
     ...(Number.isFinite(Number(runConfig?.maxToolLoopTurns)) &&
