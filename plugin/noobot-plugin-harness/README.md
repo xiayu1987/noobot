@@ -178,7 +178,7 @@ if (api?.policy?.appendDenyToolNames && Array.isArray(options?.denyToolNames)) {
 | `stepModels` / `capabilityModelByPurpose` | `{}` | Per harness flow model alias. Values can be strings or `{ "model": "alias" }`. Recommended big-flow keys: `planning`, `guidance`, `acceptance`, `default`. Detailed purpose keys such as `planning_json_repair`, `summary`, `planning_revision`, `acceptance_semantic_validation` are still accepted when a fine-grained override is needed. |
 | `capabilityToolAllowlist` | `[]` | Tool allowlist passed from harness to capability invoker (all purposes). Empty means no tools. |
 | `capabilityToolAllowlistByPurpose` | `{}` | Per-purpose allowlist override, e.g. `planning`, `guidance`, `summary`, `acceptance_semantic_validation`. |
-| `denyToolNames` | `[]` | Optional plugin-level deny list. If provided, engine appends it into `runConfig.toolPolicy.denyToolNames` via the unified policy field. |
+| `denyToolNames` | `["plan_multi_task_collaboration", "task_summary"]` | Optional plugin-level deny list. Engine appends it into `runConfig.toolPolicy.denyToolNames` via the unified policy field. |
 | `acceptance.semanticValidation` | `true` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
 | `miniRunnerMaxTurns` | `50` | Hint option for agent-side mini-runner injector (when `planningGuidanceMode=separate_model`). |
 | `miniRunnerToolAllowlist` | `[]` | Fallback allowlist used by the injected mini-runner when harness does not pass a per-call allowlist. Empty means no tools. |

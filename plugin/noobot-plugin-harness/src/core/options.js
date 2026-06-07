@@ -15,6 +15,11 @@ export function resolveHarnessDenyToolNames(input = null) {
   );
 }
 
+export const DEFAULT_HARNESS_DENY_TOOL_NAMES = Object.freeze([
+  "plan_multi_task_collaboration",
+  "task_summary",
+]);
+
 export const DEFAULT_OPTIONS = Object.freeze({
   enabled: true,
   trace: true,
@@ -64,6 +69,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   maxRunAgeDays: 30,
   cleanupGraceMs: 10 * 60 * 1000,
   fsmEnabled: true,
+  denyToolNames: DEFAULT_HARNESS_DENY_TOOL_NAMES,
   promptText: [
     "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
   ].join("\n"),

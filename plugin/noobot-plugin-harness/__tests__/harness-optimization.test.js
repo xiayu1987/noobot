@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { normalizeOptions } from "../src/core/options.js";
+import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../src/core/options.js";
 import { appendJsonlBuffered, flushAllJsonlBuffers } from "../src/store/store.js";
 import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
 import { HARNESS_HOOK_POINTS } from "../src/core/constants.js";
@@ -41,7 +41,7 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(options.jsonlFlushStrategy.onError, true);
   assert.equal(options.incrementalRecentMessageLimit, 11);
   assert.equal(options.fsmEnabled, false);
-  assert.deepEqual(options.denyToolNames, []);
+  assert.deepEqual(options.denyToolNames, [...DEFAULT_HARNESS_DENY_TOOL_NAMES]);
 });
 
 test("normalizeOptions keeps custom harness denyToolNames", () => {
