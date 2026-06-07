@@ -15,14 +15,14 @@ function normalizeSessionIds(input = []) {
   return single ? [single] : [];
 }
 
-async function resolveRunSessionId(manifestPath = "") {
-  if (!manifestPath) return "";
+async function resolveRunManifest(manifestPath = "") {
+  if (!manifestPath) return {};
   try {
     const raw = await fs.readFile(manifestPath, "utf8");
     const parsed = JSON.parse(raw);
-    return String(parsed?.sessionId || "").trim();
+    return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
-    return "";
+    return {};
   }
 }
 
@@ -162,8 +162,15 @@ export async function cleanupRunsBySessionIds(basePath, sessionIds = [], options
 
     for (const runDirName of dirs) {
       const manifestPath = path.join(harnessRunsDir, runDirName, "harness-run.json");
-      const manifestSessionId = await resolveRunSessionId(manifestPath);
-      const shouldDelete = normalizedIds.has(runDirName) || (manifestSessionId && normalizedIds.has(manifestSessionId));
+      const manifest = await resolveRunManifest(manifestPath);
+      const manifestSessionId = String(manifest?.sessionId || "").trim();
+      const manifestParentSessionId = String(manifest?.parentSessionId || "").trim();
+      const manifestWorkflowSessionId = String(manifest?.metadata?.workflowSessionId || "").trim();
+      const shouldDelete =
+        normalizedIds.has(runDirName) ||
+        (manifestSessionId && normalizedIds.has(manifestSessionId)) ||
+        (manifestParentSessionId && normalizedIds.has(manifestParentSessionId)) ||
+        (manifestWorkflowSessionId && normalizedIds.has(manifestWorkflowSessionId));
       if (!shouldDelete) continue;
       matchedRuns += 1;
       const runDirPath = path.join(harnessRunsDir, runDirName);
