@@ -396,6 +396,28 @@ export function useChatEngine({
             setPendingInteractionRequest(normalizedPendingInteractionRequest);
           }
         } else {
+          // Some backends emit `interaction_pending` without embedding
+          // `pendingInteraction` in channel_state, while the actual
+          // `interaction_request` event arrives separately.
+          // If we already have a pending request for this turn, keep waiting
+          // instead of marking the assistant turn as failed.
+          const existingPendingRequest =
+            pendingInteractionRequest.value &&
+            typeof pendingInteractionRequest.value === "object"
+              ? pendingInteractionRequest.value
+              : null;
+          if (existingPendingRequest) {
+            const existingDialogProcessId = String(
+              existingPendingRequest?.dialogProcessId || "",
+            ).trim();
+            if (
+              !dialogProcessId ||
+              !existingDialogProcessId ||
+              existingDialogProcessId === dialogProcessId
+            ) {
+              return;
+            }
+          }
           sending.value = false;
           clearPendingInteraction();
           const missingInteractionError = translate("chat.interactionPayloadMissing");

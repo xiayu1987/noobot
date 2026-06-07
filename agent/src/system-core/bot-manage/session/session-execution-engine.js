@@ -1676,7 +1676,7 @@ export class SessionExecutionEngine {
     next.maxAutoTransitions =
       Number.isFinite(Number(next?.maxAutoTransitions)) && Number(next.maxAutoTransitions) > 0
         ? Math.floor(Number(next.maxAutoTransitions))
-        : 10;
+        : 50;
     next.contextWindowRecentMessageLimit =
       Number.isFinite(Number(next?.contextWindowRecentMessageLimit)) &&
       Number(next.contextWindowRecentMessageLimit) > 0
