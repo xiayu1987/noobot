@@ -224,6 +224,112 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(hasPayloadBuiltEvent, true);
 });
 
+test("workflow hook propagates semantic transfer envelopes for node result artifacts", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const fallbackArtifactCalls = [];
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/s1/workflow-node-result.md",
+    attachmentMeta: {
+      attachmentId: "wf-semantic-result-1",
+      name: "workflow-node-result.md",
+      mimeType: "text/markdown",
+      path: "/attachments/s1/workflow-node-result.md",
+    },
+    files: [
+      {
+        filePath: "/workspace/s1/workflow-node-result.md",
+        attachmentMeta: {
+          attachmentId: "wf-semantic-result-1",
+          name: "workflow-node-result.md",
+          mimeType: "text/markdown",
+          path: "/attachments/s1/workflow-node-result.md",
+        },
+        role: "primary",
+      },
+    ],
+  };
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      semanticModel: "qwen3_6_plus",
+      capabilityModelInvoker: async () => ({
+        output: [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=act type=action name="节点A" task="请输出节点结果"',
+          'NODE id=end type=state stateType=end name="结束"',
+          'EDGE from=start to=act',
+          'EDGE from=act to=end',
+          "END",
+        ].join("\n"),
+      }),
+      subSessionRunner: async () => ({
+        sessionId: "wf-semantic-node-session-1",
+        dialogProcessId: "wf_semantic_node_dialog_1",
+        result: {
+          answer: "semantic-node-done",
+          messages: [{ role: "assistant", content: "semantic-node-done", type: "message" }],
+        },
+      }),
+      generatedArtifactPersister: async (payload = {}) => {
+        fallbackArtifactCalls.push(payload);
+        return [];
+      },
+    },
+  });
+
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  assert.ok(beforeDispatch?.handler);
+  const ctx = {
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "d1",
+    userMessage: "请给我一个语义传递工作流",
+    runConfig: { locale: "zh-CN", streaming: false },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            sharedTools: {
+              semanticTransfer: {
+                async persistTransferFile() {
+                  return {
+                    attachmentMetas: [envelope.attachmentMeta],
+                    result: { ok: true, status: "file", envelope },
+                    envelope,
+                    transferEnvelopes: [envelope],
+                  };
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  await beforeDispatch.handler(ctx);
+  const agentResult = ctx.overrideAgentResult;
+  assert.ok(agentResult?.workflow);
+  assert.equal(fallbackArtifactCalls.length, 0);
+  assert.equal(agentResult.workflow?.transferEnvelope?.protocol, "noobot.semantic-transfer");
+  assert.equal(agentResult.workflow?.transferEnvelopes?.length, 1);
+  assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelope?.protocol, "noobot.semantic-transfer");
+  assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.length, 1);
+  const workflowTurn = (agentResult.turnMessages || []).find((item) => item?.workflowMessage === true);
+  assert.equal(workflowTurn?.transferEnvelope?.protocol, "noobot.semantic-transfer");
+  assert.equal(workflowTurn?.transferEnvelopes?.length, 1);
+  assert.equal(workflowTurn?.attachmentMetas?.[0]?.attachmentId, "wf-semantic-result-1");
+});
+
 test("workflow hook injects upstream node result attachments into downstream sub-session system messages", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();

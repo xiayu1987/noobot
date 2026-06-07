@@ -61,4 +61,57 @@ describe("useMessageFiles", () => {
       "assessment_center_report_deepseek_glm_5_1/01_概述与价值.md",
     );
   });
+
+  it("prefers semantic-transfer attachment metadata before legacy attachmentMetas", () => {
+    const envelope = {
+      protocol: "noobot.semantic-transfer",
+      version: 1,
+      direction: "output",
+      transport: "file",
+      filePath: "/workspace/admin/runtime/result.md",
+      files: [
+        {
+          filePath: "/workspace/admin/runtime/result.md",
+          attachmentMeta: {
+            attachmentId: "att-transfer-1",
+            name: "result.md",
+            mimeType: "text/markdown",
+            path: "/legacy/result.md",
+          },
+          pathView: { sandboxPath: "/workspace/admin/runtime/result.md" },
+          role: "primary",
+        },
+      ],
+    };
+    const messageItem = {
+      role: "assistant",
+      dialogProcessId: "dp-1",
+      content: "done",
+      attachmentMetas: [
+        {
+          attachmentId: "att-transfer-1",
+          name: "legacy-result.md",
+          mimeType: "text/plain",
+          path: "/legacy-only/result.md",
+        },
+      ],
+      transferEnvelope: envelope,
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(1);
+    expect(displayedAttachmentMetas.value[0]).toMatchObject({
+      attachmentId: "att-transfer-1",
+      name: "result.md",
+      mimeType: "text/markdown",
+      transferFilePath: "/workspace/admin/runtime/result.md",
+      attachmentOwnerType: "agent",
+    });
+  });
+
 });

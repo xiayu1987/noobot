@@ -9,8 +9,11 @@ import {
   CAPABILITY_DOMAIN,
   LOCALE,
   appendCapabilityLog,
+  applyTransferPayloadToMessage,
   attachMetasToLatestInjectedMessage,
+  decorateAttachmentMetasWithTransferPayload,
   ensureHarnessBucket,
+  getTransferPayloadFromAttachmentMetas,
   mapAttachmentRecordsToMetas,
   relaySeparateModelOutputAsUserMessage,
   translateI18nText,
@@ -41,19 +44,21 @@ function mergeAttachmentMetasForOutput(existing = [], incoming = []) {
 
 function attachMetasToFinalOutputTurn(ctx = {}, metas = []) {
   if (!Array.isArray(metas) || !metas.length) return false;
+  const transferPayload = getTransferPayloadFromAttachmentMetas(metas);
   const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
   if (!result) return false;
   const turnMessages = Array.isArray(result.turnMessages) ? result.turnMessages : [];
   for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
     const item = turnMessages[index] || {};
     if (String(item?.role || "").trim() !== "assistant") continue;
-    turnMessages[index] = {
+    turnMessages[index] = applyTransferPayloadToMessage({
       ...item,
       attachmentMetas: mergeAttachmentMetasForOutput(item?.attachmentMetas, metas),
-    };
+    }, transferPayload);
     return true;
   }
   result.attachmentMetas = mergeAttachmentMetasForOutput(result?.attachmentMetas, metas);
+  applyTransferPayloadToMessage(result, transferPayload);
   return true;
 }
 
@@ -161,7 +166,10 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         reason: "harness_checklist",
         artifacts,
       });
-      metas = Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
+      metas = decorateAttachmentMetasWithTransferPayload(
+        Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [],
+        persisted,
+      );
     } else {
       const savedRecords = await attachmentService.ingestGeneratedArtifacts({
         userId,

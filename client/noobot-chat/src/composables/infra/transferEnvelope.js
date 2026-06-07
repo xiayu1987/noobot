@@ -62,6 +62,7 @@ function getTransferFiles(value = null) {
     if (Array.isArray(value.files)) return value.files.filter(isPlainObject);
     if (Array.isArray(value.transferEnvelopes)) return getTransferFiles(value.transferEnvelopes);
     if (isTransferEnvelope(value.transferEnvelope)) return getTransferFiles(value.transferEnvelope);
+    if (isTransferEnvelope(value.transferResult?.envelope)) return getTransferFiles(value.transferResult.envelope);
   }
   return [];
 }

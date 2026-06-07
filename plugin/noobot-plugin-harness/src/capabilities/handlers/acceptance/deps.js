@@ -21,9 +21,12 @@ export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 export {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  applyTransferPayloadToMessage,
   attachMetasToLatestInjectedMessage,
+  decorateAttachmentMetasWithTransferPayload,
   mapAttachmentRecordsToMetas,
   relaySeparateModelOutputAsUserMessage,
+  getTransferPayloadFromAttachmentMetas,
   saveCapabilityOutputAsAttachmentMetas,
 } from "../shared/attachment-log-utils.js";
 

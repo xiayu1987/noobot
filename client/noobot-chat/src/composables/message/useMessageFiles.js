@@ -81,7 +81,7 @@ function getMessageAttachmentMetas(messageItem = {}) {
       ? messageItem.attachments
       : [];
   const transferMetas = getMessageTransferAttachmentMetas(messageItem);
-  return transferMetas.length ? mergeAttachmentMetas(base, transferMetas) : base;
+  return transferMetas.length ? mergeAttachmentMetas(transferMetas, base) : base;
 }
 
 function isHarnessPluginInjectedMessage(messageItem = {}) {

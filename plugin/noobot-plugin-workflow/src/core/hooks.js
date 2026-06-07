@@ -525,6 +525,62 @@ function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   return String(relativePath || hostPath || sourceMeta?.name || "").trim();
 }
 
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeWorkflowTransferPayload(payload = {}) {
+  const source = isPlainObject(payload) ? payload : {};
+  const transferResult = isPlainObject(source.transferResult)
+    ? source.transferResult
+    : isPlainObject(source.result)
+      ? source.result
+      : null;
+  const transferEnvelope = isPlainObject(source.transferEnvelope)
+    ? source.transferEnvelope
+    : isPlainObject(source.envelope)
+      ? source.envelope
+      : isPlainObject(transferResult?.envelope)
+        ? transferResult.envelope
+        : null;
+  const transferEnvelopes = Array.isArray(source.transferEnvelopes)
+    ? source.transferEnvelopes.filter(isPlainObject)
+    : transferEnvelope
+      ? [transferEnvelope]
+      : [];
+  return { transferResult, transferEnvelope, transferEnvelopes };
+}
+
+function getWorkflowTransferPayloadFromResult(result = {}) {
+  if (!isPlainObject(result)) return normalizeWorkflowTransferPayload();
+  return normalizeWorkflowTransferPayload({
+    transferResult: result.transferResult || result.result || null,
+    transferEnvelope: result.transferEnvelope || result.envelope || null,
+    transferEnvelopes: result.transferEnvelopes || [],
+  });
+}
+
+function applyWorkflowTransferPayload(target = {}, payload = {}) {
+  if (!target || typeof target !== "object") return target;
+  const transferPayload = normalizeWorkflowTransferPayload(payload);
+  if (transferPayload.transferResult) {
+    target.transferResult = transferPayload.transferResult;
+  }
+  if (transferPayload.transferEnvelope) {
+    target.transferEnvelope = transferPayload.transferEnvelope;
+  }
+  if (transferPayload.transferEnvelopes.length) {
+    const existing = Array.isArray(target.transferEnvelopes) ? target.transferEnvelopes : [];
+    const merged = [...existing];
+    for (const envelope of transferPayload.transferEnvelopes) {
+      if (!merged.includes(envelope)) merged.push(envelope);
+    }
+    target.transferEnvelopes = merged;
+  }
+  return target;
+}
+
 function resolveWorkflowTransferFiles(value = null, ctx = {}) {
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const getTransferFiles = runtime?.sharedTools?.semanticTransfer?.getTransferFiles;
@@ -537,6 +593,19 @@ function resolveWorkflowTransferFiles(value = null, ctx = {}) {
     }
   }
   if (Array.isArray(value)) {
+    const hasTransferLikeItems = value.some((item = {}) =>
+      item &&
+      typeof item === "object" &&
+      !Array.isArray(item) &&
+      (Array.isArray(item.files) ||
+        item.filePath ||
+        item.transferEnvelope ||
+        item.transferResult?.envelope ||
+        Array.isArray(item.transferEnvelopes)),
+    );
+    if (hasTransferLikeItems) {
+      return value.flatMap((item) => resolveWorkflowTransferFiles(item, ctx));
+    }
     return value.map((meta = {}, index) => ({
       attachmentMeta: meta,
       filePath: resolveAttachmentDisplayPath(meta, ctx),
@@ -546,6 +615,13 @@ function resolveWorkflowTransferFiles(value = null, ctx = {}) {
   }
   if (value && typeof value === "object" && !Array.isArray(value)) {
     if (Array.isArray(value.files)) return value.files;
+    if (Array.isArray(value.transferEnvelopes)) return resolveWorkflowTransferFiles(value.transferEnvelopes, ctx);
+    if (value.transferEnvelope && typeof value.transferEnvelope === "object") {
+      return resolveWorkflowTransferFiles(value.transferEnvelope, ctx);
+    }
+    if (value.transferResult?.envelope && typeof value.transferResult.envelope === "object") {
+      return resolveWorkflowTransferFiles(value.transferResult.envelope, ctx);
+    }
     if (Array.isArray(value.attachmentMetas)) return resolveWorkflowTransferFiles(value.attachmentMetas, ctx);
   }
   return [];
@@ -655,10 +731,9 @@ function buildWorkflowUpstreamAttachmentResults({
       const attachmentMetas = Array.isArray(completed?.attachmentMetas)
         ? completed.attachmentMetas
         : [];
-      const transferEnvelope =
-        completed?.transferEnvelope && typeof completed.transferEnvelope === "object"
-          ? completed.transferEnvelope
-          : null;
+      const transferPayload = getWorkflowTransferPayloadFromResult(completed);
+      const transferEnvelope = transferPayload.transferEnvelope;
+      const transferEnvelopes = transferPayload.transferEnvelopes;
       const stepStatus = String(completed?.stepStatus || upstreamStep?.stepStatus || "").trim();
       const stepFailure =
         completed?.stepFailure && typeof completed.stepFailure === "object"
@@ -666,7 +741,7 @@ function buildWorkflowUpstreamAttachmentResults({
           : upstreamStep?.stepFailure && typeof upstreamStep.stepFailure === "object"
             ? upstreamStep.stepFailure
           : null;
-      const transferFiles = transferEnvelope ? resolveWorkflowTransferFiles(transferEnvelope, {}) : [];
+      const transferFiles = transferEnvelopes.length ? resolveWorkflowTransferFiles(transferEnvelopes, {}) : [];
       if (!attachmentMetas.length && !transferFiles.length && stepStatus !== "failed" && !stepFailure) return null;
       return {
         nodeId: upstreamNodeId,
@@ -685,6 +760,8 @@ function buildWorkflowUpstreamAttachmentResults({
         stepFailure,
         attachmentMetas,
         transferEnvelope,
+        transferEnvelopes,
+        ...(transferPayload.transferResult ? { transferResult: transferPayload.transferResult } : {}),
       };
     })
     .filter(Boolean);
@@ -733,7 +810,12 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
       const failureMessage = String(result?.stepFailure?.message || "子 agent 执行失败").trim();
       failureLines.push(`- ${nodeLabel}: ${failureMessage}`);
     }
-    const transferFiles = resolveWorkflowTransferFiles(result?.transferEnvelope || result?.attachmentMetas || [], ctx);
+    const transferFiles = resolveWorkflowTransferFiles(
+      Array.isArray(result?.transferEnvelopes) && result.transferEnvelopes.length
+        ? result.transferEnvelopes
+        : result?.transferEnvelope || result?.transferResult?.envelope || result?.attachmentMetas || [],
+      ctx,
+    );
     const files = transferFiles.length
       ? transferFiles
       : (Array.isArray(result?.attachmentMetas) ? result.attachmentMetas : []).map((meta = {}, index) => ({
@@ -842,7 +924,7 @@ async function persistWorkflowNodeResultAttachment({
     const runtime = resolveWorkflowRuntimeFromContext(ctx);
     const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
     let attachmentMetas = [];
-    let transferEnvelope = null;
+    let transferPayload = normalizeWorkflowTransferPayload();
     if (typeof semanticPersist === "function") {
       const persisted = await semanticPersist({
         userId,
@@ -856,7 +938,7 @@ async function persistWorkflowNodeResultAttachment({
         reason: "workflow_node_agent_result",
       });
       attachmentMetas = Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
-      transferEnvelope = persisted?.envelope && typeof persisted.envelope === "object" ? persisted.envelope : null;
+      transferPayload = normalizeWorkflowTransferPayload(persisted);
     } else {
       attachmentMetas = await persister({
         userId,
@@ -874,20 +956,17 @@ async function persistWorkflowNodeResultAttachment({
         Array.isArray(subSession.result.attachmentMetas) ? subSession.result.attachmentMetas : [],
         metas,
       );
-      if (transferEnvelope) {
-        subSession.result.transferEnvelope = transferEnvelope;
-      }
+      applyWorkflowTransferPayload(subSession.result, transferPayload);
       if (Array.isArray(subSession.result.messages) && subSession.result.messages.length) {
         const lastIndex = subSession.result.messages.length - 1;
         const lastMessage = subSession.result.messages[lastIndex] || {};
-        subSession.result.messages[lastIndex] = {
+        subSession.result.messages[lastIndex] = applyWorkflowTransferPayload({
           ...lastMessage,
           attachmentMetas: mergeAttachmentMetas(
             Array.isArray(lastMessage?.attachmentMetas) ? lastMessage.attachmentMetas : [],
             metas,
           ),
-          ...(transferEnvelope ? { transferEnvelope } : {}),
-        };
+        }, transferPayload);
       }
     }
     return metas;
@@ -914,6 +993,7 @@ function appendWorkflowPlanningMessage({
     .filter(Boolean)
     .join("\n\n");
   const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(workflowPayload);
+  const transferPayload = normalizeWorkflowTransferPayload(workflowPayload || {});
   const workflowMessage = {
     role: "assistant",
     type: "workflow",
@@ -923,6 +1003,9 @@ function appendWorkflowPlanningMessage({
     modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     summarized: false,
     attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+    ...(transferPayload.transferResult ? { transferResult: transferPayload.transferResult } : {}),
+    ...(transferPayload.transferEnvelope ? { transferEnvelope: transferPayload.transferEnvelope } : {}),
+    ...(transferPayload.transferEnvelopes.length ? { transferEnvelopes: transferPayload.transferEnvelopes } : {}),
     workflowMessage: true,
     workflowMeta: {
       source: "workflow-plugin",
@@ -1789,10 +1872,9 @@ export function createRegisterWorkflowHooks() {
                   nodeResultAttachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
                     ? item.subSession.result.attachmentMetas
                     : [],
-                  nodeResultTransferEnvelope:
-                    item?.subSession?.result?.transferEnvelope && typeof item.subSession.result.transferEnvelope === "object"
-                      ? item.subSession.result.transferEnvelope
-                      : null,
+                  nodeResultTransferEnvelope: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferEnvelope,
+                  nodeResultTransferEnvelopes: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferEnvelopes,
+                  nodeResultTransferResult: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferResult,
                   stepStatus: item?.action?.stepFailure ? "failed" : "",
                   stepFailure:
                     item?.action?.stepFailure && typeof item.action.stepFailure === "object"
@@ -1835,10 +1917,9 @@ export function createRegisterWorkflowHooks() {
                     attachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
                       ? item.subSession.result.attachmentMetas
                       : [],
-                    transferEnvelope:
-                      item?.subSession?.result?.transferEnvelope && typeof item.subSession.result.transferEnvelope === "object"
-                        ? item.subSession.result.transferEnvelope
-                        : null,
+                    transferEnvelope: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferEnvelope,
+                    transferEnvelopes: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferEnvelopes,
+                    transferResult: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferResult,
                   });
                 }
               }
@@ -1940,6 +2021,14 @@ export function createRegisterWorkflowHooks() {
                     item?.nodeResultTransferEnvelope && typeof item.nodeResultTransferEnvelope === "object"
                       ? item.nodeResultTransferEnvelope
                       : null,
+                  transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
+                    ? item.nodeResultTransferEnvelopes
+                    : item?.nodeResultTransferEnvelope && typeof item.nodeResultTransferEnvelope === "object"
+                      ? [item.nodeResultTransferEnvelope]
+                      : [],
+                  ...(item?.nodeResultTransferResult && typeof item.nodeResultTransferResult === "object"
+                    ? { transferResult: item.nodeResultTransferResult }
+                    : {}),
                   stepStatus: String(item?.stepStatus || "").trim(),
                   stepFailure:
                     item?.stepFailure && typeof item.stepFailure === "object"
@@ -1960,9 +2049,15 @@ export function createRegisterWorkflowHooks() {
                 ),
               [],
             );
-            workflowPayload.transferEnvelopes = nodeAgentRuns
-              .map((item = {}) => item?.nodeResultTransferEnvelope)
-              .filter((item) => item && typeof item === "object");
+            workflowPayload.transferEnvelopes = nodeAgentRuns.flatMap((item = {}) => {
+              if (Array.isArray(item?.nodeResultTransferEnvelopes) && item.nodeResultTransferEnvelopes.length) {
+                return item.nodeResultTransferEnvelopes;
+              }
+              return item?.nodeResultTransferEnvelope && typeof item.nodeResultTransferEnvelope === "object"
+                ? [item.nodeResultTransferEnvelope]
+                : [];
+            });
+            workflowPayload.transferEnvelope = workflowPayload.transferEnvelopes[0] || null;
             workflowPayload.attachmentMetas = workflowAttachmentMetas;
 
             agentResult.workflow = workflowPayload;
