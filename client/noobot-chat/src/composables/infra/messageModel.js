@@ -5,6 +5,11 @@
  */
 import { buildAttachmentUrl } from "../../services/api/chatApi";
 import { mergeAttachmentMetas } from "./dialogProcessChain";
+import {
+  getMessageTransferAttachmentMetas,
+  normalizeTransferEnvelope,
+  normalizeTransferEnvelopes,
+} from "./transferEnvelope";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -89,6 +94,8 @@ function createMessageModel(messageItem = {}) {
     : Array.isArray(messageItem?.attachments)
       ? messageItem.attachments
       : [];
+  const transferEnvelope = normalizeTransferEnvelope(messageItem?.transferEnvelope);
+  const transferEnvelopes = normalizeTransferEnvelopes(messageItem?.transferEnvelopes);
   return {
     role: messageItem.role || "assistant",
     content: messageItem.content || "",
@@ -100,6 +107,8 @@ function createMessageModel(messageItem = {}) {
     modelName: messageItem.modelName || messageItem.model || "",
     modelRuns: normalizeArray(messageItem.modelRuns),
     attachmentMetas: normalizeArray(normalizedAttachmentMetas),
+    transferEnvelope,
+    transferEnvelopes,
     realtimeLogs: normalizeArray(messageItem.realtimeLogs),
     executionLogTotal: Number(
       messageItem?.executionLogTotal ??
@@ -145,9 +154,12 @@ function buildViewMessage(
     : Array.isArray(messageItem?.attachments)
       ? messageItem.attachments
       : [];
-  const normalizedAttachments = normalizeArray(sourceAttachmentMetas).map(
-    (attachmentItem) =>
-      normalizeAttachment(attachmentItem, { userId, isImageMime }),
+  const transferAttachmentMetas = getMessageTransferAttachmentMetas(messageItem);
+  const normalizedAttachments = mergeAttachmentMetas(
+    normalizeArray(sourceAttachmentMetas),
+    transferAttachmentMetas,
+  ).map((attachmentItem) =>
+    normalizeAttachment(attachmentItem, { userId, isImageMime }),
   );
   return createMessageModel({
     ...messageItem,
@@ -223,6 +235,20 @@ function foldConversationMessages(messages = [], buildView) {
         previousAttachmentMetas,
         currentAttachmentMetas,
       );
+    }
+    if (!previousMessage.transferEnvelope && currentMessage.transferEnvelope) {
+      previousMessage.transferEnvelope = currentMessage.transferEnvelope;
+    }
+    const previousTransferEnvelopes = normalizeArray(previousMessage?.transferEnvelopes);
+    const currentTransferEnvelopes = [
+      ...normalizeTransferEnvelopes(currentMessage?.transferEnvelope),
+      ...normalizeTransferEnvelopes(currentMessage?.transferEnvelopes),
+    ];
+    if (currentTransferEnvelopes.length) {
+      previousMessage.transferEnvelopes = [
+        ...previousTransferEnvelopes,
+        ...currentTransferEnvelopes,
+      ];
     }
     previousMessage.ts = currentMessage?.ts || previousMessage?.ts;
     if (String(currentMessage?.modelAlias || "").trim()) {

@@ -18,8 +18,10 @@ import { ERROR_CODE } from "../../../error/constants.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import {
-  resolveAttachmentDisplayPath as resolveAttachmentDisplayPathByAgent,
-} from "../../../utils/sandbox-path-resolver.js";
+  buildLegacyOverflowFields,
+  createTransferEnvelope,
+  resolveTransferPathView,
+} from "../../../semantic-transfer/index.js";
 
 const DEFAULT_MAX_TOOL_RESULT_CHARS = 10000;
 
@@ -35,44 +37,40 @@ function resolveToolResultLengthLimit(runtime = {}) {
   return toSafePositiveInt(userLimit ?? globalLimit, DEFAULT_MAX_TOOL_RESULT_CHARS, 512);
 }
 
-function resolveOverflowSandboxFilePath({
+function buildOverflowTransferEnvelope({
   overflowPath = "",
   runtime = {},
   agentContext = null,
+  call = {},
 } = {}) {
-  const pathResolverCandidates = [
-    runtime?.sharedTools?.resolveAttachmentDisplayPath,
-    runtime?.sharedTools?.resolveSandboxPath,
-    runtime?.sharedTools?.toSandboxPath,
-    runtime?.sharedTools?.pathMapper?.toSandboxPath,
-  ];
-  for (const resolver of pathResolverCandidates) {
-    if (typeof resolver !== "function") continue;
-    try {
-      const resolved = String(
-        resolver({
-          meta: { path: overflowPath },
-          path: overflowPath,
-          hostPath: overflowPath,
-          runtime,
-          agentContext,
-          purpose: "tool_result_overflow",
-        }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to agent shared resolver below.
-    }
-  }
-  return String(
-    resolveAttachmentDisplayPathByAgent({
-      meta: { path: overflowPath },
-      path: overflowPath,
-      hostPath: overflowPath,
-      runtime,
-      agentContext,
-    }) || "",
-  ).trim();
+  const pathView = resolveTransferPathView({
+    runtime,
+    agentContext,
+    attachmentMeta: { path: overflowPath },
+    path: overflowPath,
+    hostPath: overflowPath,
+    purpose: "tool_result_overflow",
+  });
+  const filePath = String(pathView.displayPath || pathView.sandboxPath || pathView.hostPath || overflowPath || "").trim();
+  return createTransferEnvelope({
+    transport: "file",
+    filePath,
+    attachmentMeta: { path: overflowPath, name: "tool-result-overflow.json" },
+    files: [
+      {
+        filePath,
+        attachmentMeta: { path: overflowPath, name: "tool-result-overflow.json" },
+        pathView,
+        role: "primary",
+        name: "tool-result-overflow.json",
+        mimeType: "application/json",
+      },
+    ],
+    pathView,
+    storage: { kind: "workspace", reason: "tool_result_overflow" },
+    producer: { type: "tool", name: String(call?.name || "").trim() },
+    meta: { source: "tool", reason: "tool_result_overflow", mimeType: "application/json" },
+  });
 }
 
 function resolveOverflowOutputDir({ runtime = {}, agentContext = null } = {}) {
@@ -126,10 +124,15 @@ async function normalizeToolResultOverflow({
     runtime,
     agentContext,
   });
-  const overflowSandboxPath = resolveOverflowSandboxFilePath({
+  const overflowTransferEnvelope = buildOverflowTransferEnvelope({
     overflowPath,
     runtime,
     agentContext,
+    call,
+  });
+  const legacyOverflowFields = buildLegacyOverflowFields({
+    envelope: overflowTransferEnvelope,
+    hostPath: overflowPath,
   });
   const parsed = parseJsonObjectSafely(rawText);
   const ok = parsed && typeof parsed.ok === "boolean" ? parsed.ok : true;
@@ -144,8 +147,8 @@ async function normalizeToolResultOverflow({
       `工具返回内容过长(${rawText.length}字符)，已保存到文件，请按路径分批读取。`,
     overflowed: true,
     overflow_reason: `tool result length ${rawText.length} exceeds limit ${maxChars}`,
-    overflow_file_path: overflowPath,
-    ...(overflowSandboxPath ? { overflow_file_sandbox_path: overflowSandboxPath } : {}),
+    ...legacyOverflowFields,
+    overflow_transfer_envelope: overflowTransferEnvelope,
     summary: {
       original_length: rawText.length,
       max_length: maxChars,

@@ -9,6 +9,7 @@ import {
   flattenSessionMessages,
   mergeAttachmentMetas,
 } from "../infra/dialogProcessChain";
+import { getMessageTransferAttachmentMetas } from "../infra/transferEnvelope";
 
 function tryParseJsonContent(content = "") {
   try {
@@ -74,9 +75,13 @@ function extractCandidatePathsFromText(content = "") {
 }
 
 function getMessageAttachmentMetas(messageItem = {}) {
-  if (Array.isArray(messageItem?.attachmentMetas)) return messageItem.attachmentMetas;
-  if (Array.isArray(messageItem?.attachments)) return messageItem.attachments;
-  return [];
+  const base = Array.isArray(messageItem?.attachmentMetas)
+    ? messageItem.attachmentMetas
+    : Array.isArray(messageItem?.attachments)
+      ? messageItem.attachments
+      : [];
+  const transferMetas = getMessageTransferAttachmentMetas(messageItem);
+  return transferMetas.length ? mergeAttachmentMetas(base, transferMetas) : base;
 }
 
 function isHarnessPluginInjectedMessage(messageItem = {}) {

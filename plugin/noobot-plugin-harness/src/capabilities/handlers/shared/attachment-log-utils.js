@@ -164,18 +164,32 @@ export async function saveCapabilityOutputAsAttachmentMetas(
   ).trim();
   if (!userId || !sessionId) return [];
   try {
+    const artifact = {
+      name: buildCapabilityArtifactName({ purpose }),
+      mimeType: "text/markdown",
+      contentBase64: Buffer.from(text, "utf8").toString("base64"),
+    };
+    const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
+    if (typeof semanticPersist === "function") {
+      const persisted = await semanticPersist({
+        userId,
+        sessionId,
+        content: text,
+        name: artifact.name,
+        mimeType: artifact.mimeType,
+        attachmentSource: "model",
+        generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
+        source: "plugin",
+        reason: String(purpose || "harness_capability_output").trim(),
+      });
+      return Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
+    }
     const records = await attachmentService.ingestGeneratedArtifacts({
       userId,
       sessionId,
       attachmentSource: "model",
       generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
-      artifacts: [
-        {
-          name: buildCapabilityArtifactName({ purpose }),
-          mimeType: "text/markdown",
-          contentBase64: Buffer.from(text, "utf8").toString("base64"),
-        },
-      ],
+      artifacts: [artifact],
     });
     return mapAttachmentRecordsToMetas(records);
   } catch (error) {

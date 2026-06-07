@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
+import {
+  getMessageTransferAttachmentMetas,
+  getMessageTransferEnvelopes,
+  normalizeTransferEnvelope,
+  normalizeTransferEnvelopes,
+} from "./transferEnvelope";
 
 function isReconnectTerminalEvent(eventName = "") {
   return [
@@ -141,16 +147,77 @@ function normalizeMessageContentForCompare(content = "") {
   return String(content || "").trim();
 }
 
+function getArrayItems(value = null) {
+  return Array.isArray(value) ? value : [];
+}
+
+function hasArrayItems(value = null) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function buildTransferEnvelopeKey(envelope = {}) {
+  const fileKeys = getArrayItems(envelope?.files)
+    .map((file) =>
+      [
+        file?.filePath,
+        file?.pathView?.displayPath,
+        file?.pathView?.sandboxPath,
+        file?.pathView?.relativePath,
+        file?.attachmentMeta?.attachmentId,
+        file?.attachmentMeta?.relativePath,
+        file?.attachmentMeta?.name,
+      ]
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .join("|"),
+    )
+    .filter(Boolean)
+    .join(",");
+  return [
+    envelope?.protocol,
+    envelope?.version,
+    envelope?.direction,
+    envelope?.transport,
+    envelope?.filePath,
+    envelope?.attachmentMeta?.attachmentId,
+    envelope?.attachmentMeta?.relativePath,
+    fileKeys,
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join("::");
+}
+
+function mergeTransferEnvelopes(...values) {
+  const merged = [];
+  const seen = new Set();
+  for (const value of values) {
+    for (const envelope of normalizeTransferEnvelopes(value)) {
+      const key = buildTransferEnvelopeKey(envelope) || JSON.stringify(envelope);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(envelope);
+    }
+  }
+  return merged;
+}
+
 function messageCompareKey(messageItem = {}) {
   const role = String(messageItem?.role || "").trim();
   const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
   const content = normalizeMessageContentForCompare(messageItem?.content || "");
   if (role === RoleEnum.USER) {
-    const attachmentKey = (Array.isArray(messageItem?.attachmentMetas)
-      ? messageItem.attachmentMetas
-      : [])
+    const attachmentKey = [
+      ...getArrayItems(messageItem?.attachmentMetas),
+      ...getMessageTransferAttachmentMetas(messageItem),
+    ]
       .map((attachmentItem) =>
-        [attachmentItem?.name, attachmentItem?.attachmentId, attachmentItem?.size]
+        [
+          attachmentItem?.name,
+          attachmentItem?.attachmentId,
+          attachmentItem?.size,
+          attachmentItem?.transferFilePath,
+        ]
           .map((item) => String(item || "").trim())
           .join(":"),
       )
@@ -244,23 +311,37 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingRealtimeLogs = Array.isArray(targetMessage?.realtimeLogs)
     ? targetMessage.realtimeLogs
     : [];
+  const existingTransferEnvelope = normalizeTransferEnvelope(targetMessage?.transferEnvelope);
+  const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
+  const sourceTransferEnvelope = normalizeTransferEnvelope(sourceMessage?.transferEnvelope);
+  const sourceTransferEnvelopes = getMessageTransferEnvelopes(sourceMessage);
 
   Object.assign(targetMessage, sourceMessage);
 
   if (existingContent.trim() && !String(sourceMessage?.content || "").trim()) {
     targetMessage.content = existingContent;
   }
-  if (existingAttachmentMetas.length && !Array.isArray(sourceMessage?.attachmentMetas)?.length) {
+  if (existingAttachmentMetas.length && !hasArrayItems(sourceMessage?.attachmentMetas)) {
     targetMessage.attachmentMetas = existingAttachmentMetas;
   }
-  if (existingModelRuns.length && !Array.isArray(sourceMessage?.modelRuns)?.length) {
+  if (existingModelRuns.length && !hasArrayItems(sourceMessage?.modelRuns)) {
     targetMessage.modelRuns = existingModelRuns;
   }
-  if (existingCompletedToolLogs.length && !Array.isArray(sourceMessage?.completedToolLogs)?.length) {
+  if (existingCompletedToolLogs.length && !hasArrayItems(sourceMessage?.completedToolLogs)) {
     targetMessage.completedToolLogs = existingCompletedToolLogs;
   }
-  if (existingRealtimeLogs.length && !Array.isArray(sourceMessage?.realtimeLogs)?.length) {
+  if (existingRealtimeLogs.length && !hasArrayItems(sourceMessage?.realtimeLogs)) {
     targetMessage.realtimeLogs = existingRealtimeLogs;
+  }
+  if (!sourceTransferEnvelope && existingTransferEnvelope) {
+    targetMessage.transferEnvelope = existingTransferEnvelope;
+  }
+  const mergedTransferEnvelopes = mergeTransferEnvelopes(
+    existingTransferEnvelopes,
+    sourceTransferEnvelopes,
+  );
+  if (mergedTransferEnvelopes.length) {
+    targetMessage.transferEnvelopes = mergedTransferEnvelopes;
   }
   if (thinkingOpenNames) targetMessage.thinkingOpenNames = thinkingOpenNames;
   if (expandedDetailLogKeys) targetMessage.expandedDetailLogKeys = expandedDetailLogKeys;

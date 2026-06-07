@@ -23,6 +23,7 @@
     "./store": "./src/system-core/store/index.js",
     "./session": "./src/system-core/session/index.js",
     "./attach": "./src/system-core/attach/index.js",
+    "./semantic-transfer": "./src/system-core/semantic-transfer/index.js",
     "./context": "./src/system-core/context/index.js",
     "./config": "./src/system-core/config/index.js",
     "./hook": "./src/system-core/hook/index.js",

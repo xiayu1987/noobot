@@ -7,7 +7,6 @@ import { logger } from "../../../tracking/index.js";
 import { emitEvent } from "../../../event/index.js";
 import {
   appendAttachmentMetasToRuntimeAndTurn,
-  mapAttachmentRecordsToMetas,
 } from "../../../attach/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import {
@@ -17,6 +16,7 @@ import {
 import { safeNum } from "../../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { MIME_TYPE } from "../../../constants/index.js";
+import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../../semantic-transfer/index.js";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
@@ -172,7 +172,9 @@ export async function persistModelGeneratedArtifacts({
   }
   const allMediaCandidates = [...localMediaCandidates, ...remoteMediaCandidates];
   if (!allMediaCandidates.length) return [];
-  const savedRecords = await attachmentService.ingestGeneratedArtifacts({
+  const persisted = await persistTransferArtifacts({
+    runtime,
+    attachmentService,
     userId,
     sessionId: String(
       runtime?.systemRuntime?.sessionId ||
@@ -182,11 +184,25 @@ export async function persistModelGeneratedArtifacts({
     attachmentSource: "model",
     artifacts: allMediaCandidates,
     generationSource: "llm_output",
-  });
-  const attachmentMetas = mapAttachmentRecordsToMetas(savedRecords, {
     fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
-    fallbackGenerationSource: "llm_output",
-    userId,
+    source: "model",
+    reason: "llm_output",
+  });
+  const transferCompat = buildLegacyTransferCompat({
+    envelopes: [persisted?.envelope, persisted?.result?.envelope],
+  });
+  const sourceMetas = [
+    ...(Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : []),
+    ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
+  ];
+  const seen = new Set();
+  const attachmentMetas = sourceMetas.filter((attachmentItem = {}) => {
+    const key = String(attachmentItem?.attachmentId || "").trim() ||
+      `${String(attachmentItem?.path || "").trim()}|${String(attachmentItem?.relativePath || "").trim()}|${String(attachmentItem?.name || "").trim()}`;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
   if (!attachmentMetas.length) return [];
   appendAttachmentMetasToRuntimeAndTurn({
@@ -207,11 +223,30 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
   if (!normalizedToolResultText) return [];
   try {
     const parsedResult = JSON.parse(normalizedToolResultText);
-    const attachmentMetas = Array.isArray(parsedResult?.attachmentMetas)
+    const directAttachmentMetas = Array.isArray(parsedResult?.attachmentMetas)
       ? parsedResult.attachmentMetas
       : [];
+    const transferCompat = buildLegacyTransferCompat({
+      envelopes: [
+        parsedResult?.transferEnvelope,
+        parsedResult?.transferResult?.envelope,
+        parsedResult?.overflow_transfer_envelope,
+        ...(Array.isArray(parsedResult?.transferEnvelopes) ? parsedResult.transferEnvelopes : []),
+      ],
+    });
+    const transferAttachmentMetas = Array.isArray(transferCompat?.attachmentMetas)
+      ? transferCompat.attachmentMetas
+      : [];
+    const attachmentMetas = [...directAttachmentMetas, ...transferAttachmentMetas];
     if (!attachmentMetas.length) return [];
-    return attachmentMetas.map((attachmentItem) => ({
+    const seen = new Set();
+    return attachmentMetas.filter((attachmentItem = {}) => {
+      const key = String(attachmentItem?.attachmentId || "").trim() ||
+        `${String(attachmentItem?.path || "").trim()}|${String(attachmentItem?.relativePath || "").trim()}|${String(attachmentItem?.name || "").trim()}`;
+      if (key && seen.has(key)) return false;
+      if (key) seen.add(key);
+      return true;
+    }).map((attachmentItem) => ({
       attachmentId: String(attachmentItem?.attachmentId || "").trim(),
       name: String(attachmentItem?.name || "").trim(),
       mimeType: String(

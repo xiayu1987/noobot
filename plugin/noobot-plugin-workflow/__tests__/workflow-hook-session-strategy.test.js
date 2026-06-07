@@ -633,3 +633,141 @@ test("workflow semantic planning passes conversation context before current user
   assert.equal(semanticMessages.at(-1)?.role, "user");
   assert.match(semanticMessages.at(-1)?.content || "", /当前用户消息:\n请基于前文生成工作流/);
 });
+
+test("workflow semantic planning includes current available tools like harness planning", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const invokerCalls = [];
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      semanticModel: "semantic-model",
+      semanticPrompt: "emit workflow dsl",
+      capabilityModelInvoker: async (payload = {}) => {
+        invokerCalls.push(payload);
+        return {
+          output: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=act type=action name="生成报告" task="使用 search_docs 查询资料后生成报告"',
+            'NODE id=end type=state stateType=end name="结束"',
+            'EDGE from=start to=act',
+            'EDGE from=act to=end',
+            "END",
+          ].join("\n"),
+        };
+      },
+      subSessionRunner: async () => ({
+        sessionId: "wf-node-session-tools",
+        dialogProcessId: "wf_node_dialog_tools",
+        result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
+      }),
+      generatedArtifactPersister: async () => [],
+      workflowDialogPersister: async () => null,
+      workflowEventLogger: async () => null,
+    },
+  });
+
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  await beforeDispatch.handler({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "d1",
+    userMessage: "查资料并生成报告",
+    runConfig: { locale: "zh-CN" },
+    agentContext: {
+      payload: {
+        tools: {
+          registry: [
+            { name: "search_docs", description: "检索项目文档和知识库" },
+            { name: "write_file", description: "写入文件到工作区" },
+          ],
+        },
+      },
+    },
+  });
+
+  assert.equal(invokerCalls.length, 1);
+  assert.deepEqual(invokerCalls[0]?.toolAllowlist, ["search_docs", "write_file"]);
+  const semanticTask = String(invokerCalls[0]?.messages?.at(-1)?.content || "");
+  assert.match(semanticTask, /当前可用工具/);
+  assert.match(semanticTask, /search_docs/);
+  assert.match(semanticTask, /检索项目文档和知识库/);
+  assert.match(semanticTask, /write_file/);
+  assert.match(semanticTask, /不要臆造工具名/);
+});
+
+test("workflow hook aborts node sub-session when parent stop signal fires", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const abortController = new AbortController();
+  let receivedAbortSignal = null;
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      semanticModel: "semantic-model",
+      semanticPrompt: "emit workflow dsl",
+      capabilityModelInvoker: async () => ({
+        output: [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=act type=action name="节点A" task="执行当前请求"',
+          'NODE id=end type=state stateType=end name="结束"',
+          'EDGE from=start to=act',
+          'EDGE from=act to=end',
+          "END",
+        ].join("\n"),
+      }),
+      subSessionRunner: async ({ abortSignal } = {}) => {
+        receivedAbortSignal = abortSignal;
+        setTimeout(() => {
+          abortController.abort({ type: "user_stop", reason: "test stop" });
+        }, 0);
+        await new Promise((resolve, reject) => {
+          if (abortSignal?.aborted) {
+            const error = new Error("aborted before node");
+            error.name = "AbortError";
+            reject(error);
+            return;
+          }
+          abortSignal?.addEventListener(
+            "abort",
+            () => {
+              const error = new Error("aborted node");
+              error.name = "AbortError";
+              reject(error);
+            },
+            { once: true },
+          );
+        });
+      },
+      generatedArtifactPersister: async () => [],
+      workflowDialogPersister: async () => null,
+      workflowEventLogger: async () => null,
+    },
+  });
+
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  await assert.rejects(
+    () =>
+      beforeDispatch.handler({
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "d1",
+        userMessage: "请执行一个工作流",
+        runConfig: { locale: "zh-CN" },
+        abortSignal: abortController.signal,
+      }),
+    (error) => {
+      assert.equal(error?.name, "AbortError");
+      return true;
+    },
+  );
+  assert.equal(receivedAbortSignal, abortController.signal);
+});

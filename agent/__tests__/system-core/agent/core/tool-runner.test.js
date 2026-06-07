@@ -50,6 +50,59 @@ test("executeToolCall extracts attachmentMetas from multimodal tool result", asy
   );
 });
 
+test("executeToolCall extracts attachmentMetas from transferResult envelope", async () => {
+  const call = {
+    id: "call_transfer_result",
+    name: "multimodal_generate",
+    args: {},
+  };
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "multimodal_generate",
+        ok: true,
+        transferResult: {
+          ok: true,
+          status: "file",
+          envelope: {
+            protocol: "noobot.semantic-transfer",
+            version: 1,
+            direction: "output",
+            transport: "file",
+            files: [
+              {
+                filePath: "/workspace/generated_image_1.png",
+                attachmentMeta: {
+                  attachmentId: "att_t1",
+                  name: "generated_image_1.png",
+                  mimeType: "image/png",
+                  size: 256,
+                  sessionId: "s1",
+                  attachmentSource: "model",
+                  path: "/tmp/generated_image_1.png",
+                  relativePath: "runtime/attach/scoped/s1/model/generated_image_1.png",
+                  generatedByModel: true,
+                  generationSource: "multimodal_generate_tool",
+                },
+              },
+            ],
+          },
+        },
+      }),
+  };
+
+  const result = await executeToolCall({
+    call,
+    tool,
+    turn: 1,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(Array.isArray(result.extractedAttachmentMetas), true);
+  assert.equal(result.extractedAttachmentMetas.length, 1);
+  assert.equal(result.extractedAttachmentMetas[0]?.attachmentId, "att_t1");
+});
+
 test("executeToolCall returns toToolJsonResult when tool is missing", async () => {
   const result = await executeToolCall({
     call: { id: "call_missing", name: "unknown_tool", args: {} },
@@ -255,7 +308,11 @@ test("executeToolCall: overflow result should include sandbox path when resolver
   assert.equal(payload.overflowed, true);
   assert.equal(typeof payload.overflow_file_sandbox_path, "string");
   assert.equal(
-    payload.overflow_file_sandbox_path.startsWith("/injected/admin/runtime/ops_workdir/.tool-result-overflow/"),
+    payload.overflow_file_sandbox_path.startsWith("/workspace/"),
+    true,
+  );
+  assert.equal(
+    payload.overflow_file_sandbox_path.includes("/runtime/ops_workdir/.tool-result-overflow/"),
     true,
   );
 });

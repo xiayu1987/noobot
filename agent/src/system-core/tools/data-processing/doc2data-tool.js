@@ -13,7 +13,7 @@ import {
   DOC2DATA_PARSE_ENGINE,
   normalizeDoc2DataParseEngine,
 } from "../../config/core/enums.js";
-import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../semantic-transfer/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
@@ -343,6 +343,20 @@ function sanitizeArtifactBaseName(input = "", fallback = "doc2data_result") {
   return normalized.replace(/[^\w.-]+/g, "_");
 }
 
+function dedupeAttachmentMetas(attachmentMetas = []) {
+  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  const seen = new Set();
+  return source.filter((item = {}) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const key = String(item?.attachmentId || "").trim() ||
+      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function resolveLibreOfficeOutputFormat(inputFileName = "") {
   const extension = path.extname(String(inputFileName || "").trim()).toLowerCase();
   // Calc/Spreadsheet documents usually cannot export directly to plain txt.
@@ -376,7 +390,14 @@ async function persistDoc2DataTextAttachment({
 }) {
   const attachmentService = runtime?.attachmentService || null;
   const userId = String(runtime?.userId || "").trim();
-  if (!attachmentService || !userId) return [];
+  if (!attachmentService || !userId) {
+    return {
+      attachmentMetas: [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
+  }
   const content = String(text || "");
   const inputBaseName = sanitizeArtifactBaseName(
     path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
@@ -384,12 +405,18 @@ async function persistDoc2DataTextAttachment({
   const modeSuffix = sanitizeArtifactBaseName(mode || "result", "result");
   const artifactName = `${inputBaseName}.doc2data.${modeSuffix}.md`;
   try {
-    const savedAttachmentRecords = await attachmentService.ingestGeneratedArtifacts({
+    const persisted = await persistTransferArtifacts({
+      runtime,
+      attachmentService,
       userId,
       sessionId: String(
         runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
       ).trim(),
       attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
+      generationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+      fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
+      source: "tool",
+      reason: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
       artifacts: [
         {
           name: artifactName,
@@ -397,15 +424,36 @@ async function persistDoc2DataTextAttachment({
           contentBase64: Buffer.from(content, "utf8").toString("base64"),
         },
       ],
-      generationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
     });
-    return mapAttachmentRecordsToMetas(savedAttachmentRecords, {
-      fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
-      fallbackGenerationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
-      userId,
-    });
+    const transferEnvelope =
+      persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
+        ? persisted.envelope
+        : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
+          ? persisted.result.envelope
+          : null;
+    const transferResult =
+      persisted?.result && typeof persisted.result === "object" && !Array.isArray(persisted.result)
+        ? persisted.result
+        : null;
+    const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
+    const transferCompat = buildLegacyTransferCompat({ envelope: transferEnvelope, envelopes: transferEnvelopes });
+    const attachmentMetas = dedupeAttachmentMetas([
+      ...(Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : []),
+      ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
+    ]);
+    return {
+      attachmentMetas,
+      transferResult,
+      transferEnvelope,
+      transferEnvelopes,
+    };
   } catch {
-    return [];
+    return {
+      attachmentMetas: [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
   }
 }
 
@@ -504,12 +552,15 @@ export function createDoc2DataTool({ agentContext }) {
 
       const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
       if (directTextDocument) {
-        const attachmentMetas = await persistDoc2DataTextAttachment({
+        const persistedOutput = await persistDoc2DataTextAttachment({
           runtime,
           inputFile,
           text: directTextDocument.text,
           mode: TOOL_DATA_MODE.DIRECT_TEXT,
         });
+        const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
+          ? persistedOutput.attachmentMetas
+          : [];
         const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
           runtime,
           sourceAttachmentMeta,
@@ -524,6 +575,11 @@ export function createDoc2DataTool({ agentContext }) {
             input: inputFile,
             text: directTextDocument.text,
             attachmentMetas,
+            ...(persistedOutput?.transferResult ? { transferResult: persistedOutput.transferResult } : {}),
+            ...(persistedOutput?.transferEnvelope ? { transferEnvelope: persistedOutput.transferEnvelope } : {}),
+            ...(Array.isArray(persistedOutput?.transferEnvelopes) && persistedOutput.transferEnvelopes.length
+              ? { transferEnvelopes: persistedOutput.transferEnvelopes }
+              : {}),
             sourceAttachmentMeta: updatedSourceAttachment || null,
             summary: {
               bytes: Number(directTextDocument.bytes || 0),
@@ -546,12 +602,15 @@ export function createDoc2DataTool({ agentContext }) {
             inputFile,
             sourceAttachmentMeta,
           });
-          const attachmentMetas = await persistDoc2DataTextAttachment({
+          const persistedOutput = await persistDoc2DataTextAttachment({
             runtime,
             inputFile,
             text: libreOfficeResult.text,
             mode: libreOfficeResult.mode || "libreoffice_text",
           });
+          const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
+            ? persistedOutput.attachmentMetas
+            : [];
           const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
             runtime,
             sourceAttachmentMeta,
@@ -566,6 +625,11 @@ export function createDoc2DataTool({ agentContext }) {
               input: inputFile,
               text: libreOfficeResult.text,
               attachmentMetas,
+              ...(persistedOutput?.transferResult ? { transferResult: persistedOutput.transferResult } : {}),
+              ...(persistedOutput?.transferEnvelope ? { transferEnvelope: persistedOutput.transferEnvelope } : {}),
+              ...(Array.isArray(persistedOutput?.transferEnvelopes) && persistedOutput.transferEnvelopes.length
+                ? { transferEnvelopes: persistedOutput.transferEnvelopes }
+                : {}),
               sourceAttachmentMeta: updatedSourceAttachment || null,
               summary: {
                 bytes: Number(libreOfficeResult.bytes || 0),
@@ -663,12 +727,15 @@ export function createDoc2DataTool({ agentContext }) {
       const totalImageBytes = imageBatches
         .flatMap((batch) => batch)
         .reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
-      const attachmentMetas = await persistDoc2DataTextAttachment({
+      const persistedOutput = await persistDoc2DataTextAttachment({
         runtime,
         inputFile,
         text: mergedText,
         mode: TOOL_DATA_MODE.IMAGE_MODEL,
       });
+      const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
+        ? persistedOutput.attachmentMetas
+        : [];
       const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
         runtime,
         sourceAttachmentMeta,
@@ -686,6 +753,11 @@ export function createDoc2DataTool({ agentContext }) {
           imageCount: images.length,
           text: mergedText,
           attachmentMetas,
+          ...(persistedOutput?.transferResult ? { transferResult: persistedOutput.transferResult } : {}),
+          ...(persistedOutput?.transferEnvelope ? { transferEnvelope: persistedOutput.transferEnvelope } : {}),
+          ...(Array.isArray(persistedOutput?.transferEnvelopes) && persistedOutput.transferEnvelopes.length
+            ? { transferEnvelopes: persistedOutput.transferEnvelopes }
+            : {}),
           sourceAttachmentMeta: updatedSourceAttachment || null,
           model: {
             alias: modelSpec?.alias || "",

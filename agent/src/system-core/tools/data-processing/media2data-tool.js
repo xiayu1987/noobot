@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../semantic-transfer/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
   invokeModelWithTextAndAttachments,
@@ -277,6 +277,20 @@ function sanitizeArtifactBaseName(input = "", fallback = "media2data_result") {
   return normalized.replace(/[^\w.-]+/g, "_");
 }
 
+function dedupeAttachmentMetas(attachmentMetas = []) {
+  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  const seen = new Set();
+  return source.filter((item = {}) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const key = String(item?.attachmentId || "").trim() ||
+      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function persistMedia2DataTextAttachment({
   runtime = {},
   inputFile = "",
@@ -285,7 +299,14 @@ async function persistMedia2DataTextAttachment({
 }) {
   const attachmentService = runtime?.attachmentService || null;
   const userId = String(runtime?.userId || "").trim();
-  if (!attachmentService || !userId) return [];
+  if (!attachmentService || !userId) {
+    return {
+      attachmentMetas: [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
+  }
   const content = String(text || "");
   const inputBaseName = sanitizeArtifactBaseName(
     path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
@@ -293,12 +314,18 @@ async function persistMedia2DataTextAttachment({
   const mediaTypeSuffix = sanitizeArtifactBaseName(mediaType || "media", "media");
   const artifactName = `${inputBaseName}.media2data.${mediaTypeSuffix}.md`;
   try {
-    const savedAttachmentRecords = await attachmentService.ingestGeneratedArtifacts({
+    const persisted = await persistTransferArtifacts({
+      runtime,
+      attachmentService,
       userId,
       sessionId: String(
         runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
       ).trim(),
       attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
+      generationSource: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
+      fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
+      source: "tool",
+      reason: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
       artifacts: [
         {
           name: artifactName,
@@ -306,15 +333,36 @@ async function persistMedia2DataTextAttachment({
           contentBase64: Buffer.from(content, "utf8").toString("base64"),
         },
       ],
-      generationSource: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
     });
-    return mapAttachmentRecordsToMetas(savedAttachmentRecords, {
-      fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
-      fallbackGenerationSource: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
-      userId,
-    });
+    const transferEnvelope =
+      persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
+        ? persisted.envelope
+        : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
+          ? persisted.result.envelope
+          : null;
+    const transferResult =
+      persisted?.result && typeof persisted.result === "object" && !Array.isArray(persisted.result)
+        ? persisted.result
+        : null;
+    const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
+    const transferCompat = buildLegacyTransferCompat({ envelope: transferEnvelope, envelopes: transferEnvelopes });
+    const attachmentMetas = dedupeAttachmentMetas([
+      ...(Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : []),
+      ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
+    ]);
+    return {
+      attachmentMetas,
+      transferResult,
+      transferEnvelope,
+      transferEnvelopes,
+    };
   } catch {
-    return [];
+    return {
+      attachmentMetas: [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
   }
 }
 
@@ -460,12 +508,15 @@ export function createMedia2DataTool({ agentContext }) {
         streaming: false,
       });
       const extractedText = String(modelResult.text || "");
-      const attachmentMetas = await persistMedia2DataTextAttachment({
+      const persistedOutput = await persistMedia2DataTextAttachment({
         runtime,
         inputFile,
         mediaType,
         text: extractedText,
       });
+      const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
+        ? persistedOutput.attachmentMetas
+        : [];
       const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
         runtime,
         sourceAttachmentMeta,
@@ -480,6 +531,11 @@ export function createMedia2DataTool({ agentContext }) {
           input: inputFile,
           text: extractedText,
           attachmentMetas,
+          ...(persistedOutput?.transferResult ? { transferResult: persistedOutput.transferResult } : {}),
+          ...(persistedOutput?.transferEnvelope ? { transferEnvelope: persistedOutput.transferEnvelope } : {}),
+          ...(Array.isArray(persistedOutput?.transferEnvelopes) && persistedOutput.transferEnvelopes.length
+            ? { transferEnvelopes: persistedOutput.transferEnvelopes }
+            : {}),
           sourceAttachmentMeta: updatedSourceAttachment || null,
           model: {
             alias: modelSpec?.alias || "",

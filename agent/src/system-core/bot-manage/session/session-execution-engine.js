@@ -49,6 +49,7 @@ import {
   getSessionIdsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { persistTransferArtifacts } from "../../semantic-transfer/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { normalizeSessionEntity } from "../../session/entities/session-entity.js";
 import {
@@ -793,17 +794,16 @@ export class SessionExecutionEngine {
       const artifactList = Array.isArray(artifacts) ? artifacts : [];
       if (!artifactList.length) return [];
       const normalizedGenerationSource = String(generationSource || "generated_artifact").trim();
-      const records = await attachmentService.ingestGeneratedArtifacts({
+      const persisted = await persistTransferArtifacts({
+        attachmentService,
         userId: normalizedUserId,
         sessionId: normalizedSessionId,
         attachmentSource: String(attachmentSource || "model").trim() || "model",
         generationSource: normalizedGenerationSource,
+        fallbackMimeType,
         artifacts: artifactList,
       });
-      return mapAttachmentRecordsToMetas(records, {
-        fallbackMimeType,
-        fallbackGenerationSource: normalizedGenerationSource,
-      });
+      return Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
     };
   }
 
@@ -817,9 +817,20 @@ export class SessionExecutionEngine {
       strategy = {},
       metadata = {},
       eventListener = null,
+      abortSignal = null,
     } = {}) => {
       const sourceContext =
         parentContext && typeof parentContext === "object" ? parentContext : {};
+      const inheritedRuntime = getRuntimeFromAgentContext(sourceContext?.agentContext || sourceContext, null);
+      const inheritedAbortSignal = abortSignal || sourceContext?.abortSignal || inheritedRuntime?.abortSignal || null;
+      const throwIfSubSessionAborted = () => {
+        if (!inheritedAbortSignal?.aborted) return;
+        const error = new Error("workflow sub-session aborted");
+        error.name = "AbortError";
+        error.code = "ABORT_ERR";
+        throw error;
+      };
+      throwIfSubSessionAborted();
       const userId = String(
         strategy?.userId || sourceContext?.userId || "",
       ).trim();
@@ -914,6 +925,7 @@ export class SessionExecutionEngine {
         scope: "detached_sub_session",
       };
       emitEvent(eventListener, "plugin_runtime_resolved", runtimePluginState);
+      throwIfSubSessionAborted();
       const preparedAgentTurnExecution = await this._prepareAgentTurnExecution({
         buildContextPayload: {
           mode: "initial",
@@ -934,8 +946,9 @@ export class SessionExecutionEngine {
           runConfig: effectiveRunConfig,
           parentAsyncResultContainer: null,
         },
-        abortSignal: null,
+        abortSignal: inheritedAbortSignal,
       });
+      throwIfSubSessionAborted();
       const runtimeAgentContext =
         preparedAgentTurnExecution?.runtimeAgentContext &&
         typeof preparedAgentTurnExecution.runtimeAgentContext === "object"
@@ -949,6 +962,7 @@ export class SessionExecutionEngine {
         agentContext: runtimeAgentContext,
         userMessage: String(message || "").trim(),
       });
+      throwIfSubSessionAborted();
       const dialogProcessId = String(
         agentResult?.dialogProcessId ||
           runtimeAgentContext?.payload?.runtime?.systemRuntime?.dialogProcessId ||

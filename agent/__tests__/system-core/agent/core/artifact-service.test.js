@@ -64,3 +64,129 @@ test("fetchRemoteMediaArtifact returns null when fetch throws", async () => {
   );
   assert.equal(artifact, null);
 });
+
+test("extractAttachmentMetasFromToolResult reads transfer envelopes", () => {
+  const toolResultText = JSON.stringify({
+    toolName: "overflow_tool",
+    ok: true,
+    overflow_transfer_envelope: {
+      protocol: "noobot.semantic-transfer",
+      version: 1,
+      direction: "output",
+      transport: "file",
+      filePath: "/workspace/overflow.json",
+      attachmentMeta: {
+        name: "overflow.json",
+        mimeType: "application/json",
+        path: "/host/overflow.json",
+        relativePath: "runtime/overflow.json",
+      },
+      files: [
+        {
+          filePath: "/workspace/overflow.json",
+          attachmentMeta: {
+            name: "overflow.json",
+            mimeType: "application/json",
+            path: "/host/overflow.json",
+            relativePath: "runtime/overflow.json",
+          },
+        },
+      ],
+    },
+  });
+
+  const metas = extractAttachmentMetasFromToolResult("overflow_tool", toolResultText);
+  assert.equal(metas.length, 1);
+  assert.equal(metas[0].name, "overflow.json");
+  assert.equal(metas[0].relativePath, "runtime/overflow.json");
+});
+
+test("extractAttachmentMetasFromToolResult merges transferResult envelope and deduplicates", () => {
+  const toolResultText = JSON.stringify({
+    toolName: "multimodal_generate",
+    ok: true,
+    attachmentMetas: [
+      {
+        attachmentId: "att_shared",
+        name: "generated.png",
+        mimeType: "image/png",
+        path: "/host/generated.png",
+        relativePath: "runtime/generated.png",
+      },
+    ],
+    transferResult: {
+      ok: true,
+      status: "file",
+      envelope: {
+        protocol: "noobot.semantic-transfer",
+        version: 1,
+        direction: "output",
+        transport: "file",
+        files: [
+          {
+            filePath: "/workspace/generated.png",
+            attachmentMeta: {
+              attachmentId: "att_shared",
+              name: "generated.png",
+              mimeType: "image/png",
+              path: "/host/generated.png",
+              relativePath: "runtime/generated.png",
+            },
+          },
+          {
+            filePath: "/workspace/extra.png",
+            attachmentMeta: {
+              attachmentId: "att_extra",
+              name: "extra.png",
+              mimeType: "image/png",
+              path: "/host/extra.png",
+              relativePath: "runtime/extra.png",
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  const metas = extractAttachmentMetasFromToolResult("multimodal_generate", toolResultText);
+  assert.equal(metas.length, 2);
+  assert.deepEqual(
+    metas.map((item) => item.attachmentId).sort(),
+    ["att_extra", "att_shared"],
+  );
+});
+
+test("extractAttachmentMetasFromToolResult supports transferEnvelopes-only payload", () => {
+  const toolResultText = JSON.stringify({
+    toolName: "workflow_tool",
+    ok: true,
+    transferEnvelopes: [
+      {
+        protocol: "noobot.semantic-transfer",
+        version: 1,
+        direction: "output",
+        transport: "file",
+        files: [
+          {
+            filePath: "/workspace/r1.txt",
+            attachmentMeta: {
+              attachmentId: "att_r1",
+              name: "r1.txt",
+              mimeType: "text/plain",
+              path: "/host/r1.txt",
+              relativePath: "runtime/r1.txt",
+            },
+          },
+        ],
+      },
+    ],
+  });
+  const metas = extractAttachmentMetasFromToolResult("workflow_tool", toolResultText);
+  assert.equal(metas.length, 1);
+  assert.equal(metas[0].attachmentId, "att_r1");
+});
+
+test("extractAttachmentMetasFromToolResult returns empty for invalid json fallback path", () => {
+  const metas = extractAttachmentMetasFromToolResult("broken_tool", "{not_json");
+  assert.deepEqual(metas, []);
+});

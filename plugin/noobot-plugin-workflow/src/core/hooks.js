@@ -67,6 +67,55 @@ function extractWorkflowMessageTextContent(content = "") {
   return String(content || "").trim();
 }
 
+function compactWorkflowText(input = "", maxLength = 500) {
+  const raw = String(input || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const limit = Number.isFinite(Number(maxLength)) ? Math.max(80, Math.floor(Number(maxLength))) : 500;
+  if (raw.length <= limit) return raw;
+  return `${raw.slice(0, limit).trim()}...`;
+}
+
+function resolveWorkflowAvailableToolCatalog(ctx = {}) {
+  const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)
+    ? ctx.agentContext.payload.tools.registry
+    : [];
+  const catalog = [];
+  const seenNames = new Set();
+  for (const item of registry) {
+    const name = String(item?.name || "").trim();
+    if (!name || seenNames.has(name)) continue;
+    catalog.push({
+      name,
+      description: compactWorkflowText(item?.description || "（无说明）"),
+    });
+    seenNames.add(name);
+  }
+  return catalog;
+}
+
+function resolveWorkflowAvailableToolNames(ctx = {}) {
+  return resolveWorkflowAvailableToolCatalog(ctx).map((item) => item.name);
+}
+
+function buildWorkflowAvailableToolsPlanningBlock(ctx = {}, locale = "zh-CN") {
+  const catalog = resolveWorkflowAvailableToolCatalog(ctx);
+  if (!catalog.length) return "";
+  const isEnglish = String(locale || "").trim().toLowerCase() === "en-us";
+  return [
+    isEnglish
+      ? "Available tools (name/description), must be considered when planning workflow action nodes:"
+      : "当前可用工具（name/description），规划工作流 action 节点时必须参考：",
+    "```json",
+    JSON.stringify(catalog, null, 2),
+    "```",
+    "",
+    isEnglish
+      ? "When a workflow action should use tools, write the suitable tool name(s) into that NODE task. Do not invent tool names; if no listed tool is relevant, describe the task normally."
+      : "如果某个 action 节点应使用工具，请把合适的工具名写进该 NODE 的 task。不要臆造工具名；如果没有相关工具，就按普通任务描述。",
+  ].join("\n");
+}
+
 function resolveWorkflowCompatibleRole(message = {}) {
   const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
   if (role === "human") return "user";
@@ -320,6 +369,45 @@ function resolveWorkflowRuntimeFromContext(ctx = {}) {
   return candidates.find((item) => item && typeof item === "object") || null;
 }
 
+function resolveWorkflowAbortSignal(ctx = {}) {
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
+  return ctx?.abortSignal || runtime?.abortSignal || null;
+}
+
+function createWorkflowAbortError(ctx = {}) {
+  const signal = resolveWorkflowAbortSignal(ctx);
+  const reason = signal?.reason;
+  const reasonText =
+    typeof reason === "string"
+      ? reason
+      : reason && typeof reason === "object"
+        ? String(reason?.message || reason?.reason || reason?.type || "").trim()
+        : "";
+  const error = new Error(reasonText || "workflow aborted");
+  error.name = "AbortError";
+  error.code = "ABORT_ERR";
+  return error;
+}
+
+function isWorkflowAbortError(error = null, ctx = {}) {
+  const name = String(error?.name || "").trim().toLowerCase();
+  const code = String(error?.code || "").trim().toUpperCase();
+  const message = String(error?.message || error || "").trim().toLowerCase();
+  return (
+    resolveWorkflowAbortSignal(ctx)?.aborted === true ||
+    name === "aborterror" ||
+    code === "ABORT_ERR" ||
+    message.includes("abort") ||
+    message.includes("aborted") ||
+    message.includes("stopped by user")
+  );
+}
+
+function throwIfWorkflowAborted(ctx = {}) {
+  if (!resolveWorkflowAbortSignal(ctx)?.aborted) return;
+  throw createWorkflowAbortError(ctx);
+}
+
 function resolveWorkflowParentRunConfig(ctx = {}) {
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const candidates = [
@@ -342,20 +430,44 @@ function hasOwnObjectKey(source = {}, key = "") {
 }
 
 function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
-  const metaSandboxPath = String(
-    meta?.sandboxPath || meta?.sandboxViewPath || meta?.sandbox_file_path || "",
-  ).trim();
-  if (metaSandboxPath) return metaSandboxPath;
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const injectedResolver = runtime?.sharedTools?.resolveAttachmentDisplayPath;
-  if (typeof injectedResolver === "function") {
+  const semanticDisplay = runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath;
+  if (typeof semanticDisplay === "function") {
     try {
       const resolved = String(
-        injectedResolver({
-          meta,
-          path: String(meta?.path || "").trim(),
-          hostPath: String(meta?.path || "").trim(),
-          relativePath: String(meta?.relativePath || "").trim(),
+        semanticDisplay(meta, { runtime, agentContext: ctx?.agentContext || null }) || "",
+      ).trim();
+      if (resolved) return resolved;
+    } catch {
+      // Fallback to legacy resolver candidates below.
+    }
+  }
+
+  const primaryFile = Array.isArray(meta?.files) && meta.files.length ? meta.files[0] : null;
+  const sourceMeta = primaryFile?.attachmentMeta || meta?.attachmentMeta || meta;
+  const directFilePath = String(
+    primaryFile?.pathView?.displayPath ||
+      primaryFile?.filePath ||
+      meta?.pathView?.displayPath ||
+      meta?.filePath ||
+      "",
+  ).trim();
+  if (directFilePath) return directFilePath;
+
+  const metaSandboxPath = String(
+    sourceMeta?.sandboxPath || sourceMeta?.sandboxViewPath || sourceMeta?.sandbox_file_path || "",
+  ).trim();
+  if (metaSandboxPath) return metaSandboxPath;
+  const semanticResolver = runtime?.sharedTools?.semanticTransfer?.resolveTransferFilePath;
+  if (typeof semanticResolver === "function") {
+    try {
+      const resolved = String(
+        semanticResolver({
+          attachmentMeta: sourceMeta,
+          meta: sourceMeta,
+          path: String(sourceMeta?.path || "").trim(),
+          hostPath: String(sourceMeta?.path || "").trim(),
+          relativePath: String(sourceMeta?.relativePath || "").trim(),
           runtime,
           agentContext: ctx?.agentContext || null,
           purpose: "workflow_attachment_display_path",
@@ -366,8 +478,27 @@ function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
       // Fallback to legacy resolver candidates below.
     }
   }
-  const hostPath = String(meta?.path || "").trim();
-  const relativePath = String(meta?.relativePath || "").trim();
+  const injectedResolver = runtime?.sharedTools?.resolveAttachmentDisplayPath;
+  if (typeof injectedResolver === "function") {
+    try {
+      const resolved = String(
+        injectedResolver({
+          meta: sourceMeta,
+          path: String(sourceMeta?.path || "").trim(),
+          hostPath: String(sourceMeta?.path || "").trim(),
+          relativePath: String(sourceMeta?.relativePath || "").trim(),
+          runtime,
+          agentContext: ctx?.agentContext || null,
+          purpose: "workflow_attachment_display_path",
+        }) || "",
+      ).trim();
+      if (resolved) return resolved;
+    } catch {
+      // Fallback to legacy resolver candidates below.
+    }
+  }
+  const hostPath = String(sourceMeta?.path || "").trim();
+  const relativePath = String(sourceMeta?.relativePath || "").trim();
   const resolverCandidates = [
     runtime?.sharedTools?.resolveSandboxPath,
     runtime?.sharedTools?.toSandboxPath,
@@ -391,7 +522,55 @@ function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
       // Fallback to meta path below.
     }
   }
-  return String(relativePath || hostPath || meta?.name || "").trim();
+  return String(relativePath || hostPath || sourceMeta?.name || "").trim();
+}
+
+function resolveWorkflowTransferFiles(value = null, ctx = {}) {
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
+  const getTransferFiles = runtime?.sharedTools?.semanticTransfer?.getTransferFiles;
+  if (typeof getTransferFiles === "function") {
+    try {
+      const files = getTransferFiles(value, { runtime, agentContext: ctx?.agentContext || null });
+      if (Array.isArray(files) && files.length) return files;
+    } catch {
+      // Fallback below.
+    }
+  }
+  if (Array.isArray(value)) {
+    return value.map((meta = {}, index) => ({
+      attachmentMeta: meta,
+      filePath: resolveAttachmentDisplayPath(meta, ctx),
+      role: index === 0 ? "primary" : "secondary",
+      name: String(meta?.name || `附件${index + 1}`).trim(),
+    }));
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (Array.isArray(value.files)) return value.files;
+    if (Array.isArray(value.attachmentMetas)) return resolveWorkflowTransferFiles(value.attachmentMetas, ctx);
+  }
+  return [];
+}
+
+function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
+  const getTransferDisplayPath = runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath;
+  if (typeof getTransferDisplayPath === "function") {
+    try {
+      const path = String(getTransferDisplayPath(file, { runtime, agentContext: ctx?.agentContext || null }) || "").trim();
+      if (path) return path;
+    } catch {
+      // Fallback below.
+    }
+  }
+  return String(
+    file?.pathView?.displayPath ||
+      file?.filePath ||
+      file?.pathView?.sandboxPath ||
+      file?.pathView?.relativePath ||
+      file?.pathView?.hostPath ||
+      resolveAttachmentDisplayPath(file?.attachmentMeta || file, ctx) ||
+      "",
+  ).trim();
 }
 
 function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx = {}) {
@@ -476,6 +655,10 @@ function buildWorkflowUpstreamAttachmentResults({
       const attachmentMetas = Array.isArray(completed?.attachmentMetas)
         ? completed.attachmentMetas
         : [];
+      const transferEnvelope =
+        completed?.transferEnvelope && typeof completed.transferEnvelope === "object"
+          ? completed.transferEnvelope
+          : null;
       const stepStatus = String(completed?.stepStatus || upstreamStep?.stepStatus || "").trim();
       const stepFailure =
         completed?.stepFailure && typeof completed.stepFailure === "object"
@@ -483,7 +666,8 @@ function buildWorkflowUpstreamAttachmentResults({
           : upstreamStep?.stepFailure && typeof upstreamStep.stepFailure === "object"
             ? upstreamStep.stepFailure
           : null;
-      if (!attachmentMetas.length && stepStatus !== "failed" && !stepFailure) return null;
+      const transferFiles = transferEnvelope ? resolveWorkflowTransferFiles(transferEnvelope, {}) : [];
+      if (!attachmentMetas.length && !transferFiles.length && stepStatus !== "failed" && !stepFailure) return null;
       return {
         nodeId: upstreamNodeId,
         nodeName: String(completed?.nodeName || upstreamStep?.nodeName || upstreamNodeId).trim(),
@@ -500,6 +684,7 @@ function buildWorkflowUpstreamAttachmentResults({
         stepStatus,
         stepFailure,
         attachmentMetas,
+        transferEnvelope,
       };
     })
     .filter(Boolean);
@@ -548,10 +733,18 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
       const failureMessage = String(result?.stepFailure?.message || "子 agent 执行失败").trim();
       failureLines.push(`- ${nodeLabel}: ${failureMessage}`);
     }
-    const metas = Array.isArray(result?.attachmentMetas) ? result.attachmentMetas : [];
-    for (const [index, meta] of metas.entries()) {
-      const attachmentLabel = String(meta?.name || `附件${index + 1}`).trim();
-      const path = resolveAttachmentDisplayPath(meta, ctx);
+    const transferFiles = resolveWorkflowTransferFiles(result?.transferEnvelope || result?.attachmentMetas || [], ctx);
+    const files = transferFiles.length
+      ? transferFiles
+      : (Array.isArray(result?.attachmentMetas) ? result.attachmentMetas : []).map((meta = {}, index) => ({
+          attachmentMeta: meta,
+          filePath: resolveAttachmentDisplayPath(meta, ctx),
+          name: String(meta?.name || `附件${index + 1}`).trim(),
+        }));
+    for (const [index, file] of files.entries()) {
+      const meta = file?.attachmentMeta || file || {};
+      const attachmentLabel = String(file?.name || meta?.name || `附件${index + 1}`).trim();
+      const path = resolveWorkflowTransferFileDisplayPath(file, ctx);
       if (!path) continue;
       lines.push(`- ${nodeLabel} / ${attachmentLabel}: ${path}`);
     }
@@ -641,20 +834,39 @@ async function persistWorkflowNodeResultAttachment({
     "",
   ].join("\n");
   try {
-    const attachmentMetas = await persister({
-      userId,
-      sessionId,
-      attachmentSource: "model",
-      generationSource: "workflow_node_agent_result",
-      fallbackMimeType: "text/markdown",
-      artifacts: [
-        {
-          name: artifactName,
-          mimeType: "text/markdown",
-          contentBase64: Buffer.from(body, "utf8").toString("base64"),
-        },
-      ],
-    });
+    const artifact = {
+      name: artifactName,
+      mimeType: "text/markdown",
+      contentBase64: Buffer.from(body, "utf8").toString("base64"),
+    };
+    const runtime = resolveWorkflowRuntimeFromContext(ctx);
+    const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
+    let attachmentMetas = [];
+    let transferEnvelope = null;
+    if (typeof semanticPersist === "function") {
+      const persisted = await semanticPersist({
+        userId,
+        sessionId,
+        content: body,
+        name: artifact.name,
+        mimeType: artifact.mimeType,
+        attachmentSource: "model",
+        generationSource: "workflow_node_agent_result",
+        source: "plugin",
+        reason: "workflow_node_agent_result",
+      });
+      attachmentMetas = Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
+      transferEnvelope = persisted?.envelope && typeof persisted.envelope === "object" ? persisted.envelope : null;
+    } else {
+      attachmentMetas = await persister({
+        userId,
+        sessionId,
+        attachmentSource: "model",
+        generationSource: "workflow_node_agent_result",
+        fallbackMimeType: "text/markdown",
+        artifacts: [artifact],
+      });
+    }
     const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
     if (!metas.length) return [];
     if (subSession.result && typeof subSession.result === "object") {
@@ -662,6 +874,9 @@ async function persistWorkflowNodeResultAttachment({
         Array.isArray(subSession.result.attachmentMetas) ? subSession.result.attachmentMetas : [],
         metas,
       );
+      if (transferEnvelope) {
+        subSession.result.transferEnvelope = transferEnvelope;
+      }
       if (Array.isArray(subSession.result.messages) && subSession.result.messages.length) {
         const lastIndex = subSession.result.messages.length - 1;
         const lastMessage = subSession.result.messages[lastIndex] || {};
@@ -671,6 +886,7 @@ async function persistWorkflowNodeResultAttachment({
             Array.isArray(lastMessage?.attachmentMetas) ? lastMessage.attachmentMetas : [],
             metas,
           ),
+          ...(transferEnvelope ? { transferEnvelope } : {}),
         };
       }
     }
@@ -806,20 +1022,43 @@ function resolveSemanticNodeForPendingStep({ semantic = {}, pendingStep = {} } =
   );
 }
 
-function withTimeout(promise, timeoutMs, message = "") {
+function withTimeout(promise, timeoutMs, message = "", { signal = null } = {}) {
   const ms = Number(timeoutMs);
-  if (!Number.isFinite(ms) || ms <= 0) return promise;
+  if (signal?.aborted) {
+    const err = new Error("workflow aborted");
+    err.name = "AbortError";
+    err.code = "ABORT_ERR";
+    return Promise.reject(err);
+  }
+  if ((!Number.isFinite(ms) || ms <= 0) && !signal) return promise;
   let timer = null;
+  let abortListener = null;
   return Promise.race([
     Promise.resolve(promise).finally(() => {
       if (timer) clearTimeout(timer);
+      if (signal && abortListener) {
+        signal.removeEventListener("abort", abortListener);
+      }
     }),
     new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        const err = new Error(message || `workflow node timeout (${ms}ms)`);
-        err.code = "WORKFLOW_NODE_TIMEOUT";
-        reject(err);
-      }, ms);
+      if (Number.isFinite(ms) && ms > 0) {
+        timer = setTimeout(() => {
+          const err = new Error(message || `workflow node timeout (${ms}ms)`);
+          err.code = "WORKFLOW_NODE_TIMEOUT";
+          reject(err);
+        }, ms);
+      }
+      if (signal) {
+        abortListener = () => {
+          if (timer) clearTimeout(timer);
+          signal.removeEventListener("abort", abortListener);
+          const err = new Error("workflow aborted");
+          err.name = "AbortError";
+          err.code = "ABORT_ERR";
+          reject(err);
+        };
+        signal.addEventListener("abort", abortListener, { once: true });
+      }
     }),
   ]);
 }
@@ -906,6 +1145,7 @@ async function persistWorkflowPlanningDialog({
 }
 
 async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } = {}) {
+  throwIfWorkflowAborted(ctx);
   if (typeof options?.capabilityModelInvoker !== "function") {
     return {
       text: sourceText,
@@ -918,12 +1158,15 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
   const locale = String(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE).trim();
   const userAttachmentMetas = resolveWorkflowInputAttachmentMetas(ctx);
   const attachmentPlanningBlock = buildWorkflowInputAttachmentPlanningBlock(userAttachmentMetas, ctx);
+  const availableToolNames = resolveWorkflowAvailableToolNames(ctx);
+  const availableToolsPlanningBlock = buildWorkflowAvailableToolsPlanningBlock(ctx, locale);
   const contextMessages = resolveWorkflowSemanticContextMessages({ options, ctx, locale });
   const semanticTaskMessage = {
     role: "user",
     content: [
       "请基于以上会话上下文和以下当前用户消息规划工作流。",
       `当前用户消息:\n${userMessage || "(empty)"}`,
+      availableToolsPlanningBlock,
       attachmentPlanningBlock,
       `主模型回复/工作流源输入:\n${sourceText || "(empty)"}`,
     ]
@@ -940,7 +1183,10 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
     prompt: options?.semanticPrompt || "",
     messages: semanticMessages,
     ctx,
+    toolAllowlist: availableToolNames,
+    signal: resolveWorkflowAbortSignal(ctx),
   });
+  throwIfWorkflowAborted(ctx);
   const resolvedText = String(result?.content || result?.output || "").trim() || sourceText;
   return {
     text: resolvedText,
@@ -948,6 +1194,7 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
     model: String(options?.semanticModel || "").trim(),
     traceCount: Array.isArray(result?.traces) ? result.traces.length : 0,
     requestMessages: semanticMessages,
+    toolAllowlist: availableToolNames,
   };
 }
 
@@ -1026,6 +1273,7 @@ async function runNodeAgent({
   transition = 0,
   upstreamNodeResults = [],
 } = {}) {
+  throwIfWorkflowAborted(ctx);
   const nodeDialogId = `wf_node_${String(instanceId || "inst").replaceAll(/[^a-zA-Z0-9_-]/g, "_")}_${String(transition || 0)}`;
   await emitWorkflowRuntimeEvent({
     options,
@@ -1121,12 +1369,14 @@ async function runNodeAgent({
       scope: "node",
     });
     try {
+      throwIfWorkflowAborted(ctx);
       const nodeAgentTimeoutMs = Number.isFinite(Number(options?.nodeAgentTimeoutMs))
         ? Math.max(1000, Math.floor(Number(options.nodeAgentTimeoutMs)))
         : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_NODE_AGENT_TIMEOUT_MS;
       subSession = await withTimeout(
         options.subSessionRunner({
           parentContext: ctx,
+          abortSignal: resolveWorkflowAbortSignal(ctx),
           message: hookPayload.agentInstruction,
           attachmentMetas: nodeInputAttachmentMetas,
           runConfigPatch: subSessionRunConfigPatch,
@@ -1159,7 +1409,9 @@ async function runNodeAgent({
         }),
         nodeAgentTimeoutMs,
         `workflow node sub-session timeout (${nodeAgentTimeoutMs}ms)`,
+        { signal: resolveWorkflowAbortSignal(ctx) },
       );
+      throwIfWorkflowAborted(ctx);
       await emitWorkflowRuntimeEvent({
         options,
         ctx,
@@ -1172,6 +1424,9 @@ async function runNodeAgent({
         },
       });
     } catch (error) {
+      if (isWorkflowAbortError(error, ctx)) {
+        throw error;
+      }
       const failureMessage = String(error?.message || error || "workflow node sub-session failed").trim();
       subSessionFailure = {
         source: "workflow_node_agent",
@@ -1193,6 +1448,7 @@ async function runNodeAgent({
       subSession = null;
     }
     if (subSession) {
+      throwIfWorkflowAborted(ctx);
       await persistWorkflowNodeResultAttachment({
         options,
         ctx,
@@ -1202,6 +1458,7 @@ async function runNodeAgent({
       });
     }
   }
+  throwIfWorkflowAborted(ctx);
   if (subSessionFailure) {
     return {
       action: {
@@ -1217,6 +1474,7 @@ async function runNodeAgent({
   }
   if (typeof options?.nodeAgentExecutor === "function") {
     const directAction = await options.nodeAgentExecutor(hookPayload);
+    throwIfWorkflowAborted(ctx);
     if (directAction && typeof directAction === "object") {
       return {
         action: directAction,
@@ -1226,6 +1484,7 @@ async function runNodeAgent({
     }
   }
   const emitResult = await hookManager.emit(WORKFLOW_BOT_HOOK_POINTS.NODE_AGENT_EXECUTE, hookPayload);
+  throwIfWorkflowAborted(ctx);
   const results = Array.isArray(emitResult?.results) ? emitResult.results : [];
   for (const item of results) {
     if (!item?.ok) continue;
@@ -1292,6 +1551,7 @@ export function createRegisterWorkflowHooks() {
             ctx,
             event: "workflow_hook_received_started",
           });
+          throwIfWorkflowAborted(ctx);
           const sourceText = resolveWorkflowSourceText(ctx, sourceAgentResult, hookPoint);
           if (!sourceText) {
             phaseTracker.end(WORKFLOW_PHASES.HOOK_RECEIVED, WORKFLOW_PHASE_STATUS.SKIPPED, {
@@ -1314,6 +1574,7 @@ export function createRegisterWorkflowHooks() {
             event: "workflow_hook_received_succeeded",
             data: { sourceTextLength: sourceText.length },
           });
+          throwIfWorkflowAborted(ctx);
 
           try {
             phaseTracker.start(WORKFLOW_PHASES.SEMANTIC_RESOLUTION);
@@ -1322,7 +1583,9 @@ export function createRegisterWorkflowHooks() {
               ctx,
               event: "workflow_semantic_resolution_started",
             });
+            throwIfWorkflowAborted(ctx);
             const semanticResolution = await resolveSemanticText({ options, ctx, sourceText });
+            throwIfWorkflowAborted(ctx);
             phaseTracker.end(
               WORKFLOW_PHASES.SEMANTIC_RESOLUTION,
               WORKFLOW_PHASE_STATUS.SUCCEEDED,
@@ -1341,6 +1604,7 @@ export function createRegisterWorkflowHooks() {
               },
             });
             const semanticText = String(semanticResolution?.text || "").trim();
+            throwIfWorkflowAborted(ctx);
             const planningPersistResult = await persistWorkflowPlanningDialog({
               options,
               ctx,
@@ -1361,6 +1625,7 @@ export function createRegisterWorkflowHooks() {
               semanticText,
               options,
             });
+            throwIfWorkflowAborted(ctx);
             const planningWorkflowPayload = buildWorkflowOrchestrationPayload({
               ctx,
               options,
@@ -1407,6 +1672,7 @@ export function createRegisterWorkflowHooks() {
               },
             });
             phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
+            throwIfWorkflowAborted(ctx);
             await emitWorkflowRuntimeEvent({
               options,
               ctx,
@@ -1434,12 +1700,14 @@ export function createRegisterWorkflowHooks() {
             const completedStepResults = new Map();
             let transitions = 0;
             while (snapshot && snapshot.completed !== true && transitions < maxTransitions) {
+              throwIfWorkflowAborted(ctx);
               const pending = Array.isArray(snapshot.pendingSteps) ? snapshot.pendingSteps : [];
               if (!pending.length) break;
               const waveSize = parallelEnabled ? Math.min(maxParallelNodeAgents, pending.length) : 1;
               const waveSteps = pending.slice(0, waveSize);
               const waveResults = await Promise.all(
                 waveSteps.map(async (step, idx) => {
+                  throwIfWorkflowAborted(ctx);
                   const upstreamActionSteps = resolveWorkflowUpstreamActionSteps({
                     instanceId,
                     pendingStep: step,
@@ -1458,6 +1726,7 @@ export function createRegisterWorkflowHooks() {
                     transition: transitions + idx + 1,
                     upstreamNodeResults,
                   });
+                  throwIfWorkflowAborted(ctx);
                   return {
                     step,
                     action: action?.action || null,
@@ -1468,11 +1737,13 @@ export function createRegisterWorkflowHooks() {
                   };
                 }),
               );
+              throwIfWorkflowAborted(ctx);
               // 先执行高 index，尽量保持并发批次中的原始 stepIndex 语义。
               const actionQueue = waveResults
                 .slice()
                 .sort((a, b) => Number(b?.step?.index || 0) - Number(a?.step?.index || 0));
               for (const item of actionQueue) {
+                throwIfWorkflowAborted(ctx);
                 if (!snapshot || snapshot.completed === true || transitions >= maxTransitions) break;
                 const resolvedStepIndex = resolveStepIndexForAction({
                   snapshot,
@@ -1512,6 +1783,10 @@ export function createRegisterWorkflowHooks() {
                   nodeResultAttachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
                     ? item.subSession.result.attachmentMetas
                     : [],
+                  nodeResultTransferEnvelope:
+                    item?.subSession?.result?.transferEnvelope && typeof item.subSession.result.transferEnvelope === "object"
+                      ? item.subSession.result.transferEnvelope
+                      : null,
                   stepStatus: item?.action?.stepFailure ? "failed" : "",
                   stepFailure:
                     item?.action?.stepFailure && typeof item.action.stepFailure === "object"
@@ -1554,10 +1829,15 @@ export function createRegisterWorkflowHooks() {
                     attachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
                       ? item.subSession.result.attachmentMetas
                       : [],
+                    transferEnvelope:
+                      item?.subSession?.result?.transferEnvelope && typeof item.subSession.result.transferEnvelope === "object"
+                        ? item.subSession.result.transferEnvelope
+                        : null,
                   });
                 }
               }
             }
+            throwIfWorkflowAborted(ctx);
             const execution = {
               started: true,
               instanceId,
@@ -1592,6 +1872,7 @@ export function createRegisterWorkflowHooks() {
               timestamp: new Date().toISOString(),
             });
             phaseTracker.start(WORKFLOW_PHASES.PAYLOAD_BUILD);
+            throwIfWorkflowAborted(ctx);
 
             const workflowPayload = buildWorkflowOrchestrationPayload({
               ctx,
@@ -1649,6 +1930,10 @@ export function createRegisterWorkflowHooks() {
                   attachmentMetas: Array.isArray(item?.nodeResultAttachmentMetas)
                     ? item.nodeResultAttachmentMetas
                     : [],
+                  transferEnvelope:
+                    item?.nodeResultTransferEnvelope && typeof item.nodeResultTransferEnvelope === "object"
+                      ? item.nodeResultTransferEnvelope
+                      : null,
                   stepStatus: String(item?.stepStatus || "").trim(),
                   stepFailure:
                     item?.stepFailure && typeof item.stepFailure === "object"
@@ -1669,6 +1954,9 @@ export function createRegisterWorkflowHooks() {
                 ),
               [],
             );
+            workflowPayload.transferEnvelopes = nodeAgentRuns
+              .map((item = {}) => item?.nodeResultTransferEnvelope)
+              .filter((item) => item && typeof item === "object");
             workflowPayload.attachmentMetas = workflowAttachmentMetas;
 
             agentResult.workflow = workflowPayload;
@@ -1695,6 +1983,9 @@ export function createRegisterWorkflowHooks() {
               ctx.overrideAgentResult = agentResult;
             }
           } catch (error) {
+            if (isWorkflowAbortError(error, ctx)) {
+              throw error;
+            }
             retryMeta.history.push({
               attempt: 1,
               status: WORKFLOW_PHASE_STATUS.FAILED,

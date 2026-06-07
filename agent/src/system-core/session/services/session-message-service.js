@@ -46,6 +46,8 @@ export class SessionMessageService {
     frontendUserMessage = false,
     workflowMessage = false,
     workflowMeta = null,
+    transferEnvelope = null,
+    transferEnvelopes = [],
   }) {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
@@ -99,6 +101,11 @@ export class SessionMessageService {
         !Array.isArray(workflowMeta)
           ? workflowMeta
           : null,
+      transferEnvelope:
+        transferEnvelope && typeof transferEnvelope === "object" && !Array.isArray(transferEnvelope)
+          ? transferEnvelope
+          : null,
+      transferEnvelopes: Array.isArray(transferEnvelopes) ? transferEnvelopes : [],
       ts: this.now(),
     }, this.now);
 

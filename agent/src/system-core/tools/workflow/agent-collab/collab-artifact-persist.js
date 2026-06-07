@@ -5,7 +5,7 @@
  */
 import { Buffer } from "node:buffer";
 import { logError } from "../../../tracking/console/logger.js";
-import { mapAttachmentRecordsToMetas } from "../../../attach/index.js";
+import { persistTransferArtifacts } from "../../../semantic-transfer/index.js";
 import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { normalizeString } from "./collab-task-utils.js";
@@ -44,11 +44,17 @@ export function createCollabArtifactPersistor({
   patchAsyncResultTask,
   tAgentCollab,
 }) {
+  const emptyPersistOutput = {
+    attachmentMetas: [],
+    transferResult: null,
+    transferEnvelope: null,
+    transferEnvelopes: [],
+  };
   return async function persistCompletedTaskResultsAsAttachments({
     container = {},
     taskResults = [],
   } = {}) {
-    if (!attachmentService || !userId) return [];
+    if (!attachmentService || !userId) return emptyPersistOutput;
     const parentSessionId = String(container?.parentSessionId || "").trim();
     const attachmentSessionId = String(
       runtime?.systemRuntime?.sessionId ||
@@ -57,7 +63,7 @@ export function createCollabArtifactPersistor({
         parentSessionId ||
         "",
     ).trim();
-    if (!attachmentSessionId) return [];
+    if (!attachmentSessionId) return emptyPersistOutput;
 
     const taskList = Array.isArray(container?.tasks) ? container.tasks : [];
     const attachedSessionIdSet = new Set(
@@ -81,7 +87,7 @@ export function createCollabArtifactPersistor({
         return !attachedSessionIdSet.has(sessionId);
       },
     );
-    if (!pendingItems.length) return [];
+    if (!pendingItems.length) return emptyPersistOutput;
 
     const generatedAttachments = pendingItems.map((item = {}, index) => {
       const status = String(item?.status || "").trim() || TASK_STATUS.RUNNING;
@@ -98,26 +104,28 @@ export function createCollabArtifactPersistor({
       };
     });
 
+    let persisted = null;
     let attachmentMetas = [];
     try {
-      const savedRecords = await attachmentService.ingestGeneratedArtifacts({
+      persisted = await persistTransferArtifacts({
+        runtime,
+        attachmentService,
         userId,
         sessionId: attachmentSessionId,
         attachmentSource: "subtask",
         generationSource: "async_subtask_result",
+        fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
+        source: "agent",
+        reason: "async_subtask_result",
         artifacts: generatedAttachments,
       });
-      attachmentMetas = mapAttachmentRecordsToMetas(savedRecords, {
-        fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
-        fallbackGenerationSource: "async_subtask_result",
-        userId,
-      });
+      attachmentMetas = Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
     } catch (error) {
       logError("[agent-collab-tool] persistCompletedTaskResultsAsAttachments failed", {
         containerId: String(container?.id || ""),
         error: error?.message || String(error),
       });
-      return [];
+      return emptyPersistOutput;
     }
 
     for (let index = 0; index < attachmentMetas.length; index += 1) {
@@ -134,6 +142,21 @@ export function createCollabArtifactPersistor({
         },
       });
     }
-    return attachmentMetas;
+    const transferEnvelope =
+      persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
+        ? persisted.envelope
+        : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
+          ? persisted.result.envelope
+          : null;
+    const transferResult =
+      persisted?.result && typeof persisted.result === "object" && !Array.isArray(persisted.result)
+        ? persisted.result
+        : null;
+    return {
+      attachmentMetas,
+      transferResult,
+      transferEnvelope,
+      transferEnvelopes: transferEnvelope ? [transferEnvelope] : [],
+    };
   };
 }

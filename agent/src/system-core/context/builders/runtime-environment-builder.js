@@ -27,6 +27,25 @@ import {
   resolveAttachmentDisplayPath,
   resolveSandboxPath,
 } from "../../utils/sandbox-path-resolver.js";
+import {
+  directInput,
+  directOutput,
+  fileInput,
+  fileOutput,
+  getPrimaryTransferFile,
+  getTransferAttachmentMetas,
+  getTransferDisplayPath,
+  getTransferFiles,
+  materializeOutput,
+  materializeOutputResult,
+  normalizeTransfer,
+  normalizeTransferPolicy,
+  isValidTransferEnvelope,
+  persistTransferArtifacts,
+  persistTransferFile,
+  resolveTransferFilePath,
+  validateTransferEnvelope,
+} from "../../semantic-transfer/index.js";
 
 
 async function defaultSharedFetch(url, init = {}) {
@@ -168,6 +187,77 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
   };
 }
 
+function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
+  const currentSemanticTransfer = isPlainObject(sharedTools.semanticTransfer)
+    ? sharedTools.semanticTransfer
+    : {};
+  sharedTools.semanticTransfer = {
+    directInput,
+    fileInput,
+    directOutput,
+    fileOutput,
+    getTransferFiles: (value, options = {}) =>
+      getTransferFiles(value, {
+        ...(options && typeof options === "object" ? options : {}),
+        runtime: options?.runtime || runtimeContext,
+        agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    getPrimaryTransferFile: (value, options = {}) =>
+      getPrimaryTransferFile(value, {
+        ...(options && typeof options === "object" ? options : {}),
+        runtime: options?.runtime || runtimeContext,
+        agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    getTransferDisplayPath: (value, options = {}) =>
+      getTransferDisplayPath(value, {
+        ...(options && typeof options === "object" ? options : {}),
+        runtime: options?.runtime || runtimeContext,
+        agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    getTransferAttachmentMetas,
+    normalizeTransfer: (value, options = {}) =>
+      normalizeTransfer(value, {
+        ...(options && typeof options === "object" ? options : {}),
+        runtime: options?.runtime || runtimeContext,
+        agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    resolveTransferFilePath: (payload = {}) =>
+      resolveTransferFilePath({
+        ...(payload && typeof payload === "object" ? payload : { path: String(payload || "") }),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    persistTransferArtifacts: (payload = {}) =>
+      persistTransferArtifacts({
+        ...(payload && typeof payload === "object" ? payload : {}),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    persistTransferFile: (payload = {}) =>
+      persistTransferFile({
+        ...(payload && typeof payload === "object" ? payload : {}),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    normalizeTransferPolicy,
+    validateTransferEnvelope,
+    isValidTransferEnvelope,
+    materializeOutputResult: (payload = {}) =>
+      materializeOutputResult({
+        ...(payload && typeof payload === "object" ? payload : { content: String(payload || "") }),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    materializeOutput: (payload = {}) =>
+      materializeOutput({
+        ...(payload && typeof payload === "object" ? payload : { content: String(payload || "") }),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    ...currentSemanticTransfer,
+  };
+}
+
 function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
   const existingResolver =
     typeof sharedTools.resolveSandboxPath === "function" ? sharedTools.resolveSandboxPath : null;
@@ -278,6 +368,7 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   initializeSharedFetch(sharedTools);
   initializeTextCleaner(sharedTools);
   initializeSessionCrypto(sharedTools, { sessionId });
+  initializeSemanticTransfer(runtimeContext, sharedTools);
   initializeSandboxPathResolver(runtimeContext, sharedTools);
   initializeUserInteractionBridgeCrypto(runtimeContext, sharedTools);
   initializeConnectorRuntime(runtimeContext, sharedTools, { rootSessionId, sessionId });
