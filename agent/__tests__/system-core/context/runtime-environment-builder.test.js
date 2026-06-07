@@ -66,8 +66,11 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.equal(typeof runtime.sharedTools.textCleaner?.cleanHtml, "function");
   assert.equal(typeof runtime.sharedTools.resolveAttachmentDisplayPath, "function");
   assert.equal(typeof runtime.sharedTools.resolveSandboxPath, "function");
+  assert.equal(typeof runtime.sharedTools.resolveHostPath, "function");
   assert.equal(typeof runtime.sharedTools.toSandboxPath, "function");
+  assert.equal(typeof runtime.sharedTools.toHostPath, "function");
   assert.equal(typeof runtime.sharedTools.pathMapper?.toSandboxPath, "function");
+  assert.equal(typeof runtime.sharedTools.pathMapper?.toHostPath, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.encryptBySessionId, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.decryptBySessionId, "function");
   const encrypted = runtime.sharedTools.sessionCrypto.encryptBySessionId({ ok: true }, "s1");
@@ -82,6 +85,13 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
       },
     }),
     "/workspace/u1/runtime/a.md",
+  );
+  assert.equal(
+    runtime.sharedTools.toHostPath({
+      path: "/workspace/u1/runtime/a.md",
+      sandboxPath: "/workspace/u1/runtime/a.md",
+    }),
+    "/host/users/u1/runtime/a.md",
   );
 
   assert.equal(typeof runtime.sharedTools.connectorEventListener?.onConnectorAccessed, "function");

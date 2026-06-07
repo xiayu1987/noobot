@@ -6,7 +6,6 @@
 
 import { mergeAttachmentMetas, mapAttachmentRecordsToMetas } from "./meta-ops.js";
 import { DEFAULT_MIME_TYPE } from "./constants.js";
-import { resolveMessageDialogProcessId } from "../context/session/dialog-process-id-resolver.js";
 
 /**
  * 将附件元数据追加到运行时上下文和当前 turn 中
@@ -60,7 +59,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     typeof turn.updateLast === "function";
   if (isTurnStore) {
     let existingAttachmentMetas = [];
-    let lastDialogProcessId = "";
     if (typeof turn.toArray === "function") {
       const turnItems = turn.toArray();
       const lastItem = Array.isArray(turnItems)
@@ -69,7 +67,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
       existingAttachmentMetas = Array.isArray(lastItem?.attachmentMetas)
         ? lastItem.attachmentMetas
         : [];
-      lastDialogProcessId = resolveMessageDialogProcessId(lastItem);
     }
     const mergedAttachmentMetas = mergeAttachmentMetas(
       existingAttachmentMetas,
@@ -78,17 +75,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     turn.updateLast({
       attachmentMetas: mergedAttachmentMetas,
     });
-    // 同步到同一 dialogProcessId 下的 assistant 消息，便于上层消息折叠与前端显示
-    if (typeof turn.updateWhere === "function" && lastDialogProcessId) {
-      turn.updateWhere(
-        {
-          attachmentMetas: mergedAttachmentMetas,
-        },
-        (messageItem = {}) =>
-          String(messageItem?.role || "").trim() === "assistant" &&
-          resolveMessageDialogProcessId(messageItem) === lastDialogProcessId,
-      );
-    }
     return;
   }
   if (Array.isArray(turn)) {

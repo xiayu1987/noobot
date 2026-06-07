@@ -13,6 +13,7 @@ import {
 import { recoverableToolError } from "../../error/index.js";
 import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { resolveHostPath } from "../../utils/sandbox-path-resolver.js";
 
 function tCheckInput(agentContext = {}, key = "") {
   const keyMap = {
@@ -55,6 +56,37 @@ function resolveRuntimeBasePath(agentContext = {}) {
 
 function resolveUserWorkspacePath(agentContext = {}) {
   return resolveRuntimeBasePath(agentContext);
+}
+
+function resolveInputPathToHostPath({ inputPath = "", workspacePath = "", agentContext = {} } = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const payload = {
+    path: inputPath,
+    sandboxPath: inputPath,
+    runtime,
+    agentContext,
+  };
+  const resolverCandidates = [
+    runtime?.sharedTools?.resolveHostPath,
+    runtime?.sharedTools?.toHostPath,
+    runtime?.sharedTools?.pathMapper?.toHostPath,
+  ];
+  for (const resolver of resolverCandidates) {
+    if (typeof resolver !== "function") continue;
+    try {
+      const resolved = String(resolver(payload) || "").trim();
+      if (resolved) return path.resolve(resolved);
+    } catch {
+      // Keep path validation deterministic: ignore resolver errors and use fallback.
+    }
+  }
+  const resolvedByDefault = resolveHostPath({
+    path: inputPath,
+    sandboxPath: inputPath,
+    runtime: { ...runtime, basePath: runtime?.basePath || workspacePath },
+    agentContext,
+  });
+  return resolvedByDefault ? path.resolve(resolvedByDefault) : "";
 }
 
 function resolveSessionContext(agentContext = {}) {
@@ -248,9 +280,14 @@ export async function assertAndResolveUserWorkspaceFilePath({
   }
 
   const workspacePath = resolveUserWorkspacePath(agentContext);
-  const resolvedTargetPath = path.isAbsolute(normalizedPath)
+  const hostMappedPath = resolveInputPathToHostPath({
+    inputPath: normalizedPath,
+    workspacePath,
+    agentContext,
+  });
+  const resolvedTargetPath = hostMappedPath || (path.isAbsolute(normalizedPath)
     ? path.resolve(normalizedPath)
-    : path.resolve(workspacePath, normalizedPath);
+    : path.resolve(workspacePath, normalizedPath));
 
   if (!isWithinBasePath(workspacePath, resolvedTargetPath)) {
     throw recoverableToolError(
