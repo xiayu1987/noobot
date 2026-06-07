@@ -171,6 +171,53 @@ test("harness plugin deletes related run records on after_session_delete", async
   assert.equal(await exists(runB), true);
 });
 
+test("harness plugin deletes workflow child run records by manifest.parentSessionId on after_session_delete", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-cleanup-parent-"));
+  const runsDir = path.join(basePath, "runtime", "harness", "runs");
+  const runChild = path.join(runsDir, "wf_node_demo_1");
+  const runKeep = path.join(runsDir, "wf_node_demo_2");
+  await fs.mkdir(runChild, { recursive: true });
+  await fs.mkdir(runKeep, { recursive: true });
+  await fs.writeFile(
+    path.join(runChild, "harness-run.json"),
+    JSON.stringify(
+      {
+        sessionId: "child-session-1",
+        parentSessionId: "root-session-delete",
+        dialogProcessId: "wf_node_demo_1",
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(runKeep, "harness-run.json"),
+    JSON.stringify(
+      {
+        sessionId: "child-session-2",
+        parentSessionId: "root-session-keep",
+        dialogProcessId: "wf_node_demo_2",
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin({ hookManager }, { basePath, trace: false, promptPolicy: false });
+  await hookManager.emit("after_session_delete", {
+    userId: "u-cleanup-parent",
+    sessionId: "root-session-delete",
+    deletedSessionIds: ["root-session-delete"],
+    basePath,
+  });
+
+  assert.equal(await exists(runChild), false);
+  assert.equal(await exists(runKeep), true);
+});
+
 test("harness plugin rejects illegal FSM transitions and audits state commits", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
