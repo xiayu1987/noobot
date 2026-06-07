@@ -7,8 +7,8 @@ import { buildAttachmentUrl } from "../../services/api/chatApi";
 import { mergeAttachmentMetas } from "./dialogProcessChain";
 import {
   getMessageTransferAttachmentMetas,
+  getMessageTransferEnvelopes,
   normalizeTransferEnvelope,
-  normalizeTransferEnvelopes,
 } from "./transferEnvelope";
 
 function normalizeArray(value) {
@@ -94,8 +94,16 @@ function createMessageModel(messageItem = {}) {
     : Array.isArray(messageItem?.attachments)
       ? messageItem.attachments
       : [];
-  const transferEnvelope = normalizeTransferEnvelope(messageItem?.transferEnvelope);
-  const transferEnvelopes = normalizeTransferEnvelopes(messageItem?.transferEnvelopes);
+  const transferEnvelope =
+    normalizeTransferEnvelope(messageItem?.transferEnvelope) ||
+    normalizeTransferEnvelope(messageItem?.transferResult?.envelope);
+  const transferResult =
+    messageItem?.transferResult &&
+    typeof messageItem.transferResult === "object" &&
+    !Array.isArray(messageItem.transferResult)
+      ? messageItem.transferResult
+      : null;
+  const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
   return {
     role: messageItem.role || "assistant",
     content: messageItem.content || "",
@@ -107,6 +115,7 @@ function createMessageModel(messageItem = {}) {
     modelName: messageItem.modelName || messageItem.model || "",
     modelRuns: normalizeArray(messageItem.modelRuns),
     attachmentMetas: normalizeArray(normalizedAttachmentMetas),
+    transferResult,
     transferEnvelope,
     transferEnvelopes,
     realtimeLogs: normalizeArray(messageItem.realtimeLogs),
@@ -155,9 +164,9 @@ function buildViewMessage(
       ? messageItem.attachments
       : [];
   const transferAttachmentMetas = getMessageTransferAttachmentMetas(messageItem);
-  const normalizedAttachments = mergeAttachmentMetas(
-    normalizeArray(sourceAttachmentMetas),
-    transferAttachmentMetas,
+  const normalizedAttachments = (transferAttachmentMetas.length
+    ? mergeAttachmentMetas(transferAttachmentMetas, normalizeArray(sourceAttachmentMetas))
+    : normalizeArray(sourceAttachmentMetas)
   ).map((attachmentItem) =>
     normalizeAttachment(attachmentItem, { userId, isImageMime }),
   );
@@ -236,14 +245,14 @@ function foldConversationMessages(messages = [], buildView) {
         currentAttachmentMetas,
       );
     }
+    if (!previousMessage.transferResult && currentMessage.transferResult) {
+      previousMessage.transferResult = currentMessage.transferResult;
+    }
     if (!previousMessage.transferEnvelope && currentMessage.transferEnvelope) {
       previousMessage.transferEnvelope = currentMessage.transferEnvelope;
     }
     const previousTransferEnvelopes = normalizeArray(previousMessage?.transferEnvelopes);
-    const currentTransferEnvelopes = [
-      ...normalizeTransferEnvelopes(currentMessage?.transferEnvelope),
-      ...normalizeTransferEnvelopes(currentMessage?.transferEnvelopes),
-    ];
+    const currentTransferEnvelopes = getMessageTransferEnvelopes(currentMessage);
     if (currentTransferEnvelopes.length) {
       previousMessage.transferEnvelopes = [
         ...previousTransferEnvelopes,

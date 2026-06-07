@@ -12,9 +12,20 @@ import {
 } from "../constants.js";
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
 
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
 export function buildHarnessInjectedMessage(
   content = "",
-  { role = "", attachmentMetas = [], dialogProcessId = "" } = {},
+  {
+    role = "",
+    attachmentMetas = [],
+    transferResult = null,
+    transferEnvelope = null,
+    transferEnvelopes = [],
+    dialogProcessId = "",
+  } = {},
 ) {
   const normalizedRole = String(role || "").trim().toLowerCase();
   const message = {
@@ -31,6 +42,26 @@ export function buildHarnessInjectedMessage(
   }
   if (Array.isArray(attachmentMetas) && attachmentMetas.length) {
     message.attachmentMetas = attachmentMetas;
+  }
+  const normalizedTransferResult = isPlainObject(transferResult) ? transferResult : null;
+  const normalizedTransferEnvelope = isPlainObject(transferEnvelope)
+    ? transferEnvelope
+    : isPlainObject(normalizedTransferResult?.envelope)
+      ? normalizedTransferResult.envelope
+      : null;
+  const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes)
+    ? transferEnvelopes.filter(isPlainObject)
+    : normalizedTransferEnvelope
+      ? [normalizedTransferEnvelope]
+      : [];
+  if (normalizedTransferResult) {
+    message.transferResult = normalizedTransferResult;
+  }
+  if (normalizedTransferEnvelope) {
+    message.transferEnvelope = normalizedTransferEnvelope;
+  }
+  if (normalizedTransferEnvelopes.length) {
+    message.transferEnvelopes = normalizedTransferEnvelopes;
   }
   return message;
 }

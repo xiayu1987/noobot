@@ -60,6 +60,9 @@ export function injectMessageWithPolicy(
     role = "system",
     content = "",
     attachmentMetas = [],
+    transferResult = null,
+    transferEnvelope = null,
+    transferEnvelopes = [],
     injectAt = "append",
     dedupe = false,
     avoidBreakToolCallContinuity = true,
@@ -77,6 +80,9 @@ export function injectMessageWithPolicy(
   }
   const message = buildHarnessInjectedMessage(normalizedContent, {
     attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+    transferResult,
+    transferEnvelope,
+    transferEnvelopes,
     dialogProcessId: resolveDialogProcessIdFromContext(ctx),
   });
 

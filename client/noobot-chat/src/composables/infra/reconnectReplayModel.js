@@ -311,6 +311,18 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const existingRealtimeLogs = Array.isArray(targetMessage?.realtimeLogs)
     ? targetMessage.realtimeLogs
     : [];
+  const existingTransferResult =
+    targetMessage?.transferResult &&
+    typeof targetMessage.transferResult === "object" &&
+    !Array.isArray(targetMessage.transferResult)
+      ? targetMessage.transferResult
+      : null;
+  const sourceTransferResult =
+    sourceMessage?.transferResult &&
+    typeof sourceMessage.transferResult === "object" &&
+    !Array.isArray(sourceMessage.transferResult)
+      ? sourceMessage.transferResult
+      : null;
   const existingTransferEnvelope = normalizeTransferEnvelope(targetMessage?.transferEnvelope);
   const existingTransferEnvelopes = getMessageTransferEnvelopes(targetMessage);
   const sourceTransferEnvelope = normalizeTransferEnvelope(sourceMessage?.transferEnvelope);
@@ -333,6 +345,9 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (existingRealtimeLogs.length && !hasArrayItems(sourceMessage?.realtimeLogs)) {
     targetMessage.realtimeLogs = existingRealtimeLogs;
   }
+  if (!sourceTransferResult && existingTransferResult) {
+    targetMessage.transferResult = existingTransferResult;
+  }
   if (!sourceTransferEnvelope && existingTransferEnvelope) {
     targetMessage.transferEnvelope = existingTransferEnvelope;
   }
@@ -342,6 +357,9 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   );
   if (mergedTransferEnvelopes.length) {
     targetMessage.transferEnvelopes = mergedTransferEnvelopes;
+    if (!targetMessage.transferEnvelope) {
+      targetMessage.transferEnvelope = mergedTransferEnvelopes[0];
+    }
   }
   if (thinkingOpenNames) targetMessage.thinkingOpenNames = thinkingOpenNames;
   if (expandedDetailLogKeys) targetMessage.expandedDetailLogKeys = expandedDetailLogKeys;

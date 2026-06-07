@@ -36,6 +36,38 @@ test("inject-mode summary saves detail as attachment and injects detail path to 
           runtime: {
             systemRuntime: { userId: "admin", sessionId: "s1" },
             sharedTools: {
+              semanticTransfer: {
+                async persistTransferFile() {
+                  const attachmentMeta = {
+                    attachmentId: "att-summary-detail-1",
+                    sessionId: "s1",
+                    attachmentSource: "model",
+                    name: "summary-detail.md",
+                    mimeType: "text/markdown",
+                    size: 123,
+                    path: "/workspace/admin/runtime/summary-detail.md",
+                    relativePath: "runtime/summary-detail.md",
+                    generatedByModel: true,
+                    generationSource: "harness_summary_detail",
+                  };
+                  const envelope = {
+                    protocol: "noobot.semantic-transfer",
+                    version: 1,
+                    direction: "output",
+                    transport: "file",
+                    filePath: "/sandbox/admin/runtime/summary-detail.md",
+                    attachmentMeta,
+                    files: [{ filePath: "/sandbox/admin/runtime/summary-detail.md", attachmentMeta, role: "primary" }],
+                  };
+                  return {
+                    attachmentMetas: [attachmentMeta],
+                    transferResult: { ok: true, status: "file", envelope },
+                    envelope,
+                    transferEnvelope: envelope,
+                    transferEnvelopes: [envelope],
+                  };
+                },
+              },
               resolveAttachmentDisplayPath({ meta = {} } = {}) {
                 return String(meta?.path || "").replace("/workspace/admin", "/injected/admin");
               },
@@ -99,6 +131,10 @@ test("inject-mode summary saves detail as attachment and injects detail path to 
   assert.ok(injectedDetailPathMessage);
   assert.equal(Array.isArray(injectedDetailPathMessage?.attachmentMetas), true);
   assert.equal(injectedDetailPathMessage.attachmentMetas.length, 1);
+  assert.equal(injectedDetailPathMessage?.transferEnvelope?.protocol, "noobot.semantic-transfer");
+  assert.equal(Array.isArray(injectedDetailPathMessage?.transferEnvelopes), true);
+  assert.equal(injectedDetailPathMessage.transferEnvelopes.length, 1);
+  assert.equal(injectedDetailPathMessage?.transferResult?.ok, true);
 
   assert.doesNotMatch(
     ctx.messages.map((item = {}) => String(item?.content || "")).join("\n"),
