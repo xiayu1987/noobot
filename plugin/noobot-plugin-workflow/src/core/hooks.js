@@ -320,6 +320,27 @@ function resolveWorkflowRuntimeFromContext(ctx = {}) {
   return candidates.find((item) => item && typeof item === "object") || null;
 }
 
+function resolveWorkflowParentRunConfig(ctx = {}) {
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
+  const candidates = [
+    ctx?.runConfig,
+    runtime?.runConfig,
+    ctx?.agentContext?.runConfig,
+    ctx?.agentContext?.payload?.runtime?.runConfig,
+    ctx?.agentContext?.execution?.controllers?.runtime?.runConfig,
+  ];
+  return candidates.find((item) => item && typeof item === "object" && !Array.isArray(item)) || {};
+}
+
+function hasOwnObjectKey(source = {}, key = "") {
+  return Boolean(
+    source &&
+      typeof source === "object" &&
+      !Array.isArray(source) &&
+      Object.prototype.hasOwnProperty.call(source, String(key || "").trim()),
+  );
+}
+
 function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   const metaSandboxPath = String(
     meta?.sandboxPath || meta?.sandboxViewPath || meta?.sandbox_file_path || "",
@@ -1046,8 +1067,7 @@ async function runNodeAgent({
   let subSession = null;
   let subSessionFailure = null;
   if (typeof options?.subSessionRunner === "function") {
-    const parentRunConfig =
-      ctx?.runConfig && typeof ctx.runConfig === "object" ? ctx.runConfig : {};
+    const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
     const parentSelectedPlugins = Array.isArray(parentRunConfig?.selectedPlugins)
       ? parentRunConfig.selectedPlugins.map((item) => String(item || "").trim()).filter(Boolean)
       : [];
@@ -1060,8 +1080,12 @@ async function runNodeAgent({
       parentSelectedPlugins.includes("harness") ||
       parentHarness?.enabled === true ||
       parentHarnessMode === "on";
+    const streamingPatch = hasOwnObjectKey(parentRunConfig, "streaming")
+      ? { streaming: parentRunConfig.streaming }
+      : {};
     const subSessionRunConfigPatch = parentHarnessEnabled
       ? {
+          ...streamingPatch,
           selectedPlugins: Array.from(new Set([...parentSelectedPlugins, "harness"])),
           plugins: {
             harness: {
@@ -1071,7 +1095,7 @@ async function runNodeAgent({
             },
           },
         }
-      : {};
+      : streamingPatch;
     const relativeDir = buildWorkflowDialogRelativeDir({
       ctx,
       dialogProcessId: nodeDialogId,

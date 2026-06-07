@@ -123,6 +123,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     userMessage: "请给我一个审批工作流",
     runConfig: {
       locale: "zh-CN",
+      streaming: false,
     },
     agentContext: {
       execution: {
@@ -175,6 +176,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     false,
   );
   assert.equal(String(subCall?.message || "").trim(), "请输出：节点A执行完成");
+  assert.equal(subCall?.runConfigPatch?.streaming, false);
   assert.equal(typeof subCall?.eventListener?.onEvent, "function");
   assert.match(
     String(subCall?.strategy?.relativeDir || ""),

@@ -100,3 +100,58 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
     ],
   );
 });
+
+test("invokeWithToolsTurn does not final-stream when runConfig disables streaming", async () => {
+  const events = [];
+  const llm = {
+    bindTools() {
+      return {
+        async invoke() {
+          return {
+            content: "ok-without-final-stream",
+            tool_calls: [],
+            additional_kwargs: {},
+            response_metadata: {},
+          };
+        },
+      };
+    },
+  };
+
+  const modelState = {
+    llm,
+    runtime: {
+      runConfig: { streaming: false },
+      systemRuntime: {},
+    },
+    globalConfig: { streaming: true },
+    userConfig: {},
+    eventListener: {
+      onEvent(payload = {}) {
+        events.push(payload);
+      },
+    },
+    abortSignal: null,
+    defaultModelSpec: {},
+  };
+  const loopState = {
+    messages: [{ role: "user", content: "keep-user" }],
+    traces: [],
+    tools: [{ name: "execute_script" }],
+    turnMessages: [],
+    turnTasks: [],
+    currentTurnMessages: null,
+    currentTurnTasks: null,
+    dialogProcessId: "d-stream-disabled",
+    maxTurns: 1,
+  };
+
+  const result = await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+
+  assert.equal(result.aiContentText, "ok-without-final-stream");
+  assert.equal(result.finalStreaming, null);
+  assert.equal(
+    events.some((item) => String(item?.event || "") === "llm_final_stream_start"),
+    false,
+  );
+});
