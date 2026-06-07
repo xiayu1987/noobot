@@ -157,3 +157,51 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async () =
   await assert.rejects(fs.access(runDelete));
   await fs.access(runKeep);
 });
+
+test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除当前 session 附件", async () => {
+  const attachmentDeleteCalls = [];
+  const overflowDeleteCalls = [];
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+      },
+      getWorkspacePath: () => "",
+      deleteScopedAttachmentsBySessionIds: async (payload = {}) => {
+        attachmentDeleteCalls.push(payload);
+        return { deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0, deletedSessionIds: payload?.sessionIds || [] };
+      },
+      deleteToolResultOverflowBySessionIds: async (payload = {}) => {
+        overflowDeleteCalls.push(payload);
+        return { deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0, deletedSessionIds: payload?.sessionIds || [] };
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: (key) => key,
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s-fallback-delete`, { method: "DELETE" });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+  });
+
+  assert.equal(attachmentDeleteCalls.length, 1);
+  assert.deepEqual(attachmentDeleteCalls[0], {
+    userId: "u1",
+    sessionIds: ["s-fallback-delete"],
+  });
+  assert.equal(overflowDeleteCalls.length, 1);
+  assert.deepEqual(overflowDeleteCalls[0], {
+    userId: "u1",
+    sessionIds: ["s-fallback-delete"],
+  });
+});

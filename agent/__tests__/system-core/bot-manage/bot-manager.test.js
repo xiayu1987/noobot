@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { BotManager } from "../../../src/system-core/bot-manage/index.js";
 
@@ -79,4 +82,35 @@ test("BotManager should delegate async-job and attachment operations", async () 
     true,
   );
   assert.equal((await manager._logSystemError({ message: "err" })).logged, true);
+});
+
+test("BotManager should cleanup session-scoped tool-result-overflow directories", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-overflow-cleanup-"));
+  const overflowRoot = path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");
+  const sessionDeleteDir = path.join(overflowRoot, "session-delete");
+  const sessionKeepDir = path.join(overflowRoot, "session-keep");
+  await fs.mkdir(sessionDeleteDir, { recursive: true });
+  await fs.mkdir(sessionKeepDir, { recursive: true });
+  await fs.writeFile(path.join(sessionDeleteDir, "sample.json"), "{\"ok\":true}", "utf8");
+  await fs.writeFile(path.join(sessionKeepDir, "sample.json"), "{\"ok\":true}", "utf8");
+
+  const manager = createBotManagerWithMocks({
+    workspaceService: {
+      getWorkspacePath() {
+        return basePath;
+      },
+    },
+  });
+
+  const result = await manager.deleteToolResultOverflowBySessionIds({
+    userId: "u1",
+    sessionIds: ["session-delete"],
+  });
+  assert.deepEqual(result, {
+    deletedSessionIds: ["session-delete"],
+    deletedCount: 1,
+  });
+
+  await assert.rejects(fs.access(sessionDeleteDir));
+  await fs.access(sessionKeepDir);
 });

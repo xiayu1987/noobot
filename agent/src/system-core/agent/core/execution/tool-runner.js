@@ -206,14 +206,36 @@ function compactToolResultForOverflow(toolResultText = "") {
   return compactParsedToolResultForOverflow(parsed);
 }
 
-function resolveOverflowOutputDir({ runtime = {}, agentContext = null } = {}) {
+function normalizeOverflowSessionDirName(sessionId = "") {
+  const normalized = String(sessionId || "").trim().replace(/[^a-zA-Z0-9._-]/g, "_");
+  return normalized || "__default__";
+}
+
+function resolveOverflowSessionId({
+  sessionId = "",
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  return String(
+    sessionId ||
+      runtime?.systemRuntime?.sessionId ||
+      agentContext?.session?.current?.id ||
+      agentContext?.execution?.controllers?.runtime?.systemRuntime?.sessionId ||
+      "",
+  ).trim();
+}
+
+function resolveOverflowOutputDir({ runtime = {}, agentContext = null, sessionId = "" } = {}) {
   const basePath = String(
     agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
   ).trim();
+  const sessionDirName = normalizeOverflowSessionDirName(
+    resolveOverflowSessionId({ sessionId, runtime, agentContext }),
+  );
   if (basePath) {
-    return path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");
+    return path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow", sessionDirName);
   }
-  return path.join(os.tmpdir(), "noobot-tool-result-overflow");
+  return path.join(os.tmpdir(), "noobot-tool-result-overflow", sessionDirName);
 }
 
 async function persistToolResultOverflow({
@@ -222,8 +244,9 @@ async function persistToolResultOverflow({
   maxChars = DEFAULT_MAX_TOOL_RESULT_CHARS,
   runtime = {},
   agentContext = null,
+  sessionId = "",
 } = {}) {
-  const outputDir = resolveOverflowOutputDir({ runtime, agentContext });
+  const outputDir = resolveOverflowOutputDir({ runtime, agentContext, sessionId });
   await mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, `${Date.now()}-${randomUUID()}.json`);
   const payload = {
@@ -244,6 +267,7 @@ async function normalizeToolResultOverflow({
   toolResultText = "",
   runtime = {},
   agentContext = null,
+  sessionId = "",
 } = {}) {
   const rawText = String(toolResultText || "");
   const compactedText = compactToolResultTextForModel(rawText);
@@ -264,6 +288,7 @@ async function normalizeToolResultOverflow({
     maxChars,
     runtime,
     agentContext,
+    sessionId,
   });
   const overflowTransferEnvelope = buildOverflowTransferEnvelope({
     overflowPath,
@@ -533,6 +558,7 @@ export async function executeToolCall({
     toolResultText,
     runtime,
     agentContext,
+    sessionId,
   });
   toolResultText = overflowNormalized.toolResultText;
   emitEvent(eventListener, "tool_call_end", {

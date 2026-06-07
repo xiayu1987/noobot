@@ -12,6 +12,8 @@ import { SystemErrorLogger } from "../tracking/index.js";
 import { AsyncJobManager } from "./async-job-manager.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
+import path from "node:path";
+import { rm } from "node:fs/promises";
 
 export * as hook from "./hook/index.js";
 
@@ -92,6 +94,37 @@ export class BotManager {
       userId,
       sessionIds,
     });
+  }
+
+  async deleteToolResultOverflowBySessionIds({
+    userId,
+    sessionIds = [],
+  } = {}) {
+    const basePath = String(this.getWorkspacePath(userId) || "").trim();
+    const normalizedIds = [
+      ...new Set(
+        (Array.isArray(sessionIds) ? sessionIds : [])
+          .map((sid) => String(sid || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (!basePath || !normalizedIds.length) {
+      return { deletedSessionIds: [], deletedCount: 0 };
+    }
+
+    const overflowRoot = path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");
+    const deletedSessionIds = [];
+    for (const sessionId of normalizedIds) {
+      const safeSessionDir = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
+      if (!safeSessionDir) continue;
+      try {
+        await rm(path.join(overflowRoot, safeSessionDir), { recursive: true, force: true });
+        deletedSessionIds.push(sessionId);
+      } catch {
+        // ignore per-session cleanup failures (best effort)
+      }
+    }
+    return { deletedSessionIds, deletedCount: deletedSessionIds.length };
   }
 
   async loadUserConfig(basePath) {

@@ -224,6 +224,7 @@ test("executeToolCall: tool result too long should be persisted and return overf
     call: { id: "call_overflow", name: "demo_tool", args: {} },
     tool,
     turn: 1,
+    sessionId: "session-overflow-1",
     runtime: {
       basePath,
       globalConfig: {
@@ -254,6 +255,7 @@ test("executeToolCall: tool result too long should be persisted and return overf
   assert.equal(payload.overflowed, true);
   assert.equal(typeof payload.overflow_file_path, "string");
   assert.equal(payload.overflow_file_path.includes(".tool-result-overflow"), true);
+  assert.equal(payload.overflow_file_path.includes(".tool-result-overflow/session-overflow-1/"), true);
 
   const overflowFileContent = await fs.readFile(payload.overflow_file_path, "utf8");
   const overflowPayload = JSON.parse(overflowFileContent);
