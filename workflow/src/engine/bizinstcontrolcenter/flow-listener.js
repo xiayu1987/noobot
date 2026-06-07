@@ -14,9 +14,20 @@ import EStateNodeStateProcessHandleWay from '../bizinst/state/proc/fschange/enum
 import PathStateProcess from '../bizinst/state/proc/fschange/path-state-process.js';
 import StateNodeStateProcess from '../bizinst/state/proc/fschange/state-node-state-process.js';
 
+function isWorkflowVerboseLogEnabled() {
+  const raw = String(process?.env?.NOOBOT_WORKFLOW_VERBOSE_LOG || '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes';
+}
+
 class FlowListener {
   constructor() {
     this.bizinstTreeBox = null;
+    this.verboseLogEnabled = isWorkflowVerboseLogEnabled();
+  }
+
+  logVerbose(message = '') {
+    if (!this.verboseLogEnabled) return;
+    console.log(String(message || ''));
   }
 
   getBizinstTreeBox() {
@@ -35,16 +46,16 @@ class FlowListener {
     let modelStateType = EModelStateType.ActionNodeState;
 
     if (modelState && typeof modelState.getFlowto === 'function') {
-      console.log('发现流向状态：' + modelState.getFlowto().getName());
+      this.logVerbose('发现流向状态：' + modelState.getFlowto().getName());
       modelStateType = EModelStateType.FlowtoState;
     } else if (modelState && typeof modelState.getBizinst === 'function') {
-      console.log('发现复合节点状态：' + modelState.getNode().getName());
+      this.logVerbose('发现复合节点状态：' + modelState.getNode().getName());
       modelStateType = EModelStateType.CompositeNodeState;
     } else if (modelState && typeof modelState.getStepStates === 'function') {
-      console.log('发现动作节点状态：' + modelState.getNode().getName());
+      this.logVerbose('发现动作节点状态：' + modelState.getNode().getName());
       modelStateType = EModelStateType.ActionNodeState;
     } else {
-      console.log('发现状态节点状态：' + modelState.getNode().getName());
+      this.logVerbose('发现状态节点状态：' + modelState.getNode().getName());
       modelStateType = EModelStateType.StateNodeState;
     }
 
@@ -57,7 +68,7 @@ class FlowListener {
   }
 
   goThrough(bizinst, pathState, direction) {
-    console.log(
+    this.logVerbose(
       '经过' +
         (direction === 1 ? '(正向)' : '(反向)') +
         '路径：' +
@@ -76,7 +87,7 @@ class FlowListener {
   }
 
   arriveStepState(bizinst, stepState) {
-    console.log(
+    this.logVerbose(
       '到达步骤：' +
         stepState.getActionNodeState().getNode().getName() +
         '下步骤' +
@@ -92,7 +103,7 @@ class FlowListener {
   }
 
   handleStepState(bizinst, stepState) {
-    console.log(
+    this.logVerbose(
       '处理步骤：' +
         stepState.getActionNodeState().getNode().getName() +
         '下步骤' +
@@ -108,7 +119,7 @@ class FlowListener {
   }
 
   stop(bizinst, stepState) {
-    console.log('实例终止');
+    this.logVerbose('实例终止');
     const process = new ActionNodeStateProcess();
     process.setNodeState(stepState.getActionNodeState());
     process.setStepState(stepState);
@@ -118,7 +129,7 @@ class FlowListener {
   }
 
   startChildBizinst(bizinst, compositeNodeState) {
-    console.log('开始子实例：' + compositeNodeState.getNode().getName());
+    this.logVerbose('开始子实例：' + compositeNodeState.getNode().getName());
     const process = new CompositeNodeStateProcess();
     process.setNodeState(compositeNodeState);
     process.setChildBizinst(compositeNodeState.getBizinst());
@@ -128,7 +139,7 @@ class FlowListener {
   }
 
   openChildBizinst(bizinst, compositeNodeState) {
-    console.log('打开子实例：' + compositeNodeState.getNode().getName());
+    this.logVerbose('打开子实例：' + compositeNodeState.getNode().getName());
     const process = new CompositeNodeStateProcess();
     process.setNodeState(compositeNodeState);
     process.setChildBizinst(compositeNodeState.getBizinst());
@@ -138,7 +149,7 @@ class FlowListener {
   }
 
   noticeParentBizinst(parentBizinst, childBizinst, compositeNodeState, routeNoteInfo, sourceNoteInfo) {
-    console.log('通知父实例');
+    this.logVerbose('通知父实例');
     const process = new CompositeNodeStateProcess();
     process.setNodeState(compositeNodeState);
     process.setChildBizinst(compositeNodeState.getBizinst());

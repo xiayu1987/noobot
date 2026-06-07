@@ -312,6 +312,26 @@ export function useReconnectReplay({
             setPendingInteractionRequest(interactionRequest);
           }
         } else {
+          // Keep compatibility with channels that only emit
+          // `interaction_request` (without embedding pendingInteraction
+          // into channel_state).
+          const existingPendingRequest =
+            pendingInteractionRequest.value &&
+            typeof pendingInteractionRequest.value === "object"
+              ? pendingInteractionRequest.value
+              : null;
+          if (existingPendingRequest) {
+            const existingDialogProcessId = String(
+              existingPendingRequest?.dialogProcessId || "",
+            ).trim();
+            if (
+              !dialogProcessId ||
+              !existingDialogProcessId ||
+              existingDialogProcessId === dialogProcessId
+            ) {
+              return;
+            }
+          }
           sending.value = false;
           interactionSubmitting.value = false;
           clearPendingInteraction();

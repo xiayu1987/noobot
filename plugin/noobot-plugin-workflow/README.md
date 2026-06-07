@@ -95,7 +95,7 @@ END
 - `mode: "on" | "off"`（默认 `off`）
 - `semanticPrompt: string`（可覆盖默认 DSL 提示词）
 - `semanticModel: string`（语义模型名）
-- `maxAutoTransitions: number`（默认 `10`）
+- `maxAutoTransitions: number`（默认 `50`）
 - `parallelNodeExecution: boolean`（默认 `false`，开启后同一批 pending 节点并发派发 agent）
 - `maxParallelNodeAgents: number`（默认 `4`，并发上限）
 - `priority: number`（默认 `10`）
@@ -185,7 +185,7 @@ if (api?.policy?.appendDenyToolNames && Array.isArray(options?.denyToolNames)) {
       "enabled": true,
       "mode": "on",
       "semanticModel": "qwen3_6_plus",
-      "maxAutoTransitions": 10,
+      "maxAutoTransitions": 50,
       "priority": 10,
       "timeoutMs": 180000
     }
