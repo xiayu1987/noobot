@@ -130,6 +130,11 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
         controllers: {
           runtime: {
             sharedTools: {
+              resolveAttachmentDisplayPath({ meta = {} } = {}) {
+                const normalized = String(meta?.path || "").trim();
+                if (!normalized) return "";
+                return `/injected${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
+              },
               resolveSandboxPath({ hostPath = "" } = {}) {
                 const normalized = String(hostPath || "").trim();
                 if (!normalized) return "";
@@ -204,7 +209,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(workflowTurn?.attachmentMetas?.[0]?.attachmentId, "wf-node-result-1");
   assert.match(
     String(workflowTurn?.content || ""),
-    /\/workspace\/attachments\/s1\/workflow-node-1-result\.md/,
+    /\/injected\/attachments\/s1\/workflow-node-1-result\.md/,
   );
   assert.equal(String(workflowTurn?.content || "").includes("message-node-done"), false);
   assert.equal(String(workflowTurn?.content || "").includes("answer-node-done"), false);

@@ -236,6 +236,9 @@ test("executeToolCall: overflow result should include sandbox path when resolver
       },
       userConfig: {},
       sharedTools: {
+        resolveAttachmentDisplayPath({ meta = {} } = {}) {
+          return String(meta?.path || "").replace(basePath, "/injected/admin");
+        },
         resolveSandboxPath({ hostPath }) {
           return String(hostPath || "").replace(basePath, "/workspace/admin");
         },
@@ -252,7 +255,7 @@ test("executeToolCall: overflow result should include sandbox path when resolver
   assert.equal(payload.overflowed, true);
   assert.equal(typeof payload.overflow_file_sandbox_path, "string");
   assert.equal(
-    payload.overflow_file_sandbox_path.startsWith("/workspace/admin/runtime/ops_workdir/.tool-result-overflow/"),
+    payload.overflow_file_sandbox_path.startsWith("/injected/admin/runtime/ops_workdir/.tool-result-overflow/"),
     true,
   );
 });

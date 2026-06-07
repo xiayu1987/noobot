@@ -38,6 +38,18 @@ test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores"
 test("initializeRuntimeEnvironment wires shared tools and connector runtime", async () => {
   const runtime = buildRuntimeContext({
     userId: "u1",
+    basePath: "/host/users/u1",
+    globalConfig: {
+      tools: {
+        execute_script: {
+          sandboxMode: true,
+          sandboxProvider: {
+            default: "docker",
+            docker: { dockerContainerScope: "global" },
+          },
+        },
+      },
+    },
     runConfig: {},
     systemRuntime: {
       sessionId: "s1",
@@ -52,6 +64,7 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.equal(typeof runtime.sharedTools.fetch, "function");
   assert.equal(typeof runtime.sharedTools.textCleaner?.cleanText, "function");
   assert.equal(typeof runtime.sharedTools.textCleaner?.cleanHtml, "function");
+  assert.equal(typeof runtime.sharedTools.resolveAttachmentDisplayPath, "function");
   assert.equal(typeof runtime.sharedTools.resolveSandboxPath, "function");
   assert.equal(typeof runtime.sharedTools.toSandboxPath, "function");
   assert.equal(typeof runtime.sharedTools.pathMapper?.toSandboxPath, "function");
@@ -61,6 +74,15 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.deepEqual(runtime.sharedTools.sessionCrypto.decryptBySessionId(encrypted, "s1"), {
     ok: true,
   });
+  assert.equal(
+    runtime.sharedTools.resolveAttachmentDisplayPath({
+      meta: {
+        path: "/host/users/u1/runtime/a.md",
+        relativePath: "runtime/a.md",
+      },
+    }),
+    "/workspace/u1/runtime/a.md",
+  );
 
   assert.equal(typeof runtime.sharedTools.connectorEventListener?.onConnectorAccessed, "function");
   assert.ok(runtime.sharedTools.connectorChannelStore);
