@@ -17,7 +17,9 @@ import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
-import { resolveSandboxPath as resolveSandboxPathByAgent } from "../../../utils/sandbox-path-resolver.js";
+import {
+  resolveAttachmentDisplayPath as resolveAttachmentDisplayPathByAgent,
+} from "../../../utils/sandbox-path-resolver.js";
 
 const DEFAULT_MAX_TOOL_RESULT_CHARS = 10000;
 
@@ -39,6 +41,7 @@ function resolveOverflowSandboxFilePath({
   agentContext = null,
 } = {}) {
   const pathResolverCandidates = [
+    runtime?.sharedTools?.resolveAttachmentDisplayPath,
     runtime?.sharedTools?.resolveSandboxPath,
     runtime?.sharedTools?.toSandboxPath,
     runtime?.sharedTools?.pathMapper?.toSandboxPath,
@@ -48,6 +51,7 @@ function resolveOverflowSandboxFilePath({
     try {
       const resolved = String(
         resolver({
+          meta: { path: overflowPath },
           path: overflowPath,
           hostPath: overflowPath,
           runtime,
@@ -61,7 +65,8 @@ function resolveOverflowSandboxFilePath({
     }
   }
   return String(
-    resolveSandboxPathByAgent({
+    resolveAttachmentDisplayPathByAgent({
+      meta: { path: overflowPath },
       path: overflowPath,
       hostPath: overflowPath,
       runtime,

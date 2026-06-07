@@ -153,3 +153,34 @@ export function resolveSandboxPath({
   return "";
 }
 
+export function resolveAttachmentDisplayPath({
+  meta = {},
+  path = "",
+  hostPath = "",
+  relativePath = "",
+  runtime = {},
+  agentContext = null,
+  purpose = "attachment_display_path",
+} = {}) {
+  const sourceMeta = meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {};
+  const metaSandboxPath = String(
+    sourceMeta?.sandboxPath ||
+      sourceMeta?.sandboxViewPath ||
+      sourceMeta?.sandbox_file_path ||
+      "",
+  ).trim();
+  if (metaSandboxPath) return metaSandboxPath;
+
+  const resolvedHostPath = String(hostPath || path || sourceMeta?.path || "").trim();
+  const resolvedRelativePath = String(relativePath || sourceMeta?.relativePath || "").trim();
+  const sandboxPath = resolveSandboxPath({
+    path: resolvedHostPath,
+    hostPath: resolvedHostPath,
+    relativePath: resolvedRelativePath,
+    runtime,
+    agentContext,
+    purpose,
+  });
+  if (sandboxPath) return String(sandboxPath || "").trim();
+  return String(resolvedRelativePath || resolvedHostPath || sourceMeta?.name || "").trim();
+}

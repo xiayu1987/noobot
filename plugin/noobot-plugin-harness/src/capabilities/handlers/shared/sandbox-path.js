@@ -15,6 +15,25 @@ export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   if (metaSandboxPath) return metaSandboxPath;
 
   const runtime = resolveRuntime(ctx);
+  const injectedResolver = runtime?.sharedTools?.resolveAttachmentDisplayPath;
+  if (typeof injectedResolver === "function") {
+    try {
+      const resolved = String(
+        injectedResolver({
+          meta,
+          path: String(meta?.path || "").trim(),
+          hostPath: String(meta?.path || "").trim(),
+          relativePath: String(meta?.relativePath || "").trim(),
+          runtime,
+          agentContext: ctx?.agentContext || null,
+          purpose: "attachment_display_path",
+        }) || "",
+      ).trim();
+      if (resolved) return resolved;
+    } catch {
+      // Fallback to legacy resolver candidates below.
+    }
+  }
   const hostPath = String(meta?.path || "").trim();
   const relativePath = String(meta?.relativePath || "").trim();
   const resolverCandidates = [

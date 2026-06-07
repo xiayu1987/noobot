@@ -23,7 +23,10 @@ import {
   createCurrentTurnTasksStore,
 } from "../session/current-turn-store.js";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
-import { resolveSandboxPath } from "../../utils/sandbox-path-resolver.js";
+import {
+  resolveAttachmentDisplayPath,
+  resolveSandboxPath,
+} from "../../utils/sandbox-path-resolver.js";
 
 
 async function defaultSharedFetch(url, init = {}) {
@@ -177,6 +180,14 @@ function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
         agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
       }));
   sharedTools.resolveSandboxPath = resolver;
+  if (typeof sharedTools.resolveAttachmentDisplayPath !== "function") {
+    sharedTools.resolveAttachmentDisplayPath = (payload = {}) =>
+      resolveAttachmentDisplayPath({
+        ...(payload && typeof payload === "object" ? payload : { path: String(payload || "") }),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      });
+  }
   if (typeof sharedTools.toSandboxPath !== "function") {
     sharedTools.toSandboxPath = (payload = {}) =>
       resolver(
