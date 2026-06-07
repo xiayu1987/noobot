@@ -25,6 +25,7 @@ import {
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 import {
   resolveAttachmentDisplayPath,
+  resolveHostPath,
   resolveSandboxPath,
 } from "../../utils/sandbox-path-resolver.js";
 import {
@@ -286,6 +287,26 @@ function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
           : { path: String(payload || "") },
       );
   }
+  const hostResolver =
+    typeof sharedTools.resolveHostPath === "function"
+      ? sharedTools.resolveHostPath
+      : ((payload = {}) =>
+          resolveHostPath({
+            ...(payload && typeof payload === "object"
+              ? payload
+              : { path: String(payload || ""), sandboxPath: String(payload || "") }),
+            runtime: payload?.runtime || runtimeContext,
+            agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+          }));
+  sharedTools.resolveHostPath = hostResolver;
+  if (typeof sharedTools.toHostPath !== "function") {
+    sharedTools.toHostPath = (payload = {}) =>
+      hostResolver(
+        payload && typeof payload === "object"
+          ? payload
+          : { path: String(payload || ""), sandboxPath: String(payload || "") },
+      );
+  }
   const currentPathMapper =
     sharedTools.pathMapper && typeof sharedTools.pathMapper === "object"
       ? sharedTools.pathMapper
@@ -296,6 +317,10 @@ function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
       typeof currentPathMapper.toSandboxPath === "function"
         ? currentPathMapper.toSandboxPath
         : sharedTools.toSandboxPath,
+    toHostPath:
+      typeof currentPathMapper.toHostPath === "function"
+        ? currentPathMapper.toHostPath
+        : sharedTools.toHostPath,
   };
 }
 

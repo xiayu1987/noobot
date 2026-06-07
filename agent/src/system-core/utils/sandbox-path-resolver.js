@@ -85,6 +85,25 @@ function mapPathByMappings(filePath = "", mappings = []) {
   return "";
 }
 
+function mapPathByReverseMappings(filePath = "", mappings = []) {
+  const normalizedFilePath = normalizeSlashPath(filePath);
+  if (!normalizedFilePath || !Array.isArray(mappings) || !mappings.length) return "";
+  const normalizedMappings = mappings
+    .map((mapping) => ({
+      source: normalizeSlashPath(mapping?.source || mapping?.hostPath || mapping?.host || ""),
+      target: normalizeSlashPath(mapping?.target || mapping?.sandboxPath || mapping?.sandbox || ""),
+    }))
+    .filter((mapping) => Boolean(mapping.source && mapping.target))
+    .sort((leftItem, rightItem) => rightItem.target.length - leftItem.target.length);
+  for (const mapping of normalizedMappings) {
+    if (normalizedFilePath === mapping.target) return mapping.source;
+    if (normalizedFilePath.startsWith(`${mapping.target}/`)) {
+      return `${mapping.source}${normalizedFilePath.slice(mapping.target.length)}`;
+    }
+  }
+  return "";
+}
+
 export function resolveSandboxPathMappings(runtime = {}) {
   const systemRuntimeMappings = runtime?.systemRuntime?.config?.sandboxPathMappings;
   const userMappings = runtime?.userConfig?.tools?.sandboxPathMappings;
@@ -148,6 +167,52 @@ export function resolveSandboxPath({
     }
     const normalizedRelativePath = normalizeSlashPath(relativePath).replace(/^\/+/, "");
     if (normalizedRelativePath) return `${normalizedSandboxRoot}/${normalizedRelativePath}`;
+  }
+
+  return "";
+}
+
+export function resolveHostPath({
+  path = "",
+  sandboxPath = "",
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  const normalizedSandboxPath = normalizeSlashPath(sandboxPath || path);
+  if (!normalizedSandboxPath) return "";
+
+  const mappedByConfig = mapPathByReverseMappings(
+    normalizedSandboxPath,
+    resolveSandboxPathMappings(runtime),
+  );
+  if (mappedByConfig) return String(mappedByConfig || "").trim();
+
+  const sandboxUserRoot = resolveSandboxUserRoot(runtime);
+  const hostBasePath = String(
+    runtime?.basePath || agentContext?.environment?.workspace?.basePath || "",
+  ).trim();
+  const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
+  const normalizedSandboxUserRoot = normalizeSlashPath(sandboxUserRoot);
+  if (normalizedSandboxUserRoot && normalizedHostBasePath) {
+    if (normalizedSandboxPath === normalizedSandboxUserRoot) return normalizedHostBasePath;
+    if (normalizedSandboxPath.startsWith(`${normalizedSandboxUserRoot}/`)) {
+      return `${normalizedHostBasePath}${normalizedSandboxPath.slice(normalizedSandboxUserRoot.length)}`;
+    }
+  }
+
+  const sandboxRoot = String(
+    runtime?.systemRuntime?.staticInfo?.sandboxRoot ||
+      runtime?.systemRuntime?.staticInfo?.sandbox?.sandboxRoot ||
+      agentContext?.environment?.staticInfo?.sandboxRoot ||
+      agentContext?.environment?.staticInfo?.sandbox?.sandboxRoot ||
+      "",
+  ).trim();
+  const normalizedSandboxRoot = normalizeSlashPath(sandboxRoot);
+  if (normalizedSandboxRoot && normalizedHostBasePath) {
+    if (normalizedSandboxPath === normalizedSandboxRoot) return normalizedHostBasePath;
+    if (normalizedSandboxPath.startsWith(`${normalizedSandboxRoot}/`)) {
+      return `${normalizedHostBasePath}${normalizedSandboxPath.slice(normalizedSandboxRoot.length)}`;
+    }
   }
 
   return "";

@@ -7,19 +7,31 @@ import path from "node:path";
 import { createFileTool } from "../../../src/system-core/tools/execution/file-tool.js";
 import { createScriptTool } from "../../../src/system-core/tools/execution/script-tool.js";
 
-function buildAgentContext(basePath = "") {
+function buildAgentContext(basePath = "", userId = "u-test") {
   return {
     environment: {
       workspace: { basePath },
+      identity: { userId },
     },
     execution: {
       controllers: {
         runtime: {
           basePath,
-          userId: "u-test",
-          globalConfig: {},
+          userId,
+          globalConfig: {
+            tools: {
+              execute_script: {
+                sandboxMode: true,
+                sandboxProvider: {
+                  default: "docker",
+                  docker: { dockerContainerScope: "global" },
+                },
+              },
+            },
+          },
           userConfig: {},
           systemRuntime: {
+            userId,
             sessionId: "s-1",
             rootSessionId: "s-1",
             config: {},
@@ -79,4 +91,27 @@ test("read_file: 文件内容超过 8000 字符时应直接返回长度错误", 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, false);
   assert.equal(result.message, "文件内容过长，请分批读取");
+});
+
+test("read_file: should map docker sandbox /workspace/<userId> path to user workspace", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
+  const basePath = path.join(workspaceRoot, "admin");
+  const filePath = path.join(basePath, "runtime/ops_workdir/result.json");
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, "{\"ok\":true}", "utf8");
+
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath, "admin") });
+  const tool = tools.find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  const result = parseToolResult(
+    await tool.invoke({
+      filePath: "/workspace/admin/runtime/ops_workdir/result.json",
+    }),
+  );
+
+  assert.equal(result.toolName, "read_file");
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "{\"ok\":true}");
+  assert.equal(result.resolvedPath, filePath);
 });
