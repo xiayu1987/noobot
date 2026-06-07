@@ -823,6 +823,8 @@ export class SessionExecutionEngine {
         parentContext && typeof parentContext === "object" ? parentContext : {};
       const inheritedRuntime = getRuntimeFromAgentContext(sourceContext?.agentContext || sourceContext, null);
       const inheritedAbortSignal = abortSignal || sourceContext?.abortSignal || inheritedRuntime?.abortSignal || null;
+      const inheritedUserInteractionBridge =
+        sourceContext?.userInteractionBridge || inheritedRuntime?.userInteractionBridge || null;
       const throwIfSubSessionAborted = () => {
         if (!inheritedAbortSignal?.aborted) return;
         const error = new Error("workflow sub-session aborted");
@@ -943,6 +945,7 @@ export class SessionExecutionEngine {
             typeof eventListener.onEvent === "function"
               ? eventListener
               : null,
+          userInteractionBridge: inheritedUserInteractionBridge,
           runConfig: effectiveRunConfig,
           parentAsyncResultContainer: null,
         },

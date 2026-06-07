@@ -39,9 +39,11 @@ export function normalizeMessageEntity(
     modelAlias: String(message?.modelAlias || "").trim(),
     modelName: String(message?.modelName || "").trim(),
     summarized: message?.summarized === true,
-    attachmentMetas: normalizedAttachmentMetas,
     ts: String(message?.ts || "").trim() || now(),
   };
+  if (normalizedAttachmentMetas.length) {
+    normalizedMessage.attachmentMetas = normalizedAttachmentMetas;
+  }
   if (message?.transferEnvelope && typeof message.transferEnvelope === "object" && !Array.isArray(message.transferEnvelope)) {
     normalizedMessage.transferEnvelope = message.transferEnvelope;
   }
