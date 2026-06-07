@@ -17,7 +17,12 @@ async function saveEmailAttachments({
   parsedEmail = null,
 } = {}) {
   if (typeof attachmentHandler !== "function" || !Array.isArray(parsedEmail?.attachments)) {
-    return [];
+    return {
+      attachmentMetas: [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
   }
   const artifacts = [];
   let attachmentIndex = 0;
@@ -48,11 +53,51 @@ async function saveEmailAttachments({
       email_is_inline: isInline,
     });
   }
-  if (!artifacts.length) return [];
-  const savedAttachmentMetas = await attachmentHandler(artifacts, {
+  if (!artifacts.length) {
+    return {
+      attachmentMetas: [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
+  }
+  const savedOutput = await attachmentHandler(artifacts, {
     generationSource: "email_connector_read",
   });
-  return Array.isArray(savedAttachmentMetas) ? savedAttachmentMetas : [];
+  if (Array.isArray(savedOutput)) {
+    return {
+      attachmentMetas: savedOutput,
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
+  }
+  if (!savedOutput || typeof savedOutput !== "object") {
+    return {
+      attachmentMetas: [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
+  }
+  return {
+    attachmentMetas: Array.isArray(savedOutput?.attachmentMetas) ? savedOutput.attachmentMetas : [],
+    transferResult:
+      savedOutput?.transferResult &&
+      typeof savedOutput.transferResult === "object" &&
+      !Array.isArray(savedOutput.transferResult)
+        ? savedOutput.transferResult
+        : null,
+    transferEnvelope:
+      savedOutput?.transferEnvelope &&
+      typeof savedOutput.transferEnvelope === "object" &&
+      !Array.isArray(savedOutput.transferEnvelope)
+        ? savedOutput.transferEnvelope
+        : null,
+    transferEnvelopes: Array.isArray(savedOutput?.transferEnvelopes)
+      ? savedOutput.transferEnvelopes
+      : [],
+  };
 }
 
 export async function executeReadEmail({
@@ -155,10 +200,13 @@ export async function executeReadEmail({
         return Buffer.from(String(sourceValue || ""));
       })();
       const parsedEmail = await simpleParser(rawSourceBuffer);
-      const attachmentMetas = await saveEmailAttachments({
+      const persistedAttachments = await saveEmailAttachments({
         attachmentHandler,
         parsedEmail,
       });
+      const attachmentMetas = Array.isArray(persistedAttachments?.attachmentMetas)
+        ? persistedAttachments.attachmentMetas
+        : [];
       const inlineAttachmentMetas = attachmentMetas.filter(
         (attachmentItem) => attachmentItem?.email_is_inline === true,
       );
@@ -231,6 +279,11 @@ export async function executeReadEmail({
         text: textWithInlineAttachmentHint,
         html: htmlWithInlineAttachmentHint,
         attachment_metas: attachmentMetas,
+        ...(persistedAttachments?.transferResult ? { transferResult: persistedAttachments.transferResult } : {}),
+        ...(persistedAttachments?.transferEnvelope ? { transferEnvelope: persistedAttachments.transferEnvelope } : {}),
+        ...(Array.isArray(persistedAttachments?.transferEnvelopes) && persistedAttachments.transferEnvelopes.length
+          ? { transferEnvelopes: persistedAttachments.transferEnvelopes }
+          : {}),
       };
     } finally {
       mailboxLock.release();

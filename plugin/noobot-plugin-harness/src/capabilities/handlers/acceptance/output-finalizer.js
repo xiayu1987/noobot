@@ -147,15 +147,31 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
     },
   ];
 
-  let savedRecords = [];
+  let metas = [];
   try {
-    savedRecords = await attachmentService.ingestGeneratedArtifacts({
-      userId,
-      sessionId,
-      attachmentSource: "model",
-      generationSource: "harness_checklist",
-      artifacts,
-    });
+    const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferArtifacts;
+    if (typeof semanticPersist === "function") {
+      const persisted = await semanticPersist({
+        userId,
+        sessionId,
+        attachmentSource: "model",
+        generationSource: "harness_checklist",
+        fallbackMimeType: "text/plain",
+        source: "plugin",
+        reason: "harness_checklist",
+        artifacts,
+      });
+      metas = Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
+    } else {
+      const savedRecords = await attachmentService.ingestGeneratedArtifacts({
+        userId,
+        sessionId,
+        attachmentSource: "model",
+        generationSource: "harness_checklist",
+        artifacts,
+      });
+      metas = mapAttachmentRecordsToMetas(savedRecords);
+    }
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
@@ -165,7 +181,6 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
     return false;
   }
 
-  const metas = mapAttachmentRecordsToMetas(savedRecords);
   if (!metas.length) return false;
   const attachedToInjectedMessage = attachMetasToLatestInjectedMessage(ctx, metas);
   const attachedToFinalOutput = attachMetasToFinalOutputTurn(ctx, metas);

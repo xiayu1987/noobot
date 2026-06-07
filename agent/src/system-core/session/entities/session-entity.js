@@ -42,6 +42,14 @@ export function normalizeMessageEntity(
     attachmentMetas: normalizedAttachmentMetas,
     ts: String(message?.ts || "").trim() || now(),
   };
+  if (message?.transferEnvelope && typeof message.transferEnvelope === "object" && !Array.isArray(message.transferEnvelope)) {
+    normalizedMessage.transferEnvelope = message.transferEnvelope;
+  }
+  if (Array.isArray(message?.transferEnvelopes) && message.transferEnvelopes.length) {
+    normalizedMessage.transferEnvelopes = message.transferEnvelopes.filter(
+      (item) => item && typeof item === "object" && !Array.isArray(item),
+    );
+  }
   if (message?.injectedMessage === true) {
     normalizedMessage.injectedMessage = true;
   }

@@ -7,7 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import OpenAI from "openai";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
-import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
+import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../semantic-transfer/index.js";
 import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
@@ -102,6 +102,20 @@ function parseDataUrlToImageArtifact(dataUrl = "", fileName = "generated_image_1
 function normalizeImageSize(imageSize = "1024x1024") {
   const normalizedImageSize = String(imageSize || "1024x1024").trim();
   return normalizedImageSize || "1024x1024";
+}
+
+function dedupeAttachmentMetas(attachmentMetas = []) {
+  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  const seen = new Set();
+  return source.filter((item = {}) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const key = String(item?.attachmentId || "").trim() ||
+      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function resolveGenerationModelSpec({
@@ -332,9 +346,11 @@ export function createMultimodalGenerateTool({ agentContext }) {
             contentBase64: resolvedBase64,
           });
         }
-        const savedAttachmentRecords =
+        const persistedAttachments =
           attachmentService && userId && generatedAttachments.length
-              ? await attachmentService.ingestGeneratedArtifacts({
+            ? await persistTransferArtifacts({
+                runtime,
+                attachmentService,
                 userId,
                 sessionId: String(
                   runtime?.systemRuntime?.sessionId ||
@@ -344,17 +360,36 @@ export function createMultimodalGenerateTool({ agentContext }) {
                 attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
                 artifacts: generatedAttachments,
                 generationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
+                fallbackMimeType: MIME_TYPE.IMAGE_PNG,
+                source: "tool",
+                reason: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
               })
-            : [];
-        const attachmentMetas = mapAttachmentRecordsToMetas(
-          savedAttachmentRecords,
-          {
-            fallbackMimeType: MIME_TYPE.IMAGE_PNG,
-            fallbackGenerationSource:
-              ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
-            userId,
-          },
-        );
+            : null;
+        const attachmentMetas = Array.isArray(persistedAttachments?.attachmentMetas)
+          ? persistedAttachments.attachmentMetas
+          : [];
+        const transferEnvelope =
+          persistedAttachments?.envelope &&
+          typeof persistedAttachments.envelope === "object" &&
+          !Array.isArray(persistedAttachments.envelope)
+            ? persistedAttachments.envelope
+            : persistedAttachments?.result?.envelope &&
+                typeof persistedAttachments.result.envelope === "object" &&
+                !Array.isArray(persistedAttachments.result.envelope)
+              ? persistedAttachments.result.envelope
+              : null;
+        const transferResult =
+          persistedAttachments?.result &&
+          typeof persistedAttachments.result === "object" &&
+          !Array.isArray(persistedAttachments.result)
+            ? persistedAttachments.result
+            : null;
+        const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
+        const transferCompat = buildLegacyTransferCompat({ envelope: transferEnvelope, envelopes: transferEnvelopes });
+        const mergedAttachmentMetas = dedupeAttachmentMetas([
+          ...attachmentMetas,
+          ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
+        ]);
         return toToolJsonResult(
           TOOL_NAME.MULTIMODAL_GENERATE,
           {
@@ -365,10 +400,13 @@ export function createMultimodalGenerateTool({ agentContext }) {
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
             generationContentSource: "tool_input_generation_content",
-            attachmentMetas,
+            attachmentMetas: mergedAttachmentMetas,
+            ...(transferResult ? { transferResult } : {}),
+            ...(transferEnvelope ? { transferEnvelope } : {}),
+            ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
             summary: {
               generated_image_count: imageArtifacts.length,
-              saved_attachment_count: attachmentMetas.length,
+              saved_attachment_count: mergedAttachmentMetas.length,
             },
           },
           true,

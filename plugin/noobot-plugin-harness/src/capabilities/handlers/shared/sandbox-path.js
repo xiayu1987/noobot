@@ -9,21 +9,45 @@ function resolveRuntime(ctx = {}) {
 }
 
 export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
+  const runtime = resolveRuntime(ctx);
+  const semanticDisplay = runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath;
+  if (typeof semanticDisplay === "function") {
+    try {
+      const resolved = String(
+        semanticDisplay(meta, { runtime, agentContext: ctx?.agentContext || null }) || "",
+      ).trim();
+      if (resolved) return resolved;
+    } catch {
+      // Fallback to legacy resolver candidates below.
+    }
+  }
+
+  const primaryFile = Array.isArray(meta?.files) && meta.files.length ? meta.files[0] : null;
+  const sourceMeta = primaryFile?.attachmentMeta || meta?.attachmentMeta || meta;
+  const directFilePath = String(
+    primaryFile?.pathView?.displayPath ||
+      primaryFile?.filePath ||
+      meta?.pathView?.displayPath ||
+      meta?.filePath ||
+      "",
+  ).trim();
+  if (directFilePath) return directFilePath;
+
   const metaSandboxPath = String(
-    meta?.sandboxPath || meta?.sandboxViewPath || meta?.sandbox_file_path || "",
+    sourceMeta?.sandboxPath || sourceMeta?.sandboxViewPath || sourceMeta?.sandbox_file_path || "",
   ).trim();
   if (metaSandboxPath) return metaSandboxPath;
 
-  const runtime = resolveRuntime(ctx);
-  const injectedResolver = runtime?.sharedTools?.resolveAttachmentDisplayPath;
-  if (typeof injectedResolver === "function") {
+  const semanticResolver = runtime?.sharedTools?.semanticTransfer?.resolveTransferFilePath;
+  if (typeof semanticResolver === "function") {
     try {
       const resolved = String(
-        injectedResolver({
-          meta,
-          path: String(meta?.path || "").trim(),
-          hostPath: String(meta?.path || "").trim(),
-          relativePath: String(meta?.relativePath || "").trim(),
+        semanticResolver({
+          attachmentMeta: sourceMeta,
+          meta: sourceMeta,
+          path: String(sourceMeta?.path || "").trim(),
+          hostPath: String(sourceMeta?.path || "").trim(),
+          relativePath: String(sourceMeta?.relativePath || "").trim(),
           runtime,
           agentContext: ctx?.agentContext || null,
           purpose: "attachment_display_path",
@@ -34,8 +58,27 @@ export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
       // Fallback to legacy resolver candidates below.
     }
   }
-  const hostPath = String(meta?.path || "").trim();
-  const relativePath = String(meta?.relativePath || "").trim();
+  const injectedResolver = runtime?.sharedTools?.resolveAttachmentDisplayPath;
+  if (typeof injectedResolver === "function") {
+    try {
+      const resolved = String(
+        injectedResolver({
+          meta: sourceMeta,
+          path: String(sourceMeta?.path || "").trim(),
+          hostPath: String(sourceMeta?.path || "").trim(),
+          relativePath: String(sourceMeta?.relativePath || "").trim(),
+          runtime,
+          agentContext: ctx?.agentContext || null,
+          purpose: "attachment_display_path",
+        }) || "",
+      ).trim();
+      if (resolved) return resolved;
+    } catch {
+      // Fallback to legacy resolver candidates below.
+    }
+  }
+  const hostPath = String(sourceMeta?.path || "").trim();
+  const relativePath = String(sourceMeta?.relativePath || "").trim();
   const resolverCandidates = [
     runtime?.sharedTools?.resolveSandboxPath,
     runtime?.sharedTools?.toSandboxPath,
@@ -60,5 +103,5 @@ export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
     }
   }
 
-  return String(relativePath || hostPath || meta?.name || "").trim();
+  return String(relativePath || hostPath || sourceMeta?.name || "").trim();
 }

@@ -32,5 +32,10 @@ export function toConversationMessages(sessionRecords = []) {
       : Array.isArray(item.attachments)
         ? item.attachments
         : [],
+    transferEnvelope:
+      item?.transferEnvelope && typeof item.transferEnvelope === "object" && !Array.isArray(item.transferEnvelope)
+        ? item.transferEnvelope
+        : null,
+    transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
   }));
 }

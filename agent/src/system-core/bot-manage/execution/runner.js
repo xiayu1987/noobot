@@ -291,6 +291,9 @@ export class SessionExecutionRunner {
         ...botHookBase,
         userMessage: normalizedMessage,
         agentContextSummary,
+        agentContext: runtimeAgentContext,
+        runtimeAgentContext,
+        abortSignal,
         messages: dispatchContextMessages,
         attachmentMetas: userMessageAttachmentMetas,
         userMessageAttachmentMetas,
@@ -302,6 +305,15 @@ export class SessionExecutionRunner {
         context: beforeAgentDispatchContext,
         eventListener: runtimeEventListener,
       });
+      const beforeAgentDispatchAbortError = (Array.isArray(beforeAgentDispatchResult?.errors)
+        ? beforeAgentDispatchResult.errors
+        : []
+      )
+        .map((item) => item?.error || item)
+        .find((error) => isAbortError(error));
+      if (beforeAgentDispatchAbortError) {
+        throw beforeAgentDispatchAbortError;
+      }
       let agentResult = null;
       const effectiveBeforeAgentDispatchContext =
         beforeAgentDispatchResult?.context &&

@@ -21,3 +21,21 @@ test("normalizeMessageEntity does not persist heavy raw model fields", () => {
   assert.equal("modelAdditionalKwargs" in normalized, false);
   assert.equal("modelResponseMetadata" in normalized, false);
 });
+
+test("normalizeMessageEntity preserves transfer envelopes", () => {
+  const transferEnvelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/a.md",
+  };
+  const normalized = normalizeMessageEntity({
+    role: "assistant",
+    content: "done",
+    transferEnvelope,
+    transferEnvelopes: [transferEnvelope],
+  });
+  assert.deepEqual(normalized.transferEnvelope, transferEnvelope);
+  assert.deepEqual(normalized.transferEnvelopes, [transferEnvelope]);
+});

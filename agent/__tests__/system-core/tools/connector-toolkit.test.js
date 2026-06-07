@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -369,4 +370,243 @@ test("connector-toolkit/access_connector: command_file_path 超过大小限制�
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }
+});
+
+test("connector-toolkit/access_connector(email): 应透出 transferResult/envelope(s) 并保留 attachmentMetas fallback", async () => {
+  const ingestCalls = [];
+  const runtime = {
+    userId: "admin",
+    attachmentService: {
+      async ingestGeneratedArtifacts(payload = {}) {
+        ingestCalls.push(payload);
+        return (payload?.artifacts || []).map((item, index) => ({
+          attachmentId: `mail_att_${index + 1}`,
+          sessionId: payload.sessionId,
+          attachmentSource: payload.attachmentSource,
+          generationSource: payload.generationSource,
+          name: item.name,
+          mimeType: item.mimeType,
+          size: Buffer.from(String(item.contentBase64 || ""), "base64").length,
+          path: `/tmp/${item.name}`,
+          relativePath: `runtime/attach/${item.name}`,
+        }));
+      },
+    },
+    systemRuntime: {
+      sessionId: "s-child",
+      rootSessionId: "s-root",
+      config: {
+        selectedConnectors: {
+          email: "mail-main",
+        },
+      },
+    },
+    sharedTools: {
+      connectorChannelStore: {
+        getSessionConnectors() {
+          return {
+            databases: [],
+            terminals: [],
+            emails: [{ connectorName: "mail-main", connectorType: "email" }],
+          };
+        },
+        async executeConnectorCommand(payload = {}) {
+          const saved = await payload.emailAttachmentHandler([
+            {
+              name: "mail-1.txt",
+              mimeType: "text/plain",
+              contentBase64: Buffer.from("mail body", "utf8").toString("base64"),
+              email_attachment_type: "attachment",
+              email_content_id: "",
+              email_is_inline: false,
+            },
+          ], {
+            generationSource: "email_connector_read",
+          });
+          return {
+            ok: true,
+            connector: {
+              connectorName: "mail-main",
+              connectorType: "email",
+            },
+            output: {
+              code: 0,
+              stdout: JSON.stringify({
+                action: "read",
+                attachment_metas: saved?.attachmentMetas || [],
+                transferResult: saved?.transferResult || null,
+                transferEnvelope: saved?.transferEnvelope || null,
+                transferEnvelopes: saved?.transferEnvelopes || [],
+              }),
+              stderr: "",
+            },
+          };
+        },
+      },
+      connectorEventListener: {
+        onConnectorAccessed() {},
+      },
+    },
+    globalConfig: {},
+    userConfig: {},
+  };
+
+  const tools = createConnectorTools({ agentContext: { runtime } });
+  const accessTool = tools.find((tool) => tool?.name === "access_connector");
+  assert.ok(accessTool, "access_connector 工具应存在");
+  const payload = parseToolJson(await accessTool.invoke({
+    connector_type: "email",
+    command: JSON.stringify({ action: "read", uid: 1 }),
+  }));
+
+  assert.equal(payload.ok, true);
+  assert.equal(Array.isArray(payload.attachmentMetas), true);
+  assert.equal(payload.attachmentMetas.length, 1);
+  assert.equal(payload.transferResult?.status, "file");
+  assert.equal(payload.transferEnvelope?.transport, "file");
+  assert.equal(Array.isArray(payload.transferEnvelopes), true);
+  assert.equal(payload.transferEnvelopes.length, 1);
+  assert.equal(ingestCalls.length, 1);
+});
+
+test("connector-toolkit/access_connector(email): 仅 transfer 字段时也可回退产出 attachmentMetas", async () => {
+  const runtime = {
+    userId: "admin",
+    systemRuntime: {
+      sessionId: "s-child",
+      rootSessionId: "s-root",
+      config: {
+        selectedConnectors: {
+          email: "mail-main",
+        },
+      },
+    },
+    sharedTools: {
+      connectorChannelStore: {
+        getSessionConnectors() {
+          return {
+            databases: [],
+            terminals: [],
+            emails: [{ connectorName: "mail-main", connectorType: "email" }],
+          };
+        },
+        async executeConnectorCommand() {
+          const transferEnvelope = {
+            protocol: "noobot.semantic-transfer",
+            version: 1,
+            direction: "output",
+            transport: "file",
+            files: [
+              {
+                filePath: "/workspace/mail-1.txt",
+                attachmentMeta: {
+                  attachmentId: "mail_att_1",
+                  name: "mail-1.txt",
+                  mimeType: "text/plain",
+                  path: "/tmp/mail-1.txt",
+                  relativePath: "runtime/attach/mail-1.txt",
+                },
+              },
+            ],
+          };
+          return {
+            ok: true,
+            connector: {
+              connectorName: "mail-main",
+              connectorType: "email",
+            },
+            output: {
+              code: 0,
+              stdout: JSON.stringify({
+                action: "read",
+                transferResult: { ok: true, status: "file", envelope: transferEnvelope },
+                transferEnvelope,
+                transferEnvelopes: [transferEnvelope],
+              }),
+              stderr: "",
+            },
+          };
+        },
+      },
+      connectorEventListener: {
+        onConnectorAccessed() {},
+      },
+    },
+    globalConfig: {},
+    userConfig: {},
+  };
+
+  const tools = createConnectorTools({ agentContext: { runtime } });
+  const accessTool = tools.find((tool) => tool?.name === "access_connector");
+  assert.ok(accessTool, "access_connector 工具应存在");
+  const payload = parseToolJson(await accessTool.invoke({
+    connector_type: "email",
+    command: JSON.stringify({ action: "read", uid: 1 }),
+  }));
+
+  assert.equal(payload.ok, true);
+  assert.equal(payload.transferResult?.status, "file");
+  assert.equal(payload.transferEnvelope?.transport, "file");
+  assert.equal(Array.isArray(payload.attachmentMetas), true);
+  assert.equal(payload.attachmentMetas.length, 1);
+  assert.equal(payload.attachmentMetas[0]?.attachmentId, "mail_att_1");
+});
+
+test("connector-toolkit/access_connector(email): stdout 非 JSON 时不应注入 transfer 字段", async () => {
+  const runtime = {
+    userId: "admin",
+    systemRuntime: {
+      sessionId: "s-child",
+      rootSessionId: "s-root",
+      config: {
+        selectedConnectors: {
+          email: "mail-main",
+        },
+      },
+    },
+    sharedTools: {
+      connectorChannelStore: {
+        getSessionConnectors() {
+          return {
+            databases: [],
+            terminals: [],
+            emails: [{ connectorName: "mail-main", connectorType: "email" }],
+          };
+        },
+        async executeConnectorCommand() {
+          return {
+            ok: true,
+            connector: {
+              connectorName: "mail-main",
+              connectorType: "email",
+            },
+            output: {
+              code: 0,
+              stdout: "{not_json",
+              stderr: "",
+            },
+          };
+        },
+      },
+      connectorEventListener: {
+        onConnectorAccessed() {},
+      },
+    },
+    globalConfig: {},
+    userConfig: {},
+  };
+
+  const tools = createConnectorTools({ agentContext: { runtime } });
+  const accessTool = tools.find((tool) => tool?.name === "access_connector");
+  assert.ok(accessTool, "access_connector 工具应存在");
+  const payload = parseToolJson(await accessTool.invoke({
+    connector_type: "email",
+    command: JSON.stringify({ action: "read", uid: 1 }),
+  }));
+
+  assert.equal(payload.ok, true);
+  assert.equal(Array.isArray(payload.attachmentMetas), false);
+  assert.equal("transferResult" in payload, false);
+  assert.equal("transferEnvelope" in payload, false);
+  assert.equal("transferEnvelopes" in payload, false);
 });

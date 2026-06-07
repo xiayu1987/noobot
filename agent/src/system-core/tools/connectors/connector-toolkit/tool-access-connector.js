@@ -20,6 +20,7 @@ import { resolveConfiguredConnectorInfo } from "./connector-resolver.js";
 import { findConnectedConnector, tConnector } from "./connector-runtime.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
+import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../../semantic-transfer/index.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -67,6 +68,68 @@ function resolveWorkspaceBasePath(runtime = {}) {
   ).trim();
   if (!basePath) return "";
   return path.resolve(basePath);
+}
+
+function dedupeAttachmentMetas(attachmentMetas = []) {
+  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  const seen = new Set();
+  return source.filter((item = {}) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const key = String(item?.attachmentId || "").trim() ||
+      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function parseJsonObject(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function extractEmailTransferFields(rawOutput = {}) {
+  const output = rawOutput && typeof rawOutput === "object" && !Array.isArray(rawOutput) ? rawOutput : {};
+  const parsed = parseJsonObject(output?.stdout);
+  if (!parsed) {
+    return {
+      attachmentMetas: [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
+    };
+  }
+  const transferEnvelope =
+    parsed?.transferEnvelope && typeof parsed.transferEnvelope === "object" && !Array.isArray(parsed.transferEnvelope)
+      ? parsed.transferEnvelope
+      : null;
+  const transferEnvelopes = Array.isArray(parsed?.transferEnvelopes) ? parsed.transferEnvelopes : [];
+  const transferCompat = buildLegacyTransferCompat({
+    envelope: transferEnvelope,
+    envelopes: transferEnvelopes,
+  });
+  const attachmentMetas = dedupeAttachmentMetas([
+    ...(Array.isArray(parsed?.attachment_metas) ? parsed.attachment_metas : []),
+    ...(Array.isArray(parsed?.attachmentMetas) ? parsed.attachmentMetas : []),
+    ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
+  ]);
+  return {
+    attachmentMetas,
+    transferResult:
+      parsed?.transferResult && typeof parsed.transferResult === "object" && !Array.isArray(parsed.transferResult)
+        ? parsed.transferResult
+        : null,
+    transferEnvelope,
+    transferEnvelopes,
+  };
 }
 
 function resolveAccessConnectorFilePolicy({
@@ -295,25 +358,41 @@ function buildAccessConnectorTool(context = {}) {
       const generationSource = String(
         options?.generationSource || ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ,
       ).trim();
-      const savedRecords =
-        generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ &&
-        typeof attachmentService.ingestEmailArtifacts === "function"
-          ? await attachmentService.ingestEmailArtifacts({
-              userId,
-              sessionId: runtimeSessionId,
-              artifacts: sourceArtifacts,
-            })
-          : await attachmentService.ingestGeneratedArtifacts({
-              userId,
-              sessionId: runtimeSessionId,
-              attachmentSource:
-                generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ
-                  ? TOOL_ATTACHMENT_SOURCE.EMAIL
-                  : TOOL_ATTACHMENT_SOURCE.MODEL,
-              artifacts: sourceArtifacts,
-              generationSource,
-            });
-      return (Array.isArray(savedRecords) ? savedRecords : []).map(
+      const attachmentSource =
+        generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ
+          ? TOOL_ATTACHMENT_SOURCE.EMAIL
+          : TOOL_ATTACHMENT_SOURCE.MODEL;
+      const persisted = await persistTransferArtifacts({
+        runtime,
+        attachmentService,
+        userId,
+        sessionId: runtimeSessionId,
+        attachmentSource,
+        generationSource,
+        fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
+        source: attachmentSource === TOOL_ATTACHMENT_SOURCE.EMAIL ? "email" : "tool",
+        reason: generationSource,
+        artifacts: sourceArtifacts,
+      });
+      const transferCompat = buildLegacyTransferCompat({
+        envelopes: [persisted?.envelope, persisted?.result?.envelope],
+      });
+      const transferEnvelope =
+        persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
+          ? persisted.envelope
+          : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
+            ? persisted.result.envelope
+            : null;
+      const transferResult =
+        persisted?.result && typeof persisted.result === "object" && !Array.isArray(persisted.result)
+          ? persisted.result
+          : null;
+      const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
+      const rawAttachmentMetas = dedupeAttachmentMetas([
+        ...(Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : []),
+        ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
+      ]);
+      const attachmentMetas = rawAttachmentMetas.map(
         (attachmentItem, attachmentIndex) => ({
           attachmentId: String(attachmentItem?.attachmentId || "").trim(),
           sessionId: String(attachmentItem?.sessionId || runtimeSessionId).trim(),
@@ -342,6 +421,12 @@ function buildAccessConnectorTool(context = {}) {
             sourceArtifacts?.[attachmentIndex]?.email_is_inline === true,
         }),
       );
+      return {
+        attachmentMetas,
+        transferResult,
+        transferEnvelope,
+        transferEnvelopes,
+      };
     };
   };
   return {
@@ -509,6 +594,15 @@ function buildAccessConnectorTool(context = {}) {
         const executionFailedMessage = String(
           result?.output?.stderr || result?.output?.stdout || "",
         ).trim();
+        const emailTransferFields =
+          connectorType === CONNECTOR_TYPE.EMAIL
+            ? extractEmailTransferFields(result?.output || {})
+            : {
+                attachmentMetas: [],
+                transferResult: null,
+                transferEnvelope: null,
+                transferEnvelopes: [],
+              };
         return toToolJsonResult(
           TOOL_NAME.ACCESS_CONNECTOR,
           {
@@ -529,6 +623,14 @@ function buildAccessConnectorTool(context = {}) {
               },
               { maxChars: maxAccessOutputChars },
             ),
+            ...(emailTransferFields.attachmentMetas.length
+              ? { attachmentMetas: emailTransferFields.attachmentMetas }
+              : {}),
+            ...(emailTransferFields.transferResult ? { transferResult: emailTransferFields.transferResult } : {}),
+            ...(emailTransferFields.transferEnvelope ? { transferEnvelope: emailTransferFields.transferEnvelope } : {}),
+            ...(emailTransferFields.transferEnvelopes.length
+              ? { transferEnvelopes: emailTransferFields.transferEnvelopes }
+              : {}),
           },
           true,
         );

@@ -76,12 +76,21 @@ describe("reconnectReplayModel", () => {
   });
 
   it("patchMessageObjectPreservingUiState keeps non-degrading fields and UI state", () => {
+    const transferEnvelope = {
+      protocol: "noobot.semantic-transfer",
+      version: 1,
+      direction: "output",
+      transport: "file",
+      filePath: "/workspace/a.txt",
+    };
     const target = {
       content: "existing content",
       attachmentMetas: [{ name: "a.txt" }],
       modelRuns: [{ id: 1 }],
       completedToolLogs: [{ id: 1 }],
       realtimeLogs: [{ id: 1 }],
+      transferEnvelope,
+      transferEnvelopes: [transferEnvelope],
       thinkingOpenNames: ["thinking-panel"],
       expandedDetailLogKeys: ["k1"],
       statusLabel: "pending",
@@ -101,9 +110,42 @@ describe("reconnectReplayModel", () => {
     expect(target.modelRuns).toHaveLength(1);
     expect(target.completedToolLogs).toHaveLength(1);
     expect(target.realtimeLogs).toHaveLength(1);
+    expect(target.transferEnvelope).toBe(transferEnvelope);
+    expect(target.transferEnvelopes).toEqual([transferEnvelope]);
     expect(target.thinkingOpenNames).toEqual(["thinking-panel"]);
     expect(target.expandedDetailLogKeys).toEqual(["k1"]);
     expect(target.statusLabel).toBe("generated");
+  });
+
+  it("patchMessageObjectPreservingUiState merges incoming transfer envelopes", () => {
+    const existingTransferEnvelope = {
+      protocol: "noobot.semantic-transfer",
+      version: 1,
+      direction: "output",
+      transport: "file",
+      filePath: "/workspace/old.txt",
+    };
+    const incomingTransferEnvelope = {
+      protocol: "noobot.semantic-transfer",
+      version: 1,
+      direction: "output",
+      transport: "file",
+      filePath: "/workspace/new.txt",
+    };
+    const target = {
+      role: RoleEnum.ASSISTANT,
+      transferEnvelope: existingTransferEnvelope,
+      transferEnvelopes: [existingTransferEnvelope],
+    };
+
+    patchMessageObjectPreservingUiState(target, {
+      role: RoleEnum.ASSISTANT,
+      transferEnvelope: incomingTransferEnvelope,
+      transferEnvelopes: [incomingTransferEnvelope],
+    });
+
+    expect(target.transferEnvelope).toBe(incomingTransferEnvelope);
+    expect(target.transferEnvelopes).toEqual([existingTransferEnvelope, incomingTransferEnvelope]);
   });
 
   it("findReusableMessageObject prefers assistant reuse by dialogProcessId", () => {
