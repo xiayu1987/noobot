@@ -40,30 +40,30 @@ export async function processToolResults({
     }),
   });
 
-  const toolCallResults = await Promise.all(
-    calls.map(async (call) => {
-      assertNotAborted(abortSignal, runtime);
-      emitEvent(eventListener, "tool_call_start", {
-        turn,
-        tool: call.name,
-        args: call.args || {},
-      });
-      const tool = toolMap.get(call.name);
-      return executeToolCall({
-        call,
-        tool,
-        abortSignal,
-        eventListener,
-        turn,
-        errorLogger,
-        userId: systemRuntime?.userId || runtime?.userId || "",
-        sessionId: systemRuntime?.sessionId || "",
-        parentSessionId: systemRuntime?.parentSessionId || "",
-        runtime,
-        agentContext: modelState?.agentContext || null,
-      });
-    }),
-  );
+  const toolCallResults = [];
+  for (const call of calls) {
+    assertNotAborted(abortSignal, runtime);
+    emitEvent(eventListener, "tool_call_start", {
+      turn,
+      tool: call.name,
+      args: call.args || {},
+    });
+    const tool = toolMap.get(call.name);
+    const toolCallResult = await executeToolCall({
+      call,
+      tool,
+      abortSignal,
+      eventListener,
+      turn,
+      errorLogger,
+      userId: systemRuntime?.userId || runtime?.userId || "",
+      sessionId: systemRuntime?.sessionId || "",
+      parentSessionId: systemRuntime?.parentSessionId || "",
+      runtime,
+      agentContext: modelState?.agentContext || null,
+    });
+    toolCallResults.push(toolCallResult);
+  }
 
   const hasTaskSummaryCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
