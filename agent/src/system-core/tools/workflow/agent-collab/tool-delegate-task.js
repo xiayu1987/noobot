@@ -13,6 +13,7 @@ import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS } from "../../constants/index.js";
+import { hasOwnConfigKey } from "../../../config/index.js";
 import { resolveForceToolCall } from "../../../utils/shared-utils.js";
 import {
   buildDelegateTaskFailureResult,
@@ -69,9 +70,11 @@ export function createDelegateTaskTool({
         passthrough: {
           forceTool: passthroughForceToolCall,
           toolPolicy: passthroughToolPolicy,
+          streaming: hasOwnConfigKey(runConfig, "streaming"),
         },
         effectiveRunConfig: {
           forceTool: resolveForceToolCall(runConfig),
+          ...(hasOwnConfigKey(runConfig, "streaming") ? { streaming: runConfig.streaming } : {}),
           hasToolPolicy: runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object",
           toolPolicyKeys:
             runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"

@@ -471,6 +471,20 @@ export function registerChatWebSocketServer(
               sendEvent("delta", { text: String(eventData.text || ""), dialogProcessId: String(eventData?.dialogProcessId || ""), sessionId: String(sessionId || "") });
               return;
             }
+            if (
+              eventName === "attachment_metas_saved" ||
+              eventName === "model_generated_attachments_saved"
+            ) {
+              sendEvent("attachment_metas", {
+                ...eventData,
+                dialogProcessId: String(eventData?.dialogProcessId || ""),
+                sessionId: String(sessionId || ""),
+                attachmentMetas: Array.isArray(eventData?.attachmentMetas)
+                  ? eventData.attachmentMetas
+                  : [],
+              });
+              return;
+            }
             const normalizedEvent = normalizeSseLogEvent(eventPayload);
             sendEvent(normalizedEvent.event, normalizedEvent.data);
           },

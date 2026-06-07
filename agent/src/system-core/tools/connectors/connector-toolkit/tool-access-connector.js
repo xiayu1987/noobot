@@ -17,7 +17,11 @@ import { tTool } from "../../core/tool-i18n.js";
 import { collectNonSensitiveDefaults } from "./connector-fields.js";
 import { resolveRememberedConnectorInfo } from "./connector-context.js";
 import { resolveConfiguredConnectorInfo } from "./connector-resolver.js";
-import { findConnectedConnector, tConnector } from "./connector-runtime.js";
+import {
+  findConnectedConnector,
+  tConnector,
+  upsertRuntimeSelectedConnector,
+} from "./connector-runtime.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../../semantic-transfer/index.js";
@@ -327,6 +331,54 @@ async function resolveCommandFromFile({
   return commandText;
 }
 
+
+function resolveConnectorBucketName(connectorType = "") {
+  if (connectorType === CONNECTOR_TYPE.DATABASE) return CONNECTOR_TYPE.CHANNEL_BUCKET.DATABASE;
+  if (connectorType === CONNECTOR_TYPE.TERMINAL) return CONNECTOR_TYPE.CHANNEL_BUCKET.TERMINAL;
+  if (connectorType === CONNECTOR_TYPE.EMAIL) return CONNECTOR_TYPE.CHANNEL_BUCKET.EMAIL;
+  return "";
+}
+
+function resolveSelectedConnectorName({
+  runtime = {},
+  store = null,
+  rootSessionId = "",
+  connectorType = "",
+  requestedConnectorName = "",
+} = {}) {
+  const selectedConnectors =
+    runtime?.systemRuntime?.config?.selectedConnectors &&
+    typeof runtime.systemRuntime.config.selectedConnectors === "object"
+      ? runtime.systemRuntime.config.selectedConnectors
+      : {};
+  const explicitlySelectedName = String(selectedConnectors?.[connectorType] || "").trim();
+  if (explicitlySelectedName) {
+    return { connectorName: explicitlySelectedName, inferred: false };
+  }
+
+  if (!store || typeof store.getSessionConnectors !== "function") {
+    return { connectorName: "", inferred: false };
+  }
+  const bucketName = resolveConnectorBucketName(connectorType);
+  if (!bucketName) return { connectorName: "", inferred: false };
+  const sessionConnectors = store.getSessionConnectors(String(rootSessionId || "").trim());
+  const sourceList = Array.isArray(sessionConnectors?.[bucketName])
+    ? sessionConnectors[bucketName]
+    : [];
+  const connectedNames = sourceList
+    .map((item) => String(item?.connectorName || item?.connector_name || "").trim())
+    .filter(Boolean);
+
+  const requestedName = String(requestedConnectorName || "").trim();
+  if (requestedName && connectedNames.includes(requestedName)) {
+    return { connectorName: requestedName, inferred: true };
+  }
+  if (!requestedName && connectedNames.length === 1) {
+    return { connectorName: connectedNames[0], inferred: true };
+  }
+  return { connectorName: "", inferred: false };
+}
+
 function buildAccessConnectorTool(context = {}) {
   const {
     runtime,
@@ -489,12 +541,15 @@ function buildAccessConnectorTool(context = {}) {
         effectiveConfig,
         runtime,
       }));
-      const selectedConnectors =
-        runtime?.systemRuntime?.config?.selectedConnectors &&
-        typeof runtime.systemRuntime.config.selectedConnectors === "object"
-          ? runtime.systemRuntime.config.selectedConnectors
-          : {};
-      const selectedConnectorName = String(selectedConnectors?.[connectorType] || "").trim();
+      const requestedConnectorName = String(connector_name || "").trim();
+      const selectedResolution = resolveSelectedConnectorName({
+        runtime,
+        store,
+        rootSessionId,
+        connectorType,
+        requestedConnectorName,
+      });
+      const selectedConnectorName = String(selectedResolution?.connectorName || "").trim();
       if (!selectedConnectorName) {
         throw recoverableToolError(
           tConnector(runtime, "selectedMissing", { connectorType }),
@@ -503,7 +558,12 @@ function buildAccessConnectorTool(context = {}) {
           },
         );
       }
-      const requestedConnectorName = String(connector_name || "").trim();
+      if (selectedResolution?.inferred === true) {
+        upsertRuntimeSelectedConnector(runtime, {
+          connectorType,
+          connectorName: selectedConnectorName,
+        });
+      }
       if (
         requestedConnectorName &&
         requestedConnectorName !== selectedConnectorName

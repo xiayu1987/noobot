@@ -14,3 +14,5 @@ export * from "./legacy-adapter.js";
 export * from "./result.js";
 export * from "./policy.js";
 export * from "./validator.js";
+export * from "./compact.js";
+export * from "./tool-result-text.js";

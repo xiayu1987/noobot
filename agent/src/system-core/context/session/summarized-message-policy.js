@@ -80,7 +80,8 @@ export function shouldMarkCurrentTurnSummarizedMessage(
   messageItem = {},
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
-  void taskSummaryToolName;
+  if (hasTaskSummaryToolCall(messageItem, { taskSummaryToolName })) return false;
+  if (isTaskSummaryToolMessage(messageItem, { taskSummaryToolName })) return false;
   return shouldMarkCurrentTurnSummarizedByPolicy(messageItem);
 }
 
@@ -88,7 +89,8 @@ export function shouldMarkCurrentTurnSummarizedModelMessage(
   messageItem = {},
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
-  void taskSummaryToolName;
+  if (hasTaskSummaryToolCall(messageItem, { taskSummaryToolName })) return false;
+  if (isTaskSummaryToolMessage(messageItem, { taskSummaryToolName })) return false;
   return shouldMarkCurrentTurnModelSummarizedByPolicy(messageItem);
 }
 

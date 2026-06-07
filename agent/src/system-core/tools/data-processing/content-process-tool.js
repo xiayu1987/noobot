@@ -13,7 +13,7 @@ import {
   resolveChildRunParentSessionIdFromRuntime,
 } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
-import { mergeConfig } from "../../config/index.js";
+import { hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
 import { createDoc2DataTool } from "./doc2data-tool.js";
 import { createMedia2DataTool } from "./media2data-tool.js";
 import { createWeb2DataTool } from "./web2data-tool.js";
@@ -117,6 +117,7 @@ export function createContentProcessTool({ agentContext }) {
       const resolvedModelName = String(modelName || "").trim();
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
+      const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
       if (!botManager || !userId || !sessionId) {
         throw recoverableToolError(
           tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
@@ -147,6 +148,9 @@ export function createContentProcessTool({ agentContext }) {
           userInteractionBridge,
           runConfig: {
             allowUserInteraction,
+            ...(hasParentStreamingConfig
+              ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
+              : {}),
             selectedConnectors: normalizeSelectedConnectors(
               runtime?.systemRuntime?.config?.selectedConnectors || {},
             ),

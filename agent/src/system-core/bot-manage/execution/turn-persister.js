@@ -16,6 +16,81 @@ import {
   MESSAGE_TYPE,
 } from "../config/constants.js";
 
+const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
+  "doc_to_data_tool",
+  "media_to_data_tool",
+  "tool_result_overflow",
+]);
+
+const DIRECT_CONSUMED_INTERMEDIATE_TOOLS = new Set([
+  "doc_to_data",
+  "media_to_data",
+]);
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseJsonObjectSafely(text = "") {
+  try {
+    const parsed = JSON.parse(String(text || ""));
+    return isPlainObject(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasHiddenIntermediateMeta(value = null) {
+  if (!value) return false;
+  if (Array.isArray(value)) return value.some(hasHiddenIntermediateMeta);
+  if (!isPlainObject(value)) return false;
+  const generationSource = String(value?.generationSource || "").trim();
+  if (HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource)) return true;
+  return (
+    hasHiddenIntermediateMeta(value?.attachmentMeta) ||
+    hasHiddenIntermediateMeta(value?.attachmentMetas) ||
+    hasHiddenIntermediateMeta(value?.transferFiles) ||
+    hasHiddenIntermediateMeta(value?.files)
+  );
+}
+
+function filterSessionAttachmentMetas(attachmentMetas = []) {
+  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(
+    (attachmentItem = {}) =>
+      !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(
+        String(attachmentItem?.generationSource || "").trim(),
+      ),
+  );
+}
+
+function sanitizeToolContentForSession(content = "", explicitToolName = "") {
+  const parsed = parseJsonObjectSafely(content);
+  if (!parsed) return String(content || "");
+  const toolName = String(explicitToolName || parsed?.toolName || "").trim();
+  const shouldDropDirectConsumedPayload =
+    DIRECT_CONSUMED_INTERMEDIATE_TOOLS.has(toolName) ||
+    hasHiddenIntermediateMeta(parsed);
+  if (!shouldDropDirectConsumedPayload) return String(content || "");
+
+  const textLength = String(parsed?.text || parsed?.content || "").length;
+  const summary =
+    parsed?.summary && typeof parsed.summary === "object" && !Array.isArray(parsed.summary)
+      ? parsed.summary
+      : {};
+  return JSON.stringify({
+    toolName: toolName || String(parsed?.toolName || "").trim(),
+    ok: parsed?.ok !== false,
+    status: String(parsed?.status || "completed").trim() || "completed",
+    mode: String(parsed?.mode || "").trim(),
+    intermediateConsumedByModel: true,
+    sessionPersistence: "summary_only",
+    summary: {
+      ...summary,
+      ...(textLength ? { text_length: Number(summary?.text_length || textLength) } : {}),
+    },
+  });
+}
+
 /**
  * Persist session turns and agent messages.
  */
@@ -62,9 +137,14 @@ export class SessionTurnPersister {
     workflowMessage = false,
     workflowMeta = null,
   }) {
+    const sessionAttachmentMetas = filterSessionAttachmentMetas(attachmentMetas);
+    const sessionContent =
+      role === MESSAGE_ROLE.TOOL
+        ? sanitizeToolContentForSession(content, toolName)
+        : String(content || "");
     const fullTurnPayload = {
       role,
-      content,
+      content: sessionContent,
       type: type || "",
       taskId: taskId ?? "",
       taskStatus: taskStatus ?? "",
@@ -72,7 +152,7 @@ export class SessionTurnPersister {
       parentDialogProcessId: parentDialogProcessId || "",
       tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
       tool_call_id: tool_call_id || "",
-      attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+      attachmentMetas: sessionAttachmentMetas,
       modelAlias: String(modelAlias || "").trim(),
       modelName: String(modelName || "").trim(),
       summarized: summarized === true,
@@ -123,7 +203,7 @@ export class SessionTurnPersister {
       sessionId,
       parentSessionId,
       role,
-      content,
+      content: sessionContent,
       type,
       taskId,
       taskStatus,
@@ -131,7 +211,7 @@ export class SessionTurnPersister {
       parentDialogProcessId,
       tool_calls,
       tool_call_id,
-      attachmentMetas,
+      attachmentMetas: sessionAttachmentMetas,
       modelAlias,
       modelName,
       summarized,
@@ -177,7 +257,7 @@ export class SessionTurnPersister {
           : null,
         tool_call_id: messageItem.tool_call_id || "",
         attachmentMetas: Array.isArray(messageItem.attachmentMetas)
-          ? messageItem.attachmentMetas
+          ? filterSessionAttachmentMetas(messageItem.attachmentMetas)
           : null,
         modelAlias: (messageItem.modelAlias ?? "").trim(),
         modelName: (messageItem.modelName ?? "").trim(),

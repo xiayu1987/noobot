@@ -30,6 +30,7 @@ export const StreamEventEnum = Object.freeze({
   STOPPED: "stopped",
   INTERACTION_REQUEST: "interaction_request",
   CONNECTOR_STATUS: "connector_status",
+  ATTACHMENT_METAS: "attachment_metas",
   CHANNEL_STATE: "channel_state",
   RECONNECT_DATA: "reconnect_data",
   RECONNECT_COMPLETE: "reconnect_complete",

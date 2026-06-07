@@ -17,6 +17,7 @@ function buildAccessConnectorRuntime({
   connectorName = "main",
   onExecute = () => {},
   globalConfig = {},
+  selectedConnectors = undefined,
 } = {}) {
   const type = String(connectorType || "").trim();
   const name = String(connectorName || "").trim() || "main";
@@ -37,9 +38,10 @@ function buildAccessConnectorRuntime({
       sessionId: "s-child",
       rootSessionId: "s-root",
       config: {
-        selectedConnectors: {
-          [type]: name,
-        },
+        selectedConnectors:
+          selectedConnectors === undefined
+            ? { [type]: name }
+            : selectedConnectors,
       },
     },
     sharedTools: {
@@ -196,6 +198,62 @@ test("connector-toolkit/database_connect_connector: 交互补全应携带 pendin
   assert.equal(String(interactionCalls[0]?.lifecycle || ""), "pending");
   assert.equal(String(interactionCalls[0]?.ackMode || ""), "manual");
   assert.equal(String(interactionCalls[0]?.resolvedBy || ""), "");
+});
+
+
+test("connector-toolkit/access_connector: 未显式勾选但仅有一个已连接 terminal 时应自动采用", async () => {
+  let executed = null;
+  const runtime = buildAccessConnectorRuntime({
+    connectorType: "terminal",
+    connectorName: "ops_terminal",
+    selectedConnectors: {},
+    onExecute: (payload) => {
+      executed = payload;
+    },
+  });
+  const tools = createConnectorTools({ agentContext: { runtime } });
+  const accessTool = tools.find((tool) => tool?.name === "access_connector");
+  assert.ok(accessTool, "access_connector 工具应存在");
+
+  const result = parseToolJson(await accessTool.invoke({
+    connector_type: "terminal",
+    command: "ls",
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(String(executed?.connectorName || ""), "ops_terminal");
+  assert.equal(
+    String(runtime?.systemRuntime?.config?.selectedConnectors?.terminal || ""),
+    "ops_terminal",
+  );
+});
+
+test("connector-toolkit/access_connector: 未显式勾选但指定已连接 connector_name 时应自动采用", async () => {
+  let executed = null;
+  const runtime = buildAccessConnectorRuntime({
+    connectorType: "terminal",
+    connectorName: "ops_terminal",
+    selectedConnectors: {},
+    onExecute: (payload) => {
+      executed = payload;
+    },
+  });
+  const tools = createConnectorTools({ agentContext: { runtime } });
+  const accessTool = tools.find((tool) => tool?.name === "access_connector");
+  assert.ok(accessTool, "access_connector 工具应存在");
+
+  const result = parseToolJson(await accessTool.invoke({
+    connector_name: "ops_terminal",
+    connector_type: "terminal",
+    command: "pwd",
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(String(executed?.connectorName || ""), "ops_terminal");
+  assert.equal(
+    String(runtime?.systemRuntime?.config?.selectedConnectors?.terminal || ""),
+    "ops_terminal",
+  );
 });
 
 test("connector-toolkit/access_connector: command_file_path 应可读取文件内容并执行", async () => {

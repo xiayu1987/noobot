@@ -5,9 +5,26 @@
  */
 import { ToolMessage } from "@langchain/core/messages";
 import { appendAttachmentMetasToRuntimeAndTurn } from "../../../attach/index.js";
+import { emitEvent } from "../../../event/index.js";
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
+import { compactToolResultTextForModel } from "../../../semantic-transfer/index.js";
+
+const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
+  "doc_to_data_tool",
+  "media_to_data_tool",
+  "tool_result_overflow",
+]);
+
+function filterDisplayableAttachmentMetas(attachmentMetas = []) {
+  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(
+    (attachmentItem = {}) => {
+      const generationSource = String(attachmentItem?.generationSource || "").trim();
+      return !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource);
+    },
+  );
+}
 
 export function createStateCommitter({
   messages = null,
@@ -93,9 +110,10 @@ export function createStateCommitter({
     async pushToolResult({ call = {}, toolResultText = "" } = {}) {
       const resolvedCallId = resolveCallId(call);
       const resolvedCallName = resolveCallName(call);
+      const compactedToolResultText = compactToolResultTextForModel(toolResultText);
       const toolResultPayload = {
         role: "tool",
-        content: String(toolResultText || ""),
+        content: compactedToolResultText,
         type: "tool_result",
         dialogProcessId,
         tool_call_id: resolvedCallId,
@@ -163,6 +181,13 @@ export function createStateCommitter({
         turnMessageStore,
         attachmentMetas,
       });
+      const displayableAttachmentMetas = filterDisplayableAttachmentMetas(attachmentMetas);
+      if (displayableAttachmentMetas.length) {
+        emitEvent(runtime?.eventListener || null, "attachment_metas_saved", {
+          dialogProcessId,
+          attachmentMetas: displayableAttachmentMetas,
+        });
+      }
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,

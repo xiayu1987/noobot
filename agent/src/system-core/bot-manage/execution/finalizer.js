@@ -9,6 +9,63 @@ import {
   CALLER_ROLE,
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
+import { mergeAttachmentMetas } from "../../attach/meta-ops.js";
+
+const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
+  "doc_to_data_tool",
+  "media_to_data_tool",
+  "tool_result_overflow",
+]);
+
+function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
+  if (!attachmentItem || typeof attachmentItem !== "object" || Array.isArray(attachmentItem)) {
+    return false;
+  }
+  const generationSource = String(attachmentItem?.generationSource || "").trim();
+  if (HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource)) return false;
+  const attachmentSource = String(attachmentItem?.attachmentSource || "").trim();
+  return (
+    attachmentItem?.generatedByModel === true ||
+    attachmentSource === "model" ||
+    attachmentSource === "model_generated" ||
+    Boolean(generationSource)
+  );
+}
+
+function promoteGeneratedAttachmentsToFinalAssistant(messages = []) {
+  const sourceMessages = Array.isArray(messages) ? messages : [];
+  if (!sourceMessages.length) return sourceMessages;
+  const generatedAttachmentMetas = sourceMessages.flatMap((messageItem = {}) =>
+    (Array.isArray(messageItem?.attachmentMetas) ? messageItem.attachmentMetas : [])
+      .filter(shouldPromoteAttachmentToAssistant),
+  );
+  if (!generatedAttachmentMetas.length) return sourceMessages;
+
+  const finalAssistantIndex = (() => {
+    for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
+      const item = sourceMessages[index] || {};
+      if (
+        String(item?.role || "") === "assistant" &&
+        String(item?.type || "message") !== "tool_call"
+      ) {
+        return index;
+      }
+    }
+    return -1;
+  })();
+  if (finalAssistantIndex < 0) return sourceMessages;
+
+  const outputMessages = [...sourceMessages];
+  const finalAssistant = outputMessages[finalAssistantIndex] || {};
+  outputMessages[finalAssistantIndex] = {
+    ...finalAssistant,
+    attachmentMetas: mergeAttachmentMetas(
+      Array.isArray(finalAssistant?.attachmentMetas) ? finalAssistant.attachmentMetas : [],
+      generatedAttachmentMetas,
+    ),
+  };
+  return outputMessages;
+}
 
 /**
  * Session execution finalizer.
@@ -45,7 +102,7 @@ export class SessionExecutionFinalizer {
     userConfig = {},
     resolvedParentAsyncResultContainer = null,
   }) {
-    const turnMessages =
+    const rawTurnMessages =
       Array.isArray(agentResult?.turnMessages) && agentResult.turnMessages.length
         ? agentResult.turnMessages
         : [
@@ -54,6 +111,7 @@ export class SessionExecutionFinalizer {
               dialogProcessId,
             }),
           ];
+    const turnMessages = promoteGeneratedAttachmentsToFinalAssistant(rawTurnMessages);
 
     await this.turnPersister.appendAgentMessages({
       userId,

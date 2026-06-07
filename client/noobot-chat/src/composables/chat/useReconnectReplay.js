@@ -33,6 +33,7 @@ import {
   resolveConnectorConnectedPayload,
   resolveConnectorStatusPayload,
 } from "./interactionPayload";
+import { mergeAttachmentMetas } from "../infra/dialogProcessChain";
 
 function normalizeExecutionLogForRealtime(logItem = {}) {
   const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
@@ -93,6 +94,20 @@ export function useReconnectReplay({
         error: targetAssistantMessage.error || translate("chat.unknownError"),
       })}`;
     }
+  }
+
+  function mergeAssistantAttachmentMetas(targetAssistantMessage, attachmentMetas = []) {
+    if (!targetAssistantMessage || !Array.isArray(attachmentMetas) || !attachmentMetas.length) {
+      return;
+    }
+    const normalizedAttachmentMetas =
+      makeViewMessage({ attachmentMetas })?.attachmentMetas || attachmentMetas;
+    targetAssistantMessage.attachmentMetas = mergeAttachmentMetas(
+      Array.isArray(targetAssistantMessage.attachmentMetas)
+        ? targetAssistantMessage.attachmentMetas
+        : [],
+      normalizedAttachmentMetas,
+    );
   }
 
   function tryAutoResolveInteraction(rawRequest = {}) {
@@ -827,6 +842,8 @@ export function useReconnectReplay({
             refreshSessionConnectorsAsync(activeSession.value?.id || "");
           }
         }
+      } else if (eventName === StreamEventEnum.ATTACHMENT_METAS) {
+        mergeAssistantAttachmentMetas(targetMessage, eventData?.attachmentMetas || []);
       } else if (eventName === StreamEventEnum.DONE) {
         terminalDialogProcessIdSet.add(normalizedDpId);
         if (Array.isArray(eventData?.executionLogs) && eventData.executionLogs.length) {

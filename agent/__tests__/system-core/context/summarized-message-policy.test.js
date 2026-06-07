@@ -6,7 +6,7 @@ import {
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "../../../src/system-core/context/session/summarized-message-policy.js";
 
-test("task_summary assistant tool_call and tool result are marked summarized", () => {
+test("task_summary assistant tool_call and tool result are not marked summarized", () => {
   const assistantMessage = {
     role: "assistant",
     content: "",
@@ -28,8 +28,8 @@ test("task_summary assistant tool_call and tool result are marked summarized", (
     toolName: "task_summary",
   };
 
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage(assistantMessage), true);
-  assert.equal(shouldMarkCurrentTurnSummarizedMessage(toolMessage), true);
+  assert.equal(shouldMarkCurrentTurnSummarizedMessage(assistantMessage), false);
+  assert.equal(shouldMarkCurrentTurnSummarizedMessage(toolMessage), false);
 });
 
 test("non-summary empty assistant tool_call can be summarized with its tool result", () => {
@@ -58,7 +58,7 @@ test("non-summary empty assistant tool_call can be summarized with its tool resu
   assert.equal(shouldMarkCurrentTurnSummarizedMessage(toolMessage), true);
 });
 
-test("LangChain AIMessage-like task_summary tool_call is marked summarized", () => {
+test("LangChain AIMessage-like task_summary tool_call is not marked summarized", () => {
   const aiMessage = {
     type: "ai",
     content: "",
@@ -72,7 +72,7 @@ test("LangChain AIMessage-like task_summary tool_call is marked summarized", () 
     ],
   };
 
-  assert.equal(shouldMarkCurrentTurnSummarizedModelMessage(aiMessage), true);
+  assert.equal(shouldMarkCurrentTurnSummarizedModelMessage(aiMessage), false);
 });
 
 test("filterSummarizedMessages excludes only summarized in one policy", () => {

@@ -31,9 +31,6 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "call_mcp_task",
     "process_content_task",
     "process_connector_tool",
-    "delegate_task_async",
-    "wait_async_task_result",
-    "plan_multi_task_collaboration",
     "switch_model",
     "task_summary",
     "request_help",
@@ -42,6 +39,15 @@ test("buildTools: 重组后应注册关键工具", async () => {
 
   for (const toolName of expected) {
     assert.ok(names.has(toolName), `应注册工具: ${toolName}`);
+  }
+
+  const hardDisabled = [
+    "delegate_task_async",
+    "wait_async_task_result",
+    "plan_multi_task_collaboration",
+  ];
+  for (const toolName of hardDisabled) {
+    assert.equal(names.has(toolName), false, `多 agent 协作工具不应注册: ${toolName}`);
   }
 });
 

@@ -284,3 +284,58 @@ test("mini-runner filters only summarized history before first model invoke", as
     ],
   );
 });
+
+test("mini-runner compacts semantic-transfer tool messages before model invoke", async () => {
+  let firstInvokeMessages = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: true,
+    createChatModelFn: () => ({
+      bindTools() {
+        return this;
+      },
+      async invoke(messages) {
+        if (!firstInvokeMessages.length) firstInvokeMessages = messages.map((item) => ({ ...item }));
+        return { content: "ok" };
+      },
+    }),
+    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
+  });
+  const attachmentMeta = {
+    attachmentId: "att-mini",
+    name: "result.md",
+    mimeType: "text/markdown",
+    size: 12,
+    relativePath: "runtime/attach/scoped/s1/model/result.md",
+  };
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/result.md",
+    files: [{ filePath: "/workspace/result.md", attachmentMeta }],
+  };
+
+  await invoker({
+    messages: [
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "echo" } }] },
+      {
+        role: "tool",
+        content: JSON.stringify({
+          ok: true,
+          transferEnvelope: envelope,
+          transferEnvelopes: [envelope],
+          attachmentMetas: [attachmentMeta],
+        }),
+        tool_call_id: "c1",
+      },
+    ],
+    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+  });
+
+  const compactedToolPayload = JSON.parse(firstInvokeMessages.find((item) => item.role === "tool").content);
+  assert.equal("transferEnvelope" in compactedToolPayload, false);
+  assert.equal("transferEnvelopes" in compactedToolPayload, false);
+  assert.equal("attachmentMetas" in compactedToolPayload, false);
+  assert.equal(compactedToolPayload.transferFiles[0].attachmentId, "att-mini");
+});

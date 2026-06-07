@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ToolMessage } from "@langchain/core/messages";
+import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 
 import {
   buildContextMessages,
@@ -52,6 +52,38 @@ test("buildContextMessages drops orphan tool results without matching assistant 
   const toolMessages = messages.filter((item) => item instanceof ToolMessage);
   assert.equal(toolMessages.length, 1);
   assert.equal(toolMessages[0].tool_call_id, "call_ok_1");
+});
+
+
+test("buildContextMessages converts orphan task_summary tool result to user summary message", () => {
+  const messages = buildContextMessages(
+    {
+      execution: {
+        controllers: {
+          runtime: {},
+        },
+      },
+      payload: {
+        messages: {
+          system: [],
+          history: [
+            {
+              role: "tool",
+              content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"孤立小结内容\"}",
+              tool_call_id: "call_orphan_summary",
+            },
+          ],
+        },
+      },
+    },
+    { currentUserMessage: "" },
+  );
+
+  assert.equal(messages.some((item) => item instanceof ToolMessage), false);
+  const humanMessage = messages.find((item) => item instanceof HumanMessage);
+  assert.ok(humanMessage);
+  assert.equal(String(humanMessage.content || "").includes("[阶段小结]"), true);
+  assert.equal(String(humanMessage.content || "").includes("孤立小结内容"), true);
 });
 
 test("buildContextMessages filters injected messages from non-current dialog", () => {
