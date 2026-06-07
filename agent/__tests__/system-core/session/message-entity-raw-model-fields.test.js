@@ -39,3 +39,29 @@ test("normalizeMessageEntity preserves transfer envelopes", () => {
   assert.deepEqual(normalized.transferEnvelope, transferEnvelope);
   assert.deepEqual(normalized.transferEnvelopes, [transferEnvelope]);
 });
+
+test("normalizeMessageEntity omits empty attachmentMetas", () => {
+  const withoutAttachmentMetas = normalizeMessageEntity({
+    role: "user",
+    content: "hello",
+  });
+  const withEmptyAttachmentMetas = normalizeMessageEntity({
+    role: "user",
+    content: "hello",
+    attachmentMetas: [],
+  });
+
+  assert.equal("attachmentMetas" in withoutAttachmentMetas, false);
+  assert.equal("attachmentMetas" in withEmptyAttachmentMetas, false);
+});
+
+test("normalizeMessageEntity preserves non-empty attachmentMetas", () => {
+  const attachmentMetas = [{ attachmentId: "att_1", filename: "a.txt" }];
+  const normalized = normalizeMessageEntity({
+    role: "user",
+    content: "see attachment",
+    attachmentMetas,
+  });
+
+  assert.deepEqual(normalized.attachmentMetas, attachmentMetas);
+});

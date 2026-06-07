@@ -692,12 +692,17 @@ test("workflow semantic planning includes current available tools like harness p
 
   assert.equal(invokerCalls.length, 1);
   assert.deepEqual(invokerCalls[0]?.toolAllowlist, ["search_docs", "write_file"]);
-  const semanticTask = String(invokerCalls[0]?.messages?.at(-1)?.content || "");
-  assert.match(semanticTask, /当前可用工具/);
-  assert.match(semanticTask, /search_docs/);
-  assert.match(semanticTask, /检索项目文档和知识库/);
-  assert.match(semanticTask, /write_file/);
-  assert.match(semanticTask, /不要臆造工具名/);
+  const semanticMessages = invokerCalls[0]?.messages || [];
+  const availableToolsMessage = semanticMessages.find((item = {}) =>
+    String(item?.content || "").includes("当前可用工具"),
+  );
+  assert.equal(availableToolsMessage?.role, "system");
+  assert.match(String(availableToolsMessage?.content || ""), /search_docs/);
+  assert.match(String(availableToolsMessage?.content || ""), /检索项目文档和知识库/);
+  assert.match(String(availableToolsMessage?.content || ""), /write_file/);
+  assert.match(String(availableToolsMessage?.content || ""), /不要臆造工具名/);
+  const semanticTask = String(semanticMessages.at(-1)?.content || "");
+  assert.doesNotMatch(semanticTask, /当前可用工具/);
 });
 
 test("workflow hook aborts node sub-session when parent stop signal fires", async () => {

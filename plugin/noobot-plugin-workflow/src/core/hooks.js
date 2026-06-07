@@ -1161,12 +1161,14 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
   const availableToolNames = resolveWorkflowAvailableToolNames(ctx);
   const availableToolsPlanningBlock = buildWorkflowAvailableToolsPlanningBlock(ctx, locale);
   const contextMessages = resolveWorkflowSemanticContextMessages({ options, ctx, locale });
+  const availableToolsSystemMessage = String(availableToolsPlanningBlock || "").trim()
+    ? { role: "system", content: availableToolsPlanningBlock }
+    : null;
   const semanticTaskMessage = {
     role: "user",
     content: [
       "请基于以上会话上下文和以下当前用户消息规划工作流。",
       `当前用户消息:\n${userMessage || "(empty)"}`,
-      availableToolsPlanningBlock,
       attachmentPlanningBlock,
       `主模型回复/工作流源输入:\n${sourceText || "(empty)"}`,
     ]
@@ -1174,7 +1176,11 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
       .filter(Boolean)
       .join("\n\n"),
   };
-  const semanticMessages = [...contextMessages, semanticTaskMessage];
+  const semanticMessages = [
+    ...contextMessages,
+    ...(availableToolsSystemMessage ? [availableToolsSystemMessage] : []),
+    semanticTaskMessage,
+  ];
   const result = await options.capabilityModelInvoker({
     purpose: WORKFLOW_SEMANTIC.PURPOSE,
     domain: WORKFLOW_SEMANTIC.DOMAIN,
