@@ -19,12 +19,13 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import {
   buildLegacyOverflowFields,
+  compactToolResultTextForModel,
   createTransferEnvelope,
+  materializeTextForToolResult,
   resolveTransferPathView,
 } from "../../../semantic-transfer/index.js";
 
 const DEFAULT_MAX_TOOL_RESULT_CHARS = 10000;
-
 function toSafePositiveInt(value, fallback = DEFAULT_MAX_TOOL_RESULT_CHARS, min = 512) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
@@ -46,7 +47,6 @@ function buildOverflowTransferEnvelope({
   const pathView = resolveTransferPathView({
     runtime,
     agentContext,
-    attachmentMeta: { path: overflowPath },
     path: overflowPath,
     hostPath: overflowPath,
     purpose: "tool_result_overflow",
@@ -55,11 +55,9 @@ function buildOverflowTransferEnvelope({
   return createTransferEnvelope({
     transport: "file",
     filePath,
-    attachmentMeta: { path: overflowPath, name: "tool-result-overflow.json" },
     files: [
       {
         filePath,
-        attachmentMeta: { path: overflowPath, name: "tool-result-overflow.json" },
         pathView,
         role: "primary",
         name: "tool-result-overflow.json",
@@ -71,6 +69,141 @@ function buildOverflowTransferEnvelope({
     producer: { type: "tool", name: String(call?.name || "").trim() },
     meta: { source: "tool", reason: "tool_result_overflow", mimeType: "application/json" },
   });
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function dedupeTransferEnvelopes(envelopes = []) {
+  const seen = new Set();
+  const output = [];
+  for (const envelope of Array.isArray(envelopes) ? envelopes : []) {
+    if (!isPlainObject(envelope)) continue;
+    const attachmentId = String(
+      envelope?.attachmentMeta?.attachmentId ||
+        envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
+        "",
+    ).trim();
+    const key =
+      attachmentId ||
+      String(envelope?.filePath || envelope?.files?.[0]?.filePath || "").trim() ||
+      JSON.stringify(envelope);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    output.push(envelope);
+  }
+  return output;
+}
+
+function compactObject(value = {}) {
+  const output = {};
+  for (const [key, itemValue] of Object.entries(isPlainObject(value) ? value : {})) {
+    if (itemValue === "" || itemValue === null || itemValue === undefined) continue;
+    if (Array.isArray(itemValue) && !itemValue.length) continue;
+    if (isPlainObject(itemValue) && !Object.keys(itemValue).length) continue;
+    output[key] = itemValue;
+  }
+  return output;
+}
+
+function compactPathView(pathView = {}, attachmentMeta = {}) {
+  const normalizedPathView = compactObject(pathView);
+  if (normalizedPathView.hostPath === attachmentMeta.path) delete normalizedPathView.hostPath;
+  if (normalizedPathView.relativePath === attachmentMeta.relativePath) {
+    delete normalizedPathView.relativePath;
+  }
+  if (normalizedPathView.displayPath === normalizedPathView.sandboxPath) {
+    delete normalizedPathView.displayPath;
+  }
+  return compactObject(normalizedPathView);
+}
+
+function compactTransferFile(file = {}) {
+  if (!isPlainObject(file)) return null;
+  const attachmentMeta = compactObject(file?.attachmentMeta || {});
+  const pathView = compactPathView(file?.pathView || {}, attachmentMeta);
+  const output = compactObject({
+    filePath: file.filePath,
+    attachmentMeta,
+    pathView,
+    role: file.role,
+    name: file.name,
+    mimeType: file.mimeType,
+    size: file.size,
+  });
+  if (output.name === attachmentMeta.name) delete output.name;
+  if (output.mimeType === attachmentMeta.mimeType) delete output.mimeType;
+  if (Number(output.size || 0) === Number(attachmentMeta.size || 0)) delete output.size;
+  return compactObject(output);
+}
+
+function compactTransferEnvelope(envelope = {}) {
+  if (!isPlainObject(envelope)) return null;
+  const files = Array.isArray(envelope.files)
+    ? envelope.files.map(compactTransferFile).filter(Boolean)
+    : [];
+  const output = compactObject({
+    protocol: envelope.protocol,
+    version: envelope.version,
+    direction: envelope.direction,
+    transport: envelope.transport,
+    ...(files.length
+      ? { files }
+      : {
+          filePath: envelope.filePath,
+          attachmentMeta: compactObject(envelope.attachmentMeta || {}),
+          pathView: compactPathView(envelope.pathView || {}, envelope.attachmentMeta || {}),
+        }),
+    storage: envelope.storage,
+    producer: envelope.producer,
+    meta: compactObject(envelope.meta || {}),
+  });
+  return output;
+}
+
+function extractOriginalTransferPayload(parsed = null) {
+  if (!isPlainObject(parsed)) return {};
+  const transferResult = isPlainObject(parsed?.transferResult) ? parsed.transferResult : null;
+  const transferEnvelopes = dedupeTransferEnvelopes([
+    isPlainObject(parsed?.transferEnvelope) ? parsed.transferEnvelope : null,
+    isPlainObject(transferResult?.envelope) ? transferResult.envelope : null,
+    ...(Array.isArray(parsed?.transferEnvelopes) ? parsed.transferEnvelopes : []),
+  ]);
+  const attachmentMetas = Array.isArray(parsed?.attachmentMetas)
+    ? parsed.attachmentMetas.filter(isPlainObject)
+    : [];
+  return {
+    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+    ...(!transferEnvelopes.length && attachmentMetas.length ? { attachmentMetas } : {}),
+  };
+}
+
+function compactParsedToolResultForOverflow(parsed = null) {
+  if (!isPlainObject(parsed)) return parsed;
+  const transferPayload = extractOriginalTransferPayload(parsed);
+  const compact = { ...parsed };
+  delete compact.transferResult;
+  delete compact.transferEnvelope;
+  delete compact.transferEnvelopes;
+  if (transferPayload.transferEnvelopes?.length) {
+    // transferEnvelopes is the canonical semantic-transfer representation here.
+    // attachmentMetas and transferResult.envelope are legacy/compat duplicates.
+    delete compact.attachmentMetas;
+    compact.transferEnvelopes = transferPayload.transferEnvelopes
+      .map(compactTransferEnvelope)
+      .filter(Boolean);
+  } else if (transferPayload.attachmentMetas?.length) {
+    compact.attachmentMetas = transferPayload.attachmentMetas.map(compactObject);
+  }
+  return compactObject(compact);
+}
+
+function compactToolResultForOverflow(toolResultText = "") {
+  const raw = String(toolResultText || "");
+  const parsed = parseJsonObjectSafely(raw);
+  if (!isPlainObject(parsed)) return raw;
+  return compactParsedToolResultForOverflow(parsed);
 }
 
 function resolveOverflowOutputDir({ runtime = {}, agentContext = null } = {}) {
@@ -99,7 +232,8 @@ async function persistToolResultOverflow({
     createdAt: new Date().toISOString(),
     originalLength: String(toolResultText || "").length,
     maxChars: Number(maxChars || DEFAULT_MAX_TOOL_RESULT_CHARS),
-    result: String(toolResultText || ""),
+    overflowFormat: "compact-v1",
+    result: compactToolResultForOverflow(toolResultText),
   };
   await writeFile(outputPath, JSON.stringify(payload, null, 2), "utf8");
   return outputPath;
@@ -112,9 +246,16 @@ async function normalizeToolResultOverflow({
   agentContext = null,
 } = {}) {
   const rawText = String(toolResultText || "");
+  const compactedText = compactToolResultTextForModel(rawText);
+  const measuredText = String(compactedText || rawText || "");
   const maxChars = resolveToolResultLengthLimit(runtime);
-  if (rawText.length <= maxChars) {
-    return { toolResultText: rawText, overflowed: false };
+  if (measuredText.length <= maxChars) {
+    return {
+      toolResultText: measuredText,
+      overflowed: false,
+      rawLength: rawText.length,
+      measuredLength: measuredText.length,
+    };
   }
 
   const overflowPath = await persistToolResultOverflow({
@@ -134,27 +275,60 @@ async function normalizeToolResultOverflow({
     envelope: overflowTransferEnvelope,
     hostPath: overflowPath,
   });
+  const semanticOverflow = await materializeTextForToolResult({
+    runtime,
+    agentContext,
+    text: rawText,
+    name: `${String(call?.name || "tool").trim() || "tool"}.tool-result-overflow.json`,
+    mimeType: "application/json",
+    attachmentSource: "model",
+    generationSource: "tool_result_overflow",
+    source: "tool",
+    reason: "tool_result_overflow",
+    alwaysPersist: true,
+    forcePreview: true,
+    producer: { type: "tool", name: String(call?.name || "").trim() },
+    meta: { toolCallId: String(call?.id || "").trim() },
+  });
   const parsed = parseJsonObjectSafely(rawText);
   const ok = parsed && typeof parsed.ok === "boolean" ? parsed.ok : true;
   const status = String(parsed?.status || "").trim();
   const originalMessage = String(parsed?.message || "").trim();
+  const originalTransferPayload = extractOriginalTransferPayload(parsed);
+  const overflowTransferPayload = semanticOverflow.transferEnvelopes?.length
+    ? {
+        ...originalTransferPayload,
+        transferEnvelopes: dedupeTransferEnvelopes([
+          ...(Array.isArray(originalTransferPayload.transferEnvelopes) ? originalTransferPayload.transferEnvelopes : []),
+          ...semanticOverflow.transferEnvelopes,
+        ]),
+      }
+    : originalTransferPayload;
   const normalized = toToolJsonResult(call?.name, {
     ok,
     ...(status ? { status } : {}),
     ...(ok ? {} : { error: String(parsed?.error || "").trim() || "tool result overflowed" }),
     message:
       originalMessage ||
-      `工具返回内容过长(${rawText.length}字符)，已保存到文件，请按路径分批读取。`,
+      `工具返回内容过长(${measuredText.length}字符)，已保存到文件，请按路径分批读取。`,
     overflowed: true,
-    overflow_reason: `tool result length ${rawText.length} exceeds limit ${maxChars}`,
+    overflow_reason: `tool result length ${measuredText.length} exceeds limit ${maxChars}`,
+    ...overflowTransferPayload,
     ...legacyOverflowFields,
     overflow_transfer_envelope: overflowTransferEnvelope,
     summary: {
-      original_length: rawText.length,
+      original_length: measuredText.length,
       max_length: maxChars,
+      raw_serialized_length: rawText.length,
+      compacted_serialized_length: measuredText.length,
     },
   });
-  return { toolResultText: normalized, overflowed: true };
+  return {
+    toolResultText: normalized,
+    overflowed: true,
+    rawLength: rawText.length,
+    measuredLength: measuredText.length,
+  };
 }
 
 function resolveToolHookMeta(runtime = {}) {
@@ -350,6 +524,10 @@ export async function executeToolCall({
     toolResultText: rawToolResultText || toolResultText,
     invokeError,
   });
+  const rawExtractedAttachmentMetas = extractAttachmentMetasFromToolResult(
+    call?.name,
+    rawToolResultText || toolResultText,
+  );
   const overflowNormalized = await normalizeToolResultOverflow({
     call,
     toolResultText,
@@ -383,13 +561,16 @@ export async function executeToolCall({
       agentContext,
     }),
   });
+  const normalizedExtractedAttachmentMetas = extractAttachmentMetasFromToolResult(
+    call?.name,
+    toolResultText,
+  );
   return {
     call,
     toolResultText,
-    extractedAttachmentMetas: extractAttachmentMetasFromToolResult(
-      call?.name,
-      toolResultText,
-    ),
+    extractedAttachmentMetas: normalizedExtractedAttachmentMetas.length
+      ? normalizedExtractedAttachmentMetas
+      : rawExtractedAttachmentMetas,
     success: failureState.success,
     failureReason: failureState.reason,
   };

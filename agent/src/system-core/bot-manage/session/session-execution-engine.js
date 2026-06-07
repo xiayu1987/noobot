@@ -49,7 +49,10 @@ import {
   getSessionIdsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
-import { persistTransferArtifacts } from "../../semantic-transfer/index.js";
+import {
+  compactToolResultTextForModel,
+  persistTransferArtifacts,
+} from "../../semantic-transfer/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { normalizeSessionEntity } from "../../session/entities/session-entity.js";
 import {
@@ -120,7 +123,7 @@ function normalizeMessageForHarness(messageItem = {}) {
   );
   const normalized = {
     role,
-    content,
+    content: role === "tool" ? compactToolResultTextForModel(content) : content,
     summarized:
       messageItem?.summarized === true || messageItem?.lc_kwargs?.summarized === true,
   };

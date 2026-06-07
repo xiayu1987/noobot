@@ -468,6 +468,58 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
   ]);
 });
 
+test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer tool content", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+        },
+      },
+    },
+  });
+  const resolver = prepared.plugins.harness.resolveModelMessages;
+  const attachmentMeta = {
+    attachmentId: "att-harness",
+    name: "result.md",
+    mimeType: "text/markdown",
+    size: 12,
+    relativePath: "runtime/attach/scoped/s1/model/result.md",
+  };
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/result.md",
+    files: [{ filePath: "/workspace/result.md", attachmentMeta }],
+  };
+  const resolved = resolver({
+    messages: [
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "echo" } }] },
+      {
+        role: "tool",
+        tool_call_id: "c1",
+        content: JSON.stringify({
+          ok: true,
+          transferEnvelope: envelope,
+          transferEnvelopes: [envelope],
+          attachmentMetas: [attachmentMeta],
+        }),
+      },
+    ],
+  });
+
+  const compactedToolPayload = JSON.parse(resolved.find((item) => item.role === "tool").content);
+  assert.equal("transferEnvelope" in compactedToolPayload, false);
+  assert.equal("transferEnvelopes" in compactedToolPayload, false);
+  assert.equal("attachmentMetas" in compactedToolPayload, false);
+  assert.equal(compactedToolPayload.transferFiles[0].attachmentId, "att-harness");
+});
+
 test("SessionExecutionEngine resolveModelMessages filters injected messages from non-current dialog", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const prepared = engine._prepareHarnessRunConfig({

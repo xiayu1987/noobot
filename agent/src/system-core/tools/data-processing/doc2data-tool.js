@@ -13,7 +13,13 @@ import {
   DOC2DATA_PARSE_ENGINE,
   normalizeDoc2DataParseEngine,
 } from "../../config/core/enums.js";
-import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../semantic-transfer/index.js";
+import {
+  buildTextResultFields,
+  buildTransferFileEntry,
+  createTransferEnvelope,
+  materializeTextForToolResult,
+  resolveToolResultInlineTextLimit,
+} from "../../semantic-transfer/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
@@ -44,6 +50,99 @@ import {
 const require = createRequire(import.meta.url);
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_DIRECT_TEXT_BYTES = 8 * 1024 * 1024;
+const DATA_PROCESSING_ARTIFACT_SOURCES = new Set([
+  ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+  ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
+]);
+
+function isGeneratedDataProcessingArtifact(attachmentMeta = null) {
+  if (!attachmentMeta || typeof attachmentMeta !== "object" || Array.isArray(attachmentMeta)) return false;
+  return DATA_PROCESSING_ARTIFACT_SOURCES.has(String(attachmentMeta?.generationSource || "").trim());
+}
+
+function looksLikeDataProcessingArtifactPath(filePath = "") {
+  const baseName = path.basename(String(filePath || "").trim()).toLowerCase();
+  return (
+    baseName.includes(".doc2data.") ||
+    baseName.includes(".media2data.")
+  ) && baseName.endsWith(".md");
+}
+
+function buildFallbackArtifactMeta({
+  runtime = {},
+  basePath = "",
+  inputFile = "",
+  bytes = 0,
+} = {}) {
+  const normalizedInput = String(inputFile || "").trim();
+  const normalizedBase = String(basePath || runtime?.basePath || "").trim();
+  const relativePath = normalizedBase && normalizedInput.startsWith(normalizedBase)
+    ? path.relative(normalizedBase, normalizedInput)
+    : "";
+  const baseName = path.basename(normalizedInput);
+  const generationSource = baseName.toLowerCase().includes(".media2data.")
+    ? ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL
+    : ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL;
+  return {
+    name: baseName,
+    mimeType: MIME_TYPE.TEXT_MARKDOWN,
+    size: Number(bytes || 0),
+    path: normalizedInput,
+    ...(relativePath ? { relativePath } : {}),
+    generatedByModel: true,
+    generationSource,
+    attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
+  };
+}
+
+function buildExistingArtifactPersistedOutput({
+  runtime = {},
+  agentContext = null,
+  attachmentMeta = null,
+  text = "",
+} = {}) {
+  if (!attachmentMeta || typeof attachmentMeta !== "object" || Array.isArray(attachmentMeta)) {
+    return { attachmentMetas: [], transferEnvelopes: [] };
+  }
+  const file = buildTransferFileEntry({
+    runtime,
+    agentContext,
+    attachmentMeta,
+    purpose: "reuse_data_processing_artifact",
+    role: "primary",
+  });
+  const transferEnvelope = createTransferEnvelope({
+    direction: "output",
+    transport: "file",
+    filePath: file?.filePath || "",
+    attachmentMeta,
+    files: [file],
+    pathView: file?.pathView || null,
+    storage: {
+      kind: "attachment",
+      attachmentSource: String(attachmentMeta?.attachmentSource || TOOL_ATTACHMENT_SOURCE.MODEL),
+      generationSource: String(attachmentMeta?.generationSource || ""),
+      reused: true,
+    },
+    producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
+    meta: {
+      source: "tool",
+      reason: "reuse_data_processing_artifact",
+      mimeType: String(attachmentMeta?.mimeType || MIME_TYPE.TEXT_MARKDOWN),
+    },
+  });
+  const transferEnvelopes = [transferEnvelope];
+  return {
+    attachmentMetas: [attachmentMeta],
+    transferEnvelope,
+    transferEnvelopes,
+    resultFields: buildTextResultFields({
+      text,
+      transferEnvelopes,
+      inlineMaxChars: resolveToolResultInlineTextLimit(runtime),
+    }),
+  };
+}
 
 let libreOfficeConverters = null;
 
@@ -343,20 +442,6 @@ function sanitizeArtifactBaseName(input = "", fallback = "doc2data_result") {
   return normalized.replace(/[^\w.-]+/g, "_");
 }
 
-function dedupeAttachmentMetas(attachmentMetas = []) {
-  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
-  const seen = new Set();
-  return source.filter((item = {}) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    const key = String(item?.attachmentId || "").trim() ||
-      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
-    if (!key) return true;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function resolveLibreOfficeOutputFormat(inputFileName = "") {
   const extension = path.extname(String(inputFileName || "").trim()).toLowerCase();
   // Calc/Spreadsheet documents usually cannot export directly to plain txt.
@@ -384,77 +469,36 @@ function resolveLibreOfficeOutputFormat(inputFileName = "") {
 
 async function persistDoc2DataTextAttachment({
   runtime = {},
+  agentContext = null,
   inputFile = "",
   text = "",
   mode = "",
 }) {
-  const attachmentService = runtime?.attachmentService || null;
-  const userId = String(runtime?.userId || "").trim();
-  if (!attachmentService || !userId) {
-    return {
-      attachmentMetas: [],
-      transferResult: null,
-      transferEnvelope: null,
-      transferEnvelopes: [],
-    };
-  }
-  const content = String(text || "");
   const inputBaseName = sanitizeArtifactBaseName(
     path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
   );
   const modeSuffix = sanitizeArtifactBaseName(mode || "result", "result");
   const artifactName = `${inputBaseName}.doc2data.${modeSuffix}.md`;
-  try {
-    const persisted = await persistTransferArtifacts({
-      runtime,
-      attachmentService,
-      userId,
-      sessionId: String(
-        runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
-      ).trim(),
-      attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
-      generationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
-      fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
-      source: "tool",
-      reason: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
-      artifacts: [
-        {
-          name: artifactName,
-          mimeType: MIME_TYPE.TEXT_MARKDOWN,
-          contentBase64: Buffer.from(content, "utf8").toString("base64"),
-        },
-      ],
-    });
-    const transferEnvelope =
-      persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
-        ? persisted.envelope
-        : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
-          ? persisted.result.envelope
-          : null;
-    const transferResult =
-      persisted?.result && typeof persisted.result === "object" && !Array.isArray(persisted.result)
-        ? persisted.result
-        : null;
-    const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
-    const transferCompat = buildLegacyTransferCompat({ envelope: transferEnvelope, envelopes: transferEnvelopes });
-    const attachmentMetas = dedupeAttachmentMetas([
-      ...(Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : []),
-      ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
-    ]);
-    return {
-      attachmentMetas,
-      transferResult,
-      transferEnvelope,
-      transferEnvelopes,
-    };
-  } catch {
-    return {
-      attachmentMetas: [],
-      transferResult: null,
-      transferEnvelope: null,
-      transferEnvelopes: [],
-    };
-  }
+  const materialized = await materializeTextForToolResult({
+    runtime,
+    agentContext,
+    text,
+    name: artifactName,
+    mimeType: MIME_TYPE.TEXT_MARKDOWN,
+    attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
+    generationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+    source: "tool",
+    reason: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+    alwaysPersist: true,
+    producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
+    meta: { mode, inputFile },
+  });
+  return {
+    attachmentMetas: materialized.attachmentMetas,
+    transferEnvelope: materialized.transferEnvelope,
+    transferEnvelopes: materialized.transferEnvelopes,
+    resultFields: materialized.resultFields,
+  };
 }
 
 async function backwriteParsedResultToSourceAttachment({
@@ -552,8 +596,48 @@ export function createDoc2DataTool({ agentContext }) {
 
       const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
       if (directTextDocument) {
+        if (isGeneratedDataProcessingArtifact(sourceAttachmentMeta) || looksLikeDataProcessingArtifactPath(inputFile)) {
+          const reusableAttachmentMeta = sourceAttachmentMeta || buildFallbackArtifactMeta({
+            runtime,
+            basePath,
+            inputFile,
+            bytes: directTextDocument.bytes,
+          });
+          const persistedOutput = buildExistingArtifactPersistedOutput({
+            runtime,
+            agentContext,
+            attachmentMeta: reusableAttachmentMeta,
+            text: directTextDocument.text,
+          });
+          const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
+            ? persistedOutput.attachmentMetas
+            : [];
+          return toToolJsonResult(
+            TOOL_NAME.DOC_TO_DATA,
+            {
+              ok: true,
+              status: TOOL_RESULT_STATUS.COMPLETED,
+              message: "输入已经是数据处理生成的中间产物，已复用原文件；未超过限制时直接返回 text，超过限制时返回预览，避免递归复制。",
+              mode: TOOL_DATA_MODE.DIRECT_TEXT,
+              input: inputFile,
+              reusedExistingArtifact: true,
+              ...persistedOutput.resultFields,
+              summary: {
+                bytes: Number(directTextDocument.bytes || 0),
+                parse_engine: resolvedParseEngine,
+                parsed_from_attachment_id: String(reusableAttachmentMeta?.attachmentId || ""),
+                parsed_result_path: String(reusableAttachmentMeta?.path || inputFile || ""),
+                source_attachment_backwritten: false,
+                saved_attachment_count: attachmentMetas.length,
+                text_length: directTextDocument.text.length,
+              },
+            },
+            true,
+          );
+        }
         const persistedOutput = await persistDoc2DataTextAttachment({
           runtime,
+          agentContext,
           inputFile,
           text: directTextDocument.text,
           mode: TOOL_DATA_MODE.DIRECT_TEXT,
@@ -571,16 +655,10 @@ export function createDoc2DataTool({ agentContext }) {
           {
             ok: true,
             status: TOOL_RESULT_STATUS.COMPLETED,
+            message: "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
             mode: TOOL_DATA_MODE.DIRECT_TEXT,
             input: inputFile,
-            text: directTextDocument.text,
-            attachmentMetas,
-            ...(persistedOutput?.transferResult ? { transferResult: persistedOutput.transferResult } : {}),
-            ...(persistedOutput?.transferEnvelope ? { transferEnvelope: persistedOutput.transferEnvelope } : {}),
-            ...(Array.isArray(persistedOutput?.transferEnvelopes) && persistedOutput.transferEnvelopes.length
-              ? { transferEnvelopes: persistedOutput.transferEnvelopes }
-              : {}),
-            sourceAttachmentMeta: updatedSourceAttachment || null,
+            ...persistedOutput.resultFields,
             summary: {
               bytes: Number(directTextDocument.bytes || 0),
               parse_engine: resolvedParseEngine,
@@ -604,6 +682,7 @@ export function createDoc2DataTool({ agentContext }) {
           });
           const persistedOutput = await persistDoc2DataTextAttachment({
             runtime,
+            agentContext,
             inputFile,
             text: libreOfficeResult.text,
             mode: libreOfficeResult.mode || "libreoffice_text",
@@ -621,16 +700,10 @@ export function createDoc2DataTool({ agentContext }) {
             {
               ok: true,
               status: TOOL_RESULT_STATUS.COMPLETED,
+              message: "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
               mode: libreOfficeResult.mode || "libreoffice_text",
               input: inputFile,
-              text: libreOfficeResult.text,
-              attachmentMetas,
-              ...(persistedOutput?.transferResult ? { transferResult: persistedOutput.transferResult } : {}),
-              ...(persistedOutput?.transferEnvelope ? { transferEnvelope: persistedOutput.transferEnvelope } : {}),
-              ...(Array.isArray(persistedOutput?.transferEnvelopes) && persistedOutput.transferEnvelopes.length
-                ? { transferEnvelopes: persistedOutput.transferEnvelopes }
-                : {}),
-              sourceAttachmentMeta: updatedSourceAttachment || null,
+              ...persistedOutput.resultFields,
               summary: {
                 bytes: Number(libreOfficeResult.bytes || 0),
                 parse_engine: resolvedParseEngine,
@@ -729,6 +802,7 @@ export function createDoc2DataTool({ agentContext }) {
         .reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
       const persistedOutput = await persistDoc2DataTextAttachment({
         runtime,
+        agentContext,
         inputFile,
         text: mergedText,
         mode: TOOL_DATA_MODE.IMAGE_MODEL,
@@ -747,18 +821,12 @@ export function createDoc2DataTool({ agentContext }) {
         {
           ok: true,
           status: TOOL_RESULT_STATUS.COMPLETED,
+          message: "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
           mode: TOOL_DATA_MODE.IMAGE_MODEL,
           input: converted.input,
           pdfPath: converted.pdfPath,
           imageCount: images.length,
-          text: mergedText,
-          attachmentMetas,
-          ...(persistedOutput?.transferResult ? { transferResult: persistedOutput.transferResult } : {}),
-          ...(persistedOutput?.transferEnvelope ? { transferEnvelope: persistedOutput.transferEnvelope } : {}),
-          ...(Array.isArray(persistedOutput?.transferEnvelopes) && persistedOutput.transferEnvelopes.length
-            ? { transferEnvelopes: persistedOutput.transferEnvelopes }
-            : {}),
-          sourceAttachmentMeta: updatedSourceAttachment || null,
+          ...persistedOutput.resultFields,
           model: {
             alias: modelSpec?.alias || "",
             name: modelSpec?.model || "",

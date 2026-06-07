@@ -7,6 +7,7 @@ import { getCurrentScope, onScopeDispose } from "vue";
 import { normalizeSelectedConnectors } from "../../shared/models/sessionModel";
 import { promoteSessionIdentityToBackendId } from "../infra/sessionIdentity";
 import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
+import { mergeAttachmentMetas } from "../infra/dialogProcessChain";
 import { useLocale } from "../../shared/i18n/useLocale";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
@@ -161,6 +162,20 @@ export function useChatEngine({
         error: targetAssistantMessage.error || translate("chat.unknownError"),
       })}`;
     }
+  }
+
+  function mergeAssistantAttachmentMetas(targetAssistantMessage, attachmentMetas = []) {
+    if (!targetAssistantMessage || !Array.isArray(attachmentMetas) || !attachmentMetas.length) {
+      return;
+    }
+    const normalizedAttachmentMetas =
+      makeViewMessage({ attachmentMetas })?.attachmentMetas || attachmentMetas;
+    targetAssistantMessage.attachmentMetas = mergeAttachmentMetas(
+      Array.isArray(targetAssistantMessage.attachmentMetas)
+        ? targetAssistantMessage.attachmentMetas
+        : [],
+      normalizedAttachmentMetas,
+    );
   }
 
   function tryAutoResolveInteraction(rawRequest = {}) {
@@ -612,6 +627,9 @@ export function useChatEngine({
             });
             refreshSessionConnectorsAsync(activeSession.value?.id || "");
           }
+        } else if (event === StreamEventEnum.ATTACHMENT_METAS) {
+          mergeAssistantAttachmentMetas(botMsg, data?.attachmentMetas || []);
+          scrollOnFirstResponseOnce();
         } else if (event === StreamEventEnum.DONE) {
           clearPendingInteraction();
           finalDoneEventData = data || {};
@@ -693,9 +711,7 @@ export function useChatEngine({
                 if (Array.isArray(lastAssistant.modelRuns)) {
                   botMsg.modelRuns = lastAssistant.modelRuns;
                 }
-                if (Array.isArray(lastAssistant.attachmentMetas)) {
-                  botMsg.attachmentMetas = lastAssistant.attachmentMetas;
-                }
+                mergeAssistantAttachmentMetas(botMsg, lastAssistant.attachmentMetas || []);
               }
             }
             if (!patchedWorkflowMessage && workflowAssistants.length && Array.isArray(activeSession.value?.messages)) {

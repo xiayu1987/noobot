@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig, normalizeTimeMs } from "../../config/index.js";
+import { hasOwnConfigKey, mergeConfig, normalizeBooleanLike, normalizeTimeMs } from "../../config/index.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import {
   getRuntimeFromAgentContext,
@@ -49,9 +49,13 @@ export function createAgentCollabTool({ agentContext }) {
     systemRuntime?.config?.toolPolicy && typeof systemRuntime.config.toolPolicy === "object"
       ? cloneData(systemRuntime.config.toolPolicy)
       : null;
+  const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
 
   const runConfig = {
     allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
+    ...(hasParentStreamingConfig
+      ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
+      : {}),
     selectedConnectors: normalizeSelectedConnectors(
       systemRuntime?.config?.selectedConnectors || {},
     ),

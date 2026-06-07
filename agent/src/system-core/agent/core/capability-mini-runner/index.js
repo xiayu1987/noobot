@@ -14,6 +14,7 @@ import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
 } from "../../../context/agent-context-accessor.js";
+import { compactToolResultTextForModel } from "../../../semantic-transfer/index.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
 const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";
@@ -33,6 +34,17 @@ function normalizeTextContent(content = "") {
     })
     .join("\n")
     .trim();
+}
+
+function compactToolMessagesForMiniRunner(messages = []) {
+  return (Array.isArray(messages) ? messages : []).map((messageItem = {}) => {
+    const role = String(messageItem?.role || messageItem?.lc_kwargs?.role || "").trim().toLowerCase();
+    if (role !== "tool") return messageItem;
+    return {
+      ...messageItem,
+      content: compactToolResultTextForModel(messageItem?.content ?? messageItem?.lc_kwargs?.content ?? ""),
+    };
+  });
 }
 
 function resolveRuntime(ctx = {}) {
@@ -144,7 +156,7 @@ export function createAgentCapabilityModelInvoker({
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
     const traces = [];
-    const runMessages = filterForModelContext(messages);
+    const runMessages = compactToolMessagesForMiniRunner(filterForModelContext(messages));
     if (prompt) {
       runMessages.unshift({ role: "system", content: String(prompt) });
     }

@@ -12,6 +12,8 @@ function createAgentContext({
   parentForceToolCall = false,
   parentForceTool = null,
   parentToolPolicy = null,
+  parentStreamingSet = false,
+  parentStreaming = false,
 } = {}) {
   const parentSessionId = "11111111-1111-4111-8111-111111111111";
   const events = [];
@@ -44,6 +46,7 @@ function createAgentContext({
           ? { forceTool: parentForceTool === true }
           : { forceToolCall: parentForceToolCall }),
         ...(normalizedToolPolicy ? { toolPolicy: normalizedToolPolicy } : {}),
+        ...(parentStreamingSet ? { streaming: parentStreaming === true } : {}),
       },
     },
     sessionManager: {
@@ -137,6 +140,24 @@ test("delegate_task_async: 配置后透传 toolPolicy（拷贝）", async () => 
   const childRunConfig = runCalls[0]?.runConfig || {};
   assert.deepEqual(childRunConfig.toolPolicy, parentToolPolicy);
   assert.notStrictEqual(childRunConfig.toolPolicy, parentToolPolicy);
+});
+
+
+test("delegate_task_async: 透传父 runConfig 显式 streaming=false", async () => {
+  const { agentContext, runCalls, events } = createAgentContext({
+    parentStreamingSet: true,
+    parentStreaming: false,
+  });
+  const payload = await invokeDelegateTask({ agentContext });
+  assert.equal(payload.ok, true);
+  assert.equal(runCalls.length, 1);
+  const childRunConfig = runCalls[0]?.runConfig || {};
+  assert.equal(childRunConfig.streaming, false);
+  const passthroughEvent = events.find(
+    (item = {}) => item?.event === "subagent_runconfig_passthrough_applied",
+  );
+  assert.equal(passthroughEvent?.data?.passthrough?.streaming, true);
+  assert.equal(passthroughEvent?.data?.effectiveRunConfig?.streaming, false);
 });
 
 test("delegate_task_async: 记录 runconfig 透传事件日志", async () => {

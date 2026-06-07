@@ -8,7 +8,6 @@ import { createScriptTool } from "./execution/script-tool.js";
 import { createSkillTool } from "./execution/skill-tool.js";
 import { createContentProcessTool } from "./data-processing/content-process-tool.js";
 import { createServiceTool } from "./execution/service-tool.js";
-import { createAgentCollabTool } from "./workflow/agent-collab-tool.js";
 import { createModelTool } from "./ai-models/model-tool.js";
 import { createUserInteractionTool } from "./workflow/user-interaction-tool.js";
 import { createMcpTool } from "./execution/mcp-tool.js";
@@ -218,7 +217,8 @@ async function buildToolsDefault(ctx) {
     ...createMcpTool(ctx),
     ...(enableMultimodalGenerateTool ? createMultimodalGenerateTool(ctx) : []),
     ...createConnectorAccessTool(ctx),
-    ...createAgentCollabTool(ctx),
+    // Multi-agent collaboration tools are intentionally not registered here.
+    // This is a hard disable at the agent registry level, independent of config/runtime policy.
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
     ...createRequestHelpTool(ctx),

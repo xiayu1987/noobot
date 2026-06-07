@@ -7,6 +7,7 @@ import {
   normalizeRecentWindow,
   resolveModelContextMessages,
 } from "../../../src/system-core/session/utils/context-window-normalizer.js";
+import { markCurrentTurnArraySummarized } from "../../../src/system-core/context/session/summarized-message-policy.js";
 
 test("filterSummarizedMessages removes only summarized messages", () => {
   const input = [
@@ -17,6 +18,90 @@ test("filterSummarizedMessages removes only summarized messages", () => {
   ];
   const result = filterSummarizedMessages(input);
   assert.deepEqual(result.map((item) => item.content), ["a"]);
+});
+
+
+test("task_summary pair is not marked summarized and remains in model context", () => {
+  const messages = [
+    { role: "user", content: "u0" },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_exec", function: { name: "execute_script", arguments: "{}" } }],
+    },
+    {
+      role: "tool",
+      content: "{\"toolName\":\"execute_script\",\"ok\":true}",
+      tool_call_id: "call_exec",
+    },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_summary", function: { name: "task_summary", arguments: "{}" } }],
+    },
+    {
+      role: "tool",
+      content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"阶段小结内容\"}",
+      tool_call_id: "call_summary",
+    },
+  ];
+
+  const marked = markCurrentTurnArraySummarized(messages);
+  assert.equal(marked[1]?.summarized, true);
+  assert.equal(marked[2]?.summarized, true);
+  assert.equal(marked[3]?.summarized, undefined);
+  assert.equal(marked[4]?.summarized, undefined);
+
+  const result = filterSummarizedMessages(marked);
+  assert.deepEqual(
+    result.map((item) => String(item?.tool_call_id || item?.tool_calls?.[0]?.id || item?.content || "")),
+    ["u0", "call_summary", "call_summary"],
+  );
+  assert.equal(result[2]?.content.includes("阶段小结内容"), true);
+});
+
+
+test("manually summarized task_summary pair is filtered by unified summarized policy", () => {
+  const input = [
+    { role: "user", content: "u0" },
+    {
+      role: "assistant",
+      content: "",
+      summarized: true,
+      tool_calls: [{ id: "call_summary", function: { name: "task_summary", arguments: "{}" } }],
+    },
+    {
+      role: "tool",
+      summarized: true,
+      content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"历史阶段小结\"}",
+      tool_call_id: "call_summary",
+    },
+    { role: "assistant", content: "old normal", summarized: true },
+  ];
+
+  const result = filterSummarizedMessages(input);
+  assert.deepEqual(
+    result.map((item) => String(item?.tool_call_id || item?.tool_calls?.[0]?.id || item?.content || "")),
+    ["u0"],
+  );
+});
+
+
+test("unpaired task_summary assistant tool call is dropped to avoid invalid model messages", () => {
+  const input = [
+    { role: "user", content: "u0" },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_summary", function: { name: "task_summary", arguments: "{}" } }],
+    },
+  ];
+
+  const result = filterSummarizedMessages(input);
+  assert.deepEqual(
+    result.map((item) => String(item?.tool_calls?.[0]?.id || item?.content || "")),
+    ["u0"],
+  );
 });
 
 test("normalizeContextWindow drops orphan tool result and keeps valid pair", () => {
@@ -103,7 +188,7 @@ test("normalizeRecentWindow keeps latest assistant-tool pair after truncation", 
   );
 });
 
-test("normalizeRecentWindow should not leave orphan tool after truncation shrink", () => {
+test("normalizeRecentWindow converts orphan task_summary tool to user after truncation shrink", () => {
   const input = [
     { role: "user", content: "u0" },
     {
@@ -120,8 +205,10 @@ test("normalizeRecentWindow should not leave orphan tool after truncation shrink
   const result = normalizeRecentWindow(input, 2);
   assert.deepEqual(
     result.map((item) => item.role),
-    ["user"],
+    ["user", "user"],
   );
+  assert.equal(result[1]?.phaseSummaryMemory, true);
+  assert.equal(String(result[1]?.content || "").startsWith("[阶段小结]"), true);
 });
 
 test("resolveModelContextMessages filters injected messages by current dialog", () => {

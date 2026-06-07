@@ -114,6 +114,7 @@ export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
   MULTIMODAL_GENERATE_TOOL: "multimodal_generate_tool",
   DOC_TO_DATA_TOOL: "doc_to_data_tool",
   MEDIA_TO_DATA_TOOL: "media_to_data_tool",
+  WEB_TO_DATA_TOOL: "web_to_data_tool",
   EMAIL_CONNECTOR_READ: "email_connector_read",
 });
 

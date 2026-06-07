@@ -7,7 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createMcpAgentTools } from "../../mcp/index.js";
-import { mergeConfig } from "../../config/index.js";
+import { hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
   resolveChildRunParentSessionIdFromRuntime,
@@ -77,6 +77,7 @@ export function createMcpTool({ agentContext }) {
       const resolvedModelName = String(modelName || "").trim();
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
+      const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
       const maxToolLoopTurns = Number(
         effectiveConfig?.tools?.[TOOL_NAME.CALL_MCP_TASK]?.maxToolLoopTurns ??
           6,
@@ -120,6 +121,9 @@ export function createMcpTool({ agentContext }) {
           userInteractionBridge,
           runConfig: {
             allowUserInteraction,
+            ...(hasParentStreamingConfig
+              ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
+              : {}),
             selectedConnectors: normalizeSelectedConnectors(
               runtime?.systemRuntime?.config?.selectedConnectors || {},
             ),

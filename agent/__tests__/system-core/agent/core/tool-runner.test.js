@@ -258,8 +258,155 @@ test("executeToolCall: tool result too long should be persisted and return overf
   const overflowFileContent = await fs.readFile(payload.overflow_file_path, "utf8");
   const overflowPayload = JSON.parse(overflowFileContent);
   assert.equal(overflowPayload.toolName, "demo_tool");
-  assert.equal(typeof overflowPayload.result, "string");
-  assert.equal(overflowPayload.result.includes("\"text\""), true);
+  assert.equal(overflowPayload.overflowFormat, "compact-v1");
+  assert.equal(typeof overflowPayload.result, "object");
+  assert.equal(typeof overflowPayload.result.text, "string");
+});
+
+test("executeToolCall: overflow length is measured after compacting transfer wrappers", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-compact-"));
+  const attachmentMeta = {
+    attachmentId: "att_compact_1",
+    name: "result.md",
+    mimeType: "text/markdown",
+    size: 12,
+    sessionId: "s1",
+    attachmentSource: "model",
+    path: "/host/result.md",
+    relativePath: "runtime/attach/scoped/s1/model/result.md",
+    generatedByModel: true,
+    generationSource: "unit_test",
+  };
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/result.md",
+    attachmentMeta,
+    files: [{ filePath: "/workspace/result.md", attachmentMeta }],
+  };
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "demo_tool",
+        ok: true,
+        status: "completed",
+        text: "短结果",
+        attachmentMetas: [attachmentMeta],
+        transferResult: {
+          ok: true,
+          status: "file",
+          envelope,
+          debugPayloadShouldNotCountAsModelResult: "x".repeat(3000),
+        },
+        transferEnvelope: envelope,
+        transferEnvelopes: [envelope],
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_compact_not_overflow", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+    runtime: {
+      basePath,
+      globalConfig: { tools: { maxToolResultChars: 1000 } },
+      userConfig: {},
+    },
+    agentContext: {
+      environment: {
+        workspace: { basePath },
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.overflowed, undefined);
+  assert.equal(payload.overflow_file_path, undefined);
+  assert.equal("transferResult" in payload, false);
+  assert.equal("transferEnvelope" in payload, false);
+  assert.equal("transferEnvelopes" in payload, false);
+  assert.equal("attachmentMetas" in payload, false);
+  assert.equal(Array.isArray(payload.transferFiles), true);
+  assert.equal(payload.transferFiles[0].attachmentId, "att_compact_1");
+});
+
+test("executeToolCall: overflow keeps original semantic-transfer artifact and compacts duplicates", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-transfer-"));
+  const attachmentMeta = {
+    attachmentId: "att_real_1",
+    name: "generated.png",
+    mimeType: "image/png",
+    size: 128,
+    sessionId: "s1",
+    attachmentSource: "model",
+    path: "/tmp/generated.png",
+    relativePath: "runtime/attach/scoped/s1/model/generated.png",
+    generatedByModel: true,
+    generationSource: "multimodal_generate_tool",
+  };
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/generated.png",
+    attachmentMeta,
+    files: [{ filePath: "/workspace/generated.png", attachmentMeta }],
+  };
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "multimodal_generate",
+        ok: true,
+        status: "completed",
+        text: "x".repeat(500),
+        attachmentMetas: [attachmentMeta],
+        transferResult: { ok: true, status: "file", envelope },
+        transferEnvelope: envelope,
+        transferEnvelopes: [envelope],
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_overflow_transfer", name: "multimodal_generate", args: {} },
+    tool,
+    turn: 1,
+    runtime: {
+      basePath,
+      globalConfig: { tools: { maxToolResultChars: 120 } },
+      userConfig: {},
+    },
+    agentContext: {
+      environment: {
+        workspace: { basePath },
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.overflowed, true);
+  assert.equal(Array.isArray(payload.transferEnvelopes), true);
+  assert.equal(payload.transferEnvelopes.length, 1);
+  assert.equal(
+    result.extractedAttachmentMetas.some((item) => item?.attachmentId === "att_real_1"),
+    true,
+  );
+
+  const overflowPayload = JSON.parse(await fs.readFile(payload.overflow_file_path, "utf8"));
+  assert.equal(Array.isArray(overflowPayload.result.transferEnvelopes), true);
+  assert.equal("transferResult" in overflowPayload.result, false);
+  assert.equal("transferEnvelope" in overflowPayload.result, false);
+  assert.equal("attachmentMetas" in overflowPayload.result, false);
+  const compactEnvelope = overflowPayload.result.transferEnvelopes[0];
+  assert.equal("filePath" in compactEnvelope, false);
+  assert.equal("attachmentMeta" in compactEnvelope, false);
+  assert.equal("pathView" in compactEnvelope, false);
+  assert.equal(compactEnvelope.files[0].attachmentMeta.attachmentId, "att_real_1");
+  assert.equal("name" in compactEnvelope.files[0], false);
+  assert.equal("mimeType" in compactEnvelope.files[0], false);
+  assert.equal("size" in compactEnvelope.files[0], false);
 });
 
 test("executeToolCall: overflow result should include sandbox path when resolver is provided", async () => {

@@ -13,11 +13,77 @@ import { tEngine } from "../i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
 import { resolveModelContextMessages } from "../../../session/utils/context-window-normalizer.js";
 import { mergeConfig } from "../../../config/index.js";
+import { compactToolResultTextForModel } from "../../../semantic-transfer/index.js";
 import {
   resolveDialogProcessIdFromContext,
   resolveDialogProcessId,
   resolveMessageDialogProcessId,
 } from "../../../context/session/dialog-process-id-resolver.js";
+
+
+const TASK_SUMMARY_TOOL_NAME = "task_summary";
+
+function resolveToolNameFromToolCallLike(toolCall = {}) {
+  if (!toolCall || typeof toolCall !== "object") return "";
+  if (toolCall.name) return String(toolCall.name || "").trim();
+  const fn = toolCall.function && typeof toolCall.function === "object" ? toolCall.function : {};
+  return String(fn.name || "").trim();
+}
+
+function hasTaskSummaryToolCallMessage(msg = {}) {
+  return (Array.isArray(msg?.tool_calls) ? msg.tool_calls : []).some(
+    (toolCall) => resolveToolNameFromToolCallLike(toolCall) === TASK_SUMMARY_TOOL_NAME,
+  );
+}
+
+function isTaskSummaryToolResultMessage(msg = {}) {
+  const explicitToolName = String(msg?.toolName || msg?.tool_name || "").trim();
+  if (explicitToolName === TASK_SUMMARY_TOOL_NAME) return true;
+  try {
+    const parsed = JSON.parse(String(msg?.content || ""));
+    return String(parsed?.toolName || "").trim() === TASK_SUMMARY_TOOL_NAME;
+  } catch {
+    return false;
+  }
+}
+
+
+function extractTaskSummaryTextFromToolResult(msg = {}) {
+  const rawContent = String(msg?.content || "").trim();
+  if (!rawContent) return "";
+  try {
+    const parsed = JSON.parse(rawContent);
+    const phaseSummary = String(parsed?.phaseSummary || parsed?.phase_summary || "").trim();
+    if (phaseSummary) return phaseSummary;
+    const summaryContent = String(parsed?.summaryContent || parsed?.summary_content || "").trim();
+    if (summaryContent) return summaryContent;
+    const summary = typeof parsed?.summary === "string"
+      ? String(parsed.summary || "").trim()
+      : "";
+    if (summary) return summary;
+  } catch {
+    // fall through to raw content
+  }
+  return rawContent;
+}
+
+function buildTaskSummaryFallbackHumanMessage(msg = {}) {
+  const summaryText = extractTaskSummaryTextFromToolResult(msg);
+  if (!summaryText) return null;
+  return new HumanMessage({
+    content: `[阶段小结]
+${summaryText}`,
+    additional_kwargs: {
+      noobotInternalMessageType: "phase_summary_memory",
+      recoveredFromUnpairedTaskSummary: true,
+    },
+  });
+}
+
+function shouldSkipSummarizedHistoryMessage(msg = {}) {
+  if (msg?.summarized !== true) return false;
+  return !hasTaskSummaryToolCallMessage(msg) && !isTaskSummaryToolResultMessage(msg);
+}
 
 function toLangChainToolCalls(toolCalls = []) {
   return (toolCalls || [])
@@ -148,6 +214,36 @@ function resolveMainModelWindowConfig(runtime = {}) {
   };
 }
 
+
+function normalizeUnpairedTaskSummaryToolResults(historyMessages = []) {
+  const source = Array.isArray(historyMessages) ? historyMessages : [];
+  const knownToolCallIds = new Set();
+  for (const msg of source) {
+    if ((msg?.role || "") !== MESSAGE_ROLE.ASSISTANT) continue;
+    const toolCalls = toLangChainToolCalls(msg?.tool_calls || []);
+    for (const toolCall of toolCalls) {
+      const id = String(toolCall?.id || "").trim();
+      if (id) knownToolCallIds.add(id);
+    }
+  }
+
+  return source.map((msg) => {
+    if ((msg?.role || "") !== MESSAGE_ROLE.TOOL) return msg;
+    if (!isTaskSummaryToolResultMessage(msg)) return msg;
+    const toolCallId = String(msg?.tool_call_id || "").trim();
+    if (toolCallId && knownToolCallIds.has(toolCallId)) return msg;
+    const summaryText = extractTaskSummaryTextFromToolResult(msg);
+    if (!summaryText) return msg;
+    return {
+      role: MESSAGE_ROLE.USER,
+      content: `[阶段小结]
+${summaryText}`,
+      summarized: false,
+      phaseSummaryMemory: true,
+    };
+  });
+}
+
 function buildHistoryMessages({
   effectiveHistoryMessages = [],
   runtime = {},
@@ -156,7 +252,7 @@ function buildHistoryMessages({
   const history = [];
   const knownHistoryToolCallIds = new Set();
   for (const msg of effectiveHistoryMessages) {
-    if (msg?.summarized === true) continue;
+    if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if ((msg?.role || "") !== MESSAGE_ROLE.ASSISTANT) continue;
     const normalizedToolCalls = toLangChainToolCalls(msg.tool_calls || []);
     for (const toolCall of normalizedToolCalls) {
@@ -165,7 +261,7 @@ function buildHistoryMessages({
     }
   }
   for (const msg of effectiveHistoryMessages) {
-    if (msg?.summarized === true) continue;
+    if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     const role = msg.role || "";
     if (role === MESSAGE_ROLE.SYSTEM) {
       history.push(new SystemMessage(msg.content || ""));
@@ -187,11 +283,28 @@ function buildHistoryMessages({
     }
     if (role === MESSAGE_ROLE.TOOL) {
       const toolCallId = String(msg?.tool_call_id || "").trim();
-      if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) continue;
+      if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
+        if (isTaskSummaryToolResultMessage(msg)) {
+          const fallbackSummaryMessage = buildTaskSummaryFallbackHumanMessage(msg);
+          if (fallbackSummaryMessage) history.push(fallbackSummaryMessage);
+        }
+        continue;
+      }
       history.push(
         new ToolMessage({
           tool_call_id: toolCallId,
-          content: msg.content || "",
+          content: compactToolResultTextForModel(msg.content || ""),
+        }),
+      );
+      continue;
+    }
+    if (msg?.phaseSummaryMemory === true) {
+      history.push(
+        new HumanMessage({
+          content: String(msg?.content || ""),
+          additional_kwargs: {
+            noobotInternalMessageType: "phase_summary_memory",
+          },
         }),
       );
       continue;
@@ -228,9 +341,10 @@ export function buildContextMessageBlocks(
   const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
     ? agentContext.payload.messages.system
     : [];
-  const historyMessages = Array.isArray(agentContext?.payload?.messages?.history)
+  const rawHistoryMessages = Array.isArray(agentContext?.payload?.messages?.history)
     ? agentContext.payload.messages.history
     : [];
+  const historyMessages = normalizeUnpairedTaskSummaryToolResults(rawHistoryMessages);
   const resolvedDialogProcessId = resolveDialogProcessId({
     ctx: {
       agentContext: {

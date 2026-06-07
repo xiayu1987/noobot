@@ -213,6 +213,7 @@ export async function persistModelGeneratedArtifacts({
   emitEvent(eventListener, "model_generated_attachments_saved", {
     dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
     count: attachmentMetas.length,
+    attachmentMetas,
   });
   return attachmentMetas;
 }
@@ -237,7 +238,8 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
     const transferAttachmentMetas = Array.isArray(transferCompat?.attachmentMetas)
       ? transferCompat.attachmentMetas
       : [];
-    const attachmentMetas = [...directAttachmentMetas, ...transferAttachmentMetas];
+    const attachmentMetas = [...directAttachmentMetas, ...transferAttachmentMetas]
+      .filter(isRuntimeAttachmentMeta);
     if (!attachmentMetas.length) return [];
     const seen = new Set();
     return attachmentMetas.filter((attachmentItem = {}) => {
@@ -263,4 +265,16 @@ export function extractAttachmentMetasFromToolResult(toolName = "", toolResultTe
   } catch {
     return [];
   }
+}
+
+function isRuntimeAttachmentMeta(attachmentItem = {}) {
+  if (!attachmentItem || typeof attachmentItem !== "object" || Array.isArray(attachmentItem)) {
+    return false;
+  }
+  const relativePath = String(attachmentItem?.relativePath || "").replaceAll("\\", "/");
+  const absolutePath = String(attachmentItem?.path || "").replaceAll("\\", "/");
+  return (
+    relativePath.startsWith("runtime/attach/") ||
+    absolutePath.includes("/runtime/attach/")
+  );
 }

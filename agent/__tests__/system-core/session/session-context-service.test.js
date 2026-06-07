@@ -72,8 +72,13 @@ test("getRecentSessionMessages keeps a recent user anchor when window has no use
 
   assert.equal(result[0]?.role, "user");
   assert.equal(
-    result.some((messageItem) => messageItem?.role === "tool"),
-    false,
+    result.some(
+      (messageItem) =>
+        messageItem?.role === "user" &&
+        messageItem?.phaseSummaryMemory === true &&
+        String(messageItem?.original_tool_call_id || "") === "call_1",
+    ),
+    true,
   );
 });
 
@@ -203,9 +208,10 @@ test("getMessagesSinceLastCompletedTask uses the same normalization", async () =
   assert.equal(
     result.some(
       (messageItem) =>
-        messageItem?.role === "tool" &&
-        String(messageItem?.tool_call_id || "") === "orphan_done",
+        messageItem?.role === "user" &&
+        messageItem?.phaseSummaryMemory === true &&
+        String(messageItem?.original_tool_call_id || "") === "orphan_done",
     ),
-    false,
+    true,
   );
 });

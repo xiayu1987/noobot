@@ -30,6 +30,187 @@ function buildAgentContext(basePath = "") {
   };
 }
 
+test("doc_to_data: direct text result stores content in file and returns text when under limit", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-direct-"));
+  const textPath = path.join(basePath, "runtime", "ops_workdir", "input.md");
+  await fs.mkdir(path.dirname(textPath), { recursive: true });
+  await fs.writeFile(textPath, "hello\n".repeat(500), "utf8");
+
+  const attachmentService = {
+    async ingestGeneratedArtifacts(payload = {}) {
+      const outputDir = path.join(basePath, "runtime", "attach", "scoped", "s1", "model");
+      await fs.mkdir(outputDir, { recursive: true });
+      return Promise.all(
+        (payload.artifacts || []).map(async (artifact, index) => {
+          const outputPath = path.join(outputDir, `${index}-${artifact.name}`);
+          await fs.writeFile(outputPath, Buffer.from(artifact.contentBase64 || "", "base64"));
+          return {
+            attachmentId: `att-${index + 1}`,
+            sessionId: "s1",
+            attachmentSource: "model",
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: (await fs.stat(outputPath)).size,
+            path: outputPath,
+            relativePath: path.relative(basePath, outputPath),
+            generatedByModel: true,
+            generationSource: payload.generationSource,
+          };
+        }),
+      );
+    },
+  };
+  const agentContext = buildAgentContext(basePath);
+  agentContext.execution.controllers.runtime.userId = "admin";
+  agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
+  agentContext.execution.controllers.runtime.attachmentService = attachmentService;
+
+  const tools = createDoc2DataTool({ agentContext });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  const payload = JSON.parse(await tool.invoke({ filePath: "runtime/ops_workdir/input.md" }));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.text, "hello\n".repeat(500));
+  assert.equal("textPreview" in payload, false);
+  assert.equal(payload.textLength, 3000);
+  assert.equal(payload.contentStoredInFile, true);
+  assert.equal(Array.isArray(payload.transferEnvelopes), true);
+  assert.equal(payload.transferEnvelopes.length, 1);
+});
+
+test("doc_to_data: direct text result returns preview when over semantic-transfer limit", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-direct-preview-"));
+  const textPath = path.join(basePath, "runtime", "ops_workdir", "large.md");
+  await fs.mkdir(path.dirname(textPath), { recursive: true });
+  await fs.writeFile(textPath, "large\n".repeat(500), "utf8");
+
+  const attachmentService = {
+    async ingestGeneratedArtifacts(payload = {}) {
+      const outputDir = path.join(basePath, "runtime", "attach", "scoped", "s1", "model");
+      await fs.mkdir(outputDir, { recursive: true });
+      return Promise.all(
+        (payload.artifacts || []).map(async (artifact, index) => {
+          const outputPath = path.join(outputDir, `${index}-${artifact.name}`);
+          await fs.writeFile(outputPath, Buffer.from(artifact.contentBase64 || "", "base64"));
+          return {
+            attachmentId: `large-att-${index + 1}`,
+            sessionId: "s1",
+            attachmentSource: "model",
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: (await fs.stat(outputPath)).size,
+            path: outputPath,
+            relativePath: path.relative(basePath, outputPath),
+            generatedByModel: true,
+            generationSource: payload.generationSource,
+          };
+        }),
+      );
+    },
+  };
+  const agentContext = buildAgentContext(basePath);
+  agentContext.execution.controllers.runtime.userId = "admin";
+  agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
+  agentContext.execution.controllers.runtime.attachmentService = attachmentService;
+  agentContext.execution.controllers.runtime.globalConfig = { tools: { maxToolResultChars: 1000 } };
+
+  const tools = createDoc2DataTool({ agentContext });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  const payload = JSON.parse(await tool.invoke({ filePath: "runtime/ops_workdir/large.md" }));
+  assert.equal(payload.ok, true);
+  assert.equal("text" in payload, false);
+  assert.equal(typeof payload.textPreview, "string");
+  assert.equal(payload.textPreview.length, 1200);
+  assert.equal(payload.textPreviewTruncated, true);
+  assert.equal(payload.textLength, 3000);
+  assert.equal(payload.contentStoredInFile, true);
+  assert.equal(Array.isArray(payload.transferEnvelopes), true);
+  assert.equal(payload.transferEnvelopes.length, 1);
+});
+
+test("doc_to_data: reuses generated data artifact instead of creating recursive copies", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-reuse-"));
+  const textPath = path.join(basePath, "runtime", "attach", "scoped", "s1", "model", "existing.md");
+  await fs.mkdir(path.dirname(textPath), { recursive: true });
+  await fs.writeFile(textPath, "already parsed\n".repeat(200), "utf8");
+
+  let persistCalls = 0;
+  const agentContext = buildAgentContext(basePath);
+  agentContext.execution.controllers.runtime.userId = "admin";
+  agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
+  agentContext.execution.controllers.runtime.attachmentMetas = [
+    {
+      attachmentId: "existing-att",
+      sessionId: "s1",
+      attachmentSource: "model",
+      name: "existing.md",
+      mimeType: "text/markdown",
+      size: (await fs.stat(textPath)).size,
+      path: textPath,
+      relativePath: path.relative(basePath, textPath),
+      generatedByModel: true,
+      generationSource: "media_to_data_tool",
+    },
+  ];
+  agentContext.execution.controllers.runtime.attachmentService = {
+    async ingestGeneratedArtifacts() {
+      persistCalls += 1;
+      return [];
+    },
+  };
+
+  const tools = createDoc2DataTool({ agentContext });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  const payload = JSON.parse(await tool.invoke({ filePath: path.relative(basePath, textPath) }));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.reusedExistingArtifact, true);
+  assert.equal(payload.text, "already parsed\n".repeat(200));
+  assert.equal(payload.transferEnvelopes[0].files[0].attachmentMeta.attachmentId, "existing-att");
+  assert.equal(persistCalls, 0);
+});
+
+test("doc_to_data: reuses generated data artifact by path even without attachment meta", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-reuse-path-"));
+  const textPath = path.join(
+    basePath,
+    "runtime",
+    "attach",
+    "scoped",
+    "s1",
+    "model",
+    "input.media2data.image.md",
+  );
+  await fs.mkdir(path.dirname(textPath), { recursive: true });
+  await fs.writeFile(textPath, "already parsed without meta\n".repeat(100), "utf8");
+
+  let persistCalls = 0;
+  const agentContext = buildAgentContext(basePath);
+  agentContext.execution.controllers.runtime.userId = "admin";
+  agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
+  agentContext.execution.controllers.runtime.attachmentService = {
+    async ingestGeneratedArtifacts() {
+      persistCalls += 1;
+      return [];
+    },
+  };
+
+  const tools = createDoc2DataTool({ agentContext });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  const payload = JSON.parse(await tool.invoke({ filePath: path.relative(basePath, textPath) }));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.reusedExistingArtifact, true);
+  assert.equal(payload.text, "already parsed without meta\n".repeat(100));
+  assert.equal(payload.transferEnvelopes[0].files[0].filePath.includes("input.media2data.image.md"), true);
+  assert.equal(persistCalls, 0);
+});
+
 test("doc_to_data: image input should fail fast with unsupported file type", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-"));
   const imagePath = path.join(basePath, "runtime", "ops_workdir", "input.png");
@@ -127,6 +308,56 @@ test("process_content_task: detached runtime uses durable parent session", async
   assert.equal(result.parentSessionId, "root-workflow-session");
 });
 
+test("process_content_task: 透传父 runConfig 显式 streaming=false 到子 session", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-streaming-"));
+  const calls = [];
+  const botManager = {
+    async runSession(payload = {}) {
+      calls.push(payload);
+      return {
+        sessionId: payload.sessionId,
+        answer: "ok",
+        traces: [],
+        messages: [],
+      };
+    },
+  };
+  const tools = createContentProcessTool({
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            basePath,
+            userId: "admin",
+            globalConfig: {},
+            userConfig: {},
+            botManager,
+            sharedTools: {},
+            systemRuntime: {
+              sessionId: "parent-session",
+              config: {
+                streaming: false,
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK);
+  assert.ok(tool);
+
+  const resultText = await tool.invoke({
+    task: "parse content",
+    contentPath: "runtime/attach/file.png",
+  });
+  const result = JSON.parse(resultText);
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.runConfig?.streaming, false);
+});
+
 test("process_connector_tool: detached runtime uses durable parent session", async () => {
   const calls = [];
   const botManager = {
@@ -175,4 +406,55 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.parentSessionId, "root-workflow-session");
   assert.equal(result.parentSessionId, "root-workflow-session");
+});
+
+test("process_connector_tool: 透传父 runConfig 显式 streaming=false 到子 session", async () => {
+  const calls = [];
+  const botManager = {
+    async runSession(payload = {}) {
+      calls.push(payload);
+      return {
+        sessionId: payload.sessionId,
+        answer: "ok",
+        traces: [],
+        messages: [],
+      };
+    },
+  };
+  const tools = createConnectorAccessTool({
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            userId: "admin",
+            globalConfig: {},
+            userConfig: {},
+            botManager,
+            sharedTools: {
+              connectorChannelStore: {
+                getSessionConnectors() {
+                  return { databases: [], terminals: [], emails: [] };
+                },
+              },
+            },
+            systemRuntime: {
+              sessionId: "parent-session",
+              config: {
+                streaming: false,
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONNECTOR_TOOL);
+  assert.ok(tool);
+
+  const resultText = await tool.invoke({ task: "inspect connector" });
+  const result = JSON.parse(resultText);
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.runConfig?.streaming, false);
 });

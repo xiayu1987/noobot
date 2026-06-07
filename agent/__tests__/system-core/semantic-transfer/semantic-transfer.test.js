@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  compactToolResultTextForModel,
   directInput,
   directOutput,
   fileOutput,
@@ -74,6 +75,61 @@ test("normalizeTransfer maps paths to file envelopes", () => {
   const envelope = normalizeTransfer({ path: "/tmp/result.md", name: "result.md" });
   assert.equal(envelope.transport, "file");
   assert.equal(envelope.filePath, "/tmp/result.md");
+});
+
+test("compactToolResultTextForModel replaces verbose transfer payload with concise transferFiles", () => {
+  const attachmentMeta = {
+    attachmentId: "att_1",
+    sessionId: "s1",
+    attachmentSource: "model",
+    name: "generated.png",
+    mimeType: "image/png",
+    size: 123,
+    path: "/host/generated.png",
+    relativePath: "runtime/attach/scoped/s1/model/generated.png",
+    generatedByModel: true,
+    generationSource: "multimodal_generate_tool",
+    parsedResultAttachmentId: "",
+  };
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/generated.png",
+    attachmentMeta,
+    files: [
+      {
+        filePath: "/workspace/generated.png",
+        attachmentMeta,
+        pathView: {
+          displayPath: "/workspace/generated.png",
+          hostPath: "/host/generated.png",
+          relativePath: "runtime/attach/scoped/s1/model/generated.png",
+        },
+      },
+    ],
+  };
+  const compacted = JSON.parse(
+    compactToolResultTextForModel(
+      JSON.stringify({
+        toolName: "multimodal_generate",
+        ok: true,
+        attachmentMetas: [attachmentMeta],
+        transferResult: { ok: true, status: "file", envelope },
+        transferEnvelope: envelope,
+        transferEnvelopes: [envelope],
+      }),
+    ),
+  );
+
+  assert.equal("transferResult" in compacted, false);
+  assert.equal("transferEnvelope" in compacted, false);
+  assert.equal("transferEnvelopes" in compacted, false);
+  assert.equal("attachmentMetas" in compacted, false);
+  assert.equal(compacted.transferFiles.length, 1);
+  assert.equal(compacted.transferFiles[0].attachmentId, "att_1");
+  assert.equal(compacted.transferFiles[0].path, undefined);
 });
 
 test("persistTransferArtifacts saves through attachment service and returns metas", async () => {

@@ -34,6 +34,11 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
         finish_reason: "tool_calls",
       },
     },
+    {
+      role: "tool",
+      content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"阶段小结\"}",
+      tool_call_id: "call_task_summary",
+    },
   ]);
   const messages = buildContextMessages(
     {

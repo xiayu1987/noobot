@@ -73,6 +73,11 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.equal(typeof runtime.sharedTools.pathMapper?.toHostPath, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.encryptBySessionId, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.decryptBySessionId, "function");
+  assert.equal(
+    runtime.sharedTools.semanticTransfer?.compactToolResultTextForModel,
+    undefined,
+    "model-facing tool-result compaction must not be exposed as plugin/shared semantic-transfer API",
+  );
   const encrypted = runtime.sharedTools.sessionCrypto.encryptBySessionId({ ok: true }, "s1");
   assert.deepEqual(runtime.sharedTools.sessionCrypto.decryptBySessionId(encrypted, "s1"), {
     ok: true,

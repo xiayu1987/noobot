@@ -65,7 +65,7 @@ test("fetchRemoteMediaArtifact returns null when fetch throws", async () => {
   assert.equal(artifact, null);
 });
 
-test("extractAttachmentMetasFromToolResult reads transfer envelopes", () => {
+test("extractAttachmentMetasFromToolResult ignores non-runtime-attach transfer files", () => {
   const toolResultText = JSON.stringify({
     toolName: "overflow_tool",
     ok: true,
@@ -96,9 +96,7 @@ test("extractAttachmentMetasFromToolResult reads transfer envelopes", () => {
   });
 
   const metas = extractAttachmentMetasFromToolResult("overflow_tool", toolResultText);
-  assert.equal(metas.length, 1);
-  assert.equal(metas[0].name, "overflow.json");
-  assert.equal(metas[0].relativePath, "runtime/overflow.json");
+  assert.equal(metas.length, 0);
 });
 
 test("extractAttachmentMetasFromToolResult merges transferResult envelope and deduplicates", () => {
@@ -111,7 +109,7 @@ test("extractAttachmentMetasFromToolResult merges transferResult envelope and de
         name: "generated.png",
         mimeType: "image/png",
         path: "/host/generated.png",
-        relativePath: "runtime/generated.png",
+        relativePath: "runtime/attach/scoped/s1/model/generated.png",
       },
     ],
     transferResult: {
@@ -130,7 +128,7 @@ test("extractAttachmentMetasFromToolResult merges transferResult envelope and de
               name: "generated.png",
               mimeType: "image/png",
               path: "/host/generated.png",
-              relativePath: "runtime/generated.png",
+              relativePath: "runtime/attach/scoped/s1/model/generated.png",
             },
           },
           {
@@ -140,7 +138,7 @@ test("extractAttachmentMetasFromToolResult merges transferResult envelope and de
               name: "extra.png",
               mimeType: "image/png",
               path: "/host/extra.png",
-              relativePath: "runtime/extra.png",
+              relativePath: "runtime/attach/scoped/s1/model/extra.png",
             },
           },
         ],
@@ -174,7 +172,7 @@ test("extractAttachmentMetasFromToolResult supports transferEnvelopes-only paylo
               name: "r1.txt",
               mimeType: "text/plain",
               path: "/host/r1.txt",
-              relativePath: "runtime/r1.txt",
+              relativePath: "runtime/attach/scoped/s1/model/r1.txt",
             },
           },
         ],

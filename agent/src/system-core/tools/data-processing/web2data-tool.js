@@ -30,8 +30,9 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { normalizeText } from '../../utils/shared-utils.js';
+import { materializeTextForToolResult } from "../../semantic-transfer/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import {
   DEFAULT_MIME_TYPE,
   IMAGE_EXTENSION_TO_MIME,
@@ -41,6 +42,12 @@ import {
 
 const MAX_BATCH_BYTES = Math.floor(0.8 * 1024 * 1024);
 const MAX_TEXT_CHARS = 12000;
+
+function sanitizeArtifactBaseName(input = "", fallback = "web2data_result") {
+  const normalized = String(input || "").trim();
+  if (!normalized) return fallback;
+  return normalized.replace(/[^\w.-]+/g, "_");
+}
 const BROWSER_RETRY_COUNT = 2;
 const DEFAULT_CONCURRENCY = 8;
 const MAX_CONCURRENCY = 60;
@@ -700,23 +707,44 @@ export function createWeb2DataTool({ agentContext }) {
         );
       }
       const text = String(payload?.text || "").trim();
+      const inputName = sanitizeArtifactBaseName(
+        isUrl(payload?.input || input || "")
+          ? new URL(String(payload?.input || input || "")).hostname
+          : path.basename(String(payload?.input || input || "").trim() || "web"),
+      );
+      const modeName = sanitizeArtifactBaseName(payload?.mode || processMode || "result", "result");
+      const materialized = await materializeTextForToolResult({
+        runtime,
+        agentContext,
+        text,
+        name: `${inputName}.web2data.${modeName}.md`,
+        mimeType: "text/markdown",
+        attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
+        generationSource: ARTIFACT_GENERATION_SOURCE.WEB_TO_DATA_TOOL,
+        source: "tool",
+        reason: ARTIFACT_GENERATION_SOURCE.WEB_TO_DATA_TOOL,
+        alwaysPersist: true,
+        producer: { type: "tool", name: TOOL_NAME.WEB_TO_DATA },
+        meta: { mode: payload?.mode || processMode, input: payload?.input || input || "" },
+      });
       return toToolJsonResult(
         TOOL_NAME.WEB_TO_DATA,
         {
           ok: true,
           status: TOOL_RESULT_STATUS.COMPLETED,
           mode: payload?.mode || processMode,
-          message: "",
+          message: "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
           input: payload?.input || input || "",
           urls: Array.isArray(payload?.urls) ? payload.urls : [],
           successCount: Number(payload?.successCount || 0),
           resultCount: Number(payload?.resultCount || 0),
           imageCount: Number(payload?.imageCount || 0),
           batchCount: Number(payload?.batchCount || 0),
-          text,
+          ...materialized.resultFields,
           model: payload?.model || {},
           summary: {
             text_length: text.length,
+            saved_attachment_count: materialized.attachmentMetas.length,
           },
         },
         true,
