@@ -54,6 +54,10 @@ export function createConnectorAccessTool({ agentContext }) {
     effectiveConfig?.tools?.[TOOL_NAME.PROCESS_CONNECTOR_TOOL]?.maxToolLoopTurns ??
       6,
   );
+  const connectorSubSessionSystemPrompt = tTool(
+    runtime,
+    "tools.process_connector.subSessionSystemPrompt",
+  );
 
   const processConnectorTaskTool = new DynamicStructuredTool({
     name: TOOL_NAME.PROCESS_CONNECTOR_TOOL,
@@ -97,6 +101,7 @@ export function createConnectorAccessTool({ agentContext }) {
           userId,
           sessionId: subSessionId,
           message: normalizedTask,
+          systemMessages: [connectorSubSessionSystemPrompt].filter(Boolean),
           caller: TOOL_CALLER.BOT,
           parentSessionId,
           parentDialogProcessId,

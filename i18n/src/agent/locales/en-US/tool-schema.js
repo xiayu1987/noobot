@@ -77,7 +77,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "connectors.access.fillEmailConnectionInfo": "Please provide email connection info",
       "connectors.access.connectorNameLabel": "Connector name",
       "connectors.access.missingConnectionInfoNoInteraction": "Missing connection info and user interaction is disabled",
-      "connectors.access.noConnectorsFound": "No available connectors found. If needed, create one via connect_connector",
+      "connectors.access.noConnectorsFound": "No available connectors found. If needed, call the connect_connector tool to create one. No connection details are required.",
       "connectors.access.userCancelledAction": "User cancelled connection info input",
       "connectors.commandRequired": "command required",
       "connectors.connectorNameRequired": "connectorName required",
@@ -528,7 +528,8 @@ export const TOOL_SCHEMA_BY_TOOL = {
     },
     "texts": {
       "tools.connectors.errorUserInteractionBridgeMissing": "user interaction bridge missing for connection info completion",
-      "tools.process_connector.errorToolsUnavailable": "connector tools unavailable"
+      "tools.process_connector.errorToolsUnavailable": "connector tools unavailable",
+      "tools.process_connector.subSessionSystemPrompt": "Can handle connector tasks (database/terminal/email). Connection information is automatically handled by system connectors; do not provide or ask for connection details."
     }
   },
   "process_content_task": {

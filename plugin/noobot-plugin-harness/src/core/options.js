@@ -70,12 +70,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
   cleanupGraceMs: 10 * 60 * 1000,
   fsmEnabled: true,
   denyToolNames: DEFAULT_HARNESS_DENY_TOOL_NAMES,
-  promptText: [
-    "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
-  ].join("\n"),
-  finalResponseText: [
-    "最终回复请包含：做了什么、改了哪些文件、验证情况或未验证原因、下一步建议。",
-  ].join("\n"),
+  promptText: "",
+  finalResponseText: "",
 });
 
 const HarnessOptionsSchema = z

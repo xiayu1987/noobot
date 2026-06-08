@@ -18,10 +18,19 @@ export const DSL_PROTOCOL = Object.freeze({
 export const DSL_DEFAULTS = Object.freeze({
   START_NODE_ID: "start",
   END_NODE_ID: "end",
-  START_NODE_NAME: "开始",
-  END_NODE_NAME: "结束",
   STATE_TYPE_START: 0,
   STATE_TYPE_END: 1,
+});
+
+export const DSL_DEFAULT_NODE_NAME_BY_LOCALE = Object.freeze({
+  "zh-CN": Object.freeze({
+    START: "开始",
+    END: "结束",
+  }),
+  "en-US": Object.freeze({
+    START: "Start",
+    END: "End",
+  }),
 });
 
 export const DSL_TYPES = Object.freeze({

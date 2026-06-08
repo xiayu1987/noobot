@@ -35,6 +35,10 @@ import {
   statusToFsmState,
 } from "../fsm/transitions.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
+import {
+  resolveLocale as resolveHarnessLocale,
+  translateI18nText,
+} from "../capabilities/handlers/shared/i18n.js";
 
 function resolveFlushReasonByPoint(point = "") {
   if (
@@ -130,8 +134,15 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
     point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
       ? "noobot-harness-final-response"
       : "noobot-harness-policy";
-  const content =
-    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText;
+  const locale = resolveHarnessLocale(ctx);
+  const resolveDefaultPrompt = () => (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
+    ? translateI18nText(locale, "harnessFinalResponsePrompt")
+    : translateI18nText(locale, "harnessPolicyPrompt"));
+  const configuredPrompt = String(
+    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText,
+  ).trim();
+  const content = configuredPrompt || resolveDefaultPrompt();
+  if (!content) return;
 
   if (isHarnessPromptAlreadyInjected(ctx.messages, id)) return;
 

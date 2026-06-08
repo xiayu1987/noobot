@@ -17,7 +17,9 @@ import { WORKFLOW_PLUGIN_DEFAULTS } from "../core/constants.js";
 import { mountWorkflowExtensions } from "../extensions/workflow/runtime.js";
 
 export function executeWorkflowText({ semanticText = "", options = {} } = {}) {
-  const semantic = parseWorkflowDslText(semanticText);
+  const semantic = parseWorkflowDslText(semanticText, {
+    locale: options?.locale || "zh-CN",
+  });
   return { semantic };
 }
 
