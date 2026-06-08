@@ -34,6 +34,11 @@
 情况 4：多到多  
 并发多子agent所有子agent最后信息，强制每个信息保存为附件，并且植入附件信息到下面所有直接连接的子agent，附件信息每个子agent一条消息。
 
+- 失败传播补充（新增）：
+  - 如果上游子agent失败，除了已有附件信息，还要把“上游任务 + 失败信息”植入到直接下游子agent系统消息中。
+  - 适用于四种拓扑：单到单、多到单、单到多、多到多。
+  - 若上游失败且无附件，下游仍需基于失败信息继续可完成部分，并明确受影响范围。
+
 - 现状：应该有这种逻辑，但是不知道是不是 semantic-transfer 层在处理。
 - 建议：定义一个方法：子agent信息传递。
 - 输入子agent或多个子agent最后信息，输出附件地址。
@@ -63,3 +68,9 @@
 - 最后阶段要去掉兼容输出（legacy 字段），统一只保留 semantic-transfer 标准语义返回。
 - semantic-transfer 主要只负责信息转换。
 - 我不是要所有附件都走 semantic-transfer，而是我场景需要转换的内容才走 semantic-transfer。
+
+## 5. 工作流规划最终返回补充（新增）
+
+- 工作流插件在“工作流规划 + 执行完成”后的最终返回，会拼接各个子agent附件消息（附件路径/摘要块）。
+- 这一步拼接结果必须走 semantic-transfer（按授权场景，归到子agent信息传递），不能绕过 semantic-transfer 直接裸拼接返回。
+- 如果当前实现没有走 semantic-transfer，需要补齐：由 semantic-transfer 产出标准 transferResult / transferEnvelope / transferEnvelopes，再回填到 workflow 最终消息与 payload。
