@@ -1,0 +1,472 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+import {
+  applyWorkflowTransferPayload,
+  mergeAttachmentMetas,
+  normalizeWorkflowTransferPayload,
+  resolveAttachmentDisplayPath,
+  resolveWorkflowAttachmentMetasFromTransferPayload,
+  resolveWorkflowCompatAttachmentMetas,
+  resolveWorkflowTransferFileDisplayPath,
+  resolveWorkflowTransferFilesFromPayload,
+} from "./attachments.js";
+import { resolveWorkflowRuntimeFromContext } from "./runtime.js";
+import { resolveWorkflowLocaleFromContext, tWorkflow } from "../i18n.js";
+
+export function ensureTurnMessages(agentResult = {}) {
+  const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
+  agentResult.turnMessages = turnMessages;
+  return turnMessages;
+}
+
+export function sanitizeArtifactFileNamePart(input = "", fallback = "result") {
+  const normalized = String(input || "")
+    .trim()
+    .replaceAll(/[^a-zA-Z0-9\u4e00-\u9fa5_-]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return normalized || fallback;
+}
+
+export function resolveSubSessionFinalOutput(subSession = {}) {
+  const result = subSession?.result && typeof subSession.result === "object" ? subSession.result : {};
+  const messages = Array.isArray(result?.messages) ? result.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const messageItem = messages[index] || {};
+    const role = String(messageItem?.role || "").trim().toLowerCase();
+    if (role && role !== "assistant") continue;
+    const content = String(messageItem?.content || "").trim();
+    if (content) return content;
+  }
+  const direct = String(result?.answer || result?.output || "").trim();
+  if (direct) return direct;
+  return "";
+}
+
+export function stripHarnessReviewAppendix(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const markerIndex = raw.search(/(?:^|\n)\s*\[Harness-Review\]\s*(?:\n|$)/);
+  if (markerIndex < 0) return raw;
+  return raw.slice(0, markerIndex).trim();
+}
+
+export function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
+  const lines = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+    .map((item = {}, index) => {
+      const label = String(
+        item?.name || tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+      ).trim();
+      const path = resolveAttachmentDisplayPath(item, ctx);
+      if (!path) return "";
+      return `- ${label}: ${path}`;
+    })
+    .filter(Boolean);
+  if (!lines.length) return "";
+  return ["", tWorkflow(locale, "workflowNodeResultAttachmentTitle"), "", ...lines].join("\n");
+}
+
+export function buildWorkflowTransferPathBlockWithContext(workflowPayload = null, ctx = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
+  const files = resolveWorkflowTransferFilesFromPayload(
+    workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {},
+    ctx,
+  );
+  const lines = files
+    .map((item = {}, index) => {
+      const meta = item?.attachmentMeta || {};
+      const label = String(
+        item?.name ||
+          meta?.name ||
+          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+      ).trim();
+      const path = resolveWorkflowTransferFileDisplayPath(item, ctx);
+      if (!path) return "";
+      return `- ${label}: ${path}`;
+    })
+    .filter(Boolean);
+  if (!lines.length) return "";
+  return ["", tWorkflow(locale, "workflowNodeResultAttachmentTitle"), "", ...lines].join("\n");
+}
+
+export function truncateWorkflowResultText(text = "", maxLength = 1800) {
+  const raw = String(text || "").trim();
+  const limit = Number.isFinite(Number(maxLength)) ? Math.max(200, Number(maxLength)) : 1800;
+  if (raw.length <= limit) return raw;
+  return `${raw.slice(0, limit).trim()}\n\n...`;
+}
+
+export function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
+  if (!workflowPayload || typeof workflowPayload !== "object") return null;
+  let payload = null;
+  try {
+    payload = JSON.parse(JSON.stringify(workflowPayload));
+  } catch {
+    return null;
+  }
+  const nodeAgentRuns = Array.isArray(payload?.execution?.nodeAgentRuns)
+    ? payload.execution.nodeAgentRuns
+    : [];
+  for (const item of nodeAgentRuns) {
+    if (!item || typeof item !== "object") continue;
+    // 子 agent 的执行消息/结果正文不落到主 session，只保留附件元信息与会话定位信息。
+    delete item.nodeResultText;
+  }
+  return payload;
+}
+
+export async function persistWorkflowNodeResultAttachment({
+  options = {},
+  ctx = {},
+  subSession = null,
+  pendingStep = {},
+  transition = 0,
+} = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
+  const persister = typeof options?.generatedArtifactPersister === "function"
+    ? options.generatedArtifactPersister
+    : null;
+  if (!persister || !subSession) return [];
+  const output = resolveSubSessionFinalOutput(subSession);
+  const cleanOutput = stripHarnessReviewAppendix(output);
+  if (!cleanOutput) return [];
+  const userId = String(ctx?.userId || "").trim();
+  const sessionId = String(ctx?.sessionId || "").trim();
+  if (!userId || !sessionId) return [];
+  const nodeName = String(pendingStep?.nodeName || pendingStep?.nodeId || "workflow-node").trim();
+  const nodeId = String(pendingStep?.nodeId || "").trim();
+  const normalizedTransition = Number.isFinite(Number(transition)) ? Math.floor(Number(transition)) : 0;
+  const artifactName = [
+    "workflow-node",
+    normalizedTransition > 0 ? String(normalizedTransition) : "",
+    sanitizeArtifactFileNamePart(nodeName, "node"),
+    "result.md",
+  ]
+    .filter(Boolean)
+    .join("-");
+  const body = [
+    tWorkflow(locale, "workflowNodeResultTitle"),
+    "",
+    tWorkflow(locale, "workflowNodeLine", {
+      name: nodeName || tWorkflow(locale, "workflowNodeUnnamedFallback"),
+    }),
+    tWorkflow(locale, "workflowNodeIdLine", { id: nodeId || "-" }),
+    tWorkflow(locale, "workflowSubSessionLine", {
+      id: String(subSession?.sessionId || "").trim() || "-",
+    }),
+    tWorkflow(locale, "workflowDialogLine", {
+      id: String(subSession?.dialogProcessId || "").trim() || "-",
+    }),
+    "",
+    tWorkflow(locale, "workflowFinalOutputTitle"),
+    "",
+    cleanOutput,
+    "",
+  ].join("\n");
+  try {
+    const artifact = {
+      name: artifactName,
+      mimeType: "text/markdown",
+      contentBase64: Buffer.from(body, "utf8").toString("base64"),
+    };
+    const runtime = resolveWorkflowRuntimeFromContext(ctx);
+    const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
+    const semanticTransferContent =
+      runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+    let attachmentMetas = [];
+    let transferPayload = normalizeWorkflowTransferPayload();
+    if (typeof semanticTransferContent === "function") {
+      const transferred = await semanticTransferContent({
+        scenario: "subagent",
+        messages: [
+          {
+            nodeId,
+            nodeName,
+            content: body,
+            meta: {
+              transition: normalizedTransition,
+              nodeSessionId: String(subSession?.sessionId || "").trim(),
+            },
+          },
+        ],
+        nextSteps: [],
+        forceAttachment: true,
+        attachmentSource: "model",
+        generationSource: "workflow_node_agent_result",
+        source: "plugin",
+        reason: "workflow_node_agent_result",
+        mimeType: artifact.mimeType,
+      });
+      transferPayload = normalizeWorkflowTransferPayload(transferred);
+      attachmentMetas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
+    } else if (typeof semanticPersist === "function") {
+      const persisted = await semanticPersist({
+        userId,
+        sessionId,
+        content: body,
+        name: artifact.name,
+        mimeType: artifact.mimeType,
+        attachmentSource: "model",
+        generationSource: "workflow_node_agent_result",
+        source: "plugin",
+        reason: "workflow_node_agent_result",
+      });
+      transferPayload = normalizeWorkflowTransferPayload(persisted);
+      attachmentMetas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
+    } else {
+      attachmentMetas = await persister({
+        userId,
+        sessionId,
+        attachmentSource: "model",
+        generationSource: "workflow_node_agent_result",
+        fallbackMimeType: "text/markdown",
+        artifacts: [artifact],
+      });
+    }
+    const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+    if (!metas.length) return [];
+    if (subSession.result && typeof subSession.result === "object") {
+      subSession.result.attachmentMetas = mergeAttachmentMetas(
+        Array.isArray(subSession.result.attachmentMetas) ? subSession.result.attachmentMetas : [],
+        metas,
+      );
+      applyWorkflowTransferPayload(subSession.result, transferPayload);
+      if (Array.isArray(subSession.result.messages) && subSession.result.messages.length) {
+        const lastIndex = subSession.result.messages.length - 1;
+        const lastMessage = subSession.result.messages[lastIndex] || {};
+        subSession.result.messages[lastIndex] = applyWorkflowTransferPayload({
+          ...lastMessage,
+          attachmentMetas: mergeAttachmentMetas(
+            Array.isArray(lastMessage?.attachmentMetas) ? lastMessage.attachmentMetas : [],
+            metas,
+          ),
+        }, transferPayload);
+      }
+    }
+    return metas;
+  } catch {
+    return [];
+  }
+}
+
+export async function appendWorkflowPlanningMessage({
+  options = {},
+  agentResult = {},
+  ctx = {},
+  sourceText = "",
+  semanticText = "",
+  semanticResolution = {},
+  workflowPayload = null,
+  attachmentMetas = [],
+} = {}) {
+  const turnMessages = ensureTurnMessages(agentResult);
+  const dialogProcessId = String(ctx?.dialogProcessId || "").trim();
+  const baseWorkflowPayload = workflowPayload && typeof workflowPayload === "object"
+    ? workflowPayload
+    : {};
+  const baseTransferPayload = normalizeWorkflowTransferPayload(baseWorkflowPayload);
+  let composedTransferPayload = normalizeWorkflowTransferPayload();
+  const transferPathBlock = buildWorkflowTransferPathBlockWithContext(workflowPayload, ctx);
+  if (transferPathBlock) {
+    const runtime = resolveWorkflowRuntimeFromContext(ctx);
+    const semanticTransferContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+    if (typeof semanticTransferContent === "function") {
+      try {
+        const transferred = await semanticTransferContent({
+          scenario: "subagent",
+          messages: [
+            {
+              id: "workflow-final-attachment-summary",
+              nodeId: "workflow-final",
+              nodeName: "workflow-final-attachment-summary",
+              content: transferPathBlock,
+              meta: {
+                phase: "planning",
+                dialogProcessId,
+                sessionId: String(ctx?.sessionId || "").trim(),
+              },
+            },
+          ],
+          nextSteps: [],
+          forceAttachment: true,
+          attachmentSource: "model",
+          generationSource: "workflow_planning_final_attachment_summary",
+          source: "plugin",
+          reason: "workflow_planning_final_attachment_summary",
+          mimeType: "text/markdown",
+        });
+        composedTransferPayload = normalizeWorkflowTransferPayload(transferred);
+      } catch {
+        composedTransferPayload = normalizeWorkflowTransferPayload();
+      }
+    }
+  }
+  const mergedTransferPayload = normalizeWorkflowTransferPayload({
+    transferResult: baseTransferPayload.transferResult || composedTransferPayload.transferResult || null,
+    transferEnvelope: baseTransferPayload.transferEnvelope || composedTransferPayload.transferEnvelope || null,
+    transferEnvelopes: [
+      ...(Array.isArray(baseTransferPayload.transferEnvelopes) ? baseTransferPayload.transferEnvelopes : []),
+      ...(Array.isArray(composedTransferPayload.transferEnvelopes)
+        ? composedTransferPayload.transferEnvelopes
+        : []),
+    ],
+  });
+  const compatAttachmentMetas = resolveWorkflowCompatAttachmentMetas({
+    workflowPayload: mergedTransferPayload,
+    attachmentMetas,
+    ctx,
+  });
+  const attachmentPathBlock =
+    transferPathBlock || buildWorkflowAttachmentPathBlockWithContext(compatAttachmentMetas, ctx);
+  const content = [semanticText || sourceText || "", attachmentPathBlock]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+  const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(workflowPayload);
+  const workflowMessage = {
+    role: "assistant",
+    type: "workflow",
+    content,
+    dialogProcessId,
+    modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),
+    modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
+    summarized: false,
+    // Legacy mirror field for existing consumers; source of truth is transfer payload.
+    attachmentMetas: compatAttachmentMetas,
+    ...(mergedTransferPayload.transferResult ? { transferResult: mergedTransferPayload.transferResult } : {}),
+    ...(mergedTransferPayload.transferEnvelope ? { transferEnvelope: mergedTransferPayload.transferEnvelope } : {}),
+    ...(mergedTransferPayload.transferEnvelopes.length
+      ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
+      : {}),
+    workflowMessage: true,
+    workflowMeta: {
+      source: "workflow-plugin",
+      phase: "planning",
+      semanticInvokerUsed: semanticResolution?.invoked === true,
+      sourceTextPreview: String(sourceText || "").slice(0, 800),
+      semanticTextPreview: String(semanticText || "").slice(0, 2000),
+      payload: sessionWorkflowPayload,
+    },
+  };
+  const existing = turnMessages.find((messageItem = {}) => {
+    if (messageItem?.workflowMessage !== true) return false;
+    if (String(messageItem?.dialogProcessId || "").trim() !== dialogProcessId) return false;
+    const meta = messageItem?.workflowMeta && typeof messageItem.workflowMeta === "object"
+      ? messageItem.workflowMeta
+      : {};
+    return String(meta?.source || "").trim() === "workflow-plugin";
+  });
+  if (existing) {
+    Object.assign(existing, workflowMessage);
+    return existing;
+  }
+  turnMessages.push(workflowMessage);
+  return workflowMessage;
+}
+
+export function buildWorkflowDialogRelativeDir({
+  ctx = {},
+  dialogProcessId = "",
+  scope = "auto",
+} = {}) {
+  const sessionId = String(ctx?.sessionId || "").trim();
+  const dialogId = String(dialogProcessId || ctx?.dialogProcessId || "").trim();
+  if (!sessionId || !dialogId) return "";
+  const normalizedScope = String(scope || "auto").trim().toLowerCase();
+  if (normalizedScope === "planning") {
+    return `runtime/workflow/planning/${sessionId}/${dialogId}`;
+  }
+  if (normalizedScope === "node") {
+    return `runtime/workflow/session/${sessionId}/${dialogId}`;
+  }
+  const isNodeDialog = dialogId.startsWith("wf_node_");
+  return isNodeDialog
+    ? `runtime/workflow/session/${sessionId}/${dialogId}`
+    : `runtime/workflow/planning/${sessionId}/${dialogId}`;
+}
+
+export async function emitWorkflowRuntimeEvent({
+  options = {},
+  ctx = {},
+  dialogId = "",
+  event = "",
+  level = "info",
+  data = {},
+} = {}) {
+  if (typeof options?.workflowEventLogger !== "function") return null;
+  const userId = String(ctx?.userId || "").trim();
+  if (!userId) return null;
+  const resolvedDialogId = String(dialogId || ctx?.dialogProcessId || "").trim();
+  const relativeDir = buildWorkflowDialogRelativeDir({
+    ctx,
+    dialogProcessId: resolvedDialogId,
+  });
+  if (!relativeDir) return null;
+  try {
+    return await options.workflowEventLogger({
+      userId,
+      relativeDir,
+      fileName: "events.jsonl",
+      event: {
+        source: "workflow-plugin",
+        level: String(level || "info").trim(),
+        event: String(event || "").trim(),
+        sessionId: String(ctx?.sessionId || "").trim(),
+        dialogId: resolvedDialogId,
+        ...(data && typeof data === "object" ? data : {}),
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function persistWorkflowPlanningDialog({
+  options = {},
+  ctx = {},
+  sourceText = "",
+  semanticText = "",
+  semanticResolution = {},
+} = {}) {
+  if (typeof options?.workflowDialogPersister !== "function") return null;
+  const userId = String(ctx?.userId || "").trim();
+  if (!userId) return null;
+  const relativeDir = buildWorkflowDialogRelativeDir({
+    ctx,
+    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    scope: "planning",
+  });
+  if (!relativeDir) return null;
+  try {
+    return await options.workflowDialogPersister({
+      userId,
+      relativeDir,
+      fileName: "planning.json",
+      payload: {
+        scope: "workflow_planning",
+        userId,
+        sessionId: String(ctx?.sessionId || "").trim(),
+        dialogId: String(ctx?.dialogProcessId || "").trim(),
+        timestamp: new Date().toISOString(),
+        sourceText,
+        semanticText,
+        semanticModel: String(options?.semanticModel || "").trim(),
+        semanticPrompt: String(options?.semanticPrompt || "").trim(),
+        semanticResolution: {
+          invoked: semanticResolution?.invoked === true,
+          traceCount: Number(semanticResolution?.traceCount || 0),
+          requestMessages: Array.isArray(semanticResolution?.requestMessages)
+            ? semanticResolution.requestMessages
+            : [],
+        },
+      },
+    });
+  } catch {
+    return null;
+  }
+}
