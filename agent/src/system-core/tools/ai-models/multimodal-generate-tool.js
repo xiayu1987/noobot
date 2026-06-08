@@ -34,6 +34,8 @@ const MODEL_NAME_HEADER_KEY = "X-Model-Name";
 const FLOW_HEADER_KEY = "X-Harness-Flow";
 const PURPOSE_HEADER_KEY = "X-Harness-Purpose";
 const DOMAIN_HEADER_KEY = "X-Harness-Domain";
+const SESSION_HEADER_KEY = "X-Harness-Session-Id";
+const PARENT_SESSION_HEADER_KEY = "parentSessionid";
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
 const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
 const MULTIMODAL_DOMAIN_NAME = "tool";
@@ -50,12 +52,18 @@ function resolveModelBaseUrl(modelSpec = {}) {
   return String(modelSpec.base_url || "").trim();
 }
 
-function buildMultimodalRequestHeaders(modelName = "") {
+function buildMultimodalRequestHeaders(modelName = "", runtime = {}) {
+  const sessionId = String(
+    runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
+  ).trim();
+  const parentSessionId = String(runtime?.systemRuntime?.parentSessionId || "").trim();
   return {
     [MODEL_NAME_HEADER_KEY]: String(modelName || "").trim() || "unknown_model",
     [FLOW_HEADER_KEY]: MULTIMODAL_FLOW_NAME,
     [PURPOSE_HEADER_KEY]: MULTIMODAL_PURPOSE_NAME,
     [DOMAIN_HEADER_KEY]: MULTIMODAL_DOMAIN_NAME,
+    ...(sessionId ? { [SESSION_HEADER_KEY]: sessionId } : {}),
+    ...(parentSessionId ? { [PARENT_SESSION_HEADER_KEY]: parentSessionId } : {}),
   };
 }
 
@@ -327,7 +335,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
           ...(resolveModelBaseUrl(resolvedModelSpec || {})
             ? { baseURL: resolveModelBaseUrl(resolvedModelSpec || {}) }
             : {}),
-          defaultHeaders: buildMultimodalRequestHeaders(modelNameForGeneration),
+          defaultHeaders: buildMultimodalRequestHeaders(modelNameForGeneration, runtime),
         });
         const generationResult = await generateWithOpenaiResponsesApi({
           openaiClient,

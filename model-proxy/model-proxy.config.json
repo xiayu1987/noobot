@@ -18,6 +18,7 @@
   "modelNameHeaderKey": "x-model-name",
   "harnessFlowHeaderKey": "x-harness-flow",
   "sessionIdHeaderKey": "x-harness-session-id",
+  "parentSessionIdHeaderKey": "parentsessionid",
   "maxLogFileSizeBytes": 10485760,
   "retainMs": 3600000
 }

@@ -19,6 +19,7 @@ const FLOW_HEADER_KEY = "X-Harness-Flow";
 const PURPOSE_HEADER_KEY = "X-Harness-Purpose";
 const DOMAIN_HEADER_KEY = "X-Harness-Domain";
 const SESSION_HEADER_KEY = "X-Harness-Session-Id";
+const PARENT_SESSION_HEADER_KEY = "parentSessionid";
 const DEFAULT_MAIN_FLOW = "agent.main";
 const DEFAULT_MAIN_PURPOSE = "main_agent";
 const DEFAULT_MAIN_DOMAIN = "primary";
@@ -150,14 +151,40 @@ function resolveHeaderSessionId(options = {}) {
   return value.slice(0, 200);
 }
 
+function resolveHeaderParentSessionId(options = {}) {
+  const context = resolveContextObject(options);
+  const contextRuntime =
+    context?.runtime && typeof context.runtime === "object" ? context.runtime : {};
+  const contextAgentContext =
+    context?.agentContext && typeof context.agentContext === "object"
+      ? context.agentContext
+      : {};
+  const value = String(
+    context?.parentSessionId ||
+      options?.parentSessionId ||
+      contextRuntime?.systemRuntime?.parentSessionId ||
+      options?.runtime?.systemRuntime?.parentSessionId ||
+      contextRuntime?.parentSessionId ||
+      options?.runtime?.parentSessionId ||
+      contextAgentContext?.parentSessionId ||
+      options?.agentContext?.parentSessionId ||
+      contextAgentContext?.session?.parent?.id ||
+      options?.agentContext?.session?.parent?.id ||
+      "",
+  ).trim();
+  return value.slice(0, 200);
+}
+
 function buildChatModelConfiguration(normalizedSpec = {}, options = {}) {
   const sessionId = resolveHeaderSessionId(options);
+  const parentSessionId = resolveHeaderParentSessionId(options);
   const defaultHeaders = {
     [MODEL_NAME_HEADER_KEY]: String(normalizedSpec?.model || "").trim(),
     [FLOW_HEADER_KEY]: DEFAULT_MAIN_FLOW,
     [PURPOSE_HEADER_KEY]: DEFAULT_MAIN_PURPOSE,
     [DOMAIN_HEADER_KEY]: DEFAULT_MAIN_DOMAIN,
     ...(sessionId ? { [SESSION_HEADER_KEY]: sessionId } : {}),
+    ...(parentSessionId ? { [PARENT_SESSION_HEADER_KEY]: parentSessionId } : {}),
     ...normalizeAdditionalHeaders(options?.additionalHeaders),
   };
   const config = {
