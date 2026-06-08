@@ -191,6 +191,98 @@ test("interaction_request resolved by one client should be consistent across all
   );
 });
 
+test("interaction_pending channel_state should carry pendingInteractions snapshot", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-snapshot" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-snapshot",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
+  client.sentEvents = [];
+
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-a",
+    sessionId: "session-snapshot",
+    dialogProcessId: "dp-snapshot",
+    seq: 2,
+    content: "first",
+  });
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-b",
+    sessionId: "session-snapshot",
+    dialogProcessId: "dp-snapshot",
+    seq: 3,
+    content: "second",
+  });
+
+  const stateEvents = listEvents(client, "channel_state");
+  assert.equal(stateEvents.length, 2);
+  const latestState = stateEvents.at(-1);
+  assert.equal(latestState?.data?.state, "interaction_pending");
+  assert.equal(latestState?.data?.pendingInteraction?.requestId, "req-a");
+  assert.deepEqual(
+    latestState?.data?.pendingInteractions?.map((item) => item.requestId),
+    ["req-a", "req-b"],
+  );
+  assert.deepEqual(latestState?.data?.pendingRequestIds, ["req-a", "req-b"]);
+});
+
+test("resolving one concurrent interaction keeps channel_state interaction_pending for remaining requests", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-concurrent" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-concurrent",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  channel.upstreamSocket = {
+    readyState: 1,
+    sent: [],
+    send(raw) {
+      this.sent.push(String(raw || ""));
+    },
+  };
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
+  client.sentEvents = [];
+
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-a",
+    sessionId: "session-concurrent",
+    dialogProcessId: "dp-concurrent",
+    seq: 2,
+  });
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-b",
+    sessionId: "session-concurrent",
+    dialogProcessId: "dp-concurrent",
+    seq: 3,
+  });
+  const forwarded = manager.forwardToUpstream(channel, {
+    action: "interaction_response",
+    requestId: "req-a",
+    response: { confirmed: true },
+  });
+
+  assert.equal(forwarded, true);
+  const latestState = listEvents(client, "channel_state").at(-1);
+  assert.equal(latestState?.data?.state, "interaction_pending");
+  assert.equal(latestState?.data?.requestId, "req-a");
+  assert.deepEqual(
+    latestState?.data?.pendingInteractions?.map((item) => item.requestId),
+    ["req-b"],
+  );
+  assert.equal(channel.pendingInteractionRequests.has("req-a"), false);
+  assert.equal(channel.pendingInteractionRequests.has("req-b"), true);
+});
+
 test("reconnect state should be isolated between different users", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });

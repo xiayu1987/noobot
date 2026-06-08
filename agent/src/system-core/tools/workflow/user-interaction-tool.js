@@ -99,6 +99,81 @@ function isSensitiveField(field = {}) {
     }),
   );
 }
+
+function isJsonStringTerminator(nextChar = "") {
+  return nextChar === ":" || nextChar === "," || nextChar === "}" || nextChar === "]";
+}
+
+function findNextNonWhitespaceChar(text = "", startIndex = 0) {
+  for (let index = startIndex; index < text.length; index += 1) {
+    const char = text[index];
+    if (!/\s/.test(char)) return char;
+  }
+  return "";
+}
+
+function repairUnescapedQuotesInJsonStrings(text = "") {
+  const source = String(text || "");
+  let repaired = "";
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (!inString) {
+      repaired += char;
+      if (char === "\"") {
+        inString = true;
+        escaping = false;
+      }
+      continue;
+    }
+
+    if (escaping) {
+      repaired += char;
+      escaping = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      repaired += char;
+      escaping = true;
+      continue;
+    }
+
+    if (char === "\"") {
+      const nextNonWhitespaceChar = findNextNonWhitespaceChar(source, index + 1);
+      if (isJsonStringTerminator(nextNonWhitespaceChar) || !nextNonWhitespaceChar) {
+        repaired += char;
+        inString = false;
+      } else {
+        repaired += "\\\"";
+      }
+      continue;
+    }
+
+    repaired += char;
+  }
+
+  return repaired;
+}
+
+function parseJsonStringPayload(text = "") {
+  const source = String(text || "").trim();
+  try {
+    return JSON.parse(source);
+  } catch (strictParseError) {
+    const repaired = repairUnescapedQuotesInJsonStrings(source);
+    if (repaired === source) throw strictParseError;
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      throw strictParseError;
+    }
+  }
+}
+
 export function createUserInteractionTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const bridge = runtime.userInteractionBridge || null;
@@ -157,7 +232,7 @@ export function createUserInteractionTool({ agentContext }) {
       try {
         const parsedFields =
           typeof fields === "string" && String(fields || "").trim()
-            ? JSON.parse(fields)
+            ? parseJsonStringPayload(fields)
             : fields || {};
         normalizedFieldsPayload = Array.isArray(parsedFields)
           ? fieldsPayloadSchema.parse({ fields: parsedFields })

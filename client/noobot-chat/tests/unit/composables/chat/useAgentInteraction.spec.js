@@ -55,6 +55,47 @@ describe("useAgentInteraction", () => {
     expect(interaction.pendingInteractionRequest.value).toBeNull();
   });
 
+  it("queues concurrent interactions and advances after submitting current request", () => {
+    const sendJson = vi.fn();
+    const interaction = useAgentInteraction({
+      encryptPayloadBySessionId: (payload) => payload,
+      sendJson,
+    });
+
+    interaction.setPendingInteractionRequest({
+      requestId: "req-a",
+      sessionId: "s-1",
+      dialogProcessId: "dp-1",
+      interactionType: "confirm",
+      content: "first?",
+    });
+    interaction.setPendingInteractionRequest({
+      requestId: "req-b",
+      sessionId: "s-1",
+      dialogProcessId: "dp-1",
+      interactionType: "confirm",
+      content: "second?",
+    });
+
+    expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
+      "req-a",
+      "req-b",
+    ]);
+    expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-a");
+
+    interaction.submitInteractionResponse({ approved: true });
+
+    expect(sendJson).toHaveBeenCalledWith({
+      action: "interaction_response",
+      requestId: "req-a",
+      response: { approved: true },
+    });
+    expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-b");
+    expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
+      "req-b",
+    ]);
+  });
+
   it("submitInteractionResponse sends encrypted payload and toggles state", () => {
     const sendJson = vi.fn();
     const encryptPayloadBySessionId = vi.fn(() => "encrypted-payload");

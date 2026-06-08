@@ -15,6 +15,7 @@ export const useChatStore = defineStore("chat", () => {
   const loadingSessions = ref(false);
   const loadingSessionDetail = ref(false);
   const pendingInteractionRequest = ref(null);
+  const pendingInteractionRequests = ref([]);
   const interactionSubmitting = ref(false);
 
   const activeSession = computed(() =>
@@ -30,6 +31,7 @@ export const useChatStore = defineStore("chat", () => {
     loadingSessions.value = false;
     loadingSessionDetail.value = false;
     pendingInteractionRequest.value = null;
+    pendingInteractionRequests.value = [];
     interactionSubmitting.value = false;
   }
 
@@ -43,6 +45,7 @@ export const useChatStore = defineStore("chat", () => {
     loadingSessions,
     loadingSessionDetail,
     pendingInteractionRequest,
+    pendingInteractionRequests,
     interactionSubmitting,
     resetChatStore,
   };

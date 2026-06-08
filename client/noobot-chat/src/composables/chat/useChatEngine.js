@@ -150,6 +150,7 @@ export function useChatEngine({
 } = {}) {
   const { translate, locale } = useLocale();
   let cacheExpiredRefreshTimer = null;
+  const missingInteractionPayloadTimers = new Map();
   const connectorConnectedAckedRequestIds = new Set();
 
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
@@ -216,7 +217,7 @@ export function useChatEngine({
       }
     } catch {}
     if (requestId) connectorConnectedAckedRequestIds.add(requestId);
-    clearPendingInteraction();
+    clearPendingInteraction(request);
     return true;
   }
 
@@ -235,6 +236,77 @@ export function useChatEngine({
       seq: 0,
       applied: true,
     });
+  }
+
+  function getInteractionPayloadWaitKey({ sessionId = "", dialogProcessId = "" } = {}) {
+    return `${String(sessionId || "").trim()}::${String(dialogProcessId || "").trim()}`;
+  }
+
+  function clearMissingInteractionPayloadTimer({
+    sessionId = "",
+    dialogProcessId = "",
+  } = {}) {
+    const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
+    const timer = missingInteractionPayloadTimers.get(key);
+    if (!timer) return;
+    clearTimeout(timer);
+    missingInteractionPayloadTimers.delete(key);
+  }
+
+  function hasPendingInteractionForDialog(dialogProcessId = "") {
+    const pendingRequest =
+      pendingInteractionRequest.value && typeof pendingInteractionRequest.value === "object"
+        ? pendingInteractionRequest.value
+        : null;
+    if (!pendingRequest) return false;
+    const pendingDialogProcessId = String(pendingRequest?.dialogProcessId || "").trim();
+    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    return (
+      !normalizedDialogProcessId ||
+      !pendingDialogProcessId ||
+      pendingDialogProcessId === normalizedDialogProcessId
+    );
+  }
+
+  function scheduleMissingInteractionPayloadFailure({
+    sessionId = "",
+    dialogProcessId = "",
+    targetAssistantMessage = null,
+  } = {}) {
+    if (hasPendingInteractionForDialog(dialogProcessId)) return;
+    const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
+    if (missingInteractionPayloadTimers.has(key)) return;
+    const timer = setTimeout(() => {
+      missingInteractionPayloadTimers.delete(key);
+      if (hasPendingInteractionForDialog(dialogProcessId)) return;
+      sending.value = false;
+      clearPendingInteraction();
+      const missingInteractionError = translate("chat.interactionPayloadMissing");
+      applyAssistantFailureState(targetAssistantMessage, missingInteractionError);
+      emitSyntheticErrorConversationState({
+        sessionId,
+        dialogProcessId,
+        sourceEvent: "interaction_payload_missing",
+      });
+      notify({ type: "error", message: missingInteractionError });
+    }, 1200);
+    missingInteractionPayloadTimers.set(key, timer);
+  }
+
+  function normalizePendingInteractionPayloads(statePayload = {}) {
+    const pendingInteractions = Array.isArray(statePayload?.pendingInteractions)
+      ? statePayload.pendingInteractions
+      : [];
+    if (pendingInteractions.length) {
+      return pendingInteractions.filter(
+        (item) => item && typeof item === "object" && !Array.isArray(item),
+      );
+    }
+    return statePayload?.pendingInteraction &&
+      typeof statePayload.pendingInteraction === "object" &&
+      !Array.isArray(statePayload.pendingInteraction)
+      ? [statePayload.pendingInteraction]
+      : [];
   }
 
   function scheduleCacheExpiredSessionRefresh({
@@ -376,24 +448,31 @@ export function useChatEngine({
         String(statePayload?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
         typeof clearPendingInteractionIfObsolete === "function"
       ) {
-        clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
+        const responseRequestId = String(
+          statePayload?.requestId ||
+            statePayload?.interactionRequestId ||
+            statePayload?.pendingInteraction?.requestId ||
+            "",
+        ).trim();
+        if (responseRequestId) {
+          clearPendingInteractionIfObsolete({ requestId: responseRequestId });
+        }
       }
       if (state === "interaction_pending") {
         interactionSubmitting.value = false;
-        const pendingInteractionPayload =
-          statePayload?.pendingInteraction &&
-          typeof statePayload.pendingInteraction === "object"
-            ? statePayload.pendingInteraction
-            : null;
-        if (pendingInteractionPayload) {
-          const normalizedPendingInteractionRequest = normalizeInteractionRequestPayload({
-            ...pendingInteractionPayload,
-            interactionType: String(
-              pendingInteractionPayload?.interactionType || "",
-            ).trim(),
-          });
-          if (!tryAutoResolveInteraction(normalizedPendingInteractionRequest)) {
-            setPendingInteractionRequest(normalizedPendingInteractionRequest);
+        const pendingInteractionPayloads = normalizePendingInteractionPayloads(statePayload);
+        if (pendingInteractionPayloads.length) {
+          clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
+          for (const pendingInteractionPayload of pendingInteractionPayloads) {
+            const normalizedPendingInteractionRequest = normalizeInteractionRequestPayload({
+              ...pendingInteractionPayload,
+              interactionType: String(
+                pendingInteractionPayload?.interactionType || "",
+              ).trim(),
+            });
+            if (!tryAutoResolveInteraction(normalizedPendingInteractionRequest)) {
+              setPendingInteractionRequest(normalizedPendingInteractionRequest);
+            }
           }
         } else {
           // Some backends emit `interaction_pending` without embedding
@@ -418,16 +497,11 @@ export function useChatEngine({
               return;
             }
           }
-          sending.value = false;
-          clearPendingInteraction();
-          const missingInteractionError = translate("chat.interactionPayloadMissing");
-          applyAssistantFailureState(targetAssistantMessage, missingInteractionError);
-          emitSyntheticErrorConversationState({
+          scheduleMissingInteractionPayloadFailure({
             sessionId,
             dialogProcessId,
-            sourceEvent: "interaction_payload_missing",
+            targetAssistantMessage,
           });
-          notify({ type: "error", message: missingInteractionError });
           return;
         }
       }
@@ -448,6 +522,7 @@ export function useChatEngine({
     if (typeof clearPendingInteractionIfObsolete === "function") {
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }
+    clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;
     }
@@ -632,6 +707,10 @@ export function useChatEngine({
           const normalizedInteractionRequest = normalizeInteractionRequestPayload({
             ...(data || {}),
             interactionType: String(data?.interactionType || "").trim(),
+          });
+          clearMissingInteractionPayloadTimer({
+            sessionId: String(normalizedInteractionRequest?.sessionId || "").trim(),
+            dialogProcessId: String(normalizedInteractionRequest?.dialogProcessId || "").trim(),
           });
           scrollOnFirstResponseOnce();
           if (tryAutoResolveInteraction(normalizedInteractionRequest)) {

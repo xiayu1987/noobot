@@ -127,6 +127,7 @@ export class ChannelManager {
       seq = 0,
       broadcast = true,
       sessionId = "",
+      requestId = "",
     } = {},
   ) {
     if (!channel) return null;
@@ -151,6 +152,7 @@ export class ChannelManager {
       sourceEvent: String(sourceEvent || "").trim(),
       seq: Number(seq || 0),
       updatedAtMs: nowMs(),
+      requestId: String(requestId || "").trim(),
     };
     channel.conversationStateByDialogProcessId.set(stateKey, stateItem);
     if (broadcast) {
@@ -300,22 +302,12 @@ export class ChannelManager {
 
   broadcastChannelState(channel, stateItem = {}) {
     if (!channel || !stateItem) return;
-    const pendingInteraction = this._findLatestPendingInteractionByDialogProcessId(
-      channel,
-      String(stateItem?.dialogProcessId || "").trim(),
-    );
     this.broadcastChannelEvent(channel, {
       sequence: Number(channel?.eventSequence || 0),
       event: CHANNEL_EVENT.CHANNEL_STATE,
-      data: {
-        sessionId: String(stateItem?.sessionId || ""),
-        dialogProcessId: String(stateItem?.dialogProcessId || ""),
-        state: String(stateItem?.state || ""),
-        sourceEvent: String(stateItem?.sourceEvent || ""),
-        seq: Number(stateItem?.seq || 0),
+      data: this._buildConversationStatePayload(channel, stateItem, {
         updatedAtMs: Number(stateItem?.updatedAtMs || nowMs()),
-        ...(pendingInteraction ? { pendingInteraction } : {}),
-      },
+      }),
     });
   }
 
@@ -326,43 +318,71 @@ export class ChannelManager {
         Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
     );
     for (const stateItem of stateList) {
-      const pendingInteraction = this._findLatestPendingInteractionByDialogProcessId(
-        channel,
-        String(stateItem?.dialogProcessId || "").trim(),
-      );
       this.sendSocketEvent(targetSocket, {
         event: CHANNEL_EVENT.CHANNEL_STATE,
-        data: {
-          sessionId: String(stateItem?.sessionId || ""),
-          dialogProcessId: String(stateItem?.dialogProcessId || ""),
-          state: String(stateItem?.state || ""),
-          sourceEvent: String(stateItem?.sourceEvent || ""),
-          seq: Number(stateItem?.seq || 0),
+        data: this._buildConversationStatePayload(channel, stateItem, {
           updatedAtMs: Number(stateItem?.updatedAtMs || 0),
-          ...(pendingInteraction ? { pendingInteraction } : {}),
-        },
+        }),
       });
     }
   }
 
-  _findLatestPendingInteractionByDialogProcessId(channel, dialogProcessId = "") {
-    if (!channel?.pendingInteractionRequests?.size) return null;
+  _findPendingInteractionsByDialogProcessId(channel, dialogProcessId = "") {
+    if (!channel?.pendingInteractionRequests?.size) return [];
     const normalizedDpId = String(dialogProcessId || "").trim();
-    if (!normalizedDpId) return null;
-    let latestEnvelope = null;
-    let latestSequence = 0;
+    if (!normalizedDpId) return [];
+    const pendingInteractions = [];
     for (const envelope of channel.pendingInteractionRequests.values()) {
       const envelopeDpId = String(envelope?.data?.dialogProcessId || "").trim();
       if (!envelopeDpId || envelopeDpId !== normalizedDpId) continue;
       const sequence = Number(envelope?.data?.seq || envelope?.sequence || 0);
-      if (!latestEnvelope || sequence >= latestSequence) {
-        latestEnvelope = envelope;
-        latestSequence = sequence;
-      }
+      if (!envelope?.data || typeof envelope.data !== "object") continue;
+      pendingInteractions.push({
+        ...envelope.data,
+        __agentProxySequence: sequence,
+      });
     }
-    if (!latestEnvelope?.data || typeof latestEnvelope.data !== "object") return null;
+    return pendingInteractions.sort(
+      (left, right) =>
+        Number(left?.__agentProxySequence || 0) - Number(right?.__agentProxySequence || 0),
+    );
+  }
+
+  _findLatestPendingInteractionByDialogProcessId(channel, dialogProcessId = "") {
+    const pendingInteractions = this._findPendingInteractionsByDialogProcessId(
+      channel,
+      dialogProcessId,
+    );
+    return pendingInteractions[pendingInteractions.length - 1] || null;
+  }
+
+  _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
+    const state = String(stateItem?.state || "").trim();
+    const dialogProcessId = String(stateItem?.dialogProcessId || "").trim();
+    const pendingInteractions =
+      state === CONVERSATION_STATE.INTERACTION_PENDING
+        ? this._findPendingInteractionsByDialogProcessId(channel, dialogProcessId)
+        : [];
+    const firstPendingInteraction = pendingInteractions[0] || null;
     return {
-      ...latestEnvelope.data,
+      sessionId: String(stateItem?.sessionId || ""),
+      dialogProcessId,
+      state,
+      sourceEvent: String(stateItem?.sourceEvent || ""),
+      seq: Number(stateItem?.seq || 0),
+      updatedAtMs: Number(overrides?.updatedAtMs ?? stateItem?.updatedAtMs ?? nowMs()),
+      ...(String(stateItem?.requestId || "").trim()
+        ? { requestId: String(stateItem.requestId).trim() }
+        : {}),
+      ...(pendingInteractions.length
+        ? {
+            pendingInteraction: firstPendingInteraction,
+            pendingInteractions,
+            pendingRequestIds: pendingInteractions
+              .map((item) => String(item?.requestId || "").trim())
+              .filter(Boolean),
+          }
+        : {}),
     };
   }
 
@@ -567,12 +587,29 @@ export class ChannelManager {
           const requestEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
           channel.pendingInteractionRequests.delete(requestId);
           this.requestChannelMap.delete(requestId);
+          const dialogProcessId = String(requestEnvelope?.data?.dialogProcessId || "").trim();
+          const sessionId = String(requestEnvelope?.data?.sessionId || "").trim();
+          const remainingPendingInteractions = this._findPendingInteractionsByDialogProcessId(
+            channel,
+            dialogProcessId,
+          );
+          const stateKey = dialogProcessId || CONVERSATION_SCOPE_KEY;
+          const previousStateItem =
+            channel.conversationStateByDialogProcessId.get(stateKey) || null;
           this.updateConversationState(channel, {
-            dialogProcessId: String(requestEnvelope?.data?.dialogProcessId || "").trim(),
-            sessionId: String(requestEnvelope?.data?.sessionId || "").trim(),
-            state: CONVERSATION_STATE.SENDING,
+            dialogProcessId,
+            sessionId,
+            state: remainingPendingInteractions.length
+              ? CONVERSATION_STATE.INTERACTION_PENDING
+              : CONVERSATION_STATE.SENDING,
             sourceEvent: CONVERSATION_SOURCE_EVENT.INTERACTION_RESPONSE,
-            seq: Number(requestEnvelope?.data?.seq || channel?.eventSequence || 0),
+            seq:
+              Math.max(
+                Number(previousStateItem?.seq || 0),
+                Number(requestEnvelope?.data?.seq || 0),
+                Number(channel?.eventSequence || 0),
+              ) + 1,
+            requestId,
           });
         }
       }
@@ -716,23 +753,23 @@ export class ChannelManager {
         const stateKey =
           String(stateItem?.dialogProcessId || "").trim() || CONVERSATION_SCOPE_KEY;
         const existingStateItem = stateByDialogProcessId.get(stateKey);
-        const pendingInteraction = this._findLatestPendingInteractionByDialogProcessId(
-          channel,
-          String(stateItem?.dialogProcessId || "").trim(),
-        );
         if (
           !existingStateItem ||
           Number(stateItem?.updatedAtMs || 0) >= Number(existingStateItem?.updatedAtMs || 0)
         ) {
-          stateByDialogProcessId.set(stateKey, {
-            sessionId: channelSessionId,
-            dialogProcessId: String(stateItem?.dialogProcessId || "").trim(),
-            state: String(stateItem?.state || "").trim(),
-            sourceEvent: String(stateItem?.sourceEvent || "").trim(),
-            seq: Number(stateItem?.seq || 0),
-            updatedAtMs: Number(stateItem?.updatedAtMs || 0),
-            ...(pendingInteraction ? { pendingInteraction } : {}),
-          });
+          stateByDialogProcessId.set(
+            stateKey,
+            this._buildConversationStatePayload(
+              channel,
+              {
+                ...stateItem,
+                sessionId: channelSessionId,
+              },
+              {
+                updatedAtMs: Number(stateItem?.updatedAtMs || 0),
+              },
+            ),
+          );
         }
       }
       sessionEntry.conversationStates = Array.from(stateByDialogProcessId.values()).sort(
