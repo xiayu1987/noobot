@@ -35,6 +35,14 @@ const props = defineProps({
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
+  attachmentPreviewDialogClass: {
+    type: String,
+    default: "attachment-preview-dialog",
+  },
+  filePreviewDialogClass: {
+    type: String,
+    default: "generated-file-preview-dialog",
+  },
 });
 
 const {
@@ -198,7 +206,7 @@ async function handleCopyAssistantMessageText() {
     :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
     width="72%"
     top="6vh"
-    class="attachment-preview-dialog"
+    :class="attachmentPreviewDialogClass"
     destroy-on-close
     @closed="closeAttachmentPreview"
   >
@@ -222,7 +230,7 @@ async function handleCopyAssistantMessageText() {
     :title="translate('message.filePreviewTitle', { name: previewFileName || '' })"
     width="72%"
     top="6vh"
-    class="generated-file-preview-dialog"
+    :class="filePreviewDialogClass"
     destroy-on-close
     @closed="closePreviewDialog"
   >
