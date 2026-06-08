@@ -142,6 +142,11 @@ function extractOriginalTransferPayload(parsed = null) {
 function compactParsedToolResultForOverflow(parsed = null) {
   if (!isPlainObject(parsed)) return parsed;
   const compact = { ...parsed };
+  const stdoutText = "stdout" in compact ? String(compact.stdout ?? "") : "";
+  if ("stdout" in compact) {
+    compact.stdout_length = stdoutText.length;
+  }
+  delete compact.stdout;
   delete compact.transferResult;
   delete compact.transferEnvelope;
   delete compact.transferEnvelopes;
@@ -156,6 +161,43 @@ function compactParsedToolResultForOverflow(parsed = null) {
   delete compact[overflowPathKey];
   delete compact[overflowSandboxPathKey];
   return compactObject(compact);
+}
+
+function resolveOverflowAttachmentPayloads(parsed = null, rawText = "") {
+  if (isPlainObject(parsed)) {
+    const payloads = [];
+    if ("stdout" in parsed) {
+      const stdoutText = String(parsed.stdout ?? "");
+      payloads.push({
+        text: stdoutText,
+        name: "stdout.txt",
+        mimeType: "text/plain",
+        contentKind: "stdout",
+        contentLength: stdoutText.length,
+      });
+    }
+    if ("stderr" in parsed) {
+      const stderrText = String(parsed.stderr ?? "");
+      payloads.push({
+        text: stderrText,
+        name: "stderr.txt",
+        mimeType: "text/plain",
+        contentKind: "stderr",
+        contentLength: stderrText.length,
+      });
+    }
+    if (payloads.length) return payloads;
+  }
+  const normalizedRawText = String(rawText || "");
+  return [
+    {
+      text: normalizedRawText,
+      name: "tool-result.json",
+      mimeType: "application/json",
+      contentKind: "raw_tool_result",
+      contentLength: normalizedRawText.length,
+    },
+  ];
 }
 
 function normalizeOverflowSessionDirName(sessionId = "") {
@@ -245,32 +287,46 @@ async function normalizeToolResultOverflow({
     };
   }
 
-  const semanticOverflow = await materializeTextForToolResult({
-    runtime,
-    agentContext,
-    text: rawText,
-    name: `${String(call?.name || "tool").trim() || "tool"}.semantic-transfer.json`,
-    mimeType: "application/json",
-    attachmentSource: "model",
-    generationSource: "tool_result_overflow",
-    source: "tool",
-    reason: "tool_result_overflow",
-    alwaysPersist: true,
-    forcePreview: true,
-    producer: { type: "tool", name: String(call?.name || "").trim() },
-    meta: { toolCallId: String(call?.id || "").trim() },
-  });
   const parsed = parseJsonObjectSafely(rawText);
+  const overflowAttachmentPayloads = resolveOverflowAttachmentPayloads(parsed, rawText);
+  const semanticOverflows = await Promise.all(
+    overflowAttachmentPayloads.map((overflowAttachmentPayload = {}) =>
+      materializeTextForToolResult({
+        runtime,
+        agentContext,
+        text: overflowAttachmentPayload.text,
+        name: `${String(call?.name || "tool").trim() || "tool"}.${overflowAttachmentPayload.name}`,
+        mimeType: overflowAttachmentPayload.mimeType,
+        attachmentSource: "model",
+        generationSource: "tool_result_overflow",
+        source: "tool",
+        reason: "tool_result_overflow",
+        alwaysPersist: true,
+        forcePreview: true,
+        producer: { type: "tool", name: String(call?.name || "").trim() },
+        meta: {
+          toolCallId: String(call?.id || "").trim(),
+          overflowContentKind: overflowAttachmentPayload.contentKind,
+          overflowContentLength: overflowAttachmentPayload.contentLength,
+        },
+      }),
+    ),
+  );
+  const semanticOverflowEnvelopes = dedupeTransferEnvelopes(
+    semanticOverflows.flatMap((item = {}) =>
+      Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
+    ),
+  );
   const ok = parsed && typeof parsed.ok === "boolean" ? parsed.ok : true;
   const status = String(parsed?.status || "").trim();
   const originalMessage = String(parsed?.message || "").trim();
   const originalTransferPayload = extractOriginalTransferPayload(parsed);
-  const overflowTransferPayload = semanticOverflow.transferEnvelopes?.length
+  const overflowTransferPayload = semanticOverflowEnvelopes.length
     ? {
         ...originalTransferPayload,
         transferEnvelopes: dedupeTransferEnvelopes([
           ...(Array.isArray(originalTransferPayload.transferEnvelopes) ? originalTransferPayload.transferEnvelopes : []),
-          ...semanticOverflow.transferEnvelopes,
+          ...semanticOverflowEnvelopes,
         ]),
       }
     : {
