@@ -73,6 +73,11 @@ export function createStateBuilder({
       globalConfig,
       userConfig,
       streaming: false,
+      context: {
+        runtime,
+        agentContext,
+        sessionId: String(sys?.sessionId || runtime?.sessionId || "").trim(),
+      },
     });
     emitEventFn(eventListener, "model_selected", {
       alias: selectedModelSpec?.alias || "",

@@ -55,11 +55,19 @@ export function resolveLlmForTurn(modelState) {
           globalConfig,
           userConfig,
           streaming: false,
+          context: {
+            runtime,
+            sessionId: String(runtime?.systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
+          },
         })
       : createChatModel({
           globalConfig,
           userConfig,
           streaming: false,
+          context: {
+            runtime,
+            sessionId: String(runtime?.systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
+          },
         });
   }
 

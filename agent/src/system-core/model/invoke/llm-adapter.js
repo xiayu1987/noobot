@@ -30,11 +30,25 @@ function getNonStreamingInvokeLlm(modelState = {}) {
         globalConfig: modelState?.globalConfig || {},
         userConfig: modelState?.userConfig || {},
         streaming: false,
+        context: {
+          runtime: modelState?.runtime || {},
+          agentContext: modelState?.agentContext || null,
+          sessionId: String(
+            modelState?.runtime?.systemRuntime?.sessionId || modelState?.runtime?.sessionId || "",
+          ).trim(),
+        },
       })
     : createChatModel({
         globalConfig: modelState?.globalConfig || {},
         userConfig: modelState?.userConfig || {},
         streaming: false,
+        context: {
+          runtime: modelState?.runtime || {},
+          agentContext: modelState?.agentContext || null,
+          sessionId: String(
+            modelState?.runtime?.systemRuntime?.sessionId || modelState?.runtime?.sessionId || "",
+          ).trim(),
+        },
       });
 
   modelState.__invokeLlmNonStreamingCache = { key: cacheKey, llm };

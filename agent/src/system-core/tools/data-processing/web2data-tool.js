@@ -420,6 +420,7 @@ async function summarizeByModel({
     globalConfig,
     userConfig,
     streaming: false,
+    context: { runtime },
   });
   const userPrompt =
     prompt ||

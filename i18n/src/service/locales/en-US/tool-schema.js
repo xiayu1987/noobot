@@ -514,7 +514,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "process_connector_tool": {
     "description": {
       "key": "tools.process_connector.description",
-      "text": "Can handle connector tasks (database/terminal/email). Input task (optional modelName). Returns processing result."
+      "text": "Can handle connector tasks (database/terminal/email). Connection information is automatically handled by system connectors; no model-provided or model-queried connection info is needed. Input task (optional modelName), returns processing result."
     },
     "params": {
       "modelName": {

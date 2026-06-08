@@ -18,6 +18,7 @@ const MODEL_NAME_HEADER_KEY = "X-Model-Name";
 const FLOW_HEADER_KEY = "X-Harness-Flow";
 const PURPOSE_HEADER_KEY = "X-Harness-Purpose";
 const DOMAIN_HEADER_KEY = "X-Harness-Domain";
+const SESSION_HEADER_KEY = "X-Harness-Session-Id";
 const DEFAULT_MAIN_FLOW = "agent.main";
 const DEFAULT_MAIN_PURPOSE = "main_agent";
 const DEFAULT_MAIN_DOMAIN = "primary";
@@ -118,12 +119,45 @@ function normalizeAdditionalHeaders(input = null) {
   );
 }
 
+function resolveContextObject(options = {}) {
+  const ctx = options?.context;
+  return ctx && typeof ctx === "object" && !Array.isArray(ctx) ? ctx : {};
+}
+
+function resolveHeaderSessionId(options = {}) {
+  const context = resolveContextObject(options);
+  const contextRuntime =
+    context?.runtime && typeof context.runtime === "object" ? context.runtime : {};
+  const contextAgentContext =
+    context?.agentContext && typeof context.agentContext === "object"
+      ? context.agentContext
+      : {};
+  const value = String(
+    context?.sessionId ||
+      options?.sessionId ||
+      contextRuntime?.systemRuntime?.sessionId ||
+      options?.runtime?.systemRuntime?.sessionId ||
+      contextRuntime?.sessionId ||
+      options?.runtime?.sessionId ||
+      contextAgentContext?.sessionId ||
+      options?.agentContext?.sessionId ||
+      contextAgentContext?.session?.current?.sessionId ||
+      options?.agentContext?.session?.current?.sessionId ||
+      contextAgentContext?.session?.id ||
+      options?.agentContext?.session?.id ||
+      "",
+  ).trim();
+  return value.slice(0, 200);
+}
+
 function buildChatModelConfiguration(normalizedSpec = {}, options = {}) {
+  const sessionId = resolveHeaderSessionId(options);
   const defaultHeaders = {
     [MODEL_NAME_HEADER_KEY]: String(normalizedSpec?.model || "").trim(),
     [FLOW_HEADER_KEY]: DEFAULT_MAIN_FLOW,
     [PURPOSE_HEADER_KEY]: DEFAULT_MAIN_PURPOSE,
     [DOMAIN_HEADER_KEY]: DEFAULT_MAIN_DOMAIN,
+    ...(sessionId ? { [SESSION_HEADER_KEY]: sessionId } : {}),
     ...normalizeAdditionalHeaders(options?.additionalHeaders),
   };
   const config = {

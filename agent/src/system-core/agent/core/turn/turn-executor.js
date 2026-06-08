@@ -95,6 +95,13 @@ function resolveLlmForRequiredToolChoice({ modelState, eventListener, turn }) {
       },
       {
         streaming: false,
+        context: {
+          runtime: modelState?.runtime || {},
+          agentContext: modelState?.agentContext || null,
+          sessionId: String(
+            modelState?.runtime?.systemRuntime?.sessionId || modelState?.runtime?.sessionId || "",
+          ).trim(),
+        },
       },
     );
   } catch {
@@ -137,7 +144,16 @@ function createFinalStreamingLlm(modelState = {}) {
         ? { alias: String(modelState.activeModelAlias || "").trim() }
         : {}),
     },
-    { streaming: true },
+    {
+      streaming: true,
+      context: {
+        runtime: modelState?.runtime || {},
+        agentContext: modelState?.agentContext || null,
+        sessionId: String(
+          modelState?.runtime?.systemRuntime?.sessionId || modelState?.runtime?.sessionId || "",
+        ).trim(),
+      },
+    },
   );
 }
 
