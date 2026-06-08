@@ -133,11 +133,19 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[来自harness外部模型输出/{purpose}]",
     reviewHeader: "[Harness-Review]",
+    harnessPolicyPrompt:
+      "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
+    harnessFinalResponsePrompt:
+      "最终回复请包含：做了什么、改了哪些文件、验证情况或未验证原因、下一步建议。",
   }),
   [LOCALE.EN_US]: Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[Relay from harness external model/{purpose}]",
     reviewHeader: "[Harness-Review]",
+    harnessPolicyPrompt:
+      "Noobot Harness reminder: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; keep the final response concise and complete.",
+    harnessFinalResponsePrompt:
+      "Final response should include: what was done, which files were changed, validation status (or why not validated), and next-step suggestions.",
   }),
 });
 

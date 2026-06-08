@@ -6,6 +6,7 @@
 
 import {
   WORKFLOW_ACTION,
+  WORKFLOW_ATTACHMENT_SCOPE,
   WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_HOOKS,
   WORKFLOW_PHASE_STATUS,
@@ -24,6 +25,7 @@ import {
   resolveWorkflowUpstreamActionSteps,
 } from "../workflow/adapter.js";
 import { buildWorkflowOrchestrationPayload } from "./orchestration-payload.js";
+import { resolveWorkflowLocaleFromContext, tWorkflow } from "./i18n.js";
 
 function resolveAssistantOutput(agentResult = {}) {
   const direct = String(agentResult?.output || agentResult?.answer || "").trim();
@@ -77,6 +79,7 @@ function compactWorkflowText(input = "", maxLength = 500) {
 }
 
 function resolveWorkflowAvailableToolCatalog(ctx = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)
     ? ctx.agentContext.payload.tools.registry
     : [];
@@ -87,7 +90,7 @@ function resolveWorkflowAvailableToolCatalog(ctx = {}) {
     if (!name || seenNames.has(name)) continue;
     catalog.push({
       name,
-      description: compactWorkflowText(item?.description || "（无说明）"),
+      description: compactWorkflowText(item?.description || tWorkflow(locale, "workflowNoDescription")),
     });
     seenNames.add(name);
   }
@@ -101,18 +104,13 @@ function resolveWorkflowAvailableToolNames(ctx = {}) {
 function buildWorkflowAvailableToolsPlanningBlock(ctx = {}, locale = "zh-CN") {
   const catalog = resolveWorkflowAvailableToolCatalog(ctx);
   if (!catalog.length) return "";
-  const isEnglish = String(locale || "").trim().toLowerCase() === "en-us";
   return [
-    isEnglish
-      ? "Available tools (name/description), must be considered when planning workflow action nodes:"
-      : "当前可用工具（name/description），规划工作流 action 节点时必须参考：",
+    tWorkflow(locale, "workflowAvailableToolsHeader"),
     "```json",
     JSON.stringify(catalog, null, 2),
     "```",
     "",
-    isEnglish
-      ? "When a workflow action should use tools, write the suitable tool name(s) into that NODE task. Do not invent tool names; if no listed tool is relevant, describe the task normally."
-      : "如果某个 action 节点应使用工具，请把合适的工具名写进该 NODE 的 task。不要臆造工具名；如果没有相关工具，就按普通任务描述。",
+    tWorkflow(locale, "workflowAvailableToolsTaskHint"),
   ].join("\n");
 }
 
@@ -163,14 +161,13 @@ function resolveWorkflowToolCallArguments(toolCall = {}) {
 function buildWorkflowToolCallSemanticText(toolCalls = [], locale = "zh-CN") {
   const calls = Array.isArray(toolCalls) ? toolCalls : [];
   if (!calls.length) return "";
-  const isEnglish = String(locale || "").trim().toLowerCase() === "en-us";
   return calls
     .map((toolCall = {}) => {
-      const name = resolveWorkflowToolCallName(toolCall) || (isEnglish ? "unknown_script" : "未知脚本");
-      const args = resolveWorkflowToolCallArguments(toolCall) || (isEnglish ? "none" : "无参数");
-      return isEnglish
-        ? `Semantic execution: run ${name} script with arguments ${args}`
-        : `语义执行 ${name}脚本,参数${args}`;
+      const name =
+        resolveWorkflowToolCallName(toolCall) || tWorkflow(locale, "workflowToolCallUnknownScript");
+      const args =
+        resolveWorkflowToolCallArguments(toolCall) || tWorkflow(locale, "workflowToolCallNoArguments");
+      return tWorkflow(locale, "workflowToolCallSemanticLine", { name, args });
     })
     .join("\n");
 }
@@ -267,7 +264,7 @@ function normalizeAttachmentRefs(input = []) {
 
 function isAllUserAttachmentRef(ref = "") {
   const normalized = String(ref || "").trim().toLowerCase();
-  return ["*", "all", "user:*", "user:all", "用户:*", "用户:全部"].includes(normalized);
+  return WORKFLOW_ATTACHMENT_SCOPE.USER_ALL_TOKENS.includes(normalized);
 }
 
 function resolveSemanticAttachmentDeclarationMap(semantic = {}) {
@@ -676,19 +673,23 @@ function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {
 }
 
 function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   const lines = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
     .map((item = {}, index) => {
-      const label = String(item?.name || `附件${index + 1}`).trim();
+      const label = String(
+        item?.name || tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+      ).trim();
       const path = resolveAttachmentDisplayPath(item, ctx);
       if (!path) return "";
       return `- ${label}: ${path}`;
     })
     .filter(Boolean);
   if (!lines.length) return "";
-  return ["", "## 工作流节点结果附件", "", ...lines].join("\n");
+  return ["", tWorkflow(locale, "workflowNodeResultAttachmentTitle"), "", ...lines].join("\n");
 }
 
 function buildWorkflowTransferPathBlockWithContext(workflowPayload = null, ctx = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   const files = resolveWorkflowTransferFilesFromPayload(
     workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {},
     ctx,
@@ -696,21 +697,30 @@ function buildWorkflowTransferPathBlockWithContext(workflowPayload = null, ctx =
   const lines = files
     .map((item = {}, index) => {
       const meta = item?.attachmentMeta || {};
-      const label = String(item?.name || meta?.name || `附件${index + 1}`).trim();
+      const label = String(
+        item?.name ||
+          meta?.name ||
+          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+      ).trim();
       const path = resolveWorkflowTransferFileDisplayPath(item, ctx);
       if (!path) return "";
       return `- ${label}: ${path}`;
     })
     .filter(Boolean);
   if (!lines.length) return "";
-  return ["", "## 工作流节点结果附件", "", ...lines].join("\n");
+  return ["", tWorkflow(locale, "workflowNodeResultAttachmentTitle"), "", ...lines].join("\n");
 }
 
 function buildWorkflowInputAttachmentPlanningBlock(attachmentMetas = [], ctx = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   const lines = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
     .map((item = {}, index) => {
       const attachmentId = String(item?.attachmentId || item?.id || "").trim();
-      const name = String(item?.name || item?.fileName || `附件${index + 1}`).trim();
+      const name = String(
+        item?.name ||
+          item?.fileName ||
+          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+      ).trim();
       const mimeType = String(item?.mimeType || "").trim();
       const path = resolveAttachmentDisplayPath(item, ctx);
       const parts = [
@@ -724,13 +734,13 @@ function buildWorkflowInputAttachmentPlanningBlock(attachmentMetas = [], ctx = {
     .filter(Boolean);
   if (!lines.length) return "";
   return [
-    "用户附件:",
+    tWorkflow(locale, "workflowInputAttachmentsHeader"),
     ...lines,
     "",
-    "规划工作流时，如果某个 action 节点需要使用用户附件，请先在 DSL 中输出 ATTACHMENT 映射行，再在该 NODE 上添加 attachments 字段引用附件 id。",
-    "ATTACHMENT 格式：ATTACHMENT id=\"attachmentId\" name=\"附件名\" path=\"可读路径\" mimeType=\"MIME\"。",
-    "可用格式：attachments=\"user:*\" 表示使用全部用户附件；attachments=\"attachmentId1,attachmentId2\" 表示使用指定附件。",
-    "不要把附件路径硬编码进 task；task 只描述任务，附件 id/path 映射写 ATTACHMENT，节点依赖只写 attachments。",
+    tWorkflow(locale, "workflowInputAttachmentsPlanHint1"),
+    tWorkflow(locale, "workflowInputAttachmentsPlanHint2"),
+    tWorkflow(locale, "workflowInputAttachmentsPlanHint3"),
+    tWorkflow(locale, "workflowInputAttachmentsPlanHint4"),
   ].join("\n");
 }
 
@@ -740,9 +750,14 @@ function buildWorkflowInputAttachmentSystemMessage({
   semanticNode = {},
 } = {}) {
   const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   const lines = metas
     .map((item = {}, index) => {
-      const label = String(item?.name || item?.fileName || `附件${index + 1}`).trim();
+      const label = String(
+        item?.name ||
+          item?.fileName ||
+          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+      ).trim();
       const attachmentId = String(item?.attachmentId || item?.id || "").trim();
       const path = resolveAttachmentDisplayPath(item, ctx);
       if (!path && !attachmentId) return "";
@@ -750,13 +765,15 @@ function buildWorkflowInputAttachmentSystemMessage({
     })
     .filter(Boolean);
   if (!lines.length) return "";
-  const nodeName = String(semanticNode?.name || semanticNode?.id || "当前节点").trim();
+  const nodeName = String(
+    semanticNode?.name || semanticNode?.id || tWorkflow(locale, "workflowCurrentNodeFallback"),
+  ).trim();
   return [
-    "# 用户原始附件",
+    tWorkflow(locale, "workflowUserRawAttachmentsTitle"),
     "",
-    `当前节点：${nodeName}`,
+    tWorkflow(locale, "workflowCurrentNodeLine", { name: nodeName }),
     "",
-    "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。执行任务时请按需读取/参考这些附件。",
+    tWorkflow(locale, "workflowInputAttachmentsSystemHint"),
     "",
     ...lines,
   ].join("\n");
@@ -817,6 +834,7 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
   pendingStep = {},
   upstreamNodeResults = [],
 } = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   // Keep upstream injection rendering transfer-only. Any legacy fallback should
   // stay in dedicated compatibility helpers, not in this function.
   const normalizedResults = Array.isArray(upstreamNodeResults) ? upstreamNodeResults : [];
@@ -854,14 +872,29 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
   const lines = [];
   const failureLines = [];
   for (const result of normalizedResults) {
-    const nodeLabel = String(result?.nodeName || result?.nodeId || "上游节点").trim();
+    const nodeLabel = String(
+      result?.nodeName || result?.nodeId || tWorkflow(locale, "workflowUpstreamNodeFallback"),
+    ).trim();
     const nodeTask = String(result?.nodeTask || result?.task || "").trim();
     if (
       String(result?.stepStatus || "").trim() === "failed" ||
       (result?.stepFailure && typeof result.stepFailure === "object")
     ) {
-      const failureMessage = String(result?.stepFailure?.message || "子 agent 执行失败").trim();
-      failureLines.push(`- ${nodeLabel}${nodeTask ? `（任务：${nodeTask}）` : ""}: ${failureMessage}`);
+      const failureMessage = String(
+        result?.stepFailure?.message || tWorkflow(locale, "workflowSubAgentFailureFallback"),
+      ).trim();
+      failureLines.push(
+        nodeTask
+          ? tWorkflow(locale, "workflowFailureLineWithTask", {
+              nodeLabel,
+              task: nodeTask,
+              message: failureMessage,
+            })
+          : tWorkflow(locale, "workflowFailureLineWithoutTask", {
+              nodeLabel,
+              message: failureMessage,
+            }),
+      );
     }
     const transferFiles = resolveWorkflowTransferFilesFromPayload(
       {
@@ -873,25 +906,31 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
     );
     for (const [index, file] of transferFiles.entries()) {
       const meta = file?.attachmentMeta || file || {};
-      const attachmentLabel = String(file?.name || meta?.name || `附件${index + 1}`).trim();
+      const attachmentLabel = String(
+        file?.name ||
+          meta?.name ||
+          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+      ).trim();
       const path = resolveWorkflowTransferFileDisplayPath(file, ctx);
       if (!path) continue;
       lines.push(`- ${nodeLabel} / ${attachmentLabel}: ${path}`);
     }
   }
   if (!lines.length && !failureLines.length) return "";
-  const pendingName = String(pendingStep?.nodeName || pendingStep?.nodeId || "当前节点").trim();
+  const pendingName = String(
+    pendingStep?.nodeName || pendingStep?.nodeId || tWorkflow(locale, "workflowCurrentNodeFallback"),
+  ).trim();
   return [
-    "# 上游工作流节点结果附件",
+    tWorkflow(locale, "workflowUpstreamAttachmentsTitle"),
     "",
-    `当前节点：${pendingName}`,
+    tWorkflow(locale, "workflowCurrentNodeLine", { name: pendingName }),
     "",
-    "以下信息来自直接上游动作节点。请在执行当前任务前先读取/参考可用附件；如果上游节点失败且无附件，请基于失败信息继续完成当前节点可完成的部分，并明确说明受影响范围。",
+    tWorkflow(locale, "workflowUpstreamHint"),
     "",
-    failureLines.length ? "## 上游失败节点" : "",
+    failureLines.length ? tWorkflow(locale, "workflowUpstreamFailureTitle") : "",
     ...failureLines,
     failureLines.length && lines.length ? "" : "",
-    lines.length ? "## 上游结果附件" : "",
+    lines.length ? tWorkflow(locale, "workflowUpstreamResultTitle") : "",
     ...lines,
   ].join("\n");
 }
@@ -929,6 +968,7 @@ async function persistWorkflowNodeResultAttachment({
   pendingStep = {},
   transition = 0,
 } = {}) {
+  const locale = resolveWorkflowLocaleFromContext(ctx);
   const persister = typeof options?.generatedArtifactPersister === "function"
     ? options.generatedArtifactPersister
     : null;
@@ -951,14 +991,20 @@ async function persistWorkflowNodeResultAttachment({
     .filter(Boolean)
     .join("-");
   const body = [
-    "# 工作流节点执行结果",
+    tWorkflow(locale, "workflowNodeResultTitle"),
     "",
-    `- 节点: ${nodeName || "未命名节点"}`,
-    `- 节点ID: ${nodeId || "-"}`,
-    `- 子会话: ${String(subSession?.sessionId || "").trim() || "-"}`,
-    `- 对话: ${String(subSession?.dialogProcessId || "").trim() || "-"}`,
+    tWorkflow(locale, "workflowNodeLine", {
+      name: nodeName || tWorkflow(locale, "workflowNodeUnnamedFallback"),
+    }),
+    tWorkflow(locale, "workflowNodeIdLine", { id: nodeId || "-" }),
+    tWorkflow(locale, "workflowSubSessionLine", {
+      id: String(subSession?.sessionId || "").trim() || "-",
+    }),
+    tWorkflow(locale, "workflowDialogLine", {
+      id: String(subSession?.dialogProcessId || "").trim() || "-",
+    }),
     "",
-    "## 最终输出",
+    tWorkflow(locale, "workflowFinalOutputTitle"),
     "",
     cleanOutput,
     "",
@@ -1186,6 +1232,7 @@ function buildWorkflowDialogRelativeDir({
 }
 
 function buildWorkflowNodeInstruction(step = {}) {
+  const locale = String(step?.locale || "").trim();
   const taskText = String(
     step?.nodeTask ||
       step?.task ||
@@ -1195,10 +1242,10 @@ function buildWorkflowNodeInstruction(step = {}) {
   ).trim();
   if (taskText) return taskText;
   const nodeName = String(step?.nodeName || "").trim();
-  if (nodeName) return `请处理任务：${nodeName}`;
+  if (nodeName) return tWorkflow(locale, "workflowNodeInstructionByName", { name: nodeName });
   const nodeId = String(step?.nodeId || "").trim();
-  if (nodeId) return `请处理节点任务：${nodeId}`;
-  return "请处理当前任务。";
+  if (nodeId) return tWorkflow(locale, "workflowNodeInstructionById", { id: nodeId });
+  return tWorkflow(locale, "workflowNodeInstructionDefault");
 }
 
 function resolveNodeTaskForPendingStep({ semantic = {}, pendingStep = {} } = {}) {
@@ -1382,10 +1429,14 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
   const semanticTaskMessage = {
     role: "user",
     content: [
-      "请基于以上会话上下文和以下当前用户消息规划工作流。",
-      `当前用户消息:\n${userMessage || "(empty)"}`,
+      tWorkflow(locale, "workflowSemanticPlanByContext"),
+      tWorkflow(locale, "workflowSemanticCurrentUserMessage", {
+        message: userMessage || tWorkflow(locale, "workflowSemanticEmpty"),
+      }),
       attachmentPlanningBlock,
-      `主模型回复/工作流源输入:\n${sourceText || "(empty)"}`,
+      tWorkflow(locale, "workflowSemanticSourceInput", {
+        source: sourceText || tWorkflow(locale, "workflowSemanticEmpty"),
+      }),
     ]
       .map((item) => String(item || "").trim())
       .filter(Boolean)
@@ -1525,6 +1576,7 @@ async function runNodeAgent({
     },
     agentInstruction: buildWorkflowNodeInstruction({
       ...pendingStep,
+      locale: resolveWorkflowLocaleFromContext(ctx),
       nodeTask: resolveNodeTaskForPendingStep({ semantic, pendingStep }),
     }),
     proposedAction: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },

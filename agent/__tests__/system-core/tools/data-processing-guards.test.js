@@ -405,6 +405,10 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.parentSessionId, "root-workflow-session");
+  assert.equal(
+    String(calls[0]?.systemMessages?.[0] || ""),
+    "可处理连接器相关任务（数据库/终端/邮箱）。连接信息由系统连接器自动处理，无需提供或询问连接信息",
+  );
   assert.equal(result.parentSessionId, "root-workflow-session");
 });
 

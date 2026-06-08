@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { DSL_DEFAULTS, DSL_ERROR, DSL_PROTOCOL, DSL_TYPES } from "./constants.js";
+import {
+  DSL_DEFAULT_NODE_NAME_BY_LOCALE,
+  DSL_DEFAULTS,
+  DSL_ERROR,
+  DSL_PROTOCOL,
+  DSL_TYPES,
+} from "./constants.js";
 import {
   DSL_ERROR_MESSAGE,
   dslEdgeUndefinedNode,
@@ -73,7 +79,26 @@ function fail(lineNo = 0, message = "") {
   throw new Error(dslLineError(lineNo, message));
 }
 
-export function parseWorkflowDslText(text = "") {
+export function parseWorkflowDslText(text = "", options = {}) {
+  return parseWorkflowDslTextWithOptions(text, options);
+}
+
+function resolveDslLocale(input = "") {
+  const value = String(input || "").trim().toLowerCase();
+  return value.startsWith("en") ? "en-US" : "zh-CN";
+}
+
+function resolveDslDefaultNodeNames(locale = "zh-CN") {
+  const normalizedLocale = resolveDslLocale(locale);
+  const dict = DSL_DEFAULT_NODE_NAME_BY_LOCALE[normalizedLocale] || DSL_DEFAULT_NODE_NAME_BY_LOCALE["zh-CN"];
+  return {
+    startName: String(dict?.START || "").trim() || "开始",
+    endName: String(dict?.END || "").trim() || "结束",
+  };
+}
+
+export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
+  const { startName, endName } = resolveDslDefaultNodeNames(options?.locale || "zh-CN");
   const normalized = stripCodeFence(text);
   if (!normalized) throw new Error(dslError(DSL_ERROR_MESSAGE.EMPTY_TEXT));
   if (/^\s*[\[{]/.test(normalized)) {
@@ -231,7 +256,7 @@ export function parseWorkflowDslText(text = "") {
   if (!semantic.nodes.some((n) => n.id === DSL_DEFAULTS.START_NODE_ID)) {
     semantic.nodes.unshift({
       id: DSL_DEFAULTS.START_NODE_ID,
-      name: DSL_DEFAULTS.START_NODE_NAME,
+      name: startName,
       type: DSL_TYPES.NODE_STATE,
       stateType: DSL_DEFAULTS.STATE_TYPE_START,
     });
@@ -239,7 +264,7 @@ export function parseWorkflowDslText(text = "") {
   if (!semantic.nodes.some((n) => n.id === DSL_DEFAULTS.END_NODE_ID)) {
     semantic.nodes.push({
       id: DSL_DEFAULTS.END_NODE_ID,
-      name: DSL_DEFAULTS.END_NODE_NAME,
+      name: endName,
       type: DSL_TYPES.NODE_STATE,
       stateType: DSL_DEFAULTS.STATE_TYPE_END,
     });

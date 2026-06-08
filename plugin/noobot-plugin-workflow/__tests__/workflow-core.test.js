@@ -197,6 +197,23 @@ test("parseWorkflowDslText normalizes multi-outgoing start as branch", () => {
   assert.equal(start?.stateType, 2);
 });
 
+test("parseWorkflowDslText injects locale-aware default start/end names", () => {
+  const semantic = parseWorkflowDslText(
+    [
+      "WORKFLOW_DSL/1",
+      'NODE id=act_a type=action name="TaskA" task="do task A"',
+      'NODE id=act_b type=action name="TaskB" task="do task B"',
+      "EDGE from=act_a to=act_b",
+      "END",
+    ].join("\n"),
+    { locale: "en-US" },
+  );
+  const start = (semantic?.nodes || []).find((item) => String(item?.id || "") === "start");
+  const end = (semantic?.nodes || []).find((item) => String(item?.id || "") === "end");
+  assert.equal(start?.name, "Start");
+  assert.equal(end?.name, "End");
+});
+
 test("createRegisterNoobotPlugin returns empty disposers when workflow disabled", () => {
   const registerNoobotPlugin = createRegisterNoobotPlugin({
     createPluginRuntimeContext: () => ({

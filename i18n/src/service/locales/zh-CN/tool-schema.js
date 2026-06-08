@@ -77,7 +77,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "connectors.access.fillEmailConnectionInfo": "请补全邮件连接信息",
       "connectors.access.connectorNameLabel": "连接器名称",
       "connectors.access.missingConnectionInfoNoInteraction": "缺少连接信息，且当前不允许用户交互补全",
-      "connectors.access.noConnectorsFound": "未找到可用连接器，如有需要请通过 connect_connector 创建",
+      "connectors.access.noConnectorsFound": "未找到可用连接器，如有需要请调用 connect_connector工具 创建，不需要提供连接信息",
       "connectors.access.userCancelledAction": "用户取消了连接信息填写",
       "connectors.commandRequired": "command 必填",
       "connectors.connectorNameRequired": "connectorName 必填",
@@ -514,7 +514,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "process_connector_tool": {
     "description": {
       "key": "tools.process_connector.description",
-      "text": "可处理连接器相关任务（数据库/终端/邮箱）。连接信息由系统连接器自动处理，无需模型提供或询问。输入 task（可选 modelName），返回处理结果。"
+      "text": "可处理连接器相关任务（数据库/终端/邮箱）。连接信息由系统连接器自动处理，无需提供或询问连接信息。输入 task（可选 modelName），返回处理结果。"
     },
     "params": {
       "modelName": {
@@ -528,7 +528,8 @@ export const TOOL_SCHEMA_BY_TOOL = {
     },
     "texts": {
       "tools.connectors.errorUserInteractionBridgeMissing": "补全连接信息时缺少用户交互桥接",
-      "tools.process_connector.errorToolsUnavailable": "连接器工具不可用"
+      "tools.process_connector.errorToolsUnavailable": "连接器工具不可用",
+      "tools.process_connector.subSessionSystemPrompt": "可处理连接器相关任务（数据库/终端/邮箱）。连接信息由系统连接器自动处理，无需提供或询问连接信息"
     }
   },
   "process_content_task": {
