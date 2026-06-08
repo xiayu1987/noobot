@@ -122,11 +122,7 @@ export function compactTransferPayloadForModel(payload = {}) {
       });
     return transferFiles.length ? { transferFiles } : {};
   }
-
-  const attachmentMetas = Array.isArray(payload?.attachmentMetas)
-    ? payload.attachmentMetas.map(compactAttachmentMetaForModel).filter((item) => Object.keys(item).length)
-    : [];
-  return attachmentMetas.length ? { attachmentMetas } : {};
+  return {};
 }
 
 export function compactToolResultPayloadForModel(payload = {}) {
@@ -135,13 +131,13 @@ export function compactToolResultPayloadForModel(payload = {}) {
   delete compactPayload.transferResult;
   delete compactPayload.transferEnvelope;
   delete compactPayload.transferEnvelopes;
+  delete compactPayload.attachmentMetas;
+  delete compactPayload.compactTransferPayload;
+  delete compactPayload.compactToolPayload;
 
   const transferPayload = compactTransferPayloadForModel(payload);
   if (transferPayload.transferFiles?.length) {
-    delete compactPayload.attachmentMetas;
     compactPayload.transferFiles = transferPayload.transferFiles;
-  } else if (transferPayload.attachmentMetas?.length) {
-    compactPayload.attachmentMetas = transferPayload.attachmentMetas;
   }
   return compactObject(compactPayload);
 }

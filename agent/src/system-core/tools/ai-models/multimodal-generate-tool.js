@@ -10,6 +10,7 @@ import { mergeConfig } from "../../config/index.js";
 import {
   getTransferAttachmentMetas,
   persistTransferArtifacts,
+  TRANSFER_SOURCE,
 } from "../../semantic-transfer/index.js";
 import {
   resolveDefaultModelSpec,
@@ -364,7 +365,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
                 artifacts: generatedAttachments,
                 generationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
                 fallbackMimeType: MIME_TYPE.IMAGE_PNG,
-                source: "tool",
+                source: TRANSFER_SOURCE.TOOL,
                 reason: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
               })
             : null;

@@ -10,10 +10,16 @@ import {
   composeFinalMessage,
   directInput,
   directOutput,
+  extractTransferEnvelopeFromPersisted,
   fileOutput,
   isTransferEnvelope,
   materializeOutput,
+  normalizeTransferEnvelopes,
+  normalizeTransferEnvelopesWithPolicy,
+  normalizeTransferReason,
+  normalizeTransferSource,
   normalizeTransfer,
+  resolveTransferIntent,
   processStageMessage,
   resolveTransferFilePath,
   transferSemanticContent,
@@ -34,6 +40,57 @@ test("semantic transfer envelopes keep direct/file semantics", () => {
   assert.equal(output.direction, "output");
   assert.equal(output.transport, "file");
   assert.equal(output.filePath, "/tmp/result.md");
+});
+
+test("intent helpers normalize source/reason/generationSource with aliases", () => {
+  assert.equal(normalizeTransferSource("child_agent"), "subagent");
+  assert.equal(normalizeTransferReason("transfer_output"), "semantic_transfer_output");
+  const resolved = resolveTransferIntent({
+    source: "workflow",
+    reason: "",
+    generationSource: "",
+  });
+  assert.equal(resolved.source, "plugin");
+  assert.equal(resolved.reason, "semantic_transfer_output");
+  assert.equal(resolved.generationSource, "semantic_transfer_output");
+});
+
+test("envelope helpers normalize persisted output and filter invalid envelopes", () => {
+  const validEnvelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/a.txt",
+  };
+  const persisted = { result: { envelope: validEnvelope } };
+  assert.deepEqual(extractTransferEnvelopeFromPersisted(persisted), validEnvelope);
+
+  const normalized = normalizeTransferEnvelopes([
+    null,
+    {},
+    { filePath: "" },
+    validEnvelope,
+    { files: [{ filePath: "/workspace/b.txt" }] },
+  ]);
+  assert.equal(normalized.length, 2);
+  assert.equal(normalized[0].filePath, "/workspace/a.txt");
+  assert.equal(Array.isArray(normalized[1].files), true);
+
+  const validated = normalizeTransferEnvelopesWithPolicy(
+    [validEnvelope, { filePath: "/workspace/legacy.txt" }],
+    { enforceProtocol: true },
+  );
+  assert.equal(validated.length, 1);
+  assert.equal(validated[0].filePath, "/workspace/a.txt");
+  assert.throws(
+    () =>
+      normalizeTransferEnvelopesWithPolicy(
+        [{ filePath: "/workspace/legacy.txt" }],
+        { enforceProtocol: true, strict: true },
+      ),
+    /invalid transfer envelopes/i,
+  );
 });
 
 test("resolveTransferFilePath preserves sandboxPath priority and fallback path", () => {
@@ -332,6 +389,46 @@ test("consumer helpers read envelope files and attachment metas", async () => {
     getTransferAttachmentMetas(envelope).map((item) => item.attachmentId),
     ["a", "b"],
   );
+
+  const wrapped = {
+    transferResult: { ok: true, status: "file", envelope },
+    transferEnvelope: envelope,
+    transferEnvelopes: [envelope],
+  };
+  assert.equal(getTransferFiles(wrapped).length, 2);
+  assert.deepEqual(
+    getTransferAttachmentMetas(wrapped).map((item) => item.attachmentId),
+    ["a", "b"],
+  );
+
+  assert.equal(
+    getTransferFiles({ attachmentMetas: [{ attachmentId: "legacy-1", path: "/host/legacy.txt" }] }).length,
+    0,
+  );
+  assert.equal(
+    getTransferAttachmentMetas({ attachmentMetas: [{ attachmentId: "legacy-1" }] }).length,
+    0,
+  );
+
+  const events = [];
+  const runtime = {
+    eventListener: {
+      onEvent(evt = {}) {
+        events.push(evt);
+      },
+    },
+  };
+  getTransferFiles(
+    { attachmentMetas: [{ attachmentId: "legacy-1", path: "/host/legacy.txt" }] },
+    { runtime },
+  );
+  getTransferAttachmentMetas(
+    { attachmentMetas: [{ attachmentId: "legacy-1" }] },
+    { runtime },
+  );
+  const warnings = events.filter((evt = {}) => evt?.event === "semantic_transfer_legacy_input_warning");
+  assert.equal(warnings.length >= 2, true);
+  assert.equal(warnings[0]?.data?.message.includes("no longer supported"), true);
 });
 
 test("semantic-transfer public index does not export legacy adapters", async () => {
@@ -514,4 +611,37 @@ test("validateTransferEnvelope reports invalid and accepts valid envelopes", asy
   const invalid = validateTransferEnvelope({ protocol: "x" });
   assert.equal(invalid.ok, false);
   assert.ok(invalid.errors.length > 0);
+});
+
+test("semantic-transfer emits validation event and hook", async () => {
+  const { transferToolMessage } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const { createAgentHookManager, AGENT_HOOK_POINTS } = await import("../../../src/system-core/hook/index.js");
+  const events = [];
+  const hooks = [];
+  const hookManager = createAgentHookManager();
+  hookManager.on(AGENT_HOOK_POINTS.SEMANTIC_TRANSFER_VALIDATION, async (ctx = {}) => {
+    hooks.push(ctx);
+  });
+  const runtime = {
+    hookManager,
+    eventListener: {
+      onEvent(evt = {}) {
+        events.push(evt);
+      },
+    },
+    globalConfig: { semanticTransfer: { strictEnvelopeValidation: false } },
+    userConfig: {},
+  };
+  const result = await transferToolMessage({
+    runtime,
+    direction: "output",
+    text: "validation",
+    inlineMaxChars: 1024,
+  });
+  assert.equal(result.transferValidation.outputCount >= 1, true);
+  const validationEvent = events.find((evt = {}) => evt?.event === "semantic_transfer_validation");
+  assert.equal(Boolean(validationEvent), true);
+  assert.equal(validationEvent?.data?.scenario, "tool_output");
+  assert.equal(hooks.length, 1);
+  assert.equal(hooks[0].phase, "semantic_transfer");
 });

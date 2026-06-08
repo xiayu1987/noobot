@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE } from "./constants.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "./constants.js";
+import { resolveTransferIntent } from "./intent.js";
 import { persistTransferFile } from "./attachment-adapter.js";
 
 const DEFAULT_INLINE_TEXT_CHARS = 10000;
@@ -73,6 +74,15 @@ export async function materializeTextForToolResult({
   forcePreview = false,
 } = {}) {
   const normalizedText = String(text || "");
+  const intent = resolveTransferIntent({
+    source,
+    reason,
+    generationSource,
+    fallbackSource: TRANSFER_SOURCE.TOOL,
+    fallbackReason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+    defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
+    allowCustom: true,
+  });
   const maxInline = inlineMaxChars == null
     ? resolveToolResultInlineTextLimit(runtime)
     : toSafePositiveInt(inlineMaxChars, DEFAULT_INLINE_TEXT_CHARS, 0);
@@ -86,13 +96,15 @@ export async function materializeTextForToolResult({
       name: normalizeString(name) || "tool-result.txt",
       mimeType: normalizeString(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
       attachmentSource,
-      generationSource: generationSource || reason || source || "semantic_transfer_tool_result",
-      source,
-      reason,
+      generationSource: intent.generationSource,
+      source: intent.source,
+      reason: intent.reason,
       storage,
       producer,
       meta: {
         ...meta,
+        source: intent.source,
+        reason: intent.reason,
         originalLength: normalizedText.length,
       },
     });

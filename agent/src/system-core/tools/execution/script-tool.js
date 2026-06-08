@@ -32,6 +32,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
 import { logDebug, logWarn } from "../../tracking/console/logger.js";
+import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/index.js";
 
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
 const DEFAULT_TIMEOUT = 300000;
@@ -442,8 +443,8 @@ export function createScriptTool({ agentContext }) {
               inlineMaxChars: MAX_SCRIPT_COMMAND_CHARS,
               name: "execute-script-command.tool-input.sh",
               mimeType: "text/plain",
-              source: "tool",
-              reason: "execute_script_input_too_long",
+              source: TRANSFER_SOURCE.TOOL,
+              reason: TRANSFER_REASON.EXECUTE_SCRIPT_INPUT_TOO_LONG,
               meta: {
                 toolName: EXECUTE_SCRIPT_TOOL_NAME,
                 field: "command",

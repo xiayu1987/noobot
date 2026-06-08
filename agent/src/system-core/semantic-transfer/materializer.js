@@ -3,8 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE } from "./constants.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "./constants.js";
 import { directOutput } from "./envelope.js";
+import { resolveTransferIntent } from "./intent.js";
 import { persistTransferFile } from "./attachment-adapter.js";
 import { normalizeTransferPolicy } from "./policy.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
@@ -27,11 +28,20 @@ export async function materializeOutputResult({
   producer = null,
 } = {}) {
   const text = String(content || "");
+  const intent = resolveTransferIntent({
+    source,
+    reason,
+    generationSource,
+    fallbackSource: TRANSFER_SOURCE.SERVICE,
+    fallbackReason: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
+    defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
+    allowCustom: true,
+  });
   const transferPolicy = normalizeTransferPolicy({ policy, prefer, maxDirectChars });
   const outputMeta = {
     ...meta,
-    source,
-    reason,
+    source: intent.source,
+    reason: intent.reason,
     name,
     mimeType,
     size: text.length,
@@ -57,10 +67,10 @@ export async function materializeOutputResult({
     content: text,
     name,
     mimeType,
-    source,
-    reason,
+    source: intent.source,
+    reason: intent.reason,
     attachmentSource,
-    generationSource: generationSource || reason || source || "semantic_transfer_output",
+    generationSource: intent.generationSource,
     storage,
     producer,
     meta: outputMeta,

@@ -20,6 +20,8 @@ import {
   getTransferAttachmentMetas,
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
+  TRANSFER_REASON,
+  TRANSFER_SOURCE,
 } from "../../semantic-transfer/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { recoverableToolError } from "../../error/index.js";
@@ -127,8 +129,8 @@ function buildExistingArtifactPersistedOutput({
     },
     producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
     meta: {
-      source: "tool",
-      reason: "reuse_data_processing_artifact",
+      source: TRANSFER_SOURCE.TOOL,
+      reason: TRANSFER_REASON.REUSE_DATA_PROCESSING_ARTIFACT,
       mimeType: String(attachmentMeta?.mimeType || MIME_TYPE.TEXT_MARKDOWN),
     },
   });
@@ -488,7 +490,7 @@ async function persistDoc2DataTextAttachment({
     mimeType: MIME_TYPE.TEXT_MARKDOWN,
     attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
     generationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
-    source: "tool",
+    source: TRANSFER_SOURCE.TOOL,
     reason: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
     alwaysPersist: true,
     producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },

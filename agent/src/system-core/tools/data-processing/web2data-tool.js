@@ -33,6 +33,7 @@ import { normalizeText } from '../../utils/shared-utils.js';
 import {
   getTransferAttachmentMetas,
   materializeTextForToolResult,
+  TRANSFER_SOURCE,
 } from "../../semantic-transfer/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
@@ -724,7 +725,7 @@ export function createWeb2DataTool({ agentContext }) {
         mimeType: "text/markdown",
         attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
         generationSource: ARTIFACT_GENERATION_SOURCE.WEB_TO_DATA_TOOL,
-        source: "tool",
+        source: TRANSFER_SOURCE.TOOL,
         reason: ARTIFACT_GENERATION_SOURCE.WEB_TO_DATA_TOOL,
         alwaysPersist: true,
         producer: { type: "tool", name: TOOL_NAME.WEB_TO_DATA },

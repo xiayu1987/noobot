@@ -27,6 +27,7 @@ import { MIME_TYPE } from "../../../constants/index.js";
 import {
   getTransferAttachmentMetas,
   persistTransferArtifacts,
+  TRANSFER_SOURCE,
 } from "../../../semantic-transfer/index.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
@@ -416,7 +417,7 @@ function buildAccessConnectorTool(context = {}) {
         attachmentSource,
         generationSource,
         fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
-        source: attachmentSource === TOOL_ATTACHMENT_SOURCE.EMAIL ? "email" : "tool",
+        source: TRANSFER_SOURCE.CONNECTOR,
         reason: generationSource,
         artifacts: sourceArtifacts,
       });

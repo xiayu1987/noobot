@@ -12,6 +12,7 @@ import {
   assertValidFileNameFromPath,
 } from "../core/check-tool-input.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
@@ -89,8 +90,8 @@ export function createFileTool({ agentContext }) {
               inlineMaxChars: MAX_FILE_CONTENT_CHARS,
               name: `${path.basename(resolvedPath)}.tool-input.txt`,
               mimeType: "text/plain",
-              source: "tool",
-              reason: "write_file_input_too_long",
+              source: TRANSFER_SOURCE.TOOL,
+              reason: TRANSFER_REASON.WRITE_FILE_INPUT_TOO_LONG,
               meta: {
                 toolName: TOOL_NAME.WRITE_FILE,
                 field: "content",

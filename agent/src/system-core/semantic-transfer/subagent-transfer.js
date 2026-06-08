@@ -3,9 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE } from "./constants.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "./constants.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
 import { createTransferEnvelope } from "./envelope.js";
+import {
+  extractTransferEnvelopeFromPersisted,
+  normalizeTransferEnvelopesWithPolicy,
+} from "./envelope-utils.js";
+import { resolveTransferIntent } from "./intent.js";
+import { emitSemanticTransferValidation } from "./telemetry.js";
 import { persistTransferFile } from "./attachment-adapter.js";
 import { compactTransferPayloadForModel } from "./compact.js";
 
@@ -62,6 +68,15 @@ export async function transferSubAgentMessages({
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
 } = {}) {
   const normalizedMessages = normalizeSubAgentMessages(messages);
+  const intent = resolveTransferIntent({
+    source,
+    reason,
+    generationSource,
+    fallbackSource: TRANSFER_SOURCE.PLUGIN,
+    fallbackReason: TRANSFER_REASON.WORKFLOW_SUBAGENT_RESULT,
+    defaultGenerationSource: TRANSFER_REASON.WORKFLOW_SUBAGENT_RESULT,
+    allowCustom: true,
+  });
   // Note: downstream message injection belongs to workflow orchestration.
   // Keep `nextSteps` normalization for lightweight validation/compat only.
   normalizeNextSteps(nextSteps);
@@ -76,8 +91,8 @@ export async function transferSubAgentMessages({
         transport: "direct",
         content: text,
         meta: {
-          source,
-          reason,
+          source: intent.source,
+          reason: intent.reason,
           nodeId: item?.nodeId,
           nodeName: item?.nodeName,
         },
@@ -105,22 +120,21 @@ export async function transferSubAgentMessages({
       name,
       mimeType,
       attachmentSource,
-      generationSource,
-      source,
-      reason,
+      generationSource: intent.generationSource,
+      source: intent.source,
+      reason: intent.reason,
       meta: {
         ...(isPlainObject(item?.meta) ? item.meta : {}),
         nodeId: item?.nodeId,
         nodeName: item?.nodeName,
       },
     });
-    const transferEnvelope =
-      persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
-        ? persisted.envelope
-        : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
-          ? persisted.result.envelope
-          : null;
-    const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
+    const transferEnvelope = extractTransferEnvelopeFromPersisted(persisted);
+    const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
+      transferEnvelope ? [transferEnvelope] : [],
+      { runtime, enforceProtocol: true, withStats: true },
+    );
+    const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
     persistedItems.push({
       ...item,
       transferResult: transferEnvelope
@@ -132,10 +146,19 @@ export async function transferSubAgentMessages({
     });
   }
 
-  const transferEnvelopes = persistedItems
+  const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
+    persistedItems
     .flatMap((item = {}) => (Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : []))
-    .filter(isPlainObject);
+    .filter(isPlainObject),
+    { runtime, enforceProtocol: true, withStats: true },
+  );
+  const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
   const transferEnvelope = transferEnvelopes[0] || null;
+  await emitSemanticTransferValidation({
+    runtime,
+    scenario: "subagent",
+    stats: transferEnvelopesResult?.stats || {},
+  });
 
   return {
     transferResult: transferEnvelope

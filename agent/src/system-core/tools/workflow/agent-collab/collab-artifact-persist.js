@@ -8,6 +8,8 @@ import { logError } from "../../../tracking/console/logger.js";
 import {
   getTransferAttachmentMetas,
   persistTransferArtifacts,
+  TRANSFER_REASON,
+  TRANSFER_SOURCE,
 } from "../../../semantic-transfer/index.js";
 import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
@@ -116,10 +118,10 @@ export function createCollabArtifactPersistor({
         userId,
         sessionId: attachmentSessionId,
         attachmentSource: "subtask",
-        generationSource: "async_subtask_result",
+        generationSource: TRANSFER_REASON.ASYNC_SUBTASK_RESULT,
         fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
-        source: "agent",
-        reason: "async_subtask_result",
+        source: TRANSFER_SOURCE.AGENT,
+        reason: TRANSFER_REASON.ASYNC_SUBTASK_RESULT,
         artifacts: generatedAttachments,
       });
       attachmentMetas = getTransferAttachmentMetas(
