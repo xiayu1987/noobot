@@ -10,6 +10,7 @@ import {
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
 import { mergeAttachmentMetas } from "../../attach/meta-ops.js";
+import { getTransferAttachmentMetas } from "../../semantic-transfer/consumer.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -32,14 +33,69 @@ function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
   );
 }
 
-function promoteGeneratedAttachmentsToFinalAssistant(messages = []) {
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function resolveTransferEnvelopesFromMessage(messageItem = {}) {
+  const transferResult = isPlainObject(messageItem?.transferResult) ? messageItem.transferResult : null;
+  const transferEnvelope = isPlainObject(messageItem?.transferEnvelope)
+    ? messageItem.transferEnvelope
+    : isPlainObject(transferResult?.envelope)
+      ? transferResult.envelope
+      : null;
+  const transferEnvelopes = Array.isArray(messageItem?.transferEnvelopes)
+    ? messageItem.transferEnvelopes.filter(isPlainObject)
+    : transferEnvelope
+      ? [transferEnvelope]
+      : [];
+  return transferEnvelopes;
+}
+
+function dedupeTransferEnvelopes(envelopes = []) {
+  const list = Array.isArray(envelopes) ? envelopes : [];
+  if (!list.length) return [];
+  const seen = new Set();
+  const output = [];
+  for (const envelope of list) {
+    if (!isPlainObject(envelope)) continue;
+    const key =
+      String(
+        envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
+        envelope?.attachmentMeta?.attachmentId ||
+        envelope?.files?.[0]?.filePath ||
+        envelope?.filePath ||
+        "",
+      ).trim() || JSON.stringify(envelope);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(envelope);
+  }
+  return output;
+}
+
+function shouldPromoteTransferEnvelope(envelope = {}) {
+  if (!isPlainObject(envelope)) return false;
+  const metas = getTransferAttachmentMetas(envelope);
+  if (!metas.length) return true;
+  return metas.some((item = {}) => shouldPromoteAttachmentToAssistant(item));
+}
+
+function promoteGeneratedTransfersToFinalAssistant(messages = []) {
   const sourceMessages = Array.isArray(messages) ? messages : [];
   if (!sourceMessages.length) return sourceMessages;
-  const generatedAttachmentMetas = sourceMessages.flatMap((messageItem = {}) =>
-    (Array.isArray(messageItem?.attachmentMetas) ? messageItem.attachmentMetas : [])
-      .filter(shouldPromoteAttachmentToAssistant),
+  const generatedTransferEnvelopes = dedupeTransferEnvelopes(
+    sourceMessages.flatMap((messageItem = {}) =>
+      resolveTransferEnvelopesFromMessage(messageItem).filter(shouldPromoteTransferEnvelope),
+    ),
   );
-  if (!generatedAttachmentMetas.length) return sourceMessages;
+  const generatedAttachmentMetas = sourceMessages.flatMap((messageItem = {}) =>
+    resolveTransferEnvelopesFromMessage(messageItem).length
+      ? []
+      : (Array.isArray(messageItem?.attachmentMetas) ? messageItem.attachmentMetas : [])
+          .filter(shouldPromoteAttachmentToAssistant),
+  );
+  if (!generatedTransferEnvelopes.length && !generatedAttachmentMetas.length) return sourceMessages;
 
   const finalAssistantIndex = (() => {
     for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
@@ -57,11 +113,19 @@ function promoteGeneratedAttachmentsToFinalAssistant(messages = []) {
 
   const outputMessages = [...sourceMessages];
   const finalAssistant = outputMessages[finalAssistantIndex] || {};
+  const mergedTransferEnvelopes = dedupeTransferEnvelopes([
+    ...resolveTransferEnvelopesFromMessage(finalAssistant),
+    ...generatedTransferEnvelopes,
+  ]);
+  const transferEnvelope = mergedTransferEnvelopes[0] || null;
+  const fallbackAttachmentMetas = mergedTransferEnvelopes.length ? [] : generatedAttachmentMetas;
   outputMessages[finalAssistantIndex] = {
     ...finalAssistant,
+    ...(transferEnvelope ? { transferEnvelope } : {}),
+    ...(mergedTransferEnvelopes.length ? { transferEnvelopes: mergedTransferEnvelopes } : {}),
     attachmentMetas: mergeAttachmentMetas(
       Array.isArray(finalAssistant?.attachmentMetas) ? finalAssistant.attachmentMetas : [],
-      generatedAttachmentMetas,
+      mergeAttachmentMetas(fallbackAttachmentMetas, getTransferAttachmentMetas(mergedTransferEnvelopes)),
     ),
   };
   return outputMessages;
@@ -111,7 +175,7 @@ export class SessionExecutionFinalizer {
               dialogProcessId,
             }),
           ];
-    const turnMessages = promoteGeneratedAttachmentsToFinalAssistant(rawTurnMessages);
+    const turnMessages = promoteGeneratedTransfersToFinalAssistant(rawTurnMessages);
 
     await this.turnPersister.appendAgentMessages({
       userId,

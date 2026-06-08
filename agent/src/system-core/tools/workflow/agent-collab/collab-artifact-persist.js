@@ -5,7 +5,10 @@
  */
 import { Buffer } from "node:buffer";
 import { logError } from "../../../tracking/console/logger.js";
-import { persistTransferArtifacts } from "../../../semantic-transfer/index.js";
+import {
+  getTransferAttachmentMetas,
+  persistTransferArtifacts,
+} from "../../../semantic-transfer/index.js";
 import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { normalizeString } from "./collab-task-utils.js";
@@ -119,7 +122,9 @@ export function createCollabArtifactPersistor({
         reason: "async_subtask_result",
         artifacts: generatedAttachments,
       });
-      attachmentMetas = Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
+      attachmentMetas = getTransferAttachmentMetas(
+        persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
+      );
     } catch (error) {
       logError("[agent-collab-tool] persistCompletedTaskResultsAsAttachments failed", {
         containerId: String(container?.id || ""),

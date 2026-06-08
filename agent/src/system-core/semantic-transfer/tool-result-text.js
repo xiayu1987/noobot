@@ -5,7 +5,6 @@
  */
 import { DEFAULT_TRANSFER_MIME_TYPE } from "./constants.js";
 import { persistTransferFile } from "./attachment-adapter.js";
-import { buildLegacyTransferCompat } from "./legacy-adapter.js";
 
 const DEFAULT_INLINE_TEXT_CHARS = 10000;
 const DEFAULT_PREVIEW_CHARS = 1200;
@@ -106,8 +105,6 @@ export async function materializeTextForToolResult({
         ? persisted.result.envelope
         : null;
   const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
-  const transferCompat = buildLegacyTransferCompat({ envelope: transferEnvelope, envelopes: transferEnvelopes });
-  const attachmentMetas = Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : [];
   const resultFields = buildTextResultFields({
     text: normalizedText,
     transferEnvelopes,
@@ -118,7 +115,6 @@ export async function materializeTextForToolResult({
 
   return {
     resultFields,
-    attachmentMetas,
     transferEnvelope,
     transferEnvelopes,
     persisted,

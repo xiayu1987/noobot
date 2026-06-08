@@ -29,6 +29,7 @@ import {
   resolveSandboxPath,
 } from "../../utils/sandbox-path-resolver.js";
 import {
+  composeFinalMessage,
   directInput,
   directOutput,
   fileInput,
@@ -41,10 +42,15 @@ import {
   materializeOutputResult,
   normalizeTransfer,
   normalizeTransferPolicy,
+  processStageMessage,
   isValidTransferEnvelope,
   persistTransferArtifacts,
   persistTransferFile,
   resolveTransferFilePath,
+  transferSemanticContent,
+  transferSemanticContentSync,
+  transferSubAgentMessages,
+  transferToolMessage,
   validateTransferEnvelope,
 } from "../../semantic-transfer/index.js";
 
@@ -255,6 +261,37 @@ function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
         runtime: payload?.runtime || runtimeContext,
         agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
       }),
+    transferToolMessage: (payload = {}) =>
+      transferToolMessage({
+        ...(payload && typeof payload === "object" ? payload : { text: String(payload || "") }),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    transferSemanticContent: (payload = {}) =>
+      transferSemanticContent({
+        ...(payload && typeof payload === "object" ? payload : {}),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    transferSemanticContentSync: (payload = {}) =>
+      transferSemanticContentSync(
+        payload && typeof payload === "object"
+          ? payload
+          : { scenario: "", content: String(payload || "") },
+      ),
+    transferSubAgentMessages: (payload = {}) =>
+      transferSubAgentMessages({
+        ...(payload && typeof payload === "object" ? payload : {}),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    processStageMessage: (payload = {}) =>
+      processStageMessage({
+        ...(payload && typeof payload === "object" ? payload : { summary: String(payload || "") }),
+        runtime: payload?.runtime || runtimeContext,
+        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+      }),
+    composeFinalMessage,
     ...currentSemanticTransfer,
   };
 }

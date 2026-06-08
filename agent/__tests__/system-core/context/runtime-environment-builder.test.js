@@ -71,6 +71,8 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.equal(typeof runtime.sharedTools.toHostPath, "function");
   assert.equal(typeof runtime.sharedTools.pathMapper?.toSandboxPath, "function");
   assert.equal(typeof runtime.sharedTools.pathMapper?.toHostPath, "function");
+  assert.equal(typeof runtime.sharedTools.semanticTransfer?.transferSemanticContent, "function");
+  assert.equal(typeof runtime.sharedTools.semanticTransfer?.transferSemanticContentSync, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.encryptBySessionId, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.decryptBySessionId, "function");
   assert.equal(

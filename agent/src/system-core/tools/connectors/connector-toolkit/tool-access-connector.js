@@ -24,7 +24,10 @@ import {
 } from "./connector-runtime.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
-import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../../semantic-transfer/index.js";
+import {
+  getTransferAttachmentMetas,
+  persistTransferArtifacts,
+} from "../../../semantic-transfer/index.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -100,12 +103,12 @@ function parseJsonObject(value = "") {
   }
 }
 
-function extractEmailTransferFields(rawOutput = {}) {
+function extractEmailTransferPayload(rawOutput = {}) {
   const output = rawOutput && typeof rawOutput === "object" && !Array.isArray(rawOutput) ? rawOutput : {};
   const parsed = parseJsonObject(output?.stdout);
   if (!parsed) {
     return {
-      attachmentMetas: [],
+      parsed: null,
       transferResult: null,
       transferEnvelope: null,
       transferEnvelopes: [],
@@ -116,17 +119,8 @@ function extractEmailTransferFields(rawOutput = {}) {
       ? parsed.transferEnvelope
       : null;
   const transferEnvelopes = Array.isArray(parsed?.transferEnvelopes) ? parsed.transferEnvelopes : [];
-  const transferCompat = buildLegacyTransferCompat({
-    envelope: transferEnvelope,
-    envelopes: transferEnvelopes,
-  });
-  const attachmentMetas = dedupeAttachmentMetas([
-    ...(Array.isArray(parsed?.attachment_metas) ? parsed.attachment_metas : []),
-    ...(Array.isArray(parsed?.attachmentMetas) ? parsed.attachmentMetas : []),
-    ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
-  ]);
   return {
-    attachmentMetas,
+    parsed,
     transferResult:
       parsed?.transferResult && typeof parsed.transferResult === "object" && !Array.isArray(parsed.transferResult)
         ? parsed.transferResult
@@ -426,9 +420,6 @@ function buildAccessConnectorTool(context = {}) {
         reason: generationSource,
         artifacts: sourceArtifacts,
       });
-      const transferCompat = buildLegacyTransferCompat({
-        envelopes: [persisted?.envelope, persisted?.result?.envelope],
-      });
       const transferEnvelope =
         persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
           ? persisted.envelope
@@ -440,10 +431,9 @@ function buildAccessConnectorTool(context = {}) {
           ? persisted.result
           : null;
       const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
-      const rawAttachmentMetas = dedupeAttachmentMetas([
-        ...(Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : []),
-        ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
-      ]);
+      const rawAttachmentMetas = dedupeAttachmentMetas(
+        getTransferAttachmentMetas(transferEnvelopes),
+      );
       const attachmentMetas = rawAttachmentMetas.map(
         (attachmentItem, attachmentIndex) => ({
           attachmentId: String(attachmentItem?.attachmentId || "").trim(),
@@ -654,11 +644,11 @@ function buildAccessConnectorTool(context = {}) {
         const executionFailedMessage = String(
           result?.output?.stderr || result?.output?.stdout || "",
         ).trim();
-        const emailTransferFields =
+        const emailTransferPayload =
           connectorType === CONNECTOR_TYPE.EMAIL
-            ? extractEmailTransferFields(result?.output || {})
+            ? extractEmailTransferPayload(result?.output || {})
             : {
-                attachmentMetas: [],
+                parsed: null,
                 transferResult: null,
                 transferEnvelope: null,
                 transferEnvelopes: [],
@@ -683,13 +673,12 @@ function buildAccessConnectorTool(context = {}) {
               },
               { maxChars: maxAccessOutputChars },
             ),
-            ...(emailTransferFields.attachmentMetas.length
-              ? { attachmentMetas: emailTransferFields.attachmentMetas }
-              : {}),
-            ...(emailTransferFields.transferResult ? { transferResult: emailTransferFields.transferResult } : {}),
-            ...(emailTransferFields.transferEnvelope ? { transferEnvelope: emailTransferFields.transferEnvelope } : {}),
-            ...(emailTransferFields.transferEnvelopes.length
-              ? { transferEnvelopes: emailTransferFields.transferEnvelopes }
+            // Legacy top-level attachmentMetas is removed from output payload.
+            // Keep transfer contract as the only public semantic-transfer output.
+            ...(emailTransferPayload.transferResult ? { transferResult: emailTransferPayload.transferResult } : {}),
+            ...(emailTransferPayload.transferEnvelope ? { transferEnvelope: emailTransferPayload.transferEnvelope } : {}),
+            ...(emailTransferPayload.transferEnvelopes.length
+              ? { transferEnvelopes: emailTransferPayload.transferEnvelopes }
               : {}),
           },
           true,

@@ -17,6 +17,7 @@ import {
   buildTextResultFields,
   buildTransferFileEntry,
   createTransferEnvelope,
+  getTransferAttachmentMetas,
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "../../semantic-transfer/index.js";
@@ -493,8 +494,9 @@ async function persistDoc2DataTextAttachment({
     producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
     meta: { mode, inputFile },
   });
+  const attachmentMetas = getTransferAttachmentMetas(materialized.transferEnvelopes);
   return {
-    attachmentMetas: materialized.attachmentMetas,
+    attachmentMetas,
     transferEnvelope: materialized.transferEnvelope,
     transferEnvelopes: materialized.transferEnvelopes,
     resultFields: materialized.resultFields,

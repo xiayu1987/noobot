@@ -14,7 +14,7 @@ import {
   ensureHarnessBucket,
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
-  saveCapabilityOutputAsAttachmentMetas,
+  saveCapabilityOutputAsTransferArtifacts,
   invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
@@ -220,7 +220,7 @@ export async function runPlanUpdateAfterSummary(
   const revisionText =
     extractRawTextContent(revisionResponse?.content) ||
     String(revisionResponse?.text || revisionResponse?.output || "").trim();
-  const revisionAttachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+  const revisionAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_revision",
     content: revisionText,
     generationSource: "harness_planning_revision",
@@ -396,7 +396,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     summaryMergeText = summaryOverviewText;
     const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
     const summaryDetailAttachmentMetas = summaryDetailAttachmentText
-      ? await saveCapabilityOutputAsAttachmentMetas(ctx, {
+      ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
         purpose: "summary_detail",
         content: summaryDetailAttachmentText,
         generationSource: "harness_summary_detail",
@@ -411,7 +411,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     });
     relayAttachmentMetas = summaryDetailAttachmentMetas;
   } else {
-    relayAttachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+    relayAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
       purpose,
       content: responseText,
       generationSource: `harness_${String(purpose || "").trim() || "guidance"}`,

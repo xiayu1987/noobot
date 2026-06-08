@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { DEFAULT_TRANSFER_MIME_TYPE } from "./constants.js";
-import { directOutput, fileOutput } from "./envelope.js";
+import { directOutput } from "./envelope.js";
 import { persistTransferFile } from "./attachment-adapter.js";
 import { normalizeTransferPolicy } from "./policy.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
@@ -69,10 +69,6 @@ export async function materializeOutputResult({
   if (persisted?.result?.envelope) return persisted.result;
   if (persisted?.envelope) {
     return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: persisted.envelope });
-  }
-  if (persisted?.filePath) {
-    const envelope = fileOutput(persisted.filePath, persisted.attachmentMeta, outputMeta);
-    return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope });
   }
 
   // Preserve caller-visible behavior when persistence is unavailable: do not drop content unless explicitly disabled later.

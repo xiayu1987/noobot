@@ -13,7 +13,10 @@ import { tEngine } from "../i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
 import { resolveModelContextMessages } from "../../../session/utils/context-window-normalizer.js";
 import { mergeConfig } from "../../../config/index.js";
-import { compactToolResultTextForModel } from "../../../semantic-transfer/index.js";
+import {
+  compactToolResultTextForModel,
+  getTransferAttachmentMetas,
+} from "../../../semantic-transfer/index.js";
 import {
   resolveDialogProcessIdFromContext,
   resolveDialogProcessId,
@@ -119,6 +122,17 @@ function toLangChainToolCalls(toolCalls = []) {
 }
 
 function resolveAttachmentMetas(msg = {}, fallbackAttachmentMetas = []) {
+  const transferAttachmentMetas = getTransferAttachmentMetas(
+    [
+      msg?.transferEnvelope,
+      msg?.transferResult?.envelope,
+      ...(Array.isArray(msg?.transferEnvelopes) ? msg.transferEnvelopes : []),
+      msg?.lc_kwargs?.transferEnvelope,
+      msg?.lc_kwargs?.transferResult?.envelope,
+      ...(Array.isArray(msg?.lc_kwargs?.transferEnvelopes) ? msg.lc_kwargs.transferEnvelopes : []),
+    ].filter(Boolean),
+  );
+  if (transferAttachmentMetas.length) return transferAttachmentMetas;
   if (Array.isArray(msg?.attachmentMetas)) return msg.attachmentMetas;
   return Array.isArray(fallbackAttachmentMetas) ? fallbackAttachmentMetas : [];
 }

@@ -30,7 +30,10 @@ import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { normalizeText } from '../../utils/shared-utils.js';
-import { materializeTextForToolResult } from "../../semantic-transfer/index.js";
+import {
+  getTransferAttachmentMetas,
+  materializeTextForToolResult,
+} from "../../semantic-transfer/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import {
@@ -727,6 +730,7 @@ export function createWeb2DataTool({ agentContext }) {
         producer: { type: "tool", name: TOOL_NAME.WEB_TO_DATA },
         meta: { mode: payload?.mode || processMode, input: payload?.input || input || "" },
       });
+      const savedAttachmentMetas = getTransferAttachmentMetas(materialized.transferEnvelopes);
       return toToolJsonResult(
         TOOL_NAME.WEB_TO_DATA,
         {
@@ -744,7 +748,7 @@ export function createWeb2DataTool({ agentContext }) {
           model: payload?.model || {},
           summary: {
             text_length: text.length,
-            saved_attachment_count: materialized.attachmentMetas.length,
+            saved_attachment_count: savedAttachmentMetas.length,
           },
         },
         true,

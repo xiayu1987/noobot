@@ -107,7 +107,6 @@ test("delegate_task_async + wait_async_task_result: completed flow persists atta
   assert.equal(waitPayload.status, "completed");
   assert.equal(waitCalls.length, 1);
   assert.equal(ingestCalls.length, 1);
-  assert.equal(waitPayload.attachmentMetas.length, 1);
   assert.equal(waitPayload.transferResult?.status, "file");
   assert.equal(waitPayload.transferEnvelope?.transport, "file");
   assert.equal(Array.isArray(waitPayload.transferEnvelopes), true);

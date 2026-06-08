@@ -11,6 +11,7 @@ import {
   assertAndResolveUserWorkspaceFilePath,
   assertValidFileNameFromPath,
 } from "../core/check-tool-input.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
@@ -19,6 +20,9 @@ const MAX_FILE_CONTENT_CHARS = 8000;
 const MAX_FILE_CONTENT_BYTES_PRECHECK = 20000;
 
 export function createFileTool({ agentContext }) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+
   const readFileTool = new DynamicStructuredTool({
     name: TOOL_NAME.READ_FILE,
     description: tTool(agentContext, "tools.file.readDescription"),
@@ -75,11 +79,39 @@ export function createFileTool({ agentContext }) {
         fieldName: "filePath",
       });
       if (String(content || "").length > MAX_FILE_CONTENT_CHARS) {
+        let transferPayload = {};
+        if (typeof transferSemanticContent === "function") {
+          try {
+            const transferred = await transferSemanticContent({
+              scenario: "tool",
+              direction: "input",
+              text: String(content || ""),
+              inlineMaxChars: MAX_FILE_CONTENT_CHARS,
+              name: `${path.basename(resolvedPath)}.tool-input.txt`,
+              mimeType: "text/plain",
+              source: "tool",
+              reason: "write_file_input_too_long",
+              meta: {
+                toolName: TOOL_NAME.WRITE_FILE,
+                field: "content",
+                resolvedPath,
+              },
+            });
+            transferPayload =
+              transferred?.compactToolPayload &&
+              typeof transferred.compactToolPayload === "object"
+                ? transferred.compactToolPayload
+                : {};
+          } catch {
+            transferPayload = {};
+          }
+        }
         return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
           ok: false,
           message: tTool(agentContext, "tools.file.writeContentTooLong"),
           resolvedPath,
           fileName: path.basename(resolvedPath),
+          ...transferPayload,
         });
       }
       await mkdir(path.dirname(resolvedPath), { recursive: true });

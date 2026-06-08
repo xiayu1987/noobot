@@ -7,7 +7,10 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import OpenAI from "openai";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
-import { buildLegacyTransferCompat, persistTransferArtifacts } from "../../semantic-transfer/index.js";
+import {
+  getTransferAttachmentMetas,
+  persistTransferArtifacts,
+} from "../../semantic-transfer/index.js";
 import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
@@ -365,9 +368,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
                 reason: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
               })
             : null;
-        const attachmentMetas = Array.isArray(persistedAttachments?.attachmentMetas)
-          ? persistedAttachments.attachmentMetas
-          : [];
         const transferEnvelope =
           persistedAttachments?.envelope &&
           typeof persistedAttachments.envelope === "object" &&
@@ -385,10 +385,8 @@ export function createMultimodalGenerateTool({ agentContext }) {
             ? persistedAttachments.result
             : null;
         const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
-        const transferCompat = buildLegacyTransferCompat({ envelope: transferEnvelope, envelopes: transferEnvelopes });
         const mergedAttachmentMetas = dedupeAttachmentMetas([
-          ...attachmentMetas,
-          ...(Array.isArray(transferCompat?.attachmentMetas) ? transferCompat.attachmentMetas : []),
+          ...getTransferAttachmentMetas(transferEnvelopes),
         ]);
         return toToolJsonResult(
           TOOL_NAME.MULTIMODAL_GENERATE,

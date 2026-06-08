@@ -10,7 +10,10 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { materializeTextForToolResult } from "../../semantic-transfer/index.js";
+import {
+  getTransferAttachmentMetas,
+  materializeTextForToolResult,
+} from "../../semantic-transfer/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
   invokeModelWithTextAndAttachments,
@@ -302,8 +305,9 @@ async function persistMedia2DataTextAttachment({
     producer: { type: "tool", name: TOOL_NAME.MEDIA_TO_DATA },
     meta: { mediaType, inputFile },
   });
+  const attachmentMetas = getTransferAttachmentMetas(materialized.transferEnvelopes);
   return {
-    attachmentMetas: materialized.attachmentMetas,
+    attachmentMetas,
     transferEnvelope: materialized.transferEnvelope,
     transferEnvelopes: materialized.transferEnvelopes,
     resultFields: materialized.resultFields,

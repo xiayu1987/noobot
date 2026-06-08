@@ -51,11 +51,13 @@ const OVERFLOW_ALLOWED_FILES = new Set([
 const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/agent/core/context/message-builder.js": "model context compatibility consumes runtime attachmentMetas",
   "agent/src/system-core/agent/core/execution/tool-runner.js": "tool overflow builds TransferEnvelope then legacy overflow via adapter",
+  "agent/src/system-core/agent/core/execution/state-committer.js": "runtime/turn event stream still emits attachmentMetas for existing consumers",
   "agent/src/system-core/agent/core/media/artifact-service.js": "artifact extraction compatibility reads legacy + transfer",
   "agent/src/system-core/attach/meta-ops.js": "legacy attachment meta normalization utility",
   "agent/src/system-core/attach/runtime-attachment.js": "runtime attachment legacy store",
   "agent/src/system-core/attach/service/attachment-service.js": "attachment service rewrites persisted message metas",
   "agent/src/system-core/bot-manage/execution/runner.js": "session runner attachment compatibility",
+  "agent/src/system-core/bot-manage/execution/finalizer.js": "final assistant aggregation keeps attachmentMetas compatibility for persisted turn schema",
   "agent/src/system-core/bot-manage/execution/turn-persister.js": "turn persistence legacy schema",
   "agent/src/system-core/bot-manage/session/session-execution-engine.js": "session execution legacy bridge",
   "agent/src/system-core/connectors/emails/read-email.js": "email connector legacy bridge",

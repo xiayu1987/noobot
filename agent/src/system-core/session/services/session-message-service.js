@@ -8,6 +8,21 @@ import {
   resolveDialogProcessIdFromContext,
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
+import { getTransferAttachmentMetas } from "../../semantic-transfer/index.js";
+
+function dedupeAttachmentMetas(attachmentMetas = []) {
+  const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
+  const seen = new Set();
+  return source.filter((item = {}) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const key = String(item?.attachmentId || "").trim() ||
+      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 export class SessionMessageService {
   constructor({
@@ -112,8 +127,20 @@ export class SessionMessageService {
     if (tool_call_id) turn.tool_call_id = tool_call_id;
     if (toolName) turn.toolName = String(toolName || "").trim();
     if (Array.isArray(tool_calls) && tool_calls.length) turn.tool_calls = tool_calls;
-    if (Array.isArray(attachmentMetas) && attachmentMetas.length) {
-      turn.attachmentMetas = attachmentMetas;
+    const transferAttachmentMetas = getTransferAttachmentMetas(
+      [
+        transferEnvelope,
+        turn?.transferEnvelope,
+        turn?.transferResult?.envelope,
+        ...(Array.isArray(transferEnvelopes) ? transferEnvelopes : []),
+        ...(Array.isArray(turn?.transferEnvelopes) ? turn.transferEnvelopes : []),
+      ].filter(Boolean),
+    );
+    const preferredAttachmentMetas = transferAttachmentMetas.length
+      ? dedupeAttachmentMetas(transferAttachmentMetas)
+      : (Array.isArray(attachmentMetas) ? attachmentMetas : []);
+    if (preferredAttachmentMetas.length) {
+      turn.attachmentMetas = preferredAttachmentMetas;
     }
 
     session.messages = Array.isArray(session.messages) ? session.messages : [];

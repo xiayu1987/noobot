@@ -112,19 +112,27 @@ export class BotManager {
       return { deletedSessionIds: [], deletedCount: 0 };
     }
 
-    const overflowRoot = path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");
+    const semanticTransferRoot = path.join(basePath, "runtime", "ops_workdir", ".semantic-transfer");
+    const legacyOverflowRoot = path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");
     const deletedSessionIds = [];
     for (const sessionId of normalizedIds) {
       const safeSessionDir = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
       if (!safeSessionDir) continue;
       try {
-        await rm(path.join(overflowRoot, safeSessionDir), { recursive: true, force: true });
+        await Promise.allSettled([
+          rm(path.join(semanticTransferRoot, safeSessionDir), { recursive: true, force: true }),
+          rm(path.join(legacyOverflowRoot, safeSessionDir), { recursive: true, force: true }),
+        ]);
         deletedSessionIds.push(sessionId);
       } catch {
         // ignore per-session cleanup failures (best effort)
       }
     }
     return { deletedSessionIds, deletedCount: deletedSessionIds.length };
+  }
+
+  async deleteSemanticTransferBySessionIds({ userId, sessionIds = [] } = {}) {
+    return this.deleteToolResultOverflowBySessionIds({ userId, sessionIds });
   }
 
   async loadUserConfig(basePath) {

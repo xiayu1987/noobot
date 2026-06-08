@@ -69,7 +69,7 @@ test("extractAttachmentMetasFromToolResult ignores non-runtime-attach transfer f
   const toolResultText = JSON.stringify({
     toolName: "overflow_tool",
     ok: true,
-    overflow_transfer_envelope: {
+    transferEnvelope: {
       protocol: "noobot.semantic-transfer",
       version: 1,
       direction: "output",

@@ -7,7 +7,15 @@ import path from "node:path";
 import { createFileTool } from "../../../src/system-core/tools/execution/file-tool.js";
 import { createScriptTool } from "../../../src/system-core/tools/execution/script-tool.js";
 
-function buildAgentContext(basePath = "", userId = "u-test") {
+function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
+  const runtimeOverrides =
+    overrides?.runtime && typeof overrides.runtime === "object"
+      ? overrides.runtime
+      : {};
+  const sharedTools =
+    runtimeOverrides?.sharedTools && typeof runtimeOverrides.sharedTools === "object"
+      ? runtimeOverrides.sharedTools
+      : {};
   return {
     environment: {
       workspace: { basePath },
@@ -36,6 +44,8 @@ function buildAgentContext(basePath = "", userId = "u-test") {
             rootSessionId: "s-1",
             config: {},
           },
+          sharedTools,
+          ...runtimeOverrides,
         },
       },
     },
@@ -48,7 +58,25 @@ function parseToolResult(raw = "") {
 
 test("execute_script: command 超过 8000 字符时应直接返回长度错误", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-guard-"));
-  const tools = createScriptTool({ agentContext: buildAgentContext(basePath) });
+  const tools = createScriptTool({
+    agentContext: buildAgentContext(basePath, "u-test", {
+      runtime: {
+        sharedTools: {
+          semanticTransfer: {
+            async transferSemanticContent() {
+              return {
+                compactToolPayload: {
+                  transferFiles: [
+                    { attachmentId: "att-script", transferFilePath: "runtime/attach/cmd.txt" },
+                  ],
+                },
+              };
+            },
+          },
+        },
+      },
+    }),
+  });
   const tool = tools.find((item) => item?.name === "execute_script");
   assert.ok(tool);
 
@@ -58,11 +86,32 @@ test("execute_script: command 超过 8000 字符时应直接返回长度错误",
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, false);
   assert.equal(result.message, "脚本内容过长，请分批执行或拆分脚本/文本后重试");
+  assert.equal(Array.isArray(result.transferFiles), true);
+  assert.equal(result.transferFiles.length, 1);
+  assert.equal(result.transferFiles[0].attachmentId, "att-script");
 });
 
 test("write_file: content 超过 8000 字符时应直接返回长度错误且不写入", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-guard-"));
-  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tools = createFileTool({
+    agentContext: buildAgentContext(basePath, "u-test", {
+      runtime: {
+        sharedTools: {
+          semanticTransfer: {
+            async transferSemanticContent() {
+              return {
+                compactToolPayload: {
+                  transferFiles: [
+                    { attachmentId: "att-file", transferFilePath: "runtime/attach/content.txt" },
+                  ],
+                },
+              };
+            },
+          },
+        },
+      },
+    }),
+  });
   const tool = tools.find((item) => item?.name === "write_file");
   assert.ok(tool);
 
@@ -73,6 +122,9 @@ test("write_file: content 超过 8000 字符时应直接返回长度错误且不
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, false);
   assert.equal(result.message, "文件内容过长，请分批写入");
+  assert.equal(Array.isArray(result.transferFiles), true);
+  assert.equal(result.transferFiles.length, 1);
+  assert.equal(result.transferFiles[0].attachmentId, "att-file");
 
   await assert.rejects(() => fs.access(path.join(basePath, filePath)));
 });

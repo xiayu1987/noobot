@@ -7,7 +7,7 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
-  saveCapabilityOutputAsAttachmentMetas,
+  saveCapabilityOutputAsTransferArtifacts,
   relaySeparateModelOutputAsUserMessage,
   ensureHarnessBucket,
   extractRawTextContent,
@@ -206,7 +206,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || rawSummaryText;
         const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
         const detailAttachmentMetas = summaryDetailAttachmentText
-          ? await saveCapabilityOutputAsAttachmentMetas(ctx, {
+          ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
             purpose: "summary_detail",
             content: summaryDetailAttachmentText,
             generationSource: "harness_summary_detail",
