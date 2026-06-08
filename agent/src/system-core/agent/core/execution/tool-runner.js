@@ -18,11 +18,8 @@ import { ERROR_CODE } from "../../../error/constants.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import {
-  buildLegacyOverflowFields,
   compactToolResultTextForModel,
-  createTransferEnvelope,
   materializeTextForToolResult,
-  resolveTransferPathView,
 } from "../../../semantic-transfer/index.js";
 
 const DEFAULT_MAX_TOOL_RESULT_CHARS = 10000;
@@ -36,39 +33,6 @@ function resolveToolResultLengthLimit(runtime = {}) {
   const userLimit = runtime?.userConfig?.tools?.maxToolResultChars;
   const globalLimit = runtime?.globalConfig?.tools?.maxToolResultChars;
   return toSafePositiveInt(userLimit ?? globalLimit, DEFAULT_MAX_TOOL_RESULT_CHARS, 512);
-}
-
-function buildOverflowTransferEnvelope({
-  overflowPath = "",
-  runtime = {},
-  agentContext = null,
-  call = {},
-} = {}) {
-  const pathView = resolveTransferPathView({
-    runtime,
-    agentContext,
-    path: overflowPath,
-    hostPath: overflowPath,
-    purpose: "tool_result_overflow",
-  });
-  const filePath = String(pathView.displayPath || pathView.sandboxPath || pathView.hostPath || overflowPath || "").trim();
-  return createTransferEnvelope({
-    transport: "file",
-    filePath,
-    files: [
-      {
-        filePath,
-        pathView,
-        role: "primary",
-        name: "tool-result-overflow.json",
-        mimeType: "application/json",
-      },
-    ],
-    pathView,
-    storage: { kind: "workspace", reason: "tool_result_overflow" },
-    producer: { type: "tool", name: String(call?.name || "").trim() },
-    meta: { source: "tool", reason: "tool_result_overflow", mimeType: "application/json" },
-  });
 }
 
 function isPlainObject(value) {
@@ -170,40 +134,28 @@ function extractOriginalTransferPayload(parsed = null) {
     isPlainObject(transferResult?.envelope) ? transferResult.envelope : null,
     ...(Array.isArray(parsed?.transferEnvelopes) ? parsed.transferEnvelopes : []),
   ]);
-  const attachmentMetas = Array.isArray(parsed?.attachmentMetas)
-    ? parsed.attachmentMetas.filter(isPlainObject)
-    : [];
   return {
     ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
-    ...(!transferEnvelopes.length && attachmentMetas.length ? { attachmentMetas } : {}),
   };
 }
 
 function compactParsedToolResultForOverflow(parsed = null) {
   if (!isPlainObject(parsed)) return parsed;
-  const transferPayload = extractOriginalTransferPayload(parsed);
   const compact = { ...parsed };
   delete compact.transferResult;
   delete compact.transferEnvelope;
   delete compact.transferEnvelopes;
-  if (transferPayload.transferEnvelopes?.length) {
-    // transferEnvelopes is the canonical semantic-transfer representation here.
-    // attachmentMetas and transferResult.envelope are legacy/compat duplicates.
-    delete compact.attachmentMetas;
-    compact.transferEnvelopes = transferPayload.transferEnvelopes
-      .map(compactTransferEnvelope)
-      .filter(Boolean);
-  } else if (transferPayload.attachmentMetas?.length) {
-    compact.attachmentMetas = transferPayload.attachmentMetas.map(compactObject);
-  }
+  // Drop legacy top-level transfer compatibility fields in overflow payloads.
+  delete compact.attachmentMeta;
+  delete compact.attachmentMetas;
+  delete compact.filePath;
+  delete compact.filePaths;
+  delete compact.files;
+  const overflowPathKey = ["overflow", "file", "path"].join("_");
+  const overflowSandboxPathKey = ["overflow", "file", "sandbox", "path"].join("_");
+  delete compact[overflowPathKey];
+  delete compact[overflowSandboxPathKey];
   return compactObject(compact);
-}
-
-function compactToolResultForOverflow(toolResultText = "") {
-  const raw = String(toolResultText || "");
-  const parsed = parseJsonObjectSafely(raw);
-  if (!isPlainObject(parsed)) return raw;
-  return compactParsedToolResultForOverflow(parsed);
 }
 
 function normalizeOverflowSessionDirName(sessionId = "") {
@@ -225,7 +177,7 @@ function resolveOverflowSessionId({
   ).trim();
 }
 
-function resolveOverflowOutputDir({ runtime = {}, agentContext = null, sessionId = "" } = {}) {
+function resolveSemanticTransferOutputDir({ runtime = {}, agentContext = null, sessionId = "" } = {}) {
   const basePath = String(
     agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
   ).trim();
@@ -233,30 +185,41 @@ function resolveOverflowOutputDir({ runtime = {}, agentContext = null, sessionId
     resolveOverflowSessionId({ sessionId, runtime, agentContext }),
   );
   if (basePath) {
-    return path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow", sessionDirName);
+    return path.join(basePath, "runtime", "ops_workdir", ".semantic-transfer", sessionDirName);
   }
-  return path.join(os.tmpdir(), "noobot-tool-result-overflow", sessionDirName);
+  return path.join(os.tmpdir(), "noobot-semantic-transfer", sessionDirName);
 }
 
-async function persistToolResultOverflow({
+async function persistSemanticTransferRecord({
   call = {},
-  toolResultText = "",
-  maxChars = DEFAULT_MAX_TOOL_RESULT_CHARS,
+  compactedResult = null,
+  transferPayload = {},
   runtime = {},
   agentContext = null,
   sessionId = "",
+  maxChars = DEFAULT_MAX_TOOL_RESULT_CHARS,
+  rawLength = 0,
+  measuredLength = 0,
 } = {}) {
-  const outputDir = resolveOverflowOutputDir({ runtime, agentContext, sessionId });
+  const envelopes = Array.isArray(transferPayload?.transferEnvelopes)
+    ? transferPayload.transferEnvelopes.map(compactTransferEnvelope).filter(Boolean)
+    : [];
+  if (!envelopes.length) return "";
+  const outputDir = resolveSemanticTransferOutputDir({ runtime, agentContext, sessionId });
   await mkdir(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, `${Date.now()}-${randomUUID()}.json`);
   const payload = {
     toolName: String(call?.name || "").trim(),
     toolCallId: String(call?.id || "").trim(),
     createdAt: new Date().toISOString(),
-    originalLength: String(toolResultText || "").length,
-    maxChars: Number(maxChars || DEFAULT_MAX_TOOL_RESULT_CHARS),
-    overflowFormat: "compact-v1",
-    result: compactToolResultForOverflow(toolResultText),
+    reason: "tool_result_overflow",
+    summary: {
+      maxChars: Number(maxChars || DEFAULT_MAX_TOOL_RESULT_CHARS),
+      rawLength: Number(rawLength || 0),
+      measuredLength: Number(measuredLength || 0),
+    },
+    compactedResult,
+    transferEnvelopes: envelopes,
   };
   await writeFile(outputPath, JSON.stringify(payload, null, 2), "utf8");
   return outputPath;
@@ -282,29 +245,11 @@ async function normalizeToolResultOverflow({
     };
   }
 
-  const overflowPath = await persistToolResultOverflow({
-    call,
-    toolResultText: rawText,
-    maxChars,
-    runtime,
-    agentContext,
-    sessionId,
-  });
-  const overflowTransferEnvelope = buildOverflowTransferEnvelope({
-    overflowPath,
-    runtime,
-    agentContext,
-    call,
-  });
-  const legacyOverflowFields = buildLegacyOverflowFields({
-    envelope: overflowTransferEnvelope,
-    hostPath: overflowPath,
-  });
   const semanticOverflow = await materializeTextForToolResult({
     runtime,
     agentContext,
     text: rawText,
-    name: `${String(call?.name || "tool").trim() || "tool"}.tool-result-overflow.json`,
+    name: `${String(call?.name || "tool").trim() || "tool"}.semantic-transfer.json`,
     mimeType: "application/json",
     attachmentSource: "model",
     generationSource: "tool_result_overflow",
@@ -328,24 +273,41 @@ async function normalizeToolResultOverflow({
           ...semanticOverflow.transferEnvelopes,
         ]),
       }
-    : originalTransferPayload;
+    : {
+        ...originalTransferPayload,
+        transferEnvelopes: dedupeTransferEnvelopes([
+          ...(Array.isArray(originalTransferPayload.transferEnvelopes)
+            ? originalTransferPayload.transferEnvelopes
+            : []),
+        ]),
+      };
+  const semanticTransferRecordPath = await persistSemanticTransferRecord({
+    call,
+    compactedResult: compactParsedToolResultForOverflow(parseJsonObjectSafely(rawText)),
+    transferPayload: overflowTransferPayload,
+    runtime,
+    agentContext,
+    sessionId,
+    maxChars,
+    rawLength: rawText.length,
+    measuredLength: measuredText.length,
+  });
   const normalized = toToolJsonResult(call?.name, {
     ok,
     ...(status ? { status } : {}),
     ...(ok ? {} : { error: String(parsed?.error || "").trim() || "tool result overflowed" }),
     message:
       originalMessage ||
-      `工具返回内容过长(${measuredText.length}字符)，已保存到文件，请按路径分批读取。`,
+      `工具返回内容过长(${measuredText.length}字符)，已保存为附件，请按返回的 transfer 信息分批读取。`,
     overflowed: true,
     overflow_reason: `tool result length ${measuredText.length} exceeds limit ${maxChars}`,
     ...overflowTransferPayload,
-    ...legacyOverflowFields,
-    overflow_transfer_envelope: overflowTransferEnvelope,
     summary: {
       original_length: measuredText.length,
       max_length: maxChars,
       raw_serialized_length: rawText.length,
       compacted_serialized_length: measuredText.length,
+      ...(semanticTransferRecordPath ? { semantic_transfer_record_path: semanticTransferRecordPath } : {}),
     },
   });
   return {

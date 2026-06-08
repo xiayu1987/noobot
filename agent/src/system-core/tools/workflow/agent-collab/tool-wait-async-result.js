@@ -164,11 +164,9 @@ export function createWaitAsyncTaskResultTool({
             container: containerItem,
             taskResults,
           });
-          const attachmentMetas = Array.isArray(persistedAttachments)
-            ? persistedAttachments
-            : Array.isArray(persistedAttachments?.attachmentMetas)
-              ? persistedAttachments.attachmentMetas
-              : [];
+          const attachmentMetas = Array.isArray(persistedAttachments?.attachmentMetas)
+            ? persistedAttachments.attachmentMetas
+            : [];
           const transferResult =
             persistedAttachments &&
             typeof persistedAttachments === "object" &&

@@ -97,7 +97,14 @@ export function getTransferAttachmentMetas(value = null) {
     if (fromFiles.length) return fromFiles;
     return isPlainObject(value.attachmentMeta) ? [value.attachmentMeta] : [];
   }
-  if (Array.isArray(value)) return value.filter(isPlainObject);
+  if (Array.isArray(value)) {
+    const list = value.filter(isPlainObject);
+    const hasEnvelope = list.some((item = {}) => isTransferEnvelope(item));
+    if (hasEnvelope) {
+      return list.flatMap((item) => getTransferAttachmentMetas(item));
+    }
+    return list;
+  }
   if (isPlainObject(value)) {
     if (Array.isArray(value.attachmentMetas)) return value.attachmentMetas.filter(isPlainObject);
     if (Array.isArray(value.files)) {

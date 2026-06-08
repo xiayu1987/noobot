@@ -164,10 +164,25 @@ test("acceptance checklist attachments are bound to final assistant turn output"
 
   const result = await handler({ capability: "acceptance", point: "before_final_output", ctx, meta: {} });
   assert.equal(result.status, "active");
-  assert.equal(Array.isArray(ctx.result.turnMessages?.[0]?.attachmentMetas), true);
-  assert.equal(ctx.result.turnMessages[0].attachmentMetas.length, 2);
+  const finalAssistant = ctx.result.turnMessages?.[0] || {};
+  const transferAttachmentIds = (Array.isArray(finalAssistant.transferEnvelopes)
+    ? finalAssistant.transferEnvelopes
+    : []
+  )
+    .flatMap((envelope = {}) => (Array.isArray(envelope.files) ? envelope.files : []))
+    .map((file = {}) => String(file?.attachmentMeta?.attachmentId || "").trim())
+    .filter(Boolean);
+  const legacyAttachmentIds = (Array.isArray(finalAssistant.attachmentMetas)
+    ? finalAssistant.attachmentMetas
+    : []
+  )
+    .map((item = {}) => String(item?.attachmentId || "").trim())
+    .filter(Boolean);
+  const effectiveAttachmentIds = transferAttachmentIds.length
+    ? transferAttachmentIds
+    : legacyAttachmentIds;
   assert.deepEqual(
-    ctx.result.turnMessages[0].attachmentMetas.map((item = {}) => item.attachmentId),
+    effectiveAttachmentIds.slice().sort(),
     ["att_plan", "att_report"],
   );
   const acceptanceLogs = ctx.agentContext.payload.harness.logs.acceptance;

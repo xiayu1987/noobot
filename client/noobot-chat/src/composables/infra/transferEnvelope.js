@@ -33,7 +33,6 @@ function getMessageTransferEnvelopes(messageItem = {}) {
     ...normalizeTransferEnvelopes(messageItem?.transferEnvelope),
     ...normalizeTransferEnvelopes(messageItem?.transferEnvelopes),
     ...normalizeTransferEnvelopes(messageItem?.transferResult?.envelope),
-    ...normalizeTransferEnvelopes(messageItem?.overflow_transfer_envelope),
   ];
 }
 

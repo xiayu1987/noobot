@@ -14,7 +14,7 @@ export {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
   relaySeparateModelOutputAsUserMessage,
-  saveCapabilityOutputAsAttachmentMetas,
+  saveCapabilityOutputAsTransferArtifacts,
 } from "../shared/attachment-log-utils.js";
 
 export {

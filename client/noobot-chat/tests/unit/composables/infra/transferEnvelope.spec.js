@@ -71,15 +71,14 @@ describe("transferEnvelope", () => {
     });
   });
 
-  it("collects envelopes from direct, array, result, and overflow fields", () => {
+  it("collects envelopes from direct, array, and result fields", () => {
     const envelopes = getMessageTransferEnvelopes({
       transferEnvelope: envelope,
       transferEnvelopes: [envelope],
       transferResult: { envelope },
-      overflow_transfer_envelope: envelope,
     });
 
-    expect(envelopes).toHaveLength(4);
+    expect(envelopes).toHaveLength(3);
   });
 
   it("resolves display path by semantic path view precedence", () => {

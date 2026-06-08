@@ -5,11 +5,13 @@
  */
 import { ToolMessage } from "@langchain/core/messages";
 import { appendAttachmentMetasToRuntimeAndTurn } from "../../../attach/index.js";
+import { mergeAttachmentMetas } from "../../../attach/meta-ops.js";
 import { emitEvent } from "../../../event/index.js";
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../../semantic-transfer/index.js";
+import { parseJsonObjectSafely } from "../utils/json-utils.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -24,6 +26,39 @@ function filterDisplayableAttachmentMetas(attachmentMetas = []) {
       return !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource);
     },
   );
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseTransferPayloadFromToolResultText(toolResultText = "") {
+  const parsed = parseJsonObjectSafely(String(toolResultText || ""));
+  if (!isPlainObject(parsed)) return null;
+  const transferResult = isPlainObject(parsed.transferResult) ? parsed.transferResult : null;
+  const transferEnvelope = isPlainObject(parsed.transferEnvelope)
+    ? parsed.transferEnvelope
+    : isPlainObject(transferResult?.envelope)
+      ? transferResult.envelope
+      : null;
+  const transferEnvelopes = Array.isArray(parsed.transferEnvelopes)
+    ? parsed.transferEnvelopes.filter(isPlainObject)
+    : transferEnvelope
+      ? [transferEnvelope]
+      : [];
+  if (!transferResult && !transferEnvelope && !transferEnvelopes.length) return null;
+  return {
+    ...(transferResult ? { transferResult } : {}),
+    ...(transferEnvelope ? { transferEnvelope } : {}),
+    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+  };
+}
+
+function resolveLastTurnMessage(turnMessageStore = null) {
+  if (!turnMessageStore || typeof turnMessageStore.toArray !== "function") return null;
+  const turnItems = turnMessageStore.toArray();
+  if (!Array.isArray(turnItems) || !turnItems.length) return null;
+  return turnItems[turnItems.length - 1] || null;
 }
 
 export function createStateCommitter({
@@ -119,6 +154,18 @@ export function createStateCommitter({
         tool_call_id: resolvedCallId,
         toolName: resolvedCallName,
       };
+      const transferPayload = parseTransferPayloadFromToolResultText(compactedToolResultText);
+      if (transferPayload) {
+        if (transferPayload.transferResult) {
+          toolResultPayload.transferResult = transferPayload.transferResult;
+        }
+        if (transferPayload.transferEnvelope) {
+          toolResultPayload.transferEnvelope = transferPayload.transferEnvelope;
+        }
+        if (Array.isArray(transferPayload.transferEnvelopes) && transferPayload.transferEnvelopes.length) {
+          toolResultPayload.transferEnvelopes = transferPayload.transferEnvelopes;
+        }
+      }
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
@@ -176,11 +223,22 @@ export function createStateCommitter({
           agentContext,
         }),
       });
-      appendAttachmentMetasToRuntimeAndTurn({
-        runtime,
-        turnMessageStore,
-        attachmentMetas,
-      });
+      const lastTurnMessage = resolveLastTurnMessage(turnMessageStore);
+      const lastMessageHasTransferPayload = Boolean(
+        isPlainObject(lastTurnMessage?.transferResult) ||
+          isPlainObject(lastTurnMessage?.transferEnvelope) ||
+          (Array.isArray(lastTurnMessage?.transferEnvelopes) &&
+            lastTurnMessage.transferEnvelopes.length),
+      );
+      if (lastMessageHasTransferPayload) {
+        runtime.attachmentMetas = mergeAttachmentMetas(runtime?.attachmentMetas, attachmentMetas);
+      } else {
+        appendAttachmentMetasToRuntimeAndTurn({
+          runtime,
+          turnMessageStore,
+          attachmentMetas,
+        });
+      }
       const displayableAttachmentMetas = filterDisplayableAttachmentMetas(attachmentMetas);
       if (displayableAttachmentMetas.length) {
         emitEvent(runtime?.eventListener || null, "attachment_metas_saved", {

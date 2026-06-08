@@ -60,6 +60,7 @@ export function injectMessageWithPolicy(
     role = "system",
     content = "",
     attachmentMetas = [],
+    legacyAttachmentMetasMirror = false,
     transferResult = null,
     transferEnvelope = null,
     transferEnvelopes = [],
@@ -80,6 +81,7 @@ export function injectMessageWithPolicy(
   }
   const message = buildHarnessInjectedMessage(normalizedContent, {
     attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+    legacyAttachmentMetasMirror,
     transferResult,
     transferEnvelope,
     transferEnvelopes,

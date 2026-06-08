@@ -412,6 +412,7 @@ export function createScriptTool({ agentContext }) {
     resolveSandboxProviderConfig(scriptConfig);
   const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
   const scriptOutputPolicy = resolveScriptOutputPolicy(effectiveConfig?.tools);
+  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
   const description = buildScriptToolDescription({
     runtime,
     sandboxEnabled,
@@ -431,9 +432,36 @@ export function createScriptTool({ agentContext }) {
       await mkdir(workspace, { recursive: true });
       const normalizedCommand = String(command || "");
       if (normalizedCommand.length > MAX_SCRIPT_COMMAND_CHARS) {
+        let transferPayload = {};
+        if (typeof transferSemanticContent === "function") {
+          try {
+            const transferred = await transferSemanticContent({
+              scenario: "tool",
+              direction: "input",
+              text: normalizedCommand,
+              inlineMaxChars: MAX_SCRIPT_COMMAND_CHARS,
+              name: "execute-script-command.tool-input.sh",
+              mimeType: "text/plain",
+              source: "tool",
+              reason: "execute_script_input_too_long",
+              meta: {
+                toolName: EXECUTE_SCRIPT_TOOL_NAME,
+                field: "command",
+              },
+            });
+            transferPayload =
+              transferred?.compactToolPayload &&
+              typeof transferred.compactToolPayload === "object"
+                ? transferred.compactToolPayload
+                : {};
+          } catch {
+            transferPayload = {};
+          }
+        }
         return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
           ok: false,
           message: tTool(runtime, "tools.script.commandTooLong"),
+          ...transferPayload,
         });
       }
       const timeout = normalizeTimeMs(scriptConfig?.scriptTimeoutMs, {

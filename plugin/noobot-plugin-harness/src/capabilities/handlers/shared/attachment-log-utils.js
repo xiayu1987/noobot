@@ -15,9 +15,71 @@ import {
 } from "./message/injected-message-utils.js";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
+const RELAY_TRANSFER_TEXT_MAX_CHARS = 1200;
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeString(value = "") {
+  return String(value || "").trim();
+}
+
+function compactRelayContentWithTransferRef(content = "", locale = LOCALE.ZH_CN) {
+  const text = String(content || "").trim();
+  if (!text) return "";
+  if (text.length <= RELAY_TRANSFER_TEXT_MAX_CHARS) return text;
+  const ellipsis = locale === LOCALE.EN_US ? "... [truncated]" : "……【已截断】";
+  const transferHint =
+    locale === LOCALE.EN_US
+      ? "Details are stored in transferEnvelope(s)."
+      : "详细内容已保存至 transferEnvelope(s)。";
+  return `${text.slice(0, RELAY_TRANSFER_TEXT_MAX_CHARS)}\n${ellipsis}\n${transferHint}`;
+}
+
+function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
+  const metas = (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(isPlainObject);
+  if (!metas.length) return normalizeTransferPayload();
+  const files = metas.map((meta = {}, index) => ({
+    filePath: normalizeString(meta?.sandboxPath || meta?.relativePath || meta?.path || meta?.name || ""),
+    attachmentMeta: meta,
+    role: index === 0 ? "primary" : "secondary",
+  }));
+  const transferEnvelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: files[0]?.filePath || "",
+    files,
+  };
+  return normalizeTransferPayload({
+    transferResult: { ok: true, status: "file", envelope: transferEnvelope },
+    transferEnvelope,
+    transferEnvelopes: [transferEnvelope],
+  });
+}
+
+function extractAttachmentMetasFromTransferPayload(payload = {}) {
+  const source = normalizeTransferPayload(payload || {});
+  const envelopes = Array.isArray(source.transferEnvelopes)
+    ? source.transferEnvelopes
+    : source.transferEnvelope
+      ? [source.transferEnvelope]
+      : [];
+  const metas = [];
+  for (const envelope of envelopes) {
+    if (!envelope || typeof envelope !== "object") continue;
+    const files = Array.isArray(envelope.files) ? envelope.files : [];
+    if (files.length) {
+      for (const file of files) {
+        if (isPlainObject(file?.attachmentMeta)) metas.push(file.attachmentMeta);
+      }
+      continue;
+    }
+    if (isPlainObject(envelope.attachmentMeta)) metas.push(envelope.attachmentMeta);
+  }
+  return metas;
 }
 
 function normalizeTransferPayload(payload = {}) {
@@ -42,34 +104,13 @@ function normalizeTransferPayload(payload = {}) {
   };
 }
 
-export function decorateAttachmentMetasWithTransferPayload(attachmentMetas = [], payload = {}) {
-  const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
-  const transferPayload = normalizeTransferPayload(payload);
-  const descriptors = {};
-  if (transferPayload.transferResult) {
-    descriptors.transferResult = { value: transferPayload.transferResult, enumerable: false };
+export function getTransferPayloadFromAttachmentMetas(attachmentMetas = [], payload = null) {
+  void attachmentMetas;
+  const payloadTransfer = normalizeTransferPayload(payload || {});
+  if (payloadTransfer.transferResult || payloadTransfer.transferEnvelope || payloadTransfer.transferEnvelopes.length) {
+    return payloadTransfer;
   }
-  if (transferPayload.transferEnvelope) {
-    descriptors.transferEnvelope = { value: transferPayload.transferEnvelope, enumerable: false };
-  }
-  if (transferPayload.transferEnvelopes.length) {
-    descriptors.transferEnvelopes = { value: transferPayload.transferEnvelopes, enumerable: false };
-  }
-  if (Object.keys(descriptors).length) {
-    Object.defineProperties(metas, descriptors);
-  }
-  return metas;
-}
-
-export function getTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
-  if (!Array.isArray(attachmentMetas)) {
-    return normalizeTransferPayload();
-  }
-  return normalizeTransferPayload({
-    transferResult: attachmentMetas.transferResult,
-    transferEnvelope: attachmentMetas.transferEnvelope,
-    transferEnvelopes: attachmentMetas.transferEnvelopes,
-  });
+  return buildTransferPayloadFromAttachmentMetas(attachmentMetas);
 }
 
 export function applyTransferPayloadToMessage(message = {}, payload = {}) {
@@ -134,8 +175,8 @@ function isHarnessInjectedMessage(message = {}) {
   );
 }
 
-export function attachMetasToLatestInjectedMessage(ctx = {}, metas = []) {
-  const transferPayload = getTransferPayloadFromAttachmentMetas(metas);
+export function attachMetasToLatestInjectedMessage(ctx = {}, metas = [], transferPayload = null) {
+  const normalizedTransferPayload = getTransferPayloadFromAttachmentMetas(metas, transferPayload);
   const candidates = [{ list: Array.isArray(ctx?.messages) ? ctx.messages : [], isCtxMessages: true }];
   for (const candidate of candidates) {
     const messages = candidate.list;
@@ -146,14 +187,14 @@ export function attachMetasToLatestInjectedMessage(ctx = {}, metas = []) {
       messages[index] = applyTransferPayloadToMessage({
         ...item,
         attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
-      }, transferPayload);
+      }, normalizedTransferPayload);
       if (candidate.isCtxMessages) {
         const turnStore = resolveCurrentTurnMessagesStore(ctx);
         if (turnStore && typeof turnStore.updateLast === "function") {
           turnStore.updateLast(
             applyTransferPayloadToMessage({
               attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
-            }, transferPayload),
+            }, normalizedTransferPayload),
             (messageItem = {}) => isHarnessInjectedMessage(messageItem),
           );
         }
@@ -217,7 +258,7 @@ function buildCapabilityArtifactName({ purpose = "" } = {}) {
   return `harness-${normalizedPurpose}-${stamp}.md`;
 }
 
-export async function saveCapabilityOutputAsAttachmentMetas(
+export async function saveCapabilityOutputAsTransferArtifacts(
   ctx = {},
   {
     purpose = "",
@@ -228,9 +269,9 @@ export async function saveCapabilityOutputAsAttachmentMetas(
 ) {
   const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
   const attachmentService = runtime?.attachmentService || null;
-  if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
-    return [];
-  }
+  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+  const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
+  const getTransferAttachmentMetas = runtime?.sharedTools?.semanticTransfer?.getTransferAttachmentMetas;
   const text = String(content || "").trim();
   if (!text) return [];
   const userId = String(
@@ -241,12 +282,33 @@ export async function saveCapabilityOutputAsAttachmentMetas(
   ).trim();
   if (!userId || !sessionId) return [];
   try {
+    if (typeof transferSemanticContent === "function") {
+      const staged = await transferSemanticContent({
+        scenario: "harness_stage",
+        summary: "",
+        detail: text,
+        name: buildCapabilityArtifactName({ purpose }),
+        mimeType: "text/markdown",
+        attachmentSource: "model",
+        generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
+        source: "plugin",
+        reason: String(purpose || "harness_capability_output").trim(),
+        meta: {
+          purpose: String(purpose || "").trim(),
+          userId,
+          sessionId,
+        },
+      });
+      if (typeof getTransferAttachmentMetas === "function") {
+        return getTransferAttachmentMetas(staged?.transferEnvelopes || staged?.transferEnvelope || []);
+      }
+      return extractAttachmentMetasFromTransferPayload(staged);
+    }
     const artifact = {
       name: buildCapabilityArtifactName({ purpose }),
       mimeType: "text/markdown",
       contentBase64: Buffer.from(text, "utf8").toString("base64"),
     };
-    const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
     if (typeof semanticPersist === "function") {
       const persisted = await semanticPersist({
         userId,
@@ -259,10 +321,15 @@ export async function saveCapabilityOutputAsAttachmentMetas(
         source: "plugin",
         reason: String(purpose || "harness_capability_output").trim(),
       });
-      return decorateAttachmentMetasWithTransferPayload(
-        Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [],
-        persisted,
-      );
+      if (typeof getTransferAttachmentMetas === "function") {
+        return getTransferAttachmentMetas(
+          persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
+        );
+      }
+      return extractAttachmentMetasFromTransferPayload(persisted);
+    }
+    if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
+      return [];
     }
     const records = await attachmentService.ingestGeneratedArtifacts({
       userId,
@@ -285,6 +352,11 @@ export async function saveCapabilityOutputAsAttachmentMetas(
   }
 }
 
+// Deprecated alias kept for compatibility with existing handler imports.
+export async function saveCapabilityOutputAsAttachmentMetas(ctx = {}, options = {}) {
+  return saveCapabilityOutputAsTransferArtifacts(ctx, options);
+}
+
 export function relaySeparateModelOutputAsUserMessage(
   ctx = {},
   {
@@ -293,6 +365,7 @@ export function relaySeparateModelOutputAsUserMessage(
     content = "",
     dedupe = false,
     attachmentMetas = [],
+    transferPayload = null,
   } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
@@ -301,15 +374,26 @@ export function relaySeparateModelOutputAsUserMessage(
   const prefix = translateI18nText(locale, "separateModelRelayPrefix", {
     purpose: String(purpose || "").trim() || "unknown",
   });
-  const relayContent = `${prefix}\n${text}`;
   const relayAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
-  const transferPayload = getTransferPayloadFromAttachmentMetas(relayAttachmentMetas);
+  const resolvedTransferPayload = getTransferPayloadFromAttachmentMetas(
+    relayAttachmentMetas,
+    transferPayload,
+  );
+  const hasTransferRef = Boolean(
+    resolvedTransferPayload.transferResult ||
+      resolvedTransferPayload.transferEnvelope ||
+      (Array.isArray(resolvedTransferPayload.transferEnvelopes) &&
+        resolvedTransferPayload.transferEnvelopes.length),
+  );
+  const relayText = hasTransferRef
+    ? compactRelayContentWithTransferRef(text, locale)
+    : text;
   if (!messages) return false;
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
-    content: relayContent,
+    content: `${prefix}\n${relayText}`,
     attachmentMetas: relayAttachmentMetas,
-    ...transferPayload,
+    ...resolvedTransferPayload,
     injectAt: "append",
     dedupe,
     avoidBreakToolCallContinuity: true,
@@ -317,7 +401,7 @@ export function relaySeparateModelOutputAsUserMessage(
   });
   if (!injection.injected && injection.deduped === true) {
     if (relayAttachmentMetas.length) {
-      attachMetasToLatestInjectedMessage(ctx, relayAttachmentMetas);
+      attachMetasToLatestInjectedMessage(ctx, relayAttachmentMetas, resolvedTransferPayload);
     }
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,

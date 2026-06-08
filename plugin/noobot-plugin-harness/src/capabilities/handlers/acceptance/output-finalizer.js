@@ -11,7 +11,6 @@ import {
   appendCapabilityLog,
   applyTransferPayloadToMessage,
   attachMetasToLatestInjectedMessage,
-  decorateAttachmentMetasWithTransferPayload,
   ensureHarnessBucket,
   getTransferPayloadFromAttachmentMetas,
   mapAttachmentRecordsToMetas,
@@ -42,9 +41,12 @@ function mergeAttachmentMetasForOutput(existing = [], incoming = []) {
   return merged;
 }
 
-function attachMetasToFinalOutputTurn(ctx = {}, metas = []) {
+function attachMetasToFinalOutputTurn(ctx = {}, metas = [], transferPayload = null) {
   if (!Array.isArray(metas) || !metas.length) return false;
-  const transferPayload = getTransferPayloadFromAttachmentMetas(metas);
+  const normalizedTransferPayload = getTransferPayloadFromAttachmentMetas(
+    metas,
+    transferPayload,
+  );
   const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
   if (!result) return false;
   const turnMessages = Array.isArray(result.turnMessages) ? result.turnMessages : [];
@@ -54,11 +56,11 @@ function attachMetasToFinalOutputTurn(ctx = {}, metas = []) {
     turnMessages[index] = applyTransferPayloadToMessage({
       ...item,
       attachmentMetas: mergeAttachmentMetasForOutput(item?.attachmentMetas, metas),
-    }, transferPayload);
+    }, normalizedTransferPayload);
     return true;
   }
   result.attachmentMetas = mergeAttachmentMetasForOutput(result?.attachmentMetas, metas);
-  applyTransferPayloadToMessage(result, transferPayload);
+  applyTransferPayloadToMessage(result, normalizedTransferPayload);
   return true;
 }
 
@@ -81,6 +83,7 @@ function syncFinalOutputToTurnMessages(ctx = {}, nextOutput = "") {
 }
 
 function buildOutputWithAcceptanceSection({
+  ctx = {},
   original = "",
   locale = LOCALE.ZH_CN,
   reportText = "",
@@ -92,6 +95,31 @@ function buildOutputWithAcceptanceSection({
   const divider = "\n\n---\n";
   const forcedHeader = includeForcedHeader ? translateI18nText(locale, "forcedAcceptanceHeader") : "";
   const acceptanceSection = [forcedHeader, rendered].filter(Boolean).join("\n");
+  const semanticTransferContentSync =
+    ctx?.agentContext?.execution?.controllers?.runtime?.sharedTools?.semanticTransfer?.transferSemanticContentSync;
+  const semanticComposeFinalMessage =
+    ctx?.agentContext?.execution?.controllers?.runtime?.sharedTools?.semanticTransfer?.composeFinalMessage;
+  if (typeof semanticTransferContentSync === "function") {
+    const composed = String(
+      semanticTransferContentSync({
+        scenario: "harness_final",
+        resultInfo: originalText,
+        detailRefs: [],
+        validationInfo: acceptanceSection,
+      }) || "",
+    ).trim();
+    if (composed) return composed;
+  }
+  if (typeof semanticComposeFinalMessage === "function") {
+    const composed = String(
+      semanticComposeFinalMessage({
+        resultInfo: originalText,
+        detailRefs: [],
+        validationInfo: acceptanceSection,
+      }) || "",
+    ).trim();
+    if (composed) return composed;
+  }
   return [originalText, acceptanceSection].filter(Boolean).join(divider).trim();
 }
 
@@ -153,8 +181,11 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   ];
 
   let metas = [];
+  let transferPayload = {};
   try {
     const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferArtifacts;
+    const getTransferAttachmentMetas =
+      runtime?.sharedTools?.semanticTransfer?.getTransferAttachmentMetas;
     if (typeof semanticPersist === "function") {
       const persisted = await semanticPersist({
         userId,
@@ -166,10 +197,12 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         reason: "harness_checklist",
         artifacts,
       });
-      metas = decorateAttachmentMetasWithTransferPayload(
-        Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [],
-        persisted,
-      );
+      metas = typeof getTransferAttachmentMetas === "function"
+        ? getTransferAttachmentMetas(
+            persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
+          )
+        : [];
+      transferPayload = getTransferPayloadFromAttachmentMetas([], persisted);
     } else {
       const savedRecords = await attachmentService.ingestGeneratedArtifacts({
         userId,
@@ -190,18 +223,23 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   }
 
   if (!metas.length) return false;
-  const attachedToInjectedMessage = attachMetasToLatestInjectedMessage(ctx, metas);
-  const attachedToFinalOutput = attachMetasToFinalOutputTurn(ctx, metas);
+  const attachedToInjectedMessage = attachMetasToLatestInjectedMessage(
+    ctx,
+    metas,
+    transferPayload,
+  );
+  const attachedToFinalOutput = attachMetasToFinalOutputTurn(ctx, metas, transferPayload);
   if (!attachedToInjectedMessage && !attachedToFinalOutput) {
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
       purpose: "acceptance_checklist",
       content:
         locale === LOCALE.EN_US
-          ? "Harness checklist artifacts generated. See attachmentMetas for details."
-          : "已生成 harness 清单附件，详见 attachmentMetas。",
+          ? "Harness checklist artifacts generated. See transferEnvelope(s) for details."
+          : "已生成 harness 清单附件，详见 transferEnvelope(s)。",
       dedupe: true,
       attachmentMetas: metas,
+      transferPayload,
     });
   }
   state.flags.checklistArtifactsAttached = true;
@@ -237,6 +275,7 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
     const original = String(ctx.result.output || "").trim();
     const compactText = renderAcceptanceDigestReportText(report, locale);
     const nextOutput = buildOutputWithAcceptanceSection({
+      ctx,
       original,
       locale,
       reportText: compactText,
@@ -312,6 +351,7 @@ export function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
   const original = String(ctx.result.output || "").trim();
   const compactText = renderAcceptanceDigestReportText(report, locale);
   const nextOutput = buildOutputWithAcceptanceSection({
+    ctx,
     original,
     locale,
     reportText: compactText,

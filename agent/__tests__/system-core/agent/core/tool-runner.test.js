@@ -253,11 +253,19 @@ test("executeToolCall: tool result too long should be persisted and return overf
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.ok, true);
   assert.equal(payload.overflowed, true);
-  assert.equal(typeof payload.overflow_file_path, "string");
-  assert.equal(payload.overflow_file_path.includes(".tool-result-overflow"), true);
-  assert.equal(payload.overflow_file_path.includes(".tool-result-overflow/session-overflow-1/"), true);
+  const overflowEnvelope = Array.isArray(payload.transferEnvelopes)
+    ? payload.transferEnvelopes.find((item = {}) => String(item?.filePath || "").includes(".tool-result-overflow/"))
+    : null;
+  assert.equal(typeof overflowEnvelope?.filePath, "string");
+  assert.equal(overflowEnvelope.filePath.includes(".tool-result-overflow"), true);
+  assert.equal(overflowEnvelope.filePath.includes(".tool-result-overflow/session-overflow-1/"), true);
 
-  const overflowFileContent = await fs.readFile(payload.overflow_file_path, "utf8");
+  const overflowHostPath = String(
+    overflowEnvelope?.pathView?.hostPath ||
+      overflowEnvelope?.filePath ||
+      "",
+  );
+  const overflowFileContent = await fs.readFile(overflowHostPath, "utf8");
   const overflowPayload = JSON.parse(overflowFileContent);
   assert.equal(overflowPayload.toolName, "demo_tool");
   assert.equal(overflowPayload.overflowFormat, "compact-v1");
@@ -325,7 +333,7 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.overflowed, undefined);
-  assert.equal(payload.overflow_file_path, undefined);
+  assert.equal(payload.transferEnvelopes, undefined);
   assert.equal("transferResult" in payload, false);
   assert.equal("transferEnvelope" in payload, false);
   assert.equal("transferEnvelopes" in payload, false);
@@ -390,18 +398,25 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.overflowed, true);
   assert.equal(Array.isArray(payload.transferEnvelopes), true);
-  assert.equal(payload.transferEnvelopes.length, 1);
+  assert.equal(payload.transferEnvelopes.length >= 1, true);
   assert.equal(
     result.extractedAttachmentMetas.some((item) => item?.attachmentId === "att_real_1"),
     true,
   );
 
-  const overflowPayload = JSON.parse(await fs.readFile(payload.overflow_file_path, "utf8"));
+  const overflowEnvelope = Array.isArray(payload.transferEnvelopes)
+    ? payload.transferEnvelopes.find((item = {}) => String(item?.filePath || "").includes(".tool-result-overflow/"))
+    : null;
+  const overflowHostPath = String(overflowEnvelope?.pathView?.hostPath || overflowEnvelope?.filePath || "");
+  const overflowPayload = JSON.parse(await fs.readFile(overflowHostPath, "utf8"));
   assert.equal(Array.isArray(overflowPayload.result.transferEnvelopes), true);
+  assert.equal(overflowPayload.result.transferEnvelopes.length >= 1, true);
   assert.equal("transferResult" in overflowPayload.result, false);
   assert.equal("transferEnvelope" in overflowPayload.result, false);
   assert.equal("attachmentMetas" in overflowPayload.result, false);
-  const compactEnvelope = overflowPayload.result.transferEnvelopes[0];
+  const compactEnvelope = overflowPayload.result.transferEnvelopes.find(
+    (item = {}) => Array.isArray(item?.files) && item.files.some((f = {}) => f?.attachmentMeta?.attachmentId === "att_real_1"),
+  ) || overflowPayload.result.transferEnvelopes[0];
   assert.equal("filePath" in compactEnvelope, false);
   assert.equal("attachmentMeta" in compactEnvelope, false);
   assert.equal("pathView" in compactEnvelope, false);
@@ -455,13 +470,18 @@ test("executeToolCall: overflow result should include sandbox path when resolver
 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.overflowed, true);
-  assert.equal(typeof payload.overflow_file_sandbox_path, "string");
+  const overflowEnvelope = Array.isArray(payload.transferEnvelopes)
+    ? payload.transferEnvelopes.find((item = {}) => String(item?.filePath || "").includes(".tool-result-overflow/"))
+    : null;
+  assert.equal(typeof overflowEnvelope?.pathView?.sandboxPath, "string");
   assert.equal(
-    payload.overflow_file_sandbox_path.startsWith("/workspace/"),
+    overflowEnvelope.pathView.sandboxPath.startsWith("/workspace/"),
     true,
   );
   assert.equal(
-    payload.overflow_file_sandbox_path.includes("/runtime/ops_workdir/.tool-result-overflow/"),
+    overflowEnvelope.pathView.sandboxPath.includes(
+      "/runtime/ops_workdir/.tool-result-overflow/",
+    ),
     true,
   );
 });

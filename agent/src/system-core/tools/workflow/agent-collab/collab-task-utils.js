@@ -8,7 +8,6 @@ import { resolveMessageDialogProcessId } from "../../../context/session/dialog-p
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
-import { buildLegacyTransferCompat } from "../../../semantic-transfer/index.js";
 
 export function cloneData(value) {
   if (typeof globalThis.structuredClone === "function") {
@@ -130,19 +129,7 @@ export function buildWaitAsyncTaskResultPayload({
   transferEnvelope = null,
   transferEnvelopes = [],
 } = {}) {
-  const directAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
-  const compat = buildLegacyTransferCompat({ envelope: transferEnvelope, envelopes: transferEnvelopes });
-  const mergedAttachmentMetas = [...directAttachmentMetas, ...(compat?.attachmentMetas || [])];
-  const seen = new Set();
-  const dedupedAttachmentMetas = mergedAttachmentMetas.filter((item = {}) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    const key = normalizeString(item?.attachmentId) ||
-      `${normalizeString(item?.path)}|${normalizeString(item?.relativePath)}|${normalizeString(item?.name)}`;
-    if (!key) return true;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  void attachmentMetas;
   const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes) ? transferEnvelopes : [];
   const normalizedTransferEnvelope =
     transferEnvelope && typeof transferEnvelope === "object" && !Array.isArray(transferEnvelope)
@@ -163,7 +150,6 @@ export function buildWaitAsyncTaskResultPayload({
       child_async_result_containers: cloneData(containers),
       container_statuses: containerStatuses,
       task_stats: taskStats,
-      attachmentMetas: dedupedAttachmentMetas,
       ...(normalizedTransferResult ? { transferResult: normalizedTransferResult } : {}),
       ...(normalizedTransferEnvelope ? { transferEnvelope: normalizedTransferEnvelope } : {}),
       ...(normalizedTransferEnvelopes.length ? { transferEnvelopes: normalizedTransferEnvelopes } : {}),

@@ -23,7 +23,7 @@ import {
   ensureHarnessBucket,
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
-  saveCapabilityOutputAsAttachmentMetas,
+  saveCapabilityOutputAsTransferArtifacts,
   invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelName,
@@ -309,7 +309,7 @@ async function handleSeparateModelPlanningProcessResult(
   responseText = "",
 ) {
   const relayText = responseText || getPlanningSeparateModelEmptyRelay(locale);
-  const attachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+  const attachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning",
     content: relayText,
     generationSource: "harness_planning",

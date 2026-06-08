@@ -9,7 +9,6 @@ import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_DIRECTION, TRANSFER_STORAGE_KIND, 
 import { createTransferEnvelope } from "./envelope.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
 import { buildTransferFileEntry } from "./path-resolver.js";
-import { buildLegacyTransferCompat } from "./legacy-adapter.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -37,10 +36,12 @@ function resolveSessionId({ runtime = {}, agentContext = null, sessionId = "" } 
 }
 
 function emptyPersistResult(status = TRANSFER_RESULT_STATUS.SKIPPED, error = null) {
-  const legacyCompat = buildLegacyTransferCompat();
+  const result = createTransferResult({ ok: status !== TRANSFER_RESULT_STATUS.FAILED, status, error });
   return {
-    result: createTransferResult({ ok: status !== TRANSFER_RESULT_STATUS.FAILED, status, error }),
-    ...legacyCompat,
+    result,
+    transferResult: result,
+    transferEnvelope: null,
+    transferEnvelopes: [],
     records: [],
   };
 }
@@ -138,11 +139,13 @@ export async function persistTransferArtifacts({
       fileCount: files.length,
     },
   });
-  const legacyCompat = buildLegacyTransferCompat({ envelope });
+  const result = createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope });
   return {
-    result: createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope }),
+    result,
+    transferResult: result,
     envelope,
-    ...legacyCompat,
+    transferEnvelope: envelope,
+    transferEnvelopes: [envelope],
     records,
   };
 }

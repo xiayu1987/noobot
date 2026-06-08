@@ -30,7 +30,6 @@ function normalizeTransferEnvelopeList(payload = {}) {
     isPlainObject(payload?.transferEnvelope) ? payload.transferEnvelope : null,
     isPlainObject(transferResult?.envelope) ? transferResult.envelope : null,
     ...(Array.isArray(payload?.transferEnvelopes) ? payload.transferEnvelopes : []),
-    isPlainObject(payload?.overflow_transfer_envelope) ? payload.overflow_transfer_envelope : null,
   ].filter(isPlainObject);
 }
 
@@ -39,17 +38,27 @@ function getTransferFilesFromEnvelope(envelope = {}) {
   if (Array.isArray(envelope.files) && envelope.files.length) {
     return envelope.files.filter(isPlainObject);
   }
-  if (envelope.filePath || envelope.attachmentMeta || envelope.pathView) {
-    return [
-      {
-        filePath: normalizeString(envelope.filePath),
-        ...(isPlainObject(envelope.attachmentMeta) ? { attachmentMeta: envelope.attachmentMeta } : {}),
-        ...(isPlainObject(envelope.pathView) ? { pathView: envelope.pathView } : {}),
-        role: "primary",
-      },
-    ];
-  }
   return [];
+}
+
+function compactLegacyEnvelopeFileForModel(envelope = {}) {
+  if (!isPlainObject(envelope)) return {};
+  const pathView = isPlainObject(envelope.pathView) ? envelope.pathView : {};
+  const sourceMeta = isPlainObject(envelope.attachmentMeta) ? envelope.attachmentMeta : {};
+  const attachment = compactAttachmentMetaForModel(sourceMeta);
+  const transferFilePath = normalizeString(
+    pathView.displayPath ||
+      envelope.filePath ||
+      pathView.sandboxPath ||
+      pathView.relativePath ||
+      attachment.sandboxPath ||
+      attachment.relativePath,
+  );
+  return compactObject({
+    ...attachment,
+    transferFilePath,
+    role: "primary",
+  });
 }
 
 export function compactAttachmentMetaForModel(meta = {}) {
@@ -95,8 +104,12 @@ export function compactTransferPayloadForModel(payload = {}) {
   if (envelopes.length) {
     const seen = new Set();
     const transferFiles = envelopes
-      .flatMap((envelope) => getTransferFilesFromEnvelope(envelope))
-      .map(transferFileToModelFile)
+      .flatMap((envelope) => {
+        const files = getTransferFilesFromEnvelope(envelope);
+        if (files.length) return files.map(transferFileToModelFile);
+        const legacyFile = compactLegacyEnvelopeFileForModel(envelope);
+        return Object.keys(legacyFile).length ? [legacyFile] : [];
+      })
       .filter((item) => item.attachmentId || item.name || item.relativePath || item.transferFilePath)
       .filter((item) => {
         const key =
@@ -122,7 +135,6 @@ export function compactToolResultPayloadForModel(payload = {}) {
   delete compactPayload.transferResult;
   delete compactPayload.transferEnvelope;
   delete compactPayload.transferEnvelopes;
-  delete compactPayload.overflow_transfer_envelope;
 
   const transferPayload = compactTransferPayloadForModel(payload);
   if (transferPayload.transferFiles?.length) {

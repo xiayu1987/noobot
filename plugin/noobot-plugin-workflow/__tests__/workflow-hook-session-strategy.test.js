@@ -198,15 +198,12 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(agentResult.workflow.nodeSessions.length, 1);
   assert.equal(agentResult.workflow.nodeSessions[0]?.rootSessionId, "s1");
   assert.equal(agentResult.workflow.nodeSessions[0]?.sessionId, "wf-node-session-1");
-  assert.equal(agentResult.workflow.nodeSessions[0]?.attachmentMetas?.[0]?.attachmentId, "wf-node-result-1");
-  assert.equal(agentResult.workflow.attachmentMetas?.[0]?.attachmentId, "wf-node-result-1");
 
   const workflowTurn = (agentResult.turnMessages || []).find(
     (item) => item?.workflowMessage === true,
   );
   assert.ok(workflowTurn);
   assert.equal(workflowTurn?.type, "workflow");
-  assert.equal(workflowTurn?.attachmentMetas?.[0]?.attachmentId, "wf-node-result-1");
   assert.match(
     String(workflowTurn?.content || ""),
     /\/injected\/attachments\/s1\/workflow-node-1-result\.md/,
@@ -302,7 +299,6 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
               semanticTransfer: {
                 async persistTransferFile() {
                   return {
-                    attachmentMetas: [envelope.attachmentMeta],
                     result: { ok: true, status: "file", envelope },
                     envelope,
                     transferEnvelopes: [envelope],
@@ -327,7 +323,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
   const workflowTurn = (agentResult.turnMessages || []).find((item) => item?.workflowMessage === true);
   assert.equal(workflowTurn?.transferEnvelope?.protocol, "noobot.semantic-transfer");
   assert.equal(workflowTurn?.transferEnvelopes?.length, 1);
-  assert.equal(workflowTurn?.attachmentMetas?.[0]?.attachmentId, "wf-semantic-result-1");
+  assert.equal(workflowTurn?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId, "wf-semantic-result-1");
 });
 
 test("workflow hook injects upstream node result attachments into downstream sub-session system messages", async () => {
@@ -405,6 +401,57 @@ test("workflow hook injects upstream node result attachments into downstream sub
     dialogProcessId: "d-upstream",
     userMessage: "请运行带并发和汇聚的流程",
     runConfig: { locale: "zh-CN" },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            sharedTools: {
+              semanticTransfer: {
+                async transferSemanticContent({ scenario = "", messages = [] } = {}) {
+                  if (String(scenario || "") !== "subagent") {
+                    return {
+                      transferResult: { ok: false, status: "failed" },
+                      transferEnvelope: null,
+                      transferEnvelopes: [],
+                    };
+                  }
+                  artifactCounter += 1;
+                  const nodeName = String(messages?.[0]?.nodeName || `节点${artifactCounter}`).trim();
+                  const fileName = `workflow-node-${artifactCounter}-${nodeName}-result.md`;
+                  const envelope = {
+                    protocol: "noobot.semantic-transfer",
+                    version: 1,
+                    direction: "output",
+                    transport: "file",
+                    filePath: `/workspace/${fileName}`,
+                    files: [
+                      {
+                        role: "primary",
+                        filePath: `/workspace/${fileName}`,
+                        attachmentMeta: {
+                          attachmentId: `att-${artifactCounter}`,
+                          name: fileName,
+                          mimeType: "text/markdown",
+                          relativePath: `runtime/attach/${fileName}`,
+                        },
+                        pathView: {
+                          displayPath: `/workspace/${fileName}`,
+                        },
+                      },
+                    ],
+                  };
+                  return {
+                    transferResult: { ok: true, status: "file", envelope },
+                    transferEnvelope: envelope,
+                    transferEnvelopes: [envelope],
+                  };
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   const callByNodeName = new Map(
@@ -496,6 +543,57 @@ test("workflow hook injects one upstream action attachments into multiple direct
     dialogProcessId: "d-fanout",
     userMessage: "请运行直接多下游流程",
     runConfig: { locale: "zh-CN" },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            sharedTools: {
+              semanticTransfer: {
+                async transferSemanticContent({ scenario = "", messages = [] } = {}) {
+                  if (String(scenario || "") !== "subagent") {
+                    return {
+                      transferResult: { ok: false, status: "failed" },
+                      transferEnvelope: null,
+                      transferEnvelopes: [],
+                    };
+                  }
+                  artifactCounter += 1;
+                  const nodeName = String(messages?.[0]?.nodeName || `节点${artifactCounter}`).trim();
+                  const fileName = `workflow-node-${artifactCounter}-${nodeName}-result.md`;
+                  const envelope = {
+                    protocol: "noobot.semantic-transfer",
+                    version: 1,
+                    direction: "output",
+                    transport: "file",
+                    filePath: `/workspace/${fileName}`,
+                    files: [
+                      {
+                        role: "primary",
+                        filePath: `/workspace/${fileName}`,
+                        attachmentMeta: {
+                          attachmentId: `fanout-att-${artifactCounter}`,
+                          name: fileName,
+                          mimeType: "text/markdown",
+                          relativePath: `runtime/attach/${fileName}`,
+                        },
+                        pathView: {
+                          displayPath: `/workspace/${fileName}`,
+                        },
+                      },
+                    ],
+                  };
+                  return {
+                    transferResult: { ok: true, status: "file", envelope },
+                    transferEnvelope: envelope,
+                    transferEnvelopes: [envelope],
+                  };
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   const callByNodeName = new Map(
@@ -664,7 +762,6 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   });
 
   assert.equal(subSessionCalls.length, 1);
-  assert.equal(subSessionCalls[0]?.attachmentMetas?.[0]?.attachmentId, "att-user-1");
   assert.equal(subSessionCalls[0]?.metadata?.inputAttachmentRefs?.[0], "node-file");
   const nodeSystemMessages = String((subSessionCalls[0]?.systemMessages || []).join("\n\n"));
   assert.match(nodeSystemMessages, /用户原始附件/);

@@ -51,7 +51,7 @@ import {
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import {
   compactToolResultTextForModel,
-  persistTransferArtifacts,
+  getTransferAttachmentMetas,
 } from "../../semantic-transfer/index.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { normalizeSessionEntity } from "../../session/entities/session-entity.js";
@@ -155,6 +155,41 @@ function normalizeMessageForHarness(messageItem = {}) {
     normalized.frontendUserMessage = true;
   }
   return normalized;
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function resolveTransferEnvelopesFromMessage(message = {}) {
+  const transferEnvelope = isPlainObject(message?.transferEnvelope)
+    ? message.transferEnvelope
+    : isPlainObject(message?.lc_kwargs?.transferEnvelope)
+      ? message.lc_kwargs.transferEnvelope
+      : null;
+  const transferResultEnvelope = isPlainObject(message?.transferResult?.envelope)
+    ? message.transferResult.envelope
+    : isPlainObject(message?.lc_kwargs?.transferResult?.envelope)
+      ? message.lc_kwargs.transferResult.envelope
+      : null;
+  const transferEnvelopes = [
+    ...(Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : []),
+    ...(Array.isArray(message?.lc_kwargs?.transferEnvelopes) ? message.lc_kwargs.transferEnvelopes : []),
+  ].filter(isPlainObject);
+  const merged = [
+    transferEnvelope,
+    transferResultEnvelope,
+    ...transferEnvelopes,
+  ].filter(isPlainObject);
+  return merged;
+}
+
+function resolvePreferredAttachmentMetas(message = {}) {
+  const transferAttachmentMetas = getTransferAttachmentMetas(resolveTransferEnvelopesFromMessage(message));
+  if (transferAttachmentMetas.length) return transferAttachmentMetas;
+  if (Array.isArray(message?.attachmentMetas)) return message.attachmentMetas;
+  if (Array.isArray(message?.lc_kwargs?.attachmentMetas)) return message.lc_kwargs.attachmentMetas;
+  return [];
 }
 
 function resolveCurrentTurnUserMessage(ctx = {}) {
@@ -584,9 +619,25 @@ export class SessionExecutionEngine {
     if (String(message?.tool_call_id || "").trim()) {
       normalized.tool_call_id = String(message.tool_call_id || "").trim();
     }
-    if (Array.isArray(message?.attachmentMetas) && message.attachmentMetas.length) {
-      normalized.attachmentMetas = message.attachmentMetas;
-    }
+    const preferredAttachmentMetas = resolvePreferredAttachmentMetas(message);
+    if (preferredAttachmentMetas.length) normalized.attachmentMetas = preferredAttachmentMetas;
+    const transferEnvelope = isPlainObject(message?.transferEnvelope)
+      ? message.transferEnvelope
+      : isPlainObject(message?.lc_kwargs?.transferEnvelope)
+        ? message.lc_kwargs.transferEnvelope
+        : null;
+    if (transferEnvelope) normalized.transferEnvelope = transferEnvelope;
+    const transferResult = isPlainObject(message?.transferResult)
+      ? message.transferResult
+      : isPlainObject(message?.lc_kwargs?.transferResult)
+        ? message.lc_kwargs.transferResult
+        : null;
+    if (transferResult) normalized.transferResult = transferResult;
+    const transferEnvelopes = [
+      ...(Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : []),
+      ...(Array.isArray(message?.lc_kwargs?.transferEnvelopes) ? message.lc_kwargs.transferEnvelopes : []),
+    ].filter(isPlainObject);
+    if (transferEnvelopes.length) normalized.transferEnvelopes = transferEnvelopes;
     if (message?.injectedMessage === true || message?.lc_kwargs?.injectedMessage === true) {
       normalized.injectedMessage = true;
     }
@@ -797,16 +848,17 @@ export class SessionExecutionEngine {
       const artifactList = Array.isArray(artifacts) ? artifacts : [];
       if (!artifactList.length) return [];
       const normalizedGenerationSource = String(generationSource || "generated_artifact").trim();
-      const persisted = await persistTransferArtifacts({
-        attachmentService,
+      const records = await attachmentService.ingestGeneratedArtifacts({
         userId: normalizedUserId,
         sessionId: normalizedSessionId,
         attachmentSource: String(attachmentSource || "model").trim() || "model",
         generationSource: normalizedGenerationSource,
-        fallbackMimeType,
         artifacts: artifactList,
       });
-      return Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
+      return mapAttachmentRecordsToMetas(records, {
+        fallbackMimeType,
+        fallbackGenerationSource: normalizedGenerationSource,
+      });
     };
   }
 

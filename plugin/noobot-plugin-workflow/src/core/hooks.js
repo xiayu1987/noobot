@@ -449,7 +449,6 @@ function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
     primaryFile?.pathView?.displayPath ||
       primaryFile?.filePath ||
       meta?.pathView?.displayPath ||
-      meta?.filePath ||
       "",
   ).trim();
   if (directFilePath) return directFilePath;
@@ -581,50 +580,77 @@ function applyWorkflowTransferPayload(target = {}, payload = {}) {
   return target;
 }
 
-function resolveWorkflowTransferFiles(value = null, ctx = {}) {
+function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) {
+  const transferPayload = normalizeWorkflowTransferPayload(payload);
+  if (!transferPayload.transferEnvelopes.length && !transferPayload.transferEnvelope) return [];
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const getTransferFiles = runtime?.sharedTools?.semanticTransfer?.getTransferFiles;
+  const source = transferPayload.transferEnvelopes.length
+    ? transferPayload.transferEnvelopes
+    : [transferPayload.transferEnvelope];
   if (typeof getTransferFiles === "function") {
     try {
-      const files = getTransferFiles(value, { runtime, agentContext: ctx?.agentContext || null });
+      const files = getTransferFiles(source, { runtime, agentContext: ctx?.agentContext || null });
       if (Array.isArray(files) && files.length) return files;
+    } catch {
+      // Fallback to transfer-envelope-only parsing below.
+    }
+  }
+  return source.flatMap((envelope = {}) => {
+    if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return [];
+    if (Array.isArray(envelope.files) && envelope.files.length) {
+      return envelope.files.filter((item) => item && typeof item === "object" && !Array.isArray(item));
+    }
+    if (envelope.filePath || envelope.attachmentMeta || envelope.pathView) {
+      return [
+        {
+          filePath: String(envelope.filePath || "").trim(),
+          ...(envelope.attachmentMeta && typeof envelope.attachmentMeta === "object"
+            ? { attachmentMeta: envelope.attachmentMeta }
+            : {}),
+          ...(envelope.pathView && typeof envelope.pathView === "object"
+            ? { pathView: envelope.pathView }
+            : {}),
+          role: "primary",
+        },
+      ];
+    }
+    return [];
+  });
+}
+
+function resolveWorkflowAttachmentMetasFromTransferPayload(payload = {}, ctx = {}) {
+  const transferPayload = normalizeWorkflowTransferPayload(payload);
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
+  const getTransferAttachmentMetas = runtime?.sharedTools?.semanticTransfer?.getTransferAttachmentMetas;
+  if (typeof getTransferAttachmentMetas === "function") {
+    try {
+      const metas = getTransferAttachmentMetas(
+        transferPayload.transferEnvelopes.length
+          ? transferPayload.transferEnvelopes
+          : transferPayload.transferEnvelope || [],
+      );
+      if (Array.isArray(metas) && metas.length) return metas;
     } catch {
       // Fallback below.
     }
   }
-  if (Array.isArray(value)) {
-    const hasTransferLikeItems = value.some((item = {}) =>
-      item &&
-      typeof item === "object" &&
-      !Array.isArray(item) &&
-      (Array.isArray(item.files) ||
-        item.filePath ||
-        item.transferEnvelope ||
-        item.transferResult?.envelope ||
-        Array.isArray(item.transferEnvelopes)),
-    );
-    if (hasTransferLikeItems) {
-      return value.flatMap((item) => resolveWorkflowTransferFiles(item, ctx));
-    }
-    return value.map((meta = {}, index) => ({
-      attachmentMeta: meta,
-      filePath: resolveAttachmentDisplayPath(meta, ctx),
-      role: index === 0 ? "primary" : "secondary",
-      name: String(meta?.name || `附件${index + 1}`).trim(),
-    }));
-  }
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    if (Array.isArray(value.files)) return value.files;
-    if (Array.isArray(value.transferEnvelopes)) return resolveWorkflowTransferFiles(value.transferEnvelopes, ctx);
-    if (value.transferEnvelope && typeof value.transferEnvelope === "object") {
-      return resolveWorkflowTransferFiles(value.transferEnvelope, ctx);
-    }
-    if (value.transferResult?.envelope && typeof value.transferResult.envelope === "object") {
-      return resolveWorkflowTransferFiles(value.transferResult.envelope, ctx);
-    }
-    if (Array.isArray(value.attachmentMetas)) return resolveWorkflowTransferFiles(value.attachmentMetas, ctx);
-  }
-  return [];
+  return resolveWorkflowTransferFilesFromPayload(transferPayload, ctx)
+    .map((item = {}) => item?.attachmentMeta)
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item));
+}
+
+function resolveWorkflowCompatAttachmentMetas({
+  workflowPayload = null,
+  attachmentMetas = [],
+  ctx = {},
+} = {}) {
+  const transferMetas = resolveWorkflowAttachmentMetasFromTransferPayload(
+    workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {},
+    ctx,
+  );
+  if (transferMetas.length) return transferMetas;
+  return Array.isArray(attachmentMetas) ? attachmentMetas : [];
 }
 
 function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {
@@ -654,6 +680,24 @@ function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = [], ctx =
     .map((item = {}, index) => {
       const label = String(item?.name || `附件${index + 1}`).trim();
       const path = resolveAttachmentDisplayPath(item, ctx);
+      if (!path) return "";
+      return `- ${label}: ${path}`;
+    })
+    .filter(Boolean);
+  if (!lines.length) return "";
+  return ["", "## 工作流节点结果附件", "", ...lines].join("\n");
+}
+
+function buildWorkflowTransferPathBlockWithContext(workflowPayload = null, ctx = {}) {
+  const files = resolveWorkflowTransferFilesFromPayload(
+    workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {},
+    ctx,
+  );
+  const lines = files
+    .map((item = {}, index) => {
+      const meta = item?.attachmentMeta || {};
+      const label = String(item?.name || meta?.name || `附件${index + 1}`).trim();
+      const path = resolveWorkflowTransferFileDisplayPath(item, ctx);
       if (!path) return "";
       return `- ${label}: ${path}`;
     })
@@ -728,9 +772,6 @@ function buildWorkflowUpstreamAttachmentResults({
       if (!upstreamNodeId) return null;
       const upstreamStepId = String(upstreamStep?.stepId || "").trim();
       const completed = completedStepResults.get(upstreamStepId) || {};
-      const attachmentMetas = Array.isArray(completed?.attachmentMetas)
-        ? completed.attachmentMetas
-        : [];
       const transferPayload = getWorkflowTransferPayloadFromResult(completed);
       const transferEnvelope = transferPayload.transferEnvelope;
       const transferEnvelopes = transferPayload.transferEnvelopes;
@@ -741,8 +782,11 @@ function buildWorkflowUpstreamAttachmentResults({
           : upstreamStep?.stepFailure && typeof upstreamStep.stepFailure === "object"
             ? upstreamStep.stepFailure
           : null;
-      const transferFiles = transferEnvelopes.length ? resolveWorkflowTransferFiles(transferEnvelopes, {}) : [];
-      if (!attachmentMetas.length && !transferFiles.length && stepStatus !== "failed" && !stepFailure) return null;
+      const transferFiles = resolveWorkflowTransferFilesFromPayload(
+        { transferEnvelope, transferEnvelopes },
+        {},
+      );
+      if (!transferFiles.length && stepStatus !== "failed" && !stepFailure) return null;
       return {
         nodeId: upstreamNodeId,
         nodeName: String(completed?.nodeName || upstreamStep?.nodeName || upstreamNodeId).trim(),
@@ -758,7 +802,6 @@ function buildWorkflowUpstreamAttachmentResults({
         nodeSessionId: String(completed?.nodeSessionId || "").trim(),
         stepStatus,
         stepFailure,
-        attachmentMetas,
         transferEnvelope,
         transferEnvelopes,
         ...(transferPayload.transferResult ? { transferResult: transferPayload.transferResult } : {}),
@@ -773,16 +816,24 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
   pendingStep = {},
   upstreamNodeResults = [],
 } = {}) {
+  // Keep upstream injection rendering transfer-only. Any legacy fallback should
+  // stay in dedicated compatibility helpers, not in this function.
   const normalizedResults = Array.isArray(upstreamNodeResults) ? upstreamNodeResults : [];
-  const allAttachmentMetas = normalizedResults.reduce(
-    (acc, item = {}) => mergeAttachmentMetas(acc, item?.attachmentMetas || []),
-    [],
-  );
   const failedResults = normalizedResults.filter((item = {}) => {
     const status = String(item?.stepStatus || "").trim();
     return status === "failed" || (item?.stepFailure && typeof item.stepFailure === "object");
   });
-  if (!allAttachmentMetas.length && !failedResults.length) return "";
+  const hasTransferFiles = normalizedResults.some((item = {}) =>
+    resolveWorkflowTransferFilesFromPayload(
+      {
+        transferResult: item?.transferResult || null,
+        transferEnvelope: item?.transferEnvelope || item?.transferResult?.envelope || null,
+        transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
+      },
+      ctx,
+    ).length > 0,
+  );
+  if (!hasTransferFiles && !failedResults.length) return "";
   if (typeof options?.workflowNodeSystemMessageBuilder === "function") {
     try {
       const customMessage = String(
@@ -790,7 +841,7 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
           ctx,
           pendingStep,
           upstreamNodeResults: normalizedResults,
-          attachmentMetas: allAttachmentMetas,
+          attachmentMetas: [],
         }) || "",
       ).trim();
       if (customMessage) return customMessage;
@@ -810,20 +861,15 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
       const failureMessage = String(result?.stepFailure?.message || "子 agent 执行失败").trim();
       failureLines.push(`- ${nodeLabel}: ${failureMessage}`);
     }
-    const transferFiles = resolveWorkflowTransferFiles(
-      Array.isArray(result?.transferEnvelopes) && result.transferEnvelopes.length
-        ? result.transferEnvelopes
-        : result?.transferEnvelope || result?.transferResult?.envelope || result?.attachmentMetas || [],
+    const transferFiles = resolveWorkflowTransferFilesFromPayload(
+      {
+        transferResult: result?.transferResult || null,
+        transferEnvelope: result?.transferEnvelope || result?.transferResult?.envelope || null,
+        transferEnvelopes: Array.isArray(result?.transferEnvelopes) ? result.transferEnvelopes : [],
+      },
       ctx,
     );
-    const files = transferFiles.length
-      ? transferFiles
-      : (Array.isArray(result?.attachmentMetas) ? result.attachmentMetas : []).map((meta = {}, index) => ({
-          attachmentMeta: meta,
-          filePath: resolveAttachmentDisplayPath(meta, ctx),
-          name: String(meta?.name || `附件${index + 1}`).trim(),
-        }));
-    for (const [index, file] of files.entries()) {
+    for (const [index, file] of transferFiles.entries()) {
       const meta = file?.attachmentMeta || file || {};
       const attachmentLabel = String(file?.name || meta?.name || `附件${index + 1}`).trim();
       const path = resolveWorkflowTransferFileDisplayPath(file, ctx);
@@ -923,9 +969,35 @@ async function persistWorkflowNodeResultAttachment({
     };
     const runtime = resolveWorkflowRuntimeFromContext(ctx);
     const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
+    const semanticTransferContent =
+      runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
     let attachmentMetas = [];
     let transferPayload = normalizeWorkflowTransferPayload();
-    if (typeof semanticPersist === "function") {
+    if (typeof semanticTransferContent === "function") {
+      const transferred = await semanticTransferContent({
+        scenario: "subagent",
+        messages: [
+          {
+            nodeId,
+            nodeName,
+            content: body,
+            meta: {
+              transition: normalizedTransition,
+              nodeSessionId: String(subSession?.sessionId || "").trim(),
+            },
+          },
+        ],
+        nextSteps: [],
+        forceAttachment: true,
+        attachmentSource: "model",
+        generationSource: "workflow_node_agent_result",
+        source: "plugin",
+        reason: "workflow_node_agent_result",
+        mimeType: artifact.mimeType,
+      });
+      transferPayload = normalizeWorkflowTransferPayload(transferred);
+      attachmentMetas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
+    } else if (typeof semanticPersist === "function") {
       const persisted = await semanticPersist({
         userId,
         sessionId,
@@ -937,8 +1009,8 @@ async function persistWorkflowNodeResultAttachment({
         source: "plugin",
         reason: "workflow_node_agent_result",
       });
-      attachmentMetas = Array.isArray(persisted?.attachmentMetas) ? persisted.attachmentMetas : [];
       transferPayload = normalizeWorkflowTransferPayload(persisted);
+      attachmentMetas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
     } else {
       attachmentMetas = await persister({
         userId,
@@ -987,7 +1059,14 @@ function appendWorkflowPlanningMessage({
 } = {}) {
   const turnMessages = ensureTurnMessages(agentResult);
   const dialogProcessId = String(ctx?.dialogProcessId || "").trim();
-  const attachmentPathBlock = buildWorkflowAttachmentPathBlockWithContext(attachmentMetas, ctx);
+  const compatAttachmentMetas = resolveWorkflowCompatAttachmentMetas({
+    workflowPayload,
+    attachmentMetas,
+    ctx,
+  });
+  const transferPathBlock = buildWorkflowTransferPathBlockWithContext(workflowPayload, ctx);
+  const attachmentPathBlock =
+    transferPathBlock || buildWorkflowAttachmentPathBlockWithContext(compatAttachmentMetas, ctx);
   const content = [semanticText || sourceText || "", attachmentPathBlock]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
@@ -1002,7 +1081,8 @@ function appendWorkflowPlanningMessage({
     modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     summarized: false,
-    attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+    // Legacy mirror field for existing consumers; source of truth is transfer payload.
+    attachmentMetas: compatAttachmentMetas,
     ...(transferPayload.transferResult ? { transferResult: transferPayload.transferResult } : {}),
     ...(transferPayload.transferEnvelope ? { transferEnvelope: transferPayload.transferEnvelope } : {}),
     ...(transferPayload.transferEnvelopes.length ? { transferEnvelopes: transferPayload.transferEnvelopes } : {}),
@@ -1413,10 +1493,15 @@ async function runNodeAgent({
     upstreamAttachmentSystemMessage,
   ].filter(Boolean);
   hookPayload.workflow.upstreamNodeResults = upstreamNodeResults;
-  hookPayload.workflow.upstreamAttachmentMetas = upstreamNodeResults.reduce(
-    (acc, item = {}) => mergeAttachmentMetas(acc, item?.attachmentMetas || []),
-    [],
-  );
+  hookPayload.workflow.upstreamAttachmentMetas = upstreamNodeResults.reduce((acc, item = {}) => {
+    const transferPayload = normalizeWorkflowTransferPayload({
+      transferResult: item?.transferResult || null,
+      transferEnvelope: item?.transferEnvelope || null,
+      transferEnvelopes: item?.transferEnvelopes || [],
+    });
+    const metas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
+    return mergeAttachmentMetas(acc, metas.length ? metas : item?.attachmentMetas || []);
+  }, []);
   hookPayload.workflow.inputAttachmentMetas = nodeInputAttachmentMetas;
   hookPayload.workflow.inputAttachmentSystemMessage = inputAttachmentSystemMessage;
   hookPayload.workflow.upstreamAttachmentSystemMessage = upstreamAttachmentSystemMessage;
@@ -1869,9 +1954,16 @@ export function createRegisterWorkflowHooks() {
                     ),
                     4000,
                   ),
-                  nodeResultAttachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
-                    ? item.subSession.result.attachmentMetas
-                    : [],
+                  nodeResultAttachmentMetas: (() => {
+                    const transferMetas = resolveWorkflowAttachmentMetasFromTransferPayload(
+                      getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}),
+                      ctx,
+                    );
+                    if (transferMetas.length) return transferMetas;
+                    return Array.isArray(item?.subSession?.result?.attachmentMetas)
+                      ? item.subSession.result.attachmentMetas
+                      : [];
+                  })(),
                   nodeResultTransferEnvelope: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferEnvelope,
                   nodeResultTransferEnvelopes: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferEnvelopes,
                   nodeResultTransferResult: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferResult,
@@ -1896,6 +1988,7 @@ export function createRegisterWorkflowHooks() {
                   item?.step?.nodeId || completedSemanticNode?.id || "",
                 ).trim();
                 if (completedStepId) {
+                  const resultTransferPayload = getWorkflowTransferPayloadFromResult(item?.subSession?.result || {});
                   completedStepResults.set(completedStepId, {
                     transition: transitions,
                     nodeId: completedNodeId,
@@ -1914,12 +2007,19 @@ export function createRegisterWorkflowHooks() {
                       item?.action?.stepFailure && typeof item.action.stepFailure === "object"
                         ? item.action.stepFailure
                         : null,
-                    attachmentMetas: Array.isArray(item?.subSession?.result?.attachmentMetas)
-                      ? item.subSession.result.attachmentMetas
-                      : [],
-                    transferEnvelope: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferEnvelope,
-                    transferEnvelopes: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferEnvelopes,
-                    transferResult: getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}).transferResult,
+                    attachmentMetas: (() => {
+                      const transferMetas = resolveWorkflowAttachmentMetasFromTransferPayload(
+                        resultTransferPayload,
+                        ctx,
+                      );
+                      if (transferMetas.length) return transferMetas;
+                      return Array.isArray(item?.subSession?.result?.attachmentMetas)
+                        ? item.subSession.result.attachmentMetas
+                        : [];
+                    })(),
+                    transferEnvelope: resultTransferPayload.transferEnvelope,
+                    transferEnvelopes: resultTransferPayload.transferEnvelopes,
+                    transferResult: resultTransferPayload.transferResult,
                   });
                 }
               }
@@ -2039,16 +2139,22 @@ export function createRegisterWorkflowHooks() {
                 };
               })
               .filter((item) => item.dialogId || item.sessionId);
-            const workflowAttachmentMetas = nodeAgentRuns.reduce(
-              (acc, item = {}) =>
-                mergeAttachmentMetas(
-                  acc,
-                  Array.isArray(item?.nodeResultAttachmentMetas)
+            const workflowAttachmentMetas = nodeAgentRuns.reduce((acc, item = {}) => {
+              const transferPayload = normalizeWorkflowTransferPayload({
+                transferResult: item?.nodeResultTransferResult || null,
+                transferEnvelope: item?.nodeResultTransferEnvelope || null,
+                transferEnvelopes: item?.nodeResultTransferEnvelopes || [],
+              });
+              const metas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
+              return mergeAttachmentMetas(
+                acc,
+                metas.length
+                  ? metas
+                  : Array.isArray(item?.nodeResultAttachmentMetas)
                     ? item.nodeResultAttachmentMetas
                     : [],
-                ),
-              [],
-            );
+              );
+            }, []);
             workflowPayload.transferEnvelopes = nodeAgentRuns.flatMap((item = {}) => {
               if (Array.isArray(item?.nodeResultTransferEnvelopes) && item.nodeResultTransferEnvelopes.length) {
                 return item.nodeResultTransferEnvelopes;
@@ -2058,6 +2164,7 @@ export function createRegisterWorkflowHooks() {
                 : [];
             });
             workflowPayload.transferEnvelope = workflowPayload.transferEnvelopes[0] || null;
+            // Legacy mirror field for existing consumers; transfer* remains canonical.
             workflowPayload.attachmentMetas = workflowAttachmentMetas;
 
             agentResult.workflow = workflowPayload;

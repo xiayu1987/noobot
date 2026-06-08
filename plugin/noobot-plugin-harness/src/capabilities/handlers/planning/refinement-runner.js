@@ -14,7 +14,7 @@ import {
   ensureHarnessBucket,
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
-  saveCapabilityOutputAsAttachmentMetas,
+  saveCapabilityOutputAsTransferArtifacts,
   invokeWithReasoningRetry,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelName,
@@ -154,7 +154,7 @@ export async function runPlanningRefinementBySeparateModel(
   const refinementText =
     extractRawTextContent(refinementResponse?.content) ||
     String(refinementResponse?.text || refinementResponse?.output || "").trim();
-  const refinementAttachmentMetas = await saveCapabilityOutputAsAttachmentMetas(ctx, {
+  const refinementAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_refinement",
     content: refinementText,
     generationSource: "harness_planning_refinement",
