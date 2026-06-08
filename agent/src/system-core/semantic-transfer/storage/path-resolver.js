@@ -6,7 +6,7 @@
 import {
   resolveAttachmentDisplayPath,
   resolveSandboxPath,
-} from "../utils/sandbox-path-resolver.js";
+} from "../../utils/sandbox-path-resolver.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);

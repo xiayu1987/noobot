@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isTransferEnvelope } from "./envelope.js";
-import { normalizeTransferEnvelopes } from "./envelope-utils.js";
-import { emitEvent } from "../event/index.js";
+import { isTransferEnvelope } from "../envelope/envelope.js";
+import { normalizeTransferEnvelopes } from "../envelope/envelope-utils.js";
+import { emitEvent } from "../../event/index.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);

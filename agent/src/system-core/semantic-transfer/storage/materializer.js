@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "./constants.js";
-import { directOutput } from "./envelope.js";
-import { resolveTransferIntent } from "./intent.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
+import { directOutput } from "../envelope/envelope.js";
+import { resolveTransferIntent } from "../core/intent.js";
 import { persistTransferFile } from "./attachment-adapter.js";
-import { normalizeTransferPolicy } from "./policy.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
+import { normalizeTransferPolicy } from "../core/policy.js";
+import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 
 export async function materializeOutputResult({
   runtime = {},

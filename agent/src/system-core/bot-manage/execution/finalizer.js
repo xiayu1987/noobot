@@ -10,7 +10,7 @@ import {
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
 import { mergeAttachmentMetas } from "../../attach/meta-ops.js";
-import { getTransferAttachmentMetas } from "../../semantic-transfer/consumer.js";
+import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
