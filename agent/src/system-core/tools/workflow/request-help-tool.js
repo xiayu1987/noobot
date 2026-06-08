@@ -264,8 +264,14 @@ async function invokeHelpModel({
         globalConfig,
         userConfig,
         streaming: false,
+        context: { runtime },
       })
-    : createChatModel({ globalConfig, userConfig, streaming: false });
+    : createChatModel({
+        globalConfig,
+        userConfig,
+        streaming: false,
+        context: { runtime },
+      });
   const response = await llm.invoke([new HumanMessage(helpContent)]);
   const content =
     typeof response?.content === "string"

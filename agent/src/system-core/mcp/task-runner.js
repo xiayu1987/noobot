@@ -59,6 +59,7 @@ export async function executeMcpTask({
   mcpName = "",
   task = "",
   modelName = "",
+  runtime = {},
   signal = null,
   fetchImpl = null,
 }) {
@@ -91,8 +92,18 @@ export async function executeMcpTask({
   }
 
   const llm = modelName
-    ? createChatModelByName(modelName, { globalConfig, userConfig, streaming: false })
-    : createChatModel({ globalConfig, userConfig, streaming: false });
+    ? createChatModelByName(modelName, {
+        globalConfig,
+        userConfig,
+        streaming: false,
+        context: { runtime },
+      })
+    : createChatModel({
+        globalConfig,
+        userConfig,
+        streaming: false,
+        context: { runtime },
+      });
   const toolMap = new Map(langchainTools.map((tool) => [tool.name, tool]));
 
   const messages = [

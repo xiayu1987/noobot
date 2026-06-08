@@ -54,12 +54,18 @@ export function createPlanMultiTaskCollaborationTool({
             globalConfig,
             userConfig,
             streaming: false,
+            context: { runtime },
           });
         }
       }
       if (!llm) {
         modelSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
-        llm = createChatModel({ globalConfig, userConfig, streaming: false });
+        llm = createChatModel({
+          globalConfig,
+          userConfig,
+          streaming: false,
+          context: { runtime },
+        });
       }
 
       const res = await llm.invoke([

@@ -514,7 +514,7 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "process_connector_tool": {
     "description": {
       "key": "tools.process_connector.description",
-      "text": "可处理连接器相关任务（数据库/终端/邮箱）。输入 task（可选 modelName）。返回处理结果。"
+      "text": "可处理连接器相关任务（数据库/终端/邮箱）。连接信息由系统连接器自动处理，无需模型提供或询问。输入 task（可选 modelName），返回处理结果。"
     },
     "params": {
       "modelName": {

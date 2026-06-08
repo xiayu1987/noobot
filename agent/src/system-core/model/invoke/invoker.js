@@ -33,6 +33,7 @@ export async function invokeModelWithTextAndAttachments({
   globalConfig = {},
   userConfig = {},
   streaming = false,
+  context = {},
 }) {
   const resolvedModelSpec = resolveModelSpecByName({
     modelName,
@@ -50,7 +51,10 @@ export async function invokeModelWithTextAndAttachments({
     );
   }
   const providerFormat = normalizeProviderFormat(resolvedModelSpec?.format || "");
-  const modelInstance = createChatModelFromSpec(resolvedModelSpec, { streaming });
+  const modelInstance = createChatModelFromSpec(resolvedModelSpec, {
+    streaming,
+    context,
+  });
   const userText = String(text || "").trim();
   const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
   const attachmentBlocks = normalizedAttachments

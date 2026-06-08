@@ -32,8 +32,10 @@ const DEFAULT_CONFIG = {
   logPrefix: 'requests',
   unknownModelName: 'unknown_model',
   unknownFlowName: 'unknown_flow',
+  unknownSessionId: 'unknown_session',
   modelNameHeaderKey: 'x-model-name',
   harnessFlowHeaderKey: 'x-harness-flow',
+  sessionIdHeaderKey: 'x-harness-session-id',
   maxLogFileSizeBytes: 10 * 1024 * 1024,
   retainMs: 60 * 60 * 1000,
 };
@@ -93,8 +95,10 @@ const LOG_DIR = path.resolve(__dirname, String(config.logDir || DEFAULT_CONFIG.l
 const LOG_PREFIX = String(config.logPrefix || DEFAULT_CONFIG.logPrefix);
 const UNKNOWN_MODEL_NAME = String(config.unknownModelName || DEFAULT_CONFIG.unknownModelName);
 const UNKNOWN_FLOW_NAME = String(config.unknownFlowName || DEFAULT_CONFIG.unknownFlowName);
+const UNKNOWN_SESSION_ID = String(config.unknownSessionId || DEFAULT_CONFIG.unknownSessionId);
 const MODEL_NAME_HEADER_KEY = String(config.modelNameHeaderKey || DEFAULT_CONFIG.modelNameHeaderKey).toLowerCase();
 const HARNESS_FLOW_HEADER_KEY = String(config.harnessFlowHeaderKey || DEFAULT_CONFIG.harnessFlowHeaderKey).toLowerCase();
+const SESSION_ID_HEADER_KEY = String(config.sessionIdHeaderKey || DEFAULT_CONFIG.sessionIdHeaderKey).toLowerCase();
 const MAX_LOG_FILE_SIZE = Number(config.maxLogFileSizeBytes) > 0
   ? Number(config.maxLogFileSizeBytes)
   : DEFAULT_CONFIG.maxLogFileSizeBytes;
@@ -140,10 +144,28 @@ function getModelFlowLogDir(modelName = '', flowName = '') {
   return path.join(LOG_DIR, sanitizeModelName(modelName), sanitizeFlowName(flowName));
 }
 
-function ensureModelFlowLogDir(modelName = '', flowName = '') {
-  const modelFlowLogDir = getModelFlowLogDir(modelName, flowName);
-  fs.mkdirSync(modelFlowLogDir, { recursive: true });
-  return modelFlowLogDir;
+function sanitizeSessionId(sessionId = '') {
+  const normalizedSessionId = String(sessionId || '').trim();
+  if (!normalizedSessionId) return UNKNOWN_SESSION_ID;
+
+  return normalizedSessionId
+    .replace(/[\\/]+/g, '_')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 160) || UNKNOWN_SESSION_ID;
+}
+
+function getModelFlowSessionLogDir(modelName = '', flowName = '', sessionId = '') {
+  return path.join(
+    getModelFlowLogDir(modelName, flowName),
+    sanitizeSessionId(sessionId),
+  );
+}
+
+function ensureModelFlowSessionLogDir(modelName = '', flowName = '', sessionId = '') {
+  const modelFlowSessionLogDir = getModelFlowSessionLogDir(modelName, flowName, sessionId);
+  fs.mkdirSync(modelFlowSessionLogDir, { recursive: true });
+  return modelFlowSessionLogDir;
 }
 
 function isManagedLogFile(fileName = '') {
@@ -189,11 +211,11 @@ function cleanupOldLogs(now = Date.now()) {
   cleanupOldLogsInDir(LOG_DIR, now);
 }
 
-function getWritableLogFilePath(entrySizeBytes, modelName = '', flowName = '') {
-  const modelFlowLogDir = ensureModelFlowLogDir(modelName, flowName);
+function getWritableLogFilePath(entrySizeBytes, modelName = '', flowName = '', sessionId = '') {
+  const modelFlowSessionLogDir = ensureModelFlowSessionLogDir(modelName, flowName, sessionId);
   const dateStr = formatDateForFile(new Date());
   const regex = new RegExp(`^${LOG_PREFIX}-${dateStr}-(\\d{3})\\.log$`);
-  const files = fs.readdirSync(modelFlowLogDir);
+  const files = fs.readdirSync(modelFlowSessionLogDir);
 
   const indices = files
     .map((fileName) => {
@@ -204,14 +226,14 @@ function getWritableLogFilePath(entrySizeBytes, modelName = '', flowName = '') {
     .sort((leftIndex, rightIndex) => leftIndex - rightIndex);
 
   let index = indices.length ? indices[indices.length - 1] : 1;
-  let filePath = path.join(modelFlowLogDir, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
+  let filePath = path.join(modelFlowSessionLogDir, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
 
   try {
     if (fs.existsSync(filePath)) {
       const stat = fs.statSync(filePath);
       if (stat.size + entrySizeBytes > MAX_LOG_FILE_SIZE) {
         index += 1;
-        filePath = path.join(modelFlowLogDir, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
+        filePath = path.join(modelFlowSessionLogDir, `${LOG_PREFIX}-${dateStr}-${pad(index, 3)}.log`);
       }
     }
   } catch (_) {
@@ -225,13 +247,14 @@ function appendLog(
   logEntry,
   modelName = UNKNOWN_MODEL_NAME,
   flowName = UNKNOWN_FLOW_NAME,
+  sessionId = UNKNOWN_SESSION_ID,
 ) {
   try {
     ensureLogDir();
     cleanupOldLogs(Date.now());
 
     const bytes = Buffer.byteLength(logEntry, 'utf8');
-    const filePath = getWritableLogFilePath(bytes, modelName, flowName);
+    const filePath = getWritableLogFilePath(bytes, modelName, flowName, sessionId);
     fs.appendFile(filePath, logEntry, (err) => {
       if (err) console.error('Error writing log:', err);
     });
@@ -243,6 +266,15 @@ function appendLog(
 function extractModelNameFromHeaders(headers = {}) {
   if (!headers || typeof headers !== 'object') return '';
   const rawHeaderValue = headers[MODEL_NAME_HEADER_KEY];
+  if (Array.isArray(rawHeaderValue)) {
+    return String(rawHeaderValue[0] || '').trim();
+  }
+  return String(rawHeaderValue || '').trim();
+}
+
+function extractSessionIdFromHeaders(headers = {}) {
+  if (!headers || typeof headers !== 'object') return '';
+  const rawHeaderValue = headers[SESSION_ID_HEADER_KEY];
   if (Array.isArray(rawHeaderValue)) {
     return String(rawHeaderValue[0] || '').trim();
   }
@@ -270,13 +302,16 @@ function logRequestStream(req) {
     const bodyText = bodyBuffer.toString('utf8');
     const modelName = resolveRequestModelName(req);
     const harnessFlow = extractHarnessFlowFromHeaders(req?.headers) || UNKNOWN_FLOW_NAME;
+    const sessionId = extractSessionIdFromHeaders(req?.headers) || UNKNOWN_SESSION_ID;
     req.__logModelName = modelName;
     req.__logHarnessFlow = harnessFlow;
+    req.__logSessionId = sessionId;
     const logEntry = `
 === ${new Date().toLocaleString()} ===
 [Request]
 Model: ${modelName}
 Flow: ${harnessFlow}
+SessionId: ${sessionId}
 URL: ${req.url}
 Method: ${req.method}
 Headers: ${JSON.stringify(req.headers, null, 2)}
@@ -284,7 +319,7 @@ Body:
 ${bodyText}
 ========================
 `;
-    appendLog(logEntry, modelName, harnessFlow);
+    appendLog(logEntry, modelName, harnessFlow, sessionId);
   });
 }
 
@@ -514,19 +549,21 @@ function logResponse(
   bodyText,
   modelName = UNKNOWN_MODEL_NAME,
   harnessFlow = UNKNOWN_FLOW_NAME,
+  sessionId = UNKNOWN_SESSION_ID,
 ) {
   const logEntry = `
 --- ${new Date().toLocaleString()} ---
 [Response]
 Model: ${modelName}
 Flow: ${harnessFlow}
+SessionId: ${sessionId}
 Status: ${proxyRes.statusCode}
 Headers: ${JSON.stringify(proxyRes.headers, null, 2)}
 Body:
 ${bodyText}
 ----------------
 `;
-  appendLog(logEntry, modelName, harnessFlow);
+  appendLog(logEntry, modelName, harnessFlow, sessionId);
 }
 
 function createProxyServer(localPort, targetUrl) {
@@ -554,12 +591,14 @@ function createProxyServer(localPort, targetUrl) {
         );
         const modelName = req.__logModelName || UNKNOWN_MODEL_NAME;
         const harnessFlow = req.__logHarnessFlow || UNKNOWN_FLOW_NAME;
-        logResponse(proxyRes, finalText, modelName, harnessFlow);
+        const sessionId = req.__logSessionId || UNKNOWN_SESSION_ID;
+        logResponse(proxyRes, finalText, modelName, harnessFlow, sessionId);
       } catch (error) {
         appendLog(
           `\n[Response Log Error] ${new Date().toLocaleString()} ${error.stack || error}\n`,
           req.__logModelName || UNKNOWN_MODEL_NAME,
           req.__logHarnessFlow || UNKNOWN_FLOW_NAME,
+          req.__logSessionId || UNKNOWN_SESSION_ID,
         );
       }
     });

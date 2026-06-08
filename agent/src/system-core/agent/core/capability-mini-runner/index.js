@@ -20,6 +20,7 @@ const MAX_MINI_RUNNER_TOOL_TURNS = 5;
 const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";
 const MODEL_PURPOSE_HEADER_KEY = "X-Harness-Purpose";
 const MODEL_DOMAIN_HEADER_KEY = "X-Harness-Domain";
+const MODEL_SESSION_HEADER_KEY = "X-Harness-Session-Id";
 
 function normalizeTextContent(content = "") {
   if (typeof content === "string") return content;
@@ -185,16 +186,20 @@ export function createAgentCapabilityModelInvoker({
     const customFlowHeaderKey = `X-${resolvedHeaderNamespace}-Flow`;
     const customPurposeHeaderKey = `X-${resolvedHeaderNamespace}-Purpose`;
     const customDomainHeaderKey = `X-${resolvedHeaderNamespace}-Domain`;
+    const customSessionHeaderKey = `X-${resolvedHeaderNamespace}-Session-Id`;
     const flowValue = `${resolvedFlowPrefix}.${normalizedPurpose}`;
+    const resolvedSessionId = String(sessionMeta?.sessionId || "").trim();
     const additionalHeaders = {
       [customFlowHeaderKey]: flowValue,
       [customPurposeHeaderKey]: normalizedPurpose,
       [customDomainHeaderKey]: normalizedDomain,
+      ...(resolvedSessionId ? { [customSessionHeaderKey]: resolvedSessionId } : {}),
       ...((includeHarnessCompatHeaders === true || resolvedHeaderNamespace === "harness")
         ? {
             [MODEL_FLOW_HEADER_KEY]: flowValue,
             [MODEL_PURPOSE_HEADER_KEY]: normalizedPurpose,
             [MODEL_DOMAIN_HEADER_KEY]: normalizedDomain,
+            ...(resolvedSessionId ? { [MODEL_SESSION_HEADER_KEY]: resolvedSessionId } : {}),
           }
         : {}),
     };
@@ -203,12 +208,22 @@ export function createAgentCapabilityModelInvoker({
           globalConfig,
           userConfig,
           streaming: false,
+          context: {
+            runtime,
+            agentContext: ctx?.agentContext || null,
+            sessionId: resolvedSessionId,
+          },
           additionalHeaders,
         })
       : createChatModelFn({
           globalConfig,
           userConfig,
           streaming: false,
+          context: {
+            runtime,
+            agentContext: ctx?.agentContext || null,
+            sessionId: resolvedSessionId,
+          },
           additionalHeaders,
         });
 
