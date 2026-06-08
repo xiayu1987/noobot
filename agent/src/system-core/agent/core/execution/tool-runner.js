@@ -17,6 +17,7 @@ import { handleEngineError } from "../error/index.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
+import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import {
   compactToolResultTextForModel,
   materializeTextForToolResult,
@@ -510,7 +511,7 @@ export async function executeToolCall({
         turn,
         tool: String(call?.name || "").trim(),
         sessionId: String(sessionId || "").trim(),
-        parentSessionId: String(parentSessionId || "").trim(),
+        parentSessionId: normalizeParentSessionId(parentSessionId),
       },
     });
     if (isAbort || isFatal) throw error;

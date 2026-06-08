@@ -22,6 +22,10 @@ import {
   resolveDialogProcessId,
   resolveMessageDialogProcessId,
 } from "../../../context/session/dialog-process-id-resolver.js";
+import {
+  normalizeParentSessionId,
+  resolveParentSessionId,
+} from "../../../context/parent-session-id-resolver.js";
 
 
 const TASK_SUMMARY_TOOL_NAME = "task_summary";
@@ -145,12 +149,17 @@ function buildHumanMessageContent(msg = {}, fallbackAttachmentMetas = []) {
 
 function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
   const attachmentMetas = resolveAttachmentMetas(msg, fallbackMeta?.attachmentMetas || []);
+  const fallbackParentSessionId = resolveParentSessionId({
+    runtime,
+    parentSessionId: fallbackMeta?.parentSessionId,
+  });
+  const messageParentSessionId = normalizeParentSessionId(msg?.parentSessionId);
   const payload = {
     userName: String(msg?.userName || fallbackMeta?.userName || "").trim(),
     sessionId: String(msg?.sessionId || fallbackMeta?.sessionId || "").trim(),
-    parentSessionId: String(
-      msg?.parentSessionId || fallbackMeta?.parentSessionId || "",
-    ).trim(),
+    parentSessionId: messageParentSessionId
+      ? messageParentSessionId
+      : fallbackParentSessionId,
     dialogProcessId:
       resolveMessageDialogProcessId(msg) ||
       resolveDialogProcessIdFromContext({
@@ -340,10 +349,11 @@ export function buildContextMessageBlocks(
     harnessRecentLimit,
   } = resolveMainModelWindowConfig(runtime);
   const systemRuntime = runtime?.systemRuntime || {};
+  const runtimeParentSessionId = resolveParentSessionId({ runtime });
   const fallbackUserMeta = {
     userName: String(runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || "").trim(),
-    parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
+    parentSessionId: runtimeParentSessionId,
     dialogProcessId: "",
     parentDialogProcessId: String(
       systemRuntime?.parentDialogProcessId || "",

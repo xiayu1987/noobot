@@ -39,6 +39,7 @@ import {
   filterSummarizedMessages,
   normalizeContextWindow,
 } from "../session/utils/context-window-normalizer.js";
+import { normalizeParentSessionId } from "./parent-session-id-resolver.js";
 
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
@@ -200,7 +201,11 @@ export class ContextBuilder {
       this.runConfig?.systemRuntimePatch && typeof this.runConfig.systemRuntimePatch === "object"
         ? this.runConfig.systemRuntimePatch
         : null;
-    return systemRuntimePatch ? { ...dynamicInfo, ...systemRuntimePatch } : dynamicInfo;
+    const mergedRuntime = systemRuntimePatch ? { ...dynamicInfo, ...systemRuntimePatch } : dynamicInfo;
+    return {
+      ...mergedRuntime,
+      parentSessionId: normalizeParentSessionId(mergedRuntime?.parentSessionId),
+    };
   }
 
   async _buildAgentContext(
@@ -278,7 +283,7 @@ export class ContextBuilder {
     });
     const builtTools = await buildTools({
       sessionId: this.sessionId || "",
-      parentSessionId: this.parentSessionId || "",
+      parentSessionId: normalizeParentSessionId(this.parentSessionId),
       agentContext: {
         ...agentContext,
         runtime,

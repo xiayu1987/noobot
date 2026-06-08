@@ -4,9 +4,9 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import ChatMessageItem from "../../../../client/noobot-chat/src/modules/message/ChatMessageItem.vue";
+import SharedChatMessageItem from "../../../../client/noobot-chat/src/shared/message/SharedChatMessageItem.vue";
 
-defineProps({
+const props = defineProps({
   messageItem: { type: Object, required: true },
   allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
@@ -20,8 +20,8 @@ defineProps({
 </script>
 
 <template>
-  <ChatMessageItem
-    v-bind="$props"
+  <SharedChatMessageItem
+    v-bind="props"
     attachment-preview-dialog-class="workflow-session-preview-dialog"
     file-preview-dialog-class="workflow-session-preview-dialog"
   />

@@ -24,6 +24,7 @@ import { mergeConfig } from "../config/index.js";
 import { resolveForceToolCall } from "../utils/shared-utils.js";
 import { CONNECTOR_TYPE, TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
+import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 export {
   setToolBuilderAdapter,
   getToolBuilderAdapter,
@@ -254,9 +255,7 @@ async function filterToolsByRuntimePolicy({
   const sessionId = String(
     runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
   ).trim();
-  const parentSessionId = String(
-    runtime?.systemRuntime?.parentSessionId || runtime?.parentSessionId || "",
-  ).trim();
+  const parentSessionId = resolveParentSessionId({ runtime });
   const userId = String(runtime?.userId || "").trim();
   const sessionManager = runtime?.sessionManager || null;
   const maxSubAgentDepth = resolveMaxSubAgentDepth(effectiveConfig);

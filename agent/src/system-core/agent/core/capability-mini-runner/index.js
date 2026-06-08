@@ -14,6 +14,7 @@ import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
 } from "../../../context/agent-context-accessor.js";
+import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import { compactToolResultTextForModel } from "../../../semantic-transfer/index.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
@@ -57,7 +58,11 @@ function resolveSessionMeta(ctx = {}, runtime = {}) {
   return {
     userId: String(ctx?.userId || runtime?.userId || systemRuntime?.userId || "").trim(),
     sessionId: String(ctx?.sessionId || runtime?.sessionId || systemRuntime?.sessionId || "").trim(),
-    parentSessionId: String(ctx?.parentSessionId || systemRuntime?.parentSessionId || "").trim(),
+    parentSessionId: resolveParentSessionId({
+      context: ctx,
+      runtime,
+      parentSessionId: ctx?.parentSessionId,
+    }),
   };
 }
 

@@ -6,6 +6,7 @@
 import path from "node:path";
 import { resolveForceToolCall } from "../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
+import { normalizeParentSessionId } from "../parent-session-id-resolver.js";
 import {
   hasOwnConfigKey,
   normalizeBooleanLike,
@@ -231,7 +232,7 @@ export function buildDynamicInfo({
   return {
     userId: String(userId || "").trim(),
     sessionId: String(sessionId || "").trim(),
-    parentSessionId: String(parentSessionId || "").trim(),
+    parentSessionId: normalizeParentSessionId(parentSessionId),
     rootSessionId: String(rootSessionId || "").trim(),
     caller: String(caller || "user").trim(),
     dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),

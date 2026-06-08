@@ -26,6 +26,7 @@ import { buildLoopResult } from "./turn-result-aggregator.js";
 import { resolveForceToolCall } from "../../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
+import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
 export function createTurnOrchestrator({
   resolveLlmForTurnFn = resolveLlmForTurn,
@@ -273,7 +274,7 @@ export function createTurnOrchestrator({
           maxTurns,
           hasTools: Array.isArray(tools) && tools.length > 0,
           sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-          parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
+          parentSessionId: resolveParentSessionId({ runtime }),
           dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
         },
       });

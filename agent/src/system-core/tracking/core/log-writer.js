@@ -11,6 +11,7 @@ import path from "node:path";
 import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";
+import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -78,7 +79,7 @@ export function buildBaseRecord({
     ts: nowIso(),
     userId: String(userId || ""),
     sessionId: String(sessionId || ""),
-    parentSessionId: String(parentSessionId || ""),
+    parentSessionId: normalizeParentSessionId(parentSessionId),
     source: String(source || ""),
     event: String(event || ""),
     message: String(message || ""),

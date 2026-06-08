@@ -9,6 +9,7 @@ import {
   resolveForceToolCall,
 } from "../../utils/shared-utils.js";
 import { resolveDialogProcessId } from "../session/dialog-process-id-resolver.js";
+import { resolveParentSessionId } from "../parent-session-id-resolver.js";
 
 export function mapToAgentContextSchema({
   staticAgentContext = {},
@@ -32,6 +33,10 @@ export function mapToAgentContextSchema({
   const selectedConnectors = normalizeSelectedConnectors(
     systemRuntime?.config?.selectedConnectors || {},
   );
+  const resolvedParentSessionId = resolveParentSessionId({
+    runtime: runtimeRef,
+    parentSessionId,
+  });
   const controllers = { runtime: runtimeRef };
   const tools = { registry: [] };
   const resolvedDialogProcessId = resolveDialogProcessId({
@@ -95,7 +100,7 @@ export function mapToAgentContextSchema({
         sharedState: {},
       },
       parent: {
-        id: String(systemRuntime?.parentSessionId || parentSessionId || "").trim(),
+        id: resolvedParentSessionId,
         caller: String(systemRuntime?.caller || caller || "user").trim(),
       },
       current: {

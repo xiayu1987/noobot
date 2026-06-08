@@ -18,6 +18,7 @@ import {
   TRANSIENT_LLM_RETRY_BASE_DELAY_MS,
 } from "./constants/index.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
+import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 // ── Helpers ──
 
@@ -173,7 +174,7 @@ function resolveRuntimeErrorContext(modelState = {}) {
   const systemRuntime = runtime?.systemRuntime || {};
   return {
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-    parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
+    parentSessionId: resolveParentSessionId({ runtime }),
     dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
   };
 }

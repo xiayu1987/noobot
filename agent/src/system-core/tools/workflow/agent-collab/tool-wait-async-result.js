@@ -13,6 +13,7 @@ import { isPlainObject } from "../../../utils/shared-utils.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
 import { ERROR_CODE } from "../../../error/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
+import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import {
   buildWaitAsyncTaskResultPayload,
   buildWaitTaskFailedResult,
@@ -86,9 +87,9 @@ export function createWaitAsyncTaskResultTool({
       const containerResults = await Promise.all(
         containers.map(async (containerItem = {}) => {
           const containerId = String(containerItem?.id || "").trim();
-          const resolvedParentSessionId = String(
-            containerItem?.parentSessionId || "",
-          ).trim();
+          const resolvedParentSessionId = normalizeParentSessionId(
+            containerItem?.parentSessionId,
+          );
           if (!resolvedParentSessionId) {
             return {
               id: containerId,
@@ -214,7 +215,7 @@ export function createWaitAsyncTaskResultTool({
       );
       const containerStatuses = containerResults.map((item) => ({
         id: String(item?.id || "").trim(),
-        parentSessionId: String(item?.parentSessionId || "").trim(),
+        parentSessionId: normalizeParentSessionId(item?.parentSessionId),
         status: String(item?.status || "").trim(),
         ok: item?.ok !== false,
       }));

@@ -10,6 +10,7 @@ import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
+import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { recoverableToolError } from "../../error/index.js";
 import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
@@ -176,7 +177,7 @@ export async function assertValidParentSessionId({
   agentContext = {},
   fieldName = "parentSessionId",
 }) {
-  const normalizedParentSessionId = String(parentSessionId || "").trim();
+  const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
   if (!normalizedParentSessionId) {
     throw recoverableToolError(
       `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,

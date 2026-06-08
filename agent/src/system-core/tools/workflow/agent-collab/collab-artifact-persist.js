@@ -14,6 +14,7 @@ import {
 import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { normalizeString } from "./collab-task-utils.js";
+import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
 function toSafeArtifactName(value = "") {
   return String(value || "")
@@ -60,7 +61,7 @@ export function createCollabArtifactPersistor({
     taskResults = [],
   } = {}) {
     if (!attachmentService || !userId) return emptyPersistOutput;
-    const parentSessionId = String(container?.parentSessionId || "").trim();
+    const parentSessionId = normalizeParentSessionId(container?.parentSessionId);
     const attachmentSessionId = String(
       runtime?.systemRuntime?.sessionId ||
         runtime?.systemRuntime?.rootSessionId ||

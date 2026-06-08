@@ -10,6 +10,7 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { getRuntimeFromAgentContext } from "../../../context/agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
+import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
 /**
  * Build and normalize agent runtime context.
@@ -131,7 +132,7 @@ export class AgentContextFactory {
       userId: String(userId || "").trim(),
       sessionId: String(sessionId || "").trim(),
       caller: String(caller || "").trim(),
-      parentSessionId: String(parentSessionId || "").trim(),
+      parentSessionId: normalizeParentSessionId(parentSessionId),
       dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
     };
   }

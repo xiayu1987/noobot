@@ -10,6 +10,7 @@
 import { createLlmDeltaVisibilityFilter } from "./llm-filter.js";
 import { classifyExecutionEvent } from "../tracking/event-log/log-normalizer.js";
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
+import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 
 /**
  * Enrich raw event data with resolved session/dialog identifiers.
@@ -24,9 +25,10 @@ function enrichEventData(rawData = {}, defaults = {}) {
       currentDialogProcessId: defaults.dialogProcessId,
     }),
     sessionId: String(eventData?.sessionId || defaults.sessionId || ""),
-    parentSessionId: String(
-      eventData?.parentSessionId || defaults.parentSessionId || "",
-    ),
+    parentSessionId: resolveParentSessionId({
+      context: { parentSessionId: eventData?.parentSessionId },
+      parentSessionId: defaults.parentSessionId,
+    }),
   };
 }
 
