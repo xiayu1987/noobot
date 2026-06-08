@@ -7,7 +7,6 @@ import path from "node:path";
 import { access, readFile, realpath, stat } from "node:fs/promises";
 import { normalizeConnectorType } from "../../../config/index.js";
 import { recoverableToolError } from "../../../error/index.js";
-import { cleanConnectorOutputForLLM } from "../../../utils/text-cleaner.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import {
   tToolDescription,
@@ -382,7 +381,6 @@ function buildAccessConnectorTool(context = {}) {
     historyStore,
     connectorEventListener,
     rootSessionId,
-    maxAccessOutputChars,
   } = context;
   const resolveReconnectToolName = (connectorType = "") =>
     connectorType === CONNECTOR_TYPE.DATABASE
@@ -667,13 +665,12 @@ function buildAccessConnectorTool(context = {}) {
                   reason: executionFailedMessage,
                 }),
             connector: result?.connector || {},
-            output: cleanConnectorOutputForLLM(
-              {
-                connectorType,
-                output: result?.output || {},
-              },
-              { maxChars: maxAccessOutputChars },
-            ),
+            // Keep raw connector output; avoid sanitizer/truncation here.
+            // Tool-runner overflow guard + semantic-transfer handles long payloads uniformly.
+            output:
+              result?.output && typeof result.output === "object" && !Array.isArray(result.output)
+                ? result.output
+                : {},
             // Legacy top-level attachmentMetas is removed from output payload.
             // Keep transfer contract as the only public semantic-transfer output.
             ...(emailTransferPayload.transferResult ? { transferResult: emailTransferPayload.transferResult } : {}),
