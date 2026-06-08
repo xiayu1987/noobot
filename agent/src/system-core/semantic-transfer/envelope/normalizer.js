@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { createTransferEnvelope, directInput, directOutput, fileInput, fileOutput, isTransferEnvelope } from "./envelope.js";
-import { TRANSFER_DIRECTION, TRANSFER_TRANSPORT } from "./constants.js";
-import { buildTransferFileEntry, resolveTransferFilePath } from "./path-resolver.js";
+import { TRANSFER_DIRECTION, TRANSFER_TRANSPORT } from "../core/constants.js";
+import { buildTransferFileEntry, resolveTransferFilePath } from "../storage/path-resolver.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);

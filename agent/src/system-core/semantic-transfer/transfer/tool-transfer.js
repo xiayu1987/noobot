@@ -8,21 +8,21 @@ import {
   TRANSFER_DIRECTION,
   TRANSFER_REASON,
   TRANSFER_SOURCE,
-} from "./constants.js";
-import { createTransferEnvelope, directInput, directOutput } from "./envelope.js";
+} from "../core/constants.js";
+import { createTransferEnvelope, directInput, directOutput } from "../envelope/envelope.js";
 import {
   extractTransferEnvelopeFromPersisted,
   normalizeTransferEnvelopes,
   normalizeTransferEnvelopesWithPolicy,
-} from "./envelope-utils.js";
-import { resolveTransferIntent } from "./intent.js";
-import { emitSemanticTransferValidation } from "./telemetry.js";
-import { persistTransferFile } from "./attachment-adapter.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
+} from "../envelope/envelope-utils.js";
+import { resolveTransferIntent } from "../core/intent.js";
+import { emitSemanticTransferValidation } from "../core/telemetry.js";
+import { persistTransferFile } from "../storage/attachment-adapter.js";
+import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 import {
   compactToolResultPayloadForModel,
   compactTransferPayloadForModel,
-} from "./compact.js";
+} from "../core/compact.js";
 import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,

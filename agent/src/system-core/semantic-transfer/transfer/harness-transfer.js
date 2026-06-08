@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "./constants.js";
-import { persistTransferFile } from "./attachment-adapter.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
+import { persistTransferFile } from "../storage/attachment-adapter.js";
+import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 import {
   extractTransferEnvelopeFromPersisted,
   normalizeTransferEnvelopesWithPolicy,
-} from "./envelope-utils.js";
-import { resolveTransferIntent } from "./intent.js";
-import { emitSemanticTransferValidation } from "./telemetry.js";
-import { compactTransferPayloadForModel } from "./compact.js";
+} from "../envelope/envelope-utils.js";
+import { resolveTransferIntent } from "../core/intent.js";
+import { emitSemanticTransferValidation } from "../core/telemetry.js";
+import { compactTransferPayloadForModel } from "../core/compact.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();

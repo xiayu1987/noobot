@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
-import { mapAttachmentRecordsToMetas } from "../attach/index.js";
+import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   TRANSFER_DIRECTION,
@@ -12,10 +12,10 @@ import {
   TRANSFER_SOURCE,
   TRANSFER_STORAGE_KIND,
   TRANSFER_TRANSPORT,
-} from "./constants.js";
-import { createTransferEnvelope } from "./envelope.js";
-import { resolveTransferIntent } from "./intent.js";
-import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
+} from "../core/constants.js";
+import { createTransferEnvelope } from "../envelope/envelope.js";
+import { resolveTransferIntent } from "../core/intent.js";
+import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 import { buildTransferFileEntry } from "./path-resolver.js";
 
 function normalizeString(value = "") {

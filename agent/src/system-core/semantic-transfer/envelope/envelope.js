@@ -9,7 +9,7 @@ import {
   TRANSFER_PROTOCOL,
   TRANSFER_TRANSPORT,
   TRANSFER_VERSION,
-} from "./constants.js";
+} from "../core/constants.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);

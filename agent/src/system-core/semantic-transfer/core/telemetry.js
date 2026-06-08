@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { emitEvent } from "../event/index.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../hook/index.js";
+import { emitEvent } from "../../event/index.js";
+import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../hook/index.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();

@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "./constants.js";
-import { resolveTransferIntent } from "./intent.js";
-import { persistTransferFile } from "./attachment-adapter.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
+import { resolveTransferIntent } from "../core/intent.js";
+import { persistTransferFile } from "../storage/attachment-adapter.js";
 
 const DEFAULT_INLINE_TEXT_CHARS = 10000;
 const DEFAULT_PREVIEW_CHARS = 1200;
