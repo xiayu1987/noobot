@@ -91,6 +91,44 @@ test("execute_script: command 超过 8000 字符时应直接返回长度错误",
   assert.equal(result.transferFiles[0].attachmentId, "att-script");
 });
 
+test("execute_script: 返回应同时包含宿主机与沙箱工作目录视角", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-path-view-"));
+  const runtimeOpsWorkdir = path.join(basePath, "runtime/ops_workdir");
+  const tools = createScriptTool({
+    agentContext: buildAgentContext(basePath, "admin", {
+      runtime: {
+        globalConfig: {
+          tools: {
+            execute_script: {
+              sandboxMode: false,
+            },
+          },
+        },
+        sharedTools: {
+          resolveSandboxPath(payload = {}) {
+            const hostPath = String(payload?.hostPath || payload?.path || "").trim();
+            if (hostPath === runtimeOpsWorkdir) {
+              return "/workspace/admin/runtime/ops_workdir";
+            }
+            return "";
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "execute_script");
+  assert.ok(tool);
+
+  const result = parseToolResult(await tool.invoke({ command: "printf 'ok'" }));
+
+  assert.equal(result.toolName, "execute_script");
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, "local");
+  assert.equal(result.workspace.hostWorkdir, runtimeOpsWorkdir);
+  assert.equal(result.workspace.sandboxWorkdir, "/workspace/admin/runtime/ops_workdir");
+  assert.equal(result.stdout, "ok");
+});
+
 test("write_file: content 超过 8000 字符时应直接返回长度错误且不写入", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-guard-"));
   const tools = createFileTool({

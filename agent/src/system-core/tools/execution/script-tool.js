@@ -211,6 +211,105 @@ function toolExecResult(mode, r = {}, extra = {}, outputPolicy = {}) {
   });
 }
 
+function resolveSandboxPathView({
+  runtime = {},
+  agentContext = null,
+  hostPath = "",
+  relativePath = "",
+} = {}) {
+  const normalizedHostPath = String(hostPath || "").trim();
+  if (!normalizedHostPath && !String(relativePath || "").trim()) return "";
+  const payload = {
+    path: normalizedHostPath,
+    hostPath: normalizedHostPath,
+    relativePath: String(relativePath || "").trim(),
+    runtime,
+    agentContext,
+  };
+  const resolverCandidates = [
+    runtime?.sharedTools?.resolveSandboxPath,
+    runtime?.sharedTools?.toSandboxPath,
+    runtime?.sharedTools?.pathMapper?.toSandboxPath,
+  ];
+  for (const resolver of resolverCandidates) {
+    if (typeof resolver !== "function") continue;
+    try {
+      const resolved = String(resolver(payload) || "").trim();
+      if (resolved) return resolved;
+    } catch {
+      // Keep tool output deterministic: ignore resolver failures and fallback.
+    }
+  }
+  return "";
+}
+
+function normalizeMountItem(item = {}) {
+  return {
+    host: String(item?.host || item?.source || "").trim(),
+    sandbox: String(item?.sandbox || item?.target || "").trim(),
+    desc: String(item?.desc || item?.description || "").trim(),
+    role: String(item?.role || "").trim(),
+  };
+}
+
+function compactMountItem(item = {}) {
+  const normalized = normalizeMountItem(item);
+  return Object.fromEntries(
+    Object.entries(normalized).filter(([, value]) => Boolean(value)),
+  );
+}
+
+function buildDockerRuntimeMeta({
+  docker = {},
+  workspace = "",
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  const workspaceHost = String(workspace || "").trim();
+  const workspaceSandbox =
+    String(docker?.workdir || "").trim() ||
+    resolveSandboxPathView({
+      runtime,
+      agentContext,
+      hostPath: workspaceHost,
+      relativePath: "runtime/ops_workdir",
+    });
+  const mountList = [
+    compactMountItem({
+      host: docker?.mountSource || "",
+      sandbox: docker?.mountTarget || "",
+      role: "workspace",
+    }),
+    ...(Array.isArray(docker?.dockerMounts) ? docker.dockerMounts : [])
+      .map((item) =>
+        compactMountItem({
+          host: item?.source || "",
+          sandbox: item?.target || "",
+          desc: item?.description || "",
+          role: "extra",
+        }),
+      )
+      .filter((item) => Object.keys(item).length > 0),
+  ].filter((item) => Object.keys(item).length > 0);
+
+  return {
+    runtime: Object.fromEntries(
+      Object.entries({
+        container: String(docker?.containerName || "").trim(),
+        scope: String(docker?.scope || "").trim(),
+        image: String(docker?.image || "").trim(),
+      }).filter(([, value]) => Boolean(value)),
+    ),
+    workspace: Object.fromEntries(
+      Object.entries({
+        hostWorkdir: workspaceHost,
+        sandboxWorkdir: workspaceSandbox,
+      }).filter(([, value]) => Boolean(value)),
+    ),
+    mounts: mountList,
+  };
+}
+
 function missingCommandError(mode, commandName = "", runtime = {}) {
   return recoverableToolError(
     tScript(runtime, "commandNotInstalled", { commandName }),
@@ -287,6 +386,8 @@ async function tryDockerFallback({
   timeout,
   scriptConfig = {},
   outputPolicy = {},
+  runtime = {},
+  agentContext = null,
   fallbackFrom,
   warning,
 }) {
@@ -306,23 +407,7 @@ async function tryDockerFallback({
     {
       fallbackFrom,
       warning,
-      containerName: docker?.containerName || "",
-      containerScope: docker?.scope || "",
-      containerImage: docker?.image || "",
-      containerMountSource: docker?.mountSource || "",
-      containerMountTarget: docker?.mountTarget || "",
-      containerExtraMounts: Array.isArray(docker?.dockerMounts)
-        ? docker.dockerMounts
-        : [],
-      containerProjectMountSource:
-        Array.isArray(docker?.dockerMounts) && docker.dockerMounts[0]
-          ? String(docker.dockerMounts[0].source || "")
-          : "",
-      containerProjectMountTarget:
-        Array.isArray(docker?.dockerMounts) && docker.dockerMounts[0]
-          ? String(docker.dockerMounts[0].target || "")
-          : "",
-      containerWorkdir: docker?.workdir || "",
+      ...buildDockerRuntimeMeta({ docker, workspace, runtime, agentContext }),
     },
     outputPolicy,
   );
@@ -472,12 +557,39 @@ export function createScriptTool({ agentContext }) {
 
       if (!sandboxEnabled) {
         const runResult = await run(normalizedCommand, workspace, timeout);
-        return toolExecResult("local", runResult, {}, scriptOutputPolicy);
+        return toolExecResult(
+          "local",
+          runResult,
+          {
+            workspace: {
+              hostWorkdir: workspace,
+              sandboxWorkdir:
+                resolveSandboxPathView({
+                  runtime,
+                  agentContext,
+                  hostPath: workspace,
+                  relativePath: "runtime/ops_workdir",
+                }) || workspace,
+            },
+          },
+          scriptOutputPolicy,
+        );
       }
 
       let sandboxCmd = "";
       let mode = SANDBOX_PROVIDER_NAME.DOCKER;
-      let extra = {};
+      let extra = {
+        workspace: {
+          hostWorkdir: workspace,
+          sandboxWorkdir:
+            resolveSandboxPathView({
+              runtime,
+              agentContext,
+              hostPath: workspace,
+              relativePath: "runtime/ops_workdir",
+            }) || workspace,
+        },
+      };
       let dockerRunInput = null;
 
       if (sandboxProvider === SANDBOX_PROVIDER_NAME.BUBBLEWRAP) {
@@ -500,6 +612,8 @@ export function createScriptTool({ agentContext }) {
             timeout,
             scriptConfig: dockerConfig,
             outputPolicy: scriptOutputPolicy,
+            runtime,
+            agentContext,
             fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
             warning: tScript(runtime, "fallbackOverlaySrc"),
           });
@@ -585,23 +699,13 @@ export function createScriptTool({ agentContext }) {
         );
         runResult = dockerResult;
         extra = {
-          containerName: built.containerName,
-          containerScope: built.scope,
-          containerImage: built.image,
-          containerMountSource: built.mountSource,
-          containerMountTarget: built.mountTarget,
-          containerExtraMounts: Array.isArray(built?.dockerMounts)
-            ? built.dockerMounts
-            : [],
-          containerProjectMountSource:
-            Array.isArray(built?.dockerMounts) && built.dockerMounts[0]
-              ? String(built.dockerMounts[0].source || "")
-              : "",
-          containerProjectMountTarget:
-            Array.isArray(built?.dockerMounts) && built.dockerMounts[0]
-              ? String(built.dockerMounts[0].target || "")
-              : "",
-          containerWorkdir: built.workdir,
+          ...extra,
+          ...buildDockerRuntimeMeta({
+            docker: built,
+            workspace,
+            runtime,
+            agentContext,
+          }),
         };
       } else {
         runResult = await run(sandboxCmd, workspace, timeout);
@@ -621,6 +725,8 @@ export function createScriptTool({ agentContext }) {
           timeout,
           scriptConfig: dockerConfig,
           outputPolicy: scriptOutputPolicy,
+          runtime,
+          agentContext,
           fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
           warning: tScript(runtime, "fallbackUserxattr"),
         });
