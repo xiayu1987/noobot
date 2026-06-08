@@ -7,7 +7,7 @@
 import { createPluginRuntimeContext, assertHookManager } from "./context.js";
 import { normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
-import { registerWorkflowHooks } from "./hooks.js";
+import { registerWorkflowHooks } from "./hooks/index.js";
 
 export function createRegisterNoobotPlugin(deps = {}) {
   const createPluginRuntimeContextFn = deps.createPluginRuntimeContext || createPluginRuntimeContext;
