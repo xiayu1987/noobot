@@ -96,6 +96,18 @@ export class BotManager {
     });
   }
 
+  pruneOrphanScopedAttachments({
+    userId,
+    keepSessionIds = [],
+    attachmentSources = [],
+  } = {}) {
+    return this.attach.pruneOrphanScopedAttachments({
+      userId,
+      keepSessionIds,
+      attachmentSources,
+    });
+  }
+
   async deleteToolResultOverflowBySessionIds({
     userId,
     sessionIds = [],

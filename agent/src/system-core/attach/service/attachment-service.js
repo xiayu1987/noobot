@@ -17,7 +17,7 @@ import {
   fsWriteFile,
 } from "../../store/fs-adapter.js";
 
-import { DEFAULT_MIME_TYPE } from "../constants.js";
+import { DEFAULT_MIME_TYPE, DEFAULT_ATTACHMENT_SESSION_ID } from "../constants.js";
 import { safeNum, safeStr } from "../../utils/shared-utils.js";
 import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
 import { resolveAttachmentPolicy, isMimeTypeAllowed, isExtensionAllowed } from "../policy/policy-validator.js";
@@ -702,5 +702,85 @@ export class AttachmentService {
     }
 
     return { deletedSessionIds: deleted, deletedCount: deleted.length };
+  }
+
+  /**
+   * 清理已不存在会话的 scoped 附件目录（孤儿目录）。
+   *
+   * @param {object} [params] - 入参。
+   * @param {string} params.userId - 用户 ID。
+   * @param {string[]} [params.keepSessionIds] - 仍需保留的会话 ID 列表。
+   * @returns {Promise<{deletedSessionIds: string[], deletedCount: number}>}
+   */
+  async pruneOrphanScopedAttachments({
+    userId,
+    keepSessionIds = [],
+    attachmentSources = [],
+  } = {}) {
+    const basePath = resolveBasePath(this.globalConfig, userId);
+    const scopedRoot = attachScopedRoot(basePath);
+    const sourceSet = new Set(
+      (Array.isArray(attachmentSources) ? attachmentSources : [])
+        .map((source) => safeStr(source).toLowerCase())
+        .filter(Boolean),
+    );
+    const keepSet = new Set([
+      DEFAULT_ATTACHMENT_SESSION_ID,
+      ...(Array.isArray(keepSessionIds) ? keepSessionIds : [])
+        .map((sid) => safeStr(sid))
+        .filter(Boolean),
+    ]);
+
+    let sessionEntries = [];
+    try {
+      sessionEntries = await readdir(scopedRoot, { withFileTypes: true });
+    } catch {
+      return { deletedSessionIds: [], deletedCount: 0 };
+    }
+
+    const deletedSessionIds = [];
+    for (const entry of sessionEntries) {
+      if (!entry?.isDirectory?.()) continue;
+      const sessionId = safeStr(entry?.name);
+      if (!sessionId || keepSet.has(sessionId)) continue;
+      try {
+        const sessionPath = path.join(scopedRoot, sessionId);
+        if (!sourceSet.size) {
+          await fsRm(sessionPath, { recursive: true, force: true });
+          deletedSessionIds.push(sessionId);
+          continue;
+        }
+
+        let sourceEntries = [];
+        try {
+          sourceEntries = await readdir(sessionPath, { withFileTypes: true });
+        } catch {
+          continue;
+        }
+        let deletedAnySource = false;
+        for (const sourceEntry of sourceEntries) {
+          if (!sourceEntry?.isDirectory?.()) continue;
+          const sourceName = safeStr(sourceEntry?.name).toLowerCase();
+          if (!sourceName || !sourceSet.has(sourceName)) continue;
+          await fsRm(path.join(sessionPath, sourceEntry.name), {
+            recursive: true,
+            force: true,
+          });
+          deletedAnySource = true;
+        }
+        if (deletedAnySource) {
+          // best-effort: 删除已空的 session 目录
+          await fsRm(sessionPath, { recursive: false, force: true });
+          deletedSessionIds.push(sessionId);
+        }
+      } catch {
+        // ignore per-session prune failures
+      }
+    }
+
+    return {
+      deletedSessionIds,
+      deletedCount: deletedSessionIds.length,
+    };
   }
 }

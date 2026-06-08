@@ -119,6 +119,22 @@ export function registerSessionRoutes(
               sessionIds: deletedSessionIds,
             })
           : { deletedSessionIds: [], deletedCount: 0 };
+      let deletedOrphanAttachments = { deletedSessionIds: [], deletedCount: 0 };
+      if (
+        typeof bot.pruneOrphanScopedAttachments === "function" &&
+        bot?.session &&
+        typeof bot.session.getAllSessionsData === "function"
+      ) {
+        const remainingSessions = await bot.session.getAllSessionsData({ userId });
+        const keepSessionIds = (Array.isArray(remainingSessions) ? remainingSessions : [])
+          .map((item) => String(item?.sessionId || "").trim())
+          .filter(Boolean);
+        deletedOrphanAttachments = await bot.pruneOrphanScopedAttachments({
+          userId,
+          keepSessionIds,
+          attachmentSources: ["subtask"],
+        });
+      }
       let deletedConnectorHistory = false;
       if (shouldReleaseRootConnectors) {
         const connectorHistoryStore = getConnectorHistoryStore();
@@ -136,6 +152,7 @@ export function registerSessionRoutes(
         ok: true,
         ...result,
         deletedAttachments,
+        deletedOrphanAttachments,
         deletedToolResultOverflow,
         releasedConnectors,
         deletedConnectorHistory,
