@@ -52,6 +52,7 @@ export const AGENT_HOOK_POINTS = Object.freeze({
   AFTER_STATE_COMMIT: "after_state_commit",
   BEFORE_FINAL_OUTPUT: "before_final_output",
   AFTER_SESSION_DELETE: "after_session_delete",
+  SEMANTIC_TRANSFER_VALIDATION: "semantic_transfer_validation",
 });
 
 function createHookTimeoutError({ point = "", hookId = "", timeoutMs = 0 } = {}) {

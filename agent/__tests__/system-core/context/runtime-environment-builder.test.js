@@ -116,6 +116,37 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   }
 });
 
+test("initializeRuntimeEnvironment passes semantic-transfer strict envelope validation config", async () => {
+  const runtime = buildRuntimeContext({
+    userId: "u1",
+    globalConfig: {
+      semanticTransfer: {
+        strictEnvelopeValidation: true,
+      },
+    },
+    systemRuntime: {
+      sessionId: "s1",
+      rootSessionId: "r1",
+      config: { allowUserInteraction: false },
+    },
+  });
+  await initializeRuntimeEnvironment(runtime);
+  const semanticTransfer = runtime.sharedTools.semanticTransfer || {};
+  assert.equal(semanticTransfer.resolveStrictEnvelopeValidation(), true);
+  assert.throws(
+    () => semanticTransfer.validateTransferEnvelope({ protocol: "x" }),
+    /invalid transfer envelope/i,
+  );
+  assert.throws(
+    () =>
+      semanticTransfer.normalizeTransferEnvelopesWithPolicy(
+        [{ filePath: "/workspace/legacy.txt" }],
+        { enforceProtocol: true },
+      ),
+    /invalid transfer envelopes/i,
+  );
+});
+
 test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encrypted response", async () => {
   const runtime = buildRuntimeContext({
     userId: "u1",

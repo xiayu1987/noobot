@@ -41,6 +41,7 @@ import {
   materializeOutput,
   materializeOutputResult,
   normalizeTransfer,
+  normalizeTransferEnvelopesWithPolicy,
   normalizeTransferPolicy,
   processStageMessage,
   isValidTransferEnvelope,
@@ -195,6 +196,16 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
 }
 
 function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
+  const resolveStrictEnvelopeValidation = (options = {}) => {
+    if (typeof options?.strict === "boolean") return options.strict;
+    if (typeof runtimeContext?.userConfig?.semanticTransfer?.strictEnvelopeValidation === "boolean") {
+      return runtimeContext.userConfig.semanticTransfer.strictEnvelopeValidation;
+    }
+    if (typeof runtimeContext?.globalConfig?.semanticTransfer?.strictEnvelopeValidation === "boolean") {
+      return runtimeContext.globalConfig.semanticTransfer.strictEnvelopeValidation;
+    }
+    return false;
+  };
   const currentSemanticTransfer = isPlainObject(sharedTools.semanticTransfer)
     ? sharedTools.semanticTransfer
     : {};
@@ -221,7 +232,11 @@ function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
         runtime: options?.runtime || runtimeContext,
         agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
       }),
-    getTransferAttachmentMetas,
+    getTransferAttachmentMetas: (value, options = {}) =>
+      getTransferAttachmentMetas(value, {
+        ...(options && typeof options === "object" ? options : {}),
+        runtime: options?.runtime || runtimeContext,
+      }),
     normalizeTransfer: (value, options = {}) =>
       normalizeTransfer(value, {
         ...(options && typeof options === "object" ? options : {}),
@@ -247,7 +262,18 @@ function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
         agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
       }),
     normalizeTransferPolicy,
-    validateTransferEnvelope,
+    resolveStrictEnvelopeValidation,
+    normalizeTransferEnvelopesWithPolicy: (value, options = {}) =>
+      normalizeTransferEnvelopesWithPolicy(value, {
+        ...(options && typeof options === "object" ? options : {}),
+        runtime: options?.runtime || runtimeContext,
+        strict: resolveStrictEnvelopeValidation(options),
+      }),
+    validateTransferEnvelope: (value, options = {}) =>
+      validateTransferEnvelope(value, {
+        ...(options && typeof options === "object" ? options : {}),
+        strict: resolveStrictEnvelopeValidation(options),
+      }),
     isValidTransferEnvelope,
     materializeOutputResult: (payload = {}) =>
       materializeOutputResult({

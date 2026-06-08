@@ -3,9 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE } from "./constants.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "./constants.js";
 import { persistTransferFile } from "./attachment-adapter.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
+import {
+  extractTransferEnvelopeFromPersisted,
+  normalizeTransferEnvelopesWithPolicy,
+} from "./envelope-utils.js";
+import { resolveTransferIntent } from "./intent.js";
+import { emitSemanticTransferValidation } from "./telemetry.js";
 import { compactTransferPayloadForModel } from "./compact.js";
 
 function normalizeString(value = "") {
@@ -47,8 +53,32 @@ export async function processStageMessage({
 } = {}) {
   const normalizedSummary = String(summary || "").trim();
   const normalizedDetail = String(detail || "").trim();
+  const intent = resolveTransferIntent({
+    source,
+    reason,
+    generationSource,
+    fallbackSource: TRANSFER_SOURCE.PLUGIN,
+    fallbackReason: TRANSFER_REASON.HARNESS_STAGE_MESSAGE,
+    defaultGenerationSource: TRANSFER_REASON.HARNESS_STAGE_MESSAGE,
+    allowCustom: true,
+  });
 
   if (!normalizedDetail) {
+    await emitSemanticTransferValidation({
+      runtime,
+      scenario: "harness_stage",
+      stats: {
+        inputCount: 0,
+        outputCount: 0,
+        filteredCount: 0,
+        invalidCount: 0,
+        strict: Boolean(
+          runtime?.userConfig?.semanticTransfer?.strictEnvelopeValidation ??
+            runtime?.globalConfig?.semanticTransfer?.strictEnvelopeValidation,
+        ),
+        enforceProtocol: true,
+      },
+    });
     return {
       summary: normalizedSummary,
       detail: "",
@@ -66,19 +96,23 @@ export async function processStageMessage({
     name: normalizeString(name) || "harness-stage-detail.md",
     mimeType: normalizeString(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
     attachmentSource,
-    generationSource,
-    source,
-    reason,
+    generationSource: intent.generationSource,
+    source: intent.source,
+    reason: intent.reason,
     meta,
   });
 
-  const transferEnvelope =
-    persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
-      ? persisted.envelope
-      : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
-        ? persisted.result.envelope
-        : null;
-  const transferEnvelopes = transferEnvelope ? [transferEnvelope] : [];
+  const transferEnvelope = extractTransferEnvelopeFromPersisted(persisted);
+  const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
+    transferEnvelope ? [transferEnvelope] : [],
+    { runtime, enforceProtocol: true, withStats: true },
+  );
+  const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
+  await emitSemanticTransferValidation({
+    runtime,
+    scenario: "harness_stage",
+    stats: transferEnvelopesResult?.stats || {},
+  });
   return {
     summary: normalizedSummary,
     detail: "",

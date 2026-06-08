@@ -10,6 +10,10 @@ import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-
 
 const TOOL_EVENT_TYPES = new Set(["tool_call", "tool_result"]);
 const ERROR_EVENT_SUFFIX_RE = /(_error|_aborted)$/i;
+const SEMANTIC_TRANSFER_EVENTS = new Set([
+  "semantic_transfer_validation",
+  "semantic_transfer_legacy_input_warning",
+]);
 
 function resolveErrorType(rawEvent = "") {
   const normalized = String(rawEvent || "").toLowerCase();
@@ -57,6 +61,9 @@ function normalizeErrorEvent(rawEvent = "", data = {}, ts = "") {
 }
 
 export function classifyExecutionEvent(event = "") {
+  if (SEMANTIC_TRANSFER_EVENTS.has(String(event || "").trim())) {
+    return { category: "semantic_transfer", type: "semantic_transfer" };
+  }
   if (event === "tool_call_start")
     return { category: "tool", type: "tool_call" };
   if (event === "tool_call_end")
@@ -73,6 +80,26 @@ export function normalizeSseLogEvent(evt = {}) {
 
   if (ERROR_EVENT_SUFFIX_RE.test(rawEvent)) {
     return normalizeErrorEvent(rawEvent, data, ts);
+  }
+
+  if (SEMANTIC_TRANSFER_EVENTS.has(rawEvent)) {
+    const semanticType =
+      rawEvent === "semantic_transfer_legacy_input_warning"
+        ? "legacy_input_warning"
+        : "validation";
+    return {
+      event: "thinking",
+      data: {
+        category: "semantic_transfer",
+        type: "semantic_transfer",
+        event: "semantic_transfer",
+        semanticTransferType: semanticType,
+        rawEvent,
+        ts,
+        ...data,
+        text: `${rawEvent} ${JSON.stringify(data || {})}`,
+      },
+    };
   }
 
   if (rawEvent === "tool_call_start") {

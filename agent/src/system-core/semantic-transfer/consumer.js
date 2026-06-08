@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { isTransferEnvelope } from "./envelope.js";
-import { buildTransferFileEntry } from "./path-resolver.js";
+import { normalizeTransferEnvelopes } from "./envelope-utils.js";
+import { emitEvent } from "../event/index.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -14,57 +15,95 @@ function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
-export function getTransferFiles(value = null, { runtime = {}, agentContext = null } = {}) {
-  if (!value) return [];
-  if (isTransferEnvelope(value)) {
-    if (Array.isArray(value.files) && value.files.length) {
-      return value.files.filter(isPlainObject);
-    }
-    if (value.filePath || value.attachmentMeta) {
-      return [
-        {
-          filePath: normalizeString(value.filePath),
-          ...(isPlainObject(value.attachmentMeta) ? { attachmentMeta: value.attachmentMeta } : {}),
-          ...(isPlainObject(value.pathView) ? { pathView: value.pathView } : {}),
-          role: "primary",
-        },
-      ];
-    }
-    return [];
-  }
+function isLegacyTransferLikeInput(value = null) {
+  if (!value) return false;
+  if (isTransferEnvelope(value)) return false;
   if (Array.isArray(value)) {
-    return value
-      .filter(isPlainObject)
-      .map((attachmentMeta, index) =>
-        buildTransferFileEntry({
-          runtime,
-          agentContext,
-          attachmentMeta,
-          role: index === 0 ? "primary" : "secondary",
-          purpose: "consume_transfer_files",
-        }),
-      );
+    const list = value.filter(isPlainObject);
+    if (!list.length) return false;
+    return list.some((item = {}) => !isTransferEnvelope(item));
   }
-  if (isPlainObject(value)) {
-    if (Array.isArray(value.files) && value.files.length) return value.files.filter(isPlainObject);
-    if (Array.isArray(value.attachmentMetas) && value.attachmentMetas.length) {
-      return getTransferFiles(value.attachmentMetas, { runtime, agentContext });
-    }
-    if (value.filePath || value.path || value.relativePath || value.attachmentMeta) {
-      const attachmentMeta = isPlainObject(value.attachmentMeta) ? value.attachmentMeta : value;
-      return [
-        buildTransferFileEntry({
-          runtime,
-          agentContext,
-          attachmentMeta,
-          path: value.filePath || value.path || attachmentMeta?.path || "",
-          relativePath: value.relativePath || attachmentMeta?.relativePath || "",
-          purpose: "consume_transfer_files",
-        }),
-      ];
-    }
+  if (!isPlainObject(value)) return false;
+  if (isTransferEnvelope(value)) return false;
+  const legacyKeys = ["attachmentMetas", "attachmentMeta", "filePath", "path", "relativePath"];
+  return legacyKeys.some((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function emitLegacyInputWarning({
+  runtime = {},
+  api = "",
+  value = null,
+} = {}) {
+  if (!isLegacyTransferLikeInput(value)) return;
+  const source = isPlainObject(value)
+    ? value
+    : Array.isArray(value) && isPlainObject(value[0])
+      ? value[0]
+      : {};
+  const legacyKeys = ["attachmentMetas", "attachmentMeta", "filePath", "path", "relativePath"].filter((key) =>
+    Object.prototype.hasOwnProperty.call(source, key),
+  );
+  emitEvent(runtime?.eventListener || null, "semantic_transfer_legacy_input_warning", {
+    api: normalizeString(api) || "unknown",
+    legacyKeys,
+    message: "legacy semantic-transfer input is no longer supported; please provide transfer envelope(s)",
+  });
+}
+
+function envelopeToFiles(envelope = null) {
+  if (!isTransferEnvelope(envelope)) return [];
+  if (Array.isArray(envelope.files) && envelope.files.length) {
+    return envelope.files.filter(isPlainObject);
+  }
+  if (envelope.filePath || envelope.attachmentMeta) {
+    return [
+      {
+        filePath: normalizeString(envelope.filePath),
+        ...(isPlainObject(envelope.attachmentMeta) ? { attachmentMeta: envelope.attachmentMeta } : {}),
+        ...(isPlainObject(envelope.pathView) ? { pathView: envelope.pathView } : {}),
+        role: "primary",
+      },
+    ];
   }
   return [];
+}
+
+function collectTransferEnvelopes(value = null) {
+  const dedupe = (envelopes = []) => {
+    const seen = new Set();
+    const out = [];
+    for (const envelope of normalizeTransferEnvelopes(envelopes)) {
+      const key =
+        normalizeString(
+          envelope?.files?.[0]?.attachmentMeta?.attachmentId ||
+            envelope?.attachmentMeta?.attachmentId ||
+            envelope?.files?.[0]?.filePath ||
+            envelope?.filePath,
+        ) || JSON.stringify(envelope);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(envelope);
+    }
+    return out;
+  };
+  if (!value) return [];
+  if (isTransferEnvelope(value)) return dedupe([value]);
+  if (Array.isArray(value)) return dedupe(value);
+  if (!isPlainObject(value)) return [];
+  return dedupe([
+    value.transferEnvelope,
+    value?.transferResult?.envelope,
+    ...(Array.isArray(value.transferEnvelopes) ? value.transferEnvelopes : []),
+    value,
+  ]);
+}
+
+export function getTransferFiles(value = null, { runtime = {}, agentContext = null } = {}) {
+  void agentContext;
+  emitLegacyInputWarning({ runtime, api: "getTransferFiles", value });
+  const envelopes = collectTransferEnvelopes(value);
+  const fromEnvelopes = envelopes.flatMap((envelope) => envelopeToFiles(envelope));
+  return fromEnvelopes;
 }
 
 export function getPrimaryTransferFile(value = null, options = {}) {
@@ -88,29 +127,15 @@ export function getTransferDisplayPath(value = null, options = {}) {
   );
 }
 
-export function getTransferAttachmentMetas(value = null) {
-  if (!value) return [];
-  if (isTransferEnvelope(value)) {
-    const fromFiles = Array.isArray(value.files)
-      ? value.files.map((item = {}) => item?.attachmentMeta).filter(isPlainObject)
+export function getTransferAttachmentMetas(value = null, { runtime = {} } = {}) {
+  emitLegacyInputWarning({ runtime, api: "getTransferAttachmentMetas", value });
+  const envelopes = collectTransferEnvelopes(value);
+  const fromEnvelopes = envelopes.flatMap((envelope = {}) => {
+    const fromFiles = Array.isArray(envelope.files)
+      ? envelope.files.map((item = {}) => item?.attachmentMeta).filter(isPlainObject)
       : [];
     if (fromFiles.length) return fromFiles;
-    return isPlainObject(value.attachmentMeta) ? [value.attachmentMeta] : [];
-  }
-  if (Array.isArray(value)) {
-    const list = value.filter(isPlainObject);
-    const hasEnvelope = list.some((item = {}) => isTransferEnvelope(item));
-    if (hasEnvelope) {
-      return list.flatMap((item) => getTransferAttachmentMetas(item));
-    }
-    return list;
-  }
-  if (isPlainObject(value)) {
-    if (Array.isArray(value.attachmentMetas)) return value.attachmentMetas.filter(isPlainObject);
-    if (Array.isArray(value.files)) {
-      return value.files.map((item = {}) => item?.attachmentMeta).filter(isPlainObject);
-    }
-    if (isPlainObject(value.attachmentMeta)) return [value.attachmentMeta];
-  }
-  return [];
+    return isPlainObject(envelope.attachmentMeta) ? [envelope.attachmentMeta] : [];
+  });
+  return fromEnvelopes;
 }

@@ -5,8 +5,16 @@
  */
 import { Buffer } from "node:buffer";
 import { mapAttachmentRecordsToMetas } from "../attach/index.js";
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_DIRECTION, TRANSFER_STORAGE_KIND, TRANSFER_TRANSPORT } from "./constants.js";
+import {
+  DEFAULT_TRANSFER_MIME_TYPE,
+  TRANSFER_DIRECTION,
+  TRANSFER_REASON,
+  TRANSFER_SOURCE,
+  TRANSFER_STORAGE_KIND,
+  TRANSFER_TRANSPORT,
+} from "./constants.js";
 import { createTransferEnvelope } from "./envelope.js";
+import { resolveTransferIntent } from "./intent.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "./result.js";
 import { buildTransferFileEntry } from "./path-resolver.js";
 
@@ -90,8 +98,16 @@ export async function persistTransferArtifacts({
     return emptyPersistResult();
   }
 
-  const resolvedGenerationSource =
-    normalizeString(generationSource || reason || source) || "semantic_transfer_output";
+  const intent = resolveTransferIntent({
+    source,
+    reason,
+    generationSource,
+    fallbackSource: TRANSFER_SOURCE.SERVICE,
+    fallbackReason: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
+    defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
+    allowCustom: true,
+  });
+  const resolvedGenerationSource = intent.generationSource;
   const records = await service.ingestGeneratedArtifacts({
     userId: resolvedUserId,
     sessionId: resolvedSessionId,
@@ -103,7 +119,7 @@ export async function persistTransferArtifacts({
     fallbackMimeType: normalizeString(fallbackMimeType) || DEFAULT_TRANSFER_MIME_TYPE,
     fallbackGenerationSource: resolvedGenerationSource,
   });
-  const purpose = reason || resolvedGenerationSource || "semantic_transfer_file_path";
+  const purpose = intent.reason || resolvedGenerationSource || TRANSFER_REASON.SEMANTIC_TRANSFER_FILE_PATH;
   const files = attachmentMetas.map((attachmentMeta, index) =>
     buildTransferFileEntry({
       runtime,
@@ -133,7 +149,7 @@ export async function persistTransferArtifacts({
     producer,
     meta: {
       ...meta,
-      source,
+      source: intent.source,
       reason: purpose,
       mimeType: normalizeString(fallbackMimeType) || DEFAULT_TRANSFER_MIME_TYPE,
       fileCount: files.length,

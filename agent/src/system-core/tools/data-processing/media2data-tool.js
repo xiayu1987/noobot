@@ -13,6 +13,7 @@ import { z } from "zod";
 import {
   getTransferAttachmentMetas,
   materializeTextForToolResult,
+  TRANSFER_SOURCE,
 } from "../../semantic-transfer/index.js";
 import { recoverableToolError } from "../../error/index.js";
 import {
@@ -299,7 +300,7 @@ async function persistMedia2DataTextAttachment({
     mimeType: MIME_TYPE.TEXT_MARKDOWN,
     attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
     generationSource: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
-    source: "tool",
+    source: TRANSFER_SOURCE.TOOL,
     reason: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
     alwaysPersist: true,
     producer: { type: "tool", name: TOOL_NAME.MEDIA_TO_DATA },
