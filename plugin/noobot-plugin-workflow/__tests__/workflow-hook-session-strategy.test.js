@@ -326,6 +326,114 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
   assert.equal(workflowTurn?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId, "wf-semantic-result-1");
 });
 
+test("workflow hook routes final attachment summary composition through semantic-transfer", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const semanticTransferCalls = [];
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      semanticModel: "qwen3_6_plus",
+      capabilityModelInvoker: async () => ({
+        output: [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=act type=action name="节点A" task="请输出节点结果"',
+          'NODE id=end type=state stateType=end name="结束"',
+          'EDGE from=start to=act',
+          'EDGE from=act to=end',
+          "END",
+        ].join("\n"),
+      }),
+      subSessionRunner: async () => ({
+        sessionId: "wf-summary-node-session-1",
+        dialogProcessId: "wf_summary_node_dialog_1",
+        result: {
+          answer: "summary-node-done",
+          messages: [{ role: "assistant", content: "summary-node-done", type: "message" }],
+        },
+      }),
+      generatedArtifactPersister: async () => [],
+    },
+  });
+
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  assert.ok(beforeDispatch?.handler);
+  const ctx = {
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "d1",
+    userMessage: "请给我一个语义传递工作流",
+    runConfig: { locale: "zh-CN", streaming: false },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            sharedTools: {
+              semanticTransfer: {
+                async transferSemanticContent(payload = {}) {
+                  semanticTransferCalls.push(payload);
+                  const generationSource = String(payload?.generationSource || "").trim();
+                  const suffix = generationSource === "workflow_planning_final_attachment_summary"
+                    ? "final"
+                    : "node";
+                  const envelope = {
+                    protocol: "noobot.semantic-transfer",
+                    version: 1,
+                    direction: "output",
+                    transport: "file",
+                    filePath: `/workspace/${suffix}-summary.md`,
+                    files: [
+                      {
+                        role: "primary",
+                        filePath: `/workspace/${suffix}-summary.md`,
+                        attachmentMeta: {
+                          attachmentId: `wf-semantic-${suffix}-1`,
+                          name: `${suffix}-summary.md`,
+                          mimeType: "text/markdown",
+                          relativePath: `runtime/attach/${suffix}-summary.md`,
+                        },
+                      },
+                    ],
+                  };
+                  return {
+                    transferResult: { ok: true, status: "file", envelope },
+                    transferEnvelope: envelope,
+                    transferEnvelopes: [envelope],
+                  };
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  await beforeDispatch.handler(ctx);
+
+  const hasFinalSummaryCall = semanticTransferCalls.some(
+    (item = {}) =>
+      String(item?.scenario || "").trim() === "subagent" &&
+      String(item?.generationSource || "").trim() === "workflow_planning_final_attachment_summary",
+  );
+  assert.equal(hasFinalSummaryCall, true);
+  const agentResult = ctx.overrideAgentResult;
+  const workflowTurn = (agentResult?.turnMessages || []).find((item) => item?.workflowMessage === true);
+  assert.ok(workflowTurn);
+  const transferEnvelopes = Array.isArray(workflowTurn?.transferEnvelopes)
+    ? workflowTurn.transferEnvelopes
+    : [];
+  assert.equal(
+    transferEnvelopes.some(
+      (item = {}) => String(item?.files?.[0]?.attachmentMeta?.attachmentId || "").trim() === "wf-semantic-final-1",
+    ),
+    true,
+  );
+});
+
 test("workflow hook injects upstream node result attachments into downstream sub-session system messages", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
@@ -687,6 +795,197 @@ test("workflow hook marks failed sub-agent step and continues downstream", async
     (item) => String(item?.nodeName || "") === "节点A",
   );
   assert.equal(nodeSessionA?.stepStatus, "failed");
+});
+
+test("workflow hook injects failed upstream task+error from single upstream into multiple downstream nodes", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const subSessionCalls = [];
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      capabilityModelInvoker: async () => ({
+        output: [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=a type=action name="节点A" task="执行A任务"',
+          'NODE id=branch type=state stateType=branch name="分叉"',
+          'NODE id=b type=action name="节点B" task="执行B"',
+          'NODE id=c type=action name="节点C" task="执行C"',
+          'NODE id=end type=state stateType=end name="结束"',
+          "EDGE from=start to=a",
+          "EDGE from=a to=branch",
+          "EDGE from=branch to=b",
+          "EDGE from=branch to=c",
+          "EDGE from=b to=end",
+          "EDGE from=c to=end",
+          "END",
+        ].join("\n"),
+      }),
+      subSessionRunner: async (payload = {}) => {
+        subSessionCalls.push(payload);
+        const nodeName = String(payload?.metadata?.nodeName || "").trim();
+        if (nodeName === "节点A") throw new Error("节点A失败");
+        return {
+          sessionId: `session-${nodeName}`,
+          dialogProcessId: `dialog-${nodeName}`,
+          result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },
+        };
+      },
+      generatedArtifactPersister: async () => [],
+    },
+  });
+
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  assert.ok(beforeDispatch?.handler);
+  await beforeDispatch.handler({
+    userId: "u1",
+    sessionId: "s-failure-fanout",
+    dialogProcessId: "d-failure-fanout",
+    userMessage: "请运行失败传播流程",
+    runConfig: { locale: "zh-CN" },
+  });
+  const callByNodeName = new Map(
+    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
+  );
+  const nodeBSystem = String(callByNodeName.get("节点B")?.systemMessages?.[0] || "");
+  const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
+  assert.match(nodeBSystem, /节点A（任务：执行A任务）: 节点A失败/);
+  assert.match(nodeCSystem, /节点A（任务：执行A任务）: 节点A失败/);
+});
+
+test("workflow hook injects failed upstream task+error from multiple upstream into single downstream node", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const subSessionCalls = [];
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      parallelNodeExecution: true,
+      maxParallelNodeAgents: 4,
+      capabilityModelInvoker: async () => ({
+        output: [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=branch type=state stateType=branch name="分叉"',
+          'NODE id=a type=action name="节点A" task="执行A任务"',
+          'NODE id=b type=action name="节点B" task="执行B任务"',
+          'NODE id=merge type=state stateType=merge name="汇聚"',
+          'NODE id=c type=action name="节点C" task="执行C任务"',
+          'NODE id=end type=state stateType=end name="结束"',
+          "EDGE from=start to=branch",
+          "EDGE from=branch to=a",
+          "EDGE from=branch to=b",
+          "EDGE from=a to=merge",
+          "EDGE from=b to=merge",
+          "EDGE from=merge to=c",
+          "EDGE from=c to=end",
+          "END",
+        ].join("\n"),
+      }),
+      subSessionRunner: async (payload = {}) => {
+        subSessionCalls.push(payload);
+        const nodeName = String(payload?.metadata?.nodeName || "").trim();
+        if (nodeName === "节点A") throw new Error("节点A失败");
+        return {
+          sessionId: `session-${nodeName}`,
+          dialogProcessId: `dialog-${nodeName}`,
+          result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },
+        };
+      },
+      generatedArtifactPersister: async () => [],
+    },
+  });
+
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  assert.ok(beforeDispatch?.handler);
+  await beforeDispatch.handler({
+    userId: "u1",
+    sessionId: "s-failure-merge",
+    dialogProcessId: "d-failure-merge",
+    userMessage: "请运行失败传播流程",
+    runConfig: { locale: "zh-CN" },
+  });
+  const callByNodeName = new Map(
+    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
+  );
+  const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
+  assert.match(nodeCSystem, /节点A（任务：执行A任务）: 节点A失败/);
+});
+
+test("workflow hook injects failed upstream task+error from multiple upstream into multiple downstream nodes", async () => {
+  const hookManager = createMockBotHookManager();
+  const registerWorkflowHooks = createRegisterWorkflowHooks();
+  const subSessionCalls = [];
+
+  registerWorkflowHooks({
+    hookManager,
+    options: {
+      enabled: true,
+      mode: "on",
+      parallelNodeExecution: true,
+      maxParallelNodeAgents: 4,
+      capabilityModelInvoker: async () => ({
+        output: [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=branch type=state stateType=branch name="分叉"',
+          'NODE id=a type=action name="节点A" task="执行A任务"',
+          'NODE id=b type=action name="节点B" task="执行B任务"',
+          'NODE id=merge type=state stateType=merge name="汇聚"',
+          'NODE id=branch2 type=state stateType=branch name="汇聚后分叉"',
+          'NODE id=c type=action name="节点C" task="执行C任务"',
+          'NODE id=d type=action name="节点D" task="执行D任务"',
+          'NODE id=end type=state stateType=end name="结束"',
+          "EDGE from=start to=branch",
+          "EDGE from=branch to=a",
+          "EDGE from=branch to=b",
+          "EDGE from=a to=merge",
+          "EDGE from=b to=merge",
+          "EDGE from=merge to=branch2",
+          "EDGE from=branch2 to=c",
+          "EDGE from=branch2 to=d",
+          "EDGE from=c to=end",
+          "EDGE from=d to=end",
+          "END",
+        ].join("\n"),
+      }),
+      subSessionRunner: async (payload = {}) => {
+        subSessionCalls.push(payload);
+        const nodeName = String(payload?.metadata?.nodeName || "").trim();
+        if (nodeName === "节点A") throw new Error("节点A失败");
+        return {
+          sessionId: `session-${nodeName}`,
+          dialogProcessId: `dialog-${nodeName}`,
+          result: { messages: [{ role: "assistant", content: `ok-${nodeName}` }] },
+        };
+      },
+      generatedArtifactPersister: async () => [],
+    },
+  });
+
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  assert.ok(beforeDispatch?.handler);
+  await beforeDispatch.handler({
+    userId: "u1",
+    sessionId: "s-failure-multi",
+    dialogProcessId: "d-failure-multi",
+    userMessage: "请运行失败传播流程",
+    runConfig: { locale: "zh-CN" },
+  });
+  const callByNodeName = new Map(
+    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
+  );
+  const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
+  const nodeDSystem = String(callByNodeName.get("节点D")?.systemMessages?.[0] || "");
+  assert.match(nodeCSystem, /节点A（任务：执行A任务）: 节点A失败/);
+  assert.match(nodeDSystem, /节点A（任务：执行A任务）: 节点A失败/);
 });
 
 test("workflow hook passes planned user attachments to node sub-session", async () => {

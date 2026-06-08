@@ -790,6 +790,7 @@ function buildWorkflowUpstreamAttachmentResults({
       return {
         nodeId: upstreamNodeId,
         nodeName: String(completed?.nodeName || upstreamStep?.nodeName || upstreamNodeId).trim(),
+        nodeTask: String(completed?.nodeTask || upstreamStep?.nodeTask || upstreamStep?.task || "").trim(),
         actionNodeStateId: String(
           completed?.actionNodeStateId || upstreamStep?.actionNodeStateId || "",
         ).trim(),
@@ -854,12 +855,13 @@ function buildWorkflowUpstreamAttachmentSystemMessage({
   const failureLines = [];
   for (const result of normalizedResults) {
     const nodeLabel = String(result?.nodeName || result?.nodeId || "上游节点").trim();
+    const nodeTask = String(result?.nodeTask || result?.task || "").trim();
     if (
       String(result?.stepStatus || "").trim() === "failed" ||
       (result?.stepFailure && typeof result.stepFailure === "object")
     ) {
       const failureMessage = String(result?.stepFailure?.message || "子 agent 执行失败").trim();
-      failureLines.push(`- ${nodeLabel}: ${failureMessage}`);
+      failureLines.push(`- ${nodeLabel}${nodeTask ? `（任务：${nodeTask}）` : ""}: ${failureMessage}`);
     }
     const transferFiles = resolveWorkflowTransferFilesFromPayload(
       {
@@ -1047,7 +1049,7 @@ async function persistWorkflowNodeResultAttachment({
   }
 }
 
-function appendWorkflowPlanningMessage({
+async function appendWorkflowPlanningMessage({
   options = {},
   agentResult = {},
   ctx = {},
@@ -1059,12 +1061,61 @@ function appendWorkflowPlanningMessage({
 } = {}) {
   const turnMessages = ensureTurnMessages(agentResult);
   const dialogProcessId = String(ctx?.dialogProcessId || "").trim();
+  const baseWorkflowPayload = workflowPayload && typeof workflowPayload === "object"
+    ? workflowPayload
+    : {};
+  const baseTransferPayload = normalizeWorkflowTransferPayload(baseWorkflowPayload);
+  let composedTransferPayload = normalizeWorkflowTransferPayload();
+  const transferPathBlock = buildWorkflowTransferPathBlockWithContext(workflowPayload, ctx);
+  if (transferPathBlock) {
+    const runtime = resolveWorkflowRuntimeFromContext(ctx);
+    const semanticTransferContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+    if (typeof semanticTransferContent === "function") {
+      try {
+        const transferred = await semanticTransferContent({
+          scenario: "subagent",
+          messages: [
+            {
+              id: "workflow-final-attachment-summary",
+              nodeId: "workflow-final",
+              nodeName: "workflow-final-attachment-summary",
+              content: transferPathBlock,
+              meta: {
+                phase: "planning",
+                dialogProcessId,
+                sessionId: String(ctx?.sessionId || "").trim(),
+              },
+            },
+          ],
+          nextSteps: [],
+          forceAttachment: true,
+          attachmentSource: "model",
+          generationSource: "workflow_planning_final_attachment_summary",
+          source: "plugin",
+          reason: "workflow_planning_final_attachment_summary",
+          mimeType: "text/markdown",
+        });
+        composedTransferPayload = normalizeWorkflowTransferPayload(transferred);
+      } catch {
+        composedTransferPayload = normalizeWorkflowTransferPayload();
+      }
+    }
+  }
+  const mergedTransferPayload = normalizeWorkflowTransferPayload({
+    transferResult: baseTransferPayload.transferResult || composedTransferPayload.transferResult || null,
+    transferEnvelope: baseTransferPayload.transferEnvelope || composedTransferPayload.transferEnvelope || null,
+    transferEnvelopes: [
+      ...(Array.isArray(baseTransferPayload.transferEnvelopes) ? baseTransferPayload.transferEnvelopes : []),
+      ...(Array.isArray(composedTransferPayload.transferEnvelopes)
+        ? composedTransferPayload.transferEnvelopes
+        : []),
+    ],
+  });
   const compatAttachmentMetas = resolveWorkflowCompatAttachmentMetas({
-    workflowPayload,
+    workflowPayload: mergedTransferPayload,
     attachmentMetas,
     ctx,
   });
-  const transferPathBlock = buildWorkflowTransferPathBlockWithContext(workflowPayload, ctx);
   const attachmentPathBlock =
     transferPathBlock || buildWorkflowAttachmentPathBlockWithContext(compatAttachmentMetas, ctx);
   const content = [semanticText || sourceText || "", attachmentPathBlock]
@@ -1072,7 +1123,6 @@ function appendWorkflowPlanningMessage({
     .filter(Boolean)
     .join("\n\n");
   const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(workflowPayload);
-  const transferPayload = normalizeWorkflowTransferPayload(workflowPayload || {});
   const workflowMessage = {
     role: "assistant",
     type: "workflow",
@@ -1083,9 +1133,11 @@ function appendWorkflowPlanningMessage({
     summarized: false,
     // Legacy mirror field for existing consumers; source of truth is transfer payload.
     attachmentMetas: compatAttachmentMetas,
-    ...(transferPayload.transferResult ? { transferResult: transferPayload.transferResult } : {}),
-    ...(transferPayload.transferEnvelope ? { transferEnvelope: transferPayload.transferEnvelope } : {}),
-    ...(transferPayload.transferEnvelopes.length ? { transferEnvelopes: transferPayload.transferEnvelopes } : {}),
+    ...(mergedTransferPayload.transferResult ? { transferResult: mergedTransferPayload.transferResult } : {}),
+    ...(mergedTransferPayload.transferEnvelope ? { transferEnvelope: mergedTransferPayload.transferEnvelope } : {}),
+    ...(mergedTransferPayload.transferEnvelopes.length
+      ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
+      : {}),
     workflowMessage: true,
     workflowMeta: {
       source: "workflow-plugin",
@@ -1827,7 +1879,7 @@ export function createRegisterWorkflowHooks() {
             };
             planningWorkflowPayload.nodeSessions = [];
             planningWorkflowPayload.attachmentMetas = [];
-            appendWorkflowPlanningMessage({
+            await appendWorkflowPlanningMessage({
               options,
               agentResult,
               ctx,
@@ -1987,6 +2039,14 @@ export function createRegisterWorkflowHooks() {
                 const completedNodeId = String(
                   item?.step?.nodeId || completedSemanticNode?.id || "",
                 ).trim();
+                const completedNodeTask = String(
+                  item?.step?.nodeTask ||
+                    completedSemanticNode?.task ||
+                    completedSemanticNode?.taskText ||
+                    completedSemanticNode?.instruction ||
+                    completedSemanticNode?.mission ||
+                    "",
+                ).trim();
                 if (completedStepId) {
                   const resultTransferPayload = getWorkflowTransferPayloadFromResult(item?.subSession?.result || {});
                   completedStepResults.set(completedStepId, {
@@ -1995,6 +2055,7 @@ export function createRegisterWorkflowHooks() {
                     nodeName: String(
                       item?.step?.nodeName || completedSemanticNode?.name || completedNodeId,
                     ).trim(),
+                    nodeTask: completedNodeTask,
                     actionNodeStateId: String(item?.step?.actionNodeStateId || "").trim(),
                     stepId: completedStepId,
                     stepIndex: Number.isFinite(Number(item?.step?.stepIndex))
@@ -2168,7 +2229,7 @@ export function createRegisterWorkflowHooks() {
             workflowPayload.attachmentMetas = workflowAttachmentMetas;
 
             agentResult.workflow = workflowPayload;
-            appendWorkflowPlanningMessage({
+            await appendWorkflowPlanningMessage({
               options,
               agentResult,
               ctx,
