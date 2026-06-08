@@ -26,6 +26,7 @@ import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromAgentContext,
 } from "../../context/agent-context-accessor.js";
+import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import {
   getAgentContextCompatFieldHitStats,
   resetAgentContextCompatFieldHitStats,
@@ -105,7 +106,7 @@ export class SessionExecutionRunner {
     return {
       userId: String(systemRuntime?.userId || "").trim(),
       sessionId: String(systemRuntime?.sessionId || "").trim(),
-      parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
+      parentSessionId: resolveParentSessionId({ runtime }),
       dialogProcessId:
         getDialogProcessIdFromAgentContext(agentContext, runtime) ||
         resolveDialogProcessIdFromContext({ runtime }),
@@ -291,7 +292,6 @@ export class SessionExecutionRunner {
         ...botHookBase,
         userMessage: normalizedMessage,
         agentContextSummary,
-        agentContext: runtimeAgentContext,
         runtimeAgentContext,
         abortSignal,
         messages: dispatchContextMessages,

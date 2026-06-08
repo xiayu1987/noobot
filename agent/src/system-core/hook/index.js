@@ -6,6 +6,7 @@
 import { emitEvent } from "../event/index.js";
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
+import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 3000;
 const HOOK_CLIENT_BLOCKED_KEYS = new Set([
@@ -275,7 +276,7 @@ export function resolveHookRuntimeMeta(runtime = {}) {
   return {
     userId: String(systemRuntime?.userId || runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-    parentSessionId: String(systemRuntime?.parentSessionId || "").trim(),
+    parentSessionId: resolveParentSessionId({ runtime }),
     dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
     caller: String(systemRuntime?.caller || "").trim(),
   };

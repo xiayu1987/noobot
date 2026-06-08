@@ -48,6 +48,7 @@ import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
+import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import {
   compactToolResultTextForModel,
@@ -1508,13 +1509,15 @@ export class SessionExecutionEngine {
         sessionId &&
         this.session?.markSessionMessagesSummarized
       ) {
+        const resolvedParentSessionId = resolveParentSessionId({
+          context: ctx,
+          parentSessionId: sessionIds.parentSessionId,
+        });
         try {
           changedCount += await this.session.markSessionMessagesSummarized({
             userId,
             sessionId,
-            parentSessionId: String(
-              ctx?.parentSessionId || sessionIds.parentSessionId || "",
-            ).trim(),
+            parentSessionId: resolvedParentSessionId,
             shouldMark: (messageItem) => shouldMark(messageItem, normalizedTaskSummaryToolName),
           });
         } catch {

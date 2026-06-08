@@ -7,6 +7,7 @@
  */
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 /**
  * Resolve the workspace root from runtime or config.
@@ -46,7 +47,7 @@ export function buildToolCompatibilityLogLine({
     event: String(event || "").trim(),
     userId: String(runtime?.userId || "").trim(),
     sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
-    parentSessionId: String(runtime?.systemRuntime?.parentSessionId || "").trim(),
+    parentSessionId: resolveParentSessionId({ runtime }),
     modelAlias: String(modelState?.activeModelAlias || "").trim(),
     modelName: String(modelState?.activeModelName || "").trim(),
     tools: Array.isArray(tools)

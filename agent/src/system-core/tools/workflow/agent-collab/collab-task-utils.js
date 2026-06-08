@@ -8,6 +8,7 @@ import { resolveMessageDialogProcessId } from "../../../context/session/dialog-p
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot-manage/config/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
+import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
 export function cloneData(value) {
   if (typeof globalThis.structuredClone === "function") {
@@ -163,7 +164,7 @@ export function summarizeAsyncTaskResult(result = null) {
   const answer = String(result?.answer || "").trim();
   return {
     sessionId: String(result?.sessionId || "").trim(),
-    parentSessionId: String(result?.parentSessionId || "").trim(),
+    parentSessionId: normalizeParentSessionId(result?.parentSessionId),
     parentDialogProcessId: String(result?.parentDialogProcessId || "").trim(),
     dialogProcessId: resolveMessageDialogProcessId(result),
     answer,

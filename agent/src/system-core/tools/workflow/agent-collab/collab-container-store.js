@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { isPlainObject } from "../../../utils/shared-utils.js";
 import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { cloneData } from "./collab-task-utils.js";
+import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
 export function createCollabContainerStore({ runtime }) {
   runtime.childAsyncResultContainers = Array.isArray(
@@ -34,7 +35,7 @@ export function createCollabContainerStore({ runtime }) {
     if (!containerId) return null;
     const normalized = {
       id: containerId,
-      parentSessionId: String(container?.parentSessionId || "").trim(),
+      parentSessionId: normalizeParentSessionId(container?.parentSessionId),
       parentDialogProcessId: String(
         container?.parentDialogProcessId || "",
       ).trim(),

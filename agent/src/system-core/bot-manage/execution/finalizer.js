@@ -11,6 +11,7 @@ import {
 } from "../config/constants.js";
 import { mergeAttachmentMetas } from "../../attach/meta-ops.js";
 import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
+import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -264,7 +265,7 @@ export class SessionExecutionFinalizer {
         error: "",
         result: {
           sessionId,
-          parentSessionId: parentSessionId || "",
+          parentSessionId: normalizeParentSessionId(parentSessionId),
           parentDialogProcessId: parentDialogProcessId || "",
           caller: String(caller || CALLER_ROLE.USER),
           answer: agentResult.output,
@@ -279,7 +280,7 @@ export class SessionExecutionFinalizer {
 
     return {
       sessionId,
-      parentSessionId: parentSessionId || "",
+      parentSessionId: normalizeParentSessionId(parentSessionId),
       parentDialogProcessId: parentDialogProcessId || "",
       caller: String(caller || CALLER_ROLE.USER),
       answer: agentResult.output,

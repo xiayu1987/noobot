@@ -13,6 +13,7 @@ import { FINAL_ANSWER_TOOL_NAME } from "../../../tools/workflow/final-answer-too
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
+import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
 export async function processToolResults({
   modelState,
@@ -25,6 +26,7 @@ export async function processToolResults({
   const { errorLogger } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  const parentSessionId = resolveParentSessionId({ runtime });
 
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
   await runAgentRuntimeHook({
@@ -58,7 +60,7 @@ export async function processToolResults({
       errorLogger,
       userId: systemRuntime?.userId || runtime?.userId || "",
       sessionId: systemRuntime?.sessionId || "",
-      parentSessionId: systemRuntime?.parentSessionId || "",
+      parentSessionId,
       runtime,
       agentContext: modelState?.agentContext || null,
     });

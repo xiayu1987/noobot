@@ -22,6 +22,7 @@ import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../utils/mime-ut
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { MIME_TYPE } from "../../constants/index.js";
+import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -56,7 +57,7 @@ function buildMultimodalRequestHeaders(modelName = "", runtime = {}) {
   const sessionId = String(
     runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
   ).trim();
-  const parentSessionId = String(runtime?.systemRuntime?.parentSessionId || "").trim();
+  const parentSessionId = resolveParentSessionId({ runtime });
   return {
     [MODEL_NAME_HEADER_KEY]: String(modelName || "").trim() || "unknown_model",
     [FLOW_HEADER_KEY]: MULTIMODAL_FLOW_NAME,

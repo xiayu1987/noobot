@@ -13,6 +13,7 @@ import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 import { getModelDefaultFields } from "../spec/defaults.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "../resolver/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
+import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 const MODEL_NAME_HEADER_KEY = "X-Model-Name";
 const FLOW_HEADER_KEY = "X-Harness-Flow";
@@ -152,27 +153,7 @@ function resolveHeaderSessionId(options = {}) {
 }
 
 function resolveHeaderParentSessionId(options = {}) {
-  const context = resolveContextObject(options);
-  const contextRuntime =
-    context?.runtime && typeof context.runtime === "object" ? context.runtime : {};
-  const contextAgentContext =
-    context?.agentContext && typeof context.agentContext === "object"
-      ? context.agentContext
-      : {};
-  const value = String(
-    context?.parentSessionId ||
-      options?.parentSessionId ||
-      contextRuntime?.systemRuntime?.parentSessionId ||
-      options?.runtime?.systemRuntime?.parentSessionId ||
-      contextRuntime?.parentSessionId ||
-      options?.runtime?.parentSessionId ||
-      contextAgentContext?.parentSessionId ||
-      options?.agentContext?.parentSessionId ||
-      contextAgentContext?.session?.parent?.id ||
-      options?.agentContext?.session?.parent?.id ||
-      "",
-  ).trim();
-  return value.slice(0, 200);
+  return resolveParentSessionId(options);
 }
 
 function buildChatModelConfiguration(normalizedSpec = {}, options = {}) {

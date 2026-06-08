@@ -6,6 +6,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { isPlainObject } from "../../utils/shared-utils.js";
+import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import {
   CALLER_ROLE,
   SESSION_ASYNC_STATUS,
@@ -42,7 +43,7 @@ export class ParentAsyncTaskManager {
         ? taskList[targetIndex] || {}
         : {
             sessionId: normalizedSessionId,
-            parentSessionId: (parentSessionId ?? "").trim(),
+            parentSessionId: normalizeParentSessionId(parentSessionId),
             task: (task ?? "").trim(),
             sharedTaskSpec: (sharedTaskSpec ?? "").trim(),
             status: SESSION_ASYNC_STATUS.RUNNING,
@@ -101,9 +102,13 @@ export class ParentAsyncTaskManager {
       container = {};
     }
     container.id = (container?.id ?? "").trim() || uuidv4();
-    container.parentSessionId =
-      (container?.parentSessionId ?? "").trim() ||
-      (parentSessionId ?? "").trim();
+    const containerParentSessionId = normalizeParentSessionId(
+      container?.parentSessionId,
+    );
+    const inputParentSessionId = normalizeParentSessionId(parentSessionId);
+    container.parentSessionId = containerParentSessionId
+      ? containerParentSessionId
+      : inputParentSessionId;
     container.parentDialogProcessId =
       (container?.parentDialogProcessId ?? "").trim() ||
       (parentDialogProcessId ?? "").trim();

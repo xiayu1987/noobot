@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveDialogProcessIdFromContext } from "./session/dialog-process-id-resolver.js";
+import { resolveParentSessionId } from "./parent-session-id-resolver.js";
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -31,6 +32,15 @@ export function getSessionIdsFromAgentContext(agentContext = {}, fallbackRuntime
   const context = asObject(agentContext) || {};
   const runtime = getRuntimeFromAgentContext(context, fallbackRuntime);
   const systemRuntime = getSystemRuntimeFromAgentContext(context, runtime);
+  const parentSessionId = resolveParentSessionId({
+    context: {
+      parentSessionId: context?.session?.parent?.id,
+      runtime,
+      agentContext: context,
+    },
+    runtime,
+    agentContext: context,
+  });
   return {
     userId: String(
       context?.environment?.identity?.userId || runtime?.userId || systemRuntime?.userId || "",
@@ -38,9 +48,7 @@ export function getSessionIdsFromAgentContext(agentContext = {}, fallbackRuntime
     sessionId: String(
       context?.session?.current?.id || systemRuntime?.sessionId || "",
     ).trim(),
-    parentSessionId: String(
-      context?.session?.parent?.id || systemRuntime?.parentSessionId || "",
-    ).trim(),
+    parentSessionId,
     rootSessionId: String(
       context?.session?.root?.id || systemRuntime?.rootSessionId || "",
     ).trim(),

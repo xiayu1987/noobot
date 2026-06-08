@@ -18,6 +18,7 @@ import {
   SESSION_ASYNC_TERMINAL_STATUSES,
 } from "./constants.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 const POLL_INTERVAL_MS = 300;
 
@@ -116,7 +117,7 @@ export class AsyncSessionRunner {
   }
 
   _asyncJobKey({ parentSessionId = "", sessionId = "" } = {}) {
-    return `${String(parentSessionId || "").trim()}::${String(sessionId || "").trim()}`;
+    return `${normalizeParentSessionId(parentSessionId)}::${String(sessionId || "").trim()}`;
   }
 
   /**
@@ -144,7 +145,7 @@ export class AsyncSessionRunner {
     } = payload || {};
 
     const normalizedUserId = String(userId || "").trim();
-    const normalizedParentSessionId = String(parentSessionId || "").trim();
+    const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
     if (!normalizedUserId || !normalizedParentSessionId) {
       throw new Error(tSystem("common.userParentSessionRequired"));
     }
@@ -179,7 +180,7 @@ export class AsyncSessionRunner {
       error: "",
       task: String(task || ""),
       sharedTaskSpec: String(sharedTaskSpec || ""),
-      parentSessionId: String(parentSessionId || ""),
+      parentSessionId: normalizeParentSessionId(parentSessionId),
       parentDialogProcessId: String(parentDialogProcessId || ""),
       sourceDialogProcessId: String(sourceDialogProcessId || ""),
       parentAsyncResultContainer,
@@ -283,7 +284,7 @@ export class AsyncSessionRunner {
     } = payload || {};
 
     const normalizedUserId = String(userId || "").trim();
-    const normalizedParentSessionId = String(parentSessionId || "").trim();
+    const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedUserId || !normalizedParentSessionId || !normalizedSessionId) {
       throw new Error(tSystem("common.userParentSessionSessionRequired"));

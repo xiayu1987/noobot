@@ -10,6 +10,7 @@ import { fatalSystemError } from "../../error/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../error/constants.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 export class ExecutionLogRepository {
   constructor({
@@ -26,7 +27,7 @@ export class ExecutionLogRepository {
   _appendQueueKey(userId = "", sessionId = "", parentSessionId = "") {
     return [
       String(userId || "").trim(),
-      String(parentSessionId || "").trim(),
+      normalizeParentSessionId(parentSessionId),
       String(sessionId || "").trim(),
     ].join("::");
   }
