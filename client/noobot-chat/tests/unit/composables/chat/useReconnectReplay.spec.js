@@ -26,6 +26,7 @@ function createFixture({ activeId = "s-1" } = {}) {
   const activeSession = ref(sessions.value.find((s) => s.id === activeId));
   const sending = ref(true);
   const interactionSubmitting = ref(true);
+  const pendingInteractionRequest = ref(null);
 
   const clearPendingInteraction = vi.fn();
   const clearPendingInteractionIfObsolete = vi.fn();
@@ -71,6 +72,7 @@ function createFixture({ activeId = "s-1" } = {}) {
     foldMessagesForView: (messages) => [...messages],
     applyCompletedToolLogsToMessages,
     sessionTitleFromMessages: () => "session",
+    pendingInteractionRequest,
     clearPendingInteraction,
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
@@ -86,7 +88,14 @@ function createFixture({ activeId = "s-1" } = {}) {
 
   return {
     api,
-    refs: { sessions, activeSession, activeSessionId, sending, interactionSubmitting },
+    refs: {
+      sessions,
+      activeSession,
+      activeSessionId,
+      sending,
+      interactionSubmitting,
+      pendingInteractionRequest,
+    },
     mocks: {
       appendMessage,
       clearPendingInteraction,
@@ -680,12 +689,12 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-int5",
       state: "sending",
       sourceEvent: "interaction_response",
+      requestId: "req-int5",
       seq: 15,
     });
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledTimes(1);
     expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      dialogProcessId: "dp-int5",
+      requestId: "req-int5",
     });
   });
 
@@ -1086,6 +1095,7 @@ describe("useReconnectReplay", () => {
   });
 
   it("interaction_pending without pendingInteraction falls back to error state", async () => {
+    vi.useFakeTimers();
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -1112,6 +1122,11 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT,
     );
+    expect(refs.sending.value).toBe(true);
+    expect(mocks.notify).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1200);
+
     expect(refs.sending.value).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.failed");
     expect(assistant?.error).toBe("chat.interactionPayloadMissing");
@@ -1119,6 +1134,42 @@ describe("useReconnectReplay", () => {
       type: "error",
       message: "chat.interactionPayloadMissing",
     });
+    vi.useRealTimers();
+  });
+
+  it("interaction_pending without pendingInteraction waits for later interaction_request", async () => {
+    vi.useFakeTimers();
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "" },
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-late",
+      state: "interaction_pending",
+      seq: 10,
+    });
+    await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
+      requestId: "req-late",
+      sessionId: "s-1",
+      dialogProcessId: "dp-late",
+      interactionType: "confirm",
+      content: "continue?",
+    });
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    expect(mocks.setPendingInteractionRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: "req-late",
+        dialogProcessId: "dp-late",
+      }),
+    );
+    expect(refs.sending.value).toBe(true);
+    expect(mocks.notify).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it("expired refresh failure falls back to error state", async () => {

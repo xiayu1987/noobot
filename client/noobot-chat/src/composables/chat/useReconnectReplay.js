@@ -65,6 +65,7 @@ export function useReconnectReplay({
   foldMessagesForView,
   applyCompletedToolLogsToMessages,
   sessionTitleFromMessages,
+  pendingInteractionRequest,
   clearPendingInteraction,
   clearPendingInteractionIfObsolete,
   setPendingInteractionRequest,
@@ -81,6 +82,7 @@ export function useReconnectReplay({
   const replayCache = {};
   const appliedReconnectSeqByDialogProcessId = {};
   const terminalDialogProcessIdSet = new Set();
+  const missingInteractionPayloadTimers = new Map();
   let cacheExpiredRefreshTimer = null;
   let replayHydrationPromise = null;
 
@@ -130,7 +132,7 @@ export function useReconnectReplay({
         }
       }
     }
-    clearPendingInteraction();
+    clearPendingInteraction(request);
     interactionSubmitting.value = false;
     return true;
   }
@@ -150,6 +152,81 @@ export function useReconnectReplay({
       seq: 0,
       applied: true,
     });
+  }
+
+  function getInteractionPayloadWaitKey({ sessionId = "", dialogProcessId = "" } = {}) {
+    return `${String(sessionId || "").trim()}::${String(dialogProcessId || "").trim()}`;
+  }
+
+  function clearMissingInteractionPayloadTimer({
+    sessionId = "",
+    dialogProcessId = "",
+  } = {}) {
+    const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
+    const timer = missingInteractionPayloadTimers.get(key);
+    if (!timer) return;
+    clearTimeout(timer);
+    missingInteractionPayloadTimers.delete(key);
+  }
+
+  function hasPendingInteractionForDialog(dialogProcessId = "") {
+    const pendingRequest =
+      pendingInteractionRequest?.value && typeof pendingInteractionRequest.value === "object"
+        ? pendingInteractionRequest.value
+        : null;
+    if (!pendingRequest) return false;
+    const pendingDialogProcessId = String(pendingRequest?.dialogProcessId || "").trim();
+    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    return (
+      !normalizedDialogProcessId ||
+      !pendingDialogProcessId ||
+      pendingDialogProcessId === normalizedDialogProcessId
+    );
+  }
+
+  function scheduleMissingInteractionPayloadFailure({
+    sessionId = "",
+    dialogProcessId = "",
+    targetAssistantMessage = null,
+  } = {}) {
+    if (hasPendingInteractionForDialog(dialogProcessId)) return;
+    const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
+    if (missingInteractionPayloadTimers.has(key)) return;
+    const timer = setTimeout(() => {
+      missingInteractionPayloadTimers.delete(key);
+      if (hasPendingInteractionForDialog(dialogProcessId)) return;
+      sending.value = false;
+      interactionSubmitting.value = false;
+      clearPendingInteraction();
+      const missingInteractionError = translate("chat.interactionPayloadMissing");
+      const fallbackAssistantMessage =
+        targetAssistantMessage ||
+        findLatestPendingAssistantAfterLastUser(activeSession.value?.messages || []);
+      applyAssistantFailureState(fallbackAssistantMessage, missingInteractionError);
+      emitSyntheticErrorConversationState({
+        sessionId,
+        dialogProcessId,
+        sourceEvent: "interaction_payload_missing",
+      });
+      notify({ type: "error", message: missingInteractionError });
+    }, 1200);
+    missingInteractionPayloadTimers.set(key, timer);
+  }
+
+  function normalizePendingInteractionPayloads(stateData = {}) {
+    const pendingInteractions = Array.isArray(stateData?.pendingInteractions)
+      ? stateData.pendingInteractions
+      : [];
+    if (pendingInteractions.length) {
+      return pendingInteractions.filter(
+        (item) => item && typeof item === "object" && !Array.isArray(item),
+      );
+    }
+    return stateData?.pendingInteraction &&
+      typeof stateData.pendingInteraction === "object" &&
+      !Array.isArray(stateData.pendingInteraction)
+      ? [stateData.pendingInteraction]
+      : [];
   }
 
   function isCurrentActiveSession(sessionId = "") {
@@ -292,24 +369,32 @@ export function useReconnectReplay({
         String(stateData?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
         typeof clearPendingInteractionIfObsolete === "function"
       ) {
-        clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
+        const responseRequestId = String(
+          stateData?.requestId ||
+            stateData?.interactionRequestId ||
+            stateData?.pendingInteraction?.requestId ||
+            "",
+        ).trim();
+        if (responseRequestId) {
+          clearPendingInteractionIfObsolete({ requestId: responseRequestId });
+        }
       }
       if (state === "interaction_pending") {
         interactionSubmitting.value = false;
-        const pendingInteractionPayload =
-          stateData?.pendingInteraction && typeof stateData.pendingInteraction === "object"
-            ? stateData.pendingInteraction
-            : null;
-        if (pendingInteractionPayload) {
-          const interactionRequest = normalizeInteractionRequestPayload({
-            ...pendingInteractionPayload,
-            interactionType: String(pendingInteractionPayload?.interactionType || "").trim(),
-          });
-          if (tryAutoResolveInteraction(interactionRequest)) {
-            return;
-          }
-          if (!isInteractionRequestHandled(interactionRequest)) {
-            setPendingInteractionRequest(interactionRequest);
+        const pendingInteractionPayloads = normalizePendingInteractionPayloads(stateData);
+        if (pendingInteractionPayloads.length) {
+          clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
+          for (const pendingInteractionPayload of pendingInteractionPayloads) {
+            const interactionRequest = normalizeInteractionRequestPayload({
+              ...pendingInteractionPayload,
+              interactionType: String(pendingInteractionPayload?.interactionType || "").trim(),
+            });
+            if (tryAutoResolveInteraction(interactionRequest)) {
+              continue;
+            }
+            if (!isInteractionRequestHandled(interactionRequest)) {
+              setPendingInteractionRequest(interactionRequest);
+            }
           }
         } else {
           // Keep compatibility with channels that only emit
@@ -332,20 +417,11 @@ export function useReconnectReplay({
               return;
             }
           }
-          sending.value = false;
-          interactionSubmitting.value = false;
-          clearPendingInteraction();
-          const missingInteractionError = translate("chat.interactionPayloadMissing");
-          const fallbackAssistantMessage =
-            targetAssistantMessage ||
-            findLatestPendingAssistantAfterLastUser(activeSession.value?.messages || []);
-          applyAssistantFailureState(fallbackAssistantMessage, missingInteractionError);
-          emitSyntheticErrorConversationState({
+          scheduleMissingInteractionPayloadFailure({
             sessionId,
             dialogProcessId,
-            sourceEvent: "interaction_payload_missing",
+            targetAssistantMessage,
           });
-          notify({ type: "error", message: missingInteractionError });
           return;
         }
       }
@@ -382,6 +458,7 @@ export function useReconnectReplay({
           clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
         }
       }
+      clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
       if (state === "no_conversation" || state === "expired") {
         clearPendingInteraction();
         interactionSubmitting.value = false;
@@ -839,6 +916,10 @@ export function useReconnectReplay({
         targetMessage.realtimeLogs = [...(targetMessage.realtimeLogs || []), logItem].slice(-10);
       } else if (eventName === StreamEventEnum.INTERACTION_REQUEST) {
         const interactionRequest = normalizeInteractionRequestPayload(eventData);
+        clearMissingInteractionPayloadTimer({
+          sessionId: String(interactionRequest?.sessionId || "").trim(),
+          dialogProcessId: String(interactionRequest?.dialogProcessId || "").trim(),
+        });
         if (tryAutoResolveInteraction(interactionRequest)) {
           continue;
         }

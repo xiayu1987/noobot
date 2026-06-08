@@ -544,6 +544,7 @@ describe("useChatEngine", () => {
           dialogProcessId: "dp-int-send",
           state: "sending",
           sourceEvent: "interaction_response",
+          requestId: "req-int-send",
           seq: 3,
         },
       });
@@ -595,8 +596,7 @@ describe("useChatEngine", () => {
 
     expect(clearPendingInteractionIfObsolete).toHaveBeenCalledTimes(1);
     expect(clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      sessionId: "local-int-send",
-      dialogProcessId: "dp-int-send",
+      requestId: "req-int-send",
     });
   });
 
@@ -906,6 +906,7 @@ describe("useChatEngine", () => {
   });
 
   it("interaction_pending without pendingInteraction falls back to error state", async () => {
+    vi.useFakeTimers();
     const activeSessionId = ref("local-missing");
     const activeSession = ref({
       id: "local-missing",
@@ -991,6 +992,12 @@ describe("useChatEngine", () => {
     await engine.send();
 
     const assistant = activeSession.value.messages.find((m) => m.role === RoleEnum.ASSISTANT);
+    expect(sending.value).toBe(true);
+    expect(assistant?.pending).toBe(true);
+    expect(notify).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1200);
+
     expect(sending.value).toBe(false);
     expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.failed");
@@ -999,6 +1006,7 @@ describe("useChatEngine", () => {
       type: "error",
       message: "chat.interactionPayloadMissing",
     });
+    vi.useRealTimers();
   });
 
   it("expired refresh failure falls back to error state", async () => {

@@ -51,7 +51,8 @@
 
 - 自动收敛仅由 **`lifecycle=resolved && ackMode=auto`** 触发
 - 不再基于 `interactionType` 做兼容推断
-- `interaction_pending` 必须带 `pendingInteraction`，否则降级为错误态
+- `interaction_pending` 应优先携带 `pendingInteractions[]`；为兼容旧客户端，同时可携带 `pendingInteraction`
+- 前端优先按 `pendingInteractions[]` 入队展示；缺失 payload 时只做短暂等待/补查兜底，超时仍缺失才降级为错误态
 
 ---
 
@@ -61,6 +62,7 @@
 - 连接器补全信息（connect 时请求补参）：`pending + manual`
 - 连接器连接成功通知：`resolved + auto + system`
 - 连接器重连请求：`pending + manual`
+- agent-proxy 状态快照：`interaction_pending + pendingInteractions[] + pendingRequestIds[]`，并保留单个 `pendingInteraction` 兼容字段
 
 ---
 
@@ -68,4 +70,3 @@
 
 - 状态机总览：`docs/chat-state-machine.md`
 - 本文只定义 interaction 契约，不展开完整会话状态机。
-

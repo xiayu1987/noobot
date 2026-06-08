@@ -241,6 +241,7 @@ export function useChatSession({
     foldMessagesForView,
     applyCompletedToolLogsToMessages,
     sessionTitleFromMessages,
+    pendingInteractionRequest,
     clearPendingInteraction,
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,

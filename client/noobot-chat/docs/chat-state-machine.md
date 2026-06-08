@@ -68,9 +68,9 @@
 ### `interaction_pending`
 - `sending=true`
 - assistant `pending=true`
-- 从 `pendingInteraction` 恢复 `pendingInteractionRequest`
+- 优先从 `pendingInteractions[]` 恢复交互队列；没有数组时兼容读取单个 `pendingInteraction`
 - `interactionSubmitting=false`（用户还没点确认，按钮应可点击）
-- 若 `pendingInteraction` 缺失：降级为 `error` 或触发一次状态补查，避免“有交互态但无可操作表单”
+- 若交互 payload 缺失：先短暂等待/补查后续 `interaction_request`，超时仍缺失才降级为 `error`
 
 ### `stopping`
 - `sending=true`
