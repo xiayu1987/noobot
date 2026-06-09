@@ -20,7 +20,7 @@ import {
 } from "../loop-control.js";
 import { resolveLlmForTurn } from "../model/model-manager.js";
 import { assertNotAborted } from "../utils/error-utils.js";
-import { processToolResults } from "./response-processor.js";
+import { commitSyntheticToolTurn, processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
 import { resolveForceToolCall } from "../../../utils/shared-utils.js";
@@ -34,6 +34,7 @@ export function createTurnOrchestrator({
   invokeNoToolsTurnFn = invokeNoToolsTurn,
   invokeWithToolsTurnFn = invokeWithToolsTurn,
   processToolResultsFn = processToolResults,
+  commitSyntheticToolTurnFn = commitSyntheticToolTurn,
   buildLoopResultFn = buildLoopResult,
   removePhaseSummaryPromptMessagesFn = removePhaseSummaryPromptMessages,
   maybeRequestPhaseSummaryFn = maybeRequestPhaseSummary,
@@ -66,6 +67,77 @@ export function createTurnOrchestrator({
 
     try {
       assertNotAbortedFn(abortSignal, runtime);
+
+      if (
+        Array.isArray(loopState?.pendingSyntheticToolTurns) &&
+        loopState.pendingSyntheticToolTurns.length
+      ) {
+        const pendingTurn = loopState.pendingSyntheticToolTurns.shift();
+        const syntheticResult = await commitSyntheticToolTurnFn({
+          modelState,
+          loopState,
+          pendingTurn,
+          turn,
+        });
+        const {
+          toolCallResults = [],
+          hasTaskSummaryCall = false,
+          hasRequestHelpCall = false,
+          hasFinalAnswerCall = false,
+          turnMessageStore = pendingTurn?.turnMessageStore || null,
+          turnTaskStore = pendingTurn?.turnTaskStore || null,
+        } = syntheticResult || {};
+
+        if (turnMessageStore && typeof turnMessageStore.toArray === "function") {
+          loopState.turnMessages = turnMessageStore.toArray();
+        }
+        if (turnTaskStore && typeof turnTaskStore.toArray === "function") {
+          loopState.turnTasks = turnTaskStore.toArray();
+        }
+
+        if (hasTaskSummaryCall) {
+          removePhaseSummaryPromptMessagesFn(loopState.messages, runtime);
+        }
+
+        maybeRequestPhaseSummaryFn({ modelState, loopState, toolCallResults });
+        maybePromptHelpToolByLoopFn({ modelState, loopState });
+        maybePromptHelpToolByFailureFn({
+          modelState,
+          loopState,
+          hasRequestHelpCall,
+        });
+
+        if (hasTaskSummaryCall) {
+          markCurrentTurnModelMessagesSummarized(loopState.messages, {
+            taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+          });
+          if (turnMessageStore) {
+            markCurrentTurnStoreSummarized(turnMessageStore, {
+              taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
+            });
+          }
+        }
+
+        if (hasFinalAnswerCall) {
+          const finalResult = await invokeNoToolsTurnFn({
+            modelState,
+            loopState,
+            turn: turn + 1,
+            forceToolChoiceNone: true,
+          });
+          return buildLoopResultFn({
+            output: finalResult.output,
+            traces,
+            loopState,
+            turnTaskStore: finalResult.turnTaskStore,
+            turnMessageStore: finalResult.turnMessageStore,
+            modelMessages: finalResult.modelMessages,
+            finalStreaming: finalResult.finalStreaming,
+          });
+        }
+
+        return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
+      }
 
       if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted === true) {
         const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
@@ -217,6 +289,9 @@ export function createTurnOrchestrator({
           calls,
           toolMap: withToolsResult.toolMap,
           stateCommitter,
+          syntheticAssistantPayload: withToolsResult.syntheticAssistantPayload,
+          turnMessageStore,
+          turnTaskStore,
         });
 
       loopState.turnMessages = turnMessageStore.toArray();

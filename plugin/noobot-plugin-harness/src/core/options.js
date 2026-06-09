@@ -35,6 +35,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   timeoutMs: 1000,
   maxPreviewChars: 1200,
   planningGuidanceMode: "separate_model",
+  summaryOnToolBurstThreshold: false,
   capabilityModelInvoker: null,
   capabilityModelByPurpose: Object.freeze({}),
   stepModels: Object.freeze({}),
@@ -77,6 +78,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
 const HarnessOptionsSchema = z
   .object({
     planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
+    summaryOnToolBurstThreshold: z.boolean().default(DEFAULT_OPTIONS.summaryOnToolBurstThreshold),
+    enableToolBurstSummary: z.boolean().optional(),
     capabilityModelInvoker: z.any().optional(),
     capabilityModelByPurpose: z.record(z.any()).default({}),
     stepModels: z.record(z.any()).default({}),
@@ -192,6 +195,8 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     planningGuidanceMode:
       String(safe.planningGuidanceMode || DEFAULT_OPTIONS.planningGuidanceMode).trim() ||
       DEFAULT_OPTIONS.planningGuidanceMode,
+    summaryOnToolBurstThreshold:
+      safe.enableToolBurstSummary === true || safe.summaryOnToolBurstThreshold === true,
     capabilityModelInvoker:
       typeof safe.capabilityModelInvoker === "function" ? safe.capabilityModelInvoker : null,
     capabilityModelByPurpose,

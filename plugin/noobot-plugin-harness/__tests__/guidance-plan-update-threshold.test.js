@@ -55,6 +55,7 @@ function createPlanningAgentContext({ counters = {} } = {}) {
       messages: { system: [], history: [] },
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
       harness: {
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
         state: {
           counters: { llmTurns: 0, planUpdateAttempts: 0, ...counters },
           pending: {
@@ -548,7 +549,7 @@ test("planning summary threshold by chars is independent from plan update attemp
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
 });
 
-test("planning schedules summary after a single model tool burst reaches summary threshold", async () => {
+test("planning schedules summary after a single model tool burst reaches summary threshold when enabled", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
@@ -568,7 +569,7 @@ test("planning schedules summary after a single model tool burst reaches summary
       calls,
       agentContext,
     },
-    meta: {},
+    meta: { harness: { summaryOnToolBurstThreshold: true } },
   });
 
   assert.equal(agentContext.payload.harness.state.pending.summary, true);
@@ -608,6 +609,38 @@ test("planning schedules summary after a single model tool burst reaches summary
   );
 });
 
+
+test("planning does not schedule tool-burst summary by default", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({
+    counters: { llmTurns: 1, planUpdateAttempts: 0 },
+  });
+  const calls = Array.from({ length: LLM_SUMMARY_THRESHOLD }, (_item, index) => ({
+    id: `call_default_off_${index}`,
+    name: `tool_${index}`,
+    args: {},
+  }));
+
+  await planningHandler({
+    capability: "planning",
+    point: "after_tool_calls",
+    ctx: {
+      messages: [{ role: "user", content: "继续任务" }],
+      calls,
+      agentContext,
+    },
+    meta: {},
+  });
+
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some(
+      (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
+    ),
+    false,
+  );
+});
+
 test("planning does not schedule tool-burst summary when summary is already pending or task_summary is returned", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const alreadyPendingContext = createPlanningAgentContext({
@@ -628,7 +661,7 @@ test("planning does not schedule tool-burst summary when summary is already pend
       calls: burstCalls,
       agentContext: alreadyPendingContext,
     },
-    meta: {},
+    meta: { harness: { summaryOnToolBurstThreshold: true } },
   });
   assert.equal(
     alreadyPendingContext.payload.harness.logs.planning.some(
@@ -651,7 +684,7 @@ test("planning does not schedule tool-burst summary when summary is already pend
       ],
       agentContext: taskSummaryContext,
     },
-    meta: {},
+    meta: { harness: { summaryOnToolBurstThreshold: true } },
   });
   assert.equal(taskSummaryContext.payload.harness.state.pending.summary, false);
   assert.equal(
