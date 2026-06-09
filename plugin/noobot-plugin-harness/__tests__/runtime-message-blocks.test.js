@@ -63,10 +63,12 @@ test("capability runtime applies message blocks only once per runtime turn conte
       },
     },
   };
+  const originalMessageBlocks = ctx.messageBlocks;
 
   await runtime.runHook("before_llm_call", ctx, {
     harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },
   });
+  assert.equal(ctx.messageBlocks, originalMessageBlocks);
   ctx.messages.push({ role: "assistant", content: "after-first-call" });
   await runtime.runHook("before_llm_call", ctx, {
     harness: { resolveMessageBlock: ({ messages = [] } = {}) => messages },

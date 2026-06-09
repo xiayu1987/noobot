@@ -84,8 +84,14 @@ incremental2 = resolveMessageBlock(scope=incremental, incremental + extraNonSyst
 conversation = resolveMessageBlock(scope=conversation, history2 + incremental2)
 
 ctx.messages = system2 + conversation
-ctx.messageBlocks = { system: system2, history: history2, incremental: incremental2 }
+ctx.messageBlocks = {
+  system: system + extraSystem,
+  history,
+  incremental: incremental + extraNonSystem,
+}
 ```
+
+注意：最终 `ctx.messages` 是传模窗口，可以被 recent window 破坏性裁剪；`ctx.messageBlocks` 则保持为后续 hook 可重算的源块，并通过原对象原地更新，以便小结完成后能基于源块重新过滤 summarized 消息，而不是基于上一次已经裁剪过的传模窗口重算。
 
 因此最终传模前的上下文可近似理解为：
 
@@ -183,6 +189,8 @@ Agent 侧同时向 harness options 注入统一过滤/裁剪入口：
 [插件侧] ctx.messageBlocks = { system: system1, history: history1, incremental: incremental1 }
 ```
 
+实现上会原地更新既有 `ctx.messageBlocks` 对象，避免断开与 Agent `loopState.messageBlocks` 的引用关系。
+
 #### 4.2.3 插件侧 capability 注入
 
 capability / hook 运行期间，插件侧可能继续修改 `ctx.messages`：
@@ -238,13 +246,13 @@ capability / hook 运行期间，插件侧可能继续修改 `ctx.messages`：
 ```text
 [插件侧] ctx.messages = systemResolved + conversationResolved
 [插件侧] ctx.messageBlocks = {
-  system: systemResolved,
-  history: historyResolved,
-  incremental: incrementalResolved,
+  system: system1 + extraSystemMessages,
+  history: history1,
+  incremental: incremental1 + extraNonSystemMessages,
 }
 ```
 
-注意：`ctx.messageBlocks.history` 和 `ctx.messageBlocks.incremental` 仍保留分块结果，便于追踪；但最终 `ctx.messages` 使用的是 `systemResolved + conversationResolved`。
+注意：`ctx.messageBlocks.history` 和 `ctx.messageBlocks.incremental` 保留的是可重算源块，而不是最终传模窗口。最终 `ctx.messages` 使用的是 `systemResolved + conversationResolved`。这样即使某条当前轮 harness 注入消息曾在一次 `conversation` recent window 中滑出，只要它仍在源块中，小结将工具爆发消息标记为 `summarized:true` 后，下一次压缩仍可把它重新算回窗口。
 
 #### 4.2.5 最终调用模型前的 Agent 侧保护过滤
 

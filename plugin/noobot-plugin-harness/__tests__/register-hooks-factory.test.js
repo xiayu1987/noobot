@@ -274,6 +274,95 @@ test("createRegisterHarnessHooks compacts by message blocks and preserves fronte
   assert.deepEqual(calls, ["system", "history", "incremental", "conversation"]);
 });
 
+test("createRegisterHarnessHooks can recover current-turn harness injections after summary filtering", async () => {
+  const handlers = new Map();
+  const hookManager = {
+    on(point, handler) {
+      handlers.set(point, handler);
+      return () => {};
+    },
+  };
+  const registerHarnessHooks = createRegisterHarnessHooks({
+    tracePoints: ["before_llm_call"],
+    flushPoints: [],
+    sessionCleanupPoints: [],
+    emitHarnessHookProgress: () => {},
+    shouldInjectPromptAtPoint: () => false,
+    traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
+  });
+
+  const filterUnsummaryAndRecent = (messages = [], limit = 2) =>
+    messages.filter((item = {}) => item.summarized !== true).slice(-limit);
+
+  registerHarnessHooks({
+    hookManager,
+    options: {
+      tracePriority: 20,
+      timeoutMs: 1000,
+      planningGuidanceMode: "inject",
+      capabilityModelInvoker: null,
+      capabilityToolAllowlist: [],
+      capabilityToolAllowlistByPurpose: {},
+      acceptance: {},
+      review: {},
+      resolveMessageBlock: ({ scope, messages = [] }) => {
+        if (scope === "system") return messages.filter((item = {}) => item.summarized !== true);
+        return filterUnsummaryAndRecent(messages, 2);
+      },
+    },
+    capabilityRuntime: { async runHook() {} },
+    plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
+  });
+
+  const system = { role: "system", content: "system context" };
+  const harnessInjection = {
+    role: "user",
+    content: "harness current-turn injection",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    dialogProcessId: "dlg-current",
+  };
+  const noisyMessages = [
+    { role: "assistant", content: "tool burst 1" },
+    { role: "assistant", content: "tool burst 2" },
+    { role: "assistant", content: "tool burst 3" },
+  ];
+  const ctx = {
+    messages: [system, harnessInjection, ...noisyMessages],
+    messageBlocks: {
+      system: [system],
+      history: [],
+      incremental: [harnessInjection, ...noisyMessages],
+    },
+    dialogProcessId: "dlg-current",
+  };
+
+  await handlers.get("before_llm_call")(ctx);
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    ["system context", "tool burst 2", "tool burst 3"],
+  );
+  assert.deepEqual(
+    ctx.messageBlocks.incremental.map((item) => item.content),
+    [
+      "harness current-turn injection",
+      "tool burst 1",
+      "tool burst 2",
+      "tool burst 3",
+    ],
+  );
+
+  for (const message of noisyMessages) {
+    message.summarized = true;
+  }
+
+  await handlers.get("before_llm_call")(ctx);
+  assert.deepEqual(
+    ctx.messages.map((item) => item.content),
+    ["system context", "harness current-turn injection"],
+  );
+});
+
 test("createRegisterHarnessHooks keeps multiple empty assistant tool-call messages with different call ids", async () => {
   const handlers = new Map();
   const hookManager = {
