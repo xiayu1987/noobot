@@ -291,6 +291,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                 pluginVersion: plugin.version,
                 harness: {
                   planningGuidanceMode: options.planningGuidanceMode,
+                  summaryOnToolBurstThreshold: options.summaryOnToolBurstThreshold === true,
                   capabilityModelInvoker: options.capabilityModelInvoker,
                   capabilityModelByPurpose: options.capabilityModelByPurpose,
                   stepModels: options.stepModels,

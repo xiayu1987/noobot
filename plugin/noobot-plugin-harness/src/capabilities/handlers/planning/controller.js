@@ -132,7 +132,13 @@ function resolveToolCallIdFromToolMessage(messageItem = {}) {
   ).trim();
 }
 
-function maybeScheduleSummaryByToolBurst(ctx = {}) {
+function isSummaryOnToolBurstThresholdEnabled(meta = {}) {
+  return meta?.harness?.summaryOnToolBurstThreshold === true ||
+    meta?.harness?.enableToolBurstSummary === true;
+}
+
+function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
+  if (!isSummaryOnToolBurstThresholdEnabled(meta)) return false;
   const threshold = Number(LLM_SUMMARY_TOOL_CALLS_THRESHOLD);
   if (!Number.isFinite(threshold) || threshold <= 0) return false;
   const calls = Array.isArray(ctx?.calls) ? ctx.calls : [];
@@ -505,7 +511,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       return { capability, point, status: "active", changed: lifecycle.execution.changed };
     }
     if (point === "after_tool_calls") {
-      const changed = maybeScheduleSummaryByToolBurst(ctx);
+      const changed = maybeScheduleSummaryByToolBurst(ctx, meta);
       return { capability, point, status: "active", changed };
     }
     return { capability, point, status: "active", changed: false };

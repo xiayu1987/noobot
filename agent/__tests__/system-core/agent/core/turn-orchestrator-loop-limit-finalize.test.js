@@ -379,3 +379,66 @@ test("auto tool_choice should not force non-thinking params", async () => {
   assert.equal(capturedNoToolInvokeOptions[0]?.thinking_budget, undefined);
   assert.match(result.output, /上限|limit/i);
 });
+
+test("multiple tool calls are replayed as one assistant/tool pair per loop without extra LLM calls", async () => {
+  const invokedArgs = [];
+  const tool = {
+    name: "execute_script",
+    async invoke(args = {}) {
+      invokedArgs.push(args);
+      return JSON.stringify({ ok: true, value: args.value });
+    },
+  };
+  const { llm, capturedInvocations } = createToolCallingLlm([
+    {
+      content: "检查多个文件",
+      tool_calls: [
+        { id: "call_1", name: "execute_script", args: { value: 1 } },
+        { id: "call_2", name: "execute_script", args: { value: 2 } },
+        { id: "call_3", name: "execute_script", args: { value: 3 } },
+      ],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+    {
+      content: "完成",
+      tool_calls: [],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+  ]);
+
+  const loopState = createLoopState({ maxTurns: 10, tool });
+  const modelState = createModelState(llm);
+  modelState.runtime.systemRuntime.config = { forceTool: false };
+  const result = await runFunctionCallLoop({
+    modelState,
+    loopState,
+    turn: 1,
+  });
+
+  assert.equal(result.output, "完成");
+  assert.deepEqual(invokedArgs, [{ value: 1 }, { value: 2 }, { value: 3 }]);
+  assert.equal(capturedInvocations.length, 2, "synthetic tool turns should not call the LLM");
+
+  const toolCallMessages = loopState.turnMessages.filter((item) => item.role === "assistant");
+  const toolResultMessages = loopState.turnMessages.filter((item) => item.role === "tool");
+  assert.equal(toolResultMessages.length, 3);
+  assert.deepEqual(
+    toolCallMessages.slice(0, 3).map((item) => item.tool_calls.map((call) => call.id)),
+    [["call_1"], ["call_2"], ["call_3"]],
+  );
+  assert.deepEqual(
+    toolResultMessages.map((item) => item.tool_call_id),
+    ["call_1", "call_2", "call_3"],
+  );
+
+  const secondInvocationMessages = capturedInvocations[1] || [];
+  const assistantToolCallCounts = secondInvocationMessages
+    .filter((message) => String(message?._getType?.() || "") === "ai")
+    .map((message) => (Array.isArray(message.tool_calls) ? message.tool_calls.length : 0));
+  assert.ok(
+    assistantToolCallCounts.slice(-3).every((count) => count === 1),
+    "each assistant message sent to the next LLM call should contain one tool call",
+  );
+});

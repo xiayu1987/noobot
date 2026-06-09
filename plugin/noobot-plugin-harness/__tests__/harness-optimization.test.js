@@ -41,7 +41,13 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(options.jsonlFlushStrategy.onError, true);
   assert.equal(options.incrementalRecentMessageLimit, 11);
   assert.equal(options.fsmEnabled, false);
+  assert.equal(options.summaryOnToolBurstThreshold, false);
   assert.deepEqual(options.denyToolNames, [...DEFAULT_HARNESS_DENY_TOOL_NAMES]);
+});
+
+test("normalizeOptions enables optional tool-burst summary trigger", () => {
+  const options = normalizeOptions({ enableToolBurstSummary: true });
+  assert.equal(options.summaryOnToolBurstThreshold, true);
 });
 
 test("normalizeOptions keeps custom harness denyToolNames", () => {
