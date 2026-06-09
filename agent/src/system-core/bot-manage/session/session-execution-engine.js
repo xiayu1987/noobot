@@ -43,7 +43,10 @@ import {
 } from "../../context/session/summarized-message-policy.js";
 import { resolveMessageRole } from "../../context/session/message-context-policy.js";
 import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
-import { resolveDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import {
+  resolveDialogProcessId,
+  resolveMessageDialogProcessId,
+} from "../../context/session/dialog-process-id-resolver.js";
 import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
@@ -147,6 +150,8 @@ function normalizeMessageForHarness(messageItem = {}) {
     messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "",
   ).trim();
   if (injectedBy) normalized.injectedBy = injectedBy;
+  const dialogProcessId = resolveMessageDialogProcessId(messageItem);
+  if (dialogProcessId) normalized.dialogProcessId = dialogProcessId;
   if (
     messageItem?.frontendUserMessage === true ||
     messageItem?.lc_kwargs?.frontendUserMessage === true ||
@@ -156,6 +161,47 @@ function normalizeMessageForHarness(messageItem = {}) {
     normalized.frontendUserMessage = true;
   }
   return normalized;
+}
+
+function isInjectedMessageLike(messageItem = {}) {
+  if (!messageItem || typeof messageItem !== "object") return false;
+  if (messageItem?.injectedMessage === true || messageItem?.lc_kwargs?.injectedMessage === true) return true;
+  return Boolean(String(messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "").trim());
+}
+
+function isFrontendUserMessageLike(messageItem = {}) {
+  return (
+    messageItem?.frontendUserMessage === true ||
+    messageItem?.lc_kwargs?.frontendUserMessage === true ||
+    messageItem?.additional_kwargs?.frontendUserMessage === true ||
+    messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+  );
+}
+
+function resolveCurrentTurnDialogProcessIdFromMessages(messages = []) {
+  const source = Array.isArray(messages) ? messages : [];
+  for (let index = source.length - 1; index >= 0; index -= 1) {
+    const item = source[index] || {};
+    if (!isFrontendUserMessageLike(item)) continue;
+    const dialogProcessId = resolveMessageDialogProcessId(item);
+    if (dialogProcessId) return dialogProcessId;
+  }
+  for (let index = source.length - 1; index >= 0; index -= 1) {
+    const item = source[index] || {};
+    if (!isInjectedMessageLike(item)) continue;
+    const dialogProcessId = resolveMessageDialogProcessId(item);
+    if (dialogProcessId) return dialogProcessId;
+  }
+  return "";
+}
+
+function resolveHarnessBlockDialogProcessId({ scope = "", ctx = {}, messages = [] } = {}) {
+  const normalizedScope = String(scope || "").trim().toLowerCase();
+  if (normalizedScope === "incremental" || normalizedScope === "conversation" || normalizedScope === "non_system") {
+    const fromCurrentTurnMessages = resolveCurrentTurnDialogProcessIdFromMessages(messages);
+    if (fromCurrentTurnMessages) return fromCurrentTurnMessages;
+  }
+  return resolveDialogProcessId({ ctx, messages });
 }
 
 function isPlainObject(value) {
@@ -1402,11 +1448,12 @@ export class SessionExecutionEngine {
     );
     return ({ scope = "history", messages = [], ctx = {} } = {}) => {
       const source = Array.isArray(messages) ? messages : [];
-      const currentDialogProcessId = resolveDialogProcessId({
+      const normalizedScope = String(scope || "history").trim().toLowerCase();
+      const currentDialogProcessId = resolveHarnessBlockDialogProcessId({
+        scope: normalizedScope,
         ctx,
         messages: source,
       });
-      const normalizedScope = String(scope || "history").trim().toLowerCase();
       if (normalizedScope === "system") {
         return resolveModelContextMessages({
           sourceMessages: source,

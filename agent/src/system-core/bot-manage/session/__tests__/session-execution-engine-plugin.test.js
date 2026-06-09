@@ -567,9 +567,86 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
       summarized: false,
       injectedMessage: true,
       injectedBy: "harness-plugin",
+      dialogProcessId: "dlg_current",
     },
     { role: "assistant", content: "normal response", summarized: false },
   ]);
+});
+
+
+test("SessionExecutionEngine resolveMessageBlock prefers current incremental dialog over stale ctx dialog", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const prepared = engine._prepareHarnessRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+          contextWindowRecentMessageLimit: 20,
+          incrementalRecentMessageLimit: 20,
+        },
+      },
+    },
+  });
+  const resolver = prepared.plugins.harness.resolveMessageBlock;
+
+  const incrementalResolved = resolver({
+    scope: "incremental",
+    messages: [
+      {
+        role: "user",
+        content: "old summary",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        dialogProcessId: "dlg_old",
+      },
+      {
+        role: "user",
+        content: "current summary",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        dialogProcessId: "dlg_current",
+      },
+    ],
+    ctx: { dialogProcessId: "dlg_old" },
+  });
+
+  assert.deepEqual(
+    incrementalResolved.map((item) => item.content),
+    ["current summary"],
+  );
+
+  const conversationResolved = resolver({
+    scope: "conversation",
+    messages: [
+      {
+        role: "user",
+        content: "old summary",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        dialogProcessId: "dlg_old",
+      },
+      {
+        role: "user",
+        content: "normal history",
+        dialogProcessId: "dlg_old",
+      },
+      {
+        role: "user",
+        content: "current planning",
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        dialogProcessId: "dlg_current",
+      },
+    ],
+    ctx: { dialogProcessId: "dlg_old" },
+  });
+
+  assert.deepEqual(
+    conversationResolved.map((item) => item.content),
+    ["normal history", "current planning"],
+  );
 });
 
 test("SessionExecutionEngine workflow plugin injects unified denyToolNames policy", () => {
