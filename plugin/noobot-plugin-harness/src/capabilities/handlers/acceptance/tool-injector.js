@@ -9,6 +9,7 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   ACCEPTANCE_MODE,
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   TASK_ACCEPTANCE_TOOL_NAME,
   appendCapabilityLog,
@@ -25,12 +26,12 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
   const locale = state?.locale || LOCALE.ZH_CN;
   return new DynamicStructuredTool({
     name: TASK_ACCEPTANCE_TOOL_NAME,
-    description: translateI18nText(locale, "taskAcceptanceToolDescription"),
+    description: translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.DESCRIPTION),
     schema: z.object({
       mode: z
         .enum([ACCEPTANCE_MODE.ACTIVE, ACCEPTANCE_MODE.FORCED])
         .optional()
-        .describe(translateI18nText(locale, "taskAcceptanceModeDescription")),
+        .describe(translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.MODE_DESCRIPTION)),
     }),
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
@@ -41,8 +42,14 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
       const forcedReason =
         mode === ACCEPTANCE_MODE.FORCED
           ? state?.flags?.overflowForceAcceptancePending === true
-            ? "上下文溢出_流程内强制验收 | Context overflow (in-flow forced acceptance)"
-            : "工具主动请求强制验收 | Tool-requested forced acceptance"
+            ? [
+              translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_OVERFLOW_IN_FLOW),
+              translateI18nText(LOCALE.EN_US, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_OVERFLOW_IN_FLOW),
+            ].filter(Boolean).join(" | ")
+            : [
+              translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_TOOL_REQUESTED),
+              translateI18nText(LOCALE.EN_US, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_TOOL_REQUESTED),
+            ].filter(Boolean).join(" | ")
           : "";
       const phaseAcceptanceTriggered = await runPhaseAcceptanceBySeparateModel(
         toolCtx,

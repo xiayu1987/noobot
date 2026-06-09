@@ -128,10 +128,28 @@ test("priority decision snapshot exposes chosen and blocked actions", () => {
   });
   assert.equal(decision.chosenAction, "plan_update_revision");
   assert.equal(decision.chosenReason, "pending_revision");
+  assert.match(String(decision.chosenReasonLabel || ""), /待处理的计划修订|revision/i);
   assert.deepEqual(decision.blockedActions, ["summary_turns", "phase_acceptance"]);
+  assert.equal(Array.isArray(decision.blockedReasonLabels), true);
+  assert.equal(decision.blockedReasonLabels.length > 0, true);
   assert.equal(decision.pendingSnapshot.summary?.active, true);
   assert.equal(decision.pendingSnapshot.flags?.summaryByCharsPrompted, false);
   assert.equal(decision.pendingSnapshot.phaseAcceptance?.active, true);
+});
+
+test("priority decision exposes localized reason labels by locale", () => {
+  const zhDecision = resolveGuidancePriorityDecision({
+    locale: "zh-CN",
+    pending: { guidance: "consecutive_failures" },
+    flags: {},
+  });
+  const enDecision = resolveGuidancePriorityDecision({
+    locale: "en-US",
+    pending: { guidance: "consecutive_failures" },
+    flags: {},
+  });
+  assert.match(String(zhDecision.chosenReasonLabel || ""), /优先执行 guidance|待处理/);
+  assert.match(String(enDecision.chosenReasonLabel || ""), /prioritize guidance/i);
 });
 
 test("when revision and refinement are both pending, scheduler always prefers revision", () => {

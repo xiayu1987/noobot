@@ -5,18 +5,19 @@
  */
 
 import {
-  DSL_DEFAULT_NODE_NAME_BY_LOCALE,
   DSL_DEFAULTS,
-  DSL_ERROR,
   DSL_PROTOCOL,
   DSL_TYPES,
 } from "./constants.js";
 import {
   DSL_ERROR_MESSAGE,
+  dslMessage,
   dslEdgeUndefinedNode,
   dslError,
   dslLineError,
+  normalizeDslLocale,
 } from "./error-messages.js";
+import { getWorkflowDslDefaultNodeNames } from "../core/i18n.js";
 
 function stripCodeFence(text = "") {
   const trimmed = String(text || "").trim();
@@ -75,34 +76,25 @@ function toStateType(value = "") {
   return 0;
 }
 
-function fail(lineNo = 0, message = "") {
-  throw new Error(dslLineError(lineNo, message));
-}
-
 export function parseWorkflowDslText(text = "", options = {}) {
   return parseWorkflowDslTextWithOptions(text, options);
 }
 
-function resolveDslLocale(input = "") {
-  const value = String(input || "").trim().toLowerCase();
-  return value.startsWith("en") ? "en-US" : "zh-CN";
-}
-
 function resolveDslDefaultNodeNames(locale = "zh-CN") {
-  const normalizedLocale = resolveDslLocale(locale);
-  const dict = DSL_DEFAULT_NODE_NAME_BY_LOCALE[normalizedLocale] || DSL_DEFAULT_NODE_NAME_BY_LOCALE["zh-CN"];
-  return {
-    startName: String(dict?.START || "").trim() || "开始",
-    endName: String(dict?.END || "").trim() || "结束",
-  };
+  return getWorkflowDslDefaultNodeNames(normalizeDslLocale(locale));
 }
 
 export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
-  const { startName, endName } = resolveDslDefaultNodeNames(options?.locale || "zh-CN");
+  const locale = normalizeDslLocale(options?.locale || "en-US");
+  const { startName, endName } = resolveDslDefaultNodeNames(locale);
   const normalized = stripCodeFence(text);
-  if (!normalized) throw new Error(dslError(DSL_ERROR_MESSAGE.EMPTY_TEXT));
+  if (!normalized) {
+    throw new Error(dslError(dslMessage(DSL_ERROR_MESSAGE.EMPTY_TEXT, { locale }), { locale }));
+  }
   if (/^\s*[\[{]/.test(normalized)) {
-    throw new Error(dslError(DSL_ERROR.JSON_NOT_ALLOWED));
+    throw new Error(
+      dslError(dslMessage(DSL_ERROR_MESSAGE.JSON_NOT_ALLOWED, { locale }), { locale }),
+    );
   }
 
   const lines = normalized
@@ -116,6 +108,10 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
   const nodeSet = new Set();
   let edgeIndex = 0;
   let headerSeen = false;
+
+  function failWithLocale(lineNo = 0, message = "") {
+    throw new Error(dslLineError(lineNo, message, { locale }));
+  }
 
   for (const item of lines) {
     const { lineNo, text: line } = item;
@@ -136,8 +132,16 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     if (head === DSL_PROTOCOL.CMD_ATTACHMENT) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const id = String(attrs.id || attrs.attachmentId || "").trim();
-      if (!id) fail(lineNo, "ATTACHMENT requires id=<id>");
-      if (attachmentMap[id]) fail(lineNo, `duplicate ATTACHMENT id: ${id}`);
+      if (!id) failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.ATTACHMENT_ID_REQUIRED, { locale }));
+      if (attachmentMap[id]) {
+        failWithLocale(
+          lineNo,
+          dslMessage(DSL_ERROR_MESSAGE.ATTACHMENT_ID_DUPLICATE, {
+            locale,
+            params: { id },
+          }),
+        );
+      }
       const attachment = {
         id,
         attachmentId: String(attrs.attachmentId || id).trim(),
@@ -156,10 +160,18 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
       const id = String(attrs.id || "").trim();
       const type = String(attrs.type || DSL_TYPES.NODE_STATE).trim().toLowerCase();
       const name = String(attrs.name || id).trim();
-      if (!id) fail(lineNo, DSL_ERROR_MESSAGE.NODE_ID_REQUIRED);
-      if (nodeSet.has(id)) fail(lineNo, `duplicate NODE id: ${id}`);
+      if (!id) failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.NODE_ID_REQUIRED, { locale }));
+      if (nodeSet.has(id)) {
+        failWithLocale(
+          lineNo,
+          dslMessage(DSL_ERROR_MESSAGE.NODE_ID_DUPLICATE, { locale, params: { id } }),
+        );
+      }
       if (![DSL_TYPES.NODE_STATE, DSL_TYPES.NODE_ACTION].includes(type)) {
-        fail(lineNo, `NODE type must be state/action, got: ${type}`);
+        failWithLocale(
+          lineNo,
+          dslMessage(DSL_ERROR_MESSAGE.NODE_TYPE_INVALID, { locale, params: { type } }),
+        );
       }
       nodeSet.add(id);
       const task = String(
@@ -183,9 +195,11 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const from = String(attrs.from || "").trim();
       const to = String(attrs.to || "").trim();
-      if (!from || !to) fail(lineNo, DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED);
+      if (!from || !to) {
+        failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED, { locale }));
+      }
       if (String(attrs.when || attrs.condition || "").trim()) {
-        fail(lineNo, "EDGE condition is not supported");
+        failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED, { locale }));
       }
       edgeIndex += 1;
       semantic.flowtos.push({
@@ -200,7 +214,10 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const type = String(attrs.type || DSL_TYPES.AUTO_SUBMIT).trim().toLowerCase();
       if (![DSL_TYPES.AUTO_SUBMIT, DSL_TYPES.AUTO_AUDIT, DSL_TYPES.AUTO_BACK, DSL_TYPES.AUTO_STOP].includes(type)) {
-        fail(lineNo, `AUTO type invalid: ${type}`);
+        failWithLocale(
+          lineNo,
+          dslMessage(DSL_ERROR_MESSAGE.AUTO_TYPE_INVALID, { locale, params: { type } }),
+        );
       }
       const stepRaw = attrs.stepIndex ?? attrs.step ?? "0";
       const stepIndex = Number.isFinite(Number(stepRaw)) ? Math.floor(Number(stepRaw)) : 0;
@@ -208,15 +225,24 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
       continue;
     }
 
-    fail(lineNo, `unknown command: ${head}`);
+    failWithLocale(
+      lineNo,
+      dslMessage(DSL_ERROR_MESSAGE.UNKNOWN_COMMAND, { locale, params: { command: head } }),
+    );
   }
 
   if (!headerSeen) {
-    throw new Error(dslError(DSL_ERROR_MESSAGE.MISSING_HEADER));
+    throw new Error(
+      dslError(dslMessage(DSL_ERROR_MESSAGE.MISSING_HEADER, { locale }), { locale }),
+    );
   }
 
-  if (!semantic.nodes.length) throw new Error(dslError(DSL_ERROR_MESSAGE.NO_NODE));
-  if (!semantic.flowtos.length) throw new Error(dslError(DSL_ERROR_MESSAGE.NO_EDGE));
+  if (!semantic.nodes.length) {
+    throw new Error(dslError(dslMessage(DSL_ERROR_MESSAGE.NO_NODE, { locale }), { locale }));
+  }
+  if (!semantic.flowtos.length) {
+    throw new Error(dslError(dslMessage(DSL_ERROR_MESSAGE.NO_EDGE, { locale }), { locale }));
+  }
 
   if (attachmentDeclarations.length) {
     semantic.attachments = attachmentDeclarations;
@@ -225,7 +251,9 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
 
   for (const edge of semantic.flowtos) {
     if (!nodeSet.has(edge.from) || !nodeSet.has(edge.to)) {
-      throw new Error(dslError(dslEdgeUndefinedNode(edge.from, edge.to)));
+      throw new Error(
+        dslError(dslEdgeUndefinedNode(edge.from, edge.to, { locale }), { locale }),
+      );
     }
   }
 

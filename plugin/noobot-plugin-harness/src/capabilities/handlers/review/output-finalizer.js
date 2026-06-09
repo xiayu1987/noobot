@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LOCALE, ensureHarnessBucket, translateI18nText } from "./deps.js";
+import { HARNESS_I18N_KEYSET, LOCALE, ensureHarnessBucket, translateI18nText } from "./deps.js";
 
 export function attachReviewReportToFinalOutput(ctx = {}, report = null) {
   if (!report) return false;
@@ -12,7 +12,12 @@ export function attachReviewReportToFinalOutput(ctx = {}, report = null) {
   const { state } = holder;
   const locale = state?.locale || LOCALE.ZH_CN;
   const original = String(ctx.result.output || "").trim();
-  ctx.result.output = [original, "", translateI18nText(locale, "reviewHeader"), JSON.stringify(report, null, 2)]
+  ctx.result.output = [
+    original,
+    "",
+    translateI18nText(locale, HARNESS_I18N_KEYSET.REVIEW.HEADER),
+    JSON.stringify(report, null, 2),
+  ]
     .filter(Boolean)
     .join("\n");
   return true;

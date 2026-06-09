@@ -5,7 +5,7 @@
  */
 
 import { WORKFLOW_ATTACHMENT_SCOPE } from "../constants.js";
-import { resolveWorkflowRuntimeFromContext } from "./runtime.js";
+import { resolveWorkflowAgentContext, resolveWorkflowRuntimeFromContext } from "./runtime.js";
 
 export function mergeAttachmentMetas(existing = [], incoming = []) {
   const merged = Array.isArray(existing) ? existing.slice() : [];
@@ -25,10 +25,11 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
 }
 
 export function resolveWorkflowInputAttachmentMetas(ctx = {}) {
+  const agentContext = resolveWorkflowAgentContext(ctx);
   const candidates = [
     ctx?.attachmentMetas,
     ctx?.userMessageAttachmentMetas,
-    ctx?.agentContext?.session?.current?.attachments,
+    agentContext?.session?.current?.attachments,
   ];
   for (const candidate of candidates) {
     if (Array.isArray(candidate) && candidate.length) return candidate;
@@ -104,12 +105,13 @@ export function resolveNodeInputAttachmentMetas({ ctx = {}, semanticNode = {}, s
 }
 
 export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
+  const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const semanticDisplay = runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath;
   if (typeof semanticDisplay === "function") {
     try {
       const resolved = String(
-        semanticDisplay(meta, { runtime, agentContext: ctx?.agentContext || null }) || "",
+        semanticDisplay(meta, { runtime, agentContext }) || "",
       ).trim();
       if (resolved) return resolved;
     } catch {
@@ -142,7 +144,7 @@ export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
           hostPath: String(sourceMeta?.path || "").trim(),
           relativePath: String(sourceMeta?.relativePath || "").trim(),
           runtime,
-          agentContext: ctx?.agentContext || null,
+          agentContext,
           purpose: "workflow_attachment_display_path",
         }) || "",
       ).trim();
@@ -161,7 +163,7 @@ export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
           hostPath: String(sourceMeta?.path || "").trim(),
           relativePath: String(sourceMeta?.relativePath || "").trim(),
           runtime,
-          agentContext: ctx?.agentContext || null,
+          agentContext,
           purpose: "workflow_attachment_display_path",
         }) || "",
       ).trim();
@@ -186,7 +188,7 @@ export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
           hostPath,
           relativePath,
           runtime,
-          agentContext: ctx?.agentContext || null,
+          agentContext,
           purpose: "workflow_attachment_display_path",
         }) || "",
       ).trim();
@@ -256,6 +258,7 @@ export function applyWorkflowTransferPayload(target = {}, payload = {}) {
 export function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) {
   const transferPayload = normalizeWorkflowTransferPayload(payload);
   if (!transferPayload.transferEnvelopes.length && !transferPayload.transferEnvelope) return [];
+  const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const getTransferFiles = runtime?.sharedTools?.semanticTransfer?.getTransferFiles;
   const source = transferPayload.transferEnvelopes.length
@@ -263,7 +266,7 @@ export function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) 
     : [transferPayload.transferEnvelope];
   if (typeof getTransferFiles === "function") {
     try {
-      const files = getTransferFiles(source, { runtime, agentContext: ctx?.agentContext || null });
+      const files = getTransferFiles(source, { runtime, agentContext });
       if (Array.isArray(files) && files.length) return files;
     } catch {
       // Fallback to transfer-envelope-only parsing below.
@@ -327,11 +330,12 @@ export function resolveWorkflowCompatAttachmentMetas({
 }
 
 export function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {
+  const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const getTransferDisplayPath = runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath;
   if (typeof getTransferDisplayPath === "function") {
     try {
-      const path = String(getTransferDisplayPath(file, { runtime, agentContext: ctx?.agentContext || null }) || "").trim();
+      const path = String(getTransferDisplayPath(file, { runtime, agentContext }) || "").trim();
       if (path) return path;
     } catch {
       // Fallback below.

@@ -11,6 +11,7 @@ import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shar
 import { safeId } from "../data/record-builders.js";
 import { DEFAULT_OPTIONS, normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
+import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 
 export function normalizePlanningGuidance(options = {}) {
   if (options.planningGuidanceMode === "separate_model" && !options.capabilityModelInvoker) {
@@ -170,9 +171,14 @@ export function createPluginRuntimeContextFactory(deps = {}) {
   };
 }
 
-export function assertHookManager(hookManager) {
+export function assertHookManager(hookManager, { locale = "en-US" } = {}) {
   if (!hookManager || typeof hookManager.on !== "function") {
-    throw new Error(`${PLUGIN_NAME}: hookManager with .on(point, handler, options) is required`);
+    throw new Error(
+      formatHarnessCoreError(HARNESS_CORE_ERROR.HOOK_MANAGER_REQUIRED, {
+        locale,
+        params: { pluginName: PLUGIN_NAME },
+      }),
+    );
   }
 }
 

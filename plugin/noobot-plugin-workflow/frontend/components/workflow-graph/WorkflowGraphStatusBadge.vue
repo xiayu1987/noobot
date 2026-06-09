@@ -5,18 +5,22 @@
 -->
 <script setup>
 import { computed } from "vue";
+import { useWorkflowLocale } from "../../i18n";
 
 const props = defineProps({
   status: { type: String, default: "pending" },
 });
+const { translate } = useWorkflowLocale();
 
 const normalizedStatus = computed(() => String(props.status || "").trim().toLowerCase());
 
 const statusLabel = computed(() => {
-  if (normalizedStatus.value === "success") return "成功";
-  if (normalizedStatus.value === "failed" || normalizedStatus.value === "error") return "失败";
-  if (normalizedStatus.value === "running") return "执行中";
-  return "待执行";
+  if (normalizedStatus.value === "success") return translate("workflow.statusSuccess");
+  if (normalizedStatus.value === "failed" || normalizedStatus.value === "error") {
+    return translate("workflow.statusFailed");
+  }
+  if (normalizedStatus.value === "running") return translate("workflow.statusRunning");
+  return translate("workflow.statusPending");
 });
 
 const statusClass = computed(() => {

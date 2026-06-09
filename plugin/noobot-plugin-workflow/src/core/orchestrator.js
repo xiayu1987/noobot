@@ -59,7 +59,7 @@ import {
   truncateWorkflowResultText,
 } from "./hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "./orchestration-payload.js";
-import { resolveWorkflowLocaleFromContext, tWorkflow } from "./i18n.js";
+import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "./i18n.js";
 
 function buildWorkflowInputAttachmentPlanningBlock(attachmentMetas = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
@@ -67,9 +67,9 @@ function buildWorkflowInputAttachmentPlanningBlock(attachmentMetas = [], ctx = {
     .map((item = {}, index) => {
       const attachmentId = String(item?.attachmentId || item?.id || "").trim();
       const name = String(
-        item?.name ||
+          item?.name ||
           item?.fileName ||
-          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+          tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
       const mimeType = String(item?.mimeType || "").trim();
       const path = resolveAttachmentDisplayPath(item, ctx);
@@ -84,13 +84,13 @@ function buildWorkflowInputAttachmentPlanningBlock(attachmentMetas = [], ctx = {
     .filter(Boolean);
   if (!lines.length) return "";
   return [
-    tWorkflow(locale, "workflowInputAttachmentsHeader"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_HEADER),
     ...lines,
     "",
-    tWorkflow(locale, "workflowInputAttachmentsPlanHint1"),
-    tWorkflow(locale, "workflowInputAttachmentsPlanHint2"),
-    tWorkflow(locale, "workflowInputAttachmentsPlanHint3"),
-    tWorkflow(locale, "workflowInputAttachmentsPlanHint4"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_PLAN_HINT_1),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_PLAN_HINT_2),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_PLAN_HINT_3),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_PLAN_HINT_4),
   ].join("\n");
 }
 
@@ -117,13 +117,13 @@ async function resolveSemanticText({ options = {}, ctx = {}, sourceText = "" } =
   const semanticTaskMessage = {
     role: "user",
     content: [
-      tWorkflow(locale, "workflowSemanticPlanByContext"),
-      tWorkflow(locale, "workflowSemanticCurrentUserMessage", {
-        message: userMessage || tWorkflow(locale, "workflowSemanticEmpty"),
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.SEMANTIC.PLAN_BY_CONTEXT),
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.SEMANTIC.CURRENT_USER_MESSAGE, {
+        message: userMessage || tWorkflow(locale, WORKFLOW_I18N_KEYSET.SEMANTIC.EMPTY),
       }),
       attachmentPlanningBlock,
-      tWorkflow(locale, "workflowSemanticSourceInput", {
-        source: sourceText || tWorkflow(locale, "workflowSemanticEmpty"),
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.SEMANTIC.SOURCE_INPUT, {
+        source: sourceText || tWorkflow(locale, WORKFLOW_I18N_KEYSET.SEMANTIC.EMPTY),
       }),
     ]
       .map((item) => String(item || "").trim())
@@ -374,7 +374,7 @@ export function createRegisterWorkflowHooks() {
                 }),
               );
               throwIfWorkflowAborted(ctx);
-              // 先执行高 index，尽量保持并发批次中的原始 stepIndex 语义。
+              // Execute higher index first to keep original stepIndex semantics in the same parallel batch.
               const actionQueue = waveResults
                 .slice()
                 .sort((a, b) => Number(b?.step?.index || 0) - Number(a?.step?.index || 0));

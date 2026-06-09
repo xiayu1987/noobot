@@ -4,9 +4,88 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveWorkflowAgentContext, resolveWorkflowRuntimeFromContext } from "./hooks/runtime.js";
+
 export const WORKFLOW_LOCALE = Object.freeze({
   ZH_CN: "zh-CN",
   EN_US: "en-US",
+});
+
+export const WORKFLOW_I18N_KEYSET = Object.freeze({
+  COMMON: Object.freeze({
+    CURRENT_NODE_FALLBACK: "workflowCurrentNodeFallback",
+    CURRENT_NODE_LINE: "workflowCurrentNodeLine",
+  }),
+  SEMANTIC: Object.freeze({
+    PLAN_BY_CONTEXT: "workflowSemanticPlanByContext",
+    CURRENT_USER_MESSAGE: "workflowSemanticCurrentUserMessage",
+    SOURCE_INPUT: "workflowSemanticSourceInput",
+    EMPTY: "workflowSemanticEmpty",
+  }),
+  DSL_ERROR: Object.freeze({
+    PREFIX: "workflowDslErrorPrefix",
+    EMPTY_TEXT: "workflowDslErrorEmptyText",
+    JSON_NOT_ALLOWED: "workflowDslErrorJsonNotAllowed",
+    MISSING_HEADER: "workflowDslErrorMissingHeader",
+    NO_NODE: "workflowDslErrorNoNode",
+    NO_EDGE: "workflowDslErrorNoEdge",
+    NODE_ID_REQUIRED: "workflowDslErrorNodeIdRequired",
+    NODE_ID_DUPLICATE: "workflowDslErrorNodeIdDuplicate",
+    NODE_TYPE_INVALID: "workflowDslErrorNodeTypeInvalid",
+    ATTACHMENT_ID_REQUIRED: "workflowDslErrorAttachmentIdRequired",
+    ATTACHMENT_ID_DUPLICATE: "workflowDslErrorAttachmentIdDuplicate",
+    EDGE_FROM_TO_REQUIRED: "workflowDslErrorEdgeFromToRequired",
+    EDGE_CONDITION_UNSUPPORTED: "workflowDslErrorEdgeConditionUnsupported",
+    EDGE_UNDEFINED_NODE: "workflowDslErrorEdgeUndefinedNode",
+    AUTO_TYPE_INVALID: "workflowDslErrorAutoTypeInvalid",
+    UNKNOWN_COMMAND: "workflowDslErrorUnknownCommand",
+    LINE_LABEL: "workflowDslLineLabel",
+  }),
+  DSL_DEFAULT_NODE: Object.freeze({
+    START_NAME: "workflowDslDefaultStartNodeName",
+    END_NAME: "workflowDslDefaultEndNodeName",
+  }),
+  ATTACHMENT: Object.freeze({
+    DEFAULT_LABEL: "workflowAttachmentDefaultLabel",
+    USER_RAW_ATTACHMENTS_TITLE: "workflowUserRawAttachmentsTitle",
+    INPUT_SYSTEM_HINT: "workflowInputAttachmentsSystemHint",
+    INPUT_HEADER: "workflowInputAttachmentsHeader",
+    INPUT_PLAN_HINT_1: "workflowInputAttachmentsPlanHint1",
+    INPUT_PLAN_HINT_2: "workflowInputAttachmentsPlanHint2",
+    INPUT_PLAN_HINT_3: "workflowInputAttachmentsPlanHint3",
+    INPUT_PLAN_HINT_4: "workflowInputAttachmentsPlanHint4",
+  }),
+  NODE_AGENT: Object.freeze({
+    UPSTREAM_NODE_FALLBACK: "workflowUpstreamNodeFallback",
+    SUB_AGENT_FAILURE_FALLBACK: "workflowSubAgentFailureFallback",
+    FAILURE_LINE_WITH_TASK: "workflowFailureLineWithTask",
+    FAILURE_LINE_WITHOUT_TASK: "workflowFailureLineWithoutTask",
+    UPSTREAM_ATTACHMENTS_TITLE: "workflowUpstreamAttachmentsTitle",
+    UPSTREAM_HINT: "workflowUpstreamHint",
+    UPSTREAM_FAILURE_TITLE: "workflowUpstreamFailureTitle",
+    UPSTREAM_RESULT_TITLE: "workflowUpstreamResultTitle",
+    NODE_INSTRUCTION_BY_NAME: "workflowNodeInstructionByName",
+    NODE_INSTRUCTION_BY_ID: "workflowNodeInstructionById",
+    NODE_INSTRUCTION_DEFAULT: "workflowNodeInstructionDefault",
+  }),
+  PERSISTENCE: Object.freeze({
+    NODE_RESULT_ATTACHMENT_TITLE: "workflowNodeResultAttachmentTitle",
+    NODE_RESULT_TITLE: "workflowNodeResultTitle",
+    NODE_UNNAMED_FALLBACK: "workflowNodeUnnamedFallback",
+    NODE_LINE: "workflowNodeLine",
+    NODE_ID_LINE: "workflowNodeIdLine",
+    SUB_SESSION_LINE: "workflowSubSessionLine",
+    DIALOG_LINE: "workflowDialogLine",
+    FINAL_OUTPUT_TITLE: "workflowFinalOutputTitle",
+  }),
+  MESSAGES: Object.freeze({
+    NO_DESCRIPTION: "workflowNoDescription",
+    AVAILABLE_TOOLS_HEADER: "workflowAvailableToolsHeader",
+    AVAILABLE_TOOLS_TASK_HINT: "workflowAvailableToolsTaskHint",
+    TOOL_CALL_UNKNOWN_SCRIPT: "workflowToolCallUnknownScript",
+    TOOL_CALL_NO_ARGUMENTS: "workflowToolCallNoArguments",
+    TOOL_CALL_SEMANTIC_LINE: "workflowToolCallSemanticLine",
+  }),
 });
 
 const WORKFLOW_I18N_TEXT = Object.freeze({
@@ -57,6 +136,25 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowNodeInstructionByName: "请处理任务：{name}",
     workflowNodeInstructionById: "请处理节点任务：{id}",
     workflowNodeInstructionDefault: "请处理当前任务。",
+    workflowDslErrorPrefix: "工作流 DSL 解析错误",
+    workflowDslErrorEmptyText: "文本为空",
+    workflowDslErrorJsonNotAllowed: "不支持 JSON 输入",
+    workflowDslErrorMissingHeader: "缺少协议头 '{header}'",
+    workflowDslErrorNoNode: "未找到 NODE",
+    workflowDslErrorNoEdge: "未找到 EDGE",
+    workflowDslErrorNodeIdRequired: "NODE 必须包含 id=<id>",
+    workflowDslErrorNodeIdDuplicate: "重复的 NODE id: {id}",
+    workflowDslErrorNodeTypeInvalid: "NODE type 必须是 state/action，当前: {type}",
+    workflowDslErrorAttachmentIdRequired: "ATTACHMENT 必须包含 id=<id>",
+    workflowDslErrorAttachmentIdDuplicate: "重复的 ATTACHMENT id: {id}",
+    workflowDslErrorEdgeFromToRequired: "EDGE 必须包含 from=<id> 和 to=<id>",
+    workflowDslErrorEdgeConditionUnsupported: "EDGE 暂不支持条件",
+    workflowDslErrorEdgeUndefinedNode: "EDGE 引用了未定义节点 ({from} -> {to})",
+    workflowDslErrorAutoTypeInvalid: "AUTO type 无效: {type}",
+    workflowDslErrorUnknownCommand: "未知命令: {command}",
+    workflowDslLineLabel: "第{lineNo}行",
+    workflowDslDefaultStartNodeName: "开始",
+    workflowDslDefaultEndNodeName: "结束",
   }),
   [WORKFLOW_LOCALE.EN_US]: Object.freeze({
     workflowNoDescription: "(no description)",
@@ -107,6 +205,25 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowNodeInstructionByName: "Please process task: {name}",
     workflowNodeInstructionById: "Please process node task: {id}",
     workflowNodeInstructionDefault: "Please process the current task.",
+    workflowDslErrorPrefix: "workflow dsl parse error",
+    workflowDslErrorEmptyText: "empty text",
+    workflowDslErrorJsonNotAllowed: "JSON is not allowed",
+    workflowDslErrorMissingHeader: "missing protocol header '{header}'",
+    workflowDslErrorNoNode: "no NODE",
+    workflowDslErrorNoEdge: "no EDGE",
+    workflowDslErrorNodeIdRequired: "NODE requires id=<id>",
+    workflowDslErrorNodeIdDuplicate: "duplicate NODE id: {id}",
+    workflowDslErrorNodeTypeInvalid: "NODE type must be state/action, got: {type}",
+    workflowDslErrorAttachmentIdRequired: "ATTACHMENT requires id=<id>",
+    workflowDslErrorAttachmentIdDuplicate: "duplicate ATTACHMENT id: {id}",
+    workflowDslErrorEdgeFromToRequired: "EDGE requires from=<id> to=<id>",
+    workflowDslErrorEdgeConditionUnsupported: "EDGE condition is not supported",
+    workflowDslErrorEdgeUndefinedNode: "EDGE references undefined node ({from} -> {to})",
+    workflowDslErrorAutoTypeInvalid: "AUTO type invalid: {type}",
+    workflowDslErrorUnknownCommand: "unknown command: {command}",
+    workflowDslLineLabel: "line {lineNo}",
+    workflowDslDefaultStartNodeName: "Start",
+    workflowDslDefaultEndNodeName: "End",
   }),
 });
 
@@ -199,14 +316,15 @@ export function normalizeWorkflowLocale(locale = "") {
 }
 
 export function resolveWorkflowLocaleFromContext(ctx = {}, fallbackLocale = WORKFLOW_LOCALE.ZH_CN) {
-  const runtime =
-    ctx?.agentContext?.execution?.controllers?.runtime &&
-    typeof ctx.agentContext.execution.controllers.runtime === "object"
-      ? ctx.agentContext.execution.controllers.runtime
-      : {};
+  const agentContext = resolveWorkflowAgentContext(ctx);
+  const runtime = resolveWorkflowRuntimeFromContext({
+    ...ctx,
+    agentContext: agentContext || ctx?.agentContext || null,
+  }) || {};
   const localeCandidates = [
     ctx?.runConfig?.locale,
     ctx?.locale,
+    agentContext?.runConfig?.locale,
     runtime?.systemRuntime?.config?.locale,
     runtime?.userConfig?.locale,
     runtime?.globalConfig?.locale,
@@ -233,4 +351,20 @@ export function getWorkflowDefaultSemanticPrompt(locale = WORKFLOW_LOCALE.ZH_CN)
       DEFAULT_SEMANTIC_PROMPT_BY_LOCALE[WORKFLOW_LOCALE.ZH_CN] ||
       "",
   ).trim();
+}
+
+export function getWorkflowDslDefaultNodeNames(locale = WORKFLOW_LOCALE.ZH_CN) {
+  const normalizedLocale = normalizeWorkflowLocale(locale);
+  const startName =
+    tWorkflow(normalizedLocale, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.START_NAME) ||
+    tWorkflow(WORKFLOW_LOCALE.EN_US, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.START_NAME) ||
+    "Start";
+  const endName =
+    tWorkflow(normalizedLocale, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.END_NAME) ||
+    tWorkflow(WORKFLOW_LOCALE.EN_US, WORKFLOW_I18N_KEYSET.DSL_DEFAULT_NODE.END_NAME) ||
+    "End";
+  return {
+    startName: String(startName || "").trim(),
+    endName: String(endName || "").trim(),
+  };
 }

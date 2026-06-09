@@ -7,10 +7,12 @@ import {
   DEFAULT_SUBTASK_OWNERS,
   DEFAULT_TASK_OWNER,
   DEFAULT_TASK_TEMPLATE,
+  HARNESS_I18N_KEYSET,
   I18N_TEXT,
   LOCALE,
   PROMPT_JSON_FORMAT_EXAMPLES,
-} from "./constants.js";
+} from "../../../i18n.js";
+export { HARNESS_I18N_KEYSET };
 
 export function resolveLocale(ctx = {}) {
   const runtime =

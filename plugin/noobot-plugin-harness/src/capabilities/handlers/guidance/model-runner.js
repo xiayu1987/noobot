@@ -6,6 +6,7 @@
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   PROMPT_ENVELOPE,
   appendCapabilityLog,
@@ -72,12 +73,8 @@ function buildSummaryRelayContent({
     .map((item = {}) => resolveDetailPath(item))
     .filter(Boolean);
   if (!lines.length) return overview;
-  const header = locale === LOCALE.EN_US
-    ? "[SUMMARY_DETAIL_PATHS]"
-    : "【SUMMARY_DETAIL_PATHS】";
-  const footer = locale === LOCALE.EN_US
-    ? "[SUMMARY_DETAIL_PATHS_END]"
-    : "【SUMMARY_DETAIL_PATHS_END】";
+  const header = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.SUMMARY_DETAIL_PATHS_HEADER);
+  const footer = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.SUMMARY_DETAIL_PATHS_FOOTER);
   const pathBlock = [
     header,
     ...lines.map((item) => `DETAIL_PATH: ${item}`),

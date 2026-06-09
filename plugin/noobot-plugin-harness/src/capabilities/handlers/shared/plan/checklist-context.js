@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "../constants.js";
+import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { parsePlanDocumentFromText, renderPlanDocument } from "./text-protocol.js";
 
 function buildMainPlanTextFromChecklist(checklist = []) {
@@ -53,10 +54,10 @@ export function buildPlanChecklistSystemContent({
 } = {}) {
   const resolvedPlanText = resolvePlanChecklistText({ planText, bucket });
   if (!resolvedPlanText) return "";
-  const header =
-    locale === LOCALE.EN_US
-      ? "<!-- harness-plan-checklist-context -->\n[Plan Checklist]"
-      : "<!-- harness-plan-checklist-context -->\n【计划清单】";
+  const header = `<!-- harness-plan-checklist-context -->\n${translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLAN_CHECKLIST_CONTEXT_HEADER,
+  )}`;
   return `${header}\n${resolvedPlanText}`;
 }
 

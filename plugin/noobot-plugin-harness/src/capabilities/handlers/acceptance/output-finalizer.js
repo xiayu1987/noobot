@@ -7,6 +7,7 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   ACCEPTANCE_MODE,
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   appendCapabilityLog,
   applyTransferPayloadToMessage,
@@ -93,7 +94,9 @@ function buildOutputWithAcceptanceSection({
   const rendered = String(reportText || "").trim();
   if (!rendered) return originalText;
   const divider = "\n\n---\n";
-  const forcedHeader = includeForcedHeader ? translateI18nText(locale, "forcedAcceptanceHeader") : "";
+  const forcedHeader = includeForcedHeader
+    ? translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_HEADER)
+    : "";
   const acceptanceSection = [forcedHeader, rendered].filter(Boolean).join("\n");
   const semanticTransferContentSync =
     ctx?.agentContext?.execution?.controllers?.runtime?.sharedTools?.semanticTransfer?.transferSemanticContentSync;
@@ -151,7 +154,13 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         state,
         ctx,
         mode: ACCEPTANCE_MODE.FORCED,
-        forcedReason: "补建验收报告_用于附件生成 | Rebuilt acceptance report for artifact generation",
+        forcedReason: [
+          translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS),
+          translateI18nText(
+            LOCALE.EN_US,
+            HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_REBUILT_ARTIFACTS,
+          ),
+        ].filter(Boolean).join(" | "),
       });
 
   const artifacts = [
@@ -234,9 +243,10 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
       locale,
       purpose: "acceptance_checklist",
       content:
-        locale === LOCALE.EN_US
-          ? "Harness checklist artifacts generated. See transferEnvelope(s) for details."
-          : "已生成 harness 清单附件，详见 transferEnvelope(s)。",
+        translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.CHECKLIST_ARTIFACTS_GENERATED_NOTICE,
+        ),
       dedupe: true,
       attachmentMetas: metas,
       transferPayload,
@@ -256,10 +266,29 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   if (!holder) return false;
   const { bucket, state } = holder;
   if (state.flags.acceptanceRequested === true) return false;
+  const locale = state?.locale || LOCALE.ZH_CN;
   const forcedReason =
     state?.flags?.overflowForceAcceptancePending === true
-      ? "上下文溢出_最终输出兜底强制验收 | Context overflow (final-output fallback forced acceptance)"
-      : "未主动请求验收_最终输出兜底 | No active acceptance request (final-output fallback)";
+      ? [
+        translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_OVERFLOW_FALLBACK,
+        ),
+        translateI18nText(
+          LOCALE.EN_US,
+          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_OVERFLOW_FALLBACK,
+        ),
+      ].filter(Boolean).join(" | ")
+      : [
+        translateI18nText(
+          locale,
+          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_NO_ACTIVE_REQUEST,
+        ),
+        translateI18nText(
+          LOCALE.EN_US,
+          HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_REASON_NO_ACTIVE_REQUEST,
+        ),
+      ].filter(Boolean).join(" | ");
   const report = buildAcceptanceReport({
     bucket,
     state,
@@ -271,7 +300,6 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   bucket.acceptanceReports.push(report);
   if (ctx?.result && typeof ctx.result === "object") {
     await runAcceptanceBySeparateModel(ctx, meta, report);
-    const locale = state?.locale || LOCALE.ZH_CN;
     const original = String(ctx.result.output || "").trim();
     const compactText = renderAcceptanceDigestReportText(report, locale);
     const nextOutput = buildOutputWithAcceptanceSection({

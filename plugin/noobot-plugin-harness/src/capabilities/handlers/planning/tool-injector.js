@@ -9,6 +9,7 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { runPlanningRefinementBySeparateModel } from "./refinement-runner.js";
 import {
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   PLAN_REFINEMENT_TOOL_NAME,
   appendCapabilityLog,
@@ -23,16 +24,21 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
   return new DynamicStructuredTool({
     name: PLAN_REFINEMENT_TOOL_NAME,
-    description: translateI18nText(locale, "planRefinementToolDescription"),
+    description: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.DESCRIPTION),
     schema: z.object({
       summary: z
         .string()
         .optional()
-        .describe(translateI18nText(locale, "planRefinementToolSummaryDescription")),
+        .describe(translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.SUMMARY_DESCRIPTION)),
       targetMainStepIndexes: z
         .array(z.number().int().positive())
         .optional()
-        .describe("可选：指定要细化的主计划 ID 列表，如 [2,3]。"),
+        .describe(
+          translateI18nText(
+            locale,
+            HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.TARGET_MAIN_STEP_INDEXES_DESCRIPTION,
+          ),
+        ),
     }),
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
@@ -43,7 +49,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           ok: false,
           status: "not_ready",
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason: translateI18nText(locale, "planRefinementNotReadyReason"),
+          reason: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.NOT_READY_REASON),
         };
       }
       const refinementResult = await runPlanningRefinementBySeparateModel(
@@ -62,7 +68,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           ok: false,
           status: "converged",
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason: translateI18nText(locale, "planRefinementConvergedReason"),
+          reason: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.CONVERGED_REASON),
         };
       }
       if (refinementResult?.applied !== true) {
@@ -70,7 +76,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           ok: false,
           status: String(refinementResult?.status || "failed"),
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason: translateI18nText(locale, "planRefinementFailedReason"),
+          reason: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.FAILED_REASON),
         };
       }
       return {

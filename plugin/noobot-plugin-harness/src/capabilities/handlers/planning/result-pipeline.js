@@ -6,12 +6,14 @@
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   appendCapabilityLog,
   canAttemptPlanUpdate,
   ensureHarnessBucket,
   getDefaultTaskOwner,
   setPendingPlanUpdate,
+  translateI18nText,
 } from "./deps.js";
 import {
   parseMainPlansFromPlanText,
@@ -21,6 +23,18 @@ import { executePlanMutation } from "../shared/plan/mutation-facade.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
+const DEFAULT_PLAN_REASON_I18N_KEY = Object.freeze({
+  planning_empty_response: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_EMPTY_RESPONSE,
+  planning_invalid_nonempty_response: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_INVALID_NONEMPTY,
+  planning_retry_exhausted: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_RETRY_EXHAUSTED,
+});
+
+function resolveDefaultPlanReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
+  const normalizedReason = String(reason || "").trim() || "planning_empty_response";
+  const key = DEFAULT_PLAN_REASON_I18N_KEY[normalizedReason];
+  if (!key) return normalizedReason;
+  return translateI18nText(locale, key) || normalizedReason;
+}
 
 function extractChangedMainStepIndexes(previousDocument = {}, nextDocument = {}) {
   const previousMainPlans = Array.isArray(previousDocument?.mainPlans) ? previousDocument.mainPlans : [];
@@ -127,15 +141,16 @@ function applyDefaultPlanText(ctx = {}, locale = LOCALE.ZH_CN, reason = "") {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const fallbackText = locale === LOCALE.EN_US
-    ? "1. Clarify requirements and constraints\n2. Implement and verify core changes\n3. Final acceptance and delivery"
-    : "1. 需求澄清与约束确认\n2. 实施并验证核心改动\n3. 最终验收与交付";
+  const fallbackText = translateI18nText(locale, HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_PLAN_TEXT);
   const applied = applyPlanText(ctx, bucket, state, fallbackText, "default_plan_text");
   if (!applied) return false;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event: PLANNING_EVENTS.defaultChecklistApplied,
-    detail: { reason: String(reason || "").trim() || "planning_empty_response" },
+    detail: {
+      reason: String(reason || "").trim() || "planning_empty_response",
+      reasonLabel: resolveDefaultPlanReasonLabel(locale, reason),
+    },
   });
   return true;
 }

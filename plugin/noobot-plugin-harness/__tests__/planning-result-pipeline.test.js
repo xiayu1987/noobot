@@ -103,6 +103,12 @@ test("planning result pipeline applies default checklist when retry exhausted", 
   assert.equal(result.sourceType, "default");
   assert.equal(ctx.agentContext.payload.harness.taskChecklistSource, "plan_text");
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
+  const logs = Array.isArray(ctx.agentContext.payload.harness.logs?.planning)
+    ? ctx.agentContext.payload.harness.logs.planning
+    : [];
+  const event = logs.find((item = {}) => item?.event === "planning_default_checklist_applied");
+  assert.equal(event?.detail?.reason, "planning_retry_exhausted");
+  assert.equal(event?.detail?.reasonLabel, "规划重试次数耗尽，使用默认主计划");
 });
 
 test("planning result pipeline keeps waiting when malformed payload is non-empty", async () => {
@@ -116,4 +122,30 @@ test("planning result pipeline keeps waiting when malformed payload is non-empty
   assert.equal(result.jsonRepairAttempted, false);
   assert.equal(result.retryScheduled, true);
   assert.equal(result.sourceType, "none");
+});
+
+test("planning result pipeline records english fallback reason label", async () => {
+  const ctx = createCtx();
+  ctx.agentContext.payload.harness.state = {
+    counters: { planningCaptureAttempts: MAX_PLANNING_CAPTURE_ATTEMPTS - 1 },
+    flags: {},
+  };
+
+  const result = await processPlanningResult(ctx, {}, {
+    source: "after_llm_call",
+    rawText: '{"taskChecklist":[{bad json}]}',
+    locale: LOCALE.EN_US,
+  });
+
+  assert.equal(result.captured, true);
+  assert.equal(result.sourceType, "default");
+  const logs = Array.isArray(ctx.agentContext.payload.harness.logs?.planning)
+    ? ctx.agentContext.payload.harness.logs.planning
+    : [];
+  const event = logs.find((item = {}) => item?.event === "planning_default_checklist_applied");
+  assert.equal(event?.detail?.reason, "planning_invalid_nonempty_response");
+  assert.match(
+    String(event?.detail?.reasonLabel || ""),
+    /fallback to default main plan/i,
+  );
 });

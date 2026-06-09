@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { LOCALE } from "../constants.js";
+import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 
 function isHarnessInjectedMessage(message = {}) {
   return (
@@ -188,7 +190,6 @@ export function buildModelMessagesWithStructuredEnvelope({
   constraints = [],
   task = "",
 } = {}) {
-  const isEn = String(locale || "").trim().toLowerCase() === "en-us";
   const normalizedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
     .map((item = {}) => normalizePromptMessageItem(item))
     .filter(Boolean);
@@ -201,7 +202,7 @@ export function buildModelMessagesWithStructuredEnvelope({
   output.push({
     role: "system",
     content: [
-      isEn ? "[Agent message context]" : "[Agent消息上下文]",
+      translateI18nText(locale, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER),
       "```json",
       JSON.stringify(normalizedAgentMessages, null, 2),
       "```",
@@ -211,7 +212,7 @@ export function buildModelMessagesWithStructuredEnvelope({
     output.push({
       role: "system",
       content: [
-        isEn ? "[Constraint context]" : "[约束上下文]",
+        translateI18nText(locale, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.CONSTRAINT_HEADER),
         ...normalizedConstraints,
       ].join("\n"),
     });
@@ -231,5 +232,8 @@ export function isStructuredEnvelopeMessages(messages = []) {
   const first = list[0];
   if (String(first?.role || "").trim().toLowerCase() !== "system") return false;
   const text = String(first?.content || "").trim();
-  return text.startsWith("[Agent message context]") || text.startsWith("[Agent消息上下文]");
+  return (
+    text.startsWith(translateI18nText(LOCALE.EN_US, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER)) ||
+    text.startsWith(translateI18nText(LOCALE.ZH_CN, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER))
+  );
 }

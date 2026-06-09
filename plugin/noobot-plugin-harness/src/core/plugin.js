@@ -9,6 +9,7 @@ import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
 import { registerHarnessHooks } from "./hooks.js";
 import { normalizeOptions } from "./options.js";
 import { extractBasePath } from "./context.js";
+import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 
 export function createRegisterNoobotPlugin(deps = {}) {
   const createPluginRuntimeContextFn = deps.createPluginRuntimeContext || createPluginRuntimeContext;
@@ -19,7 +20,8 @@ export function createRegisterNoobotPlugin(deps = {}) {
 
   return function registerNoobotPlugin(api = {}, userOptions = {}) {
     const { options, hookManager, capabilityRuntime } = createPluginRuntimeContextFn(api, userOptions);
-    assertHookManagerFn(hookManager);
+    const locale = String(options?.locale || "").trim() || "en-US";
+    assertHookManagerFn(hookManager, { locale });
     if (!options.enabled) return { name: PLUGIN_NAME, version: PLUGIN_VERSION, disposers: [] };
     if (
       api?.policy &&
@@ -33,9 +35,12 @@ export function createRegisterNoobotPlugin(deps = {}) {
     const basePath = extractBasePathFn({}, options);
     if (basePath) {
       cleanupOldRunsFn(basePath, options).catch((error) => {
-        console.warn(
-          `[harness] cleanupOldRuns failed during plugin registration: ${String(error?.message || error || "")}`,
-        );
+        console.warn(formatHarnessCoreError(HARNESS_CORE_ERROR.CLEANUP_OLD_RUNS_FAILED, {
+          locale,
+          params: {
+            message: String(error?.message || error || ""),
+          },
+        }));
       });
     }
     const disposers = registerHarnessHooksFn({

@@ -7,6 +7,7 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { createMessagePlan, renderMessagePlanForInject } from "../shared/model/message-plan.js";
 import {
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   appendCapabilityLog,
   ensureHarnessBucket,
@@ -14,6 +15,7 @@ import {
   injectMessageWithPolicy,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
+  translateI18nText,
 } from "./deps.js";
 import {
   buildWorkflowResponsibilityConstraintUserPrompt,
@@ -37,7 +39,10 @@ function resolvePlanningToolCatalog(ctx = {}, locale = LOCALE.ZH_CN) {
   const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)
     ? ctx.agentContext.payload.tools.registry
     : [];
-  const fallbackDescription = locale === LOCALE.EN_US ? "(no description)" : "（无说明）";
+  const fallbackDescription = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_TOOL_DESCRIPTION_FALLBACK,
+  );
   const catalog = [];
   const seenNames = new Set();
   for (const toolItem of registry) {
@@ -67,7 +72,13 @@ function buildPlanningToolCatalogPrompt(ctx = {}, locale = LOCALE.ZH_CN) {
 
 function isHarnessRelayMessage(text = "") {
   const raw = String(text || "").trim();
-  return raw.startsWith("[来自harness外部模型输出/") || raw.startsWith("[Relay from harness external model/");
+  if (!raw) return false;
+  const prefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
+    .map((locale) =>
+      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, { purpose: "" }))
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return prefixes.some((prefix) => raw.startsWith(prefix));
 }
 
 function resolveCompatibleRole(message = {}) {
@@ -123,7 +134,7 @@ export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, 
 
 export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
   const latestUserGoal = resolveLatestUserMessageText(ctx) ||
-    (locale === LOCALE.EN_US ? "N/A" : "（未获取到用户目标）");
+    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
   const contextSummary = {
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
@@ -140,7 +151,8 @@ export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {
 }
 
 export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}) {
-  const userGoal = resolveLatestUserMessageText(_ctx) || (locale === LOCALE.EN_US ? "N/A" : "（未获取到用户目标）");
+  const userGoal = resolveLatestUserMessageText(_ctx) ||
+    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
   return buildPlanningMainPrompt({
     locale,
     marker: getPlanningPromptMarker(locale),

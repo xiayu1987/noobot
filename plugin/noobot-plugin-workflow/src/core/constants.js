@@ -72,8 +72,8 @@ export const WORKFLOW_PROTOCOL = Object.freeze({
 
 /**
  * Attachment scope aliases accepted by workflow DSL compatibility layer.
- * Keep legacy Chinese aliases for backward compatibility with historical plans.
+ * Keep legacy zh aliases for backward compatibility with historical plans.
  */
 export const WORKFLOW_ATTACHMENT_SCOPE = Object.freeze({
-  USER_ALL_TOKENS: Object.freeze(["*", "all", "user:*", "user:all", "用户:*", "用户:全部"]),
+  USER_ALL_TOKENS: Object.freeze(["*", "all", "user:*", "user:all", "\u7528\u6237:*", "\u7528\u6237:\u5168\u90e8"]),
 });

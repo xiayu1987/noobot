@@ -87,6 +87,10 @@ test("golden: phase_acceptance is blocked when summary is pending", async () => 
     (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "before_llm_call",
   );
   assert.equal(decisionLog?.detail?.chosenReason, "phase_acceptance_blocked");
+  assert.match(
+    String(decisionLog?.detail?.chosenReasonLabel || ""),
+    /阶段验收|Phase acceptance/i,
+  );
 });
 
 test("golden: overflow force acceptance wins priority at before_llm_call", async () => {

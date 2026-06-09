@@ -6,6 +6,7 @@
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   PROMPT_ENVELOPE,
   appendCapabilityLog,
@@ -22,6 +23,7 @@ import {
   resolveCapabilityToolAllowlist,
   resolvePlanningGuidanceMode,
   getDefaultTaskOwner,
+  translateI18nText,
 } from "./deps.js";
 import {
   captureInjectedResult,
@@ -180,10 +182,10 @@ function appendPhaseAcceptanceReport(bucket = {}, content = "", { planText = "" 
 function buildFinalOutputFallbackPhaseAcceptanceText(locale = LOCALE.ZH_CN, bucket = {}, state = {}) {
   const checklistCount = Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist.length : 0;
   const signalCount = Number(state?.signals?.successfulToolCount || 0);
-  if (locale === LOCALE.EN_US) {
-    return `Phase acceptance before final acceptance: checklistCount=${checklistCount}, successfulToolCount=${signalCount}.`;
-  }
-  return `总体验收前阶段验收：checklistCount=${checklistCount}，successfulToolCount=${signalCount}。`;
+  return translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_VALIDATION.PHASE_FINAL_OUTPUT_FALLBACK, {
+    checklistCount,
+    successfulToolCount: signalCount,
+  });
 }
 
 function pushRoleMessage(messages = [], role = "system", content = "") {

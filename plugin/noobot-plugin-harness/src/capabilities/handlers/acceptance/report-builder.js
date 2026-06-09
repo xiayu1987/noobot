@@ -10,6 +10,7 @@ import {
   defaultTaskChecklist,
   getDefaultTaskOwner,
   normalizeChecklistItem,
+  translateI18nText,
 } from "./deps.js";
 import { resolveFirstMatchedRuleResult } from "../shared/rule-table-utils.js";
 import { buildStatusSummary, nowIsoTimestamp } from "../shared/report-utils.js";
@@ -24,6 +25,25 @@ const TASK_STATUS = Object.freeze({
 });
 
 const MODEL_ACCEPTANCE_LINE_RE = /^\s*(ADD|UPDATE)\s+A([A-Za-z0-9._-]+)\s+(.+?)\s*$/i;
+
+function resolveKeywordSet(i18nKey = "") {
+  const values = [LOCALE.ZH_CN, LOCALE.EN_US]
+    .map((locale) => translateI18nText(locale, i18nKey))
+    .flatMap((line) => String(line || "").split("|"))
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean);
+  return [...new Set(values)];
+}
+
+const ACCEPTANCE_SIGNAL_ATTACHMENT_KEYWORDS = resolveKeywordSet("acceptanceSignalAttachmentKeywords");
+const ACCEPTANCE_SIGNAL_SUBTASK_KEYWORDS = resolveKeywordSet("acceptanceSignalSubtaskKeywords");
+const ACCEPTANCE_SIGNAL_SUBTASK_START_KEYWORDS = resolveKeywordSet("acceptanceSignalSubtaskStartKeywords");
+const ACCEPTANCE_SIGNAL_SUBTASK_WAIT_KEYWORDS = resolveKeywordSet("acceptanceSignalSubtaskWaitKeywords");
+
+function includesAnyKeyword(text = "", keywords = []) {
+  const source = String(text || "").toLowerCase();
+  return keywords.some((token) => source.includes(token));
+}
 
 function parseModelAcceptanceItemsFromText(text = "") {
   const raw = String(text || "").trim();
@@ -121,21 +141,22 @@ function resolveLatestModelAcceptance(bucket = {}) {
 
 const ACCEPTANCE_TASK_STATUS_RULES = Object.freeze([
   {
-    matches: ({ text = "" } = {}) => text.includes("附件") || text.includes("attachment"),
+    matches: ({ text = "" } = {}) =>
+      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_ATTACHMENT_KEYWORDS),
     resolve: ({ signals = {} } = {}) =>
       signals.parsedAttachment ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
   },
   {
     matches: ({ text = "" } = {}) =>
-      (text.includes("子任务") && text.includes("开启")) ||
-      (text.includes("subtask") && text.includes("start")),
+      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_SUBTASK_KEYWORDS) &&
+      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_SUBTASK_START_KEYWORDS),
     resolve: ({ signals = {} } = {}) =>
       signals.subtaskStarted ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
   },
   {
     matches: ({ text = "" } = {}) =>
-      (text.includes("等待") && text.includes("子任务")) ||
-      (text.includes("wait") && text.includes("subtask")),
+      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_SUBTASK_WAIT_KEYWORDS) &&
+      includesAnyKeyword(text, ACCEPTANCE_SIGNAL_SUBTASK_KEYWORDS),
     resolve: ({ signals = {} } = {}) =>
       signals.subtaskWaited ? TASK_STATUS.COMPLETED : TASK_STATUS.PENDING,
   },

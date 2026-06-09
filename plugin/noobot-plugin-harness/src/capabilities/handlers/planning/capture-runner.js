@@ -16,6 +16,7 @@ import {
 import { renderMessagePlanForSeparateModel } from "../shared/model/message-plan.js";
 import {
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   PROMPT_ENVELOPE,
   appendCapabilityLog,
@@ -30,6 +31,7 @@ import {
   resolveCapabilityModelMessages,
   resolvePlanningToolAllowlist,
   resolveSceneToolNames,
+  translateI18nText,
 } from "./deps.js";
 import {
   buildPostPlanUserFollowupPrompt,
@@ -106,10 +108,13 @@ function isInjectedMessage(item = {}) {
   if (item?.injectedMessage === true) return true;
   if (String(item?.injectedBy || "").trim()) return true;
   const content = String(item?.content || "").trim();
-  return (
-    content.startsWith("[来自harness外部模型输出/") ||
-    content.startsWith("[Relay from harness external model/")
-  );
+  if (!content) return false;
+  const relayPrefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
+    .map((locale) =>
+      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, { purpose: "" }))
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return relayPrefixes.some((prefix) => content.startsWith(prefix));
 }
 
 function collectAgentStyleHistoryMessages(ctx = {}) {

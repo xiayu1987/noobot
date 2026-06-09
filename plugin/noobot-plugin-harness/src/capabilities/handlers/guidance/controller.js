@@ -6,11 +6,13 @@
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   CAPABILITY_DOMAIN,
+  HARNESS_I18N_KEYSET,
   LOCALE,
   saveCapabilityOutputAsTransferArtifacts,
   relaySeparateModelOutputAsUserMessage,
   ensureHarnessBucket,
   extractRawTextContent,
+  translateI18nText,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
 import {
@@ -50,12 +52,8 @@ function buildSummaryDetailPathRelayContent(ctx = {}, locale = LOCALE.ZH_CN, det
   if (!metas.length) return "";
   const lines = metas.map((item = {}) => resolveDetailPath(item, ctx)).filter(Boolean);
   if (!lines.length) return "";
-  const header = locale === LOCALE.EN_US
-    ? "[SUMMARY_DETAIL_PATHS]"
-    : "【SUMMARY_DETAIL_PATHS】";
-  const footer = locale === LOCALE.EN_US
-    ? "[SUMMARY_DETAIL_PATHS_END]"
-    : "【SUMMARY_DETAIL_PATHS_END】";
+  const header = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.SUMMARY_DETAIL_PATHS_HEADER);
+  const footer = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.SUMMARY_DETAIL_PATHS_FOOTER);
   return [
     header,
     ...lines.map((item) => `DETAIL_PATH: ${item}`),
@@ -159,11 +157,13 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         resolveDecision: () => ({
           chosenAction: decision.chosenAction,
           chosenReason: decision.chosenReason,
+          chosenReasonLabel: decision.chosenReasonLabel,
           chosenStage: decision.chosenStage,
           candidateActions: decision.candidateActions,
           deferredActions: decision.deferredActions,
           blockedActions: decision.blockedActions,
           blockedReasons: decision.blockedReasons,
+          blockedReasonLabels: decision.blockedReasonLabels,
           pending: decision.pendingSnapshot,
         }),
         execute: async () => {

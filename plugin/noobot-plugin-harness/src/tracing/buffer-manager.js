@@ -36,6 +36,7 @@ import {
 } from "../fsm/transitions.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import {
+  HARNESS_I18N_KEYSET,
   resolveLocale as resolveHarnessLocale,
   translateI18nText,
 } from "../capabilities/handlers/shared/i18n.js";
@@ -136,8 +137,8 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
       : "noobot-harness-policy";
   const locale = resolveHarnessLocale(ctx);
   const resolveDefaultPrompt = () => (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
-    ? translateI18nText(locale, "harnessFinalResponsePrompt")
-    : translateI18nText(locale, "harnessPolicyPrompt"));
+    ? translateI18nText(locale, HARNESS_I18N_KEYSET.SYSTEM_PROMPT.FINAL_RESPONSE)
+    : translateI18nText(locale, HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY));
   const configuredPrompt = String(
     point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText,
   ).trim();

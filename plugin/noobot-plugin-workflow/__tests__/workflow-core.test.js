@@ -178,6 +178,43 @@ test("parseWorkflowDslText rejects edge conditions", () => {
   );
 });
 
+test("parseWorkflowDslText returns zh-CN error message when locale is zh-CN", () => {
+  assert.throws(
+    () =>
+      parseWorkflowDslText(
+        [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=sub type=composite name="子流程"',
+          'NODE id=end type=state stateType=end name="结束"',
+          "EDGE from=start to=sub",
+          "EDGE from=sub to=end",
+          "END",
+        ].join("\n"),
+        { locale: "zh-CN" },
+      ),
+    /NODE type 必须是 state\/action/,
+  );
+});
+
+test("parseWorkflowDslText returns en-US error message by default", () => {
+  assert.throws(
+    () =>
+      parseWorkflowDslText(
+        [
+          "WORKFLOW_DSL/1",
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=sub type=composite name="子流程"',
+          'NODE id=end type=state stateType=end name="结束"',
+          "EDGE from=start to=sub",
+          "EDGE from=sub to=end",
+          "END",
+        ].join("\n"),
+      ),
+    /NODE type must be state\/action/,
+  );
+});
+
 test("parseWorkflowDslText normalizes multi-outgoing start as branch", () => {
   const semantic = parseWorkflowDslText(
     [

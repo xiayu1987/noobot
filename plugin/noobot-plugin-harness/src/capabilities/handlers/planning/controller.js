@@ -20,6 +20,8 @@ import { maybeInjectPlanningPrompt } from "./prompt-builder.js";
 import { maybeCapturePlanningResult, runPlanningBySeparateModel } from "./capture-runner.js";
 import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
 import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
+import { LOCALE } from "../shared/constants.js";
+import { translateI18nText } from "../shared/i18n.js";
 import {
   resolveWorkflowMode,
   runWorkflowLifecycle,
@@ -56,6 +58,30 @@ const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
 const PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
 const PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
+const PLANNING_REASON_LABEL_KEY = Object.freeze({
+  [PLANNING_DECISION.reason.idle]: "planningReasonIdle",
+  [PLANNING_DECISION.reason.summaryThresholdTurns]: "planningReasonSummaryThresholdTurns",
+  [PLANNING_DECISION.reason.summaryThresholdChars]: "planningReasonSummaryThresholdChars",
+  [PLANNING_DECISION.reason.planUpdateThreshold]: "planningReasonPlanUpdateThreshold",
+  [PLANNING_DECISION.reason.phaseAcceptanceThreshold]: "planningReasonPhaseAcceptanceThreshold",
+  [PLANNING_DECISION.reason.afterLlmCapture]: "planningReasonAfterLlmCapture",
+});
+const PLANNING_BLOCKED_REASON_LABEL_KEY = Object.freeze({
+  plan_update_blocked_by_pending_plan_update: "planningBlockedPlanUpdatePending",
+  phase_acceptance_blocked_by_higher_priority_pending: "planningBlockedPhaseAcceptanceHigherPriority",
+});
+
+function resolvePlanningReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
+  const key = PLANNING_REASON_LABEL_KEY[String(reason || "").trim()];
+  if (!key) return String(reason || "").trim();
+  return translateI18nText(locale, key) || String(reason || "").trim();
+}
+
+function resolvePlanningBlockedReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
+  const key = PLANNING_BLOCKED_REASON_LABEL_KEY[String(reason || "").trim()];
+  if (!key) return String(reason || "").trim();
+  return translateI18nText(locale, key) || String(reason || "").trim();
+}
 
 function resolvePlanningTriggeredActions({
   summary = false,
@@ -387,11 +413,15 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         resolveDecision: () => ({
           chosenAction: PLANNING_DECISION.action.planningBootstrap,
           chosenReason: decisionReason,
+          chosenReasonLabel: resolvePlanningReasonLabel(holder?.state?.locale || LOCALE.ZH_CN, decisionReason),
           candidateActions,
           deferredActions: candidateActions,
           triggeredActions: candidateActions,
           blockedActions,
           blockedReasons,
+          blockedReasonLabels: blockedReasons.map((reason) =>
+            resolvePlanningBlockedReasonLabel(holder?.state?.locale || LOCALE.ZH_CN, reason),
+          ),
           pending: normalizedPendingSnapshot,
         }),
         execute: async () => {
@@ -424,6 +454,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
     }
     if (point === "after_llm_call") {
       const mode = resolveWorkflowMode(meta);
+      const holder = ensureHarnessBucket(ctx);
       const lifecycle = await runWorkflowLifecycle(ctx, {
         domain: CAPABILITY_DOMAIN.PLANNING,
         point: "after_llm_call",
@@ -431,6 +462,10 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         resolveDecision: () => ({
           chosenAction: PLANNING_DECISION.action.planningCapture,
           chosenReason: PLANNING_DECISION.reason.afterLlmCapture,
+          chosenReasonLabel: resolvePlanningReasonLabel(
+            holder?.state?.locale || LOCALE.ZH_CN,
+            PLANNING_DECISION.reason.afterLlmCapture,
+          ),
         }),
         execute: async () => {
           const captureChanged = (await maybeCapturePlanningResult(ctx, meta)) || false;

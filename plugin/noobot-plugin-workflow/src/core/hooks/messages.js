@@ -5,7 +5,8 @@
  */
 
 import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_SEMANTIC } from "../constants.js";
-import { resolveWorkflowLocaleFromContext, tWorkflow } from "../i18n.js";
+import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
+import { resolveWorkflowAgentContext } from "./runtime.js";
 
 export function resolveAssistantOutput(agentResult = {}) {
   const direct = String(agentResult?.output || agentResult?.answer || "").trim();
@@ -60,8 +61,9 @@ export function compactWorkflowText(input = "", maxLength = 500) {
 
 export function resolveWorkflowAvailableToolCatalog(ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
-  const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)
-    ? ctx.agentContext.payload.tools.registry
+  const agentContext = resolveWorkflowAgentContext(ctx);
+  const registry = Array.isArray(agentContext?.payload?.tools?.registry)
+    ? agentContext.payload.tools.registry
     : [];
   const catalog = [];
   const seenNames = new Set();
@@ -70,7 +72,9 @@ export function resolveWorkflowAvailableToolCatalog(ctx = {}) {
     if (!name || seenNames.has(name)) continue;
     catalog.push({
       name,
-      description: compactWorkflowText(item?.description || tWorkflow(locale, "workflowNoDescription")),
+      description: compactWorkflowText(
+        item?.description || tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.NO_DESCRIPTION),
+      ),
     });
     seenNames.add(name);
   }
@@ -85,12 +89,12 @@ export function buildWorkflowAvailableToolsPlanningBlock(ctx = {}, locale = "zh-
   const catalog = resolveWorkflowAvailableToolCatalog(ctx);
   if (!catalog.length) return "";
   return [
-    tWorkflow(locale, "workflowAvailableToolsHeader"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.AVAILABLE_TOOLS_HEADER),
     "```json",
     JSON.stringify(catalog, null, 2),
     "```",
     "",
-    tWorkflow(locale, "workflowAvailableToolsTaskHint"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.AVAILABLE_TOOLS_TASK_HINT),
   ].join("\n");
 }
 
@@ -144,10 +148,12 @@ export function buildWorkflowToolCallSemanticText(toolCalls = [], locale = "zh-C
   return calls
     .map((toolCall = {}) => {
       const name =
-        resolveWorkflowToolCallName(toolCall) || tWorkflow(locale, "workflowToolCallUnknownScript");
+        resolveWorkflowToolCallName(toolCall) ||
+        tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.TOOL_CALL_UNKNOWN_SCRIPT);
       const args =
-        resolveWorkflowToolCallArguments(toolCall) || tWorkflow(locale, "workflowToolCallNoArguments");
-      return tWorkflow(locale, "workflowToolCallSemanticLine", { name, args });
+        resolveWorkflowToolCallArguments(toolCall) ||
+        tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.TOOL_CALL_NO_ARGUMENTS);
+      return tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.TOOL_CALL_SEMANTIC_LINE, { name, args });
     })
     .join("\n");
 }
@@ -180,7 +186,49 @@ export function normalizeWorkflowSemanticContextMessage(message = {}, locale = "
 }
 
 export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {}, locale = "zh-CN" } = {}) {
-  const fallbackMessages = Array.isArray(ctx?.messages) ? ctx.messages : [];
+  const fallbackMessages = (() => {
+    const agentContext = resolveWorkflowAgentContext(ctx);
+    const direct = Array.isArray(ctx?.messages) ? ctx.messages : [];
+    if (direct.length) return direct;
+    const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+    if (blocks) {
+      const system = Array.isArray(blocks.system) ? blocks.system : [];
+      const history = Array.isArray(blocks.history) ? blocks.history : [];
+      const incremental = Array.isArray(blocks.incremental) ? blocks.incremental : [];
+      const conversationSeed = [...history, ...incremental];
+      if (typeof options?.resolveMessageBlock === "function") {
+        try {
+          const resolvedSystem = options.resolveMessageBlock({
+            scope: "system",
+            messages: system,
+            ctx,
+          });
+          const resolvedConversation = options.resolveMessageBlock({
+            scope: "conversation",
+            messages: conversationSeed,
+            ctx,
+          });
+          const normalizedSystem = Array.isArray(resolvedSystem) ? resolvedSystem : system;
+          const normalizedConversation = Array.isArray(resolvedConversation)
+            ? resolvedConversation
+            : conversationSeed;
+          return [...normalizedSystem, ...normalizedConversation];
+        } catch {
+          // fall through to raw message blocks.
+        }
+      }
+      return [...system, ...conversationSeed];
+    }
+    const historyFromAgentContext = Array.isArray(agentContext?.payload?.messages?.history)
+      ? agentContext.payload.messages.history
+      : [];
+    if (historyFromAgentContext.length) return historyFromAgentContext;
+    const historyFromSession = Array.isArray(agentContext?.session?.messages)
+      ? agentContext.session.messages
+      : [];
+    if (historyFromSession.length) return historyFromSession;
+    return [];
+  })();
   if (typeof options?.resolveModelMessages === "function") {
     try {
       const resolved = options.resolveModelMessages({
