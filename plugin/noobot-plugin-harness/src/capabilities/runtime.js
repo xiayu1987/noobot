@@ -44,6 +44,20 @@ function resolveFilteredBlock({
   }
 }
 
+function writeMessageBlocksInPlace(
+  ctx = {},
+  { system = [], history = [], incremental = [] } = {},
+) {
+  const existing =
+    ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+  const target = existing || {};
+  target.system = Array.isArray(system) ? system : [];
+  target.history = Array.isArray(history) ? history : [];
+  target.incremental = Array.isArray(incremental) ? incremental : [];
+  ctx.messageBlocks = target;
+  return target;
+}
+
 function applyMessageBlocksForBeforeLlmCall(point = "", ctx = {}, meta = {}) {
   if (String(point || "").trim().toLowerCase() !== "before_llm_call") return;
   const runtime =
@@ -77,7 +91,11 @@ function applyMessageBlocksForBeforeLlmCall(point = "", ctx = {}, meta = {}) {
   const target = Array.isArray(ctx?.messages) ? ctx.messages : [];
   target.splice(0, target.length, ...composed);
   ctx.messages = target;
-  ctx.messageBlocks = { system, history, incremental };
+  // Preserve the original messageBlocks object identity. In the agent runtime
+  // this object is shared with loopState.messageBlocks; replacing it would make
+  // later hook turns fall back to stale blocks and lose the re-computable source
+  // accumulated by final compaction.
+  writeMessageBlocksInPlace(ctx, { system, history, incremental });
   if (runtime) runtime.__harnessMessageBlocksApplied = true;
 }
 

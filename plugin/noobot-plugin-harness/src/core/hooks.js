@@ -141,6 +141,20 @@ function resolveFrontendUserAnchoredIncremental(source = [], resolved = []) {
   return [anchor, ...resolvedList];
 }
 
+function writeMessageBlocksInPlace(
+  ctx = {},
+  { system = [], history = [], incremental = [] } = {},
+) {
+  const existing =
+    ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+  const target = existing || {};
+  target.system = Array.isArray(system) ? system : [];
+  target.history = Array.isArray(history) ? history : [];
+  target.incremental = Array.isArray(incremental) ? incremental : [];
+  ctx.messageBlocks = target;
+  return target;
+}
+
 function compactFinalMessageBlocks(point = "", ctx = {}, options = {}) {
   if (point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return null;
   const blocks = resolveMessageBlocks(ctx);
@@ -193,7 +207,17 @@ function compactFinalMessageBlocks(point = "", ctx = {}, options = {}) {
       ? conversationResolved
       : [...history, ...incrementalBase],
   );
-  return { system, history, incremental: incrementalBase, conversation };
+  return {
+    system,
+    history,
+    incremental: incrementalBase,
+    conversation,
+    sourceBlocks: {
+      system: systemSource,
+      history: historySource,
+      incremental: incrementalSource,
+    },
+  };
 }
 
 function compactFinalConversationWindow(point = "", ctx = {}, options = {}) {
@@ -210,11 +234,16 @@ function compactFinalConversationWindow(point = "", ctx = {}, options = {}) {
       ...conversation,
     ];
     ctx.messages.splice(0, ctx.messages.length, ...composed);
-    ctx.messageBlocks = {
+    // Keep messageBlocks as the re-computable source blocks, not as the final
+    // compacted model window. The final ctx.messages window is intentionally
+    // lossy; messageBlocks must remain lossless for the current turn so a later
+    // summary pass can filter summarized tool burst messages and recover older
+    // current-turn injections from the same source.
+    writeMessageBlocksInPlace(ctx, compactedBlocks.sourceBlocks || {
       system: compactedBlocks.system,
       history: compactedBlocks.history,
       incremental: compactedBlocks.incremental,
-    };
+    });
     return true;
   }
   const { system, conversation } = splitLeadingSystemMessages(ctx.messages);
