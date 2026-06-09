@@ -19,11 +19,11 @@ import {
 } from "../workflow/prompts.js";
 
 function formatSubPlansText(subPlans = [], targetId = 0) {
-  if (!Array.isArray(subPlans) || !subPlans.length) return "（空）";
+  if (!Array.isArray(subPlans) || !subPlans.length) return "\uff08\u7a7a\uff09";
   return subPlans
     .filter((item = {}) => Number(item.mainId) === Number(targetId))
     .map((item = {}) => `${item.id} ${String(item.content || "").trim()}`)
-    .join("\n") || "（空）";
+    .join("\n") || "\uff08\u7a7a\uff09";
 }
 
 function normalizeMainStepIndexes(indexes = []) {
@@ -304,7 +304,7 @@ export function createPlanRevisionHelpers({
     const existingSubPlansSections = targetIds
       .map((id) => {
         const existingSubPlans = formatSubPlansText(parseSubPlansFromPlanText(bucket.planText, Number(id)), Number(id));
-        return `主计划 ${id}:\n${existingSubPlans}`;
+        return `\u4e3b\u8ba1\u5212 ${id}:\n${existingSubPlans}`;
       })
       .join("\n\n")
       .trim();
@@ -327,11 +327,11 @@ export function createPlanRevisionHelpers({
       normalizedStage === "refinement"
         ? locale === LOCALE?.EN_US
           ? "Refined plan text:"
-          : "细化后的计划文本："
+          : "\u7ec6\u5316\u540e\u7684\u8ba1\u5212\u6587\u672c\uff1a"
         : locale === LOCALE?.EN_US
           ? "Revised plan text:"
-          : "修正后的计划文本：";
-    return `${title}\n${String(bucket?.planText || "").trim() || (locale === LOCALE?.EN_US ? "N/A" : "（空）")}`;
+          : "\u4fee\u6b63\u540e\u7684\u8ba1\u5212\u6587\u672c\uff1a";
+    return `${title}\n${String(bucket?.planText || "").trim() || (locale === LOCALE?.EN_US ? "N/A" : "\uff08\u7a7a\uff09")}`;
   }
 
   return {

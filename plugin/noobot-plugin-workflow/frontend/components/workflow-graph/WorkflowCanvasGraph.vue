@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { useWorkflowLocale } from "../../i18n";
 import {
   BaseEmptyHint,
   BaseZoomControls,
@@ -19,6 +20,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["node-click", "step-click", "update:selectedDialogId"]);
+const { translate } = useWorkflowLocale();
 
 const hostRef = ref(null);
 const resizeObserverRef = ref(null);
@@ -105,7 +107,7 @@ const normalizedNodes = computed(() => {
   const startNode = {
     dialogId: "__wf_start__",
     nodeId: "__wf_start__",
-    nodeName: "开始",
+    nodeName: translate("workflow.stateStart"),
     type: "state",
     nodeType: 0,
     stateType: 0,
@@ -120,7 +122,7 @@ const normalizedNodes = computed(() => {
   const endNode = {
     dialogId: "__wf_end__",
     nodeId: "__wf_end__",
-    nodeName: "结束",
+    nodeName: translate("workflow.stateEnd"),
     type: "state",
     nodeType: 0,
     stateType: 1,
@@ -203,7 +205,7 @@ function buildTopologyRows(nodes = [], flowtos = []) {
     });
   }
 
-  // 有环或孤立节点时，仍按原始顺序追加，避免节点丢失。
+  // Keep cyclic or isolated nodes in original order to avoid dropping nodes.
   let fallbackRank = Math.max(0, ...Array.from(rankById.values()).map((value) => Number(value || 0)));
   for (const id of nodeById.keys()) {
     if (visited.has(id)) continue;
@@ -394,10 +396,10 @@ function getNodeStyle(nodeItem = {}) {
 
 function resolveStatusLabel(nodeItem = {}) {
   const status = String(nodeItem?._status || "").trim();
-  if (status === "success") return "成功";
-  if (status === "failed" || status === "error") return "失败";
-  if (status === "running") return "执行中";
-  return "待执行";
+  if (status === "success") return translate("workflow.statusSuccess");
+  if (status === "failed" || status === "error") return translate("workflow.statusFailed");
+  if (status === "running") return translate("workflow.statusRunning");
+  return translate("workflow.statusPending");
 }
 
 function resolveStatusClass(nodeItem = {}) {
@@ -547,13 +549,13 @@ function zoomReset() {
 
 function resolveStepLabel(stepItem = {}, stepIndex = 0) {
   const order = Number.isFinite(Number(stepItem?.stepIndex)) ? Number(stepItem.stepIndex) + 1 : stepIndex + 1;
-  return `步骤Box #${order}`;
+  return translate("workflow.stepBoxLabel", { order });
 }
 
 function resolveStateBoxLabel(stateBox = {}, stateIndex = 0) {
   const id = String(stateBox?.actionNodeStateId || "").trim();
-  if (!id) return `节点Box #${stateIndex + 1}`;
-  return `节点Box ${id}`;
+  if (!id) return translate("workflow.nodeBoxLabelFallback", { index: stateIndex + 1 });
+  return translate("workflow.nodeBoxLabel", { id });
 }
 
 function stepHasSession(stepItem = {}) {
@@ -588,9 +590,9 @@ function handleStepClick(stepItem = {}) {
 <template>
   <div class="workflow-canvas-root">
     <BaseZoomControls
-      title="Canvas流程图"
+      :title="translate('workflow.canvasTitle')"
       :scale="zoomScale"
-      reset-label="重置"
+      :reset-label="translate('workflow.reset')"
       @zoom-in="zoomIn"
       @zoom-out="zoomOut"
       @zoom-reset="zoomReset"
@@ -641,11 +643,21 @@ function handleStepClick(stepItem = {}) {
       <div class="workflow-runtime-inspector-header">
         <div>
           <div class="workflow-runtime-inspector-title">
-            {{ expandedRuntimeNode?.nodeName || expandedRuntimeNode?.nodeId || "动作节点" }} · 运行态
+            {{
+              expandedRuntimeNode?.nodeName ||
+              expandedRuntimeNode?.nodeId ||
+              translate("workflow.actionNode")
+            }}
+            ·
+            {{ translate("workflow.runtimeState") }}
           </div>
-          <div class="workflow-runtime-inspector-subtitle">节点Box / 步骤Box，点击步骤Box查看子 agent session</div>
+          <div class="workflow-runtime-inspector-subtitle">
+            {{ translate("workflow.runtimeInspectorSubtitle") }}
+          </div>
         </div>
-        <button type="button" class="workflow-runtime-close" @click="expandedNodeKey = ''">收起</button>
+        <button type="button" class="workflow-runtime-close" @click="expandedNodeKey = ''">
+          {{ translate("workflow.collapse") }}
+        </button>
       </div>
       <div class="workflow-runtime-inspector-body">
         <div
@@ -655,7 +667,9 @@ function handleStepClick(stepItem = {}) {
         >
           <div class="workflow-runtime-state-title">
             <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
-            <span class="workflow-runtime-state-count">{{ (stateBox?.steps || []).length }} 步</span>
+            <span class="workflow-runtime-state-count">
+              {{ translate("workflow.stepCount", { count: (stateBox?.steps || []).length }) }}
+            </span>
           </div>
           <button
             v-for="(stepItem, stepIndex) in (stateBox?.steps || [])"
@@ -678,7 +692,7 @@ function handleStepClick(stepItem = {}) {
           <BaseEmptyHint
             v-if="!(stateBox?.steps || []).length"
             class="workflow-runtime-step-empty"
-            text="暂无步骤Box"
+            :text="translate('workflow.noStepBox')"
           />
         </div>
       </div>

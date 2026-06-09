@@ -111,7 +111,7 @@ function deleteMainPlan(doc = {}, mainId = 0) {
 function ensureMainPlanPlaceholder(doc = {}, mainId = 0) {
   if (!Number.isFinite(mainId) || mainId <= 0) return false;
   if (doc.mainPlans.some((item = {}) => Number(item.id) === Number(mainId))) return true;
-  return upsertMainPlan(doc, mainId, `主计划 ${mainId}`);
+  return upsertMainPlan(doc, mainId, `main plan ${mainId}`);
 }
 
 function upsertSubPlan(

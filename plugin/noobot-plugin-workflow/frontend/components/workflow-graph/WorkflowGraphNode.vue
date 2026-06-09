@@ -5,6 +5,7 @@
 -->
 <script setup>
 import WorkflowGraphStatusBadge from "./WorkflowGraphStatusBadge.vue";
+import { useWorkflowLocale } from "../../i18n";
 
 defineProps({
   nodeItem: { type: Object, default: () => ({}) },
@@ -17,6 +18,29 @@ defineProps({
 });
 
 const emit = defineEmits(["click"]);
+const { translate } = useWorkflowLocale();
+
+function normalizeText(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isStartName(value = "") {
+  const normalized = normalizeText(value);
+  if (!normalized) return false;
+  return (
+    normalized === "start" ||
+    normalized === normalizeText(translate("workflow.stateStart"))
+  );
+}
+
+function isEndName(value = "") {
+  const normalized = normalizeText(value);
+  if (!normalized) return false;
+  return (
+    normalized === "end" ||
+    normalized === normalizeText(translate("workflow.stateEnd"))
+  );
+}
 
 function isStateNode(nodeItem = {}, boundaryType = "") {
   if (boundaryType) return true;
@@ -29,22 +53,24 @@ function resolveStateTypeKey(nodeItem = {}, boundaryType = "") {
   if (boundaryType === "start") return "start";
   if (boundaryType === "end") return "end";
   const nodeId = String(nodeItem?.nodeId || nodeItem?.id || "").trim().toLowerCase();
-  const nodeName = String(nodeItem?.nodeName || nodeItem?.name || "").trim();
+  const nodeName = String(nodeItem?.nodeName || nodeItem?.name || "");
   const stateType = Number(nodeItem?.stateType);
-  if (stateType === 1 || nodeId === "end" || nodeName === "结束") return "end";
+  if (stateType === 1 || nodeId === "end" || isEndName(nodeName)) return "end";
   if (stateType === 2) return "branch";
   if (stateType === 3) return "merge";
-  if (stateType === 0 && (nodeId === "start" || nodeName === "开始")) return "start";
+  if (stateType === 0 && (nodeId === "start" || isStartName(nodeName))) {
+    return "start";
+  }
   return "normal";
 }
 
 function resolveStateTypeLabel(nodeItem = {}, boundaryType = "") {
   const key = resolveStateTypeKey(nodeItem, boundaryType);
-  if (key === "start") return "开始";
-  if (key === "end") return "结束";
-  if (key === "branch") return "分叉";
-  if (key === "merge") return "汇聚";
-  return "状态";
+  if (key === "start") return translate("workflow.stateStart");
+  if (key === "end") return translate("workflow.stateEnd");
+  if (key === "branch") return translate("workflow.stateBranch");
+  if (key === "merge") return translate("workflow.stateMerge");
+  return translate("workflow.stateNormal");
 }
 
 function isActionNode(nodeItem = {}, boundaryType = "") {
@@ -88,19 +114,32 @@ function handleClick(nodeItem = {}, clickable = true) {
     </div>
     <div class="workflow-node-main">
       <div class="workflow-node-name">
-        {{ nodeItem?.nodeName || nodeItem?.nodeId || `节点${nodeIndex + 1}` }}
+        {{ nodeItem?.nodeName || nodeItem?.nodeId || translate("workflow.nodeFallback", { index: nodeIndex + 1 }) }}
       </div>
       <div
         v-if="!boundaryType && Number(nodeItem?.parallelWave || 0) > 0"
         class="workflow-node-parallel"
       >
-        并发#{{ Number(nodeItem?.parallelWave || 0) }} · 序{{ Number(nodeItem?.waveOrder || 0) + 1 }}
+        {{
+          translate("workflow.parallelOrder", {
+            wave: Number(nodeItem?.parallelWave || 0),
+            order: Number(nodeItem?.waveOrder || 0) + 1,
+          })
+        }}
       </div>
       <div
         v-if="!boundaryType && isActionNode(nodeItem, boundaryType) && Array.isArray(nodeItem?.actionNodeStates) && nodeItem.actionNodeStates.length"
         class="workflow-node-runtime-hint"
       >
-        {{ expanded ? "收起" : "展开" }} · {{ nodeItem.actionNodeStates.length }} 节点Box
+        {{
+          translate(expanded ? "workflow.collapse" : "workflow.expand")
+        }}
+        ·
+        {{
+          translate("workflow.nodeBoxCount", {
+            count: nodeItem.actionNodeStates.length,
+          })
+        }}
       </div>
       <div
         v-if="!boundaryType && isStateNode(nodeItem, boundaryType)"

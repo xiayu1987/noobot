@@ -6,7 +6,7 @@
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
-import { translateI18nText } from "./i18n.js";
+import { HARNESS_I18N_KEYSET, translateI18nText } from "./i18n.js";
 import { injectMessageWithPolicy } from "./message/injection-utils.js";
 import { resolveDialogProcessIdFromContext } from "./runtime/dialog-process-id.js";
 import {
@@ -29,11 +29,8 @@ function compactRelayContentWithTransferRef(content = "", locale = LOCALE.ZH_CN)
   const text = String(content || "").trim();
   if (!text) return "";
   if (text.length <= RELAY_TRANSFER_TEXT_MAX_CHARS) return text;
-  const ellipsis = locale === LOCALE.EN_US ? "... [truncated]" : "……【已截断】";
-  const transferHint =
-    locale === LOCALE.EN_US
-      ? "Details are stored in transferEnvelope(s)."
-      : "详细内容已保存至 transferEnvelope(s)。";
+  const ellipsis = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.CONTENT_TRUNCATED_ELLIPSIS);
+  const transferHint = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.CONTENT_TRANSFER_HINT);
   return `${text.slice(0, RELAY_TRANSFER_TEXT_MAX_CHARS)}\n${ellipsis}\n${transferHint}`;
 }
 
@@ -371,7 +368,7 @@ export function relaySeparateModelOutputAsUserMessage(
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   const text = String(content || "").trim();
   if (!text) return false;
-  const prefix = translateI18nText(locale, "separateModelRelayPrefix", {
+  const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
     purpose: String(purpose || "").trim() || "unknown",
   });
   const relayAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];

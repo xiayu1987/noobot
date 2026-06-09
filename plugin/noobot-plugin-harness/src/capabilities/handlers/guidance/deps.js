@@ -38,4 +38,4 @@ export {
 export { buildCapabilityModelMessages } from "../shared/model/message-factory.js";
 export { invokeWithReasoningRetry } from "../shared/model/invocation-utils.js";
 
-export { translateI18nText } from "../shared/i18n.js";
+export { HARNESS_I18N_KEYSET, translateI18nText } from "../shared/i18n.js";

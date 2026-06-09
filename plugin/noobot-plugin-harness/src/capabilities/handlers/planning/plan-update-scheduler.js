@@ -5,8 +5,38 @@
  */
 import { GUIDANCE_PRIORITY_ORDER } from "../shared/workflow/policy.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { translateI18nText } from "../shared/i18n.js";
+import { LOCALE } from "../shared/constants.js";
 
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
+const GUIDANCE_REASON_LABEL_KEY = Object.freeze({
+  [GUIDANCE_DECISION.reason.pendingSummaryOverflow]: "guidanceReasonPendingSummaryOverflow",
+  [GUIDANCE_DECISION.reason.pendingSummaryTurns]: "guidanceReasonPendingSummaryTurns",
+  [GUIDANCE_DECISION.reason.pendingGuidance]: "guidanceReasonPendingGuidance",
+  [GUIDANCE_DECISION.reason.pendingRevision]: "guidanceReasonPendingRevision",
+  [GUIDANCE_DECISION.reason.pendingRefinement]: "guidanceReasonPendingRefinement",
+  [GUIDANCE_DECISION.reason.idle]: "guidanceReasonIdle",
+});
+const GUIDANCE_BLOCKED_REASON_LABEL_KEY = Object.freeze({
+  phase_acceptance_deferred_by_guidance_priority: "guidanceBlockedPhaseAcceptanceDeferred",
+});
+
+function resolveDecisionLocale(state = {}) {
+  const locale = String(state?.locale || "").trim().toLowerCase();
+  return locale.startsWith("en") ? LOCALE.EN_US : LOCALE.ZH_CN;
+}
+
+function resolveReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
+  const key = GUIDANCE_REASON_LABEL_KEY[String(reason || "").trim()];
+  if (!key) return String(reason || "").trim();
+  return translateI18nText(locale, key) || String(reason || "").trim();
+}
+
+function resolveBlockedReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
+  const key = GUIDANCE_BLOCKED_REASON_LABEL_KEY[String(reason || "").trim()];
+  if (!key) return String(reason || "").trim();
+  return translateI18nText(locale, key) || String(reason || "").trim();
+}
 
 export function resolvePendingPlanUpdate(state = {}) {
   const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
@@ -164,6 +194,7 @@ function toPendingSnapshot(state = {}) {
 }
 
 export function resolveGuidancePriorityDecision(state = {}) {
+  const locale = resolveDecisionLocale(state);
   const nextAction = resolveNextGuidanceAction(state);
   const chosenAction = toActionLabel(nextAction.action, nextAction.stage, nextAction.reason);
   const pendingActionLabels = collectPendingActionLabels(state);
@@ -176,11 +207,13 @@ export function resolveGuidancePriorityDecision(state = {}) {
   return {
     chosenAction,
     chosenReason: nextAction.reason,
+    chosenReasonLabel: resolveReasonLabel(locale, nextAction.reason),
     chosenStage: nextAction.stage || "",
     candidateActions,
     deferredActions,
     blockedActions: deferredActions,
     blockedReasons,
+    blockedReasonLabels: blockedReasons.map((reason) => resolveBlockedReasonLabel(locale, reason)),
     pendingSnapshot: toPendingSnapshot(state),
   };
 }

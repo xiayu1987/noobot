@@ -22,17 +22,6 @@ export const DSL_DEFAULTS = Object.freeze({
   STATE_TYPE_END: 1,
 });
 
-export const DSL_DEFAULT_NODE_NAME_BY_LOCALE = Object.freeze({
-  "zh-CN": Object.freeze({
-    START: "开始",
-    END: "结束",
-  }),
-  "en-US": Object.freeze({
-    START: "Start",
-    END: "End",
-  }),
-});
-
 export const DSL_TYPES = Object.freeze({
   NODE_STATE: "state",
   NODE_ACTION: "action",
@@ -41,9 +30,4 @@ export const DSL_TYPES = Object.freeze({
   AUTO_AUDIT: "audit",
   AUTO_BACK: "back",
   AUTO_STOP: "stop",
-});
-
-export const DSL_ERROR = Object.freeze({
-  PREFIX: "workflow dsl parse error",
-  JSON_NOT_ALLOWED: "JSON is not allowed",
 });

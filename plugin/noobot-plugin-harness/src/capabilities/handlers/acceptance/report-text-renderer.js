@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ACCEPTANCE_MODE, LOCALE } from "./deps.js";
+import { ACCEPTANCE_MODE, HARNESS_I18N_KEYSET, LOCALE, translateI18nText } from "./deps.js";
 
 const ALLOWED_STATUS = new Set(["completed", "in_progress", "pending"]);
 
@@ -52,17 +52,28 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
     ? data.modelAcceptance
     : null;
   const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
+  const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_TITLE);
+  const forcedReasonField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_FORCED_REASON_FIELD);
+  const planTextField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_PLAN_TEXT_FIELD);
+  const checklistHeader = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_CHECKLIST_HEADER);
+  const summaryField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SUMMARY_FIELD);
+  const semanticField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SEMANTIC_FIELD);
+  const modelField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_MODEL_FIELD);
+  const summaryDetailPathsField = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SUMMARY_DETAIL_PATHS_FIELD,
+  );
   const lines = [
-    locale === LOCALE.EN_US ? "[Harness-Acceptance]" : "[Harness-验收]",
+    title,
     `mode: ${mode}`,
     mode === ACCEPTANCE_MODE.FORCED && forcedReason
-      ? `${locale === LOCALE.EN_US ? "forcedReason" : "强制原因"}: ${forcedReason}`
+      ? `${forcedReasonField}: ${forcedReason}`
       : "",
     acceptedAt ? `acceptedAt: ${acceptedAt}` : "",
     planText
-      ? `${locale === LOCALE.EN_US ? "planText" : "计划文本"}:\n${planText}`
+      ? `${planTextField}:\n${planText}`
       : "",
-    locale === LOCALE.EN_US ? "Acceptance Checklist:" : "验收清单：",
+    checklistHeader,
     ...checklist.map((item = {}) => {
       const index = String(item?.index ?? "").trim();
       const task = String(item?.task || "").trim();
@@ -70,18 +81,18 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
       return `${index}. [${status}] ${task}`;
     }),
     Object.keys(summary).length
-      ? `${locale === LOCALE.EN_US ? "summary" : "汇总"}: ${JSON.stringify(summary)}`
+      ? `${summaryField}: ${JSON.stringify(summary)}`
       : "",
     semanticValidation?.content
-      ? `${locale === LOCALE.EN_US ? "semanticValidation" : "语义验收"}:\n${String(semanticValidation.content)}`
+      ? `${semanticField}:\n${String(semanticValidation.content)}`
       : "",
     modelAcceptance?.rawContent
-      ? `${locale === LOCALE.EN_US ? "modelAcceptance" : "模型验收"}:\n${String(modelAcceptance.rawContent)}`
+      ? `${modelField}:\n${String(modelAcceptance.rawContent)}`
       : "",
     summaryDetailPaths.length
-      ? `${
-        locale === LOCALE.EN_US ? "summaryDetailPaths" : "小结明细路径"
-      }:\n${summaryDetailPaths.map((item) => `- ${String(item || "").trim()}`).join("\n")}`
+      ? `${summaryDetailPathsField}:\n${summaryDetailPaths
+        .map((item) => `- ${String(item || "").trim()}`)
+        .join("\n")}`
       : "",
   ].filter(Boolean);
   return lines.join("\n").trim();
@@ -102,16 +113,26 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
     ? data.modelAcceptance
     : null;
   const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
-  const title = locale === LOCALE.EN_US ? "[Harness-Acceptance]" : "[Harness-验收]";
-  const modeLabel = locale === LOCALE.EN_US ? "Mode" : "模式";
-  const forcedReasonLabel = locale === LOCALE.EN_US ? "Forced reason" : "强制原因";
-  const acceptedAtLabel = locale === LOCALE.EN_US ? "Accepted at" : "验收时间";
-  const planTextLabel = locale === LOCALE.EN_US ? "Plan text" : "计划文本";
-  const checklistLabel = locale === LOCALE.EN_US ? "Acceptance checklist" : "验收清单";
-  const summaryLabel = locale === LOCALE.EN_US ? "Summary" : "汇总";
-  const semanticLabel = locale === LOCALE.EN_US ? "Semantic validation" : "语义验收";
-  const modelAcceptanceLabel = locale === LOCALE.EN_US ? "Model acceptance" : "模型验收结果";
-  const detailPathLabel = locale === LOCALE.EN_US ? "Summary detail paths" : "小结明细路径";
+  const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_TITLE);
+  const modeLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.MODE_LABEL);
+  const forcedReasonLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.FORCED_REASON_LABEL);
+  const acceptedAtLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.ACCEPTED_AT_LABEL);
+  const planTextLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.PLAN_TEXT_LABEL);
+  const checklistLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.CHECKLIST_LABEL);
+  const summaryLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SUMMARY_LABEL);
+  const semanticLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SEMANTIC_VALIDATION_LABEL,
+  );
+  const modelAcceptanceLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.MODEL_ACCEPTANCE_LABEL,
+  );
+  const detailPathLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SUMMARY_DETAIL_PATHS_LABEL,
+  );
+  const emptyLine = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.EMPTY_LINE);
 
   const summaryCompleted = Number(summary?.completed || 0);
   const summaryInProgress = Number(summary?.inProgress || 0);
@@ -138,7 +159,7 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
         const status = String(item?.status || "").trim() || "pending";
         return `- ${index}. [${status}] ${task}`;
       })
-      : [locale === LOCALE.EN_US ? "- (empty)" : "- （空）"]),
+      : [emptyLine]),
     Object.keys(summary).length
       ? ["", `## ${summaryLabel}`, `- total: ${summaryTotal}`, `- completed: ${summaryCompleted}`, `- inProgress: ${summaryInProgress}`, `- pending: ${summaryPending}`].join("\n")
       : "",
@@ -168,33 +189,55 @@ function renderAcceptanceDigestReportText(report = {}, locale = LOCALE.ZH_CN) {
     ? String(semanticValidation?.content || "").trim() || JSON.stringify(semanticValidation, null, 2)
     : "";
   const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
-  const isEn = locale === LOCALE.EN_US;
+  const digestTitle = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_TITLE);
+  const digestModeLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_MODE_LABEL);
+  const digestAcceptedAtLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_ACCEPTED_AT_LABEL,
+  );
+  const digestPlanTextLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_PLAN_TEXT_LABEL,
+  );
+  const digestSummaryLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_SUMMARY_LABEL);
+  const digestSemanticLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_SEMANTIC_VALIDATION_LABEL,
+  );
+  const digestDetailPathsLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_SUMMARY_DETAIL_PATHS_LABEL,
+  );
+  const digestNoDetailPaths = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_NO_DETAIL_PATHS,
+  );
   const safeCodeBlock = (value = "") => String(value || "").replaceAll("```", "'''");
 
   const lines = [
-    isEn ? "### [Harness-Acceptance]" : "### [Harness-验收]",
-    `- **${isEn ? "Mode" : "模式"}**: \`${mode}\``,
-    `- **${isEn ? "Accepted At" : "验收时间"}**: ${acceptedAt || "-"}`,
+    digestTitle,
+    `- **${digestModeLabel}**: \`${mode}\``,
+    `- **${digestAcceptedAtLabel}**: ${acceptedAt || "-"}`,
     "",
-    `#### ${isEn ? "Plan Text" : "计划文本"}`,
+    `#### ${digestPlanTextLabel}`,
     "```text",
     safeCodeBlock(planText || "-"),
     "```",
     "",
-    `#### ${isEn ? "Summary" : "汇总"}`,
+    `#### ${digestSummaryLabel}`,
     "| total | completed | inProgress | pending |",
     "| --- | --- | --- | --- |",
     `| ${Number(summary?.total || 0)} | ${Number(summary?.completed || 0)} | ${Number(summary?.inProgress || 0)} | ${Number(summary?.pending || 0)} |`,
     "",
-    `#### ${isEn ? "Semantic Validation" : "语义验收"}`,
+    `#### ${digestSemanticLabel}`,
     "```text",
     safeCodeBlock(semanticValidationRaw || "-"),
     "```",
     "",
-    `#### ${isEn ? "Summary Detail Paths" : "小结明细路径"}`,
+    `#### ${digestDetailPathsLabel}`,
     ...(summaryDetailPaths.length
       ? summaryDetailPaths.map((item) => `- ${String(item || "").trim()}`)
-      : [isEn ? "-" : "（无）"]),
+      : [digestNoDetailPaths]),
   ];
   return lines.join("\n").trim();
 }

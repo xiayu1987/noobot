@@ -4,10 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function resolveWorkflowRuntimeFromContext(ctx = {}) {
+export function resolveWorkflowAgentContext(ctx = {}) {
   const candidates = [
-    ctx?.agentContext?.execution?.controllers?.runtime,
-    ctx?.agentContext?.runtime,
+    ctx?.agentContext,
+    ctx?.runtimeAgentContext,
+  ];
+  return candidates.find((item) => item && typeof item === "object") || null;
+}
+
+export function resolveWorkflowRuntimeFromContext(ctx = {}) {
+  const agentContext = resolveWorkflowAgentContext(ctx);
+  const candidates = [
+    agentContext?.execution?.controllers?.runtime,
+    agentContext?.runtime,
     ctx?.execution?.controllers?.runtime,
     ctx?.runtime,
   ];
@@ -54,13 +63,14 @@ export function throwIfWorkflowAborted(ctx = {}) {
 }
 
 export function resolveWorkflowParentRunConfig(ctx = {}) {
+  const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const candidates = [
     ctx?.runConfig,
     runtime?.runConfig,
-    ctx?.agentContext?.runConfig,
-    ctx?.agentContext?.payload?.runtime?.runConfig,
-    ctx?.agentContext?.execution?.controllers?.runtime?.runConfig,
+    agentContext?.runConfig,
+    agentContext?.payload?.runtime?.runConfig,
+    agentContext?.execution?.controllers?.runtime?.runConfig,
   ];
   return candidates.find((item) => item && typeof item === "object" && !Array.isArray(item)) || {};
 }

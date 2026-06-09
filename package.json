@@ -23,7 +23,13 @@
     "dev:client": "npm run -w client/noobot-chat dev",
     "test": "npm run -ws --if-present test",
     "check:i18n-imports": "npm run -ws --if-present check:i18n-imports",
+    "check:plugin-frontend-i18n": "node ./scripts/check-plugin-frontend-i18n.mjs",
     "check:semantic-transfer-compat": "node ./scripts/check-semantic-transfer-compat.mjs",
-    "check:parent-sessionid-unification": "node ./scripts/check-parent-sessionid-unification.mjs"
+    "check:parent-sessionid-unification": "node ./scripts/check-parent-sessionid-unification.mjs",
+    "check:plugin-harness-src-i18n": "node ./scripts/check-plugin-harness-src-i18n.mjs",
+    "check:plugin-harness-i18n-keyset": "node ./scripts/check-plugin-harness-i18n-keyset.mjs",
+    "check:plugin-workflow-src-i18n": "node ./scripts/check-plugin-workflow-src-i18n.mjs",
+    "check:plugin-workflow-i18n-keyset": "node ./scripts/check-plugin-workflow-i18n-keyset.mjs",
+    "check:plugin-i18n": "npm run -s check:plugin-harness-src-i18n && npm run -s check:plugin-harness-i18n-keyset && npm run -s check:plugin-workflow-src-i18n && npm run -s check:plugin-workflow-i18n-keyset && npm run -s check:plugin-frontend-i18n"
   }
 }

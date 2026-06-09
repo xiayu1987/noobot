@@ -6,7 +6,7 @@
 
 export { CAPABILITY_DOMAIN, LOCALE, PLAN_REFINEMENT_TOOL_NAME, PROMPT_ENVELOPE } from "../shared/constants.js";
 
-export { getDefaultTaskOwner, getTaskTemplate, translateI18nText } from "../shared/i18n.js";
+export { getDefaultTaskOwner, getTaskTemplate, HARNESS_I18N_KEYSET, translateI18nText } from "../shared/i18n.js";
 
 export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 

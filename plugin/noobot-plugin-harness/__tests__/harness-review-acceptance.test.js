@@ -64,6 +64,13 @@ test("harness review generates review report at final output", async () => {
     agentContext.payload.harness.logs.review.some((item = {}) => item?.event === "workflow_execution_result"),
     true,
   );
+  const reviewDecision = agentContext.payload.harness.logs.review.find(
+    (item = {}) => item?.event === "workflow_priority_decision",
+  );
+  assert.match(
+    String(reviewDecision?.detail?.chosenReasonLabel || ""),
+    /review 报告|review report/i,
+  );
 });
 
 test("harness before_final_output capability runtime runs once", async () => {

@@ -159,7 +159,7 @@ export async function invokeWithReasoningRetry({
     }
     const reasoningMessage = [
       "<!-- harness-capability-reasoning -->",
-      "以下是上次模型返回的思考内容，仅供参考，不代表最终答案：",
+      "\u4ee5\u4e0b\u662f\u4e0a\u6b21\u6a21\u578b\u8fd4\u56de\u7684\u601d\u8003\u5185\u5bb9\uff0c\u4ec5\u4f9b\u53c2\u8003\uff0c\u4e0d\u4ee3\u8868\u6700\u7ec8\u7b54\u6848\uff1a",
       reasoningText,
     ].join("\n");
     runtimeMessages = [...runtimeMessages, { role: "system", content: reasoningMessage }];

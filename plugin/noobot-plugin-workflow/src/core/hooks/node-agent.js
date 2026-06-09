@@ -5,7 +5,7 @@
  */
 
 import { WORKFLOW_ACTION, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
-import { resolveWorkflowLocaleFromContext, tWorkflow } from "../i18n.js";
+import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
   getWorkflowTransferPayloadFromResult,
   mergeAttachmentMetas,
@@ -41,9 +41,9 @@ export function buildWorkflowInputAttachmentSystemMessage({
   const lines = metas
     .map((item = {}, index) => {
       const label = String(
-        item?.name ||
+          item?.name ||
           item?.fileName ||
-          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+          tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
       const attachmentId = String(item?.attachmentId || item?.id || "").trim();
       const path = resolveAttachmentDisplayPath(item, ctx);
@@ -53,14 +53,14 @@ export function buildWorkflowInputAttachmentSystemMessage({
     .filter(Boolean);
   if (!lines.length) return "";
   const nodeName = String(
-    semanticNode?.name || semanticNode?.id || tWorkflow(locale, "workflowCurrentNodeFallback"),
+    semanticNode?.name || semanticNode?.id || tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
   ).trim();
   return [
-    tWorkflow(locale, "workflowUserRawAttachmentsTitle"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.USER_RAW_ATTACHMENTS_TITLE),
     "",
-    tWorkflow(locale, "workflowCurrentNodeLine", { name: nodeName }),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_LINE, { name: nodeName }),
     "",
-    tWorkflow(locale, "workflowInputAttachmentsSystemHint"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_SYSTEM_HINT),
     "",
     ...lines,
   ].join("\n");
@@ -158,7 +158,9 @@ export function buildWorkflowUpstreamAttachmentSystemMessage({
   const failureLines = [];
   for (const result of normalizedResults) {
     const nodeLabel = String(
-      result?.nodeName || result?.nodeId || tWorkflow(locale, "workflowUpstreamNodeFallback"),
+      result?.nodeName ||
+      result?.nodeId ||
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_NODE_FALLBACK),
     ).trim();
     const nodeTask = String(result?.nodeTask || result?.task || "").trim();
     if (
@@ -166,16 +168,17 @@ export function buildWorkflowUpstreamAttachmentSystemMessage({
       (result?.stepFailure && typeof result.stepFailure === "object")
     ) {
       const failureMessage = String(
-        result?.stepFailure?.message || tWorkflow(locale, "workflowSubAgentFailureFallback"),
+        result?.stepFailure?.message ||
+        tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.SUB_AGENT_FAILURE_FALLBACK),
       ).trim();
       failureLines.push(
         nodeTask
-          ? tWorkflow(locale, "workflowFailureLineWithTask", {
+          ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITH_TASK, {
               nodeLabel,
               task: nodeTask,
               message: failureMessage,
             })
-          : tWorkflow(locale, "workflowFailureLineWithoutTask", {
+          : tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITHOUT_TASK, {
               nodeLabel,
               message: failureMessage,
             }),
@@ -194,7 +197,7 @@ export function buildWorkflowUpstreamAttachmentSystemMessage({
       const attachmentLabel = String(
         file?.name ||
           meta?.name ||
-          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+          tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
       const path = resolveWorkflowTransferFileDisplayPath(file, ctx);
       if (!path) continue;
@@ -203,19 +206,21 @@ export function buildWorkflowUpstreamAttachmentSystemMessage({
   }
   if (!lines.length && !failureLines.length) return "";
   const pendingName = String(
-    pendingStep?.nodeName || pendingStep?.nodeId || tWorkflow(locale, "workflowCurrentNodeFallback"),
+    pendingStep?.nodeName ||
+    pendingStep?.nodeId ||
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
   ).trim();
   return [
-    tWorkflow(locale, "workflowUpstreamAttachmentsTitle"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_ATTACHMENTS_TITLE),
     "",
-    tWorkflow(locale, "workflowCurrentNodeLine", { name: pendingName }),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_LINE, { name: pendingName }),
     "",
-    tWorkflow(locale, "workflowUpstreamHint"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_HINT),
     "",
-    failureLines.length ? tWorkflow(locale, "workflowUpstreamFailureTitle") : "",
+    failureLines.length ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_FAILURE_TITLE) : "",
     ...failureLines,
     failureLines.length && lines.length ? "" : "",
-    lines.length ? tWorkflow(locale, "workflowUpstreamResultTitle") : "",
+    lines.length ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_RESULT_TITLE) : "",
     ...lines,
   ].join("\n");
 }
@@ -231,10 +236,12 @@ export function buildWorkflowNodeInstruction(step = {}) {
   ).trim();
   if (taskText) return taskText;
   const nodeName = String(step?.nodeName || "").trim();
-  if (nodeName) return tWorkflow(locale, "workflowNodeInstructionByName", { name: nodeName });
+  if (nodeName) {
+    return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_NAME, { name: nodeName });
+  }
   const nodeId = String(step?.nodeId || "").trim();
-  if (nodeId) return tWorkflow(locale, "workflowNodeInstructionById", { id: nodeId });
-  return tWorkflow(locale, "workflowNodeInstructionDefault");
+  if (nodeId) return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_ID, { id: nodeId });
+  return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_DEFAULT);
 }
 
 export function resolveNodeTaskForPendingStep({ semantic = {}, pendingStep = {} } = {}) {

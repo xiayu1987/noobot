@@ -4,14 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "./constants.js";
-import { getDefaultSubtaskOwners, getDefaultTaskOwner, getTaskTemplate } from "./i18n.js";
+import {
+  HARNESS_I18N_KEYSET,
+  getDefaultSubtaskOwners,
+  getDefaultTaskOwner,
+  getTaskTemplate,
+  translateI18nText,
+} from "./i18n.js";
 import { extractJsonObjectFromText, sanitizeJsonCandidate } from "./json-repair-utils.js";
 export { extractJsonObjectFromText, sanitizeJsonCandidate } from "./json-repair-utils.js";
 
 const WRAPPED_PAYLOAD_MAX_DEPTH = 3;
 const WRAPPED_PAYLOAD_MAX_NODES = 100;
 const WRAPPED_PAYLOAD_MAX_STRING_LENGTH = 200_000;
-const CHECKLIST_HINT_RE = /taskchecklist|refinementchecklist|checklist|\"task\"|\"index\"|步骤|任务/i;
+const CHECKLIST_HINT_RE = /taskchecklist|refinementchecklist|checklist|\"task\"|\"index\"|\u6b65\u9aa4|\u4efb\u52a1/i;
 const STRIP_FENCED_BLOCK_RE = /```[\s\S]*?```/g;
 
 function normalizeFilePlan(files = null) {
@@ -23,9 +29,9 @@ function normalizeFilePlan(files = null) {
     return [];
   };
   return {
-    create: readArray("create", "created", "add", "新增", "new"),
-    modify: readArray("modify", "modified", "change", "update", "修改"),
-    delete: readArray("delete", "deleted", "remove", "删除"),
+    create: readArray("create", "created", "add", "\u65b0\u589e", "new"),
+    modify: readArray("modify", "modified", "change", "update", "\u4fee\u6539"),
+    delete: readArray("delete", "deleted", "remove", "\u5220\u9664"),
   };
 }
 
@@ -39,8 +45,9 @@ export function normalizeChecklistItem(item = {}, index = 0, locale = LOCALE.ZH_
   const resolvedMainStepIndex = hasMainStepCandidate ? mainStepCandidate : normalizedIndex;
   const isMainStep =
     source.isMainStep === true || !hasMainStepCandidate || resolvedMainStepIndex === normalizedIndex;
-  const fallbackTaskName =
-    locale === LOCALE.EN_US ? `Task ${index + 1}` : `任务${index + 1}`;
+  const fallbackTaskName = translateI18nText(locale, HARNESS_I18N_KEYSET.CHECKLIST.TASK_DEFAULT_NAME_TEMPLATE, {
+    index: index + 1,
+  });
   return {
     index: normalizedIndex,
     mainStepIndex: Number(resolvedMainStepIndex),
@@ -180,7 +187,7 @@ export function parseChecklistFromPlainText(text = "", locale = LOCALE.ZH_CN) {
   for (const line of lines) {
     const numbered = line.match(/^\s*(\d+)\s*[\.、\)\-:：]\s*(.+)$/);
     const checkbox = line.match(/^\s*[-*+]\s*(?:\[[ xX]\]\s*)?(.+)$/);
-    const step = line.match(/^\s*第?\s*(\d+)\s*步\s*[:：]?\s*(.+)$/);
+    const step = line.match(/^\s*\u7b2c?\s*(\d+)\s*\u6b65\s*[:\uff1a]?\s*(.+)$/);
     const detail = (numbered?.[2] || step?.[2] || checkbox?.[1] || "").trim();
     if (!detail) continue;
     matched.push({
@@ -193,7 +200,11 @@ export function parseChecklistFromPlainText(text = "", locale = LOCALE.ZH_CN) {
   const owner = getDefaultTaskOwner(locale);
   return matched.map((item, index) => ({
     index: Number.isFinite(Number(item.index)) ? Number(item.index) : index + 1,
-    task: String(item.task || "").trim() || `${locale === LOCALE.EN_US ? "Task" : "任务"} ${index + 1}`,
+    task:
+      String(item.task || "").trim() ||
+      translateI18nText(locale, HARNESS_I18N_KEYSET.CHECKLIST.TASK_DEFAULT_NAME_TEMPLATE, {
+        index: index + 1,
+      }),
     owner,
     subOwners: [],
   }));

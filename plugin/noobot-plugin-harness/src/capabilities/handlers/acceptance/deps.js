@@ -14,7 +14,7 @@ export {
   TASK_ACCEPTANCE_TOOL_NAME,
 } from "../shared/constants.js";
 
-export { getDefaultTaskOwner, translateI18nText } from "../shared/i18n.js";
+export { getDefaultTaskOwner, HARNESS_I18N_KEYSET, translateI18nText } from "../shared/i18n.js";
 
 export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 

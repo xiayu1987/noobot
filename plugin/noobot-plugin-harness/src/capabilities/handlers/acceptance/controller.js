@@ -12,6 +12,7 @@ import {
   disableBlockedCalls,
   disableBlockedToolsInRegistry,
   ensureHarnessBucket,
+  translateI18nText,
 } from "./deps.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
@@ -40,6 +41,43 @@ import { buildHarnessInjectedMessage } from "../shared/message/injected-message-
 
 const ACCEPTANCE_DECISION = WORKFLOW_PARAMS.acceptance.decisions;
 const ACCEPTANCE_REQUESTED_ACTION = ACCEPTANCE_DECISION.requestedAction;
+const ACCEPTANCE_REASON_LABEL_KEY = Object.freeze({
+  [ACCEPTANCE_DECISION.reason.overflowForceAcceptance]: "acceptanceReasonOverflowForceAcceptance",
+  [ACCEPTANCE_DECISION.reason.phaseAcceptanceBlocked]: "acceptanceReasonPhaseAcceptanceBlocked",
+  [ACCEPTANCE_DECISION.reason.phaseAcceptancePending]: "acceptanceReasonPhaseAcceptancePending",
+  [ACCEPTANCE_DECISION.reason.acceptanceSemanticValidationPending]:
+    "acceptanceReasonSemanticValidationPending",
+  [ACCEPTANCE_DECISION.reason.toolGuard]: "acceptanceReasonToolGuard",
+  [ACCEPTANCE_DECISION.reason.beforeTurnSetup]: "acceptanceReasonBeforeTurnSetup",
+  [ACCEPTANCE_DECISION.reason.finalOutputOverflowFallback]:
+    "acceptanceReasonFinalOutputOverflowFallback",
+  [ACCEPTANCE_DECISION.reason.finalOutputAcceptanceFallback]:
+    "acceptanceReasonFinalOutputAcceptanceFallback",
+  [ACCEPTANCE_DECISION.reason.afterLlmCapture]: "acceptanceReasonAfterLlmCapture",
+  [ACCEPTANCE_DECISION.reason.idle]: "acceptanceReasonIdle",
+});
+const ACCEPTANCE_BLOCKED_REASON_LABEL_KEY = Object.freeze({
+  phase_acceptance_blocked_by_higher_priority_pending:
+    "acceptanceBlockedPhaseAcceptanceHigherPriority",
+  acceptance_semantic_validation_deferred_by_primary_choice:
+    "acceptanceBlockedSemanticValidationDeferred",
+});
+
+function resolveAcceptanceLocale(state = {}) {
+  return String(state?.locale || "").trim() || "zh-CN";
+}
+
+function resolveAcceptanceReasonLabel(locale = "zh-CN", reason = "") {
+  const key = ACCEPTANCE_REASON_LABEL_KEY[String(reason || "").trim()];
+  if (!key) return String(reason || "").trim();
+  return translateI18nText(locale, key) || String(reason || "").trim();
+}
+
+function resolveAcceptanceBlockedReasonLabel(locale = "zh-CN", reason = "") {
+  const key = ACCEPTANCE_BLOCKED_REASON_LABEL_KEY[String(reason || "").trim()];
+  if (!key) return String(reason || "").trim();
+  return translateI18nText(locale, key) || String(reason || "").trim();
+}
 
 function hasHigherPriorityPendingForPhaseAcceptance(state = {}) {
   return hasAcceptancePhaseBlockers(state);
@@ -153,14 +191,19 @@ function resolveAcceptanceDecision({
     chosenReason = ACCEPTANCE_DECISION.reason.afterLlmCapture;
   }
   const planUpdateSnapshot = resolvePendingPlanUpdateSnapshot(state);
+  const locale = resolveAcceptanceLocale(state);
   return {
     category,
     chosenAction,
     chosenReason,
+    chosenReasonLabel: resolveAcceptanceReasonLabel(locale, chosenReason),
     candidateActions,
     deferredActions: candidateActions.filter((item) => item !== chosenAction),
     blockedActions,
     blockedReasons,
+    blockedReasonLabels: blockedReasons.map((reason) =>
+      resolveAcceptanceBlockedReasonLabel(locale, reason),
+    ),
     pending: {
       summary: {
         active: pending.summary === true,
@@ -269,10 +312,12 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
       category: decision.category,
       chosenAction: decision.chosenAction,
       chosenReason: decision.chosenReason,
+      chosenReasonLabel: decision.chosenReasonLabel,
       candidateActions: decision.candidateActions,
       deferredActions: decision.deferredActions,
       blockedActions: decision.blockedActions,
       blockedReasons: decision.blockedReasons,
+      blockedReasonLabels: decision.blockedReasonLabels,
       pending: decision.pending,
     }),
     execute: async () => {

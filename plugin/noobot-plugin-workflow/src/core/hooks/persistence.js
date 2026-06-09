@@ -15,7 +15,7 @@ import {
   resolveWorkflowTransferFilesFromPayload,
 } from "./attachments.js";
 import { resolveWorkflowRuntimeFromContext } from "./runtime.js";
-import { resolveWorkflowLocaleFromContext, tWorkflow } from "../i18n.js";
+import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 
 export function ensureTurnMessages(agentResult = {}) {
   const turnMessages = Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : [];
@@ -60,7 +60,7 @@ export function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = []
   const lines = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
     .map((item = {}, index) => {
       const label = String(
-        item?.name || tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+        item?.name || tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
       const path = resolveAttachmentDisplayPath(item, ctx);
       if (!path) return "";
@@ -68,7 +68,7 @@ export function buildWorkflowAttachmentPathBlockWithContext(attachmentMetas = []
     })
     .filter(Boolean);
   if (!lines.length) return "";
-  return ["", tWorkflow(locale, "workflowNodeResultAttachmentTitle"), "", ...lines].join("\n");
+  return ["", tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_RESULT_ATTACHMENT_TITLE), "", ...lines].join("\n");
 }
 
 export function buildWorkflowTransferPathBlockWithContext(workflowPayload = null, ctx = {}) {
@@ -81,9 +81,9 @@ export function buildWorkflowTransferPathBlockWithContext(workflowPayload = null
     .map((item = {}, index) => {
       const meta = item?.attachmentMeta || {};
       const label = String(
-        item?.name ||
+          item?.name ||
           meta?.name ||
-          tWorkflow(locale, "workflowAttachmentDefaultLabel", { index: index + 1 }),
+          tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
       const path = resolveWorkflowTransferFileDisplayPath(item, ctx);
       if (!path) return "";
@@ -91,7 +91,7 @@ export function buildWorkflowTransferPathBlockWithContext(workflowPayload = null
     })
     .filter(Boolean);
   if (!lines.length) return "";
-  return ["", tWorkflow(locale, "workflowNodeResultAttachmentTitle"), "", ...lines].join("\n");
+  return ["", tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_RESULT_ATTACHMENT_TITLE), "", ...lines].join("\n");
 }
 
 export function truncateWorkflowResultText(text = "", maxLength = 1800) {
@@ -114,7 +114,7 @@ export function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null)
     : [];
   for (const item of nodeAgentRuns) {
     if (!item || typeof item !== "object") continue;
-    // 子 agent 的执行消息/结果正文不落到主 session，只保留附件元信息与会话定位信息。
+    // Keep sub-agent execution body out of the parent session; preserve only attachment meta and session linkage.
     delete item.nodeResultText;
   }
   return payload;
@@ -150,20 +150,20 @@ export async function persistWorkflowNodeResultAttachment({
     .filter(Boolean)
     .join("-");
   const body = [
-    tWorkflow(locale, "workflowNodeResultTitle"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_RESULT_TITLE),
     "",
-    tWorkflow(locale, "workflowNodeLine", {
-      name: nodeName || tWorkflow(locale, "workflowNodeUnnamedFallback"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_LINE, {
+      name: nodeName || tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_UNNAMED_FALLBACK),
     }),
-    tWorkflow(locale, "workflowNodeIdLine", { id: nodeId || "-" }),
-    tWorkflow(locale, "workflowSubSessionLine", {
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.NODE_ID_LINE, { id: nodeId || "-" }),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.SUB_SESSION_LINE, {
       id: String(subSession?.sessionId || "").trim() || "-",
     }),
-    tWorkflow(locale, "workflowDialogLine", {
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.DIALOG_LINE, {
       id: String(subSession?.dialogProcessId || "").trim() || "-",
     }),
     "",
-    tWorkflow(locale, "workflowFinalOutputTitle"),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.PERSISTENCE.FINAL_OUTPUT_TITLE),
     "",
     cleanOutput,
     "",

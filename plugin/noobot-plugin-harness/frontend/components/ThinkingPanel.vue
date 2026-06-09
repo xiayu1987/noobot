@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useLocale } from "../../../../client/noobot-chat/src/shared/i18n/useLocale";
+import { useHarnessLocale } from "../i18n";
 import { isHarnessInjectedMessage } from "../../../../client/noobot-chat/src/composables/infra/messageModel";
 import {
   BaseEmptyHint,
@@ -27,7 +27,7 @@ const injectedMessages = computed(() => getInjectedMessagesForMessage(props.mess
 const hasThinking = computed(
   () => hasThinkingLogs(props.messageItem) || injectedMessages.value.length > 0,
 );
-const { translate } = useLocale();
+const { translate } = useHarnessLocale();
 const nowTick = ref(Date.now());
 const detailExpansionTick = ref(0);
 let timer = null;
@@ -105,13 +105,13 @@ function buildToolCallText(toolCall = {}, fallbackIndex = 0) {
 
 function buildToolResultText(messageItem = {}) {
   const contentText = String(messageItem?.content || "").trim();
-  if (!contentText) return "tool_result";
+  if (!contentText) return translate("message.toolResultFallback");
   try {
     const parsed = JSON.parse(contentText);
     const toolName = String(parsed?.toolName || parsed?.name || "").trim();
     const status = String(parsed?.status || "").trim();
     const okText = typeof parsed?.ok === "boolean" ? `ok=${parsed.ok}` : "";
-    return [toolName || "tool_result", status, okText].filter(Boolean).join(" ");
+    return [toolName || translate("message.toolResultFallback"), status, okText].filter(Boolean).join(" ");
   } catch {
     const shortText = contentText.length > 180 ? `${contentText.slice(0, 180)}...` : contentText;
     return shortText;
@@ -177,7 +177,7 @@ function getInjectedMessageCount() {
 
 function formatInjectedMessageTitle(messageItem = {}, messageIndex = 0) {
   const timeText = String(messageItem?.ts || "").trim();
-  const sourceText = String(messageItem?.injectedBy || "harness-plugin").trim();
+  const sourceText = String(messageItem?.injectedBy || translate("message.injectedSourceHarness")).trim();
   return `${messageIndex + 1}. ${sourceText}${timeText ? ` · ${timeText}` : ""}`;
 }
 
@@ -186,9 +186,9 @@ function formatSessionGroupLabel(
   depth = 0,
   dialogProcessId = "",
 ) {
-  const shortSessionId = String(sessionId || "").slice(0, 8) || "unknown";
+  const shortSessionId = String(sessionId || "").slice(0, 8) || translate("message.unknownShort");
   const shortDialogProcessId =
-    String(dialogProcessId || "").slice(0, 8) || "unknown";
+    String(dialogProcessId || "").slice(0, 8) || translate("message.unknownShort");
   const levelText = translate("message.depthLabel", { depth: Math.max(1, Number(depth || 1)) });
   if (Number(depth || 0) <= 1) {
     return translate("message.mainTaskGroup", {

@@ -6,7 +6,7 @@
 
 export { CAPABILITY_DOMAIN, LOCALE } from "../shared/constants.js";
 
-export { translateI18nText } from "../shared/i18n.js";
+export { HARNESS_I18N_KEYSET, translateI18nText } from "../shared/i18n.js";
 
 export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 

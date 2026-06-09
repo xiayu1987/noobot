@@ -9,6 +9,7 @@ import { ElMessage } from "element-plus";
 import { getWorkflowSessionDetailApi } from "../../../../client/noobot-chat/src/services/api/chatApi";
 import { applyCompletedToolLogsToMessages } from "../../../../client/noobot-chat/src/composables/infra/sessionToolLogs";
 import { buildViewMessage, foldConversationMessages } from "../../../../client/noobot-chat/src/composables/infra/messageModel";
+import { useWorkflowLocale } from "../i18n";
 import {
   BaseEmptyHint,
   BaseMessageErrorAlert,
@@ -25,6 +26,7 @@ const props = defineProps({
   formatFileSize: { type: Function, default: (value = 0) => `${Number(value || 0)} B` },
   isImageMime: { type: Function, default: (mimeType = "") => String(mimeType || "").startsWith("image/") },
 });
+const { translate } = useWorkflowLocale();
 
 const viewerVisible = ref(false);
 const viewerLoading = ref(false);
@@ -505,7 +507,7 @@ function renderableMessageContent(messageItem = {}) {
     const toolCallsPreview = buildToolCallsPreview(messageItem);
     if (toolCallsPreview) return `\`\`\`json\n${toolCallsPreview}\n\`\`\``;
   }
-  return "（空）";
+  return translate("workflow.empty");
 }
 
 function buildWorkflowDrawerRoute(nodeItem = {}, patch = {}) {
@@ -618,7 +620,7 @@ async function openNodeSession(nodeItem = {}, options = {}) {
   selectedGraphDialogId.value = String(nodeItem?.dialogId || "").trim();
   const { dialogId, rootSessionId } = buildWorkflowDrawerRoute(nodeItem);
   if (!props.userId || !rootSessionId || !dialogId) {
-    ElMessage.warning("工作流节点会话标识缺失");
+    ElMessage.warning(translate("workflow.nodeSessionMissing"));
     return;
   }
   viewerVisible.value = true;
@@ -641,13 +643,13 @@ async function openNodeSession(nodeItem = {}, options = {}) {
     );
     const payload = await response.json();
     if (!payload?.ok) {
-      throw new Error(String(payload?.error || "读取节点会话失败"));
+      throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
     }
     const session = payload?.workflowSession?.session || {};
     selectedNodeSessionId.value = String(session?.sessionId || "").trim();
     selectedNodeMessages.value = Array.isArray(session?.messages) ? session.messages : [];
   } catch (error) {
-    viewerError.value = String(error?.message || error || "读取节点会话失败");
+    viewerError.value = String(error?.message || error || translate("workflow.readNodeSessionFailed"));
   } finally {
     viewerLoading.value = false;
   }
@@ -700,9 +702,9 @@ watch(
   <div class="workflow-card">
     <div class="workflow-card-header">
       <div>
-        <div class="workflow-card-title">工作流规划模型输出</div>
+        <div class="workflow-card-title">{{ translate("workflow.planningOutputTitle") }}</div>
         <div class="workflow-card-subtitle">
-          {{ semanticPreviewLineCount }} 行
+          {{ translate("workflow.lineCount", { count: semanticPreviewLineCount }) }}
         </div>
       </div>
       <button
@@ -711,7 +713,7 @@ watch(
         class="workflow-preview-toggle"
         @click="semanticPreviewExpanded = !semanticPreviewExpanded"
       >
-        {{ semanticPreviewExpanded ? "收起" : "展开" }}
+        {{ translate(semanticPreviewExpanded ? "workflow.collapse" : "workflow.expand") }}
       </button>
     </div>
     <div
@@ -720,11 +722,11 @@ watch(
         'is-collapsed': semanticPreviewCollapsible && !semanticPreviewExpanded,
       }"
     >
-      <pre class="workflow-card-preview">{{ semanticPreview || "（空）" }}</pre>
+      <pre class="workflow-card-preview">{{ semanticPreview || translate("workflow.empty") }}</pre>
     </div>
 
     <div v-if="flowNodes.length" class="workflow-node-list">
-      <div class="workflow-node-title">工作流节点（组件化流程）</div>
+      <div class="workflow-node-title">{{ translate("workflow.componentizedNodes") }}</div>
       <WorkflowCanvasGraph
         :nodes="flowNodes"
         :flowtos="semanticFlowtos"
@@ -736,7 +738,7 @@ watch(
     <BaseEmptyHint
       v-else
       class="workflow-node-empty"
-      text="暂无工作流节点"
+      :text="translate('workflow.noWorkflowNodes')"
     />
   </div>
 
@@ -746,7 +748,7 @@ watch(
     size="72%"
     destroy-on-close
     :append-to-body="true"
-    :title="`节点会话 ${selectedNodeSessionId || ''}`"
+    :title="translate('workflow.nodeSessionTitle', { sessionId: selectedNodeSessionId || '' })"
     modal-class="workflow-node-session-modal noobot-side-drawer-modal"
     body-class="workflow-node-session-drawer__body noobot-side-drawer__body"
     header-class="workflow-node-session-drawer__header noobot-side-drawer__header"
@@ -755,7 +757,7 @@ watch(
     <div
       v-loading="viewerLoading"
       class="workflow-node-session-content"
-      element-loading-text="正在加载节点会话..."
+      :element-loading-text="translate('workflow.loadingNodeSession')"
       element-loading-background="var(--noobot-panel-bg)"
     >
       <BaseMessageErrorAlert :error="viewerError" />
@@ -780,7 +782,7 @@ watch(
         <BaseEmptyHint
           v-if="!displayNodeMessages.length && !viewerLoading"
           class="workflow-node-empty"
-          text="暂无节点会话内容"
+          :text="translate('workflow.noNodeSessionContent')"
         />
       </template>
     </div>

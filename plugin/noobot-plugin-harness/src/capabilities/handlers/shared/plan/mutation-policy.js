@@ -16,7 +16,7 @@ function normalizeStage(stage = "") {
 export function isSyntheticMainPlanPlaceholder(content = "") {
   const text = String(content || "").trim();
   if (!text) return false;
-  return /^(主计划|main plan)\s+\d+$/i.test(text);
+  return /^(\u4e3b\u8ba1\u5212|main plan)\s+\d+$/i.test(text);
 }
 
 export function resolvePlanMutationPolicy(stage = "", overrides = {}) {
@@ -32,4 +32,3 @@ export function resolvePlanMutationPolicy(stage = "", overrides = {}) {
     ...(overrides && typeof overrides === "object" ? overrides : {}),
   };
 }
-

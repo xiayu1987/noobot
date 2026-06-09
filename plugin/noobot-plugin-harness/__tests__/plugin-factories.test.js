@@ -10,6 +10,7 @@ import {
   createPluginRuntimeContextFactory,
   assertHookManager,
 } from "../src/core/context.js";
+import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "../src/core/error-messages.js";
 import { createRegisterNoobotPlugin } from "../src/core/plugin.js";
 import { createHarnessPluginFactory } from "../src/core/plugin.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "../src/core/constants.js";
@@ -67,6 +68,26 @@ test("createPluginRuntimeContextFactory wires injected deps and normalizes plann
 test("assertHookManager throws on invalid manager", () => {
   assert.throws(() => assertHookManager(null), /hookManager with \.on\(point, handler, options\) is required/);
   assert.doesNotThrow(() => assertHookManager({ on() {} }));
+});
+
+test("assertHookManager supports zh-CN localized error", () => {
+  assert.throws(
+    () => assertHookManager(null, { locale: "zh-CN" }),
+    /需要提供支持 \.on\(point, handler, options\) 的 hookManager/,
+  );
+});
+
+test("formatHarnessCoreError supports localized cleanup warning", () => {
+  const zhText = formatHarnessCoreError(HARNESS_CORE_ERROR.CLEANUP_OLD_RUNS_FAILED, {
+    locale: "zh-CN",
+    params: { message: "boom" },
+  });
+  const enText = formatHarnessCoreError(HARNESS_CORE_ERROR.CLEANUP_OLD_RUNS_FAILED, {
+    locale: "en-US",
+    params: { message: "boom" },
+  });
+  assert.match(zhText, /清理历史运行目录失败/);
+  assert.match(enText, /cleanupOldRuns failed during plugin registration/);
 });
 
 test("createRegisterNoobotPlugin returns early when disabled", () => {

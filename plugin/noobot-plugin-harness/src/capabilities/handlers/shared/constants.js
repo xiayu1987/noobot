@@ -4,6 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import {
+  DEFAULT_SUBTASK_OWNERS as HARNESS_DEFAULT_SUBTASK_OWNERS,
+  DEFAULT_TASK_OWNER as HARNESS_DEFAULT_TASK_OWNER,
+  DEFAULT_TASK_TEMPLATE as HARNESS_DEFAULT_TASK_TEMPLATE,
+  I18N_TEXT as HARNESS_I18N_TEXT,
+  LOCALE as HARNESS_LOCALE,
+  PROMPT_JSON_FORMAT_EXAMPLES as HARNESS_PROMPT_JSON_FORMAT_EXAMPLES,
+} from "../../../i18n.js";
 
 export const FAILURE_THRESHOLD = Object.freeze({
   CONSECUTIVE: WORKFLOW_PARAMS.guidance.failureThreshold.consecutive,
@@ -21,35 +29,13 @@ export const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
     WORKFLOW_PARAMS.planning.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
 });
 
-export const LOCALE = Object.freeze({
-  ZH_CN: "zh-CN",
-  EN_US: "en-US",
-});
+export const LOCALE = HARNESS_LOCALE;
 
-export const DEFAULT_TASK_OWNER = Object.freeze({
-  [LOCALE.ZH_CN]: "primary_task_owner",
-  [LOCALE.EN_US]: "primary_task_owner",
-});
+export const DEFAULT_TASK_OWNER = HARNESS_DEFAULT_TASK_OWNER;
 
-export const DEFAULT_SUBTASK_OWNERS = Object.freeze({
-  [LOCALE.ZH_CN]: ["subtask_owner_alpha", "subtask_owner_beta"],
-  [LOCALE.EN_US]: ["subtask_owner_alpha", "subtask_owner_beta"],
-});
+export const DEFAULT_SUBTASK_OWNERS = HARNESS_DEFAULT_SUBTASK_OWNERS;
 
-export const DEFAULT_TASK_TEMPLATE = Object.freeze({
-  [LOCALE.ZH_CN]: Object.freeze({
-    PARSE_ATTACHMENT: "解析附件",
-    EXECUTE_CORE: "执行核心任务",
-    START_SUBTASK: "开启子任务",
-    WAIT_SUBTASK_RESULT: "等待子任务结果",
-  }),
-  [LOCALE.EN_US]: Object.freeze({
-    PARSE_ATTACHMENT: "Parse attachments",
-    EXECUTE_CORE: "Execute core task",
-    START_SUBTASK: "Start subtasks",
-    WAIT_SUBTASK_RESULT: "Wait for subtask results",
-  }),
-});
+export const DEFAULT_TASK_TEMPLATE = HARNESS_DEFAULT_TASK_TEMPLATE;
 
 export const ACCEPTANCE_MODE = Object.freeze({
   ACTIVE: "active",
@@ -92,73 +78,9 @@ export const HARNESS_INJECTED_MESSAGE_FLAG_VALUE = true;
 export const HARNESS_INJECTED_MESSAGE_BY_FIELD = "injectedBy";
 export const HARNESS_INJECTED_MESSAGE_BY_VALUE = "harness-plugin";
 
-export const PROMPT_JSON_FORMAT_EXAMPLES = Object.freeze({
-  planning_main:
-    '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
-  planning_revision:
-    '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
-  planning_refinement:
-    '{"stage":"refinement","totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"refinementChecklist":[{"index":101,"mainStepIndex":1,"isMainStep":false,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',
-  acceptance_semantic_validation:
-    '{"status":"pass|warn|fail","consistent":true,"missingItems":[],"unsupportedClaims":[],"checklistCoverage":[{"index":1,"task":"...","covered":true,"evidence":"...","risk":"low"}],"suggestions":[]}',
-});
+export const PROMPT_JSON_FORMAT_EXAMPLES = HARNESS_PROMPT_JSON_FORMAT_EXAMPLES;
 
-// Prompt texts are managed in `shared/workflow/prompts.js`.
-// Keep constants.js focused on non-prompt i18n copy (tool copy + runtime labels).
-const I18N_TOOL_COPY = Object.freeze({
-  [LOCALE.ZH_CN]: Object.freeze({
-    taskAcceptanceToolDescription:
-      "请求任务验收：按 harness 插件任务清单输出验收报告；mode=active(主动) 或 forced(强行)。",
-    taskAcceptanceModeDescription: "验收模式：active(主动) 或 forced(强行)。",
-    planRefinementToolDescription: "在总计划完成后触发计划细化流程。",
-    planRefinementToolSummaryDescription: "可选的小结文本，会作为计划细化上下文。",
-    planRefinementNotReadyReason: "总计划流程尚未完成",
-    planRefinementConvergedReason: "未找到可细化的主步骤",
-    planRefinementFailedReason: "插件侧细化失败",
-  }),
-  [LOCALE.EN_US]: Object.freeze({
-    taskAcceptanceToolDescription:
-      "Request task acceptance: validate completion against the harness checklist; mode=active or forced.",
-    taskAcceptanceModeDescription: "Acceptance mode: active or forced.",
-    planRefinementToolDescription: "Trigger planning refinement flow after main plan is ready.",
-    planRefinementToolSummaryDescription: "Optional summary text used as refinement context.",
-    planRefinementNotReadyReason: "main planning flow is not completed yet",
-    planRefinementConvergedReason: "no refinable main step found",
-    planRefinementFailedReason: "plugin-side refinement failed",
-  }),
-});
-
-const I18N_RUNTIME_LABELS = Object.freeze({
-  [LOCALE.ZH_CN]: Object.freeze({
-    forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
-    separateModelRelayPrefix: "[来自harness外部模型输出/{purpose}]",
-    reviewHeader: "[Harness-Review]",
-    harnessPolicyPrompt:
-      "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
-    harnessFinalResponsePrompt:
-      "最终回复请包含：做了什么、改了哪些文件、验证情况或未验证原因、下一步建议。",
-  }),
-  [LOCALE.EN_US]: Object.freeze({
-    forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
-    separateModelRelayPrefix: "[Relay from harness external model/{purpose}]",
-    reviewHeader: "[Harness-Review]",
-    harnessPolicyPrompt:
-      "Noobot Harness reminder: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; keep the final response concise and complete.",
-    harnessFinalResponsePrompt:
-      "Final response should include: what was done, which files were changed, validation status (or why not validated), and next-step suggestions.",
-  }),
-});
-
-export const I18N_TEXT = Object.freeze({
-  [LOCALE.ZH_CN]: Object.freeze({
-    ...I18N_TOOL_COPY[LOCALE.ZH_CN],
-    ...I18N_RUNTIME_LABELS[LOCALE.ZH_CN],
-  }),
-  [LOCALE.EN_US]: Object.freeze({
-    ...I18N_TOOL_COPY[LOCALE.EN_US],
-    ...I18N_RUNTIME_LABELS[LOCALE.EN_US],
-  }),
-});
+export const I18N_TEXT = HARNESS_I18N_TEXT;
 
 export const BLOCKED_AGENT_TOOL_NAMES = new Set([
   ...WORKFLOW_PARAMS.acceptance.guards.blockedAgentToolNames,

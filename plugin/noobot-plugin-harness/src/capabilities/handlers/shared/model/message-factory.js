@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { extractRawTextContent } from "../message/utils.js";
+import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 
 function resolveCompatibleRole(message = {}) {
   const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
@@ -89,16 +90,18 @@ function resolveToolCallArguments(toolCall = {}) {
 function buildToolCallSemanticText(toolCalls = [], locale = "zh-CN") {
   const calls = Array.isArray(toolCalls) ? toolCalls : [];
   if (!calls.length) return "";
-  const normalizedLocale = String(locale || "").trim().toLowerCase();
-  const isEnglish = normalizedLocale === "en-us";
   return calls
     .map((toolCall = {}) => {
-      const name = resolveToolCallName(toolCall) || (isEnglish ? "unknown_script" : "未知脚本");
-      const args = resolveToolCallArguments(toolCall) || (isEnglish ? "none" : "无参数");
-      if (isEnglish) {
-        return `Semantic execution: run ${name} script with arguments ${args}`;
-      }
-      return `语义执行 ${name}脚本,参数${args}`;
+      const name =
+        resolveToolCallName(toolCall) ||
+        translateI18nText(locale, HARNESS_I18N_KEYSET.MESSAGE_FACTORY.TOOL_CALL_UNKNOWN_SCRIPT);
+      const args =
+        resolveToolCallArguments(toolCall) ||
+        translateI18nText(locale, HARNESS_I18N_KEYSET.MESSAGE_FACTORY.TOOL_CALL_NO_ARGUMENTS);
+      return translateI18nText(locale, HARNESS_I18N_KEYSET.MESSAGE_FACTORY.TOOL_CALL_SEMANTIC_LINE, {
+        name,
+        args,
+      });
     })
     .join("\n");
 }
