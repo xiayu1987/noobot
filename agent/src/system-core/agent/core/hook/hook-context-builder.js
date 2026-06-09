@@ -130,7 +130,10 @@ function validateHookContext(point = "", runtime = {}, context = {}) {
   ) {
     requireArray("messages");
   }
-  if (normalizedPoint === "before_tool_calls") {
+  if (
+    normalizedPoint === "before_tool_calls" ||
+    normalizedPoint === "after_tool_calls"
+  ) {
     requireArray("calls");
   }
   if (

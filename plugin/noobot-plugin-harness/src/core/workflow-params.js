@@ -38,6 +38,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
         captureBlockedForToolCallTurn: "planning_capture_blocked_for_tool_call_turn",
         defaultChecklistApplied: "planning_default_checklist_applied",
         revisionScheduledByTurnThreshold: "planning_revision_scheduled_by_turn_threshold",
+        summaryScheduledByToolBurstThreshold: "summary_scheduled_by_tool_burst_threshold",
         refinementToolInjected: "planning_refinement_tool_injected",
         refinementInvokerMissing: "planning_refinement_invoker_missing",
         refinementConvergedNoTargetMainStep: "planning_refinement_converged_no_target_main_step",

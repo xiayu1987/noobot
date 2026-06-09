@@ -49,6 +49,7 @@ export const HARNESS_HOOK_POINTS = Object.freeze({
   AFTER_LLM_CALL: "after_llm_call",
   LLM_CALL_ERROR: "llm_call_error",
   BEFORE_TOOL_CALLS: "before_tool_calls",
+  AFTER_TOOL_CALLS: "after_tool_calls",
   BEFORE_TOOL_CALL: "before_tool_call",
   AFTER_TOOL_CALL: "after_tool_call",
   TOOL_CALL_ERROR: "tool_call_error",

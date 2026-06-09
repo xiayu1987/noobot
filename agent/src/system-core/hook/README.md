@@ -86,6 +86,7 @@ Additionally, `hook_plugin_progress.data` is schema-whitelisted to:
 
 ### Tool
 - `before_tool_calls`
+- `after_tool_calls`
 - `before_tool_call`
 - `after_tool_call`
 - `tool_call_error`
@@ -105,6 +106,8 @@ Additionally, `hook_plugin_progress.data` is schema-whitelisted to:
   - `turn`, `mode`, `toolChoice`, `hasToolCalls`, `calls`, `ai`, `modelResponse`, `messages`, `maxTurns`
 - `before_tool_calls`:
   - `turn`, `toolCallCount`, `calls`
+- `after_tool_calls`:
+  - `turn`, `toolCallCount`, `calls`, `toolCallResults`, `hasTaskSummaryCall`, `hasRequestHelpCall`, `hasFinalAnswerCall`
 - `before_tool_call` / `after_tool_call` / `tool_call_error`:
   - `turn`, `toolName`, `call`, `args`, `success`, `failureReason`, `toolResultText`, `error`
 - `before_state_commit` / `after_state_commit`:
