@@ -47,6 +47,7 @@ const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
+const LLM_SUMMARY_TOOL_CALLS_THRESHOLD = LLM_SUMMARY_THRESHOLD;
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
 const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
   ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.planning.summary.overflowPolicy.enablePruneAfterSummary,
@@ -131,6 +132,31 @@ function resolveToolCallIdFromToolMessage(messageItem = {}) {
   ).trim();
 }
 
+function maybeScheduleSummaryByToolBurst(ctx = {}) {
+  const threshold = Number(LLM_SUMMARY_TOOL_CALLS_THRESHOLD);
+  if (!Number.isFinite(threshold) || threshold <= 0) return false;
+  const calls = Array.isArray(ctx?.calls) ? ctx.calls : [];
+  if (!Array.isArray(calls) || calls.length < threshold) return false;
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return false;
+  if (holder.state?.pending?.summary === true) return false;
+  const toolNames = calls.map((call) => resolveToolNameFromToolCall(call)).filter(Boolean);
+  if (toolNames.includes(TASK_SUMMARY_TOOL_NAME)) return false;
+
+  setPendingStateWithMeta(holder.state, "summary", true);
+  holder.state.flags.summaryByCharsPrompted = false;
+  appendCapabilityLog(ctx, {
+    domain: CAPABILITY_DOMAIN.PLANNING,
+    event: PLANNING_EVENTS.summaryScheduledByToolBurstThreshold,
+    detail: {
+      threshold,
+      toolCallCount: calls.length,
+      toolNames,
+    },
+  });
+  return true;
+}
+
 function setMessageSummarized(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem.summarized === true && messageItem?.lc_kwargs?.summarized === true) return false;
@@ -200,7 +226,7 @@ function discardOldestToolCallPairs(messages = [], charsThreshold = 0) {
 export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => true } = {}) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     if (
-      ["before_llm_call", "after_llm_call", "before_final_output"].includes(point) &&
+      ["before_llm_call", "after_llm_call", "after_tool_calls", "before_final_output"].includes(point) &&
       !shouldProcessPrimaryToolHooks(ctx)
     ) {
       return { capability, point, status: "active", changed: false };
@@ -477,6 +503,10 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         },
       });
       return { capability, point, status: "active", changed: lifecycle.execution.changed };
+    }
+    if (point === "after_tool_calls") {
+      const changed = maybeScheduleSummaryByToolBurst(ctx);
+      return { capability, point, status: "active", changed };
     }
     return { capability, point, status: "active", changed: false };
   };

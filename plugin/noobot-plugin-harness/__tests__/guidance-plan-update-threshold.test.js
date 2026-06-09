@@ -548,6 +548,120 @@ test("planning summary threshold by chars is independent from plan update attemp
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
 });
 
+test("planning schedules summary after a single model tool burst reaches summary threshold", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({
+    counters: { llmTurns: 1, planUpdateAttempts: 0 },
+  });
+  const calls = Array.from({ length: LLM_SUMMARY_THRESHOLD }, (_item, index) => ({
+    id: `call_${index}`,
+    name: `tool_${index}`,
+    args: {},
+  }));
+
+  await planningHandler({
+    capability: "planning",
+    point: "after_tool_calls",
+    ctx: {
+      messages: [{ role: "user", content: "继续任务" }],
+      calls,
+      agentContext,
+    },
+    meta: {},
+  });
+
+  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(agentContext.payload.harness.state.flags.summaryByCharsPrompted, false);
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some(
+      (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
+    ),
+    true,
+  );
+
+  const nextCtx = {
+    messages: [
+      { role: "assistant", content: "", tool_calls: calls },
+      ...calls.map((call) => ({
+        role: "tool",
+        tool_call_id: call.id,
+        toolName: call.name,
+        content: `{"toolName":"${call.name}","ok":true}`,
+      })),
+    ],
+    agentContext,
+  };
+  await guidanceHandler({
+    capability: "guidance",
+    point: "before_llm_call",
+    ctx: nextCtx,
+    meta: { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } },
+  });
+
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(
+    nextCtx.messages.some((msg = {}) =>
+      String(msg?.content || "").includes("harness-guidance-summary"),
+    ),
+    true,
+  );
+});
+
+test("planning does not schedule tool-burst summary when summary is already pending or task_summary is returned", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const alreadyPendingContext = createPlanningAgentContext({
+    counters: { llmTurns: LLM_SUMMARY_THRESHOLD },
+  });
+  alreadyPendingContext.payload.harness.state.pending.summary = true;
+  const burstCalls = Array.from({ length: LLM_SUMMARY_THRESHOLD }, (_item, index) => ({
+    id: `call_pending_${index}`,
+    name: `tool_${index}`,
+    args: {},
+  }));
+
+  await planningHandler({
+    capability: "planning",
+    point: "after_tool_calls",
+    ctx: {
+      messages: [{ role: "user", content: "继续任务" }],
+      calls: burstCalls,
+      agentContext: alreadyPendingContext,
+    },
+    meta: {},
+  });
+  assert.equal(
+    alreadyPendingContext.payload.harness.logs.planning.some(
+      (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
+    ),
+    false,
+  );
+
+  const taskSummaryContext = createPlanningAgentContext({
+    counters: { llmTurns: 1 },
+  });
+  await planningHandler({
+    capability: "planning",
+    point: "after_tool_calls",
+    ctx: {
+      messages: [{ role: "user", content: "继续任务" }],
+      calls: [
+        { id: "summary_call", name: "task_summary", args: {} },
+        ...burstCalls.slice(1),
+      ],
+      agentContext: taskSummaryContext,
+    },
+    meta: {},
+  });
+  assert.equal(taskSummaryContext.payload.harness.state.pending.summary, false);
+  assert.equal(
+    taskSummaryContext.payload.harness.logs.planning.some(
+      (item = {}) => item?.event === "summary_scheduled_by_tool_burst_threshold",
+    ),
+    false,
+  );
+});
+
 test("phase acceptance is deferred (not lost) when same-turn plan update has higher priority", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({

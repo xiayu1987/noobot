@@ -103,6 +103,22 @@ export async function processToolResults({
     loopState.toolConsecutiveFailureCount = 0;
     systemRuntime.toolConsecutiveFailureCount = 0;
   }
+  await runAgentRuntimeHook({
+    runtime,
+    point: AGENT_HOOK_POINTS.AFTER_TOOL_CALLS,
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALLS, runtime, {
+      phase: "tool_calls",
+      status: "success",
+      turn,
+      toolCallCount: calls.length,
+      calls,
+      toolCallResults,
+      hasTaskSummaryCall,
+      hasRequestHelpCall,
+      hasFinalAnswerCall,
+      agentContext: modelState?.agentContext || null,
+    }),
+  });
 
   return {
     toolCallResults,
