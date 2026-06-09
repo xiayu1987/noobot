@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
 
 import { runFunctionCallLoop } from "../../../../src/system-core/agent/core/turn/orchestrator.js";
+import { createAgentHookManager } from "../../../../src/system-core/hook/index.js";
 
 function createToolCallingLlm(responses = []) {
   const capturedInvocations = [];
@@ -410,6 +411,16 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
 
   const loopState = createLoopState({ maxTurns: 10, tool });
   const modelState = createModelState(llm);
+  const hookManager = createAgentHookManager();
+  const beforeLlmContexts = [];
+  const afterLlmContexts = [];
+  const beforeToolCallContexts = [];
+  const afterToolCallContexts = [];
+  hookManager.on("before_llm_call", (ctx = {}) => beforeLlmContexts.push(ctx));
+  hookManager.on("after_llm_call", (ctx = {}) => afterLlmContexts.push(ctx));
+  hookManager.on("before_tool_calls", (ctx = {}) => beforeToolCallContexts.push(ctx));
+  hookManager.on("after_tool_calls", (ctx = {}) => afterToolCallContexts.push(ctx));
+  modelState.runtime.hookManager = hookManager;
   modelState.runtime.systemRuntime.config = { forceTool: false };
   const result = await runFunctionCallLoop({
     modelState,
@@ -440,5 +451,26 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
   assert.ok(
     assistantToolCallCounts.slice(-3).every((count) => count === 1),
     "each assistant message sent to the next LLM call should contain one tool call",
+  );
+
+  const syntheticBeforeLlm = beforeLlmContexts.filter((ctx) => ctx?.fakeTurn === true);
+  const syntheticAfterLlm = afterLlmContexts.filter((ctx) => ctx?.fakeTurn === true);
+  const syntheticBeforeToolCalls = beforeToolCallContexts.filter((ctx) => ctx?.fakeTurn === true);
+  const syntheticAfterToolCalls = afterToolCallContexts.filter((ctx) => ctx?.fakeTurn === true);
+  assert.equal(syntheticBeforeLlm.length, 2);
+  assert.equal(syntheticAfterLlm.length, 2);
+  assert.equal(syntheticBeforeToolCalls.length, 2);
+  assert.equal(syntheticAfterToolCalls.length, 2);
+  assert.deepEqual(
+    syntheticBeforeLlm.map((ctx) => ctx.calls?.[0]?.id),
+    ["call_2", "call_3"],
+  );
+  assert.ok(
+    syntheticBeforeLlm.every(
+      (ctx) => ctx.synthetic === true &&
+        ctx.replayedToolTurn === true &&
+        ctx.mode === "synthetic_tool_turn" &&
+        ctx.source === "split_multi_tool_calls",
+    ),
   );
 });

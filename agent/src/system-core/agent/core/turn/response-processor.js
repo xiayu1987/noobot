@@ -78,17 +78,90 @@ export async function commitSyntheticToolTurn({
   const toolCallResult = pendingTurn.toolCallResult || {};
   const runtime = modelState?.runtime || {};
   const eventListener = modelState?.eventListener || null;
+  const syntheticAi = buildSyntheticAiFromPayload(assistantPayload, call);
+  const syntheticMeta = {
+    synthetic: true,
+    fakeTurn: true,
+    replayedToolTurn: true,
+    source: "split_multi_tool_calls",
+    syntheticSource: "split_multi_tool_calls",
+  };
 
   emitEvent(eventListener, "synthetic_tool_turn_start", {
     turn,
     tool: call.name,
     toolCallId: call.id || "",
+    ...syntheticMeta,
+  });
+
+  const llmStartedAtMs = Date.now();
+  const llmStartedAt = new Date(llmStartedAtMs).toISOString();
+  await runAgentRuntimeHook({
+    runtime,
+    point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
+      phase: "llm_call",
+      turn,
+      mode: "synthetic_tool_turn",
+      status: "start",
+      startedAt: llmStartedAt,
+      toolChoice: "synthetic",
+      toolNames: (Array.isArray(loopState?.tools) ? loopState.tools : [])
+        .map((tool) => String(tool?.name || "").trim())
+        .filter(Boolean),
+      messages: Array.isArray(loopState?.messages) ? loopState.messages : [],
+      messageBlocks: loopState?.messageBlocks || null,
+      maxTurns: Number(loopState?.maxTurns || 0),
+      agentContext: modelState?.agentContext || null,
+      call,
+      calls: [call],
+      ...syntheticMeta,
+    }),
+  });
+
+  await runAgentRuntimeHook({
+    runtime,
+    point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_LLM_CALL, runtime, {
+      phase: "llm_call",
+      turn,
+      mode: "synthetic_tool_turn",
+      status: "success",
+      startedAt: llmStartedAt,
+      endedAt: new Date(Date.now()).toISOString(),
+      durationMs: Date.now() - llmStartedAtMs,
+      hasToolCalls: true,
+      toolChoice: "synthetic",
+      ai: syntheticAi,
+      call,
+      calls: [call],
+      messages: Array.isArray(loopState?.messages) ? loopState.messages : [],
+      messageBlocks: loopState?.messageBlocks || null,
+      maxTurns: Number(loopState?.maxTurns || 0),
+      agentContext: modelState?.agentContext || null,
+      ...syntheticMeta,
+    }),
+  });
+
+  await runAgentRuntimeHook({
+    runtime,
+    point: AGENT_HOOK_POINTS.BEFORE_TOOL_CALLS,
+    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TOOL_CALLS, runtime, {
+      phase: "tool_calls",
+      status: "start",
+      turn,
+      toolCallCount: 1,
+      call,
+      calls: [call],
+      agentContext: modelState?.agentContext || null,
+      ...syntheticMeta,
+    }),
   });
 
   if (Array.isArray(loopState?.messages)) {
     loopState.messages.push(
       buildAssistantModelMessageForToolCalls({
-        ai: buildSyntheticAiFromPayload(assistantPayload, call),
+        ai: syntheticAi,
         contentText: assistantPayload.content || "",
         toolCalls: [call],
       }),
@@ -129,10 +202,30 @@ export async function commitSyntheticToolTurn({
     systemRuntime.toolConsecutiveFailureCount = 0;
   }
 
+  await runAgentRuntimeHook({
+    runtime,
+    point: AGENT_HOOK_POINTS.AFTER_TOOL_CALLS,
+    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALLS, runtime, {
+      phase: "tool_calls",
+      status: "success",
+      turn,
+      toolCallCount: 1,
+      call,
+      calls: [call],
+      toolCallResults: [toolCallResult],
+      hasTaskSummaryCall,
+      hasRequestHelpCall,
+      hasFinalAnswerCall,
+      agentContext: modelState?.agentContext || null,
+      ...syntheticMeta,
+    }),
+  });
+
   emitEvent(eventListener, "synthetic_tool_turn_end", {
     turn,
     tool: call.name,
     toolCallId: call.id || "",
+    ...syntheticMeta,
   });
 
   return {
