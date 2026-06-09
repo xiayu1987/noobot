@@ -42,6 +42,7 @@ const SANDBOX_PROVIDER_NAME = SANDBOX_CONFIG.PROVIDERS;
 const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
 const SANDBOX_COMMAND = SANDBOX_CONFIG.COMMANDS;
 const dockerContainerQueueMap = new Map();
+const SCRIPT_WORKDIR_RELATIVE_PATH = "runtime/ops_workdir";
 const ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS = normalizeTimeMs(
   process.env.NOOBOT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   {
@@ -134,7 +135,12 @@ function enqueueDockerContainerTask({
 
 
 function resolveSandboxProviderConfig(scriptConfig = {}) {
-  const providerConfig = scriptConfig?.sandboxProvider;
+  const providerConfig =
+    scriptConfig?.sandboxProvider && typeof scriptConfig.sandboxProvider === "object"
+      ? scriptConfig.sandboxProvider
+      : scriptConfig?.sandbox_provider && typeof scriptConfig.sandbox_provider === "object"
+        ? scriptConfig.sandbox_provider
+        : null;
   if (!providerConfig || typeof providerConfig !== "object" || Array.isArray(providerConfig)) {
     return { provider: SANDBOX_PROVIDER_NAME.DOCKER, providerDetail: {} };
   }
@@ -243,71 +249,130 @@ function resolveSandboxPathView({
   return "";
 }
 
-function normalizeMountItem(item = {}) {
-  return {
-    host: String(item?.host || item?.source || "").trim(),
-    sandbox: String(item?.sandbox || item?.target || "").trim(),
-    desc: String(item?.desc || item?.description || "").trim(),
-    role: String(item?.role || "").trim(),
-  };
+function normalizePathForTool(value = "") {
+  return String(value || "").trim().replaceAll("\\", "/");
 }
 
-function compactMountItem(item = {}) {
-  const normalized = normalizeMountItem(item);
+function compactObject(value = {}) {
   return Object.fromEntries(
-    Object.entries(normalized).filter(([, value]) => Boolean(value)),
+    Object.entries(value && typeof value === "object" ? value : {})
+      .filter(([, item]) => {
+        if (Array.isArray(item)) return item.length > 0;
+        if (item && typeof item === "object") return Object.keys(item).length > 0;
+        return item !== undefined && item !== null && String(item || "").trim() !== "";
+      }),
   );
 }
 
-function buildDockerRuntimeMeta({
+function resolveSandboxRuntimePathDefaults({
+  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
+  dockerConfig = {},
   docker = {},
+  runtime = {},
+  agentContext = null,
+  workspace = "",
+} = {}) {
+  const normalizedProvider = normalizeSandboxProvider(sandboxProvider || SANDBOX_PROVIDER_NAME.DOCKER);
+  const workspaceHost = normalizePathForTool(workspace);
+  const sandboxDefaultWorkdir = normalizePathForTool(
+    docker?.workdir ||
+      resolveSandboxPathView({
+        runtime,
+        agentContext,
+        hostPath: workspaceHost,
+        relativePath: SCRIPT_WORKDIR_RELATIVE_PATH,
+      }),
+  );
+  const fallbackWorkdirMap = {
+    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: "/workspace/runtime/sandbox/persist",
+    [SANDBOX_PROVIDER_NAME.FIREJAIL]: "$HOME/runtime/sandbox/persist",
+    [SANDBOX_PROVIDER_NAME.DOCKER]: sandboxDefaultWorkdir,
+  };
+  const sandboxRootMap = {
+    [SANDBOX_PROVIDER_NAME.BUBBLEWRAP]: "/workspace",
+    [SANDBOX_PROVIDER_NAME.FIREJAIL]: "$HOME",
+    [SANDBOX_PROVIDER_NAME.DOCKER]: "/workspace",
+  };
+  const extraMountTargets = normalizedProvider === SANDBOX_PROVIDER_NAME.DOCKER
+    ? Array.from(
+        new Set(
+          [
+            ...(Array.isArray(docker?.dockerMounts) ? docker.dockerMounts : []),
+            ...normalizeDockerMounts(dockerConfig),
+          ]
+            .map((item = {}) => normalizePathForTool(item?.target || item?.mountTarget || ""))
+            .filter(Boolean),
+        ),
+      )
+    : [];
+  const sandboxRoot = sandboxRootMap[normalizedProvider] || sandboxRootMap[SANDBOX_PROVIDER_NAME.DOCKER];
+  const defaultWorkdir = sandboxDefaultWorkdir || fallbackWorkdirMap[normalizedProvider] || "";
+  const allowedRoots = Array.from(new Set([sandboxRoot, ...extraMountTargets].filter(Boolean)));
+  return compactObject({
+    defaultWorkdir,
+    sandboxRoot,
+    relativePathBase: "defaultWorkdir",
+    allowedRoots,
+    extraMountTargets,
+  });
+}
+
+export function buildExecutionWorkspaceMeta({
+  sandboxEnabled = false,
+  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
   workspace = "",
   runtime = {},
   agentContext = null,
+  dockerConfig = {},
+  docker = {},
 } = {}) {
-  const workspaceHost = String(workspace || "").trim();
-  const workspaceSandbox =
-    String(docker?.workdir || "").trim() ||
-    resolveSandboxPathView({
+  const workspaceHost = normalizePathForTool(workspace);
+  if (!sandboxEnabled) {
+    return {
+      relativePath: SCRIPT_WORKDIR_RELATIVE_PATH,
+      absolutePath: workspaceHost,
+      view: "non_sandbox",
+    };
+  }
+  const sandboxDefaults = resolveSandboxRuntimePathDefaults({
+    sandboxProvider,
+    dockerConfig,
+    docker,
+    runtime,
+    agentContext,
+    workspace: workspaceHost,
+  });
+  return {
+    relativePath: SCRIPT_WORKDIR_RELATIVE_PATH,
+    absolutePath: String(sandboxDefaults.defaultWorkdir || "").trim(),
+    view: "sandbox",
+    ...sandboxDefaults,
+  };
+}
+
+export function buildScriptExecutionMeta({
+  sandboxEnabled = false,
+  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
+  workspace = "",
+  runtime = {},
+  agentContext = null,
+  dockerConfig = {},
+  docker = {},
+} = {}) {
+  return compactObject({
+    runtime: compactObject({
+      image: String(docker?.image || "").trim(),
+    }),
+    workspace: buildExecutionWorkspaceMeta({
+      sandboxEnabled,
+      sandboxProvider,
+      workspace,
       runtime,
       agentContext,
-      hostPath: workspaceHost,
-      relativePath: "runtime/ops_workdir",
-    });
-  const mountList = [
-    compactMountItem({
-      host: docker?.mountSource || "",
-      sandbox: docker?.mountTarget || "",
-      role: "workspace",
+      dockerConfig,
+      docker,
     }),
-    ...(Array.isArray(docker?.dockerMounts) ? docker.dockerMounts : [])
-      .map((item) =>
-        compactMountItem({
-          host: item?.source || "",
-          sandbox: item?.target || "",
-          desc: item?.description || "",
-          role: "extra",
-        }),
-      )
-      .filter((item) => Object.keys(item).length > 0),
-  ].filter((item) => Object.keys(item).length > 0);
-
-  return {
-    runtime: Object.fromEntries(
-      Object.entries({
-        container: String(docker?.containerName || "").trim(),
-        scope: String(docker?.scope || "").trim(),
-        image: String(docker?.image || "").trim(),
-      }).filter(([, value]) => Boolean(value)),
-    ),
-    workspace: Object.fromEntries(
-      Object.entries({
-        hostWorkdir: workspaceHost,
-        sandboxWorkdir: workspaceSandbox,
-      }).filter(([, value]) => Boolean(value)),
-    ),
-    mounts: mountList,
-  };
+  });
 }
 
 function missingCommandError(mode, commandName = "", runtime = {}) {
@@ -407,7 +472,15 @@ async function tryDockerFallback({
     {
       fallbackFrom,
       warning,
-      ...buildDockerRuntimeMeta({ docker, workspace, runtime, agentContext }),
+      ...buildScriptExecutionMeta({
+        sandboxEnabled: true,
+        sandboxProvider: SANDBOX_PROVIDER_NAME.DOCKER,
+        dockerConfig: scriptConfig,
+        docker,
+        workspace,
+        runtime,
+        agentContext,
+      }),
     },
     outputPolicy,
   );
@@ -493,7 +566,7 @@ export function createScriptTool({ agentContext }) {
     !Array.isArray(effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME])
       ? effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME]
       : {};
-  const sandboxEnabled = !!scriptConfig?.sandboxMode;
+  const sandboxEnabled = scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
   const { provider: sandboxProvider, providerDetail } =
     resolveSandboxProviderConfig(scriptConfig);
   const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
@@ -560,36 +633,26 @@ export function createScriptTool({ agentContext }) {
         return toolExecResult(
           "local",
           runResult,
-          {
-            workspace: {
-              hostWorkdir: workspace,
-              sandboxWorkdir:
-                resolveSandboxPathView({
-                  runtime,
-                  agentContext,
-                  hostPath: workspace,
-                  relativePath: "runtime/ops_workdir",
-                }) || workspace,
-            },
-          },
+          buildScriptExecutionMeta({
+            sandboxEnabled: false,
+            workspace,
+            runtime,
+            agentContext,
+          }),
           scriptOutputPolicy,
         );
       }
 
       let sandboxCmd = "";
       let mode = SANDBOX_PROVIDER_NAME.DOCKER;
-      let extra = {
-        workspace: {
-          hostWorkdir: workspace,
-          sandboxWorkdir:
-            resolveSandboxPathView({
-              runtime,
-              agentContext,
-              hostPath: workspace,
-              relativePath: "runtime/ops_workdir",
-            }) || workspace,
-        },
-      };
+      let extra = buildScriptExecutionMeta({
+        sandboxEnabled: true,
+        sandboxProvider,
+        workspace,
+        runtime,
+        agentContext,
+        dockerConfig,
+      });
       let dockerRunInput = null;
 
       if (sandboxProvider === SANDBOX_PROVIDER_NAME.BUBBLEWRAP) {
@@ -653,12 +716,14 @@ export function createScriptTool({ agentContext }) {
         }
         sandboxCmd = built.cmd;
         mode = SANDBOX_PROVIDER_NAME.BUBBLEWRAP;
-        extra = {
-          sandboxRoot: built.sandboxRoot,
-          overlayUpper: built.overlayUpper,
-          overlayWork: built.overlayWork,
-          persistDir: built.persistDir,
-        };
+        extra = buildScriptExecutionMeta({
+          sandboxEnabled: true,
+          sandboxProvider: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
+          workspace,
+          runtime,
+          agentContext,
+          dockerConfig,
+        });
       } else if (sandboxProvider === SANDBOX_PROVIDER_NAME.FIREJAIL) {
         const firejailInstalled = await hasCommand(SANDBOX_COMMAND.FIREJAIL);
         if (!firejailInstalled) {
@@ -672,7 +737,14 @@ export function createScriptTool({ agentContext }) {
         const built = buildFirejailCommand({ userRoot, command: normalizedCommand });
         sandboxCmd = built.cmd;
         mode = SANDBOX_PROVIDER_NAME.FIREJAIL;
-        extra = { sandboxHome: built.homeDir, persistDir: built.persistDir };
+        extra = buildScriptExecutionMeta({
+          sandboxEnabled: true,
+          sandboxProvider: SANDBOX_PROVIDER_NAME.FIREJAIL,
+          workspace,
+          runtime,
+          agentContext,
+          dockerConfig,
+        });
       } else {
         const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
         if (!dockerInstalled) {
@@ -700,7 +772,10 @@ export function createScriptTool({ agentContext }) {
         runResult = dockerResult;
         extra = {
           ...extra,
-          ...buildDockerRuntimeMeta({
+          ...buildScriptExecutionMeta({
+            sandboxEnabled: true,
+            sandboxProvider: SANDBOX_PROVIDER_NAME.DOCKER,
+            dockerConfig,
             docker: built,
             workspace,
             runtime,

@@ -27,6 +27,10 @@ import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
 } from "../shared/workflow/prompts.js";
+import {
+  formatOperationDirectoryForRelay,
+  resolveOperationDirectoryContext,
+} from "../shared/operation-directory.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -183,7 +187,10 @@ export async function runPlanningRefinementBySeparateModel(
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
       purpose: "next_phase_plan_refinement_followup",
-      content: buildPostPlanUserFollowupPrompt(locale, "refinement"),
+      content: [
+        buildPostPlanUserFollowupPrompt(locale, "refinement"),
+        formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
+      ].filter(Boolean).join("\n\n"),
       dedupe: true,
     });
     return {

@@ -20,6 +20,7 @@ import {
   parsePlanDocumentFromText,
 } from "../shared/plan/text-protocol.js";
 import { executePlanMutation } from "../shared/plan/mutation-facade.js";
+import { resolveOperationDirectoryContext } from "../shared/operation-directory.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -90,6 +91,7 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
   }
   bucket.planDocument = appliedMutation.nextDocument;
   bucket.planText = appliedMutation.nextPlanText;
+  bucket.operationDirectory = resolveOperationDirectoryContext(ctx);
   bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(previousDocument, bucket.planDocument);
   bucket.taskChecklist = [];
   bucket.taskChecklistSource = "plan_text";

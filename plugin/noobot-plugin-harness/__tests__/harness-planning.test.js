@@ -194,11 +194,22 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
     },
   );
 
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-refinement-opdir-"));
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
       messages: { system: [], history: [] },
       harness: {},
+    },
+    execution: {
+      controllers: {
+        runtime: {
+          basePath,
+          userId: "u11-r",
+          globalConfig: { tools: { execute_script: { sandboxMode: false } } },
+          systemRuntime: { userId: "u11-r", sessionId: "s11-r" },
+        },
+      },
     },
   };
 
@@ -244,6 +255,12 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   );
   assert.equal(Array.isArray(agentContext.payload.harness.planRefinementRecords), true);
   assert.equal(agentContext.payload.harness.planRefinementRecords.length >= 1, true);
+  const followupMessage = messages.find((item = {}) =>
+    /next_phase_plan_refinement_followup/.test(String(item?.content || "")),
+  );
+  const followupText = String(followupMessage?.content || "");
+  assert.match(followupText, /\[Harness operation dir\] runtime\/ops_workdir/);
+  assert.equal(followupText.includes(`Use (non-sandbox): ${basePath}/runtime/ops_workdir`), true);
 });
 
 test("harness request_plan_refinement falls back to closure meta when configurable meta lacks harness", async () => {
@@ -796,4 +813,116 @@ test("harness planning requires parseable main plan payload", async () => {
   assert.equal(Array.isArray(ctx.agentContext.payload.harness.taskChecklist), true);
   assert.equal(ctx.agentContext.payload.harness.taskChecklist.length, 0);
   assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, false);
+});
+
+test("harness planning operation directory uses sandbox view without losing host view", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+
+  const hostBasePath = "/host/user-a";
+  const sandboxBasePath = "/workspace/user-a";
+  const messages = [{ role: "user", content: "开始任务" }];
+  const ctx = {
+    messages,
+    agentContext: {
+      environment: {
+        // Simulates the harness-side bug class: environment.workspace has
+        // already been rewritten to sandbox view, while runtime.basePath still
+        // keeps the non-sandbox host path.
+        workspace: { basePath: sandboxBasePath },
+        staticInfo: { defaultWorkdir: `${sandboxBasePath}/runtime/ops_workdir` },
+      },
+      payload: {
+        tools: { registry: [{ name: "read_file", description: "读取文件", invoke: async () => ({ ok: true }) }] },
+        messages: { system: [], history: [] },
+        harness: {},
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            basePath: hostBasePath,
+            userId: "user-a",
+            globalConfig: {
+              tools: {
+                execute_script: {
+                  sandbox_mode: true,
+                  sandbox_provider: { default: "docker" },
+                },
+              },
+            },
+            sharedTools: {
+              resolveSandboxPath: ({ hostPath = "", relativePath = "" } = {}) => {
+                if (hostPath === `${hostBasePath}/runtime/ops_workdir`) {
+                  return `${sandboxBasePath}/runtime/ops_workdir`;
+                }
+                return relativePath ? `${sandboxBasePath}/${relativePath}` : "";
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  const contextMessage = messages.find((item = {}) =>
+    /"operationDirectory"/.test(String(item?.content || "")),
+  );
+  const contextText = String(contextMessage?.content || "");
+  assert.match(contextText, /"operationDirectory"/);
+  assert.match(contextText, /"relativePath": "runtime\/ops_workdir"/);
+  assert.match(contextText, /"absolutePath": "\/workspace\/user-a\/runtime\/ops_workdir"/);
+  assert.match(contextText, /"view": "sandbox"/);
+  assert.doesNotMatch(contextText, /"nonSandboxView"/);
+  assert.doesNotMatch(contextText, /\/host\/user-a\/runtime\/ops_workdir/);
+});
+
+test("harness separate-model plan relay includes operation directory for main agent", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => ({ content: "1. 解析附件\n2. 执行核心任务" }),
+    },
+  );
+
+  const basePath = "/host/user-b";
+  const ctx = {
+    userId: "user-b",
+    sessionId: "s-user-b",
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+        harness: {},
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            basePath,
+            userId: "user-b",
+            systemRuntime: { userId: "user-b", sessionId: "s-user-b" },
+            globalConfig: { tools: { execute_script: { sandboxMode: false } } },
+          },
+        },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  const relayMessage = ctx.messages.find((item = {}) =>
+    /Harness operation dir/.test(String(item?.content || "")),
+  );
+  const relayText = String(relayMessage?.content || "");
+  assert.match(relayText, /\[Harness operation dir\] runtime\/ops_workdir/);
+  assert.match(relayText, /Use \(non-sandbox\): \/host\/user-b\/runtime\/ops_workdir/);
+  assert.doesNotMatch(relayText, /Sandbox:/);
+  assert.match(relayText, /1\. 解析附件/);
+  assert.equal(ctx.agentContext.payload.harness.operationDirectory.absolutePath, `${basePath}/runtime/ops_workdir`);
 });

@@ -38,6 +38,10 @@ import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
 } from "../shared/workflow/prompts.js";
+import {
+  formatOperationDirectoryForRelay,
+  resolveOperationDirectoryContext,
+} from "../shared/operation-directory.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
@@ -204,7 +208,12 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
             stage === "revision"
               ? "next_phase_plan_followup"
               : "next_phase_plan_refinement_followup",
-          content: buildPostPlanUserFollowupPrompt(locale, stage),
+          content: [
+            buildPostPlanUserFollowupPrompt(locale, stage),
+            stage === "refinement"
+              ? formatOperationDirectoryForRelay(resolveOperationDirectoryContext(currentCtx))
+              : "",
+          ].filter(Boolean).join("\n\n"),
           dedupe: true,
         });
       }
