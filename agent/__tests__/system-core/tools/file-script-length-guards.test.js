@@ -5,7 +5,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { createFileTool } from "../../../src/system-core/tools/execution/file-tool.js";
-import { createScriptTool } from "../../../src/system-core/tools/execution/script-tool.js";
+import {
+  buildExecutionWorkspaceMeta,
+  buildScriptExecutionMeta,
+  createScriptTool,
+} from "../../../src/system-core/tools/execution/script-tool.js";
 
 function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const runtimeOverrides =
@@ -91,7 +95,7 @@ test("execute_script: command 超过 8000 字符时应直接返回长度错误",
   assert.equal(result.transferFiles[0].attachmentId, "att-script");
 });
 
-test("execute_script: 返回应同时包含宿主机与沙箱工作目录视角", async () => {
+test("execute_script: 非沙箱返回仅包含当前 host 工作目录视角", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-path-view-"));
   const runtimeOpsWorkdir = path.join(basePath, "runtime/ops_workdir");
   const tools = createScriptTool({
@@ -124,9 +128,74 @@ test("execute_script: 返回应同时包含宿主机与沙箱工作目录视角"
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, true);
   assert.equal(result.mode, "local");
-  assert.equal(result.workspace.hostWorkdir, runtimeOpsWorkdir);
-  assert.equal(result.workspace.sandboxWorkdir, "/workspace/admin/runtime/ops_workdir");
+  assert.deepEqual(result.workspace, {
+    relativePath: "runtime/ops_workdir",
+    absolutePath: runtimeOpsWorkdir,
+    view: "non_sandbox",
+  });
+  assert.equal(result.runtime, undefined);
+  assert.equal(result.mounts, undefined);
   assert.equal(result.stdout, "ok");
+});
+
+test("execute_script: 沙箱 workspace 元信息仅包含沙箱视角与 system 环境字段", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-sandbox-view-"));
+  const runtimeOpsWorkdir = path.join(basePath, "runtime/ops_workdir");
+  const meta = buildExecutionWorkspaceMeta({
+    sandboxEnabled: true,
+    sandboxProvider: "docker",
+    workspace: runtimeOpsWorkdir,
+    runtime: {
+      userId: "admin",
+      sharedTools: {
+        resolveSandboxPath(payload = {}) {
+          const hostPath = String(payload?.hostPath || payload?.path || "").trim();
+          if (hostPath === runtimeOpsWorkdir) return "/workspace/admin/runtime/ops_workdir";
+          return "";
+        },
+      },
+    },
+    dockerConfig: {
+      dockerMounts: [{ source: "/host/project", target: "/project" }],
+    },
+  });
+
+  assert.deepEqual(meta, {
+    relativePath: "runtime/ops_workdir",
+    absolutePath: "/workspace/admin/runtime/ops_workdir",
+    view: "sandbox",
+    defaultWorkdir: "/workspace/admin/runtime/ops_workdir",
+    sandboxRoot: "/workspace",
+    relativePathBase: "defaultWorkdir",
+    allowedRoots: ["/workspace", "/project"],
+    extraMountTargets: ["/project"],
+  });
+});
+
+test("execute_script: Docker 返回仅保留镜像名和当前 workspace 视角", async () => {
+  const meta = buildScriptExecutionMeta({
+    sandboxEnabled: true,
+    sandboxProvider: "docker",
+    workspace: "/host/admin/runtime/ops_workdir",
+    dockerConfig: {
+      dockerMounts: [{ source: "/host/project", target: "/project" }],
+    },
+    docker: {
+      image: "example/script:latest",
+      containerName: "noobot-script-sandbox",
+      scope: "global",
+      workdir: "/workspace/admin/runtime/ops_workdir",
+      dockerMounts: [{ source: "/host/project", target: "/project" }],
+    },
+  });
+
+  assert.equal(meta.runtime.image, "example/script:latest");
+  assert.equal(meta.runtime.container, undefined);
+  assert.equal(meta.runtime.scope, undefined);
+  assert.equal(meta.mounts, undefined);
+  assert.equal(meta.workspace.absolutePath, "/workspace/admin/runtime/ops_workdir");
+  assert.equal(meta.workspace.view, "sandbox");
+  assert.deepEqual(meta.workspace.allowedRoots, ["/workspace", "/project"]);
 });
 
 test("write_file: content 超过 8000 字符时应直接返回长度错误且不写入", async () => {

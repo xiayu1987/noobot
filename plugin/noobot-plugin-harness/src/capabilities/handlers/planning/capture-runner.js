@@ -38,6 +38,11 @@ import {
   getPlanningContextSummaryHeader,
   getPlanningSeparateModelEmptyRelay,
 } from "../shared/workflow/prompts.js";
+import {
+  compactOperationDirectoryForPrompt,
+  formatOperationDirectoryForRelay,
+  resolveOperationDirectoryContext,
+} from "../shared/operation-directory.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -203,6 +208,7 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
     latestUserGoal: compactText(latestUserGoalText, PLANNING_CONTEXT_GOAL_MAX_CHARS),
+    operationDirectory: compactOperationDirectoryForPrompt(resolveOperationDirectoryContext(ctx)),
     sceneTools: resolveSceneToolNames(ctx),
     toolAllowlist: resolvePlanningToolAllowlist(meta),
   };
@@ -313,7 +319,11 @@ async function handleSeparateModelPlanningProcessResult(
   locale = LOCALE.ZH_CN,
   responseText = "",
 ) {
-  const relayText = responseText || getPlanningSeparateModelEmptyRelay(locale);
+  const operationDirectory = resolveOperationDirectoryContext(ctx);
+  const relayText = [
+    responseText || getPlanningSeparateModelEmptyRelay(locale),
+    formatOperationDirectoryForRelay(operationDirectory),
+  ].filter(Boolean).join("\n\n");
   const attachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning",
     content: relayText,

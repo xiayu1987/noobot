@@ -18,6 +18,10 @@ import {
   translateI18nText,
 } from "./deps.js";
 import {
+  compactOperationDirectoryForPrompt,
+  resolveOperationDirectoryContext,
+} from "../shared/operation-directory.js";
+import {
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildPlanningMainPrompt,
   getPlanningContextSummaryHeader,
@@ -139,6 +143,7 @@ export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
     latestUserGoal: String(latestUserGoal || "").trim(),
+    operationDirectory: compactOperationDirectoryForPrompt(resolveOperationDirectoryContext(ctx)),
     sceneTools: resolveSceneToolNames(ctx),
     toolAllowlist: resolvePlanningToolAllowlist(meta),
   };

@@ -234,6 +234,10 @@ export function buildPlanSnapshot(bucket = {}, locale = LOCALE.ZH_CN) {
     nextPhase: source.nextPhase && typeof source.nextPhase === "object" ? source.nextPhase : null,
     checklistSource: String(source.taskChecklistSource || "").trim(),
     revisionCount: Array.isArray(source.planRevisions) ? source.planRevisions.length : 0,
+    operationDirectory:
+      source.operationDirectory && typeof source.operationDirectory === "object"
+        ? source.operationDirectory
+        : null,
   };
 }
 
