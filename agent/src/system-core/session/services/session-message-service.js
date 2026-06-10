@@ -58,6 +58,7 @@ export class SessionMessageService {
     parentSessionId = "",
     injectedMessage = false,
     injectedBy = "",
+    injectedMessageType = "",
     frontendUserMessage = false,
     workflowMessage = false,
     workflowMeta = null,
@@ -108,6 +109,7 @@ export class SessionMessageService {
       modelResponseMetadata,
       injectedMessage: injectedMessage === true,
       injectedBy: String(injectedBy || "").trim(),
+      injectedMessageType: String(injectedMessageType || "").trim(),
       frontendUserMessage: frontendUserMessage === true,
       workflowMessage: workflowMessage === true,
       workflowMeta:

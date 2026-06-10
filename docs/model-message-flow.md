@@ -18,7 +18,10 @@
 - `agent/src/system-core/agent/core/context/message-builder.js`
 - `agent/src/system-core/agent/core/turn/turn-executor.js`
 - `agent/src/system-core/session/utils/context-window-normalizer.js`
+- `agent/src/system-core/context/session/message-context-policy.js`
+- `agent/src/system-core/context/session/summarized-message-policy.js`
 - `plugin/noobot-plugin-harness/src/capabilities/runtime.js`
 - `plugin/noobot-plugin-harness/src/core/hooks.js`
+- `plugin/noobot-plugin-harness/src/capabilities/handlers/shared/message/injection-utils.js`
 
 若文档与实现不一致，以代码为准并同步修正文档（尤其是 scope、默认值、调用顺序、最终过滤时机）。

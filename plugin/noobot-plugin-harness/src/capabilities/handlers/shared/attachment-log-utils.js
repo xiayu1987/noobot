@@ -389,6 +389,7 @@ export function relaySeparateModelOutputAsUserMessage(
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: `${prefix}\n${relayText}`,
+    injectedMessageType: `separate_model_relay:${String(purpose || "unknown").trim() || "unknown"}`,
     attachmentMetas: relayAttachmentMetas,
     ...resolvedTransferPayload,
     injectAt: "append",

@@ -52,6 +52,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
       injectMessageWithPolicy(ctx, {
         role: "system",
         content: checklistContent,
+        injectedMessageType: "guidance_summary_checklist",
         injectAt: "append",
         dedupe: false,
         avoidBreakToolCallContinuity: true,
@@ -63,6 +64,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
         locale,
         marker: getGuidanceSummaryMarker(locale),
       }),
+      injectedMessageType: "guidance_summary_prompt",
       injectAt: "append",
       dedupe: false,
       avoidBreakToolCallContinuity: true,
@@ -71,6 +73,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
     injectMessageWithPolicy(ctx, {
       role: "user",
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary"),
+      injectedMessageType: "guidance_summary_responsibility_constraint",
       injectAt: "append",
       dedupe: false,
       avoidBreakToolCallContinuity: true,
@@ -90,6 +93,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   injectMessageWithPolicy(ctx, {
     role: "system",
     content: buildGuidancePromptContent(locale, reason, { includeMarker: true }),
+    injectedMessageType: `guidance_failure:${String(reason || "").trim() || "unknown"}`,
     injectAt: "prepend",
     avoidBreakToolCallContinuity: true,
   });

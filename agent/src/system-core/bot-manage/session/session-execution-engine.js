@@ -41,7 +41,11 @@ import {
   shouldMarkCurrentTurnSummarizedMessage,
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "../../context/session/summarized-message-policy.js";
-import { resolveMessageRole } from "../../context/session/message-context-policy.js";
+import {
+  collectLatestInjectedMessageIndexes,
+  isInjectedMessage,
+  resolveMessageRole,
+} from "../../context/session/message-context-policy.js";
 import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
 import {
   resolveDialogProcessId,
@@ -150,6 +154,14 @@ function normalizeMessageForHarness(messageItem = {}) {
     messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "",
   ).trim();
   if (injectedBy) normalized.injectedBy = injectedBy;
+  const injectedMessageType = String(
+    messageItem?.injectedMessageType ||
+      messageItem?.injected_message_type ||
+      messageItem?.lc_kwargs?.injectedMessageType ||
+      messageItem?.lc_kwargs?.injected_message_type ||
+      "",
+  ).trim();
+  if (injectedMessageType) normalized.injectedMessageType = injectedMessageType;
   const dialogProcessId = resolveMessageDialogProcessId(messageItem);
   if (dialogProcessId) normalized.dialogProcessId = dialogProcessId;
   if (
@@ -692,6 +704,14 @@ export class SessionExecutionEngine {
       message?.injectedBy || message?.lc_kwargs?.injectedBy || "",
     ).trim();
     if (injectedBy) normalized.injectedBy = injectedBy;
+    const injectedMessageType = String(
+      message?.injectedMessageType ||
+        message?.injected_message_type ||
+        message?.lc_kwargs?.injectedMessageType ||
+        message?.lc_kwargs?.injected_message_type ||
+        "",
+    ).trim();
+    if (injectedMessageType) normalized.injectedMessageType = injectedMessageType;
     if (
       message?.frontendUserMessage === true ||
       message?.lc_kwargs?.frontendUserMessage === true ||
@@ -1127,6 +1147,7 @@ export class SessionExecutionEngine {
                 parentDialogProcessId,
                 injectedMessage: true,
                 injectedBy: "workflow",
+                injectedMessageType: "workflow_system_context",
               },
               now,
             ),
@@ -1494,6 +1515,24 @@ export class SessionExecutionEngine {
     const shouldMark = (messageItem = {}, taskSummaryToolName = "task_summary") =>
       shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName }) ||
       shouldMarkCurrentTurnSummarizedModelMessage(messageItem, { taskSummaryToolName });
+    const shouldPreserveInjectedAtIndex = (messages = [], index = -1, latestInjectedIndexes = null) => {
+      if (!Array.isArray(messages) || index < 0) return false;
+      if (!isInjectedMessage(messages[index])) return false;
+      const latestIndexes = latestInjectedIndexes instanceof Set
+        ? latestInjectedIndexes
+        : collectLatestInjectedMessageIndexes(messages);
+      return latestIndexes.has(index);
+    };
+    const shouldMarkInScope = (messageItem = {}, {
+      messages = [],
+      index = -1,
+      latestInjectedIndexes = null,
+      taskSummaryToolName = "task_summary",
+    } = {}) => {
+      if (shouldPreserveInjectedAtIndex(messages, index, latestInjectedIndexes)) return false;
+      if (isInjectedMessage(messageItem)) return true;
+      return shouldMark(messageItem, taskSummaryToolName);
+    };
     const isSummarized = (messageItem = {}) =>
       messageItem?.summarized === true || messageItem?.lc_kwargs?.summarized === true;
     const markMessage = (messageItem = null) => {
@@ -1527,10 +1566,16 @@ export class SessionExecutionEngine {
         (normalizedScope?.limitToProvidedMessagesOnly === true ||
           normalizedScope?.applyToStores === false ||
           normalizedScope?.applyToSession === false);
+      const latestSourceInjectedIndexes = collectLatestInjectedMessageIndexes(source);
       let changedCount = 0;
       for (let index = 0; index < scopedSourceLimit; index += 1) {
         const messageItem = source[index];
-        if (!shouldMark(messageItem, normalizedTaskSummaryToolName)) continue;
+        if (!shouldMarkInScope(messageItem, {
+          messages: source,
+          index,
+          latestInjectedIndexes: latestSourceInjectedIndexes,
+          taskSummaryToolName: normalizedTaskSummaryToolName,
+        })) continue;
         if (markMessage(messageItem)) changedCount += 1;
       }
       const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
@@ -1540,11 +1585,19 @@ export class SessionExecutionEngine {
         currentTurnMessages &&
         typeof currentTurnMessages.updateWhere === "function"
       ) {
+        const currentTurnScope =
+          typeof currentTurnMessages.toArray === "function" ? currentTurnMessages.toArray() : [];
+        const latestCurrentTurnInjectedIndexes = collectLatestInjectedMessageIndexes(currentTurnScope);
         changedCount += currentTurnMessages.updateWhere(
           { summarized: true },
-          (messageItem) =>
+          (messageItem, index) =>
             !isSummarized(messageItem) &&
-            shouldMark(messageItem, normalizedTaskSummaryToolName),
+            shouldMarkInScope(messageItem, {
+              messages: currentTurnScope,
+              index,
+              latestInjectedIndexes: latestCurrentTurnInjectedIndexes,
+              taskSummaryToolName: normalizedTaskSummaryToolName,
+            }),
         );
       }
       const sessionIds = getSessionIdsFromAgentContext(ctx?.agentContext || {}, runtime);

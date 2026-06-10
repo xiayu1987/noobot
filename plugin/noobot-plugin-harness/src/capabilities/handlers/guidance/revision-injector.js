@@ -127,6 +127,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
     injectMessageWithPolicy(ctx, {
       role: "system",
       content: systemChecklistContent,
+      injectedMessageType: "planning_revision_checklist",
       injectAt: "append",
       dedupe: false,
       avoidBreakToolCallContinuity: true,
@@ -139,6 +140,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
   const userInjection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: String(promptContent || "").trim(),
+    injectedMessageType: pendingData.stage === "revision" ? "planning_revision_prompt" : "planning_refinement_prompt",
     injectAt: "append",
     dedupe: false,
     avoidBreakToolCallContinuity: true,
@@ -150,6 +152,9 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
       locale,
       pendingData.stage === "revision" ? "revision" : "refinement",
     ),
+    injectedMessageType: pendingData.stage === "revision"
+      ? "planning_revision_responsibility_constraint"
+      : "planning_refinement_responsibility_constraint",
     injectAt: "append",
     dedupe: false,
     avoidBreakToolCallContinuity: true,

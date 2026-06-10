@@ -133,6 +133,7 @@ export class SessionTurnPersister {
     eventListener,
     injectedMessage = false,
     injectedBy = "",
+    injectedMessageType = "",
     frontendUserMessage = false,
     workflowMessage = false,
     workflowMeta = null,
@@ -169,6 +170,7 @@ export class SessionTurnPersister {
           : null,
       injectedMessage: injectedMessage === true,
       injectedBy: String(injectedBy || "").trim(),
+      injectedMessageType: String(injectedMessageType || "").trim(),
       frontendUserMessage: frontendUserMessage === true,
       workflowMessage: workflowMessage === true,
       workflowMeta:
@@ -221,6 +223,7 @@ export class SessionTurnPersister {
       modelResponseMetadata,
       injectedMessage,
       injectedBy,
+      injectedMessageType,
       frontendUserMessage,
       workflowMessage,
       workflowMeta,
@@ -276,6 +279,7 @@ export class SessionTurnPersister {
             : null,
         injectedMessage: messageItem.injectedMessage === true,
         injectedBy: String(messageItem.injectedBy || "").trim(),
+        injectedMessageType: String(messageItem.injectedMessageType || messageItem.injected_message_type || "").trim(),
         frontendUserMessage: messageItem.frontendUserMessage === true,
         workflowMessage: messageItem.workflowMessage === true,
         workflowMeta:

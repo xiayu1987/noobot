@@ -303,3 +303,21 @@ test("resolveModelContextMessages supports harness mode with normalize/filter pi
     ["a1", "a2"],
   );
 });
+
+
+test("resolveModelContextMessages keeps latest injected message per type after dialog filtering", () => {
+  const result = resolveModelContextMessages({
+    sourceMessages: [
+      { role: "user", content: "old summary", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d1" },
+      { role: "user", content: "planning", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning_task", dialogProcessId: "d1" },
+      { role: "user", content: "new summary", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d1" },
+      { role: "user", content: "other dialog newest", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d2" },
+      { role: "assistant", content: "normal" },
+    ],
+    currentDialogProcessId: "d1",
+  });
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["planning", "new summary", "normal"],
+  );
+});

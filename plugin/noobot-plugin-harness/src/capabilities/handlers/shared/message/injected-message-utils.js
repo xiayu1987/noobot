@@ -8,6 +8,7 @@ import {
   HARNESS_INJECTED_MESSAGE_BY_VALUE,
   HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
   HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
+  HARNESS_INJECTED_MESSAGE_TYPE_FIELD,
   HARNESS_INJECTION_MESSAGE_ROLE,
 } from "../constants.js";
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
@@ -26,6 +27,8 @@ export function buildHarnessInjectedMessage(
     transferEnvelope = null,
     transferEnvelopes = [],
     dialogProcessId = "",
+    injectedMessageType = "",
+    injectionType = "",
   } = {},
 ) {
   const normalizedRole = String(role || "").trim().toLowerCase();
@@ -35,6 +38,12 @@ export function buildHarnessInjectedMessage(
     [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
     [HARNESS_INJECTED_MESSAGE_BY_FIELD]: HARNESS_INJECTED_MESSAGE_BY_VALUE,
   };
+  const normalizedInjectedMessageType = String(
+    injectedMessageType || injectionType || "",
+  ).trim();
+  if (normalizedInjectedMessageType) {
+    message[HARNESS_INJECTED_MESSAGE_TYPE_FIELD] = normalizedInjectedMessageType;
+  }
   const normalizedDialogProcessId = resolveDialogProcessIdFromContext({
     dialogProcessId,
   });

@@ -66,6 +66,8 @@ export function injectMessageWithPolicy(
     transferEnvelopes = [],
     injectAt = "append",
     dedupe = false,
+    injectedMessageType = "",
+    injectionType = "",
     avoidBreakToolCallContinuity = true,
     persistToCurrentTurn = true,
   } = {},
@@ -86,6 +88,8 @@ export function injectMessageWithPolicy(
     transferEnvelope,
     transferEnvelopes,
     dialogProcessId: resolveDialogProcessIdFromContext(ctx),
+    injectedMessageType,
+    injectionType,
   });
 
   if (dedupe && dedupeExists(messages, message)) {

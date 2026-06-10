@@ -29,12 +29,12 @@ system -> effectiveHistoryMessages -> currentUserMessage -> currentUserMeta
 
 ### 第一段（会话级）
 - 输出：`agentContext.payload.messages.history`
-- 典型处理：dialog 过滤、`summarized:true` 过滤、tool pair 合法化、窗口截断（recent fallback 默认 20）
+- 典型处理：dialog 过滤、injected 同类型最新保留、`summarized:true` 过滤、tool pair 合法化、窗口截断（recent fallback 默认 20）
 
 ### 第二段（主模型前）
 - 输出：`effectiveHistoryMessages`
 - 入口：`resolveModelContextMessages(...)`
-- 典型处理：再次 dialog/summarized/tool pair 过滤
+- 典型处理：再次 dialog / injected 同类型最新保留 / summarized / tool pair 过滤
 - recent 配置：`context.mainModelRecentWindow`（默认开）+ `context.mainModelRecentLimit`（默认 15）
 
 ---
@@ -45,6 +45,8 @@ system -> effectiveHistoryMessages -> currentUserMessage -> currentUserMeta
 2. 当前用户消息在历史处理后追加，不参与 history recent 计数。
 3. 最终请求前统一执行 `filterForModelContext(messages)`。
 4. hook 允许改写顺序（prepend/append/replace/splice）。
+5. 若 hook 或 harness 向主链路注入消息，筛选会按 `injectedBy + injectedMessageType` 分组只保留同类型最新一条；缺少 `injectedMessageType` 的旧消息会按内部类型 / relay purpose / `type` / `injectedBy` 回退。
+6. Agent 小结工具标记当前轮消息时，同样按 `injectedBy + injectedMessageType` 保护同类型最新 injected 消息不标 `summarized:true`，旧的同类型 injected 消息会被标记。
 
 ---
 

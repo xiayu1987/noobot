@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
+import { injectPrompt } from "../src/tracing/buffer-manager.js";
 import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
@@ -442,6 +443,45 @@ test("harness FSM remains planning when checklist is absent", async () => {
   assert.equal(manifest.fsmStatus, "planning");
   const commits = await readJsonl(path.join(runDir, "state-commits.jsonl"));
   assert.equal(commits.some((item) => item.type === "fsm_transition" && item.to === "planned"), false);
+});
+
+test("harness policy prompt de-dupes against messageBlocks source during pseudo tool turns", async () => {
+  const policyMessage = {
+    role: "user",
+    content: "<!-- noobot-harness-policy -->\npolicy",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    injectedMessageType: "harness_prompt:noobot-harness-policy",
+  };
+  const ctx = {
+    messages: [{ role: "user", content: "current compacted window without policy" }],
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [policyMessage],
+    },
+  };
+
+  await injectPrompt("before_llm_call", ctx, {
+    enabled: true,
+    promptPolicy: true,
+    promptText: "policy",
+    promptPriority: 80,
+    writePrompts: false,
+  });
+
+  assert.equal(
+    ctx.messages.filter((item = {}) =>
+      String(item?.content || "").includes("noobot-harness-policy"),
+    ).length,
+    0,
+  );
+  assert.equal(
+    ctx.messageBlocks.incremental.filter((item = {}) =>
+      String(item?.content || "").includes("noobot-harness-policy"),
+    ).length,
+    1,
+  );
 });
 
 test("harness plugin injects prompt into before_llm_call messages", async () => {
