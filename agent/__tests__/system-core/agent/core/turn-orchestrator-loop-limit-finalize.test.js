@@ -444,12 +444,13 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
     toolResultMessages.map((item) => item.tool_call_id),
     ["call_1", "call_2", "call_3"],
   );
-  assert.ok(
+  assert.equal(
     userPromptMessages.some((item = {}) =>
       /不要一次返回 3 条及以上工具|do not return 3 or more at once/i.test(
         String(item?.content || ""),
       )),
-    "turn message store should persist the injected tool-batch-limit prompt",
+    false,
+    "tool-batch-limit prompt should be model-context-only and not appear in frontend turn messages",
   );
 
   const secondInvocationMessages = capturedInvocations[1] || [];
@@ -468,6 +469,15 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
     toolBatchLimitPromptMessage.additional_kwargs?.noobotInternalMessageType,
     undefined,
     "tool-batch-limit prompt must remain visible to harness before_llm_call cleanup",
+  );
+  assert.equal(
+    toolBatchLimitPromptMessage.additional_kwargs?.noobotModelOnlyMessage,
+    true,
+    "tool-batch-limit prompt should be explicitly marked as model-context-only",
+  );
+  assert.equal(
+    toolBatchLimitPromptMessage.additional_kwargs?.noobotModelOnlyMessageReason,
+    "tool_batch_limit_prompt",
   );
   const assistantToolCallCounts = secondInvocationMessages
     .filter((message) => String(message?._getType?.() || "") === "ai")
