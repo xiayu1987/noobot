@@ -5,7 +5,7 @@
  */
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
-import { resolvePlanChecklistText } from "../plan/checklist-context.js";
+import { resolveCompletePlanChecklistText } from "../plan/checklist-context.js";
 import { parseSummaryItemsFromText } from "../plan/summary-text-protocol.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import {
@@ -255,7 +255,7 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROMPT_GOAL),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROTOCOL_HINT),
     "[SUMMARY_OVERVIEW]",
-    "1. [plan=2][status=done] ...",
+    "1. [plan=2][status=done][evidence=...] ...",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH),
     "[SUMMARY_DETAIL]",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_DETAIL_HEADER),
@@ -283,7 +283,7 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
       .filter(Boolean)
       .join("\n")
       .trim();
-    const resolved = resolvePlanChecklistText({
+    const resolved = resolveCompletePlanChecklistText({
       planText: planTextFromPayload || mergedPlanTextFromOrderedPlans,
       bucket: { taskChecklist: checklist },
     });
