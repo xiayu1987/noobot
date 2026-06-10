@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../../event/index.js";
-import { HumanMessage } from "@langchain/core/messages";
 import { REQUEST_HELP_TOOL_NAME } from "../../../tools/workflow/request-help-tool.js";
 import { executeToolCall } from "../execution/tool-runner.js";
 import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
@@ -20,6 +19,7 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
+import { appendModelOnlyHumanMessage } from "../context/model-only-message.js";
 
 const MULTI_TOOL_CALL_LIMIT = 3;
 
@@ -71,7 +71,6 @@ function maybeInjectToolBatchLimitPrompt({
   modelState,
   loopState,
   observedCalls = 0,
-  turnMessageStore = null,
 } = {}) {
   if (!Array.isArray(loopState?.messages)) return false;
   const runtime = modelState?.runtime || {};
@@ -80,24 +79,11 @@ function maybeInjectToolBatchLimitPrompt({
     maxCalls: MULTI_TOOL_CALL_LIMIT - 1,
     observedCalls: Number(observedCalls || 0),
   });
-  loopState.messages.push(
-    new HumanMessage({
-      content: text,
-    }),
-  );
-  if (turnMessageStore?.push) {
-    turnMessageStore.push({
-      role: "user",
-      content: text,
-      type: "message",
-      dialogProcessId: String(
-        modelState?.runtime?.systemRuntime?.dialogProcessId ||
-          modelState?.runtime?.dialogProcessId ||
-          loopState?.dialogProcessId ||
-          "",
-      ).trim(),
-    });
-  }
+  appendModelOnlyHumanMessage({
+    messages: loopState.messages,
+    content: text,
+    reason: "tool_batch_limit_prompt",
+  });
   emitEvent(eventListener, "tool_batch_limit_prompted", {
     observedCalls: Number(observedCalls || 0),
     maxCalls: MULTI_TOOL_CALL_LIMIT - 1,
@@ -277,7 +263,6 @@ export async function commitSyntheticToolTurn({
         modelState,
         loopState,
         observedCalls: Number(loopState?.lastObservedToolCallBatchSize || 0),
-        turnMessageStore: pendingTurn?.turnMessageStore || null,
       });
       loopState.toolBatchLimitPromptPending = false;
       loopState.lastObservedToolCallBatchSize = 0;
