@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { filterAndClipHarnessCapabilityMessages } from "../message/utils.js";
 
 export function resolvePlanningGuidanceMode(meta = {}) {
   return String(meta?.harness?.planningGuidanceMode || "separate_model").trim().toLowerCase();
@@ -61,8 +62,12 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
 }
 
 function resolveAgentModelMessages(ctx = {}, fallbackMessages = []) {
-  if (Array.isArray(fallbackMessages) && fallbackMessages.length) return fallbackMessages;
-  if (Array.isArray(ctx?.messages) && ctx.messages.length) return ctx.messages;
+  if (Array.isArray(fallbackMessages) && fallbackMessages.length) {
+    return filterAndClipHarnessCapabilityMessages(fallbackMessages);
+  }
+  if (Array.isArray(ctx?.messages) && ctx.messages.length) {
+    return filterAndClipHarnessCapabilityMessages(ctx.messages);
+  }
   return [];
 }
 
@@ -70,11 +75,13 @@ export function resolveCapabilityModelMessages(
   meta = {},
   { ctx = {}, purpose = "", messages = [] } = {},
 ) {
-  const sourceMessages = Array.isArray(messages) && messages.length
-    ? messages
-    : Array.isArray(ctx?.messages)
-      ? ctx.messages
-      : [];
+  const sourceMessages = filterAndClipHarnessCapabilityMessages(
+    Array.isArray(messages) && messages.length
+      ? messages
+      : Array.isArray(ctx?.messages)
+        ? ctx.messages
+        : [],
+  );
   const resolver = meta?.harness?.resolveModelMessages;
   if (typeof resolver === "function") {
     try {
@@ -83,7 +90,7 @@ export function resolveCapabilityModelMessages(
         purpose: String(purpose || "").trim(),
         messages: sourceMessages,
       });
-      if (Array.isArray(resolved)) return resolved;
+      if (Array.isArray(resolved)) return filterAndClipHarnessCapabilityMessages(resolved);
     } catch {
       // fall through to local compatibility fallback
     }
