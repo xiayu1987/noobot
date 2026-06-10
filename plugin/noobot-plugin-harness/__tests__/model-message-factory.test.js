@@ -119,3 +119,39 @@ test("buildCapabilityModelMessages only keeps role and content for converted mes
   assert.deepEqual(Object.keys(output[0]).sort(), ["content", "role"]);
   assert.deepEqual(Object.keys(output[1]).sort(), ["content", "role"]);
 });
+
+
+test("buildCapabilityModelMessages filters summarized agent messages", () => {
+  const output = buildCapabilityModelMessages({
+    locale: "zh-CN",
+    agentMessages: [
+      { role: "user", content: "keep" },
+      { role: "assistant", content: "drop", summarized: true },
+      { role: "assistant", content: "drop-lc", lc_kwargs: { summarized: true } },
+      { role: "assistant", content: "keep2" },
+    ],
+  });
+
+  assert.deepEqual(output, [
+    { role: "user", content: "keep" },
+    { role: "assistant", content: "keep2" },
+  ]);
+});
+
+
+test("buildCapabilityModelMessages clips capability agent context to latest 10 messages", () => {
+  const output = buildCapabilityModelMessages({
+    locale: "zh-CN",
+    agentMessages: Array.from({ length: 12 }, (_, index) => ({
+      role: "user",
+      content: `m${index + 1}`,
+    })),
+    task: "task",
+  });
+
+  assert.deepEqual(
+    output.filter((item) => String(item.content || "").startsWith("m")).map((item) => item.content),
+    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12"],
+  );
+  assert.equal(output.at(-1).content, "task");
+});

@@ -212,7 +212,21 @@ Harness 注入到主链路的消息应携带：
 
 实现上会原地更新既有 `ctx.messageBlocks` 对象，避免断开与 Agent `loopState.messageBlocks` 的引用关系。
 
-#### 4.2.3 插件侧 capability 注入
+#### 4.2.3 插件侧非主链路模型请求
+
+Harness capability 流程（planning / guidance / summary / acceptance 等）在请求 separate model / capability model 时，不直接复用主链路完整 `ctx.messages`。非主链路模型上下文会先经过统一处理：
+
+```text
+capabilityAgentMessages
+  -> 过滤 summarized:true / lc_kwargs.summarized:true
+  -> 裁剪为最近 10 条 agent 上下文消息
+  -> 再拼接 capability 自己的 task / constraint / responsibility prompt
+  -> 调用 capabilityModelInvoker
+```
+
+注意：10 条窗口只裁剪 agent 上下文部分，不直接裁掉 capability 自己追加的 task、约束或重试提示，避免把本次能力请求的指令裁掉。真正调用 invoker 前还会再次过滤 `summarized:true` 作为兜底。
+
+#### 4.2.4 插件侧 capability 注入
 
 capability / hook 运行期间，插件侧可能继续修改 `ctx.messages`：
 
@@ -228,7 +242,7 @@ capability / hook 运行期间，插件侧可能继续修改 `ctx.messages`：
 [插件侧] extraNonSystemMessages -> 合并进 incremental
 ```
 
-#### 4.2.4 插件侧最终压缩，Agent 侧入口执行过滤/裁剪
+#### 4.2.5 插件侧最终压缩，Agent 侧入口执行过滤/裁剪
 
 插件侧 `core/hooks.js -> compactFinalConversationWindow(...)` 会再次调用 Agent 侧入口：
 
@@ -275,7 +289,7 @@ capability / hook 运行期间，插件侧可能继续修改 `ctx.messages`：
 
 注意：`ctx.messageBlocks.history` 和 `ctx.messageBlocks.incremental` 保留的是可重算源块，而不是最终传模窗口。最终 `ctx.messages` 使用的是 `systemResolved + conversationResolved`。这样即使某条当前轮 harness 注入消息曾在一次 `conversation` recent window 中滑出，只要它仍在源块中、且仍是同 `injectedMessageType` 分组的最新注入消息，小结将工具爆发消息标记为 `summarized:true` 后，下一次压缩仍可把它重新算回窗口；同类型更旧的注入消息会被小结标记/筛选移除。
 
-#### 4.2.5 最终调用模型前的 Agent 侧保护过滤
+#### 4.2.6 最终调用模型前的 Agent 侧保护过滤
 
 最终 LLM invoke 前，Agent 侧还会执行：
 
@@ -336,7 +350,7 @@ finalModelMessages
   )
 ```
 
-#### 4.2.6 最终上下文中的筛选/裁剪规则标注
+#### 4.2.7 最终上下文中的筛选/裁剪规则标注
 
 ```text
 [Agent侧输入] originalSystemBlock

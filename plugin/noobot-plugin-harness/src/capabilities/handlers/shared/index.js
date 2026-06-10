@@ -57,8 +57,13 @@ export {
 } from "./tool-utils.js";
 
 export {
+  HARNESS_CAPABILITY_MODEL_CONTEXT_MESSAGE_LIMIT,
   cleanupInternalForcedMessages,
+  clipHarnessMessageWindow,
   extractRawTextContent,
+  filterAndClipHarnessCapabilityMessages,
+  filterSummarizedHarnessMessages,
+  isMessageSummarized,
   markMessagesSummarized,
   resolveInjectedMessageSummarizer,
   safeJsonStringify,

@@ -159,6 +159,7 @@ function collectAgentStyleHistoryMessages(ctx = {}) {
       const toolCallId = String(msg?.tool_call_id || "").trim();
       return !toolCallId || knownToolCallIds.has(toolCallId);
     })
+    .slice(-WORKFLOW_PARAMS.contextWindow.capabilityModelRecentMessageLimit)
     .map((msg = {}) => {
       const role = String(msg?.role || "").trim().toLowerCase();
       const assistantRaw =
