@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../../event/index.js";
+import { HumanMessage } from "@langchain/core/messages";
 import { REQUEST_HELP_TOOL_NAME } from "../../../tools/workflow/request-help-tool.js";
 import { executeToolCall } from "../execution/tool-runner.js";
 import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
+import { tEngine } from "../i18n-adapter.js";
 import { assertNotAborted } from "../utils/error-utils.js";
 import {
   buildAssistantModelMessageForToolCalls,
@@ -18,6 +20,8 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
+
+const MULTI_TOOL_CALL_LIMIT = 3;
 
 function ensurePendingSyntheticToolTurns(loopState = {}) {
   if (!Array.isArray(loopState.pendingSyntheticToolTurns)) {
@@ -61,6 +65,44 @@ function updateToolFailureState({ modelState, loopState, toolCallResult }) {
     : Number(loopState.toolConsecutiveFailureCount || 0) + 1;
   loopState.toolConsecutiveFailureCount = nextFailureCount;
   systemRuntime.toolConsecutiveFailureCount = nextFailureCount;
+}
+
+function maybeInjectToolBatchLimitPrompt({
+  modelState,
+  loopState,
+  observedCalls = 0,
+  turnMessageStore = null,
+} = {}) {
+  if (!Array.isArray(loopState?.messages)) return false;
+  const runtime = modelState?.runtime || {};
+  const eventListener = modelState?.eventListener || null;
+  const text = tEngine(runtime, "toolBatchLimitPrompt", {
+    maxCalls: MULTI_TOOL_CALL_LIMIT - 1,
+    observedCalls: Number(observedCalls || 0),
+  });
+  loopState.messages.push(
+    new HumanMessage({
+      content: text,
+    }),
+  );
+  if (turnMessageStore?.push) {
+    turnMessageStore.push({
+      role: "user",
+      content: text,
+      type: "message",
+      dialogProcessId: String(
+        modelState?.runtime?.systemRuntime?.dialogProcessId ||
+          modelState?.runtime?.dialogProcessId ||
+          loopState?.dialogProcessId ||
+          "",
+      ).trim(),
+    });
+  }
+  emitEvent(eventListener, "tool_batch_limit_prompted", {
+    observedCalls: Number(observedCalls || 0),
+    maxCalls: MULTI_TOOL_CALL_LIMIT - 1,
+  });
+  return true;
 }
 
 export async function commitSyntheticToolTurn({
@@ -228,6 +270,20 @@ export async function commitSyntheticToolTurn({
     ...syntheticMeta,
   });
 
+  if (loopState?.toolBatchLimitPromptPending === true) {
+    const pendingTurns = ensurePendingSyntheticToolTurns(loopState);
+    if (!pendingTurns.length) {
+      maybeInjectToolBatchLimitPrompt({
+        modelState,
+        loopState,
+        observedCalls: Number(loopState?.lastObservedToolCallBatchSize || 0),
+        turnMessageStore: pendingTurn?.turnMessageStore || null,
+      });
+      loopState.toolBatchLimitPromptPending = false;
+      loopState.lastObservedToolCallBatchSize = 0;
+    }
+  }
+
   return {
     toolCallResults: [toolCallResult],
     hasTaskSummaryCall,
@@ -312,6 +368,13 @@ export async function processToolResults({
   const committedToolCallResults = shouldSplitToolTurns
     ? toolCallResults.slice(0, 1)
     : toolCallResults;
+  if (shouldSplitToolTurns && toolCallResults.length >= MULTI_TOOL_CALL_LIMIT) {
+    loopState.toolBatchLimitPromptPending = true;
+    loopState.lastObservedToolCallBatchSize = toolCallResults.length;
+  } else {
+    loopState.toolBatchLimitPromptPending = false;
+    loopState.lastObservedToolCallBatchSize = 0;
+  }
   const committedHasTaskSummaryCall = committedToolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
   );

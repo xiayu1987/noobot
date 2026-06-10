@@ -1151,6 +1151,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
     },
   );
 
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-summary-opdir-"));
   const messages = [{ role: "user", content: "继续" }];
   const agentContext = {
     payload: {
@@ -1166,11 +1167,35 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
         logs: { planning: [], guidance: [], acceptance: [], review: [] },
       },
     },
+    execution: {
+      controllers: {
+        runtime: {
+          basePath,
+          userId: "summary-user",
+          globalConfig: { tools: { execute_script: { sandboxMode: false } } },
+          systemRuntime: { userId: "summary-user", sessionId: "summary-session" },
+        },
+      },
+    },
   };
 
   await hookManager.emit("before_llm_call", { messages, agentContext });
 
   assert.deepEqual(invocations.map((item) => item.purpose), ["summary"]);
+  const summaryRelayMessage = messages.find((item = {}) =>
+    /\[来自harness外部模型输出\/summary\]/.test(String(item?.content || "")),
+  );
+  const summaryRelayText = String(summaryRelayMessage?.content || "");
+  assert.match(summaryRelayText, /已完成：完成初始检查/);
+  assert.match(summaryRelayText, /\[Harness operation dir\] runtime\/ops_workdir/);
+  assert.equal(
+    summaryRelayText.includes(`Use (non-sandbox): ${basePath}/runtime/ops_workdir`),
+    true,
+  );
+  assert.equal(
+    summaryRelayText.indexOf("[Harness operation dir]") > summaryRelayText.indexOf("已完成：完成初始检查"),
+    true,
+  );
   assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, false);
 
   const result = { output: "done" };

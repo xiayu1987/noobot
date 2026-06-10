@@ -48,6 +48,10 @@ import {
   buildWorkflowResponsibilityConstraintUserPrompt,
 } from "../shared/workflow/prompts.js";
 import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
+import {
+  formatOperationDirectoryForRelay,
+  resolveOperationDirectoryContext,
+} from "../shared/operation-directory.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -406,6 +410,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       overviewText: summaryOverviewText,
       detailAttachmentMetas: summaryDetailAttachmentMetas,
     });
+    relayText = [
+      relayText,
+      formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
+    ].filter(Boolean).join("\n\n");
     relayAttachmentMetas = summaryDetailAttachmentMetas;
   } else {
     relayAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
