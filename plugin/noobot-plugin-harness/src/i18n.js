@@ -453,15 +453,15 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryProtocolHint:
       "请优先使用纯文本 summary_text_v2 协议：",
     guidanceSummarySampleRiskHigh:
-      "2. [plan=8][status=todo][risk=高] ...",
+      "2. [plan=8][status=todo][risk=高][evidence=...] ...",
     guidanceSummaryDetailHeader: "## 详细明细",
     guidanceSummaryDetailSample: "- 证据/日志/风险分析 ...",
     guidanceSummaryRules:
-      "要求：SUMMARY_OVERVIEW 保持简短、面向主流程决策，并且用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节。",
+      "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节。",
     relayContentTruncatedEllipsis: "……【已截断】",
     relayContentTransferHint: "详细内容已保存至 transferEnvelope(s)。",
     checklistTaskDefaultNameTemplate: "任务 {index}",
-    planChecklistContextHeader: "【计划清单】",
+    planChecklistContextHeader: "【当前完整计划清单】",
     phaseAcceptanceFinalOutputFallback:
       "总体验收前阶段验收：checklistCount={checklistCount}，successfulToolCount={successfulToolCount}。",
     structuredEnvelopeAgentHeader: "[Agent消息上下文]",
@@ -491,12 +491,12 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryLine1: "建议使用 summary_patch_v1（与计划 patch 协议独立）。",
     protocolSummaryLine2: "语法：",
     protocolSummaryLine3:
-      "ADD S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] [小结内容]",
+      "ADD S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] [小结内容]",
     protocolSummaryLine4:
-      "UPDATE S[小结ID] status=[done|in_progress|risk|todo] [小结内容]",
+      "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] [小结内容]",
     protocolSummaryLine5: "DELETE S[小结ID]",
     protocolSummaryLine6:
-      "若无法按协议输出，返回非空文本也可。小结后请继续任务，输出已完成项及问题说明。",
+      "必须对齐当前完整计划清单；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据与问题说明。小结后请继续任务。",
     protocolAcceptanceTitlePhase:
       "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
     protocolAcceptanceTitleFinal:
@@ -649,15 +649,15 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryProtocolHint:
       "Use plain-text summary_text_v2 blocks:",
     guidanceSummarySampleRiskHigh:
-      "2. [plan=8][status=todo][risk=high] ...",
+      "2. [plan=8][status=todo][risk=high][evidence=...] ...",
     guidanceSummaryDetailHeader: "## Detailed notes",
     guidanceSummaryDetailSample: "- evidence / logs / risk analysis ...",
     guidanceSummaryRules:
-      "Rules: SUMMARY_OVERVIEW should be short and action-oriented for main agent context, and must include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer.",
+      "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer.",
     relayContentTruncatedEllipsis: "... [truncated]",
     relayContentTransferHint: "Details are stored in transferEnvelope(s).",
     checklistTaskDefaultNameTemplate: "Task {index}",
-    planChecklistContextHeader: "[Plan Checklist]",
+    planChecklistContextHeader: "[Current Complete Plan Checklist]",
     phaseAcceptanceFinalOutputFallback:
       "Phase acceptance before final acceptance: checklistCount={checklistCount}, successfulToolCount={successfulToolCount}.",
     structuredEnvelopeAgentHeader: "[Agent message context]",
@@ -688,12 +688,12 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "Prefer summary_patch_v1 (independent from plan patch protocol).",
     protocolSummaryLine2: "Syntax:",
     protocolSummaryLine3:
-      "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] [summary content]",
+      "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] [summary content]",
     protocolSummaryLine4:
-      "UPDATE S[summary_id] status=[done|in_progress|risk|todo] [summary content]",
+      "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] [summary content]",
     protocolSummaryLine5: "DELETE S[summary_id]",
     protocolSummaryLine6:
-      "If protocol cannot be followed, any non-empty text is acceptable. Then continue with the task.",
+      "Align with the current complete plan checklist; evidence must come from context, tool results, or model final output and must not be fabricated. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, and issue notes. Then continue with the task.",
     protocolAcceptanceTitlePhase:
       "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
     protocolAcceptanceTitleFinal:

@@ -7,7 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildAcceptanceReport } from "../src/capabilities/handlers/acceptance/report-builder.js";
-import { resolvePlanChecklistText } from "../src/capabilities/handlers/shared/plan/checklist-context.js";
+import {
+  buildPlanChecklistSystemContent,
+  resolveCompletePlanChecklistText,
+  resolvePlanChecklistText,
+} from "../src/capabilities/handlers/shared/plan/checklist-context.js";
 
 test("acceptance report checklist includes first-level sub plans from planText", () => {
   const report = buildAcceptanceReport({
@@ -46,4 +50,53 @@ test("plan checklist context strips refinement patch appendix when plan text is 
   assert.match(String(text), /^1\.1 子计划一/m);
   assert.doesNotMatch(String(text), /planning_refinement/);
   assert.doesNotMatch(String(text), /^ADD /m);
+});
+
+test("summary checklist context preserves complete plan sub-plans from planText", () => {
+  const content = buildPlanChecklistSystemContent({
+    locale: "zh-CN",
+    planText: [
+      "1. 主计划一",
+      "1.1 子计划一",
+      "2. 主计划二",
+      "2.1 子计划二一",
+    ].join("\n"),
+  });
+  assert.match(String(content), /当前完整计划清单/);
+  assert.match(String(content), /^1\.1 子计划一/m);
+  assert.match(String(content), /^2\.1 子计划二一/m);
+});
+
+test("complete plan resolver preserves sub-plans from taskChecklist fallback", () => {
+  const text = resolveCompletePlanChecklistText({
+    bucket: {
+      taskChecklist: [
+        { index: 1, task: "主计划一", isMainStep: true },
+        { index: 101, mainStepIndex: 1, isMainStep: false, task: "子计划一" },
+        { index: 2, task: "主计划二", isMainStep: true },
+        { index: 205, mainStepIndex: 2, isMainStep: false, task: "子计划二一" },
+      ],
+    },
+  });
+  assert.match(String(text), /^1\. 主计划一/m);
+  assert.match(String(text), /^1\.1 子计划一/m);
+  assert.match(String(text), /^2\. 主计划二/m);
+  assert.match(String(text), /^2\.1 子计划二一/m);
+});
+
+test("complete plan resolver prefers bucket.planDocument over planText", () => {
+  const text = resolveCompletePlanChecklistText({
+    planText: "1. 旧主计划\n1.1 旧子计划",
+    bucket: {
+      planDocument: {
+        mainPlans: [{ id: 1, content: "新主计划" }],
+        subPlansByMainId: {
+          1: [{ id: "1.1", mainId: 1, subIndex: 1, content: "新子计划" }],
+        },
+      },
+    },
+  });
+  assert.match(String(text), /^1\. 新主计划/m);
+  assert.match(String(text), /^1\.1 新子计划/m);
+  assert.doesNotMatch(String(text), /旧主计划/);
 });
