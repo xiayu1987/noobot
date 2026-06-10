@@ -245,6 +245,7 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
     injectMessageWithPolicy(ctx, {
       role: messageItem.role,
       content: messageItem.content,
+      injectedMessageType: messageItem.kind || "planning_prompt",
       injectAt: "append",
       avoidBreakToolCallContinuity: true,
     });

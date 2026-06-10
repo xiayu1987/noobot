@@ -58,6 +58,11 @@ export function normalizeMessageEntity(
   if (String(message?.injectedBy || "").trim()) {
     normalizedMessage.injectedBy = String(message.injectedBy || "").trim();
   }
+  if (String(message?.injectedMessageType || message?.injected_message_type || "").trim()) {
+    normalizedMessage.injectedMessageType = String(
+      message.injectedMessageType || message.injected_message_type || "",
+    ).trim();
+  }
   if (message?.frontendUserMessage === true) {
     normalizedMessage.frontendUserMessage = true;
   }

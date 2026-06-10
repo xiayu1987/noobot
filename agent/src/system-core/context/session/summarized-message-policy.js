@@ -5,8 +5,10 @@
  */
 
 import {
+  collectLatestInjectedMessageIndexes,
   filterForModelContext,
   getMessageToolCalls,
+  isInjectedMessage,
   shouldMarkCurrentTurnSummarizedByPolicy,
   shouldMarkCurrentTurnModelSummarizedByPolicy,
 } from "./message-context-policy.js";
@@ -94,6 +96,35 @@ export function shouldMarkCurrentTurnSummarizedModelMessage(
   return shouldMarkCurrentTurnModelSummarizedByPolicy(messageItem);
 }
 
+function shouldPreserveInjectedMessageAtIndex(
+  messages = [],
+  index = -1,
+  latestInjectedIndexes = null,
+) {
+  if (!Array.isArray(messages) || index < 0) return false;
+  const messageItem = messages[index];
+  if (!isInjectedMessage(messageItem)) return false;
+  const latestIndexes =
+    latestInjectedIndexes instanceof Set
+      ? latestInjectedIndexes
+      : collectLatestInjectedMessageIndexes(messages);
+  return latestIndexes.has(index);
+}
+
+function shouldMarkCurrentTurnSummarizedMessageInScope(
+  messageItem = {},
+  {
+    messages = [],
+    index = -1,
+    latestInjectedIndexes = null,
+    taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
+  } = {},
+) {
+  if (shouldPreserveInjectedMessageAtIndex(messages, index, latestInjectedIndexes)) return false;
+  if (isInjectedMessage(messageItem)) return true;
+  return shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName });
+}
+
 export function markCurrentTurnStoreSummarized(
   turnMessageStore = null,
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
@@ -101,10 +132,18 @@ export function markCurrentTurnStoreSummarized(
   if (!turnMessageStore || typeof turnMessageStore.updateWhere !== "function") {
     return 0;
   }
+  const scopedMessages =
+    typeof turnMessageStore.toArray === "function" ? turnMessageStore.toArray() : [];
+  const latestInjectedIndexes = collectLatestInjectedMessageIndexes(scopedMessages);
   return turnMessageStore.updateWhere(
     { summarized: true },
-    (messageItem) =>
-      shouldMarkCurrentTurnSummarizedMessage(messageItem, { taskSummaryToolName }),
+    (messageItem, index) =>
+      shouldMarkCurrentTurnSummarizedMessageInScope(messageItem, {
+        messages: scopedMessages,
+        index,
+        latestInjectedIndexes,
+        taskSummaryToolName,
+      }),
   );
 }
 
@@ -113,9 +152,13 @@ export function markCurrentTurnArraySummarized(
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
   const source = Array.isArray(messages) ? messages : [];
-  return source.map((messageItem) => {
+  const latestInjectedIndexes = collectLatestInjectedMessageIndexes(source);
+  return source.map((messageItem, index) => {
     if (
-      !shouldMarkCurrentTurnSummarizedMessage(messageItem, {
+      !shouldMarkCurrentTurnSummarizedMessageInScope(messageItem, {
+        messages: source,
+        index,
+        latestInjectedIndexes,
         taskSummaryToolName,
       })
     ) {

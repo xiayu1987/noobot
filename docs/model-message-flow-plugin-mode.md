@@ -67,7 +67,9 @@ system -> history -> incremental
 - 过滤 `summarized: true`；
 - 过滤非法 tool-call/tool-result pair；
 - 按 `dialogProcessId` 过滤不属于当前链路的 injected 消息；
-- 当前轮 harness injected message 通常不因 `summarized:true` 被过滤，但仍参与 `incremental`/`conversation` recent window 裁剪；只有 frontend user message 有额外 anchor 补回逻辑。
+- 对 injected 消息按 `injectedMessageType`（缺省时回退内部类型 / relay purpose / `type` / `injectedBy`）分组，同一分组只保留最新一条；
+- 小结标记时也按同一分组保护最新 injected 消息：同类型最新一条不标 `summarized:true`，同类型更旧的注入消息会被标记并在后续筛选中移除；
+- 当前轮 harness injected message 仍参与 `incremental`/`conversation` recent window 裁剪；只有 frontend user message 有额外 anchor 补回逻辑。
 
 ### 4.1 当前最终压缩形态
 
@@ -146,10 +148,29 @@ Agent 侧同时向 harness options 注入统一过滤/裁剪入口：
 
 ```text
 [筛选] dialogProcessId：只过滤 injected message；非当前 dialogProcessId 的 injected message 会被移除
+[筛选] injected type：同一 injectedBy + injectedMessageType 分组只保留最新一条；缺省 type 会按内部类型 / relay purpose / type / injectedBy 回退
 [筛选] summarized:true：普通 summarized 消息移除；current system_context 是例外
 [筛选] tool pair：assistant tool_calls 与 tool result 必须成对，非法/孤立 pair 会被移除
 [筛选] task_summary fallback：孤立 task_summary tool result 会转换为 user 角色的 [阶段小结] 消息保留
 ```
+
+### 注入消息类型字段
+
+Harness 注入到主链路的消息应携带：
+
+```json
+{
+  "injectedMessage": true,
+  "injectedBy": "harness-plugin",
+  "injectedMessageType": "<stable-type>"
+}
+```
+
+`injectedMessageType` 表示注入来源/用途的稳定类型，例如 planning prompt、guidance summary prompt、acceptance validation request、separate model relay 等。筛选和小结标记均使用 `injectedBy + injectedMessageType` 作为分组键：
+
+- 小结时：同分组最新一条 injected 消息不标 `summarized:true`，更旧的同分组 injected 消息会标记为已小结；
+- 筛选时：同分组只保留最新一条；
+- 如果历史消息缺少 `injectedMessageType`，实现会回退到内部消息类型、relay purpose、通用 `type` 或 `injectedBy`，以兼容旧数据。
 
 基础裁剪规则（recent window）：
 
@@ -252,7 +273,7 @@ capability / hook 运行期间，插件侧可能继续修改 `ctx.messages`：
 }
 ```
 
-注意：`ctx.messageBlocks.history` 和 `ctx.messageBlocks.incremental` 保留的是可重算源块，而不是最终传模窗口。最终 `ctx.messages` 使用的是 `systemResolved + conversationResolved`。这样即使某条当前轮 harness 注入消息曾在一次 `conversation` recent window 中滑出，只要它仍在源块中，小结将工具爆发消息标记为 `summarized:true` 后，下一次压缩仍可把它重新算回窗口。
+注意：`ctx.messageBlocks.history` 和 `ctx.messageBlocks.incremental` 保留的是可重算源块，而不是最终传模窗口。最终 `ctx.messages` 使用的是 `systemResolved + conversationResolved`。这样即使某条当前轮 harness 注入消息曾在一次 `conversation` recent window 中滑出，只要它仍在源块中、且仍是同 `injectedMessageType` 分组的最新注入消息，小结将工具爆发消息标记为 `summarized:true` 后，下一次压缩仍可把它重新算回窗口；同类型更旧的注入消息会被小结标记/筛选移除。
 
 #### 4.2.5 最终调用模型前的 Agent 侧保护过滤
 
@@ -359,11 +380,12 @@ finalModelMessages
 筛选规则清单：
 
 ```text
-[筛选: dialog]       injectedMessage/injectedBy 标记的消息按 dialogProcessId 过滤；非 injected 不按 dialogProcessId 删除
-[筛选: summarized]   summarized:true 删除；summarized:true 的 current system_context 例外保留
-[筛选: tool-pair]    assistant tool_calls 与 tool result 必须成对；孤立普通 tool / assistant tool_call 会被删除
-[筛选: task_summary] 孤立 task_summary tool result 转换为 user [阶段小结] 消息保留
-[筛选: final]        最终 invoke 前再次执行 filterForModelContext，但不再执行 recent window
+[筛选: dialog]        injectedMessage/injectedBy 标记的消息按 dialogProcessId 过滤；非 injected 不按 dialogProcessId 删除
+[筛选: injected-type] 同一 injectedBy + injectedMessageType 分组只保留最新一条；缺省 type 会按内部类型 / relay purpose / type / injectedBy 回退
+[筛选: summarized]    summarized:true 删除；summarized:true 的 current system_context 例外保留
+[筛选: tool-pair]     assistant tool_calls 与 tool result 必须成对；孤立普通 tool / assistant tool_call 会被删除
+[筛选: task_summary]  孤立 task_summary tool result 转换为 user [阶段小结] 消息保留
+[筛选: final]         最终 invoke 前再次执行 filterForModelContext，但不再执行 recent window
 ```
 
 裁剪规则清单：
@@ -414,4 +436,4 @@ conversation = recent20(historyRecent20 + incrementalRecent20)
 3. **“current user 永远是最终最后一条”**：不保证，插件可后置注入。  
 4. **“只看最后一次日志就能还原全部裁剪过程”**：不行，历史通常是两段处理后才进入最终请求。
 5. **“最终是 history 窗口 + incremental 窗口相加”**：不是。当前最终 `conversation` 会把 `history + incremental` 再按 `contextWindowRecentMessageLimit` 合并裁剪一次。
-6. **“当前轮 harness 注入消息不会被裁剪”**：不是。它通常不会因为 `summarized:true` 被过滤，但仍会参与 `incremental` 和最终 `conversation` recent window。
+6. **“当前轮 harness 注入消息不会被裁剪”**：不是。它会按 `injectedMessageType` 同类型只保留最新一条，也仍会参与 `incremental` 和最终 `conversation` recent window。

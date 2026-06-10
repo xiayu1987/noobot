@@ -77,6 +77,7 @@ export const HARNESS_INJECTED_MESSAGE_FLAG_FIELD = "injectedMessage";
 export const HARNESS_INJECTED_MESSAGE_FLAG_VALUE = true;
 export const HARNESS_INJECTED_MESSAGE_BY_FIELD = "injectedBy";
 export const HARNESS_INJECTED_MESSAGE_BY_VALUE = "harness-plugin";
+export const HARNESS_INJECTED_MESSAGE_TYPE_FIELD = "injectedMessageType";
 
 export const PROMPT_JSON_FORMAT_EXAMPLES = HARNESS_PROMPT_JSON_FORMAT_EXAMPLES;
 

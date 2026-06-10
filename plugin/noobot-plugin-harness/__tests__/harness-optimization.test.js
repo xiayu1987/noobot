@@ -366,6 +366,21 @@ test("markMessagesSummarized keeps user/system messages unsummarized", () => {
   assert.equal(messages[3].summarized, true);
 });
 
+test("markMessagesSummarized marks older injected messages but preserves latest per type", () => {
+  const messages = [
+    { role: "user", content: "old summary", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt" },
+    { role: "user", content: "planning", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning_task" },
+    { role: "user", content: "new summary", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt" },
+  ];
+
+  const marked = markMessagesSummarized(messages);
+  assert.equal(marked, 1);
+  assert.equal(messages[0].summarized, true);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, undefined);
+});
+
+
 test("markMessagesSummarized follows task_summary exclusions", () => {
   const messages = [
     { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "task_summary" } }] },

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   filterSummarizedMessages,
+  markCurrentTurnArraySummarized,
   shouldMarkCurrentTurnSummarizedMessage,
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "../../../src/system-core/context/session/summarized-message-policy.js";
@@ -125,4 +126,32 @@ test("system is summarized while user and assistant-without-tool-calls are not",
     shouldMarkCurrentTurnSummarizedMessage({ role: "assistant", content: "plain text" }),
     false,
   );
+});
+
+
+test("markCurrentTurnArraySummarized preserves only latest injected message per type", () => {
+  const result = markCurrentTurnArraySummarized([
+    { role: "user", content: "old summary prompt", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt" },
+    { role: "user", content: "old planning prompt", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning_task" },
+    { role: "user", content: "new summary prompt", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt" },
+  ]);
+
+  assert.equal(result[0].summarized, true);
+  assert.equal(result[1].summarized, undefined);
+  assert.equal(result[2].summarized, undefined);
+});
+
+test("filterSummarizedMessages keeps latest injected message for each injected type", () => {
+  const result = filterSummarizedMessages([
+    { role: "user", content: "old relay", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "separate_model_relay:planning" },
+    { role: "user", content: "planning prompt", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning_task" },
+    { role: "user", content: "new relay", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "separate_model_relay:planning" },
+    { role: "assistant", content: "normal" },
+  ]);
+
+  assert.deepEqual(result.map((item) => item.content), [
+    "planning prompt",
+    "new relay",
+    "normal",
+  ]);
 });

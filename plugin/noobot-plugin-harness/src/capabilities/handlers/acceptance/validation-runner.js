@@ -194,6 +194,7 @@ function pushRoleMessage(messages = [], role = "system", content = "") {
   messages.push(
     buildHarnessInjectedMessage(normalizedContent, {
       role: String(role || "system").trim() || "system",
+      injectedMessageType: "acceptance_prompt",
     }),
   );
   return true;
@@ -631,6 +632,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   const systemInjection = injectMessageWithPolicy(ctx, {
     role: "system",
     content: systemContent,
+    injectedMessageType: "acceptance_main_plan_context",
     injectAt: "append",
     dedupe: false,
     avoidBreakToolCallContinuity: false,
@@ -640,6 +642,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
     injectMessageWithPolicy(ctx, {
       role: "system",
       content,
+      injectedMessageType: "acceptance_phase_report",
       injectAt: "append",
       dedupe: false,
       avoidBreakToolCallContinuity: false,
@@ -648,6 +651,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   const userInjection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: requestContent,
+    injectedMessageType: "acceptance_semantic_validation_request",
     injectAt: "append",
     dedupe: false,
     avoidBreakToolCallContinuity: false,
@@ -656,6 +660,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   injectMessageWithPolicy(ctx, {
     role: "user",
     content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance"),
+    injectedMessageType: "acceptance_responsibility_constraint",
     injectAt: "append",
     dedupe: false,
     avoidBreakToolCallContinuity: false,

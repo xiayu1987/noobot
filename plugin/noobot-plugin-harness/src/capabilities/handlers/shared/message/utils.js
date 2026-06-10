@@ -88,6 +88,37 @@ export function sanitizeInternalMessages(ctx = {}) {
   return changed;
 }
 
+function resolveInjectedMessageType(messageItem = {}) {
+  if (!messageItem || typeof messageItem !== "object") return "";
+  if (messageItem?.injectedMessage !== true && !String(messageItem?.injectedBy || "").trim()) {
+    return "";
+  }
+  const explicitType = String(
+    messageItem?.injectedMessageType ||
+      messageItem?.injected_message_type ||
+      messageItem?.lc_kwargs?.injectedMessageType ||
+      messageItem?.lc_kwargs?.injected_message_type ||
+      "",
+  ).trim();
+  if (explicitType) return explicitType;
+  const genericType = String(messageItem?.type || messageItem?.lc_kwargs?.type || "").trim();
+  if (genericType && genericType !== "message") return genericType;
+  return String(messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "injected_message").trim();
+}
+
+function collectLatestInjectedMessageIndexes(messages = []) {
+  const latestByType = new Map();
+  const source = Array.isArray(messages) ? messages : [];
+  for (let index = 0; index < source.length; index += 1) {
+    const messageItem = source[index] || {};
+    const type = resolveInjectedMessageType(messageItem);
+    if (!type) continue;
+    const injectedBy = String(messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "").trim();
+    latestByType.set(`${injectedBy || "injected"}:${type}`, index);
+  }
+  return new Set(latestByType.values());
+}
+
 function markMessageSummarized(messageItem = null) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem.summarized === true && messageItem?.lc_kwargs?.summarized === true) return false;
@@ -152,15 +183,17 @@ function shouldMarkHarnessSummaryMessage(
 
 export function markMessagesSummarized(messages = []) {
   if (!Array.isArray(messages)) return 0;
+  const latestInjectedIndexes = collectLatestInjectedMessageIndexes(messages);
   let changedCount = 0;
-  for (const messageItem of messages) {
-    if (
-      !shouldMarkHarnessSummaryMessage(messageItem, {
-        taskSummaryToolName: DEFAULT_TASK_SUMMARY_TOOL_NAME,
-      })
-    ) {
-      continue;
-    }
+  for (let index = 0; index < messages.length; index += 1) {
+    const messageItem = messages[index];
+    const injectedType = resolveInjectedMessageType(messageItem);
+    const shouldMark = injectedType
+      ? !latestInjectedIndexes.has(index)
+      : shouldMarkHarnessSummaryMessage(messageItem, {
+          taskSummaryToolName: DEFAULT_TASK_SUMMARY_TOOL_NAME,
+        });
+    if (!shouldMark) continue;
     if (markMessageSummarized(messageItem)) {
       changedCount += 1;
     }

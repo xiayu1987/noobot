@@ -187,14 +187,22 @@ export function injectSystemMessages(ctx = {}, options = {}) {
           messages.splice(i, 1);
         }
       }
-      prependItems.push(buildHarnessInjectedMessage(marker));
+      prependItems.push(
+        buildHarnessInjectedMessage(marker, { injectedMessageType: `harness_prompt:${id}` }),
+      );
     } else if (mode === "append") {
-      appendItems.push(buildHarnessInjectedMessage(marker));
+      appendItems.push(
+        buildHarnessInjectedMessage(marker, { injectedMessageType: `harness_prompt:${id}` }),
+      );
     } else if (mode === "after_system") {
-      afterSystemItems.push(buildHarnessInjectedMessage(marker));
+      afterSystemItems.push(
+        buildHarnessInjectedMessage(marker, { injectedMessageType: `harness_prompt:${id}` }),
+      );
     } else {
       // prepend (default)
-      prependItems.push(buildHarnessInjectedMessage(marker));
+      prependItems.push(
+        buildHarnessInjectedMessage(marker, { injectedMessageType: `harness_prompt:${id}` }),
+      );
     }
     injected = true;
   }

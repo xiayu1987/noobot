@@ -129,6 +129,24 @@ export async function updateManifest(paths, ctx = {}, patch = {}, options = {}, 
   );
 }
 
+function collectPromptScanMessageLists(ctx = {}) {
+  const lists = [];
+  if (Array.isArray(ctx?.messages)) lists.push(ctx.messages);
+  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+  if (blocks) {
+    if (Array.isArray(blocks.system)) lists.push(blocks.system);
+    if (Array.isArray(blocks.history)) lists.push(blocks.history);
+    if (Array.isArray(blocks.incremental)) lists.push(blocks.incremental);
+  }
+  return lists;
+}
+
+function isHarnessPromptAlreadyInjectedInContext(ctx = {}, id = "") {
+  return collectPromptScanMessageLists(ctx).some((messages) =>
+    isHarnessPromptAlreadyInjected(messages, id),
+  );
+}
+
 export async function injectPrompt(point, ctx, options, plugin = {}) {
   if (!options.enabled || !options.promptPolicy) return;
   const id =
@@ -145,7 +163,7 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
   const content = configuredPrompt || resolveDefaultPrompt();
   if (!content) return;
 
-  if (isHarnessPromptAlreadyInjected(ctx.messages, id)) return;
+  if (isHarnessPromptAlreadyInjectedInContext(ctx, id)) return;
 
   const injected = injectSystemMessages(ctx, {
     skipIds: new Set(),

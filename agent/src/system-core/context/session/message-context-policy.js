@@ -162,7 +162,7 @@ export function isCurrentSystemContextMessage(messageItem = {}) {
   return marker === "system_context";
 }
 
-function isInjectedMessage(messageItem = {}) {
+export function isInjectedMessage(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem?.injectedMessage === true) return true;
   if (messageItem?.lc_kwargs?.injectedMessage === true) return true;
@@ -178,6 +178,70 @@ function isInjectedMessage(messageItem = {}) {
     return true;
   }
   return false;
+}
+
+export function resolveInjectedMessageType(messageItem = {}) {
+  if (!isInjectedMessage(messageItem)) return "";
+  const explicitType = String(
+    messageItem?.injectedMessageType ||
+      messageItem?.injected_message_type ||
+      messageItem?.lc_kwargs?.injectedMessageType ||
+      messageItem?.lc_kwargs?.injected_message_type ||
+      messageItem?.additional_kwargs?.injectedMessageType ||
+      messageItem?.lc_kwargs?.additional_kwargs?.injectedMessageType ||
+      "",
+  ).trim();
+  if (explicitType) return explicitType;
+  const internalType = String(
+    messageItem?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.metadata?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.metadata?.noobotInternalMessageType ||
+      "",
+  ).trim();
+  if (internalType) return internalType;
+  const content = String(
+    messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
+  ).trim();
+  const relayMatch = content.match(/^\[(?:来自harness外部模型输出|Relay from harness external model)\/([^\]]+)\]/);
+  if (relayMatch?.[1]) return `harness_relay:${String(relayMatch[1] || "").trim()}`;
+  const genericType = String(messageItem?.type || messageItem?.lc_kwargs?.type || "").trim();
+  if (genericType && genericType !== "message") return genericType;
+  const injectedBy = String(
+    messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "",
+  ).trim();
+  return injectedBy || "injected_message";
+}
+
+function buildInjectedMessageLatestKey(messageItem = {}) {
+  const type = resolveInjectedMessageType(messageItem);
+  if (!type) return "";
+  const injectedBy = String(
+    messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "",
+  ).trim();
+  return `${injectedBy || "injected"}:${type}`;
+}
+
+export function collectLatestInjectedMessageIndexes(messages = []) {
+  const latestByType = new Map();
+  const source = Array.isArray(messages) ? messages : [];
+  for (let index = 0; index < source.length; index += 1) {
+    const key = buildInjectedMessageLatestKey(source[index]);
+    if (!key) continue;
+    latestByType.set(key, index);
+  }
+  return new Set(latestByType.values());
+}
+
+export function filterLatestInjectedMessagesByType(messages = []) {
+  const source = Array.isArray(messages) ? messages : [];
+  const latestIndexes = collectLatestInjectedMessageIndexes(source);
+  return source.filter((messageItem, index) => {
+    if (!isInjectedMessage(messageItem)) return true;
+    const key = buildInjectedMessageLatestKey(messageItem);
+    if (!key) return true;
+    return latestIndexes.has(index);
+  });
 }
 
 function shouldKeepMessageForDialog(
@@ -199,9 +263,10 @@ export function filterInjectedMessagesForDialog(
   messages = [],
   currentDialogProcessId = "",
 ) {
-  return (Array.isArray(messages) ? messages : []).filter((messageItem) =>
+  const sameDialogMessages = (Array.isArray(messages) ? messages : []).filter((messageItem) =>
     shouldKeepMessageForDialog(messageItem, currentDialogProcessId),
   );
+  return filterLatestInjectedMessagesByType(sameDialogMessages);
 }
 
 export function shouldKeepForModelContext(messageItem = {}) {
@@ -216,8 +281,10 @@ export function shouldKeepForModelContext(messageItem = {}) {
 }
 
 export function filterForModelContext(messages = []) {
-  const source = (Array.isArray(messages) ? messages : []).filter((messageItem) =>
-    shouldKeepForModelContext(messageItem),
+  const source = filterLatestInjectedMessagesByType(
+    (Array.isArray(messages) ? messages : []).filter((messageItem) =>
+      shouldKeepForModelContext(messageItem),
+    ),
   );
   const assistantCallIds = new Set();
   const toolResultIds = new Set();
