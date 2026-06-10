@@ -434,6 +434,7 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
 
   const toolCallMessages = loopState.turnMessages.filter((item) => item.role === "assistant");
   const toolResultMessages = loopState.turnMessages.filter((item) => item.role === "tool");
+  const userPromptMessages = loopState.turnMessages.filter((item) => item.role === "user");
   assert.equal(toolResultMessages.length, 3);
   assert.deepEqual(
     toolCallMessages.slice(0, 3).map((item) => item.tool_calls.map((call) => call.id)),
@@ -443,8 +444,31 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
     toolResultMessages.map((item) => item.tool_call_id),
     ["call_1", "call_2", "call_3"],
   );
+  assert.ok(
+    userPromptMessages.some((item = {}) =>
+      /不要一次返回 3 条及以上工具|do not return 3 or more at once/i.test(
+        String(item?.content || ""),
+      )),
+    "turn message store should persist the injected tool-batch-limit prompt",
+  );
 
   const secondInvocationMessages = capturedInvocations[1] || [];
+  const toolBatchLimitPromptMessage = [...secondInvocationMessages]
+    .reverse()
+    .find((messageItem) =>
+      messageItem instanceof HumanMessage &&
+      /不要一次返回 3 条及以上工具|do not return 3 or more at once/i.test(
+        String(messageItem?.content || ""),
+      ));
+  assert.ok(
+    toolBatchLimitPromptMessage,
+    "should inject a user prompt when a split synthetic batch has 3+ tool calls",
+  );
+  assert.equal(
+    toolBatchLimitPromptMessage.additional_kwargs?.noobotInternalMessageType,
+    undefined,
+    "tool-batch-limit prompt must remain visible to harness before_llm_call cleanup",
+  );
   const assistantToolCallCounts = secondInvocationMessages
     .filter((message) => String(message?._getType?.() || "") === "ai")
     .map((message) => (Array.isArray(message.tool_calls) ? message.tool_calls.length : 0));
