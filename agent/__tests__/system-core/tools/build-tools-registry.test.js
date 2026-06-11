@@ -133,3 +133,41 @@ test("buildTools: 兼容 legacy disableAgentCollabTools 字段", async () => {
   assert.equal(names.has("wait_async_task_result"), false);
   assert.equal(names.has("plan_multi_task_collaboration"), false);
 });
+
+test("buildTools: coding 场景应强制保留编程基础工具", async () => {
+  const tools = await buildTools(
+    createContext({
+      globalConfig: {
+        tools: {
+          file: { enabled: false },
+          read_file: { enabled: false },
+          write_file: { enabled: false },
+          search: { enabled: false },
+          patch_file: { enabled: false },
+          execute_script: { enabled: false },
+        },
+      },
+      runtimePatch: {
+        basePath: "/tmp",
+        runConfig: {
+          scenario: "coding",
+          toolPolicy: {
+            denyToolNames: [
+              "read_file",
+              "write_file",
+              "search",
+              "patch_file",
+              "execute_script",
+            ],
+          },
+        },
+      },
+    }),
+  );
+  const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
+  assert.equal(names.has("read_file"), true);
+  assert.equal(names.has("write_file"), true);
+  assert.equal(names.has("search"), true);
+  assert.equal(names.has("patch_file"), true);
+  assert.equal(names.has("execute_script"), true);
+});

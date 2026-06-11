@@ -93,3 +93,50 @@ test("applyRunConfigToolPolicy denyToolNames should override allowToolNames", ()
 
   assert.deepEqual(toolNames, ["read_file"]);
 });
+
+test("applyRunConfigToolPolicy should keep coding-required tools in coding scenario", () => {
+  const resolver = new RunConfigResolver();
+  const agentContext = {
+    payload: {
+      tools: {
+        registry: [
+          { name: "read_file" },
+          { name: "write_file" },
+          { name: "search" },
+          { name: "patch_file" },
+          { name: "execute_script" },
+          { name: "request_help" },
+        ],
+      },
+    },
+  };
+  const runConfig = {
+    scenario: "coding",
+    toolPolicy: {
+      mode: "custom_only",
+      customTools: [{ name: "request_help" }],
+      allowToolNames: ["request_help"],
+      denyToolNames: [
+        "read_file",
+        "write_file",
+        "search",
+        "patch_file",
+        "execute_script",
+      ],
+    },
+  };
+
+  const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
+  const toolNames = (nextContext?.payload?.tools?.registry || [])
+    .map((tool) => tool.name)
+    .sort();
+
+  assert.deepEqual(toolNames, [
+    "execute_script",
+    "patch_file",
+    "read_file",
+    "request_help",
+    "search",
+    "write_file",
+  ]);
+});
