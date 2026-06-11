@@ -5,6 +5,7 @@
  */
 import { normalizeKnownConfigKeys } from "./key-normalizer.js";
 import { normalizeTimeMs } from "./time-config-normalizer.js";
+import { sanitizeScenarioConfig } from "./builtin-scenarios.js";
 import { isPlainObject } from "../../utils/shared-utils.js";
 
 // 用户可覆盖策略（只允许这些键被 user config 覆盖）
@@ -19,7 +20,7 @@ const USER_OVERRIDE_POLICY = {
   services: "deep",
   mcpServers: "deep",
   tools: "deep",
-  scenarios: "deep",
+  scenarios: "scenarios",
   plugins: "deep",
   preferences: "deep",
 };
@@ -106,6 +107,10 @@ function cloneAllowedValue(key, value) {
     return Number.isFinite(normalizedNumber) && normalizedNumber > 0
       ? normalizedNumber
       : undefined;
+  }
+  if (mode === "scenarios") {
+    const sanitizedScenarios = sanitizeScenarioConfig(value);
+    return Object.keys(sanitizedScenarios).length ? sanitizedScenarios : undefined;
   }
   return isPlainObject(value) ? stripDeniedPaths(key, { ...value }) : undefined;
 }

@@ -5,12 +5,14 @@
  */
 
 export {
+  BUILTIN_SCENARIOS,
   BUILTIN_THRESHOLDS,
   createGlobalConfigBuilder,
   hasOwnConfigKey,
   mergeConfig,
   normalizeBooleanLike,
   normalizeTimeMs,
+  resolveBuiltinScenarios,
   resolveRunConfigValue,
   resolveTimeMs,
 } from "noobot-agent/config";

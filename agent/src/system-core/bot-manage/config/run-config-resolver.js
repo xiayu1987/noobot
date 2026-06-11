@@ -4,17 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { mergeConfig } from "../../config/index.js";
+import { PROGRAMMING_REQUIRED_TOOL_NAMES, mergeConfig } from "../../config/index.js";
 import { isPlainObject, resolveForceToolCall } from "../../utils/shared-utils.js";
 
 const CODING_SCENARIO_KEYS = new Set(["coding", "programming"]);
-const CODING_REQUIRED_TOOL_NAMES = Object.freeze([
-  "read_file",
-  "write_file",
-  "search",
-  "patch_file",
-  "execute_script",
-]);
+const CODING_REQUIRED_TOOL_NAMES = PROGRAMMING_REQUIRED_TOOL_NAMES;
 
 /**
  * Resolve scenario-based runtime config and apply tool policy scopes.

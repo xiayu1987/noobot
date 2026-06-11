@@ -139,22 +139,14 @@ Notes:
 
 | Key | Type | Description |
 |---|---|---|
-| `scenarios.default` | string | Default scenario key (used when request does not set `config.scenario`) |
-| `scenarios.definitions.<name>.name` | string | Display name used by frontend scenario buttons |
-| `scenarios.definitions.<name>.description` | string | Scenario description (injected into system prompt and can be shown in UI) |
-| `scenarios.definitions.<name>.model` | string | Runtime model alias/name for this scenario (applied when request does not set `runtimeModel`) |
-| `scenarios.definitions.<name>.tools` | string[] | Allowed tool names for this scenario |
-| `scenarios.definitions.<name>.context` | string[] | Allowed context sections (`scenario`, `system_runtime`, `base_prompt`, `services`, `mcp_servers`, etc.) |
-| `scenarios.definitions.<name>.services` | string[] | Scenario-bound services (`serviceName` or `serviceName.endpointName`) |
-| `scenarios.definitions.<name>.mcp_servers` / `mcpServers` | string[] | Scenario-bound MCP server names |
+| `scenarios.default` | string | Default scenario key (only built-in `full` / `programming`; used when request does not set `config.scenario`) |
+| `scenarios.definitions.programming.model` | string | Default runtime model alias/name for the programming scenario (applied when request does not set `runtimeModel`) |
 
-Current defaults in repo:
-- `full` (default): tools/context/services/mcp_servers are `["*"]`, meaning no extra restriction
-- `programming`: model=`"qwen3_6_plus_2026_04_02"`, description="analyze code structure first...", tools=`["execute_script", "task_summary", "request_help"]`, services=`["web_search_service"]`, context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
+Scenario definitions are now system built-ins with two fixed scenarios:
+- `full` (all-purpose, default): tools/context/services/mcp_servers are `["*"]`, meaning unrestricted by scenario.
+- `programming`: fixed code-task policy with required coding tools, code context sections, and `web_search_service`; configuration may override only `model`.
 
-Built-in definition keys:
-- `scenarios.definitions.full`
-- `scenarios.definitions.programming`
+Other scenario fields in global/user config (`name`, `description`, `tools`, `context`, `services`, `mcp_servers`) and custom scenario definitions are ignored to protect built-in behavior.
 
 ### 3.5.1 Plugins
 
@@ -266,7 +258,7 @@ User config can override global values.
 | `default_provider` | User default provider |
 | `attachments` | User attachment policy override |
 | `tools` | User tool enable/options override |
-| `scenarios` | User scenario definitions/default override |
+| `scenarios` | User scenario selection / programming model override (only `default` and `definitions.programming.model`) |
 | `plugins` | User plugin default/enable override |
 | `providers` | User provider override |
 | `services` | User external service definitions (see §4.1) |

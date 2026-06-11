@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 
 import { resolveScenarioProfile } from "../../../src/system-core/context/builders/scenario-resolver.js";
 
-test("resolveScenarioProfile prefers runConfig scenarioProfile over scenario definition", () => {
+test("resolveScenarioProfile prefers runConfig scenarioProfile over builtin scenario definition", () => {
   const result = resolveScenarioProfile({
     runConfig: {
-      scenario: "coding",
+      scenario: "programming",
       scenarioProfile: {
         name: "临时覆盖",
         description: "run profile",
@@ -16,29 +16,33 @@ test("resolveScenarioProfile prefers runConfig scenarioProfile over scenario def
     },
     effectiveConfig: {
       scenarios: {
-        default: "coding",
+        default: "programming",
         definitions: {
-          coding: {
-            name: "编码",
-            description: "definition",
+          programming: {
             model: "openai:gpt-4.1",
-            tools: ["call_service"],
-            context: ["system_runtime"],
+            tools: ["unsafe_tool"],
+            context: ["attachments"],
           },
         },
       },
     },
   });
 
-  assert.equal(result.key, "coding");
+  assert.equal(result.key, "programming");
   assert.equal(result.name, "临时覆盖");
   assert.equal(result.description, "run profile");
   assert.equal(result.model, "openai:gpt-5");
   assert.deepEqual(result.tools, ["execute_script"]);
-  assert.deepEqual(result.context, ["system_runtime"]);
+  assert.deepEqual(result.context, [
+    "scenario",
+    "system_runtime",
+    "base_prompt",
+    "services",
+    "mcp_servers",
+  ]);
 });
 
-test("resolveScenarioProfile supports mcpServers/mcp_servers and normalizes string arrays", () => {
+test("resolveScenarioProfile supports runConfig mcp aliases and ignores custom scenario definitions", () => {
   const fromRunConfig = resolveScenarioProfile({
     runConfig: {
       scenarioProfile: {
@@ -63,5 +67,6 @@ test("resolveScenarioProfile supports mcpServers/mcp_servers and normalizes stri
       },
     },
   });
-  assert.deepEqual(fromDefinition.mcpServers, ["server-c"]);
+  assert.equal(fromDefinition.key, "assistant");
+  assert.deepEqual(fromDefinition.mcpServers, []);
 });

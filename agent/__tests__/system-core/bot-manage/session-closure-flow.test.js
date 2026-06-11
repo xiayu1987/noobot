@@ -46,12 +46,11 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       async loadUserConfig() {
         return {
           scenarios: {
-            default: "flow_patch",
+            default: "programming",
             definitions: {
-              flow_patch: {
-                name: "闭环流程",
-                description: "中途改 context + 模型切换 + 附件产出",
+              programming: {
                 model: "gpt-4.1-mini",
+                // 内置编程情景只允许覆盖 model；其它字段即使配置也会被忽略。
                 tools: ["switch_model", "task_summary"],
                 context: ["base_prompt", "attachments"],
               },
@@ -91,8 +90,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       );
       assert.deepEqual(
         toolNames,
-        ["switch_model", "task_summary"],
-        "工具链应按场景策略收敛",
+        ["task_summary"],
+        "工具链应按内置编程场景策略收敛",
       );
       return {
         output: "已切换模型并生成附件",
@@ -226,11 +225,11 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     parentSessionId: "",
   });
 
-  assert.equal(capturedBuildContextInput?.runConfig?.scenario, "flow_patch");
+  assert.equal(capturedBuildContextInput?.runConfig?.scenario, "programming");
   assert.equal(capturedBuildContextInput?.runConfig?.runtimeModel, "gpt-4.1-mini");
   assert.deepEqual(
     capturedBuildContextInput?.runConfig?.contextPolicy?.includeContextKeys,
-    ["base_prompt", "attachments"],
+    ["scenario", "system_runtime", "base_prompt", "services", "mcp_servers"],
   );
   assert.equal(
     capturedBuildContextInput?.attachmentMetas?.[0]?.name,

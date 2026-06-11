@@ -140,3 +140,44 @@ test("applyRunConfigToolPolicy should keep coding-required tools in coding scena
     "write_file",
   ]);
 });
+
+test("resolveScenarioRunConfig should use builtin programming shape and only accept model override", () => {
+  const resolver = new RunConfigResolver({
+    globalConfig: {
+      scenarios: {
+        definitions: {
+          programming: {
+            model: "code-model",
+            tools: ["unsafe_tool"],
+            context: ["*"],
+            services: ["custom_service"],
+          },
+          custom: { name: "custom" },
+        },
+      },
+    },
+  });
+
+  const resolved = resolver.resolveScenarioRunConfig({ scenario: "programming" }, {});
+
+  assert.equal(resolved.runtimeModel, "code-model");
+  assert.equal(resolved.scenarioProfile.name, "编程");
+  assert.deepEqual(resolved.scenarioProfile.tools, [
+    "read_file",
+    "write_file",
+    "search",
+    "patch_file",
+    "execute_script",
+    "task_summary",
+    "request_help",
+    "call_service",
+  ]);
+  assert.deepEqual(resolved.scenarioProfile.context, [
+    "scenario",
+    "system_runtime",
+    "base_prompt",
+    "services",
+    "mcp_servers",
+  ]);
+  assert.deepEqual(resolved.scenarioProfile.services, ["web_search_service"]);
+});

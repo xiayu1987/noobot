@@ -139,22 +139,14 @@
 
 | 键名 | 类型 | 说明 |
 |---|---|---|
-| `scenarios.default` | string | 默认情景键（请求未设置 `config.scenario` 时使用） |
-| `scenarios.definitions.<name>.name` | string | 前端显示名称（用于情景按钮文案） |
-| `scenarios.definitions.<name>.description` | string | 情景说明（会注入系统提示块并可在前端展示） |
-| `scenarios.definitions.<name>.model` | string | 该情景默认运行模型别名/模型名（请求未设置 `runtimeModel` 时生效） |
-| `scenarios.definitions.<name>.tools` | string[] | 该情景允许的工具名称集合 |
-| `scenarios.definitions.<name>.context` | string[] | 该情景允许注入的上下文段（如 `scenario`、`system_runtime`、`base_prompt`、`services`、`mcp_servers`） |
-| `scenarios.definitions.<name>.services` | string[] | 情景绑定的 Service 集合（支持 `serviceName` 或 `serviceName.endpointName`） |
-| `scenarios.definitions.<name>.mcp_servers` / `mcpServers` | string[] | 情景绑定的 MCP Server 名称集合 |
+| `scenarios.default` | string | 默认情景键（仅支持内置 `full` / `programming`；请求未设置 `config.scenario` 时使用） |
+| `scenarios.definitions.programming.model` | string | 编程情景默认运行模型别名/模型名（请求未设置 `runtimeModel` 时生效） |
 
-当前仓库默认：
-- `full`（默认）：tools/context/services/mcp_servers 为 `["*"]`，表示不额外限制
-- `programming`：model=`"qwen3_6_plus_2026_04_02"`，description=“优先分析代码结构…”，tools=`["execute_script", "task_summary", "request_help"]`，services=`["web_search_service"]`，context=`["scenario","system_runtime","base_prompt","services","mcp_servers"]`
+情景定义现在由系统内置，只保留两个固定情景：
+- `full`（全能，默认）：tools/context/services/mcp_servers 均为 `["*"]`，表示不额外限制。
+- `programming`（编程）：固定使用代码任务策略，包含代码修改必要工具、代码上下文段、`web_search_service` 辅助服务；配置文件只允许覆盖 `model`。
 
-内置定义键：
-- `scenarios.definitions.full`
-- `scenarios.definitions.programming`
+用户配置或全局配置中的其它字段（如 `name`、`description`、`tools`、`context`、`services`、`mcp_servers`，以及自定义情景定义）会被忽略，避免破坏内置行为。
 
 ### 3.5.1 插件配置
 
@@ -266,7 +258,7 @@
 | `default_provider` | 用户默认模型 |
 | `attachments` | 用户级附件策略覆盖 |
 | `tools` | 用户级工具开关/参数覆盖 |
-| `scenarios` | 用户级情景定义/默认值覆盖 |
+| `scenarios` | 用户级情景选择/编程模型覆盖（只允许 `default` 与 `definitions.programming.model`） |
 | `plugins` | 用户级插件开关/默认模式覆盖 |
 | `providers` | 用户级模型配置覆盖 |
 | `services` | 用户级外部服务定义（见 §4.1） |

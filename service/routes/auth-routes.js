@@ -3,62 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveBuiltinScenarios } from "#agent/config";
 import { logError } from "#agent/tracking";
 import { withJsonError } from "./route-wrapper.js";
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function normalizeScenarioDefinitions(definitionsInput = {}) {
-  const sourceDefinitions = isPlainObject(definitionsInput) ? definitionsInput : {};
-  const normalizedDefinitions = {};
-  const normalizeStringArray = (input = []) =>
-    Array.isArray(input)
-      ? input
-          .map((item) => String(item || "").trim())
-          .filter(Boolean)
-      : [];
-  for (const [scenarioKey, scenarioValue] of Object.entries(sourceDefinitions)) {
-    const normalizedScenarioKey = String(scenarioKey || "").trim();
-    if (!normalizedScenarioKey) continue;
-    const sourceScenario = isPlainObject(scenarioValue) ? scenarioValue : {};
-    const normalizedTools = normalizeStringArray(sourceScenario?.tools);
-    const normalizedContext = normalizeStringArray(sourceScenario?.context);
-    const normalizedServices = normalizeStringArray(sourceScenario?.services);
-    const normalizedMcpServers = normalizeStringArray(
-      sourceScenario?.mcpServers ?? sourceScenario?.mcp_servers,
-    );
-    normalizedDefinitions[normalizedScenarioKey] = {
-      ...sourceScenario,
-      name: String(sourceScenario?.name || "").trim(),
-      description: String(sourceScenario?.description || "").trim(),
-      model: String(sourceScenario?.model || "").trim(),
-      tools: normalizedTools,
-      context: normalizedContext,
-      services: normalizedServices,
-      mcpServers: normalizedMcpServers,
-    };
-  }
-  return normalizedDefinitions;
-}
-
-function resolveMergedScenarios(globalScenarios = {}, userScenarios = {}) {
-  const globalSource = isPlainObject(globalScenarios) ? globalScenarios : {};
-  const userSource = isPlainObject(userScenarios) ? userScenarios : {};
-  const globalDefinitions = normalizeScenarioDefinitions(globalSource?.definitions);
-  const userDefinitions = normalizeScenarioDefinitions(userSource?.definitions);
-  const mergedDefinitions = {
-    ...globalDefinitions,
-    ...userDefinitions,
-  };
-  const userDefaultScenario = String(userSource?.default || "").trim();
-  const globalDefaultScenario = String(globalSource?.default || "").trim();
-  const resolvedDefaultScenario = userDefaultScenario || globalDefaultScenario || "";
-  return {
-    default: resolvedDefaultScenario,
-    definitions: mergedDefinitions,
-  };
 }
 
 function normalizePluginMode(value = "off") {
@@ -163,7 +113,7 @@ export function registerAuthRoutes(
       ) {
         await workspaceService.ensureUserWorkspace(userId);
         const loadedSuperAdminConfig = await loadUserConfigSafe(userId);
-        const superAdminScenarios = resolveMergedScenarios(globalConfig?.scenarios, {});
+        const superAdminScenarios = resolveBuiltinScenarios(globalConfig?.scenarios, {});
         const superAdminPlugins = resolveMergedPlugins(
           globalConfig?.plugins,
           loadedSuperAdminConfig?.plugins,
@@ -196,7 +146,7 @@ export function registerAuthRoutes(
         loadedUserConfig && typeof loadedUserConfig === "object"
           ? loadedUserConfig.scenarios || {}
           : {};
-      const mergedScenarios = resolveMergedScenarios(
+      const mergedScenarios = resolveBuiltinScenarios(
         globalConfig?.scenarios,
         userScenarios,
       );
