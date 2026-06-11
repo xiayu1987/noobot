@@ -6,6 +6,7 @@
 
 import path from "node:path";
 
+import { BUILTIN_ATTACHMENT_POLICY } from "../../config/index.js";
 import { safeStr } from "../../utils/shared-utils.js";
 
 /**
@@ -17,17 +18,12 @@ import { safeStr } from "../../utils/shared-utils.js";
 export function resolveAttachmentPolicy(policy = {}) {
   const config = policy && typeof policy === "object" ? policy : {};
 
-  const toPositiveInt = (val) => {
-    const num = Number(val ?? 0);
-    return Number.isFinite(num) && num > 0 ? Math.floor(num) : 0;
-  };
-
   return {
-    maxFileSizeBytes: toPositiveInt(config?.maxFileSizeBytes),
-    maxTotalSizeBytes: toPositiveInt(config?.maxTotalSizeBytes),
-    maxFileCount: toPositiveInt(config?.maxFileCount),
-    allowedMimeTypes: normalizeStringArray(config?.allowedMimeTypes),
-    allowedExtensions: normalizeExtensions(config?.allowedExtensions),
+    maxFileSizeBytes: BUILTIN_ATTACHMENT_POLICY.maxFileSizeBytes,
+    maxTotalSizeBytes: BUILTIN_ATTACHMENT_POLICY.maxTotalSizeBytes,
+    maxFileCount: BUILTIN_ATTACHMENT_POLICY.maxFileCount,
+    allowedMimeTypes: normalizeStringArray(BUILTIN_ATTACHMENT_POLICY.allowedMimeTypes),
+    allowedExtensions: normalizeExtensions(BUILTIN_ATTACHMENT_POLICY.allowedExtensions),
   };
 }
 

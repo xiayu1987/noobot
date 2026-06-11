@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { normalizeSseLogEvent } from "#agent/event";
 import {
+  BUILTIN_THRESHOLDS,
   hasOwnConfigKey,
   mergeConfig,
   normalizeBooleanLike,
@@ -17,7 +18,7 @@ import {
 import { logError } from "#agent/tracking";
 import { HTTP_STATUS } from "#agent/constants";
 
-const DEFAULT_RUN_TIMEOUT_MS = 5 * 60 * 60 * 1000;
+const DEFAULT_RUN_TIMEOUT_MS = BUILTIN_THRESHOLDS.runTimeoutMs;
 const MIN_RUN_TIMEOUT_MS = 10000;
 const MAX_RUN_TIMEOUT_MS = 12 * 60 * 60 * 1000;
 
@@ -46,36 +47,13 @@ function resolveConfigRunTimeoutMs(config = {}) {
   });
 }
 
-async function resolveEffectiveRunTimeoutMs({ bot, userId = "", runConfig = {} } = {}) {
-  const normalizedUserId = String(userId || "").trim();
+async function resolveEffectiveRunTimeoutMs({ bot: _bot, userId: _userId = "", runConfig = {} } = {}) {
   const runConfigTimeoutMs = resolveConfigRunTimeoutMs(runConfig);
   if (runConfigTimeoutMs !== undefined && runConfigTimeoutMs !== null) {
     return resolveRunTimeoutMs(runConfigTimeoutMs);
   }
 
-  const globalConfig =
-    bot?.globalConfig && typeof bot.globalConfig === "object" ? bot.globalConfig : {};
-  if (!normalizedUserId || typeof bot?.loadUserConfig !== "function") {
-    return resolveRunTimeoutMs(resolveConfigRunTimeoutMs(globalConfig));
-  }
-
-  let userConfig = {};
-  try {
-    const workspacePath =
-      typeof bot?.getWorkspacePath === "function" ? bot.getWorkspacePath(normalizedUserId) : "";
-    userConfig =
-      workspacePath && typeof workspacePath === "string"
-        ? (await bot.loadUserConfig(workspacePath)) || {}
-        : {};
-  } catch (error) {
-    logError("[ws][chat-websocket-server] load user config failed when resolving timeout", {
-      userId: normalizedUserId,
-      error: error?.message || String(error),
-    });
-    userConfig = {};
-  }
-  const effectiveConfig = mergeConfig(globalConfig, userConfig);
-  return resolveRunTimeoutMs(resolveConfigRunTimeoutMs(effectiveConfig));
+  return resolveRunTimeoutMs(DEFAULT_RUN_TIMEOUT_MS);
 }
 
 async function resolveEffectiveStreamingEnabled({ bot, userId = "", runConfig = {} } = {}) {

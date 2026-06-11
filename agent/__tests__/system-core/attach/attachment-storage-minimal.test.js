@@ -5,6 +5,7 @@ import path from "node:path";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import { AttachmentService } from "../../../src/system-core/attach/service/attachment-service.js";
+import { BUILTIN_ATTACHMENT_POLICY } from "../../../src/system-core/config/index.js";
 import {
   readAttachIndex,
   writeAttachIndex,
@@ -163,9 +164,10 @@ test("policy + mime minimal compatibility", () => {
     allowedExtensions: ["PNG", ".txt"],
   });
 
-  assert.equal(policy.maxFileSizeBytes, 12);
-  assert.deepEqual(policy.allowedMimeTypes, ["image/*", "text/plain"]);
-  assert.deepEqual(policy.allowedExtensions, [".png", ".txt"]);
+  assert.equal(policy.maxFileSizeBytes, BUILTIN_ATTACHMENT_POLICY.maxFileSizeBytes);
+  assert.deepEqual(policy.allowedMimeTypes, BUILTIN_ATTACHMENT_POLICY.allowedMimeTypes);
+  assert.equal(policy.allowedExtensions.includes(".png"), true);
+  assert.equal(policy.allowedExtensions.includes(".txt"), true);
   assert.deepEqual(validateAttachmentPolicy(policy), policy);
 
   assert.equal(isMimeTypeAllowed("image/png", policy.allowedMimeTypes), true);

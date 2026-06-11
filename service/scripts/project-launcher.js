@@ -19,6 +19,71 @@ const CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS = new Set([
   "streaming",
   "super_admin",
 ]);
+
+const BUILTIN_CONFIG_PRUNE_PATHS = Object.freeze([
+  ["memory_max_items"],
+  ["memoryMaxItems"],
+  ["max_tool_loop_turns"],
+  ["maxToolLoopTurns"],
+  ["run_timeout_ms"], // legacyKeys prune
+  ["runTimeoutMs"],
+  ["context", "main_model_recent_window"],
+  ["context", "mainModelRecentWindow"],
+  ["context", "main_model_recent_limit"],
+  ["context", "mainModelRecentLimit"],
+  ["session", "recent_message_limit"],
+  ["session", "recentMessageLimit"],
+  ["attachments", "max_file_count"],
+  ["attachments", "maxFileCount"],
+  ["attachments", "max_file_size_bytes"],
+  ["attachments", "maxFileSizeBytes"],
+  ["attachments", "max_total_size_bytes"],
+  ["attachments", "maxTotalSizeBytes"],
+  ["attachments", "allowed_extensions"],
+  ["attachments", "allowedExtensions"],
+  ["attachments", "allowed_mime_types"],
+  ["attachments", "allowedMimeTypes"],
+  ["tools", "delegate_task_async", "wait_timeout_ms"],
+  ["tools", "delegate_task_async", "waitTimeoutMs"],
+  ["tools", "delegate_task_async", "max_sub_agent_depth"],
+  ["tools", "delegate_task_async", "maxSubAgentDepth"],
+  ["tools", "delegate_task_async", "poll_interval_ms"],
+  ["tools", "delegate_task_async", "pollIntervalMs"],
+  ["tools", "wait_async_task_result", "poll_interval_ms"],
+  ["tools", "wait_async_task_result", "pollIntervalMs"],
+  ["tools", "process_content_task", "max_tool_loop_turns"],
+  ["tools", "process_content_task", "maxToolLoopTurns"],
+  ["tools", "execute_script", "script_timeout_ms"],
+  ["tools", "execute_script", "scriptTimeoutMs"],
+  ["tools", "process_connector_tool", "max_tool_loop_turns"],
+  ["tools", "process_connector_tool", "maxToolLoopTurns"],
+  ["tools", "access_connector", "command_file", "max_bytes"],
+  ["tools", "access_connector", "command_file", "maxBytes"],
+  ["tools", "access_connector", "command_file", "allowed_extensions"],
+  ["tools", "access_connector", "command_file", "allowedExtensions"],
+  ["tools", "task_summary", "phase_summary_loop_turns"],
+  ["tools", "task_summary", "phaseSummaryLoopTurns"],
+  ["tools", "task_summary", "phase_summary_message_chars_threshold"],
+  ["tools", "task_summary", "phaseSummaryMessageCharsThreshold"],
+  ["tools", "task_summary", "max_tool_loop_turns"],
+  ["tools", "task_summary", "maxToolLoopTurns"],
+  ["tools", "request_help", "help_prompt_loop_turns"],
+  ["tools", "request_help", "helpPromptLoopTurns"],
+  ["tools", "request_help", "tool_failure_help_count"],
+  ["tools", "request_help", "toolFailureHelpCount"],
+  ["plugins", "workflow", "timeout_ms"],
+  ["plugins", "workflow", "timeoutMs"],
+  ["plugins", "workflow", "maxAutoTransitions"],
+  ["plugins", "workflow", "maxParallelNodeAgents"],
+  ["plugins", "workflow", "miniRunnerMaxTurns"],
+  ["plugins", "workflow", "contextWindowRecentMessageLimit"],
+  ["plugins", "harness", "miniRunnerMaxTurns"],
+  ["plugins", "harness", "contextWindowRecentMessageLimit"],
+  ["openvscode", "start_timeout_ms"],
+  ["openvscode", "startTimeoutMs"],
+  ["openvscode", "idle_timeout_ms"],
+  ["openvscode", "idleTimeoutMs"],
+]);
 const CONFIG_TEXT_BILINGUAL_PAIRS = [
   {
     zh: "目录映射配置示例：source 与 target 同时非空才会生效；不配置或留空 source 则不映射",
@@ -208,6 +273,31 @@ function normalizeModelFormat(input = "") {
   const format = String(input || "").trim().toLowerCase();
   if (!format) return "";
   return MODEL_FORMAT_VALUES.has(format) ? format : "";
+}
+
+
+function deleteConfigPath(root = {}, segments = []) {
+  if (!isPlainObject(root) || !Array.isArray(segments) || !segments.length) return;
+  let node = root;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    node = node?.[segments[index]];
+    if (!isPlainObject(node)) return;
+  }
+  delete node[segments[segments.length - 1]];
+}
+
+function pruneBuiltInConfigParams(payload = {}) {
+  if (!isPlainObject(payload)) return payload;
+  const output = deepClone(payload);
+  for (const segments of BUILTIN_CONFIG_PRUNE_PATHS) {
+    deleteConfigPath(output, segments);
+  }
+  for (const key of ["context", "session", "attachments", "openvscode"]) {
+    if (isPlainObject(output[key]) && !Object.keys(output[key]).length) {
+      delete output[key];
+    }
+  }
+  return output;
 }
 
 function mergeIncremental({ template, target, pathDepth = 0, skipTopLevelKeys = new Set() } = {}) {
@@ -743,11 +833,11 @@ async function syncJsonFileIncremental({ templateFilePath, targetFilePath, skipT
   const targetJson = targetExists
     ? await readJsonStrict(targetFilePath, t(locale, "labelTargetConfig"))
     : {};
-  const merged = mergeIncremental({
-    template: templateJson,
-    target: targetJson,
+  const merged = pruneBuiltInConfigParams(mergeIncremental({
+    template: pruneBuiltInConfigParams(templateJson),
+    target: pruneBuiltInConfigParams(targetJson),
     skipTopLevelKeys,
-  });
+  }));
 
   if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
     await writeJson(targetFilePath, merged);
@@ -1116,11 +1206,11 @@ async function syncWhenGlobalConfigExists({ globalExamplePath, globalConfigPath,
 
   if (!isPlainObject(globalExampleConfig) || !isPlainObject(globalConfig)) return;
 
-  const mergedGlobal = mergeIncremental({
-    template: globalExampleConfig,
-    target: globalConfig,
+  const mergedGlobal = pruneBuiltInConfigParams(mergeIncremental({
+    template: pruneBuiltInConfigParams(globalExampleConfig),
+    target: pruneBuiltInConfigParams(globalConfig),
     skipTopLevelKeys: CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS,
-  });
+  }));
 
   const existingConfigLanguage = String(mergedGlobal?.preferences?.language || "").trim();
   const mergedGlobalLocalized = existingConfigLanguage

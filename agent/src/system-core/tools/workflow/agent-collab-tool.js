@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { hasOwnConfigKey, mergeConfig, normalizeBooleanLike, normalizeTimeMs } from "../../config/index.js";
+import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import {
   getRuntimeFromAgentContext,
@@ -60,10 +60,6 @@ export function createAgentCollabTool({ agentContext }) {
       systemRuntime?.config?.selectedConnectors || {},
     ),
     runtimeModel: String(runtime?.runtimeModel || "").trim(),
-    ...(Number.isFinite(Number(systemRuntime?.config?.maxToolLoopTurns)) &&
-    Number(systemRuntime?.config?.maxToolLoopTurns) > 0
-      ? { maxToolLoopTurns: Math.floor(Number(systemRuntime.config.maxToolLoopTurns)) }
-      : {}),
     sharedTools:
       runtime?.sharedTools && typeof runtime.sharedTools === "object"
         ? runtime.sharedTools
@@ -77,21 +73,8 @@ export function createAgentCollabTool({ agentContext }) {
     ...(passthroughToolPolicy && parentToolPolicy ? { toolPolicy: parentToolPolicy } : {}),
   };
 
-  const defaultWaitMs = normalizeTimeMs(
-    effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.waitTimeoutMs,
-    {
-      fallback: 300000,
-      min: 1000,
-    },
-  );
-  const defaultPollIntervalMs = normalizeTimeMs(
-    effectiveConfig?.tools?.[TOOL_NAME.WAIT_ASYNC_TASK_RESULT]?.pollIntervalMs ??
-      effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.pollIntervalMs,
-    {
-      fallback: 5000,
-      min: 1000,
-    },
-  );
+  const defaultWaitMs = BUILTIN_THRESHOLDS.agentCollab.waitTimeoutMs;
+  const defaultPollIntervalMs = BUILTIN_THRESHOLDS.agentCollab.pollIntervalMs;
 
   const botManager = runtime.botManager || null;
   const userId = agentContext?.userId || runtime.userId || "";

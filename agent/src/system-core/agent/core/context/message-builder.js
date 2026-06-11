@@ -12,7 +12,7 @@ import {
 import { tEngine } from "../i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
 import { resolveModelContextMessages } from "../../../session/utils/context-window-normalizer.js";
-import { mergeConfig } from "../../../config/index.js";
+import { BUILTIN_THRESHOLDS, mergeConfig } from "../../../config/index.js";
 import {
   compactToolResultTextForModel,
   getTransferAttachmentMetas,
@@ -207,10 +207,6 @@ function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
 
 function resolveMainModelWindowConfig(runtime = {}) {
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
-  const contextConfig =
-    effectiveConfig?.context && typeof effectiveConfig.context === "object"
-      ? effectiveConfig.context
-      : {};
   const harnessConfig =
     effectiveConfig?.plugins?.harness && typeof effectiveConfig.plugins.harness === "object"
       ? effectiveConfig.plugins.harness
@@ -218,17 +214,9 @@ function resolveMainModelWindowConfig(runtime = {}) {
   const harnessEnabled = harnessConfig.enabled === true;
   const harnessMode = String(harnessConfig.mode || "").trim().toLowerCase();
   const harnessActive = harnessEnabled && harnessMode !== "off" && harnessMode !== "disabled";
-  const mainModelRecentWindow = contextConfig.mainModelRecentWindow !== false;
-  const parsedMainModelRecentLimit = Number(contextConfig.mainModelRecentLimit);
-  const mainModelRecentLimit =
-    Number.isFinite(parsedMainModelRecentLimit) && parsedMainModelRecentLimit > 0
-      ? Math.floor(parsedMainModelRecentLimit)
-      : 15;
-  const parsedHarnessRecentLimit = Number(harnessConfig.contextWindowRecentMessageLimit);
-  const harnessRecentLimit =
-    Number.isFinite(parsedHarnessRecentLimit) && parsedHarnessRecentLimit > 0
-      ? Math.floor(parsedHarnessRecentLimit)
-      : 20;
+  const mainModelRecentWindow = BUILTIN_THRESHOLDS.mainModelRecentWindow;
+  const mainModelRecentLimit = BUILTIN_THRESHOLDS.mainModelRecentLimit;
+  const harnessRecentLimit = BUILTIN_THRESHOLDS.workflow.contextWindowRecentMessageLimit;
   return {
     mainModelRecentWindow,
     mainModelRecentLimit,

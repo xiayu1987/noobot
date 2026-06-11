@@ -9,6 +9,7 @@ import path from "node:path";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
+  BUILTIN_THRESHOLDS,
   mergeConfig,
   normalizeSandboxProvider,
   normalizeTimeMs,
@@ -597,10 +598,7 @@ export function createScriptTool({ agentContext }) {
           ...transferPayload,
         });
       }
-      const timeout = normalizeTimeMs(scriptConfig?.scriptTimeoutMs, {
-        fallback: DEFAULT_TIMEOUT,
-        min: 1000,
-      });
+      const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
 
       if (!sandboxEnabled) {
         const runResult = await run(normalizedCommand, workspace, timeout);

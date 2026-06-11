@@ -224,10 +224,6 @@ export function buildDynamicInfo({
       : {}),
     ...(toolPolicy ? { toolPolicy } : {}),
     selectedConnectors,
-    ...(Number.isFinite(Number(runConfig?.maxToolLoopTurns)) &&
-    Number(runConfig?.maxToolLoopTurns) > 0
-      ? { maxToolLoopTurns: Math.floor(Number(runConfig.maxToolLoopTurns)) }
-      : {}),
   };
   return {
     userId: String(userId || "").trim(),

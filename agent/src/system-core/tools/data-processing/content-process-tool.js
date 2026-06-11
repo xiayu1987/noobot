@@ -13,7 +13,7 @@ import {
   resolveChildRunParentSessionIdFromRuntime,
 } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
-import { hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
+import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
 import { createDoc2DataTool } from "./doc2data-tool.js";
 import { createMedia2DataTool } from "./media2data-tool.js";
 import { createWeb2DataTool } from "./web2data-tool.js";
@@ -42,14 +42,8 @@ export function createContentProcessTool({ agentContext }) {
   const docToDataEnabled = isToolEnabled(TOOL_NAME.DOC_TO_DATA, true);
   const mediaToDataEnabled = isToolEnabled(TOOL_NAME.MEDIA_TO_DATA, true);
   const webToDataEnabled = isToolEnabled(TOOL_NAME.WEB_TO_DATA, true);
-  const configuredMaxToolLoopTurns = Number(
-    effectiveConfig?.tools?.[TOOL_NAME.PROCESS_CONTENT_TASK]?.maxToolLoopTurns,
-  );
   const resolvedMaxToolLoopTurns =
-    Number.isFinite(configuredMaxToolLoopTurns) &&
-    configuredMaxToolLoopTurns > 0
-      ? Math.min(20, Math.max(1, Math.floor(configuredMaxToolLoopTurns)))
-      : 4;
+    BUILTIN_THRESHOLDS.subTasks.processContentTaskMaxToolLoopTurns;
   const contentProcessTools = [
     ...(docToDataEnabled ? createDoc2DataTool({ agentContext }) : []),
     ...(mediaToDataEnabled ? createMedia2DataTool({ agentContext }) : []),

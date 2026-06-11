@@ -6,7 +6,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
+import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
@@ -50,10 +50,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const allowUserInteraction =
     systemRuntime?.config?.allowUserInteraction !== false;
   const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
-  const maxToolLoopTurns = Number(
-    effectiveConfig?.tools?.[TOOL_NAME.PROCESS_CONNECTOR_TOOL]?.maxToolLoopTurns ??
-      6,
-  );
+  const maxToolLoopTurns = BUILTIN_THRESHOLDS.subTasks.processConnectorToolMaxToolLoopTurns;
   const connectorSubSessionSystemPrompt = tTool(
     runtime,
     "tools.process_connector.subSessionSystemPrompt",

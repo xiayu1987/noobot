@@ -1,70 +1,6 @@
 {
   "default_provider": "qwen3_6_plus_2026_04_02",
-  "context": {
-    "main_model_recent_window": true,
-    "main_model_recent_limit": 15
-  },
   "attachments": {
-    "max_file_count": 8,
-    "max_file_size_bytes": 10485760,
-    "max_total_size_bytes": 31457280,
-    "allowed_extensions": [
-      ".txt",
-      ".md",
-      ".markdown",
-      ".json",
-      ".csv",
-      ".xml",
-      ".pdf",
-      ".png",
-      ".jpg",
-      ".jpeg",
-      ".webp",
-      ".doc",
-      ".docx",
-      ".xls",
-      ".xlsx",
-      ".ppt",
-      ".pptx",
-      ".rtf",
-      ".odt",
-      ".ods",
-      ".odp",
-      ".mp4",
-      ".mov",
-      ".avi",
-      ".mkv",
-      ".webm",
-      ".m4v",
-      ".js",
-      ".mjs",
-      ".cjs",
-      ".ts",
-      ".tsx",
-      ".jsx",
-      ".jsonc",
-      ".yaml",
-      ".yml",
-      ".py",
-      ".java",
-      ".go",
-      ".rs",
-      ".cpp",
-      ".c",
-      ".h",
-      ".hpp",
-      ".cs",
-      ".php",
-      ".rb",
-      ".sh",
-      ".bash",
-      ".zsh",
-      ".sql",
-      ".toml",
-      ".ini",
-      ".env",
-      ".log"
-    ],
     "attachment_models": {
       "audio": "qwen3_5_omni_plus",
       "video": "qwen3_5_omni_plus",
@@ -91,14 +27,10 @@
       "enabled": true
     },
     "delegate_task_async": {
-      "enabled": true,
-      "wait_timeout_ms": 300000,
-      "max_sub_agent_depth": 3,
-      "poll_interval_ms": 5000
+      "enabled": true
     },
     "wait_async_task_result": {
-      "enabled": true,
-      "poll_interval_ms": 5000
+      "enabled": true
     },
     "plan_multi_task_collaboration": {
       "enabled": true
@@ -110,17 +42,14 @@
       "enabled": true
     },
     "task_summary": {
-      "enabled": true,
-      "phase_summary_loop_turns": 15
+      "enabled": true
     },
     "request_help": {
       "enabled": true,
       "help_services": [
         "web_search_service"
       ],
-      "help_model": "",
-      "help_prompt_loop_turns": 50,
-      "tool_failure_help_count": 3
+      "help_model": ""
     },
     "web_to_data": {
       "enabled": true,
@@ -131,8 +60,7 @@
       "parse_engine": "libreoffice"
     },
     "process_content_task": {
-      "enabled": true,
-      "max_tool_loop_turns": 50
+      "enabled": true
     },
     "execute_script": {
       "enabled": true,
@@ -146,27 +74,15 @@
         },
         "bubblewrap": {},
         "firejail": {}
-      },
-      "script_timeout_ms": 300000
+      }
     },
     "process_connector_tool": {
-      "enabled": true,
-      "max_tool_loop_turns": 50
+      "enabled": true
     },
     "access_connector": {
       "enabled": true,
       "command_file": {
         "enabled": true,
-        "max_bytes": 262144,
-        "allowed_extensions": [
-          ".sql",
-          ".sh",
-          ".bash",
-          ".zsh",
-          ".ksh",
-          ".py",
-          ".js"
-        ],
         "allowed_roots": []
       }
     },
@@ -273,9 +189,7 @@
     "workflow": {
       "enabled": true,
       "mode": "off",
-      "semanticModel": "qwen3_6_plus",
-      "timeout_ms": 18000000,
-      "maxAutoTransitions": 10
+      "semanticModel": "qwen3_6_plus"
     }
   },
   "providers": {
@@ -441,9 +355,5 @@
   },
   "preferences": {
     "language": "zh-CN"
-  },
-  "run_timeout_ms": 18000000,
-  "openvscode": {
-    "start_timeout_ms": 60000
   }
 }
