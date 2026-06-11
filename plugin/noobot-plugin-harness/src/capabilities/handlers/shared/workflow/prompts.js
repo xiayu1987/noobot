@@ -300,6 +300,25 @@ export function buildGuidanceSummaryPromptText(options = {}) {
   ].filter(Boolean).join("\n");
 }
 
+export function buildPreviousSummaryContextContent({
+  locale = LOCALE.ZH_CN,
+  summaryText = "",
+} = {}) {
+  const text = String(summaryText || "").trim();
+  if (!text) return "";
+  const header = `<!-- harness-previous-summary-context -->\n${translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PREVIOUS_SUMMARY_CONTEXT_HEADER,
+  )}`;
+  return `${header}\n${text}`;
+}
+
+export function buildPreviousSummaryContextMessages(options = {}) {
+  const content = buildPreviousSummaryContextContent(options);
+  if (!content) return [];
+  return [{ role: "system", content }];
+}
+
 export function buildAcceptanceValidationPromptText(options = {}) {
   return buildAcceptanceValidationRequestPromptText(options);
 }

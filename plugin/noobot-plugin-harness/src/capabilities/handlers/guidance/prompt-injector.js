@@ -13,7 +13,9 @@ import {
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
+import { resolvePreviousSummaryContextText } from "./summary-manager.js";
 import {
+  buildPreviousSummaryContextContent,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildGuidanceFailurePromptText,
   buildGuidanceSummaryPromptText,
@@ -54,6 +56,20 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
         role: "system",
         content: checklistContent,
         injectedMessageType: "guidance_summary_checklist",
+        injectAt: "append",
+        dedupe: false,
+        avoidBreakToolCallContinuity: true,
+      });
+    }
+    const previousSummaryContent = buildPreviousSummaryContextContent({
+      locale,
+      summaryText: resolvePreviousSummaryContextText(ctx),
+    });
+    if (previousSummaryContent) {
+      injectMessageWithPolicy(ctx, {
+        role: "system",
+        content: previousSummaryContent,
+        injectedMessageType: "guidance_summary_previous_summary",
         injectAt: "append",
         dedupe: false,
         avoidBreakToolCallContinuity: true,

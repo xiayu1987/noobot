@@ -127,6 +127,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     GUIDANCE_SUMMARY_DETAIL_HEADER: "guidanceSummaryDetailHeader",
     GUIDANCE_SUMMARY_DETAIL_SAMPLE: "guidanceSummaryDetailSample",
     GUIDANCE_SUMMARY_RULES: "guidanceSummaryRules",
+    PREVIOUS_SUMMARY_CONTEXT_HEADER: "previousSummaryContextHeader",
     ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER: "acceptanceMainPlanContextHeader",
     PHASE_ACCEPTANCE_REQUEST_GOAL: "phaseAcceptanceRequestGoal",
     PHASE_ACCEPTANCE_REQUEST_CONSTRAINT: "phaseAcceptanceRequestConstraint",
@@ -466,7 +467,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryDetailHeader: "## 详细明细",
     guidanceSummaryDetailSample: "- 证据/日志/风险分析 ...",
     guidanceSummaryRules:
-      "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节。",
+      "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节。",
+    previousSummaryContextHeader: "【上一次小结】",
     relayContentTruncatedEllipsis: "……【已截断】",
     relayContentTransferHint: "详细内容已保存至 transferEnvelope(s)。",
     checklistTaskDefaultNameTemplate: "任务 {index}",
@@ -672,7 +674,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryDetailHeader: "## Detailed notes",
     guidanceSummaryDetailSample: "- evidence / logs / risk analysis ...",
     guidanceSummaryRules:
-      "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer.",
+      "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer.",
+    previousSummaryContextHeader: "[Previous Summary]",
     relayContentTruncatedEllipsis: "... [truncated]",
     relayContentTransferHint: "Details are stored in transferEnvelope(s).",
     checklistTaskDefaultNameTemplate: "Task {index}",

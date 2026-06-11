@@ -8,7 +8,78 @@ import assert from "node:assert/strict";
 
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
 
-test("inject-mode summary saves detail as attachment and injects detail path to main agent", async () => {
+test("inject-mode summary defaults to injecting full summary to main agent without attachment", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  let ingestCalled = 0;
+  const fullSummary = [
+    "[SUMMARY_OVERVIEW]",
+    "1. [plan=2][status=done] 完成模块分析",
+    "",
+    "[SUMMARY_DETAIL]",
+    "## 详细明细",
+    "- 执行了命令A",
+    "- 发现风险B",
+    "[SUMMARY_END]",
+  ].join("\n");
+  const ctx = {
+    userId: "admin",
+    sessionId: "s1",
+    messages: [
+      { role: "user", content: "继续任务" },
+      { role: "assistant", content: "收到" },
+    ],
+    ai: { content: fullSummary },
+    agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            attachmentService: {
+              async ingestGeneratedArtifacts() {
+                ingestCalled += 1;
+                return [];
+              },
+            },
+          },
+        },
+      },
+      payload: {
+        harness: {
+          state: {
+            flags: { guidanceSummaryMarkPending: true },
+            counters: {},
+            signals: {},
+            pending: {},
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  await handler({ capability: "guidance", point: "after_llm_call", ctx, meta: {} });
+
+  const harnessBucket = ctx?.agentContext?.payload?.harness || {};
+  assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
+  assert.match(String(harnessBucket.summaryFullText || ""), /\[SUMMARY_DETAIL\]/);
+  assert.equal(ingestCalled, 0);
+  assert.equal(Array.isArray(harnessBucket.summaryDetailAttachmentMetas), true);
+  assert.equal(harnessBucket.summaryDetailAttachmentMetas.length, 0);
+  assert.equal(
+    ctx.messages.some(
+      (item = {}) =>
+        String(item?.role || "") === "user" &&
+        String(item?.content || "").includes("[SUMMARY_DETAIL]") &&
+        String(item?.content || "").includes("- 执行了命令A"),
+    ),
+    true,
+  );
+  assert.equal(
+    ctx.messages.some((item = {}) => String(item?.content || "").includes("DETAIL_PATH:")),
+    false,
+  );
+});
+
+test("inject-mode summary can save detail as attachment and inject detail path to main agent", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const ctx = {
     userId: "admin",
@@ -110,7 +181,7 @@ test("inject-mode summary saves detail as attachment and injects detail path to 
       },
     },
   };
-  const meta = {};
+  const meta = { harness: { summaryDetailSaveToAttachment: true } };
 
   await handler({ capability: "guidance", point: "after_llm_call", ctx, meta });
 

@@ -36,7 +36,13 @@ import { schedulePlanUpdateByInject } from "./revision-injector.js";
 import { buildGuidancePromptContent } from "./prompt-injector.js";
 import { resolvePendingPlanUpdate } from "../planning/plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages } from "./signal-tracker.js";
-import { applySummaryText, recordSummaryDetailAttachmentMetas } from "./summary-manager.js";
+import {
+  applySummaryText,
+  recordLatestSummaryFullText,
+  recordSummaryDetailAttachmentMetas,
+  resolvePreviousSummaryContextText,
+  shouldSaveSummaryDetailToAttachment,
+} from "./summary-manager.js";
 import {
   parseSummaryOverviewAndDetailFromText,
   resolveSummaryDetailAttachmentText,
@@ -44,6 +50,7 @@ import {
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
+  buildPreviousSummaryContextMessages,
   resolveProgrammingModeFromContext,
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
@@ -336,6 +343,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
             planText: bucket?.planText || "",
             bucket,
           }),
+          ...buildPreviousSummaryContextMessages({
+            locale,
+            summaryText: resolvePreviousSummaryContextText(ctx),
+          }),
         ]
       : modelMessages;
   const invokerMessages = buildCapabilityModelMessages({
@@ -399,8 +410,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
     const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || responseText;
     summaryMergeText = summaryOverviewText;
+    const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
     const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-    const summaryDetailAttachmentMetas = summaryDetailAttachmentText
+    const summaryDetailAttachmentMetas = saveDetailToAttachment && summaryDetailAttachmentText
       ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
         purpose: "summary_detail",
         content: summaryDetailAttachmentText,
@@ -409,11 +421,13 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       })
       : [];
     recordSummaryDetailAttachmentMetas(ctx, summaryDetailAttachmentMetas);
-    relayText = buildSummaryRelayContent({
-      locale,
-      overviewText: summaryOverviewText,
-      detailAttachmentMetas: summaryDetailAttachmentMetas,
-    });
+    relayText = saveDetailToAttachment
+      ? buildSummaryRelayContent({
+          locale,
+          overviewText: summaryOverviewText,
+          detailAttachmentMetas: summaryDetailAttachmentMetas,
+        })
+      : responseText;
     relayText = [
       relayText,
       formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
@@ -443,6 +457,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     attachmentMetas: relayAttachmentMetas,
   });
   if (purpose === "summary") {
+    recordLatestSummaryFullText(ctx, responseText);
     const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
     const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
     appendCapabilityLog(ctx, {

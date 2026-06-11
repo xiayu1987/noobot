@@ -18,6 +18,37 @@ export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   return bucket.summaryText;
 }
 
+export function recordLatestSummaryFullText(ctx = {}, summaryFullText = "") {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return "";
+  const { bucket } = holder;
+  const text = String(summaryFullText || "").trim();
+  if (!text) return String(bucket?.summaryFullText || "").trim();
+  bucket.summaryFullText = text;
+  return bucket.summaryFullText;
+}
+
+export function shouldSaveSummaryDetailToAttachment(meta = {}) {
+  return (
+    meta?.harness?.summaryDetailSaveToAttachment === true ||
+    meta?.harness?.saveSummaryDetailToAttachment === true
+  );
+}
+
+export function resolvePreviousSummaryContextText(ctx = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  const bucket = holder?.bucket || {};
+  const fullText = String(bucket?.summaryFullText || "").trim();
+  const overviewText = String(bucket?.summaryText || "").trim();
+  const paths = Array.isArray(bucket?.summaryDetailPaths)
+    ? bucket.summaryDetailPaths.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const pathBlock = paths.length
+    ? ["SUMMARY_DETAIL_PATHS:", ...paths.map((item) => `- ${item}`)].join("\n")
+    : "";
+  return [fullText || overviewText, pathBlock].filter(Boolean).join("\n\n").trim();
+}
+
 function resolveAttachmentPath(meta = {}, ctx = {}) {
   return resolveAttachmentDisplayPath(meta, ctx);
 }
