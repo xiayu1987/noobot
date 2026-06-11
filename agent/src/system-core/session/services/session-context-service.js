@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BUILTIN_THRESHOLDS } from "../../config/index.js";
+import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
 import {
   resolveModelContextMessages,
 } from "../utils/context-window-normalizer.js";
@@ -19,8 +19,18 @@ export class SessionContextService {
   }
 
   _sessionContextConfig(userConfig = {}) {
+    const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
+    const sessionConfig =
+      effectiveConfig?.session && typeof effectiveConfig.session === "object"
+        ? effectiveConfig.session
+        : {};
+    const configuredRecentMessageLimit = Number(sessionConfig.recentMessageLimit);
+    const recentMessageLimit =
+      Number.isFinite(configuredRecentMessageLimit) && configuredRecentMessageLimit >= 0
+        ? configuredRecentMessageLimit
+        : BUILTIN_THRESHOLDS.sessionRecentMessageLimit;
     return {
-      recentMessageLimit: BUILTIN_THRESHOLDS.sessionRecentMessageLimit,
+      recentMessageLimit,
       useLastRunningTaskRange: sessionConfig.useLastRunningTaskRange === true,
       useLastCompletedTaskRange:
         sessionConfig.useLastCompletedTaskRange === true,

@@ -215,3 +215,53 @@ test("getMessagesSinceLastCompletedTask uses the same normalization", async () =
     true,
   );
 });
+
+test("getContextRecords reads session context options from global config", async () => {
+  const messages = [
+    { role: "user", content: "origin user" },
+    { role: "assistant", content: "old answer" },
+    {
+      role: "assistant",
+      content: "",
+      taskStatus: "start",
+      tool_calls: [{ id: "call_run", function: { name: "execute_script", arguments: "{}" } }],
+    },
+    {
+      role: "tool",
+      content: "{\"toolName\":\"execute_script\",\"ok\":true}",
+      tool_call_id: "call_run",
+    },
+  ];
+  const service = createSessionContextService(messages, {
+    globalConfig: {
+      session: {
+        use_last_running_task_range: true,
+        recent_message_limit: 1,
+      },
+    },
+  });
+
+  const result = await service.getContextRecords({
+    userId: "u1",
+    sessionId: "s1",
+  });
+
+  assert.deepEqual(
+    result.map((messageItem) => messageItem.content),
+    ["origin user", "", "{\"toolName\":\"execute_script\",\"ok\":true}"],
+  );
+});
+
+test("session context config resolves canonicalized global session options", async () => {
+  const service = createSessionContextService([], {
+    globalConfig: {
+      session: {
+        recent_message_limit: 2,
+      },
+    },
+  });
+
+  const result = service._sessionContextConfig();
+
+  assert.equal(result.recentMessageLimit, 2);
+});
