@@ -228,11 +228,76 @@ test("separate_model summary request includes previous summary after complete pl
   );
   assert.equal(checklistIndex >= 0, true);
   assert.equal(previousSummaryIndex > checklistIndex, true);
+  assert.equal(capturedMessages[checklistIndex]?.role, "system");
+  assert.equal(capturedMessages[previousSummaryIndex]?.role, "system");
+  assert.equal(previousSummaryIndex, checklistIndex + 1);
+  assert.equal(
+    String(capturedMessages[previousSummaryIndex]?.content || "").includes("[SUMMARY_DETAIL]"),
+    true,
+  );
   assert.equal(
     capturedMessages.some((item = {}) =>
       String(item?.content || "").includes("基于上一轮小结") ||
       String(item?.content || "").includes("previous summary"),
     ),
+    true,
+  );
+});
+
+test("separate_model summary request extracts previous summary relay into standalone system message", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  let capturedMessages = [];
+  const agentContext = createAgentContext({
+    planText: "1. 当前完整计划\n1.1 子计划A",
+    pending: { summary: true },
+  });
+  agentContext.payload.harness.summaryText = "";
+  agentContext.payload.harness.summaryFullText = "";
+  const previousSummaryRelay = [
+    "[来自harness外部模型输出/summary]",
+    "[SUMMARY_OVERVIEW]",
+    "1. [plan=1][status=done] 上一轮概要",
+    "[SUMMARY_DETAIL]",
+    "- 仅存在于历史 relay 中的上一轮详细证据",
+    "[SUMMARY_END]",
+  ].join("\n");
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        if (payload.purpose === "summary") capturedMessages = payload.messages || [];
+        return { content: "1. [plan=1][status=done] 新小结" };
+      },
+    },
+  };
+
+  const ctx = {
+    messages: [
+      { role: "user", content: "继续" },
+      {
+        role: "user",
+        content: previousSummaryRelay,
+        injectedMessage: true,
+        injectedBy: "harness-plugin",
+        injectedMessageType: "separate_model_relay:summary",
+      },
+    ],
+    agentContext,
+  };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+
+  const checklistIndex = capturedMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("当前完整计划"),
+  );
+  const previousSummaryIndex = capturedMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("仅存在于历史 relay 中的上一轮详细证据") &&
+      String(item?.content || "").includes("上一次小结"),
+  );
+  assert.equal(checklistIndex >= 0, true);
+  assert.equal(previousSummaryIndex, checklistIndex + 1);
+  assert.equal(capturedMessages[previousSummaryIndex]?.role, "system");
+  assert.equal(
+    String(capturedMessages[previousSummaryIndex]?.content || "").includes("[SUMMARY_DETAIL]"),
     true,
   );
 });
