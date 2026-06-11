@@ -12,6 +12,8 @@ const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
   providers: "deep",
   attachments: "deep",
+  session: "deep",
+  context: "deep",
   services: "deep",
   mcpServers: "deep",
   tools: "deep",

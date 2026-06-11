@@ -78,6 +78,49 @@ test("mergeConfig: 应按策略深度合并并合并 runtime configParams", () =
   assert.deepEqual(out.configParams, { A: "1", B: "20", C: "30" });
 });
 
+test("mergeConfig: session/context/preferences 用户覆盖应保持深度合并", () => {
+  const out = mergeConfig(
+    {
+      session: {
+        recentMessageLimit: 15,
+        contextWindow: { maxTokens: 1000, reserveTokens: 200 },
+      },
+      context: {
+        mode: "full",
+        sections: { services: true, tools: true },
+      },
+      preferences: {
+        locale: "zh-CN",
+        theme: { mode: "light", density: "comfortable" },
+      },
+    },
+    {
+      session: {
+        contextWindow: { reserveTokens: 300 },
+      },
+      context: {
+        sections: { tools: false },
+      },
+      preferences: {
+        theme: { density: "compact" },
+      },
+    },
+  );
+
+  assert.deepEqual(out.session, {
+    recentMessageLimit: 15,
+    contextWindow: { maxTokens: 1000, reserveTokens: 300 },
+  });
+  assert.deepEqual(out.context, {
+    mode: "full",
+    sections: { services: true, tools: false },
+  });
+  assert.deepEqual(out.preferences, {
+    locale: "zh-CN",
+    theme: { mode: "light", density: "compact" },
+  });
+});
+
 test("applySessionModelOverride: 传入 alias 时应覆盖 defaultProvider", () => {
   const out = applySessionModelOverride({ defaultProvider: "openai" }, "anthropic");
   assert.equal(out.defaultProvider, "anthropic");
