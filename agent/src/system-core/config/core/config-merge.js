@@ -5,6 +5,7 @@
  */
 import { deepMerge, isPlainObject } from "../../utils/shared-utils.js";
 import { normalizeKnownConfigKeys } from "./key-normalizer.js";
+import { resolveBuiltinScenarios } from "./builtin-scenarios.js";
 import { sanitizeUserConfig } from "./user-override-policy.js";
 
 const USER_OVERRIDE_POLICY = {
@@ -14,7 +15,7 @@ const USER_OVERRIDE_POLICY = {
   services: "deep",
   mcpServers: "deep",
   tools: "deep",
-  scenarios: "deep",
+  scenarios: "scenarios",
   plugins: "deep",
   preferences: "deep",
 };
@@ -27,12 +28,14 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
   const out = { ...globalBase };
   for (const [key, userValue] of Object.entries(safeUser)) {
     const mode = USER_OVERRIDE_POLICY[key];
+    if (key === "scenarios") continue;
     if (mode === "deep") {
       out[key] = deepMerge(globalBase[key], userValue);
       continue;
     }
     out[key] = userValue;
   }
+  out.scenarios = resolveBuiltinScenarios(globalBase?.scenarios, safeUser?.scenarios);
   const userRuntimeConfigParams =
     userConfig?.configParams && isPlainObject(userConfig.configParams)
       ? userConfig.configParams

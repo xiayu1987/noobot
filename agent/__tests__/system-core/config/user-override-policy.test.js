@@ -135,3 +135,80 @@ test("resolveRunConfigValue: runConfig 未传字段时才复用配置默认值",
   );
   assert.equal(hasOwnConfigKey({ streaming: false }, "streaming"), true);
 });
+
+test("sanitizeUserConfig: scenarios 仅允许默认情景与 programming.model", () => {
+  const out = sanitizeUserConfig({
+    scenarios: {
+      default: "programming",
+      definitions: {
+        full: { name: "用户全能", tools: [] },
+        programming: {
+          name: "用户编程",
+          model: "code-model",
+          tools: ["unsafe_tool"],
+          context: ["*"],
+          services: ["custom_service"],
+        },
+        custom: { name: "自定义", model: "custom-model" },
+      },
+    },
+  });
+
+  assert.deepEqual(out.scenarios, {
+    default: "programming",
+    definitions: {
+      programming: {
+        model: "code-model",
+      },
+    },
+  });
+});
+
+test("mergeConfig: full/programming 为内置情景且用户只能覆盖 programming.model", () => {
+  const out = mergeConfig(
+    {
+      scenarios: {
+        default: "full",
+        definitions: {
+          full: { name: "全局全能覆盖", tools: [] },
+          programming: {
+            name: "全局编程覆盖",
+            model: "global-code-model",
+            tools: ["unsafe_global_tool"],
+          },
+          custom: { name: "全局自定义" },
+        },
+      },
+    },
+    {
+      scenarios: {
+        default: "programming",
+        definitions: {
+          full: { name: "用户全能覆盖", tools: [] },
+          programming: {
+            name: "用户编程覆盖",
+            model: "user-code-model",
+            tools: ["unsafe_user_tool"],
+          },
+          custom: { name: "用户自定义" },
+        },
+      },
+    },
+  );
+
+  assert.equal(out.scenarios.default, "programming");
+  assert.deepEqual(Object.keys(out.scenarios.definitions).sort(), ["full", "programming"]);
+  assert.equal(out.scenarios.definitions.full.name, "全能");
+  assert.deepEqual(out.scenarios.definitions.full.tools, ["*"]);
+  assert.equal(out.scenarios.definitions.programming.name, "编程");
+  assert.equal(out.scenarios.definitions.programming.model, "user-code-model");
+  assert.deepEqual(out.scenarios.definitions.programming.tools, [
+    "read_file",
+    "write_file",
+    "search",
+    "patch_file",
+    "execute_script",
+    "task_summary",
+    "request_help",
+  ]);
+});

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveBuiltinScenarios } from "../../config/core/builtin-scenarios.js";
+
 function normalizeStringArray(input = []) {
   return Array.isArray(input)
     ? input
@@ -18,10 +20,7 @@ export function resolveScenarioProfile({ runConfig = {}, effectiveConfig = {} } 
       ? runConfig.scenarioProfile
       : {};
   const runConfigScenarioKey = String(runConfig?.scenario || "").trim();
-  const scenarioConfig =
-    effectiveConfig?.scenarios && typeof effectiveConfig.scenarios === "object"
-      ? effectiveConfig.scenarios
-      : {};
+  const scenarioConfig = resolveBuiltinScenarios(effectiveConfig?.scenarios, {});
   const defaultScenarioKey = String(scenarioConfig?.default || "").trim();
   const resolvedScenarioKey = runConfigScenarioKey || defaultScenarioKey;
   const scenarioDefinitions =

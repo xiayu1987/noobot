@@ -465,6 +465,22 @@ function resolveTemplateProvider(providers = {}, format = "") {
   return isPlainObject(firstProvider) ? firstProvider : null;
 }
 
+const BUILTIN_SCENARIO_KEYS = new Set(["full", "programming"]);
+
+function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { programmingModel = "" } = {}) {
+  const source = isPlainObject(scenarios) ? scenarios : {};
+  const defaultScenario = String(source.default || "full").trim();
+  const definitions = isPlainObject(source.definitions) ? source.definitions : {};
+  const programming = isPlainObject(definitions.programming) ? definitions.programming : {};
+  const model = String(programmingModel || programming.model || "").trim();
+  return {
+    default: BUILTIN_SCENARIO_KEYS.has(defaultScenario) ? defaultScenario : "full",
+    definitions: {
+      programming: model ? { model } : {},
+    },
+  };
+}
+
 function alignInitialModelReferences({
   globalConfig = {},
   providerAlias = "",
@@ -511,22 +527,9 @@ function alignInitialModelReferences({
     };
   }
 
-  if (isPlainObject(globalConfig.scenarios) && isPlainObject(globalConfig.scenarios.definitions)) {
-    const definitions = { ...globalConfig.scenarios.definitions };
-    for (const [scenarioKey, scenarioDefinition] of Object.entries(definitions)) {
-      if (!isPlainObject(scenarioDefinition)) continue;
-      if (hasOwnProperty(scenarioDefinition, "model")) {
-        definitions[scenarioKey] = {
-          ...scenarioDefinition,
-          model: alias,
-        };
-      }
-    }
-    globalConfig.scenarios = {
-      ...globalConfig.scenarios,
-      definitions,
-    };
-  }
+  globalConfig.scenarios = normalizeBuiltinScenarioConfigForLauncher(globalConfig.scenarios, {
+    programmingModel: alias,
+  });
 
   return globalConfig;
 }

@@ -8,6 +8,16 @@ export {
   resolveConfigTemplates,
 } from "./core/template-resolver.js";
 export { BUILTIN_THRESHOLDS, BUILTIN_ATTACHMENT_POLICY } from "./core/builtin-thresholds.js";
+export {
+  BUILTIN_SCENARIO_KEYS,
+  BUILTIN_SCENARIOS,
+  PROGRAMMING_AUXILIARY_TOOL_NAMES,
+  PROGRAMMING_REQUIRED_TOOL_NAMES,
+  PROGRAMMING_SCENARIO_KEY,
+  PROGRAMMING_TOOL_NAMES,
+  resolveBuiltinScenarios,
+  sanitizeScenarioConfig,
+} from "./core/builtin-scenarios.js";
 export { sanitizeUserConfig } from "./core/user-override-policy.js";
 export {
   normalizeTimeMs,
