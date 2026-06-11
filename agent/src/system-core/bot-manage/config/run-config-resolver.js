@@ -7,6 +7,15 @@
 import { mergeConfig } from "../../config/index.js";
 import { isPlainObject, resolveForceToolCall } from "../../utils/shared-utils.js";
 
+const CODING_SCENARIO_KEYS = new Set(["coding", "programming"]);
+const CODING_REQUIRED_TOOL_NAMES = Object.freeze([
+  "read_file",
+  "write_file",
+  "search",
+  "patch_file",
+  "execute_script",
+]);
+
 /**
  * Resolve scenario-based runtime config and apply tool policy scopes.
  */
@@ -29,14 +38,37 @@ export class RunConfigResolver {
       : [];
   }
 
+  resolveAlwaysIncludedToolNames(runConfig = {}) {
+    const alwaysIncludedToolNames = new Set(
+      resolveForceToolCall(runConfig) ? ["final_answer"] : [],
+    );
+    const scenario = String(runConfig?.scenario || "").trim().toLowerCase();
+    const scenarioProfileKey = String(runConfig?.scenarioProfile?.key || "")
+      .trim()
+      .toLowerCase();
+    const scenarioProfileName = String(runConfig?.scenarioProfile?.name || "")
+      .trim()
+      .toLowerCase();
+    const isCodingScenario =
+      CODING_SCENARIO_KEYS.has(scenario) ||
+      CODING_SCENARIO_KEYS.has(scenarioProfileKey) ||
+      scenarioProfileName.includes("coding") ||
+      scenarioProfileName.includes("programming") ||
+      scenarioProfileName.includes("编程");
+    if (isCodingScenario) {
+      for (const toolName of CODING_REQUIRED_TOOL_NAMES) {
+        alwaysIncludedToolNames.add(toolName);
+      }
+    }
+    return alwaysIncludedToolNames;
+  }
+
   applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
     const sourceTools = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
       : [];
     if (!sourceTools.length) return agentContext;
-    const alwaysIncludedToolNames = new Set(
-      resolveForceToolCall(runConfig) ? ["final_answer"] : [],
-    );
+    const alwaysIncludedToolNames = this.resolveAlwaysIncludedToolNames(runConfig);
     const toolPolicy = runConfig?.toolPolicy || {};
     const mode = (toolPolicy?.mode ?? "").trim().toLowerCase();
     const customTools = this.normalizeToolItems(toolPolicy?.customTools);
@@ -82,6 +114,9 @@ export class RunConfigResolver {
     );
     if (denyToolNames.length) {
       const denySet = new Set(denyToolNames);
+      for (const toolName of alwaysIncludedToolNames) {
+        denySet.delete(toolName);
+      }
       nextTools = nextTools.filter(
         (toolItem) => !denySet.has(String(toolItem?.name || "")),
       );

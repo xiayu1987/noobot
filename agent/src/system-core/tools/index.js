@@ -32,6 +32,14 @@ export {
 } from "./adapter.js";
 
 const DEFAULT_MAX_SUB_AGENT_DEPTH = 1;
+const CODING_SCENARIO_KEYS = new Set(["coding", "programming"]);
+const CODING_REQUIRED_TOOL_NAMES = new Set([
+  TOOL_NAME.READ_FILE,
+  TOOL_NAME.WRITE_FILE,
+  TOOL_NAME.SEARCH,
+  TOOL_NAME.PATCH_FILE,
+  TOOL_NAME.EXECUTE_SCRIPT,
+]);
 const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
   TOOL_NAME.DELEGATE_TASK_ASYNC,
   TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
@@ -62,6 +70,35 @@ function normalizeToolNameList(input = []) {
     : [];
 }
 
+function resolveAlwaysIncludedToolNames(runtime = {}) {
+  const runConfig =
+    runtime?.runConfig && typeof runtime.runConfig === "object"
+      ? runtime.runConfig
+      : {};
+  const alwaysIncludedToolNames = new Set(
+    resolveForceToolCall(runConfig) ? [FINAL_ANSWER_TOOL_NAME] : [],
+  );
+  const scenario = String(runConfig?.scenario || "").trim().toLowerCase();
+  const scenarioProfileKey = String(runConfig?.scenarioProfile?.key || "")
+    .trim()
+    .toLowerCase();
+  const scenarioProfileName = String(runConfig?.scenarioProfile?.name || "")
+    .trim()
+    .toLowerCase();
+  const isCodingScenario =
+    CODING_SCENARIO_KEYS.has(scenario) ||
+    CODING_SCENARIO_KEYS.has(scenarioProfileKey) ||
+    scenarioProfileName.includes("coding") ||
+    scenarioProfileName.includes("programming") ||
+    scenarioProfileName.includes("编程");
+  if (isCodingScenario) {
+    for (const toolName of CODING_REQUIRED_TOOL_NAMES) {
+      alwaysIncludedToolNames.add(toolName);
+    }
+  }
+  return alwaysIncludedToolNames;
+}
+
 function resolveDeniedToolNamesByRuntimePolicy(runtime = {}) {
   const runConfig =
     runtime?.runConfig && typeof runtime.runConfig === "object"
@@ -82,6 +119,10 @@ function resolveDeniedToolNamesByRuntimePolicy(runtime = {}) {
       denyToolNames.add(toolName);
     }
   }
+  const alwaysIncludedToolNames = resolveAlwaysIncludedToolNames(runtime);
+  for (const toolName of alwaysIncludedToolNames) {
+    denyToolNames.delete(toolName);
+  }
   return denyToolNames;
 }
 
@@ -100,6 +141,8 @@ function normalizeToolName(toolDefinition = {}) {
 const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.READ_FILE]: [TOOL_NAME.READ_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
   [TOOL_NAME.WRITE_FILE]: [TOOL_NAME.WRITE_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
+  [TOOL_NAME.SEARCH]: [TOOL_NAME.SEARCH, TOOL_CONFIG_ALIAS_KEY.FILE],
+  [TOOL_NAME.PATCH_FILE]: [TOOL_NAME.PATCH_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
   [TOOL_NAME.EXECUTE_SCRIPT]: [TOOL_NAME.EXECUTE_SCRIPT],
   [TOOL_NAME.LIST_SKILLS]: [TOOL_NAME.LIST_SKILLS, TOOL_CONFIG_ALIAS_KEY.SKILL],
   [TOOL_NAME.SET_SKILL_TASK]: [TOOL_NAME.SET_SKILL_TASK, TOOL_CONFIG_ALIAS_KEY.SKILL],
@@ -133,11 +176,15 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.REQUEST_HELP]: [TOOL_NAME.REQUEST_HELP],
 };
 
-function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
+function filterToolsByConfigEnabled(
+  tools = [],
+  effectiveConfig = {},
+  alwaysIncludedToolNames = new Set(),
+) {
   const source = Array.isArray(tools) ? tools : [];
   return source.filter((toolDefinition) => {
     const name = normalizeToolName(toolDefinition);
-    if (name === FINAL_ANSWER_TOOL_NAME) return true;
+    if (alwaysIncludedToolNames.has(name)) return true;
     const candidates =
       Array.isArray(TOOL_CONFIG_ALIASES[name]) && TOOL_CONFIG_ALIASES[name].length
         ? TOOL_CONFIG_ALIASES[name]
@@ -209,6 +256,7 @@ async function buildToolsDefault(ctx) {
   const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(
     effectiveConfig,
   );
+  const alwaysIncludedToolNames = resolveAlwaysIncludedToolNames(runtime);
   const baseTools = [
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
@@ -226,11 +274,16 @@ async function buildToolsDefault(ctx) {
     ...(forceTool ? createFinalAnswerTool(ctx) : []),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
-  const enabledTools = filterToolsByConfigEnabled(baseTools, effectiveConfig);
+  const enabledTools = filterToolsByConfigEnabled(
+    baseTools,
+    effectiveConfig,
+    alwaysIncludedToolNames,
+  );
   return await filterToolsByRuntimePolicy({
     agentContext: ctx?.agentContext || {},
     tools: enabledTools,
     effectiveConfig,
+    alwaysIncludedToolNames,
     eventListener: runtime?.eventListener || null,
   });
 }
@@ -243,6 +296,7 @@ async function filterToolsByRuntimePolicy({
   agentContext,
   tools,
   effectiveConfig,
+  alwaysIncludedToolNames = new Set(),
   eventListener = null,
 }) {
   const sourceTools = Array.isArray(tools)
@@ -264,9 +318,11 @@ async function filterToolsByRuntimePolicy({
   const deniedToolNames = resolveDeniedToolNamesByRuntimePolicy(runtime);
 
   if (deniedToolNames.size) {
-    const filteredTools = sourceTools.filter(
-      (toolDefinition) => !deniedToolNames.has(normalizeToolName(toolDefinition)),
-    );
+    const filteredTools = sourceTools.filter((toolDefinition) => {
+      const toolName = normalizeToolName(toolDefinition);
+      if (alwaysIncludedToolNames.has(toolName)) return true;
+      return !deniedToolNames.has(toolName);
+    });
     if (filteredTools.length !== sourceTools.length) {
       emitEvent(eventListener, "tools_disabled_by_runtime_policy", {
         sessionId: depthTargetSessionId,

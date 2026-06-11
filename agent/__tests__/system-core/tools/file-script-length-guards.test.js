@@ -271,6 +271,96 @@ test("read_file: should map docker sandbox /workspace/<userId> path to user work
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
-  assert.equal(result.content, "{\"ok\":true}");
+  assert.equal(result.content, "1 | {\"ok\":true}");
+  assert.equal(result.includeLineNumbers, true);
   assert.equal(result.resolvedPath, filePath);
+});
+
+test("read_file: 默认返回行号且可关闭行号", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-lines-"));
+  await fs.writeFile(path.join(basePath, "lines.txt"), "a\nb\nc\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  const withLines = parseToolResult(await tool.invoke({ filePath: "lines.txt", startLine: 2, endLine: 3 }));
+  assert.equal(withLines.ok, true);
+  assert.equal(withLines.content, "2 | b\n3 | c");
+  assert.equal(withLines.includeLineNumbers, true);
+
+  const withoutLines = parseToolResult(
+    await tool.invoke({ filePath: "lines.txt", startLine: 2, endLine: 3, includeLineNumbers: false }),
+  );
+  assert.equal(withoutLines.ok, true);
+  assert.equal(withoutLines.content, "b\nc");
+  assert.equal(withoutLines.includeLineNumbers, false);
+});
+
+test("search: 支持搜索文件和文本", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-"));
+  await fs.mkdir(path.join(basePath, "src"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "src", "a.js"), "alpha\nbeta\nAlpha2\n", "utf8");
+  await fs.writeFile(path.join(basePath, "src", "skip.txt"), "alpha\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "search");
+  assert.ok(tool);
+
+  const fileResult = parseToolResult(
+    await tool.invoke({ source: "files", query: "alpha", path: "src", glob: "*.js", maxResults: 5 }),
+  );
+  assert.equal(fileResult.ok, true);
+  assert.equal(fileResult.matches.length, 2);
+  assert.equal(fileResult.matches[0].filePath, "src/a.js");
+  assert.equal(fileResult.matches[0].line, 1);
+  assert.equal(fileResult.matches[1].line, 3);
+
+  const textResult = parseToolResult(
+    await tool.invoke({ source: "text", query: "b.t", isRegex: true, text: "aa\nbet\ncc" }),
+  );
+  assert.equal(textResult.ok, true);
+  assert.equal(textResult.matches.length, 1);
+  assert.equal(textResult.matches[0].line, 2);
+});
+
+test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const applyPatch = [
+    "*** Begin Patch",
+    "*** Update File: a.txt",
+    "@@",
+    " one",
+    "-two",
+    "+TWO",
+    " three",
+    "*** End Patch",
+    "",
+  ].join("\n");
+  const applyResult = parseToolResult(await tool.invoke({ format: "apply_patch", patch: applyPatch }));
+  assert.equal(applyResult.ok, true);
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+
+  const diff = [
+    "--- a/a.txt",
+    "+++ b/a.txt",
+    "@@ -1,3 +1,3 @@",
+    " one",
+    "-TWO",
+    "+two",
+    " three",
+    "",
+  ].join("\n");
+  const dryRunResult = parseToolResult(
+    await tool.invoke({ format: "unified_diff", patch: diff, strip: 1, dryRun: true }),
+  );
+  assert.equal(dryRunResult.ok, true);
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+
+  const diffResult = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
+  assert.equal(diffResult.ok, true);
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
 });

@@ -41,6 +41,7 @@ if [[ "$NOOBOT_LANG" == zh* || "$NOOBOT_LANG" == *"zh_CN"* || "$NOOBOT_LANG" == 
 else
   NOOBOT_LANG="en"
 fi
+AUTO_INSTALL_RIPGREP="${AUTO_INSTALL_RIPGREP:-0}"
 
 msg() {
   local key="$1"
@@ -51,6 +52,12 @@ msg() {
     optional_missing_title_en) echo "Detected missing optional dependencies (won't be auto-installed, please install manually):" ;;
     install_hint_title_zh) echo "建议安装命令（按你的系统选择执行）：" ;;
     install_hint_title_en) echo "Suggested install commands (choose one for your system):" ;;
+    install_ripgrep_try_zh) echo "尝试自动安装 ripgrep (rg)..." ;;
+    install_ripgrep_try_en) echo "Trying to auto-install ripgrep (rg)..." ;;
+    install_ripgrep_ok_zh) echo "ripgrep 安装成功" ;;
+    install_ripgrep_ok_en) echo "ripgrep installed successfully" ;;
+    install_ripgrep_fail_zh) echo "ripgrep 自动安装失败，请按提示手动安装" ;;
+    install_ripgrep_fail_en) echo "Auto-install ripgrep failed, please install manually with the hint command" ;;
     update_code_zh) echo "更新代码: git pull --rebase (branch: $2, upstream: $3)" ;;
     update_code_en) echo "Updating code: git pull --rebase (branch: $2, upstream: $3)" ;;
     no_upstream_zh) echo "当前分支($2)未设置 upstream，跳过 git pull" ;;
@@ -114,6 +121,18 @@ require_cmd() {
   fi
 }
 
+run_with_optional_sudo() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+    return $?
+  fi
+  if command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+    return $?
+  fi
+  return 127
+}
+
 detect_pkg_manager() {
   if command -v apt-get >/dev/null 2>&1; then
     echo "apt"
@@ -155,6 +174,9 @@ print_missing_dependency_hints() {
       ffmpeg)
         echo "- ffmpeg：未安装将影响音视频处理与相关解析能力。"
         ;;
+      ripgrep)
+        echo "- ripgrep(rg)：未安装不影响系统启动，但会降低 search 工具在大项目中的搜索性能。"
+        ;;
       docker)
         echo "- docker：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider.default=docker 时，执行脚本 的 docker 沙箱模式才不可用。"
         echo "  官方安装文档: https://docs.docker.com/engine/install/"
@@ -172,23 +194,23 @@ print_missing_dependency_hints() {
   log "$(msg install_hint_title)"
   case "$pm" in
     apt)
-      echo "  sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg bubblewrap firejail"
+      echo "  sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg ripgrep bubblewrap firejail"
       ;;
     dnf)
-      echo "  sudo dnf install -y libreoffice ffmpeg bubblewrap firejail"
+      echo "  sudo dnf install -y libreoffice ffmpeg ripgrep bubblewrap firejail"
       ;;
     yum)
-      echo "  sudo yum install -y libreoffice ffmpeg bubblewrap firejail"
+      echo "  sudo yum install -y libreoffice ffmpeg ripgrep bubblewrap firejail"
       ;;
     pacman)
-      echo "  sudo pacman -Sy --noconfirm libreoffice-fresh ffmpeg bubblewrap firejail"
+      echo "  sudo pacman -Sy --noconfirm libreoffice-fresh ffmpeg ripgrep bubblewrap firejail"
       ;;
     brew)
       echo "  brew install --cask libreoffice"
-      echo "  brew install ffmpeg bubblewrap firejail"
+      echo "  brew install ffmpeg ripgrep bubblewrap firejail"
       ;;
     *)
-      echo "  请使用你的系统包管理器安装：libreoffice ffmpeg bubblewrap firejail"
+      echo "  请使用你的系统包管理器安装：libreoffice ffmpeg ripgrep bubblewrap firejail"
       ;;
   esac
   echo ""
@@ -317,6 +339,47 @@ is_truthy() {
     1|true|TRUE|yes|YES|on|ON) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+try_auto_install_ripgrep_if_requested() {
+  is_truthy "$AUTO_INSTALL_RIPGREP" || return 0
+  command -v rg >/dev/null 2>&1 && return 0
+
+  log "$(msg install_ripgrep_try)"
+  local pm
+  pm="$(detect_pkg_manager)"
+
+  set +e
+  case "$pm" in
+    apt)
+      run_with_optional_sudo apt-get update &&
+        run_with_optional_sudo apt-get install -y ripgrep
+      ;;
+    dnf)
+      run_with_optional_sudo dnf install -y ripgrep
+      ;;
+    yum)
+      run_with_optional_sudo yum install -y ripgrep
+      ;;
+    pacman)
+      run_with_optional_sudo pacman -Sy --noconfirm ripgrep
+      ;;
+    brew)
+      brew install ripgrep
+      ;;
+    *)
+      false
+      ;;
+  esac
+  local install_exit=$?
+  set -e
+
+  if [[ "$install_exit" -eq 0 ]] && command -v rg >/dev/null 2>&1; then
+    log "$(msg install_ripgrep_ok)"
+    return 0
+  fi
+  log "$(msg install_ripgrep_fail)"
+  return 0
 }
 
 ensure_openvscode_server_binary() {
@@ -478,9 +541,11 @@ if (bad.length) {
 main() {
   require_cmd node
   require_cmd npm
+  try_auto_install_ripgrep_if_requested
   local missing_deps=()
   command -v libreoffice >/dev/null 2>&1 || missing_deps+=("libreoffice")
   command -v ffmpeg >/dev/null 2>&1 || missing_deps+=("ffmpeg")
+  command -v rg >/dev/null 2>&1 || missing_deps+=("ripgrep")
   command -v docker >/dev/null 2>&1 || missing_deps+=("docker")
   command -v bwrap >/dev/null 2>&1 || missing_deps+=("bubblewrap")
   command -v firejail >/dev/null 2>&1 || missing_deps+=("firejail")
