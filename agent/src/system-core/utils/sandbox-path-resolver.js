@@ -34,6 +34,65 @@ function resolveExecuteScriptConfig(runtime = {}) {
   };
 }
 
+function normalizeContainerTarget(target = "") {
+  const normalized = normalizeSlashPath(target);
+  if (!normalized) return "";
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+function resolveExecuteScriptMountMappings(runtime = {}) {
+  const scriptConfig = resolveExecuteScriptConfig(runtime);
+  const sandboxProviderCfg =
+    ((scriptConfig?.sandboxProvider &&
+      typeof scriptConfig.sandboxProvider === "object"
+      ? scriptConfig.sandboxProvider
+      : null) ||
+      (scriptConfig?.sandbox_provider &&
+      typeof scriptConfig.sandbox_provider === "object"
+        ? scriptConfig.sandbox_provider
+        : null) ||
+      {});
+  const provider = normalizeSandboxProvider(
+    sandboxProviderCfg?.default || "docker",
+  );
+  const providerDetail =
+    sandboxProviderCfg?.[provider] && typeof sandboxProviderCfg[provider] === "object"
+      ? sandboxProviderCfg[provider]
+      : {};
+  const dockerMounts = Array.isArray(providerDetail?.dockerMounts)
+    ? providerDetail.dockerMounts
+    : Array.isArray(providerDetail?.docker_mounts)
+      ? providerDetail.docker_mounts
+      : [];
+  const normalizedMounts = dockerMounts
+    .map((item) => (item && typeof item === "object" ? item : {}))
+    .map((item) => ({
+      source: normalizeSlashPath(
+        item?.source || item?.mountSource || item?.mount_source || "",
+      ),
+      target: normalizeContainerTarget(
+        item?.target || item?.mountTarget || item?.mount_target || "",
+      ),
+    }))
+    .filter((item) => Boolean(item.source && item.target));
+  if (normalizedMounts.length) return normalizedMounts;
+
+  const legacySource = normalizeSlashPath(
+    providerDetail?.dockerProjectMountSource ||
+      providerDetail?.docker_project_mount_source ||
+      "",
+  );
+  const legacyTarget = normalizeContainerTarget(
+    providerDetail?.dockerProjectMountTarget ||
+      providerDetail?.docker_project_mount_target ||
+      "",
+  );
+  if (legacySource && legacyTarget) {
+    return [{ source: legacySource, target: legacyTarget }];
+  }
+  return [];
+}
+
 function resolveSandboxUserRoot(runtime = {}) {
   const scriptConfig = resolveExecuteScriptConfig(runtime);
   const sandboxMode =
@@ -111,8 +170,11 @@ export function resolveSandboxPathMappings(runtime = {}) {
   const mappings = Array.isArray(systemRuntimeMappings)
     ? systemRuntimeMappings
     : (Array.isArray(userMappings) ? userMappings : globalMappings);
-  if (!Array.isArray(mappings)) return [];
-  return mappings
+  const configuredMappings = Array.isArray(mappings) ? mappings : [];
+  return [
+    ...configuredMappings,
+    ...resolveExecuteScriptMountMappings(runtime),
+  ]
     .map((item) => (item && typeof item === "object" ? item : {}))
     .map((item) => ({
       source: normalizeSlashPath(item?.source || item?.hostPath || item?.host || ""),
