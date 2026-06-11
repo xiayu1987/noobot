@@ -397,6 +397,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "command": {
         "key": "tools.script.fieldCommand",
         "text": "Shell command."
+      },
+      "includeLineNumbers": {
+        "key": "tools.script.fieldIncludeLineNumbers",
+        "text": "Whether stdout/stderr should include line numbers (disabled by default)."
       }
     },
     "texts": {

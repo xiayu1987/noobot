@@ -70,3 +70,15 @@ test("resolveScenarioProfile supports runConfig mcp aliases and ignores custom s
   assert.equal(fromDefinition.key, "assistant");
   assert.deepEqual(fromDefinition.mcpServers, []);
 });
+
+test("resolveScenarioProfile programming description mentions preferred code tools by actual names", () => {
+  const result = resolveScenarioProfile({
+    runConfig: { scenario: "programming" },
+    effectiveConfig: {},
+  });
+
+  assert.match(result.description, /search/);
+  assert.match(result.description, /read_file/);
+  assert.match(result.description, /write_file/);
+  assert.match(result.description, /patch_file/);
+});

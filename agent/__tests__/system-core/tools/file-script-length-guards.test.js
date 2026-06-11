@@ -138,6 +138,40 @@ test("execute_script: 非沙箱返回仅包含当前 host 工作目录视角", a
   assert.equal(result.stdout, "ok");
 });
 
+test("execute_script: 可选给 stdout/stderr 加行号", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-lines-"));
+  const tools = createScriptTool({
+    agentContext: buildAgentContext(basePath, "admin", {
+      runtime: {
+        globalConfig: {
+          tools: {
+            execute_script: {
+              sandboxMode: false,
+            },
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "execute_script");
+  assert.ok(tool);
+
+  const defaultResult = parseToolResult(
+    await tool.invoke({ command: "printf 'a\\nb\\n'" }),
+  );
+  assert.equal(defaultResult.ok, true);
+  assert.equal(defaultResult.includeLineNumbers, false);
+  assert.equal(defaultResult.stdout, "a\nb\n");
+
+  const withLines = parseToolResult(
+    await tool.invoke({ command: "printf 'a\\nb\\n'; printf 'err\\n' >&2", includeLineNumbers: true }),
+  );
+  assert.equal(withLines.ok, true);
+  assert.equal(withLines.includeLineNumbers, true);
+  assert.equal(withLines.stdout, "1 | a\n2 | b");
+  assert.equal(withLines.stderr, "1 | err");
+});
+
 test("execute_script: 沙箱 workspace 元信息仅包含沙箱视角与 system 环境字段", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-sandbox-view-"));
   const runtimeOpsWorkdir = path.join(basePath, "runtime/ops_workdir");
@@ -455,4 +489,33 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
   const diffResult = parseToolResult(await tool.invoke({ format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(diffResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
+});
+
+test("patch_file: hunk 不匹配时返回带行号上下文", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-context-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\nfour\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const badPatch = [
+    "*** Begin Patch",
+    "*** Update File: a.txt",
+    "@@",
+    " one",
+    "-TWO",
+    "+two",
+    " three",
+    "*** End Patch",
+    "",
+  ].join("\n");
+  const result = parseToolResult(await tool.invoke({ format: "apply_patch", patch: badPatch }));
+
+  assert.equal(result.toolName, "patch_file");
+  assert.equal(result.ok, false);
+  assert.equal(result.filePath, "a.txt");
+  assert.equal(result.details.line, 1);
+  assert.match(result.nearbyContent, /1 \| one/);
+  assert.match(result.nearbyContent, /2 \| two/);
+  assert.match(result.nearbyContent, /3 \| three/);
 });

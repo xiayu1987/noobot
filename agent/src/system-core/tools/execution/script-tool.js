@@ -34,6 +34,7 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
 import { logDebug, logWarn } from "../../tracking/console/logger.js";
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/index.js";
+import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
 
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
 const DEFAULT_TIMEOUT = 300000;
@@ -186,12 +187,32 @@ function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
   };
 }
 
-function toolExecResult(mode, r = {}, extra = {}) {
+function formatCommandOutputWithLineNumbers(value = "") {
+  const text = String(value || "");
+  if (!text) return "";
+  const lines = splitLines(text);
+  if (text.endsWith("\n")) lines.pop();
+  return formatLinesWithNumbers(lines, 1);
+}
+
+function normalizeExecOutput(r = {}, { includeLineNumbers = false } = {}) {
+  if (includeLineNumbers !== true) return r;
+  return {
+    ...r,
+    stdout: formatCommandOutputWithLineNumbers(r?.stdout || ""),
+    stderr: formatCommandOutputWithLineNumbers(r?.stderr || ""),
+  };
+}
+
+function toolExecResult(mode, r = {}, extra = {}, options = {}) {
+  const includeLineNumbers = options?.includeLineNumbers === true;
+  const normalizedResult = normalizeExecOutput(r, { includeLineNumbers });
   return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
     ok: Number(r?.code || 0) === 0,
     mode,
     ...extra,
-    ...r,
+    ...normalizedResult,
+    includeLineNumbers,
   });
 }
 
@@ -432,6 +453,7 @@ async function tryDockerFallback({
   agentContext = null,
   fallbackFrom,
   warning,
+  includeLineNumbers = false,
 }) {
   const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
   if (!dockerInstalled) return null;
@@ -459,6 +481,7 @@ async function tryDockerFallback({
         agentContext,
       }),
     },
+    { includeLineNumbers },
   );
 }
 
@@ -561,10 +584,12 @@ export function createScriptTool({ agentContext }) {
     description,
     schema: z.object({
       command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
+      includeLineNumbers: z.boolean().optional().default(false).describe(tTool(runtime, "tools.script.fieldIncludeLineNumbers")),
     }),
-    func: async ({ command }) => {
+    func: async ({ command, includeLineNumbers = false }) => {
       await mkdir(workspace, { recursive: true });
       const normalizedCommand = String(command || "");
+      const shouldIncludeLineNumbers = includeLineNumbers === true;
       if (normalizedCommand.length > MAX_SCRIPT_COMMAND_CHARS) {
         let transferPayload = {};
         if (typeof transferSemanticContent === "function") {
@@ -611,6 +636,7 @@ export function createScriptTool({ agentContext }) {
             runtime,
             agentContext,
           }),
+          { includeLineNumbers: shouldIncludeLineNumbers },
         );
       }
 
@@ -773,6 +799,7 @@ export function createScriptTool({ agentContext }) {
           agentContext,
           fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
           warning: tScript(runtime, "fallbackUserxattr"),
+          includeLineNumbers: shouldIncludeLineNumbers,
         });
         if (fallbackResult) return fallbackResult;
         runResult = {
@@ -782,7 +809,9 @@ export function createScriptTool({ agentContext }) {
           }),
         };
       }
-      return toolExecResult(mode, runResult, extra);
+      return toolExecResult(mode, runResult, extra, {
+        includeLineNumbers: shouldIncludeLineNumbers,
+      });
     },
   });
 
