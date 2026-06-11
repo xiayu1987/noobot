@@ -276,6 +276,47 @@ test("read_file: should map docker sandbox /workspace/<userId> path to user work
   assert.equal(result.resolvedPath, filePath);
 });
 
+test("read_file: should allow mapped sandbox path that points to mounted host directory", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
+  const basePath = path.join(workspaceRoot, "admin");
+  const mountedRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-mounted-root-"));
+  const mountedFile = path.join(mountedRoot, "sandbox-mounted.txt");
+  await fs.writeFile(mountedFile, "mounted-ok", "utf8");
+
+  const tools = createFileTool({
+    agentContext: buildAgentContext(basePath, "admin", {
+      runtime: {
+        systemRuntime: {
+          userId: "admin",
+          sessionId: "s-1",
+          rootSessionId: "s-1",
+          config: {
+            sandboxPathMappings: [
+              {
+                source: mountedRoot,
+                target: "/project",
+              },
+            ],
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  const result = parseToolResult(
+    await tool.invoke({
+      filePath: "/project/sandbox-mounted.txt",
+    }),
+  );
+
+  assert.equal(result.toolName, "read_file");
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "1 | mounted-ok");
+  assert.equal(result.resolvedPath, mountedFile);
+});
+
 test("read_file: 默认返回行号且可关闭行号", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-lines-"));
   await fs.writeFile(path.join(basePath, "lines.txt"), "a\nb\nc\n", "utf8");

@@ -14,7 +14,10 @@ import { normalizeParentSessionId } from "../../context/parent-session-id-resolv
 import { recoverableToolError } from "../../error/index.js";
 import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { resolveHostPath } from "../../utils/sandbox-path-resolver.js";
+import {
+  resolveHostPath,
+  resolveSandboxPathMappings,
+} from "../../utils/sandbox-path-resolver.js";
 
 function tCheckInput(agentContext = {}, key = "") {
   const keyMap = {
@@ -57,6 +60,61 @@ function resolveRuntimeBasePath(agentContext = {}) {
 
 function resolveUserWorkspacePath(agentContext = {}) {
   return resolveRuntimeBasePath(agentContext);
+}
+
+function resolveExecuteScriptConfig(runtime = {}) {
+  const globalCfg =
+    runtime?.globalConfig?.tools?.execute_script &&
+    typeof runtime.globalConfig.tools.execute_script === "object"
+      ? runtime.globalConfig.tools.execute_script
+      : {};
+  const userCfg =
+    runtime?.userConfig?.tools?.execute_script &&
+    typeof runtime.userConfig.tools.execute_script === "object"
+      ? runtime.userConfig.tools.execute_script
+      : {};
+  return {
+    ...globalCfg,
+    ...userCfg,
+  };
+}
+
+function resolveAdditionalAllowedRoots(agentContext = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const mappedRoots = resolveSandboxPathMappings(runtime)
+    .map((item = {}) => String(item?.source || "").trim())
+    .filter(Boolean);
+  const scriptConfig = resolveExecuteScriptConfig(runtime);
+  const sandboxProviderConfig =
+    scriptConfig?.sandboxProvider &&
+    typeof scriptConfig.sandboxProvider === "object"
+      ? scriptConfig.sandboxProvider
+      : scriptConfig?.sandbox_provider &&
+          typeof scriptConfig.sandbox_provider === "object"
+        ? scriptConfig.sandbox_provider
+        : {};
+  const providerName = String(sandboxProviderConfig?.default || "docker")
+    .trim()
+    .toLowerCase();
+  const providerDetail =
+    sandboxProviderConfig?.[providerName] &&
+    typeof sandboxProviderConfig[providerName] === "object"
+      ? sandboxProviderConfig[providerName]
+      : {};
+  const dockerMounts = Array.isArray(providerDetail?.dockerMounts)
+    ? providerDetail.dockerMounts
+    : Array.isArray(providerDetail?.docker_mounts)
+      ? providerDetail.docker_mounts
+      : [];
+  const dockerMountSources = dockerMounts
+    .map((item) => (item && typeof item === "object" ? item : {}))
+    .map((item) =>
+      String(item?.source || item?.mountSource || item?.mount_source || "").trim(),
+    )
+    .filter(Boolean);
+  return Array.from(new Set([...mappedRoots, ...dockerMountSources]))
+    .map((item) => path.resolve(item))
+    .filter(Boolean);
 }
 
 function resolveInputPathToHostPath({ inputPath = "", workspacePath = "", agentContext = {} } = {}) {
@@ -290,7 +348,14 @@ export async function assertAndResolveUserWorkspaceFilePath({
     ? path.resolve(normalizedPath)
     : path.resolve(workspacePath, normalizedPath));
 
-  if (!isWithinBasePath(workspacePath, resolvedTargetPath)) {
+  const allowedRoots = [
+    workspacePath,
+    ...resolveAdditionalAllowedRoots(agentContext),
+  ];
+  const inAllowedScope = allowedRoots.some((rootPath) =>
+    isWithinBasePath(rootPath, resolvedTargetPath),
+  );
+  if (!inAllowedScope) {
     throw recoverableToolError(
       `${tCheckInput(agentContext, "pathOutOfScope")}: ${normalizedPath}`,
       {
@@ -298,7 +363,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
         details: {
           field: fieldName,
           filePath: normalizedPath,
-          allowedRoot: workspacePath,
+          allowedRoots,
         },
       },
     );
