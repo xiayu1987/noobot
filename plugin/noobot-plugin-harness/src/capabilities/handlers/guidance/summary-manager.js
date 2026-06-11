@@ -35,10 +35,58 @@ export function shouldSaveSummaryDetailToAttachment(meta = {}) {
   );
 }
 
+function stripSummaryRelayPrefix(content = "") {
+  return String(content || "")
+    .replace(/^\[(?:来自harness外部模型输出|Relay from harness external model)\/summary\]\s*/i, "")
+    .trim();
+}
+
+function isSummaryRelayMessage(message = {}) {
+  const injectedType = String(
+    message?.injectedMessageType ||
+      message?.injected_message_type ||
+      message?.lc_kwargs?.injectedMessageType ||
+      message?.lc_kwargs?.injected_message_type ||
+      "",
+  ).trim();
+  if (injectedType === "separate_model_relay:summary") return true;
+  const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
+  return /^\[(?:来自harness外部模型输出|Relay from harness external model)\/summary\]/i.test(content);
+}
+
+function resolveLatestSummaryRelayText(ctx = {}) {
+  const candidates = [
+    ...(Array.isArray(ctx?.messages) ? ctx.messages : []),
+    ...(Array.isArray(ctx?.agentContext?.payload?.messages?.history)
+      ? ctx.agentContext.payload.messages.history
+      : []),
+  ];
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const message = candidates[index] || {};
+    if (!isSummaryRelayMessage(message)) continue;
+    const text = stripSummaryRelayPrefix(message?.content ?? message?.lc_kwargs?.content ?? "");
+    if (text) return text;
+  }
+  return "";
+}
+
+function resolveLatestSummaryOutputFullText(bucket = {}) {
+  const outputs = Array.isArray(bucket?.guidanceOutputs) ? bucket.guidanceOutputs : [];
+  for (let index = outputs.length - 1; index >= 0; index -= 1) {
+    const item = outputs[index] || {};
+    if (String(item?.purpose || "").trim() !== "summary") continue;
+    const content = String(item?.content || "").trim();
+    if (content) return content;
+  }
+  return "";
+}
+
 export function resolvePreviousSummaryContextText(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   const bucket = holder?.bucket || {};
   const fullText = String(bucket?.summaryFullText || "").trim();
+  const outputFullText = resolveLatestSummaryOutputFullText(bucket);
+  const relayText = resolveLatestSummaryRelayText(ctx);
   const overviewText = String(bucket?.summaryText || "").trim();
   const paths = Array.isArray(bucket?.summaryDetailPaths)
     ? bucket.summaryDetailPaths.map((item) => String(item || "").trim()).filter(Boolean)
@@ -46,7 +94,10 @@ export function resolvePreviousSummaryContextText(ctx = {}) {
   const pathBlock = paths.length
     ? ["SUMMARY_DETAIL_PATHS:", ...paths.map((item) => `- ${item}`)].join("\n")
     : "";
-  return [fullText || overviewText, pathBlock].filter(Boolean).join("\n\n").trim();
+  return [fullText || outputFullText || relayText || overviewText, pathBlock]
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
 }
 
 function resolveAttachmentPath(meta = {}, ctx = {}) {
