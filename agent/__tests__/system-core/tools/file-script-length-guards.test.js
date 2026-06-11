@@ -317,6 +317,57 @@ test("read_file: should allow mapped sandbox path that points to mounted host di
   assert.equal(result.resolvedPath, mountedFile);
 });
 
+test("read_file: should allow docker mount target path under /project", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
+  const basePath = path.join(workspaceRoot, "admin");
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-project-root-"));
+  const projectFile = path.join(
+    projectRoot,
+    "agent/src/system-core/tools/execution/file-tool.js",
+  );
+  await fs.mkdir(path.dirname(projectFile), { recursive: true });
+  await fs.writeFile(projectFile, "project-mounted-ok", "utf8");
+
+  const tools = createFileTool({
+    agentContext: buildAgentContext(basePath, "admin", {
+      runtime: {
+        globalConfig: {
+          tools: {
+            execute_script: {
+              sandboxMode: true,
+              sandboxProvider: {
+                default: "docker",
+                docker: {
+                  dockerContainerScope: "global",
+                  dockerMounts: [
+                    {
+                      source: projectRoot,
+                      target: "/project",
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  const result = parseToolResult(
+    await tool.invoke({
+      filePath: "/project/agent/src/system-core/tools/execution/file-tool.js",
+    }),
+  );
+
+  assert.equal(result.toolName, "read_file");
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "1 | project-mounted-ok");
+  assert.equal(result.resolvedPath, projectFile);
+});
+
 test("read_file: 默认返回行号且可关闭行号", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-lines-"));
   await fs.writeFile(path.join(basePath, "lines.txt"), "a\nb\nc\n", "utf8");
