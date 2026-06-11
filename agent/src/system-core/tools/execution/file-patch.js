@@ -118,7 +118,12 @@ export function applyUnifiedHunks(originalContent = "", hunks = []) {
         if (originalLines[pointer] !== line.text) {
           throw recoverableToolError("patch context does not match target file", {
             code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-            details: { field: "patch", expected: line.text, actual: originalLines[pointer] },
+            details: {
+              field: "patch",
+              line: pointer + 1,
+              expected: line.text,
+              actual: originalLines[pointer],
+            },
           });
         }
         output.push(line.text);
@@ -127,7 +132,12 @@ export function applyUnifiedHunks(originalContent = "", hunks = []) {
         if (originalLines[pointer] !== line.text) {
           throw recoverableToolError("patch removal does not match target file", {
             code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-            details: { field: "patch", expected: line.text, actual: originalLines[pointer] },
+            details: {
+              field: "patch",
+              line: pointer + 1,
+              expected: line.text,
+              actual: originalLines[pointer],
+            },
           });
         }
         pointer += 1;
@@ -246,7 +256,11 @@ export function applySearchHunks(originalContent = "", hunks = []) {
     if (hit < 0) {
       throw recoverableToolError("apply_patch hunk context does not match target file", {
         code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-        details: { field: "patch" },
+        details: {
+          field: "patch",
+          line: searchStart + 1,
+          expected: oldPattern.join("\n"),
+        },
       });
     }
     output = [
@@ -280,4 +294,3 @@ export async function resolvePatchTargets({ patches = [], agentContext = {} } = 
   }
   return resolved;
 }
-

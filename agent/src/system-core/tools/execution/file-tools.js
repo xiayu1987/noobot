@@ -34,6 +34,49 @@ import {
 import { collectSearchFiles, hasRipgrep, searchFilesWithRipgrep, searchInText } from "./file-search.js";
 import { applySearchHunks, applyUnifiedHunks, parseApplyPatch, parseUnifiedDiff, resolvePatchTargets } from "./file-patch.js";
 
+function buildLineNumberedNearbyContent(content = "", targetLine = 1, radius = 3) {
+  const rawContent = String(content || "");
+  const lines = splitLines(rawContent);
+  if (rawContent.endsWith("\n")) lines.pop();
+  const totalLines = lines.length;
+  if (!totalLines) {
+    return {
+      contextStartLine: 1,
+      contextEndLine: 0,
+      nearbyContent: "",
+    };
+  }
+  const line = toPositiveInt(targetLine, 1, 1, totalLines);
+  const contextRadius = toPositiveInt(radius, 3, 0, 20);
+  const start = Math.max(1, line - contextRadius);
+  const end = Math.min(totalLines, line + contextRadius);
+  return {
+    contextStartLine: start,
+    contextEndLine: end,
+    nearbyContent: formatLinesWithNumbers(lines.slice(start - 1, end), start),
+  };
+}
+
+function buildPatchFailurePayload({
+  error,
+  original = "",
+  displayPath = "",
+  resolvedPath = "",
+} = {}) {
+  const details = error?.details && typeof error.details === "object" ? error.details : {};
+  const line = Number(details?.line || 1);
+  return {
+    ok: false,
+    code: String(error?.code || ERROR_CODE.RECOVERABLE_INVALID_INPUT),
+    error: error?.message || String(error),
+    message: error?.message || String(error),
+    filePath: displayPath,
+    resolvedPath,
+    details,
+    ...buildLineNumberedNearbyContent(original, line, 3),
+  };
+}
+
 export function createFileTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
@@ -326,9 +369,22 @@ export function createFileTool({ agentContext }) {
           continue;
         }
         const original = await readFile(item.resolvedOldPath, "utf8");
-        const nextContent = normalizedFormat === "unified_diff"
-          ? applyUnifiedHunks(original, item.hunks || [])
-          : applySearchHunks(original, item.hunks || []);
+        let nextContent = "";
+        try {
+          nextContent = normalizedFormat === "unified_diff"
+            ? applyUnifiedHunks(original, item.hunks || [])
+            : applySearchHunks(original, item.hunks || []);
+        } catch (error) {
+          return toToolJsonResult(
+            TOOL_NAME.PATCH_FILE,
+            buildPatchFailurePayload({
+              error,
+              original,
+              displayPath: item.oldPath,
+              resolvedPath: item.resolvedOldPath,
+            }),
+          );
+        }
         const outputPath = item.resolvedNewPath || item.resolvedOldPath;
         writePlans.push({ filePath: outputPath, content: nextContent, displayPath: item.newPath || item.oldPath });
         if (item.mode === "move" && item.resolvedOldPath !== outputPath) {

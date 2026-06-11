@@ -397,6 +397,10 @@ export const TOOL_SCHEMA_BY_TOOL = {
       "command": {
         "key": "tools.script.fieldCommand",
         "text": "Shell 命令。"
+      },
+      "includeLineNumbers": {
+        "key": "tools.script.fieldIncludeLineNumbers",
+        "text": "stdout/stderr 是否带行号（默认关闭）。"
       }
     },
     "texts": {
