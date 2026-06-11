@@ -192,6 +192,51 @@ test("separate_model summary uses checkpointed summary scope when marking messag
   assert.equal(markedCalled >= 1, true);
 });
 
+test("separate_model summary request includes previous summary after complete plan checklist", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  let capturedMessages = [];
+  const agentContext = createAgentContext({
+    planText: "1. 当前完整计划\n1.1 子计划A",
+    pending: { summary: true },
+  });
+  agentContext.payload.harness.summaryText = "1. [plan=1][status=done] 上一轮概要";
+  agentContext.payload.harness.summaryFullText = [
+    "[SUMMARY_OVERVIEW]",
+    "1. [plan=1][status=done] 上一轮概要",
+    "[SUMMARY_DETAIL]",
+    "- 上一轮详细证据",
+    "[SUMMARY_END]",
+  ].join("\n");
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        if (payload.purpose === "summary") capturedMessages = payload.messages || [];
+        return { content: "1. [plan=1][status=done] 新小结" };
+      },
+    },
+  };
+
+  const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
+  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+
+  const checklistIndex = capturedMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("当前完整计划"),
+  );
+  const previousSummaryIndex = capturedMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("上一轮详细证据"),
+  );
+  assert.equal(checklistIndex >= 0, true);
+  assert.equal(previousSummaryIndex > checklistIndex, true);
+  assert.equal(
+    capturedMessages.some((item = {}) =>
+      String(item?.content || "").includes("基于上一轮小结") ||
+      String(item?.content || "").includes("previous summary"),
+    ),
+    true,
+  );
+});
+
 test("inject mode: overflow summary keeps higher priority than revision", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({

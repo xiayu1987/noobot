@@ -292,6 +292,8 @@ export function createRegisterHarnessHooks(deps = {}) {
                 harness: {
                   planningGuidanceMode: options.planningGuidanceMode,
                   summaryOnToolBurstThreshold: options.summaryOnToolBurstThreshold === true,
+                  summaryDetailSaveToAttachment: options.summaryDetailSaveToAttachment === true,
+                  saveSummaryDetailToAttachment: options.summaryDetailSaveToAttachment === true,
                   capabilityModelInvoker: options.capabilityModelInvoker,
                   capabilityModelByPurpose: options.capabilityModelByPurpose,
                   stepModels: options.stepModels,

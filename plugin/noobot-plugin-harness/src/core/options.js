@@ -36,6 +36,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   maxPreviewChars: 1200,
   planningGuidanceMode: "separate_model",
   summaryOnToolBurstThreshold: false,
+  summaryDetailSaveToAttachment: false,
   capabilityModelInvoker: null,
   capabilityModelByPurpose: Object.freeze({}),
   stepModels: Object.freeze({}),
@@ -80,6 +81,8 @@ const HarnessOptionsSchema = z
     planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
     summaryOnToolBurstThreshold: z.boolean().default(DEFAULT_OPTIONS.summaryOnToolBurstThreshold),
     enableToolBurstSummary: z.boolean().optional(),
+    summaryDetailSaveToAttachment: z.boolean().default(DEFAULT_OPTIONS.summaryDetailSaveToAttachment),
+    saveSummaryDetailToAttachment: z.boolean().optional(),
     capabilityModelInvoker: z.any().optional(),
     capabilityModelByPurpose: z.record(z.any()).default({}),
     stepModels: z.record(z.any()).default({}),
@@ -197,6 +200,10 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       DEFAULT_OPTIONS.planningGuidanceMode,
     summaryOnToolBurstThreshold:
       safe.enableToolBurstSummary === true || safe.summaryOnToolBurstThreshold === true,
+    summaryDetailSaveToAttachment:
+      safe.summaryDetailSaveToAttachment === true || safe.saveSummaryDetailToAttachment === true,
+    saveSummaryDetailToAttachment:
+      safe.summaryDetailSaveToAttachment === true || safe.saveSummaryDetailToAttachment === true,
     capabilityModelInvoker:
       typeof safe.capabilityModelInvoker === "function" ? safe.capabilityModelInvoker : null,
     capabilityModelByPurpose,

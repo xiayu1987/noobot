@@ -30,8 +30,12 @@ import {
 } from "./model-runner.js";
 import { resolveGuidancePriorityDecision, resolveNextGuidanceAction } from "../planning/plan-update-scheduler.js";
 import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters } from "./signal-tracker.js";
-import { applySummaryText } from "./summary-manager.js";
-import { recordSummaryDetailAttachmentMetas } from "./summary-manager.js";
+import {
+  applySummaryText,
+  recordLatestSummaryFullText,
+  recordSummaryDetailAttachmentMetas,
+  shouldSaveSummaryDetailToAttachment,
+} from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 import {
@@ -204,8 +208,9 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         const locale = holder.state?.locale || LOCALE.ZH_CN;
         const parsedSummary = parseSummaryOverviewAndDetailFromText(rawSummaryText);
         const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || rawSummaryText;
+        const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
         const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-        const detailAttachmentMetas = summaryDetailAttachmentText
+        const detailAttachmentMetas = saveDetailToAttachment && summaryDetailAttachmentText
           ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
             purpose: "summary_detail",
             content: summaryDetailAttachmentText,
@@ -228,6 +233,15 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
             attachmentMetas: detailAttachmentMetas,
           });
         }
+        if (!saveDetailToAttachment && rawSummaryText) {
+          relaySeparateModelOutputAsUserMessage(ctx, {
+            locale,
+            purpose: "summary",
+            content: rawSummaryText,
+            dedupe: true,
+          });
+        }
+        recordLatestSummaryFullText(ctx, rawSummaryText);
         const summaryText = applySummaryText(ctx, summaryOverviewText);
         if (!isSummaryCompletionMarked(summaryText, locale)) {
           appendCapabilityLog(ctx, {

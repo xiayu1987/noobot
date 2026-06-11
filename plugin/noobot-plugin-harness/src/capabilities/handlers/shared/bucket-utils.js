@@ -197,6 +197,7 @@ export function ensureHarnessBucket(ctx = {}) {
     ensureArrayField(bucket, "planningRawOutputs");
     ensureArrayField(bucket, "completedDialogProcessIds");
     if (typeof bucket.summaryText !== "string") bucket.summaryText = "";
+    if (typeof bucket.summaryFullText !== "string") bucket.summaryFullText = "";
     if (typeof bucket.planText !== "string") bucket.planText = "";
     if (!Number.isFinite(Number(bucket.globalRevisionCount))) bucket.globalRevisionCount = 0;
     if (!Array.isArray(bucket.lastRevisionChangedMainStepIndexes)) {
