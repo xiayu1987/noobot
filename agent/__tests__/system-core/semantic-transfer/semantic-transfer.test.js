@@ -147,7 +147,7 @@ test("transferSemanticContent dispatches by scenario", async () => {
     text: "small text",
   });
   assert.equal(toolTransferred?.transferResult?.ok, true);
-  assert.equal(toolTransferred?.transferEnvelope?.transport, "direct");
+  assert.equal(toolTransferred?.transferEnvelopes?.[0]?.transport, "direct");
 
   const stageTransferred = await transferSemanticContent({
     scenario: "harness_stage",
@@ -220,14 +220,12 @@ test("compactToolResultTextForModel replaces verbose transfer payload with conci
         ok: true,
         attachmentMetas: [attachmentMeta],
         transferResult: { ok: true, status: "file", envelope },
-        transferEnvelope: envelope,
         transferEnvelopes: [envelope],
       }),
     ),
   );
 
   assert.equal("transferResult" in compacted, false);
-  assert.equal("transferEnvelope" in compacted, false);
   assert.equal("transferEnvelopes" in compacted, false);
   assert.equal("attachmentMetas" in compacted, false);
   assert.equal(compacted.transferFiles.length, 1);
@@ -266,7 +264,7 @@ test("persistTransferArtifacts saves through attachment service and returns tran
   assert.equal(calls.length, 1);
   assert.equal(calls[0].generationSource, "unit_test");
   assert.equal(persisted.transferResult?.status, "file");
-  assert.equal(persisted.transferEnvelope?.filePath, "attachments/a.txt");
+  assert.equal(persisted.transferEnvelopes?.[0]?.filePath, "attachments/a.txt");
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes).length, 1);
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes)[0].attachmentId, "att-1");
   assert.equal("attachmentMetas" in persisted, false);
@@ -282,7 +280,6 @@ test("persistTransferArtifacts returns skipped result and empty transfer fields 
     artifacts: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "YQ==" }],
   });
   assert.equal(persisted.result?.status, "skipped");
-  assert.equal(persisted.transferEnvelope, null);
   assert.deepEqual(persisted.transferEnvelopes, []);
   assert.equal("attachmentMetas" in persisted, false);
   assert.equal("filePath" in persisted, false);
@@ -348,12 +345,12 @@ test("persistTransferArtifacts returns rich transfer envelope for multi artifact
       { name: "b.txt", mimeType: "text/plain", contentBase64: "Yg==" },
     ],
   });
-  assert.equal(persisted.transferEnvelope.filePath, "attachments/a.txt");
-  assert.equal(persisted.transferEnvelope.files.length, 2);
+  assert.equal(persisted.transferEnvelopes[0].filePath, "attachments/a.txt");
+  assert.equal(persisted.transferEnvelopes[0].files.length, 2);
   assert.equal(getTransferAttachmentMetas(persisted.transferEnvelopes).length, 2);
-  assert.equal(persisted.transferEnvelope.storage.kind, "attachment");
-  assert.equal(persisted.transferEnvelope.storage.generationSource, "rich_test");
-  assert.equal(persisted.transferEnvelope.meta.producer.name, "rich");
+  assert.equal(persisted.transferEnvelopes[0].storage.kind, "attachment");
+  assert.equal(persisted.transferEnvelopes[0].storage.generationSource, "rich_test");
+  assert.equal(persisted.transferEnvelopes[0].meta.producer.name, "rich");
   assert.equal("attachmentMetas" in persisted, false);
   assert.equal("filePath" in persisted, false);
   assert.equal("filePaths" in persisted, false);
@@ -392,7 +389,6 @@ test("consumer helpers read envelope files and attachment metas", async () => {
 
   const wrapped = {
     transferResult: { ok: true, status: "file", envelope },
-    transferEnvelope: envelope,
     transferEnvelopes: [envelope],
   };
   assert.equal(getTransferFiles(wrapped).length, 2);
@@ -463,7 +459,7 @@ test("transferToolMessage returns compact transfer payload for long input", asyn
     },
   });
   assert.equal(transferred.transferResult?.status, "file");
-  assert.equal(transferred.transferEnvelope?.direction, "input");
+  assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
   assert.equal(Array.isArray(transferred.compactToolPayload?.transferFiles), true);
   assert.equal(transferred.compactToolPayload.transferFiles[0].attachmentId, "tool-input-1");
 });
@@ -587,7 +583,7 @@ test("persistTransferFile accepts base64 and bytes and returns transfer envelope
     contentBase64: "AQID",
   });
   assert.equal(fromBase64.result.status, "file");
-  assert.equal(fromBase64.transferEnvelope?.filePath, "attachments/a.bin");
+  assert.equal(fromBase64.transferEnvelopes?.[0]?.filePath, "attachments/a.bin");
   assert.equal(calls[0].artifacts[0].contentBase64, "AQID");
   assert.equal("attachmentMetas" in fromBase64, false);
   assert.equal("filePath" in fromBase64, false);
@@ -683,17 +679,17 @@ test("semantic-transfer read_file overflow returns original-file envelope withou
   assert.equal(payload.fileAddress, undefined);
   assert.equal(payload.resolvedPath, undefined);
   assert.equal(payload.content_omitted, undefined);
-  assert.equal(payload.transferEnvelope?.protocol, "noobot.semantic-transfer");
-  assert.equal(payload.transferEnvelope?.transport, "file");
-  assert.equal(payload.transferEnvelope?.filePath, resolvedPath);
-  assert.equal(payload.transferEnvelope?.storage?.originalFile, true);
-  assert.equal(payload.transferEnvelope?.storage?.persisted, false);
-  assert.equal(payload.transferEnvelope?.meta?.originalFile, true);
-  assert.equal(payload.transferEnvelope?.meta?.contentOmitted, true);
-  assert.equal(payload.transferEnvelope?.meta?.contentLength, content.length);
-  assert.equal(payload.transferEnvelope?.attachmentMeta, undefined);
-  assert.equal(payload.transferEnvelope?.files?.[0]?.attachmentMeta, undefined);
-  assert.equal(payload.transferEnvelope?.files?.[0]?.filePath, resolvedPath);
+  assert.equal(payload.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
+  assert.equal(payload.transferEnvelopes?.[0]?.transport, "file");
+  assert.equal(payload.transferEnvelopes?.[0]?.filePath, resolvedPath);
+  assert.equal(payload.transferEnvelopes?.[0]?.storage?.originalFile, true);
+  assert.equal(payload.transferEnvelopes?.[0]?.storage?.persisted, false);
+  assert.equal(payload.transferEnvelopes?.[0]?.meta?.originalFile, true);
+  assert.equal(payload.transferEnvelopes?.[0]?.meta?.contentOmitted, true);
+  assert.equal(payload.transferEnvelopes?.[0]?.meta?.contentLength, content.length);
+  assert.equal(payload.transferEnvelopes?.[0]?.attachmentMeta, undefined);
+  assert.equal(payload.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta, undefined);
+  assert.equal(payload.transferEnvelopes?.[0]?.files?.[0]?.filePath, resolvedPath);
   assert.equal(Array.isArray(payload.transferEnvelopes), true);
   assert.equal(payload.transferEnvelopes.length, 1);
 });

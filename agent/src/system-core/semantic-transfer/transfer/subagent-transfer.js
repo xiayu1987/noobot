@@ -100,7 +100,6 @@ export async function transferSubAgentMessages({
       persistedItems.push({
         ...item,
         transferResult: createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.DIRECT, envelope }),
-        transferEnvelope: envelope,
         transferEnvelopes: [envelope],
       });
       continue;
@@ -129,20 +128,18 @@ export async function transferSubAgentMessages({
         nodeName: item?.nodeName,
       },
     });
-    const transferEnvelope = extractTransferEnvelopeFromPersisted(persisted);
     const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
-      transferEnvelope ? [transferEnvelope] : [],
+      Array.isArray(persisted?.transferEnvelopes) ? persisted.transferEnvelopes : [],
       { runtime, enforceProtocol: true, withStats: true },
     );
     const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
     persistedItems.push({
       ...item,
-      transferResult: transferEnvelope
-        ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelope })
+      transferResult: transferEnvelopes[0]
+        ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelopes[0] })
         : createTransferResult({ ok: false, status: TRANSFER_RESULT_STATUS.FAILED }),
-      transferEnvelope,
       transferEnvelopes,
-      compactTransferPayload: compactTransferPayloadForModel({ transferEnvelope, transferEnvelopes }),
+      compactTransferPayload: compactTransferPayloadForModel({ transferEnvelopes }),
     });
   }
 
@@ -153,7 +150,6 @@ export async function transferSubAgentMessages({
     { runtime, enforceProtocol: true, withStats: true },
   );
   const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
-  const transferEnvelope = transferEnvelopes[0] || null;
   await emitSemanticTransferValidation({
     runtime,
     scenario: "subagent",
@@ -161,12 +157,11 @@ export async function transferSubAgentMessages({
   });
 
   return {
-    transferResult: transferEnvelope
-      ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelope })
+    transferResult: transferEnvelopes[0]
+      ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelopes[0] })
       : createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.SKIPPED }),
-    transferEnvelope,
     transferEnvelopes,
     nodeTransferResults: persistedItems,
-    compactTransferPayload: compactTransferPayloadForModel({ transferEnvelope, transferEnvelopes }),
+    compactTransferPayload: compactTransferPayloadForModel({ transferEnvelopes }),
   };
 }

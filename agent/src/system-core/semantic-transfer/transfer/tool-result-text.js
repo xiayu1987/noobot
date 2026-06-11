@@ -127,7 +127,6 @@ export async function materializeTextForToolResult({
 
   return {
     resultFields,
-    transferEnvelope,
     transferEnvelopes,
     persisted,
   };

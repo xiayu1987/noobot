@@ -48,7 +48,6 @@ function emptyPersistResult(status = TRANSFER_RESULT_STATUS.SKIPPED, error = nul
   return {
     result,
     transferResult: result,
-    transferEnvelope: null,
     transferEnvelopes: [],
     records: [],
   };
@@ -160,7 +159,6 @@ export async function persistTransferArtifacts({
     result,
     transferResult: result,
     envelope,
-    transferEnvelope: envelope,
     transferEnvelopes: [envelope],
     records,
   };

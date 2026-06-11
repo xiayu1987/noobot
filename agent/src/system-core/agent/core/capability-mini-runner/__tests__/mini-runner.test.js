@@ -91,6 +91,42 @@ test("mini-runner records rejected and missing tool call statuses in traces", as
   );
 });
 
+test("mini-runner preserves standalone system previous-summary context", async () => {
+  let seenMessages = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: () => ({
+      async invoke(messages) {
+        seenMessages = messages;
+        return { content: "ok" };
+      },
+    }),
+  });
+
+  await invoker({
+    purpose: "summary",
+    messages: [
+      { role: "user", content: "继续" },
+      { role: "system", content: "<!-- harness-current-complete-plan-checklist -->\n当前完整计划\n1. A" },
+      {
+        role: "system",
+        content: "<!-- harness-previous-summary-context -->\n上一次小结\n[SUMMARY_DETAIL]\n- 上一轮完整证据",
+      },
+      { role: "user", content: "请生成小结" },
+    ],
+  });
+
+  const checklistIndex = seenMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("harness-current-complete-plan-checklist"),
+  );
+  const previousSummaryIndex = seenMessages.findIndex((item = {}) =>
+    String(item?.content || "").includes("上一轮完整证据"),
+  );
+  assert.equal(checklistIndex >= 0, true);
+  assert.equal(previousSummaryIndex, checklistIndex + 1);
+  assert.equal(seenMessages[previousSummaryIndex]?.role, "system");
+});
+
 test("mini-runner treats * as all tools in current registry", async () => {
   const first = {
     content: "need tools",
