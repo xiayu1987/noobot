@@ -37,6 +37,10 @@ const MAX_SEARCH_FILE_BYTES = 512000;
 const DEFAULT_READ_MAX_LINES = 500;
 const DEFAULT_SEARCH_MAX_RESULTS = 50;
 const DEFAULT_SEARCH_CONTEXT_LINES = 2;
+const DEFAULT_MAX_SEARCH_FILES = 2000;
+const MAX_SEARCH_BUFFER_SIZE = 16 * 1024 * 1024;
+const RIPGREP_MAX_FILESIZE = "512K";
+let ripgrepAvailablePromise = null;
 const DEFAULT_SEARCH_EXCLUDED_DIRS = new Set([
   ".git",
   "node_modules",
@@ -69,6 +73,10 @@ function escapeRegExp(value = "") {
 
 function normalizeSlash(value = "") {
   return String(value || "").replaceAll("\\", "/");
+}
+
+function toWorkspaceRelativePath(workspacePath = "", targetPath = "") {
+  return normalizeSlash(path.relative(workspacePath, targetPath));
 }
 
 function isForbiddenWorkspaceRelativePath(relativePath = "") {
@@ -168,7 +176,7 @@ function searchInText({
   };
 }
 
-async function collectSearchFiles({ rootPath = "", workspacePath = "", glob = "", maxFiles = 2000 } = {}) {
+async function collectSearchFiles({ rootPath = "", workspacePath = "", glob = "", maxFiles = DEFAULT_MAX_SEARCH_FILES } = {}) {
   const files = [];
   async function walk(currentPath) {
     if (files.length >= maxFiles) return;
@@ -179,7 +187,7 @@ async function collectSearchFiles({ rootPath = "", workspacePath = "", glob = ""
       return;
     }
     if (entryStat.isSymbolicLink()) return;
-    const rel = normalizeSlash(path.relative(workspacePath, currentPath));
+    const rel = toWorkspaceRelativePath(workspacePath, currentPath);
     if (rel && isForbiddenWorkspaceRelativePath(rel)) return;
     if (entryStat.isDirectory()) {
       const base = path.basename(currentPath);
@@ -191,8 +199,8 @@ async function collectSearchFiles({ rootPath = "", workspacePath = "", glob = ""
         return;
       }
       for (const entry of entries) {
-        await walk(path.join(currentPath, entry.name));
         if (files.length >= maxFiles) break;
+        await walk(path.join(currentPath, entry.name));
       }
       return;
     }
@@ -206,12 +214,12 @@ async function collectSearchFiles({ rootPath = "", workspacePath = "", glob = ""
 }
 
 async function hasRipgrep() {
-  try {
-    await execFile("rg", ["--version"]);
-    return true;
-  } catch {
-    return false;
+  if (!ripgrepAvailablePromise) {
+    ripgrepAvailablePromise = execFile("rg", ["--version"])
+      .then(() => true)
+      .catch(() => false);
   }
+  return ripgrepAvailablePromise;
 }
 
 function toTextLine(value = "") {
@@ -220,7 +228,7 @@ function toTextLine(value = "") {
 
 function normalizeRgPathToWorkspace({ rootPath = "", workspacePath = "", rgPath = "" } = {}) {
   const absolutePath = path.resolve(rootPath, String(rgPath || ""));
-  return normalizeSlash(path.relative(workspacePath, absolutePath));
+  return toWorkspaceRelativePath(workspacePath, absolutePath);
 }
 
 async function searchFilesWithRipgrep({
@@ -240,7 +248,7 @@ async function searchFilesWithRipgrep({
     "--line-number",
     "--column",
     "--max-filesize",
-    "512K",
+    RIPGREP_MAX_FILESIZE,
     "--glob",
     "!**/.git/**",
     "--glob",
@@ -254,6 +262,7 @@ async function searchFilesWithRipgrep({
     "--glob",
     "!**/coverage/**",
   ];
+  args.push("--max-count", String(maxCount));
   if (contextCount > 0) {
     args.push("--context", String(contextCount));
   }
@@ -268,7 +277,7 @@ async function searchFilesWithRipgrep({
   try {
     const result = await execFile("rg", args, {
       cwd: rootPath,
-      maxBuffer: 16 * 1024 * 1024,
+      maxBuffer: MAX_SEARCH_BUFFER_SIZE,
     });
     stdout = String(result?.stdout || "");
   } catch (error) {
@@ -847,6 +856,7 @@ export function createFileTool({ agentContext }) {
           rootPath: searchRoot,
           workspacePath,
           glob,
+          maxFiles: DEFAULT_MAX_SEARCH_FILES,
         });
         matches = [];
         for (const file of files) {

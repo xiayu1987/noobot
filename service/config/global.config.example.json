@@ -81,7 +81,6 @@
     }
   },
   "tools": {
-    "max_output_chars": 20000,
     "read_file": {
       "enabled": true
     },

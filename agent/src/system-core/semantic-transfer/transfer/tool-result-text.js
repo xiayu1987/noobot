@@ -7,20 +7,20 @@ import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "..
 import { resolveTransferIntent } from "../core/intent.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 
-const DEFAULT_INLINE_TEXT_CHARS = 10000;
+export const DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS = 30000;
 const DEFAULT_PREVIEW_CHARS = 1200;
 
 function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
-function toSafePositiveInt(value, fallback = DEFAULT_INLINE_TEXT_CHARS, min = 0) {
+function toSafePositiveInt(value, fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, min = 0) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
   return Math.max(min, Math.floor(parsed));
 }
 
-export function resolveToolResultInlineTextLimit(runtime = {}, fallback = DEFAULT_INLINE_TEXT_CHARS) {
+export function resolveToolResultInlineTextLimit(runtime = {}, fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS) {
   const userLimit = runtime?.userConfig?.tools?.maxToolResultChars;
   const globalLimit = runtime?.globalConfig?.tools?.maxToolResultChars;
   return toSafePositiveInt(userLimit ?? globalLimit, fallback, 512);
@@ -29,7 +29,7 @@ export function resolveToolResultInlineTextLimit(runtime = {}, fallback = DEFAUL
 export function buildTextResultFields({
   text = "",
   transferEnvelopes = [],
-  inlineMaxChars = DEFAULT_INLINE_TEXT_CHARS,
+  inlineMaxChars = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
   previewChars = DEFAULT_PREVIEW_CHARS,
   forcePreview = false,
 } = {}) {
@@ -37,7 +37,7 @@ export function buildTextResultFields({
   const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes)
     ? transferEnvelopes.filter((item) => item && typeof item === "object" && !Array.isArray(item))
     : [];
-  const maxInline = toSafePositiveInt(inlineMaxChars, DEFAULT_INLINE_TEXT_CHARS, 0);
+  const maxInline = toSafePositiveInt(inlineMaxChars, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, 0);
   const maxPreview = toSafePositiveInt(previewChars, DEFAULT_PREVIEW_CHARS, 0);
   const shouldInline = !forcePreview && normalizedText.length <= maxInline;
   const textPayload = shouldInline
@@ -85,7 +85,7 @@ export async function materializeTextForToolResult({
   });
   const maxInline = inlineMaxChars == null
     ? resolveToolResultInlineTextLimit(runtime)
-    : toSafePositiveInt(inlineMaxChars, DEFAULT_INLINE_TEXT_CHARS, 0);
+    : toSafePositiveInt(inlineMaxChars, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, 0);
   const shouldPersist = alwaysPersist || normalizedText.length > maxInline;
   let persisted = null;
   if (shouldPersist) {

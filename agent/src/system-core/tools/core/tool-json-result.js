@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject } from "../../utils/shared-utils.js";
-import { sanitizeToolPayloadOutput } from "./tool-output-sanitizer.js";
-
-const DEFAULT_MAX_OUTPUT_CHARS = 10000;
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -70,15 +67,7 @@ export function buildToolResultPayload(payload = {}) {
     if (value === undefined) continue;
     out[key] = value;
   }
-  sanitizeLargeTerminalLikeOutput(out);
   return out;
-}
-
-function sanitizeLargeTerminalLikeOutput(payload = {}) {
-  sanitizeToolPayloadOutput(payload, {
-    defaultMaxOutputChars: DEFAULT_MAX_OUTPUT_CHARS,
-    minMaxOutputChars: 256,
-  });
 }
 
 export function toToolJsonResult(toolName, payload = {}, pretty = false) {

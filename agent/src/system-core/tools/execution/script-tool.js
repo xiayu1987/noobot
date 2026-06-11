@@ -185,33 +185,10 @@ function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}) {
   };
 }
 
-function toSafePositiveInt(value, fallback = 0, min = 1) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
-  return Math.max(min, Math.floor(parsed));
-}
-
-function resolveScriptOutputPolicy(toolsConfig = {}) {
-  const toolsCfg =
-    toolsConfig && typeof toolsConfig === "object" && !Array.isArray(toolsConfig)
-      ? toolsConfig
-      : {};
-  const configured = Number(toolsCfg?.maxOutputChars);
-  const maxOutputChars = Number.isFinite(configured) && configured > 0
-    ? toSafePositiveInt(configured, 0, 256)
-    : undefined;
-  return {
-    maxOutputChars,
-  };
-}
-
-function toolExecResult(mode, r = {}, extra = {}, outputPolicy = {}) {
+function toolExecResult(mode, r = {}, extra = {}) {
   return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
     ok: Number(r?.code || 0) === 0,
     mode,
-    ...(Number.isFinite(outputPolicy?.maxOutputChars)
-      ? { __max_output_chars: outputPolicy.maxOutputChars }
-      : {}),
     ...extra,
     ...r,
   });
@@ -450,7 +427,6 @@ async function tryDockerFallback({
   workspace,
   timeout,
   scriptConfig = {},
-  outputPolicy = {},
   runtime = {},
   agentContext = null,
   fallbackFrom,
@@ -482,7 +458,6 @@ async function tryDockerFallback({
         agentContext,
       }),
     },
-    outputPolicy,
   );
 }
 
@@ -570,7 +545,6 @@ export function createScriptTool({ agentContext }) {
   const { provider: sandboxProvider, providerDetail } =
     resolveSandboxProviderConfig(scriptConfig);
   const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
-  const scriptOutputPolicy = resolveScriptOutputPolicy(effectiveConfig?.tools);
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
   const description = buildScriptToolDescription({
     runtime,
@@ -639,7 +613,6 @@ export function createScriptTool({ agentContext }) {
             runtime,
             agentContext,
           }),
-          scriptOutputPolicy,
         );
       }
 
@@ -674,7 +647,6 @@ export function createScriptTool({ agentContext }) {
             workspace,
             timeout,
             scriptConfig: dockerConfig,
-            outputPolicy: scriptOutputPolicy,
             runtime,
             agentContext,
             fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
@@ -799,7 +771,6 @@ export function createScriptTool({ agentContext }) {
           workspace,
           timeout,
           scriptConfig: dockerConfig,
-          outputPolicy: scriptOutputPolicy,
           runtime,
           agentContext,
           fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
@@ -813,7 +784,7 @@ export function createScriptTool({ agentContext }) {
           }),
         };
       }
-      return toolExecResult(mode, runResult, extra, scriptOutputPolicy);
+      return toolExecResult(mode, runResult, extra);
     },
   });
 
