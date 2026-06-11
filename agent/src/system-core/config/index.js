@@ -7,6 +7,7 @@
 export {
   resolveConfigTemplates,
 } from "./core/template-resolver.js";
+export { BUILTIN_THRESHOLDS, BUILTIN_ATTACHMENT_POLICY } from "./core/builtin-thresholds.js";
 export { sanitizeUserConfig } from "./core/user-override-policy.js";
 export {
   normalizeTimeMs,

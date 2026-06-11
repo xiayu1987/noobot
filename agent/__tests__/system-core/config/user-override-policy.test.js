@@ -13,7 +13,6 @@ import {
 test("sanitizeUserConfig: 应仅保留允许覆盖字段并规范化键名", () => {
   const out = sanitizeUserConfig({
     default_provider: "openai",
-    runTimeoutMs: 9876,
     workspace_root: "/should-be-denied",
     providers: { openai: { model: "gpt-4o" } },
     context: {
@@ -23,17 +22,14 @@ test("sanitizeUserConfig: 应仅保留允许覆盖字段并规范化键名", () 
     unknownKey: "x",
   });
   assert.equal(out.defaultProvider, "openai");
-  assert.equal(out.runTimeoutMs, 9876);
+  assert.equal(out.runTimeoutMs, undefined);
   assert.equal(out.workspaceRoot, undefined);
   assert.deepEqual(out.providers, { openai: { model: "gpt-4o" } });
-  assert.deepEqual(out.context, {
-    mainModelRecentWindow: true,
-    mainModelRecentLimit: 15,
-  });
+  assert.equal(out.context, undefined);
   assert.equal("unknownKey" in out, false);
 });
 
-test("sanitizeUserConfig: runTimeoutMs 非法值应被过滤", () => {
+test("sanitizeUserConfig: runTimeoutMs 阈值配置应被过滤", () => {
   const out = sanitizeUserConfig({
     runTimeoutMs: -1,
   });

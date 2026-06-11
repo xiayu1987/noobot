@@ -27,19 +27,19 @@ export const DEFAULT_TOOL_FAILURE_HELP_COUNT = 3;
 
 /**
  * 工具调用循环默认最大轮数
- * 可通过配置 maxToolLoopTurns 覆盖
+ * 内置阈值，不通过配置覆盖
  */
-export const DEFAULT_MAX_TOOL_LOOP_TURNS = 4;
+export const DEFAULT_MAX_TOOL_LOOP_TURNS = 200;
 
 /**
  * 阶段小结默认触发工具循环轮数。
- * 0 表示默认不强制触发；可通过 tools.task_summary.phase_summary_loop_turns 覆盖。
+ * 内置阈值，不通过配置覆盖。
  */
-export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS = 0;
+export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS = 15;
 
 /**
  * 阶段小结默认触发消息字符阈值（未 summarized 的上下文总字符数）。
- * 可通过 tools.task_summary.phase_summary_message_chars_threshold 覆盖。
+ * 内置阈值，不通过配置覆盖。
  */
 export const DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD = 150000;
 export const PHASE_SUMMARY_OVERFLOW_POLICY = Object.freeze({

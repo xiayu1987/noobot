@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createChatModelByName, resolveDefaultModelSpec } from "../model/index.js";
-import { mergeConfig } from "../config/index.js";
+import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { normalizeLocale } from "noobot-i18n/shared";
 import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
 import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptI18n } from "noobot-i18n/agent/locales/en-US/system-prompt";
@@ -72,7 +72,7 @@ export class MemoryManager {
     const short = await this.shortMemory.read(basePath);
     throwIfAborted(abortSignal);
     const unextracted = this.shortMemory.sorted(short);
-    const memoryMaxItems = Number(effectiveConfig.memoryMaxItems || 100);
+    const memoryMaxItems = BUILTIN_THRESHOLDS.memoryMaxItems;
     const shouldUpdateLongMemory = unextracted.length >= memoryMaxItems;
     const promptPayload = unextracted.map((item) => ({ records: item.records }));
     const longMemoryPromptPayload = trimPromptPayloadByCharLimit(promptPayload, {

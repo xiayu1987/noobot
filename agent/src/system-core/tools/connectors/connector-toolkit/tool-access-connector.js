@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { access, readFile, realpath, stat } from "node:fs/promises";
-import { normalizeConnectorType } from "../../../config/index.js";
+import { BUILTIN_THRESHOLDS, normalizeConnectorType } from "../../../config/index.js";
 import { recoverableToolError } from "../../../error/index.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import {
@@ -171,31 +171,16 @@ function resolveAccessConnectorFilePolicy({
     : workspaceBasePath
       ? [workspaceBasePath]
       : [];
-  const defaultExtensionsByType = connectorType === CONNECTOR_TYPE.DATABASE
-    ? [".sql"]
-    : connectorType === CONNECTOR_TYPE.TERMINAL
-      ? [".sh", ".bash", ".zsh", ".ksh", ".py", ".js"]
-      : [];
-  const configuredExtensions = Array.isArray(commandFileConfig?.allowedExtensions)
-    ? commandFileConfig.allowedExtensions
-    : Array.isArray(commandFileConfig?.allowed_extensions)
-      ? commandFileConfig.allowed_extensions
-      : [];
+  const defaultExtensionsByType =
+    BUILTIN_THRESHOLDS.connectorCommandFile.allowedExtensionsByType?.[connectorType] || [];
   return {
     enabled: normalizeBoolean(
       commandFileConfig?.enabled ?? commandFileConfig?.enable,
       true,
     ),
-    maxBytes: normalizePositiveInt(
-      commandFileConfig?.maxBytes ?? commandFileConfig?.max_bytes,
-      256 * 1024,
-      1024,
-    ),
+    maxBytes: BUILTIN_THRESHOLDS.connectorCommandFile.maxBytes,
     allowedRoots: roots,
-    allowedExtensions: normalizeExtensionList(
-      configuredExtensions,
-      defaultExtensionsByType,
-    ),
+    allowedExtensions: normalizeExtensionList(defaultExtensionsByType, defaultExtensionsByType),
   };
 }
 

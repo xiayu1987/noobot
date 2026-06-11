@@ -5,6 +5,7 @@
  */
 
 export {
+  BUILTIN_THRESHOLDS,
   createGlobalConfigBuilder,
   hasOwnConfigKey,
   mergeConfig,

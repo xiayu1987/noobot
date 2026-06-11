@@ -26,7 +26,7 @@ import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { createAgentHookManager } from "../../hook/index.js";
 import { createBotHookManager } from "../hook/index.js";
-import { mergeConfig } from "../../config/index.js";
+import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
 import {
   getNoobotPluginRuntime,
   resolveFirstLoadedNoobotPluginByCapability,
@@ -1824,19 +1824,10 @@ export class SessionExecutionEngine {
       ...(runWorkflow && typeof runWorkflow === "object" ? runWorkflow : {}),
     };
     const next = { ...options, enabled: true, mode: "on" };
-    next.miniRunnerMaxTurns =
-      Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
-        ? Math.min(Number(next.miniRunnerMaxTurns), 5)
-        : 3;
-    next.maxAutoTransitions =
-      Number.isFinite(Number(next?.maxAutoTransitions)) && Number(next.maxAutoTransitions) > 0
-        ? Math.floor(Number(next.maxAutoTransitions))
-        : 50;
+    next.miniRunnerMaxTurns = BUILTIN_THRESHOLDS.workflow.miniRunnerMaxTurns;
+    next.maxAutoTransitions = BUILTIN_THRESHOLDS.workflow.maxAutoTransitions;
     next.contextWindowRecentMessageLimit =
-      Number.isFinite(Number(next?.contextWindowRecentMessageLimit)) &&
-      Number(next.contextWindowRecentMessageLimit) > 0
-        ? Math.floor(Number(next.contextWindowRecentMessageLimit))
-        : 20;
+      BUILTIN_THRESHOLDS.workflow.contextWindowRecentMessageLimit;
     next.resolveModelMessages = this._createHarnessResolveModelMessages({
       harnessOptions: next,
     });

@@ -20,7 +20,7 @@ import {
   createFinalAnswerTool,
 } from "./workflow/final-answer-tool.js";
 import { emitEvent } from "../event/index.js";
-import { mergeConfig } from "../config/index.js";
+import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { resolveForceToolCall } from "../utils/shared-utils.js";
 import { CONNECTOR_TYPE, TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
@@ -31,7 +31,7 @@ export {
   resetToolBuilderAdapter,
 } from "./adapter.js";
 
-const DEFAULT_MAX_SUB_AGENT_DEPTH = 1;
+const DEFAULT_MAX_SUB_AGENT_DEPTH = BUILTIN_THRESHOLDS.agentCollab.maxSubAgentDepth;
 const CODING_SCENARIO_KEYS = new Set(["coding", "programming"]);
 const CODING_REQUIRED_TOOL_NAMES = new Set([
   TOOL_NAME.READ_FILE,
@@ -222,20 +222,8 @@ function hasEnabledMultimodalGenerationProvider(effectiveConfig = {}) {
   return false;
 }
 
-function resolveMaxSubAgentDepth(effectiveConfig = {}) {
-  const configuredValue = Number(
-    effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.max_sub_agent_depth ??
-      effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.maxSubAgentDepth ??
-      effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.delegate_tool_parent_max_depth ??
-      effectiveConfig?.tools?.[TOOL_NAME.DELEGATE_TASK_ASYNC]?.delegateToolParentMaxDepth ??
-      effectiveConfig?.tools?.[TOOL_CONFIG_ALIAS_KEY.AGENT_COLLAB]?.max_sub_agent_depth ??
-      effectiveConfig?.tools?.[TOOL_CONFIG_ALIAS_KEY.AGENT_COLLAB]?.maxSubAgentDepth ??
-      0,
-  );
-  if (!Number.isFinite(configuredValue) || configuredValue <= 0) {
-    return DEFAULT_MAX_SUB_AGENT_DEPTH;
-  }
-  return configuredValue;
+function resolveMaxSubAgentDepth(_effectiveConfig = {}) {
+  return DEFAULT_MAX_SUB_AGENT_DEPTH;
 }
 
 async function buildToolsDefault(ctx) {

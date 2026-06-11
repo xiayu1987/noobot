@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig } from "../../config/index.js";
+import { BUILTIN_THRESHOLDS } from "../../config/index.js";
 import {
   resolveModelContextMessages,
 } from "../utils/context-window-normalizer.js";
@@ -19,10 +19,8 @@ export class SessionContextService {
   }
 
   _sessionContextConfig(userConfig = {}) {
-    const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
-    const sessionConfig = effectiveConfig?.session || {};
     return {
-      recentMessageLimit: Number(sessionConfig.recentMessageLimit || 20),
+      recentMessageLimit: BUILTIN_THRESHOLDS.sessionRecentMessageLimit,
       useLastRunningTaskRange: sessionConfig.useLastRunningTaskRange === true,
       useLastCompletedTaskRange:
         sessionConfig.useLastCompletedTaskRange === true,
@@ -44,7 +42,7 @@ export class SessionContextService {
     });
   }
 
-  _normalizeRecentWindow(messages = [], limit = 20, currentDialogProcessId = "") {
+  _normalizeRecentWindow(messages = [], limit = BUILTIN_THRESHOLDS.sessionRecentMessageLimit, currentDialogProcessId = "") {
     return resolveModelContextMessages({
       sourceMessages: messages,
       currentDialogProcessId,
@@ -67,7 +65,7 @@ export class SessionContextService {
   }) {
     const messages = await this._getSessionTurns({ userId, sessionId });
     const resolvedLimit = Number(
-      limit || this._sessionContextConfig(userConfig).recentMessageLimit || 20,
+      limit || this._sessionContextConfig(userConfig).recentMessageLimit || BUILTIN_THRESHOLDS.sessionRecentMessageLimit,
     );
     if (resolvedLimit <= 0) return [];
     return this._normalizeRecentWindow(messages, resolvedLimit, currentDialogProcessId);

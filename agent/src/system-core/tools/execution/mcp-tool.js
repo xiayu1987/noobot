@@ -7,7 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { createMcpAgentTools } from "../../mcp/index.js";
-import { hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
+import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
   resolveChildRunParentSessionIdFromRuntime,
@@ -78,10 +78,7 @@ export function createMcpTool({ agentContext }) {
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
       const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
-      const maxToolLoopTurns = Number(
-        effectiveConfig?.tools?.[TOOL_NAME.CALL_MCP_TASK]?.maxToolLoopTurns ??
-          6,
-      );
+      const maxToolLoopTurns = BUILTIN_THRESHOLDS.subTasks.callMcpTaskMaxToolLoopTurns;
       try {
         if (!botManager || !userId || !sessionId) {
           throw recoverableToolError(

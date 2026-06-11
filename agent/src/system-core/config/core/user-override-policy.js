@@ -12,7 +12,6 @@ import { isPlainObject } from "../../utils/shared-utils.js";
 // - deep：对象深度合并（用户配置覆盖同名子键，未提供的子键保留全局默认）
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
-  runTimeoutMs: "replace_number",
   providers: "deep",
   attachments: "deep",
   session: "deep",
@@ -31,7 +30,34 @@ const USER_OVERRIDE_TOP_LEVEL_DENY_KEYS = new Set([
 ]);
 
 const USER_OVERRIDE_DENY_PATHS = new Set([
+  "context.mainModelRecentWindow",
+  "context.mainModelRecentLimit",
+  "session.recentMessageLimit",
+  "attachments.maxFileCount",
+  "attachments.maxFileSizeBytes",
+  "attachments.maxTotalSizeBytes",
+  "attachments.allowedExtensions",
+  "attachments.allowedMimeTypes",
+  "tools.access_connector.command_file.allowedExtensions",
+  "tools.delegate_task_async.waitTimeoutMs",
+  "tools.delegate_task_async.pollIntervalMs",
+  "tools.delegate_task_async.maxSubAgentDepth",
+  "tools.wait_async_task_result.pollIntervalMs",
+  "tools.process_content_task.maxToolLoopTurns",
+  "tools.process_connector_tool.maxToolLoopTurns",
+  "tools.call_mcp_task.maxToolLoopTurns",
   "tools.execute_script",
+  "tools.access_connector.command_file.maxBytes",
+  "tools.task_summary.phaseSummaryLoopTurns",
+  "tools.task_summary.phaseSummaryMessageCharsThreshold",
+  "tools.task_summary.maxToolLoopTurns",
+  "tools.request_help.helpPromptLoopTurns",
+  "tools.request_help.toolFailureHelpCount",
+  "plugins.workflow.timeoutMs",
+  "plugins.workflow.maxAutoTransitions",
+  "plugins.workflow.maxParallelNodeAgents",
+  "plugins.workflow.miniRunnerMaxTurns",
+  "plugins.workflow.contextWindowRecentMessageLimit",
 ]);
 
 function stripDeniedPaths(rootKey = "", value) {

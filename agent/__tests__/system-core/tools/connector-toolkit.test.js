@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 
+import { BUILTIN_THRESHOLDS } from "../../../src/system-core/config/index.js";
 import { createConnectorTools } from "../../../src/system-core/tools/connectors/connector-toolkit.js";
 
 function parseToolJson(raw = "") {
@@ -396,7 +397,11 @@ test("connector-toolkit/access_connector: command_file_path 超过大小限制�
   try {
     const sqlPath = path.join(tmpRoot, "queries", "big.sql");
     await mkdir(path.dirname(sqlPath), { recursive: true });
-    await writeFile(sqlPath, "x".repeat(4096), "utf8");
+    await writeFile(
+      sqlPath,
+      "x".repeat(BUILTIN_THRESHOLDS.connectorCommandFile.maxBytes + 1),
+      "utf8",
+    );
     const runtime = buildAccessConnectorRuntime({
       basePath: tmpRoot,
       connectorType: "database",

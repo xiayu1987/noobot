@@ -11,13 +11,13 @@ import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { normalizeTimeMs, resolveTimeMs } from "#agent/config";
+import { BUILTIN_THRESHOLDS, normalizeTimeMs, resolveTimeMs } from "#agent/config";
 
 const DEFAULT_COMMAND = "openvscode-server";
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_START_TIMEOUT_MS = 60_000;
-const DEFAULT_IDLE_TIMEOUT_MS = 3 * 60 * 60 * 1000;
+const DEFAULT_START_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.startTimeoutMs;
+const DEFAULT_IDLE_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.idleTimeoutMs;
 const DEFAULT_CLEANUP_INTERVAL_MS = 60_000;
 const DEFAULT_SHUTDOWN_GRACE_MS = 5_000;
 const DEFAULT_TOUCH_PERSIST_INTERVAL_MS = 30_000;
@@ -96,22 +96,8 @@ function getOpenVSCodeConfig(globalConfig = {}) {
   return {
     command: configuredCommand || resolveManagedOpenVSCodeCommand() || DEFAULT_COMMAND,
     host: String(process.env.OPENVSCODE_SERVER_HOST || source.host || DEFAULT_HOST).trim() || DEFAULT_HOST,
-    startTimeoutMs: resolveOpenVSCodeTimeMs({
-      envName: "OPENVSCODE_SERVER_START_TIMEOUT_MS",
-      source,
-      key: "startTimeoutMs",
-      legacyKey: "start_timeout_ms",
-      fallback: DEFAULT_START_TIMEOUT_MS,
-      min: 1_000,
-    }),
-    idleTimeoutMs: resolveOpenVSCodeTimeMs({
-      envName: "OPENVSCODE_SERVER_IDLE_TIMEOUT_MS",
-      source,
-      key: "idleTimeoutMs",
-      legacyKey: "idle_timeout_ms",
-      fallback: DEFAULT_IDLE_TIMEOUT_MS,
-      min: 0,
-    }),
+    startTimeoutMs: DEFAULT_START_TIMEOUT_MS,
+    idleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
     cleanupIntervalMs: resolveOpenVSCodeTimeMs({
       envName: "OPENVSCODE_SERVER_CLEANUP_INTERVAL_MS",
       source,
