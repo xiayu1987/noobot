@@ -83,7 +83,6 @@ export async function processStageMessage({
       summary: normalizedSummary,
       detail: "",
       transferResult: createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.SKIPPED }),
-      transferEnvelope: null,
       transferEnvelopes: [],
       compactTransferPayload: {},
     };
@@ -102,9 +101,8 @@ export async function processStageMessage({
     meta,
   });
 
-  const transferEnvelope = extractTransferEnvelopeFromPersisted(persisted);
   const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
-    transferEnvelope ? [transferEnvelope] : [],
+    Array.isArray(persisted?.transferEnvelopes) ? persisted.transferEnvelopes : [],
     { runtime, enforceProtocol: true, withStats: true },
   );
   const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
@@ -116,12 +114,11 @@ export async function processStageMessage({
   return {
     summary: normalizedSummary,
     detail: "",
-    transferResult: transferEnvelope
-      ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelope })
+    transferResult: transferEnvelopes[0]
+      ? createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: transferEnvelopes[0] })
       : createTransferResult({ ok: false, status: TRANSFER_RESULT_STATUS.FAILED }),
-    transferEnvelope,
     transferEnvelopes,
-    compactTransferPayload: compactTransferPayloadForModel({ transferEnvelope, transferEnvelopes }),
+    compactTransferPayload: compactTransferPayloadForModel({ transferEnvelopes }),
   };
 }
 

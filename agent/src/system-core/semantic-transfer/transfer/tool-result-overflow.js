@@ -287,7 +287,6 @@ function normalizeReadFileOverflowResult({
     overflowed: true,
     overflow_reason: `read_file result length ${measuredLength} exceeds limit ${maxChars}`,
     overflow_strategy: "original_file_reference",
-    transferEnvelope,
     transferEnvelopes: [transferEnvelope],
     summary: {
       original_length: measuredLength,

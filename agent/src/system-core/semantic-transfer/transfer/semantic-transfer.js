@@ -40,7 +40,6 @@ function buildInvalidScenarioResult() {
         message: "scenario must be one of tool/subagent/harness_stage/harness_final",
       },
     },
-    transferEnvelope: null,
     transferEnvelopes: [],
   };
 }

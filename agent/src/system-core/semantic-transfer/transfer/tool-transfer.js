@@ -56,18 +56,13 @@ function remapEnvelopeDirection(envelope = {}, direction = TRANSFER_DIRECTION.OU
 
 async function buildTransferResponse({
   transferResult = null,
-  transferEnvelope = null,
   transferEnvelopes = [],
   passthrough = {},
   runtime = {},
   scenario = "tool",
 } = {}) {
   const normalizedResult = normalizeTransferEnvelopesWithPolicy(
-    Array.isArray(transferEnvelopes)
-      ? transferEnvelopes
-      : transferEnvelope
-        ? [transferEnvelope]
-        : [],
+    Array.isArray(transferEnvelopes) ? transferEnvelopes : [],
     {
       runtime,
       enforceProtocol: true,
@@ -78,7 +73,6 @@ async function buildTransferResponse({
     ? normalizedResult.envelopes
     : [];
   const validationStats = normalizedResult?.stats || {};
-  const normalizedEnvelope = normalizedEnvelopes[0] || null;
   const transferValidation = {
     strict: Boolean(validationStats.strict),
     enforceProtocol: Boolean(validationStats.enforceProtocol),
@@ -89,11 +83,9 @@ async function buildTransferResponse({
   };
   const payload = {
     transferResult,
-    transferEnvelope: normalizedEnvelope,
     transferEnvelopes: normalizedEnvelopes,
     compactTransferPayload: compactTransferPayloadForModel({
       transferResult,
-      transferEnvelope: normalizedEnvelope,
       transferEnvelopes: normalizedEnvelopes,
     }),
     transferValidation,
@@ -163,35 +155,29 @@ async function transferToolOutput({
     forcePreview,
   });
 
-  const transferEnvelope = extractTransferEnvelopeFromPersisted(materialized);
   const persistedTransferEnvelopes = normalizeTransferEnvelopes(
-    Array.isArray(materialized?.transferEnvelopes)
-      ? materialized.transferEnvelopes
-      : transferEnvelope
-        ? [transferEnvelope]
-        : [],
+    Array.isArray(materialized?.transferEnvelopes) ? materialized.transferEnvelopes : [],
   );
   const directEnvelope = directOutput(normalizedText, {
     ...meta,
     source: intent.source,
     reason: intent.reason,
   });
-  const effectiveEnvelope = transferEnvelope || directEnvelope;
-  const transferEnvelopes = transferEnvelope ? persistedTransferEnvelopes : [directEnvelope];
+  const persistedEnvelope = persistedTransferEnvelopes[0] || null;
+  const transferEnvelopes = persistedEnvelope ? persistedTransferEnvelopes : [directEnvelope];
 
   return await buildTransferResponse({
-    transferResult: transferEnvelope
+    transferResult: persistedEnvelope
       ? createTransferResult({
           ok: true,
           status: TRANSFER_RESULT_STATUS.FILE,
-          envelope: transferEnvelope,
+          envelope: persistedEnvelope,
         })
       : createTransferResult({
           ok: true,
           status: TRANSFER_RESULT_STATUS.DIRECT,
           envelope: directEnvelope,
         }),
-    transferEnvelope: effectiveEnvelope,
     transferEnvelopes,
     passthrough: {
       ...(materialized?.resultFields && typeof materialized.resultFields === "object"
@@ -252,7 +238,6 @@ async function transferToolInput({
         status: TRANSFER_RESULT_STATUS.DIRECT,
         envelope,
       }),
-      transferEnvelope: envelope,
       transferEnvelopes: [envelope],
       passthrough: {
         inlineContent: normalizedText,
@@ -283,15 +268,17 @@ async function transferToolInput({
   });
 
   const outputEnvelope = extractTransferEnvelopeFromPersisted(persisted);
-  const transferEnvelope = remapEnvelopeDirection(outputEnvelope, TRANSFER_DIRECTION.INPUT);
-  const transferEnvelopes = normalizeTransferEnvelopes(transferEnvelope ? [transferEnvelope] : []);
+  const transferEnvelopes = normalizeTransferEnvelopes(
+    outputEnvelope ? [remapEnvelopeDirection(outputEnvelope, TRANSFER_DIRECTION.INPUT)] : [],
+  );
+  const persistedEnvelope = transferEnvelopes[0] || null;
 
   return await buildTransferResponse({
-    transferResult: transferEnvelope
+    transferResult: persistedEnvelope
       ? createTransferResult({
           ok: true,
           status: TRANSFER_RESULT_STATUS.FILE,
-          envelope: transferEnvelope,
+          envelope: persistedEnvelope,
         })
       : createTransferResult({
           ok: false,
@@ -301,7 +288,6 @@ async function transferToolInput({
             message: "failed to persist tool input",
           },
         }),
-    transferEnvelope,
     transferEnvelopes,
     passthrough: {
       exceeded: true,
