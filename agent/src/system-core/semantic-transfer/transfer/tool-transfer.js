@@ -27,6 +27,7 @@ import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
+import { normalizeToolResultOverflow } from "./tool-result-overflow.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -312,7 +313,20 @@ async function transferToolInput({
   });
 }
 
-export async function transferToolMessage({ direction = TRANSFER_DIRECTION.OUTPUT, ...options } = {}) {
+export async function transferToolMessage({
+  direction = TRANSFER_DIRECTION.OUTPUT,
+  transferMode = "",
+  mode = "",
+  ...options
+} = {}) {
+  const normalizedMode = normalizeString(transferMode || mode);
+  if (normalizedMode === "tool_result_text") {
+    return normalizeToolResultOverflow({
+      ...options,
+      toolResultText: options.toolResultText ?? options.text ?? options.content ?? "",
+    });
+  }
+
   const normalizedDirection = normalizeDirection(direction);
   if (normalizedDirection === TRANSFER_DIRECTION.INPUT) {
     return transferToolInput(options);
