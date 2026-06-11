@@ -17,6 +17,7 @@ import {
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildGuidanceFailurePromptText,
   buildGuidanceSummaryPromptText,
+  resolveProgrammingModeFromContext,
   getGuidanceMarker,
   getGuidanceSummaryMarker,
 } from "../shared/workflow/prompts.js";
@@ -63,6 +64,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
       content: buildGuidanceSummaryPromptText({
         locale,
         marker: getGuidanceSummaryMarker(locale),
+        programmingMode: resolveProgrammingModeFromContext(ctx),
       }),
       injectedMessageType: "guidance_summary_prompt",
       injectAt: "append",

@@ -122,6 +122,8 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     GUIDANCE_SUMMARY_PROMPT_GOAL: "guidanceSummaryPromptGoal",
     GUIDANCE_SUMMARY_PROTOCOL_HINT: "guidanceSummaryProtocolHint",
     GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH: "guidanceSummarySampleRiskHigh",
+    GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH_PROGRAMMING: "guidanceSummarySampleRiskHighProgramming",
+    GUIDANCE_SUMMARY_PROGRAMMING_RULES: "guidanceSummaryProgrammingRules",
     GUIDANCE_SUMMARY_DETAIL_HEADER: "guidanceSummaryDetailHeader",
     GUIDANCE_SUMMARY_DETAIL_SAMPLE: "guidanceSummaryDetailSample",
     GUIDANCE_SUMMARY_RULES: "guidanceSummaryRules",
@@ -154,6 +156,9 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PROTOCOL_SUMMARY_LINE4: "protocolSummaryLine4",
     PROTOCOL_SUMMARY_LINE5: "protocolSummaryLine5",
     PROTOCOL_SUMMARY_LINE6: "protocolSummaryLine6",
+    PROTOCOL_SUMMARY_PROGRAMMING_LINE3: "protocolSummaryProgrammingLine3",
+    PROTOCOL_SUMMARY_PROGRAMMING_LINE4: "protocolSummaryProgrammingLine4",
+    PROTOCOL_SUMMARY_PROGRAMMING_LINE6: "protocolSummaryProgrammingLine6",
     PROTOCOL_ACCEPTANCE_TITLE_PHASE: "protocolAcceptanceTitlePhase",
     PROTOCOL_ACCEPTANCE_TITLE_FINAL: "protocolAcceptanceTitleFinal",
     PROTOCOL_ACCEPTANCE_OUTPUT_RULE: "protocolAcceptanceOutputRule",
@@ -454,6 +459,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "请优先使用纯文本 summary_text_v2 协议：",
     guidanceSummarySampleRiskHigh:
       "2. [plan=8][status=todo][risk=高][evidence=...] ...",
+    guidanceSummarySampleRiskHighProgramming:
+      "2. [plan=8][status=todo][risk=高][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ...",
+    guidanceSummaryProgrammingRules:
+      "编程模式附加要求：涉及代码、文件变更、测试结果或定位证据的小结条目必须包含 file=[文件路径]、method=[方法/函数名] 与 line=[行号/行号范围，可多段逗号分隔]。",
     guidanceSummaryDetailHeader: "## 详细明细",
     guidanceSummaryDetailSample: "- 证据/日志/风险分析 ...",
     guidanceSummaryRules:
@@ -497,6 +506,12 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryLine5: "DELETE S[小结ID]",
     protocolSummaryLine6:
       "必须对齐当前完整计划清单；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据与问题说明。小结后请继续任务。",
+    protocolSummaryProgrammingLine3:
+      "ADD S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径] method=[方法/函数名] line=[行号/行号范围，可多段逗号分隔] [小结内容]",
+    protocolSummaryProgrammingLine4:
+      "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径] method=[方法/函数名] line=[行号/行号范围，可多段逗号分隔] [小结内容]",
+    protocolSummaryProgrammingLine6:
+      "编程模式必须对齐当前完整计划清单；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；涉及代码、文件变更、测试结果或定位证据时必须写明 file、method 与 line（line 支持多段，如 10-20,35,48-52）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、文件、方法、行号与问题说明。小结后请继续任务。",
     protocolAcceptanceTitlePhase:
       "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
     protocolAcceptanceTitleFinal:
@@ -650,6 +665,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "Use plain-text summary_text_v2 blocks:",
     guidanceSummarySampleRiskHigh:
       "2. [plan=8][status=todo][risk=high][evidence=...] ...",
+    guidanceSummarySampleRiskHighProgramming:
+      "2. [plan=8][status=todo][risk=high][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ...",
+    guidanceSummaryProgrammingRules:
+      "Programming-mode additional requirement: summary items involving code, file changes, test results, or location evidence must include file=[file path], method=[method/function name], and line=[line number/range; comma-separated multi-segments allowed].",
     guidanceSummaryDetailHeader: "## Detailed notes",
     guidanceSummaryDetailSample: "- evidence / logs / risk analysis ...",
     guidanceSummaryRules:
@@ -694,6 +713,12 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryLine5: "DELETE S[summary_id]",
     protocolSummaryLine6:
       "Align with the current complete plan checklist; evidence must come from context, tool results, or model final output and must not be fabricated. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, and issue notes. Then continue with the task.",
+    protocolSummaryProgrammingLine3:
+      "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path] method=[method/function name] line=[line number/range; comma-separated multi-segments allowed] [summary content]",
+    protocolSummaryProgrammingLine4:
+      "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path] method=[method/function name] line=[line number/range; comma-separated multi-segments allowed] [summary content]",
+    protocolSummaryProgrammingLine6:
+      "In programming mode, align with the current complete plan checklist; evidence must come from context, tool results, or model final output and must not be fabricated; when code, file changes, test results, or location evidence is involved, include file, method, and line (comma-separated multi-segments such as 10-20,35,48-52 are accepted). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, file, method, line, and issue notes. Then continue with the task.",
     protocolAcceptanceTitlePhase:
       "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
     protocolAcceptanceTitleFinal:

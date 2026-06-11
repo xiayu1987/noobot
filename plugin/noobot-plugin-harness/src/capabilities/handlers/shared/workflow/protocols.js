@@ -70,15 +70,37 @@ export function buildPlanningRefinementPatchProtocolText(locale = LOCALE.ZH_CN) 
   ].join("\n");
 }
 
-export function buildSummaryPatchProtocolText(locale = LOCALE.ZH_CN) {
-  const normalizedLocale = resolveLocale(locale);
+function resolveSummaryPatchProtocolOptions(input = LOCALE.ZH_CN) {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    return {
+      locale: resolveLocale(input.locale),
+      programmingMode: input.programmingMode === true || input.isProgrammingMode === true,
+    };
+  }
+  return {
+    locale: resolveLocale(input),
+    programmingMode: false,
+  };
+}
+
+export function buildSummaryPatchProtocolText(options = LOCALE.ZH_CN) {
+  const { locale: normalizedLocale, programmingMode } = resolveSummaryPatchProtocolOptions(options);
+  const summaryLine3 = programmingMode
+    ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_LINE3
+    : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE3;
+  const summaryLine4 = programmingMode
+    ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_LINE4
+    : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE4;
+  const summaryLine6 = programmingMode
+    ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_LINE6
+    : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE6;
   return [
     translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE1),
     translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE2),
-    translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE3),
-    translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE4),
+    translateI18nText(normalizedLocale, summaryLine3),
+    translateI18nText(normalizedLocale, summaryLine4),
     translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE5),
-    translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE6),
+    translateI18nText(normalizedLocale, summaryLine6),
   ].join("\n");
 }
 

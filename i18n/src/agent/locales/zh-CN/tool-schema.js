@@ -356,12 +356,12 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "task_summary": {
     "description": {
       "key": "tools.task_summary.description",
-      "text": "提交当前任务阶段小结。仅在系统要求阶段小结时调用；summaryContent 需简要说明当前目标、已完成事项、关键结果/文件/状态、未完成事项和下一步。"
+      "text": "提交当前任务阶段小结。仅在系统要求阶段小结时调用；summaryContent 需简要说明当前目标、已完成事项、关键结果/文件/状态、未完成事项和下一步；编程模式下必须包含文件路径、方法/函数名与行号（支持多段行号/范围，如 10-20,35,48-52）。"
     },
     "params": {
       "summaryContent": {
         "key": "tools.task_summary.fieldSummaryContent",
-        "text": "阶段小结内容。请简明但覆盖当前任务状态、关键结果、遗留问题和下一步。"
+        "text": "阶段小结内容。请简明但覆盖当前任务状态、关键结果、遗留问题和下一步；编程模式下写明文件路径、方法/函数名与行号（支持多段行号/范围，如 10-20,35,48-52）。"
       }
     },
     "texts": {

@@ -9,11 +9,20 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 import { compactToolResultTextForModel } from "../core/compact.js";
+import { createTransferEnvelope } from "../envelope/envelope.js";
+import {
+  DEFAULT_TRANSFER_MIME_TYPE,
+  TRANSFER_DIRECTION,
+  TRANSFER_SOURCE,
+  TRANSFER_STORAGE_KIND,
+  TRANSFER_TRANSPORT,
+} from "../core/constants.js";
 import {
   DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
+import { resolveTransferPathView } from "../storage/path-resolver.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -189,6 +198,106 @@ function resolveOverflowAttachmentPayloads(parsed = null, rawText = "") {
   ];
 }
 
+
+function isReadFileToolOverflow({ call = {}, parsed = null } = {}) {
+  const callName = String(call?.name || "").trim();
+  const parsedToolName = String(parsed?.toolName || parsed?.tool_name || "").trim();
+  return callName === "read_file" || parsedToolName === "read_file";
+}
+
+function normalizeReadFileOverflowResult({
+  call = {},
+  parsed = null,
+  rawText = "",
+  measuredText = "",
+  maxChars = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  if (!isPlainObject(parsed)) return null;
+  const sourcePath = String(
+    parsed?.resolvedPath ||
+      parsed?.fileAddress ||
+      parsed?.displayPath ||
+      parsed?.filePath ||
+      "",
+  ).trim();
+  if (!sourcePath) return null;
+  const pathView = resolveTransferPathView({
+    runtime,
+    agentContext,
+    path: sourcePath,
+    hostPath: String(parsed?.resolvedPath || sourcePath).trim(),
+    purpose: "read_file_overflow_address",
+  });
+  const fileAddress = String(
+    parsed?.fileAddress ||
+      parsed?.displayPath ||
+      pathView.displayPath ||
+      pathView.sandboxPath ||
+      parsed?.filePath ||
+      sourcePath,
+  ).trim();
+  const contentText = String(parsed?.content || "");
+  const contentLength = contentText.length;
+  const measuredLength = String(measuredText || rawText || "").length;
+  const fileName = String(parsed?.fileName || path.basename(sourcePath)).trim();
+  const transferEnvelope = createTransferEnvelope({
+    direction: TRANSFER_DIRECTION.OUTPUT,
+    transport: TRANSFER_TRANSPORT.FILE,
+    filePath: fileAddress,
+    files: [
+      {
+        filePath: fileAddress,
+        pathView,
+        role: "primary",
+        name: fileName,
+        mimeType: DEFAULT_TRANSFER_MIME_TYPE,
+      },
+    ],
+    pathView,
+    storage: {
+      kind: TRANSFER_STORAGE_KIND.WORKSPACE,
+      originalFile: true,
+      persisted: false,
+    },
+    producer: { type: "tool", name: "read_file" },
+    meta: {
+      source: TRANSFER_SOURCE.TOOL,
+      reason: "read_file_overflow_original_file",
+      toolName: "read_file",
+      originalFile: true,
+      contentOmitted: true,
+      contentLength,
+      startLine: parsed?.startLine,
+      endLine: parsed?.endLine,
+      totalLines: parsed?.totalLines,
+      includeLineNumbers: parsed?.includeLineNumbers,
+      truncated: parsed?.truncated,
+    },
+  });
+  const ok = typeof parsed.ok === "boolean" ? parsed.ok : true;
+  const status = String(parsed?.status || "").trim();
+  return toToolJsonResult(call?.name || "read_file", {
+    ok,
+    ...(status ? { status } : {}),
+    message:
+      String(parsed?.message || "").trim() ||
+      "文件读取结果超过上下文限制，未保存为附件；已返回原文件引用，请按行号范围分段读取。",
+    overflowed: true,
+    overflow_reason: `read_file result length ${measuredLength} exceeds limit ${maxChars}`,
+    overflow_strategy: "original_file_reference",
+    transferEnvelope,
+    transferEnvelopes: [transferEnvelope],
+    summary: {
+      original_length: measuredLength,
+      max_length: maxChars,
+      raw_serialized_length: String(rawText || "").length,
+      compacted_serialized_length: measuredLength,
+    },
+  });
+}
+
 function normalizeOverflowSessionDirName(sessionId = "") {
   const normalized = String(sessionId || "").trim().replace(/[^a-zA-Z0-9._-]/g, "_");
   return normalized || "__default__";
@@ -277,6 +386,24 @@ export async function normalizeToolResultOverflow({
   }
 
   const parsed = parseJsonObjectSafely(rawText);
+  const readFileOverflowResult = normalizeReadFileOverflowResult({
+    call,
+    parsed,
+    rawText,
+    measuredText,
+    maxChars,
+    runtime,
+    agentContext,
+  });
+  if (readFileOverflowResult) {
+    return {
+      toolResultText: readFileOverflowResult,
+      overflowed: true,
+      rawLength: rawText.length,
+      measuredLength: measuredText.length,
+    };
+  }
+
   const overflowAttachmentPayloads = resolveOverflowAttachmentPayloads(parsed, rawText);
   const semanticOverflows = await Promise.all(
     overflowAttachmentPayloads.map((overflowAttachmentPayload = {}) =>

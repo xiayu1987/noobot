@@ -22,11 +22,38 @@ const PLAN_UPDATE_POLICY = Object.freeze({
 
 function normalizePromptOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
+  const data = source.data && typeof source.data === "object" ? source.data : {};
   return {
     locale: source.locale || LOCALE.ZH_CN,
     marker: String(source.marker || "").trim(),
-    data: source.data && typeof source.data === "object" ? source.data : {},
+    data,
+    programmingMode: source.programmingMode === true || source.isProgrammingMode === true || data.programmingMode === true,
   };
+}
+
+function normalizeScenarioText(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isProgrammingScenarioText(value = "") {
+  const text = normalizeScenarioText(value);
+  return text === "programming" || text === "coding" || text.includes("programming") || text.includes("coding") || text.includes("\u7f16\u7a0b");
+}
+
+export function resolveProgrammingModeFromContext(ctx = {}) {
+  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || ctx?.runtime || null;
+  const candidates = [
+    ctx?.runConfig,
+    runtime?.runConfig,
+    runtime?.systemRuntime?.runConfig,
+    ctx?.agentContext?.runConfig,
+  ].filter((item) => item && typeof item === "object");
+  for (const runConfig of candidates) {
+    if (isProgrammingScenarioText(runConfig?.scenario)) return true;
+    if (isProgrammingScenarioText(runConfig?.scenarioProfile?.key)) return true;
+    if (isProgrammingScenarioText(runConfig?.scenarioProfile?.name)) return true;
+  }
+  return false;
 }
 
 export function getPlanningPromptMarker(locale = LOCALE.ZH_CN) {
@@ -249,20 +276,27 @@ export function buildPlanningRefinementPromptText(options = {}) {
 }
 
 export function buildGuidanceSummaryPromptText(options = {}) {
-  const { locale, marker } = normalizePromptOptions(options);
+  const { locale, marker, programmingMode } = normalizePromptOptions(options);
+  const overviewSample = programmingMode
+    ? "1. [plan=2][status=done][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ..."
+    : "1. [plan=2][status=done][evidence=...] ...";
+  const riskSampleKey = programmingMode
+    ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH_PROGRAMMING
+    : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH;
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROMPT_GOAL),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROTOCOL_HINT),
     "[SUMMARY_OVERVIEW]",
-    "1. [plan=2][status=done][evidence=...] ...",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH),
+    overviewSample,
+    translateI18nText(locale, riskSampleKey),
     "[SUMMARY_DETAIL]",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_DETAIL_HEADER),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_DETAIL_SAMPLE),
     "[SUMMARY_END]",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_RULES),
-    buildSummaryPatchProtocolCoreText(locale),
+    programmingMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_RULES) : "",
+    buildSummaryPatchProtocolCoreText({ locale, programmingMode }),
   ].filter(Boolean).join("\n");
 }
 
