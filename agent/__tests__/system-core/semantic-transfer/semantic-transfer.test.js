@@ -645,3 +645,55 @@ test("semantic-transfer emits validation event and hook", async () => {
   assert.equal(hooks.length, 1);
   assert.equal(hooks[0].phase, "semantic_transfer");
 });
+
+
+test("semantic-transfer read_file overflow returns original-file envelope without attachment metadata", async () => {
+  const resolvedPath = "/workspace/project/large-read.txt";
+  const content = "a".repeat(400);
+  const result = await transferToolMessage({
+    transferMode: "tool_result_text",
+    call: { id: "call_read_overflow", name: "read_file" },
+    runtime: {
+      globalConfig: {
+        tools: { maxToolResultChars: 120 },
+      },
+      userConfig: {},
+    },
+    toolResultText: JSON.stringify({
+      toolName: "read_file",
+      ok: true,
+      resolvedPath,
+      fileName: "large-read.txt",
+      startLine: 1,
+      endLine: 1,
+      totalLines: 1,
+      includeLineNumbers: true,
+      truncated: false,
+      content,
+    }),
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(result.overflowed, true);
+  assert.equal(payload.toolName, "read_file");
+  assert.equal(payload.ok, true);
+  assert.equal(payload.overflowed, true);
+  assert.equal(payload.overflow_strategy, "original_file_reference");
+  assert.equal(payload.content, undefined);
+  assert.equal(payload.fileAddress, undefined);
+  assert.equal(payload.resolvedPath, undefined);
+  assert.equal(payload.content_omitted, undefined);
+  assert.equal(payload.transferEnvelope?.protocol, "noobot.semantic-transfer");
+  assert.equal(payload.transferEnvelope?.transport, "file");
+  assert.equal(payload.transferEnvelope?.filePath, resolvedPath);
+  assert.equal(payload.transferEnvelope?.storage?.originalFile, true);
+  assert.equal(payload.transferEnvelope?.storage?.persisted, false);
+  assert.equal(payload.transferEnvelope?.meta?.originalFile, true);
+  assert.equal(payload.transferEnvelope?.meta?.contentOmitted, true);
+  assert.equal(payload.transferEnvelope?.meta?.contentLength, content.length);
+  assert.equal(payload.transferEnvelope?.attachmentMeta, undefined);
+  assert.equal(payload.transferEnvelope?.files?.[0]?.attachmentMeta, undefined);
+  assert.equal(payload.transferEnvelope?.files?.[0]?.filePath, resolvedPath);
+  assert.equal(Array.isArray(payload.transferEnvelopes), true);
+  assert.equal(payload.transferEnvelopes.length, 1);
+});

@@ -44,6 +44,7 @@ import {
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
+  resolveProgrammingModeFromContext,
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
 } from "../shared/workflow/prompts.js";
@@ -305,7 +306,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     state.pending.summaryCheckpointMessageCount = Array.isArray(ctx?.messages)
       ? ctx.messages.length
       : null;
-    prompt = buildGuidanceSummaryPromptText({ locale });
+    prompt = buildGuidanceSummaryPromptText({
+      locale,
+      programmingMode: resolveProgrammingModeFromContext(ctx),
+    });
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
   } else if (state.pending.guidance) {

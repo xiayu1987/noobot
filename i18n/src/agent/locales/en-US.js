@@ -168,6 +168,6 @@ export default {
   "ws.unauthorized": "Unauthorized",
   "ws.unknownError": "unknown error",
   "ws.userInteractionTimeout": "user interaction timeout",
-  "agent.phaseSummaryPrompt": "Before continuing with the next steps, please provide a brief summary of the current task phase. Complete the summary first, then proceed, in order to prevent excessive context accumulation and potential confusion.",
+  "agent.phaseSummaryPrompt": "Before continuing with the next steps, please provide a brief summary of the current task phase. Complete the summary first, then proceed, in order to prevent excessive context accumulation and potential confusion. In programming mode, include file paths, method/function names, and line numbers (comma-separated multi-segment ranges such as 10-20,35,48-52 are accepted).",
   "agent.abortError": "dialog stopped by user"
 };
