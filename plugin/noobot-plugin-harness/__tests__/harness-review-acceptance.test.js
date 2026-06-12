@@ -473,7 +473,8 @@ test("harness forced acceptance is owned by acceptance and appended once", async
     agentContext,
   });
 
-  assert.equal((String(result.output).match(/Harness-验收/g) || []).length, 1);
+  assert.equal((String(result.output).match(/\[Harness-验收\]/g) || []).length, 1);
+  assert.match(String(result.output), /NOOBOT_HARNESS_COLLAPSE:start[^>]*kind="acceptance"/);
   assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
   assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "forced_acceptance_triggered"), true);
   assert.equal(agentContext.payload.harness.logs.planning.some((log) => log.event === "forced_acceptance_triggered"), false);

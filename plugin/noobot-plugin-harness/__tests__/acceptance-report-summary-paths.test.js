@@ -63,6 +63,10 @@ test("before_final_output appends last acceptance report text to final output on
   const first = maybeAppendAcceptanceReportAtFinalOutput(ctx);
   assert.equal(first, true);
   assert.match(String(ctx?.result?.output || ""), /\n\n---\n/);
+  assert.match(
+    String(ctx?.result?.output || ""),
+    /NOOBOT_HARNESS_COLLAPSE:start[^>]*kind="acceptance"[^>]*default="closed"/,
+  );
   assert.match(String(ctx?.result?.output || ""), /\[Harness-验收\]/);
   assert.match(String(ctx?.result?.output || ""), /#### 完整计划清单/);
   assert.match(String(ctx?.result?.output || ""), /1\. \[pending\] 主计划一/);
@@ -289,8 +293,13 @@ test("before_final_output prepends latest complete summary before acceptance che
   const output = String(ctx?.result?.output || "");
   const summaryIndex = output.indexOf("## 最后一次完整小结");
   const acceptanceIndex = output.indexOf("[Harness-验收]");
+  const summaryMarkerIndex = output.indexOf('kind="latest_complete_summary"');
+  const acceptanceMarkerIndex = output.indexOf('kind="acceptance"');
   assert.equal(summaryIndex >= 0, true);
   assert.equal(acceptanceIndex >= 0, true);
+  assert.equal(summaryMarkerIndex >= 0, true);
+  assert.equal(acceptanceMarkerIndex >= 0, true);
+  assert.equal(summaryMarkerIndex < acceptanceMarkerIndex, true);
   assert.equal(summaryIndex < acceptanceIndex, true);
   assert.match(output, /完整小结：这是最后一次完整小结内容。/);
   assert.match(output, /#### 完整计划清单[\s\S]*1\. \[pending\] 主计划一[\s\S]*#### 汇总/);
