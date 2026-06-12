@@ -9,7 +9,7 @@
     "prebuild": "npm run -s generate:frontend-plugin-entries",
     "dev": "vite",
     "build": "vite build",
-    "test": "vitest run",
+    "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
     "serve:caddy": "bash ./deploy/run-caddy.sh",

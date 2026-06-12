@@ -111,6 +111,11 @@ test("createRegisterNoobotPlugin returns early when disabled", () => {
 
 test("createRegisterNoobotPlugin uses injected collaborators on happy path", async () => {
   const calls = [];
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => {
+    warnings.push(args.map((item) => String(item || "")).join(" "));
+  };
   const hookManager = { on() {} };
   const capabilityRuntime = { hookMap: {} };
   const options = { enabled: true, tracePriority: 20 };
@@ -139,9 +144,13 @@ test("createRegisterNoobotPlugin uses injected collaborators on happy path", asy
 
   const api = { hookManager };
   const userOptions = { enabled: true };
-  const result = registerNoobotPlugin(api, userOptions);
-
-  await new Promise((resolve) => setImmediate(resolve));
+  let result = null;
+  try {
+    result = registerNoobotPlugin(api, userOptions);
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    console.warn = originalWarn;
+  }
 
   assert.equal(result.name, PLUGIN_NAME);
   assert.equal(result.version, PLUGIN_VERSION);
@@ -154,6 +163,10 @@ test("createRegisterNoobotPlugin uses injected collaborators on happy path", asy
     "cleanupOldRuns",
     "registerHarnessHooks",
   ]);
+  assert.equal(
+    warnings.some((item) => /cleanupOldRuns failed during plugin registration/.test(item)),
+    true,
+  );
 });
 
 test("createRegisterNoobotPlugin appends denyToolNames via unified policy api", () => {
