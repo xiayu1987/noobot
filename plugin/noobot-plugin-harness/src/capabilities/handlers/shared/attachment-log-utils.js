@@ -150,7 +150,7 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
 
 export function mapAttachmentRecordsToMetas(records = []) {
   const list = Array.isArray(records) ? records : [];
-  return list.map((record = {}) => ({
+  return list.map((record = {}) => markHarnessPluginAttachmentMeta({
     attachmentId: String(record?.attachmentId || "").trim(),
     sessionId: String(record?.sessionId || "").trim(),
     attachmentSource: String(record?.attachmentSource || "model").trim(),
@@ -162,6 +162,62 @@ export function mapAttachmentRecordsToMetas(records = []) {
     generatedByModel: record?.generatedByModel === true,
     generationSource: String(record?.generationSource || "").trim(),
   }));
+}
+
+export function markHarnessPluginAttachmentMeta(meta = {}) {
+  const source = meta && typeof meta === "object" ? meta : {};
+  return {
+    ...source,
+    attachmentOwnerType: "plugin",
+    attachmentOwner: "harness-plugin",
+  };
+}
+
+export function markHarnessPluginAttachmentMetas(metas = []) {
+  return (Array.isArray(metas) ? metas : []).map((item = {}) =>
+    markHarnessPluginAttachmentMeta(item),
+  );
+}
+
+function markHarnessPluginTransferEnvelope(envelope = null) {
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return envelope;
+  const next = { ...envelope };
+  if (Array.isArray(next.files)) {
+    next.files = next.files.map((file = {}) => {
+      if (!file || typeof file !== "object" || Array.isArray(file)) return file;
+      return {
+        ...file,
+        attachmentMeta: markHarnessPluginAttachmentMeta(file?.attachmentMeta || {}),
+      };
+    });
+  }
+  if (next.attachmentMeta && typeof next.attachmentMeta === "object" && !Array.isArray(next.attachmentMeta)) {
+    next.attachmentMeta = markHarnessPluginAttachmentMeta(next.attachmentMeta);
+  }
+  return next;
+}
+
+export function markHarnessPluginTransferPayload(payload = {}) {
+  const source = normalizeTransferPayload(payload || {});
+  const transferEnvelope = source.transferEnvelope
+    ? markHarnessPluginTransferEnvelope(source.transferEnvelope)
+    : null;
+  const transferEnvelopes = Array.isArray(source.transferEnvelopes)
+    ? source.transferEnvelopes.map((item) => markHarnessPluginTransferEnvelope(item)).filter(Boolean)
+    : [];
+  const transferResult = source.transferResult
+    ? {
+      ...source.transferResult,
+      envelope: source.transferResult?.envelope
+        ? markHarnessPluginTransferEnvelope(source.transferResult.envelope)
+        : source.transferResult?.envelope,
+    }
+    : null;
+  return {
+    transferResult,
+    transferEnvelope,
+    transferEnvelopes,
+  };
 }
 
 function isHarnessInjectedMessage(message = {}) {
@@ -297,9 +353,11 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         },
       });
       if (typeof getTransferAttachmentMetas === "function") {
-        return getTransferAttachmentMetas(staged?.transferEnvelopes || staged?.transferEnvelope || []);
+        return markHarnessPluginAttachmentMetas(
+          getTransferAttachmentMetas(staged?.transferEnvelopes || staged?.transferEnvelope || []),
+        );
       }
-      return extractAttachmentMetasFromTransferPayload(staged);
+      return markHarnessPluginAttachmentMetas(extractAttachmentMetasFromTransferPayload(staged));
     }
     const artifact = {
       name: buildCapabilityArtifactName({ purpose }),
@@ -319,11 +377,13 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         reason: String(purpose || "harness_capability_output").trim(),
       });
       if (typeof getTransferAttachmentMetas === "function") {
-        return getTransferAttachmentMetas(
-          persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
+        return markHarnessPluginAttachmentMetas(
+          getTransferAttachmentMetas(
+            persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
+          ),
         );
       }
-      return extractAttachmentMetasFromTransferPayload(persisted);
+      return markHarnessPluginAttachmentMetas(extractAttachmentMetasFromTransferPayload(persisted));
     }
     if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
       return [];
