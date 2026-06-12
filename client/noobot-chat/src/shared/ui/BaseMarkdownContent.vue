@@ -142,6 +142,40 @@ defineExpose({ getHtml });
   border-radius: var(--noobot-radius-xs);
 }
 
+.base-markdown-content :deep(.noobot-harness-collapse) {
+  margin: var(--noobot-space-md) 0;
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: var(--noobot-radius-md);
+  background: color-mix(in srgb, var(--noobot-panel-muted) 68%, transparent);
+  overflow: hidden;
+}
+
+.base-markdown-content :deep(.noobot-harness-collapse > summary) {
+  cursor: pointer;
+  user-select: none;
+  padding: var(--noobot-space-sm) var(--noobot-space-md);
+  font-weight: 700;
+  color: var(--noobot-text-main);
+  background: color-mix(in srgb, var(--noobot-accent-soft) 70%, transparent);
+  border-bottom: 1px solid transparent;
+}
+
+.base-markdown-content :deep(.noobot-harness-collapse[open] > summary) {
+  border-bottom-color: var(--noobot-panel-border);
+}
+
+.base-markdown-content :deep(.noobot-harness-collapse__body) {
+  padding: var(--noobot-space-md);
+}
+
+.base-markdown-content :deep(.noobot-harness-collapse__body > :first-child) {
+  margin-top: 0;
+}
+
+.base-markdown-content :deep(.noobot-harness-collapse__body > :last-child) {
+  margin-bottom: 0;
+}
+
 .base-markdown-content :deep(h1),
 .base-markdown-content :deep(h2),
 .base-markdown-content :deep(h3),

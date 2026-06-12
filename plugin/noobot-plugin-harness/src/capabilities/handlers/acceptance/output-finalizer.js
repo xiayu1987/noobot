@@ -24,6 +24,41 @@ import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-buil
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
+const HARNESS_COLLAPSE_MARKER_NAME = "NOOBOT_HARNESS_COLLAPSE";
+const HARNESS_COLLAPSE_KIND = Object.freeze({
+  latestCompleteSummary: "latest_complete_summary",
+  acceptance: "acceptance",
+});
+
+function escapeMarkerAttribute(value = "") {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function wrapHarnessCollapsibleSection({
+  kind = "",
+  title = "",
+  content = "",
+} = {}) {
+  const body = String(content || "").trim();
+  if (!body) return "";
+  const normalizedKind = String(kind || "").trim();
+  const normalizedTitle = String(title || "").trim();
+  if (!normalizedKind || !normalizedTitle) return body;
+  const attrs = [
+    `kind="${escapeMarkerAttribute(normalizedKind)}"`,
+    `title="${escapeMarkerAttribute(normalizedTitle)}"`,
+    'default="closed"',
+  ].join(" ");
+  return [
+    `<<<${HARNESS_COLLAPSE_MARKER_NAME}:start ${attrs}>>>`,
+    body,
+    `<<<${HARNESS_COLLAPSE_MARKER_NAME}:end kind="${escapeMarkerAttribute(normalizedKind)}">>>`,
+  ].join("\n").trim();
+}
 
 function mergeAttachmentMetasForOutput(existing = [], incoming = []) {
   const current = Array.isArray(existing) ? existing : [];
@@ -150,17 +185,29 @@ function buildLatestCompleteSummarySection(bucket = {}, locale = LOCALE.ZH_CN) {
   const summaryText = resolveLatestCompleteSummaryText(bucket);
   if (!summaryText) return "";
   const title = locale === LOCALE.EN_US ? "## Latest complete summary" : "## 最后一次完整小结";
-  return [title, summaryText].filter(Boolean).join("\n").trim();
+  return wrapHarnessCollapsibleSection({
+    kind: HARNESS_COLLAPSE_KIND.latestCompleteSummary,
+    title: title.replace(/^#+\s*/, ""),
+    content: [title, summaryText].filter(Boolean).join("\n").trim(),
+  });
 }
 
-function prependLatestCompleteSummaryToReportText({
+function buildFinalHarnessValidationSections({
   bucket = {},
   locale = LOCALE.ZH_CN,
   reportText = "",
 } = {}) {
   const rendered = String(reportText || "").trim();
   const summarySection = buildLatestCompleteSummarySection(bucket, locale);
-  return [summarySection, rendered].filter(Boolean).join("\n\n").trim();
+  const acceptanceTitle = locale === LOCALE.EN_US ? "Harness-Acceptance" : "Harness-验收";
+  const acceptanceSection = rendered
+    ? wrapHarnessCollapsibleSection({
+        kind: HARNESS_COLLAPSE_KIND.acceptance,
+        title: acceptanceTitle,
+        content: rendered,
+      })
+    : "";
+  return [summarySection, acceptanceSection].filter(Boolean).join("\n\n").trim();
 }
 
 function buildOutputWithAcceptanceSection({
@@ -385,7 +432,7 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   if (ctx?.result && typeof ctx.result === "object") {
     await runAcceptanceBySeparateModel(ctx, meta, report);
     const original = String(ctx.result.output || "").trim();
-    const compactText = prependLatestCompleteSummaryToReportText({
+    const compactText = buildFinalHarnessValidationSections({
       bucket,
       locale,
       reportText: renderFinalAcceptanceChecklistSummaryText(report, locale),
@@ -465,7 +512,7 @@ export function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
   if (!report) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
   const original = String(ctx.result.output || "").trim();
-  const compactText = prependLatestCompleteSummaryToReportText({
+  const compactText = buildFinalHarnessValidationSections({
     bucket,
     locale,
     reportText: renderFinalAcceptanceChecklistSummaryText(report, locale),
