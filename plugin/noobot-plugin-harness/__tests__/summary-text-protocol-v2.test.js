@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   parseSummaryOverviewAndDetailFromText,
   parseSummaryPatchCommands,
+  resolveSummaryDetailAttachmentText,
 } from "../src/capabilities/handlers/shared/plan/summary-text-protocol.js";
 import { buildGuidanceSummaryPromptText } from "../src/capabilities/handlers/shared/workflow/prompts.js";
 import { buildSummaryPatchProtocolText } from "../src/capabilities/handlers/shared/workflow/protocols.js";
@@ -25,6 +26,9 @@ test("summary_text_v2 parser extracts overview and detail blocks", () => {
     "- 证据A",
     "- 风险B",
     "",
+    "[NEXT_EXECUTION_SUGGESTION]",
+    "- 下一步先处理风险B，并补充回归验证",
+    "",
     "[SUMMARY_END]",
   ].join("\n");
   const parsed = parseSummaryOverviewAndDetailFromText(text);
@@ -32,6 +36,9 @@ test("summary_text_v2 parser extracts overview and detail blocks", () => {
   assert.match(String(parsed.overviewText || ""), /\[plan=2\]\[status=done\]\[file=src\/a\.js\]\[method=bootstrap\]\[line=12\]/);
   assert.match(String(parsed.overviewText || ""), /\[plan=8\]\[status=todo\]\[risk=高\]\[file=src\/b\.js\]\[method=runWorker\]\[line=20-35,40,55-60\]/);
   assert.match(String(parsed.detailText || ""), /^## 详细明细/m);
+  assert.doesNotMatch(String(parsed.detailText || ""), /\[NEXT_EXECUTION_SUGGESTION\]/);
+  assert.match(String(parsed.nextSuggestionText || ""), /下一步先处理风险B/);
+  assert.match(resolveSummaryDetailAttachmentText(parsed), /\[NEXT_EXECUTION_SUGGESTION\]\n- 下一步先处理风险B/);
 });
 
 test("summary parser falls back to plain text when blocks missing", () => {
@@ -59,6 +66,11 @@ test("summary patch parser accepts protocol IDs with S prefix and bracketed numb
 
 test("summary prompts require file method and multi-segment line only in programming mode", () => {
   const normalPrompt = buildGuidanceSummaryPromptText({ locale: "zh-CN" });
+  assert.match(normalPrompt, /\[NEXT_EXECUTION_SUGGESTION\]/);
+  assert.match(normalPrompt, /SUMMARY_DETAIL 后必须输出 \[NEXT_EXECUTION_SUGGESTION\]/);
+  assert.match(normalPrompt, /必须整合上一轮小结结果/);
+  assert.match(normalPrompt, /不得遗漏/);
+  assert.doesNotMatch(normalPrompt, /\[next=下一步执行建议\]/);
   assert.doesNotMatch(normalPrompt, /file=\[文件路径\]/);
   assert.doesNotMatch(normalPrompt, /method=\[方法\/函数名\]/);
   assert.doesNotMatch(normalPrompt, /line=\[行号\/行号范围/);
@@ -74,6 +86,10 @@ test("summary prompts require file method and multi-segment line only in program
   assert.match(programmingPrompt, /编程模式.*file.*method.*line/);
 
   const normalProtocol = buildSummaryPatchProtocolText("en-US");
+  assert.match(normalProtocol, /\[NEXT_EXECUTION_SUGGESTION\] after SUMMARY_DETAIL/);
+  assert.match(normalProtocol, /integrate the previous summary results/);
+  assert.match(normalProtocol, /do not omit still-valid previous items/);
+  assert.doesNotMatch(normalProtocol, /next=\[next execution suggestion\]/);
   assert.doesNotMatch(normalProtocol, /file=\[file path\]/);
   assert.doesNotMatch(normalProtocol, /method=\[method\/function name\]/);
   assert.doesNotMatch(normalProtocol, /line=\[line number\/range/);

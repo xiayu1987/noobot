@@ -280,6 +280,9 @@ export function buildGuidanceSummaryPromptText(options = {}) {
   const overviewSample = programmingMode
     ? "1. [plan=2][status=done][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ..."
     : "1. [plan=2][status=done][evidence=...] ...";
+  const nextSuggestionSample = locale === LOCALE.EN_US
+    ? "- Next, execute the highest-priority unfinished/risky plan item with concrete verification."
+    : "- 下一步优先执行最高优先级的未完成/风险计划项，并给出可验证动作。";
   const riskSampleKey = programmingMode
     ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH_PROGRAMMING
     : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH;
@@ -293,6 +296,8 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     "[SUMMARY_DETAIL]",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_DETAIL_HEADER),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_DETAIL_SAMPLE),
+    "[NEXT_EXECUTION_SUGGESTION]",
+    nextSuggestionSample,
     "[SUMMARY_END]",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_RULES),
     programmingMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_RULES) : "",

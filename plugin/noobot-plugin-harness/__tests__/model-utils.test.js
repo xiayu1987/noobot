@@ -30,7 +30,7 @@ test("buildHarnessInjectedMessage includes dialogProcessId when provided", () =>
   const message = buildHarnessInjectedMessage("relay text", {
     dialogProcessId: "dlg_1",
   });
-  assert.equal(message.role, "user");
+  assert.equal(message.role, "system");
   assert.equal(message.injectedMessage, true);
   assert.equal(message.injectedBy, "harness-plugin");
   assert.equal(message.dialogProcessId, "dlg_1");

@@ -148,7 +148,7 @@ function persistPromptMessagesToCurrentTurn(ctx = {}, promptMessages = []) {
 }
 
 /**
- * Inject user-role harness messages based on registered prompts.
+ * Inject system-role harness messages based on registered prompts.
  * Respects priority and mode. Returns true if any injection occurred.
  */
 export function injectSystemMessages(ctx = {}, options = {}) {

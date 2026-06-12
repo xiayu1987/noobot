@@ -8,7 +8,8 @@ const SUMMARY_LINE_RE = /^\s*(\d+)\.\s+(.+?)\s*$/;
 const PATCH_ADD_UPDATE_RE = /^\s*(ADD|UPDATE)\s+(?:S\s*)?\[?(\d+)\]?\s+(.+?)\s*$/i;
 const PATCH_DELETE_RE = /^\s*(DELETE)\s+(?:S\s*)?\[?(\d+)\]?\s*$/i;
 const SUMMARY_OVERVIEW_BLOCK_RE = /\[SUMMARY_OVERVIEW\]([\s\S]*?)(?=\[SUMMARY_DETAIL\]|\[SUMMARY_END\]|$)/i;
-const SUMMARY_DETAIL_BLOCK_RE = /\[SUMMARY_DETAIL\]([\s\S]*?)(?=\[SUMMARY_END\]|$)/i;
+const SUMMARY_DETAIL_BLOCK_RE = /\[SUMMARY_DETAIL\]([\s\S]*?)(?=\[NEXT_EXECUTION_SUGGESTION\]|\[SUMMARY_END\]|$)/i;
+const NEXT_EXECUTION_SUGGESTION_BLOCK_RE = /\[NEXT_EXECUTION_SUGGESTION\]([\s\S]*?)(?=\[SUMMARY_END\]|$)/i;
 const SUMMARY_END_MARKER_RE = /\[SUMMARY_END\]/i;
 
 function splitLines(text = "") {
@@ -104,21 +105,24 @@ export function mergeSummaryText(existingText = "", incomingText = "") {
 
 export function parseSummaryOverviewAndDetailFromText(text = "") {
   const raw = String(text || "").trim();
-  if (!raw) return { overviewText: "", detailText: "", trailingText: "", usedV2: false };
+  if (!raw) return { overviewText: "", detailText: "", nextSuggestionText: "", trailingText: "", usedV2: false };
   const overviewMatch = raw.match(SUMMARY_OVERVIEW_BLOCK_RE);
   const detailMatch = raw.match(SUMMARY_DETAIL_BLOCK_RE);
+  const nextSuggestionMatch = raw.match(NEXT_EXECUTION_SUGGESTION_BLOCK_RE);
   const endMatch = raw.match(SUMMARY_END_MARKER_RE);
-  if (!overviewMatch && !detailMatch) {
-    return { overviewText: raw, detailText: "", trailingText: "", usedV2: false };
+  if (!overviewMatch && !detailMatch && !nextSuggestionMatch) {
+    return { overviewText: raw, detailText: "", nextSuggestionText: "", trailingText: "", usedV2: false };
   }
   const overviewText = String(overviewMatch?.[1] || "").trim();
   const detailText = String(detailMatch?.[1] || "").trim();
+  const nextSuggestionText = String(nextSuggestionMatch?.[1] || "").trim();
   const trailingText = endMatch
     ? String(raw.slice(Number(endMatch.index) + String(endMatch[0] || "").length)).trim()
     : "";
   return {
     overviewText: overviewText || raw,
     detailText,
+    nextSuggestionText,
     trailingText,
     usedV2: true,
   };
@@ -126,9 +130,10 @@ export function parseSummaryOverviewAndDetailFromText(text = "") {
 
 export function resolveSummaryDetailAttachmentText(parsedSummary = {}) {
   const detailText = String(parsedSummary?.detailText || "").trim();
+  const nextSuggestionText = String(parsedSummary?.nextSuggestionText || "").trim();
   const trailingText = String(parsedSummary?.trailingText || "").trim();
-  if (!detailText && !trailingText) return "";
-  if (!detailText) return trailingText;
-  if (!trailingText) return detailText;
-  return [detailText, trailingText].join("\n\n");
+  const nextSuggestionBlock = nextSuggestionText
+    ? ["[NEXT_EXECUTION_SUGGESTION]", nextSuggestionText].join("\n")
+    : "";
+  return [detailText, nextSuggestionBlock, trailingText].filter(Boolean).join("\n\n");
 }
