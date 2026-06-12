@@ -145,9 +145,9 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
     ctx: beforeLlmCallCtx,
     meta: {},
   });
-  assert.equal(beforeLlmCallCtx.messages[0]?.role, "system");
-  assert.equal(beforeLlmCallCtx.messages[0]?.injectedMessage, true);
-  assert.equal(beforeLlmCallCtx.messages[0]?.injectedBy, "harness-plugin");
+  assert.equal(beforeLlmCallCtx.messages.at(-1)?.role, "user");
+  assert.equal(beforeLlmCallCtx.messages.at(-1)?.injectedMessage, true);
+  assert.equal(beforeLlmCallCtx.messages.at(-1)?.injectedBy, "harness-plugin");
   const beforeLlmCallExecutionLog = acceptanceLogs.find((item = {}) =>
     item?.event === "workflow_execution_result" && item?.detail?.point === "before_llm_call"
   );

@@ -107,7 +107,7 @@ test("harness planning prompt includes current tool names and descriptions", asy
     /harness-planning-tools/.test(String(item?.content || "")),
   );
   const toolsPromptText = String(toolsPrompt?.content || "");
-  assert.equal(String(planningPromptMessage?.role || ""), "system");
+  assert.equal(String(planningPromptMessage?.role || ""), "user");
   assert.match(planningPrompt, /harness-planning-bootstrap/);
   assert.match(planningPrompt, /\[CURRENT_TASK_GOAL\]/);
   assert.match(planningPrompt, /\[PLAN\]/);
@@ -140,7 +140,7 @@ test("harness planning captures checklist and forces acceptance at final output"
   const planningPromptMessage = messages.find((item = {}) =>
     /harness-planning-bootstrap/.test(String(item?.content || "")),
   );
-  assert.equal(String(planningPromptMessage?.role || ""), "system");
+  assert.equal(String(planningPromptMessage?.role || ""), "user");
   assert.match(String(planningPromptMessage?.content || ""), /harness-planning-bootstrap/);
 
   await hookManager.emit("after_llm_call", {

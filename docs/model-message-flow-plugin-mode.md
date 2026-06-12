@@ -35,7 +35,7 @@ system -> history -> incremental
 ### 插件侧
 1. 在 `before_llm_call` 读取 `ctx.messageBlocks`。
 2. 先按 `system/history/incremental` 分块调用 `resolveMessageBlock(scope)` 并重组 `ctx.messages`。
-3. capability 运行期间允许前置/后置注入；后续 hooks 会把新增 system 合并回 system，把新增非 system 合并回 incremental。
+3. capability 运行期间允许前置/后置注入；后续 hooks 会把新增 system 合并回 system，把新增非 system 合并回 incremental。为保持模型厂商 prefix cache 友好，harness 当前轮动态主链路注入（planning/guidance/acceptance/separate model relay 等）默认解析为非 system/user 注入，进入 incremental，避免插到 history 前破坏稳定历史前缀。
 4. 最终通过 `scope=conversation` 对 `history + incremental` 再做一次非 system 合并窗口过滤/裁剪，并写回 `ctx.messages = system + conversation`。
 
 ---
@@ -170,6 +170,7 @@ Harness 注入到主链路的消息应携带：
 
 - 小结时：同分组最新一条 injected 消息不标 `summarized:true`，更旧的同分组 injected 消息会标记为已小结；
 - 筛选时：同分组只保留最新一条；
+- 主链路动态注入：`planning_*`、`guidance_*`、`acceptance_*`、`separate_model_relay:*` 即使调用方请求 `role=system`，也会按 cache-friendly 策略转为 `role=user`，最终进入 `incremental` 并位于 history 后；固定 harness policy prompt 仍由 prompt-injector 作为真正 system 消息注入。
 - 如果历史消息缺少 `injectedMessageType`，实现会回退到内部消息类型、relay purpose、通用 `type` 或 `injectedBy`，以兼容旧数据。
 
 基础裁剪规则（recent window）：
@@ -234,6 +235,8 @@ capability / hook 运行期间，插件侧可能继续修改 `ctx.messages`：
 [插件侧] extraSystemMessages    = 新增且 role 为 system 的消息
 [插件侧] extraNonSystemMessages = 新增且 role 非 system 的消息
 ```
+
+注意：harness 内置动态注入通常会先被规范化为 `role=user`，因此一般会进入 `extraNonSystemMessages` / `incremental`；只有稳定 policy 或明确保留为 system 的消息才进入 `extraSystemMessages`。
 
 当前 hooks 最终压缩会把这些新增消息归类为：
 

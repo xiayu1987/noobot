@@ -200,12 +200,16 @@ function buildFinalOutputFallbackPhaseAcceptanceText(locale = LOCALE.ZH_CN, buck
 function pushRoleMessage(messages = [], role = "system", content = "") {
   const normalizedContent = String(content || "").trim();
   if (!Array.isArray(messages) || !normalizedContent) return false;
+  // Inject-mode phase acceptance prompts are current-turn dynamic guidance for
+  // the main model. Keep them in the non-system/incremental segment so stable
+  // system + history prefixes remain provider-cache friendly.
   messages.push(
     buildHarnessInjectedMessage(normalizedContent, {
-      role: String(role || "system").trim() || "system",
+      role: "user",
       injectedMessageType: "acceptance_prompt",
     }),
   );
+  void role;
   return true;
 }
 
