@@ -115,7 +115,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     // Incremental block clipping window size (recent messages).
     incrementalRecentMessageLimit: 20,
     // Non-main-chain capability/separate model agent context clipping window size.
-    capabilityModelRecentMessageLimit: 10,
+    capabilityModelRecentMessageLimit: 20,
   },
   planning: {
     summary: {

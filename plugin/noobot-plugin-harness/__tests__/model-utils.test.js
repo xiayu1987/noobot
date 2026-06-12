@@ -108,13 +108,13 @@ test("invokeWithReasoningRetry filters summarized messages before invoking capab
 });
 
 
-test("resolveCapabilityModelMessages clips capability context window to latest 10 after filtering", () => {
+test("resolveCapabilityModelMessages clips capability context window to latest 20 after filtering", () => {
   const result = resolveCapabilityModelMessages(
     {},
     {
       messages: [
         { role: "assistant", content: "drop", summarized: true },
-        ...Array.from({ length: 12 }, (_, index) => ({
+        ...Array.from({ length: 22 }, (_, index) => ({
           role: "user",
           content: `m${index + 1}`,
         })),
@@ -124,14 +124,14 @@ test("resolveCapabilityModelMessages clips capability context window to latest 1
 
   assert.deepEqual(
     result.map((item) => item.content),
-    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12"],
+    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
   );
 });
 
-test("buildModelMessagesWithStructuredEnvelope clips agent context to latest 10", () => {
+test("buildModelMessagesWithStructuredEnvelope clips agent context to latest 20", () => {
   const output = buildModelMessagesWithStructuredEnvelope({
     locale: "zh-CN",
-    agentMessages: Array.from({ length: 12 }, (_, index) => ({
+    agentMessages: Array.from({ length: 22 }, (_, index) => ({
       role: "user",
       content: `m${index + 1}`,
     })),
@@ -142,7 +142,7 @@ test("buildModelMessagesWithStructuredEnvelope clips agent context to latest 10"
   const agentContext = JSON.parse(jsonText);
   assert.deepEqual(
     agentContext.map((item) => item.content),
-    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12"],
+    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
   );
   assert.equal(output.at(-1).content, "task");
 });
