@@ -542,6 +542,20 @@ async function backwriteParsedResultToSourceAttachment({
   }
 }
 
+function _normalizeAttachmentMetas(persistedOutput) {
+  return Array.isArray(persistedOutput?.attachmentMetas)
+    ? persistedOutput.attachmentMetas
+    : [];
+}
+
+async function _backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachmentMetas }) {
+  return backwriteParsedResultToSourceAttachment({
+    runtime,
+    sourceAttachmentMeta,
+    parsedAttachmentMeta: attachmentMetas[0] || null,
+  });
+}
+
 export function createDoc2DataTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath =
@@ -613,9 +627,7 @@ export function createDoc2DataTool({ agentContext }) {
             attachmentMeta: reusableAttachmentMeta,
             text: directTextDocument.text,
           });
-          const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
-            ? persistedOutput.attachmentMetas
-            : [];
+          const attachmentMetas = _normalizeAttachmentMetas(persistedOutput);
           return toToolJsonResult(
             TOOL_NAME.DOC_TO_DATA,
             {
@@ -646,13 +658,11 @@ export function createDoc2DataTool({ agentContext }) {
           text: directTextDocument.text,
           mode: TOOL_DATA_MODE.DIRECT_TEXT,
         });
-        const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
-          ? persistedOutput.attachmentMetas
-          : [];
-        const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
+        const attachmentMetas = _normalizeAttachmentMetas(persistedOutput);
+        const updatedSourceAttachment = await _backwriteFirstAttachment({
           runtime,
           sourceAttachmentMeta,
-          parsedAttachmentMeta: attachmentMetas[0] || null,
+          attachmentMetas,
         });
         return toToolJsonResult(
           TOOL_NAME.DOC_TO_DATA,
@@ -691,13 +701,11 @@ export function createDoc2DataTool({ agentContext }) {
             text: libreOfficeResult.text,
             mode: libreOfficeResult.mode || "libreoffice_text",
           });
-          const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
-            ? persistedOutput.attachmentMetas
-            : [];
-          const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
+          const attachmentMetas = _normalizeAttachmentMetas(persistedOutput);
+          const updatedSourceAttachment = await _backwriteFirstAttachment({
             runtime,
             sourceAttachmentMeta,
-            parsedAttachmentMeta: attachmentMetas[0] || null,
+            attachmentMetas,
           });
           return toToolJsonResult(
             TOOL_NAME.DOC_TO_DATA,
@@ -811,13 +819,11 @@ export function createDoc2DataTool({ agentContext }) {
         text: mergedText,
         mode: TOOL_DATA_MODE.IMAGE_MODEL,
       });
-      const attachmentMetas = Array.isArray(persistedOutput?.attachmentMetas)
-        ? persistedOutput.attachmentMetas
-        : [];
-      const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
+      const attachmentMetas = _normalizeAttachmentMetas(persistedOutput);
+      const updatedSourceAttachment = await _backwriteFirstAttachment({
         runtime,
         sourceAttachmentMeta,
-        parsedAttachmentMeta: attachmentMetas[0] || null,
+        attachmentMetas,
       });
 
       return toToolJsonResult(
