@@ -219,12 +219,12 @@ Harness capability 流程（planning / guidance / summary / acceptance 等）在
 ```text
 capabilityAgentMessages
   -> 过滤 summarized:true / lc_kwargs.summarized:true
-  -> 裁剪为最近 10 条 agent 上下文消息
+  -> 裁剪为最近 20 条 agent 上下文消息
   -> 再拼接 capability 自己的 task / constraint / responsibility prompt
   -> 调用 capabilityModelInvoker
 ```
 
-注意：10 条窗口只裁剪 agent 上下文部分，不直接裁掉 capability 自己追加的 task、约束或重试提示，避免把本次能力请求的指令裁掉。真正调用 invoker 前还会再次过滤 `summarized:true` 作为兜底。
+注意：20 条窗口只裁剪 agent 上下文部分，不直接裁掉 capability 自己追加的 task、约束或重试提示，避免把本次能力请求的指令裁掉。真正调用 invoker 前还会再次过滤 `summarized:true` 作为兜底。
 
 #### 4.2.4 插件侧 capability 注入
 

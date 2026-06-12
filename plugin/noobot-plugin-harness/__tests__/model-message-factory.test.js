@@ -139,10 +139,10 @@ test("buildCapabilityModelMessages filters summarized agent messages", () => {
 });
 
 
-test("buildCapabilityModelMessages clips capability agent context to latest 10 messages", () => {
+test("buildCapabilityModelMessages clips capability agent context to latest 20 messages", () => {
   const output = buildCapabilityModelMessages({
     locale: "zh-CN",
-    agentMessages: Array.from({ length: 12 }, (_, index) => ({
+    agentMessages: Array.from({ length: 22 }, (_, index) => ({
       role: "user",
       content: `m${index + 1}`,
     })),
@@ -151,7 +151,7 @@ test("buildCapabilityModelMessages clips capability agent context to latest 10 m
 
   assert.deepEqual(
     output.filter((item) => String(item.content || "").startsWith("m")).map((item) => item.content),
-    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12"],
+    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
   );
   assert.equal(output.at(-1).content, "task");
 });
