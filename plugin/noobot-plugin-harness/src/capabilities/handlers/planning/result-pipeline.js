@@ -23,6 +23,11 @@ import {
 import { executePlanMutation } from "../shared/plan/mutation-facade.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "../shared/plan/acceptance-status.js";
 import { resolveOperationDirectoryContext } from "../shared/operation-directory.js";
+import {
+  buildHarnessInjectedMessage,
+  persistHarnessMessageToCurrentTurn,
+} from "../shared/message/injected-message-utils.js";
+import { resolveDialogProcessIdFromContext } from "../shared/runtime/dialog-process-id.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -33,6 +38,7 @@ const DEFAULT_PLAN_REASON_I18N_KEY = Object.freeze({
 });
 const CURRENT_TASK_GOAL_BLOCK_RE = /\[CURRENT_TASK_GOAL\]([\s\S]*?)(?=\[PLAN\]|\[PLAN_PATCH\]|\[CURRENT_PLAN\]|$)/i;
 const PLAN_BLOCK_MARKER_RE = /^\s*\[(?:PLAN|PLAN_PATCH|CURRENT_PLAN)\]\s*$/gim;
+const CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE = "planning_current_task_goal";
 
 function resolveDefaultPlanReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
   const normalizedReason = String(reason || "").trim() || "planning_empty_response";
@@ -88,6 +94,62 @@ function parsePlanningTextProtocol(text = "") {
   return { currentTaskGoal, planText: planText || raw };
 }
 
+function isCurrentTaskGoalInjectedMessage(message = {}) {
+  return (
+    message?.injectedMessage === true &&
+    String(message?.injectedBy || "").trim() === "harness-plugin" &&
+    String(message?.injectedMessageType || "").trim() === CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE
+  );
+}
+
+function removeCurrentTaskGoalInjectedMessagesFromList(messages = []) {
+  if (!Array.isArray(messages)) return 0;
+  let removed = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (!isCurrentTaskGoalInjectedMessage(messages[index])) continue;
+    messages.splice(index, 1);
+    removed += 1;
+  }
+  return removed;
+}
+
+function removeCurrentTaskGoalInjectedMessages(ctx = {}) {
+  let removed = removeCurrentTaskGoalInjectedMessagesFromList(ctx?.messages);
+  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+  if (blocks) {
+    removed += removeCurrentTaskGoalInjectedMessagesFromList(blocks.system);
+    removed += removeCurrentTaskGoalInjectedMessagesFromList(blocks.history);
+    removed += removeCurrentTaskGoalInjectedMessagesFromList(blocks.incremental);
+  }
+  return removed;
+}
+
+function buildCurrentTaskGoalSystemContent(currentTaskGoal = "") {
+  return [
+    "<!-- noobot-harness-current-task-goal -->",
+    "[CURRENT_TASK_GOAL]",
+    String(currentTaskGoal || "").trim(),
+  ].filter(Boolean).join("\n");
+}
+
+function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
+  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
+  const normalizedGoal = String(currentTaskGoal || "").trim();
+  if (!messages || !normalizedGoal) return false;
+  removeCurrentTaskGoalInjectedMessages(ctx);
+  const message = buildHarnessInjectedMessage(
+    buildCurrentTaskGoalSystemContent(normalizedGoal),
+    {
+      role: "system",
+      dialogProcessId: resolveDialogProcessIdFromContext(ctx),
+      injectedMessageType: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE,
+    },
+  );
+  messages.push(message);
+  persistHarnessMessageToCurrentTurn(ctx, message, true);
+  return true;
+}
+
 function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source = "unknown", summary = "") {
   const parsedProtocol = parsePlanningTextProtocol(rawText);
   const normalized = String(parsedProtocol.planText || "").trim();
@@ -110,6 +172,7 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
   bucket.planText = appliedMutation.nextPlanText;
   if (parsedProtocol.currentTaskGoal) {
     bucket.currentTaskGoal = parsedProtocol.currentTaskGoal;
+    injectCurrentTaskGoalSystemMessage(ctx, parsedProtocol.currentTaskGoal);
   }
   resetPlanAcceptanceStatusForPlanChange(bucket, String(renderPlanDocument(previousDocument) || "").trim(), bucket.planText, {
     stage: "planning_capture",

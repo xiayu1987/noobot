@@ -60,6 +60,20 @@ test("planning result pipeline supports ID+PATCH main plan text", async () => {
 
 test("planning result pipeline extracts current task goal from planning text protocol", async () => {
   const ctx = createCtx();
+  ctx.dialogProcessId = "planning-dp";
+  ctx.messages = [{ role: "user", content: "开始任务" }];
+  const persisted = [];
+  ctx.agentContext.execution = {
+    controllers: {
+      runtime: {
+        currentTurnMessages: {
+          push(message) {
+            persisted.push(message);
+          },
+        },
+      },
+    },
+  };
   const result = await processPlanningResult(ctx, {}, {
     source: "separate_model",
     rawText: [
@@ -74,6 +88,21 @@ test("planning result pipeline extracts current task goal from planning text pro
 
   assert.equal(result.captured, true);
   assert.equal(ctx.agentContext.payload.harness.currentTaskGoal, "由计划模型确认的当前任务目标");
+  const injectedGoalMessage = ctx.messages.find((item = {}) =>
+    String(item?.injectedMessageType || "") === "planning_current_task_goal"
+  );
+  assert.equal(injectedGoalMessage?.role, "system");
+  assert.equal(injectedGoalMessage?.injectedMessage, true);
+  assert.equal(injectedGoalMessage?.injectedBy, "harness-plugin");
+  assert.equal(injectedGoalMessage?.dialogProcessId, "planning-dp");
+  assert.match(String(injectedGoalMessage?.content || ""), /\[CURRENT_TASK_GOAL\]/);
+  assert.match(String(injectedGoalMessage?.content || ""), /由计划模型确认的当前任务目标/);
+  assert.equal(
+    persisted.some((item = {}) =>
+      String(item?.injectedMessageType || "") === "planning_current_task_goal"
+    ),
+    true,
+  );
   assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^1\. 解析附件/m);
   assert.doesNotMatch(String(ctx.agentContext.payload.harness.planText || ""), /CURRENT_TASK_GOAL/);
 });
