@@ -49,6 +49,7 @@ import {
 } from "../shared/workflow/prompts.js";
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
+import { applyPhaseAcceptanceReportToPlanStatus } from "../shared/plan/acceptance-status.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -172,6 +173,7 @@ function appendPhaseAcceptanceReport(bucket = {}, content = "", { planText = "" 
     content: String(content || "").trim(),
   };
   bucket.phaseAcceptanceReports.push(report);
+  applyPhaseAcceptanceReportToPlanStatus(bucket, report);
   if (bucket.phaseAcceptanceReports.length > 50) {
     bucket.phaseAcceptanceReports.splice(0, bucket.phaseAcceptanceReports.length - 50);
   }

@@ -134,3 +134,45 @@ test("planning refinement allows main-plan patch and sub-plan patch in one paylo
   assert.match(String(ctx.bucket.planText || ""), /^2\.2 子计划二-新增细化/m);
   assert.equal(ctx.bucket.globalRevisionCount, 0);
 });
+
+test("planning revision resets acceptance status for changed plan items only", () => {
+  const ctx = {
+    bucket: {
+      planText: [
+        "1. 主计划一",
+        "1.1 子计划一",
+        "2. 主计划二",
+      ].join("\n"),
+      globalRevisionCount: 0,
+      lastRevisionChangedMainStepIndexes: [],
+      planRevisions: [],
+      planAcceptanceStatusByPlanId: {
+        1: { planId: "1", status: "pass", taskStatus: "completed", source: "phase_acceptance" },
+        "1.1": { planId: "1.1", status: "pass", taskStatus: "completed", source: "phase_acceptance" },
+        2: { planId: "2", status: "pass", taskStatus: "completed", source: "phase_acceptance" },
+      },
+    },
+    state: { flags: {} },
+  };
+  const helpers = createPlanRevisionHelpers({
+    CAPABILITY_DOMAIN: { PLANNING: "planning" },
+    LOCALE: { ZH_CN: "zh-CN" },
+    appendCapabilityLog: () => {},
+    ensureHarnessBucket: (inputCtx = {}) => ({
+      bucket: inputCtx.bucket,
+      state: inputCtx.state,
+    }),
+  });
+
+  const applied = helpers.applyRevisedPlanFromText(
+    ctx,
+    "UPDATE [1] 主计划一（已修正）",
+    { source: "planning_revision", stage: "revision" },
+  );
+
+  assert.equal(applied, true);
+  assert.equal(ctx.bucket.planAcceptanceStatusByPlanId[1].taskStatus, "pending");
+  assert.equal(ctx.bucket.planAcceptanceStatusByPlanId[1].source, "plan_change_reset");
+  assert.equal(ctx.bucket.planAcceptanceStatusByPlanId["1.1"].taskStatus, "completed");
+  assert.equal(ctx.bucket.planAcceptanceStatusByPlanId[2].taskStatus, "completed");
+});

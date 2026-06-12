@@ -12,6 +12,7 @@ import {
   resolveCompletePlanChecklistText,
   resolvePlanChecklistText,
 } from "../src/capabilities/handlers/shared/plan/checklist-context.js";
+import { applyPhaseAcceptanceReportToPlanStatus } from "../src/capabilities/handlers/shared/plan/acceptance-status.js";
 
 test("acceptance report checklist includes first-level sub plans from planText", () => {
   const report = buildAcceptanceReport({
@@ -99,4 +100,30 @@ test("complete plan resolver prefers bucket.planDocument over planText", () => {
   assert.match(String(text), /^1\. 新主计划/m);
   assert.match(String(text), /^1\.1 新子计划/m);
   assert.doesNotMatch(String(text), /旧主计划/);
+});
+
+test("phase acceptance status is written back to complete plan checklist context", () => {
+  const bucket = {
+    planText: [
+      "1. 主计划一",
+      "1.1 子计划一",
+      "2. 主计划二",
+    ].join("\n"),
+  };
+  const reportEntry = {
+    type: "phase",
+    acceptedAt: "2026-01-01T00:00:00.000Z",
+    planText: bucket.planText,
+    content: "UPDATE A1 plan=1 status=pass risk=low evidence=done [通过]",
+  };
+  bucket.phaseAcceptanceReports = [reportEntry];
+  const applied = applyPhaseAcceptanceReportToPlanStatus(bucket, reportEntry);
+  assert.equal(applied.applied, true);
+
+  const content = buildPlanChecklistSystemContent({ locale: "zh-CN", bucket });
+  assert.match(String(content), /^1\. 主计划一 \[acceptance:completed, source:phase_acceptance\]/m);
+
+  const report = buildAcceptanceReport({ bucket, state: { locale: "zh-CN", signals: {} } });
+  assert.equal(report.finalPlanChecklist[0].status, "completed");
+  assert.equal(report.finalPlanChecklist[0].statusSource, "plan_acceptance_status");
 });
