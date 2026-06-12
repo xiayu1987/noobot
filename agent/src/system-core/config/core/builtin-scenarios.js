@@ -5,6 +5,7 @@
  */
 
 import { isPlainObject } from "../../utils/shared-utils.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
 
 export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming"]);
 export const PROGRAMMING_SCENARIO_KEY = "programming";
@@ -58,6 +59,55 @@ export const BUILTIN_SCENARIOS = Object.freeze({
   }),
 });
 
+const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
+  full: Object.freeze({
+    name: "scenarios.full.name",
+    description: "scenarios.full.description",
+  }),
+  programming: Object.freeze({
+    name: "scenarios.programming.name",
+    description: "scenarios.programming.description",
+  }),
+});
+
+function localizeScenarioText(locale, key, fallback) {
+  return tSystem(key, locale, fallback);
+}
+
+export function getBuiltinScenarios(locale) {
+  return Object.freeze({
+    default: BUILTIN_SCENARIOS.default,
+    definitions: Object.freeze({
+      full: Object.freeze({
+        ...BUILTIN_SCENARIOS.definitions.full,
+        name: localizeScenarioText(
+          locale,
+          BUILTIN_SCENARIO_I18N_KEYS.full.name,
+          BUILTIN_SCENARIOS.definitions.full.name,
+        ),
+        description: localizeScenarioText(
+          locale,
+          BUILTIN_SCENARIO_I18N_KEYS.full.description,
+          BUILTIN_SCENARIOS.definitions.full.description,
+        ),
+      }),
+      programming: Object.freeze({
+        ...BUILTIN_SCENARIOS.definitions.programming,
+        name: localizeScenarioText(
+          locale,
+          BUILTIN_SCENARIO_I18N_KEYS.programming.name,
+          BUILTIN_SCENARIOS.definitions.programming.name,
+        ),
+        description: localizeScenarioText(
+          locale,
+          BUILTIN_SCENARIO_I18N_KEYS.programming.description,
+          BUILTIN_SCENARIOS.definitions.programming.description,
+        ),
+      }),
+    }),
+  });
+}
+
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -94,10 +144,11 @@ export function sanitizeScenarioConfig(input = {}) {
   return out;
 }
 
-export function resolveBuiltinScenarios(globalScenarios = {}, userScenarios = {}) {
+export function resolveBuiltinScenarios(globalScenarios = {}, userScenarios = {}, options = {}) {
+  const builtinScenarios = getBuiltinScenarios(options?.locale);
   const globalSafe = sanitizeScenarioConfig(globalScenarios);
   const userSafe = sanitizeScenarioConfig(userScenarios);
-  const definitions = cloneJson(BUILTIN_SCENARIOS.definitions);
+  const definitions = cloneJson(builtinScenarios.definitions);
   const globalProgrammingModel = readProgrammingModel(globalSafe);
   const userProgrammingModel = readProgrammingModel(userSafe);
   const programmingModel = userProgrammingModel || globalProgrammingModel;
@@ -108,7 +159,7 @@ export function resolveBuiltinScenarios(globalScenarios = {}, userScenarios = {}
     };
   }
   return {
-    default: userSafe.default || globalSafe.default || BUILTIN_SCENARIOS.default,
+    default: userSafe.default || globalSafe.default || builtinScenarios.default,
     definitions,
   };
 }

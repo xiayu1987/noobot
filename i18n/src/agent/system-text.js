@@ -11,11 +11,12 @@ export function resolveLocaleFromEnv() {
   return normalizeLocale(lang, DEFAULT_LOCALE);
 }
 
-export function tSystem(key = "", locale = "") {
+export function tSystem(key = "", locale = "", fallback = "") {
   return pickLocaleText({
     locale: normalizeLocale(locale || resolveLocaleFromEnv(), DEFAULT_LOCALE),
     dict: BACKEND_I18N,
     key,
+    fallback,
     fallbackLocale: DEFAULT_LOCALE,
   });
 }

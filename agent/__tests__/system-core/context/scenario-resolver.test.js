@@ -82,3 +82,17 @@ test("resolveScenarioProfile programming description mentions preferred code too
   assert.match(result.description, /write_file/);
   assert.match(result.description, /patch_file/);
 });
+
+test("resolveScenarioProfile localizes builtin scenario names from runtime locale", () => {
+  const english = resolveScenarioProfile({
+    runConfig: { scenario: "programming", locale: "en-US" },
+    effectiveConfig: {},
+  });
+  const chinese = resolveScenarioProfile({
+    runConfig: { scenario: "programming", locale: "zh-CN" },
+    effectiveConfig: {},
+  });
+
+  assert.equal(english.name, "Programming");
+  assert.equal(chinese.name, "编程");
+});
