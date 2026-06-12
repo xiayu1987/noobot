@@ -58,6 +58,26 @@ test("planning result pipeline supports ID+PATCH main plan text", async () => {
   assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^2\. 执行核心任务/m);
 });
 
+test("planning result pipeline extracts current task goal from planning text protocol", async () => {
+  const ctx = createCtx();
+  const result = await processPlanningResult(ctx, {}, {
+    source: "separate_model",
+    rawText: [
+      "[CURRENT_TASK_GOAL]",
+      "由计划模型确认的当前任务目标",
+      "[PLAN]",
+      "ADD [1] 解析附件",
+      "ADD [2] 执行核心任务",
+    ].join("\n"),
+    locale: LOCALE.ZH_CN,
+  });
+
+  assert.equal(result.captured, true);
+  assert.equal(ctx.agentContext.payload.harness.currentTaskGoal, "由计划模型确认的当前任务目标");
+  assert.match(String(ctx.agentContext.payload.harness.planText || ""), /^1\. 解析附件/m);
+  assert.doesNotMatch(String(ctx.agentContext.payload.harness.planText || ""), /CURRENT_TASK_GOAL/);
+});
+
 test("planning result pipeline schedules retry when payload has no main plan", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {

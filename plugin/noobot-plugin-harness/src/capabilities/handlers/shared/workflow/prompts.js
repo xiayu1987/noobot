@@ -177,6 +177,9 @@ export function buildPlanningMainPrompt(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const userGoal = String(data.userGoal || options?.userGoal || "").trim();
   const goal = String(userGoal || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
+  const currentTaskGoalProtocol = locale === LOCALE.EN_US
+    ? "Before plan patch lines, output the current task goal using this text protocol: [CURRENT_TASK_GOAL]\\n<one concise current task goal synthesized by the planning model>\\n[PLAN]"
+    : "在计划 patch 行之前，必须用以下文本协议输出当前任务目标：[CURRENT_TASK_GOAL]\\n<由计划模型提炼的一句话当前任务目标>\\n[PLAN]";
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL),
@@ -185,6 +188,8 @@ export function buildPlanningMainPrompt(options = {}) {
     goal,
     "",
     buildPlanningMainPatchProtocolCoreText({ locale, actions: ["ADD"] }),
+    "",
+    currentTaskGoalProtocol,
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_CONSTRAINT),
     "",
@@ -333,6 +338,7 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
   const payload = data.mainPlanContext ?? options?.mainPlanContext ?? null;
   const source = payload && typeof payload === "object" ? payload : {};
   const planTextFromPayload = String(source?.planText || "").trim();
+  const currentTaskGoal = String(source?.currentTaskGoal || "").trim();
   const plansInOrder = Array.isArray(source?.plansInOrder) ? source.plansInOrder : [];
   const checklist = Array.isArray(source?.taskChecklist) ? source.taskChecklist : [];
   const planChecklistText = (() => {
@@ -344,6 +350,8 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
     const resolved = resolveCompletePlanChecklistText({
       planText: planTextFromPayload || mergedPlanTextFromOrderedPlans,
       bucket: { taskChecklist: checklist },
+      currentTaskGoal,
+      locale,
     });
     if (resolved) return resolved;
     return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);

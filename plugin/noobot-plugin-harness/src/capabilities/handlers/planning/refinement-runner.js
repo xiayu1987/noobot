@@ -99,6 +99,7 @@ export async function runPlanningRefinementBySeparateModel(
       locale,
       planText: bucket?.planText || "",
       bucket,
+      ctx,
     }),
   ];
   const refinementMessages = buildCapabilityModelMessages({

@@ -135,6 +135,8 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     SUMMARY_CHECKLIST_TITLE: "summaryChecklistTitle",
     FINAL_ACCEPTANCE_REQUEST_GOAL: "finalAcceptanceRequestGoal",
     PLAN_CHECKLIST_CONTEXT_HEADER: "planChecklistContextHeader",
+    PLAN_CHECKLIST_CURRENT_TASK_GOAL_HEADER: "planChecklistCurrentTaskGoalHeader",
+    PLAN_CHECKLIST_TASKS_HEADER: "planChecklistTasksHeader",
   }),
   WORKFLOW_PROTOCOLS: Object.freeze({
     PROTOCOL_PLANNING_MAIN_ACTION_ADD: "protocolPlanningMainActionAdd",
@@ -473,6 +475,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     relayContentTransferHint: "详细内容已保存至 transferEnvelope(s)。",
     checklistTaskDefaultNameTemplate: "任务 {index}",
     planChecklistContextHeader: "【当前完整计划清单】",
+    planChecklistCurrentTaskGoalHeader: "【当前任务目标】",
+    planChecklistTasksHeader: "【任务清单】",
     phaseAcceptanceFinalOutputFallback:
       "总体验收前阶段验收：checklistCount={checklistCount}，successfulToolCount={successfulToolCount}。",
     structuredEnvelopeAgentHeader: "[Agent消息上下文]",
@@ -680,6 +684,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     relayContentTransferHint: "Details are stored in transferEnvelope(s).",
     checklistTaskDefaultNameTemplate: "Task {index}",
     planChecklistContextHeader: "[Current Complete Plan Checklist]",
+    planChecklistCurrentTaskGoalHeader: "[Current Task Goal]",
+    planChecklistTasksHeader: "[Task Checklist]",
     phaseAcceptanceFinalOutputFallback:
       "Phase acceptance before final acceptance: checklistCount={checklistCount}, successfulToolCount={successfulToolCount}.",
     structuredEnvelopeAgentHeader: "[Agent message context]",

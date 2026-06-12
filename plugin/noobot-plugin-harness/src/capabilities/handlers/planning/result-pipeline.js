@@ -31,6 +31,8 @@ const DEFAULT_PLAN_REASON_I18N_KEY = Object.freeze({
   planning_invalid_nonempty_response: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_INVALID_NONEMPTY,
   planning_retry_exhausted: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_RETRY_EXHAUSTED,
 });
+const CURRENT_TASK_GOAL_BLOCK_RE = /\[CURRENT_TASK_GOAL\]([\s\S]*?)(?=\[PLAN\]|\[PLAN_PATCH\]|\[CURRENT_PLAN\]|$)/i;
+const PLAN_BLOCK_MARKER_RE = /^\s*\[(?:PLAN|PLAN_PATCH|CURRENT_PLAN)\]\s*$/gim;
 
 function resolveDefaultPlanReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
   const normalizedReason = String(reason || "").trim() || "planning_empty_response";
@@ -74,8 +76,21 @@ function increasePlanningCaptureAttempts(state = {}) {
   return next;
 }
 
+function parsePlanningTextProtocol(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return { currentTaskGoal: "", planText: "" };
+  const goalMatch = raw.match(CURRENT_TASK_GOAL_BLOCK_RE);
+  const currentTaskGoal = String(goalMatch?.[1] || "").trim();
+  const planText = raw
+    .replace(CURRENT_TASK_GOAL_BLOCK_RE, "")
+    .replace(PLAN_BLOCK_MARKER_RE, "")
+    .trim();
+  return { currentTaskGoal, planText: planText || raw };
+}
+
 function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source = "unknown", summary = "") {
-  const normalized = String(rawText || "").trim();
+  const parsedProtocol = parsePlanningTextProtocol(rawText);
+  const normalized = String(parsedProtocol.planText || "").trim();
   if (!normalized) return false;
   const previousDocument = parsePlanDocumentFromText(bucket.planText);
   const appliedMutation = executePlanMutation({
@@ -93,6 +108,9 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
   }
   bucket.planDocument = appliedMutation.nextDocument;
   bucket.planText = appliedMutation.nextPlanText;
+  if (parsedProtocol.currentTaskGoal) {
+    bucket.currentTaskGoal = parsedProtocol.currentTaskGoal;
+  }
   resetPlanAcceptanceStatusForPlanChange(bucket, String(renderPlanDocument(previousDocument) || "").trim(), bucket.planText, {
     stage: "planning_capture",
     reason: "planning_capture_replaced_plan",
@@ -111,6 +129,7 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
     stage: "main_plan",
     revisedAt: new Date().toISOString(),
     summary: String(summary || "").trim() || undefined,
+    currentTaskGoal: String(bucket.currentTaskGoal || "").trim() || undefined,
     planText: bucket.planText,
     checklistCount: parseMainPlansFromPlanText(bucket.planText).length,
   });

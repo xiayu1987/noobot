@@ -175,6 +175,7 @@ export async function runPlanUpdateAfterSummary(
       locale,
       planText: bucket?.planText || "",
       bucket,
+      ctx,
     }),
   ];
   const revisionMessagesFinal = buildCapabilityModelMessages({
@@ -334,21 +335,26 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     ctx,
     purpose,
   });
+  const planChecklistContextMessages = buildPlanChecklistContextMessages({
+    locale,
+    planText: bucket?.planText || "",
+    bucket,
+    ctx,
+  });
   const modelMessagesWithChecklist =
     purpose === "summary"
       ? [
           ...modelMessages,
-          ...buildPlanChecklistContextMessages({
-            locale,
-            planText: bucket?.planText || "",
-            bucket,
-          }),
+          ...planChecklistContextMessages,
           ...buildPreviousSummaryContextMessages({
             locale,
             summaryText: resolvePreviousSummaryContextText(ctx),
           }),
         ]
-      : modelMessages;
+      : [
+          ...modelMessages,
+          ...planChecklistContextMessages,
+        ];
   const invokerMessages = buildCapabilityModelMessages({
     locale,
     agentMessages: modelMessagesWithChecklist,
