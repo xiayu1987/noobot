@@ -64,6 +64,11 @@ test("before_final_output appends last acceptance report text to final output on
   assert.equal(first, true);
   assert.match(String(ctx?.result?.output || ""), /\n\n---\n/);
   assert.match(String(ctx?.result?.output || ""), /\[Harness-验收\]/);
+  assert.match(String(ctx?.result?.output || ""), /#### 完整计划清单/);
+  assert.match(String(ctx?.result?.output || ""), /1\. \[pending\] 主计划一/);
+  assert.match(String(ctx?.result?.output || ""), /#### 汇总/);
+  assert.doesNotMatch(String(ctx?.result?.output || ""), /小结明细路径|summary detail/i);
+  assert.doesNotMatch(String(ctx?.result?.output || ""), /runtime\/summary\/detail-2\.md/);
   assert.match(
     String(ctx?.result?.turnMessages?.[1]?.content || ""),
     /\n\n---\n/,
@@ -246,4 +251,48 @@ test("semantic acceptance fallback keeps phase/signal status when semantic text 
   assert.equal(applied, false);
   const checklist = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
   assert.equal(checklist[0]?.status, "completed");
+});
+
+test("before_final_output prepends latest complete summary before acceptance checklist", () => {
+  const report = buildAcceptanceReport({
+    bucket: {
+      planText: "1. 主计划一",
+    },
+    state: { locale: "zh-CN", signals: {} },
+  });
+  const ctx = {
+    result: {
+      output: "主流程回答",
+      turnMessages: [{ role: "assistant", content: "主流程回答" }],
+    },
+    agentContext: {
+      payload: {
+        harness: {
+          summaryText: "旧小结概览",
+          summaryFullText: "完整小结：这是最后一次完整小结内容。",
+          state: {
+            locale: "zh-CN",
+            flags: { acceptanceReportAppendedToFinalOutput: false },
+            counters: {},
+            signals: {},
+            pending: {},
+          },
+          lastAcceptanceReport: report,
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  const appended = maybeAppendAcceptanceReportAtFinalOutput(ctx);
+  assert.equal(appended, true);
+  const output = String(ctx?.result?.output || "");
+  const summaryIndex = output.indexOf("## 最后一次完整小结");
+  const acceptanceIndex = output.indexOf("[Harness-验收]");
+  assert.equal(summaryIndex >= 0, true);
+  assert.equal(acceptanceIndex >= 0, true);
+  assert.equal(summaryIndex < acceptanceIndex, true);
+  assert.match(output, /完整小结：这是最后一次完整小结内容。/);
+  assert.match(output, /#### 完整计划清单[\s\S]*1\. \[pending\] 主计划一[\s\S]*#### 汇总/);
+  assert.equal(ctx.result.turnMessages[0].content, ctx.result.output);
 });
