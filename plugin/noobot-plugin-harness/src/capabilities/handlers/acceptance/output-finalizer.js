@@ -19,7 +19,6 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-builder.js";
-import { renderAcceptanceDigestReportText } from "./report-text-renderer.js";
 import { runAcceptanceBySeparateModel } from "./validation-runner.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
@@ -81,6 +80,85 @@ function syncFinalOutputToTurnMessages(ctx = {}, nextOutput = "") {
     return true;
   }
   return false;
+}
+
+
+function formatChecklistIndex(value = "") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (!/^\d+(?:\.\d+)?$/.test(raw)) return raw;
+  return raw.split(".").map((item) => String(Number(item))).join(".");
+}
+
+function renderFinalChecklistLine(item = {}, fallbackIndex = 1) {
+  const index = formatChecklistIndex(item?.index ?? item?.id) || String(fallbackIndex);
+  const status = String(item?.status || item?.taskStatus || "pending").trim() || "pending";
+  const task = String(item?.task || item?.name || item?.todo || "").trim() || "-";
+  return `${index}. [${status}] ${task}`;
+}
+
+function renderFinalAcceptanceChecklistSummaryText(report = {}, locale = LOCALE.ZH_CN) {
+  const data = report && typeof report === "object" ? report : {};
+  const checklist = Array.isArray(data.finalPlanChecklist)
+    ? data.finalPlanChecklist
+    : Array.isArray(data.taskChecklist)
+      ? data.taskChecklist
+      : [];
+  const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
+  const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_TITLE) ||
+    (locale === LOCALE.EN_US ? "[Harness-Acceptance]" : "[Harness-验收]");
+  const checklistLabel = locale === LOCALE.EN_US ? "Complete plan checklist" : "完整计划清单";
+  const summaryLabel = locale === LOCALE.EN_US ? "Summary" : "汇总";
+  const emptyLine = locale === LOCALE.EN_US ? "-" : "（空）";
+  const total = Number(summary?.total || checklist.length || 0);
+  const completed = Number(summary?.completed || 0);
+  const inProgress = Number(summary?.inProgress || 0);
+  const pending = Number(summary?.pending || 0);
+  return [
+    title,
+    "",
+    `#### ${checklistLabel}`,
+    "```text",
+    ...(checklist.length
+      ? checklist.map((item, index) => renderFinalChecklistLine(item, index + 1))
+      : [emptyLine]),
+    "```",
+    "",
+    `#### ${summaryLabel}`,
+    "| total | completed | inProgress | pending |",
+    "| --- | --- | --- | --- |",
+    `| ${total} | ${completed} | ${inProgress} | ${pending} |`,
+  ].join("\n").trim();
+}
+
+function resolveLatestCompleteSummaryText(bucket = {}) {
+  const fullText = String(bucket?.summaryFullText || "").trim();
+  if (fullText) return fullText;
+  const outputs = Array.isArray(bucket?.guidanceOutputs) ? bucket.guidanceOutputs : [];
+  for (let index = outputs.length - 1; index >= 0; index -= 1) {
+    const item = outputs[index] || {};
+    if (String(item?.purpose || "").trim() !== "summary") continue;
+    const content = String(item?.content || "").trim();
+    if (content) return content;
+  }
+  return String(bucket?.summaryText || "").trim();
+}
+
+function buildLatestCompleteSummarySection(bucket = {}, locale = LOCALE.ZH_CN) {
+  const summaryText = resolveLatestCompleteSummaryText(bucket);
+  if (!summaryText) return "";
+  const title = locale === LOCALE.EN_US ? "## Latest complete summary" : "## 最后一次完整小结";
+  return [title, summaryText].filter(Boolean).join("\n").trim();
+}
+
+function prependLatestCompleteSummaryToReportText({
+  bucket = {},
+  locale = LOCALE.ZH_CN,
+  reportText = "",
+} = {}) {
+  const rendered = String(reportText || "").trim();
+  const summarySection = buildLatestCompleteSummarySection(bucket, locale);
+  return [summarySection, rendered].filter(Boolean).join("\n\n").trim();
 }
 
 function buildOutputWithAcceptanceSection({
@@ -301,7 +379,11 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
   if (ctx?.result && typeof ctx.result === "object") {
     await runAcceptanceBySeparateModel(ctx, meta, report);
     const original = String(ctx.result.output || "").trim();
-    const compactText = renderAcceptanceDigestReportText(report, locale);
+    const compactText = prependLatestCompleteSummaryToReportText({
+      bucket,
+      locale,
+      reportText: renderFinalAcceptanceChecklistSummaryText(report, locale),
+    });
     const nextOutput = buildOutputWithAcceptanceSection({
       ctx,
       original,
@@ -377,7 +459,11 @@ export function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
   if (!report) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
   const original = String(ctx.result.output || "").trim();
-  const compactText = renderAcceptanceDigestReportText(report, locale);
+  const compactText = prependLatestCompleteSummaryToReportText({
+    bucket,
+    locale,
+    reportText: renderFinalAcceptanceChecklistSummaryText(report, locale),
+  });
   const nextOutput = buildOutputWithAcceptanceSection({
     ctx,
     original,
