@@ -13,49 +13,129 @@ vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   }),
 }));
 
+const makeSession = (id, overrides = {}) => ({
+  id,
+  backendSessionId: id,
+  title: "chat.newSession",
+  loaded: false,
+  messages: [],
+  rawMessages: [],
+  sessionDocs: [],
+  connectorPanelState: { selectedConnectors: {} },
+  messageCount: 0,
+  lastMessage: null,
+  updatedAt: "",
+  ...overrides,
+});
+
+const makeMessage = (role, content = "", attachmentMetas = []) => ({
+  role,
+  content,
+  attachmentMetas,
+  pending: false,
+  statusLabel: "",
+  realtimeLogs: [],
+  executionLogTotal: 0,
+  tool_calls: [],
+});
+
+const createHarness = ({
+  sessionId,
+  stream,
+  pendingInteraction = null,
+  interactionSubmittingValue = false,
+  deps = {},
+} = {}) => {
+  const activeSessionId = ref(sessionId);
+  const activeSession = ref(makeSession(sessionId));
+  const sending = ref(false);
+  const input = ref("hello");
+  const uploadFiles = ref([]);
+  const pendingInteractionRequest = ref(pendingInteraction);
+  const interactionSubmitting = ref(interactionSubmittingValue);
+
+  const appendMessage = vi.fn((role, content = "", attachmentMetas = []) => {
+    const message = makeMessage(role, content, attachmentMetas);
+    activeSession.value.messages.push(message);
+    activeSession.value.rawMessages.push(message);
+    activeSession.value.messageCount = activeSession.value.messages.length;
+    activeSession.value.lastMessage = message;
+    return message;
+  });
+
+  const defaultDeps = {
+    userId: ref("u-1"),
+    allowUserInteraction: ref(true),
+    forceTool: ref(false),
+    botScenario: ref(""),
+    isImageMime: () => false,
+    classifyRealtimeLog: (d) => d,
+    scrollBottom: vi.fn(),
+    activeSession,
+    activeSessionId,
+    sending,
+    input,
+    uploadFiles,
+    clearUploads: vi.fn(),
+    serializeAttachments: vi.fn(async () => []),
+    appendMessage,
+    makeViewMessage: (message) => ({ ...message }),
+    foldMessagesForView: (messages) => [...messages],
+    fetchSessionDetail: vi.fn(async () => ({})),
+    applySessionDetail: vi.fn(),
+    refreshSessionConnectorsAsync: vi.fn(),
+    connectorTypeSet: new Set(),
+    upsertConnectedConnectorInPanelState: vi.fn(),
+    pendingInteractionRequest,
+    interactionSubmitting,
+    clearPendingInteraction: vi.fn(() => {
+      pendingInteractionRequest.value = null;
+    }),
+    clearPendingInteractionIfObsolete: vi.fn(),
+    setPendingInteractionRequest: vi.fn(),
+    submitInteractionResponse: vi.fn(),
+    refreshSessionsAsync: vi.fn(),
+    chatWebSocketClient: {
+      stream: stream ?? vi.fn(),
+      requestStop: vi.fn(),
+      clearLastReceivedSeqMap: vi.fn(),
+      dispose: vi.fn(),
+      clearStopRequested: vi.fn(),
+      isStopRequested: vi.fn(() => false),
+    },
+    ensureConnected: vi.fn(() => true),
+    notify: vi.fn(),
+  };
+
+  const resolvedDeps = { ...defaultDeps, ...deps };
+  const engine = useChatEngine(resolvedDeps);
+
+  return {
+    engine,
+    deps: resolvedDeps,
+    activeSession,
+    activeSessionId,
+    sending,
+    input,
+    uploadFiles,
+    pendingInteractionRequest,
+    interactionSubmitting,
+    appendMessage,
+  };
+};
+
+const assistantMessage = (activeSession) =>
+  activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT);
+
+const emitChannelState = (onEvent, sessionId, dialogProcessId, state, data = {}) => {
+  onEvent({
+    event: StreamEventEnum.CHANNEL_STATE,
+    data: { sessionId, dialogProcessId, state, ...data },
+  });
+};
+
 describe("useChatEngine", () => {
   it("DONE patches current assistant turn and promotes session identity", async () => {
-    const activeSessionId = ref("local-1");
-    const activeSession = ref({
-      id: "local-1",
-      backendSessionId: "local-1",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = {
-        role,
-        content,
-        attachmentMetas,
-        pending: false,
-        statusLabel: "",
-        realtimeLogs: [],
-        executionLogTotal: 0,
-        tool_calls: [],
-      };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      activeSession.value.messageCount = activeSession.value.messages.length;
-      activeSession.value.lastMessage = message;
-      return message;
-    };
-
-    const makeViewMessage = (message) => ({ ...message });
-    const foldMessagesForView = (messages) => [...messages];
-
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.DELTA,
@@ -84,47 +164,14 @@ describe("useChatEngine", () => {
         },
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage,
-      foldMessagesForView,
-      fetchSessionDetail: vi.fn(async () => {
-        throw new Error("ignore detail fetch in this unit test");
-      }),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
+    const { engine, activeSession, activeSessionId, sending } = createHarness({
+      sessionId: "local-1",
+      stream,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => {
+          throw new Error("ignore detail fetch in this unit test");
+        }),
       },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
     });
 
     await engine.send();
@@ -145,108 +192,23 @@ describe("useChatEngine", () => {
   });
 
   it("channel_state drives assistant status transition", async () => {
-    const activeSessionId = ref("local-2");
-    const activeSession = ref({
-      id: "local-2",
-      backendSessionId: "local-2",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = {
-        role,
-        content,
-        attachmentMetas,
-        pending: false,
-        statusLabel: "",
-        realtimeLogs: [],
-        executionLogTotal: 0,
-      };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      activeSession.value.messageCount = activeSession.value.messages.length;
-      activeSession.value.lastMessage = message;
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: { sessionId: "local-2", dialogProcessId: "dp-state", state: "sending" },
-      });
+      emitChannelState(onEvent, "local-2", "dp-state", "sending");
       onEvent({
         event: StreamEventEnum.DELTA,
         data: { sessionId: "local-2", dialogProcessId: "dp-state", text: "partial" },
       });
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: { sessionId: "local-2", dialogProcessId: "dp-state", state: "stopped" },
-      });
+      emitChannelState(onEvent, "local-2", "dp-state", "stopped");
       onEvent({
         event: StreamEventEnum.STOPPED,
         data: { sessionId: "local-2", dialogProcessId: "dp-state" },
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete: vi.fn(),
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
-      },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
-    });
+    const { engine, activeSession, sending } = createHarness({ sessionId: "local-2", stream });
 
     await engine.send();
 
-    const assistant = activeSession.value.messages.find(
-      (messageItem) => messageItem.role === RoleEnum.ASSISTANT,
-    );
+    const assistant = assistantMessage(activeSession);
     expect(assistant?.dialogProcessId).toBe("dp-state");
     expect(assistant?.statusLabel).toBe("chat.stopped");
     expect(assistant?.pending).toBe(false);
@@ -255,109 +217,33 @@ describe("useChatEngine", () => {
 
   it("expired channel_state schedules session refresh", async () => {
     vi.useFakeTimers();
-    const activeSessionId = ref("local-expired");
-    const activeSession = ref({
-      id: "local-expired",
-      backendSessionId: "local-expired",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref({
-      requestId: "req-1",
-      sessionId: "local-expired",
-      dialogProcessId: "dp-expired",
-    });
-    const interactionSubmitting = ref(true);
     const refreshSessionsAsync = vi.fn(async () => {});
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = {
-        role,
-        content,
-        attachmentMetas,
-        pending: false,
-        statusLabel: "",
-        realtimeLogs: [],
-        executionLogTotal: 0,
-      };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      activeSession.value.messageCount = activeSession.value.messages.length;
-      activeSession.value.lastMessage = message;
-      return message;
-    };
-
-    const clearPendingInteraction = vi.fn(() => {
-      pendingInteractionRequest.value = null;
-    });
-
     const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: { sessionId: "local-expired", dialogProcessId: "dp-expired", state: "expired" },
-      });
+      emitChannelState(onEvent, "local-expired", "dp-expired", "expired");
       onEvent({
         event: StreamEventEnum.STOPPED,
         data: { sessionId: "local-expired", dialogProcessId: "dp-expired" },
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction,
-      clearPendingInteractionIfObsolete: vi.fn(() => true),
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      refreshSessionsAsync,
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
+    const { engine, deps } = createHarness({
+      sessionId: "local-expired",
+      stream,
+      pendingInteraction: {
+        requestId: "req-1",
+        sessionId: "local-expired",
+        dialogProcessId: "dp-expired",
       },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
+      interactionSubmittingValue: true,
+      deps: {
+        refreshSessionsAsync,
+        clearPendingInteractionIfObsolete: vi.fn(() => true),
+      },
     });
 
     await engine.send();
     await vi.advanceTimersByTimeAsync(1300);
 
-    expect(clearPendingInteraction).toHaveBeenCalled();
+    expect(deps.clearPendingInteraction).toHaveBeenCalled();
     expect(refreshSessionsAsync).toHaveBeenCalledTimes(1);
     expect(refreshSessionsAsync).toHaveBeenCalledWith("local-expired", {
       silent: true,
@@ -367,229 +253,62 @@ describe("useChatEngine", () => {
   });
 
   it("channel_state interaction_pending restores pending interaction payload", async () => {
-    const activeSessionId = ref("local-int");
-    const activeSession = ref({
-      id: "local-int",
-      backendSessionId: "local-int",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
     const setPendingInteractionRequest = vi.fn();
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
-    const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "local-int",
-          dialogProcessId: "dp-int",
-          state: "interaction_pending",
-          seq: 2,
-          pendingInteraction: {
-            requestId: "req-int",
-            sessionId: "local-int",
-            dialogProcessId: "dp-int",
-            interactionType: "confirm",
-            content: "confirm?",
-          },
-        },
-      });
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "local-int",
-          dialogProcessId: "dp-int",
-          state: "stopped",
-          seq: 3,
-        },
-      });
-      onEvent({
-        event: StreamEventEnum.STOPPED,
-        data: { sessionId: "local-int", dialogProcessId: "dp-int" },
-      });
-    });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete: vi.fn(),
-      setPendingInteractionRequest,
-      submitInteractionResponse: vi.fn(),
-      refreshSessionsAsync: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
-      },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
-    });
-
-    await engine.send();
-
-    expect(setPendingInteractionRequest).toHaveBeenCalledTimes(1);
-    expect(setPendingInteractionRequest.mock.calls[0][0]).toMatchObject({
+    const pendingInteraction = {
       requestId: "req-int",
       sessionId: "local-int",
       dialogProcessId: "dp-int",
       interactionType: "confirm",
       content: "confirm?",
+    };
+    const stream = vi.fn(async (_payload, onEvent) => {
+      emitChannelState(onEvent, "local-int", "dp-int", "interaction_pending", {
+        seq: 2,
+        pendingInteraction,
+      });
+      emitChannelState(onEvent, "local-int", "dp-int", "stopped", { seq: 3 });
+      onEvent({
+        event: StreamEventEnum.STOPPED,
+        data: { sessionId: "local-int", dialogProcessId: "dp-int" },
+      });
     });
+    const { engine, interactionSubmitting } = createHarness({
+      sessionId: "local-int",
+      stream,
+      deps: { setPendingInteractionRequest },
+    });
+
+    await engine.send();
+
+    expect(setPendingInteractionRequest).toHaveBeenCalledTimes(1);
+    expect(setPendingInteractionRequest.mock.calls[0][0]).toMatchObject(pendingInteraction);
     expect(interactionSubmitting.value).toBe(false);
   });
 
   it("channel_state sending does not clear interaction unless sourceEvent is interaction_response", async () => {
-    const activeSessionId = ref("local-int-send");
-    const activeSession = ref({
-      id: "local-int-send",
-      backendSessionId: "local-int-send",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
     const clearPendingInteractionIfObsolete = vi.fn();
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "local-int-send",
-          dialogProcessId: "dp-int-send",
-          state: "interaction_pending",
-          seq: 1,
-          pendingInteraction: {
-            requestId: "req-int-send",
-            sessionId: "local-int-send",
-            dialogProcessId: "dp-int-send",
-            interactionType: "confirm",
-            content: "confirm?",
-          },
-        },
-      });
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "local-int-send",
-          dialogProcessId: "dp-int-send",
-          state: "sending",
-          seq: 2,
-        },
-      });
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "local-int-send",
-          dialogProcessId: "dp-int-send",
-          state: "sending",
-          sourceEvent: "interaction_response",
+      emitChannelState(onEvent, "local-int-send", "dp-int-send", "interaction_pending", {
+        seq: 1,
+        pendingInteraction: {
           requestId: "req-int-send",
-          seq: 3,
+          sessionId: "local-int-send",
+          dialogProcessId: "dp-int-send",
+          interactionType: "confirm",
+          content: "confirm?",
         },
+      });
+      emitChannelState(onEvent, "local-int-send", "dp-int-send", "sending", { seq: 2 });
+      emitChannelState(onEvent, "local-int-send", "dp-int-send", "sending", {
+        sourceEvent: "interaction_response",
+        requestId: "req-int-send",
+        seq: 3,
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete,
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      refreshSessionsAsync: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
-      },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
+    const { engine } = createHarness({
+      sessionId: "local-int-send",
+      stream,
+      deps: { clearPendingInteractionIfObsolete },
     });
 
     await engine.send();
@@ -601,246 +320,61 @@ describe("useChatEngine", () => {
   });
 
   it("channel_state stopping/reconnecting updates in-flight status label", async () => {
-    const activeSessionId = ref("local-flight");
-    const activeSession = ref({
-      id: "local-flight",
-      backendSessionId: "local-flight",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: { sessionId: "local-flight", dialogProcessId: "dp-flight", state: "stopping" },
-      });
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: { sessionId: "local-flight", dialogProcessId: "dp-flight", state: "reconnecting" },
-      });
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: { sessionId: "local-flight", dialogProcessId: "dp-flight", state: "stopped" },
-      });
+      emitChannelState(onEvent, "local-flight", "dp-flight", "stopping");
+      emitChannelState(onEvent, "local-flight", "dp-flight", "reconnecting");
+      emitChannelState(onEvent, "local-flight", "dp-flight", "stopped");
       onEvent({
         event: StreamEventEnum.STOPPED,
         data: { sessionId: "local-flight", dialogProcessId: "dp-flight" },
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete: vi.fn(),
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      refreshSessionsAsync: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
-      },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
+    const { engine, activeSession, sending } = createHarness({
+      sessionId: "local-flight",
+      stream,
     });
 
     await engine.send();
 
-    const assistant = activeSession.value.messages.find((m) => m.role === RoleEnum.ASSISTANT);
+    const assistant = assistantMessage(activeSession);
     expect(assistant?.statusLabel).toBe("chat.stopped");
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
   });
 
   it("channel_state completed/error/no_conversation terminal behaviors are covered", async () => {
-    const activeSessionId = ref("local-terminal");
-    const activeSession = ref({
-      id: "local-terminal",
-      backendSessionId: "local-terminal",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref({
-      requestId: "req-terminal",
-      sessionId: "local-terminal",
-      dialogProcessId: "dp-terminal",
-    });
-    const interactionSubmitting = ref(true);
-    const clearPendingInteraction = vi.fn(() => {
-      pendingInteractionRequest.value = null;
-    });
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: { sessionId: "local-terminal", dialogProcessId: "dp-terminal", state: "completed" },
-      });
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: { sessionId: "local-terminal", dialogProcessId: "dp-terminal", state: "error" },
-      });
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "local-terminal",
-          dialogProcessId: "dp-terminal",
-          state: "no_conversation",
-        },
-      });
+      emitChannelState(onEvent, "local-terminal", "dp-terminal", "completed");
+      emitChannelState(onEvent, "local-terminal", "dp-terminal", "error");
+      emitChannelState(onEvent, "local-terminal", "dp-terminal", "no_conversation");
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction,
-      clearPendingInteractionIfObsolete: vi.fn(() => true),
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      refreshSessionsAsync: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
+    const { engine, activeSession, sending, interactionSubmitting, deps } = createHarness({
+      sessionId: "local-terminal",
+      stream,
+      pendingInteraction: {
+        requestId: "req-terminal",
+        sessionId: "local-terminal",
+        dialogProcessId: "dp-terminal",
       },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
+      interactionSubmittingValue: true,
+      deps: {
+        clearPendingInteractionIfObsolete: vi.fn(() => true),
+      },
     });
 
     await engine.send();
 
-    const assistant = activeSession.value.messages.find((m) => m.role === RoleEnum.ASSISTANT);
+    const assistant = assistantMessage(activeSession);
     expect(assistant?.statusLabel).toBe("chat.failed");
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
     expect(interactionSubmitting.value).toBe(false);
-    expect(clearPendingInteraction).toHaveBeenCalled();
+    expect(deps.clearPendingInteraction).toHaveBeenCalled();
   });
 
   it("terminal channel_state with backend sessionId still finalizes current local turn", async () => {
-    const activeSessionId = ref("local-x");
-    const activeSession = ref({
-      id: "local-x",
-      backendSessionId: "local-x",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "backend-x",
-          dialogProcessId: "dp-x",
-          state: "completed",
-          seq: 2,
-        },
-      });
+      emitChannelState(onEvent, "backend-x", "dp-x", "completed", { seq: 2 });
       onEvent({
         event: StreamEventEnum.DONE,
         data: {
@@ -853,145 +387,41 @@ describe("useChatEngine", () => {
         },
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => {
-        throw new Error("ignore");
-      }),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete: vi.fn(),
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      refreshSessionsAsync: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
+    const { engine, activeSession, sending } = createHarness({
+      sessionId: "local-x",
+      stream,
+      deps: {
+        fetchSessionDetail: vi.fn(async () => {
+          throw new Error("ignore");
+        }),
       },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
     });
 
     await engine.send();
+
     expect(sending.value).toBe(false);
-    const assistant = activeSession.value.messages.find((m) => m.role === RoleEnum.ASSISTANT);
+    const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.generated");
   });
 
   it("interaction_pending without pendingInteraction falls back to error state", async () => {
     vi.useFakeTimers();
-    const activeSessionId = ref("local-missing");
-    const activeSession = ref({
-      id: "local-missing",
-      backendSessionId: "local-missing",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
     const notify = vi.fn();
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "local-missing",
-          dialogProcessId: "dp-missing",
-          state: "interaction_pending",
-          seq: 2,
-        },
+      emitChannelState(onEvent, "local-missing", "dp-missing", "interaction_pending", {
+        seq: 2,
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete: vi.fn(),
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      refreshSessionsAsync: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
-      },
-      ensureConnected: vi.fn(() => true),
-      notify,
+    const { engine, activeSession, sending } = createHarness({
+      sessionId: "local-missing",
+      stream,
+      deps: { notify },
     });
 
     await engine.send();
 
-    const assistant = activeSession.value.messages.find((m) => m.role === RoleEnum.ASSISTANT);
+    const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(true);
     expect(assistant?.pending).toBe(true);
     expect(notify).not.toHaveBeenCalled();
@@ -1011,92 +441,25 @@ describe("useChatEngine", () => {
 
   it("expired refresh failure falls back to error state", async () => {
     vi.useFakeTimers();
-    const activeSessionId = ref("local-expired-fail");
-    const activeSession = ref({
-      id: "local-expired-fail",
-      backendSessionId: "local-expired-fail",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
     const notify = vi.fn();
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
-      onEvent({
-        event: StreamEventEnum.CHANNEL_STATE,
-        data: {
-          sessionId: "local-expired-fail",
-          dialogProcessId: "dp-expired-fail",
-          state: "expired",
-          seq: 2,
-        },
+      emitChannelState(onEvent, "local-expired-fail", "dp-expired-fail", "expired", {
+        seq: 2,
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete: vi.fn(),
-      setPendingInteractionRequest: vi.fn(),
-      submitInteractionResponse: vi.fn(),
-      refreshSessionsAsync: vi.fn(async () => false),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
+    const { engine, activeSession, sending } = createHarness({
+      sessionId: "local-expired-fail",
+      stream,
+      deps: {
+        notify,
+        refreshSessionsAsync: vi.fn(async () => false),
       },
-      ensureConnected: vi.fn(() => true),
-      notify,
     });
 
     await engine.send();
     await vi.advanceTimersByTimeAsync(1300);
 
-    const assistant = activeSession.value.messages.find((m) => m.role === RoleEnum.ASSISTANT);
+    const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(false);
     expect(assistant?.statusLabel).toBe("chat.failed");
     expect(assistant?.error).toBe("chat.expiredRefreshFailed");
@@ -1108,37 +471,10 @@ describe("useChatEngine", () => {
   });
 
   it("connector_status is informational: updates connector panel without interaction pending", async () => {
-    const activeSessionId = ref("local-connector-status");
-    const activeSession = ref({
-      id: "local-connector-status",
-      backendSessionId: "local-connector-status",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
     const setPendingInteractionRequest = vi.fn();
     const submitInteractionResponse = vi.fn();
     const refreshSessionConnectorsAsync = vi.fn();
     const upsertConnectedConnectorInPanelState = vi.fn();
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.CONNECTOR_STATUS,
@@ -1157,99 +493,42 @@ describe("useChatEngine", () => {
           dialogProcessId: "dp-connector-status",
           messages: [
             { role: RoleEnum.USER, content: "hello" },
-            { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-connector-status", content: "ok" },
+            {
+              role: RoleEnum.ASSISTANT,
+              dialogProcessId: "dp-connector-status",
+              content: "ok",
+            },
           ],
         },
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync,
-      connectorTypeSet: new Set(["email"]),
-      upsertConnectedConnectorInPanelState,
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete: vi.fn(),
-      setPendingInteractionRequest,
-      submitInteractionResponse,
-      refreshSessionsAsync: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-connector-status",
+      stream,
+      deps: {
+        refreshSessionConnectorsAsync,
+        connectorTypeSet: new Set(["email"]),
+        upsertConnectedConnectorInPanelState,
+        setPendingInteractionRequest,
+        submitInteractionResponse,
       },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
     });
 
     await engine.send();
 
-    expect(upsertConnectedConnectorInPanelState).toHaveBeenCalledWith(
-      activeSession.value,
-      {
-        connectorType: "email",
-        connectorName: "example_email",
-        status: "connected",
-      },
-    );
+    expect(upsertConnectedConnectorInPanelState).toHaveBeenCalledWith(activeSession.value, {
+      connectorType: "email",
+      connectorName: "example_email",
+      status: "connected",
+    });
     expect(refreshSessionConnectorsAsync).toHaveBeenCalledWith("local-connector-status");
     expect(setPendingInteractionRequest).not.toHaveBeenCalled();
     expect(submitInteractionResponse).not.toHaveBeenCalled();
   });
 
   it("interaction_request with lifecycle=resolved & ackMode=auto should auto ack and not enter pending", async () => {
-    const activeSessionId = ref("local-auto-resolved");
-    const activeSession = ref({
-      id: "local-auto-resolved",
-      backendSessionId: "local-auto-resolved",
-      title: "chat.newSession",
-      loaded: false,
-      messages: [],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      messageCount: 0,
-      lastMessage: null,
-      updatedAt: "",
-    });
-    const sending = ref(false);
-    const input = ref("hello");
-    const uploadFiles = ref([]);
-    const pendingInteractionRequest = ref(null);
-    const interactionSubmitting = ref(false);
     const setPendingInteractionRequest = vi.fn();
     const submitInteractionResponse = vi.fn();
-
-    const appendMessage = (role, content = "", attachmentMetas = []) => {
-      const message = { role, content, attachmentMetas, pending: false, statusLabel: "" };
-      activeSession.value.messages.push(message);
-      activeSession.value.rawMessages.push(message);
-      return message;
-    };
-
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.INTERACTION_REQUEST,
@@ -1275,47 +554,14 @@ describe("useChatEngine", () => {
         },
       });
     });
-
-    const engine = useChatEngine({
-      userId: ref("u-1"),
-      allowUserInteraction: ref(true),
-      forceTool: ref(false),
-      botScenario: ref(""),
-      isImageMime: () => false,
-      classifyRealtimeLog: (d) => d,
-      scrollBottom: vi.fn(),
-      activeSession,
-      activeSessionId,
-      sending,
-      input,
-      uploadFiles,
-      clearUploads: vi.fn(),
-      serializeAttachments: vi.fn(async () => []),
-      appendMessage,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => [...messages],
-      fetchSessionDetail: vi.fn(async () => ({})),
-      applySessionDetail: vi.fn(),
-      refreshSessionConnectorsAsync: vi.fn(),
-      connectorTypeSet: new Set(["email"]),
-      upsertConnectedConnectorInPanelState: vi.fn(),
-      pendingInteractionRequest,
-      interactionSubmitting,
-      clearPendingInteraction: vi.fn(),
-      clearPendingInteractionIfObsolete: vi.fn(),
-      setPendingInteractionRequest,
-      submitInteractionResponse,
-      refreshSessionsAsync: vi.fn(),
-      chatWebSocketClient: {
-        stream,
-        requestStop: vi.fn(),
-        clearLastReceivedSeqMap: vi.fn(),
-        dispose: vi.fn(),
-        clearStopRequested: vi.fn(),
-        isStopRequested: vi.fn(() => false),
+    const { engine } = createHarness({
+      sessionId: "local-auto-resolved",
+      stream,
+      deps: {
+        connectorTypeSet: new Set(["email"]),
+        setPendingInteractionRequest,
+        submitInteractionResponse,
       },
-      ensureConnected: vi.fn(() => true),
-      notify: vi.fn(),
     });
 
     await engine.send();
