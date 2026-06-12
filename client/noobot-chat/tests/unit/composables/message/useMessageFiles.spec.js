@@ -114,4 +114,69 @@ describe("useMessageFiles", () => {
     });
   });
 
+  it("classifies explicitly marked harness assistant attachments as plugin attachments", () => {
+    const messageItem = {
+      role: "assistant",
+      dialogProcessId: "dp-1",
+      content: "done",
+      attachmentMetas: [
+        {
+          attachmentId: "att-harness-1",
+          name: "harness-acceptance-report.txt",
+          mimeType: "text/plain",
+          generationSource: "harness_checklist",
+          attachmentOwnerType: "plugin",
+          attachmentOwner: "harness-plugin",
+        },
+        {
+          attachmentId: "att-agent-1",
+          name: "main-result.txt",
+          mimeType: "text/plain",
+        },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(2);
+    expect(displayedAttachmentMetas.value.find((item) => item.attachmentId === "att-harness-1")).toMatchObject({
+      attachmentOwnerType: "plugin",
+    });
+    expect(displayedAttachmentMetas.value.find((item) => item.attachmentId === "att-agent-1")).toMatchObject({
+      attachmentOwnerType: "agent",
+    });
+  });
+
+  it("does not infer plugin ownership from harness-like generationSource alone", () => {
+    const messageItem = {
+      role: "assistant",
+      dialogProcessId: "dp-1",
+      content: "done",
+      attachmentMetas: [
+        {
+          attachmentId: "att-legacy-harness-name",
+          name: "harness-named-file.txt",
+          mimeType: "text/plain",
+          generationSource: "harness_checklist",
+        },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(1);
+    expect(displayedAttachmentMetas.value[0]).toMatchObject({
+      attachmentId: "att-legacy-harness-name",
+      attachmentOwnerType: "agent",
+    });
+  });
+
 });

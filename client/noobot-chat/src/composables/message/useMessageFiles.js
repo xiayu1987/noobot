@@ -91,6 +91,24 @@ function isHarnessPluginInjectedMessage(messageItem = {}) {
   );
 }
 
+function isHarnessPluginAttachmentMeta(attachmentItem = {}) {
+  const ownerType = String(attachmentItem?.attachmentOwnerType || "").trim();
+  if (ownerType === "plugin") return true;
+  const owner = String(attachmentItem?.attachmentOwner || "").trim();
+  if (owner === "harness-plugin") return true;
+  return false;
+}
+
+function splitAttachmentMetasByOwner(attachmentMetas = []) {
+  const plugin = [];
+  const agent = [];
+  for (const attachmentItem of Array.isArray(attachmentMetas) ? attachmentMetas : []) {
+    if (isHarnessPluginAttachmentMeta(attachmentItem)) plugin.push(attachmentItem);
+    else agent.push(attachmentItem);
+  }
+  return { agent, plugin };
+}
+
 function toAttachmentKey(attachmentItem = {}) {
   return String(
     attachmentItem?.attachmentId ||
@@ -311,8 +329,9 @@ export function useMessageFiles({
       candidateMessages,
       rootDialogProcessId,
     );
-    let mainFlowAttachmentMetas = [...baseAttachmentMetas];
-    let pluginAttachmentMetas = [];
+    const baseSplit = splitAttachmentMetasByOwner(baseAttachmentMetas);
+    let mainFlowAttachmentMetas = [...baseSplit.agent];
+    let pluginAttachmentMetas = [...baseSplit.plugin];
     for (const sessionMessage of candidateMessages) {
       const messageRole = String(sessionMessage?.role || "").trim();
       const messageDialogProcessId = String(sessionMessage?.dialogProcessId || "").trim();
@@ -327,6 +346,7 @@ export function useMessageFiles({
       }
       const currentAttachmentMetas = getMessageAttachmentMetas(sessionMessage);
       if (!currentAttachmentMetas.length) continue;
+      const splitCurrentAttachmentMetas = splitAttachmentMetasByOwner(currentAttachmentMetas);
       if (
         messageRole === "user" &&
         isHarnessPluginInjectedMessage(sessionMessage)
@@ -337,10 +357,17 @@ export function useMessageFiles({
         );
         continue;
       }
+      if (splitCurrentAttachmentMetas.plugin.length) {
+        pluginAttachmentMetas = mergeAttachmentMetas(
+          pluginAttachmentMetas,
+          splitCurrentAttachmentMetas.plugin,
+        );
+      }
       if (!["assistant", "tool"].includes(messageRole)) continue;
+      if (!splitCurrentAttachmentMetas.agent.length) continue;
       mainFlowAttachmentMetas = mergeAttachmentMetas(
         mainFlowAttachmentMetas,
-        currentAttachmentMetas,
+        splitCurrentAttachmentMetas.agent,
       );
     }
     const mergedWithOwnerType = [

@@ -23,6 +23,8 @@ export {
   appendCapabilityModelTraceLog,
   applyTransferPayloadToMessage,
   attachMetasToLatestInjectedMessage,
+  markHarnessPluginAttachmentMetas,
+  markHarnessPluginTransferPayload,
   mapAttachmentRecordsToMetas,
   relaySeparateModelOutputAsUserMessage,
   getTransferPayloadFromAttachmentMetas,

@@ -14,6 +14,8 @@ import {
   attachMetasToLatestInjectedMessage,
   ensureHarnessBucket,
   getTransferPayloadFromAttachmentMetas,
+  markHarnessPluginAttachmentMetas,
+  markHarnessPluginTransferPayload,
   mapAttachmentRecordsToMetas,
   relaySeparateModelOutputAsUserMessage,
   translateI18nText,
@@ -285,11 +287,15 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         artifacts,
       });
       metas = typeof getTransferAttachmentMetas === "function"
-        ? getTransferAttachmentMetas(
-            persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
+        ? markHarnessPluginAttachmentMetas(
+            getTransferAttachmentMetas(
+              persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
+            ),
           )
         : [];
-      transferPayload = getTransferPayloadFromAttachmentMetas([], persisted);
+      transferPayload = markHarnessPluginTransferPayload(
+        getTransferPayloadFromAttachmentMetas([], persisted),
+      );
     } else {
       const savedRecords = await attachmentService.ingestGeneratedArtifacts({
         userId,
