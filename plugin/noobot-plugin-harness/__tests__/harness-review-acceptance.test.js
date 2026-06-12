@@ -303,7 +303,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   const planningPromptMessage = messages.find((item = {}) =>
     /harness-planning-bootstrap/.test(String(item?.content || "")),
   );
-  assert.equal(String(planningPromptMessage?.role || ""), "system");
+  assert.equal(String(planningPromptMessage?.role || ""), "user");
   assert.match(String(planningPromptMessage?.content || ""), /harness-planning-bootstrap/);
 
   await hookManager.emit("after_llm_call", {
@@ -603,7 +603,7 @@ test("acceptance semantic validation relays via unified ctx.messages protocol", 
       (item = {}) =>
         item.injectedMessage === true &&
         String(item.injectedBy || "") === "harness-plugin" &&
-        String(item.role || "") === "system" &&
+        String(item.role || "") === "user" &&
         String(item.content || "").includes("acceptance_semantic_validation"),
     ),
     true,
@@ -648,7 +648,7 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   const responsibilityIndex = ctx.messages.findIndex((item = {}) =>
     /职责约束：你当前仅负责「阶段验收」/.test(String(item?.content || "")),
   );
-  assert.equal(ctx.messages[planContextIndex].role, "system");
+  assert.equal(ctx.messages[planContextIndex].role, "user");
   assert.match(String(ctx.messages[planContextIndex].content), /计划清单上下文|Plan checklist context/);
   assert.match(String(ctx.messages[planContextIndex].content), /核心实现/);
   assert.equal(ctx.messages[planContextIndex].injectedMessage, true);

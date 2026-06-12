@@ -374,9 +374,9 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
             WORKFLOW_PARAMS.acceptance.guards.overflowForcedAcceptanceSystemPrompt;
           const overflowPrompt = String(overflowPromptTemplate || "")
             .replaceAll("{tool}", TASK_ACCEPTANCE_TOOL_NAME);
-          ctx.messages.unshift(
+          ctx.messages.push(
             buildHarnessInjectedMessage(overflowPrompt, {
-              role: "system",
+              role: "user",
               injectedMessageType: "acceptance_overflow_forced_prompt",
             }),
           );

@@ -54,13 +54,17 @@ function dedupeExists(messages = [], target = {}) {
   });
 }
 
-function isSummaryUserInjectionType(injectedMessageType = "", injectionType = "") {
+const CACHE_FRIENDLY_INCREMENTAL_INJECTION_PREFIXES = Object.freeze([
+  "planning_",
+  "guidance_",
+  "acceptance_",
+  "separate_model_relay:",
+]);
+
+function isCacheFriendlyIncrementalInjectionType(injectedMessageType = "", injectionType = "") {
   const type = String(injectedMessageType || injectionType || "").trim().toLowerCase();
-  return (
-    type.startsWith("guidance_summary_") ||
-    type === "separate_model_relay:summary" ||
-    type.startsWith("separate_model_relay:summary_")
-  );
+  if (!type) return false;
+  return CACHE_FRIENDLY_INCREMENTAL_INJECTION_PREFIXES.some((prefix) => type.startsWith(prefix));
 }
 
 function resolveHarnessMainFlowRole({
@@ -69,9 +73,16 @@ function resolveHarnessMainFlowRole({
   injectionType = "",
 } = {}) {
   const requestedRole = String(role || "system").trim().toLowerCase();
-  if (requestedRole === "user") {
-    return isSummaryUserInjectionType(injectedMessageType, injectionType) ? "user" : "system";
+  // Current-turn harness prompts are dynamic. If they are inserted as system
+  // messages before history, provider prefix-cache invalidation makes the
+  // otherwise stable history expensive. Keep stable harness policy prompts in
+  // the real system block (they use prompt-injector, not this helper), but map
+  // dynamic main-flow injections to user/incremental so they are compacted
+  // after history.
+  if (requestedRole === "system" && isCacheFriendlyIncrementalInjectionType(injectedMessageType, injectionType)) {
+    return "user";
   }
+  if (requestedRole === "user") return "user";
   return requestedRole || "system";
 }
 
@@ -94,9 +105,11 @@ export function injectMessageWithPolicy(
   } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
-  // Plugin-to-main-flow injections are system-role by default, tagged so they
-  // can be persisted/rendered separately from real turns. Summary request
-  // injections are the only user-role exception.
+  // Plugin-to-main-flow injections are tagged so they can be persisted/rendered
+  // separately from real user turns. Dynamic harness prompts are resolved to
+  // user/incremental by injectedMessageType to keep history prefix-cacheable;
+  // stable harness policy prompts are injected through prompt-injector as real
+  // system messages.
   const normalizedContent = String(content || "").trim();
   if (!messages || !normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {
@@ -122,6 +135,7 @@ export function injectMessageWithPolicy(
   const normalizedInjectAt = String(injectAt || "append").trim().toLowerCase();
   const shouldProtectContinuity =
     avoidBreakToolCallContinuity === true &&
+    resolvedRole === "system" &&
     normalizedInjectAt === "append" &&
     hasPendingToolCallPair(messages);
   if (shouldProtectContinuity) {
