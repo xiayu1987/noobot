@@ -467,7 +467,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryDetailHeader: "## 详细明细",
     guidanceSummaryDetailSample: "- 证据/日志/风险分析 ...",
     guidanceSummaryRules:
-      "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节。",
+      "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结必须整合上一轮小结结果：仍有效的已完成事项、进行中事项、风险、待办和证据都要保留或更新，不得遗漏；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节；SUMMARY_DETAIL 后必须输出 [NEXT_EXECUTION_SUGGESTION]，集中给出下一步可执行建议。",
     previousSummaryContextHeader: "【上一次小结】",
     relayContentTruncatedEllipsis: "……【已截断】",
     relayContentTransferHint: "详细内容已保存至 transferEnvelope(s)。",
@@ -507,13 +507,13 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] [小结内容]",
     protocolSummaryLine5: "DELETE S[小结ID]",
     protocolSummaryLine6:
-      "必须对齐当前完整计划清单；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据与问题说明。小结后请继续任务。",
+      "必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION] 集中给出下一步执行建议。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、下一步执行建议与问题说明。小结后请继续任务。",
     protocolSummaryProgrammingLine3:
       "ADD S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径] method=[方法/函数名] line=[行号/行号范围，可多段逗号分隔] [小结内容]",
     protocolSummaryProgrammingLine4:
       "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径] method=[方法/函数名] line=[行号/行号范围，可多段逗号分隔] [小结内容]",
     protocolSummaryProgrammingLine6:
-      "编程模式必须对齐当前完整计划清单；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；涉及代码、文件变更、测试结果或定位证据时必须写明 file、method 与 line（line 支持多段，如 10-20,35,48-52）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、文件、方法、行号与问题说明。小结后请继续任务。",
+      "编程模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION] 集中给出下一步执行建议；涉及代码、文件变更、测试结果或定位证据时必须写明 file、method 与 line（line 支持多段，如 10-20,35,48-52）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、下一步执行建议、文件、方法、行号与问题说明。小结后请继续任务。",
     protocolAcceptanceTitlePhase:
       "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
     protocolAcceptanceTitleFinal:
@@ -674,7 +674,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryDetailHeader: "## Detailed notes",
     guidanceSummaryDetailSample: "- evidence / logs / risk analysis ...",
     guidanceSummaryRules:
-      "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer.",
+      "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; this summary must integrate the previous summary results: keep or update all still-valid completed items, in-progress items, risks, todos, and evidence without omissions; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer; after SUMMARY_DETAIL, output [NEXT_EXECUTION_SUGGESTION] with centralized actionable next execution suggestions.",
     previousSummaryContextHeader: "[Previous Summary]",
     relayContentTruncatedEllipsis: "... [truncated]",
     relayContentTransferHint: "Details are stored in transferEnvelope(s).",
@@ -715,13 +715,13 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] [summary content]",
     protocolSummaryLine5: "DELETE S[summary_id]",
     protocolSummaryLine6:
-      "Align with the current complete plan checklist; evidence must come from context, tool results, or model final output and must not be fabricated. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, and issue notes. Then continue with the task.",
+      "Align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL with centralized next execution suggestions. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, next execution suggestion, and issue notes. Then continue with the task.",
     protocolSummaryProgrammingLine3:
       "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path] method=[method/function name] line=[line number/range; comma-separated multi-segments allowed] [summary content]",
     protocolSummaryProgrammingLine4:
       "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path] method=[method/function name] line=[line number/range; comma-separated multi-segments allowed] [summary content]",
     protocolSummaryProgrammingLine6:
-      "In programming mode, align with the current complete plan checklist; evidence must come from context, tool results, or model final output and must not be fabricated; when code, file changes, test results, or location evidence is involved, include file, method, and line (comma-separated multi-segments such as 10-20,35,48-52 are accepted). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, file, method, line, and issue notes. Then continue with the task.",
+      "In programming mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL with centralized next execution suggestions; when code, file changes, test results, or location evidence is involved, include file, method, and line (comma-separated multi-segments such as 10-20,35,48-52 are accepted). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, next execution suggestion, file, method, line, and issue notes. Then continue with the task.",
     protocolAcceptanceTitlePhase:
       "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
     protocolAcceptanceTitleFinal:

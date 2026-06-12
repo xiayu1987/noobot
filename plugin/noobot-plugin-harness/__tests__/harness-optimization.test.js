@@ -261,6 +261,7 @@ test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when
   assert.equal(first, true);
   assert.equal(second, false);
   assert.equal(ctx.messages.length, 1);
+  assert.equal(ctx.messages[0]?.role, "system");
   assert.match(String(ctx.messages[0]?.content || ""), /\[来自harness外部模型输出\/planning\]/);
 });
 
@@ -284,6 +285,7 @@ test("relaySeparateModelOutputAsUserMessage truncates oversized relay content wh
   assert.equal(relayed, true);
   assert.equal(ctx.messages.length, 1);
   const message = ctx.messages[0] || {};
+  assert.equal(message.role, "system");
   const relayContent = String(message?.content || "");
   assert.match(relayContent, /transferEnvelope\(s\)/);
   assert.match(relayContent, /已截断/);

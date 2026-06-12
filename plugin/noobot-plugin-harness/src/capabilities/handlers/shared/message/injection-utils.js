@@ -54,6 +54,27 @@ function dedupeExists(messages = [], target = {}) {
   });
 }
 
+function isSummaryUserInjectionType(injectedMessageType = "", injectionType = "") {
+  const type = String(injectedMessageType || injectionType || "").trim().toLowerCase();
+  return (
+    type.startsWith("guidance_summary_") ||
+    type === "separate_model_relay:summary" ||
+    type.startsWith("separate_model_relay:summary_")
+  );
+}
+
+function resolveHarnessMainFlowRole({
+  role = "system",
+  injectedMessageType = "",
+  injectionType = "",
+} = {}) {
+  const requestedRole = String(role || "system").trim().toLowerCase();
+  if (requestedRole === "user") {
+    return isSummaryUserInjectionType(injectedMessageType, injectionType) ? "user" : "system";
+  }
+  return requestedRole || "system";
+}
+
 export function injectMessageWithPolicy(
   ctx = {},
   {
@@ -73,15 +94,17 @@ export function injectMessageWithPolicy(
   } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
-  void role;
-  // Plugin-to-main-flow injections are user-role messages, tagged so they can
-  // be persisted and rendered separately from real user turns.
+  // Plugin-to-main-flow injections are system-role by default, tagged so they
+  // can be persisted/rendered separately from real turns. Summary request
+  // injections are the only user-role exception.
   const normalizedContent = String(content || "").trim();
   if (!messages || !normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {
     return { injected: false, target: "none", blockedByTurnEnded: true };
   }
+  const resolvedRole = resolveHarnessMainFlowRole({ role, injectedMessageType, injectionType });
   const message = buildHarnessInjectedMessage(normalizedContent, {
+    role: resolvedRole,
     attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
     legacyAttachmentMetasMirror,
     transferResult,
@@ -107,7 +130,7 @@ export function injectMessageWithPolicy(
       if (dedupe && dedupeExists(systemContextMessages, message)) {
         return { injected: false, target: "agent_system", deduped: true };
       }
-      // System context is a string-only channel; persist the tagged user-role
+      // System context is a string-only channel; persist the tagged roleful
       // copy for session display while keeping the model context protocol-safe.
       systemContextMessages.push(normalizedContent);
       persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);

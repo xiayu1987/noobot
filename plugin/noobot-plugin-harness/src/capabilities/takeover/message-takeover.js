@@ -53,7 +53,11 @@ function resolveMessageRole(message = {}) {
 
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
-  while (index < messages.length && resolveMessageRole(messages[index]) === "system") {
+  while (
+    index < messages.length &&
+    resolveMessageRole(messages[index]) === "system" &&
+    messages[index]?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] !== HARNESS_INJECTED_MESSAGE_FLAG_VALUE
+  ) {
     index += 1;
   }
   return index;
