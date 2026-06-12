@@ -18,8 +18,18 @@ import {
   resolveConnectorStatusPayload,
 } from "./interactionPayload";
 
+function normalizeTrimmedString(value) {
+  return String(value || "").trim();
+}
+
+function isBlankCompatibleSameId(left, right) {
+  const normalizedLeft = normalizeTrimmedString(left);
+  const normalizedRight = normalizeTrimmedString(right);
+  return !normalizedLeft || !normalizedRight || normalizedLeft === normalizedRight;
+}
+
 function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialogProcessId = "" }) {
-  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
   const messageList = Array.isArray(foldedMessages) ? foldedMessages : [];
   const lastUserMessageIndex = (() => {
     for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
@@ -38,7 +48,7 @@ function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialogProces
   if (!normalizedDialogProcessId) return assistantMessagesAfterLastUser;
   const matchedMessages = assistantMessagesAfterLastUser.filter(
     (messageItem) =>
-      String(messageItem?.dialogProcessId || "").trim() === normalizedDialogProcessId,
+      normalizeTrimmedString(messageItem?.dialogProcessId) === normalizedDialogProcessId,
   );
   return matchedMessages.length ? matchedMessages : assistantMessagesAfterLastUser;
 }
@@ -46,7 +56,7 @@ function pickAssistantMessagesForCurrentTurn({ foldedMessages = [], dialogProces
 function mergeAssistantContents(assistantMessages = []) {
   const contentList = [];
   for (const assistantMessage of assistantMessages) {
-    const content = String(assistantMessage?.content || "").trim();
+    const content = normalizeTrimmedString(assistantMessage?.content);
     if (!content) continue;
     if (contentList[contentList.length - 1] === content) continue;
     contentList.push(content);
@@ -67,8 +77,8 @@ function buildWorkflowMessageSignature(messageItem = {}) {
       "",
   ).trim();
   return [
-    String(messageItem?.dialogProcessId || "").trim(),
-    String(messageItem?.content || "").trim(),
+    normalizeTrimmedString(messageItem?.dialogProcessId),
+    normalizeTrimmedString(messageItem?.content),
     semanticPreview,
   ].join("|");
 }
@@ -96,17 +106,15 @@ function patchAssistantFromWorkflowMessage(targetMessage = null, workflowMessage
 
 function normalizeExecutionLogForRealtime(logItem = {}) {
   const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
-  const rawEvent = String(logItem?.event || "").trim();
-  const text = String(data?.text || "").trim();
+  const rawEvent = normalizeTrimmedString(logItem?.event);
+  const text = normalizeTrimmedString(data?.text);
   return {
     ...data,
-    event: String(data?.event || rawEvent || "system").trim() || "system",
-    type: String(data?.type || logItem?.type || "system").trim() || "system",
-    category: String(data?.category || logItem?.category || "system").trim() || "system",
-    dialogProcessId: String(
-      data?.dialogProcessId || logItem?.dialogProcessId || "",
-    ).trim(),
-    ts: String(data?.ts || logItem?.ts || "").trim() || new Date().toISOString(),
+    event: normalizeTrimmedString(data?.event || rawEvent || "system") || "system",
+    type: normalizeTrimmedString(data?.type || logItem?.type || "system") || "system",
+    category: normalizeTrimmedString(data?.category || logItem?.category || "system") || "system",
+    dialogProcessId: normalizeTrimmedString(data?.dialogProcessId || logItem?.dialogProcessId),
+    ts: normalizeTrimmedString(data?.ts || logItem?.ts) || new Date().toISOString(),
     text: text || (rawEvent ? `[${rawEvent}]` : ""),
   };
 }
@@ -231,7 +239,7 @@ export function useChatEngine({
       source: "stream",
       state: "error",
       sessionId: String(sessionId || "").trim(),
-      dialogProcessId: String(dialogProcessId || "").trim(),
+      dialogProcessId: normalizeTrimmedString(dialogProcessId),
       sourceEvent: String(sourceEvent || "").trim(),
       seq: 0,
       applied: true,
@@ -239,7 +247,7 @@ export function useChatEngine({
   }
 
   function getInteractionPayloadWaitKey({ sessionId = "", dialogProcessId = "" } = {}) {
-    return `${String(sessionId || "").trim()}::${String(dialogProcessId || "").trim()}`;
+    return `${String(sessionId || "").trim()}::${normalizeTrimmedString(dialogProcessId)}`;
   }
 
   function clearMissingInteractionPayloadTimer({
@@ -259,13 +267,7 @@ export function useChatEngine({
         ? pendingInteractionRequest.value
         : null;
     if (!pendingRequest) return false;
-    const pendingDialogProcessId = String(pendingRequest?.dialogProcessId || "").trim();
-    const normalizedDialogProcessId = String(dialogProcessId || "").trim();
-    return (
-      !normalizedDialogProcessId ||
-      !pendingDialogProcessId ||
-      pendingDialogProcessId === normalizedDialogProcessId
-    );
+    return isBlankCompatibleSameId(pendingRequest?.dialogProcessId, dialogProcessId);
   }
 
   function scheduleMissingInteractionPayloadFailure({
@@ -332,7 +334,7 @@ export function useChatEngine({
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
           applyAssistantFailureState(targetAssistantMessage, expiredErrorMessage);
           emitSyntheticErrorConversationState({
-            sessionId: String(sessionId || activeSession.value?.id || "").trim(),
+            sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
             dialogProcessId,
             sourceEvent: "expired_refresh_failed",
           });
@@ -345,7 +347,7 @@ export function useChatEngine({
           const expiredErrorMessage = translate("chat.expiredRefreshFailed");
           applyAssistantFailureState(targetAssistantMessage, expiredErrorMessage);
           emitSyntheticErrorConversationState({
-            sessionId: String(sessionId || activeSession.value?.id || "").trim(),
+            sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
             dialogProcessId,
             sourceEvent: "expired_refresh_failed",
           });
@@ -355,13 +357,13 @@ export function useChatEngine({
   }
   function isInFlightConversationState(state = "") {
     return ["sending", "interaction_pending", "stopping", "reconnecting"].includes(
-      String(state || "").trim(),
+      normalizeTrimmedString(state),
     );
   }
 
   function isTerminalConversationState(state = "") {
     return ["stopped", "completed", "error", "no_conversation", "expired"].includes(
-      String(state || "").trim(),
+      normalizeTrimmedString(state),
     );
   }
 
@@ -381,14 +383,14 @@ export function useChatEngine({
     const messageList = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];
-    const normalizedDpId = String(dialogProcessId || "").trim();
+    const normalizedDpId = normalizeTrimmedString(dialogProcessId);
     for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
       const messageItem = messageList[messageIndex];
-      if (String(messageItem?.role || "").trim() !== RoleEnum.ASSISTANT) continue;
+      if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.ASSISTANT) continue;
       if (
         normalizedDpId &&
-        String(messageItem?.dialogProcessId || "").trim() &&
-        String(messageItem?.dialogProcessId || "").trim() !== normalizedDpId
+        normalizeTrimmedString(messageItem?.dialogProcessId) &&
+        normalizeTrimmedString(messageItem?.dialogProcessId) !== normalizedDpId
       ) {
         continue;
       }
@@ -486,14 +488,7 @@ export function useChatEngine({
               ? pendingInteractionRequest.value
               : null;
           if (existingPendingRequest) {
-            const existingDialogProcessId = String(
-              existingPendingRequest?.dialogProcessId || "",
-            ).trim();
-            if (
-              !dialogProcessId ||
-              !existingDialogProcessId ||
-              existingDialogProcessId === dialogProcessId
-            ) {
+            if (isBlankCompatibleSameId(existingPendingRequest?.dialogProcessId, dialogProcessId)) {
               return;
             }
           }
@@ -583,7 +578,7 @@ export function useChatEngine({
       .reverse()
       .find(
         (messageItem) =>
-          String(messageItem?.role || "").trim() === RoleEnum.ASSISTANT &&
+          normalizeTrimmedString(messageItem?.role) === RoleEnum.ASSISTANT &&
           Boolean(messageItem?.pending),
       );
     return chatWebSocketClient.requestStop(
@@ -662,10 +657,10 @@ export function useChatEngine({
           allowUserInteraction: allowUserInteraction?.value === false ? false : true,
           forceTool: forceTool?.value === true,
           streaming: requestedTextStreaming,
-          ...(String(botScenario?.value || "").trim()
-            ? { scenario: String(botScenario?.value || "").trim() }
+          ...(normalizeTrimmedString(botScenario?.value)
+            ? { scenario: normalizeTrimmedString(botScenario?.value) }
             : {}),
-          locale: String(locale.value || "").trim(),
+          locale: normalizeTrimmedString(locale.value),
           selectedConnectors: normalizeSelectedConnectors(
             activeSession.value?.connectorPanelState?.selectedConnectors || {},
           ),
@@ -673,7 +668,7 @@ export function useChatEngine({
             ? selectedPlugins.value
             : []
           )
-            .map((pluginKey) => String(pluginKey || "").trim())
+            .map((pluginKey) => normalizeTrimmedString(pluginKey))
             .filter(Boolean),
         },
       };
@@ -681,7 +676,7 @@ export function useChatEngine({
       await chatWebSocketClient.stream(payload, ({ event, data }) => {
         applyConversationStateFromEvent(event, data || {}, {
           botMessage: botMsg,
-          fallbackDialogProcessId: String(botMsg.dialogProcessId || "").trim(),
+          fallbackDialogProcessId: normalizeTrimmedString(botMsg.dialogProcessId),
         });
         if (event === StreamEventEnum.CHANNEL_STATE) {
           return;
@@ -696,8 +691,8 @@ export function useChatEngine({
           scrollOnFirstResponseOnce();
         } else if (event === StreamEventEnum.DELTA) {
           const chunkText = String(data.text || "");
-          if (data?.dialogProcessId && !String(botMsg.dialogProcessId || "").trim()) {
-            botMsg.dialogProcessId = String(data.dialogProcessId || "").trim();
+          if (data?.dialogProcessId && !normalizeTrimmedString(botMsg.dialogProcessId)) {
+            botMsg.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
           }
           botMsg.content += chunkText;
           if (chunkText) {
@@ -706,11 +701,11 @@ export function useChatEngine({
         } else if (event === StreamEventEnum.INTERACTION_REQUEST) {
           const normalizedInteractionRequest = normalizeInteractionRequestPayload({
             ...(data || {}),
-            interactionType: String(data?.interactionType || "").trim(),
+            interactionType: normalizeTrimmedString(data?.interactionType),
           });
           clearMissingInteractionPayloadTimer({
-            sessionId: String(normalizedInteractionRequest?.sessionId || "").trim(),
-            dialogProcessId: String(normalizedInteractionRequest?.dialogProcessId || "").trim(),
+            sessionId: normalizeTrimmedString(normalizedInteractionRequest?.sessionId),
+            dialogProcessId: normalizeTrimmedString(normalizedInteractionRequest?.dialogProcessId),
           });
           scrollOnFirstResponseOnce();
           if (tryAutoResolveInteraction(normalizedInteractionRequest)) {
@@ -750,10 +745,10 @@ export function useChatEngine({
                 doneRealtimeLogs.length,
                 Number(data?.executionLogs?.length || 0),
               );
-              if (!String(botMsg.dialogProcessId || "").trim()) {
+              if (!normalizeTrimmedString(botMsg.dialogProcessId)) {
                 const latestDialogProcessId = [...doneRealtimeLogs]
                   .reverse()
-                  .map((logItem) => String(logItem?.dialogProcessId || "").trim())
+                  .map((logItem) => normalizeTrimmedString(logItem?.dialogProcessId))
                   .find(Boolean);
                 if (latestDialogProcessId) {
                   botMsg.dialogProcessId = latestDialogProcessId;
@@ -807,8 +802,8 @@ export function useChatEngine({
                   : [];
                 botMsg.dialogProcessId = lastAssistant.dialogProcessId || botMsg.dialogProcessId;
                 botMsg.content = String(mergedAssistantContent || botMsg.content || "");
-                botMsg.modelAlias = String(lastAssistant.modelAlias || "").trim();
-                botMsg.modelName = String(lastAssistant.modelName || "").trim();
+                botMsg.modelAlias = normalizeTrimmedString(lastAssistant.modelAlias);
+                botMsg.modelName = normalizeTrimmedString(lastAssistant.modelName);
                 if (Array.isArray(lastAssistant.modelRuns)) {
                   botMsg.modelRuns = lastAssistant.modelRuns;
                 }
@@ -883,9 +878,7 @@ export function useChatEngine({
         finalDoneEventData?.sessionId || activeSession.value.backendSessionId || "",
       );
       const finalExecutionLogTotal = Number(botMsg.executionLogTotal || 0);
-      const finalDialogProcessId = String(
-        botMsg.dialogProcessId || finalDoneEventData?.dialogProcessId || "",
-      ).trim();
+      const finalDialogProcessId = normalizeTrimmedString(botMsg.dialogProcessId || finalDoneEventData?.dialogProcessId);
       if (doneSessionId) {
         try {
           const detail = await fetchSessionDetail(doneSessionId);
@@ -899,9 +892,9 @@ export function useChatEngine({
           if (finalExecutionLogTotal > 0 && finalDialogProcessId) {
             const patchExecutionTotal = (messages = []) => {
               for (const messageItem of Array.isArray(messages) ? messages : []) {
-                if (String(messageItem?.role || "").trim() !== RoleEnum.ASSISTANT) continue;
+                if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.ASSISTANT) continue;
                 if (
-                  String(messageItem?.dialogProcessId || "").trim() !==
+                  normalizeTrimmedString(messageItem?.dialogProcessId) !==
                   finalDialogProcessId
                 ) {
                   continue;
