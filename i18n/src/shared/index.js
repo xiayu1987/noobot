@@ -40,6 +40,7 @@ export function pickLocaleText({
   locale = DEFAULT_LOCALE,
   dict = {},
   key = "",
+  fallback = "",
   fallbackLocale = DEFAULT_LOCALE,
   params = {},
 } = {}) {
@@ -49,7 +50,7 @@ export function pickLocaleText({
   const value =
     row?.[normalizedLocale] ??
     row?.[normalizeLocale(fallbackLocale, DEFAULT_LOCALE)] ??
-    normalizedKey;
+    (fallback || normalizedKey);
   if (typeof value === "function") return String(value(params) ?? "");
   return String(value ?? "");
 }

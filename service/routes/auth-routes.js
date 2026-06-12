@@ -113,7 +113,7 @@ export function registerAuthRoutes(
       ) {
         await workspaceService.ensureUserWorkspace(userId);
         const loadedSuperAdminConfig = await loadUserConfigSafe(userId);
-        const superAdminScenarios = resolveBuiltinScenarios(globalConfig?.scenarios, {});
+        const superAdminScenarios = resolveBuiltinScenarios(globalConfig?.scenarios, {}, { locale: req.locale });
         const superAdminPlugins = resolveMergedPlugins(
           globalConfig?.plugins,
           loadedSuperAdminConfig?.plugins,
@@ -149,6 +149,7 @@ export function registerAuthRoutes(
       const mergedScenarios = resolveBuiltinScenarios(
         globalConfig?.scenarios,
         userScenarios,
+        { locale: req.locale },
       );
       const mergedPlugins = resolveMergedPlugins(
         globalConfig?.plugins,

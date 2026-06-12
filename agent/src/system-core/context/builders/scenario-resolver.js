@@ -20,7 +20,9 @@ export function resolveScenarioProfile({ runConfig = {}, effectiveConfig = {} } 
       ? runConfig.scenarioProfile
       : {};
   const runConfigScenarioKey = String(runConfig?.scenario || "").trim();
-  const scenarioConfig = resolveBuiltinScenarios(effectiveConfig?.scenarios, {});
+  const scenarioConfig = resolveBuiltinScenarios(effectiveConfig?.scenarios, {}, {
+    locale: runConfig?.locale || effectiveConfig?.locale,
+  });
   const defaultScenarioKey = String(scenarioConfig?.default || "").trim();
   const resolvedScenarioKey = runConfigScenarioKey || defaultScenarioKey;
   const scenarioDefinitions =
