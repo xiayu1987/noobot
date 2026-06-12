@@ -122,6 +122,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
     locale,
     planText: bucket?.planText || "",
     bucket,
+    ctx,
   });
   if (systemChecklistContent) {
     injectMessageWithPolicy(ctx, {

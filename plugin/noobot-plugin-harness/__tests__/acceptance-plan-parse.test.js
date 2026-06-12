@@ -68,6 +68,18 @@ test("summary checklist context preserves complete plan sub-plans from planText"
   assert.match(String(content), /^2\.1 子计划二一/m);
 });
 
+test("plan checklist context includes planning-model current task goal from bucket", () => {
+  const content = buildPlanChecklistSystemContent({
+    locale: "zh-CN",
+    planText: "1. 分析需求\n1.1 梳理约束",
+    bucket: { currentTaskGoal: "计划模型提炼的当前任务目标" },
+  });
+  assert.match(String(content), /当前任务目标/);
+  assert.match(String(content), /计划模型提炼的当前任务目标/);
+  assert.match(String(content), /任务清单/);
+  assert.match(String(content), /^1\.1 梳理约束/m);
+});
+
 test("complete plan resolver preserves sub-plans from taskChecklist fallback", () => {
   const text = resolveCompletePlanChecklistText({
     bucket: {

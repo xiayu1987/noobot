@@ -29,6 +29,7 @@ import {
   getPlanningPromptToolsHeader,
   getPlanningToolContextMarker,
 } from "../shared/workflow/prompts.js";
+import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -203,12 +204,27 @@ export function buildPlanningMessagePlan(
     taskContent = "",
   } = {},
 ) {
+  const bucket = ctx?.agentContext?.payload?.harness && typeof ctx.agentContext.payload.harness === "object"
+    ? ctx.agentContext.payload.harness
+    : {};
+  const planChecklistContent = buildPlanChecklistSystemContent({
+    locale,
+    planText: bucket?.planText || "",
+    bucket,
+    ctx,
+  });
   return createMessagePlan([
     {
       kind: "planning_context_summary",
       injectRole: "system",
       separateRole: "constraint",
       content: contextSummaryContent || buildPlanningContextSummaryPrompt(locale, ctx, meta),
+    },
+    {
+      kind: "planning_plan_checklist_context",
+      injectRole: "system",
+      separateRole: "constraint",
+      content: planChecklistContent,
     },
     {
       kind: "planning_tool_context",

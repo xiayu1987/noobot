@@ -50,6 +50,7 @@ import {
 import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { applyPhaseAcceptanceReportToPlanStatus } from "../shared/plan/acceptance-status.js";
+import { resolveCurrentTaskGoalText } from "../shared/plan/checklist-context.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -68,6 +69,7 @@ function resolveAcceptanceMainPlanContext(
   promptPayload = {},
   bucket = {},
   locale = LOCALE.ZH_CN,
+  ctx = {},
 ) {
   const finalMainPlan =
     promptPayload?.finalMainPlan && typeof promptPayload.finalMainPlan === "object"
@@ -110,6 +112,11 @@ function resolveAcceptanceMainPlanContext(
             ? bucket.taskChecklist
             : [],
     planText: String(promptPayload?.planText || "").trim(),
+    currentTaskGoal: resolveCurrentTaskGoalText({
+      ctx,
+      bucket,
+      currentTaskGoal: promptPayload?.currentTaskGoal || "",
+    }),
     plansInOrder: Array.isArray(promptPayload?.plansInOrder) ? promptPayload.plansInOrder : [],
     refinementPlansForFinalMainPlan: Array.isArray(promptPayload?.refinementPlansForFinalMainPlan)
       ? promptPayload.refinementPlansForFinalMainPlan
@@ -208,14 +215,17 @@ function buildAcceptancePromptParts({
   locale = LOCALE.ZH_CN,
   requestPayload = {},
   phase = false,
+  ctx = {},
 } = {}) {
   const mainPlanContext = resolveAcceptanceMainPlanContext(
     {
       planText: String(bucket?.planText || "").trim(),
       finalPlanChecklist: Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist : [],
+      currentTaskGoal: resolveCurrentTaskGoalText({ ctx, bucket }),
     },
     bucket,
     locale,
+    ctx,
   );
   const planContextContent = buildAcceptanceMainPlanContextPromptText({
     locale,
@@ -296,6 +306,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
     locale,
     phase: true,
     requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
+    ctx,
   });
   for (const content of summaryReportsContents) {
     pushRoleMessage(messages, "system", content);
@@ -366,6 +377,7 @@ export async function runPhaseAcceptanceBySeparateModel(
     locale,
     phase: true,
     requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
+    ctx,
   });
   const agentMessages = resolveCapabilityModelMessages(meta, {
     ctx,
@@ -481,6 +493,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     locale,
     phase: true,
     requestPayload,
+    ctx,
   });
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) {
@@ -614,7 +627,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
   const promptPayload = pendingData.payload && typeof pendingData.payload === "object" ? pendingData.payload : {};
-  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale);
+  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale, ctx);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
   const systemContent = buildAcceptanceMainPlanContextPromptText({
     locale,
@@ -747,7 +760,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     finalOutput,
     locale,
   });
-  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale);
+  const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale, ctx);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
   const prompt = buildAcceptanceValidationRequestPromptText({
     locale,

@@ -50,6 +50,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
       locale,
       planText: bucket?.planText || "",
       bucket,
+      ctx,
     });
     if (checklistContent) {
       injectMessageWithPolicy(ctx, {

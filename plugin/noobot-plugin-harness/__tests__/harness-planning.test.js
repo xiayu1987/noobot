@@ -109,6 +109,8 @@ test("harness planning prompt includes current tool names and descriptions", asy
   const toolsPromptText = String(toolsPrompt?.content || "");
   assert.equal(String(planningPromptMessage?.role || ""), "system");
   assert.match(planningPrompt, /harness-planning-bootstrap/);
+  assert.match(planningPrompt, /\[CURRENT_TASK_GOAL\]/);
+  assert.match(planningPrompt, /\[PLAN\]/);
   assert.match(toolsPromptText, /可用工具（name\/description）/);
   assert.match(toolsPromptText, /"name": "read_file"/);
   assert.match(toolsPromptText, /"description": "读取文件内容"/);
@@ -732,6 +734,11 @@ test("harness planning separate model uses resolved planning tool allowlist", as
     String(item?.role || "") === "system" &&
     /规划输入上下文摘要（精简）如下/.test(String(item?.content || "")));
   assert.match(String(constraintPrompt?.content || ""), /"latestUserGoal": "开始任务"/);
+  const taskPrompt = invocations[0].messages.find((item = {}) =>
+    String(item?.role || "") === "user" &&
+    /harness-planning-bootstrap/.test(String(item?.content || "")));
+  assert.match(String(taskPrompt?.content || ""), /\[CURRENT_TASK_GOAL\]/);
+  assert.match(String(taskPrompt?.content || ""), /\[PLAN\]/);
 });
 
 test("harness planning separate model keeps latest user goal in planning context summary", async () => {

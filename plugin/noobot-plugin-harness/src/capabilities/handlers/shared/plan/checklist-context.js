@@ -127,14 +127,53 @@ function buildCompletePlanTextFromChecklist(checklist = []) {
     .trim();
 }
 
+export function resolveCurrentTaskGoalText({
+  bucket = {},
+  currentTaskGoal = "",
+} = {}) {
+  const explicit = String(currentTaskGoal || "").trim();
+  if (explicit) return explicit;
+  return String(bucket?.currentTaskGoal || "").trim();
+}
+
+function prependCurrentTaskGoalToPlanText({
+  locale = LOCALE.ZH_CN,
+  planText = "",
+  currentTaskGoal = "",
+} = {}) {
+  const goal = String(currentTaskGoal || "").trim();
+  const plan = String(planText || "").trim();
+  if (!goal) return plan;
+  const goalHeader = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLAN_CHECKLIST_CURRENT_TASK_GOAL_HEADER,
+  );
+  const tasksHeader = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLAN_CHECKLIST_TASKS_HEADER,
+  );
+  return [
+    goalHeader,
+    goal,
+    plan ? "" : "",
+    plan ? tasksHeader : "",
+    plan,
+  ].filter((item) => String(item || "").length > 0).join("\n").trim();
+}
+
 export function resolveCompletePlanChecklistText({
   planText = "",
   bucket = {},
+  currentTaskGoal = "",
+  locale = LOCALE.ZH_CN,
 } = {}) {
+  const taskGoal = resolveCurrentTaskGoalText({ bucket, currentTaskGoal });
   const renderedDocument = hasRenderablePlanDocument(bucket?.planDocument)
     ? String(renderPlanDocument(bucket.planDocument) || "").trim()
     : "";
-  if (renderedDocument) return renderedDocument;
+  if (renderedDocument) {
+    return prependCurrentTaskGoalToPlanText({ locale, planText: renderedDocument, currentTaskGoal: taskGoal });
+  }
 
   const normalizedPlanText = String(planText || bucket?.planText || "").trim();
   if (normalizedPlanText) {
@@ -142,11 +181,17 @@ export function resolveCompletePlanChecklistText({
     const hasNumberedPlans = Array.isArray(parsed?.mainPlans) && parsed.mainPlans.length > 0;
     if (hasNumberedPlans) {
       const rendered = String(renderPlanDocument(parsed) || "").trim();
-      if (rendered) return rendered;
+      if (rendered) {
+        return prependCurrentTaskGoalToPlanText({ locale, planText: rendered, currentTaskGoal: taskGoal });
+      }
     }
-    return normalizedPlanText;
+    return prependCurrentTaskGoalToPlanText({ locale, planText: normalizedPlanText, currentTaskGoal: taskGoal });
   }
-  return buildCompletePlanTextFromChecklist(bucket?.taskChecklist || []);
+  return prependCurrentTaskGoalToPlanText({
+    locale,
+    planText: buildCompletePlanTextFromChecklist(bucket?.taskChecklist || []),
+    currentTaskGoal: taskGoal,
+  });
 }
 
 export function resolvePlanChecklistText(options = {}) {
@@ -157,9 +202,10 @@ export function buildPlanChecklistSystemContent({
   locale = LOCALE.ZH_CN,
   planText = "",
   bucket = {},
+  currentTaskGoal = "",
 } = {}) {
   const resolvedPlanText = appendAcceptanceStatusToPlanText(
-    resolveCompletePlanChecklistText({ planText, bucket }),
+    resolveCompletePlanChecklistText({ planText, bucket, currentTaskGoal, locale }),
     bucket,
   );
   if (!resolvedPlanText) return "";
