@@ -7,6 +7,7 @@ import {
   parseMainPlansFromPlanText,
   parsePlanDocumentFromText,
   parseSubPlansFromPlanText,
+  renderPlanDocument,
 } from "./text-protocol.js";
 import { executePlanMutation } from "./mutation-facade.js";
 import {
@@ -17,6 +18,7 @@ import {
   buildPlanningRefinementPromptText,
   getPlanningRefinementMarker,
 } from "../workflow/prompts.js";
+import { resetPlanAcceptanceStatusForPlanChange } from "./acceptance-status.js";
 
 function formatSubPlansText(subPlans = [], targetId = 0) {
   if (!Array.isArray(subPlans) || !subPlans.length) return "\uff08\u7a7a\uff09";
@@ -234,6 +236,12 @@ export function createPlanRevisionHelpers({
 
     if (!applied) return false;
     const nextDocument = parsePlanDocumentFromText(bucket.planText);
+    const acceptanceStatusReset = resetPlanAcceptanceStatusForPlanChange(
+      bucket,
+      String(renderPlanDocument(previousDocument) || "").trim(),
+      bucket.planText,
+      { stage: normalizedStage, reason: "plan_mutation_changed_item" },
+    );
     if (normalizedStage === "revision") {
       bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(previousDocument, nextDocument);
     }
@@ -263,6 +271,8 @@ export function createPlanRevisionHelpers({
             : undefined,
         refinementTargetMainStepIndexes:
           normalizedStage === "refinement" ? normalizedTargetMainStepIndexes : undefined,
+        acceptanceStatusResetCount: acceptanceStatusReset.resetCount,
+        acceptanceStatusRemovedCount: acceptanceStatusReset.removedCount,
       },
     });
     return true;

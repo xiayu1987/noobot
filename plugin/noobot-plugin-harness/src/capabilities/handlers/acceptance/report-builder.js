@@ -17,6 +17,12 @@ import { buildStatusSummary, nowIsoTimestamp } from "../shared/report-utils.js";
 import { parsePlanDocumentFromText } from "../shared/plan/text-protocol.js";
 import { renderAcceptanceReportText } from "./report-text-renderer.js";
 import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
+import {
+  getPlanAcceptanceStatusMap,
+  mapPlanAcceptanceStatusToTaskStatus,
+  parsePlanAcceptanceItemsFromText,
+  resolvePlanAcceptanceForChecklistItem,
+} from "../shared/plan/acceptance-status.js";
 
 const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -84,15 +90,12 @@ function parseModelAcceptanceItemsFromText(text = "") {
 }
 
 function parseSemanticAcceptanceItemsFromText(text = "") {
-  return parseModelAcceptanceItemsFromText(text);
+  return parsePlanAcceptanceItemsFromText(text);
 }
 
 function mapModelAcceptanceStatusToTaskStatus(status = "") {
   const normalized = String(status || "").trim().toLowerCase();
-  if (normalized === "pass") return TASK_STATUS.COMPLETED;
-  if (normalized === "warn") return TASK_STATUS.IN_PROGRESS;
-  if (normalized === "fail") return TASK_STATUS.PENDING;
-  return "";
+  return mapPlanAcceptanceStatusToTaskStatus(normalized);
 }
 
 function resolveAcceptanceStatusForChecklistItem(item = {}, byPlan = {}) {
@@ -258,12 +261,36 @@ export function buildAcceptanceReport({
       : {};
   const items = checklist.map((task, index) => {
     const normalized = normalizeChecklistItem(task, index, locale);
+    const persistedAcceptance = resolvePlanAcceptanceForChecklistItem(bucket, normalized);
     const modelAcceptance = resolveModelAcceptanceForChecklistItem(normalized, modelAcceptanceByPlan);
+    const persistedMappedStatus = String(persistedAcceptance?.taskStatus || "").trim() ||
+      mapModelAcceptanceStatusToTaskStatus(persistedAcceptance?.status);
     const modelMappedStatus = mapModelAcceptanceStatusToTaskStatus(modelAcceptance?.status);
     const baseStatus = evaluateTaskStatus(normalized, state);
+    const status = persistedMappedStatus || modelMappedStatus || baseStatus;
+    const statusSource = persistedMappedStatus
+      ? "plan_acceptance_status"
+      : modelMappedStatus
+        ? "phase_acceptance_report"
+        : "signal";
     return {
       ...normalized,
-      status: modelMappedStatus || baseStatus,
+      status,
+      statusSource,
+      planAcceptance: persistedAcceptance
+        ? {
+          acceptanceId: persistedAcceptance.acceptanceId,
+          status: persistedAcceptance.status,
+          taskStatus: persistedAcceptance.taskStatus,
+          risk: persistedAcceptance.risk,
+          evidence: persistedAcceptance.evidence,
+          conclusion: persistedAcceptance.conclusion,
+          source: persistedAcceptance.source,
+          acceptedAt: persistedAcceptance.acceptedAt,
+          resetAt: persistedAcceptance.resetAt,
+          resetReason: persistedAcceptance.resetReason,
+        }
+        : undefined,
       modelAcceptance: modelAcceptance
         ? {
           acceptanceId: modelAcceptance.acceptanceId,
@@ -294,6 +321,7 @@ export function buildAcceptanceReport({
         rawContent: latestModelAcceptance.rawContent,
       }
       : null,
+    planAcceptanceStatusByPlanId: getPlanAcceptanceStatusMap(bucket),
   };
 }
 

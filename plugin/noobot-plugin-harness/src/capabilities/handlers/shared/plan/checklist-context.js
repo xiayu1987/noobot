@@ -6,6 +6,30 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { parsePlanDocumentFromText, renderPlanDocument } from "./text-protocol.js";
+import { getPlanAcceptanceStatusMap } from "./acceptance-status.js";
+
+
+function appendAcceptanceStatusToPlanText(planText = "", bucket = {}) {
+  const statusMap = getPlanAcceptanceStatusMap(bucket);
+  if (!Object.keys(statusMap).length) return String(planText || "").trim();
+  return String(planText || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => {
+      const text = String(line || "");
+      const match = text.match(/^\s*(\d+(?:\.\d+)?)(?:\.|\s)\s+(.+?)\s*$/);
+      if (!match) return text;
+      const planId = String(match[1] || "").trim();
+      const acceptance = statusMap[planId] && typeof statusMap[planId] === "object" ? statusMap[planId] : null;
+      if (!acceptance) return text;
+      const taskStatus = String(acceptance.taskStatus || "").trim() || "pending";
+      const source = String(acceptance.source || "").trim();
+      const resetSuffix = String(acceptance.resetAt || "").trim() ? ", reset" : "";
+      return `${text} [acceptance:${taskStatus}${source ? `, source:${source}` : ""}${resetSuffix}]`;
+    })
+    .join("\n")
+    .trim();
+}
 
 function hasRenderablePlanDocument(planDocument = null) {
   const doc = planDocument && typeof planDocument === "object" ? planDocument : null;
@@ -112,7 +136,7 @@ export function resolveCompletePlanChecklistText({
     : "";
   if (renderedDocument) return renderedDocument;
 
-  const normalizedPlanText = String(planText || "").trim();
+  const normalizedPlanText = String(planText || bucket?.planText || "").trim();
   if (normalizedPlanText) {
     const parsed = parsePlanDocumentFromText(normalizedPlanText);
     const hasNumberedPlans = Array.isArray(parsed?.mainPlans) && parsed.mainPlans.length > 0;
@@ -134,7 +158,10 @@ export function buildPlanChecklistSystemContent({
   planText = "",
   bucket = {},
 } = {}) {
-  const resolvedPlanText = resolveCompletePlanChecklistText({ planText, bucket });
+  const resolvedPlanText = appendAcceptanceStatusToPlanText(
+    resolveCompletePlanChecklistText({ planText, bucket }),
+    bucket,
+  );
   if (!resolvedPlanText) return "";
   const header = `<!-- harness-plan-checklist-context -->\n${translateI18nText(
     locale,

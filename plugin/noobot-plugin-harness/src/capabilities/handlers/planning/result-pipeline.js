@@ -18,8 +18,10 @@ import {
 import {
   parseMainPlansFromPlanText,
   parsePlanDocumentFromText,
+  renderPlanDocument,
 } from "../shared/plan/text-protocol.js";
 import { executePlanMutation } from "../shared/plan/mutation-facade.js";
+import { resetPlanAcceptanceStatusForPlanChange } from "../shared/plan/acceptance-status.js";
 import { resolveOperationDirectoryContext } from "../shared/operation-directory.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
@@ -91,6 +93,10 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
   }
   bucket.planDocument = appliedMutation.nextDocument;
   bucket.planText = appliedMutation.nextPlanText;
+  resetPlanAcceptanceStatusForPlanChange(bucket, String(renderPlanDocument(previousDocument) || "").trim(), bucket.planText, {
+    stage: "planning_capture",
+    reason: "planning_capture_replaced_plan",
+  });
   bucket.operationDirectory = resolveOperationDirectoryContext(ctx);
   bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(previousDocument, bucket.planDocument);
   bucket.taskChecklist = [];
