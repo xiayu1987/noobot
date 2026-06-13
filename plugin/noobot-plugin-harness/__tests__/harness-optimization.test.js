@@ -270,7 +270,7 @@ test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when
   assert.match(String(ctx.messages[0]?.content || ""), /\[来自harness外部模型输出\/planning\]/);
 });
 
-test("relaySeparateModelOutputAsUserMessage truncates oversized relay content when transfer refs exist", () => {
+test("relaySeparateModelOutputAsUserMessage preserves oversized relay content when transfer refs exist", () => {
   const ctx = { messages: [] };
   const content = `HEAD-${"x".repeat(2400)}-TAIL`;
   const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
@@ -292,9 +292,8 @@ test("relaySeparateModelOutputAsUserMessage truncates oversized relay content wh
   const message = ctx.messages[0] || {};
   assert.equal(message.role, "user");
   const relayContent = String(message?.content || "");
-  assert.match(relayContent, /transferEnvelope\(s\)/);
-  assert.match(relayContent, /已截断/);
-  assert.equal(relayContent.includes("-TAIL"), false);
+  assert.equal(relayContent, `[来自harness外部模型输出/planning_refinement]\n${content}`);
+  assert.equal(relayContent.includes("-TAIL"), true);
   assert.equal(typeof message?.transferEnvelope, "object");
   assert.equal(Array.isArray(message?.transferEnvelopes), true);
   assert.equal(message.transferEnvelopes.length > 0, true);

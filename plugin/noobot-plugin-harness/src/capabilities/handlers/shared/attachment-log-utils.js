@@ -15,23 +15,12 @@ import {
 } from "./message/injected-message-utils.js";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
-const RELAY_TRANSFER_TEXT_MAX_CHARS = 1200;
-
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeString(value = "") {
   return String(value || "").trim();
-}
-
-function compactRelayContentWithTransferRef(content = "", locale = LOCALE.ZH_CN) {
-  const text = String(content || "").trim();
-  if (!text) return "";
-  if (text.length <= RELAY_TRANSFER_TEXT_MAX_CHARS) return text;
-  const ellipsis = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.CONTENT_TRUNCATED_ELLIPSIS);
-  const transferHint = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.CONTENT_TRANSFER_HINT);
-  return `${text.slice(0, RELAY_TRANSFER_TEXT_MAX_CHARS)}\n${ellipsis}\n${transferHint}`;
 }
 
 function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
@@ -436,19 +425,10 @@ export function relaySeparateModelOutputAsUserMessage(
     relayAttachmentMetas,
     transferPayload,
   );
-  const hasTransferRef = Boolean(
-    resolvedTransferPayload.transferResult ||
-      resolvedTransferPayload.transferEnvelope ||
-      (Array.isArray(resolvedTransferPayload.transferEnvelopes) &&
-        resolvedTransferPayload.transferEnvelopes.length),
-  );
-  const relayText = hasTransferRef
-    ? compactRelayContentWithTransferRef(text, locale)
-    : text;
   if (!messages) return false;
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
-    content: `${prefix}\n${relayText}`,
+    content: `${prefix}\n${text}`,
     injectedMessageType: `separate_model_relay:${String(purpose || "unknown").trim() || "unknown"}`,
     attachmentMetas: relayAttachmentMetas,
     ...resolvedTransferPayload,
