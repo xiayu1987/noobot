@@ -5,6 +5,9 @@ import {
   filterSummarizedMessages,
   normalizeContextWindow,
   normalizeRecentWindow,
+  resolveMainModelFinalMessages,
+  resolveMainModelHistoryMessages,
+  resolveMainModelIncrementalMessages,
   resolveModelContextMessages,
 } from "../../../src/system-core/session/utils/context-window-normalizer.js";
 import { markCurrentTurnArraySummarized } from "../../../src/system-core/context/session/summarized-message-policy.js";
@@ -319,5 +322,154 @@ test("resolveModelContextMessages keeps latest injected message per type after d
   assert.deepEqual(
     result.map((item) => item.content),
     ["planning", "new summary", "normal"],
+  );
+});
+
+
+test("resolveMainModelHistoryMessages keeps first actual user and latest assistant per dialog then clips to 10", () => {
+  const input = Array.from({ length: 6 }, (_, index) => {
+    const dialogProcessId = `d${index + 1}`;
+    return [
+      { role: "user", content: `u${index + 1}-first`, dialogProcessId },
+      { role: "user", content: `u${index + 1}-second`, dialogProcessId },
+      { role: "assistant", content: `a${index + 1}-old`, dialogProcessId },
+      { role: "assistant", content: `a${index + 1}-latest`, dialogProcessId },
+    ];
+  }).flat();
+
+  const result = resolveMainModelHistoryMessages({ sourceMessages: input });
+
+  assert.deepEqual(
+    result.map((item) => item.content),
+    [
+      "u2-first",
+      "a2-latest",
+      "u3-first",
+      "a3-latest",
+      "u4-first",
+      "a4-latest",
+      "u5-first",
+      "a5-latest",
+      "u6-first",
+      "a6-latest",
+    ],
+  );
+});
+
+test("resolveMainModelHistoryMessages excludes injected and user meta from actual user selection", () => {
+  const result = resolveMainModelHistoryMessages({
+    sourceMessages: [
+      { role: "user", content: "injected", injectedBy: "harness-plugin", dialogProcessId: "d1" },
+      { role: "user", content: "meta", additional_kwargs: { noobotInternalMessageType: "user_meta" }, dialogProcessId: "d1" },
+      { role: "user", content: "actual", dialogProcessId: "d1" },
+      { role: "assistant", content: "old", dialogProcessId: "d1" },
+      { role: "assistant", content: "latest", dialogProcessId: "d1" },
+    ],
+  });
+
+  assert.deepEqual(result.map((item) => item.content), ["actual", "latest"]);
+});
+
+test("resolveMainModelIncrementalMessages filters summarized messages without clipping", () => {
+  const result = resolveMainModelIncrementalMessages({
+    sourceMessages: Array.from({ length: 22 }, (_, index) => ({
+      role: "user",
+      content: `m${index + 1}`,
+      summarized: index === 5,
+    })),
+  });
+
+  assert.equal(result.length, 21);
+  assert.equal(result[0].content, "m1");
+  assert.equal(result.at(-1).content, "m22");
+  assert.equal(result.some((item) => item.content === "m6"), false);
+});
+
+test("resolveMainModelFinalMessages composes system history incremental in order", () => {
+  const result = resolveMainModelFinalMessages({
+    systemMessages: [{ role: "system", content: "sys" }],
+    historyMessages: [
+      { role: "user", content: "u", dialogProcessId: "d1" },
+      { role: "assistant", content: "a", dialogProcessId: "d1" },
+    ],
+    incrementalMessages: [{ role: "user", content: "inc" }],
+  });
+
+  assert.deepEqual(result.messages.map((item) => item.content), ["sys", "u", "a", "inc"]);
+});
+
+test("main-flow context resolution does not mutate source message order or count when unsummarized", () => {
+  const systemMessages = [{ role: "system", content: "sys-1" }];
+  const historyMessages = [
+    { role: "user", content: "u1", dialogProcessId: "d1" },
+    { role: "assistant", content: "a1", dialogProcessId: "d1" },
+    { role: "user", content: "u2", dialogProcessId: "d2" },
+    { role: "assistant", content: "a2", dialogProcessId: "d2" },
+  ];
+  const incrementalMessages = [
+    { role: "user", content: "current", dialogProcessId: "d3" },
+    { role: "assistant", content: "current-a", dialogProcessId: "d3" },
+  ];
+  const before = JSON.stringify({ systemMessages, historyMessages, incrementalMessages });
+
+  const resolved = resolveMainModelFinalMessages({
+    systemMessages,
+    historyMessages,
+    incrementalMessages,
+    currentDialogProcessId: "d3",
+  });
+
+  assert.deepEqual(
+    resolved.messages.map((item) => item.content),
+    ["sys-1", "u1", "a1", "u2", "a2", "current", "current-a"],
+  );
+  assert.equal(JSON.stringify({ systemMessages, historyMessages, incrementalMessages }), before);
+  assert.deepEqual(historyMessages.map((item) => item.content), ["u1", "a1", "u2", "a2"]);
+  assert.equal(historyMessages.length, 4);
+  assert.deepEqual(incrementalMessages.map((item) => item.content), ["current", "current-a"]);
+  assert.equal(incrementalMessages.length, 2);
+});
+
+test("resolveMainModelIncrementalMessages preserves actual order for tool, plugin, and main-flow increments", () => {
+  const incrementalMessages = [
+    { role: "user", content: "main-user", dialogProcessId: "d1" },
+    {
+      role: "assistant",
+      content: "",
+      dialogProcessId: "d1",
+      tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
+    },
+    { role: "tool", content: "tool-result", tool_call_id: "call-1", dialogProcessId: "d1" },
+    {
+      role: "user",
+      content: "plugin-guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      dialogProcessId: "d1",
+    },
+    {
+      role: "system",
+      content: "main-injected-system",
+      injectedMessage: true,
+      injectedBy: "main-flow",
+      injectedMessageType: "runtime_hint",
+      dialogProcessId: "d1",
+    },
+    { role: "assistant", content: "main-assistant", dialogProcessId: "d1" },
+  ];
+
+  const result = resolveMainModelIncrementalMessages({
+    sourceMessages: incrementalMessages,
+    currentDialogProcessId: "d1",
+  });
+
+  assert.deepEqual(
+    result.map((item = {}) => item.content || item.tool_call_id || item.tool_calls?.[0]?.id),
+    ["main-user", "call-1", "tool-result", "plugin-guidance", "main-injected-system", "main-assistant"],
+  );
+  assert.deepEqual(
+    incrementalMessages.map((item = {}) => item.content || item.tool_call_id || item.tool_calls?.[0]?.id),
+    ["main-user", "call-1", "tool-result", "plugin-guidance", "main-injected-system", "main-assistant"],
   );
 });

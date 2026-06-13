@@ -113,7 +113,6 @@ export const BUILTIN_THRESHOLDS = Object.freeze({
     maxAutoTransitions: 10,
     maxParallelNodeAgents: 4,
     miniRunnerMaxTurns: 3,
-    contextWindowRecentMessageLimit: 20,
   }),
   runTimeoutMs: 5 * 60 * 60 * 1000,
   openvscode: Object.freeze({

@@ -35,7 +35,10 @@ import {
 import { PLUGIN_CAPABILITY } from "../../plugin/capabilities.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
 import {
-  resolveModelContextMessages,
+  resolveMainModelFinalMessages,
+  resolveMainModelHistoryMessages,
+  resolveMainModelIncrementalMessages,
+  resolveMainModelSystemMessages,
 } from "../../session/utils/context-window-normalizer.js";
 import {
   shouldMarkCurrentTurnSummarizedMessage,
@@ -147,6 +150,19 @@ function normalizeMessageForHarness(messageItem = {}) {
     messageItem?.tool_call_id || messageItem?.lc_kwargs?.tool_call_id || "",
   ).trim();
   if (toolCallId) normalized.tool_call_id = toolCallId;
+  const internalType = String(
+    messageItem?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.metadata?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.metadata?.noobotInternalMessageType ||
+      "",
+  ).trim();
+  if (internalType) {
+    normalized.additional_kwargs = {
+      ...(normalized.additional_kwargs || {}),
+      noobotInternalMessageType: internalType,
+    };
+  }
   if (messageItem?.injectedMessage === true || messageItem?.lc_kwargs?.injectedMessage === true) {
     normalized.injectedMessage = true;
   }
@@ -1435,10 +1451,11 @@ export class SessionExecutionEngine {
   }
 
   _createHarnessResolveModelMessages({ harnessOptions = {} } = {}) {
-    const recentLimit = Number(
-      harnessOptions?.contextWindowRecentMessageLimit || 20,
-    );
+    void harnessOptions;
     return ({ messages = [], ctx = {} } = {}) => {
+      const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object"
+        ? ctx.messageBlocks
+        : null;
       const explicitMessages = Array.isArray(messages) ? messages : [];
       const source = explicitMessages.length
         ? explicitMessages
@@ -1449,24 +1466,38 @@ export class SessionExecutionEngine {
         ctx,
         messages: source,
       });
-      return resolveModelContextMessages({
-        sourceMessages: source,
+      const normalizedSource = source
+        .map((item) => normalizeMessageForHarness(item))
+        .filter(Boolean);
+      if (blocks) {
+        const resolved = resolveMainModelFinalMessages({
+          systemMessages: (Array.isArray(blocks.system) ? blocks.system : [])
+            .map((item) => normalizeMessageForHarness(item))
+            .filter(Boolean),
+          historyMessages: (Array.isArray(blocks.history) ? blocks.history : [])
+            .map((item) => normalizeMessageForHarness(item))
+            .filter(Boolean),
+          incrementalMessages: (Array.isArray(blocks.incremental) ? blocks.incremental : [])
+            .map((item) => normalizeMessageForHarness(item))
+            .filter(Boolean),
+          currentDialogProcessId,
+        });
+        return resolved.messages;
+      }
+      const system = resolveMainModelSystemMessages({
+        sourceMessages: normalizedSource.filter((item) => resolveMessageRole(item) === "system"),
         currentDialogProcessId,
-        mode: "agent",
-        useRecentWindow: true,
-        recentLimit,
-        normalizeMessage: (item) => normalizeMessageForHarness(item),
       });
+      const conversation = resolveMainModelIncrementalMessages({
+        sourceMessages: normalizedSource.filter((item) => resolveMessageRole(item) !== "system"),
+        currentDialogProcessId,
+      });
+      return [...system, ...conversation];
     };
   }
 
   _createHarnessResolveMessageBlock({ harnessOptions = {} } = {}) {
-    const historyRecentLimit = Number(
-      harnessOptions?.contextWindowRecentMessageLimit || 20,
-    );
-    const incrementalRecentLimit = Number(
-      harnessOptions?.incrementalRecentMessageLimit || historyRecentLimit || 20,
-    );
+    void harnessOptions;
     return ({ scope = "history", messages = [], ctx = {} } = {}) => {
       const source = Array.isArray(messages) ? messages : [];
       const normalizedScope = String(scope || "history").trim().toLowerCase();
@@ -1476,37 +1507,25 @@ export class SessionExecutionEngine {
         messages: source,
       });
       if (normalizedScope === "system") {
-        return resolveModelContextMessages({
+        return resolveMainModelSystemMessages({
           sourceMessages: source,
           currentDialogProcessId,
-          mode: "agent",
-          useRecentWindow: false,
         });
       }
       if (normalizedScope === "incremental") {
-        return resolveModelContextMessages({
+        return resolveMainModelIncrementalMessages({
           sourceMessages: source,
           currentDialogProcessId,
-          mode: "agent",
-          useRecentWindow: true,
-          recentLimit: incrementalRecentLimit,
         });
       }
       if (normalizedScope === "conversation" || normalizedScope === "non_system") {
-        return resolveModelContextMessages({
+        return resolveMainModelIncrementalMessages({
           sourceMessages: source,
           currentDialogProcessId,
-          mode: "agent",
-          useRecentWindow: true,
-          recentLimit: historyRecentLimit,
         });
       }
-      return resolveModelContextMessages({
+      return resolveMainModelHistoryMessages({
         sourceMessages: source,
-        currentDialogProcessId,
-        mode: "agent",
-        useRecentWindow: true,
-        recentLimit: historyRecentLimit,
       });
     };
   }
@@ -1666,14 +1685,6 @@ export class SessionExecutionEngine {
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
     const next = { ...options, enabled: true, mode: "on", basePath };
-    next.incrementalRecentMessageLimit =
-      Number.isFinite(Number(next?.incrementalRecentMessageLimit)) &&
-      Number(next.incrementalRecentMessageLimit) > 0
-        ? Math.floor(Number(next.incrementalRecentMessageLimit))
-        : Number.isFinite(Number(next?.contextWindowRecentMessageLimit)) &&
-            Number(next.contextWindowRecentMessageLimit) > 0
-          ? Math.floor(Number(next.contextWindowRecentMessageLimit))
-          : 20;
     next.resolveModelMessages = this._createHarnessResolveModelMessages({
       harnessOptions: next,
     });
@@ -1826,8 +1837,6 @@ export class SessionExecutionEngine {
     const next = { ...options, enabled: true, mode: "on" };
     next.miniRunnerMaxTurns = BUILTIN_THRESHOLDS.workflow.miniRunnerMaxTurns;
     next.maxAutoTransitions = BUILTIN_THRESHOLDS.workflow.maxAutoTransitions;
-    next.contextWindowRecentMessageLimit =
-      BUILTIN_THRESHOLDS.workflow.contextWindowRecentMessageLimit;
     next.resolveModelMessages = this._createHarnessResolveModelMessages({
       harnessOptions: next,
     });

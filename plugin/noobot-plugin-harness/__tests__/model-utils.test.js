@@ -48,7 +48,7 @@ test("resolveDialogProcessIdFromContext reads nested execution dialogProcessId",
 });
 
 
-test("resolveCapabilityModelMessages filters summarized messages from fallback and resolver", () => {
+test("resolveCapabilityModelMessages preserves fallback messages and trusts injected resolver output", () => {
   const fallback = resolveCapabilityModelMessages(
     {},
     {
@@ -58,7 +58,7 @@ test("resolveCapabilityModelMessages filters summarized messages from fallback a
       ],
     },
   );
-  assert.deepEqual(fallback.map((item) => item.content), ["keep"]);
+  assert.deepEqual(fallback.map((item) => item.content), ["keep", "drop"]);
 
   const resolved = resolveCapabilityModelMessages(
     {
@@ -71,10 +71,10 @@ test("resolveCapabilityModelMessages filters summarized messages from fallback a
     },
     { messages: [{ role: "user", content: "ignored" }] },
   );
-  assert.deepEqual(resolved.map((item) => item.content), ["keep-resolved"]);
+  assert.deepEqual(resolved.map((item) => item.content), ["keep-resolved", "drop-resolved"]);
 });
 
-test("buildModelMessagesWithStructuredEnvelope filters summarized agent messages", () => {
+test("buildModelMessagesWithStructuredEnvelope preserves provided agent messages without plugin-side filtering", () => {
   const output = buildModelMessagesWithStructuredEnvelope({
     locale: "zh-CN",
     agentMessages: [
@@ -85,10 +85,10 @@ test("buildModelMessagesWithStructuredEnvelope filters summarized agent messages
   });
 
   assert.match(output[0].content, /keep/);
-  assert.doesNotMatch(output[0].content, /drop/);
+  assert.match(output[0].content, /drop/);
 });
 
-test("invokeWithReasoningRetry filters summarized messages before invoking capability model", async () => {
+test("invokeWithReasoningRetry preserves provided messages before invoking capability model", async () => {
   let capturedMessages = null;
   const response = await invokeWithReasoningRetry({
     invoker: async ({ messages = [] } = {}) => {
@@ -104,11 +104,11 @@ test("invokeWithReasoningRetry filters summarized messages before invoking capab
   });
 
   assert.equal(response.content, "ok");
-  assert.deepEqual(capturedMessages.map((item) => item.content), ["keep"]);
+  assert.deepEqual(capturedMessages.map((item) => item.content), ["keep", "drop"]);
 });
 
 
-test("resolveCapabilityModelMessages clips capability context window to latest 20 after filtering", () => {
+test("resolveCapabilityModelMessages fallback preserves messages without filtering or clipping", () => {
   const result = resolveCapabilityModelMessages(
     {},
     {
@@ -124,11 +124,11 @@ test("resolveCapabilityModelMessages clips capability context window to latest 2
 
   assert.deepEqual(
     result.map((item) => item.content),
-    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
+    ["drop", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
   );
 });
 
-test("buildModelMessagesWithStructuredEnvelope clips agent context to latest 20", () => {
+test("buildModelMessagesWithStructuredEnvelope does not clip agent context in plugin structured envelope", () => {
   const output = buildModelMessagesWithStructuredEnvelope({
     locale: "zh-CN",
     agentMessages: Array.from({ length: 22 }, (_, index) => ({
@@ -142,7 +142,7 @@ test("buildModelMessagesWithStructuredEnvelope clips agent context to latest 20"
   const agentContext = JSON.parse(jsonText);
   assert.deepEqual(
     agentContext.map((item) => item.content),
-    ["m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
+    ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
   );
   assert.equal(output.at(-1).content, "task");
 });

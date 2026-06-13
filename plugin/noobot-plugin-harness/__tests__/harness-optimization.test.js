@@ -28,7 +28,6 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   const options = normalizeOptions({
     miniRunnerMaxTurns: "15",
     manifestDebounceMs: "0",
-    incrementalRecentMessageLimit: "11",
     jsonlFlushStrategy: { maxSize: "100", maxTime: "5000", onTerminal: false },
     fsmEnabled: false,
   });
@@ -39,7 +38,6 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(options.jsonlFlushStrategy.maxTime, 5000);
   assert.equal(options.jsonlFlushStrategy.onTerminal, false);
   assert.equal(options.jsonlFlushStrategy.onError, true);
-  assert.equal(options.incrementalRecentMessageLimit, 11);
   assert.equal(options.fsmEnabled, false);
   assert.equal(options.summaryOnToolBurstThreshold, false);
   assert.deepEqual(options.denyToolNames, [...DEFAULT_HARNESS_DENY_TOOL_NAMES]);
@@ -79,6 +77,13 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
   });
   const ctx = {
     agentContext: {
+      execution: {
+        controllers: {
+          runtime: {
+            runConfig: { scenario: "programming" },
+          },
+        },
+      },
       payload: {
         harness: {
           state: {
@@ -125,14 +130,14 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 2);
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 3);
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.guidance, null);
   assert.equal(ctx.agentContext.payload.harness.state.pending.summary, false);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(ctx.agentContext.payload.harness.state.pending.acceptanceSemanticValidation, null);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
   assert.equal(ctx.agentContext.payload.harness.state.flags.acceptanceSemanticValidationCapturePending, false);

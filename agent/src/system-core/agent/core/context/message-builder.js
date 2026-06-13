@@ -11,8 +11,7 @@ import {
 } from "@langchain/core/messages";
 import { tEngine } from "../i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
-import { resolveModelContextMessages } from "../../../session/utils/context-window-normalizer.js";
-import { BUILTIN_THRESHOLDS, mergeConfig } from "../../../config/index.js";
+import { resolveMainModelFinalMessages } from "../../../session/utils/context-window-normalizer.js";
 import {
   compactToolResultTextForModel,
   getTransferAttachmentMetas,
@@ -199,32 +198,14 @@ function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
         additional_kwargs: { frontendUserMessage: true },
       })
     : new HumanMessage(contentText);
-  const metaMessage = new HumanMessage(
-    buildUserMetaInfoContent(runtime, msg, fallbackMeta),
-  );
+  const metaMessage = new HumanMessage({
+    content: buildUserMetaInfoContent(runtime, msg, fallbackMeta),
+    additional_kwargs: {
+      noobotInternalMessageType: "user_meta",
+    },
+  });
   return [contentMessage, metaMessage];
 }
-
-function resolveMainModelWindowConfig(runtime = {}) {
-  const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
-  const harnessConfig =
-    effectiveConfig?.plugins?.harness && typeof effectiveConfig.plugins.harness === "object"
-      ? effectiveConfig.plugins.harness
-      : {};
-  const harnessEnabled = harnessConfig.enabled === true;
-  const harnessMode = String(harnessConfig.mode || "").trim().toLowerCase();
-  const harnessActive = harnessEnabled && harnessMode !== "off" && harnessMode !== "disabled";
-  const mainModelRecentWindow = BUILTIN_THRESHOLDS.mainModelRecentWindow;
-  const mainModelRecentLimit = BUILTIN_THRESHOLDS.mainModelRecentLimit;
-  const harnessRecentLimit = BUILTIN_THRESHOLDS.workflow.contextWindowRecentMessageLimit;
-  return {
-    mainModelRecentWindow,
-    mainModelRecentLimit,
-    harnessActive,
-    harnessRecentLimit,
-  };
-}
-
 
 function normalizeUnpairedTaskSummaryToolResults(historyMessages = []) {
   const source = Array.isArray(historyMessages) ? historyMessages : [];
@@ -259,6 +240,7 @@ function buildHistoryMessages({
   effectiveHistoryMessages = [],
   runtime = {},
   fallbackUserMeta = {},
+  includeUserMeta = true,
 } = {}) {
   const history = [];
   const knownHistoryToolCallIds = new Set();
@@ -320,7 +302,16 @@ function buildHistoryMessages({
       );
       continue;
     }
-    history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
+    if (includeUserMeta) {
+      history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
+    } else {
+      history.push(
+        new HumanMessage({
+          content: buildHumanMessageContent(msg, fallbackUserMeta?.attachmentMetas || []),
+          additional_kwargs: msg?.frontendUserMessage === true ? { frontendUserMessage: true } : {},
+        }),
+      );
+    }
   }
   return history;
 }
@@ -330,12 +321,6 @@ export function buildContextMessageBlocks(
   { currentUserMessage = "" } = {},
 ) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
-  const {
-    mainModelRecentWindow,
-    mainModelRecentLimit,
-    harnessActive,
-    harnessRecentLimit,
-  } = resolveMainModelWindowConfig(runtime);
   const systemRuntime = runtime?.systemRuntime || {};
   const runtimeParentSessionId = resolveParentSessionId({ runtime });
   const fallbackUserMeta = {
@@ -369,18 +354,34 @@ export function buildContextMessageBlocks(
     messages: historyMessages,
   });
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
-  const effectiveHistoryMessages = resolveModelContextMessages({
-    sourceMessages: historyMessages,
+  const rawIncrementalMessages = [];
+  const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
+  if (normalizedCurrentUserMessage) {
+    rawIncrementalMessages.push({
+      role: MESSAGE_ROLE.USER,
+      content: normalizedCurrentUserMessage,
+      frontendUserMessage: true,
+      userName: fallbackUserMeta.userName,
+      attachmentMetas: fallbackUserMeta.attachmentMetas,
+      sessionId: fallbackUserMeta.sessionId,
+      parentSessionId: fallbackUserMeta.parentSessionId,
+      dialogProcessId: fallbackUserMeta.dialogProcessId,
+      parentDialogProcessId: fallbackUserMeta.parentDialogProcessId,
+    });
+  }
+
+  const resolvedMainBlocks = resolveMainModelFinalMessages({
+    systemMessages,
+    historyMessages,
+    incrementalMessages: rawIncrementalMessages,
     currentDialogProcessId: resolvedDialogProcessId,
-    mode: "agent",
-    useRecentWindow: mainModelRecentWindow,
-    recentLimit: harnessActive ? harnessRecentLimit : mainModelRecentLimit,
   });
+
   const system = [];
-  for (const content of systemMessages) {
+  for (const content of resolvedMainBlocks.system) {
     system.push(
       new SystemMessage({
-        content,
+        content: typeof content === "string" ? content : String(content?.content || ""),
         additional_kwargs: {
           noobotInternalMessageType: "system_context",
         },
@@ -388,30 +389,26 @@ export function buildContextMessageBlocks(
     );
   }
   const history = buildHistoryMessages({
-    effectiveHistoryMessages,
+    effectiveHistoryMessages: resolvedMainBlocks.history,
     runtime,
     fallbackUserMeta,
+    includeUserMeta: false,
   });
   const incremental = [];
-  const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
-  if (normalizedCurrentUserMessage) {
-    incremental.push(
-      ...buildHumanMessagesForUser(
-        runtime,
-        {
-          role: MESSAGE_ROLE.USER,
-          content: normalizedCurrentUserMessage,
-          frontendUserMessage: true,
-          userName: fallbackUserMeta.userName,
-          attachmentMetas: fallbackUserMeta.attachmentMetas,
-          sessionId: fallbackUserMeta.sessionId,
-          parentSessionId: fallbackUserMeta.parentSessionId,
-          dialogProcessId: fallbackUserMeta.dialogProcessId,
-          parentDialogProcessId: fallbackUserMeta.parentDialogProcessId,
-        },
-        fallbackUserMeta,
-      ),
-    );
+  for (const msg of resolvedMainBlocks.incremental) {
+    const role = msg?.role || "";
+    if (role === MESSAGE_ROLE.USER || msg?.frontendUserMessage === true) {
+      incremental.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta));
+    } else {
+      incremental.push(
+        ...buildHistoryMessages({
+          effectiveHistoryMessages: [msg],
+          runtime,
+          fallbackUserMeta,
+          includeUserMeta: true,
+        }),
+      );
+    }
   }
   return {
     system,

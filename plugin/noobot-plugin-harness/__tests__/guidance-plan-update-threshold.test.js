@@ -49,8 +49,15 @@ function createAgentContext({
   };
 }
 
-function createPlanningAgentContext({ counters = {} } = {}) {
+function createPlanningAgentContext({ counters = {}, scenario = "full" } = {}) {
   return {
+    execution: {
+      controllers: {
+        runtime: {
+          runConfig: { scenario },
+        },
+      },
+    },
     payload: {
       messages: { system: [], history: [] },
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -398,6 +405,53 @@ test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets"
   assert.equal(state.counters.planRevisionAttempts, MAX_PLAN_UPDATE_ATTEMPTS);
   assert.equal(canAttemptPlanRevision({}, state, { increment: false, stage: "revision" }), false);
   assert.equal(canAttemptPlanRevision({}, state, { increment: false, stage: "refinement" }), true);
+});
+
+
+
+test("planning thresholds use full-mode defaults: summary 8 and plan-update 4", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({
+    scenario: "full",
+    counters: { llmTurns: 8, planUpdateTurns: 3 },
+  });
+  const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+
+  await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+
+  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
+  assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
+});
+
+test("planning thresholds use programming-mode overrides: summary 12 and plan-update 8", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const beforeProgrammingThresholds = createPlanningAgentContext({
+    scenario: "programming",
+    counters: { llmTurns: 8, planUpdateTurns: 3 },
+  });
+  await planningHandler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: beforeProgrammingThresholds },
+    meta: {},
+  });
+  assert.equal(beforeProgrammingThresholds.payload.harness.state.pending.summary, false);
+  assert.equal(beforeProgrammingThresholds.payload.harness.state.pending.planRevision, false);
+
+  const atProgrammingThresholds = createPlanningAgentContext({
+    scenario: "programming",
+    counters: { llmTurns: 12, planUpdateTurns: 7 },
+  });
+  await planningHandler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atProgrammingThresholds },
+    meta: {},
+  });
+  assert.equal(atProgrammingThresholds.payload.harness.state.pending.summary, true);
+  assert.equal(atProgrammingThresholds.payload.harness.state.pending.planRevision, true);
+  assert.equal(atProgrammingThresholds.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
 test("planning plan-update threshold keeps pressure while pending plan-update blocks scheduling", async () => {
