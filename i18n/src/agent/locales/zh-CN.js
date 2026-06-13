@@ -168,7 +168,7 @@ export default {
   "ws.unauthorized": "未授权",
   "ws.unknownError": "未知错误",
   "ws.userInteractionTimeout": "用户交互超时",
-  "agent.phaseSummaryPrompt": "在继续后续任务之前，请先对当前阶段的任务情况进行简要小结，总结完毕后再继续，以避免上下文累积过多导致信息混乱。编程模式下，小结必须包含文件路径、方法/函数名与行号（支持多段行号/范围，如 10-20,35,48-52）。",
+  "agent.phaseSummaryPrompt": "在继续后续任务之前，请先对当前阶段的任务情况进行详细小结，总结完毕后再继续，以避免上下文累积过多导致信息混乱。编程模式下，小结必须包含文件路径、方法/函数名与行号（支持多段行号/范围，如 10-20,35,48-52）。",
   "agent.abortError": "对话已被用户停止",
   "scenarios.full.name": "全能",
   "scenarios.full.description": "通用情景：不限制工具和上下文，按任务需要自主选择能力。",

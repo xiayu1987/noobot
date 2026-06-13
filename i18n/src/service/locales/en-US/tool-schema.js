@@ -356,12 +356,12 @@ export const TOOL_SCHEMA_BY_TOOL = {
   "task_summary": {
     "description": {
       "key": "tools.task_summary.description",
-      "text": "Submit a phase summary of the current task. Only call when the system requests a phase summary; summaryContent should briefly describe current goals, completed items, key results/files/status, pending items, and next steps; in programming mode, include file paths, method/function names, and line numbers (comma-separated multi-segment ranges such as 10-20,35,48-52 are accepted)."
+      "text": "Submit a phase summary of the current task. Only call when the system requests a phase summary; summaryContent should describe in detail current goals, completed items, key results/files/status, pending items, and next steps; in programming mode, include file paths, method/function names, and line numbers (comma-separated multi-segment ranges such as 10-20,35,48-52 are accepted)."
     },
     "params": {
       "summaryContent": {
         "key": "tools.task_summary.fieldSummaryContent",
-        "text": "Phase summary content. Briefly cover current task status, key results, remaining issues, and next steps; in programming mode, include file paths, method/function names, and line numbers (comma-separated multi-segment ranges such as 10-20,35,48-52 are accepted)."
+        "text": "Phase summary content. Cover in detail current task status, key results, remaining issues, and next steps; in programming mode, include file paths, method/function names, and line numbers (comma-separated multi-segment ranges such as 10-20,35,48-52 are accepted)."
       }
     },
     "texts": {
