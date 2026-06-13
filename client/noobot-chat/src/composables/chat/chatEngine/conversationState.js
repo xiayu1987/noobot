@@ -3,19 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
+import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
   resolveConnectorConnectedPayload,
-} from "./interactionPayload";
+} from "../interactionPayload";
 import {
   isBlankCompatibleSameId,
   isInFlightConversationState,
   isTerminalConversationState,
   normalizePendingInteractionPayloads,
   normalizeTrimmedString,
-} from "./chatEngineUtils";
+} from "./utils";
 
 export function createChatEngineConversationState({
   activeSession,

@@ -3,17 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../shared/constants/chatConstants";
-import { promoteSessionIdentityToBackendId } from "../infra/sessionIdentity";
-import { applyDoneMessagesPatch } from "./chatEngineMessagePatch";
+import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
+import { applyDoneMessagesPatch } from "./messagePatch";
 import {
   normalizeExecutionLogForRealtime,
   normalizeTrimmedString,
-} from "./chatEngineUtils";
+} from "./utils";
 import {
   normalizeInteractionRequestPayload,
   resolveConnectorStatusPayload,
-} from "./interactionPayload";
+} from "../interactionPayload";
 
 export function handleThinkingStreamEvent({
   data,

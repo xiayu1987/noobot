@@ -7,26 +7,26 @@ import { getCurrentScope, onScopeDispose } from "vue";
 import { StreamEventEnum } from "../../shared/constants/chatConstants";
 import { mergeAttachmentMetas } from "../infra/dialogProcessChain";
 import { useLocale } from "../../shared/i18n/useLocale";
-import { createChatEngineConversationState } from "./chatEngineConversationState";
-import { buildChatPayload } from "./chatEnginePayload";
+import { createChatEngineConversationState } from "./chatEngine/conversationState";
+import { buildChatPayload } from "./chatEngine/payload";
 import {
   applySendErrorState,
   applyStopRequestedState,
   applyStreamCompletedFallback,
   finalizeSendCleanup,
-} from "./chatEngineSendFinalize";
-import { prepareChatSend } from "./chatEngineSendPrepare";
-import { finalizeDoneSessionDetail } from "./chatEngineSessionFinalize";
+} from "./chatEngine/sendFinalize";
+import { prepareChatSend } from "./chatEngine/sendPrepare";
+import { finalizeDoneSessionDetail } from "./chatEngine/sessionFinalize";
 import {
   forceStopUiFinalize as finalizeForceStopUi,
   stopSending as requestStopSending,
-} from "./chatEngineStop";
+} from "./chatEngine/stop";
 import {
   handleBasicStreamEvent,
   handleDoneStreamEvent,
   handleInteractionRequestStreamEvent,
-} from "./chatEngineStreamHandlers";
-import { normalizeTrimmedString } from "./chatEngineUtils";
+} from "./chatEngine/streamHandlers";
+import { normalizeTrimmedString } from "./chatEngine/utils";
 
 export function useChatEngine({
   userId,
