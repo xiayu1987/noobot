@@ -16,6 +16,8 @@ const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
 const MAX_PLAN_UPDATE_ATTEMPTS = WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts;
 const PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
+const FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.full.planning.planUpdate.triggerTurnsThreshold;
 const PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.programming.planning.planUpdate.triggerTurnsThreshold;
 const FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
@@ -413,11 +415,11 @@ test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets"
 
 
 
-test("planning thresholds use full-mode defaults: summary 8 and plan-update 4", async () => {
+test("planning thresholds use full-mode defaults from modeThresholds", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
     scenario: "full",
-    counters: { llmTurns: 8, planUpdateTurns: 3 },
+    counters: { llmTurns: 8, planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1 },
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
 
@@ -517,7 +519,7 @@ test("phase acceptance threshold uses programming-mode override", async () => {
 test("planning plan-update threshold keeps pressure while pending plan-update blocks scheduling", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
-    counters: { planUpdateTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1 },
+    counters: { planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1 },
   });
   agentContext.payload.harness.state.pending.planRevision = true;
   agentContext.payload.harness.state.pending.planRevisionContext = {
@@ -528,7 +530,7 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx: blockedCtx, meta: {} });
   assert.equal(
     agentContext.payload.harness.state.counters.planUpdateTurns,
-    PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+    FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
   );
 
   agentContext.payload.harness.state.pending.planRevision = false;
@@ -543,7 +545,7 @@ test("unified attempts no longer block revision scheduling in planning handler",
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
     counters: {
-      planUpdateTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
+      planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
       planUpdateAttempts: MAX_PLAN_UPDATE_ATTEMPTS,
     },
   });
@@ -923,7 +925,7 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
   const agentContext = createPlanningAgentContext({
     counters: {
       llmTurns: 0,
-      planUpdateTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
+      planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
       phaseAcceptanceTurns: FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
