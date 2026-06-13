@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { normalizeReplayCacheKey } from "./replayCache";
+import { _trimStr } from "./utils";
+
+export async function applyReconnectEventReplay({
+  event,
+  data,
+  replayCache,
+  isCurrentActiveSession,
+  consumeReplayCacheForSession,
+  applyReconnectMessagesToActiveSession,
+  applyChannelState,
+} = {}) {
+  if (_trimStr(event) === StreamEventEnum.CHANNEL_STATE) {
+    applyChannelState(data || {});
+    return;
+  }
+
+  const dialogProcessId = _trimStr(data?.dialogProcessId);
+  const sessionId = _trimStr(data?.sessionId);
+  if (sessionId && isCurrentActiveSession(sessionId)) {
+    await consumeReplayCacheForSession(sessionId);
+    await applyReconnectMessagesToActiveSession([{ event, data }], dialogProcessId);
+    return;
+  }
+
+  if (sessionId) {
+    const replayKey = normalizeReplayCacheKey(dialogProcessId, sessionId);
+    if (!replayCache[sessionId]) replayCache[sessionId] = {};
+    if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
+    replayCache[sessionId][replayKey].push({ event, data });
+  }
+}
