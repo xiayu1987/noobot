@@ -58,7 +58,6 @@ const USER_OVERRIDE_DENY_PATHS = new Set([
   "plugins.workflow.maxAutoTransitions",
   "plugins.workflow.maxParallelNodeAgents",
   "plugins.workflow.miniRunnerMaxTurns",
-  "plugins.workflow.contextWindowRecentMessageLimit",
 ]);
 
 function stripDeniedPaths(rootKey = "", value) {

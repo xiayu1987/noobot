@@ -81,7 +81,7 @@ test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", 
   assert.equal(prepared.plugins.harness.capabilityModelInvoker, explicitInvoker);
 });
 
-test("SessionExecutionEngine harness plugin does not force-inject denyToolNames by default", () => {
+test("SessionExecutionEngine harness plugin applies default denyToolNames policy", () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
       plugins: {
@@ -101,7 +101,10 @@ test("SessionExecutionEngine harness plugin does not force-inject denyToolNames 
   });
 
   assert.equal(prepared?.plugins?.harness?.enabled, true);
-  assert.equal(prepared?.toolPolicy, undefined);
+  assert.deepEqual(prepared?.toolPolicy?.denyToolNames, [
+    "plan_multi_task_collaboration",
+    "task_summary",
+  ]);
 });
 
 test("SessionExecutionEngine harness plugin can inject denyToolNames from harness options", () => {
@@ -223,7 +226,7 @@ test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning
   assert.equal(prepared.plugins.harness.timeoutMs, 180_000);
 });
 
-test("SessionExecutionEngine injects workflow resolveModelMessages with recent window", async () => {
+test("SessionExecutionEngine injects workflow resolveModelMessages without harness window config", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
   const prepared = engine._prepareWorkflowRunConfig({
@@ -233,7 +236,6 @@ test("SessionExecutionEngine injects workflow resolveModelMessages with recent w
         workflow: {
           enabled: true,
           mode: "on",
-          contextWindowRecentMessageLimit: 2,
         },
       },
     },
@@ -251,12 +253,14 @@ test("SessionExecutionEngine injects workflow resolveModelMessages with recent w
   });
 
   assert.deepEqual(resolved, [
+    { role: "system", content: "policy", summarized: false },
     { role: "user", content: "old", summarized: false },
+    { role: "assistant", content: "a1", summarized: false },
     { role: "user", content: "current", summarized: false, frontendUserMessage: true },
   ]);
 });
 
-test("SessionExecutionEngine injects plugin resolveModelMessages with recent window", async () => {
+test("SessionExecutionEngine injects plugin resolveModelMessages without harness window config", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
   const prepared = engine._prepareHarnessRunConfig({
@@ -266,7 +270,6 @@ test("SessionExecutionEngine injects plugin resolveModelMessages with recent win
         harness: {
           enabled: true,
           mode: "on",
-          contextWindowRecentMessageLimit: 3,
         },
       },
     },
@@ -287,13 +290,15 @@ test("SessionExecutionEngine injects plugin resolveModelMessages with recent win
 
   assert.equal(Array.isArray(resolved), true);
   assert.deepEqual(resolved, [
+    { role: "system", content: "policy", summarized: false },
     { role: "user", content: "u1", summarized: false },
+    { role: "assistant", content: "a2", summarized: false },
     { role: "assistant", content: "a3", summarized: false },
     { role: "assistant", content: "a4", summarized: false },
   ]);
 });
 
-test("SessionExecutionEngine injects plugin resolveMessageBlock for history/incremental unified filtering", async () => {
+test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow filtering", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const prepared = engine._prepareHarnessRunConfig({
     userId: "u1",
@@ -302,8 +307,6 @@ test("SessionExecutionEngine injects plugin resolveMessageBlock for history/incr
         harness: {
           enabled: true,
           mode: "on",
-          contextWindowRecentMessageLimit: 2,
-          incrementalRecentMessageLimit: 3,
         },
       },
     },
@@ -348,9 +351,9 @@ test("SessionExecutionEngine injects plugin resolveMessageBlock for history/incr
     ],
     ctx: { dialogProcessId: "dlg1" },
   });
-  assert.deepEqual(historyResolved.map((item) => item.content), ["h2", "h3"]);
-  assert.deepEqual(incrementalResolved.map((item) => item.content), ["a2", "a3", "a4"]);
-  assert.deepEqual(conversationResolved.map((item) => item.content), ["u1", "u2"]);
+  assert.deepEqual(historyResolved.map((item) => item.content), ["h1", "h2", "h3"]);
+  assert.deepEqual(incrementalResolved.map((item) => item.content), ["a1", "a2", "a3", "a4"]);
+  assert.deepEqual(conversationResolved.map((item) => item.content), ["h1", "h2", "u1", "u2"]);
   assert.deepEqual(systemResolved.map((item) => item.content), ["policy"]);
 });
 
@@ -379,12 +382,12 @@ test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with 
     { role: "tool", content: '{"toolName":"task_summary","ok":true}' },
   ];
   const marked = await summarizer({ messages });
-  assert.equal(marked, 4);
+  assert.equal(marked, 3);
   assert.equal(messages[0].summarized, true);
   assert.equal(messages[1].summarized, undefined);
   assert.equal(messages[2].summarized, true);
   assert.equal(messages[3].summarized, true);
-  assert.equal(messages[4].summarized, true);
+  assert.equal(messages[4].summarized, undefined);
 });
 
 test("SessionExecutionEngine markMessagesSummarized supports scoped marking", async () => {
@@ -583,8 +586,6 @@ test("SessionExecutionEngine resolveMessageBlock prefers current incremental dia
         harness: {
           enabled: true,
           mode: "on",
-          contextWindowRecentMessageLimit: 20,
-          incrementalRecentMessageLimit: 20,
         },
       },
     },

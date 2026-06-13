@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  extractRawTextContent,
-  filterAndClipHarnessCapabilityMessages,
-} from "../message/utils.js";
+import { extractRawTextContent } from "../message/utils.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 
 function resolveCompatibleRole(message = {}) {
@@ -150,7 +147,7 @@ export function buildCapabilityModelMessages({
   const normalizedPostTaskMessages = (Array.isArray(postTaskMessages) ? postTaskMessages : [])
     .map((item) => String(item || "").trim())
     .filter(Boolean);
-  const flattenedAgentMessages = filterAndClipHarnessCapabilityMessages(agentMessages)
+  const flattenedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
     .map((item = {}) => rewriteMessageForCapabilityContext(item, locale))
     .filter((item) => item && String(item.content || "").trim());
   const constraintMessages = (Array.isArray(constraints) ? constraints : [])

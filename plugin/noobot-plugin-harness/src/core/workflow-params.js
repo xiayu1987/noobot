@@ -108,18 +108,32 @@ export const WORKFLOW_PARAMS = deepFreeze({
       },
     },
   },
-  contextWindow: {
-    // Harness-side model context clipping window size (recent messages).
-    // This replaces agent session.recentMessageLimit for harness flow.
-    recentMessageLimit: 20,
-    // Incremental block clipping window size (recent messages).
-    incrementalRecentMessageLimit: 20,
-    // Non-main-chain capability/separate model agent context clipping window size.
-    capabilityModelRecentMessageLimit: 20,
+  modeThresholds: {
+    full: {
+      planning: {
+        summary: {
+          turnsThreshold: 8,
+        },
+        planUpdate: {
+          triggerTurnsThreshold: 4,
+        },
+      },
+    },
+    programming: {
+      planning: {
+        summary: {
+          turnsThreshold: 12,
+        },
+        planUpdate: {
+          triggerTurnsThreshold: 8,
+        },
+      },
+    },
   },
   planning: {
     summary: {
-      turnsThreshold: 6,
+      // Fallback defaults. Mode-specific planning thresholds live in top-level modeThresholds.<mode>.planning.
+      turnsThreshold: 8,
       messageCharsThreshold: 150000,
       overflowPolicy: {
         enablePruneAfterSummary: true,
@@ -130,7 +144,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     planUpdate: {
       revisionMaxAttempts: 10,
       refinementMaxAttempts: 10,
-      triggerTurnsThreshold: 3,
+      triggerTurnsThreshold: 4,
     },
     capture: {
       maxAttempts: 2,

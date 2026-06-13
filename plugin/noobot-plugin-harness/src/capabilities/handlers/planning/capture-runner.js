@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import {
-  resolveDialogProcessId,
-  resolveMessageDialogProcessId,
-} from "../shared/runtime/dialog-process-id.js";
 import { processPlanningResult } from "./result-pipeline.js";
 import {
   buildPlanningMessagePlan,
@@ -108,71 +104,31 @@ function normalizePlanningTextContent(content = "") {
     .trim();
 }
 
-function isInjectedMessage(item = {}) {
-  if (!item || typeof item !== "object") return false;
-  if (item?.injectedMessage === true) return true;
-  if (String(item?.injectedBy || "").trim()) return true;
-  const content = String(item?.content || "").trim();
-  if (!content) return false;
-  const relayPrefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
-    .map((locale) =>
-      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, { purpose: "" }))
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-  return relayPrefixes.some((prefix) => content.startsWith(prefix));
-}
 
 function collectAgentStyleHistoryMessages(ctx = {}) {
-  const currentDialogProcessId = resolveDialogProcessId({
-    ctx,
-    messages: ctx?.agentContext?.payload?.messages?.history,
-  });
   const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
     ? ctx.agentContext.payload.messages.history
     : [];
-  if (!history.length) return Array.isArray(ctx?.messages) ? ctx.messages : [];
+  const source = history.length
+    ? history
+    : Array.isArray(ctx?.messages)
+      ? ctx.messages
+      : [];
 
-  const knownToolCallIds = new Set();
-  for (const msg of history) {
-    if (msg?.summarized === true) continue;
-    if (String(msg?.role || "").trim().toLowerCase() !== "assistant") continue;
-    const calls = Array.isArray(msg?.tool_calls) ? msg.tool_calls : [];
-    for (const call of calls) {
-      const id = String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim();
-      if (id) knownToolCallIds.add(id);
-    }
-  }
-
-  return history
-    .filter((msg) => msg?.summarized !== true)
-    .filter((msg) => {
-      if (!isInjectedMessage(msg)) return true;
-      if (!currentDialogProcessId) return false;
-      return (
-        resolveMessageDialogProcessId(msg) === currentDialogProcessId
-      );
-    })
-    .filter((msg) => {
-      const role = String(msg?.role || "").trim().toLowerCase();
-      if (!role) return false;
-      if (role !== "tool") return true;
-      const toolCallId = String(msg?.tool_call_id || "").trim();
-      return !toolCallId || knownToolCallIds.has(toolCallId);
-    })
-    .slice(-WORKFLOW_PARAMS.contextWindow.capabilityModelRecentMessageLimit)
+  return source
     .map((msg = {}) => {
-      const role = String(msg?.role || "").trim().toLowerCase();
+      const role = String(msg?.role || msg?.lc_kwargs?.role || "").trim().toLowerCase();
       const assistantRaw =
         typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
           ? msg.rawModelContent
-          : msg?.content;
+          : msg?.content ?? msg?.lc_kwargs?.content;
       const content =
         role === "assistant"
           ? normalizePlanningTextContent(assistantRaw)
-          : normalizePlanningTextContent(msg?.content);
+          : normalizePlanningTextContent(msg?.content ?? msg?.lc_kwargs?.content);
       return { role, content };
     })
-    .filter((msg) => msg.content);
+    .filter((msg) => msg.role && msg.content);
 }
 
 function summarizePlanningMessages(messages = [], maxItems = PLANNING_SUMMARY_MAX_ITEMS) {

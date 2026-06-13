@@ -26,6 +26,7 @@ import {
   resolveWorkflowMode,
   runWorkflowLifecycle,
 } from "../shared/workflow/pattern.js";
+import { resolveProgrammingModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
 function isMessageSummarized(message = {}) {
@@ -46,8 +47,7 @@ const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
 const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
-const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
-const LLM_SUMMARY_TOOL_CALLS_THRESHOLD = LLM_SUMMARY_THRESHOLD;
+const DEFAULT_LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
 const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
   ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.planning.summary.overflowPolicy.enablePruneAfterSummary,
@@ -56,9 +56,33 @@ const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
   FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
     WORKFLOW_PARAMS.planning.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
 });
-const PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
+const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
 const PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
+
+function normalizePositiveInteger(value = 0, fallback = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.floor(num);
+}
+
+function resolvePlanningTurnThresholds(ctx = {}) {
+  const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
+  const programmingMode = resolveProgrammingModeFromContext(ctx) === true;
+  const scopedMode = programmingMode ? modeThresholds.programming : modeThresholds.full;
+  const scoped = scopedMode?.planning || {};
+  return {
+    mode: programmingMode ? "programming" : "full",
+    summaryTurnsThreshold: normalizePositiveInteger(
+      scoped?.summary?.turnsThreshold,
+      DEFAULT_LLM_SUMMARY_THRESHOLD,
+    ),
+    planUpdateTriggerTurnsThreshold: normalizePositiveInteger(
+      scoped?.planUpdate?.triggerTurnsThreshold,
+      DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+    ),
+  };
+}
 const PLANNING_REASON_LABEL_KEY = Object.freeze({
   [PLANNING_DECISION.reason.idle]: "planningReasonIdle",
   [PLANNING_DECISION.reason.summaryThresholdTurns]: "planningReasonSummaryThresholdTurns",
@@ -139,7 +163,7 @@ function isSummaryOnToolBurstThresholdEnabled(meta = {}) {
 
 function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   if (!isSummaryOnToolBurstThresholdEnabled(meta)) return false;
-  const threshold = Number(LLM_SUMMARY_TOOL_CALLS_THRESHOLD);
+  const threshold = Number(resolvePlanningTurnThresholds(ctx).summaryTurnsThreshold);
   if (!Number.isFinite(threshold) || threshold <= 0) return false;
   const calls = Array.isArray(ctx?.calls) ? ctx.calls : [];
   if (!Array.isArray(calls) || calls.length < threshold) return false;
@@ -260,10 +284,13 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         holder.state.counters.phaseAcceptanceTurns =
           Number(holder.state.counters.phaseAcceptanceTurns || 0) + 1;
         let currentChars = resolveUnsummarizedMessageChars(ctx?.messages);
-        const reachedTurnsSummary = holder.state.counters.llmTurns > LLM_SUMMARY_THRESHOLD;
+        const planningThresholds = resolvePlanningTurnThresholds(ctx);
+        const summaryTurnsThreshold = planningThresholds.summaryTurnsThreshold;
+        const planUpdateTriggerTurnsThreshold = planningThresholds.planUpdateTriggerTurnsThreshold;
+        const reachedTurnsSummary = holder.state.counters.llmTurns > summaryTurnsThreshold;
         let reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
         const reachedPlanUpdateTurns =
-          holder.state.counters.planUpdateTurns >= PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD;
+          holder.state.counters.planUpdateTurns >= planUpdateTriggerTurnsThreshold;
         const reachedPhaseAcceptanceTurns =
           holder.state.counters.phaseAcceptanceTurns >= PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD;
 
@@ -324,7 +351,8 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               domain: CAPABILITY_DOMAIN.PLANNING,
               event: PLANNING_EVENTS.revisionScheduledByTurnThreshold,
               detail: {
-                triggerTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+                triggerTurns: planUpdateTriggerTurnsThreshold,
+                thresholdMode: planningThresholds.mode,
                 summaryPending: holder.state.pending?.summary === true,
               },
             });
@@ -337,7 +365,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
             holder.state.counters.planUpdateTurns = 0;
           } else if (blockedByPendingPlanUpdate) {
             // Keep threshold pressure while a prior plan-update is still pending.
-            holder.state.counters.planUpdateTurns = PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD;
+            holder.state.counters.planUpdateTurns = planUpdateTriggerTurnsThreshold;
             blockedActions.push(PLANNING_DECISION.label.planUpdateRevision);
             blockedReasons.push("plan_update_blocked_by_pending_plan_update");
           } else {

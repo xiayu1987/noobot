@@ -3,12 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
-
-export const HARNESS_CAPABILITY_MODEL_CONTEXT_MESSAGE_LIMIT =
-  WORKFLOW_PARAMS.contextWindow.capabilityModelRecentMessageLimit;
 
 function isHarnessInjectedMessage(message = {}) {
   return (
@@ -130,30 +126,6 @@ export function isMessageSummarized(messageItem = {}) {
   return false;
 }
 
-export function filterSummarizedHarnessMessages(messages = []) {
-  return (Array.isArray(messages) ? messages : []).filter(
-    (messageItem) => !isMessageSummarized(messageItem),
-  );
-}
-
-export function clipHarnessMessageWindow(
-  messages = [],
-  limit = HARNESS_CAPABILITY_MODEL_CONTEXT_MESSAGE_LIMIT,
-) {
-  const source = Array.isArray(messages) ? messages : [];
-  const resolvedLimit = Number(limit);
-  if (!Number.isFinite(resolvedLimit) || resolvedLimit <= 0) return source;
-  const keepCount = Math.floor(resolvedLimit);
-  if (source.length <= keepCount) return source;
-  return source.slice(-keepCount);
-}
-
-export function filterAndClipHarnessCapabilityMessages(
-  messages = [],
-  limit = HARNESS_CAPABILITY_MODEL_CONTEXT_MESSAGE_LIMIT,
-) {
-  return clipHarnessMessageWindow(filterSummarizedHarnessMessages(messages), limit);
-}
 
 function markMessageSummarized(messageItem = null) {
   if (!messageItem || typeof messageItem !== "object") return false;
@@ -259,7 +231,7 @@ export function buildModelMessagesWithStructuredEnvelope({
   constraints = [],
   task = "",
 } = {}) {
-  const normalizedAgentMessages = filterAndClipHarnessCapabilityMessages(agentMessages)
+  const normalizedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
     .map((item = {}) => normalizePromptMessageItem(item))
     .filter(Boolean);
   const normalizedConstraints = (Array.isArray(constraints) ? constraints : [])

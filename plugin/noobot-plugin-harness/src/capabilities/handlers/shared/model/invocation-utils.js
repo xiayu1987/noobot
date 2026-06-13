@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
-import { filterSummarizedHarnessMessages } from "../message/utils.js";
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 
@@ -103,8 +102,7 @@ export async function invokeWithReasoningRetry({
   if (typeof invoker !== "function") return null;
   if (isHarnessAgentTurnEnded(ctx)) return null;
   const payload = invokePayload && typeof invokePayload === "object" ? { ...invokePayload } : {};
-  const baseMessages = filterSummarizedHarnessMessages(payload?.messages);
-  let runtimeMessages = [...baseMessages];
+  let runtimeMessages = Array.isArray(payload?.messages) ? [...payload.messages] : [];
   let response = null;
 
   for (let attempt = 0; attempt <= Math.max(0, Number(maxReasoningRetries) || 0); attempt += 1) {
