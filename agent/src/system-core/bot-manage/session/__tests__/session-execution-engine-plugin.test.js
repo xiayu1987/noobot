@@ -36,7 +36,7 @@ test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plug
     workspaceService: createWorkspaceService(basePath),
   });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -64,7 +64,7 @@ test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", 
   const explicitInvoker = async () => ({ output: "ok" });
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -90,7 +90,7 @@ test("SessionExecutionEngine harness plugin applies default denyToolNames policy
     },
   });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       selectedPlugins: ["harness"],
@@ -116,7 +116,7 @@ test("SessionExecutionEngine harness plugin can inject denyToolNames from harnes
     },
   });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       selectedPlugins: ["harness"],
@@ -145,7 +145,7 @@ test("SessionExecutionEngine deep-merges plugin step model config", async () => 
     },
   });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -170,7 +170,7 @@ test("SessionExecutionEngine deep-merges plugin step model config", async () => 
 test("SessionExecutionEngine defaults plugin miniRunnerMaxTurns to 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -189,7 +189,7 @@ test("SessionExecutionEngine defaults plugin miniRunnerMaxTurns to 5", async () 
 test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -209,7 +209,7 @@ test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
 test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -229,7 +229,7 @@ test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning
 test("SessionExecutionEngine injects workflow resolveModelMessages without harness window config", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareWorkflowRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareWorkflowRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -263,7 +263,7 @@ test("SessionExecutionEngine injects workflow resolveModelMessages without harne
 test("SessionExecutionEngine injects plugin resolveModelMessages without harness window config", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -300,7 +300,7 @@ test("SessionExecutionEngine injects plugin resolveModelMessages without harness
 
 test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow filtering", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -359,7 +359,7 @@ test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow f
 
 test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with agent summary policy", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -392,7 +392,7 @@ test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with 
 
 test("SessionExecutionEngine markMessagesSummarized supports scoped marking", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -431,7 +431,7 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
   const engine = new SessionExecutionEngine({
     globalConfig: {},
   });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -473,7 +473,7 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
 
 test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer tool content", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -525,7 +525,7 @@ test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer too
 
 test("SessionExecutionEngine resolveModelMessages filters injected messages from non-current dialog", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -579,7 +579,7 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
 
 test("SessionExecutionEngine resolveMessageBlock prefers current incremental dialog over stale ctx dialog", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine._prepareHarnessRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -658,7 +658,7 @@ test("SessionExecutionEngine workflow plugin injects unified denyToolNames polic
       },
     },
   });
-  const prepared = engine._prepareWorkflowRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareWorkflowRunConfig({
     userId: "u1",
     runConfig: {
       selectedPlugins: ["workflow"],
@@ -690,7 +690,7 @@ test("SessionExecutionEngine workflow plugin merges existing denyToolNames", () 
       },
     },
   });
-  const prepared = engine._prepareWorkflowRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareWorkflowRunConfig({
     userId: "u1",
     runConfig: {
       selectedPlugins: ["workflow"],
@@ -724,7 +724,7 @@ test("SessionExecutionEngine workflow plugin denyToolNames comes from workflow p
       },
     },
   });
-  const prepared = engine._prepareWorkflowRunConfig({
+  const prepared = engine.runConfigExtensionPreparer.prepareWorkflowRunConfig({
     userId: "u1",
     runConfig: {
       selectedPlugins: ["workflow"],

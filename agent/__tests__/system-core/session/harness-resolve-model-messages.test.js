@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/session/session-execution-engine.js";
 
-test("_createHarnessResolveModelMessages reads dialogProcessId from execution context", () => {
+test("_createExtensionResolveModelMessages reads dialogProcessId from execution context", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createHarnessResolveModelMessages({
+  const resolver = engine._createExtensionResolveModelMessages({
     harnessOptions: { contextWindowRecentMessageLimit: 50 },
   });
   const resolved = resolver({
@@ -40,9 +40,9 @@ test("_createHarnessResolveModelMessages reads dialogProcessId from execution co
   );
 });
 
-test("_createHarnessResolveModelMessages falls back to latest message dialogProcessId", () => {
+test("_createExtensionResolveModelMessages falls back to latest message dialogProcessId", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createHarnessResolveModelMessages({
+  const resolver = engine._createExtensionResolveModelMessages({
     harnessOptions: { contextWindowRecentMessageLimit: 50 },
   });
   const resolved = resolver({
@@ -71,9 +71,9 @@ test("_createHarnessResolveModelMessages falls back to latest message dialogProc
   );
 });
 
-test("_createHarnessResolveModelMessages no longer clips agent context to harness context window limit", () => {
+test("_createExtensionResolveModelMessages no longer clips agent context to harness context window limit", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createHarnessResolveModelMessages({
+  const resolver = engine._createExtensionResolveModelMessages({
     harnessOptions: { contextWindowRecentMessageLimit: 2 },
   });
   const resolved = resolver({
@@ -98,9 +98,9 @@ test("_createHarnessResolveModelMessages no longer clips agent context to harnes
 });
 
 
-test("_createHarnessResolveModelMessages uses main-flow blocks when available", () => {
+test("_createExtensionResolveModelMessages uses main-flow blocks when available", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createHarnessResolveModelMessages({
+  const resolver = engine._createExtensionResolveModelMessages({
     harnessOptions: { contextWindowRecentMessageLimit: 2 },
   });
   const resolved = resolver({
@@ -129,9 +129,9 @@ test("_createHarnessResolveModelMessages uses main-flow blocks when available", 
   );
 });
 
-test("_createHarnessResolveModelMessages does not mutate source messages or messageBlocks when unsummarized", () => {
+test("_createExtensionResolveModelMessages does not mutate source messages or messageBlocks when unsummarized", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createHarnessResolveModelMessages({ harnessOptions: {} });
+  const resolver = engine._createExtensionResolveModelMessages({ harnessOptions: {} });
   const ctx = {
     messages: [
       { role: "system", content: "ctx-sys" },
