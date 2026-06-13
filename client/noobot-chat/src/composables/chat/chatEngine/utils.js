@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../shared/constants/chatConstants";
+import { RoleEnum } from "../../../shared/constants/chatConstants";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();

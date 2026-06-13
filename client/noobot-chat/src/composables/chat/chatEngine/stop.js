@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../shared/constants/chatConstants";
-import { normalizeTrimmedString } from "./chatEngineUtils";
+import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { normalizeTrimmedString } from "./utils";
 
 export function forceStopUiFinalize({
   sending,

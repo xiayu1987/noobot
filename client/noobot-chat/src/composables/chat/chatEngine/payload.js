@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeSelectedConnectors } from "../../shared/models/sessionModel";
-import { normalizeTrimmedString } from "./chatEngineUtils";
+import { normalizeSelectedConnectors } from "../../../shared/models/sessionModel";
+import { normalizeTrimmedString } from "./utils";
 
 export function buildChatPayload({
   userId,

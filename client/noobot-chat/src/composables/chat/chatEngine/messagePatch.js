@@ -9,7 +9,7 @@ import {
   normalizeTrimmedString,
   patchAssistantFromWorkflowMessage,
   pickAssistantMessagesForCurrentTurn,
-} from "./chatEngineUtils";
+} from "./utils";
 
 export function applyDoneMessagesPatch({
   data = {},
