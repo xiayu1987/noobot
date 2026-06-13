@@ -258,17 +258,23 @@ export function useChatSession({
   });
 
   async function handleReconnect() {
+    const pendingReconnectReplays = [];
+    const trackReconnectReplay = (replayPromise) => {
+      pendingReconnectReplays.push(Promise.resolve(replayPromise));
+    };
     return chatWebSocketClient.reconnect({
       currentSessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
       onReconnectData: (reconnectPayload) => {
         if (reconnectPayload?.sessions) {
-          reconnectReplay.applyReconnectData(reconnectPayload);
+          trackReconnectReplay(reconnectReplay.applyReconnectData(reconnectPayload));
         }
         if (reconnectPayload?.event && reconnectPayload?.data) {
-          reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data);
+          trackReconnectReplay(
+            reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data),
+          );
         }
       },
-    }).catch((error) => {
+    }).then(() => Promise.all(pendingReconnectReplays)).catch((error) => {
       console.warn("Reconnect failed:", error);
       notify({ type: "warning", message: translate("infra.reconnectFailed") });
     });

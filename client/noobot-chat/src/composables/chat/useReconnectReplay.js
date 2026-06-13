@@ -5,28 +5,11 @@
  */
 import {
   findSessionByAnyId as findSessionByAnyIdInList,
-  isCurrentActiveSessionId,
-  promoteSessionIdentityToBackendId,
 } from "../infra/sessionIdentity";
-import { getCurrentScope, onScopeDispose } from "vue";
 import {
-  collectReconnectDeltaText,
   findLatestPendingAssistantAfterLastUser,
-  findRecoverableReconnectSessionId,
-  findReconnectDoneEnvelopeWithMessages,
-  findReusableMessageObject,
-  getReconnectEnvelopeSequence,
-  getReconnectMaxSequence,
-  isDialogProcessRecoverable,
-  isPendingInteractionReplay,
-  isReconnectTerminalBatch,
-  isReconnectTerminalEvent,
-  mergeCurrentUserMessagesIntoFoldedMessages,
-  patchMessageObjectPreservingUiState,
-  resolveDialogProcessIdFromReplay,
-  splitReconnectMessagesByDialogProcessId,
 } from "../infra/reconnectReplayModel";
-import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
+import { RoleEnum } from "../../shared/constants/chatConstants";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
@@ -34,39 +17,49 @@ import {
   resolveConnectorStatusPayload,
 } from "./interactionPayload";
 import { mergeAttachmentMetas } from "../infra/dialogProcessChain";
-
-function _trimStr(x) {
-  return String(x || "").trim();
-}
-
-function _ensureArray(x) {
-  return Array.isArray(x) ? x : [];
-}
-
-function _isAssistantRole(msg) {
-  return _trimStr(msg?.role) === RoleEnum.ASSISTANT;
-}
-
-function _matchesDialogProcessId(msg, dpId) {
-  return _trimStr(msg?.dialogProcessId) === _trimStr(dpId);
-}
-
-function normalizeExecutionLogForRealtime(logItem = {}) {
-  const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
-  const rawEvent = _trimStr(logItem?.event);
-  const text = _trimStr(data?.text);
-  return {
-    ...data,
-    event: String(data?.event || rawEvent || "system").trim() || "system",
-    type: String(data?.type || logItem?.type || "system").trim() || "system",
-    category: String(data?.category || logItem?.category || "system").trim() || "system",
-    dialogProcessId: String(
-      data?.dialogProcessId || logItem?.dialogProcessId || "",
-    ).trim(),
-    ts: _trimStr(data?.ts || logItem?.ts) || new Date().toISOString(),
-    text: text || (rawEvent ? `[${rawEvent}]` : ""),
-  };
-}
+import {
+  createReconnectInteractionEnvelopeCallbacks,
+  tryAutoResolveReconnectInteraction,
+} from "./reconnectReplay/interactionHandlers";
+import {
+  applyReconnectChannelState,
+  emitSyntheticReconnectErrorConversationState,
+  scheduleMissingInteractionPayloadFailure as scheduleMissingInteractionPayloadFailureWithContext,
+} from "./reconnectReplay/channelStateReplay";
+import { applyReconnectDataReplay } from "./reconnectReplay/reconnectDataReplay";
+import { applyReconnectEventReplay } from "./reconnectReplay/reconnectEventReplay";
+import { scheduleCacheExpiredSessionRefresh as scheduleCacheExpiredSessionRefreshWithContext } from "./reconnectReplay/cacheExpiredRefresh";
+import {
+  _ensureArray,
+  _isAssistantRole,
+  _matchesDialogProcessId,
+} from "./reconnectReplay/utils";
+import { createReconnectReplayContext } from "./reconnectReplay/context";
+import {
+  ensureReconnectSessionActive as ensureReconnectSessionActiveWithContext,
+  isCurrentActiveSession as isCurrentActiveSessionWithContext,
+} from "./reconnectReplay/sessionActivation";
+import {
+  applyReconnectMessagesToActiveSessionReplay,
+  consumeReconnectReplayCacheForSession,
+  markReconnectSequenceApplied as markReconnectSequenceAppliedInConsumer,
+} from "./reconnectReplay/replayCacheConsumer";
+import {
+  applyAssistantFailureState as applyAssistantFailureStateWithContext,
+  applyFoldedMessagesForDialogProcess as applyFoldedMessagesForDialogProcessWithContext,
+  applyFoldedMessagesToActiveSession as applyFoldedMessagesToActiveSessionWithContext,
+  buildReconnectReplayEnvelopeCallbacks,
+  createFinalAssistantFromReconnectReplay as createFinalAssistantFromReconnectReplayWithContext,
+  findAssistantMessageByDialogProcessId as findAssistantMessageByDialogProcessIdWithContext,
+  hasAssistantMessageWithContent as hasAssistantMessageWithContentWithContext,
+  mergeAssistantAttachmentMetas as mergeAssistantAttachmentMetasWithContext,
+  resolveReconnectTargetAssistantMessage as resolveReconnectTargetAssistantMessageWithContext,
+} from "./reconnectReplay/messageReplay";
+import {
+  applyDoneMessagesFromReconnect as applyDoneMessagesFromReconnectWithContext,
+} from "./reconnectReplay/doneReplay";
+import { createReconnectReplayPublicApi } from "./reconnectReplay/publicApi";
+import { registerReconnectReplayLifecycleCleanup } from "./reconnectReplay/lifecycle";
 
 export function useReconnectReplay({
   sessions,
@@ -95,60 +88,55 @@ export function useReconnectReplay({
   onConversationState,
   notify = () => {},
 } = {}) {
-  const replayCache = {};
-  const appliedReconnectSeqByDialogProcessId = {};
-  const terminalDialogProcessIdSet = new Set();
-  const missingInteractionPayloadTimers = new Map();
-  let cacheExpiredRefreshTimer = null;
-  let replayHydrationPromise = null;
+  const reconnectReplayContext = createReconnectReplayContext();
+  const { replayCache, appliedReconnectSeqByDialogProcessId, terminalDialogProcessIdSet, missingInteractionPayloadTimers } =
+    reconnectReplayContext;
+  let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
 
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
-    if (!targetAssistantMessage) return;
-    targetAssistantMessage.pending = false;
-    targetAssistantMessage.statusLabel = translate("chat.failed");
-    targetAssistantMessage.error = _trimStr(errorMessage);
-    if (!_trimStr(targetAssistantMessage.content)) {
-      targetAssistantMessage.content = `> ${translate("chat.occurredError", {
-        error: targetAssistantMessage.error || translate("chat.unknownError"),
-      })}`;
-    }
+    return applyAssistantFailureStateWithContext({ targetAssistantMessage, errorMessage, translate });
   }
 
   function mergeAssistantAttachmentMetas(targetAssistantMessage, attachmentMetas = []) {
-    if (!targetAssistantMessage || !Array.isArray(attachmentMetas) || !attachmentMetas.length) {
-      return;
-    }
-    const normalizedAttachmentMetas =
-      makeViewMessage({ attachmentMetas })?.attachmentMetas || attachmentMetas;
-    targetAssistantMessage.attachmentMetas = mergeAttachmentMetas(
-      _ensureArray(targetAssistantMessage.attachmentMetas),
-      normalizedAttachmentMetas,
-    );
+    return mergeAssistantAttachmentMetasWithContext({
+      targetAssistantMessage,
+      attachmentMetas,
+      makeViewMessage,
+      mergeAttachmentMetas,
+    });
   }
 
   function tryAutoResolveInteraction(rawRequest = {}) {
-    const request = normalizeInteractionRequestPayload(rawRequest || {});
-    if (!isAutoResolvedInteraction(request)) return false;
-    if (_trimStr(request?.interactionType) === "connector_connected") {
-      const { connectorType, connectorName, status } = resolveConnectorConnectedPayload(request);
-      if (
-        connectorTypeSet?.has?.(connectorType) &&
-        connectorName &&
-        typeof upsertConnectedConnectorInPanelState === "function"
-      ) {
-        upsertConnectedConnectorInPanelState(activeSession.value, {
-          connectorType,
-          connectorName,
-          status,
-        });
-        if (typeof refreshSessionConnectorsAsync === "function") {
-          refreshSessionConnectorsAsync(activeSession.value?.id || "");
-        }
-      }
-    }
-    clearPendingInteraction(request);
-    interactionSubmitting.value = false;
-    return true;
+    return tryAutoResolveReconnectInteraction({
+      rawRequest,
+      activeSession,
+      interactionSubmitting,
+      connectorTypeSet,
+      normalizeInteractionRequestPayload,
+      isAutoResolvedInteraction,
+      resolveConnectorConnectedPayload,
+      upsertConnectedConnectorInPanelState,
+      refreshSessionConnectorsAsync,
+      clearPendingInteraction,
+    });
+  }
+
+  function createReconnectReplayEnvelopeCallbacks() {
+    return createReconnectInteractionEnvelopeCallbacks({
+      buildReconnectReplayEnvelopeCallbacks,
+      missingInteractionPayloadTimers,
+      normalizeInteractionRequestPayload,
+      tryAutoResolveInteraction,
+      isInteractionRequestHandled,
+      setPendingInteractionRequest,
+      activeSession,
+      connectorTypeSet,
+      resolveConnectorStatusPayload,
+      upsertConnectedConnectorInPanelState,
+      refreshSessionConnectorsAsync,
+      onAttachmentMetas: mergeAssistantAttachmentMetas,
+      onDoneMessages: applyDoneMessagesFromReconnect,
+    });
   }
 
   function emitSyntheticErrorConversationState({
@@ -156,46 +144,12 @@ export function useReconnectReplay({
     dialogProcessId = "",
     sourceEvent = "",
   } = {}) {
-    if (typeof onConversationState !== "function") return;
-    onConversationState({
-      source: "reconnect",
-      state: "error",
-      sessionId: _trimStr(sessionId),
-      dialogProcessId: _trimStr(dialogProcessId),
-      sourceEvent: _trimStr(sourceEvent),
-      seq: 0,
-      applied: true,
+    return emitSyntheticReconnectErrorConversationState({
+      onConversationState,
+      sessionId,
+      dialogProcessId,
+      sourceEvent,
     });
-  }
-
-  function getInteractionPayloadWaitKey({ sessionId = "", dialogProcessId = "" } = {}) {
-    return `${_trimStr(sessionId)}::${_trimStr(dialogProcessId)}`;
-  }
-
-  function clearMissingInteractionPayloadTimer({
-    sessionId = "",
-    dialogProcessId = "",
-  } = {}) {
-    const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
-    const timer = missingInteractionPayloadTimers.get(key);
-    if (!timer) return;
-    clearTimeout(timer);
-    missingInteractionPayloadTimers.delete(key);
-  }
-
-  function hasPendingInteractionForDialog(dialogProcessId = "") {
-    const pendingRequest =
-      pendingInteractionRequest?.value && typeof pendingInteractionRequest.value === "object"
-        ? pendingInteractionRequest.value
-        : null;
-    if (!pendingRequest) return false;
-    const pendingDialogProcessId = _trimStr(pendingRequest?.dialogProcessId);
-    const normalizedDialogProcessId = _trimStr(dialogProcessId);
-    return (
-      !normalizedDialogProcessId ||
-      !pendingDialogProcessId ||
-      pendingDialogProcessId === normalizedDialogProcessId
-    );
   }
 
   function scheduleMissingInteractionPayloadFailure({
@@ -203,48 +157,26 @@ export function useReconnectReplay({
     dialogProcessId = "",
     targetAssistantMessage = null,
   } = {}) {
-    if (hasPendingInteractionForDialog(dialogProcessId)) return;
-    const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
-    if (missingInteractionPayloadTimers.has(key)) return;
-    const timer = setTimeout(() => {
-      missingInteractionPayloadTimers.delete(key);
-      if (hasPendingInteractionForDialog(dialogProcessId)) return;
-      sending.value = false;
-      interactionSubmitting.value = false;
-      clearPendingInteraction();
-      const missingInteractionError = translate("chat.interactionPayloadMissing");
-      const fallbackAssistantMessage =
-        targetAssistantMessage ||
-        findLatestPendingAssistantAfterLastUser(activeSession.value?.messages || []);
-      applyAssistantFailureState(fallbackAssistantMessage, missingInteractionError);
-      emitSyntheticErrorConversationState({
-        sessionId,
-        dialogProcessId,
-        sourceEvent: "interaction_payload_missing",
-      });
-      notify({ type: "error", message: missingInteractionError });
-    }, 1200);
-    missingInteractionPayloadTimers.set(key, timer);
-  }
-
-  function normalizePendingInteractionPayloads(stateData = {}) {
-    const pendingInteractions = Array.isArray(stateData?.pendingInteractions)
-      ? stateData.pendingInteractions
-      : [];
-    if (pendingInteractions.length) {
-      return pendingInteractions.filter(
-        (item) => item && typeof item === "object" && !Array.isArray(item),
-      );
-    }
-    return stateData?.pendingInteraction &&
-      typeof stateData.pendingInteraction === "object" &&
-      !Array.isArray(stateData.pendingInteraction)
-      ? [stateData.pendingInteraction]
-      : [];
+    return scheduleMissingInteractionPayloadFailureWithContext({
+      pendingInteractionRequest,
+      missingInteractionPayloadTimers,
+      sessionId,
+      dialogProcessId,
+      targetAssistantMessage,
+      sending,
+      interactionSubmitting,
+      clearPendingInteraction,
+      translate,
+      findFallbackAssistantMessage: () =>
+        findLatestPendingAssistantAfterLastUser(activeSession.value?.messages || []),
+      applyAssistantFailureState,
+      emitSyntheticErrorConversationState,
+      notify,
+    });
   }
 
   function isCurrentActiveSession(sessionId = "") {
-    return isCurrentActiveSessionId({
+    return isCurrentActiveSessionWithContext({
       sessionId,
       activeSession: activeSession.value,
       activeSessionId: activeSessionId.value,
@@ -252,289 +184,63 @@ export function useReconnectReplay({
   }
 
   async function ensureReconnectSessionActive(sessionId = "") {
-    const normalizedSessionId = _trimStr(sessionId);
-    if (!normalizedSessionId || isCurrentActiveSession(normalizedSessionId)) return true;
-    const targetSession = findSessionByAnyIdInList(sessions.value, normalizedSessionId);
-    if (!targetSession) {
-      await chatList.fetchSessions(normalizedSessionId, {
-        silent: true,
-        preserveCurrentMessages: true,
-      });
-    }
-    const resolvedTargetSession = findSessionByAnyIdInList(
-      sessions.value,
-      normalizedSessionId,
-    );
-    if (!resolvedTargetSession) return false;
-    await chatList.selectSession(resolvedTargetSession.id, {
-      force: true,
-      silent: true,
-      preserveCurrentMessages: true,
+    return ensureReconnectSessionActiveWithContext({
+      sessionId,
+      sessions,
+      activeSession,
+      activeSessionId,
+      chatList,
     });
-    return isCurrentActiveSession(normalizedSessionId);
   }
 
   async function applyReconnectData(reconnectData) {
-    const reconnectSessions = Array.isArray(reconnectData?.sessions)
-      ? reconnectData.sessions
-      : [];
-    const recoverableSessionId = findRecoverableReconnectSessionId(reconnectSessions);
-    if (recoverableSessionId) {
-      await ensureReconnectSessionActive(recoverableSessionId);
-      sending.value = true;
-      const recoverableSessionEntry = reconnectSessions.find(
-        (sessionEntry) =>
-          _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
-      );
-      const recoverableDialogProcesses = Array.isArray(
-        recoverableSessionEntry?.dialogProcesses,
-      )
-        ? recoverableSessionEntry.dialogProcesses
-        : [];
-      const hasReconnectMessages = recoverableDialogProcesses.some(
-        (dialogProcess) =>
-          Array.isArray(dialogProcess?.messages) && dialogProcess.messages.length,
-      );
-      if (!hasReconnectMessages && isCurrentActiveSession(recoverableSessionId)) {
-        resolveReconnectTargetAssistantMessage("", { allowCreate: true });
-      }
-    }
-
-    for (const sessionEntry of reconnectSessions) {
-      const sessionId = _trimStr(sessionEntry?.sessionId);
-      if (!sessionId) continue;
-      const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
-        ? sessionEntry.dialogProcesses
-        : [];
-      for (const dp of dialogProcesses) {
-        const dpMessages = Array.isArray(dp?.messages) ? dp.messages : [];
-        if (!dpMessages.length) continue;
-        for (const replayGroup of splitReconnectMessagesByDialogProcessId(
-          dpMessages,
-          dp?.dialogProcessId || "",
-        )) {
-          const messages = replayGroup.messages;
-          const dpId = resolveDialogProcessIdFromReplay(
-            messages,
-            replayGroup.dialogProcessId || dp?.dialogProcessId || "",
-          );
-          if (!messages.length) continue;
-          if (!isCurrentActiveSession(sessionId)) {
-            const replayKey = dpId || `__unknown_${Date.now()}_${Math.random()}`;
-            if (!replayCache[sessionId]) replayCache[sessionId] = {};
-            replayCache[sessionId][replayKey] = messages;
-          } else {
-            await applyReconnectMessagesToActiveSession(messages, dpId, {
-              allowCreate: isDialogProcessRecoverable(sessionEntry, messages),
-            });
-          }
-        }
-      }
-    }
-
-    reconnectSessions.forEach((sessionEntry) => {
-      const stateEntries = Array.isArray(sessionEntry?.conversationStates)
-        ? sessionEntry.conversationStates
-        : [];
-      stateEntries.forEach((stateEntry) => {
-        applyChannelState(stateEntry);
-      });
+    return applyReconnectDataReplay({
+      reconnectData,
+      ensureReconnectSessionActive,
+      sending,
+      isCurrentActiveSession,
+      resolveReconnectTargetAssistantMessage,
+      replayCache,
+      applyReconnectMessagesToActiveSession,
+      applyChannelState,
+      scheduleCacheExpiredSessionRefresh,
     });
-
-    if (reconnectData?.cacheExpired) {
-      scheduleCacheExpiredSessionRefresh();
-    }
-  }
-
-  function isInFlightConversationState(state = "") {
-    return ["sending", "interaction_pending", "stopping", "reconnecting"].includes(
-      _trimStr(state),
-    );
-  }
-
-  function isTerminalConversationState(state = "") {
-    return ["stopped", "completed", "error", "no_conversation", "expired"].includes(
-      _trimStr(state),
-    );
   }
 
   function applyChannelState(stateData = {}) {
-    const sessionId = _trimStr(stateData?.sessionId);
-    const forActiveSession = !sessionId || isCurrentActiveSession(sessionId);
-    if (typeof onConversationState === "function") {
-      onConversationState({
-        source: "reconnect",
-        state: _trimStr(stateData?.state),
-        sessionId,
-        dialogProcessId: _trimStr(stateData?.dialogProcessId),
-        sourceEvent: _trimStr(stateData?.sourceEvent),
-        seq: Number(stateData?.seq || 0),
-        applied: forActiveSession,
-      });
-    }
-    if (!forActiveSession) return;
-    const state = _trimStr(stateData?.state);
-    const dialogProcessId = _trimStr(stateData?.dialogProcessId);
-    const targetAssistantMessage = findAssistantMessageByDialogProcessId(dialogProcessId);
-    if (isInFlightConversationState(state)) {
-      sending.value = true;
-      if (
-        state === "sending" &&
-        _trimStr(stateData?.sourceEvent).toLowerCase() === "interaction_response" &&
-        typeof clearPendingInteractionIfObsolete === "function"
-      ) {
-        const responseRequestId = String(
-          stateData?.requestId ||
-            stateData?.interactionRequestId ||
-            stateData?.pendingInteraction?.requestId ||
-            "",
-        ).trim();
-        if (responseRequestId) {
-          clearPendingInteractionIfObsolete({ requestId: responseRequestId });
-        }
-      }
-      if (state === "interaction_pending") {
-        interactionSubmitting.value = false;
-        const pendingInteractionPayloads = normalizePendingInteractionPayloads(stateData);
-        if (pendingInteractionPayloads.length) {
-          clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
-          for (const pendingInteractionPayload of pendingInteractionPayloads) {
-            const interactionRequest = normalizeInteractionRequestPayload({
-              ...pendingInteractionPayload,
-              interactionType: _trimStr(pendingInteractionPayload?.interactionType),
-            });
-            if (tryAutoResolveInteraction(interactionRequest)) {
-              continue;
-            }
-            if (!isInteractionRequestHandled(interactionRequest)) {
-              setPendingInteractionRequest(interactionRequest);
-            }
-          }
-        } else {
-          // Keep compatibility with channels that only emit
-          // `interaction_request` (without embedding pendingInteraction
-          // into channel_state).
-          const existingPendingRequest =
-            pendingInteractionRequest.value &&
-            typeof pendingInteractionRequest.value === "object"
-              ? pendingInteractionRequest.value
-              : null;
-          if (existingPendingRequest) {
-            const existingDialogProcessId = String(
-              existingPendingRequest?.dialogProcessId || "",
-            ).trim();
-            if (
-              !dialogProcessId ||
-              !existingDialogProcessId ||
-              existingDialogProcessId === dialogProcessId
-            ) {
-              return;
-            }
-          }
-          scheduleMissingInteractionPayloadFailure({
-            sessionId,
-            dialogProcessId,
-            targetAssistantMessage,
-          });
-          return;
-        }
-      }
-      if (targetAssistantMessage) {
-        targetAssistantMessage.pending = true;
-        if (state === "stopping") {
-          targetAssistantMessage.statusLabel = translate("chat.stopping");
-        } else if (state === "reconnecting") {
-          targetAssistantMessage.statusLabel = translate("chat.reconnecting");
-        } else if (state === "sending") {
-          targetAssistantMessage.statusLabel = "";
-        }
-      }
-      return;
-    }
-    if (isTerminalConversationState(state)) {
-      if (dialogProcessId) {
-        terminalDialogProcessIdSet.add(dialogProcessId);
-      }
-      chatWebSocketClient.clearStopRequested();
-      interactionSubmitting.value = false;
-      if (state === "expired") {
-        scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
-      }
-      sending.value = false;
-      if (
-        state === "completed" ||
-        state === "stopped" ||
-        state === "error" ||
-        state === "no_conversation" ||
-        state === "expired"
-      ) {
-        if (typeof clearPendingInteractionIfObsolete === "function") {
-          clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
-        }
-      }
-      clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
-      if (state === "no_conversation" || state === "expired") {
-        clearPendingInteraction();
-        interactionSubmitting.value = false;
-        if (targetAssistantMessage) {
-          targetAssistantMessage.pending = false;
-        }
-        return;
-      }
-      if (targetAssistantMessage) {
-        targetAssistantMessage.pending = false;
-        if (state === "completed") {
-          targetAssistantMessage.statusLabel = translate("chat.generated");
-        } else if (state === "stopped") {
-          targetAssistantMessage.statusLabel = translate("chat.stopped");
-        } else if (state === "error") {
-          targetAssistantMessage.statusLabel = translate("chat.failed");
-        }
-      }
-    }
+    return applyReconnectChannelState({
+      stateData,
+      onConversationState,
+      isCurrentActiveSession,
+      findAssistantMessageByDialogProcessId,
+      sending,
+      interactionSubmitting,
+      clearPendingInteractionIfObsolete,
+      pendingInteractionRequest,
+      normalizeInteractionRequestPayload,
+      tryAutoResolveInteraction,
+      isInteractionRequestHandled,
+      setPendingInteractionRequest,
+      scheduleMissingInteractionPayloadFailure,
+      missingInteractionPayloadTimers,
+      terminalDialogProcessIdSet,
+      chatWebSocketClient,
+      scheduleCacheExpiredSessionRefresh,
+      clearPendingInteraction,
+      translate,
+    });
   }
 
   function resolveReconnectTargetAssistantMessage(
     dialogProcessId = "",
     { allowCreate = true } = {},
   ) {
-    if (!activeSession.value) return null;
-    const normalizedDpId = _trimStr(dialogProcessId);
-    const messageList = Array.isArray(activeSession.value.messages)
-      ? activeSession.value.messages
-      : [];
-    const matchedAssistantMessage = messageList.find(
-      (messageItem) =>
-        normalizedDpId &&
-        _isAssistantRole(messageItem) &&
-        _matchesDialogProcessId(messageItem, normalizedDpId),
-    );
-    if (matchedAssistantMessage) {
-      return matchedAssistantMessage.pending ? matchedAssistantMessage : null;
-    }
-
-    const latestPendingAssistant = findLatestPendingAssistantAfterLastUser(messageList);
-    if (latestPendingAssistant) {
-      const latestPendingDpId = _trimStr(latestPendingAssistant?.dialogProcessId);
-      // Never write a replay for dialogProcess A into a pending assistant that
-      // already belongs to dialogProcess B. That is the main cause of replay
-      // touching the previous turn.
-      if (normalizedDpId && latestPendingDpId && latestPendingDpId !== normalizedDpId) {
-        return null;
-      }
-      if (normalizedDpId && !latestPendingDpId) {
-        latestPendingAssistant.dialogProcessId = normalizedDpId;
-      }
-      return latestPendingAssistant;
-    }
-    if (!allowCreate) return null;
-    const appendedMessage = appendMessage(RoleEnum.ASSISTANT, "");
-    appendedMessage.pending = true;
-    appendedMessage.statusLabel = "";
-    if (normalizedDpId) {
-      appendedMessage.dialogProcessId = normalizedDpId;
-    }
-    return appendedMessage;
+    return resolveReconnectTargetAssistantMessageWithContext({
+      activeSession,
+      appendMessage,
+      dialogProcessId,
+      allowCreate,
+    });
   }
 
   function scheduleCacheExpiredSessionRefresh({
@@ -542,288 +248,86 @@ export function useReconnectReplay({
     dialogProcessId = "",
     targetAssistantMessage = null,
   } = {}) {
-    if (cacheExpiredRefreshTimer) clearTimeout(cacheExpiredRefreshTimer);
-    cacheExpiredRefreshTimer = setTimeout(() => {
-      cacheExpiredRefreshTimer = null;
-      Object.keys(replayCache).forEach((sessionKey) => {
-        delete replayCache[sessionKey];
-      });
-      function _handleExpiredRefreshError({ sessionId = "", dialogProcessId = "", targetAssistantMessage = null } = {}) {
-        sending.value = false;
-        interactionSubmitting.value = false;
-        clearPendingInteraction();
-        const expiredErrorMessage = translate("chat.expiredRefreshFailed");
-        const fallbackAssistantMessage =
-          targetAssistantMessage ||
-          findLatestPendingAssistantAfterLastUser(activeSession.value?.messages || []);
-        applyAssistantFailureState(fallbackAssistantMessage, expiredErrorMessage);
-        emitSyntheticErrorConversationState({
-          sessionId: _trimStr(sessionId || activeSession.value?.id),
-          dialogProcessId,
-          sourceEvent: "expired_refresh_failed",
-        });
-        notify({ type: "error", message: expiredErrorMessage });
-      }
-
-      Promise.resolve(
-        chatList.fetchSessions(_trimStr(activeSessionId.value), {
-          silent: true,
-          preserveCurrentMessages: true,
-        }),
-      )
-        .then((ok) => {
-          if (ok !== false) return;
-          _handleExpiredRefreshError({ sessionId, dialogProcessId, targetAssistantMessage });
-        })
-        .catch(() => {
-          _handleExpiredRefreshError({ sessionId, dialogProcessId, targetAssistantMessage });
-        });
-    }, 1200);
-  }
-
-  function normalizeReplayCacheKey(dialogProcessId = "", sessionId = "") {
-    const normalizedDpId = _trimStr(dialogProcessId);
-    if (normalizedDpId) return normalizedDpId;
-    const normalizedSessionId = _trimStr(sessionId);
-    return normalizedSessionId ? `__session__${normalizedSessionId}` : "__session__unknown";
+    return scheduleCacheExpiredSessionRefreshWithContext({
+      getCacheExpiredRefreshTimer: () => cacheExpiredRefreshTimer,
+      setCacheExpiredRefreshTimer: (timer) => {
+        cacheExpiredRefreshTimer = timer;
+        reconnectReplayContext.cacheExpiredRefreshTimer = timer;
+      },
+      replayCache,
+      sending,
+      interactionSubmitting,
+      clearPendingInteraction,
+      translate,
+      activeSession,
+      activeSessionId,
+      chatList,
+      applyAssistantFailureState,
+      emitSyntheticErrorConversationState,
+      notify,
+      sessionId,
+      dialogProcessId,
+      targetAssistantMessage,
+    });
   }
 
   async function consumeReplayCacheForSession(sessionId = "") {
-    const normalizedSessionId = _trimStr(sessionId);
-    if (!normalizedSessionId) return;
-    const sessionReplayCache = replayCache[normalizedSessionId];
-    if (!sessionReplayCache) return;
-    const replayGroups = Object.entries(sessionReplayCache);
-    delete replayCache[normalizedSessionId];
-    for (const [replayKey, replayMessages] of replayGroups) {
-      const dialogProcessId = String(replayKey || "").startsWith("__session__")
-        ? ""
-        : String(replayKey || "");
-      await applyReconnectMessagesToActiveSession(replayMessages, dialogProcessId);
-    }
+    return consumeReconnectReplayCacheForSession({
+      replayCache,
+      sessionId,
+      applyReconnectMessagesToActiveSession,
+    });
   }
 
   function markReconnectSequenceApplied(dialogProcessId = "", sequence = 0) {
-    const normalizedDpId = _trimStr(dialogProcessId);
-    const normalizedSequence = Number(sequence || 0);
-    if (!normalizedDpId || normalizedSequence <= 0) return;
-    const lastAppliedSeq = Number(appliedReconnectSeqByDialogProcessId[normalizedDpId] || 0);
-    if (normalizedSequence > lastAppliedSeq) {
-      appliedReconnectSeqByDialogProcessId[normalizedDpId] = normalizedSequence;
-    }
+    markReconnectSequenceAppliedInConsumer(
+      appliedReconnectSeqByDialogProcessId,
+      dialogProcessId,
+      sequence,
+    );
   }
 
   function findAssistantMessageByDialogProcessId(dialogProcessId = "") {
-    const normalizedDpId = _trimStr(dialogProcessId);
-    if (!normalizedDpId || !activeSession.value) return null;
-    return (activeSession.value.messages || []).find(
-      (messageItem) =>
-        _isAssistantRole(messageItem) &&
-        _matchesDialogProcessId(messageItem, normalizedDpId),
-    ) || null;
+    return findAssistantMessageByDialogProcessIdWithContext(activeSession, dialogProcessId);
   }
 
   function hasAssistantMessageWithContent(content = "") {
-    const normalizedContent = _trimStr(content);
-    if (!normalizedContent || !activeSession.value) return false;
-    return (activeSession.value.messages || []).some(
-      (messageItem) =>
-        _isAssistantRole(messageItem) &&
-        _trimStr(messageItem?.content) === normalizedContent,
-    );
+    return hasAssistantMessageWithContentWithContext(activeSession, content);
   }
 
   function applyFoldedMessagesToActiveSession(foldedMessages = []) {
-    if (!activeSession.value) return [];
-    const existingMessages = Array.isArray(activeSession.value.messages)
-      ? activeSession.value.messages
-      : [];
-    const nextMessages = mergeCurrentUserMessagesIntoFoldedMessages({
-      foldedMessages,
-      existingMessages,
-    }).map((nextMessage) => {
-      const reusableMessage = findReusableMessageObject(nextMessage, existingMessages);
-      return reusableMessage
-        ? patchMessageObjectPreservingUiState(reusableMessage, nextMessage)
-        : nextMessage;
-    });
-    if (activeSession.value.messages !== existingMessages) {
-      activeSession.value.messages = existingMessages;
-    }
-    existingMessages.splice(0, existingMessages.length, ...nextMessages);
-    return existingMessages;
+    return applyFoldedMessagesToActiveSessionWithContext(activeSession, foldedMessages);
   }
 
   function applyFoldedMessagesForDialogProcess(foldedMessages = [], dialogProcessId = "") {
-    if (!activeSession.value) return [];
-    const normalizedDpId = _trimStr(dialogProcessId);
-    if (!normalizedDpId) return applyFoldedMessagesToActiveSession(foldedMessages);
-    const existingMessages = Array.isArray(activeSession.value.messages)
-      ? activeSession.value.messages
-      : [];
-    const assistantMessagesForDialogProcess = (_ensureArray(foldedMessages))
-      .filter(
-        (messageItem) =>
-          _isAssistantRole(messageItem) &&
-          _matchesDialogProcessId(messageItem, normalizedDpId),
-      );
-    if (!assistantMessagesForDialogProcess.length) return existingMessages;
-
-    for (const nextMessage of assistantMessagesForDialogProcess) {
-      let reusableMessage = findReusableMessageObject(nextMessage, existingMessages);
-      if (!reusableMessage) {
-        reusableMessage = findLatestPendingAssistantAfterLastUser(existingMessages);
-        if (reusableMessage && _trimStr(reusableMessage?.dialogProcessId)) {
-          reusableMessage = null;
-        }
-      }
-      if (reusableMessage) {
-        reusableMessage.dialogProcessId = normalizedDpId;
-        patchMessageObjectPreservingUiState(reusableMessage, nextMessage);
-        continue;
-      }
-      existingMessages.push(nextMessage);
-    }
-    return existingMessages;
-  }
-
-  function hasReconnectInFlightEvent(messages = []) {
-    return (_ensureArray(messages)).some((envelope) => {
-      const eventName = _trimStr(envelope?.event);
-      return (
-        eventName === StreamEventEnum.DELTA ||
-        eventName === StreamEventEnum.THINKING ||
-        eventName === StreamEventEnum.INTERACTION_REQUEST
-      );
-    });
+    return applyFoldedMessagesForDialogProcessWithContext(
+      activeSession,
+      foldedMessages,
+      dialogProcessId,
+    );
   }
 
   function createFinalAssistantFromReconnectReplay(messages = [], dialogProcessId = "") {
-    if (!activeSession.value) return null;
-    const normalizedDpId = _trimStr(dialogProcessId);
-    const replayText =
-      collectReconnectDeltaText(messages) ||
-      String(
-        [...(_ensureArray(messages))]
-          .reverse()
-          .find((envelope) => _trimStr(envelope?.event) === StreamEventEnum.DONE)
-          ?.data?.answer || "",
-      );
-    if (!_trimStr(replayText)) return null;
-
-    const existingAssistantMessage = findAssistantMessageByDialogProcessId(normalizedDpId);
-    const targetAssistantMessage = existingAssistantMessage ||
-      (hasAssistantMessageWithContent(replayText)
-        ? null
-        : appendMessage(RoleEnum.ASSISTANT, replayText));
-    if (!targetAssistantMessage) return null;
-
-    const currentContent = String(targetAssistantMessage?.content || "");
-    if (!currentContent.trim()) {
-      targetAssistantMessage.content = replayText;
-    } else if (!currentContent.includes(replayText) && !replayText.includes(currentContent)) {
-      targetAssistantMessage.content = `${currentContent}${replayText}`;
-    }
-
-    if (normalizedDpId) targetAssistantMessage.dialogProcessId = normalizedDpId;
-    const errorEnvelope = [...(_ensureArray(messages))]
-      .reverse()
-      .find((envelope) => _trimStr(envelope?.event) === StreamEventEnum.ERROR);
-    if (errorEnvelope) {
-      targetAssistantMessage.error = String(errorEnvelope?.data?.error || "");
-    }
-    return targetAssistantMessage;
-  }
-
-  function applyDoneMessagesFromReconnect(eventData = {}) {
-    if (!activeSession.value) return false;
-    const sessionMessages = Array.isArray(eventData?.messages) ? eventData.messages : [];
-    if (!sessionMessages.length) return false;
-    const returnedSessionId = _trimStr(eventData?.sessionId);
-    if (returnedSessionId) {
-      const promotionResult = promoteSessionIdentityToBackendId({
-        sessionItem: activeSession.value,
-        backendSessionId: returnedSessionId,
-        activeSessionId: activeSessionId.value,
-      });
-      activeSessionId.value = promotionResult.nextActiveSessionId;
-    }
-    activeSession.value.loaded = true;
-    activeSession.value.rawMessages = sessionMessages.map((messageItem) =>
-      makeViewMessage(messageItem),
-    );
-    const foldedSessionMessages = foldMessagesForView(sessionMessages);
-    const doneDialogProcessId = _trimStr(eventData?.dialogProcessId);
-    if (
-      doneDialogProcessId &&
-      Array.isArray(activeSession.value.messages) &&
-      activeSession.value.messages.length
-    ) {
-      // DONE snapshots may contain the whole conversation. During reconnect we
-      // should only finalize the dialog process that emitted DONE; patching the
-      // entire folded history can mutate/remount the previous assistant message.
-      applyFoldedMessagesForDialogProcess(foldedSessionMessages, doneDialogProcessId);
-    } else {
-      applyFoldedMessagesToActiveSession(foldedSessionMessages);
-    }
-    applyCompletedToolLogsToMessages(
-      activeSession.value.messages,
-      activeSession.value.sessionDocs || [],
-    );
-    activeSession.value.messageCount = activeSession.value.messages.length;
-    activeSession.value.lastMessage = activeSession.value.messages.length
-      ? activeSession.value.messages[activeSession.value.messages.length - 1]
-      : null;
-    activeSession.value.title = sessionTitleFromMessages(
-      activeSession.value.messages,
-      activeSession.value.title || returnedSessionId.slice(0, 8),
-    );
-    activeSession.value.updatedAt = new Date().toISOString();
-    return true;
-  }
-
-  function shouldHydrateSessionBeforeReplay(messages = [], dialogProcessId = "", allowCreate = true) {
-    const normalizedDpId = _trimStr(dialogProcessId);
-    if (!allowCreate || !normalizedDpId || !activeSession.value) return false;
-    if (findAssistantMessageByDialogProcessId(normalizedDpId)) return false;
-    const messageList = Array.isArray(activeSession.value.messages)
-      ? activeSession.value.messages
-      : [];
-    if (findLatestPendingAssistantAfterLastUser(messageList)) return false;
-    const lastMessage = messageList.length ? messageList[messageList.length - 1] : null;
-    if (_trimStr(lastMessage?.role) === RoleEnum.USER) return false;
-    return (_ensureArray(messages)).some((envelope) => {
-      const eventName = _trimStr(envelope?.event);
-      return eventName === StreamEventEnum.DELTA || eventName === StreamEventEnum.THINKING;
+    return createFinalAssistantFromReconnectReplayWithContext({
+      activeSession,
+      appendMessage,
+      messages,
+      dialogProcessId,
     });
   }
 
-  async function renderActiveSessionBeforeReplay() {
-    if (!activeSession.value) return false;
-    if (replayHydrationPromise) return replayHydrationPromise;
-    const backendSessionId = String(
-      activeSession.value?.backendSessionId || activeSessionId.value || "",
-    ).trim();
-    if (
-      !backendSessionId ||
-      typeof chatList?.fetchSessionDetail !== "function" ||
-      typeof chatList?.applySessionDetail !== "function"
-    ) {
-      return false;
-    }
-    replayHydrationPromise = (async () => {
-      try {
-        const detail = await chatList.fetchSessionDetail(backendSessionId);
-        chatList.applySessionDetail(detail, { preserveCurrentMessages: false });
-        return true;
-      } catch (error) {
-        console.warn("Reconnect replay pre-render session failed:", error);
-        return false;
-      } finally {
-        replayHydrationPromise = null;
-      }
-    })();
-    return replayHydrationPromise;
+  function applyDoneMessagesFromReconnect(eventData = {}) {
+    return applyDoneMessagesFromReconnectWithContext({
+      activeSession,
+      activeSessionId,
+      eventData,
+      makeViewMessage,
+      foldMessagesForView,
+      applyCompletedToolLogsToMessages,
+      sessionTitleFromMessages,
+      applyFoldedMessagesForDialogProcess: applyFoldedMessagesForDialogProcessWithContext,
+      applyFoldedMessagesToActiveSession: applyFoldedMessagesToActiveSessionWithContext,
+    });
   }
 
   async function applyReconnectMessagesToActiveSession(
@@ -831,210 +335,57 @@ export function useReconnectReplay({
     dialogProcessId,
     { allowCreate = true } = {},
   ) {
-    function _mergeRealtimeLogs(targetMessage, newLogs, { maxCount = 10 } = {}) {
-      if (!targetMessage || !newLogs?.length) return;
-      targetMessage.realtimeLogs = [
-        ...(targetMessage.realtimeLogs || []),
-        ...newLogs,
-      ].slice(-maxCount);
-    }
-
-    if (!activeSession.value) return;
-    const normalizedDpId = _trimStr(dialogProcessId);
-    const lastAppliedSeq = Number(appliedReconnectSeqByDialogProcessId[normalizedDpId] || 0);
-    const nextMessages = (_ensureArray(messages)).filter((envelope) => {
-      if (isPendingInteractionReplay(envelope)) return true;
-      const sequence = getReconnectEnvelopeSequence(envelope);
-      return !sequence || sequence > lastAppliedSeq;
+    return applyReconnectMessagesToActiveSessionReplay({
+      activeSession,
+      activeSessionId,
+      appendMessage,
+      chatList,
+      messages,
+      dialogProcessId,
+      allowCreate,
+      appliedReconnectSeqByDialogProcessId,
+      terminalDialogProcessIdSet,
+      classifyRealtimeLog,
+      getReplayHydrationPromise: () => replayHydrationPromise,
+      setReplayHydrationPromise: (promise) => {
+        replayHydrationPromise = promise;
+        reconnectReplayContext.replayHydrationPromise = promise;
+      },
+      applyDoneMessages: applyDoneMessagesFromReconnect,
+      envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
+      markReconnectSequenceApplied,
+      scrollBottom,
     });
-    if (!nextMessages.length) return;
-    const maxSequence = getReconnectMaxSequence(nextMessages, lastAppliedSeq);
-    if (normalizedDpId && terminalDialogProcessIdSet.has(normalizedDpId)) {
-      if (!isReconnectTerminalBatch(nextMessages)) {
-        markReconnectSequenceApplied(normalizedDpId, maxSequence);
-        return;
-      }
-    }
-    const batchHasTerminalEvent = isReconnectTerminalBatch(nextMessages);
-    const shouldCreateTarget = Boolean(allowCreate) && !batchHasTerminalEvent;
-    if (shouldHydrateSessionBeforeReplay(nextMessages, normalizedDpId, shouldCreateTarget)) {
-      await renderActiveSessionBeforeReplay();
-    }
-    const doneEnvelopeWithMessages = findReconnectDoneEnvelopeWithMessages(nextMessages);
-    if (doneEnvelopeWithMessages) {
-      applyDoneMessagesFromReconnect(doneEnvelopeWithMessages.data || {});
-      const doneData = doneEnvelopeWithMessages.data || {};
-      if (Array.isArray(doneData?.executionLogs) && doneData.executionLogs.length) {
-        const doneRealtimeLogs = doneData.executionLogs
-          .map((executionLogItem) =>
-            classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
-          )
-          .filter(Boolean);
-        if (doneRealtimeLogs.length) {
-          const messageList = Array.isArray(activeSession.value?.messages)
-            ? activeSession.value.messages
-            : [];
-          const targetMessage = [...messageList].reverse().find((messageItem) => {
-            if (_trimStr(messageItem?.role) !== RoleEnum.ASSISTANT) return false;
-            if (!normalizedDpId) return true;
-            const itemDpId = _trimStr(messageItem?.dialogProcessId);
-            return !itemDpId || itemDpId === normalizedDpId;
-          });
-          if (targetMessage) {
-            targetMessage.executionLogTotal = Math.max(
-              Number(targetMessage.executionLogTotal || 0),
-              doneRealtimeLogs.length,
-              Number(doneData?.executionLogs?.length || 0),
-            );
-            _mergeRealtimeLogs(targetMessage, doneRealtimeLogs);
-          }
-        }
-      }
-      markReconnectSequenceApplied(normalizedDpId, maxSequence);
-      scrollBottom();
-      return;
-    }
-
-    const targetMessage = resolveReconnectTargetAssistantMessage(normalizedDpId, {
-      allowCreate: shouldCreateTarget,
-    });
-    if (!targetMessage) {
-      createFinalAssistantFromReconnectReplay(nextMessages, normalizedDpId);
-      markReconnectSequenceApplied(normalizedDpId, maxSequence);
-      scrollBottom();
-      return;
-    }
-    let maxAppliedSeq = lastAppliedSeq;
-    for (const envelope of nextMessages) {
-      maxAppliedSeq = Math.max(maxAppliedSeq, getReconnectEnvelopeSequence(envelope));
-      const eventName = _trimStr(envelope?.event);
-      const eventData = envelope?.data || {};
-      if (
-        terminalDialogProcessIdSet.has(normalizedDpId) &&
-        !isReconnectTerminalEvent(eventName)
-      ) {
-        continue;
-      }
-      if (eventName === StreamEventEnum.DELTA) {
-        targetMessage.content += String(eventData?.text || "");
-      } else if (eventName === StreamEventEnum.THINKING) {
-        const logItem = classifyRealtimeLog(eventData);
-        if (logItem?.dialogProcessId && !_trimStr(targetMessage?.dialogProcessId)) {
-          targetMessage.dialogProcessId = _trimStr(logItem.dialogProcessId);
-        }
-        targetMessage.executionLogTotal = Number(targetMessage.executionLogTotal || 0) + 1;
-        _mergeRealtimeLogs(targetMessage, [logItem]);
-      } else if (eventName === StreamEventEnum.INTERACTION_REQUEST) {
-        const interactionRequest = normalizeInteractionRequestPayload(eventData);
-        clearMissingInteractionPayloadTimer({
-          sessionId: _trimStr(interactionRequest?.sessionId),
-          dialogProcessId: _trimStr(interactionRequest?.dialogProcessId),
-        });
-        if (tryAutoResolveInteraction(interactionRequest)) {
-          continue;
-        }
-        if (!isInteractionRequestHandled(interactionRequest)) {
-          setPendingInteractionRequest(interactionRequest);
-        }
-      } else if (eventName === StreamEventEnum.CONNECTOR_STATUS) {
-        const { connectorType, connectorName, status } =
-          resolveConnectorStatusPayload(eventData);
-        if (
-          connectorTypeSet?.has?.(connectorType) &&
-          connectorName &&
-          typeof upsertConnectedConnectorInPanelState === "function"
-        ) {
-          upsertConnectedConnectorInPanelState(activeSession.value, {
-            connectorType,
-            connectorName,
-            status,
-          });
-          if (typeof refreshSessionConnectorsAsync === "function") {
-            refreshSessionConnectorsAsync(activeSession.value?.id || "");
-          }
-        }
-      } else if (eventName === StreamEventEnum.ATTACHMENT_METAS) {
-        mergeAssistantAttachmentMetas(targetMessage, eventData?.attachmentMetas || []);
-      } else if (eventName === StreamEventEnum.DONE) {
-        terminalDialogProcessIdSet.add(normalizedDpId);
-        if (Array.isArray(eventData?.executionLogs) && eventData.executionLogs.length) {
-          const doneRealtimeLogs = eventData.executionLogs
-            .map((executionLogItem) =>
-              classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
-            )
-            .filter(Boolean);
-          if (doneRealtimeLogs.length) {
-            targetMessage.executionLogTotal = Math.max(
-              Number(targetMessage.executionLogTotal || 0),
-              doneRealtimeLogs.length,
-              Number(eventData?.executionLogs?.length || 0),
-            );
-            _mergeRealtimeLogs(targetMessage, doneRealtimeLogs);
-            if (!_trimStr(targetMessage?.dialogProcessId)) {
-              const latestDialogProcessId = [...doneRealtimeLogs]
-                .reverse()
-                .map((logItem) => _trimStr(logItem?.dialogProcessId))
-                .find(Boolean);
-              if (latestDialogProcessId) {
-                targetMessage.dialogProcessId = latestDialogProcessId;
-              }
-            }
-          }
-        }
-        if (Array.isArray(eventData?.messages) && eventData.messages.length) {
-          applyDoneMessagesFromReconnect(eventData);
-        }
-      } else if (eventName === StreamEventEnum.STOPPED) {
-        terminalDialogProcessIdSet.add(normalizedDpId);
-      } else if (eventName === StreamEventEnum.ERROR) {
-        targetMessage.error = String(eventData?.error || targetMessage?.error || "");
-        terminalDialogProcessIdSet.add(normalizedDpId);
-      }
-    }
-    markReconnectSequenceApplied(normalizedDpId, maxAppliedSeq);
-    scrollBottom();
   }
 
   async function applyReconnectEvent(event, data) {
-    if (_trimStr(event) === StreamEventEnum.CHANNEL_STATE) {
-      applyChannelState(data || {});
-      return;
-    }
-    const dpId = _trimStr(data?.dialogProcessId);
-    const sessionId = _trimStr(data?.sessionId);
-    if (sessionId && isCurrentActiveSession(sessionId)) {
-      await consumeReplayCacheForSession(sessionId);
-      await applyReconnectMessagesToActiveSession([{ event, data }], dpId);
-      return;
-    }
-    if (sessionId) {
-      const replayKey = normalizeReplayCacheKey(dpId, sessionId);
-      if (!replayCache[sessionId]) replayCache[sessionId] = {};
-      if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
-      replayCache[sessionId][replayKey].push({ event, data });
-    }
-  }
-
-  if (getCurrentScope()) {
-    onScopeDispose(() => {
-      if (cacheExpiredRefreshTimer) {
-        clearTimeout(cacheExpiredRefreshTimer);
-        cacheExpiredRefreshTimer = null;
-      }
+    return applyReconnectEventReplay({
+      event,
+      data,
+      replayCache,
+      isCurrentActiveSession,
+      consumeReplayCacheForSession,
+      applyReconnectMessagesToActiveSession,
+      applyChannelState,
     });
   }
 
-  return {
+  registerReconnectReplayLifecycleCleanup({
+    missingInteractionPayloadTimers,
+    getCacheExpiredRefreshTimer: () => cacheExpiredRefreshTimer,
+    setCacheExpiredRefreshTimer: (timer) => {
+      cacheExpiredRefreshTimer = timer;
+      reconnectReplayContext.cacheExpiredRefreshTimer = timer;
+    },
+  });
+
+  return createReconnectReplayPublicApi({
     applyReconnectData,
     applyReconnectEvent,
     applyChannelState,
-    __test:
-      import.meta.env.MODE === "test"
-        ? {
-            replayCache,
-            appliedReconnectSeqByDialogProcessId,
-            terminalDialogProcessIdSet,
-          }
-        : undefined,
-  };
+    replayCache,
+    appliedReconnectSeqByDialogProcessId,
+    terminalDialogProcessIdSet,
+    isTestMode: import.meta.env.MODE === "test",
+  });
 }
