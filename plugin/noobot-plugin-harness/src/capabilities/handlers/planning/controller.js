@@ -57,7 +57,7 @@ const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
     WORKFLOW_PARAMS.planning.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
 });
 const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
-const PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
+const DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
 
 function normalizePositiveInteger(value = 0, fallback = 0) {
@@ -80,6 +80,10 @@ function resolvePlanningTurnThresholds(ctx = {}) {
     planUpdateTriggerTurnsThreshold: normalizePositiveInteger(
       scoped?.planUpdate?.triggerTurnsThreshold,
       DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+    ),
+    phaseAcceptanceTriggerTurnsThreshold: normalizePositiveInteger(
+      scopedMode?.acceptance?.phase?.triggerTurnsThreshold,
+      DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
     ),
   };
 }
@@ -287,12 +291,14 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         const planningThresholds = resolvePlanningTurnThresholds(ctx);
         const summaryTurnsThreshold = planningThresholds.summaryTurnsThreshold;
         const planUpdateTriggerTurnsThreshold = planningThresholds.planUpdateTriggerTurnsThreshold;
+        const phaseAcceptanceTriggerTurnsThreshold =
+          planningThresholds.phaseAcceptanceTriggerTurnsThreshold;
         const reachedTurnsSummary = holder.state.counters.llmTurns > summaryTurnsThreshold;
         let reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
         const reachedPlanUpdateTurns =
           holder.state.counters.planUpdateTurns >= planUpdateTriggerTurnsThreshold;
         const reachedPhaseAcceptanceTurns =
-          holder.state.counters.phaseAcceptanceTurns >= PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD;
+          holder.state.counters.phaseAcceptanceTurns >= phaseAcceptanceTriggerTurnsThreshold;
 
         const pruneEnabled = LLM_SUMMARY_OVERFLOW_POLICY.ENABLE_PRUNE_AFTER_SUMMARY === true;
         const pruneTriggerRounds = Number(
@@ -387,7 +393,8 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               domain: CAPABILITY_DOMAIN.ACCEPTANCE,
               event: ACCEPTANCE_EVENTS.phaseAcceptanceScheduledByTurnThreshold,
               detail: {
-                triggerTurns: PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
+                triggerTurns: phaseAcceptanceTriggerTurnsThreshold,
+                thresholdMode: planningThresholds.mode,
                 summaryPending: holder.state.pending?.summary === true,
                 guidancePending: Boolean(holder.state.pending?.guidance),
                 planUpdatePending: resolvePendingPlanUpdate(holder.state).active === true,
@@ -403,7 +410,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
             // Keep threshold pressure when blocked by higher-priority flows
             // (summary/guidance/plan-update), so phase acceptance can be
             // scheduled immediately after they are cleared.
-            holder.state.counters.phaseAcceptanceTurns = PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD;
+            holder.state.counters.phaseAcceptanceTurns = phaseAcceptanceTriggerTurnsThreshold;
             blockedActions.push(WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance);
             blockedReasons.push("phase_acceptance_blocked_by_higher_priority_pending");
           }
