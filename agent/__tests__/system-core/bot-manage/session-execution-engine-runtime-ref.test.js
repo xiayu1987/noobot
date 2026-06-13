@@ -37,7 +37,7 @@ test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for 
   );
 });
 
-test("workflow detached sub-session runner inherits userInteractionBridge from parent runtime", async () => {
+test("detached sub-session runner inherits userInteractionBridge from parent runtime", async () => {
   const bridge = {
     async requestUserInteraction() {
       return { ok: true };
@@ -68,7 +68,7 @@ test("workflow detached sub-session runner inherits userInteractionBridge from p
     },
   };
 
-  const runner = engine._createBotSubSessionRunner();
+  const runner = engine._createDetachedSubSessionRunner();
   await runner({
     parentContext: {
       userId: "u1",

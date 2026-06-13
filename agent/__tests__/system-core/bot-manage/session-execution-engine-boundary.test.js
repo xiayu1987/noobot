@@ -26,6 +26,10 @@ test("SessionExecutionEngine keeps plugin runtime details behind adapter boundar
   assert.equal(source.includes("../../plugin/capabilities.js"), false);
   assert.equal(source.includes("getNoobotPluginRuntime"), false);
   assert.equal(source.includes("PLUGIN_CAPABILITY"), false);
+  assert.equal(source.includes("harness"), false);
+  assert.equal(source.includes("Harness"), false);
+  assert.equal(source.includes("workflow"), false);
+  assert.equal(source.includes("Workflow"), false);
 });
 
 test("SessionExecutionEngine imports capability-oriented helpers instead of concrete extension files", async () => {
@@ -44,8 +48,10 @@ test("session extension runtime adapter is descriptor-driven and not tied to con
   assert.equal(source.includes("../../plugin/capabilities.js"), false);
   assert.equal(source.includes("getNoobotPluginRuntime"), false);
   assert.equal(source.includes("PLUGIN_CAPABILITY"), false);
-  assert.equal(source.includes("\"harness\""), false);
-  assert.equal(source.includes("\"workflow\""), false);
+  assert.equal(source.includes("harness"), false);
+  assert.equal(source.includes("Harness"), false);
+  assert.equal(source.includes("workflow"), false);
+  assert.equal(source.includes("Workflow"), false);
   assert.equal(source.includes("HARNESS_PLUGIN_KEY"), false);
   assert.equal(source.includes("WORKFLOW_PLUGIN_KEY"), false);
 });

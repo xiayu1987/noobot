@@ -422,26 +422,6 @@ export class SessionExecutionEngine {
     return this.scopedArtifactPersistenceHelpers.createGeneratedArtifactPersister();
   }
 
-  _resolveWorkflowScopedDir(payload = {}) {
-    return this._resolveScopedOutputDir(payload);
-  }
-
-  _resolveWorkflowScopedFileTarget(payload = {}) {
-    return this._resolveScopedFileTarget(payload);
-  }
-
-  _createWorkflowScopedJsonWriter() {
-    return this._createScopedJsonWriter();
-  }
-
-  _createWorkflowScopedEventLogger() {
-    return this._createScopedEventLogger();
-  }
-
-  _createBotSubSessionRunner() {
-    return this._createDetachedSubSessionRunner();
-  }
-
   _createDetachedSubSessionRunner() {
     return createDetachedSubSessionRunner({
       workspaceService: this.workspaceService,
@@ -661,67 +641,16 @@ export class SessionExecutionEngine {
     return this.modelMessageRuntimeHelpers.mergePluginOptions(...items);
   }
 
-  _mergeHarnessExtensionOptions(...items) {
-    return this._mergeModelExtensionOptions(...items);
-  }
-
   _createExtensionResolveModelMessages(payload = {}) {
     return this.modelMessageRuntimeHelpers.createResolveModelMessages(payload);
-  }
-
-  _createHarnessResolveModelMessages({ harnessOptions = {} } = {}) {
-    return this._createExtensionResolveModelMessages({ harnessOptions });
   }
 
   _createExtensionResolveMessageBlock(payload = {}) {
     return this.modelMessageRuntimeHelpers.createResolveMessageBlock(payload);
   }
 
-  _createHarnessResolveMessageBlock({ harnessOptions = {} } = {}) {
-    return this._createExtensionResolveMessageBlock({ harnessOptions });
-  }
-
   _createExtensionMarkMessagesSummarized() {
     return this.modelMessageRuntimeHelpers.createMarkMessagesSummarized();
-  }
-
-  _createHarnessMarkMessagesSummarized() {
-    return this._createExtensionMarkMessagesSummarized();
-  }
-
-  _resolveHarnessPluginOptions({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    return this.runConfigExtensionPreparer.resolveHarnessPluginOptions({
-      userId,
-      runConfig,
-      userConfig,
-    });
-  }
-
-  _prepareRegisteredPluginRunConfig(payload = {}) {
-    return this.runConfigExtensionPreparer.prepareRegisteredPluginRunConfig(payload);
-  }
-
-  _prepareHarnessRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    return this.runConfigExtensionPreparer.prepareHarnessRunConfig({
-      userId,
-      runConfig,
-      userConfig,
-    });
-  }
-
-  _resolveWorkflowPluginOptions({ runConfig = {}, userConfig = {} } = {}) {
-    return this.runConfigExtensionPreparer.resolveWorkflowPluginOptions({
-      runConfig,
-      userConfig,
-    });
-  }
-
-  _prepareWorkflowRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    return this.runConfigExtensionPreparer.prepareWorkflowRunConfig({
-      userId,
-      runConfig,
-      userConfig,
-    });
   }
 
   _prepareBotHookRunConfig({ runConfig = {} } = {}) {
