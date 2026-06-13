@@ -115,7 +115,12 @@ export const WORKFLOW_PARAMS = deepFreeze({
           turnsThreshold: 8,
         },
         planUpdate: {
-          triggerTurnsThreshold: 4,
+          triggerTurnsThreshold: 6,
+        },
+      },
+      acceptance: {
+        phase: {
+          triggerTurnsThreshold: 10,
         },
       },
     },
@@ -125,7 +130,12 @@ export const WORKFLOW_PARAMS = deepFreeze({
           turnsThreshold: 12,
         },
         planUpdate: {
-          triggerTurnsThreshold: 8,
+          triggerTurnsThreshold: 10,
+        },
+      },
+      acceptance: {
+        phase: {
+          triggerTurnsThreshold: 14,
         },
       },
     },
@@ -242,6 +252,8 @@ export const WORKFLOW_PARAMS = deepFreeze({
       enabled: true,
     },
     phase: {
+      // Fallback default. Mode-specific phase acceptance thresholds live in
+      // top-level modeThresholds.<mode>.acceptance.phase.
       triggerTurnsThreshold: 9,
       blockerKeys: ["summary", "guidance", "planUpdate", "planningCaptured"],
     },

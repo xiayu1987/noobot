@@ -16,8 +16,12 @@ const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
 const MAX_PLAN_UPDATE_ATTEMPTS = WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts;
 const PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
-const PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
-  WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
+const PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.programming.planning.planUpdate.triggerTurnsThreshold;
+const FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.full.acceptance.phase.triggerTurnsThreshold;
+const PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.programming.acceptance.phase.triggerTurnsThreshold;
 
 function createAgentContext({
   planText = "1. 主任务\n",
@@ -424,7 +428,7 @@ test("planning thresholds use full-mode defaults: summary 8 and plan-update 4", 
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
-test("planning thresholds use programming-mode overrides: summary 12 and plan-update 8", async () => {
+test("planning thresholds use programming-mode overrides: summary 12 and configured plan-update", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeProgrammingThresholds = createPlanningAgentContext({
     scenario: "programming",
@@ -441,7 +445,10 @@ test("planning thresholds use programming-mode overrides: summary 12 and plan-up
 
   const atProgrammingThresholds = createPlanningAgentContext({
     scenario: "programming",
-    counters: { llmTurns: 12, planUpdateTurns: 7 },
+    counters: {
+      llmTurns: 12,
+      planUpdateTurns: PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
+    },
   });
   await planningHandler({
     capability: "planning",
@@ -452,6 +459,59 @@ test("planning thresholds use programming-mode overrides: summary 12 and plan-up
   assert.equal(atProgrammingThresholds.payload.harness.state.pending.summary, true);
   assert.equal(atProgrammingThresholds.payload.harness.state.pending.planRevision, true);
   assert.equal(atProgrammingThresholds.payload.harness.state.counters.planUpdateTurns, 0);
+});
+
+test("phase acceptance threshold uses programming-mode override", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const beforeProgrammingPhaseAcceptance = createPlanningAgentContext({
+    scenario: "programming",
+    counters: {
+      llmTurns: 0,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
+    },
+  });
+  beforeProgrammingPhaseAcceptance.payload.harness.state.flags = {
+    planningCaptured: true,
+  };
+  await planningHandler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: {
+      messages: [{ role: "user", content: "继续任务" }],
+      agentContext: beforeProgrammingPhaseAcceptance,
+    },
+    meta: {},
+  });
+  assert.equal(beforeProgrammingPhaseAcceptance.payload.harness.state.pending.phaseAcceptance, false);
+
+  const atProgrammingPhaseAcceptance = createPlanningAgentContext({
+    scenario: "programming",
+    counters: {
+      llmTurns: 0,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
+    },
+  });
+  atProgrammingPhaseAcceptance.payload.harness.state.flags = {
+    planningCaptured: true,
+  };
+  await planningHandler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: {
+      messages: [{ role: "user", content: "继续任务" }],
+      agentContext: atProgrammingPhaseAcceptance,
+    },
+    meta: {},
+  });
+  assert.equal(atProgrammingPhaseAcceptance.payload.harness.state.pending.phaseAcceptance, true);
+  assert.equal(atProgrammingPhaseAcceptance.payload.harness.state.counters.phaseAcceptanceTurns, 0);
+  const acceptanceLog = atProgrammingPhaseAcceptance.payload.harness.logs.acceptance.find(
+    (item = {}) => item?.event === "phase_acceptance_scheduled_by_turn_threshold",
+  );
+  assert.equal(acceptanceLog?.detail?.triggerTurns, PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD);
+  assert.equal(acceptanceLog?.detail?.thresholdMode, "programming");
 });
 
 test("planning plan-update threshold keeps pressure while pending plan-update blocks scheduling", async () => {
@@ -864,7 +924,7 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
     counters: {
       llmTurns: 0,
       planUpdateTurns: PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
-      phaseAcceptanceTurns: PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
+      phaseAcceptanceTurns: FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
   agentContext.payload.harness.state.flags = {
@@ -878,7 +938,7 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
   assert.equal(agentContext.payload.harness.state.pending.phaseAcceptance, false);
   assert.equal(
     agentContext.payload.harness.state.counters.phaseAcceptanceTurns,
-    PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
+    FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   );
 
   agentContext.payload.harness.state.pending.planRevision = false;
