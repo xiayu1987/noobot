@@ -41,6 +41,143 @@ function createMockBotHookManager() {
   };
 }
 
+
+function workflowDsl(lines = []) {
+  return ["WORKFLOW_DSL/1", ...lines, "END"].join("\n");
+}
+
+function simpleActionWorkflowDsl({
+  nodeId = "act",
+  nodeName = "节点A",
+  task = "执行当前请求",
+} = {}) {
+  return workflowDsl([
+    'NODE id=start type=state stateType=start name="开始"',
+    `NODE id=${nodeId} type=action name="${nodeName}" task="${task}"`,
+    'NODE id=end type=state stateType=end name="结束"',
+    `EDGE from=start to=${nodeId}`,
+    `EDGE from=${nodeId} to=end`,
+  ]);
+}
+
+function createCapabilityModelInvoker(output, calls = null) {
+  return async (payload = {}) => {
+    if (Array.isArray(calls)) calls.push(payload);
+    return { output };
+  };
+}
+
+function createNodeResult(nodeName, overrides = {}) {
+  return {
+    sessionId: `session-${nodeName}`,
+    dialogProcessId: `dialog-${nodeName}`,
+    result: {
+      answer: `answer-${nodeName}`,
+      messages: [{ role: "assistant", content: `result-${nodeName}` }],
+    },
+    ...overrides,
+  };
+}
+
+function createRecordingSubSessionRunner(calls, { failNodeName = "", failMessage = "" } = {}) {
+  return async (payload = {}) => {
+    calls.push(payload);
+    const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
+    if (failNodeName && nodeName === failNodeName) {
+      throw new Error(failMessage || `${nodeName}失败`);
+    }
+    return createNodeResult(nodeName);
+  };
+}
+
+function createAttachmentPersister({ prefix = "att", counterRef = { value: 0 } } = {}) {
+  return async (payload = {}) => {
+    counterRef.value += 1;
+    const artifactName = String(payload?.artifacts?.[0]?.name || `result-${counterRef.value}.md`);
+    return [
+      {
+        attachmentId: `${prefix}-${counterRef.value}`,
+        name: artifactName,
+        mimeType: "text/markdown",
+        path: `/attachments/${artifactName}`,
+      },
+    ];
+  };
+}
+
+function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 } } = {}) {
+  return {
+    async transferSemanticContent({ scenario = "", messages = [] } = {}) {
+      if (String(scenario || "") !== "subagent") {
+        return { transferResult: { ok: false, status: "failed" }, transferEnvelope: null, transferEnvelopes: [] };
+      }
+      counterRef.value += 1;
+      const nodeName = String(messages?.[0]?.nodeName || `节点${counterRef.value}`).trim();
+      const fileName = `workflow-node-${counterRef.value}-${nodeName}-result.md`;
+      const envelope = {
+        protocol: "noobot.semantic-transfer",
+        version: 1,
+        direction: "output",
+        transport: "file",
+        filePath: `/workspace/${fileName}`,
+        files: [{
+          role: "primary",
+          filePath: `/workspace/${fileName}`,
+          attachmentMeta: {
+            attachmentId: `${prefix}-${counterRef.value}`,
+            name: fileName,
+            mimeType: "text/markdown",
+            relativePath: `runtime/attach/${fileName}`,
+          },
+          pathView: { displayPath: `/workspace/${fileName}` },
+        }],
+      };
+      return { transferResult: { ok: true, status: "file", envelope }, transferEnvelope: envelope, transferEnvelopes: [envelope] };
+    },
+  };
+}
+
+function createBaseContext(overrides = {}) {
+  return {
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "d1",
+    userMessage: "请执行一个工作流",
+    runConfig: { locale: "zh-CN" },
+    ...overrides,
+  };
+}
+
+function createContextWithSharedTools(sharedTools = {}, overrides = {}) {
+  return createBaseContext({
+    agentContext: {
+      execution: { controllers: { runtime: { sharedTools } } },
+    },
+    ...overrides,
+  });
+}
+
+function getBeforeDispatch(hookManager) {
+  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  assert.ok(beforeDispatch?.handler);
+  return beforeDispatch;
+}
+
+async function runWorkflowHook({ options = {}, context = {} } = {}) {
+  const hookManager = createMockBotHookManager();
+  createRegisterWorkflowHooks()({ hookManager, options: { enabled: true, mode: "on", ...options } });
+  const ctx = createBaseContext(context);
+  await getBeforeDispatch(hookManager).handler(ctx);
+  return { hookManager, ctx, agentResult: ctx.overrideAgentResult };
+}
+
+function callsByNodeName(calls = []) {
+  return new Map(calls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]));
+}
+
+function workflowTurn(agentResult) {
+  return (agentResult?.turnMessages || []).find((item) => item?.workflowMessage === true);
+}
 test("workflow hook uses injected sub-session strategy and marks workflow message", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
@@ -112,8 +249,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(Array.isArray(disposers), true);
   assert.equal(disposers.length > 0, true);
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
 
   const beforeContext = {
     userId: "u1",
@@ -199,20 +335,18 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(agentResult.workflow.nodeSessions[0]?.rootSessionId, "s1");
   assert.equal(agentResult.workflow.nodeSessions[0]?.sessionId, "wf-node-session-1");
 
-  const workflowTurn = (agentResult.turnMessages || []).find(
-    (item) => item?.workflowMessage === true,
-  );
-  assert.ok(workflowTurn);
-  assert.equal(workflowTurn?.type, "workflow");
+  const workflowTurnMessage = workflowTurn(agentResult);
+  assert.ok(workflowTurnMessage);
+  assert.equal(workflowTurnMessage?.type, "workflow");
   assert.match(
-    String(workflowTurn?.content || ""),
+    String(workflowTurnMessage?.content || ""),
     /\/injected\/attachments\/s1\/workflow-node-1-result\.md/,
   );
-  assert.equal(String(workflowTurn?.content || "").includes("message-node-done"), false);
-  assert.equal(String(workflowTurn?.content || "").includes("answer-node-done"), false);
-  assert.equal(workflowTurn?.workflowMeta?.source, "workflow-plugin");
+  assert.equal(String(workflowTurnMessage?.content || "").includes("message-node-done"), false);
+  assert.equal(String(workflowTurnMessage?.content || "").includes("answer-node-done"), false);
+  assert.equal(workflowTurnMessage?.workflowMeta?.source, "workflow-plugin");
   assert.equal(
-    workflowTurn?.workflowMeta?.payload?.execution?.nodeAgentRuns?.[0]?.nodeResultText,
+    workflowTurnMessage?.workflowMeta?.payload?.execution?.nodeAgentRuns?.[0]?.nodeResultText,
     undefined,
   );
   const hasPayloadBuiltEvent = eventLogCalls.some(
@@ -283,8 +417,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   const ctx = {
     userId: "u1",
     sessionId: "s1",
@@ -320,10 +453,10 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
   assert.equal(agentResult.workflow?.transferEnvelopes?.length, 1);
   assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelope?.protocol, "noobot.semantic-transfer");
   assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.length, 1);
-  const workflowTurn = (agentResult.turnMessages || []).find((item) => item?.workflowMessage === true);
-  assert.equal(workflowTurn?.transferEnvelope?.protocol, "noobot.semantic-transfer");
-  assert.equal(workflowTurn?.transferEnvelopes?.length, 1);
-  assert.equal(workflowTurn?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId, "wf-semantic-result-1");
+  const workflowTurnMessage = workflowTurn(agentResult);
+  assert.equal(workflowTurnMessage?.transferEnvelope?.protocol, "noobot.semantic-transfer");
+  assert.equal(workflowTurnMessage?.transferEnvelopes?.length, 1);
+  assert.equal(workflowTurnMessage?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId, "wf-semantic-result-1");
 });
 
 test("workflow hook routes final attachment summary composition through semantic-transfer", async () => {
@@ -360,8 +493,7 @@ test("workflow hook routes final attachment summary composition through semantic
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   const ctx = {
     userId: "u1",
     sessionId: "s1",
@@ -421,10 +553,10 @@ test("workflow hook routes final attachment summary composition through semantic
   );
   assert.equal(hasFinalSummaryCall, true);
   const agentResult = ctx.overrideAgentResult;
-  const workflowTurn = (agentResult?.turnMessages || []).find((item) => item?.workflowMessage === true);
-  assert.ok(workflowTurn);
-  const transferEnvelopes = Array.isArray(workflowTurn?.transferEnvelopes)
-    ? workflowTurn.transferEnvelopes
+  const workflowTurnMessage = workflowTurn(agentResult);
+  assert.ok(workflowTurnMessage);
+  const transferEnvelopes = Array.isArray(workflowTurnMessage?.transferEnvelopes)
+    ? workflowTurnMessage.transferEnvelopes
     : [];
   assert.equal(
     transferEnvelopes.some(
@@ -501,8 +633,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s-upstream",
@@ -562,9 +693,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
     },
   });
 
-  const callByNodeName = new Map(
-    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
-  );
+  const callByNodeName = callsByNodeName(subSessionCalls);
   assert.equal(subSessionCalls.length, 5);
   assert.deepEqual(callByNodeName.get("节点A")?.systemMessages || [], []);
 
@@ -643,8 +772,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s-fanout",
@@ -704,9 +832,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
     },
   });
 
-  const callByNodeName = new Map(
-    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
-  );
+  const callByNodeName = callsByNodeName(subSessionCalls);
   assert.equal(subSessionCalls.length, 3);
   assert.deepEqual(callByNodeName.get("节点A")?.systemMessages || [], []);
 
@@ -767,8 +893,7 @@ test("workflow hook marks failed sub-agent step and continues downstream", async
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   const beforeContext = {
     userId: "u1",
     sessionId: "s-failed-step",
@@ -780,9 +905,7 @@ test("workflow hook marks failed sub-agent step and continues downstream", async
 
   assert.equal(beforeContext.skipAgentDispatch, true);
   assert.equal(subSessionCalls.length, 2);
-  const callByNodeName = new Map(
-    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
-  );
+  const callByNodeName = callsByNodeName(subSessionCalls);
   const nodeBSystem = String(callByNodeName.get("节点B")?.systemMessages?.[0] || "");
   assert.match(nodeBSystem, /上游失败节点/);
   assert.match(nodeBSystem, /节点A子agent失败/);
@@ -839,8 +962,7 @@ test("workflow hook injects failed upstream task+error from single upstream into
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s-failure-fanout",
@@ -848,9 +970,7 @@ test("workflow hook injects failed upstream task+error from single upstream into
     userMessage: "请运行失败传播流程",
     runConfig: { locale: "zh-CN" },
   });
-  const callByNodeName = new Map(
-    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
-  );
+  const callByNodeName = callsByNodeName(subSessionCalls);
   const nodeBSystem = String(callByNodeName.get("节点B")?.systemMessages?.[0] || "");
   const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
   assert.match(nodeBSystem, /节点A（任务：执行A任务）: 节点A失败/);
@@ -903,8 +1023,7 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s-failure-merge",
@@ -912,9 +1031,7 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
     userMessage: "请运行失败传播流程",
     runConfig: { locale: "zh-CN" },
   });
-  const callByNodeName = new Map(
-    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
-  );
+  const callByNodeName = callsByNodeName(subSessionCalls);
   const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
   assert.match(nodeCSystem, /节点A（任务：执行A任务）: 节点A失败/);
 });
@@ -970,8 +1087,7 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s-failure-multi",
@@ -979,9 +1095,7 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
     userMessage: "请运行失败传播流程",
     runConfig: { locale: "zh-CN" },
   });
-  const callByNodeName = new Map(
-    subSessionCalls.map((call) => [String(call?.metadata?.nodeName || "").trim(), call]),
-  );
+  const callByNodeName = callsByNodeName(subSessionCalls);
   const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
   const nodeDSystem = String(callByNodeName.get("节点D")?.systemMessages?.[0] || "");
   assert.match(nodeCSystem, /节点A（任务：执行A任务）: 节点A失败/);
@@ -1029,8 +1143,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
-  assert.ok(beforeDispatch?.handler);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s-input-att",
@@ -1112,7 +1225,7 @@ test("workflow semantic planning passes conversation context before current user
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s1",
@@ -1178,7 +1291,7 @@ test("workflow semantic planning falls back to messageBlocks context when ctx.me
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s1",
@@ -1245,7 +1358,7 @@ test("workflow semantic planning includes current available tools like harness p
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s1",
@@ -1316,7 +1429,7 @@ test("workflow semantic planning reads available tools from runtimeAgentContext"
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s1",
@@ -1383,7 +1496,7 @@ test("workflow semantic planning falls back to runtimeAgentContext history when 
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await beforeDispatch.handler({
     userId: "u1",
     sessionId: "s1",
@@ -1465,7 +1578,7 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
     },
   });
 
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const beforeDispatch = getBeforeDispatch(hookManager);
   await assert.rejects(
     () =>
       beforeDispatch.handler({

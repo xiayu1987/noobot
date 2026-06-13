@@ -98,7 +98,7 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
               guidance: "consecutive_failures",
               summary: true,
               planRevision: true,
-              planRevisionContext: { summaryText: "pending-summary", targetMainStepIndexes: [] },
+              planRevisionContext: { targetMainStepIndexes: [] },
               acceptanceSemanticValidation: { reportIndex: 3 },
             },
           },

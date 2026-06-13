@@ -112,7 +112,6 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   }
   setPendingPlanUpdate(state, { active: false, stage: pendingData.stage });
 
-  const summaryText = String(pendingData.summaryText || "").trim();
   if (pendingData.stage === GUIDANCE_DECISION.stage.refinement) {
     if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "refinement" })) {
       appendCapabilityLog(ctx, {
@@ -127,7 +126,6 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
       return false;
     }
     const refinementResult = await runPlanningRefinementBySeparateModel(ctx, meta, {
-      summaryText,
       source: "planning_refinement",
       targetMainStepIndexes: Array.isArray(pendingData.targetMainStepIndexes)
         ? pendingData.targetMainStepIndexes
@@ -135,13 +133,12 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
     });
     return refinementResult.applied === true;
   }
-  return runPlanUpdateAfterSummary(ctx, meta, summaryText);
+  return runPlanUpdateAfterSummary(ctx, meta);
 }
 
 export async function runPlanUpdateAfterSummary(
   ctx = {},
   meta = {},
-  summaryText = "",
   { baseMessages = null } = {},
 ) {
   const holder = ensureHarnessBucket(ctx);
@@ -149,7 +146,7 @@ export async function runPlanUpdateAfterSummary(
   const { bucket, state } = holder;
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) {
-    return schedulePlanUpdateByInject(ctx, summaryText, "revision");
+    return schedulePlanUpdateByInject(ctx, "revision");
   }
   const pendingPlanUpdate = resolvePendingPlanUpdate(state);
   if (pendingPlanUpdate?.active) {
@@ -168,7 +165,7 @@ export async function runPlanUpdateAfterSummary(
   if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "revision" })) {
     return changed;
   }
-  const revisionTask = buildPlanningRevisionPrompt(locale, bucket, state, summaryText);
+  const revisionTask = buildPlanningRevisionPrompt(locale, bucket, state);
   const revisionBaseMessages = [
     ...modelMessages,
     ...buildPlanChecklistContextMessages({
@@ -244,7 +241,6 @@ export async function runPlanUpdateAfterSummary(
     attachmentMetas: revisionAttachmentMetas,
   });
   const revisionApplied = applyRevisedPlanFromText(ctx, revisionText, {
-    summary: summaryText,
     source: "planning_revision",
     stage: "revision",
   });
@@ -289,7 +285,6 @@ export async function runPlanUpdateAfterSummary(
   setPendingPlanUpdate(state, {
     active: true,
     stage: "refinement",
-    summaryText,
     targetMainStepIndexes: refinementTargetMainStepIndexes,
   });
   return true;
@@ -348,7 +343,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
           ...planChecklistContextMessages,
           ...buildPreviousSummaryContextMessages({
             locale,
-            summaryText: resolvePreviousSummaryContextText(ctx),
+            previousSummaryContent: resolvePreviousSummaryContextText(ctx),
           }),
         ]
       : [

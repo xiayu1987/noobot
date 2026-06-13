@@ -94,7 +94,6 @@ function resolvePendingPlanUpdateSnapshot(state = {}) {
       active: true,
       stage: "revision",
       context: {
-        summaryText: String(context.summaryText || "").trim(),
         targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
           ? context.targetMainStepIndexes
           : [],
@@ -110,7 +109,6 @@ function resolvePendingPlanUpdateSnapshot(state = {}) {
       active: true,
       stage: "refinement",
       context: {
-        summaryText: String(context.summaryText || "").trim(),
         targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
           ? context.targetMainStepIndexes
           : [],

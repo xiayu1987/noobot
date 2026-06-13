@@ -30,7 +30,7 @@ export const applyRevisedPlanFromText = planRevisionHelpers.applyRevisedPlanFrom
 export const buildPlanningRefinementPrompt = planRevisionHelpers.buildPlanningRefinementPrompt;
 export const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayContent;
 
-export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}, summaryText = "") {
+export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, state = {}) {
   const globalRevisionCount = Number.isFinite(Number(bucket?.globalRevisionCount))
     ? Number(bucket.globalRevisionCount)
     : 0;
@@ -41,7 +41,6 @@ export function buildPlanningRevisionPrompt(locale = LOCALE.ZH_CN, bucket = {}, 
     data: {
       globalRevisionCount,
       includeCurrentMainPlans: false,
-      feedback: String(summaryText || "").trim(),
     },
   });
 }

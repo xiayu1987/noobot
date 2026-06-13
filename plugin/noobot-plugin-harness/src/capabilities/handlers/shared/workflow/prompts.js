@@ -203,9 +203,7 @@ export function buildPlanningRevisionPromptText(options = {}) {
   const globalRevisionCount = data.globalRevisionCount ?? options?.globalRevisionCount ?? 0;
   const currentMainPlansText = data.currentMainPlansText ?? options?.currentMainPlansText ?? "";
   const includeCurrentMainPlans = data.includeCurrentMainPlans ?? options?.includeCurrentMainPlans ?? true;
-  const feedback = data.feedback ?? options?.feedback ?? "";
   const mainPlansText = String(currentMainPlansText || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
-  const latestFeedback = String(feedback || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_NO_FEEDBACK_FALLBACK);
   const revisionCount = Number.isFinite(Number(globalRevisionCount)) ? Number(globalRevisionCount) : 0;
   const currentPlanSection = includeCurrentMainPlans === false
     ? []
@@ -220,9 +218,6 @@ export function buildPlanningRevisionPromptText(options = {}) {
       maxAttempts: Number(PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION),
     }),
     ...currentPlanSection,
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_LATEST_FEEDBACK_LABEL),
-    latestFeedback,
-    "",
     buildPlanningRevisionPatchProtocolCoreText(locale),
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REVISION_CONSTRAINT),
@@ -247,13 +242,11 @@ export function buildPlanningRefinementPromptText(options = {}) {
   const targetId = data.targetId ?? options?.targetId ?? targetIds[0] ?? 1;
   const targetContent = data.targetContent ?? options?.targetContent ?? "";
   const existingSubPlansText = data.existingSubPlansText ?? options?.existingSubPlansText ?? "";
-  const feedback = data.feedback ?? options?.feedback ?? "";
   const id = Number.isFinite(Number(targetId)) ? Number(targetId) : 1;
   const content = String(targetContent || "").trim();
   const targetIdListText = targetIds.length ? `[${targetIds.join(",")}]` : `[${id}]`;
   const targetPlans = String(targetPlansText || "").trim() || `${id}. ${content}`.trim();
   const subPlans = String(existingSubPlansText || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_EMPTY_TEXT);
-  const latestFeedback = String(feedback || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_NO_FEEDBACK_FALLBACK);
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_PROMPT_GOAL),
@@ -270,9 +263,6 @@ export function buildPlanningRefinementPromptText(options = {}) {
     subPlans,
     "",
     buildPlanningRefinementPatchProtocolCoreText(locale),
-    "",
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_LATEST_FEEDBACK_HEADER),
-    latestFeedback,
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_HEADER),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_REFINEMENT_EXAMPLE_ADD),
@@ -312,9 +302,9 @@ export function buildGuidanceSummaryPromptText(options = {}) {
 
 export function buildPreviousSummaryContextContent({
   locale = LOCALE.ZH_CN,
-  summaryText = "",
+  previousSummaryContent = "",
 } = {}) {
-  const text = String(summaryText || "").trim();
+  const text = String(previousSummaryContent || "").trim();
   if (!text) return "";
   const header = `<!-- harness-previous-summary-context -->\n${translateI18nText(
     locale,
@@ -413,16 +403,16 @@ export function buildAllPhaseAcceptanceReportSystemContents(options = {}) {
 
 export function buildAllSummaryReportSystemContents(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const summaryText = String(data.summaryText ?? options?.summaryText ?? "").trim();
-  if (!summaryText) return [];
-  const items = parseSummaryItemsFromText(summaryText);
+  const reportText = String(data.latestSummaryOverview ?? options?.latestSummaryOverview ?? "").trim();
+  if (!reportText) return [];
+  const items = parseSummaryItemsFromText(reportText);
   if (!items.length) {
     return [
       [
         String(marker || "").trim(),
         translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SUMMARY_CHECKLIST_TITLE, { index: 1, total: 1 }),
         "#1",
-        summaryText,
+        reportText,
       ].filter(Boolean).join("\n"),
     ];
   }

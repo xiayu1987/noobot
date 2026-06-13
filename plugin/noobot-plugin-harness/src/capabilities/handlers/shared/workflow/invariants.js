@@ -28,7 +28,6 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
         ? state.pending.planRevisionContext
         : {};
     const normalizedRevisionContext = {
-      summaryText: String(revisionContext.summaryText || "").trim(),
       targetMainStepIndexes: Array.isArray(revisionContext.targetMainStepIndexes)
         ? revisionContext.targetMainStepIndexes
         : [],
@@ -50,7 +49,6 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
         ? state.pending.planRefinementContext
         : {};
     const normalizedRefinementContext = {
-      summaryText: String(refinementContext.summaryText || "").trim(),
       targetMainStepIndexes: Array.isArray(refinementContext.targetMainStepIndexes)
         ? refinementContext.targetMainStepIndexes
         : [],
@@ -92,11 +90,6 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
     changed = true;
     violations.push("pending.planRevisionTargetMainStepIndexes_removed");
   }
-  if ("summaryText" in state.pending) {
-    delete state.pending.summaryText;
-    changed = true;
-    violations.push("pending.summaryText_removed");
-  }
   if ("planRevisionCapturePending" in state.flags) {
     delete state.flags.planRevisionCapturePending;
     changed = true;
@@ -106,11 +99,6 @@ export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
     delete state.flags.planRevisionCaptureStage;
     changed = true;
     violations.push("flags.planRevisionCaptureStage_removed");
-  }
-  if ("planRevisionCaptureSummaryText" in state.flags) {
-    delete state.flags.planRevisionCaptureSummaryText;
-    changed = true;
-    violations.push("flags.planRevisionCaptureSummaryText_removed");
   }
   if ("planRevisionCaptureTargetMainStepIndexes" in state.flags) {
     delete state.flags.planRevisionCaptureTargetMainStepIndexes;

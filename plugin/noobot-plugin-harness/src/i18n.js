@@ -98,12 +98,10 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PLANNING_MAIN_EXAMPLE_HEADER: "planningMainExampleHeader",
     PLANNING_MAIN_EXAMPLE_ADD: "planningMainExampleAdd",
     PLANNING_EMPTY_TEXT: "planningEmptyText",
-    PLANNING_NO_FEEDBACK_FALLBACK: "planningNoFeedbackFallback",
     PLANNING_REVISION_CURRENT_PLAN_LABEL: "planningRevisionCurrentPlanLabel",
     PLANNING_REVISION_PROMPT_GOAL: "planningRevisionPromptGoal",
     PLANNING_REVISION_STATUS_HEADER: "planningRevisionStatusHeader",
     PLANNING_REVISION_COUNT_LINE: "planningRevisionCountLine",
-    PLANNING_REVISION_LATEST_FEEDBACK_LABEL: "planningRevisionLatestFeedbackLabel",
     PLANNING_REVISION_CONSTRAINT: "planningRevisionConstraint",
     PLANNING_REVISION_EXAMPLE_HEADER: "planningRevisionExampleHeader",
     PLANNING_REVISION_EXAMPLE_UPDATE: "planningRevisionExampleUpdate",
@@ -113,7 +111,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PLANNING_REFINEMENT_TARGET_IDS_HEADER: "planningRefinementTargetIdsHeader",
     PLANNING_REFINEMENT_TARGET_ONLY_CONSTRAINT: "planningRefinementTargetOnlyConstraint",
     PLANNING_REFINEMENT_EXISTING_SUBSTEPS_LABEL: "planningRefinementExistingSubstepsLabel",
-    PLANNING_REFINEMENT_LATEST_FEEDBACK_HEADER: "planningRefinementLatestFeedbackHeader",
     PLANNING_REFINEMENT_EXAMPLE_HEADER: "planningRefinementExampleHeader",
     PLANNING_REFINEMENT_EXAMPLE_ADD: "planningRefinementExampleAdd",
     PLANNING_REFINEMENT_EXAMPLE_UPDATE: "planningRefinementExampleUpdate",
@@ -178,7 +175,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
   }),
   PLAN_REFINEMENT_TOOL: Object.freeze({
     DESCRIPTION: "planRefinementToolDescription",
-    SUMMARY_DESCRIPTION: "planRefinementToolSummaryDescription",
     TARGET_MAIN_STEP_INDEXES_DESCRIPTION: "planRefinementTargetMainStepIndexesDescription",
     NOT_READY_REASON: "planRefinementNotReadyReason",
     CONVERGED_REASON: "planRefinementConvergedReason",
@@ -240,7 +236,6 @@ const I18N_TOOL_COPY = Object.freeze({
       "请求任务验收：按 harness 插件任务清单输出验收报告；mode=active(主动) 或 forced(强行)。",
     taskAcceptanceModeDescription: "验收模式：active(主动) 或 forced(强行)。",
     planRefinementToolDescription: "在总计划完成后触发计划细化流程。",
-    planRefinementToolSummaryDescription: "可选的小结文本，会作为计划细化上下文。",
     planRefinementNotReadyReason: "总计划流程尚未完成",
     planRefinementConvergedReason: "未找到可细化的主步骤",
     planRefinementFailedReason: "插件侧细化失败",
@@ -282,7 +277,6 @@ const I18N_TOOL_COPY = Object.freeze({
       "Request task acceptance: validate completion against the harness checklist; mode=active or forced.",
     taskAcceptanceModeDescription: "Acceptance mode: active or forced.",
     planRefinementToolDescription: "Trigger planning refinement flow after main plan is ready.",
-    planRefinementToolSummaryDescription: "Optional summary text used as refinement context.",
     planRefinementNotReadyReason: "main planning flow is not completed yet",
     planRefinementConvergedReason: "no refinable main step found",
     planRefinementFailedReason: "plugin-side refinement failed",
@@ -390,7 +384,6 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningContextSummaryHeader: "规划输入上下文摘要（精简）如下，必须完整参考：",
     planningSeparateModelEmptyRelay: "无",
     planningEmptyText: "（空）",
-    planningNoFeedbackFallback: "（无）",
     planningDefaultPlanText:
       "1. 需求澄清与约束确认\n2. 实施并验证核心改动\n3. 最终验收与交付",
     postPlanFollowupPlanning:
@@ -428,12 +421,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainExampleHeader: "【输出示例】",
     planningMainExampleAdd: "ADD [主计划ID] [主计划内容]",
     planningRevisionPromptGoal:
-      "目标：基于最新反馈修正宏观主计划。仅限操作主计划ID，严禁涉及子计划。",
+      "目标：基于当前上下文与计划清单修正宏观主计划。仅限操作主计划ID，严禁涉及子计划。",
     planningRevisionStatusHeader: "【当前状态】",
     planningRevisionCountLine:
       "已修正次数：{revisionCount}/{maxAttempts}",
     planningRevisionCurrentPlanLabel: "当前主计划：",
-    planningRevisionLatestFeedbackLabel: "最新反馈：",
     planningRevisionConstraint:
       "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
     planningRevisionExampleHeader: "【输出示例】",
@@ -448,7 +440,6 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningRefinementTargetOnlyConstraint:
       "仅允许细化上述目标ID，禁止输出其他主计划ID下的子计划。",
     planningRefinementExistingSubstepsLabel: "已有子步骤：",
-    planningRefinementLatestFeedbackHeader: "【最新反馈】",
     planningRefinementExampleHeader: "【输出示例】",
     planningRefinementExampleAdd:
       "ADD [主序号.子序号] [抽象子步骤内容A]",
@@ -600,7 +591,6 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningContextSummaryHeader: "Planning context summary (compact). Must be fully considered:",
     planningSeparateModelEmptyRelay: "None",
     planningEmptyText: "(empty)",
-    planningNoFeedbackFallback: "N/A",
     planningDefaultPlanText:
       "1. Clarify requirements and constraints\n2. Implement and verify core changes\n3. Final acceptance and delivery",
     postPlanFollowupPlanning:
@@ -640,12 +630,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainExampleAdd:
       "ADD [main_plan_id] [main plan content]",
     planningRevisionPromptGoal:
-      "Goal: Revise the high-level main plan based on latest feedback. Only operate on main_plan_id; do not include sub-steps.",
+      "Goal: Revise the high-level main plan based on the current context and plan checklist. Only operate on main_plan_id; do not include sub-steps.",
     planningRevisionStatusHeader: "[Current Status]",
     planningRevisionCountLine:
       "Revision count: {revisionCount}/{maxAttempts}",
     planningRevisionCurrentPlanLabel: "Current main plan:",
-    planningRevisionLatestFeedbackLabel: "Latest feedback:",
     planningRevisionConstraint: "",
     planningRevisionExampleHeader: "",
     planningRevisionExampleUpdate: "",
@@ -657,7 +646,6 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningRefinementTargetOnlyConstraint:
       "Only refine the target IDs listed above. Do not refine any other main-plan ID.",
     planningRefinementExistingSubstepsLabel: "Existing sub-steps:",
-    planningRefinementLatestFeedbackHeader: "[Latest Feedback]",
     planningRefinementExampleHeader: "",
     planningRefinementExampleAdd: "",
     planningRefinementExampleUpdate: "",

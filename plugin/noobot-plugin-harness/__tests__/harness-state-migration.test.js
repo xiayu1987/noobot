@@ -20,7 +20,6 @@ test("ensureHarnessBucket normalizes plan-update counters and pending fields", (
             pending: {
               planRevision: true,
               planRevisionContext: {
-                summaryText: "revision-summary",
                 targetMainStepIndexes: [1],
               },
             },
@@ -45,7 +44,6 @@ test("ensureHarnessBucket normalizes plan-update counters and pending fields", (
   assert.equal(state.counters.planRefinementAttempts, 0);
   assert.equal(state.pending.planRevision, true);
   assert.deepEqual(state.pending.planRevisionContext, {
-    summaryText: "revision-summary",
     targetMainStepIndexes: [1],
   });
   assert.equal(state.pending.planRefinement, false);

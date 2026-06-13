@@ -92,7 +92,6 @@ export function setPendingPlanUpdate(
   {
     active = false,
     stage = "revision",
-    summaryText = "",
     targetMainStepIndexes = [],
   } = {},
 ) {
@@ -119,12 +118,10 @@ export function setPendingPlanUpdate(
     return true;
   }
   const normalizedStage = normalizePlanUpdateStage(stage);
-  const normalizedSummaryText = String(summaryText || "").trim();
   const normalizedTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes
     : [];
   const normalizedContext = {
-    summaryText: normalizedSummaryText,
     targetMainStepIndexes: normalizedTargetMainStepIndexes,
   };
   if (normalizedStage === "revision") {
@@ -146,17 +143,15 @@ export function setPendingPlanUpdate(
 
 export function writePlanUpdateCaptureContext(
   state = {},
-  { stage = "revision", summaryText = "", targetMainStepIndexes = [] } = {},
+  { stage = "revision", targetMainStepIndexes = [] } = {},
 ) {
   if (!state || typeof state !== "object") return false;
   if (!state.flags || typeof state.flags !== "object") state.flags = {};
   const normalizedStage = normalizePlanUpdateStage(stage);
-  const normalizedSummaryText = String(summaryText || "").trim();
   const normalizedTargetMainStepIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes
     : [];
   state.flags.planUpdateCaptureStage = normalizedStage;
-  state.flags.planUpdateCaptureSummaryText = normalizedSummaryText;
   state.flags.planUpdateCaptureTargetMainStepIndexes = normalizedTargetMainStepIndexes;
   return true;
 }
@@ -164,17 +159,15 @@ export function writePlanUpdateCaptureContext(
 export function readPlanUpdateCaptureContext(state = {}) {
   const flags = state?.flags && typeof state.flags === "object" ? state.flags : {};
   const stage = normalizePlanUpdateStage(flags.planUpdateCaptureStage || "refinement");
-  const summaryText = String(flags.planUpdateCaptureSummaryText || "").trim();
   const targetMainStepIndexes = Array.isArray(flags.planUpdateCaptureTargetMainStepIndexes)
     ? flags.planUpdateCaptureTargetMainStepIndexes
     : [];
-  return { stage, summaryText, targetMainStepIndexes };
+  return { stage, targetMainStepIndexes };
 }
 
 export function clearPlanUpdateCaptureContext(state = {}) {
   if (!state?.flags || typeof state.flags !== "object") return false;
   delete state.flags.planUpdateCaptureStage;
-  delete state.flags.planUpdateCaptureSummaryText;
   delete state.flags.planUpdateCaptureTargetMainStepIndexes;
   return true;
 }

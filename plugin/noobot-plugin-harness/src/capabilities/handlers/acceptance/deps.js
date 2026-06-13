@@ -45,4 +45,6 @@ export { invokeWithReasoningRetry } from "../shared/model/invocation-utils.js";
 
 export { buildPlanSnapshot, defaultTaskChecklist, normalizeChecklistItem } from "../shared/checklist-utils.js";
 
+export { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
+
 export { disableBlockedCalls, disableBlockedToolsInRegistry } from "../shared/tool-utils.js";
