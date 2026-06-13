@@ -12,8 +12,8 @@ const EMPTY_PLAN_METADATA = Object.freeze({
   nextPhase: { objective: "", checklistIndexes: [], content: "" },
 });
 
-export function isSummaryCompletionMarked(summaryText = "", locale = LOCALE.ZH_CN) {
-  const text = String(summaryText || "").trim();
+export function isSummaryCompletionMarked(content = "", locale = LOCALE.ZH_CN) {
+  const text = String(content || "").trim();
   if (!text) return false;
   const lines = text
     .split(/\r?\n/)

@@ -64,7 +64,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
     }
     const previousSummaryContent = buildPreviousSummaryContextContent({
       locale,
-      summaryText: resolvePreviousSummaryContextText(ctx),
+      previousSummaryContent: resolvePreviousSummaryContextText(ctx),
     });
     if (previousSummaryContent) {
       injectMessageWithPolicy(ctx, {

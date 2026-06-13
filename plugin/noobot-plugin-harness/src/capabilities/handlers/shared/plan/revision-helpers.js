@@ -297,7 +297,6 @@ export function createPlanRevisionHelpers({
     locale = LOCALE?.ZH_CN,
     bucket = {},
     state = {},
-    summaryText = "",
     { targetMainStepIndexes = [] } = {},
   ) {
     const targets = resolveRefinementTargetMainSteps(bucket, state, {
@@ -325,7 +324,6 @@ export function createPlanRevisionHelpers({
         targetIds,
         targetPlansText: targetPlans,
         existingSubPlansText: existingSubPlansSections,
-        feedback: String(summaryText || "").trim(),
       },
     });
   }

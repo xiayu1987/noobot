@@ -178,17 +178,17 @@ function resolveLatestCompleteSummaryText(bucket = {}) {
     const content = String(item?.content || "").trim();
     if (content) return content;
   }
-  return String(bucket?.summaryText || "").trim();
+  return "";
 }
 
 function buildLatestCompleteSummarySection(bucket = {}, locale = LOCALE.ZH_CN) {
-  const summaryText = resolveLatestCompleteSummaryText(bucket);
-  if (!summaryText) return "";
+  const latestCompleteSummary = resolveLatestCompleteSummaryText(bucket);
+  if (!latestCompleteSummary) return "";
   const title = locale === LOCALE.EN_US ? "## Latest complete summary" : "## 最后一次完整小结";
   return wrapHarnessCollapsibleSection({
     kind: HARNESS_COLLAPSE_KIND.latestCompleteSummary,
     title: title.replace(/^#+\s*/, ""),
-    content: [title, summaryText].filter(Boolean).join("\n").trim(),
+    content: [title, latestCompleteSummary].filter(Boolean).join("\n").trim(),
   });
 }
 

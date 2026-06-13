@@ -65,12 +65,10 @@ test("setPendingPlanUpdate manages independent revision/refinement pending field
   setPendingPlanUpdate(state, {
     active: true,
     stage: "revision",
-    summaryText: "summary",
     targetMainStepIndexes: [1],
   });
   assert.equal(state.pending.planRevision, true);
   assert.deepEqual(state.pending.planRevisionContext, {
-    summaryText: "summary",
     targetMainStepIndexes: [1],
   });
   assert.equal(state.pending.planRefinement, false);
@@ -90,12 +88,10 @@ test("plan update capture context helpers support unified + legacy fields", () =
   const state = { flags: {} };
   writePlanUpdateCaptureContext(state, {
     stage: "revision",
-    summaryText: "summary",
     targetMainStepIndexes: [1, 2],
   });
   assert.deepEqual(readPlanUpdateCaptureContext(state), {
     stage: "revision",
-    summaryText: "summary",
     targetMainStepIndexes: [1, 2],
   });
   assert.equal(clearPlanUpdateCaptureContext(state), true);

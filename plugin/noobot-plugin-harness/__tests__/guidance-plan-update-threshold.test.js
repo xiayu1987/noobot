@@ -85,7 +85,7 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
     pending: {
       summary: true,
       planRevision: true,
-      planRevisionContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
+      planRevisionContext: { targetMainStepIndexes: [] },
     },
   });
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
@@ -134,7 +134,7 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
     pending: {
       summary: true,
       planRevision: true,
-      planRevisionContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
+      planRevisionContext: { targetMainStepIndexes: [] },
     },
   });
   const meta = {
@@ -315,7 +315,7 @@ test("inject mode: overflow summary keeps higher priority than revision", async 
     pending: {
       summary: true,
       planRevision: true,
-      planRevisionContext: { summaryText: "请先修复再细化", targetMainStepIndexes: [] },
+      planRevisionContext: { targetMainStepIndexes: [] },
     },
   });
   agentContext.payload.harness.state.flags.summaryByCharsPrompted = true;
@@ -339,7 +339,7 @@ test("separate_model mode: pending revision runs by separate model without promp
   const agentContext = createAgentContext({
     pending: {
       planRevision: true,
-      planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+      planRevisionContext: { targetMainStepIndexes: [] },
     },
   });
   const meta = {
@@ -461,7 +461,6 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
   });
   agentContext.payload.harness.state.pending.planRevision = true;
   agentContext.payload.harness.state.pending.planRevisionContext = {
-    summaryText: "pending-summary",
     targetMainStepIndexes: [],
   };
 
@@ -535,7 +534,7 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
     planText: "1. 主任务\n",
     pending: {
       planRefinement: true,
-      planRefinementContext: { summaryText: "针对 1 细化", targetMainStepIndexes: [1] },
+      planRefinementContext: { targetMainStepIndexes: [1] },
     },
     counters: { planRevisionAttempts: 0, planRefinementAttempts: 0, planUpdateAttempts: 0 },
   });
@@ -560,7 +559,7 @@ test("separate_model refinement-only flow runs planning_refinement directly", as
     planText: "1. 主任务\n",
     pending: {
       planRefinement: true,
-      planRefinementContext: { summaryText: "针对 1 细化", targetMainStepIndexes: [1] },
+      planRefinementContext: { targetMainStepIndexes: [1] },
     },
     counters: { planRevisionAttempts: 0, planRefinementAttempts: 0, planUpdateAttempts: 0 },
   });
@@ -598,7 +597,7 @@ test("runPlanUpdateAfterSummary does not start revision when refinement is alrea
     agentContext: createAgentContext({
       pending: {
         planRefinement: true,
-        planRefinementContext: { summaryText: "待细化", targetMainStepIndexes: [1] },
+        planRefinementContext: { targetMainStepIndexes: [1] },
       },
     }),
     messages: [{ role: "user", content: "继续" }],

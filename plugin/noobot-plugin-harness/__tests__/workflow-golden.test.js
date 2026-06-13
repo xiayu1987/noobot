@@ -49,7 +49,7 @@ test("golden: summary_overflow outranks guidance and plan_update", () => {
       summary: true,
       guidance: { reason: "tool_failures" },
       planRevision: true,
-      planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+      planRevisionContext: { targetMainStepIndexes: [] },
     },
     flags: {
       summaryByCharsPrompted: true,
@@ -64,7 +64,7 @@ test("golden: guidance outranks plan_update", () => {
       summary: false,
       guidance: { reason: "tool_failures" },
       planRevision: true,
-      planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+      planRevisionContext: { targetMainStepIndexes: [] },
     },
     flags: {
       summaryByCharsPrompted: false,

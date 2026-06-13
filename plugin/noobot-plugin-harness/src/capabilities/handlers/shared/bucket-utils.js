@@ -115,7 +115,6 @@ function migrateLegacyPlanUpdateState(state = {}) {
         ? pending.planRevisionContext
         : {};
     const normalizedRevisionContext = {
-      summaryText: String(revisionContext.summaryText || "").trim(),
       targetMainStepIndexes: Array.isArray(revisionContext.targetMainStepIndexes)
         ? revisionContext.targetMainStepIndexes
         : [],
@@ -127,7 +126,6 @@ function migrateLegacyPlanUpdateState(state = {}) {
         ? pending.planRefinementContext
         : {};
     const normalizedRefinementContext = {
-      summaryText: String(refinementContext.summaryText || "").trim(),
       targetMainStepIndexes: Array.isArray(refinementContext.targetMainStepIndexes)
         ? refinementContext.targetMainStepIndexes
         : [],
@@ -141,11 +139,8 @@ function migrateLegacyPlanUpdateState(state = {}) {
 
   if ("planRevisionStage" in pending) delete pending.planRevisionStage;
   if ("planRevisionTargetMainStepIndexes" in pending) delete pending.planRevisionTargetMainStepIndexes;
-  if ("summaryText" in pending) delete pending.summaryText;
-
   if ("planRevisionCapturePending" in flags) delete flags.planRevisionCapturePending;
   if ("planRevisionCaptureStage" in flags) delete flags.planRevisionCaptureStage;
-  if ("planRevisionCaptureSummaryText" in flags) delete flags.planRevisionCaptureSummaryText;
   if ("planRevisionCaptureTargetMainStepIndexes" in flags) {
     delete flags.planRevisionCaptureTargetMainStepIndexes;
   }

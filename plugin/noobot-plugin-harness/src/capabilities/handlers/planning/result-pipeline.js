@@ -211,7 +211,6 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
     setPendingPlanUpdate(state, {
       active: true,
       stage: "refinement",
-      summaryText: "",
       targetMainStepIndexes: changedMainStepIndexes,
     });
     appendCapabilityLog(ctx, {

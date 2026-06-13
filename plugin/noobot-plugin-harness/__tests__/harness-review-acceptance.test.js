@@ -687,7 +687,15 @@ test("phase acceptance separate model receives context, summaries, revised plan,
         messages: { system: [], history: [] },
         harness: {
           planText: "1. 核心实现\n1.1 子任务A\n2. 验证交付",
-          summaryText: "1. 已完成基础结构审查\n2. 正在补齐验收流程",
+          summaryText: "1. 旧小结：已完成基础结构审查\n2. 旧小结：正在补齐验收流程",
+          summaryFullText: [
+            "[SUMMARY_OVERVIEW]",
+            "1. 最新小结概要：阶段验收只应看到这一条",
+            "[SUMMARY_DETAIL]",
+            "## 详细明细",
+            "- 详细内容不应作为小结清单传入阶段验收",
+            "[SUMMARY_END]",
+          ].join("\n"),
           phaseAcceptanceReports: [
             { acceptedAt: "2026-05-27T00:00:00.000Z", content: "阶段验收清单一：warn" },
           ],
@@ -731,16 +739,17 @@ test("phase acceptance separate model receives context, summaries, revised plan,
       String(item.content || "").includes("harness-phase-acceptance-reports") ? index : -1)
     .filter((index) => index >= 0);
   const requestIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-phase-acceptance-request"));
-  assert.equal(summaryIndexes.length, 2);
+  assert.equal(summaryIndexes.length, 1);
   assert.equal(messages[summaryIndexes[0]].role, "system");
-  assert.equal(messages[summaryIndexes[1]].role, "system");
+  assert.match(String(messages[summaryIndexes[0]].content || ""), /最新小结概要/);
+  assert.doesNotMatch(String(messages[summaryIndexes[0]].content || ""), /旧小结/);
+  assert.doesNotMatch(String(messages[summaryIndexes[0]].content || ""), /详细内容不应作为小结清单/);
   assert.equal(messages[planIndex].role, "system");
   assert.equal(messages[phaseIndexes[0]].role, "system");
   assert.equal(messages[requestIndex].role, "user");
   assert.equal(
     summaryIndexes[0] > 0 &&
-      summaryIndexes[1] > summaryIndexes[0] &&
-      planIndex > summaryIndexes[1] &&
+      planIndex > summaryIndexes[0] &&
       phaseIndexes[0] > planIndex &&
       requestIndex > phaseIndexes[0],
     true,

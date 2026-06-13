@@ -49,7 +49,7 @@ const buildNextPhaseRelayContent = planRevisionHelpers.buildNextPhaseRelayConten
 export async function runPlanningRefinementBySeparateModel(
   ctx = {},
   meta = {},
-  { summaryText = "", source = "planning_refinement", baseMessages = null, targetMainStepIndexes = [] } = {},
+  { source = "planning_refinement", baseMessages = null, targetMainStepIndexes = [] } = {},
 ) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return { applied: false, status: "missing_harness_bucket" };
@@ -84,7 +84,7 @@ export async function runPlanningRefinementBySeparateModel(
     locale,
     bucket,
     state,
-    String(summaryText || "").trim(),
+    "",
     { targetMainStepIndexes: refinementTargetMainSteps.map((item) => item.index) },
   );
   const agentMessagesBase = Array.isArray(baseMessages)
@@ -173,7 +173,6 @@ export async function runPlanningRefinementBySeparateModel(
     attachmentMetas: refinementAttachmentMetas,
   });
   const refinementApplied = applyRevisedPlanFromText(ctx, refinementText, {
-    summary: String(summaryText || "").trim(),
     source,
     stage: "refinement",
     targetMainStepIndexes: refinementTargetMainSteps.map((item) => item.index),

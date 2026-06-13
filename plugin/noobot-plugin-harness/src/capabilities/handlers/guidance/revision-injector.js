@@ -47,7 +47,6 @@ const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
 export function schedulePlanUpdateByInject(
   ctx = {},
-  summaryText = "",
   stage = "revision",
   { targetMainStepIndexes = [] } = {},
 ) {
@@ -89,7 +88,6 @@ export function schedulePlanUpdateByInject(
       setPendingPlanUpdate(state, {
         active: true,
         stage: normalizedStage,
-        summaryText,
         targetMainStepIndexes: normalizedTargetMainStepIndexes,
       });
       setPendingStateWithMeta(
@@ -101,7 +99,6 @@ export function schedulePlanUpdateByInject(
     },
     buildScheduledDetail: ({ bucket, state }) => ({
       stage: normalizedStage,
-      hasSummaryText: Boolean(String(summaryText || "").trim()),
       refinementTargetMainStepIndexes:
         normalizedStage === "refinement" ? targetMainSteps.map((item = {}) => Number(item?.index)) : [],
       checklistCount: Array.isArray(bucket.taskChecklist) ? bucket.taskChecklist.length : 0,
@@ -136,8 +133,8 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
   }
   const promptContent =
     pendingData.stage === "revision"
-      ? buildPlanningRevisionPrompt(locale, bucket, state, pendingData.summaryText || "")
-      : buildPlanningRefinementPrompt(locale, bucket, state, pendingData.summaryText || "");
+      ? buildPlanningRevisionPrompt(locale, bucket, state)
+      : buildPlanningRefinementPrompt(locale, bucket, state, "");
   const userInjection = injectMessageWithPolicy(ctx, {
     role: "user",
     content: String(promptContent || "").trim(),
@@ -182,10 +179,10 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
     failedEvent: GUIDANCE_EVENTS.planUpdateCaptureFailedInject,
     isCapturePending: ({ state }) => state.flags.planUpdateCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
-      const { stage, summaryText, targetMainStepIndexes } = readPlanUpdateCaptureContext(state);
+      const { stage, targetMainStepIndexes } = readPlanUpdateCaptureContext(state);
       setCaptureFlagStateWithMeta(state, "planUpdateCapturePending", false);
       clearPlanUpdateCaptureContext(state);
-      return { stage, summaryText, targetMainStepIndexes };
+      return { stage, targetMainStepIndexes };
     },
     applyCaptureResult: ({ responseText, ctx: currentCtx, state, bucket, captureMeta }) => {
       const stage = captureMeta?.stage === "revision" ? "revision" : "refinement";
@@ -194,7 +191,6 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
       }
       const applied = applyRevisedPlanFromText(currentCtx, responseText, {
         source: stage === "revision" ? "planning_revision_inject" : "planning_refinement_inject",
-        summary: captureMeta?.summaryText || "",
         stage,
         targetMainStepIndexes: Array.isArray(captureMeta?.targetMainStepIndexes)
           ? captureMeta.targetMainStepIndexes
@@ -231,7 +227,6 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
         const scheduled = applied
           ? schedulePlanUpdateByInject(
             currentCtx,
-            captureMeta?.summaryText || "",
             "refinement",
             { targetMainStepIndexes: refinementTargetMainStepIndexes },
           )

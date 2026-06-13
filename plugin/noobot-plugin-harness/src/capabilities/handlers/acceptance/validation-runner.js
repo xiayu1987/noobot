@@ -17,6 +17,7 @@ import {
   invokeWithReasoningRetry,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
+  parseSummaryOverviewAndDetailFromText,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
@@ -134,6 +135,36 @@ function resolveAcceptanceValidationRequestPayload(promptPayload = {}) {
   };
 }
 
+function resolveLatestSummaryOutputText(bucket = {}) {
+  const outputs = Array.isArray(bucket?.guidanceOutputs) ? bucket.guidanceOutputs : [];
+  for (let index = outputs.length - 1; index >= 0; index -= 1) {
+    const item = outputs[index] || {};
+    if (String(item?.purpose || "").trim() !== "summary") continue;
+    const content = String(item?.content || "").trim();
+    if (content) return content;
+  }
+  return "";
+}
+
+function resolveSummaryOverviewText(candidateText = "") {
+  const text = String(candidateText || "").trim();
+  if (!text) return "";
+  const parsed = parseSummaryOverviewAndDetailFromText(text);
+  return String(parsed?.overviewText || "").trim() || text;
+}
+
+function resolveLatestSummaryOverviewText(bucket = {}) {
+  const candidates = [
+    String(bucket?.summaryFullText || "").trim(),
+    resolveLatestSummaryOutputText(bucket),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    const overview = resolveSummaryOverviewText(candidate);
+    if (overview) return overview;
+  }
+  return "";
+}
+
 function buildFinalAcceptanceSemanticValidationMessages({
   locale = LOCALE.ZH_CN,
   planContextContent = "",
@@ -165,7 +196,6 @@ function buildPhaseAcceptanceRequestPayload({ bucket = {}, state = {} } = {}) {
     phaseIndex: Array.isArray(bucket?.phaseAcceptanceReports)
       ? bucket.phaseAcceptanceReports.length + 1
       : 1,
-    summaryText: String(bucket?.summaryText || "").trim(),
     toolSignals: state?.signals || {},
   };
 }
@@ -241,11 +271,13 @@ function buildAcceptancePromptParts({
     marker: getAllPhaseAcceptanceReportsMarker(locale),
     data: { phaseAcceptanceReports: bucket?.phaseAcceptanceReports || [] },
   });
-  const summaryReportsContents = buildAllSummaryReportSystemContents({
-    locale,
-    marker: getAllSummaryReportsMarker(locale),
-    data: { summaryText: String(bucket?.summaryText || "").trim() },
-  });
+  const summaryReportsContents = phase
+    ? buildAllSummaryReportSystemContents({
+        locale,
+        marker: getAllSummaryReportsMarker(locale),
+        data: { latestSummaryOverview: resolveLatestSummaryOverviewText(bucket) },
+      })
+    : [];
   const requestContent = phase
     ? buildPhaseAcceptanceRequestPromptText({
         locale,

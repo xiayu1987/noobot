@@ -26,10 +26,6 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
     name: PLAN_REFINEMENT_TOOL_NAME,
     description: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.DESCRIPTION),
     schema: z.object({
-      summary: z
-        .string()
-        .optional()
-        .describe(translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.SUMMARY_DESCRIPTION)),
       targetMainStepIndexes: z
         .array(z.number().int().positive())
         .optional()
@@ -43,7 +39,6 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
       const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
-      const summaryText = String(args?.summary || "").trim();
       if (state?.flags?.planningCaptured !== true) {
         return {
           ok: false,
@@ -56,7 +51,6 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
         toolCtx,
         toolMeta,
         {
-          summaryText,
           source: "planning_refinement_tool",
           targetMainStepIndexes: Array.isArray(args?.targetMainStepIndexes)
             ? args.targetMainStepIndexes

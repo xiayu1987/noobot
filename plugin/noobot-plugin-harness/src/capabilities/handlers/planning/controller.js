@@ -344,7 +344,6 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
             setPendingPlanUpdate(holder.state, {
               active: true,
               stage: "revision",
-              summaryText: String(holder.bucket?.summaryText || "").trim(),
             });
             setPendingStateWithMeta(holder.state, "planRevision", true);
             appendCapabilityLog(ctx, {
@@ -444,7 +443,6 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           active: planUpdateSnapshot.active === true,
           stage: planUpdateSnapshot.stage || "",
           context: {
-            summaryText: planUpdateSnapshot.summaryText || "",
             targetMainStepIndexes: Array.isArray(planUpdateSnapshot.targetMainStepIndexes)
               ? planUpdateSnapshot.targetMainStepIndexes
               : [],

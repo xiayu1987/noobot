@@ -48,7 +48,6 @@ export function resolvePendingPlanUpdate(state = {}) {
     return {
       active: true,
       stage: GUIDANCE_DECISION.stage.revision,
-      summaryText: String(context.summaryText || "").trim(),
       targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
         ? context.targetMainStepIndexes
         : [],
@@ -62,13 +61,12 @@ export function resolvePendingPlanUpdate(state = {}) {
     return {
       active: true,
       stage: GUIDANCE_DECISION.stage.refinement,
-      summaryText: String(context.summaryText || "").trim(),
       targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
         ? context.targetMainStepIndexes
         : [],
     };
   }
-  return { active: false, stage: "", summaryText: "", targetMainStepIndexes: [] };
+  return { active: false, stage: "", targetMainStepIndexes: [] };
 }
 
 export function resolveNextGuidanceAction(state = {}) {
@@ -174,7 +172,6 @@ function toPendingSnapshot(state = {}) {
       active: planUpdate.active === true,
       stage: planUpdate.stage || "",
       context: {
-        summaryText: planUpdate.summaryText || "",
         targetMainStepIndexes: Array.isArray(planUpdate.targetMainStepIndexes) ? planUpdate.targetMainStepIndexes : [],
       },
     },

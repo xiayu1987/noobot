@@ -20,7 +20,7 @@ test("scheduler priority: overflow-summary > guidance > revision > refinement > 
         summary: true,
         guidance: "consecutive_failures",
         planRevision: true,
-        planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+        planRevisionContext: { targetMainStepIndexes: [] },
       },
     }),
     { action: "summary", stage: "", reason: "pending_summary_overflow" },
@@ -32,7 +32,7 @@ test("scheduler priority: overflow-summary > guidance > revision > refinement > 
         summary: true,
         guidance: "consecutive_failures",
         planRevision: true,
-        planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+        planRevisionContext: { targetMainStepIndexes: [] },
       },
     }),
     { action: "guidance", stage: "", reason: "pending_guidance" },
@@ -44,7 +44,7 @@ test("scheduler priority: overflow-summary > guidance > revision > refinement > 
         summary: false,
         guidance: "consecutive_failures",
         planRevision: true,
-        planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+        planRevisionContext: { targetMainStepIndexes: [] },
       },
     }),
     { action: "guidance", stage: "", reason: "pending_guidance" },
@@ -56,7 +56,7 @@ test("scheduler priority: overflow-summary > guidance > revision > refinement > 
         summary: false,
         guidance: null,
         planRevision: true,
-        planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+        planRevisionContext: { targetMainStepIndexes: [] },
       },
     }),
     { action: "plan_update", stage: "revision", reason: "pending_revision" },
@@ -68,7 +68,7 @@ test("scheduler priority: overflow-summary > guidance > revision > refinement > 
         summary: false,
         guidance: null,
         planRefinement: true,
-        planRefinementContext: { summaryText: "", targetMainStepIndexes: [1] },
+        planRefinementContext: { targetMainStepIndexes: [1] },
       },
     }),
     { action: "plan_update", stage: "refinement", reason: "pending_refinement" },
@@ -87,7 +87,6 @@ test("scheduler resolves independent revision/refinement pending fields", () => 
     pending: {
       planRevision: true,
       planRevisionContext: {
-        summaryText: "revision summary",
         targetMainStepIndexes: [1, 2],
       },
     },
@@ -95,14 +94,13 @@ test("scheduler resolves independent revision/refinement pending fields", () => 
   assert.deepEqual(resolved, {
     active: true,
     stage: "revision",
-    summaryText: "revision summary",
     targetMainStepIndexes: [1, 2],
   });
   assert.deepEqual(
     resolveNextGuidanceAction({
       pending: {
         planRevision: true,
-        planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+        planRevisionContext: { targetMainStepIndexes: [] },
       },
     }),
     {
@@ -119,7 +117,7 @@ test("priority decision snapshot exposes chosen and blocked actions", () => {
       summary: true,
       guidance: null,
       planRevision: true,
-      planRevisionContext: { summaryText: "", targetMainStepIndexes: [] },
+      planRevisionContext: { targetMainStepIndexes: [] },
       phaseAcceptance: true,
     },
     flags: {
@@ -156,24 +154,23 @@ test("when revision and refinement are both pending, scheduler always prefers re
   const resolved = resolvePendingPlanUpdate({
     pending: {
       planRevision: true,
-      planRevisionContext: { summaryText: "rev", targetMainStepIndexes: [1] },
+      planRevisionContext: { targetMainStepIndexes: [1] },
       planRefinement: true,
-      planRefinementContext: { summaryText: "ref", targetMainStepIndexes: [2] },
+      planRefinementContext: { targetMainStepIndexes: [2] },
     },
   });
   assert.deepEqual(resolved, {
     active: true,
     stage: "revision",
-    summaryText: "rev",
     targetMainStepIndexes: [1],
   });
 
   const action = resolveNextGuidanceAction({
     pending: {
       planRevision: true,
-      planRevisionContext: { summaryText: "rev", targetMainStepIndexes: [1] },
+      planRevisionContext: { targetMainStepIndexes: [1] },
       planRefinement: true,
-      planRefinementContext: { summaryText: "ref", targetMainStepIndexes: [2] },
+      planRefinementContext: { targetMainStepIndexes: [2] },
     },
   });
   assert.deepEqual(action, {
