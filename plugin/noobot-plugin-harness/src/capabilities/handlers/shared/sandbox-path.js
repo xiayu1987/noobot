@@ -8,19 +8,54 @@ function resolveRuntime(ctx = {}) {
   return ctx?.agentContext?.execution?.controllers?.runtime || null;
 }
 
+function callResolver(resolver, ...args) {
+  if (typeof resolver !== "function") return "";
+  try {
+    return String(resolver(...args) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function buildResolverPayload(meta = {}, sourceMeta = {}, runtime = null, ctx = {}) {
+  const path = String(sourceMeta?.path || meta?.path || "").trim();
+  return {
+    ...(meta && typeof meta === "object" ? meta : {}),
+    attachmentMeta: sourceMeta,
+    meta: sourceMeta,
+    path,
+    hostPath: path,
+    relativePath: String(sourceMeta?.relativePath || "").trim(),
+    runtime,
+    agentContext: ctx?.agentContext || null,
+    purpose: "attachment_display_path",
+  };
+}
+
+function resolveViaRuntimeResolvers(sourceMeta = {}, runtime = null, ctx = {}) {
+  const payload = buildResolverPayload(sourceMeta, sourceMeta, runtime, ctx);
+  const resolvers = [
+    runtime?.sharedTools?.semanticTransfer?.resolveTransferFilePath,
+    runtime?.sharedTools?.resolveAttachmentDisplayPath,
+    runtime?.sharedTools?.resolveSandboxPath,
+    runtime?.sharedTools?.toSandboxPath,
+    runtime?.sharedTools?.pathMapper?.toSandboxPath,
+  ];
+  for (const resolver of resolvers) {
+    const resolved = callResolver(resolver, payload);
+    if (resolved) return resolved;
+  }
+  return "";
+}
+
 export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   const runtime = resolveRuntime(ctx);
-  const semanticDisplay = runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath;
-  if (typeof semanticDisplay === "function") {
-    try {
-      const resolved = String(
-        semanticDisplay(meta, { runtime, agentContext: ctx?.agentContext || null }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to legacy resolver candidates below.
-    }
-  }
+  const semanticDisplay = callResolver(
+    runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath,
+    meta,
+    { runtime, agentContext: ctx?.agentContext || null },
+  );
+  if (semanticDisplay) return semanticDisplay;
 
   const primaryFile = Array.isArray(meta?.files) && meta.files.length ? meta.files[0] : null;
   const sourceMeta = primaryFile?.attachmentMeta || meta?.attachmentMeta || meta;
@@ -33,75 +68,8 @@ export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   ).trim();
   if (directFilePath) return directFilePath;
 
-  const metaSandboxPath = String(
-    sourceMeta?.sandboxPath || sourceMeta?.sandboxViewPath || sourceMeta?.sandbox_file_path || "",
-  ).trim();
-  if (metaSandboxPath) return metaSandboxPath;
+  const resolved = resolveViaRuntimeResolvers(sourceMeta, runtime, ctx);
+  if (resolved) return resolved;
 
-  const semanticResolver = runtime?.sharedTools?.semanticTransfer?.resolveTransferFilePath;
-  if (typeof semanticResolver === "function") {
-    try {
-      const resolved = String(
-        semanticResolver({
-          attachmentMeta: sourceMeta,
-          meta: sourceMeta,
-          path: String(sourceMeta?.path || "").trim(),
-          hostPath: String(sourceMeta?.path || "").trim(),
-          relativePath: String(sourceMeta?.relativePath || "").trim(),
-          runtime,
-          agentContext: ctx?.agentContext || null,
-          purpose: "attachment_display_path",
-        }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to legacy resolver candidates below.
-    }
-  }
-  const injectedResolver = runtime?.sharedTools?.resolveAttachmentDisplayPath;
-  if (typeof injectedResolver === "function") {
-    try {
-      const resolved = String(
-        injectedResolver({
-          meta: sourceMeta,
-          path: String(sourceMeta?.path || "").trim(),
-          hostPath: String(sourceMeta?.path || "").trim(),
-          relativePath: String(sourceMeta?.relativePath || "").trim(),
-          runtime,
-          agentContext: ctx?.agentContext || null,
-          purpose: "attachment_display_path",
-        }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to legacy resolver candidates below.
-    }
-  }
-  const hostPath = String(sourceMeta?.path || "").trim();
-  const relativePath = String(sourceMeta?.relativePath || "").trim();
-  const resolverCandidates = [
-    runtime?.sharedTools?.resolveSandboxPath,
-    runtime?.sharedTools?.toSandboxPath,
-    runtime?.sharedTools?.pathMapper?.toSandboxPath,
-  ];
-  for (const resolver of resolverCandidates) {
-    if (typeof resolver !== "function") continue;
-    try {
-      const resolved = String(
-        resolver({
-          path: hostPath,
-          hostPath,
-          relativePath,
-          runtime,
-          agentContext: ctx?.agentContext || null,
-          purpose: "attachment_display_path",
-        }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to meta path below.
-    }
-  }
-
-  return String(relativePath || hostPath || sourceMeta?.name || "").trim();
+  return String(sourceMeta?.relativePath || sourceMeta?.path || sourceMeta?.name || "").trim();
 }

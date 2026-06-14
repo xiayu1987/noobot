@@ -12,7 +12,7 @@ import {
 } from "../envelope/envelope-utils.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/telemetry.js";
-import { compactTransferPayloadForModel } from "../core/compact.js";
+import { compactTransferPayloadForModel, firstNormalizedString } from "../core/compact.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -26,12 +26,12 @@ function normalizeDetailRefs(detailRefs = []) {
   return (Array.isArray(detailRefs) ? detailRefs : [])
     .map((item = {}, index) => {
       const source = isPlainObject(item) ? item : {};
-      const name = normalizeString(source?.name || `detail-${index + 1}`);
-      const path = normalizeString(
-        source?.transferFilePath ||
-          source?.filePath ||
-          source?.relativePath ||
-          source?.sandboxPath,
+      const name = firstNormalizedString(source?.name, `detail-${index + 1}`);
+      const path = firstNormalizedString(
+        source?.transferFilePath,
+        source?.filePath,
+        source?.relativePath,
+        source?.sandboxPath,
       );
       return path ? { name, path } : null;
     })
@@ -92,8 +92,8 @@ export async function processStageMessage({
     runtime,
     agentContext,
     content: normalizedDetail,
-    name: normalizeString(name) || "harness-stage-detail.md",
-    mimeType: normalizeString(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+    name: firstNormalizedString(name, "harness-stage-detail.md"),
+    mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
     generationSource: intent.generationSource,
     source: intent.source,

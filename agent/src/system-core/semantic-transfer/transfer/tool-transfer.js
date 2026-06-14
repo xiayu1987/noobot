@@ -22,6 +22,7 @@ import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js"
 import {
   compactToolResultPayloadForModel,
   compactTransferPayloadForModel,
+  firstNormalizedString,
 } from "../core/compact.js";
 import {
   materializeTextForToolResult,
@@ -253,8 +254,8 @@ async function transferToolInput({
     runtime,
     agentContext,
     content: normalizedText,
-    name: normalizeString(name) || "tool-input.txt",
-    mimeType: normalizeString(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+    name: firstNormalizedString(name, "tool-input.txt"),
+    mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
     generationSource: intent.generationSource,
     source: intent.source,
@@ -305,7 +306,7 @@ export async function transferToolMessage({
   mode = "",
   ...options
 } = {}) {
-  const normalizedMode = normalizeString(transferMode || mode);
+  const normalizedMode = firstNormalizedString(transferMode, mode);
   if (normalizedMode === "tool_result_text") {
     return normalizeToolResultOverflow({
       ...options,

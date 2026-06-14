@@ -26,6 +26,7 @@ import {
   transferSemanticContentSync,
   transferSubAgentMessages,
   transferToolMessage,
+  resolveTransferPathView,
 } from "../../../src/system-core/semantic-transfer/index.js";
 
 test("semantic transfer envelopes keep direct/file semantics", () => {
@@ -101,6 +102,26 @@ test("resolveTransferFilePath preserves sandboxPath priority and fallback path",
   assert.equal(
     resolveTransferFilePath({ attachmentMeta: { relativePath: "attachments/a.md", name: "a.md" } }),
     "attachments/a.md",
+  );
+});
+
+test("resolveTransferPathView keeps sandboxPath semantic separate from relative display fallback", () => {
+  assert.deepEqual(
+    resolveTransferPathView({ attachmentMeta: { relativePath: "attachments/a.md", name: "a.md" } }),
+    {
+      displayPath: "attachments/a.md",
+      relativePath: "attachments/a.md",
+    },
+  );
+  assert.equal(
+    resolveTransferPathView({
+      attachmentMeta: {
+        sandboxPath: "/workspace/a.md",
+        relativePath: "attachments/a.md",
+        name: "a.md",
+      },
+    }).sandboxPath,
+    "/workspace/a.md",
   );
 });
 

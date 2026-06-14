@@ -142,11 +142,13 @@ function renderFinalAcceptanceChecklistSummaryText(report = {}, locale = LOCALE.
       ? data.taskChecklist
       : [];
   const summary = data?.summary && typeof data.summary === "object" ? data.summary : {};
-  const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_TITLE) ||
-    (locale === LOCALE.EN_US ? "[Harness-Acceptance]" : "[Harness-验收]");
-  const checklistLabel = locale === LOCALE.EN_US ? "Complete plan checklist" : "完整计划清单";
-  const summaryLabel = locale === LOCALE.EN_US ? "Summary" : "汇总";
-  const emptyLine = locale === LOCALE.EN_US ? "-" : "（空）";
+  const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_TITLE);
+  const checklistLabel = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.COMPLETE_PLAN_CHECKLIST_LABEL,
+  );
+  const summaryLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SUMMARY_LABEL);
+  const emptyLine = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.EMPTY_LINE);
   const total = Number(summary?.total || checklist.length || 0);
   const completed = Number(summary?.completed || 0);
   const inProgress = Number(summary?.inProgress || 0);
@@ -184,7 +186,10 @@ function resolveLatestCompleteSummaryText(bucket = {}) {
 function buildLatestCompleteSummarySection(bucket = {}, locale = LOCALE.ZH_CN) {
   const latestCompleteSummary = resolveLatestCompleteSummaryText(bucket);
   if (!latestCompleteSummary) return "";
-  const title = locale === LOCALE.EN_US ? "## Latest complete summary" : "## 最后一次完整小结";
+  const title = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.LATEST_COMPLETE_SUMMARY_TITLE,
+  );
   return wrapHarnessCollapsibleSection({
     kind: HARNESS_COLLAPSE_KIND.latestCompleteSummary,
     title: title.replace(/^#+\s*/, ""),
@@ -199,7 +204,10 @@ function buildFinalHarnessValidationSections({
 } = {}) {
   const rendered = String(reportText || "").trim();
   const summarySection = buildLatestCompleteSummarySection(bucket, locale);
-  const acceptanceTitle = locale === LOCALE.EN_US ? "Harness-Acceptance" : "Harness-验收";
+  const acceptanceTitle = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.COLLAPSE_ACCEPTANCE_TITLE,
+  );
   const acceptanceSection = rendered
     ? wrapHarnessCollapsibleSection({
         kind: HARNESS_COLLAPSE_KIND.acceptance,

@@ -7,6 +7,7 @@ import {
   resolveAttachmentDisplayPath,
   resolveSandboxPath,
 } from "../../utils/sandbox-path-resolver.js";
+import { firstNormalizedString } from "../core/compact.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -14,6 +15,56 @@ function isPlainObject(value) {
 
 function normalizeString(value = "") {
   return String(value || "").trim();
+}
+
+function resolveSourceMeta(attachmentMeta = null, meta = null) {
+  return isPlainObject(attachmentMeta)
+    ? attachmentMeta
+    : (isPlainObject(meta) ? meta : {});
+}
+
+function buildTransferPathResolverPayload({
+  runtime = {},
+  agentContext = null,
+  attachmentMeta = null,
+  meta = null,
+  path = "",
+  hostPath = "",
+  relativePath = "",
+  purpose = "semantic_transfer_file_path",
+} = {}) {
+  const sourceMeta = resolveSourceMeta(attachmentMeta, meta);
+  const resolvedHostPath = firstNormalizedString(hostPath, path, sourceMeta?.path);
+  const resolvedRelativePath = firstNormalizedString(relativePath, sourceMeta?.relativePath);
+  return {
+    meta: sourceMeta,
+    path: resolvedHostPath,
+    hostPath: resolvedHostPath,
+    relativePath: resolvedRelativePath,
+    runtime,
+    agentContext,
+    purpose,
+  };
+}
+
+function resolveViaRuntimeTransferPathResolvers(payload = {}) {
+  const resolverCandidates = [
+    payload?.runtime?.sharedTools?.resolveAttachmentDisplayPath,
+    payload?.runtime?.sharedTools?.resolveSandboxPath,
+    payload?.runtime?.sharedTools?.toSandboxPath,
+    payload?.runtime?.sharedTools?.pathMapper?.toSandboxPath,
+  ];
+
+  for (const resolver of resolverCandidates) {
+    if (typeof resolver !== "function") continue;
+    try {
+      const resolved = normalizeString(resolver(payload));
+      if (resolved) return resolved;
+    } catch {
+      // Keep the historical fallback behavior: ignore resolver errors.
+    }
+  }
+  return "";
 }
 
 export function resolveTransferFilePath({
@@ -26,55 +77,25 @@ export function resolveTransferFilePath({
   relativePath = "",
   purpose = "semantic_transfer_file_path",
 } = {}) {
-  const sourceMeta = isPlainObject(attachmentMeta)
-    ? attachmentMeta
-    : (isPlainObject(meta) ? meta : {});
-  const resolvedHostPath = normalizeString(hostPath || path || sourceMeta?.path);
-  const resolvedRelativePath = normalizeString(relativePath || sourceMeta?.relativePath);
-
-  const resolverPayload = {
-    meta: sourceMeta,
-    path: resolvedHostPath,
-    hostPath: resolvedHostPath,
-    relativePath: resolvedRelativePath,
+  const resolverPayload = buildTransferPathResolverPayload({
     runtime,
     agentContext,
+    attachmentMeta,
+    meta,
+    path,
+    hostPath,
+    relativePath,
     purpose,
-  };
+  });
 
-  const resolverCandidates = [
-    runtime?.sharedTools?.resolveAttachmentDisplayPath,
-    runtime?.sharedTools?.resolveSandboxPath,
-    runtime?.sharedTools?.toSandboxPath,
-    runtime?.sharedTools?.pathMapper?.toSandboxPath,
-  ];
+  const runtimeResolvedPath = resolveViaRuntimeTransferPathResolvers(resolverPayload);
+  if (runtimeResolvedPath) return runtimeResolvedPath;
 
-  for (const resolver of resolverCandidates) {
-    if (typeof resolver !== "function") continue;
-    try {
-      const resolved = normalizeString(resolver(resolverPayload));
-      if (resolved) return resolved;
-    } catch {
-      // Keep the historical fallback behavior: ignore resolver errors.
-    }
-  }
-
-  return normalizeString(
-    resolveAttachmentDisplayPath({
-      ...resolverPayload,
-      runtime,
-      agentContext,
-    }) ||
-      resolveSandboxPath({
-        path: resolvedHostPath,
-        hostPath: resolvedHostPath,
-        relativePath: resolvedRelativePath,
-        runtime,
-        agentContext,
-      }) ||
-      resolvedRelativePath ||
-      resolvedHostPath ||
-      sourceMeta?.name,
+  return firstNormalizedString(
+    resolveAttachmentDisplayPath(resolverPayload),
+    resolverPayload.relativePath,
+    resolverPayload.hostPath,
+    resolverPayload.meta?.name,
   );
 }
 
@@ -89,35 +110,31 @@ export function resolveTransferPathView({
   relativePath = "",
   purpose = "semantic_transfer_file_path",
 } = {}) {
-  const sourceMeta = isPlainObject(attachmentMeta)
-    ? attachmentMeta
-    : (isPlainObject(meta) ? meta : {});
-  const resolvedHostPath = normalizeString(hostPath || path || sourceMeta?.path);
-  const resolvedRelativePath = normalizeString(relativePath || sourceMeta?.relativePath);
-  const sandboxPath = normalizeString(
-    sourceMeta?.sandboxPath || sourceMeta?.sandboxViewPath || sourceMeta?.sandbox_file_path ||
-      resolveSandboxPath({
-        path: resolvedHostPath,
-        hostPath: resolvedHostPath,
-        relativePath: resolvedRelativePath,
-        runtime,
-        agentContext,
-      }),
-  );
-  const displayPath = resolveTransferFilePath({
+  const resolverPayload = buildTransferPathResolverPayload({
     runtime,
     agentContext,
-    attachmentMeta: sourceMeta,
-    path: resolvedHostPath,
-    hostPath: resolvedHostPath,
-    relativePath: resolvedRelativePath,
+    attachmentMeta,
+    meta,
+    path,
+    hostPath,
+    relativePath,
     purpose,
+  });
+  const sandboxPath = firstNormalizedString(
+    resolverPayload.meta?.sandboxPath,
+    resolverPayload.meta?.sandboxViewPath,
+    resolverPayload.meta?.sandbox_file_path,
+    resolveSandboxPath(resolverPayload),
+  );
+  const displayPath = resolveTransferFilePath({
+    ...resolverPayload,
+    attachmentMeta: resolverPayload.meta,
   });
   return {
     displayPath,
     ...(sandboxPath ? { sandboxPath } : {}),
-    ...(resolvedHostPath ? { hostPath: resolvedHostPath } : {}),
-    ...(resolvedRelativePath ? { relativePath: resolvedRelativePath } : {}),
+    ...(resolverPayload.hostPath ? { hostPath: resolverPayload.hostPath } : {}),
+    ...(resolverPayload.relativePath ? { relativePath: resolverPayload.relativePath } : {}),
   };
 }
 
@@ -132,19 +149,22 @@ export function buildTransferFileEntry({
   purpose = "semantic_transfer_file_path",
   role = "primary",
 } = {}) {
-  const sourceMeta = isPlainObject(attachmentMeta)
-    ? attachmentMeta
-    : (isPlainObject(meta) ? meta : {});
+  const sourceMeta = resolveSourceMeta(attachmentMeta, meta);
   const pathView = resolveTransferPathView({
     runtime,
     agentContext,
     attachmentMeta: sourceMeta,
-    path: hostPath || path || sourceMeta?.path || "",
-    hostPath: hostPath || path || sourceMeta?.path || "",
-    relativePath: relativePath || sourceMeta?.relativePath || "",
+    path: firstNormalizedString(hostPath, path, sourceMeta?.path),
+    hostPath: firstNormalizedString(hostPath, path, sourceMeta?.path),
+    relativePath: firstNormalizedString(relativePath, sourceMeta?.relativePath),
     purpose,
   });
-  const filePath = normalizeString(pathView.displayPath || pathView.sandboxPath || pathView.relativePath || pathView.hostPath);
+  const filePath = firstNormalizedString(
+    pathView.displayPath,
+    pathView.sandboxPath,
+    pathView.relativePath,
+    pathView.hostPath,
+  );
   return {
     ...(filePath ? { filePath } : {}),
     ...(isPlainObject(sourceMeta) ? { attachmentMeta: sourceMeta } : {}),

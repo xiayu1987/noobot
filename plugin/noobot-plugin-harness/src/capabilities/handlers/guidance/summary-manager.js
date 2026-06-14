@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ensureHarnessBucket } from "./deps.js";
+import { HARNESS_I18N_KEYSET, LOCALE, translateI18nText } from "./deps.js";
 import { mergeSummaryText } from "../shared/plan/summary-text-protocol.js";
 import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 
@@ -35,9 +36,25 @@ export function shouldSaveSummaryDetailToAttachment(meta = {}) {
   );
 }
 
+function escapeRegExp(value = "") {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function resolveSummaryRelayPrefixPattern() {
+  const prefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
+    .map((locale) =>
+      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
+        purpose: "summary",
+      }),
+    )
+    .filter(Boolean)
+    .map(escapeRegExp);
+  return prefixes.length ? `(?:${prefixes.join("|")})` : "$^";
+}
+
 function stripSummaryRelayPrefix(content = "") {
   return String(content || "")
-    .replace(/^\[(?:来自harness外部模型输出|Relay from harness external model)\/summary\]\s*/i, "")
+    .replace(new RegExp(`^${resolveSummaryRelayPrefixPattern()}\\s*`, "i"), "")
     .trim();
 }
 
@@ -51,7 +68,7 @@ function isSummaryRelayMessage(message = {}) {
   ).trim();
   if (injectedType === "separate_model_relay:summary") return true;
   const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
-  return /^\[(?:来自harness外部模型输出|Relay from harness external model)\/summary\]/i.test(content);
+  return new RegExp(`^${resolveSummaryRelayPrefixPattern()}`, "i").test(content);
 }
 
 function resolveLatestSummaryRelayText(ctx = {}) {

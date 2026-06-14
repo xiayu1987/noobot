@@ -177,9 +177,10 @@ export function buildPlanningMainPrompt(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
   const userGoal = String(data.userGoal || options?.userGoal || "").trim();
   const goal = String(userGoal || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
-  const currentTaskGoalProtocol = locale === LOCALE.EN_US
-    ? "Before plan patch lines, output the current task goal using this text protocol: [CURRENT_TASK_GOAL]\\n<one concise current task goal synthesized by the planning model>\\n[PLAN]"
-    : "在计划 patch 行之前，必须用以下文本协议输出当前任务目标：[CURRENT_TASK_GOAL]\\n<由计划模型提炼的一句话当前任务目标>\\n[PLAN]";
+  const currentTaskGoalProtocol = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL,
+  );
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL),
@@ -275,9 +276,10 @@ export function buildGuidanceSummaryPromptText(options = {}) {
   const overviewSample = programmingMode
     ? "1. [plan=2][status=done][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ..."
     : "1. [plan=2][status=done][evidence=...] ...";
-  const nextSuggestionSample = locale === LOCALE.EN_US
-    ? "- Next, execute the highest-priority unfinished/risky plan item with concrete verification."
-    : "- 下一步优先执行最高优先级的未完成/风险计划项，并给出可验证动作。";
+  const nextSuggestionSample = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_NEXT_SUGGESTION_SAMPLE,
+  );
   const riskSampleKey = programmingMode
     ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH_PROGRAMMING
     : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH;
