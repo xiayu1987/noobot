@@ -107,8 +107,8 @@ function createAttachmentPersister({ prefix = "att", counterRef = { value: 0 } }
 
 function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 } } = {}) {
   return {
-    async transferSemanticContent({ scenario = "", messages = [] } = {}) {
-      if (String(scenario || "") !== "subagent") {
+    async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
+      if (String(scenario || "") !== "workflow" || !String(strategy || "").startsWith("workflow_")) {
         return { transferResult: { ok: false, status: "failed" }, transferEnvelope: null, transferEnvelopes: [] };
       }
       counterRef.value += 1;
@@ -334,10 +334,13 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(agentResult.workflow.nodeSessions.length, 1);
   assert.equal(agentResult.workflow.nodeSessions[0]?.rootSessionId, "s1");
   assert.equal(agentResult.workflow.nodeSessions[0]?.sessionId, "wf-node-session-1");
+  assert.equal(agentResult.workflow?.attachmentMetas, undefined);
+  assert.equal(agentResult.workflow.nodeSessions[0]?.attachmentMetas, undefined);
 
   const workflowTurnMessage = workflowTurn(agentResult);
   assert.ok(workflowTurnMessage);
   assert.equal(workflowTurnMessage?.type, "workflow");
+  assert.equal(workflowTurnMessage?.attachmentMetas, undefined);
   assert.match(
     String(workflowTurnMessage?.content || ""),
     /\/injected\/attachments\/s1\/workflow-node-1-result\.md/,
@@ -430,10 +433,13 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
           runtime: {
             sharedTools: {
               semanticTransfer: {
-                async persistTransferFile() {
+                async transferSemanticContent({ scenario = "", strategy = "" } = {}) {
+                  if (String(scenario || "") !== "workflow" || String(strategy || "") !== "workflow_subagent_result") {
+                    return { transferResult: { ok: false, status: "failed" }, transferEnvelope: null, transferEnvelopes: [] };
+                  }
                   return {
-                    result: { ok: true, status: "file", envelope },
-                    envelope,
+                    transferResult: { ok: true, status: "file", envelope },
+                    transferEnvelope: envelope,
                     transferEnvelopes: [envelope],
                   };
                 },
@@ -548,7 +554,8 @@ test("workflow hook routes final attachment summary composition through semantic
 
   const hasFinalSummaryCall = semanticTransferCalls.some(
     (item = {}) =>
-      String(item?.scenario || "").trim() === "subagent" &&
+      String(item?.scenario || "").trim() === "workflow" &&
+      String(item?.strategy || "").trim() === "workflow_final_return" &&
       String(item?.generationSource || "").trim() === "workflow_planning_final_attachment_summary",
   );
   assert.equal(hasFinalSummaryCall, true);
@@ -646,8 +653,8 @@ test("workflow hook injects upstream node result attachments into downstream sub
           runtime: {
             sharedTools: {
               semanticTransfer: {
-                async transferSemanticContent({ scenario = "", messages = [] } = {}) {
-                  if (String(scenario || "") !== "subagent") {
+                async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
+                  if (String(scenario || "") !== "workflow" || !String(strategy || "").startsWith("workflow_")) {
                     return {
                       transferResult: { ok: false, status: "failed" },
                       transferEnvelope: null,
@@ -785,8 +792,8 @@ test("workflow hook injects one upstream action attachments into multiple direct
           runtime: {
             sharedTools: {
               semanticTransfer: {
-                async transferSemanticContent({ scenario = "", messages = [] } = {}) {
-                  if (String(scenario || "") !== "subagent") {
+                async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
+                  if (String(scenario || "") !== "workflow" || !String(strategy || "").startsWith("workflow_")) {
                     return {
                       transferResult: { ok: false, status: "failed" },
                       transferEnvelope: null,

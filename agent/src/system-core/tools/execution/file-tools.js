@@ -14,7 +14,7 @@ import {
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/index.js";
+import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/core/constants.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
@@ -183,7 +183,7 @@ export function createFileTool({ agentContext }) {
           try {
             const transferred = await transferSemanticContent({
               scenario: "tool",
-              direction: "input",
+              strategy: "tool_input",
               text: String(content || ""),
               inlineMaxChars: MAX_FILE_CONTENT_CHARS,
               name: `${path.basename(resolvedPath)}.tool-input.txt`,

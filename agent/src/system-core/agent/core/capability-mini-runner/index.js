@@ -15,7 +15,7 @@ import {
   getSystemRuntimeFromRuntime,
 } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
-import { compactToolResultTextForModel } from "../../../semantic-transfer/index.js";
+import { compactToolResultTextForModel } from "../../../semantic-transfer/core/compact.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
 const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";

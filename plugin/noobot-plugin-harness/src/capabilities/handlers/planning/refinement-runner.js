@@ -13,6 +13,7 @@ import {
   buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
+  getTransferPayloadFromAttachmentMetas,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   invokeWithReasoningRetry,
@@ -170,7 +171,7 @@ export async function runPlanningRefinementBySeparateModel(
     purpose: "planning_refinement",
     content: refinementText,
     dedupe: true,
-    attachmentMetas: refinementAttachmentMetas,
+    transferPayload: getTransferPayloadFromAttachmentMetas(refinementAttachmentMetas),
   });
   const refinementApplied = applyRevisedPlanFromText(ctx, refinementText, {
     source,

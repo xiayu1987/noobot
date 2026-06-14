@@ -14,7 +14,7 @@ import { ERROR_CODE } from "../../../error/constants.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
-import { transferSemanticContent } from "../../../semantic-transfer/index.js";
+import { transferSemanticContent } from "../../../semantic-transfer/transfer/semantic-transfer.js";
 
 function resolveToolHookMeta(runtime = {}) {
   const runtimeMeta =
@@ -215,7 +215,7 @@ export async function executeToolCall({
   );
   const overflowNormalized = await transferSemanticContent({
     scenario: "tool",
-    transferMode: "tool_result_text",
+    strategy: "tool_result_text",
     call,
     toolResultText,
     runtime,

@@ -27,3 +27,17 @@ test("toConversationMessages keeps transferEnvelope/transferEnvelopes for replay
   assert.deepEqual(messages[0].attachmentMetas, [{ attachmentId: "att_1" }]);
 });
 
+test("toConversationMessages omits empty legacy attachment/transfer mirrors", () => {
+  const [message] = toConversationMessages([
+    {
+      role: "assistant",
+      content: "ok",
+      attachmentMetas: [],
+      transferEnvelopes: [],
+    },
+  ]);
+
+  assert.equal("attachmentMetas" in message, false);
+  assert.equal("transferEnvelope" in message, false);
+  assert.equal("transferEnvelopes" in message, false);
+});

@@ -435,7 +435,7 @@ test("connector-toolkit/access_connector: command_file_path 超过大小限制�
   }
 });
 
-test("connector-toolkit/access_connector(email): 应透出 transferResult/envelope(s) 且不再输出 attachmentMetas", async () => {
+test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 semantic-transfer 输出", async () => {
   const ingestCalls = [];
   const runtime = {
     userId: "admin",
@@ -524,14 +524,13 @@ test("connector-toolkit/access_connector(email): 应透出 transferResult/envelo
 
   assert.equal(payload.ok, true);
   assert.equal("attachmentMetas" in payload, false);
-  assert.equal(payload.transferResult?.status, "file");
-  assert.equal(payload.transferEnvelope?.transport, "file");
-  assert.equal(Array.isArray(payload.transferEnvelopes), true);
-  assert.equal(payload.transferEnvelopes.length, 1);
+  assert.equal("transferResult" in payload, false);
+  assert.equal("transferEnvelope" in payload, false);
+  assert.equal("transferEnvelopes" in payload, false);
   assert.equal(ingestCalls.length, 1);
 });
 
-test("connector-toolkit/access_connector(email): 仅 transfer 字段时保持 transfer 输出", async () => {
+test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字段不提升为顶层 semantic-transfer 输出", async () => {
   const runtime = {
     userId: "admin",
     systemRuntime: {
@@ -607,8 +606,9 @@ test("connector-toolkit/access_connector(email): 仅 transfer 字段时保持 tr
   }));
 
   assert.equal(payload.ok, true);
-  assert.equal(payload.transferResult?.status, "file");
-  assert.equal(payload.transferEnvelope?.transport, "file");
+  assert.equal("transferResult" in payload, false);
+  assert.equal("transferEnvelope" in payload, false);
+  assert.equal("transferEnvelopes" in payload, false);
   assert.equal("attachmentMetas" in payload, false);
 });
 

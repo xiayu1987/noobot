@@ -6,7 +6,7 @@
 
 import {
   applyWorkflowTransferPayload,
-  mergeAttachmentMetas,
+  buildWorkflowTransferPayloadFromAttachmentMetas,
   normalizeWorkflowTransferPayload,
   resolveAttachmentDisplayPath,
   resolveWorkflowAttachmentMetasFromTransferPayload,
@@ -175,14 +175,14 @@ export async function persistWorkflowNodeResultAttachment({
       contentBase64: Buffer.from(body, "utf8").toString("base64"),
     };
     const runtime = resolveWorkflowRuntimeFromContext(ctx);
-    const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
     const semanticTransferContent =
       runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
     let attachmentMetas = [];
     let transferPayload = normalizeWorkflowTransferPayload();
     if (typeof semanticTransferContent === "function") {
       const transferred = await semanticTransferContent({
-        scenario: "subagent",
+        scenario: "workflow",
+        strategy: "workflow_subagent_result",
         messages: [
           {
             nodeId,
@@ -204,20 +204,6 @@ export async function persistWorkflowNodeResultAttachment({
       });
       transferPayload = normalizeWorkflowTransferPayload(transferred);
       attachmentMetas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
-    } else if (typeof semanticPersist === "function") {
-      const persisted = await semanticPersist({
-        userId,
-        sessionId,
-        content: body,
-        name: artifact.name,
-        mimeType: artifact.mimeType,
-        attachmentSource: "model",
-        generationSource: "workflow_node_agent_result",
-        source: "plugin",
-        reason: "workflow_node_agent_result",
-      });
-      transferPayload = normalizeWorkflowTransferPayload(persisted);
-      attachmentMetas = resolveWorkflowAttachmentMetasFromTransferPayload(transferPayload, ctx);
     } else {
       attachmentMetas = await persister({
         userId,
@@ -227,24 +213,17 @@ export async function persistWorkflowNodeResultAttachment({
         fallbackMimeType: "text/markdown",
         artifacts: [artifact],
       });
+      transferPayload = buildWorkflowTransferPayloadFromAttachmentMetas(attachmentMetas);
     }
     const metas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
     if (!metas.length) return [];
     if (subSession.result && typeof subSession.result === "object") {
-      subSession.result.attachmentMetas = mergeAttachmentMetas(
-        Array.isArray(subSession.result.attachmentMetas) ? subSession.result.attachmentMetas : [],
-        metas,
-      );
       applyWorkflowTransferPayload(subSession.result, transferPayload);
       if (Array.isArray(subSession.result.messages) && subSession.result.messages.length) {
         const lastIndex = subSession.result.messages.length - 1;
         const lastMessage = subSession.result.messages[lastIndex] || {};
         subSession.result.messages[lastIndex] = applyWorkflowTransferPayload({
           ...lastMessage,
-          attachmentMetas: mergeAttachmentMetas(
-            Array.isArray(lastMessage?.attachmentMetas) ? lastMessage.attachmentMetas : [],
-            metas,
-          ),
         }, transferPayload);
       }
     }
@@ -278,7 +257,8 @@ export async function appendWorkflowPlanningMessage({
     if (typeof semanticTransferContent === "function") {
       try {
         const transferred = await semanticTransferContent({
-          scenario: "subagent",
+          scenario: "workflow",
+          strategy: "workflow_final_return",
           messages: [
             {
               id: "workflow-final-attachment-summary",
@@ -336,8 +316,6 @@ export async function appendWorkflowPlanningMessage({
     modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     modelName: String(semanticResolution?.model || options?.semanticModel || "").trim(),
     summarized: false,
-    // Legacy mirror field for existing consumers; source of truth is transfer payload.
-    attachmentMetas: compatAttachmentMetas,
     ...(mergedTransferPayload.transferResult ? { transferResult: mergedTransferPayload.transferResult } : {}),
     ...(mergedTransferPayload.transferEnvelope ? { transferEnvelope: mergedTransferPayload.transferEnvelope } : {}),
     ...(mergedTransferPayload.transferEnvelopes.length

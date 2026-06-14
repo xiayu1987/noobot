@@ -6,28 +6,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  COMPACT_TRANSFER_FILE_FIELDS,
+  COMPACT_TRANSFER_PAYLOAD_FIELDS,
   compactToolResultTextForModel,
-  composeFinalMessage,
   directInput,
   directOutput,
   extractTransferEnvelopeFromPersisted,
   fileOutput,
   isTransferEnvelope,
-  materializeOutput,
   normalizeTransferEnvelopes,
   normalizeTransferEnvelopesWithPolicy,
   normalizeTransferReason,
   normalizeTransferSource,
   normalizeTransfer,
   resolveTransferIntent,
-  processStageMessage,
   resolveTransferFilePath,
   transferSemanticContent,
-  transferSemanticContentSync,
-  transferSubAgentMessages,
-  transferToolMessage,
   resolveTransferPathView,
 } from "../../../src/system-core/semantic-transfer/index.js";
+import { materializeOutput } from "../../../src/system-core/semantic-transfer/storage/materializer.js";
 
 test("semantic transfer envelopes keep direct/file semantics", () => {
   const input = directInput("hello", { source: "user" });
@@ -164,41 +161,31 @@ test("normalizeTransfer maps paths to file envelopes", () => {
 test("transferSemanticContent dispatches by scenario", async () => {
   const toolTransferred = await transferSemanticContent({
     scenario: "tool",
-    direction: "output",
+    strategy: "tool_output",
     text: "small text",
   });
   assert.equal(toolTransferred?.transferResult?.ok, true);
   assert.equal(toolTransferred?.transferEnvelopes?.[0]?.transport, "direct");
 
   const stageTransferred = await transferSemanticContent({
-    scenario: "harness_stage",
+    scenario: "harness",
+    strategy: "harness_stage_message",
     summary: "ok",
     detail: "",
   });
   assert.equal(stageTransferred?.summary, "ok");
   assert.equal(stageTransferred?.transferResult?.status, "skipped");
 
-  const finalComposed = await transferSemanticContent({
-    scenario: "harness_final",
+  const finalTransferred = await transferSemanticContent({
+    scenario: "harness",
+    strategy: "harness_final_message",
     resultInfo: "done",
     detailRefs: [],
     validationInfo: "pass",
   });
-  assert.equal(typeof finalComposed, "string");
-  assert.equal(finalComposed.includes("done"), true);
-  assert.equal(finalComposed.includes("pass"), true);
-});
-
-test("transferSemanticContentSync supports harness_final sync compose", () => {
-  const finalComposed = transferSemanticContentSync({
-    scenario: "harness_final",
-    resultInfo: "done",
-    detailRefs: [],
-    validationInfo: "pass",
-  });
-  assert.equal(typeof finalComposed, "string");
-  assert.equal(finalComposed.includes("done"), true);
-  assert.equal(finalComposed.includes("pass"), true);
+  assert.equal(finalTransferred?.transferResult?.ok, true);
+  assert.equal(finalTransferred.finalMessage.includes("done"), true);
+  assert.equal(finalTransferred.finalMessage.includes("pass"), true);
 });
 
 test("compactToolResultTextForModel replaces verbose transfer payload with concise transferFiles", () => {
@@ -249,13 +236,19 @@ test("compactToolResultTextForModel replaces verbose transfer payload with conci
   assert.equal("transferResult" in compacted, false);
   assert.equal("transferEnvelopes" in compacted, false);
   assert.equal("attachmentMetas" in compacted, false);
+  assert.deepEqual(COMPACT_TRANSFER_PAYLOAD_FIELDS, ["transferFiles"]);
   assert.equal(compacted.transferFiles.length, 1);
   assert.equal(compacted.transferFiles[0].attachmentId, "att_1");
   assert.equal(compacted.transferFiles[0].path, undefined);
+  assert.deepEqual(
+    Object.keys(compacted.transferFiles[0]).filter((field) => !COMPACT_TRANSFER_FILE_FIELDS.includes(field)),
+    [],
+  );
 });
 
 test("persistTransferArtifacts saves through attachment service and returns transfer envelopes", async () => {
-  const { getTransferAttachmentMetas, persistTransferArtifacts } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const { getTransferAttachmentMetas } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const { persistTransferArtifacts } = await import("../../../src/system-core/semantic-transfer/storage/attachment-adapter.js");
   const calls = [];
   const attachmentService = {
     async ingestGeneratedArtifacts(payload) {
@@ -294,7 +287,7 @@ test("persistTransferArtifacts saves through attachment service and returns tran
 });
 
 test("persistTransferArtifacts returns skipped result and empty transfer fields when service missing", async () => {
-  const { persistTransferArtifacts } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const { persistTransferArtifacts } = await import("../../../src/system-core/semantic-transfer/storage/attachment-adapter.js");
   const persisted = await persistTransferArtifacts({
     userId: "u1",
     sessionId: "s1",
@@ -336,7 +329,8 @@ test("file envelope supports files, pathView, storage and producer", () => {
 });
 
 test("persistTransferArtifacts returns rich transfer envelope for multi artifacts", async () => {
-  const { getTransferAttachmentMetas, persistTransferArtifacts } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const { getTransferAttachmentMetas } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const { persistTransferArtifacts } = await import("../../../src/system-core/semantic-transfer/storage/attachment-adapter.js");
   const attachmentService = {
     async ingestGeneratedArtifacts(payload) {
       return payload.artifacts.map((artifact, index) => ({
@@ -448,15 +442,26 @@ test("consumer helpers read envelope files and attachment metas", async () => {
   assert.equal(warnings[0]?.data?.message.includes("no longer supported"), true);
 });
 
-test("semantic-transfer public index does not export legacy adapters", async () => {
+test("semantic-transfer public index only exposes unified transfer entry for scenario wrappers", async () => {
   const mod = await import("../../../src/system-core/semantic-transfer/index.js");
   assert.equal("buildLegacyTransferCompat" in mod, false);
   assert.equal("buildLegacyOverflowFields" in mod, false);
+  assert.equal("transferSemanticContent" in mod, true);
+  assert.equal("transferSemanticContentSync" in mod, false);
+  assert.equal("transferToolMessage" in mod, false);
+  assert.equal("transferSubAgentMessages" in mod, false);
+  assert.equal("processStageMessage" in mod, false);
+  assert.equal("composeFinalMessage" in mod, false);
+  assert.equal("persistTransferArtifacts" in mod, false);
+  assert.equal("persistTransferFile" in mod, false);
+  assert.equal("materializeOutput" in mod, false);
+  assert.equal("materializeOutputResult" in mod, false);
 });
 
-test("transferToolMessage returns compact transfer payload for long input", async () => {
-  const transferred = await transferToolMessage({
-    direction: "input",
+test("transferSemanticContent returns compact transfer payload for long tool input", async () => {
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
     text: "x".repeat(64),
     inlineMaxChars: 10,
     runtime: {
@@ -485,8 +490,10 @@ test("transferToolMessage returns compact transfer payload for long input", asyn
   assert.equal(transferred.compactToolPayload.transferFiles[0].attachmentId, "tool-input-1");
 });
 
-test("transferSubAgentMessages keeps sub-agent transfer output focused on conversion", async () => {
-  const transferred = await transferSubAgentMessages({
+test("transferSemanticContent keeps workflow sub-agent transfer output focused on conversion", async () => {
+  const transferred = await transferSemanticContent({
+    scenario: "workflow",
+    strategy: "workflow_subagent_result",
     runtime: {
       attachmentService: {
         async ingestGeneratedArtifacts(payload) {
@@ -517,8 +524,10 @@ test("transferSubAgentMessages keeps sub-agent transfer output focused on conver
   assert.equal("downstreamInjections" in transferred, false);
 });
 
-test("processStageMessage + composeFinalMessage produce detail refs output", async () => {
-  const staged = await processStageMessage({
+test("transferSemanticContent produces harness stage refs and final output", async () => {
+  const staged = await transferSemanticContent({
+    scenario: "harness",
+    strategy: "harness_stage_message",
     runtime: {
       attachmentService: {
         async ingestGeneratedArtifacts(payload) {
@@ -543,17 +552,19 @@ test("processStageMessage + composeFinalMessage produce detail refs output", asy
   });
   assert.equal(staged.summary, "done");
   assert.equal(staged.transferResult?.status, "file");
-  const finalMessage = composeFinalMessage({
+  const finalTransferred = await transferSemanticContent({
+    scenario: "harness",
+    strategy: "harness_final_message",
     resultInfo: "最终结果",
     detailRefs: staged.compactTransferPayload?.transferFiles || [],
     validationInfo: "验收通过",
   });
-  assert.equal(finalMessage.includes("最终结果"), true);
-  assert.equal(finalMessage.includes("验收通过"), true);
+  assert.equal(finalTransferred.finalMessage.includes("最终结果"), true);
+  assert.equal(finalTransferred.finalMessage.includes("验收通过"), true);
 });
 
 test("materializeOutputResult returns TransferResult and honors policy", async () => {
-  const { materializeOutput, materializeOutputResult } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const { materializeOutput, materializeOutputResult } = await import("../../../src/system-core/semantic-transfer/storage/materializer.js");
   const directResult = await materializeOutputResult({
     content: "abcdef",
     policy: { prefer: "auto", maxDirectChars: 10 },
@@ -575,7 +586,7 @@ test("materializeOutputResult returns TransferResult and honors policy", async (
 });
 
 test("persistTransferFile accepts base64 and bytes and returns transfer envelope", async () => {
-  const { persistTransferFile } = await import("../../../src/system-core/semantic-transfer/index.js");
+  const { persistTransferFile } = await import("../../../src/system-core/semantic-transfer/storage/attachment-adapter.js");
   const calls = [];
   const attachmentService = {
     async ingestGeneratedArtifacts(payload) {
@@ -631,7 +642,6 @@ test("validateTransferEnvelope reports invalid and accepts valid envelopes", asy
 });
 
 test("semantic-transfer emits validation event and hook", async () => {
-  const { transferToolMessage } = await import("../../../src/system-core/semantic-transfer/index.js");
   const { createAgentHookManager, AGENT_HOOK_POINTS } = await import("../../../src/system-core/hook/index.js");
   const events = [];
   const hooks = [];
@@ -649,9 +659,10 @@ test("semantic-transfer emits validation event and hook", async () => {
     globalConfig: { semanticTransfer: { strictEnvelopeValidation: false } },
     userConfig: {},
   };
-  const result = await transferToolMessage({
+  const result = await transferSemanticContent({
     runtime,
-    direction: "output",
+    scenario: "tool",
+    strategy: "tool_output",
     text: "validation",
     inlineMaxChars: 1024,
   });
@@ -667,8 +678,9 @@ test("semantic-transfer emits validation event and hook", async () => {
 test("semantic-transfer read_file overflow returns original-file envelope without attachment metadata", async () => {
   const resolvedPath = "/workspace/project/large-read.txt";
   const content = "a".repeat(400);
-  const result = await transferToolMessage({
-    transferMode: "tool_result_text",
+  const result = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_result_text",
     call: { id: "call_read_overflow", name: "read_file" },
     runtime: {
       globalConfig: {

@@ -55,7 +55,7 @@ function normalizeSubAgentMessages(messages = []) {
     .filter((item) => normalizeString(item.content));
 }
 
-export async function transferSubAgentMessages({
+export async function transferWorkflowSubagentResult({
   runtime = {},
   agentContext = null,
   messages = [],
@@ -154,7 +154,7 @@ export async function transferSubAgentMessages({
   const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
   await emitSemanticTransferValidation({
     runtime,
-    scenario: "subagent",
+    scenario: "workflow_subagent_result",
     stats: transferEnvelopesResult?.stats || {},
   });
 

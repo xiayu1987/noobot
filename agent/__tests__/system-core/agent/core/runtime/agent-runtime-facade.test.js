@@ -20,13 +20,14 @@ test("AgentRuntimeFacade prepareTurnExecution builds context and runtime context
 
   const abortSignal = { aborted: false };
   const result = await facade.prepareTurnExecution({
-    buildContextPayload: { sessionId: "s1" },
+    buildContextPayload: { sessionId: "s1", inputAttachmentMetas: [{ attachmentId: "att1" }] },
     abortSignal,
   });
 
   assert.equal(result?.agentContext?.id, "agent_ctx");
   assert.equal(result?.runtimeAgentContext?.id, "runtime_ctx");
   assert.equal(calls[0]?.[0], "buildAgentContext");
+  assert.deepEqual(calls[0]?.[1]?.inputAttachmentMetas, [{ attachmentId: "att1" }]);
   assert.equal(calls[1]?.[0], "buildRunTurnAgentContext");
   assert.equal(calls[1]?.[1]?.abortSignal, abortSignal);
 });

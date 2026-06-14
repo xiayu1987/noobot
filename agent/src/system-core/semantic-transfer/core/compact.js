@@ -31,6 +31,36 @@ export function firstNormalizedString(...values) {
   return "";
 }
 
+
+export const COMPACT_TRANSFER_PAYLOAD_FIELDS = Object.freeze(["transferFiles"]);
+
+export const COMPACT_TRANSFER_FILE_FIELDS = Object.freeze([
+  "attachmentId",
+  "sessionId",
+  "attachmentSource",
+  "name",
+  "mimeType",
+  "size",
+  "relativePath",
+  "sandboxPath",
+  "generatedByModel",
+  "generationSource",
+  "parsedResultAttachmentId",
+  "parsedResultRelativePath",
+  "parsedResultTool",
+  "transferFilePath",
+  "role",
+]);
+
+function pickCompactTransferFileFields(file = {}) {
+  const source = isPlainObject(file) ? file : {};
+  const output = {};
+  for (const field of COMPACT_TRANSFER_FILE_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(source, field)) output[field] = source[field];
+  }
+  return compactObject(output);
+}
+
 function resolveCompactTransferFilePath({ pathView = {}, file = {}, attachmentMeta = {} } = {}) {
   const normalizedPathView = isPlainObject(pathView) ? pathView : {};
   const normalizedFile = isPlainObject(file) ? file : {};
@@ -73,7 +103,7 @@ function compactLegacyEnvelopeFileForModel(envelope = {}) {
     file: envelope,
     attachmentMeta: attachment,
   });
-  return compactObject({
+  return pickCompactTransferFileFields({
     ...attachment,
     transferFilePath,
     role: "primary",
@@ -107,7 +137,7 @@ function transferFileToModelFile(file = {}) {
     file,
     attachmentMeta,
   });
-  return compactObject({
+  return pickCompactTransferFileFields({
     ...attachmentMeta,
     transferFilePath,
     role: file?.role,

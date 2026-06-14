@@ -5,12 +5,11 @@
  */
 import { ToolMessage } from "@langchain/core/messages";
 import { appendAttachmentMetasToRuntimeAndTurn } from "../../../attach/index.js";
-import { mergeAttachmentMetas } from "../../../attach/meta-ops.js";
 import { emitEvent } from "../../../event/index.js";
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
-import { compactToolResultTextForModel } from "../../../semantic-transfer/index.js";
+import { compactToolResultTextForModel } from "../../../semantic-transfer/core/compact.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
@@ -52,13 +51,6 @@ function parseTransferPayloadFromToolResultText(toolResultText = "") {
     ...(transferEnvelope ? { transferEnvelope } : {}),
     ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
   };
-}
-
-function resolveLastTurnMessage(turnMessageStore = null) {
-  if (!turnMessageStore || typeof turnMessageStore.toArray !== "function") return null;
-  const turnItems = turnMessageStore.toArray();
-  if (!Array.isArray(turnItems) || !turnItems.length) return null;
-  return turnItems[turnItems.length - 1] || null;
 }
 
 export function createStateCommitter({
@@ -223,22 +215,11 @@ export function createStateCommitter({
           agentContext,
         }),
       });
-      const lastTurnMessage = resolveLastTurnMessage(turnMessageStore);
-      const lastMessageHasTransferPayload = Boolean(
-        isPlainObject(lastTurnMessage?.transferResult) ||
-          isPlainObject(lastTurnMessage?.transferEnvelope) ||
-          (Array.isArray(lastTurnMessage?.transferEnvelopes) &&
-            lastTurnMessage.transferEnvelopes.length),
-      );
-      if (lastMessageHasTransferPayload) {
-        runtime.attachmentMetas = mergeAttachmentMetas(runtime?.attachmentMetas, attachmentMetas);
-      } else {
-        appendAttachmentMetasToRuntimeAndTurn({
-          runtime,
-          turnMessageStore,
-          attachmentMetas,
-        });
-      }
+      appendAttachmentMetasToRuntimeAndTurn({
+        runtime,
+        turnMessageStore,
+        attachmentMetas,
+      });
       const displayableAttachmentMetas = filterDisplayableAttachmentMetas(attachmentMetas);
       if (displayableAttachmentMetas.length) {
         emitEvent(runtime?.eventListener || null, "attachment_metas_saved", {

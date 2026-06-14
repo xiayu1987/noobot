@@ -7,6 +7,34 @@
 import { DEFAULT_ATTACHMENT_SESSION_ID, DEFAULT_ATTACHMENT_SOURCE, DEFAULT_MIME_TYPE } from "./constants.js";
 import { safeStr, safeNum } from "../utils/shared-utils.js";
 
+const SEMANTIC_TRANSFER_GENERATION_SOURCE_PREFIXES = [
+  "semantic_transfer_",
+  "workflow_",
+  "harness_",
+];
+
+const SEMANTIC_TRANSFER_GENERATION_SOURCE_EXACT = new Set([
+  "tool_result_overflow",
+  "execute_script_input_too_long",
+  "write_file_input_too_long",
+  "read_file_overflow_original_file",
+]);
+
+export function isSemanticTransferAttachmentMeta(attachmentMeta = {}) {
+  const generationSource = safeStr(attachmentMeta?.generationSource);
+  if (!generationSource) return false;
+  if (SEMANTIC_TRANSFER_GENERATION_SOURCE_EXACT.has(generationSource)) return true;
+  return SEMANTIC_TRANSFER_GENERATION_SOURCE_PREFIXES.some((prefix) =>
+    generationSource.startsWith(prefix),
+  );
+}
+
+export function filterSemanticTransferAttachmentMetas(attachmentMetas = []) {
+  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(
+    isSemanticTransferAttachmentMeta,
+  );
+}
+
 /**
  * 合并附件元数据（去重）
  */
@@ -85,4 +113,41 @@ export function mapAttachmentRecordsToMetas(
     parsedResultTool: safeStr(item?.parsedResultTool),
     parsedResultUpdatedAt: safeStr(item?.parsedResultUpdatedAt),
   }));
+}
+
+/**
+ * 将附件元数据转换为标准 semantic-transfer payload。
+ * 仅用于把 legacy attachmentMetas 适配进标准 transferEnvelope(s) 流转；
+ * 调用方不应再把 attachmentMetas 作为新的标准输出 mirror。
+ */
+export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
+  const metas = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item));
+  if (!metas.length) {
+    return { transferResult: null, transferEnvelope: null, transferEnvelopes: [] };
+  }
+  const files = metas.map((meta = {}, index) => ({
+    filePath: safeStr(
+      meta?.sandboxPath ||
+        meta?.sandboxViewPath ||
+        meta?.relativePath ||
+        meta?.path ||
+        meta?.name,
+    ),
+    attachmentMeta: meta,
+    role: index === 0 ? "primary" : "secondary",
+  }));
+  const transferEnvelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: safeStr(files[0]?.filePath),
+    files,
+  };
+  return {
+    transferResult: { ok: true, status: "file", envelope: transferEnvelope },
+    transferEnvelope,
+    transferEnvelopes: [transferEnvelope],
+  };
 }

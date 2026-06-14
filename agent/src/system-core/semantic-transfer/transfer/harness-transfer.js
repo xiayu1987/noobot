@@ -38,7 +38,7 @@ function normalizeDetailRefs(detailRefs = []) {
     .filter(Boolean);
 }
 
-export async function processStageMessage({
+export async function transferHarnessStageMessage({
   runtime = {},
   agentContext = null,
   summary = "",
@@ -66,7 +66,7 @@ export async function processStageMessage({
   if (!normalizedDetail) {
     await emitSemanticTransferValidation({
       runtime,
-      scenario: "harness_stage",
+      scenario: "harness_stage_message",
       stats: {
         inputCount: 0,
         outputCount: 0,
@@ -108,7 +108,7 @@ export async function processStageMessage({
   const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
   await emitSemanticTransferValidation({
     runtime,
-    scenario: "harness_stage",
+    scenario: "harness_stage_message",
     stats: transferEnvelopesResult?.stats || {},
   });
   return {
@@ -122,7 +122,7 @@ export async function processStageMessage({
   };
 }
 
-export function composeFinalMessage({
+export function composeHarnessFinalMessage({
   resultInfo = "",
   detailRefs = [],
   validationInfo = "",

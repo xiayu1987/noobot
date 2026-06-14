@@ -58,6 +58,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   const botHookManager = createBotHookManager();
   const events = [];
   let beforeDispatchContext = null;
+  let capturedBuildContextPayload = null;
   botHookManager.on(BOT_HOOK_POINTS.BEFORE_SESSION_RUN, () => events.push("before_session_run"));
   botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
     events.push("before_agent_dispatch");
@@ -69,7 +70,8 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   botHookManager.on(BOT_HOOK_POINTS.AFTER_SESSION_RUN, () => events.push("after_session_run"));
   const runner = createRunner({
     botHookManager,
-    prepareAgentTurnExecution: async () => {
+    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      capturedBuildContextPayload = buildContextPayload;
       const runtimeAgentContext = {
         payload: {
           messages: {
@@ -89,6 +91,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     userId: "u1",
     sessionId: "s1",
     message: "hello",
+    attachments: [{ attachmentId: "att1" }],
     runConfig: {},
   });
 
@@ -99,6 +102,8 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     "after_agent_dispatch",
     "after_session_run",
   ]);
+  assert.deepEqual(capturedBuildContextPayload?.inputAttachmentMetas, [{ attachmentId: "att1" }]);
+  assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
   assert.equal(Boolean(beforeDispatchContext?.agentContext), false);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");
   assert.deepEqual(beforeDispatchContext?.messages, [

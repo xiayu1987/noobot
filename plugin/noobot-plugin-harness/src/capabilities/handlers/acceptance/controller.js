@@ -389,7 +389,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
         })) || false;
         const step3 = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || false;
         const step4 = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || false;
-        const step5 = maybeAppendAcceptanceReportAtFinalOutput(ctx) || false;
+        const step5 = (await maybeAppendAcceptanceReportAtFinalOutput(ctx)) || false;
         changed = step1 || step2 || step3 || step4 || step5 || changed;
         executedPrimary = step1 === true || step2 === true || step3 === true;
         executedFollowup = step4 === true || step5 === true;

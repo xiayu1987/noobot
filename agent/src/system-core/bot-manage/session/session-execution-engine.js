@@ -452,6 +452,7 @@ export class SessionExecutionEngine {
     caller = CALLER_ROLE.USER,
     parentSessionId,
     userConfig,
+    inputAttachmentMetas = null,
     attachmentMetas,
     systemMessages = [],
     eventListener,
@@ -466,6 +467,7 @@ export class SessionExecutionEngine {
       caller,
       parentSessionId,
       userConfig,
+      inputAttachmentMetas,
       attachmentMetas,
       systemMessages,
       eventListener,
@@ -496,9 +498,11 @@ export class SessionExecutionEngine {
       abortSignal,
     });
     const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
-    const runtimeAttachmentMetas = Array.isArray(preparedRuntime?.attachmentMetas)
-      ? preparedRuntime.attachmentMetas
-      : [];
+    const runtimeAttachmentMetas = Array.isArray(preparedRuntime?.inputAttachmentMetas)
+      ? preparedRuntime.inputAttachmentMetas
+      : Array.isArray(preparedRuntime?.attachmentMetas)
+        ? preparedRuntime.attachmentMetas
+        : [];
     return {
       ...(prepared && typeof prepared === "object" ? prepared : {}),
       userMessageAttachmentMetas: mapAttachmentRecordsToMetas(runtimeAttachmentMetas, {

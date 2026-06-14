@@ -17,9 +17,7 @@ import {
 import { safeNum } from "../../../utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { MIME_TYPE } from "../../../constants/index.js";
-import {
-  getTransferAttachmentMetas,
-} from "../../../semantic-transfer/index.js";
+import { getTransferAttachmentMetas } from "../../../semantic-transfer/storage/consumer.js";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];

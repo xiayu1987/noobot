@@ -53,9 +53,29 @@ const SETTLED_ATTACHMENT_SERVICE_ONLY_FILES = new Map(Object.entries({
     "generic generated artifacts must use attachmentService.ingestGeneratedArtifacts",
   "agent/src/system-core/agent/core/media/artifact-service.js":
     "LLM output media attachment persistence must use attachmentService.ingestGeneratedArtifacts",
+  "agent/src/system-core/tools/ai-models/multimodal-generate-tool.js":
+    "multimodal image generation attachment persistence must use attachmentService.ingestGeneratedArtifacts",
+  "agent/src/system-core/tools/connectors/connector-toolkit/tool-access-connector.js":
+    "email connector attachment persistence must use attachmentService.ingestGeneratedArtifacts",
+  "agent/src/system-core/tools/workflow/agent-collab/collab-artifact-persist.js":
+    "ordinary agent-collab async result attachment persistence must use attachmentService.ingestGeneratedArtifacts",
 }));
 
-const SEMANTIC_PERSISTENCE_API_REGEXES = [
+
+const REMOVED_PUBLIC_WRAPPER_REGEXES = [
+  { api: "transferSemanticContentSync", regex: /\btransferSemanticContentSync\b/ },
+  { api: "transferToolMessage", regex: /\btransferToolMessage\b/ },
+  { api: "transferSubAgentMessages", regex: /\btransferSubAgentMessages\b/ },
+  { api: "processStageMessage", regex: /\bprocessStageMessage\b/ },
+  { api: "composeFinalMessage", regex: /\bcomposeFinalMessage\b/ },
+];
+
+const REMOVED_PUBLIC_WRAPPER_ALLOWED_FILES = new Set();
+
+const OUT_OF_SCOPE_SEMANTIC_TRANSFER_REGEXES = [
+  { api: "transferSemanticContent", regex: /\btransferSemanticContent\b/ },
+  { api: "semanticTransfer", regex: /\bsemanticTransfer\b/ },
+  { api: "noobot.semantic-transfer", regex: /noobot\.semantic-transfer/ },
   { api: "persistTransferArtifacts", regex: /\bpersistTransferArtifacts\b/ },
   { api: "persistTransferFile", regex: /\bpersistTransferFile\b/ },
   { api: "materializeOutputResult", regex: /\bmaterializeOutputResult\b/ },
@@ -90,8 +110,8 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/semantic-transfer/legacy-adapter.js": "central legacy compatibility adapter",
   "agent/src/system-core/semantic-transfer/envelope/normalizer.js": "semantic-transfer normalizes legacy fallback (semantic dir layout)",
   "agent/src/system-core/semantic-transfer/storage/path-resolver.js": "semantic-transfer path resolver compatibility (semantic dir layout)",
-  "agent/src/system-core/tools/ai-models/multimodal-generate-tool.js": "tool output keeps legacy fallback from semantic-transfer",
-  "agent/src/system-core/tools/connectors/connector-toolkit/tool-access-connector.js": "connector output keeps legacy fallback from semantic-transfer",
+  "agent/src/system-core/tools/ai-models/multimodal-generate-tool.js": "multimodal tool returns attachmentMetas from attachmentService for existing consumers",
+  "agent/src/system-core/tools/connectors/connector-toolkit/tool-access-connector.js": "connector output keeps attachmentMetas compatibility; ordinary email attachment save stays on attachmentService",
   "agent/src/system-core/tools/core/check-tool-input.js": "tool input schema/error details use filePath as user field",
   "agent/src/system-core/tools/data-processing/doc2data-tool.js": "tool input/output compatibility",
   "agent/src/system-core/tools/data-processing/media2data-tool.js": "tool input/output compatibility",
@@ -100,7 +120,7 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/tools/execution/file-search.js": "file search public result schema uses filePath for searched workspace files",
   "agent/src/system-core/tools/execution/file-tools.js": "file tool public schema/results use filePath as user-facing workspace file address",
   "agent/src/system-core/tools/execution/file-tool.js": "file tool public input schema",
-  "agent/src/system-core/tools/workflow/agent-collab/collab-artifact-persist.js": "agent-collab output keeps legacy fallback from semantic-transfer",
+  "agent/src/system-core/tools/workflow/agent-collab/collab-artifact-persist.js": "agent-collab async result output keeps attachmentMetas compatibility; ordinary save stays on attachmentService",
   "agent/src/system-core/tools/workflow/agent-collab/collab-task-utils.js": "agent-collab payload compatibility",
   "agent/src/system-core/tools/workflow/agent-collab/tool-wait-async-result.js": "agent-collab wait result compatibility",
 
@@ -181,7 +201,7 @@ function detectFile(file) {
 
     if (SETTLED_ATTACHMENT_SERVICE_ONLY_FILES.has(rel)) {
       if (!isCommentOrEmptyLine(line)) {
-        for (const item of SEMANTIC_PERSISTENCE_API_REGEXES) {
+        for (const item of OUT_OF_SCOPE_SEMANTIC_TRANSFER_REGEXES) {
           if (!item.regex.test(line)) continue;
           violations.push({
             type: "out-of-scope-semantic-persistence",
@@ -189,7 +209,7 @@ function detectFile(file) {
             file: rel,
             line: index + 1,
             text: line.trim(),
-            hint: `${SETTLED_ATTACHMENT_SERVICE_ONLY_FILES.get(rel)}; do not route this ordinary attachment save through semantic-transfer.`,
+            hint: `${SETTLED_ATTACHMENT_SERVICE_ONLY_FILES.get(rel)}; do not route this ordinary attachment save/result through semantic-transfer or emit noobot.semantic-transfer envelopes here.`,
           });
         }
       }
@@ -207,6 +227,19 @@ function detectFile(file) {
         line: index + 1,
         text: line.trim(),
         hint: "Use buildLegacyOverflowFields() from semantic-transfer/legacy-adapter instead of spelling overflow legacy fields.",
+      });
+    }
+
+    for (const item of REMOVED_PUBLIC_WRAPPER_REGEXES) {
+      if (!item.regex.test(line)) continue;
+      if (REMOVED_PUBLIC_WRAPPER_ALLOWED_FILES.has(rel)) continue;
+      violations.push({
+        type: "removed-public-wrapper",
+        field: item.api,
+        file: rel,
+        line: index + 1,
+        text: line.trim(),
+        hint: "Do not reintroduce removed semantic-transfer wrapper APIs; route through transferSemanticContent({ scenario, strategy, ... }) or private strategy implementation files.",
       });
     }
 

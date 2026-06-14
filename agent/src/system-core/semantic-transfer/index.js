@@ -6,5 +6,15 @@
 
 export * from "./core/index.js";
 export * from "./envelope/index.js";
-export * from "./storage/index.js";
+export {
+  getTransferFiles,
+  getPrimaryTransferFile,
+  getTransferDisplayPath,
+  getTransferAttachmentMetas,
+} from "./storage/consumer.js";
+export {
+  buildTransferFileEntry,
+  resolveTransferFilePath,
+  resolveTransferPathView,
+} from "./storage/path-resolver.js";
 export * from "./transfer/index.js";

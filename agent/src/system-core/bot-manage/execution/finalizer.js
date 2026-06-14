@@ -9,7 +9,10 @@ import {
   CALLER_ROLE,
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
-import { mergeAttachmentMetas } from "../../attach/meta-ops.js";
+import {
+  buildTransferPayloadFromAttachmentMetas,
+  filterSemanticTransferAttachmentMetas,
+} from "../../attach/meta-ops.js";
 import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 
@@ -31,6 +34,13 @@ function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
     attachmentSource === "model" ||
     attachmentSource === "model_generated" ||
     Boolean(generationSource)
+  );
+}
+
+function shouldPromoteSemanticTransferAttachmentToAssistant(attachmentItem = {}) {
+  return (
+    filterSemanticTransferAttachmentMetas([attachmentItem]).length > 0 &&
+    shouldPromoteAttachmentToAssistant(attachmentItem)
   );
 }
 
@@ -79,7 +89,7 @@ function shouldPromoteTransferEnvelope(envelope = {}) {
   if (!isPlainObject(envelope)) return false;
   const metas = getTransferAttachmentMetas(envelope);
   if (!metas.length) return true;
-  return metas.some((item = {}) => shouldPromoteAttachmentToAssistant(item));
+  return metas.some((item = {}) => shouldPromoteSemanticTransferAttachmentToAssistant(item));
 }
 
 function promoteGeneratedTransfersToFinalAssistant(messages = []) {
@@ -94,9 +104,13 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
     resolveTransferEnvelopesFromMessage(messageItem).length
       ? []
       : (Array.isArray(messageItem?.attachmentMetas) ? messageItem.attachmentMetas : [])
-          .filter(shouldPromoteAttachmentToAssistant),
+          .filter(shouldPromoteSemanticTransferAttachmentToAssistant),
   );
-  if (!generatedTransferEnvelopes.length && !generatedAttachmentMetas.length) return sourceMessages;
+  const generatedAttachmentTransferPayload = buildTransferPayloadFromAttachmentMetas(generatedAttachmentMetas);
+  const generatedAttachmentTransferEnvelopes = Array.isArray(generatedAttachmentTransferPayload?.transferEnvelopes)
+    ? generatedAttachmentTransferPayload.transferEnvelopes
+    : [];
+  if (!generatedTransferEnvelopes.length && !generatedAttachmentTransferEnvelopes.length) return sourceMessages;
 
   const finalAssistantIndex = (() => {
     for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
@@ -117,18 +131,18 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
   const mergedTransferEnvelopes = dedupeTransferEnvelopes([
     ...resolveTransferEnvelopesFromMessage(finalAssistant),
     ...generatedTransferEnvelopes,
+    ...generatedAttachmentTransferEnvelopes,
   ]);
   const transferEnvelope = mergedTransferEnvelopes[0] || null;
-  const fallbackAttachmentMetas = mergedTransferEnvelopes.length ? [] : generatedAttachmentMetas;
-  outputMessages[finalAssistantIndex] = {
+  const nextFinalAssistant = {
     ...finalAssistant,
     ...(transferEnvelope ? { transferEnvelope } : {}),
     ...(mergedTransferEnvelopes.length ? { transferEnvelopes: mergedTransferEnvelopes } : {}),
-    attachmentMetas: mergeAttachmentMetas(
-      Array.isArray(finalAssistant?.attachmentMetas) ? finalAssistant.attachmentMetas : [],
-      mergeAttachmentMetas(fallbackAttachmentMetas, getTransferAttachmentMetas(mergedTransferEnvelopes)),
-    ),
   };
+  if (mergedTransferEnvelopes.length) {
+    delete nextFinalAssistant.attachmentMetas;
+  }
+  outputMessages[finalAssistantIndex] = nextFinalAssistant;
   return outputMessages;
 }
 

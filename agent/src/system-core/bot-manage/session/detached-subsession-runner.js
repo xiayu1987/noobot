@@ -113,7 +113,7 @@ export function createDetachedSubSessionRunner({
         parentSessionId,
         dialogProcessId: subDialogProcessId || subSessionId,
         userConfig: subSessionUserConfig,
-        attachmentMetas: subSessionAttachmentMetas,
+        inputAttachmentMetas: subSessionAttachmentMetas,
         systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
         eventListener: resolveObjectEventListener(eventListener),
         userInteractionBridge: inheritedUserInteractionBridge,
@@ -351,7 +351,9 @@ async function persistWorkflowSubSessionSnapshot({
       dialogProcessId,
       parentDialogProcessId,
       frontendUserMessage: false,
-      attachmentMetas: subSessionAttachmentMetas,
+      ...(subSessionAttachmentMetas.length
+        ? { inputAttachmentMetas: subSessionAttachmentMetas }
+        : {}),
     },
     timestamp,
   );

@@ -14,6 +14,7 @@ import {
   buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
+  getTransferPayloadFromAttachmentMetas,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   invokeWithReasoningRetry,
@@ -42,6 +43,7 @@ import {
   recordSummaryDetailAttachmentMetas,
   resolvePreviousSummaryContextText,
   shouldSaveSummaryDetailToAttachment,
+  transferSummaryInjectionMessage,
 } from "./summary-manager.js";
 import {
   parseSummaryOverviewAndDetailFromText,
@@ -238,7 +240,7 @@ export async function runPlanUpdateAfterSummary(
     purpose: "planning_revision",
     content: revisionText,
     dedupe: true,
-    attachmentMetas: revisionAttachmentMetas,
+    transferPayload: getTransferPayloadFromAttachmentMetas(revisionAttachmentMetas),
   });
   const revisionApplied = applyRevisedPlanFromText(ctx, revisionText, {
     source: "planning_revision",
@@ -422,15 +424,22 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
       })
       : [];
     recordSummaryDetailAttachmentMetas(ctx, summaryDetailAttachmentMetas);
-    relayText = saveDetailToAttachment
+    const baseRelayText = saveDetailToAttachment
       ? buildSummaryRelayContent({
           locale,
           overviewText: summaryOverviewText,
           detailAttachmentMetas: summaryDetailAttachmentMetas,
         })
       : responseText;
+    relayText = await transferSummaryInjectionMessage(ctx, {
+      fullText: responseText,
+      summaryText: baseRelayText,
+      detailText: summaryDetailAttachmentText,
+      injectMode: saveDetailToAttachment ? "summary" : "full",
+      meta,
+    });
     relayText = [
-      relayText,
+      relayText || baseRelayText,
       formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
     ].filter(Boolean).join("\n\n");
     relayAttachmentMetas = summaryDetailAttachmentMetas;
@@ -455,7 +464,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     locale,
     purpose,
     content: relayText,
-    attachmentMetas: relayAttachmentMetas,
+    transferPayload: getTransferPayloadFromAttachmentMetas(relayAttachmentMetas),
   });
   if (purpose === "summary") {
     recordLatestSummaryFullText(ctx, responseText);

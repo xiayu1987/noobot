@@ -192,6 +192,7 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     effectiveAttachmentIds.slice().sort(),
     ["att_plan", "att_report"],
   );
+  assert.equal(finalAssistant.attachmentMetas, undefined);
   const acceptanceLogs = ctx.agentContext.payload.harness.logs.acceptance;
   assert.equal(
     acceptanceLogs.some((item = {}) => item?.event === "workflow_priority_decision"),

@@ -16,7 +16,15 @@ export function createCurrentTurnMessagesStore(messages = []) {
       for (let index = items.length - 1; index >= 0; index -= 1) {
         const item = items[index] || {};
         if (typeof matcher === "function" && !matcher(item)) continue;
-        items[index] = { ...item, ...(patch || {}) };
+        const nextItem = { ...item };
+        for (const [key, value] of Object.entries(patch || {})) {
+          if (value === undefined) {
+            delete nextItem[key];
+          } else {
+            nextItem[key] = value;
+          }
+        }
+        items[index] = nextItem;
         return items[index];
       }
       return null;
@@ -26,7 +34,15 @@ export function createCurrentTurnMessagesStore(messages = []) {
       for (let index = 0; index < items.length; index += 1) {
         const item = items[index] || {};
         if (typeof matcher === "function" && !matcher(item, index)) continue;
-        items[index] = { ...item, ...(patch || {}) };
+        const nextItem = { ...item };
+        for (const [key, value] of Object.entries(patch || {})) {
+          if (value === undefined) {
+            delete nextItem[key];
+          } else {
+            nextItem[key] = value;
+          }
+        }
+        items[index] = nextItem;
         updatedCount += 1;
       }
       return updatedCount;

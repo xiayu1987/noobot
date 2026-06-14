@@ -13,6 +13,7 @@ export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 export {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  getTransferPayloadFromAttachmentMetas,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
 } from "../shared/attachment-log-utils.js";
