@@ -212,10 +212,12 @@ test("separate_model summary request includes previous summary after complete pl
     planText: "1. 当前完整计划\n1.1 子计划A",
     pending: { summary: true },
   });
-  agentContext.payload.harness.summaryText = "1. [plan=1][status=done] 上一轮概要";
+  agentContext.payload.harness.summaryText = "1. [plan=1][status=done] 上一轮概要\n2. [plan=1.1][status=done] 上一轮概要二";
   agentContext.payload.harness.summaryFullText = [
     "[SUMMARY_OVERVIEW]",
     "1. [plan=1][status=done] 上一轮概要",
+    "2. [plan=1.1][status=done] 上一轮概要二",
+    "3. [plan=1.2][status=warn] 上一轮概要三",
     "[SUMMARY_DETAIL]",
     "- 上一轮详细证据",
     "[SUMMARY_END]",
@@ -244,10 +246,17 @@ test("separate_model summary request includes previous summary after complete pl
   assert.equal(capturedMessages[checklistIndex]?.role, "system");
   assert.equal(capturedMessages[previousSummaryIndex]?.role, "system");
   assert.equal(previousSummaryIndex, checklistIndex + 1);
+  const previousSummaryMessages = capturedMessages.filter((item = {}) =>
+    String(item?.content || "").includes("harness-previous-summary-context"),
+  );
+  assert.equal(previousSummaryMessages.length, 1);
   assert.equal(
     String(capturedMessages[previousSummaryIndex]?.content || "").includes("[SUMMARY_DETAIL]"),
     true,
   );
+  assert.match(String(capturedMessages[previousSummaryIndex]?.content || ""), /1\. \[plan=1\]\[status=done\] 上一轮概要/);
+  assert.match(String(capturedMessages[previousSummaryIndex]?.content || ""), /2\. \[plan=1\.1\]\[status=done\] 上一轮概要二/);
+  assert.match(String(capturedMessages[previousSummaryIndex]?.content || ""), /3\. \[plan=1\.2\]\[status=warn\] 上一轮概要三/);
   assert.equal(
     capturedMessages.some((item = {}) =>
       String(item?.content || "").includes("基于上一轮小结") ||

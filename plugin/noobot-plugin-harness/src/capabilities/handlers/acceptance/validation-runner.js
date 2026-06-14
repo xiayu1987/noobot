@@ -17,7 +17,6 @@ import {
   invokeWithReasoningRetry,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
-  parseSummaryOverviewAndDetailFromText,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
@@ -52,6 +51,7 @@ import { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { applyPhaseAcceptanceReportToPlanStatus } from "../shared/plan/acceptance-status.js";
 import { resolveCurrentTaskGoalText } from "../shared/plan/checklist-context.js";
+import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
@@ -133,36 +133,6 @@ function resolveAcceptanceValidationRequestPayload(promptPayload = {}) {
     toolSignals: source.toolSignals || {},
     finalOutput: String(source.finalOutput || "").trim(),
   };
-}
-
-function resolveLatestSummaryOutputText(bucket = {}) {
-  const outputs = Array.isArray(bucket?.guidanceOutputs) ? bucket.guidanceOutputs : [];
-  for (let index = outputs.length - 1; index >= 0; index -= 1) {
-    const item = outputs[index] || {};
-    if (String(item?.purpose || "").trim() !== "summary") continue;
-    const content = String(item?.content || "").trim();
-    if (content) return content;
-  }
-  return "";
-}
-
-function resolveSummaryOverviewText(candidateText = "") {
-  const text = String(candidateText || "").trim();
-  if (!text) return "";
-  const parsed = parseSummaryOverviewAndDetailFromText(text);
-  return String(parsed?.overviewText || "").trim() || text;
-}
-
-function resolveLatestSummaryOverviewText(bucket = {}) {
-  const candidates = [
-    String(bucket?.summaryFullText || "").trim(),
-    resolveLatestSummaryOutputText(bucket),
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    const overview = resolveSummaryOverviewText(candidate);
-    if (overview) return overview;
-  }
-  return "";
 }
 
 function buildFinalAcceptanceSemanticValidationMessages({
@@ -275,7 +245,7 @@ function buildAcceptancePromptParts({
     ? buildAllSummaryReportSystemContents({
         locale,
         marker: getAllSummaryReportsMarker(locale),
-        data: { latestSummaryOverview: resolveLatestSummaryOverviewText(bucket) },
+        data: { latestCompleteSummaryText: resolveLatestCompleteSummaryText({ bucket, ctx }) },
       })
     : [];
   const requestContent = phase

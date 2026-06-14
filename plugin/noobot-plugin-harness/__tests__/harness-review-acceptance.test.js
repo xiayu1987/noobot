@@ -787,7 +787,8 @@ test("phase acceptance separate model receives context, summaries, revised plan,
   assert.equal(messages[summaryIndexes[0]].role, "system");
   assert.match(String(messages[summaryIndexes[0]].content || ""), /最新小结概要/);
   assert.doesNotMatch(String(messages[summaryIndexes[0]].content || ""), /旧小结/);
-  assert.doesNotMatch(String(messages[summaryIndexes[0]].content || ""), /详细内容不应作为小结清单/);
+  assert.match(String(messages[summaryIndexes[0]].content || ""), /\[SUMMARY_DETAIL\]/);
+  assert.match(String(messages[summaryIndexes[0]].content || ""), /详细内容不应作为小结清单/);
   assert.equal(messages[planIndex].role, "system");
   assert.equal(messages[phaseIndexes[0]].role, "system");
   assert.equal(messages[requestIndex].role, "user");
@@ -983,7 +984,9 @@ test("phase acceptance separate model drops historical summary relays and passes
           summaryText: "旧合并小结：不应作为阶段验收小结上下文",
           summaryFullText: [
             "[SUMMARY_OVERVIEW]",
-            "1. 最后一次完整小结：只应传这一份",
+            "1. 最后一次完整小结 item-1：只应作为同一份小结传入",
+            "2. 最后一次完整小结 item-2：不能拆成第二份 summary report",
+            "3. 最后一次完整小结 item-3：不能拆成第三份 summary report",
             "[SUMMARY_DETAIL]",
             "- 最后一次完整小结的明细",
             "[SUMMARY_END]",
@@ -1020,7 +1023,9 @@ test("phase acceptance separate model drops historical summary relays and passes
   const joined = invocations[0].messages
     .map((item = {}) => String(item.content || ""))
     .join("\n\n");
-  assert.match(joined, /最后一次完整小结：只应传这一份/);
+  assert.match(joined, /最后一次完整小结 item-1：只应作为同一份小结传入/);
+  assert.match(joined, /最后一次完整小结 item-2：不能拆成第二份 summary report/);
+  assert.match(joined, /最后一次完整小结 item-3：不能拆成第三份 summary report/);
   assert.doesNotMatch(joined, /旧小结完整-1/);
   assert.doesNotMatch(joined, /旧小结完整-2/);
   assert.doesNotMatch(joined, /旧小结完整-3/);
