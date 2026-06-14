@@ -1,4 +1,4 @@
-# experience model (text protocol)
+【经验教训字段模型】
 
 DOMAIN: career_wealth
 CATEGORY: career_development

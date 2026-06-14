@@ -74,7 +74,7 @@ test("parse daily experience output supports ID+PATCH protocol", () => {
   const service = new MemoryManager({ workspaceRoot: "/tmp/workspace" });
   const items = service.experience.parseDaily(
     [
-      'ADD D1 domain="测试/域" new=true experiences="经验1 || 经验1" lessons="教训1"',
+      'ADD D[1] domain="测试/域" new=true experiences="经验1 || 经验1" lessons="教训1"',
     ].join("\n"),
   );
   assert.equal(items.length, 1);
@@ -121,9 +121,9 @@ test("long memory update applies L/M patch commands", async () => {
   const changed = await service.longMemory.update(
     userRoot,
     [
-      "UPDATE L1 喜欢结构化输出",
-      "ADD L2 倾向先验证再实现",
-      'ADD M1 key="communication_style" value="concise"',
+      "UPDATE L[1] 喜欢结构化输出",
+      "ADD L[2] 倾向先验证再实现",
+      'ADD M[1] key="communication_style" value="concise"',
     ].join("\n"),
   );
   assert.equal(changed, true);

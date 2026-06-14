@@ -9,9 +9,9 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     idPrefix: "D",
     parseErrorCode: "daily_patch_command_not_found",
     promptProtocol:
-      'ADD/UPDATE/DELETE D[整数ID] domain="领域" new=true|false experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
+      'ADD/UPDATE/DELETE D[id] domain="domain" new=true|false experiences="experience 1 || experience 2" lessons="lesson 1 || lesson 2"',
     promptExample:
-      'ADD D1 domain="领域" new=true experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
+      'ADD D[1] domain="domain" new=true experiences="experience 1 || experience 2" lessons="lesson 1 || lesson 2"',
     fieldMap: Object.freeze({
       domain_name: Object.freeze({
         type: "sanitized",
@@ -36,9 +36,9 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     idPrefix: "W",
     parseErrorCode: "weekly_patch_command_not_found",
     promptProtocol:
-      'ADD/UPDATE/DELETE W[整数ID] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
+      'ADD/UPDATE/DELETE W[id] category="category" experiences="experience 1 || experience 2" lessons="lesson 1 || lesson 2"',
     promptExample:
-      'ADD W1 category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
+      'ADD W[1] category="category" experiences="experience 1 || experience 2" lessons="lesson 1 || lesson 2"',
     fieldMap: Object.freeze({
       category_name: Object.freeze({
         type: "sanitized",
@@ -59,9 +59,9 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     idPrefix: "M",
     parseErrorCode: "monthly_patch_command_not_found",
     promptProtocol:
-      'ADD/UPDATE/DELETE M[整数ID] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"',
+      'ADD/UPDATE/DELETE M[id] category="category" subcategory="subcategory" patterns="pattern 1 || pattern 2" methodologies="method 1 || method 2"',
     promptExample:
-      'ADD M1 category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"',
+      'ADD M[1] category="category" subcategory="subcategory" patterns="pattern 1 || pattern 2" methodologies="method 1 || method 2"',
     fieldMap: Object.freeze({
       category_name: Object.freeze({
         type: "sanitized",
@@ -87,9 +87,9 @@ export const EXPERIENCE_PATCH_SCHEMA = Object.freeze({
     idPrefix: "Y",
     parseErrorCode: "yearly_patch_command_not_found",
     promptProtocol:
-      'ADD/UPDATE/DELETE Y[整数ID] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"',
+      'ADD/UPDATE/DELETE Y[id] category="category" subcategory="subcategory" principles="principle 1 || principle 2" reflections="reflection 1 || reflection 2"',
     promptExample:
-      'ADD Y1 category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"',
+      'ADD Y[1] category="category" subcategory="subcategory" principles="principle 1 || principle 2" reflections="reflection 1 || reflection 2"',
     fieldMap: Object.freeze({
       category_name: Object.freeze({
         type: "sanitized",

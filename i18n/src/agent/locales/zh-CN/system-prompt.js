@@ -5,14 +5,38 @@
  */
 
 const DAILY_EXPERIENCE_PATCH_EXAMPLE =
-  'ADD D1 domain="领域" new=true experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
+  'ADD D[1] domain="领域" new=true experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
 
 const WEEKLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD W1 category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
+  'ADD W[1] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
 const MONTHLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD M1 category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"';
+  'ADD M[1] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"';
 const YEARLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD Y1 category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"';
+  'ADD Y[1] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"';
+
+
+const EXPERIENCE_PATCH_PROTOCOLS = Object.freeze({
+  daily: Object.freeze({
+    protocol:
+      'ADD/UPDATE/DELETE D[整数ID] domain="领域" new=true|false experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
+    example: DAILY_EXPERIENCE_PATCH_EXAMPLE,
+  }),
+  weekly: Object.freeze({
+    protocol:
+      'ADD/UPDATE/DELETE W[整数ID] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"',
+    example: WEEKLY_SUMMARY_PATCH_EXAMPLE,
+  }),
+  monthly: Object.freeze({
+    protocol:
+      'ADD/UPDATE/DELETE M[整数ID] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"',
+    example: MONTHLY_SUMMARY_PATCH_EXAMPLE,
+  }),
+  yearly: Object.freeze({
+    protocol:
+      'ADD/UPDATE/DELETE Y[整数ID] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"',
+    example: YEARLY_SUMMARY_PATCH_EXAMPLE,
+  }),
+});
 
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
   contextPrompt: {
@@ -43,6 +67,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
   },
   memoryPrompt: {
+    experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
     prompt: (params = {}) => {
       const longMemoryModel = String(params.longMemoryModel || "").trim();
       const longMemoryMetadata = String(params.longMemoryMetadata || "").trim();
@@ -51,16 +76,23 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
           ? params.existingLongMemory
           : JSON.stringify(params.existingLongMemory ?? "", null, 2);
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
-      const modelRuleText = longMemoryModel
-        ? `请严格遵循以下长期记忆建模规则（来自 long-memory-model.md）：\n${longMemoryModel}`
-        : "若未提供记忆模型规则，请优先保留稳定偏好与长期约束。";
+      const fieldModelText = longMemoryModel
+        ? `【长期记忆字段模型（来自 long-memory-model.md）】\n${longMemoryModel}`
+        : "【长期记忆字段模型】未提供字段模型时，优先保留稳定偏好与长期约束。";
       return [
         "你是长期记忆整理助手。",
-        modelRuleText,
+        fieldModelText,
+        "【长期记忆 ID+PATCH 协议】",
+        "每行输出一条命令；只输出命令，不要 markdown、JSON 或解释。",
+        "ADD L[记忆ID] [稳定长期记忆]",
+        "UPDATE L[记忆ID] [修改后的稳定长期记忆]",
+        "DELETE L[记忆ID]",
+        "ADD M[元数据ID] key=\"字段\" value=\"值\"",
+        "UPDATE M[元数据ID] key=\"字段\" value=\"值\"",
+        "DELETE M[元数据ID]",
+        "硬性约束：L/M ID 必须使用正整数；更新或删除必须复用已有 ID；新增使用未占用 ID。",
+        "记忆规则：只记录稳定、长期、可复用的信息；临时任务、一次性报错、短期安排、无证据推测不要写入；新信息修正旧信息用 UPDATE，旧信息过期或被否定用 DELETE，不要重复 ADD 近义记忆。",
         "请基于“已有长期记忆”“长期记忆元数据”和“新的短期记忆片段”产出 ID+PATCH 更新指令。",
-        "仅输出 ID+PATCH 行，不要 markdown 或解释。",
-        "长期记忆补丁：ADD/UPDATE/DELETE L[整数ID] [记忆内容]",
-        "长期记忆元数据补丁：ADD/UPDATE/DELETE M[整数ID] key=\"字段\" value=\"值\"",
         `已有长期偏好：\n${existingLongMemory}`,
         `已有长期记忆元数据：\n${longMemoryMetadata || "（空）"}`,
         `新的短期记忆片段：\n${promptPayload}`,
