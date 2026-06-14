@@ -5,6 +5,7 @@
  */
 import { createTransferEnvelope, directInput, directOutput, fileInput, fileOutput, isTransferEnvelope } from "./envelope.js";
 import { TRANSFER_DIRECTION, TRANSFER_TRANSPORT } from "../core/constants.js";
+import { firstNormalizedString } from "../core/compact.js";
 import { buildTransferFileEntry, resolveTransferFilePath } from "../storage/path-resolver.js";
 
 function isPlainObject(value) {
@@ -57,22 +58,24 @@ export function normalizeTransfer(value, {
     }
 
     const attachmentMeta = isPlainObject(value.attachmentMeta) ? value.attachmentMeta : value;
-    const explicitPath = String(value.filePath || value.path || value.relativePath || "").trim();
+    const explicitPath = firstNormalizedString(value.filePath, value.path, value.relativePath);
     if (explicitPath || attachmentMeta?.path || attachmentMeta?.relativePath) {
+      const transferPath = firstNormalizedString(explicitPath, attachmentMeta?.path);
+      const transferRelativePath = firstNormalizedString(attachmentMeta?.relativePath);
       const filePath = resolveTransferFilePath({
         runtime,
         agentContext,
         attachmentMeta,
-        path: explicitPath || attachmentMeta?.path || "",
-        relativePath: attachmentMeta?.relativePath || "",
+        path: transferPath,
+        relativePath: transferRelativePath,
         purpose: "normalize_transfer_file_path",
       });
       const file = buildTransferFileEntry({
         runtime,
         agentContext,
         attachmentMeta,
-        path: explicitPath || attachmentMeta?.path || "",
-        relativePath: attachmentMeta?.relativePath || "",
+        path: transferPath,
+        relativePath: transferRelativePath,
         purpose: "normalize_transfer_file_path",
       });
       return createTransferEnvelope({

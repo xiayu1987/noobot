@@ -6,6 +6,8 @@
 import { isTransferEnvelope } from "../envelope/envelope.js";
 import { normalizeTransferEnvelopes } from "../envelope/envelope-utils.js";
 import { emitEvent } from "../../event/index.js";
+import { resolveTransferFilePath } from "./path-resolver.js";
+import { firstNormalizedString } from "../core/compact.js";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -113,17 +115,20 @@ export function getPrimaryTransferFile(value = null, options = {}) {
 export function getTransferDisplayPath(value = null, options = {}) {
   const file = getPrimaryTransferFile(value, options);
   if (!file) return "";
-  return normalizeString(
-    file?.pathView?.displayPath ||
-      file?.filePath ||
-      file?.pathView?.sandboxPath ||
-      file?.pathView?.relativePath ||
-      file?.pathView?.hostPath ||
-      file?.attachmentMeta?.sandboxPath ||
-      file?.attachmentMeta?.sandboxViewPath ||
-      file?.attachmentMeta?.relativePath ||
-      file?.attachmentMeta?.path ||
-      file?.attachmentMeta?.name,
+  const attachmentMeta = isPlainObject(file?.attachmentMeta) ? file.attachmentMeta : {};
+  const pathView = isPlainObject(file?.pathView) ? file.pathView : {};
+  return firstNormalizedString(
+    pathView?.displayPath,
+    file?.filePath,
+    resolveTransferFilePath({
+      attachmentMeta,
+      path: pathView?.hostPath || "",
+      hostPath: pathView?.hostPath || "",
+      relativePath: pathView?.relativePath || "",
+      runtime: options?.runtime || {},
+      agentContext: options?.agentContext || null,
+      purpose: "semantic_transfer_display_path",
+    }),
   );
 }
 

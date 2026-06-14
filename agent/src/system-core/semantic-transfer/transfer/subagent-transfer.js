@@ -13,7 +13,7 @@ import {
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/telemetry.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { compactTransferPayloadForModel } from "../core/compact.js";
+import { compactTransferPayloadForModel, firstNormalizedString } from "../core/compact.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -26,8 +26,8 @@ function isPlainObject(value) {
 function normalizeNextSteps(nextSteps = []) {
   return (Array.isArray(nextSteps) ? nextSteps : [])
     .map((item = {}) => ({
-      nodeId: normalizeString(item?.nodeId || item?.id || item),
-      nodeName: normalizeString(item?.nodeName || item?.name || ""),
+      nodeId: firstNormalizedString(item?.nodeId, item?.id, item),
+      nodeName: firstNormalizedString(item?.nodeName, item?.name),
     }))
     .filter((item) => item.nodeId);
 }
@@ -45,9 +45,9 @@ function normalizeSubAgentMessages(messages = []) {
         };
       }
       return {
-        id: normalizeString(item?.id || item?.stepId || item?.nodeId || `subagent-${index + 1}`),
-        nodeId: normalizeString(item?.nodeId || ""),
-        nodeName: normalizeString(item?.nodeName || item?.name || ""),
+        id: firstNormalizedString(item?.id, item?.stepId, item?.nodeId, `subagent-${index + 1}`),
+        nodeId: firstNormalizedString(item?.nodeId),
+        nodeName: firstNormalizedString(item?.nodeName, item?.name),
         content: String(item?.content || item?.output || item?.text || ""),
         meta: isPlainObject(item?.meta) ? item.meta : {},
       };
@@ -107,7 +107,9 @@ export async function transferSubAgentMessages({
 
     const name = [
       "workflow-node",
-      normalizeString(item?.nodeName || item?.nodeId || item?.id || String(index + 1)).replace(/\s+/g, "-").toLowerCase(),
+      firstNormalizedString(item?.nodeName, item?.nodeId, item?.id, String(index + 1))
+        .replace(/\s+/g, "-")
+        .toLowerCase(),
       "result.md",
     ]
       .filter(Boolean)

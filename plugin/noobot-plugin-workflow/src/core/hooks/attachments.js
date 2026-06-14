@@ -107,17 +107,12 @@ export function resolveNodeInputAttachmentMetas({ ctx = {}, semanticNode = {}, s
 export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const semanticDisplay = runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath;
-  if (typeof semanticDisplay === "function") {
-    try {
-      const resolved = String(
-        semanticDisplay(meta, { runtime, agentContext }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to legacy resolver candidates below.
-    }
-  }
+  const semanticDisplay = callAttachmentPathResolver(
+    runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath,
+    meta,
+    { runtime, agentContext },
+  );
+  if (semanticDisplay) return semanticDisplay;
 
   const primaryFile = Array.isArray(meta?.files) && meta.files.length ? meta.files[0] : null;
   const sourceMeta = primaryFile?.attachmentMeta || meta?.attachmentMeta || meta;
@@ -129,75 +124,49 @@ export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   ).trim();
   if (directFilePath) return directFilePath;
 
-  const metaSandboxPath = String(
-    sourceMeta?.sandboxPath || sourceMeta?.sandboxViewPath || sourceMeta?.sandbox_file_path || "",
-  ).trim();
-  if (metaSandboxPath) return metaSandboxPath;
-  const semanticResolver = runtime?.sharedTools?.semanticTransfer?.resolveTransferFilePath;
-  if (typeof semanticResolver === "function") {
-    try {
-      const resolved = String(
-        semanticResolver({
-          attachmentMeta: sourceMeta,
-          meta: sourceMeta,
-          path: String(sourceMeta?.path || "").trim(),
-          hostPath: String(sourceMeta?.path || "").trim(),
-          relativePath: String(sourceMeta?.relativePath || "").trim(),
-          runtime,
-          agentContext,
-          purpose: "workflow_attachment_display_path",
-        }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to legacy resolver candidates below.
-    }
+  const resolved = resolveViaRuntimeAttachmentPathResolvers(sourceMeta, runtime, agentContext);
+  if (resolved) return resolved;
+  return String(sourceMeta?.relativePath || sourceMeta?.path || sourceMeta?.name || "").trim();
+}
+
+function callAttachmentPathResolver(resolver, ...args) {
+  if (typeof resolver !== "function") return "";
+  try {
+    return String(resolver(...args) || "").trim();
+  } catch {
+    return "";
   }
-  const injectedResolver = runtime?.sharedTools?.resolveAttachmentDisplayPath;
-  if (typeof injectedResolver === "function") {
-    try {
-      const resolved = String(
-        injectedResolver({
-          meta: sourceMeta,
-          path: String(sourceMeta?.path || "").trim(),
-          hostPath: String(sourceMeta?.path || "").trim(),
-          relativePath: String(sourceMeta?.relativePath || "").trim(),
-          runtime,
-          agentContext,
-          purpose: "workflow_attachment_display_path",
-        }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to legacy resolver candidates below.
-    }
-  }
-  const hostPath = String(sourceMeta?.path || "").trim();
-  const relativePath = String(sourceMeta?.relativePath || "").trim();
-  const resolverCandidates = [
+}
+
+function buildAttachmentPathResolverPayload(sourceMeta = {}, runtime = null, agentContext = null) {
+  const path = String(sourceMeta?.path || "").trim();
+  return {
+    ...(sourceMeta && typeof sourceMeta === "object" ? sourceMeta : {}),
+    attachmentMeta: sourceMeta,
+    meta: sourceMeta,
+    path,
+    hostPath: path,
+    relativePath: String(sourceMeta?.relativePath || "").trim(),
+    runtime,
+    agentContext,
+    purpose: "workflow_attachment_display_path",
+  };
+}
+
+function resolveViaRuntimeAttachmentPathResolvers(sourceMeta = {}, runtime = null, agentContext = null) {
+  const payload = buildAttachmentPathResolverPayload(sourceMeta, runtime, agentContext);
+  const resolvers = [
+    runtime?.sharedTools?.semanticTransfer?.resolveTransferFilePath,
+    runtime?.sharedTools?.resolveAttachmentDisplayPath,
     runtime?.sharedTools?.resolveSandboxPath,
     runtime?.sharedTools?.toSandboxPath,
     runtime?.sharedTools?.pathMapper?.toSandboxPath,
   ];
-  for (const resolver of resolverCandidates) {
-    if (typeof resolver !== "function") continue;
-    try {
-      const resolved = String(
-        resolver({
-          path: hostPath,
-          hostPath,
-          relativePath,
-          runtime,
-          agentContext,
-          purpose: "workflow_attachment_display_path",
-        }) || "",
-      ).trim();
-      if (resolved) return resolved;
-    } catch {
-      // Fallback to meta path below.
-    }
+  for (const resolver of resolvers) {
+    const resolved = callAttachmentPathResolver(resolver, payload);
+    if (resolved) return resolved;
   }
-  return String(relativePath || hostPath || sourceMeta?.name || "").trim();
+  return "";
 }
 
 export function isPlainObject(value) {
@@ -332,22 +301,25 @@ export function resolveWorkflowCompatAttachmentMetas({
 export function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {
   const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const getTransferDisplayPath = runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath;
-  if (typeof getTransferDisplayPath === "function") {
-    try {
-      const path = String(getTransferDisplayPath(file, { runtime, agentContext }) || "").trim();
-      if (path) return path;
-    } catch {
-      // Fallback below.
-    }
-  }
+  const semanticDisplay = callAttachmentPathResolver(
+    runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath,
+    file,
+    { runtime, agentContext },
+  );
+  if (semanticDisplay) return semanticDisplay;
   return String(
     file?.pathView?.displayPath ||
       file?.filePath ||
-      file?.pathView?.sandboxPath ||
-      file?.pathView?.relativePath ||
-      file?.pathView?.hostPath ||
-      resolveAttachmentDisplayPath(file?.attachmentMeta || file, ctx) ||
+      resolveAttachmentDisplayPath(
+        {
+          ...(file?.attachmentMeta && typeof file.attachmentMeta === "object" ? file.attachmentMeta : {}),
+          pathView: file?.pathView,
+          path: file?.attachmentMeta?.path || file?.pathView?.hostPath,
+          relativePath: file?.attachmentMeta?.relativePath || file?.pathView?.relativePath,
+          sandboxPath: file?.attachmentMeta?.sandboxPath || file?.pathView?.sandboxPath,
+        },
+        ctx,
+      ) ||
       "",
   ).trim();
 }

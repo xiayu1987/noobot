@@ -47,6 +47,9 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     CHECKLIST_ARTIFACTS_GENERATED_NOTICE: "acceptanceChecklistArtifactsGeneratedNotice",
     FORCED_REASON_OVERFLOW_FALLBACK: "acceptanceForcedReasonOverflowFallback",
     FORCED_REASON_NO_ACTIVE_REQUEST: "acceptanceForcedReasonNoActiveRequest",
+    COMPLETE_PLAN_CHECKLIST_LABEL: "acceptanceCompletePlanChecklistLabel",
+    LATEST_COMPLETE_SUMMARY_TITLE: "acceptanceLatestCompleteSummaryTitle",
+    COLLAPSE_ACCEPTANCE_TITLE: "acceptanceCollapseAcceptanceTitle",
   }),
   ACCEPTANCE_VALIDATION: Object.freeze({
     PHASE_FINAL_OUTPUT_FALLBACK: "phaseAcceptanceFinalOutputFallback",
@@ -94,6 +97,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PLANNING_LATEST_USER_GOAL_FALLBACK: "planningLatestUserGoalFallback",
     PLANNING_MAIN_PROMPT_GOAL: "planningMainPromptGoal",
     PLANNING_MAIN_USER_GOAL_HEADER: "planningMainUserGoalHeader",
+    PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL: "planningMainCurrentTaskGoalProtocol",
     PLANNING_MAIN_CONSTRAINT: "planningMainConstraint",
     PLANNING_MAIN_EXAMPLE_HEADER: "planningMainExampleHeader",
     PLANNING_MAIN_EXAMPLE_ADD: "planningMainExampleAdd",
@@ -121,6 +125,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     GUIDANCE_SUMMARY_PROGRAMMING_RULES: "guidanceSummaryProgrammingRules",
     GUIDANCE_SUMMARY_DETAIL_HEADER: "guidanceSummaryDetailHeader",
     GUIDANCE_SUMMARY_DETAIL_SAMPLE: "guidanceSummaryDetailSample",
+    GUIDANCE_SUMMARY_NEXT_SUGGESTION_SAMPLE: "guidanceSummaryNextSuggestionSample",
     GUIDANCE_SUMMARY_RULES: "guidanceSummaryRules",
     PREVIOUS_SUMMARY_CONTEXT_HEADER: "previousSummaryContextHeader",
     ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER: "acceptanceMainPlanContextHeader",
@@ -374,6 +379,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "上下文溢出_最终输出兜底强制验收",
     acceptanceForcedReasonNoActiveRequest:
       "未主动请求验收_最终输出兜底",
+    acceptanceCompletePlanChecklistLabel: "完整计划清单",
+    acceptanceLatestCompleteSummaryTitle: "## 最后一次完整小结",
+    acceptanceCollapseAcceptanceTitle: "Harness-验收",
     acceptanceSignalAttachmentKeywords: "附件|attachment",
     acceptanceSignalSubtaskKeywords: "子任务|subtask",
     acceptanceSignalSubtaskStartKeywords: "开启|start",
@@ -416,6 +424,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoal:
       "目标：根据用户需求生成宏观主计划。仅限宏观步骤，严禁输出任何子计划或实施细节。",
     planningMainUserGoalHeader: "【用户目标】",
+    planningMainCurrentTaskGoalProtocol:
+      "在计划 patch 行之前，必须用以下文本协议输出当前任务目标：[CURRENT_TASK_GOAL]\\n<由计划模型提炼的一句话当前任务目标>\\n[PLAN]",
     planningMainConstraint:
       "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
     planningMainExampleHeader: "【输出示例】",
@@ -457,6 +467,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "编程模式附加要求：涉及代码、文件变更、测试结果或定位证据的小结条目必须包含 file=[文件路径]、method=[方法/函数名] 与 line=[行号/行号范围，可多段逗号分隔]。",
     guidanceSummaryDetailHeader: "## 详细明细",
     guidanceSummaryDetailSample: "- 证据/日志/风险分析 ...",
+    guidanceSummaryNextSuggestionSample:
+      "- 下一步优先执行最高优先级的未完成/风险计划项，并给出可验证动作。",
     guidanceSummaryRules:
       "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结必须整合上一轮小结结果：仍有效的已完成事项、进行中事项、风险、待办和证据都要保留或更新，不得遗漏；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节；SUMMARY_DETAIL 后必须输出 [NEXT_EXECUTION_SUGGESTION]，集中给出下一步可执行建议。",
     previousSummaryContextHeader: "【上一次小结】",
@@ -581,6 +593,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "Context overflow (final-output fallback forced acceptance)",
     acceptanceForcedReasonNoActiveRequest:
       "No active acceptance request (final-output fallback)",
+    acceptanceCompletePlanChecklistLabel: "Complete plan checklist",
+    acceptanceLatestCompleteSummaryTitle: "## Latest complete summary",
+    acceptanceCollapseAcceptanceTitle: "Harness-Acceptance",
     acceptanceSignalAttachmentKeywords: "attachment|附件",
     acceptanceSignalSubtaskKeywords: "subtask|子任务",
     acceptanceSignalSubtaskStartKeywords: "start|开启",
@@ -624,6 +639,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoal:
       "Goal: Generate a high-level main plan from the user goal. Only high-level steps; no sub-steps or implementation details.",
     planningMainUserGoalHeader: "[User Goal]",
+    planningMainCurrentTaskGoalProtocol:
+      "Before plan patch lines, output the current task goal using this text protocol: [CURRENT_TASK_GOAL]\\n<one concise current task goal synthesized by the planning model>\\n[PLAN]",
     planningMainConstraint:
       "Constraint: main_plan_id must be numeric (Arabic digits only).",
     planningMainExampleHeader: "[Example]",
@@ -661,6 +678,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "Programming-mode additional requirement: summary items involving code, file changes, test results, or location evidence must include file=[file path], method=[method/function name], and line=[line number/range; comma-separated multi-segments allowed].",
     guidanceSummaryDetailHeader: "## Detailed notes",
     guidanceSummaryDetailSample: "- evidence / logs / risk analysis ...",
+    guidanceSummaryNextSuggestionSample:
+      "- Next, execute the highest-priority unfinished/risky plan item with concrete verification.",
     guidanceSummaryRules:
       "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; this summary must integrate the previous summary results: keep or update all still-valid completed items, in-progress items, risks, todos, and evidence without omissions; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer; after SUMMARY_DETAIL, output [NEXT_EXECUTION_SUGGESTION] with centralized actionable next execution suggestions.",
     previousSummaryContextHeader: "[Previous Summary]",

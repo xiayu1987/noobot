@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { AttachmentService } from "../../attach/service/attachment-service.js";
 import { mapAttachmentRecordsToMetas } from "../../attach/index.js";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
@@ -16,6 +19,7 @@ import {
 import { createTransferEnvelope } from "../envelope/envelope.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
+import { firstNormalizedString } from "../core/compact.js";
 import { buildTransferFileEntry } from "./path-resolver.js";
 
 function normalizeString(value = "") {
@@ -28,6 +32,7 @@ function resolveUserId({ runtime = {}, agentContext = null, userId = "" } = {}) 
       runtime?.systemRuntime?.userId ||
       runtime?.userId ||
       agentContext?.userId ||
+      agentContext?.environment?.identity?.userId ||
       agentContext?.environment?.userId,
   );
 }
@@ -38,9 +43,14 @@ function resolveSessionId({ runtime = {}, agentContext = null, sessionId = "" } 
       runtime?.systemRuntime?.sessionId ||
       runtime?.sessionId ||
       agentContext?.sessionId ||
+      agentContext?.session?.current?.id ||
       agentContext?.session?.id ||
       agentContext?.session?.current?.sessionId,
   );
+}
+
+function resolveFallbackSessionId({ runtime = {}, agentContext = null, sessionId = "" } = {}) {
+  return resolveSessionId({ runtime, agentContext, sessionId }) || "default";
 }
 
 function emptyPersistResult(status = TRANSFER_RESULT_STATUS.SKIPPED, error = null) {
@@ -70,6 +80,83 @@ function resolveContentBase64({
   return text ? Buffer.from(text, "utf8").toString("base64") : "";
 }
 
+function createFallbackAttachmentService(runtime = {}) {
+  const workspaceRoot = normalizeString(runtime?.globalConfig?.workspaceRoot);
+  if (!workspaceRoot) return null;
+  return new AttachmentService(runtime.globalConfig);
+}
+
+function resolveWorkspaceBasePath({ runtime = {}, agentContext = null } = {}) {
+  return normalizeString(runtime?.basePath || agentContext?.environment?.workspace?.basePath);
+}
+
+function shouldUseLocalToolOverflowFallback({ service = null, generationSource = "", reason = "" } = {}) {
+  if (service && typeof service.ingestGeneratedArtifacts === "function") return false;
+  return [generationSource, reason].some((value) => normalizeString(value) === TRANSFER_REASON.TOOL_RESULT_OVERFLOW);
+}
+
+function buildLocalToolOverflowRecord({
+  artifact = {},
+  contentBytes = null,
+  filePath = "",
+  relativePath = "",
+  sessionId = "",
+  generationSource = TRANSFER_REASON.TOOL_RESULT_OVERFLOW,
+} = {}) {
+  const name = firstNormalizedString(artifact?.name, path.basename(filePath), "tool-result-overflow.txt");
+  return {
+    attachmentId: `tool-result-overflow-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    sessionId,
+    attachmentSource: "model",
+    name,
+    mimeType: normalizeString(artifact?.mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+    size: contentBytes?.length || 0,
+    path: filePath,
+    relativePath,
+    generatedByModel: true,
+    generationSource,
+  };
+}
+
+async function persistLocalToolOverflowArtifacts({
+  runtime = {},
+  agentContext = null,
+  sessionId = "",
+  artifacts = [],
+  generationSource = TRANSFER_REASON.TOOL_RESULT_OVERFLOW,
+} = {}) {
+  const basePath = resolveWorkspaceBasePath({ runtime, agentContext });
+  const artifactList = Array.isArray(artifacts) ? artifacts : [];
+  if (!basePath || !sessionId || !artifactList.length) return [];
+
+  const outputDir = path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow", sessionId);
+  await fs.mkdir(outputDir, { recursive: true });
+  const records = [];
+  for (const [index, artifact] of artifactList.entries()) {
+    const fallbackName = `tool-result-overflow-${index + 1}.txt`;
+    const name = firstNormalizedString(artifact?.name, fallbackName);
+    const safeName = firstNormalizedString(path.basename(name), fallbackName);
+    const filePath = path.join(outputDir, `${Date.now()}-${index}-${safeName}`);
+    const contentBase64 = resolveContentBase64({
+      content: artifact?.content,
+      contentBase64: artifact?.contentBase64,
+      bytes: artifact?.bytes,
+      contentEncoding: artifact?.contentEncoding,
+    });
+    const contentBytes = Buffer.from(contentBase64, "base64");
+    await fs.writeFile(filePath, contentBytes);
+    records.push(buildLocalToolOverflowRecord({
+      artifact,
+      contentBytes,
+      filePath,
+      relativePath: path.relative(basePath, filePath),
+      sessionId,
+      generationSource,
+    }));
+  }
+  return records;
+}
+
 export async function persistTransferArtifacts({
   runtime = {},
   agentContext = null,
@@ -86,14 +173,13 @@ export async function persistTransferArtifacts({
   producer = null,
   meta = {},
 } = {}) {
-  const service = attachmentService || runtime?.attachmentService || null;
-  if (!service || typeof service.ingestGeneratedArtifacts !== "function") {
-    return emptyPersistResult();
-  }
+  const service = attachmentService || runtime?.attachmentService || createFallbackAttachmentService(runtime);
   const resolvedUserId = resolveUserId({ runtime, agentContext, userId });
-  const resolvedSessionId = resolveSessionId({ runtime, agentContext, sessionId });
+  const resolvedSessionId = shouldUseLocalToolOverflowFallback({ service, generationSource, reason })
+    ? resolveFallbackSessionId({ runtime, agentContext, sessionId })
+    : resolveSessionId({ runtime, agentContext, sessionId });
   const artifactList = Array.isArray(artifacts) ? artifacts : [];
-  if (!resolvedUserId || !resolvedSessionId || !artifactList.length) {
+  if (!resolvedSessionId || !artifactList.length) {
     return emptyPersistResult();
   }
 
@@ -107,15 +193,27 @@ export async function persistTransferArtifacts({
     allowCustom: true,
   });
   const resolvedGenerationSource = intent.generationSource;
-  const records = await service.ingestGeneratedArtifacts({
-    userId: resolvedUserId,
-    sessionId: resolvedSessionId,
-    attachmentSource: normalizeString(attachmentSource) || "model",
-    generationSource: resolvedGenerationSource,
-    artifacts: artifactList,
-  });
+  let records = [];
+  if (service && typeof service.ingestGeneratedArtifacts === "function" && resolvedUserId) {
+    records = await service.ingestGeneratedArtifacts({
+      userId: resolvedUserId,
+      sessionId: resolvedSessionId,
+      attachmentSource: firstNormalizedString(attachmentSource, "model"),
+      generationSource: resolvedGenerationSource,
+      artifacts: artifactList,
+    });
+  } else if (shouldUseLocalToolOverflowFallback({ service, generationSource: resolvedGenerationSource, reason })) {
+    records = await persistLocalToolOverflowArtifacts({
+      runtime,
+      agentContext,
+      sessionId: resolvedSessionId,
+      artifacts: artifactList,
+      generationSource: resolvedGenerationSource,
+    });
+  }
+  if (!records.length) return emptyPersistResult();
   const attachmentMetas = mapAttachmentRecordsToMetas(records, {
-    fallbackMimeType: normalizeString(fallbackMimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+    fallbackMimeType: firstNormalizedString(fallbackMimeType, DEFAULT_TRANSFER_MIME_TYPE),
     fallbackGenerationSource: resolvedGenerationSource,
   });
   const purpose = intent.reason || resolvedGenerationSource || TRANSFER_REASON.SEMANTIC_TRANSFER_FILE_PATH;
@@ -134,7 +232,7 @@ export async function persistTransferArtifacts({
     ? storage
     : {
         kind: TRANSFER_STORAGE_KIND.ATTACHMENT,
-        attachmentSource: normalizeString(attachmentSource) || "model",
+        attachmentSource: firstNormalizedString(attachmentSource, "model"),
         generationSource: resolvedGenerationSource,
       };
   const envelope = createTransferEnvelope({
@@ -150,7 +248,7 @@ export async function persistTransferArtifacts({
       ...meta,
       source: intent.source,
       reason: purpose,
-      mimeType: normalizeString(fallbackMimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+      mimeType: firstNormalizedString(fallbackMimeType, DEFAULT_TRANSFER_MIME_TYPE),
       fileCount: files.length,
     },
   });
@@ -194,7 +292,7 @@ export async function persistTransferFile({
     sessionId,
     attachmentSource,
     generationSource,
-    fallbackMimeType: normalizeString(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+    fallbackMimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
     source,
     reason,
     storage,
@@ -202,8 +300,8 @@ export async function persistTransferFile({
     meta,
     artifacts: [
       {
-        name: normalizeString(name) || "output.txt",
-        mimeType: normalizeString(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+        name: firstNormalizedString(name, "output.txt"),
+        mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
         contentBase64: resolvedContentBase64,
       },
     ],

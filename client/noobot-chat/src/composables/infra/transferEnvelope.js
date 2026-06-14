@@ -66,18 +66,35 @@ function getTransferFiles(value = null) {
   return [];
 }
 
+function firstNormalizedString(...values) {
+  for (const value of values) {
+    const normalized = normalizeString(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function getPathViewDisplayPath(pathView = {}) {
+  if (!isPlainObject(pathView)) return "";
+  return firstNormalizedString(pathView.displayPath, pathView.sandboxPath, pathView.relativePath, pathView.hostPath);
+}
+
+function getAttachmentMetaDisplayPath(attachmentMeta = {}) {
+  if (!isPlainObject(attachmentMeta)) return "";
+  return firstNormalizedString(
+    attachmentMeta.sandboxPath,
+    attachmentMeta.sandboxViewPath,
+    attachmentMeta.relativePath,
+    attachmentMeta.path,
+    attachmentMeta.name,
+  );
+}
+
 function getTransferDisplayPath(file = {}) {
-  return normalizeString(
-    file?.pathView?.displayPath ||
-      file?.filePath ||
-      file?.pathView?.sandboxPath ||
-      file?.pathView?.relativePath ||
-      file?.pathView?.hostPath ||
-      file?.attachmentMeta?.sandboxPath ||
-      file?.attachmentMeta?.sandboxViewPath ||
-      file?.attachmentMeta?.relativePath ||
-      file?.attachmentMeta?.path ||
-      file?.attachmentMeta?.name,
+  return firstNormalizedString(
+    getPathViewDisplayPath(file?.pathView),
+    file?.filePath,
+    getAttachmentMetaDisplayPath(file?.attachmentMeta),
   );
 }
 

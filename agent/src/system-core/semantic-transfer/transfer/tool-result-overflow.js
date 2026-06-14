@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
-import { compactToolResultTextForModel } from "../core/compact.js";
+import { compactToolResultTextForModel, firstNormalizedString } from "../core/compact.js";
 import { createTransferEnvelope } from "../envelope/envelope.js";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
@@ -49,7 +49,7 @@ function dedupeTransferEnvelopes(envelopes = []) {
     ).trim();
     const key =
       attachmentId ||
-      String(envelope?.filePath || envelope?.files?.[0]?.filePath || "").trim() ||
+      firstNormalizedString(envelope?.filePath, envelope?.files?.[0]?.filePath) ||
       JSON.stringify(envelope);
     if (key && seen.has(key)) continue;
     if (key) seen.add(key);
@@ -81,6 +81,26 @@ function compactPathView(pathView = {}, attachmentMeta = {}) {
   return compactObject(normalizedPathView);
 }
 
+function resolveReadFileOverflowSourcePath(parsed = {}) {
+  return firstNormalizedString(
+    parsed?.resolvedPath,
+    parsed?.fileAddress,
+    parsed?.displayPath,
+    parsed?.filePath,
+  );
+}
+
+function resolveReadFileOverflowFileAddress({ parsed = {}, pathView = {}, sourcePath = "" } = {}) {
+  return firstNormalizedString(
+    parsed?.fileAddress,
+    parsed?.displayPath,
+    pathView?.displayPath,
+    pathView?.sandboxPath,
+    parsed?.filePath,
+    sourcePath,
+  );
+}
+
 function compactTransferFile(file = {}) {
   if (!isPlainObject(file)) return null;
   const attachmentMeta = compactObject(file?.attachmentMeta || {});
@@ -105,6 +125,7 @@ function compactTransferEnvelope(envelope = {}) {
   const files = Array.isArray(envelope.files)
     ? envelope.files.map(compactTransferFile).filter(Boolean)
     : [];
+  const compactedPathView = compactPathView(envelope.pathView || {}, envelope.attachmentMeta || {});
   const output = compactObject({
     protocol: envelope.protocol,
     version: envelope.version,
@@ -115,7 +136,7 @@ function compactTransferEnvelope(envelope = {}) {
       : {
           filePath: envelope.filePath,
           attachmentMeta: compactObject(envelope.attachmentMeta || {}),
-          pathView: compactPathView(envelope.pathView || {}, envelope.attachmentMeta || {}),
+          pathView: compactedPathView,
         }),
     storage: envelope.storage,
     producer: envelope.producer,
@@ -198,6 +219,43 @@ function resolveOverflowAttachmentPayloads(parsed = null, rawText = "") {
   ];
 }
 
+function resolveToolResultOverflowArtifactText({
+  overflowAttachmentPayload = {},
+  rawText = "",
+  call = {},
+  maxChars = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
+  measuredText = "",
+  overflowTransferPayload = {},
+} = {}) {
+  if (overflowAttachmentPayload.contentKind !== "raw_tool_result") {
+    return overflowAttachmentPayload.text;
+  }
+  const parsed = parseJsonObjectSafely(rawText);
+  const ok = parsed && typeof parsed.ok === "boolean" ? parsed.ok : true;
+  const status = String(parsed?.status || "").trim();
+  const originalMessage = String(parsed?.message || "").trim();
+  const measuredLength = String(measuredText || rawText || "").length;
+  const compactResult = compactParsedToolResultForOverflow(parsed);
+  const compactTransferEnvelopes = Array.isArray(overflowTransferPayload?.transferEnvelopes)
+    ? overflowTransferPayload.transferEnvelopes.map(compactTransferEnvelope).filter(Boolean)
+    : [];
+  return toToolJsonResult(call?.name, {
+    overflowFormat: "compact-v1",
+    ok,
+    ...(status ? { status } : {}),
+    ...(ok ? {} : { error: String(parsed?.error || "").trim() || "tool result overflowed" }),
+    message:
+      originalMessage ||
+      `工具返回内容过长(${measuredLength}字符)，已保存为附件，请按返回的 transfer 信息分批读取。`,
+    overflowed: true,
+    overflow_reason: `tool result length ${measuredLength} exceeds limit ${maxChars}`,
+    result: compactObject({
+      ...(isPlainObject(compactResult) ? compactResult : {}),
+      ...(compactTransferEnvelopes.length ? { transferEnvelopes: compactTransferEnvelopes } : {}),
+    }),
+  });
+}
+
 
 function isReadFileToolOverflow({ call = {}, parsed = null } = {}) {
   const callName = String(call?.name || "").trim();
@@ -215,13 +273,7 @@ function normalizeReadFileOverflowResult({
   agentContext = null,
 } = {}) {
   if (!isPlainObject(parsed)) return null;
-  const sourcePath = String(
-    parsed?.resolvedPath ||
-      parsed?.fileAddress ||
-      parsed?.displayPath ||
-      parsed?.filePath ||
-      "",
-  ).trim();
+  const sourcePath = resolveReadFileOverflowSourcePath(parsed);
   if (!sourcePath) return null;
   const pathView = resolveTransferPathView({
     runtime,
@@ -230,14 +282,7 @@ function normalizeReadFileOverflowResult({
     hostPath: String(parsed?.resolvedPath || sourcePath).trim(),
     purpose: "read_file_overflow_address",
   });
-  const fileAddress = String(
-    parsed?.fileAddress ||
-      parsed?.displayPath ||
-      pathView.displayPath ||
-      pathView.sandboxPath ||
-      parsed?.filePath ||
-      sourcePath,
-  ).trim();
+  const fileAddress = resolveReadFileOverflowFileAddress({ parsed, pathView, sourcePath });
   const contentText = String(parsed?.content || "");
   const contentLength = contentText.length;
   const measuredLength = String(measuredText || rawText || "").length;
@@ -404,38 +449,63 @@ export async function normalizeToolResultOverflow({
   }
 
   const overflowAttachmentPayloads = resolveOverflowAttachmentPayloads(parsed, rawText);
-  const semanticOverflows = await Promise.all(
-    overflowAttachmentPayloads.map((overflowAttachmentPayload = {}) =>
-      materializeTextForToolResult({
-        runtime,
-        agentContext,
-        text: overflowAttachmentPayload.text,
-        name: `${String(call?.name || "tool").trim() || "tool"}.${overflowAttachmentPayload.name}`,
-        mimeType: overflowAttachmentPayload.mimeType,
-        attachmentSource: "model",
-        generationSource: "tool_result_overflow",
-        source: "tool",
-        reason: "tool_result_overflow",
-        alwaysPersist: true,
-        forcePreview: true,
-        producer: { type: "tool", name: String(call?.name || "").trim() },
-        meta: {
-          toolCallId: String(call?.id || "").trim(),
-          overflowContentKind: overflowAttachmentPayload.contentKind,
-          overflowContentLength: overflowAttachmentPayload.contentLength,
-        },
+  const ok = parsed && typeof parsed.ok === "boolean" ? parsed.ok : true;
+  const status = String(parsed?.status || "").trim();
+  const originalMessage = String(parsed?.message || "").trim();
+  const originalTransferPayload = extractOriginalTransferPayload(parsed);
+  const persistedOverflowPayloads = [];
+  const semanticOverflows = [];
+  for (const overflowAttachmentPayload of overflowAttachmentPayloads) {
+    const persistedPayload = {
+      ...originalTransferPayload,
+      transferEnvelopes: dedupeTransferEnvelopes([
+        ...(Array.isArray(originalTransferPayload.transferEnvelopes)
+          ? originalTransferPayload.transferEnvelopes
+          : []),
+        ...persistedOverflowPayloads.flatMap((payload = {}) =>
+          Array.isArray(payload.transferEnvelopes) ? payload.transferEnvelopes : [],
+        ),
+      ]),
+    };
+    const materialized = await materializeTextForToolResult({
+      runtime,
+      agentContext,
+      sessionId,
+      text: resolveToolResultOverflowArtifactText({
+        overflowAttachmentPayload,
+        rawText,
+        call,
+        maxChars,
+        measuredText,
+        overflowTransferPayload: persistedPayload,
       }),
-    ),
-  );
+      name: `${String(call?.name || "tool").trim() || "tool"}.${overflowAttachmentPayload.name}`,
+      mimeType: overflowAttachmentPayload.mimeType,
+      attachmentSource: "model",
+      generationSource: "tool_result_overflow",
+      source: "tool",
+      reason: "tool_result_overflow",
+      alwaysPersist: true,
+      forcePreview: true,
+      producer: { type: "tool", name: String(call?.name || "").trim() },
+      meta: {
+        toolCallId: String(call?.id || "").trim(),
+        overflowContentKind: overflowAttachmentPayload.contentKind,
+        overflowContentLength: overflowAttachmentPayload.contentLength,
+      },
+    });
+    semanticOverflows.push(materialized);
+    persistedOverflowPayloads.push({
+      transferEnvelopes: Array.isArray(materialized?.transferEnvelopes)
+        ? materialized.transferEnvelopes
+        : [],
+    });
+  }
   const semanticOverflowEnvelopes = dedupeTransferEnvelopes(
     semanticOverflows.flatMap((item = {}) =>
       Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
     ),
   );
-  const ok = parsed && typeof parsed.ok === "boolean" ? parsed.ok : true;
-  const status = String(parsed?.status || "").trim();
-  const originalMessage = String(parsed?.message || "").trim();
-  const originalTransferPayload = extractOriginalTransferPayload(parsed);
   const overflowTransferPayload = semanticOverflowEnvelopes.length
     ? {
         ...originalTransferPayload,
@@ -452,9 +522,20 @@ export async function normalizeToolResultOverflow({
             : []),
         ]),
       };
+  const overflowTransferPayloadText = toToolJsonResult(call?.name, {
+    ok,
+    ...(status ? { status } : {}),
+    ...(ok ? {} : { error: String(parsed?.error || "").trim() || "tool result overflowed" }),
+    message:
+      originalMessage ||
+      `工具返回内容过长(${measuredText.length}字符)，已保存为附件，请按返回的 transfer 信息分批读取。`,
+    overflowed: true,
+    overflow_reason: `tool result length ${measuredText.length} exceeds limit ${maxChars}`,
+    ...overflowTransferPayload,
+  });
   const semanticTransferRecordPath = await persistSemanticTransferRecord({
     call,
-    compactedResult: compactParsedToolResultForOverflow(parseJsonObjectSafely(rawText)),
+    compactedResult: compactParsedToolResultForOverflow(parseJsonObjectSafely(overflowTransferPayloadText)),
     transferPayload: overflowTransferPayload,
     runtime,
     agentContext,

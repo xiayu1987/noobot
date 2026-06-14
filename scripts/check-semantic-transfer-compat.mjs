@@ -60,6 +60,7 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/bot-manage/execution/finalizer.js": "final assistant aggregation keeps attachmentMetas compatibility for persisted turn schema",
   "agent/src/system-core/bot-manage/execution/turn-persister.js": "turn persistence legacy schema",
   "agent/src/system-core/bot-manage/session/session-execution-engine.js": "session execution legacy bridge",
+  "agent/src/system-core/bot-manage/session/detached-subsession-runner.js": "detached sub-session runner still accepts/publishes attachmentMetas in session snapshot compatibility contract",
   "agent/src/system-core/session/services/session-message-service.js": "session message service keeps attachmentMetas compatibility for persisted/runtime message contracts",
   "agent/src/system-core/connectors/emails/read-email.js": "email connector legacy bridge",
   "agent/src/system-core/context/builders/runtime-environment-builder.js": "runtime environment exposes semantic-transfer helpers and legacy metas",
@@ -67,6 +68,8 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/context/session/message-converter.js": "replay compatibility preserves legacy fields",
   "agent/src/system-core/semantic-transfer/storage/attachment-adapter.js": "semantic-transfer adapter derives legacy fields centrally (semantic dir layout)",
   "agent/src/system-core/semantic-transfer/storage/consumer.js": "semantic-transfer consumer accepts legacy fallback (semantic dir layout)",
+  "agent/src/system-core/semantic-transfer/core/compact.js": "semantic-transfer compact model view reads envelope attachmentMeta/filePath fields",
+  "agent/src/system-core/semantic-transfer/transfer/tool-result-overflow.js": "semantic-transfer overflow compacts TransferEnvelope file fields and emits original-file envelope references",
   "agent/src/system-core/semantic-transfer/legacy-adapter.js": "central legacy compatibility adapter",
   "agent/src/system-core/semantic-transfer/envelope/normalizer.js": "semantic-transfer normalizes legacy fallback (semantic dir layout)",
   "agent/src/system-core/semantic-transfer/storage/path-resolver.js": "semantic-transfer path resolver compatibility (semantic dir layout)",
@@ -76,6 +79,9 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/tools/data-processing/doc2data-tool.js": "tool input/output compatibility",
   "agent/src/system-core/tools/data-processing/media2data-tool.js": "tool input/output compatibility",
   "agent/src/system-core/tools/data-processing/web2data-tool.js": "tool input path schema",
+  "agent/src/system-core/tools/execution/file-patch.js": "file patch public API uses filePath-style variable/detail names unrelated to semantic-transfer output",
+  "agent/src/system-core/tools/execution/file-search.js": "file search public result schema uses filePath for searched workspace files",
+  "agent/src/system-core/tools/execution/file-tools.js": "file tool public schema/results use filePath as user-facing workspace file address",
   "agent/src/system-core/tools/execution/file-tool.js": "file tool public input schema",
   "agent/src/system-core/tools/workflow/agent-collab/collab-artifact-persist.js": "agent-collab output keeps legacy fallback from semantic-transfer",
   "agent/src/system-core/tools/workflow/agent-collab/collab-task-utils.js": "agent-collab payload compatibility",
@@ -83,6 +89,7 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
 
   "client/noobot-chat/src/composables/infra/messageModel.js": "frontend message model keeps legacy fallback but consumes transfer first",
   "client/noobot-chat/src/composables/infra/transferEnvelope.js": "frontend semantic-transfer adapter maps envelope files to legacy display metas",
+  "client/noobot-chat/src/composables/message/useMessageFiles.js": "frontend message file list consumes attachmentMetas compatibility after transfer-first extraction",
 
   "plugin/noobot-plugin-harness/src/capabilities/handlers/acceptance/output-finalizer.js": "harness final output legacy fallback with transfer payload",
   "plugin/noobot-plugin-harness/src/capabilities/handlers/guidance/controller.js": "harness relay compatibility",
@@ -93,6 +100,14 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/sandbox-path.js": "harness path block compatibility",
 
   "plugin/noobot-plugin-workflow/src/core/hooks.js": "workflow payload keeps transfer fields with legacy fallback",
+  "plugin/noobot-plugin-workflow/src/core/hooks/attachments.js": "workflow central attachment/transfer bridge consumes envelope file fields and legacy attachmentMetas fallback",
+  "plugin/noobot-plugin-workflow/src/core/hooks/node-agent.js": "workflow node sub-session compatibility still passes input attachmentMetas alongside transfer payloads",
+  "plugin/noobot-plugin-workflow/src/core/hooks/persistence.js": "workflow persistence snapshots keep attachmentMetas compatibility while transfer payload migrates",
+  "plugin/noobot-plugin-workflow/src/core/orchestrator/execution-runner.js": "workflow orchestrator compatibility publishes node result attachmentMetas derived from transfer payloads",
+  "plugin/noobot-plugin-workflow/src/core/orchestrator/payload-enrichment.js": "workflow orchestrator enriches legacy node attachmentMetas for existing consumers",
+  "plugin/noobot-plugin-workflow/src/core/orchestrator/planning-message.js": "workflow planning message contract initializes attachmentMetas for compatibility",
+  "plugin/noobot-plugin-workflow/src/core/orchestrator/result-publisher.js": "workflow result publisher keeps attachmentMetas compatibility in final payload",
+  "plugin/noobot-plugin-workflow/src/core/orchestrator/semantic-resolution.js": "workflow semantic resolution renders existing attachmentMetas contract for prompts",
 }));
 
 function toPosix(filePath) {

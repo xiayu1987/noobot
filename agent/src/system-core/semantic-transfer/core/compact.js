@@ -23,6 +23,28 @@ function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
+export function firstNormalizedString(...values) {
+  for (const value of values) {
+    const normalized = normalizeString(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function resolveCompactTransferFilePath({ pathView = {}, file = {}, attachmentMeta = {} } = {}) {
+  const normalizedPathView = isPlainObject(pathView) ? pathView : {};
+  const normalizedFile = isPlainObject(file) ? file : {};
+  const normalizedAttachmentMeta = isPlainObject(attachmentMeta) ? attachmentMeta : {};
+  return firstNormalizedString(
+    normalizedPathView.displayPath,
+    normalizedFile.filePath,
+    normalizedPathView.sandboxPath,
+    normalizedPathView.relativePath,
+    normalizedAttachmentMeta.sandboxPath,
+    normalizedAttachmentMeta.relativePath,
+  );
+}
+
 function normalizeTransferEnvelopeList(payload = {}) {
   if (!isPlainObject(payload)) return [];
   const transferResult = isPlainObject(payload?.transferResult) ? payload.transferResult : null;
@@ -46,14 +68,11 @@ function compactLegacyEnvelopeFileForModel(envelope = {}) {
   const pathView = isPlainObject(envelope.pathView) ? envelope.pathView : {};
   const sourceMeta = isPlainObject(envelope.attachmentMeta) ? envelope.attachmentMeta : {};
   const attachment = compactAttachmentMetaForModel(sourceMeta);
-  const transferFilePath = normalizeString(
-    pathView.displayPath ||
-      envelope.filePath ||
-      pathView.sandboxPath ||
-      pathView.relativePath ||
-      attachment.sandboxPath ||
-      attachment.relativePath,
-  );
+  const transferFilePath = resolveCompactTransferFilePath({
+    pathView,
+    file: envelope,
+    attachmentMeta: attachment,
+  });
   return compactObject({
     ...attachment,
     transferFilePath,
@@ -71,7 +90,7 @@ export function compactAttachmentMetaForModel(meta = {}) {
     mimeType: meta.mimeType,
     size: meta.size,
     relativePath: meta.relativePath,
-    sandboxPath: meta.sandboxPath || meta.sandboxViewPath,
+    sandboxPath: firstNormalizedString(meta.sandboxPath, meta.sandboxViewPath),
     generatedByModel: meta.generatedByModel,
     generationSource: meta.generationSource,
     parsedResultAttachmentId: meta.parsedResultAttachmentId,
@@ -83,14 +102,11 @@ export function compactAttachmentMetaForModel(meta = {}) {
 function transferFileToModelFile(file = {}) {
   const attachmentMeta = compactAttachmentMetaForModel(file?.attachmentMeta || {});
   const pathView = isPlainObject(file?.pathView) ? file.pathView : {};
-  const transferFilePath = normalizeString(
-    pathView.displayPath ||
-      file?.filePath ||
-      pathView.sandboxPath ||
-      pathView.relativePath ||
-      attachmentMeta.sandboxPath ||
-      attachmentMeta.relativePath,
-  );
+  const transferFilePath = resolveCompactTransferFilePath({
+    pathView,
+    file,
+    attachmentMeta,
+  });
   return compactObject({
     ...attachmentMeta,
     transferFilePath,

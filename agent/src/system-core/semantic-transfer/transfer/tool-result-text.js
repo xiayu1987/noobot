@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
+import { firstNormalizedString } from "../core/compact.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 
@@ -32,6 +33,7 @@ export function buildTextResultFields({
   inlineMaxChars = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
   previewChars = DEFAULT_PREVIEW_CHARS,
   forcePreview = false,
+  sessionId = "",
 } = {}) {
   const normalizedText = String(text || "");
   const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes)
@@ -72,6 +74,7 @@ export async function materializeTextForToolResult({
   inlineMaxChars = null,
   previewChars = DEFAULT_PREVIEW_CHARS,
   forcePreview = false,
+  sessionId = "",
 } = {}) {
   const normalizedText = String(text || "");
   const intent = resolveTransferIntent({
@@ -93,13 +96,14 @@ export async function materializeTextForToolResult({
       runtime,
       agentContext,
       content: normalizedText,
-      name: normalizeString(name) || "tool-result.txt",
-      mimeType: normalizeString(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+      name: firstNormalizedString(name, "tool-result.txt"),
+      mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
       attachmentSource,
       generationSource: intent.generationSource,
       source: intent.source,
       reason: intent.reason,
       storage,
+      sessionId,
       producer,
       meta: {
         ...meta,
