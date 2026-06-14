@@ -45,6 +45,23 @@ const OVERFLOW_ALLOWED_FILES = new Set([
   "agent/src/system-core/semantic-transfer/legacy-adapter.js",
 ]);
 
+// Out-of-scope attachment-save paths that have already been moved back to
+// attachmentService. Keep them closed so semantic-transfer does not regress
+// into a generic attachment persistence layer.
+const SETTLED_ATTACHMENT_SERVICE_ONLY_FILES = new Map(Object.entries({
+  "agent/src/system-core/bot-manage/session/scoped-artifact-persistence-helpers.js":
+    "generic generated artifacts must use attachmentService.ingestGeneratedArtifacts",
+  "agent/src/system-core/agent/core/media/artifact-service.js":
+    "LLM output media attachment persistence must use attachmentService.ingestGeneratedArtifacts",
+}));
+
+const SEMANTIC_PERSISTENCE_API_REGEXES = [
+  { api: "persistTransferArtifacts", regex: /\bpersistTransferArtifacts\b/ },
+  { api: "persistTransferFile", regex: /\bpersistTransferFile\b/ },
+  { api: "materializeOutputResult", regex: /\bmaterializeOutputResult\b/ },
+  { api: "materializeOutput", regex: /\bmaterializeOutput\b/ },
+];
+
 // Files that intentionally bridge semantic-transfer with legacy attachment/file
 // fields, or define existing public message/runtime contracts that still carry
 // attachmentMetas as a compatibility field.
@@ -143,6 +160,16 @@ function isCommentOrImportLine(line = "") {
   );
 }
 
+function isCommentOrEmptyLine(line = "") {
+  const text = String(line || "").trim();
+  return (
+    !text ||
+    text.startsWith("//") ||
+    text.startsWith("*") ||
+    text.startsWith("/*")
+  );
+}
+
 function detectFile(file) {
   const rel = toPosix(path.relative(ROOT, file));
   const raw = readFileSync(file, "utf8");
@@ -151,6 +178,23 @@ function detectFile(file) {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+
+    if (SETTLED_ATTACHMENT_SERVICE_ONLY_FILES.has(rel)) {
+      if (!isCommentOrEmptyLine(line)) {
+        for (const item of SEMANTIC_PERSISTENCE_API_REGEXES) {
+          if (!item.regex.test(line)) continue;
+          violations.push({
+            type: "out-of-scope-semantic-persistence",
+            field: item.api,
+            file: rel,
+            line: index + 1,
+            text: line.trim(),
+            hint: `${SETTLED_ATTACHMENT_SERVICE_ONLY_FILES.get(rel)}; do not route this ordinary attachment save through semantic-transfer.`,
+          });
+        }
+      }
+    }
+
     if (isCommentOrImportLine(line)) continue;
 
     for (const item of OVERFLOW_FIELD_REGEXES) {
