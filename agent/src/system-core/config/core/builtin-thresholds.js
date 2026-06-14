@@ -108,12 +108,6 @@ export const BUILTIN_THRESHOLDS = Object.freeze({
     helpPromptLoopTurns: 50,
     toolFailureHelpCount: 3,
   }),
-  botPlugin: Object.freeze({
-    timeoutMs: 5 * 60 * 60 * 1000,
-    maxAutoTransitions: 10,
-    maxParallelNodeAgents: 4,
-    miniRunnerMaxTurns: 3,
-  }),
   runTimeoutMs: 5 * 60 * 60 * 1000,
   openvscode: Object.freeze({
     startTimeoutMs: 60000,

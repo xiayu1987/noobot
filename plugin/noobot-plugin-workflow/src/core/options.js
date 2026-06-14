@@ -57,6 +57,7 @@ export function normalizeOptions(input = {}) {
   const locale = normalizeWorkflowLocale(source?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE);
   const maxAutoTransitions = Number(source?.maxAutoTransitions);
   const maxParallelNodeAgents = Number(source?.maxParallelNodeAgents);
+  const miniRunnerMaxTurns = Number(source?.miniRunnerMaxTurns);
 
   return {
     enabled: source?.enabled !== false,
@@ -79,6 +80,10 @@ export function normalizeOptions(input = {}) {
       Number.isFinite(maxParallelNodeAgents) && maxParallelNodeAgents > 0
         ? Math.floor(maxParallelNodeAgents)
         : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
+    miniRunnerMaxTurns:
+      Number.isFinite(miniRunnerMaxTurns) && miniRunnerMaxTurns > 0
+        ? Math.floor(miniRunnerMaxTurns)
+        : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MINI_RUNNER_MAX_TURNS,
     nodeAgentTimeoutMs: normalizeNodeAgentTimeoutMs(source?.nodeAgentTimeoutMs),
     priority: normalizePriority(source?.priority),
     timeoutMs: normalizeTimeoutMs(source?.timeoutMs),

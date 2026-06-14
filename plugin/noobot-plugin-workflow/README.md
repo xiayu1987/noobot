@@ -95,11 +95,12 @@ END
 - `mode: "on" | "off"`（默认 `off`）
 - `semanticPrompt: string`（可覆盖默认 DSL 提示词）
 - `semanticModel: string`（语义模型名）
-- `maxAutoTransitions: number`（默认 `50`）
+- `maxAutoTransitions: number`（默认 `10`）
 - `parallelNodeExecution: boolean`（默认 `false`，开启后同一批 pending 节点并发派发 agent）
 - `maxParallelNodeAgents: number`（默认 `4`，并发上限）
 - `priority: number`（默认 `10`）
-- `timeoutMs: number`（默认 `180000`）
+- `timeoutMs: number`（默认 `18000000`）
+- `miniRunnerMaxTurns: number`（默认 `3`，语义模型 mini-runner 轮数上限）
 - `capabilityModelInvoker: function`（可选，语义模型调用器）
 - `nodeAgentExecutor: function`（可选，直接执行节点 agent；返回 action）
 - `denyToolNames: string[]`（可选；插件侧声明应禁用的工具名列表，默认值为多 agent 协作三件套）
@@ -108,7 +109,6 @@ END
 
 - `semanticMode`
 - `workflowProjectPath`
-- `miniRunnerMaxTurns`
 - `autoSubmit`
 - `hookPoint`（已固定为 `before_agent_dispatch`）
 
@@ -185,9 +185,9 @@ if (api?.policy?.appendDenyToolNames && Array.isArray(options?.denyToolNames)) {
       "enabled": true,
       "mode": "on",
       "semanticModel": "qwen3_6_plus",
-      "maxAutoTransitions": 50,
+      "maxAutoTransitions": 10,
       "priority": 10,
-      "timeoutMs": 180000
+      "timeoutMs": 18000000
     }
   },
   "selectedPlugins": ["workflow"]

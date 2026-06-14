@@ -5,7 +5,7 @@
  */
 import { createAgentHookManager } from "../../hook/index.js";
 import { createBotHookManager } from "../hook/index.js";
-import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
+import { mergeConfig } from "../../config/index.js";
 import { resolvePluginRegisterByCapability } from "../../plugin/plugin-loader.js";
 import { PLUGIN_CAPABILITY } from "../../plugin/capabilities.js";
 import {
@@ -217,8 +217,6 @@ export class RunConfigPluginPreparer {
       ...(runBotPlugin && typeof runBotPlugin === "object" ? runBotPlugin : {}),
     };
     const next = { ...options, enabled: true, mode: "on" };
-    next.miniRunnerMaxTurns = BUILTIN_THRESHOLDS.botPlugin.miniRunnerMaxTurns;
-    next.maxAutoTransitions = BUILTIN_THRESHOLDS.botPlugin.maxAutoTransitions;
     next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
       botPluginOptions: next,
     });

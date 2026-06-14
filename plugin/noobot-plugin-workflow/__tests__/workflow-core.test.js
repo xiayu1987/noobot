@@ -66,6 +66,33 @@ test("normalizeOptions keeps workflow extension hooks", () => {
   assert.deepEqual(options.workflowExtensions, [extensionA, extensionB]);
 });
 
+
+test("normalizeOptions applies workflow execution defaults", () => {
+  const options = normalizeOptions({
+    enabled: true,
+    mode: "on",
+  });
+  assert.equal(options.timeoutMs, 18_000_000);
+  assert.equal(options.maxAutoTransitions, 10);
+  assert.equal(options.maxParallelNodeAgents, 4);
+  assert.equal(options.miniRunnerMaxTurns, 3);
+});
+
+test("normalizeOptions keeps valid workflow execution overrides", () => {
+  const options = normalizeOptions({
+    enabled: true,
+    mode: "on",
+    timeoutMs: 12345,
+    maxAutoTransitions: 6,
+    maxParallelNodeAgents: 2,
+    miniRunnerMaxTurns: 1,
+  });
+  assert.equal(options.timeoutMs, 12345);
+  assert.equal(options.maxAutoTransitions, 6);
+  assert.equal(options.maxParallelNodeAgents, 2);
+  assert.equal(options.miniRunnerMaxTurns, 1);
+});
+
 test("normalizeOptions provides default workflow denyToolNames", () => {
   const options = normalizeOptions({
     enabled: true,

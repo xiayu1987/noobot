@@ -229,8 +229,10 @@ test("RunConfigPluginPreparer resolves bot plugin options and injects runtime he
 
   assert.equal(options.enabled, true);
   assert.equal(options.mode, "on");
-  assert.equal(options.miniRunnerMaxTurns > 0, true);
-  assert.equal(options.maxAutoTransitions > 0, true);
+  assert.equal(options.timeoutMs, undefined);
+  assert.equal(options.miniRunnerMaxTurns, undefined);
+  assert.equal(options.maxAutoTransitions, undefined);
+  assert.equal(options.maxParallelNodeAgents, undefined);
   assert.equal(options.semanticMode, "separate_model");
   assert.equal(typeof options.resolveModelMessages, "function");
   assert.equal(typeof options.capabilityModelInvoker, "function");
