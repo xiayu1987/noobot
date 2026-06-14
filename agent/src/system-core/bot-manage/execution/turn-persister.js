@@ -135,8 +135,8 @@ export class SessionTurnPersister {
     injectedBy = "",
     injectedMessageType = "",
     frontendUserMessage = false,
-    workflowMessage = false,
-    workflowMeta = null,
+    pluginMessage = false,
+    pluginMeta = null,
     transferResult = null,
     transferEnvelope = null,
     transferEnvelopes = [],
@@ -192,12 +192,12 @@ export class SessionTurnPersister {
       injectedBy: String(injectedBy || "").trim(),
       injectedMessageType: String(injectedMessageType || "").trim(),
       frontendUserMessage: frontendUserMessage === true,
-      workflowMessage: workflowMessage === true,
-      workflowMeta:
-        workflowMeta &&
-        typeof workflowMeta === "object" &&
-        !Array.isArray(workflowMeta)
-          ? workflowMeta
+      pluginMessage: pluginMessage === true,
+      pluginMeta:
+        pluginMeta &&
+        typeof pluginMeta === "object" &&
+        !Array.isArray(pluginMeta)
+          ? pluginMeta
           : null,
       ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
       ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
@@ -248,8 +248,8 @@ export class SessionTurnPersister {
       injectedBy,
       injectedMessageType,
       frontendUserMessage,
-      workflowMessage,
-      workflowMeta,
+      pluginMessage,
+      pluginMeta,
       ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
       ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
@@ -307,12 +307,12 @@ export class SessionTurnPersister {
         injectedBy: String(messageItem.injectedBy || "").trim(),
         injectedMessageType: String(messageItem.injectedMessageType || messageItem.injected_message_type || "").trim(),
         frontendUserMessage: messageItem.frontendUserMessage === true,
-        workflowMessage: messageItem.workflowMessage === true,
-        workflowMeta:
-          messageItem.workflowMeta &&
-          typeof messageItem.workflowMeta === "object" &&
-          !Array.isArray(messageItem.workflowMeta)
-            ? messageItem.workflowMeta
+        pluginMessage: messageItem.pluginMessage === true,
+        pluginMeta:
+          messageItem.pluginMeta &&
+          typeof messageItem.pluginMeta === "object" &&
+          !Array.isArray(messageItem.pluginMeta)
+            ? messageItem.pluginMeta
             : null,
         transferResult:
           messageItem.transferResult &&

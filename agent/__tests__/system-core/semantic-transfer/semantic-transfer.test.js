@@ -44,7 +44,7 @@ test("intent helpers normalize source/reason/generationSource with aliases", () 
   assert.equal(normalizeTransferSource("child_agent"), "subagent");
   assert.equal(normalizeTransferReason("transfer_output"), "semantic_transfer_output");
   const resolved = resolveTransferIntent({
-    source: "workflow",
+    source: "bot_plugin",
     reason: "",
     generationSource: "",
   });
@@ -168,8 +168,8 @@ test("transferSemanticContent dispatches by scenario", async () => {
   assert.equal(toolTransferred?.transferEnvelopes?.[0]?.transport, "direct");
 
   const stageTransferred = await transferSemanticContent({
-    scenario: "harness",
-    strategy: "harness_stage_message",
+    scenario: "agent_plugin",
+    strategy: "agent_plugin_stage_message",
     summary: "ok",
     detail: "",
   });
@@ -177,8 +177,8 @@ test("transferSemanticContent dispatches by scenario", async () => {
   assert.equal(stageTransferred?.transferResult?.status, "skipped");
 
   const finalTransferred = await transferSemanticContent({
-    scenario: "harness",
-    strategy: "harness_final_message",
+    scenario: "agent_plugin",
+    strategy: "agent_plugin_final_message",
     resultInfo: "done",
     detailRefs: [],
     validationInfo: "pass",
@@ -490,10 +490,10 @@ test("transferSemanticContent returns compact transfer payload for long tool inp
   assert.equal(transferred.compactToolPayload.transferFiles[0].attachmentId, "tool-input-1");
 });
 
-test("transferSemanticContent keeps workflow sub-agent transfer output focused on conversion", async () => {
+test("transferSemanticContent keeps bot_plugin sub-agent transfer output focused on conversion", async () => {
   const transferred = await transferSemanticContent({
-    scenario: "workflow",
-    strategy: "workflow_subagent_result",
+    scenario: "bot_plugin",
+    strategy: "bot_plugin_subagent_result",
     runtime: {
       attachmentService: {
         async ingestGeneratedArtifacts(payload) {
@@ -524,10 +524,10 @@ test("transferSemanticContent keeps workflow sub-agent transfer output focused o
   assert.equal("downstreamInjections" in transferred, false);
 });
 
-test("transferSemanticContent produces harness stage refs and final output", async () => {
+test("transferSemanticContent produces agent_plugin stage refs and final output", async () => {
   const staged = await transferSemanticContent({
-    scenario: "harness",
-    strategy: "harness_stage_message",
+    scenario: "agent_plugin",
+    strategy: "agent_plugin_stage_message",
     runtime: {
       attachmentService: {
         async ingestGeneratedArtifacts(payload) {
@@ -553,8 +553,8 @@ test("transferSemanticContent produces harness stage refs and final output", asy
   assert.equal(staged.summary, "done");
   assert.equal(staged.transferResult?.status, "file");
   const finalTransferred = await transferSemanticContent({
-    scenario: "harness",
-    strategy: "harness_final_message",
+    scenario: "agent_plugin",
+    strategy: "agent_plugin_final_message",
     resultInfo: "最终结果",
     detailRefs: staged.compactTransferPayload?.transferFiles || [],
     validationInfo: "验收通过",

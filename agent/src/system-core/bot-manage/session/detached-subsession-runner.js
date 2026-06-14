@@ -11,18 +11,23 @@ import {
   normalizeTrimmedStringList,
   resolvePluginOptionsFromConfig,
 } from "./session-execution-engine-utils.js";
+import {
+  createPluginSelectorSet,
+  PLUGIN_RUNTIME_PROPERTY,
+  PLUGIN_SLOT_KEY,
+} from "../../plugin/plugin-constants.js";
 
 export function createDetachedSubSessionRunner({
   workspaceService = null,
   configService = null,
   agentRuntimeFacade = null,
   errorLogger = null,
-  extensionRuntime = {},
+  pluginRuntime = {},
   mergeRunConfigWithPluginStrategy = null,
   prepareRunConfig = null,
   prepareAgentTurnExecution = null,
   resolveScopedOutputDir = null,
-  resolveWorkflowScopedDir = null,
+  resolvePluginScopedDir = null,
   normalizeDetachedSubSessionMessage = null,
   persistDetachedSubSessionSnapshot = null,
   assertDetachedSubSessionIsolation = null,
@@ -66,7 +71,7 @@ export function createDetachedSubSessionRunner({
     const subSessionId = String(strategy?.sessionId || "").trim() || randomUUID();
     const subDialogProcessId = String(
       strategy?.dialogProcessId ||
-        metadata?.workflowDialogId ||
+        metadata?.pluginDialogId ||
         parentDialogProcessId ||
         subSessionId,
     ).trim();
@@ -78,7 +83,7 @@ export function createDetachedSubSessionRunner({
     const subSessionAttachmentMetas = Array.isArray(attachmentMetas) ? attachmentMetas : [];
 
     // 子会话为 detached 执行，不能复用父会话的 hook manager（会把父插件/hook 链一并带入）。
-    // 否则即便 selectedPlugins 关闭，也可能继续触发已注册的 harness/workflow hooks。
+    // 否则即便 selectedPlugins 关闭，也可能继续触发已注册的 plugin hooks。
     delete mergedRunConfig.hookManager;
     delete mergedRunConfig.hooks;
     delete mergedRunConfig.botHookManager;
@@ -94,12 +99,12 @@ export function createDetachedSubSessionRunner({
       runConfig: mergedRunConfig,
       userConfig: subSessionUserConfig,
     });
-    attachWorkflowRuntimePatch(effectiveRunConfig, parentSessionId);
+    attachPluginRuntimePatch(effectiveRunConfig, parentSessionId);
 
     const runtimePluginState = buildRuntimePluginState({
       effectiveRunConfig,
       disabledPlugins: strategy?.disabledPlugins,
-      extensionRuntime,
+      pluginRuntime,
     });
     emitEvent(eventListener, "plugin_runtime_resolved", runtimePluginState);
     throwIfSubSessionAborted();
@@ -138,7 +143,7 @@ export function createDetachedSubSessionRunner({
         "",
     ).trim();
     const turnMessages = resolveTurnMessages({ agentResult, dialogProcessId });
-    const persisted = await persistWorkflowSubSessionSnapshot({
+    const persisted = await persistPluginSubSessionSnapshot({
       userId,
       subSessionId,
       parentSessionId,
@@ -153,7 +158,7 @@ export function createDetachedSubSessionRunner({
       agentResult,
       turnMessages,
       runtimePluginState,
-      resolveScopedOutputDir: resolveScopedOutputDir || resolveWorkflowScopedDir,
+      resolveScopedOutputDir: resolveScopedOutputDir || resolvePluginScopedDir,
       normalizeDetachedSubSessionMessage,
       persistDetachedSubSessionSnapshot,
       now,
@@ -163,7 +168,7 @@ export function createDetachedSubSessionRunner({
       userId,
       sessionId: subSessionId,
       eventListener,
-      scope: "workflow_node_subsession",
+      scope: "bot_plugin_node_subsession",
     });
     return {
       userId,
@@ -190,7 +195,7 @@ export function createDetachedSubSessionRunner({
 function createAbortGuard(abortSignal = null) {
   return () => {
     if (!abortSignal?.aborted) return;
-    const error = new Error("workflow sub-session aborted");
+    const error = new Error("bot plugin sub-session aborted");
     error.name = "AbortError";
     error.code = "ABORT_ERR";
     throw error;
@@ -210,7 +215,7 @@ async function loadSubSessionUserConfig({
   }
 }
 
-function attachWorkflowRuntimePatch(effectiveRunConfig = {}, parentSessionId = "") {
+function attachPluginRuntimePatch(effectiveRunConfig = {}, parentSessionId = "") {
   effectiveRunConfig.systemRuntimePatch = {
     ...(effectiveRunConfig?.systemRuntimePatch &&
     typeof effectiveRunConfig.systemRuntimePatch === "object"
@@ -218,48 +223,58 @@ function attachWorkflowRuntimePatch(effectiveRunConfig = {}, parentSessionId = "
       : {}),
     childRunParentSessionId: parentSessionId,
     durableParentSessionId: parentSessionId,
-    detachedSessionScope: "workflow_node",
+    detachedSessionScope: "bot_plugin_node",
   };
 }
 
 function buildRuntimePluginState({
   effectiveRunConfig = {},
   disabledPlugins = [],
-  extensionRuntime = {},
+  pluginRuntime = {},
 } = {}) {
   const {
-    harnessPluginKey = "harness",
-    workflowPluginKey = "workflow",
-    harnessPluginSelectors = new Set(["harness"]),
-    workflowPluginSelectors = new Set(["workflow"]),
-  } = extensionRuntime && typeof extensionRuntime === "object" ? extensionRuntime : {};
+    [PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY]: agentPluginKey = "",
+    [PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_KEY]: botPluginKey = "",
+    [PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS]: agentPluginSelectors = null,
+    [PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_SELECTORS]: botPluginSelectors = null,
+  } = pluginRuntime && typeof pluginRuntime === "object" ? pluginRuntime : {};
+  const resolvedAgentPluginKey =
+    String(agentPluginKey || PLUGIN_SLOT_KEY.AGENT).trim() || PLUGIN_SLOT_KEY.AGENT;
+  const resolvedBotPluginKey =
+    String(botPluginKey || PLUGIN_SLOT_KEY.BOT).trim() || PLUGIN_SLOT_KEY.BOT;
+  const resolvedAgentPluginSelectors =
+    agentPluginSelectors || createPluginSelectorSet(PLUGIN_SLOT_KEY.AGENT);
+  const resolvedBotPluginSelectors =
+    botPluginSelectors || createPluginSelectorSet(PLUGIN_SLOT_KEY.BOT);
   const selectedPlugins = normalizeTrimmedStringList(effectiveRunConfig?.selectedPlugins);
-  const harnessRuntimeOptions = resolvePluginOptionsFromConfig(
+  const agentPluginRuntimeOptions = resolvePluginOptionsFromConfig(
     effectiveRunConfig,
-    harnessPluginSelectors,
+    resolvedAgentPluginSelectors,
   );
-  const workflowRuntimeOptions = resolvePluginOptionsFromConfig(
+  const botPluginRuntimeOptions = resolvePluginOptionsFromConfig(
     effectiveRunConfig,
-    workflowPluginSelectors,
+    resolvedBotPluginSelectors,
   );
+  const agentPlugin = {
+    pluginKey: resolvedAgentPluginKey,
+    enabled: agentPluginRuntimeOptions?.enabled === true,
+    mode: String(agentPluginRuntimeOptions?.mode || "")
+      .trim()
+      .toLowerCase(),
+    hookManagerReady: Boolean(effectiveRunConfig?.hookManager),
+  };
+  const botPlugin = {
+    pluginKey: resolvedBotPluginKey,
+    enabled: botPluginRuntimeOptions?.enabled === true,
+    mode: String(botPluginRuntimeOptions?.mode || "")
+      .trim()
+      .toLowerCase(),
+    botHookManagerReady: Boolean(effectiveRunConfig?.botHookManager),
+  };
   return {
     selectedPlugins,
-    harness: {
-      pluginKey: harnessPluginKey,
-      enabled: harnessRuntimeOptions?.enabled === true,
-      mode: String(harnessRuntimeOptions?.mode || "")
-        .trim()
-        .toLowerCase(),
-      hookManagerReady: Boolean(effectiveRunConfig?.hookManager),
-    },
-    workflow: {
-      pluginKey: workflowPluginKey,
-      enabled: workflowRuntimeOptions?.enabled === true,
-      mode: String(workflowRuntimeOptions?.mode || "")
-        .trim()
-        .toLowerCase(),
-      botHookManagerReady: Boolean(effectiveRunConfig?.botHookManager),
-    },
+    agentPlugin,
+    botPlugin,
     disabledPlugins: normalizeTrimmedStringList(disabledPlugins),
     scope: "detached_sub_session",
   };
@@ -302,7 +317,7 @@ function resolveTurnMessages({ agentResult = {}, dialogProcessId = "" } = {}) {
       ];
 }
 
-async function persistWorkflowSubSessionSnapshot({
+async function persistPluginSubSessionSnapshot({
   userId = "",
   subSessionId = "",
   parentSessionId = "",
@@ -318,12 +333,12 @@ async function persistWorkflowSubSessionSnapshot({
   turnMessages = [],
   runtimePluginState = {},
   resolveScopedOutputDir = null,
-  resolveWorkflowScopedDir = null,
+  resolvePluginScopedDir = null,
   normalizeDetachedSubSessionMessage = null,
   persistDetachedSubSessionSnapshot = null,
   now = null,
 } = {}) {
-  const resolveOutputDir = resolveScopedOutputDir || resolveWorkflowScopedDir;
+  const resolveOutputDir = resolveScopedOutputDir || resolvePluginScopedDir;
   const resolvedOutputDir = resolveOutputDir({
     userId,
     relativeDir: strategy?.relativeDir || "",
@@ -332,7 +347,7 @@ async function persistWorkflowSubSessionSnapshot({
   if (!resolvedOutputDir) return null;
 
   const timestamp = typeof now === "function" ? now() : new Date().toISOString();
-  const extensionRuntimeResolvedLog = {
+  const pluginRuntimeResolvedLog = {
     dialogProcessId: subDialogProcessId || subSessionId,
     event: "plugin_runtime_resolved",
     category: "system",
@@ -369,8 +384,8 @@ async function persistWorkflowSubSessionSnapshot({
           dialogProcessId,
           parentDialogProcessId,
           injectedMessage: true,
-          injectedBy: "workflow",
-          injectedMessageType: "workflow_system_context",
+          injectedBy: "botPlugin",
+          injectedMessageType: "bot_plugin_system_context",
         },
         timestamp,
       ),
@@ -394,7 +409,7 @@ async function persistWorkflowSubSessionSnapshot({
     },
     executionPayload: {
       sessionId: subSessionId,
-      logs: [extensionRuntimeResolvedLog],
+      logs: [pluginRuntimeResolvedLog],
     },
     metadata: {
       userId,

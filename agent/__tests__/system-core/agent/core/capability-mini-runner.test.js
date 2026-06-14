@@ -22,7 +22,7 @@ test("capability mini-runner uses fallback configs when runtime is missing", asy
   const result = await invoker({
     model: "GLM_5_1",
     purpose: "workflow_semantic",
-    domain: "workflow",
+    domain: "botPlugin",
     ctx: {},
     messages: [{ role: "user", content: "你好" }],
   });

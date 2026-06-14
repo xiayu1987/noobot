@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { buildMonthlySummaryPrompt } from "../../prompts/builders.js";
-import { isAbortLikeError, throwIfAborted } from "../workflow.js";
+import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
 
 function toMonthKey(weekKeys = []) {
   const firstWeek = String((Array.isArray(weekKeys) ? weekKeys[0] : "") || "").trim();

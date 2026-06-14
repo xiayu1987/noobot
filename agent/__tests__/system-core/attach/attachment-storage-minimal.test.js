@@ -56,12 +56,12 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
   });
 });
 
-test("AttachmentService.linkParsedResultToAttachment syncs runtime and workflow snapshots", async () => {
+test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin snapshots", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     const userId = "u1";
     const rootSessionId = "root_s1";
-    const workflowDialogId = "wf_d1";
+    const pluginDialogId = "wf_d1";
     const sourceContent = Buffer.from("source-attach", "utf8").toString("base64");
     const parsedContent = Buffer.from("# parsed", "utf8").toString("base64");
 
@@ -80,11 +80,11 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and workflow 
 
     const basePath = path.join(workspaceRoot, userId);
     const runtimeSessionFile = path.join(basePath, "runtime/session", rootSessionId, "session.json");
-    const workflowSessionFile = path.join(
+    const pluginSessionFile = path.join(
       basePath,
-      "runtime/workflow/session",
+      "runtime/plugin/session",
       rootSessionId,
-      workflowDialogId,
+      pluginDialogId,
       "session.json",
     );
     const snapshotPayload = {
@@ -107,8 +107,8 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and workflow 
     };
     await mkdir(path.dirname(runtimeSessionFile), { recursive: true });
     await writeFile(runtimeSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
-    await mkdir(path.dirname(workflowSessionFile), { recursive: true });
-    await writeFile(workflowSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
+    await mkdir(path.dirname(pluginSessionFile), { recursive: true });
+    await writeFile(pluginSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
 
     const linked = await service.linkParsedResultToAttachment({
       userId,
@@ -124,13 +124,13 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and workflow 
     assert.equal(linked.parsedResultAttachmentId, parsedAttachment.attachmentId);
 
     const runtimeSnapshot = JSON.parse(await readFile(runtimeSessionFile, "utf8"));
-    const workflowSnapshot = JSON.parse(await readFile(workflowSessionFile, "utf8"));
+    const pluginSnapshot = JSON.parse(await readFile(pluginSessionFile, "utf8"));
     const runtimeAttachment = runtimeSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
-    const workflowAttachment = workflowSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
+    const pluginAttachment = pluginSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
     assert.equal(runtimeAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
-    assert.equal(workflowAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
+    assert.equal(pluginAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
     assert.equal(runtimeAttachment.parsedResultTool, "doc_to_data");
-    assert.equal(workflowAttachment.parsedResultTool, "doc_to_data");
+    assert.equal(pluginAttachment.parsedResultTool, "doc_to_data");
   });
 });
 

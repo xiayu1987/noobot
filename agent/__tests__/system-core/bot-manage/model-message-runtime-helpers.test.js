@@ -69,14 +69,14 @@ test("ModelMessageRuntimeHelpers resolveModelMessages filters stale injected dia
         role: "user",
         content: "old-injected",
         injectedMessage: true,
-        injectedBy: "harness",
+        injectedBy: "agentPlugin",
         dialogProcessId: "old",
       },
       {
         role: "user",
         content: "new-injected",
         injectedMessage: true,
-        injectedBy: "harness",
+        injectedBy: "agentPlugin",
         dialogProcessId: "new",
       },
       { role: "assistant", content: "normal", dialogProcessId: "new" },
@@ -101,8 +101,8 @@ test("ModelMessageRuntimeHelpers resolveMessageBlock supports system/incremental
   const resolver = helpers.createResolveMessageBlock();
   const messages = [
     { role: "system", content: "sys" },
-    { role: "user", content: "old-injected", injectedMessage: true, injectedBy: "harness", dialogProcessId: "old" },
-    { role: "user", content: "new-injected", injectedMessage: true, injectedBy: "harness", dialogProcessId: "new" },
+    { role: "user", content: "old-injected", injectedMessage: true, injectedBy: "agentPlugin", dialogProcessId: "old" },
+    { role: "user", content: "new-injected", injectedMessage: true, injectedBy: "agentPlugin", dialogProcessId: "new" },
     { role: "assistant", content: "new-normal", dialogProcessId: "new" },
     { role: "assistant", content: "summarized", summarized: true, dialogProcessId: "new" },
   ];

@@ -55,16 +55,16 @@ function normalizeSubAgentMessages(messages = []) {
     .filter((item) => normalizeString(item.content));
 }
 
-export async function transferWorkflowSubagentResult({
+export async function transferBotPluginSubagentResult({
   runtime = {},
   agentContext = null,
   messages = [],
   nextSteps = [],
   forceAttachment = true,
   attachmentSource = "model",
-  generationSource = "workflow_subagent_result",
+  generationSource = "bot_plugin_subagent_result",
   source = "plugin",
-  reason = "workflow_subagent_result",
+  reason = "bot_plugin_subagent_result",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
 } = {}) {
   const normalizedMessages = normalizeSubAgentMessages(messages);
@@ -73,12 +73,12 @@ export async function transferWorkflowSubagentResult({
     reason,
     generationSource,
     fallbackSource: TRANSFER_SOURCE.PLUGIN,
-    fallbackReason: TRANSFER_REASON.WORKFLOW_SUBAGENT_RESULT,
-    defaultGenerationSource: TRANSFER_REASON.WORKFLOW_SUBAGENT_RESULT,
+    fallbackReason: TRANSFER_REASON.BOT_PLUGIN_SUBAGENT_RESULT,
+    defaultGenerationSource: TRANSFER_REASON.BOT_PLUGIN_SUBAGENT_RESULT,
     allowCustom: true,
   });
-  // Note: downstream message injection belongs to workflow orchestration.
-  // Keep `nextSteps` normalization for lightweight validation/compat only.
+  // Note: downstream message injection belongs to bot plugin orchestration.
+  // Keep `nextSteps` normalization for lightweight validation only.
   normalizeNextSteps(nextSteps);
   const persistedItems = [];
 
@@ -106,7 +106,7 @@ export async function transferWorkflowSubagentResult({
     }
 
     const name = [
-      "workflow-node",
+      "bot-plugin-node",
       firstNormalizedString(item?.nodeName, item?.nodeId, item?.id, String(index + 1))
         .replace(/\s+/g, "-")
         .toLowerCase(),
@@ -154,7 +154,7 @@ export async function transferWorkflowSubagentResult({
   const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
   await emitSemanticTransferValidation({
     runtime,
-    scenario: "workflow_subagent_result",
+    scenario: "bot_plugin_subagent_result",
     stats: transferEnvelopesResult?.stats || {},
   });
 

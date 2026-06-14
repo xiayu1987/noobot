@@ -9,16 +9,16 @@ import { createSkillTool } from "./execution/skill-tool.js";
 import { createContentProcessTool } from "./data-processing/content-process-tool.js";
 import { createServiceTool } from "./execution/service-tool.js";
 import { createModelTool } from "./ai-models/model-tool.js";
-import { createUserInteractionTool } from "./workflow/user-interaction-tool.js";
+import { createUserInteractionTool } from "./collaboration/user-interaction-tool.js";
 import { createMcpTool } from "./execution/mcp-tool.js";
 import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
 import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-tool.js";
-import { createTaskSummaryTool } from "./workflow/task-summary-tool.js";
-import { createRequestHelpTool } from "./workflow/request-help-tool.js";
+import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
+import { createRequestHelpTool } from "./collaboration/request-help-tool.js";
 import {
   FINAL_ANSWER_TOOL_NAME,
   createFinalAnswerTool,
-} from "./workflow/final-answer-tool.js";
+} from "./collaboration/final-answer-tool.js";
 import { emitEvent } from "../event/index.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { resolveForceToolCall } from "../utils/shared-utils.js";

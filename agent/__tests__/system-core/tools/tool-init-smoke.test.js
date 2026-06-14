@@ -24,7 +24,7 @@ function buildAgentContext(runtime = {}) {
   };
 }
 
-test("工具初始化 smoke: workflow/data-processing/ai/execution/connectors", async () => {
+test("工具初始化 smoke: plugin/data-processing/ai/execution/connectors", async () => {
   const fileTools = createFileTool(buildAgentContext());
   assert.equal(fileTools[0]?.name, "read_file");
   assert.equal(fileTools[1]?.name, "write_file");

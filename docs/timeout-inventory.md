@@ -49,7 +49,7 @@
 | `30000` ms | `agent/src/system-core/connectors/channel-store.js:286`；`agent/src/system-core/connectors/databases/*`；`agent/src/system-core/connectors/terminals/ssh-connector-channel.js:18` | 连接器执行常用默认超时。 |
 | `45000` ms | `agent/src/system-core/tools/data-processing/web2data-tool.js:317`；`agent/src/system-core/utils/web/web2img/web2img-config.js:53,57` | 网页抓取/截图入口超时（页面加载与 goto）。 |
 | `60000` ms | `service/services/openvscode-service.js:18`；`agent-proxy/src/config.js:133`；`agent/src/system-core/connectors/databases/postgres-connector-channel.js:66` | OpenVSCode 启动默认超时、agent-proxy 上游 HTTP 默认超时、Postgres 连接池空闲连接回收超时。 |
-| `300000` ms | `agent/src/system-core/bot-manage/config/constants.js:89`；`agent/src/system-core/tools/execution/script-tool.js:37`；`agent/src/system-core/tools/workflow/agent-collab-tool.js:79`；`agent/src/system-core/bot-manage/execution/memory-postprocess.js:14` | 异步任务默认等待、脚本执行默认超时、协作工具默认 wait、memory summary 后处理超时。 |
+| `300000` ms | `agent/src/system-core/bot-manage/config/constants.js:89`；`agent/src/system-core/tools/execution/script-tool.js:37`；`agent/src/system-core/tools/collaboration/agent-collab-tool.js:79`；`agent/src/system-core/bot-manage/execution/memory-postprocess.js:14` | 异步任务默认等待、脚本执行默认超时、协作工具默认 wait、memory summary 后处理超时。 |
 | `180000` ms | `agent/src/system-core/bot-manage/session/session-execution-engine.js:1520,1521` | workflow 规划插件最小超时保护（低于 3 分钟会抬升）。 |
 | `600000` ms | `service/ws/chat-websocket-server.js:202`；`agent-proxy/src/config.js:86` | 用户交互请求超时（10 分钟）；proxy channel retention。 |
 | `660000` ms | `agent-proxy/src/config.js:112` | agent-proxy 交互 requestId TTL（11 分钟）。 |

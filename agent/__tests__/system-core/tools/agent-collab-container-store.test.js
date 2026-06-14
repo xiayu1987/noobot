@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createCollabContainerStore } from "../../../src/system-core/tools/workflow/agent-collab/collab-container-store.js";
+import { createCollabContainerStore } from "../../../src/system-core/tools/collaboration/agent-collab/collab-container-store.js";
 
 test("collab-container-store: create + patch + status aggregation", () => {
   const runtime = {};

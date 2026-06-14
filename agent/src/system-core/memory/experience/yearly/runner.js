@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { buildYearlySummaryPrompt } from "../../prompts/builders.js";
-import { isAbortLikeError, throwIfAborted } from "../workflow.js";
+import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
 
 export async function runYearlySummaryIfNeeded({
   storage,

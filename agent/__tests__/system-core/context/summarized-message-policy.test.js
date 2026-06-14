@@ -131,9 +131,9 @@ test("system is summarized while user and assistant-without-tool-calls are not",
 
 test("markCurrentTurnArraySummarized preserves only latest injected message per type", () => {
   const result = markCurrentTurnArraySummarized([
-    { role: "user", content: "old summary prompt", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt" },
-    { role: "user", content: "old planning prompt", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning_task" },
-    { role: "user", content: "new summary prompt", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt" },
+    { role: "user", content: "old summary prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance_summary_prompt" },
+    { role: "user", content: "old planning prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "planning_task" },
+    { role: "user", content: "new summary prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance_summary_prompt" },
   ]);
 
   assert.equal(result[0].summarized, true);
@@ -143,9 +143,9 @@ test("markCurrentTurnArraySummarized preserves only latest injected message per 
 
 test("filterSummarizedMessages keeps latest injected message for each injected type", () => {
   const result = filterSummarizedMessages([
-    { role: "user", content: "old relay", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "separate_model_relay:planning" },
-    { role: "user", content: "planning prompt", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning_task" },
-    { role: "user", content: "new relay", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "separate_model_relay:planning" },
+    { role: "user", content: "old relay", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "separate_model_relay:planning" },
+    { role: "user", content: "planning prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "planning_task" },
+    { role: "user", content: "new relay", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "separate_model_relay:planning" },
     { role: "assistant", content: "normal" },
   ]);
 

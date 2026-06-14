@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { RunConfigExtensionPreparer } from "../../../src/system-core/bot-manage/session/run-config-extension-preparer.js";
+import { RunConfigPluginPreparer } from "../../../src/system-core/bot-manage/session/run-config-plugin-preparer.js";
+import { createSessionPluginRuntime } from "../../../src/system-core/bot-manage/session/session-plugin-runtime-adapter.js";
 import { PLUGIN_CAPABILITY } from "../../../src/system-core/plugin/capabilities.js";
 
 function normalizeStringArray(input = []) {
@@ -41,37 +42,37 @@ function createPreparer({
   globalConfig = {},
   workspaceService = createWorkspaceService(),
   loadedDynamicPlugins = { registry: new Map() },
-  extensionRuntime = {},
+  pluginRuntime = {},
 } = {}) {
-  return new RunConfigExtensionPreparer({
+  return new RunConfigPluginPreparer({
     globalConfig,
     workspaceService,
     loadedDynamicPlugins,
-    extensionRuntime: {
-      harnessPluginKey: "harness",
-      workflowPluginKey: "workflow",
-      harnessPluginSelectors: new Set(["harness"]),
-      workflowPluginSelectors: new Set(["workflow"]),
-      ...extensionRuntime,
+    pluginRuntime: {
+      agentPluginKey: "agentPlugin",
+      botPluginKey: "botPlugin",
+      agentPluginSelectors: new Set(["agentPlugin"]),
+      botPluginSelectors: new Set(["botPlugin"]),
+      ...pluginRuntime,
     },
     normalizeStringArray,
-    mergeHarnessExtensionOptions: (...items) =>
+    mergePluginOptions: (...items) =>
       items.reduce((acc, item) => ({ ...acc, ...(item && typeof item === "object" ? item : {}) }), {}),
-    createHarnessResolveModelMessages: () => () => [],
-    createHarnessResolveMessageBlock: () => () => [],
-    createHarnessMarkMessagesSummarized: () => async () => 0,
+    createPluginResolveModelMessages: () => () => [],
+    createPluginResolveMessageBlock: () => () => [],
+    createPluginMarkMessagesSummarized: () => async () => 0,
     createBotSubSessionRunner: () => async () => ({}),
     createGeneratedArtifactPersister: () => async () => [],
-    createWorkflowScopedJsonWriter: () => async () => ({}),
-    createWorkflowScopedEventLogger: () => async () => ({}),
+    createBotPluginScopedJsonWriter: () => async () => ({}),
+    createBotPluginScopedEventLogger: () => async () => ({}),
   });
 }
 
-test("RunConfigExtensionPreparer leaves harness runConfig untouched when disabled", () => {
+test("RunConfigPluginPreparer leaves agent plugin runConfig untouched when disabled", () => {
   const preparer = createPreparer();
   const runConfig = { runtimeModel: "m1" };
 
-  const prepared = preparer.prepareHarnessRunConfig({
+  const prepared = preparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig,
   });
@@ -80,17 +81,39 @@ test("RunConfigExtensionPreparer leaves harness runConfig untouched when disable
   assert.equal(prepared.hookManager, undefined);
 });
 
-test("RunConfigExtensionPreparer resolves harness options with workspace basePath and safe defaults", () => {
+test("createSessionPluginRuntime exposes generic plugin slots without concrete plugin aliases", () => {
+  const runtime = createSessionPluginRuntime({
+    descriptors: [
+      {
+        keyProperty: "agentPluginKey",
+        selectorsProperty: "agentPluginSelectors",
+        fallbackKey: "agentPlugin",
+      },
+      {
+        keyProperty: "botPluginKey",
+        selectorsProperty: "botPluginSelectors",
+        fallbackKey: "botPlugin",
+      },
+    ],
+  });
+
+  assert.equal(runtime.agentPluginKey, "agentPlugin");
+  assert.equal(runtime.botPluginKey, "botPlugin");
+  assert.deepEqual([...runtime.agentPluginSelectors], ["agentPlugin"]);
+  assert.deepEqual([...runtime.botPluginSelectors], ["botPlugin"]);
+});
+
+test("RunConfigPluginPreparer resolves agent plugin options with workspace basePath and safe defaults", () => {
   const preparer = createPreparer({
     workspaceService: createWorkspaceService("/tmp/noobot-preparer-base"),
   });
 
-  const options = preparer.resolveHarnessPluginOptions({
+  const options = preparer.resolveAgentPluginOptions({
     userId: "u1",
     runConfig: {
-      selectedPlugins: ["harness"],
+      selectedPlugins: ["agentPlugin"],
       plugins: {
-        harness: {
+        agentPlugin: {
           miniRunnerMaxTurns: 99,
           timeoutMs: 1000,
         },
@@ -110,7 +133,32 @@ test("RunConfigExtensionPreparer resolves harness options with workspace basePat
   assert.equal(typeof options.capabilityModelInvoker, "function");
 });
 
-test("RunConfigExtensionPreparer registers harness once and keeps per-run policy patches on reuse", () => {
+test("RunConfigPluginPreparer resolves agent plugin options via generic runtime selectors", () => {
+  const preparer = createPreparer({
+    pluginRuntime: {
+      agentPluginKey: "assistant-driver",
+      agentPluginSelectors: new Set(["assistant-driver"]),
+    },
+  });
+
+  const options = preparer.resolveAgentPluginOptions({
+    userId: "u1",
+    runConfig: {
+      selectedPlugins: ["assistant-driver"],
+      plugins: {
+        "assistant-driver": {
+          miniRunnerMaxTurns: 2,
+        },
+      },
+    },
+  });
+
+  assert.equal(options.enabled, true);
+  assert.equal(options.mode, "on");
+  assert.equal(options.miniRunnerMaxTurns, 2);
+});
+
+test("RunConfigPluginPreparer registers agent plugin once", () => {
   let registerCount = 0;
   const loadedDynamicPlugins = createLoadedPlugins({
     capability: PLUGIN_CAPABILITY.AGENT_REGISTER,
@@ -121,11 +169,11 @@ test("RunConfigExtensionPreparer registers harness once and keeps per-run policy
   });
   const preparer = createPreparer({ loadedDynamicPlugins });
 
-  const first = preparer.prepareHarnessRunConfig({
+  const first = preparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
           denyToolNames: ["first_run_tool"],
@@ -136,17 +184,18 @@ test("RunConfigExtensionPreparer registers harness once and keeps per-run policy
 
   assert.equal(registerCount, 1);
   assert.ok(first.hookManager);
-  assert.equal(first.hookManager.__noobotHarnessPluginRegistered, true);
+  assert.equal(first.hookManager.__noobotAgentPluginRegistered, true);
+  assert.equal(first.hookManager.runtime.agentPlugin, first.plugins.agentPlugin);
   assert.deepEqual(first.toolPolicy.denyToolNames, ["registered_tool"]);
 
-  const second = preparer.prepareHarnessRunConfig({
+  const second = preparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       ...first,
       plugins: {
         ...first.plugins,
-        harness: {
-          ...first.plugins.harness,
+        agentPlugin: {
+          ...first.plugins.agentPlugin,
           denyToolNames: ["second_run_tool"],
         },
       },
@@ -161,11 +210,11 @@ test("RunConfigExtensionPreparer registers harness once and keeps per-run policy
   ]);
 });
 
-test("RunConfigExtensionPreparer resolves workflow options and injects runtime helpers", () => {
+test("RunConfigPluginPreparer resolves bot plugin options and injects runtime helpers", () => {
   const preparer = createPreparer({
     globalConfig: {
       plugins: {
-        workflow: {
+        botPlugin: {
           enabled: true,
           mode: "on",
         },
@@ -173,7 +222,7 @@ test("RunConfigExtensionPreparer resolves workflow options and injects runtime h
     },
   });
 
-  const options = preparer.resolveWorkflowPluginOptions({
+  const options = preparer.resolveBotPluginOptions({
     runConfig: {},
     userConfig: {},
   });
@@ -187,15 +236,46 @@ test("RunConfigExtensionPreparer resolves workflow options and injects runtime h
   assert.equal(typeof options.capabilityModelInvoker, "function");
   assert.equal(typeof options.subSessionRunner, "function");
   assert.equal(typeof options.generatedArtifactPersister, "function");
-  assert.equal(typeof options.workflowDialogPersister, "function");
-  assert.equal(typeof options.workflowEventLogger, "function");
+  assert.equal(typeof options.botPluginDialogPersister, "function");
+  assert.equal(typeof options.botPluginEventLogger, "function");
 });
 
-test("RunConfigExtensionPreparer prepares workflow botHookManager and respects enabled=false override", () => {
+test("RunConfigPluginPreparer resolves bot plugin options via generic runtime selectors", () => {
   const preparer = createPreparer({
+    pluginRuntime: {
+      botPluginKey: "task-orchestrator",
+      botPluginSelectors: new Set(["task-orchestrator"]),
+    },
+  });
+
+  const options = preparer.resolveBotPluginOptions({
+    runConfig: {
+      selectedPlugins: ["task-orchestrator"],
+      plugins: {
+        "task-orchestrator": {
+          semanticMode: "inline",
+        },
+      },
+    },
+  });
+
+  assert.equal(options.enabled, true);
+  assert.equal(options.mode, "on");
+  assert.equal(options.semanticMode, "inline");
+});
+
+test("RunConfigPluginPreparer prepares bot plugin botHookManager", () => {
+  let registerCount = 0;
+  const preparer = createPreparer({
+    loadedDynamicPlugins: createLoadedPlugins({
+      capability: PLUGIN_CAPABILITY.BOT_REGISTER,
+      register() {
+        registerCount += 1;
+      },
+    }),
     globalConfig: {
       plugins: {
-        workflow: {
+        botPlugin: {
           enabled: true,
           mode: "on",
         },
@@ -203,10 +283,10 @@ test("RunConfigExtensionPreparer prepares workflow botHookManager and respects e
     },
   });
 
-  const disabled = preparer.resolveWorkflowPluginOptions({
+  const disabled = preparer.resolveBotPluginOptions({
     runConfig: {
       plugins: {
-        workflow: {
+        botPlugin: {
           enabled: false,
           mode: "off",
         },
@@ -215,10 +295,10 @@ test("RunConfigExtensionPreparer prepares workflow botHookManager and respects e
   });
   assert.deepEqual(disabled, { enabled: false, mode: "off" });
 
-  const prepared = preparer.prepareWorkflowRunConfig({
+  const prepared = preparer.prepareBotPluginRunConfig({
     runConfig: {
       plugins: {
-        workflow: {
+        botPlugin: {
           enabled: true,
           mode: "on",
         },
@@ -227,6 +307,9 @@ test("RunConfigExtensionPreparer prepares workflow botHookManager and respects e
   });
 
   assert.ok(prepared.botHookManager);
-  assert.equal(prepared.plugins.workflow.enabled, true);
-  assert.equal(prepared.plugins.workflow.mode, "on");
+  assert.equal(registerCount, 1);
+  assert.equal(prepared.botHookManager.__noobotBotPluginRegistered, true);
+  assert.equal(prepared.botHookManager.runtime.botPlugin, prepared.plugins.botPlugin);
+  assert.equal(prepared.plugins.botPlugin.enabled, true);
+  assert.equal(prepared.plugins.botPlugin.mode, "on");
 });

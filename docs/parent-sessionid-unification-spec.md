@@ -184,7 +184,7 @@
 - 2026-06-08：Phase 1（继续）：`bot-manage / event / hook` 关键读取点（`execution/runner`、`session-execution-engine`、`event/execution-listener`、`hook/index`）已收口到统一 resolver；相关测试通过。
 - 2026-06-08：Phase 1 收官复扫：`agent/src/system-core` 仍有约 **51** 处 `parentSessionId` 相关归一/回填代码，主要集中在 `session/*` 持久化与实体规范化层（属于 in-scope 保留）；未发现新的“模型/header 主链路分散 fallback”新增点。
 - 2026-06-08：Phase 2（起步）：新增 `normalizeParentSessionId`（统一写入归一化函数），并接入关键写路径：`context/providers/environment-provider.buildDynamicInfo`、`context/index._buildSystemRuntime`（含 patch 后再归一）、`bot-manage/hook.resolveBotHookRuntimeMeta`、`agent/core/context/agent-context-factory._buildContextHookBase`。
-- 2026-06-08：Phase 2（继续）：补齐写路径归一化到 `normalizeParentSessionId`：`bot-manage/async/session-runner`、`bot-manage/execution/finalizer`、`tracking/core/log-writer`、`tracking/execution-log/execution-log-repository`、`tools/workflow/agent-collab/*`（artifact persist/task summary/wait/container store）、`context/index` 的工具构建入参。复扫后相关命中由约 **51** 降至约 **43**（剩余主要为 `session/*` 存储与必要业务 fallback）。
+- 2026-06-08：Phase 2（继续）：补齐写路径归一化到 `normalizeParentSessionId`：`bot-manage/async/session-runner`、`bot-manage/execution/finalizer`、`tracking/core/log-writer`、`tracking/execution-log/execution-log-repository`、`tools/collaboration/agent-collab/*`（artifact persist/task summary/wait/container store）、`context/index` 的工具构建入参。复扫后相关命中由约 **51** 降至约 **43**（剩余主要为 `session/*` 存储与必要业务 fallback）。
 - 2026-06-08：Phase 2（继续）：补齐 `parent-async-task-manager`、`agent/core/context/message-builder`、`tools/core/check-tool-input`、`agent/core/execution/tool-runner` 等点位的归一化。新增守护脚本 `scripts/check-parent-sessionid-unification.mjs`（并接入 `npm run check:parent-sessionid-unification`），用于阻止非白名单区域新增分散写法。
 - 2026-06-08：Phase 2（继续）：对剩余点位再收敛一轮后，扫描命中降至约 **28**（`session/*` 约 21、`bot-manage/*` 约 4、`tools/*` 约 3）。其中多数为：
   - `session/*`：仓储/实体/路径层的持久化归一（保留）
@@ -216,7 +216,7 @@
 7. `agent/src/system-core/bot-manage/session/session-execution-engine.js`  
 8. `agent/src/system-core/bot-manage/async/session-runner.js`  
 9. `agent/src/system-core/tools/index.js`  
-10. `agent/src/system-core/tools/workflow/agent-collab/collab-artifact-persist.js`  
+10. `agent/src/system-core/tools/collaboration/agent-collab/collab-artifact-persist.js`  
 11. `agent/src/system-core/tools/core/tool-json-result.js`  
 
 保留分类：

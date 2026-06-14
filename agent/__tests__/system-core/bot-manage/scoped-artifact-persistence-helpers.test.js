@@ -9,10 +9,10 @@ import { MIME_TYPE } from "../../../src/system-core/constants/index.js";
 import { setEventAdapter } from "../../../src/system-core/event/index.js";
 
 async function createTempRoot() {
-  return fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-persistence-"));
+  return fs.mkdtemp(path.join(os.tmpdir(), "noobot-plugin-persistence-"));
 }
 
-function createWorkspaceService(baseDir = "/tmp/noobot-workflow-persistence") {
+function createWorkspaceService(baseDir = "/tmp/noobot-plugin-persistence") {
   return {
     getWorkspacePath(userId = "") {
       return path.join(baseDir, userId);
@@ -21,7 +21,7 @@ function createWorkspaceService(baseDir = "/tmp/noobot-workflow-persistence") {
 }
 
 function createHelpers({
-  baseDir = "/tmp/noobot-workflow-persistence",
+  baseDir = "/tmp/noobot-plugin-persistence",
   session = null,
   attach = null,
   now = () => "2026-01-02T03:04:05.000Z",
@@ -39,8 +39,8 @@ test("ScopedArtifactPersistenceHelpers resolves scoped dirs inside workspace and
   const helpers = createHelpers({ baseDir: tempRoot });
 
   assert.equal(
-    helpers.resolveScopedDir({ userId: "u1", relativeDir: "workflow/out" }),
-    path.join(tempRoot, "u1", "workflow/out"),
+    helpers.resolveScopedDir({ userId: "u1", relativeDir: "plugin/out" }),
+    path.join(tempRoot, "u1", "plugin/out"),
   );
   assert.equal(
     helpers.resolveScopedDir({
@@ -51,11 +51,11 @@ test("ScopedArtifactPersistenceHelpers resolves scoped dirs inside workspace and
   );
   assert.throws(
     () => helpers.resolveScopedDir({ userId: "u1", relativeDir: "../escape" }),
-    /workflow scoped output path must be inside workspace/,
+    /plugin scoped output path must be inside workspace/,
   );
   assert.throws(
     () => helpers.resolveScopedDir({ userId: "u1", absoluteDir: path.join(tempRoot, "other") }),
-    /workflow scoped output path must be inside workspace/,
+    /plugin scoped output path must be inside workspace/,
   );
 });
 
@@ -67,16 +67,16 @@ test("ScopedArtifactPersistenceHelpers scoped writer and event logger write insi
 
   const written = await writer({
     userId: "u1",
-    relativeDir: "workflow/node-a",
+    relativeDir: "plugin/node-a",
     fileName: "payload.json",
     payload: { ok: true },
   });
-  assert.equal(written.outputFile, path.join(tempRoot, "u1", "workflow/node-a", "payload.json"));
+  assert.equal(written.outputFile, path.join(tempRoot, "u1", "plugin/node-a", "payload.json"));
   assert.deepEqual(JSON.parse(await fs.readFile(written.outputFile, "utf8")), { ok: true });
 
   const logged = await logger({
     userId: "u1",
-    relativeDir: "workflow/node-a",
+    relativeDir: "plugin/node-a",
     fileName: "events.jsonl",
     event: { step: "done" },
   });
@@ -88,8 +88,8 @@ test("ScopedArtifactPersistenceHelpers scoped writer and event logger write insi
   });
 
   await assert.rejects(
-    () => writer({ userId: "u1", relativeDir: "workflow/node-a", fileName: "../bad.json" }),
-    /workflow scoped writer fileName must be plain file name/,
+    () => writer({ userId: "u1", relativeDir: "plugin/node-a", fileName: "../bad.json" }),
+    /plugin scoped writer fileName must be plain file name/,
   );
 });
 
@@ -108,7 +108,7 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
       transferResult: { envelope: { envelopeId: "e2" } },
       transferEnvelopes: [{ envelopeId: "e3" }],
       injectedMessage: true,
-      injectedBy: "workflow",
+      injectedBy: "botPlugin",
       injectedMessageType: "workflow_system_context",
       frontendUserMessage: true,
     },
@@ -124,7 +124,7 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
   assert.deepEqual(normalized.transferResult, { envelope: { envelopeId: "e2" } });
   assert.deepEqual(normalized.transferEnvelopes, [{ envelopeId: "e3" }]);
   assert.equal(normalized.injectedMessage, true);
-  assert.equal(normalized.injectedBy, "workflow");
+  assert.equal(normalized.injectedBy, "botPlugin");
   assert.equal(normalized.injectedMessageType, "workflow_system_context");
   assert.equal(normalized.frontendUserMessage, true);
 });
@@ -132,7 +132,7 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
 test("ScopedArtifactPersistenceHelpers persists detached snapshot json files", async () => {
   const tempRoot = await createTempRoot();
   const helpers = createHelpers({ baseDir: tempRoot });
-  const outputDir = path.join(tempRoot, "u1", "workflow/node-b");
+  const outputDir = path.join(tempRoot, "u1", "plugin/node-b");
 
   const persisted = await helpers.persistDetachedSubSessionSnapshot({
     outputDir,
@@ -142,12 +142,12 @@ test("ScopedArtifactPersistenceHelpers persists detached snapshot json files", a
     },
     taskPayload: { sessionId: "s1", tasks: [] },
     executionPayload: { sessionId: "s1", logs: [] },
-    metadata: { workflowNodeId: "node-b" },
+    metadata: { pluginNodeId: "node-b" },
   });
 
   assert.equal(persisted.outputDir, outputDir);
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.meta, "utf8")), {
-    workflowNodeId: "node-b",
+    pluginNodeId: "node-b",
   });
   const sessionJson = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
   assert.equal(sessionJson.sessionId, "s1");
@@ -156,7 +156,7 @@ test("ScopedArtifactPersistenceHelpers persists detached snapshot json files", a
 
 test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot from session service", async () => {
   const tempRoot = await createTempRoot();
-  const outputDir = path.join(tempRoot, "u1", "workflow/node-c");
+  const outputDir = path.join(tempRoot, "u1", "plugin/node-c");
   const helpers = createHelpers({
     baseDir: tempRoot,
     session: {
@@ -220,7 +220,7 @@ test("ScopedArtifactPersistenceHelpers detects detached sub-session isolation le
 
   assert.equal(isolated, true);
   assert.equal(leaked, false);
-  assert.equal(events[0].event, "workflow_subsession_persistence_leak");
+  assert.equal(events[0].event, "plugin_subsession_persistence_leak");
   assert.equal(events[0].data.scope, "test_scope");
   assert.equal(events[0].data.leakedMainSessionFile, leakedFile);
 });

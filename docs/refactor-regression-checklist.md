@@ -53,3 +53,6 @@
 - [ ] 旧会话可打开，不崩溃。
 - [ ] 新会话链路全部正常（明确：旧数据不自动补字段）。
 
+## 13) Agent 插件解耦守卫
+- [ ] `npm run check:agent-plugin-decoupling` 通过。
+- [ ] 新增 agent core 代码不直接写死具体插件名（如 `harness` / `workflow`）；不要新增具体插件兼容别名或守卫例外。

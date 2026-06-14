@@ -18,14 +18,14 @@ test("SessionExecutionEngine preserves injected flags in detached sub-session me
       role: "user",
       content: "injected prompt",
       injectedMessage: true,
-      injectedBy: "harness-plugin",
+      injectedBy: "agent-plugin",
       frontendUserMessage: true,
     },
     "2026-06-04T00:00:00.000Z",
   );
 
   assert.equal(normalized.injectedMessage, true);
-  assert.equal(normalized.injectedBy, "harness-plugin");
+  assert.equal(normalized.injectedBy, "agent-plugin");
   assert.equal(normalized.frontendUserMessage, true);
 });
 
@@ -36,11 +36,11 @@ test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plug
     workspaceService: createWorkspaceService(basePath),
   });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
           planningGuidanceMode: "separate_model",
@@ -52,23 +52,23 @@ test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plug
   });
 
   assert.equal(typeof prepared.hookManager?.emit, "function");
-  assert.equal(prepared.plugins.harness.enabled, true);
-  assert.equal(prepared.plugins.harness.basePath, basePath);
-  assert.equal(prepared.plugins.harness.planningGuidanceMode, "separate_model");
-  assert.equal(typeof prepared.plugins.harness.capabilityModelInvoker, "function");
-  assert.equal(typeof prepared.hookManager.runtime?.harness, "object");
-  assert.equal(prepared.hookManager.runtime.harness.mode, "on");
+  assert.equal(prepared.plugins.agentPlugin.enabled, true);
+  assert.equal(prepared.plugins.agentPlugin.basePath, basePath);
+  assert.equal(prepared.plugins.agentPlugin.planningGuidanceMode, "separate_model");
+  assert.equal(typeof prepared.plugins.agentPlugin.capabilityModelInvoker, "function");
+  assert.equal(typeof prepared.hookManager.runtime?.agentPlugin, "object");
+  assert.equal(prepared.hookManager.runtime.agentPlugin.mode, "on");
 });
 
 test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", async () => {
   const explicitInvoker = async () => ({ output: "ok" });
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
           planningGuidanceMode: "separate_model",
@@ -78,50 +78,50 @@ test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", 
     },
   });
 
-  assert.equal(prepared.plugins.harness.capabilityModelInvoker, explicitInvoker);
+  assert.equal(prepared.plugins.agentPlugin.capabilityModelInvoker, explicitInvoker);
 });
 
-test("SessionExecutionEngine harness plugin applies default denyToolNames policy", () => {
+test("SessionExecutionEngine agent plugin applies default denyToolNames policy", () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
       plugins: {
-        harness: { enabled: true, mode: "on" },
+        agentPlugin: { enabled: true, mode: "on" },
       },
     },
   });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
-      selectedPlugins: ["harness"],
+      selectedPlugins: ["agentPlugin"],
       plugins: {
-        harness: { enabled: true, mode: "on" },
+        agentPlugin: { enabled: true, mode: "on" },
       },
     },
   });
 
-  assert.equal(prepared?.plugins?.harness?.enabled, true);
+  assert.equal(prepared?.plugins?.agentPlugin?.enabled, true);
   assert.deepEqual(prepared?.toolPolicy?.denyToolNames, [
     "plan_multi_task_collaboration",
     "task_summary",
   ]);
 });
 
-test("SessionExecutionEngine harness plugin can inject denyToolNames from harness options", () => {
+test("SessionExecutionEngine agent plugin can inject denyToolNames from agent plugin options", () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
       plugins: {
-        harness: { enabled: true, mode: "on", denyToolNames: ["plan_multi_task_collaboration"] },
+        agentPlugin: { enabled: true, mode: "on", denyToolNames: ["plan_multi_task_collaboration"] },
       },
     },
   });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
-      selectedPlugins: ["harness"],
+      selectedPlugins: ["agentPlugin"],
       plugins: {
-        harness: { enabled: true, mode: "on" },
+        agentPlugin: { enabled: true, mode: "on" },
       },
     },
   });
@@ -133,7 +133,7 @@ test("SessionExecutionEngine deep-merges plugin step model config", async () => 
   const engine = new SessionExecutionEngine({
     globalConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
           stepModels: {
@@ -145,11 +145,11 @@ test("SessionExecutionEngine deep-merges plugin step model config", async () => 
     },
   });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           mode: "on",
           stepModels: {
             planning: "planner_run",
@@ -160,7 +160,7 @@ test("SessionExecutionEngine deep-merges plugin step model config", async () => 
     },
   });
 
-  assert.deepEqual(prepared.plugins.harness.stepModels, {
+  assert.deepEqual(prepared.plugins.agentPlugin.stepModels, {
     planning: "planner_run",
     summary: "summary_global",
     guidance: "guidance_run",
@@ -170,11 +170,11 @@ test("SessionExecutionEngine deep-merges plugin step model config", async () => 
 test("SessionExecutionEngine defaults plugin miniRunnerMaxTurns to 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
           planningGuidanceMode: "separate_model",
@@ -183,17 +183,17 @@ test("SessionExecutionEngine defaults plugin miniRunnerMaxTurns to 5", async () 
     },
   });
 
-  assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, 5);
+  assert.equal(prepared.plugins.agentPlugin.miniRunnerMaxTurns, 5);
 });
 
 test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
           planningGuidanceMode: "separate_model",
@@ -203,17 +203,17 @@ test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
     },
   });
 
-  assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, 5);
+  assert.equal(prepared.plugins.agentPlugin.miniRunnerMaxTurns, 5);
 });
 
 test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
           planningGuidanceMode: "separate_model",
@@ -223,17 +223,17 @@ test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning
     },
   });
 
-  assert.equal(prepared.plugins.harness.timeoutMs, 180_000);
+  assert.equal(prepared.plugins.agentPlugin.timeoutMs, 180_000);
 });
 
-test("SessionExecutionEngine injects workflow resolveModelMessages without harness window config", async () => {
+test("SessionExecutionEngine injects bot plugin resolveModelMessages without plugin window config", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareWorkflowRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareBotPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        workflow: {
+        botPlugin: {
           enabled: true,
           mode: "on",
         },
@@ -241,7 +241,7 @@ test("SessionExecutionEngine injects workflow resolveModelMessages without harne
     },
   });
 
-  const resolver = prepared.plugins.workflow.resolveModelMessages;
+  const resolver = prepared.plugins.botPlugin.resolveModelMessages;
   assert.equal(typeof resolver, "function");
   const resolved = resolver({
     messages: [
@@ -260,14 +260,14 @@ test("SessionExecutionEngine injects workflow resolveModelMessages without harne
   ]);
 });
 
-test("SessionExecutionEngine injects plugin resolveModelMessages without harness window config", async () => {
+test("SessionExecutionEngine injects plugin resolveModelMessages without plugin window config", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
 
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
         },
@@ -275,7 +275,7 @@ test("SessionExecutionEngine injects plugin resolveModelMessages without harness
     },
   });
 
-  const resolver = prepared.plugins.harness.resolveModelMessages;
+  const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
   assert.equal(typeof resolver, "function");
 
   const messages = [
@@ -300,18 +300,18 @@ test("SessionExecutionEngine injects plugin resolveModelMessages without harness
 
 test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow filtering", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
         },
       },
     },
   });
-  const resolver = prepared.plugins.harness.resolveMessageBlock;
+  const resolver = prepared.plugins.agentPlugin.resolveMessageBlock;
   assert.equal(typeof resolver, "function");
 
   const historyResolved = resolver({
@@ -359,11 +359,11 @@ test("SessionExecutionEngine injects plugin resolveMessageBlock with main-flow f
 
 test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with agent summary policy", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
         },
@@ -371,7 +371,7 @@ test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with 
     },
   });
 
-  const summarizer = prepared.plugins.harness.markMessagesSummarized;
+  const summarizer = prepared.plugins.agentPlugin.markMessagesSummarized;
   assert.equal(typeof summarizer, "function");
 
   const messages = [
@@ -392,11 +392,11 @@ test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with 
 
 test("SessionExecutionEngine markMessagesSummarized supports scoped marking", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
         },
@@ -404,7 +404,7 @@ test("SessionExecutionEngine markMessagesSummarized supports scoped marking", as
     },
   });
 
-  const summarizer = prepared.plugins.harness.markMessagesSummarized;
+  const summarizer = prepared.plugins.agentPlugin.markMessagesSummarized;
   const messages = [
     { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
     { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
@@ -431,18 +431,18 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
   const engine = new SessionExecutionEngine({
     globalConfig: {},
   });
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
         },
       },
     },
   });
-  const resolver = prepared.plugins.harness.resolveModelMessages;
+  const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
   const resolved = resolver({
     messages: [
       new HumanMessage("查找最适合组织的人"),
@@ -473,20 +473,20 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
 
 test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer tool content", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
         },
       },
     },
   });
-  const resolver = prepared.plugins.harness.resolveModelMessages;
+  const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
   const attachmentMeta = {
-    attachmentId: "att-harness",
+    attachmentId: "att-agent-plugin",
     name: "result.md",
     mimeType: "text/markdown",
     size: 12,
@@ -520,37 +520,37 @@ test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer too
   assert.equal("transferEnvelope" in compactedToolPayload, false);
   assert.equal("transferEnvelopes" in compactedToolPayload, false);
   assert.equal("attachmentMetas" in compactedToolPayload, false);
-  assert.equal(compactedToolPayload.transferFiles[0].attachmentId, "att-harness");
+  assert.equal(compactedToolPayload.transferFiles[0].attachmentId, "att-agent-plugin");
 });
 
 test("SessionExecutionEngine resolveModelMessages filters injected messages from non-current dialog", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
         },
       },
     },
   });
-  const resolver = prepared.plugins.harness.resolveModelMessages;
+  const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
   const resolved = resolver({
     messages: [
       {
         role: "assistant",
         content: "current injected",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
         dialogProcessId: "dlg_current",
       },
       {
         role: "assistant",
         content: "old injected",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
         dialogProcessId: "dlg_old",
       },
       {
@@ -569,7 +569,7 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
       content: "current injected",
       summarized: false,
       injectedMessage: true,
-      injectedBy: "harness-plugin",
+      injectedBy: "agent-plugin",
       dialogProcessId: "dlg_current",
     },
     { role: "assistant", content: "normal response", summarized: false },
@@ -579,18 +579,18 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
 
 test("SessionExecutionEngine resolveMessageBlock prefers current incremental dialog over stale ctx dialog", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine.runConfigExtensionPreparer.prepareHarnessRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
-        harness: {
+        agentPlugin: {
           enabled: true,
           mode: "on",
         },
       },
     },
   });
-  const resolver = prepared.plugins.harness.resolveMessageBlock;
+  const resolver = prepared.plugins.agentPlugin.resolveMessageBlock;
 
   const incrementalResolved = resolver({
     scope: "incremental",
@@ -599,14 +599,14 @@ test("SessionExecutionEngine resolveMessageBlock prefers current incremental dia
         role: "user",
         content: "old summary",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
         dialogProcessId: "dlg_old",
       },
       {
         role: "user",
         content: "current summary",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
         dialogProcessId: "dlg_current",
       },
     ],
@@ -625,7 +625,7 @@ test("SessionExecutionEngine resolveMessageBlock prefers current incremental dia
         role: "user",
         content: "old summary",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
         dialogProcessId: "dlg_old",
       },
       {
@@ -637,7 +637,7 @@ test("SessionExecutionEngine resolveMessageBlock prefers current incremental dia
         role: "user",
         content: "current planning",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
         dialogProcessId: "dlg_current",
       },
     ],
@@ -650,30 +650,30 @@ test("SessionExecutionEngine resolveMessageBlock prefers current incremental dia
   );
 });
 
-test("SessionExecutionEngine workflow plugin injects unified denyToolNames policy", () => {
+test("SessionExecutionEngine bot plugin injects unified denyToolNames policy", () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
       plugins: {
-        workflow: { enabled: true, mode: "on" },
+        botPlugin: { enabled: true, mode: "on" },
       },
     },
   });
-  const prepared = engine.runConfigExtensionPreparer.prepareWorkflowRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareBotPluginRunConfig({
     userId: "u1",
     runConfig: {
-      selectedPlugins: ["workflow"],
+      selectedPlugins: ["botPlugin"],
       toolPolicy: {
         mode: "append_custom",
       },
       plugins: {
-        workflow: { enabled: true, mode: "on" },
+        botPlugin: { enabled: true, mode: "on" },
       },
     },
     userConfig: {},
   });
 
-  assert.equal(prepared?.plugins?.workflow?.enabled, true);
-  assert.equal(prepared?.plugins?.workflow?.mode, "on");
+  assert.equal(prepared?.plugins?.botPlugin?.enabled, true);
+  assert.equal(prepared?.plugins?.botPlugin?.mode, "on");
   assert.equal(prepared?.toolPolicy?.mode, "append_custom");
   assert.deepEqual(prepared?.toolPolicy?.denyToolNames, [
     "delegate_task_async",
@@ -682,23 +682,23 @@ test("SessionExecutionEngine workflow plugin injects unified denyToolNames polic
   ]);
 });
 
-test("SessionExecutionEngine workflow plugin merges existing denyToolNames", () => {
+test("SessionExecutionEngine bot plugin merges existing denyToolNames", () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
       plugins: {
-        workflow: { enabled: true, mode: "on" },
+        botPlugin: { enabled: true, mode: "on" },
       },
     },
   });
-  const prepared = engine.runConfigExtensionPreparer.prepareWorkflowRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareBotPluginRunConfig({
     userId: "u1",
     runConfig: {
-      selectedPlugins: ["workflow"],
+      selectedPlugins: ["botPlugin"],
       toolPolicy: {
         denyToolNames: ["request_help", "delegate_task_async"],
       },
       plugins: {
-        workflow: { enabled: true, mode: "on" },
+        botPlugin: { enabled: true, mode: "on" },
       },
     },
     userConfig: {},
@@ -712,11 +712,11 @@ test("SessionExecutionEngine workflow plugin merges existing denyToolNames", () 
   ]);
 });
 
-test("SessionExecutionEngine workflow plugin denyToolNames comes from workflow plugin options", () => {
+test("SessionExecutionEngine bot plugin denyToolNames comes from bot plugin options", () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {
       plugins: {
-        workflow: {
+        botPlugin: {
           enabled: true,
           mode: "on",
           denyToolNames: ["request_help"],
@@ -724,12 +724,12 @@ test("SessionExecutionEngine workflow plugin denyToolNames comes from workflow p
       },
     },
   });
-  const prepared = engine.runConfigExtensionPreparer.prepareWorkflowRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareBotPluginRunConfig({
     userId: "u1",
     runConfig: {
-      selectedPlugins: ["workflow"],
+      selectedPlugins: ["botPlugin"],
       plugins: {
-        workflow: { enabled: true, mode: "on" },
+        botPlugin: { enabled: true, mode: "on" },
       },
     },
     userConfig: {},
@@ -742,7 +742,7 @@ test("SessionExecutionEngine plugin register api exposes unified policy helpers"
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const pluginApi = engine._buildPluginRegisterApi({
     manager: { on: () => () => {} },
-    pluginName: "workflow",
+    pluginName: "botPlugin",
     options: { enabled: true, mode: "on" },
     runConfig: {
       toolPolicy: {

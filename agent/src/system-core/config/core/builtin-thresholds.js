@@ -108,7 +108,7 @@ export const BUILTIN_THRESHOLDS = Object.freeze({
     helpPromptLoopTurns: 50,
     toolFailureHelpCount: 3,
   }),
-  workflow: Object.freeze({
+  botPlugin: Object.freeze({
     timeoutMs: 5 * 60 * 60 * 1000,
     maxAutoTransitions: 10,
     maxParallelNodeAgents: 4,

@@ -468,7 +468,7 @@ test("multiple tool calls are replayed as one assistant/tool pair per loop witho
   assert.equal(
     toolBatchLimitPromptMessage.additional_kwargs?.noobotInternalMessageType,
     undefined,
-    "tool-batch-limit prompt must remain visible to harness before_llm_call cleanup",
+    "tool-batch-limit prompt must remain visible to plugin before_llm_call cleanup",
   );
   assert.equal(
     toolBatchLimitPromptMessage.additional_kwargs?.noobotModelOnlyMessage,

@@ -224,7 +224,7 @@ export function resolveModelContextMessages({
 } = {}) {
   const normalizedMode = String(mode || "agent").trim().toLowerCase();
   const useRecentWindowByMode =
-    normalizedMode === "harness" ? true : useRecentWindow === true;
+    normalizedMode === "plugin" ? true : useRecentWindow === true;
   const sameDialogMessages = filterInjectedMessagesForDialog(
     sourceMessages,
     currentDialogProcessId,

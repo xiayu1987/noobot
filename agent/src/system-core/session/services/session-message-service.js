@@ -60,8 +60,8 @@ export class SessionMessageService {
     injectedBy = "",
     injectedMessageType = "",
     frontendUserMessage = false,
-    workflowMessage = false,
-    workflowMeta = null,
+    pluginMessage = false,
+    pluginMeta = null,
     transferEnvelope = null,
     transferEnvelopes = [],
   }) {
@@ -111,12 +111,12 @@ export class SessionMessageService {
       injectedBy: String(injectedBy || "").trim(),
       injectedMessageType: String(injectedMessageType || "").trim(),
       frontendUserMessage: frontendUserMessage === true,
-      workflowMessage: workflowMessage === true,
-      workflowMeta:
-        workflowMeta &&
-        typeof workflowMeta === "object" &&
-        !Array.isArray(workflowMeta)
-          ? workflowMeta
+      pluginMessage: pluginMessage === true,
+      pluginMeta:
+        pluginMeta &&
+        typeof pluginMeta === "object" &&
+        !Array.isArray(pluginMeta)
+          ? pluginMeta
           : null,
       transferEnvelope:
         transferEnvelope && typeof transferEnvelope === "object" && !Array.isArray(transferEnvelope)

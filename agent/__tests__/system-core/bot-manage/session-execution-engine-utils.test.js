@@ -26,15 +26,15 @@ async function createTempRoot() {
 }
 
 test("session-execution-engine-utils normalizes plugin selectors and resolves plugin options", () => {
-  const selectors = normalizePluginSelectorSet([" harness ", "", "harness", "plugin-key"]);
+  const selectors = normalizePluginSelectorSet([" agentPlugin ", "", "agentPlugin", "plugin-key"]);
 
-  assert.deepEqual(Array.from(selectors), ["harness", "plugin-key"]);
+  assert.deepEqual(Array.from(selectors), ["agentPlugin", "plugin-key"]);
   assert.deepEqual(normalizeTrimmedStringList([" a ", "", null, "b"]), ["a", "b"]);
   assert.deepEqual(
     resolvePluginOptionsFromConfig(
       {
         plugins: {
-          harness: { enabled: true, mode: "off", fromHarness: true },
+          agentPlugin: { enabled: true, mode: "off", fromPlugin: true },
           "plugin-key": { mode: "on", fromKey: true },
           other: { ignored: true },
         },
@@ -44,13 +44,13 @@ test("session-execution-engine-utils normalizes plugin selectors and resolves pl
     {
       enabled: true,
       mode: "on",
-      fromHarness: true,
+      fromPlugin: true,
       fromKey: true,
     },
   );
 });
 
-test("session-execution-engine-utils normalizes harness messages from plain and lc_kwargs shapes", () => {
+test("session-execution-engine-utils normalizes plugin messages from plain and lc_kwargs shapes", () => {
   const normalized = normalizeMessageForModelRuntime({
     lc_kwargs: {
       content: "tool result",
@@ -62,7 +62,7 @@ test("session-execution-engine-utils normalizes harness messages from plain and 
     role: "tool",
     summarized: true,
     injectedMessage: true,
-    injectedBy: "harness",
+    injectedBy: "agentPlugin",
     injectedMessageType: "planning",
     frontendUserMessage: true,
     dialogProcessId: "d1",
@@ -74,7 +74,7 @@ test("session-execution-engine-utils normalizes harness messages from plain and 
   assert.equal(normalized.summarized, true);
   assert.equal(normalized.additional_kwargs.noobotInternalMessageType, "internal");
   assert.equal(normalized.injectedMessage, true);
-  assert.equal(normalized.injectedBy, "harness");
+  assert.equal(normalized.injectedBy, "agentPlugin");
   assert.equal(normalized.injectedMessageType, "planning");
   assert.equal(normalized.frontendUserMessage, true);
   assert.equal(normalized.dialogProcessId, "d1");
@@ -86,7 +86,7 @@ test("session-execution-engine-utils applies normalized message flags", () => {
   const applied = applyNormalizedMessageFlags(target, {
     lc_kwargs: {
       injectedMessage: true,
-      injectedBy: "workflow",
+      injectedBy: "botPlugin",
       injectedMessageType: "system",
       additional_kwargs: {
         frontendUserMessage: true,
@@ -96,7 +96,7 @@ test("session-execution-engine-utils applies normalized message flags", () => {
 
   assert.equal(applied, target);
   assert.equal(applied.injectedMessage, true);
-  assert.equal(applied.injectedBy, "workflow");
+  assert.equal(applied.injectedBy, "botPlugin");
   assert.equal(applied.injectedMessageType, "system");
   assert.equal(applied.frontendUserMessage, true);
 });

@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RunConfigExtensionPreparer } from "./run-config-extension-preparer.js";
+import { RunConfigPluginPreparer } from "./run-config-plugin-preparer.js";
 import { normalizePluginSelectorSet } from "./session-execution-engine-utils.js";
 
-export function createSessionExtensionRuntime({
-  loadedExtensions = null,
+export function createSessionPluginRuntime({
+  loadedPlugins = null,
   descriptors = [],
-  resolveExtensionKey = null,
+  resolvePluginKey = null,
 } = {}) {
   const runtime = {};
   for (const descriptor of Array.isArray(descriptors) ? descriptors : []) {
@@ -20,47 +20,45 @@ export function createSessionExtensionRuntime({
 
     const fallbackKey = String(descriptor.fallbackKey || "").trim();
     const resolvedKey =
-      typeof resolveExtensionKey === "function"
-        ? String(resolveExtensionKey({ loadedExtensions, descriptor }) || "").trim()
+      typeof resolvePluginKey === "function"
+        ? String(resolvePluginKey({ loadedPlugins, descriptor }) || "").trim()
         : "";
-    const extensionKey = resolvedKey || fallbackKey;
-    const selectors = normalizePluginSelectorSet([
-      extensionKey,
+    const pluginKey = resolvedKey || fallbackKey;
+    runtime[keyProperty] = pluginKey;
+    runtime[selectorsProperty] = normalizePluginSelectorSet([
+      pluginKey,
       fallbackKey,
       ...(Array.isArray(descriptor.selectors) ? descriptor.selectors : []),
     ]);
-
-    runtime[keyProperty] = extensionKey;
-    runtime[selectorsProperty] = selectors;
   }
   return Object.freeze(runtime);
 }
 
-export function createRunConfigExtensionPreparer({
+export function createRunConfigPluginPreparer({
   globalConfig = {},
   workspaceService = null,
-  loadedExtensions = null,
-  extensionRuntime = {},
+  loadedPlugins = null,
+  pluginRuntime = {},
   normalizeStringArray = null,
-  mergeModelExtensionOptions = null,
-  createExtensionResolveModelMessages = null,
-  createExtensionResolveMessageBlock = null,
-  createExtensionMarkMessagesSummarized = null,
+  mergePluginOptions = null,
+  createPluginResolveModelMessages = null,
+  createPluginResolveMessageBlock = null,
+  createPluginMarkMessagesSummarized = null,
   createDetachedSubSessionRunner = null,
   createGeneratedArtifactPersister = null,
   createScopedJsonWriter = null,
   createScopedEventLogger = null,
 } = {}) {
-  return new RunConfigExtensionPreparer({
+  return new RunConfigPluginPreparer({
     globalConfig,
     workspaceService,
-    loadedDynamicPlugins: loadedExtensions,
-    extensionRuntime,
+    loadedDynamicPlugins: loadedPlugins,
+    pluginRuntime,
     normalizeStringArray,
-    mergeModelExtensionOptions,
-    createExtensionResolveModelMessages,
-    createExtensionResolveMessageBlock,
-    createExtensionMarkMessagesSummarized,
+    mergePluginOptions,
+    createPluginResolveModelMessages,
+    createPluginResolveMessageBlock,
+    createPluginMarkMessagesSummarized,
     createDetachedSubSessionRunner,
     createGeneratedArtifactPersister,
     createScopedJsonWriter,

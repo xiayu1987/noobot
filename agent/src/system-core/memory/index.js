@@ -14,7 +14,7 @@ import { LongMemoryManager } from "./long-memory/index.js";
 import { ExperienceManager } from "./experience/index.js";
 import { normalizeModelContent } from "./utils/format.js";
 import { trimPromptPayloadByCharLimit } from "./utils/payload-trimmer.js";
-import { isAbortLikeError, throwIfAborted } from "./experience/workflow.js";
+import { isAbortLikeError, throwIfAborted } from "./experience/abort-control.js";
 import {
   MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
   MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,

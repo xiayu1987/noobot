@@ -54,10 +54,10 @@ const USER_OVERRIDE_DENY_PATHS = new Set([
   "tools.task_summary.maxToolLoopTurns",
   "tools.request_help.helpPromptLoopTurns",
   "tools.request_help.toolFailureHelpCount",
-  "plugins.workflow.timeoutMs",
-  "plugins.workflow.maxAutoTransitions",
-  "plugins.workflow.maxParallelNodeAgents",
-  "plugins.workflow.miniRunnerMaxTurns",
+  "plugins.botPlugin.timeoutMs",
+  "plugins.botPlugin.maxAutoTransitions",
+  "plugins.botPlugin.maxParallelNodeAgents",
+  "plugins.botPlugin.miniRunnerMaxTurns",
 ]);
 
 function stripDeniedPaths(rootKey = "", value) {

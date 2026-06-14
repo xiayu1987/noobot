@@ -57,7 +57,7 @@ const SETTLED_ATTACHMENT_SERVICE_ONLY_FILES = new Map(Object.entries({
     "multimodal image generation attachment persistence must use attachmentService.ingestGeneratedArtifacts",
   "agent/src/system-core/tools/connectors/connector-toolkit/tool-access-connector.js":
     "email connector attachment persistence must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/system-core/tools/workflow/agent-collab/collab-artifact-persist.js":
+  "agent/src/system-core/tools/collaboration/agent-collab/collab-artifact-persist.js":
     "ordinary agent-collab async result attachment persistence must use attachmentService.ingestGeneratedArtifacts",
 }));
 
@@ -120,9 +120,9 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/tools/execution/file-search.js": "file search public result schema uses filePath for searched workspace files",
   "agent/src/system-core/tools/execution/file-tools.js": "file tool public schema/results use filePath as user-facing workspace file address",
   "agent/src/system-core/tools/execution/file-tool.js": "file tool public input schema",
-  "agent/src/system-core/tools/workflow/agent-collab/collab-artifact-persist.js": "agent-collab async result output keeps attachmentMetas compatibility; ordinary save stays on attachmentService",
-  "agent/src/system-core/tools/workflow/agent-collab/collab-task-utils.js": "agent-collab payload compatibility",
-  "agent/src/system-core/tools/workflow/agent-collab/tool-wait-async-result.js": "agent-collab wait result compatibility",
+  "agent/src/system-core/tools/collaboration/agent-collab/collab-artifact-persist.js": "agent-collab async result output keeps attachmentMetas compatibility; ordinary save stays on attachmentService",
+  "agent/src/system-core/tools/collaboration/agent-collab/collab-task-utils.js": "agent-collab payload compatibility",
+  "agent/src/system-core/tools/collaboration/agent-collab/tool-wait-async-result.js": "agent-collab wait result compatibility",
 
   "client/noobot-chat/src/composables/infra/messageModel.js": "frontend message model keeps legacy fallback but consumes transfer first",
   "client/noobot-chat/src/composables/infra/transferEnvelope.js": "frontend semantic-transfer adapter maps envelope files to legacy display metas",

@@ -164,7 +164,7 @@ test("captureSessionToShortMemory skips injected messages", async () => {
             content: "注入消息",
             dialogProcessId: "d1",
             injectedMessage: true,
-            injectedBy: "harness",
+            injectedBy: "agentPlugin",
           },
         ],
       },

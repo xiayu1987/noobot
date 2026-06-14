@@ -3,25 +3,27 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionEngine } from "../../../src/system-core/bot-manage/session/session-execution-engine.js";
 
-test("_createExtensionResolveModelMessages reads dialogProcessId from execution context", () => {
+test("_createPluginResolveModelMessages reads dialogProcessId from execution context", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createExtensionResolveModelMessages({
-    harnessOptions: { contextWindowRecentMessageLimit: 50 },
+  const resolver = engine._createPluginResolveModelMessages({
+    agentPluginOptions: { contextWindowRecentMessageLimit: 50 },
   });
   const resolved = resolver({
     messages: [
       {
         role: "user",
-        content: "[来自harness外部模型输出/planning]\\nold",
+        content: "[agent-plugin-relay/planning]\\nold",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
+        injectedMessageType: "planning_relay",
         dialogProcessId: "dlg_old",
       },
       {
         role: "user",
-        content: "[来自harness外部模型输出/planning]\\nnew",
+        content: "[agent-plugin-relay/planning]\\nnew",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
+        injectedMessageType: "planning_relay",
         dialogProcessId: "dlg_new",
       },
       { role: "assistant", content: "normal" },
@@ -36,29 +38,31 @@ test("_createExtensionResolveModelMessages reads dialogProcessId from execution 
   });
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
-    ["[来自harness外部模型输出/planning]\\nnew", "normal"],
+    ["[agent-plugin-relay/planning]\\nnew", "normal"],
   );
 });
 
-test("_createExtensionResolveModelMessages falls back to latest message dialogProcessId", () => {
+test("_createPluginResolveModelMessages falls back to latest message dialogProcessId", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createExtensionResolveModelMessages({
-    harnessOptions: { contextWindowRecentMessageLimit: 50 },
+  const resolver = engine._createPluginResolveModelMessages({
+    agentPluginOptions: { contextWindowRecentMessageLimit: 50 },
   });
   const resolved = resolver({
     messages: [
       {
         role: "user",
-        content: "[来自harness外部模型输出/planning]\\nold",
+        content: "[agent-plugin-relay/planning]\\nold",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
+        injectedMessageType: "planning_relay",
         dialogProcessId: "dlg_old",
       },
       {
         role: "user",
-        content: "[来自harness外部模型输出/planning]\\nnew",
+        content: "[agent-plugin-relay/planning]\\nnew",
         injectedMessage: true,
-        injectedBy: "harness-plugin",
+        injectedBy: "agent-plugin",
+        injectedMessageType: "planning_relay",
         dialogProcessId: "dlg_new",
       },
       { role: "assistant", content: "normal", dialogProcessId: "dlg_new" },
@@ -67,14 +71,39 @@ test("_createExtensionResolveModelMessages falls back to latest message dialogPr
   });
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
-    ["[来自harness外部模型输出/planning]\\nnew", "normal"],
+    ["[agent-plugin-relay/planning]\\nnew", "normal"],
   );
 });
 
-test("_createExtensionResolveModelMessages no longer clips agent context to harness context window limit", () => {
+test("_createPluginResolveModelMessages accepts agentPluginOptions payload", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createExtensionResolveModelMessages({
-    harnessOptions: { contextWindowRecentMessageLimit: 2 },
+  const resolver = engine._createPluginResolveModelMessages({
+    agentPluginOptions: { contextWindowRecentMessageLimit: 1 },
+  });
+
+  const resolved = resolver({
+    messages: [
+      { role: "user", content: "legacy-compatible", dialogProcessId: "dlg_legacy" },
+    ],
+    ctx: {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dlg_legacy",
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    resolved.map((item = {}) => item.content),
+    ["legacy-compatible"],
+  );
+});
+
+test("_createPluginResolveModelMessages no longer clips agent context to plugin context window limit", () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const resolver = engine._createPluginResolveModelMessages({
+    agentPluginOptions: { contextWindowRecentMessageLimit: 2 },
   });
   const resolved = resolver({
     messages: [
@@ -98,10 +127,10 @@ test("_createExtensionResolveModelMessages no longer clips agent context to harn
 });
 
 
-test("_createExtensionResolveModelMessages uses main-flow blocks when available", () => {
+test("_createPluginResolveModelMessages uses main-flow blocks when available", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createExtensionResolveModelMessages({
-    harnessOptions: { contextWindowRecentMessageLimit: 2 },
+  const resolver = engine._createPluginResolveModelMessages({
+    agentPluginOptions: { contextWindowRecentMessageLimit: 2 },
   });
   const resolved = resolver({
     messages: [],
@@ -129,9 +158,9 @@ test("_createExtensionResolveModelMessages uses main-flow blocks when available"
   );
 });
 
-test("_createExtensionResolveModelMessages does not mutate source messages or messageBlocks when unsummarized", () => {
+test("_createPluginResolveModelMessages does not mutate source messages or messageBlocks when unsummarized", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const resolver = engine._createExtensionResolveModelMessages({ harnessOptions: {} });
+  const resolver = engine._createPluginResolveModelMessages({ agentPluginOptions: {} });
   const ctx = {
     messages: [
       { role: "system", content: "ctx-sys" },

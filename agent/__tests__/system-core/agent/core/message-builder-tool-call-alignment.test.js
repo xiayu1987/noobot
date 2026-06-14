@@ -106,14 +106,14 @@ test("buildContextMessages filters injected messages from non-current dialog", (
               role: "assistant",
               content: "当前对话注入",
               injectedMessage: true,
-              injectedBy: "harness-plugin",
+              injectedBy: "agent-plugin",
               dialogProcessId: "dlg_current",
             },
             {
               role: "assistant",
               content: "旧对话注入",
               injectedMessage: true,
-              injectedBy: "harness-plugin",
+              injectedBy: "agent-plugin",
               dialogProcessId: "dlg_old",
             },
           ],
@@ -188,7 +188,7 @@ test("buildContextMessages can disable main model recent window via context conf
   assert.equal(messages[messages.length - 1]?.content, "m-20");
 });
 
-test("buildContextMessages uses harness history recent limit when harness plugin is enabled", () => {
+test("buildContextMessages uses plugin history recent limit when harness plugin is enabled", () => {
   const history = Array.from({ length: 30 }, (_, index) => ({
     role: "assistant",
     content: `m-${index + 1}`,

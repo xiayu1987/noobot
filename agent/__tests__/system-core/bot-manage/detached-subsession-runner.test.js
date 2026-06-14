@@ -10,7 +10,7 @@ function createDefaultDeps(overrides = {}) {
     prepareRunConfigPayload: null,
     prepareAgentTurnExecutionPayload: null,
     runTurnPayload: null,
-    resolveWorkflowScopedDirPayload: null,
+    resolvePluginScopedDirPayload: null,
     persistDetachedSubSessionSnapshotPayload: null,
     assertDetachedSubSessionIsolationPayload: null,
     loadedWorkspacePath: "",
@@ -39,11 +39,11 @@ function createDefaultDeps(overrides = {}) {
       },
     },
     errorLogger: { name: "logger" },
-    extensionRuntime: {
-      harnessPluginKey: "harness",
-      workflowPluginKey: "workflow",
-      harnessPluginSelectors: new Set(["harness"]),
-      workflowPluginSelectors: new Set(["workflow"]),
+    pluginRuntime: {
+      agentPluginKey: "agentPlugin",
+      botPluginKey: "botPlugin",
+      agentPluginSelectors: new Set(["agentPlugin"]),
+      botPluginSelectors: new Set(["botPlugin"]),
     },
     mergeRunConfigWithPluginStrategy(payload = {}) {
       calls.mergePayload = payload;
@@ -60,10 +60,10 @@ function createDefaultDeps(overrides = {}) {
       calls.prepareRunConfigPayload = payload;
       return {
         ...payload.runConfig,
-        selectedPlugins: ["harness", "workflow"],
+        selectedPlugins: ["agentPlugin", "botPlugin"],
         plugins: {
-          harness: { enabled: true, mode: "on" },
-          workflow: { enabled: true, mode: "on" },
+          agentPlugin: { enabled: true, mode: "on" },
+          botPlugin: { enabled: true, mode: "on" },
         },
         hookManager: { ready: true },
         botHookManager: { ready: true },
@@ -83,8 +83,8 @@ function createDefaultDeps(overrides = {}) {
         },
       };
     },
-    resolveWorkflowScopedDir(payload = {}) {
-      calls.resolveWorkflowScopedDirPayload = payload;
+    resolvePluginScopedDir(payload = {}) {
+      calls.resolvePluginScopedDirPayload = payload;
       return "";
     },
     normalizeDetachedSubSessionMessage(message = {}, now = "") {
@@ -163,24 +163,24 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
       userInteractionBridge: bridge,
       runConfig: {
         base: true,
-        selectedPlugins: ["workflow"],
+        selectedPlugins: ["botPlugin"],
       },
     },
-    message: "  hello workflow  ",
+    message: "  hello bot plugin  ",
     attachmentMetas: [{ attachmentId: "att1" }],
     runConfigPatch: { patched: true },
     systemMessages: ["sys"],
     strategy: {
       sessionId: "sub1",
-      disabledPlugins: ["harness"],
+      disabledPlugins: ["agentPlugin"],
     },
     eventListener: { onEvent: (event) => events.push(event) },
   });
 
   assert.deepEqual(calls.mergePayload, {
-    baseRunConfig: { base: true, selectedPlugins: ["workflow"] },
+    baseRunConfig: { base: true, selectedPlugins: ["botPlugin"] },
     runConfigPatch: { patched: true },
-    disabledPlugins: ["harness"],
+    disabledPlugins: ["agentPlugin"],
   });
   assert.equal(calls.loadedWorkspacePath, "/tmp/workspace/u1");
   assert.equal(calls.prepareRunConfigPayload.userId, "u1");
@@ -203,16 +203,18 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.equal(buildContextPayload.userInteractionBridge, bridge);
   assert.equal(buildContextPayload.runConfig.systemRuntimePatch.childRunParentSessionId, "parent1");
   assert.equal(buildContextPayload.runConfig.systemRuntimePatch.durableParentSessionId, "parent1");
-  assert.equal(buildContextPayload.runConfig.systemRuntimePatch.detachedSessionScope, "workflow_node");
+  assert.equal(buildContextPayload.runConfig.systemRuntimePatch.detachedSessionScope, "bot_plugin_node");
 
   assert.equal(calls.runTurnPayload.errorLogger, deps.errorLogger);
-  assert.equal(calls.runTurnPayload.userMessage, "hello workflow");
+  assert.equal(calls.runTurnPayload.userMessage, "hello bot plugin");
   assert.equal(events[0].event, "plugin_runtime_resolved");
-  assert.equal(events[0].data.harness.enabled, true);
-  assert.equal(events[0].data.workflow.enabled, true);
-  assert.deepEqual(events[0].data.disabledPlugins, ["harness"]);
+  assert.equal(events[0].data.agentPlugin.enabled, true);
+  assert.equal(events[0].data.agentPlugin.mode, "on");
+  assert.equal(events[0].data.botPlugin.enabled, true);
+  assert.equal(events[0].data.botPlugin.mode, "on");
+  assert.deepEqual(events[0].data.disabledPlugins, ["agentPlugin"]);
 
-  assert.deepEqual(calls.resolveWorkflowScopedDirPayload, {
+  assert.deepEqual(calls.resolvePluginScopedDirPayload, {
     userId: "u1",
     relativeDir: "",
     absoluteDir: "",
@@ -220,7 +222,7 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.equal(calls.persistDetachedSubSessionSnapshotPayload, null);
   assert.equal(calls.assertDetachedSubSessionIsolationPayload.userId, "u1");
   assert.equal(calls.assertDetachedSubSessionIsolationPayload.sessionId, "sub1");
-  assert.equal(calls.assertDetachedSubSessionIsolationPayload.scope, "workflow_node_subsession");
+  assert.equal(calls.assertDetachedSubSessionIsolationPayload.scope, "bot_plugin_node_subsession");
 
   assert.equal(result.userId, "u1");
   assert.equal(result.sessionId, "sub1");
@@ -240,11 +242,11 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);
 });
 
-test("createDetachedSubSessionRunner persists workflow sub-session snapshot when output dir resolves", async () => {
+test("createDetachedSubSessionRunner persists bot plugin sub-session snapshot when output dir resolves", async () => {
   const { calls, deps } = createDefaultDeps({
-    resolveWorkflowScopedDir(payload = {}) {
-      calls.resolveWorkflowScopedDirPayload = payload;
-      return "/tmp/workflow/sub1";
+    resolvePluginScopedDir(payload = {}) {
+      calls.resolvePluginScopedDirPayload = payload;
+      return "/tmp/plugin/sub1";
     },
     agentRuntimeFacade: {
       async runTurn(payload = {}) {
@@ -280,19 +282,19 @@ test("createDetachedSubSessionRunner persists workflow sub-session snapshot when
     strategy: {
       sessionId: "sub1",
       dialogProcessId: "sub-dialog",
-      relativeDir: "workflow/sub1",
+      relativeDir: "plugin/sub1",
     },
     metadata: {
-      workflowNodeId: "node1",
+      pluginNodeId: "node1",
     },
   });
 
-  assert.deepEqual(calls.resolveWorkflowScopedDirPayload, {
+  assert.deepEqual(calls.resolvePluginScopedDirPayload, {
     userId: "u1",
-    relativeDir: "workflow/sub1",
+    relativeDir: "plugin/sub1",
     absoluteDir: "",
   });
-  assert.equal(calls.persistDetachedSubSessionSnapshotPayload.outputDir, "/tmp/workflow/sub1");
+  assert.equal(calls.persistDetachedSubSessionSnapshotPayload.outputDir, "/tmp/plugin/sub1");
   assert.equal(calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.sessionId, "sub1");
   assert.equal(calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.parentSessionId, "parent1");
   assert.equal(calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.caller, CALLER_ROLE.BOT);
@@ -333,8 +335,7 @@ test("createDetachedSubSessionRunner persists workflow sub-session snapshot when
     calls.persistDetachedSubSessionSnapshotPayload.executionPayload.logs[0].dialogProcessId,
     "sub-dialog",
   );
-  assert.equal(calls.persistDetachedSubSessionSnapshotPayload.metadata.workflowNodeId, "node1");
-  assert.equal(result.persisted.outputDir, "/tmp/workflow/sub1");
+  assert.equal(result.persisted.outputDir, "/tmp/plugin/sub1");
   assert.deepEqual(result.result.messages, [
     {
       role: "assistant",

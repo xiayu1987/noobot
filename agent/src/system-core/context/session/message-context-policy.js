@@ -5,6 +5,10 @@
  */
 
 import { resolveMessageDialogProcessId } from "./dialog-process-id-resolver.js";
+import {
+  isPluginRelayContent,
+  resolvePluginRelayInjectedMessageType,
+} from "./plugin-relay.js";
 
 
 const TASK_SUMMARY_TOOL_NAME = "task_summary";
@@ -171,12 +175,7 @@ export function isInjectedMessage(messageItem = {}) {
   const content = String(
     messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
   ).trim();
-  if (
-    content.startsWith("[来自harness外部模型输出/") ||
-    content.startsWith("[Relay from harness external model/")
-  ) {
-    return true;
-  }
+  if (isPluginRelayContent(content)) return true;
   return false;
 }
 
@@ -203,8 +202,8 @@ export function resolveInjectedMessageType(messageItem = {}) {
   const content = String(
     messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
   ).trim();
-  const relayMatch = content.match(/^\[(?:来自harness外部模型输出|Relay from harness external model)\/([^\]]+)\]/);
-  if (relayMatch?.[1]) return `harness_relay:${String(relayMatch[1] || "").trim()}`;
+  const relayType = resolvePluginRelayInjectedMessageType(content);
+  if (relayType) return relayType;
   const genericType = String(messageItem?.type || messageItem?.lc_kwargs?.type || "").trim();
   if (genericType && genericType !== "message") return genericType;
   const injectedBy = String(

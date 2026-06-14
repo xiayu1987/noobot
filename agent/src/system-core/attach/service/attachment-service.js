@@ -333,7 +333,7 @@ export class AttachmentService {
           sourceAttachmentPath: resolvedSourcePath,
           updatedSourceAttachment: updatedRecord,
           sessionIdHint: resolvedSessionIdHint,
-          sessionRoot: path.join(basePath, "runtime/workflow/session"),
+          sessionRoot: path.join(basePath, "runtime/plugin/session"),
         }),
       ]);
     }
