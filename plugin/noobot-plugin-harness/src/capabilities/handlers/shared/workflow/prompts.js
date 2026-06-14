@@ -6,7 +6,6 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { resolveCompletePlanChecklistText } from "../plan/checklist-context.js";
-import { parseSummaryItemsFromText } from "../plan/summary-text-protocol.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import {
   buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText,
@@ -405,32 +404,22 @@ export function buildAllPhaseAcceptanceReportSystemContents(options = {}) {
 
 export function buildAllSummaryReportSystemContents(options = {}) {
   const { locale, marker, data } = normalizePromptOptions(options);
-  const reportText = String(data.latestSummaryOverview ?? options?.latestSummaryOverview ?? "").trim();
+  const reportText = String(
+    data.latestCompleteSummaryText ??
+      options?.latestCompleteSummaryText ??
+      data.latestSummaryOverview ??
+      options?.latestSummaryOverview ??
+      "",
+  ).trim();
   if (!reportText) return [];
-  const items = parseSummaryItemsFromText(reportText);
-  if (!items.length) {
-    return [
-      [
-        String(marker || "").trim(),
-        translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SUMMARY_CHECKLIST_TITLE, { index: 1, total: 1 }),
-        "#1",
-        reportText,
-      ].filter(Boolean).join("\n"),
-    ];
-  }
-  return items.map((item = {}, index) => {
-    const content = `${Number(item?.id)}. ${String(item?.content || "").trim()}`.trim();
-    const total = items.length;
-    return [
+  return [
+    [
       String(marker || "").trim(),
-      translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SUMMARY_CHECKLIST_TITLE, {
-        index: index + 1,
-        total,
-      }),
-      `#${index + 1}`,
-      content,
-    ].filter(Boolean).join("\n");
-  });
+      translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.SUMMARY_CHECKLIST_TITLE, { index: 1, total: 1 }),
+      "#1",
+      reportText,
+    ].filter(Boolean).join("\n"),
+  ];
 }
 
 export function buildAcceptanceValidationRequestPromptText(options = {}) {

@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { ensureHarnessBucket } from "./deps.js";
-import { HARNESS_I18N_KEYSET, LOCALE, translateI18nText } from "./deps.js";
 import { mergeSummaryText } from "../shared/plan/summary-text-protocol.js";
 import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
+import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
 
 export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   const holder = ensureHarnessBucket(ctx);
@@ -70,82 +70,17 @@ export async function transferSummaryInjectionMessage(
   }
 }
 
-function escapeRegExp(value = "") {
-  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function resolveSummaryRelayPrefixPattern() {
-  const prefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
-    .map((locale) =>
-      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
-        purpose: "summary",
-      }),
-    )
-    .filter(Boolean)
-    .map(escapeRegExp);
-  return prefixes.length ? `(?:${prefixes.join("|")})` : "$^";
-}
-
-function stripSummaryRelayPrefix(content = "") {
-  return String(content || "")
-    .replace(new RegExp(`^${resolveSummaryRelayPrefixPattern()}\\s*`, "i"), "")
-    .trim();
-}
-
-function isSummaryRelayMessage(message = {}) {
-  const injectedType = String(
-    message?.injectedMessageType ||
-      message?.injected_message_type ||
-      message?.lc_kwargs?.injectedMessageType ||
-      message?.lc_kwargs?.injected_message_type ||
-      "",
-  ).trim();
-  if (injectedType === "separate_model_relay:summary") return true;
-  const content = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
-  return new RegExp(`^${resolveSummaryRelayPrefixPattern()}`, "i").test(content);
-}
-
-function resolveLatestSummaryRelayText(ctx = {}) {
-  const candidates = [
-    ...(Array.isArray(ctx?.messages) ? ctx.messages : []),
-    ...(Array.isArray(ctx?.agentContext?.payload?.messages?.history)
-      ? ctx.agentContext.payload.messages.history
-      : []),
-  ];
-  for (let index = candidates.length - 1; index >= 0; index -= 1) {
-    const message = candidates[index] || {};
-    if (!isSummaryRelayMessage(message)) continue;
-    const text = stripSummaryRelayPrefix(message?.content ?? message?.lc_kwargs?.content ?? "");
-    if (text) return text;
-  }
-  return "";
-}
-
-function resolveLatestSummaryOutputFullText(bucket = {}) {
-  const outputs = Array.isArray(bucket?.guidanceOutputs) ? bucket.guidanceOutputs : [];
-  for (let index = outputs.length - 1; index >= 0; index -= 1) {
-    const item = outputs[index] || {};
-    if (String(item?.purpose || "").trim() !== "summary") continue;
-    const content = String(item?.content || "").trim();
-    if (content) return content;
-  }
-  return "";
-}
-
 export function resolvePreviousSummaryContextText(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   const bucket = holder?.bucket || {};
-  const fullText = String(bucket?.summaryFullText || "").trim();
-  const outputFullText = resolveLatestSummaryOutputFullText(bucket);
-  const relayText = resolveLatestSummaryRelayText(ctx);
-  const overviewText = String(bucket?.summaryText || "").trim();
+  const latestCompleteSummaryText = resolveLatestCompleteSummaryText({ bucket, ctx });
   const paths = Array.isArray(bucket?.summaryDetailPaths)
     ? bucket.summaryDetailPaths.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
   const pathBlock = paths.length
     ? ["SUMMARY_DETAIL_PATHS:", ...paths.map((item) => `- ${item}`)].join("\n")
     : "";
-  return [fullText || outputFullText || relayText || overviewText, pathBlock]
+  return [latestCompleteSummaryText, pathBlock]
     .filter(Boolean)
     .join("\n\n")
     .trim();
