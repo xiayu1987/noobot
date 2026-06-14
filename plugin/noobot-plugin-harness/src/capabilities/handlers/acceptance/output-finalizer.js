@@ -60,24 +60,6 @@ function wrapHarnessCollapsibleSection({
   ].join("\n").trim();
 }
 
-function mergeAttachmentMetasForOutput(existing = [], incoming = []) {
-  const current = Array.isArray(existing) ? existing : [];
-  const next = Array.isArray(incoming) ? incoming : [];
-  if (!next.length) return current;
-  const keyOf = (item = {}) =>
-    String(item?.attachmentId || "").trim() ||
-    `${String(item?.name || "").trim()}|${String(item?.path || "").trim()}`;
-  const seen = new Set(current.map((item) => keyOf(item)).filter(Boolean));
-  const merged = [...current];
-  for (const item of next) {
-    const key = keyOf(item);
-    if (key && seen.has(key)) continue;
-    merged.push(item);
-    if (key) seen.add(key);
-  }
-  return merged;
-}
-
 function attachMetasToFinalOutputTurn(ctx = {}, metas = [], transferPayload = null) {
   if (!Array.isArray(metas) || !metas.length) return false;
   const normalizedTransferPayload = getTransferPayloadFromAttachmentMetas(
@@ -90,13 +72,9 @@ function attachMetasToFinalOutputTurn(ctx = {}, metas = [], transferPayload = nu
   for (let index = turnMessages.length - 1; index >= 0; index -= 1) {
     const item = turnMessages[index] || {};
     if (String(item?.role || "").trim() !== "assistant") continue;
-    turnMessages[index] = applyTransferPayloadToMessage({
-      ...item,
-      attachmentMetas: mergeAttachmentMetasForOutput(item?.attachmentMetas, metas),
-    }, normalizedTransferPayload);
+    turnMessages[index] = applyTransferPayloadToMessage({ ...item }, normalizedTransferPayload);
     return true;
   }
-  result.attachmentMetas = mergeAttachmentMetasForOutput(result?.attachmentMetas, metas);
   applyTransferPayloadToMessage(result, normalizedTransferPayload);
   return true;
 }
@@ -218,7 +196,7 @@ function buildFinalHarnessValidationSections({
   return [summarySection, acceptanceSection].filter(Boolean).join("\n\n").trim();
 }
 
-function buildOutputWithAcceptanceSection({
+async function buildOutputWithAcceptanceSection({
   ctx = {},
   original = "",
   locale = LOCALE.ZH_CN,
@@ -233,33 +211,26 @@ function buildOutputWithAcceptanceSection({
     ? translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.FORCED_HEADER)
     : "";
   const acceptanceSection = [forcedHeader, rendered].filter(Boolean).join("\n");
-  const semanticTransferContentSync =
-    ctx?.agentContext?.execution?.controllers?.runtime?.sharedTools?.semanticTransfer?.transferSemanticContentSync;
-  const semanticComposeFinalMessage =
-    ctx?.agentContext?.execution?.controllers?.runtime?.sharedTools?.semanticTransfer?.composeFinalMessage;
-  if (typeof semanticTransferContentSync === "function") {
-    const composed = String(
-      semanticTransferContentSync({
-        scenario: "harness_final",
+  const semanticTransferContent =
+    ctx?.agentContext?.execution?.controllers?.runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+  if (typeof semanticTransferContent === "function") {
+    try {
+      const transferred = await semanticTransferContent({
+        scenario: "harness",
+        strategy: "harness_final_message",
         resultInfo: originalText,
         detailRefs: [],
         validationInfo: acceptanceSection,
-      }) || "",
-    ).trim();
-    if (composed) return composed;
-  }
-  if (typeof semanticComposeFinalMessage === "function") {
-    const composed = String(
-      semanticComposeFinalMessage({
-        resultInfo: originalText,
-        detailRefs: [],
-        validationInfo: acceptanceSection,
-      }) || "",
-    ).trim();
-    if (composed) return composed;
+      });
+      const composed = String(transferred?.finalMessage || transferred?.message || "").trim();
+      if (composed) return composed;
+    } catch {
+      // Fall through to local compose fallback.
+    }
   }
   return [originalText, acceptanceSection].filter(Boolean).join(divider).trim();
 }
+
 
 export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -327,40 +298,14 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   let metas = [];
   let transferPayload = {};
   try {
-    const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferArtifacts;
-    const getTransferAttachmentMetas =
-      runtime?.sharedTools?.semanticTransfer?.getTransferAttachmentMetas;
-    if (typeof semanticPersist === "function") {
-      const persisted = await semanticPersist({
-        userId,
-        sessionId,
-        attachmentSource: "model",
-        generationSource: "harness_checklist",
-        fallbackMimeType: "text/plain",
-        source: "plugin",
-        reason: "harness_checklist",
-        artifacts,
-      });
-      metas = typeof getTransferAttachmentMetas === "function"
-        ? markHarnessPluginAttachmentMetas(
-            getTransferAttachmentMetas(
-              persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
-            ),
-          )
-        : [];
-      transferPayload = markHarnessPluginTransferPayload(
-        getTransferPayloadFromAttachmentMetas([], persisted),
-      );
-    } else {
-      const savedRecords = await attachmentService.ingestGeneratedArtifacts({
-        userId,
-        sessionId,
-        attachmentSource: "model",
-        generationSource: "harness_checklist",
-        artifacts,
-      });
-      metas = mapAttachmentRecordsToMetas(savedRecords);
-    }
+    const savedRecords = await attachmentService.ingestGeneratedArtifacts({
+      userId,
+      sessionId,
+      attachmentSource: "model",
+      generationSource: "harness_checklist",
+      artifacts,
+    });
+    metas = markHarnessPluginAttachmentMetas(mapAttachmentRecordsToMetas(savedRecords));
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
@@ -371,6 +316,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   }
 
   if (!metas.length) return false;
+  transferPayload = getTransferPayloadFromAttachmentMetas(metas, transferPayload);
   const attachedToInjectedMessage = attachMetasToLatestInjectedMessage(
     ctx,
     metas,
@@ -387,7 +333,6 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
           HARNESS_I18N_KEYSET.ACCEPTANCE_FINAL_OUTPUT.CHECKLIST_ARTIFACTS_GENERATED_NOTICE,
         ),
       dedupe: true,
-      attachmentMetas: metas,
       transferPayload,
     });
   }
@@ -445,7 +390,7 @@ export async function maybeForceAcceptanceAtFinalOutput(ctx = {}, meta = {}) {
       locale,
       reportText: renderFinalAcceptanceChecklistSummaryText(report, locale),
     });
-    const nextOutput = buildOutputWithAcceptanceSection({
+    const nextOutput = await buildOutputWithAcceptanceSection({
       ctx,
       original,
       locale,
@@ -507,7 +452,7 @@ export async function maybeRefreshAcceptanceReportBeforeFinalOutput(
   return true;
 }
 
-export function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
+export async function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -525,7 +470,7 @@ export function maybeAppendAcceptanceReportAtFinalOutput(ctx = {}) {
     locale,
     reportText: renderFinalAcceptanceChecklistSummaryText(report, locale),
   });
-  const nextOutput = buildOutputWithAcceptanceSection({
+  const nextOutput = await buildOutputWithAcceptanceSection({
     ctx,
     original,
     locale,

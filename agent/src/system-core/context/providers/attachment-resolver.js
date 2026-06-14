@@ -10,6 +10,7 @@ export async function resolveAttachments({
   attachmentService = null,
   runtimeBasePath = "",
   effectiveConfig = {},
+  inputAttachmentMetas = null,
   attachmentMetas = [],
   userId = "",
   sessionId = "",
@@ -19,13 +20,18 @@ export async function resolveAttachments({
     effectiveConfig?.attachments && typeof effectiveConfig.attachments === "object"
       ? effectiveConfig.attachments
       : {};
-  const hasIngestedRecords = (attachmentMetas || []).some(
+  const sourceAttachmentMetas = Array.isArray(inputAttachmentMetas)
+    ? inputAttachmentMetas
+    : Array.isArray(attachmentMetas)
+      ? attachmentMetas
+      : [];
+  const hasIngestedRecords = sourceAttachmentMetas.some(
     (attachmentItem) =>
       String(attachmentItem?.attachmentId || "").trim() &&
       String(attachmentItem?.path || "").trim(),
   );
   if (hasIngestedRecords) {
-    return (attachmentMetas || []).map((attachmentItem) => ({
+    return sourceAttachmentMetas.map((attachmentItem) => ({
       attachmentId: String(attachmentItem?.attachmentId || ""),
       sessionId: String(attachmentItem?.sessionId || sessionId || ""),
       attachmentSource: String(attachmentItem?.attachmentSource || "user").trim(),
@@ -53,7 +59,7 @@ export async function resolveAttachments({
     userId,
     sessionId: sessionId || "",
     attachmentSource: "user",
-    attachments: attachmentMetas,
+    attachments: sourceAttachmentMetas,
     attachmentPolicy,
   });
 }

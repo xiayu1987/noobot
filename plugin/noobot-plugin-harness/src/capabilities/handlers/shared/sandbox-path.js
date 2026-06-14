@@ -35,7 +35,6 @@ function buildResolverPayload(meta = {}, sourceMeta = {}, runtime = null, ctx = 
 function resolveViaRuntimeResolvers(sourceMeta = {}, runtime = null, ctx = {}) {
   const payload = buildResolverPayload(sourceMeta, sourceMeta, runtime, ctx);
   const resolvers = [
-    runtime?.sharedTools?.semanticTransfer?.resolveTransferFilePath,
     runtime?.sharedTools?.resolveAttachmentDisplayPath,
     runtime?.sharedTools?.resolveSandboxPath,
     runtime?.sharedTools?.toSandboxPath,
@@ -50,13 +49,6 @@ function resolveViaRuntimeResolvers(sourceMeta = {}, runtime = null, ctx = {}) {
 
 export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   const runtime = resolveRuntime(ctx);
-  const semanticDisplay = callResolver(
-    runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath,
-    meta,
-    { runtime, agentContext: ctx?.agentContext || null },
-  );
-  if (semanticDisplay) return semanticDisplay;
-
   const primaryFile = Array.isArray(meta?.files) && meta.files.length ? meta.files[0] : null;
   const sourceMeta = primaryFile?.attachmentMeta || meta?.attachmentMeta || meta;
   const directFilePath = String(

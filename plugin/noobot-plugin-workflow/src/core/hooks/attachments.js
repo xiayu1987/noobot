@@ -107,13 +107,6 @@ export function resolveNodeInputAttachmentMetas({ ctx = {}, semanticNode = {}, s
 export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
   const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const semanticDisplay = callAttachmentPathResolver(
-    runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath,
-    meta,
-    { runtime, agentContext },
-  );
-  if (semanticDisplay) return semanticDisplay;
-
   const primaryFile = Array.isArray(meta?.files) && meta.files.length ? meta.files[0] : null;
   const sourceMeta = primaryFile?.attachmentMeta || meta?.attachmentMeta || meta;
   const directFilePath = String(
@@ -156,7 +149,6 @@ function buildAttachmentPathResolverPayload(sourceMeta = {}, runtime = null, age
 function resolveViaRuntimeAttachmentPathResolvers(sourceMeta = {}, runtime = null, agentContext = null) {
   const payload = buildAttachmentPathResolverPayload(sourceMeta, runtime, agentContext);
   const resolvers = [
-    runtime?.sharedTools?.semanticTransfer?.resolveTransferFilePath,
     runtime?.sharedTools?.resolveAttachmentDisplayPath,
     runtime?.sharedTools?.resolveSandboxPath,
     runtime?.sharedTools?.toSandboxPath,
@@ -224,23 +216,43 @@ export function applyWorkflowTransferPayload(target = {}, payload = {}) {
   return target;
 }
 
+export function buildWorkflowTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
+  const metas = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item));
+  if (!metas.length) return normalizeWorkflowTransferPayload();
+  const files = metas.map((meta = {}, index) => ({
+    filePath: String(
+      meta?.sandboxPath ||
+        meta?.sandboxViewPath ||
+        meta?.relativePath ||
+        meta?.path ||
+        meta?.name ||
+        "",
+    ).trim(),
+    attachmentMeta: meta,
+    role: index === 0 ? "primary" : "secondary",
+  }));
+  const transferEnvelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: String(files[0]?.filePath || "").trim(),
+    files,
+  };
+  return normalizeWorkflowTransferPayload({
+    transferResult: { ok: true, status: "file", envelope: transferEnvelope },
+    transferEnvelope,
+    transferEnvelopes: [transferEnvelope],
+  });
+}
+
 export function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) {
   const transferPayload = normalizeWorkflowTransferPayload(payload);
   if (!transferPayload.transferEnvelopes.length && !transferPayload.transferEnvelope) return [];
-  const agentContext = resolveWorkflowAgentContext(ctx);
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const getTransferFiles = runtime?.sharedTools?.semanticTransfer?.getTransferFiles;
   const source = transferPayload.transferEnvelopes.length
     ? transferPayload.transferEnvelopes
     : [transferPayload.transferEnvelope];
-  if (typeof getTransferFiles === "function") {
-    try {
-      const files = getTransferFiles(source, { runtime, agentContext });
-      if (Array.isArray(files) && files.length) return files;
-    } catch {
-      // Fallback to transfer-envelope-only parsing below.
-    }
-  }
   return source.flatMap((envelope = {}) => {
     if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return [];
     if (Array.isArray(envelope.files) && envelope.files.length) {
@@ -266,20 +278,6 @@ export function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) 
 
 export function resolveWorkflowAttachmentMetasFromTransferPayload(payload = {}, ctx = {}) {
   const transferPayload = normalizeWorkflowTransferPayload(payload);
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const getTransferAttachmentMetas = runtime?.sharedTools?.semanticTransfer?.getTransferAttachmentMetas;
-  if (typeof getTransferAttachmentMetas === "function") {
-    try {
-      const metas = getTransferAttachmentMetas(
-        transferPayload.transferEnvelopes.length
-          ? transferPayload.transferEnvelopes
-          : transferPayload.transferEnvelope || [],
-      );
-      if (Array.isArray(metas) && metas.length) return metas;
-    } catch {
-      // Fallback below.
-    }
-  }
   return resolveWorkflowTransferFilesFromPayload(transferPayload, ctx)
     .map((item = {}) => item?.attachmentMeta)
     .filter((item) => item && typeof item === "object" && !Array.isArray(item));
@@ -299,17 +297,8 @@ export function resolveWorkflowCompatAttachmentMetas({
 }
 
 export function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {
-  const agentContext = resolveWorkflowAgentContext(ctx);
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const semanticDisplay = callAttachmentPathResolver(
-    runtime?.sharedTools?.semanticTransfer?.getTransferDisplayPath,
-    file,
-    { runtime, agentContext },
-  );
-  if (semanticDisplay) return semanticDisplay;
   return String(
     file?.pathView?.displayPath ||
-      file?.filePath ||
       resolveAttachmentDisplayPath(
         {
           ...(file?.attachmentMeta && typeof file.attachmentMeta === "object" ? file.attachmentMeta : {}),
@@ -320,6 +309,7 @@ export function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {
         },
         ctx,
       ) ||
+      file?.filePath ||
       "",
   ).trim();
 }

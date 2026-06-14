@@ -5,16 +5,13 @@
  */
 import { Buffer } from "node:buffer";
 import { logError } from "../../../tracking/console/logger.js";
-import {
-  getTransferAttachmentMetas,
-  persistTransferArtifacts,
-  TRANSFER_REASON,
-  TRANSFER_SOURCE,
-} from "../../../semantic-transfer/index.js";
+import { mapAttachmentRecordsToMetas } from "../../../attach/meta-ops.js";
 import { TASK_STATUS } from "../../../bot-manage/async/constants.js";
 import { MIME_TYPE } from "../../../constants/index.js";
 import { normalizeString } from "./collab-task-utils.js";
 import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
+
+const ASYNC_SUBTASK_RESULT_GENERATION_SOURCE = "async_subtask_result";
 
 function toSafeArtifactName(value = "") {
   return String(value || "")
@@ -110,24 +107,19 @@ export function createCollabArtifactPersistor({
       };
     });
 
-    let persisted = null;
     let attachmentMetas = [];
     try {
-      persisted = await persistTransferArtifacts({
-        runtime,
-        attachmentService,
+      const records = await attachmentService.ingestGeneratedArtifacts({
         userId,
         sessionId: attachmentSessionId,
         attachmentSource: "subtask",
-        generationSource: TRANSFER_REASON.ASYNC_SUBTASK_RESULT,
-        fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
-        source: TRANSFER_SOURCE.AGENT,
-        reason: TRANSFER_REASON.ASYNC_SUBTASK_RESULT,
+        generationSource: ASYNC_SUBTASK_RESULT_GENERATION_SOURCE,
         artifacts: generatedAttachments,
       });
-      attachmentMetas = getTransferAttachmentMetas(
-        persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
-      );
+      attachmentMetas = mapAttachmentRecordsToMetas(records, {
+        fallbackMimeType: MIME_TYPE.TEXT_MARKDOWN,
+        fallbackGenerationSource: ASYNC_SUBTASK_RESULT_GENERATION_SOURCE,
+      });
     } catch (error) {
       logError("[agent-collab-tool] persistCompletedTaskResultsAsAttachments failed", {
         containerId: String(container?.id || ""),
@@ -150,21 +142,11 @@ export function createCollabArtifactPersistor({
         },
       });
     }
-    const transferEnvelope =
-      persisted?.envelope && typeof persisted.envelope === "object" && !Array.isArray(persisted.envelope)
-        ? persisted.envelope
-        : persisted?.result?.envelope && typeof persisted.result.envelope === "object" && !Array.isArray(persisted.result.envelope)
-          ? persisted.result.envelope
-          : null;
-    const transferResult =
-      persisted?.result && typeof persisted.result === "object" && !Array.isArray(persisted.result)
-        ? persisted.result
-        : null;
     return {
       attachmentMetas,
-      transferResult,
-      transferEnvelope,
-      transferEnvelopes: transferEnvelope ? [transferEnvelope] : [],
+      transferResult: null,
+      transferEnvelope: null,
+      transferEnvelopes: [],
     };
   };
 }

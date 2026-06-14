@@ -32,7 +32,8 @@ test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores"
   assert.equal(runtime.runConfig.streaming, false);
   assert.equal(typeof runtime.currentTurnMessages.push, "function");
   assert.equal(typeof runtime.currentTurnTasks.push, "function");
-  assert.deepEqual(runtime.attachmentMetas, [{ attachmentId: "att_1" }]);
+  assert.deepEqual(runtime.inputAttachmentMetas, [{ attachmentId: "att_1" }]);
+  assert.deepEqual(runtime.attachmentMetas, []);
 });
 
 test("initializeRuntimeEnvironment wires shared tools and connector runtime", async () => {
@@ -72,7 +73,7 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.equal(typeof runtime.sharedTools.pathMapper?.toSandboxPath, "function");
   assert.equal(typeof runtime.sharedTools.pathMapper?.toHostPath, "function");
   assert.equal(typeof runtime.sharedTools.semanticTransfer?.transferSemanticContent, "function");
-  assert.equal(typeof runtime.sharedTools.semanticTransfer?.transferSemanticContentSync, "function");
+  assert.equal(runtime.sharedTools.semanticTransfer?.transferSemanticContentSync, undefined);
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.encryptBySessionId, "function");
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.decryptBySessionId, "function");
   assert.equal(
@@ -132,19 +133,10 @@ test("initializeRuntimeEnvironment passes semantic-transfer strict envelope vali
   });
   await initializeRuntimeEnvironment(runtime);
   const semanticTransfer = runtime.sharedTools.semanticTransfer || {};
-  assert.equal(semanticTransfer.resolveStrictEnvelopeValidation(), true);
-  assert.throws(
-    () => semanticTransfer.validateTransferEnvelope({ protocol: "x" }),
-    /invalid transfer envelope/i,
-  );
-  assert.throws(
-    () =>
-      semanticTransfer.normalizeTransferEnvelopesWithPolicy(
-        [{ filePath: "/workspace/legacy.txt" }],
-        { enforceProtocol: true },
-      ),
-    /invalid transfer envelopes/i,
-  );
+  assert.equal(typeof semanticTransfer.transferSemanticContent, "function");
+  assert.equal(semanticTransfer.resolveStrictEnvelopeValidation, undefined);
+  assert.equal(semanticTransfer.validateTransferEnvelope, undefined);
+  assert.equal(semanticTransfer.normalizeTransferEnvelopesWithPolicy, undefined);
 });
 
 test("initializeRuntimeEnvironment wraps userInteractionBridge and decrypts encrypted response", async () => {

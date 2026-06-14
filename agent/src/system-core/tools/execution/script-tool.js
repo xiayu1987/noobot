@@ -33,7 +33,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
 import { logDebug, logWarn } from "../../tracking/console/logger.js";
-import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/index.js";
+import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/core/constants.js";
 import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
 
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
@@ -596,7 +596,7 @@ export function createScriptTool({ agentContext }) {
           try {
             const transferred = await transferSemanticContent({
               scenario: "tool",
-              direction: "input",
+              strategy: "tool_input",
               text: normalizedCommand,
               inlineMaxChars: MAX_SCRIPT_COMMAND_CHARS,
               name: "execute-script-command.tool-input.sh",

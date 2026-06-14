@@ -28,7 +28,7 @@ test("acceptance report includes summary detail paths", () => {
   assert.match(String(text), /runtime\/summary\/detail-1\.md/);
 });
 
-test("before_final_output appends last acceptance report text to final output once", () => {
+test("before_final_output appends last acceptance report text to final output once", async () => {
   const report = buildAcceptanceReport({
     bucket: {
       planText: "1. 主计划一",
@@ -60,7 +60,7 @@ test("before_final_output appends last acceptance report text to final output on
       },
     },
   };
-  const first = maybeAppendAcceptanceReportAtFinalOutput(ctx);
+  const first = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
   assert.equal(first, true);
   assert.match(String(ctx?.result?.output || ""), /\n\n---\n/);
   assert.match(
@@ -81,7 +81,7 @@ test("before_final_output appends last acceptance report text to final output on
     String(ctx?.result?.turnMessages?.[1]?.content || ""),
     /\[Harness-验收\]/,
   );
-  const second = maybeAppendAcceptanceReportAtFinalOutput(ctx);
+  const second = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
   assert.equal(second, false);
 });
 
@@ -257,7 +257,7 @@ test("semantic acceptance fallback keeps phase/signal status when semantic text 
   assert.equal(checklist[0]?.status, "completed");
 });
 
-test("before_final_output prepends latest complete summary before acceptance checklist", () => {
+test("before_final_output prepends latest complete summary before acceptance checklist", async () => {
   const report = buildAcceptanceReport({
     bucket: {
       planText: "1. 主计划一",
@@ -288,7 +288,7 @@ test("before_final_output prepends latest complete summary before acceptance che
     },
   };
 
-  const appended = maybeAppendAcceptanceReportAtFinalOutput(ctx);
+  const appended = await maybeAppendAcceptanceReportAtFinalOutput(ctx);
   assert.equal(appended, true);
   const output = String(ctx?.result?.output || "");
   const summaryIndex = output.indexOf("## 最后一次完整小结");

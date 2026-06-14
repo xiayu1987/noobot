@@ -297,6 +297,7 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
   assert.equal(typeof message?.transferEnvelope, "object");
   assert.equal(Array.isArray(message?.transferEnvelopes), true);
   assert.equal(message.transferEnvelopes.length > 0, true);
+  assert.equal(message?.attachmentMetas, undefined);
 });
 
 test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", async () => {

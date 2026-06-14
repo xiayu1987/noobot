@@ -13,10 +13,8 @@ import {
   resolveDialogProcessId,
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
-import {
-  compactToolResultTextForModel,
-  getTransferAttachmentMetas,
-} from "../../semantic-transfer/index.js";
+import { compactToolResultTextForModel } from "../../semantic-transfer/core/compact.js";
+import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
 
 export function normalizePluginSelectorSet(keys = []) {
   return new Set(normalizeTrimmedStringList(keys));

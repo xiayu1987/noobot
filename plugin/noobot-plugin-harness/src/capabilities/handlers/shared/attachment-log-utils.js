@@ -226,17 +226,12 @@ export function attachMetasToLatestInjectedMessage(ctx = {}, metas = [], transfe
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const item = messages[index] || {};
       if (!isHarnessInjectedMessage(item)) continue;
-      messages[index] = applyTransferPayloadToMessage({
-        ...item,
-        attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
-      }, normalizedTransferPayload);
+      messages[index] = applyTransferPayloadToMessage({ ...item }, normalizedTransferPayload);
       if (candidate.isCtxMessages) {
         const turnStore = resolveCurrentTurnMessagesStore(ctx);
         if (turnStore && typeof turnStore.updateLast === "function") {
           turnStore.updateLast(
-            applyTransferPayloadToMessage({
-              attachmentMetas: mergeAttachmentMetas(item?.attachmentMetas, metas),
-            }, normalizedTransferPayload),
+            applyTransferPayloadToMessage({}, normalizedTransferPayload),
             (messageItem = {}) => isHarnessInjectedMessage(messageItem),
           );
         }
@@ -312,8 +307,6 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
   const attachmentService = runtime?.attachmentService || null;
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  const semanticPersist = runtime?.sharedTools?.semanticTransfer?.persistTransferFile;
-  const getTransferAttachmentMetas = runtime?.sharedTools?.semanticTransfer?.getTransferAttachmentMetas;
   const text = String(content || "").trim();
   if (!text) return [];
   const userId = String(
@@ -326,7 +319,8 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   try {
     if (typeof transferSemanticContent === "function") {
       const staged = await transferSemanticContent({
-        scenario: "harness_stage",
+        scenario: "harness",
+        strategy: "harness_stage_message",
         summary: "",
         detail: text,
         name: buildCapabilityArtifactName({ purpose }),
@@ -341,11 +335,6 @@ export async function saveCapabilityOutputAsTransferArtifacts(
           sessionId,
         },
       });
-      if (typeof getTransferAttachmentMetas === "function") {
-        return markHarnessPluginAttachmentMetas(
-          getTransferAttachmentMetas(staged?.transferEnvelopes || staged?.transferEnvelope || []),
-        );
-      }
       return markHarnessPluginAttachmentMetas(extractAttachmentMetasFromTransferPayload(staged));
     }
     const artifact = {
@@ -353,27 +342,6 @@ export async function saveCapabilityOutputAsTransferArtifacts(
       mimeType: "text/markdown",
       contentBase64: Buffer.from(text, "utf8").toString("base64"),
     };
-    if (typeof semanticPersist === "function") {
-      const persisted = await semanticPersist({
-        userId,
-        sessionId,
-        content: text,
-        name: artifact.name,
-        mimeType: artifact.mimeType,
-        attachmentSource: "model",
-        generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
-        source: "plugin",
-        reason: String(purpose || "harness_capability_output").trim(),
-      });
-      if (typeof getTransferAttachmentMetas === "function") {
-        return markHarnessPluginAttachmentMetas(
-          getTransferAttachmentMetas(
-            persisted?.transferEnvelopes || persisted?.transferEnvelope || persisted?.envelope || [],
-          ),
-        );
-      }
-      return markHarnessPluginAttachmentMetas(extractAttachmentMetasFromTransferPayload(persisted));
-    }
     if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
       return [];
     }
@@ -430,7 +398,6 @@ export function relaySeparateModelOutputAsUserMessage(
     role: "user",
     content: `${prefix}\n${text}`,
     injectedMessageType: `separate_model_relay:${String(purpose || "unknown").trim() || "unknown"}`,
-    attachmentMetas: relayAttachmentMetas,
     ...resolvedTransferPayload,
     injectAt: "append",
     dedupe,

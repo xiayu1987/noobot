@@ -12,10 +12,8 @@ import {
 import { tEngine } from "../i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot-manage/config/constants.js";
 import { resolveMainModelFinalMessages } from "../../../session/utils/context-window-normalizer.js";
-import {
-  compactToolResultTextForModel,
-  getTransferAttachmentMetas,
-} from "../../../semantic-transfer/index.js";
+import { compactToolResultTextForModel } from "../../../semantic-transfer/core/compact.js";
+import { getTransferAttachmentMetas } from "../../../semantic-transfer/storage/consumer.js";
 import {
   resolveDialogProcessIdFromContext,
   resolveDialogProcessId,
@@ -136,6 +134,7 @@ function resolveAttachmentMetas(msg = {}, fallbackAttachmentMetas = []) {
     ].filter(Boolean),
   );
   if (transferAttachmentMetas.length) return transferAttachmentMetas;
+  if (Array.isArray(msg?.inputAttachmentMetas)) return msg.inputAttachmentMetas;
   if (Array.isArray(msg?.attachmentMetas)) return msg.attachmentMetas;
   return Array.isArray(fallbackAttachmentMetas) ? fallbackAttachmentMetas : [];
 }
@@ -147,7 +146,10 @@ function buildHumanMessageContent(msg = {}, fallbackAttachmentMetas = []) {
 }
 
 function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
-  const attachmentMetas = resolveAttachmentMetas(msg, fallbackMeta?.attachmentMetas || []);
+  const fallbackAttachments = Array.isArray(fallbackMeta?.inputAttachmentMetas)
+    ? fallbackMeta.inputAttachmentMetas
+    : fallbackMeta?.attachmentMetas || [];
+  const attachmentMetas = resolveAttachmentMetas(msg, fallbackAttachments);
   const fallbackParentSessionId = resolveParentSessionId({
     runtime,
     parentSessionId: fallbackMeta?.parentSessionId,
@@ -190,7 +192,12 @@ function buildUserMetaInfoContent(runtime = {}, msg = {}, fallbackMeta = {}) {
 }
 
 function buildHumanMessagesForUser(runtime = {}, msg = {}, fallbackMeta = {}) {
-  const contentText = buildHumanMessageContent(msg, fallbackMeta?.attachmentMetas || []);
+  const contentText = buildHumanMessageContent(
+    msg,
+    Array.isArray(fallbackMeta?.inputAttachmentMetas)
+      ? fallbackMeta.inputAttachmentMetas
+      : fallbackMeta?.attachmentMetas || [],
+  );
   const isFrontendUserMessage = msg?.frontendUserMessage === true;
   const contentMessage = isFrontendUserMessage
     ? new HumanMessage({
@@ -307,7 +314,12 @@ function buildHistoryMessages({
     } else {
       history.push(
         new HumanMessage({
-          content: buildHumanMessageContent(msg, fallbackUserMeta?.attachmentMetas || []),
+          content: buildHumanMessageContent(
+            msg,
+            Array.isArray(fallbackUserMeta?.inputAttachmentMetas)
+              ? fallbackUserMeta.inputAttachmentMetas
+              : fallbackUserMeta?.attachmentMetas || [],
+          ),
           additional_kwargs: msg?.frontendUserMessage === true ? { frontendUserMessage: true } : {},
         }),
       );
@@ -331,9 +343,11 @@ export function buildContextMessageBlocks(
     parentDialogProcessId: String(
       systemRuntime?.parentDialogProcessId || "",
     ).trim(),
-    attachmentMetas: Array.isArray(runtime?.attachmentMetas)
-      ? runtime.attachmentMetas
-      : [],
+    inputAttachmentMetas: Array.isArray(runtime?.inputAttachmentMetas)
+      ? runtime.inputAttachmentMetas
+      : Array.isArray(runtime?.attachmentMetas)
+        ? runtime.attachmentMetas
+        : [],
   };
   const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
     ? agentContext.payload.messages.system
@@ -362,7 +376,7 @@ export function buildContextMessageBlocks(
       content: normalizedCurrentUserMessage,
       frontendUserMessage: true,
       userName: fallbackUserMeta.userName,
-      attachmentMetas: fallbackUserMeta.attachmentMetas,
+      inputAttachmentMetas: fallbackUserMeta.inputAttachmentMetas,
       sessionId: fallbackUserMeta.sessionId,
       parentSessionId: fallbackUserMeta.parentSessionId,
       dialogProcessId: fallbackUserMeta.dialogProcessId,

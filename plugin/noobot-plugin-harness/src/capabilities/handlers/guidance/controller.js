@@ -8,6 +8,7 @@ import {
   CAPABILITY_DOMAIN,
   HARNESS_I18N_KEYSET,
   LOCALE,
+  getTransferPayloadFromAttachmentMetas,
   saveCapabilityOutputAsTransferArtifacts,
   relaySeparateModelOutputAsUserMessage,
   ensureHarnessBucket,
@@ -35,6 +36,7 @@ import {
   recordLatestSummaryFullText,
   recordSummaryDetailAttachmentMetas,
   shouldSaveSummaryDetailToAttachment,
+  transferSummaryInjectionMessage,
 } from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
@@ -230,14 +232,21 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
             purpose: "summary_detail_path",
             content: detailPathRelay,
             dedupe: true,
-            attachmentMetas: detailAttachmentMetas,
+            transferPayload: getTransferPayloadFromAttachmentMetas(detailAttachmentMetas),
           });
         }
         if (!saveDetailToAttachment && rawSummaryText) {
+          const summaryInjectionContent = await transferSummaryInjectionMessage(ctx, {
+            fullText: rawSummaryText,
+            summaryText: summaryOverviewText,
+            detailText: summaryDetailAttachmentText,
+            injectMode: "full",
+            meta,
+          });
           relaySeparateModelOutputAsUserMessage(ctx, {
             locale,
             purpose: "summary",
-            content: rawSummaryText,
+            content: summaryInjectionContent || rawSummaryText,
             dedupe: true,
           });
         }

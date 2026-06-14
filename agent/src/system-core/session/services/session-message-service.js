@@ -8,7 +8,7 @@ import {
   resolveDialogProcessIdFromContext,
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
-import { getTransferAttachmentMetas } from "../../semantic-transfer/index.js";
+import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
 
 function dedupeAttachmentMetas(attachmentMetas = []) {
   const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];

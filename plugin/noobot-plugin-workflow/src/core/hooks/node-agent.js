@@ -27,6 +27,7 @@ import {
   isWorkflowAbortError,
   resolveWorkflowAbortSignal,
   resolveWorkflowParentRunConfig,
+  resolveWorkflowRuntimeFromContext,
   throwIfWorkflowAborted,
   withTimeout,
 } from "./runtime.js";
@@ -115,7 +116,7 @@ export function buildWorkflowUpstreamAttachmentResults({
     .filter(Boolean);
 }
 
-export function buildWorkflowUpstreamAttachmentSystemMessage({
+export async function buildWorkflowUpstreamAttachmentSystemMessage({
   options = {},
   ctx = {},
   pendingStep = {},
@@ -210,7 +211,7 @@ export function buildWorkflowUpstreamAttachmentSystemMessage({
     pendingStep?.nodeId ||
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
   ).trim();
-  return [
+  const message = [
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_ATTACHMENTS_TITLE),
     "",
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_LINE, { name: pendingName }),
@@ -223,6 +224,26 @@ export function buildWorkflowUpstreamAttachmentSystemMessage({
     lines.length ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_RESULT_TITLE) : "",
     ...lines,
   ].join("\n");
+  if (!failureLines.length) return message;
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
+  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+  if (typeof transferSemanticContent !== "function") return message;
+  try {
+    const transferred = await transferSemanticContent({
+      scenario: "workflow",
+      strategy: "workflow_failure_propagation",
+      content: message,
+      meta: {
+        pendingNodeId: String(pendingStep?.nodeId || "").trim(),
+        pendingNodeName: pendingName,
+        failureCount: failureLines.length,
+      },
+    });
+    return String(transferred?.injectionMessage || message).trim() || message;
+  } catch {
+    return message;
+  }
+
 }
 
 export function buildWorkflowNodeInstruction(step = {}) {
@@ -342,7 +363,7 @@ export async function runNodeAgent({
     attachmentMetas: nodeInputAttachmentMetas,
     semanticNode,
   });
-  const upstreamAttachmentSystemMessage = buildWorkflowUpstreamAttachmentSystemMessage({
+  const upstreamAttachmentSystemMessage = await buildWorkflowUpstreamAttachmentSystemMessage({
     options,
     ctx,
     pendingStep,

@@ -42,9 +42,6 @@ export function buildWorkflowNodeSessions({
         rootSessionId: String(ctx?.sessionId || "").trim(),
         dialogId: String(item?.nodeDialogId || "").trim(),
         sessionId: String(item?.nodeSessionId || "").trim(),
-        attachmentMetas: Array.isArray(item?.nodeResultAttachmentMetas)
-          ? item.nodeResultAttachmentMetas
-          : [],
         transferEnvelope:
           item?.nodeResultTransferEnvelope && typeof item.nodeResultTransferEnvelope === "object"
             ? item.nodeResultTransferEnvelope
@@ -122,9 +119,6 @@ export function enrichWorkflowPayload({
   });
   workflowPayload.transferEnvelopes = resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns);
   workflowPayload.transferEnvelope = workflowPayload.transferEnvelopes[0] || null;
-  // Legacy mirror field for existing consumers; transfer* remains canonical.
-  workflowPayload.attachmentMetas = workflowAttachmentMetas;
-
   return {
     workflowPayload,
     workflowAttachmentMetas,

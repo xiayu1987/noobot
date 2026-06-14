@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { mergeAttachmentMetas, mapAttachmentRecordsToMetas } from "./meta-ops.js";
+import {
+  buildTransferPayloadFromAttachmentMetas,
+  filterSemanticTransferAttachmentMetas,
+  mergeAttachmentMetas,
+  mapAttachmentRecordsToMetas,
+} from "./meta-ops.js";
 import { DEFAULT_MIME_TYPE } from "./constants.js";
 
 /**
@@ -45,6 +50,11 @@ export function appendAttachmentMetasToRuntimeAndTurn(
   });
 
   if (mappedMetas.length === 0) return;
+  const semanticTransferMetas = filterSemanticTransferAttachmentMetas(mappedMetas);
+  const ordinaryAttachmentMetas = mappedMetas.filter(
+    (item) => !semanticTransferMetas.includes(item),
+  );
+  const transferPayload = buildTransferPayloadFromAttachmentMetas(semanticTransferMetas);
 
   // 更新 runtime
   runtime.attachmentMetas = mergeAttachmentMetas(
@@ -52,40 +62,60 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     mappedMetas,
   );
 
+  const applyAttachmentPayload = (target = {}) => {
+    const existingEnvelope = target?.transferEnvelope && typeof target.transferEnvelope === "object"
+      ? target.transferEnvelope
+      : target?.transferResult?.envelope && typeof target.transferResult.envelope === "object"
+        ? target.transferResult.envelope
+        : null;
+    const existingEnvelopes = Array.isArray(target?.transferEnvelopes)
+      ? target.transferEnvelopes
+      : existingEnvelope
+        ? [existingEnvelope]
+        : [];
+    const mergedEnvelopes = [...existingEnvelopes, ...transferPayload.transferEnvelopes];
+    const primaryEnvelope = existingEnvelope || transferPayload.transferEnvelope || mergedEnvelopes[0] || null;
+    return {
+      ...(target || {}),
+      ...(target?.transferResult
+        ? { transferResult: target.transferResult }
+        : transferPayload.transferResult
+          ? { transferResult: transferPayload.transferResult }
+          : {}),
+      ...(primaryEnvelope ? { transferEnvelope: primaryEnvelope } : {}),
+      ...(mergedEnvelopes.length ? { transferEnvelopes: mergedEnvelopes } : {}),
+      ...(ordinaryAttachmentMetas.length
+        ? {
+            attachmentMetas: mergeAttachmentMetas(
+              Array.isArray(target?.attachmentMetas) ? target.attachmentMetas : [],
+              ordinaryAttachmentMetas,
+            ),
+          }
+        : { attachmentMetas: undefined }),
+    };
+  };
+
   // 更新 turn（支持当前 turn store / 普通对象 / 数组）
   const isTurnStore =
     turn &&
     typeof turn === "object" &&
     typeof turn.updateLast === "function";
   if (isTurnStore) {
-    let existingAttachmentMetas = [];
-    if (typeof turn.toArray === "function") {
-      const turnItems = turn.toArray();
-      const lastItem = Array.isArray(turnItems)
-        ? turnItems[turnItems.length - 1] || {}
-        : {};
-      existingAttachmentMetas = Array.isArray(lastItem?.attachmentMetas)
-        ? lastItem.attachmentMetas
-        : [];
-    }
-    const mergedAttachmentMetas = mergeAttachmentMetas(
-      existingAttachmentMetas,
-      mappedMetas,
-    );
-    turn.updateLast({
-      attachmentMetas: mergedAttachmentMetas,
-    });
+    const turnItems = typeof turn.toArray === "function" ? turn.toArray() : [];
+    const lastItem = Array.isArray(turnItems) && turnItems.length
+      ? turnItems[turnItems.length - 1] || {}
+      : {};
+    turn.updateLast(applyAttachmentPayload(lastItem));
     return;
   }
   if (Array.isArray(turn)) {
     if (!turn.length) return;
     const lastIndex = turn.length - 1;
     const lastItem = turn[lastIndex] || {};
-    turn[lastIndex] = {
-      ...lastItem,
-      attachmentMetas: mergeAttachmentMetas(lastItem?.attachmentMetas, mappedMetas),
-    };
+    turn[lastIndex] = applyAttachmentPayload(lastItem);
+    if (!ordinaryAttachmentMetas.length) delete turn[lastIndex].attachmentMetas;
     return;
   }
-  turn.attachmentMetas = mergeAttachmentMetas(turn.attachmentMetas, mappedMetas);
+  Object.assign(turn, applyAttachmentPayload(turn));
+  if (!ordinaryAttachmentMetas.length) delete turn.attachmentMetas;
 }

@@ -142,6 +142,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
 
   engine._buildContextBuilder = ({
     runConfig = {},
+    inputAttachmentMetas = [],
     attachmentMetas = [],
     sessionId = "",
     parentSessionId = "",
@@ -149,6 +150,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   } = {}) => {
     capturedBuildContextInput = {
       runConfig,
+      inputAttachmentMetas,
       attachmentMetas,
       sessionId,
       parentSessionId,
@@ -156,13 +158,16 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     };
     return {
       async buildInitialContext({ dialogProcessId = "" } = {}) {
-        const firstIncoming = Array.isArray(attachmentMetas) ? attachmentMetas[0] || {} : {};
+        const effectiveAttachmentMetas = Array.isArray(inputAttachmentMetas) && inputAttachmentMetas.length
+          ? inputAttachmentMetas
+          : attachmentMetas;
+        const firstIncoming = Array.isArray(effectiveAttachmentMetas) ? effectiveAttachmentMetas[0] || {} : {};
         return {
           execution: {
             controllers: {
               runtime: {
                 runtimeModel: String(runConfig?.runtimeModel || ""),
-                attachmentMetas: [
+                inputAttachmentMetas: [
                   {
                     attachmentId: "att-in-1",
                     sessionId,
@@ -174,6 +179,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
                     relativePath: "input.png",
                   },
                 ],
+                attachmentMetas: [],
                 systemRuntime: {
                   dialogProcessId,
                 },
@@ -232,7 +238,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     ["scenario", "system_runtime", "base_prompt", "services", "mcp_servers"],
   );
   assert.equal(
-    capturedBuildContextInput?.attachmentMetas?.[0]?.name,
+    capturedBuildContextInput?.inputAttachmentMetas?.[0]?.name,
     "input.png",
     "入口附件应透传到 context 构建阶段",
   );
@@ -250,6 +256,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(finalAssistantTurn.modelAlias, "anthropic");
   assert.equal(finalAssistantTurn.modelName, "gpt-4.1-mini");
   assert.equal(finalAssistantTurn.attachmentMetas?.[0]?.attachmentId, "att-out-1");
+  assert.equal(finalAssistantTurn.transferEnvelopes, undefined);
 
   assert.equal(savedCurrentTurnTasksPayload?.currentTurnTasks?.length, 1);
   assert.equal(result.answer, "已切换模型并生成附件");

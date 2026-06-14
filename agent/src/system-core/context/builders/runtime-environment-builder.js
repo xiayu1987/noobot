@@ -29,30 +29,7 @@ import {
   resolveSandboxPath,
 } from "../../utils/sandbox-path-resolver.js";
 import {
-  composeFinalMessage,
-  directInput,
-  directOutput,
-  fileInput,
-  fileOutput,
-  getPrimaryTransferFile,
-  getTransferAttachmentMetas,
-  getTransferDisplayPath,
-  getTransferFiles,
-  materializeOutput,
-  materializeOutputResult,
-  normalizeTransfer,
-  normalizeTransferEnvelopesWithPolicy,
-  normalizeTransferPolicy,
-  processStageMessage,
-  isValidTransferEnvelope,
-  persistTransferArtifacts,
-  persistTransferFile,
-  resolveTransferFilePath,
   transferSemanticContent,
-  transferSemanticContentSync,
-  transferSubAgentMessages,
-  transferToolMessage,
-  validateTransferEnvelope,
 } from "../../semantic-transfer/index.js";
 
 
@@ -106,6 +83,7 @@ export function buildRuntimeContext({
   parentAsyncResultContainer = null,
   runConfig = {},
   systemRuntime = {},
+  inputAttachmentMetas = null,
   attachmentMetas = [],
 } = {}) {
   const passthroughSharedTools =
@@ -151,7 +129,15 @@ export function buildRuntimeContext({
     systemRuntime: systemRuntime && typeof systemRuntime === "object" ? systemRuntime : {},
     currentTurnMessages: createCurrentTurnMessagesStore(),
     currentTurnTasks: createCurrentTurnTasksStore(),
-    attachmentMetas: Array.isArray(attachmentMetas) ? attachmentMetas : [],
+    inputAttachmentMetas: Array.isArray(inputAttachmentMetas)
+      ? inputAttachmentMetas
+      : Array.isArray(attachmentMetas)
+        ? attachmentMetas
+        : [],
+    // Runtime-generated attachments are tracked separately from user input attachments.
+    // User input attachments live in inputAttachmentMetas; attachmentMetas remains
+    // a mutable runtime bucket for generated ordinary attachments only.
+    attachmentMetas: [],
   };
 }
 
@@ -196,131 +182,16 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
 }
 
 function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
-  const resolveStrictEnvelopeValidation = (options = {}) => {
-    if (typeof options?.strict === "boolean") return options.strict;
-    if (typeof runtimeContext?.userConfig?.semanticTransfer?.strictEnvelopeValidation === "boolean") {
-      return runtimeContext.userConfig.semanticTransfer.strictEnvelopeValidation;
-    }
-    if (typeof runtimeContext?.globalConfig?.semanticTransfer?.strictEnvelopeValidation === "boolean") {
-      return runtimeContext.globalConfig.semanticTransfer.strictEnvelopeValidation;
-    }
-    return false;
-  };
-  const currentSemanticTransfer = isPlainObject(sharedTools.semanticTransfer)
-    ? sharedTools.semanticTransfer
-    : {};
   sharedTools.semanticTransfer = {
-    directInput,
-    fileInput,
-    directOutput,
-    fileOutput,
-    getTransferFiles: (value, options = {}) =>
-      getTransferFiles(value, {
-        ...(options && typeof options === "object" ? options : {}),
-        runtime: options?.runtime || runtimeContext,
-        agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    getPrimaryTransferFile: (value, options = {}) =>
-      getPrimaryTransferFile(value, {
-        ...(options && typeof options === "object" ? options : {}),
-        runtime: options?.runtime || runtimeContext,
-        agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    getTransferDisplayPath: (value, options = {}) =>
-      getTransferDisplayPath(value, {
-        ...(options && typeof options === "object" ? options : {}),
-        runtime: options?.runtime || runtimeContext,
-        agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    getTransferAttachmentMetas: (value, options = {}) =>
-      getTransferAttachmentMetas(value, {
-        ...(options && typeof options === "object" ? options : {}),
-        runtime: options?.runtime || runtimeContext,
-      }),
-    normalizeTransfer: (value, options = {}) =>
-      normalizeTransfer(value, {
-        ...(options && typeof options === "object" ? options : {}),
-        runtime: options?.runtime || runtimeContext,
-        agentContext: options?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    resolveTransferFilePath: (payload = {}) =>
-      resolveTransferFilePath({
-        ...(payload && typeof payload === "object" ? payload : { path: String(payload || "") }),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    persistTransferArtifacts: (payload = {}) =>
-      persistTransferArtifacts({
-        ...(payload && typeof payload === "object" ? payload : {}),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    persistTransferFile: (payload = {}) =>
-      persistTransferFile({
-        ...(payload && typeof payload === "object" ? payload : {}),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    normalizeTransferPolicy,
-    resolveStrictEnvelopeValidation,
-    normalizeTransferEnvelopesWithPolicy: (value, options = {}) =>
-      normalizeTransferEnvelopesWithPolicy(value, {
-        ...(options && typeof options === "object" ? options : {}),
-        runtime: options?.runtime || runtimeContext,
-        strict: resolveStrictEnvelopeValidation(options),
-      }),
-    validateTransferEnvelope: (value, options = {}) =>
-      validateTransferEnvelope(value, {
-        ...(options && typeof options === "object" ? options : {}),
-        strict: resolveStrictEnvelopeValidation(options),
-      }),
-    isValidTransferEnvelope,
-    materializeOutputResult: (payload = {}) =>
-      materializeOutputResult({
-        ...(payload && typeof payload === "object" ? payload : { content: String(payload || "") }),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    materializeOutput: (payload = {}) =>
-      materializeOutput({
-        ...(payload && typeof payload === "object" ? payload : { content: String(payload || "") }),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    transferToolMessage: (payload = {}) =>
-      transferToolMessage({
-        ...(payload && typeof payload === "object" ? payload : { text: String(payload || "") }),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
     transferSemanticContent: (payload = {}) =>
       transferSemanticContent({
         ...(payload && typeof payload === "object" ? payload : {}),
         runtime: payload?.runtime || runtimeContext,
         agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
       }),
-    transferSemanticContentSync: (payload = {}) =>
-      transferSemanticContentSync(
-        payload && typeof payload === "object"
-          ? payload
-          : { scenario: "", content: String(payload || "") },
-      ),
-    transferSubAgentMessages: (payload = {}) =>
-      transferSubAgentMessages({
-        ...(payload && typeof payload === "object" ? payload : {}),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    processStageMessage: (payload = {}) =>
-      processStageMessage({
-        ...(payload && typeof payload === "object" ? payload : { summary: String(payload || "") }),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
-      }),
-    composeFinalMessage,
-    ...currentSemanticTransfer,
   };
 }
+
 
 function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
   const existingResolver =

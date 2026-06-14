@@ -96,6 +96,26 @@ test("resolveAttachments should call ingest when attachments are raw", async () 
   assert.deepEqual(result, [{ attachmentId: "att-ingested" }]);
 });
 
+test("resolveAttachments prefers inputAttachmentMetas over legacy attachmentMetas", async () => {
+  let receivedPayload = null;
+  const result = await resolveAttachments({
+    attachmentService: {
+      async ingest(payload = {}) {
+        receivedPayload = payload;
+        return [{ attachmentId: "att-input" }];
+      },
+    },
+    runtimeBasePath: "/workspace/u1",
+    inputAttachmentMetas: [{ name: "input.txt", mimeType: "text/plain", size: 1 }],
+    attachmentMetas: [{ name: "legacy.txt", mimeType: "text/plain", size: 1 }],
+    userId: "u1",
+    sessionId: "s1",
+  });
+
+  assert.equal(receivedPayload.attachments[0].name, "input.txt");
+  assert.deepEqual(result, [{ attachmentId: "att-input" }]);
+});
+
 test("toConversationMessages preserves model payload fields and attachment fallback", () => {
   const output = toConversationMessages([
     {

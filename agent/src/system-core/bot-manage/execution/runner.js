@@ -100,6 +100,9 @@ export class SessionExecutionRunner {
     const toolRegistry = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
       : [];
+    const inputAttachmentMetas = Array.isArray(runtime?.inputAttachmentMetas)
+      ? runtime.inputAttachmentMetas
+      : [];
     const attachmentMetas = Array.isArray(runtime?.attachmentMetas)
       ? runtime.attachmentMetas
       : [];
@@ -114,7 +117,7 @@ export class SessionExecutionRunner {
       runtimeModel: String(runtime?.runtimeModel || "").trim(),
       messageCount: messagesHistory.length,
       toolCount: toolRegistry.length,
-      attachmentCount: attachmentMetas.length,
+      attachmentCount: inputAttachmentMetas.length + attachmentMetas.length,
       hasAbortSignal: Boolean(runtime?.abortSignal),
     };
   }
@@ -253,7 +256,7 @@ export class SessionExecutionRunner {
         caller,
         parentSessionId,
         userConfig,
-        attachmentMetas: attachments,
+        inputAttachmentMetas: attachments,
         systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
         eventListener: runtimeEventListener,
         dialogProcessId,
@@ -297,6 +300,7 @@ export class SessionExecutionRunner {
         runtimeAgentContext,
         abortSignal,
         messages: dispatchContextMessages,
+        inputAttachmentMetas: userMessageAttachmentMetas,
         attachmentMetas: userMessageAttachmentMetas,
         userMessageAttachmentMetas,
         eventListener: runtimeEventListener,

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { SessionTurnPersister } from "../../../src/system-core/bot-manage/execution/turn-persister.js";
 
-test("SessionTurnPersister does not persist transfer envelopes into session turns", async () => {
+test("SessionTurnPersister does not persist intermediate tool transfer envelopes into session turns", async () => {
   const appendedTurns = [];
   const session = {
     appendExecutionLog: async () => {},
@@ -33,6 +33,44 @@ test("SessionTurnPersister does not persist transfer envelopes into session turn
   assert.equal(appendedTurns.length, 1);
   assert.equal("transferEnvelope" in appendedTurns[0], false);
   assert.equal("transferEnvelopes" in appendedTurns[0], false);
+});
+
+test("SessionTurnPersister persists final assistant transfer envelopes without attachment mirror", async () => {
+  const appendedTurns = [];
+  const session = {
+    appendExecutionLog: async () => {},
+    appendTurn: async (payload = {}) => {
+      appendedTurns.push(payload);
+    },
+  };
+  const persister = new SessionTurnPersister({ session });
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    files: [{ attachmentMeta: { attachmentId: "att-final" }, role: "primary" }],
+  };
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      {
+        role: "assistant",
+        type: "message",
+        content: "done",
+        transferEnvelope: envelope,
+        transferEnvelopes: [envelope],
+      },
+    ],
+    dialogProcessId: "dp1",
+  });
+
+  assert.equal(appendedTurns.length, 1);
+  assert.equal(appendedTurns[0].attachmentMetas, undefined);
+  assert.equal(appendedTurns[0].transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId, "att-final");
+  assert.equal(appendedTurns[0].transferEnvelopes?.length, 1);
 });
 
 test("SessionTurnPersister drops direct-consumed intermediate tool payloads and metas", async () => {

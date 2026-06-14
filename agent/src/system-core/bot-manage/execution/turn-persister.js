@@ -137,12 +137,32 @@ export class SessionTurnPersister {
     frontendUserMessage = false,
     workflowMessage = false,
     workflowMeta = null,
+    transferResult = null,
+    transferEnvelope = null,
+    transferEnvelopes = [],
   }) {
     const sessionAttachmentMetas = filterSessionAttachmentMetas(attachmentMetas);
     const sessionContent =
       role === MESSAGE_ROLE.TOOL
         ? sanitizeToolContentForSession(content, toolName)
         : String(content || "");
+    const shouldPersistTransferPayload = role !== MESSAGE_ROLE.TOOL;
+    const sessionTransferResult =
+      shouldPersistTransferPayload && isPlainObject(transferResult) ? transferResult : null;
+    const sessionTransferEnvelope =
+      shouldPersistTransferPayload && isPlainObject(transferEnvelope)
+        ? transferEnvelope
+        : shouldPersistTransferPayload && isPlainObject(sessionTransferResult?.envelope)
+          ? sessionTransferResult.envelope
+          : null;
+    const sessionTransferEnvelopes =
+      shouldPersistTransferPayload && Array.isArray(transferEnvelopes)
+        ? transferEnvelopes.filter(isPlainObject)
+        : sessionTransferEnvelope
+          ? [sessionTransferEnvelope]
+          : [];
+    const shouldOmitAttachmentMetasMirror =
+      shouldPersistTransferPayload && sessionTransferEnvelopes.length > 0;
     const fullTurnPayload = {
       role,
       content: sessionContent,
@@ -153,7 +173,7 @@ export class SessionTurnPersister {
       parentDialogProcessId: parentDialogProcessId || "",
       tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
       tool_call_id: tool_call_id || "",
-      attachmentMetas: sessionAttachmentMetas,
+      ...(!shouldOmitAttachmentMetasMirror ? { attachmentMetas: sessionAttachmentMetas } : {}),
       modelAlias: String(modelAlias || "").trim(),
       modelName: String(modelName || "").trim(),
       summarized: summarized === true,
@@ -179,6 +199,9 @@ export class SessionTurnPersister {
         !Array.isArray(workflowMeta)
           ? workflowMeta
           : null,
+      ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
+      ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
+      ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
       modelResponseMetadata:
         modelResponseMetadata &&
         typeof modelResponseMetadata === "object" &&
@@ -213,7 +236,7 @@ export class SessionTurnPersister {
       parentDialogProcessId,
       tool_calls,
       tool_call_id,
-      attachmentMetas: sessionAttachmentMetas,
+      ...(!shouldOmitAttachmentMetasMirror ? { attachmentMetas: sessionAttachmentMetas } : {}),
       modelAlias,
       modelName,
       summarized,
@@ -227,6 +250,9 @@ export class SessionTurnPersister {
       frontendUserMessage,
       workflowMessage,
       workflowMeta,
+      ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
+      ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
+      ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -288,6 +314,21 @@ export class SessionTurnPersister {
           !Array.isArray(messageItem.workflowMeta)
             ? messageItem.workflowMeta
             : null,
+        transferResult:
+          messageItem.transferResult &&
+          typeof messageItem.transferResult === "object" &&
+          !Array.isArray(messageItem.transferResult)
+            ? messageItem.transferResult
+            : null,
+        transferEnvelope:
+          messageItem.transferEnvelope &&
+          typeof messageItem.transferEnvelope === "object" &&
+          !Array.isArray(messageItem.transferEnvelope)
+            ? messageItem.transferEnvelope
+            : null,
+        transferEnvelopes: Array.isArray(messageItem.transferEnvelopes)
+          ? messageItem.transferEnvelopes
+          : [],
         modelResponseMetadata:
           messageItem.modelResponseMetadata &&
           typeof messageItem.modelResponseMetadata === "object" &&

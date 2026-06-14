@@ -197,7 +197,8 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.equal(buildContextPayload.caller, CALLER_ROLE.BOT);
   assert.equal(buildContextPayload.parentSessionId, "parent1");
   assert.equal(buildContextPayload.dialogProcessId, "parent-dialog");
-  assert.deepEqual(buildContextPayload.attachmentMetas, [{ attachmentId: "att1" }]);
+  assert.deepEqual(buildContextPayload.inputAttachmentMetas, [{ attachmentId: "att1" }]);
+  assert.equal(buildContextPayload.attachmentMetas, undefined);
   assert.deepEqual(buildContextPayload.systemMessages, ["sys"]);
   assert.equal(buildContextPayload.userInteractionBridge, bridge);
   assert.equal(buildContextPayload.runConfig.systemRuntimePatch.childRunParentSessionId, "parent1");
@@ -313,8 +314,12 @@ test("createDetachedSubSessionRunner persists workflow sub-session snapshot when
     "user ask",
   );
   assert.deepEqual(
-    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].attachmentMetas,
+    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].inputAttachmentMetas,
     [{ attachmentId: "att1" }],
+  );
+  assert.equal(
+    calls.persistDetachedSubSessionSnapshotPayload.sessionPayload.messages[2].attachmentMetas,
+    undefined,
   );
   assert.deepEqual(calls.persistDetachedSubSessionSnapshotPayload.taskPayload.tasks, [
     { taskId: "task1" },

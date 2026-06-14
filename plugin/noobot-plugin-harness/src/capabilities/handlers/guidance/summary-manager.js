@@ -36,6 +36,40 @@ export function shouldSaveSummaryDetailToAttachment(meta = {}) {
   );
 }
 
+export async function transferSummaryInjectionMessage(
+  ctx = {},
+  {
+    fullText = "",
+    summaryText = "",
+    detailText = "",
+    injectMode = "full",
+    meta = {},
+  } = {},
+) {
+  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
+  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
+  const fallback = String(
+    String(injectMode || "").trim().toLowerCase() === "summary"
+      ? summaryText || fullText
+      : fullText || summaryText
+  ).trim();
+  if (typeof transferSemanticContent !== "function") return fallback;
+  try {
+    const transferred = await transferSemanticContent({
+      scenario: "harness",
+      strategy: "harness_summary_injection",
+      injectMode,
+      fullText,
+      summaryText,
+      detailText,
+      meta,
+    });
+    return String(transferred?.injectionMessage || fallback).trim();
+  } catch {
+    return fallback;
+  }
+}
+
 function escapeRegExp(value = "") {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -28,7 +28,6 @@ import {
   materializeTextForToolResult,
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
-import { normalizeToolResultOverflow } from "./tool-result-overflow.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -38,12 +37,6 @@ function toSafePositiveInt(value, fallback = 0, min = 0) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
   return Math.max(min, Math.floor(parsed));
-}
-
-function normalizeDirection(value = TRANSFER_DIRECTION.OUTPUT) {
-  const normalized = normalizeString(value);
-  if (normalized === TRANSFER_DIRECTION.INPUT) return TRANSFER_DIRECTION.INPUT;
-  return TRANSFER_DIRECTION.OUTPUT;
 }
 
 function remapEnvelopeDirection(envelope = {}, direction = TRANSFER_DIRECTION.OUTPUT) {
@@ -104,7 +97,7 @@ async function buildTransferResponse({
   };
 }
 
-async function transferToolOutput({
+export async function transferToolOutput({
   runtime = {},
   agentContext = null,
   text = "",
@@ -192,7 +185,7 @@ async function transferToolOutput({
   });
 }
 
-async function transferToolInput({
+export async function transferToolInput({
   runtime = {},
   agentContext = null,
   text = "",
@@ -300,23 +293,3 @@ async function transferToolInput({
   });
 }
 
-export async function transferToolMessage({
-  direction = TRANSFER_DIRECTION.OUTPUT,
-  transferMode = "",
-  mode = "",
-  ...options
-} = {}) {
-  const normalizedMode = firstNormalizedString(transferMode, mode);
-  if (normalizedMode === "tool_result_text") {
-    return normalizeToolResultOverflow({
-      ...options,
-      toolResultText: options.toolResultText ?? options.text ?? options.content ?? "",
-    });
-  }
-
-  const normalizedDirection = normalizeDirection(direction);
-  if (normalizedDirection === TRANSFER_DIRECTION.INPUT) {
-    return transferToolInput(options);
-  }
-  return transferToolOutput(options);
-}
