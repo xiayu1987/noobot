@@ -112,30 +112,30 @@ export const WORKFLOW_PARAMS = deepFreeze({
     full: {
       planning: {
         summary: {
-          turnsThreshold: 8,
+          turnsThreshold: 9,
         },
         planUpdate: {
-          triggerTurnsThreshold: 6,
+          triggerTurnsThreshold: 7,
         },
       },
       acceptance: {
         phase: {
-          triggerTurnsThreshold: 10,
+          triggerTurnsThreshold: 8,
         },
       },
     },
     programming: {
       planning: {
         summary: {
-          turnsThreshold: 12,
+          turnsThreshold: 13,
         },
         planUpdate: {
-          triggerTurnsThreshold: 10,
+          triggerTurnsThreshold: 11,
         },
       },
       acceptance: {
         phase: {
-          triggerTurnsThreshold: 14,
+          triggerTurnsThreshold: 12,
         },
       },
     },
