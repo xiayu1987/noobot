@@ -266,13 +266,20 @@ export function createFileTool({ agentContext }) {
     name: TOOL_NAME.PATCH_FILE,
     description: tTool(agentContext, "tools.patch_file.description"),
     schema: z.object({
-      format: z.enum(["apply_patch", "unified_diff"]).optional().default("apply_patch").describe(tTool(agentContext, "tools.patch_file.fieldFormat")),
+      format: z.enum(["unified_diff", "apply_patch"]).optional().describe(tTool(agentContext, "tools.patch_file.fieldFormat")),
       patch: z.string().describe(tTool(agentContext, "tools.patch_file.fieldPatch")),
       strip: z.number().int().optional().default(1).describe(tTool(agentContext, "tools.patch_file.fieldStrip")),
       dryRun: z.boolean().optional().default(false).describe(tTool(agentContext, "tools.patch_file.fieldDryRun")),
     }),
-    func: async ({ format = "apply_patch", patch = "", strip = 1, dryRun = false }) => {
-      const normalizedFormat = String(format || "apply_patch").trim() === "unified_diff" ? "unified_diff" : "apply_patch";
+    func: async ({ format, patch = "", strip = 1, dryRun = false }) => {
+      const requestedFormat = String(format || "").trim();
+      const normalizedFormat = requestedFormat === "apply_patch"
+        ? "apply_patch"
+        : requestedFormat === "unified_diff"
+          ? "unified_diff"
+          : String(patch || "").trimStart().startsWith("*** Begin Patch")
+            ? "apply_patch"
+            : "unified_diff";
       const parsed = normalizedFormat === "unified_diff"
         ? parseUnifiedDiff(patch, strip)
         : parseApplyPatch(patch);

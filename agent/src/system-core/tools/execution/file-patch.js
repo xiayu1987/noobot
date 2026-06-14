@@ -41,27 +41,30 @@ function stripDiffPath(rawPath = "", strip = 1) {
   return parts.slice(stripCount).join("/") || normalized;
 }
 
+function normalizePatchText(patch = "") {
+  const text = String(patch || "").replace(/\r\n/g, "\n");
+  const trimmed = text.trim();
+  const fenced = /^```(?:diff|patch)?\n([\s\S]*?)\n```$/.exec(trimmed);
+  return fenced ? fenced[1] : text;
+}
+
 export function parseUnifiedDiff(patch = "", strip = 1) {
-  const lines = String(patch || "").replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizePatchText(patch).split("\n");
   const filePatches = [];
   let i = 0;
   while (i < lines.length) {
-    if (!lines[i].startsWith("--- ")) {
+    if (!lines[i].startsWith("--- ") || !lines[i + 1]?.startsWith("+++ ")) {
       i += 1;
       continue;
     }
     const oldPath = stripDiffPath(lines[i].slice(4), strip);
-    i += 1;
-    if (!lines[i]?.startsWith("+++ ")) {
-      throw recoverableToolError("invalid unified diff: missing +++ file header", {
-        code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-        details: { field: "patch" },
-      });
-    }
-    const newPath = stripDiffPath(lines[i].slice(4), strip);
-    i += 1;
+    const newPath = stripDiffPath(lines[i + 1].slice(4), strip);
+    i += 2;
     const hunks = [];
-    while (i < lines.length && !lines[i].startsWith("--- ")) {
+    while (i < lines.length) {
+      if (lines[i].startsWith("--- ") && lines[i + 1]?.startsWith("+++ ")) {
+        break;
+      }
       if (!lines[i].startsWith("@@")) {
         i += 1;
         continue;
@@ -69,24 +72,50 @@ export function parseUnifiedDiff(patch = "", strip = 1) {
       const header = parseUnifiedHunkHeader(lines[i]);
       i += 1;
       const hunkLines = [];
-      while (
-        i < lines.length &&
-        !lines[i].startsWith("@@") &&
-        !lines[i].startsWith("--- ")
-      ) {
+      let oldSeen = 0;
+      let newSeen = 0;
+      while (i < lines.length && (oldSeen < header.oldCount || newSeen < header.newCount)) {
         if (lines[i] === "\\ No newline at end of file") {
           i += 1;
           continue;
         }
         const prefix = lines[i][0];
-        if ([" ", "+", "-"].includes(prefix)) {
-          hunkLines.push({ type: prefix, text: lines[i].slice(1) });
+        if (![" ", "+", "-"].includes(prefix)) {
+          break;
         }
+        hunkLines.push({ type: prefix, text: lines[i].slice(1) });
+        if (prefix !== "+") oldSeen += 1;
+        if (prefix !== "-") newSeen += 1;
         i += 1;
+      }
+      if (oldSeen !== header.oldCount || newSeen !== header.newCount) {
+        throw recoverableToolError("invalid unified diff: hunk body does not match header line counts", {
+          code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+          details: {
+            field: "patch",
+            oldStart: header.oldStart,
+            oldCount: header.oldCount,
+            oldSeen,
+            newStart: header.newStart,
+            newCount: header.newCount,
+            newSeen,
+          },
+        });
       }
       hunks.push({ ...header, lines: hunkLines });
     }
-    filePatches.push({ oldPath, newPath, hunks, mode: newPath === "/dev/null" ? "delete" : oldPath === "/dev/null" ? "add" : "update" });
+    filePatches.push({
+      oldPath,
+      newPath,
+      hunks,
+      mode: newPath === "/dev/null"
+        ? "delete"
+        : oldPath === "/dev/null"
+          ? "add"
+          : oldPath !== newPath
+            ? "move"
+            : "update",
+    });
   }
   if (!filePatches.length) {
     throw recoverableToolError("invalid unified diff: no file patch found", {
@@ -151,7 +180,7 @@ export function applyUnifiedHunks(originalContent = "", hunks = []) {
 }
 
 export function parseApplyPatch(patch = "") {
-  const lines = String(patch || "").replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizePatchText(patch).split("\n");
   if (lines[0] !== "*** Begin Patch" || !lines.some((line) => line === "*** End Patch")) {
     throw recoverableToolError("invalid apply_patch: missing Begin/End Patch marker", {
       code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
