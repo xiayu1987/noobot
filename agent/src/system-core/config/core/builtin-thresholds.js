@@ -12,7 +12,7 @@
  * still configured in provider specs.
  */
 export const BUILTIN_THRESHOLDS = Object.freeze({
-  memoryMaxItems: 50,
+  memoryMaxItems: 30,
   maxToolLoopTurns: 200,
   mainModelRecentWindow: true,
   mainModelRecentLimit: 15,
