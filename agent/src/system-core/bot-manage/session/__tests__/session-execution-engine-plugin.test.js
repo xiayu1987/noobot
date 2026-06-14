@@ -576,6 +576,53 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
   ]);
 });
 
+test("SessionExecutionEngine resolveModelMessages treats persisted harness summary relays as injected history", async () => {
+  const engine = new SessionExecutionEngine({ globalConfig: {} });
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
+    userId: "u1",
+    runConfig: {
+      plugins: {
+        agentPlugin: {
+          enabled: true,
+          mode: "on",
+        },
+      },
+    },
+  });
+  const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
+  const resolved = resolver({
+    messages: [{ role: "user", content: "当前增量" }],
+    ctx: {
+      dialogProcessId: "dlg_current",
+      messageBlocks: {
+        system: [],
+        history: [
+          { role: "user", content: "真实历史用户", dialogProcessId: "dlg_old" },
+          {
+            role: "user",
+            content: "[来自harness外部模型输出/summary]\n历史小结一：不应作为实际用户历史",
+            dialogProcessId: "dlg_old",
+          },
+          {
+            role: "user",
+            content: "[Relay from harness external model/summary]\nhistorical summary two",
+            dialogProcessId: "dlg_old",
+          },
+          { role: "assistant", content: "历史最终回答", dialogProcessId: "dlg_old" },
+        ],
+        incremental: [
+          { role: "user", content: "当前增量", dialogProcessId: "dlg_current" },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(
+    resolved.map((item = {}) => String(item.content || "")),
+    ["真实历史用户", "历史最终回答", "当前增量"],
+  );
+});
+
 
 test("SessionExecutionEngine resolveMessageBlock prefers current incremental dialog over stale ctx dialog", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });

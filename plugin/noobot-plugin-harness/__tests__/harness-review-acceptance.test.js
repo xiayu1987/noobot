@@ -10,9 +10,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
+import { ModelMessageRuntimeHelpers } from "../../../agent/src/system-core/bot-manage/session/model-message-runtime-helpers.js";
 import { registerNoobotPlugin } from "../src/index.js";
 import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
 import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
+import { markGuidanceSummarizedMessages } from "../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
 function assertFlatCapabilityMessages(messages = []) {
@@ -678,6 +680,47 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   assert.match(ctx.agentContext.payload.harness.phaseAcceptanceReports[0].content, /pass/);
 });
 
+test("model-context rules 2 note: harness-side summary marking policy remains unchanged", async () => {
+  const ctx = {
+    messages: [
+      { role: "user", content: "用户当前输入" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "call-exec", function: { name: "execute_script", arguments: "{}" } }],
+      },
+      { role: "tool", content: "{\"toolName\":\"execute_script\",\"ok\":true}", tool_call_id: "call-exec" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "call-summary", function: { name: "task_summary", arguments: "{}" } }],
+      },
+      {
+        role: "tool",
+        content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"阶段小结\"}",
+        tool_call_id: "call-summary",
+      },
+    ],
+    agentContext: {
+      payload: {
+        messages: { history: [] },
+        harness: {
+          state: { flags: {}, counters: {}, signals: {}, pending: {} },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  const markedCount = await markGuidanceSummarizedMessages(ctx, {});
+
+  assert.equal(markedCount, 2);
+  assert.equal(ctx.messages[1]?.summarized, true);
+  assert.equal(ctx.messages[2]?.summarized, true);
+  assert.equal(ctx.messages[3]?.summarized, undefined);
+  assert.equal(ctx.messages[4]?.summarized, undefined);
+});
+
 test("phase acceptance separate model receives context, summaries, revised plan, phase checklists, then phase request", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
@@ -754,6 +797,239 @@ test("phase acceptance separate model receives context, summaries, revised plan,
       phaseIndexes[0] > planIndex &&
       requestIndex > phaseIndexes[0],
     true,
+  );
+});
+
+test("model-context rules 2: phase acceptance separate model uses six ordered context segments", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const runtimeHelpers = new ModelMessageRuntimeHelpers();
+  const baseResolveModelMessages = runtimeHelpers.createResolveModelMessages();
+  const invocations = [];
+  const resolverCalls = [];
+  const ctx = {
+    dialogProcessId: "dlg_current",
+    messages: [
+      { role: "user", content: "当前阶段继续", dialogProcessId: "dlg_current" },
+      {
+        role: "assistant",
+        content: "",
+        dialogProcessId: "dlg_current",
+        tool_calls: [{ id: "call-ctx", function: { name: "execute_script", arguments: "{\"cmd\":\"pwd\"}" } }],
+      },
+      {
+        role: "tool",
+        content: "{\"ok\":true,\"stdout\":\"/workspace\"}",
+        tool_call_id: "call-ctx",
+        dialogProcessId: "dlg_current",
+      },
+    ],
+    messageBlocks: {
+      system: [
+        { role: "system", content: "agent-system", dialogProcessId: "dlg_current" },
+      ],
+      history: [
+        { role: "user", content: "history-user-first", dialogProcessId: "dlg_old" },
+        { role: "user", content: "history-user-second", dialogProcessId: "dlg_old" },
+        { role: "assistant", content: "history-assistant-old", dialogProcessId: "dlg_old" },
+        { role: "assistant", content: "history-assistant-latest", dialogProcessId: "dlg_old" },
+      ],
+      incremental: [
+        { role: "user", content: "当前阶段继续", dialogProcessId: "dlg_current" },
+        {
+          role: "assistant",
+          content: "",
+          dialogProcessId: "dlg_current",
+          tool_calls: [{ id: "call-ctx", function: { name: "execute_script", arguments: "{\"cmd\":\"pwd\"}" } }],
+        },
+        {
+          role: "tool",
+          content: "{\"ok\":true,\"stdout\":\"/workspace\"}",
+          tool_call_id: "call-ctx",
+          dialogProcessId: "dlg_current",
+        },
+      ],
+    },
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        harness: {
+          planText: "1. 核心实现\n2. 验证交付",
+          summaryFullText: [
+            "[SUMMARY_OVERVIEW]",
+            "1. 最后一次完整小结：用于阶段验收",
+            "[SUMMARY_DETAIL]",
+            "- 明细不应被拆成历史多次小结",
+            "[SUMMARY_END]",
+          ].join("\n"),
+          phaseAcceptanceReports: [
+            { acceptedAt: "2026-06-01T00:00:00.000Z", content: "上一阶段验收：warn" },
+          ],
+          state: {
+            flags: { planningCaptured: true },
+            counters: {},
+            signals: {},
+            pending: { phaseAcceptance: true },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  await handler({
+    capability: "acceptance",
+    point: "before_llm_call",
+    ctx,
+    meta: {
+      harness: {
+        planningGuidanceMode: "separate_model",
+        resolveModelMessages: (payload = {}) => {
+          resolverCalls.push(payload);
+          return baseResolveModelMessages(payload);
+        },
+        capabilityModelInvoker: async (payload) => {
+          invocations.push(payload);
+          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+        },
+      },
+    },
+  });
+
+  assert.equal(resolverCalls.length, 1);
+  assert.equal(resolverCalls[0]?.purpose, "phase_acceptance");
+  assert.equal(invocations.length, 1);
+  const messages = invocations[0].messages || [];
+  const indexOf = (pattern) => messages.findIndex((item = {}) => pattern.test(String(item.content || "")));
+  const agentSystemIndex = indexOf(/agent-system/);
+  const historyUserIndex = indexOf(/history-user-first/);
+  const historyAssistantIndex = indexOf(/history-assistant-latest/);
+  const toolCallSemanticIndex = indexOf(/语义执行 execute_script脚本/);
+  const toolResultIndex = messages.findIndex((item = {}) => String(item.content || "").includes('"stdout":"/workspace"'));
+  const summaryIndex = indexOf(/harness-summary-reports/);
+  const planIndex = indexOf(/harness-acceptance-main-plan/);
+  const phaseReportIndex = indexOf(/harness-phase-acceptance-reports/);
+  const requestIndex = indexOf(/harness-phase-acceptance-request/);
+  const responsibilityIndex = indexOf(/职责约束：你当前仅负责「阶段验收」/);
+
+  assert.equal(messages[agentSystemIndex]?.role, "system");
+  assert.equal(messages[historyUserIndex]?.role, "user");
+  assert.equal(messages[historyAssistantIndex]?.role, "assistant");
+  assert.equal(messages[toolCallSemanticIndex]?.role, "user");
+  assert.equal(messages[toolResultIndex]?.role, "assistant");
+  assert.equal(messages[summaryIndex]?.role, "system");
+  assert.equal(messages[planIndex]?.role, "system");
+  assert.equal(messages[phaseReportIndex]?.role, "system");
+  assert.equal(messages[requestIndex]?.role, "user");
+  assert.equal(messages[responsibilityIndex]?.role, "user");
+  assert.equal(historyUserIndex < historyAssistantIndex, true);
+  assert.equal(historyAssistantIndex < toolCallSemanticIndex, true);
+  assert.equal(toolCallSemanticIndex < toolResultIndex, true);
+  assert.equal(toolResultIndex < summaryIndex, true);
+  assert.equal(summaryIndex < planIndex, true);
+  assert.equal(planIndex < phaseReportIndex, true);
+  assert.equal(phaseReportIndex < requestIndex, true);
+  assert.equal(requestIndex < responsibilityIndex, true);
+  assert.match(String(messages[summaryIndex]?.content || ""), /最后一次完整小结：用于阶段验收/);
+  assert.match(String(messages[phaseReportIndex]?.content || ""), /上一阶段验收：warn/);
+});
+
+test("phase acceptance separate model drops historical summary relays and passes only latest complete summary context", async () => {
+  const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const resolveModelMessages = new ModelMessageRuntimeHelpers().createResolveModelMessages();
+  const invocations = [];
+  const ctx = {
+    messages: [
+      { role: "user", content: "阶段上下文：继续验收当前阶段" },
+      { role: "assistant", content: "继续处理当前阶段" },
+    ],
+    messageBlocks: {
+      system: [],
+      history: [
+        { role: "user", content: "阶段历史真实用户", dialogProcessId: "dlg_old" },
+        {
+          role: "user",
+          content: "[harness:summary]\n旧小结完整-1：不应再次传给阶段验收模型",
+          injectedMessage: true,
+          injectedBy: "harness-plugin",
+          injectedMessageType: "separate_model_relay:summary",
+          dialogProcessId: "dlg_old",
+        },
+        {
+          role: "user",
+          content: "[harness:summary]\n旧小结完整-2：也不应再次传给阶段验收模型",
+          injectedMessage: true,
+          injectedBy: "harness-plugin",
+          injectedMessageType: "separate_model_relay:summary",
+          dialogProcessId: "dlg_old",
+        },
+        {
+          role: "user",
+          content: "[来自harness外部模型输出/summary]\n旧小结完整-3：历史持久化前缀消息也不应传给阶段验收模型",
+          dialogProcessId: "dlg_old",
+        },
+        { role: "assistant", content: "阶段历史最终回答", dialogProcessId: "dlg_old" },
+      ],
+      incremental: [
+        { role: "user", content: "阶段上下文：继续验收当前阶段", dialogProcessId: "dlg_current" },
+        { role: "assistant", content: "继续处理当前阶段", dialogProcessId: "dlg_current" },
+      ],
+    },
+    dialogProcessId: "dlg_current",
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        harness: {
+          planText: "1. 核心实现\n2. 验证交付",
+          summaryText: "旧合并小结：不应作为阶段验收小结上下文",
+          summaryFullText: [
+            "[SUMMARY_OVERVIEW]",
+            "1. 最后一次完整小结：只应传这一份",
+            "[SUMMARY_DETAIL]",
+            "- 最后一次完整小结的明细",
+            "[SUMMARY_END]",
+          ].join("\n"),
+          state: {
+            flags: { planningCaptured: true },
+            counters: {},
+            signals: {},
+            pending: { phaseAcceptance: true },
+          },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  };
+
+  await handler({
+    capability: "acceptance",
+    point: "before_llm_call",
+    ctx,
+    meta: {
+      harness: {
+        planningGuidanceMode: "separate_model",
+        resolveModelMessages,
+        capabilityModelInvoker: async (payload) => {
+          invocations.push(payload);
+          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+        },
+      },
+    },
+  });
+
+  assert.equal(invocations.length, 1);
+  const joined = invocations[0].messages
+    .map((item = {}) => String(item.content || ""))
+    .join("\n\n");
+  assert.match(joined, /最后一次完整小结：只应传这一份/);
+  assert.doesNotMatch(joined, /旧小结完整-1/);
+  assert.doesNotMatch(joined, /旧小结完整-2/);
+  assert.doesNotMatch(joined, /旧小结完整-3/);
+  assert.doesNotMatch(joined, /旧合并小结/);
+  assert.equal(
+    invocations[0].messages.filter((item = {}) =>
+      String(item.content || "").includes("harness-summary-reports"),
+    ).length,
+    1,
   );
 });
 
