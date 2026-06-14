@@ -33,12 +33,10 @@ import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { SANDBOX_CONFIG, TOOL_NAME } from "../constants/index.js";
 import { logDebug, logWarn } from "../../tracking/console/logger.js";
-import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/core/constants.js";
 import { formatLinesWithNumbers, splitLines } from "./file-utils.js";
 
 const EXECUTE_SCRIPT_TOOL_NAME = TOOL_NAME.EXECUTE_SCRIPT;
 const DEFAULT_TIMEOUT = 300000;
-const MAX_SCRIPT_COMMAND_CHARS = 8000;
 const DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS = 3600000;
 const SANDBOX_PROVIDER_NAME = SANDBOX_CONFIG.PROVIDERS;
 const DOCKER_SANDBOX_DEFAULT = SANDBOX_CONFIG.DOCKER;
@@ -569,7 +567,6 @@ export function createScriptTool({ agentContext }) {
   const { provider: sandboxProvider, providerDetail } =
     resolveSandboxProviderConfig(scriptConfig);
   const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
-  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
   const description = buildScriptToolDescription({
     runtime,
     sandboxEnabled,
@@ -590,39 +587,6 @@ export function createScriptTool({ agentContext }) {
       await mkdir(workspace, { recursive: true });
       const normalizedCommand = String(command || "");
       const shouldIncludeLineNumbers = includeLineNumbers === true;
-      if (normalizedCommand.length > MAX_SCRIPT_COMMAND_CHARS) {
-        let transferPayload = {};
-        if (typeof transferSemanticContent === "function") {
-          try {
-            const transferred = await transferSemanticContent({
-              scenario: "tool",
-              strategy: "tool_input",
-              text: normalizedCommand,
-              inlineMaxChars: MAX_SCRIPT_COMMAND_CHARS,
-              name: "execute-script-command.tool-input.sh",
-              mimeType: "text/plain",
-              source: TRANSFER_SOURCE.TOOL,
-              reason: TRANSFER_REASON.EXECUTE_SCRIPT_INPUT_TOO_LONG,
-              meta: {
-                toolName: EXECUTE_SCRIPT_TOOL_NAME,
-                field: "command",
-              },
-            });
-            transferPayload =
-              transferred?.compactToolPayload &&
-              typeof transferred.compactToolPayload === "object"
-                ? transferred.compactToolPayload
-                : {};
-          } catch {
-            transferPayload = {};
-          }
-        }
-        return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
-          ok: false,
-          message: tTool(runtime, "tools.script.commandTooLong"),
-          ...transferPayload,
-        });
-      }
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
 
       if (!sandboxEnabled) {

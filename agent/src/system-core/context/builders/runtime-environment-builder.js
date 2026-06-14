@@ -181,13 +181,34 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
   };
 }
 
+function resolveSharedToolRuntime(runtimeContext = {}, payloadRuntime = null) {
+  if (!isPlainObject(payloadRuntime)) return runtimeContext;
+  return {
+    ...runtimeContext,
+    ...payloadRuntime,
+    systemRuntime: {
+      ...(isPlainObject(runtimeContext?.systemRuntime) ? runtimeContext.systemRuntime : {}),
+      ...(isPlainObject(payloadRuntime?.systemRuntime) ? payloadRuntime.systemRuntime : {}),
+    },
+  };
+}
+
+function resolveSharedToolAgentContext(runtimeContext = {}, payload = {}) {
+  return (
+    payload?.agentContext ||
+    payload?.runtime?.systemRuntime?.agentContext ||
+    runtimeContext?.systemRuntime?.agentContext ||
+    null
+  );
+}
+
 function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
   sharedTools.semanticTransfer = {
     transferSemanticContent: (payload = {}) =>
       transferSemanticContent({
         ...(payload && typeof payload === "object" ? payload : {}),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+        runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
+        agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
       }),
   };
 }
@@ -201,16 +222,16 @@ function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
     ((payload = {}) =>
       resolveSandboxPath({
         ...payload,
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+        runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
+        agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
       }));
   sharedTools.resolveSandboxPath = resolver;
   if (typeof sharedTools.resolveAttachmentDisplayPath !== "function") {
     sharedTools.resolveAttachmentDisplayPath = (payload = {}) =>
       resolveAttachmentDisplayPath({
         ...(payload && typeof payload === "object" ? payload : { path: String(payload || "") }),
-        runtime: payload?.runtime || runtimeContext,
-        agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+        runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
+        agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
       });
   }
   if (typeof sharedTools.toSandboxPath !== "function") {
@@ -229,8 +250,8 @@ function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
             ...(payload && typeof payload === "object"
               ? payload
               : { path: String(payload || ""), sandboxPath: String(payload || "") }),
-            runtime: payload?.runtime || runtimeContext,
-            agentContext: payload?.agentContext || runtimeContext?.systemRuntime?.agentContext || null,
+            runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
+            agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
           }));
   sharedTools.resolveHostPath = hostResolver;
   if (typeof sharedTools.toHostPath !== "function") {

@@ -16,6 +16,14 @@
   "unknownFlowName": "unknown_flow",
   "unknownSessionId": "unknown_session",
   "modelNameHeaderKey": "x-model-name",
+  "flowHeaderKeys": [
+    "x-plugin-flow",
+    "x-harness-flow"
+  ],
+  "sessionIdHeaderKeys": [
+    "x-plugin-session-id",
+    "x-harness-session-id"
+  ],
   "harnessFlowHeaderKey": "x-harness-flow",
   "sessionIdHeaderKey": "x-harness-session-id",
   "parentSessionIdHeaderKey": "parentsessionid",

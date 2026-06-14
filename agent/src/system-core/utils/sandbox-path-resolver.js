@@ -191,14 +191,20 @@ export function resolveSandboxPath({
   runtime = {},
   agentContext = null,
 } = {}) {
+  const scriptConfig = resolveExecuteScriptConfig(runtime);
+  const sandboxMode =
+    scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+  const sandboxRoot = String(
+    runtime?.systemRuntime?.staticInfo?.sandboxRoot ||
+      runtime?.systemRuntime?.staticInfo?.sandbox?.sandboxRoot ||
+      agentContext?.environment?.staticInfo?.sandboxRoot ||
+      agentContext?.environment?.staticInfo?.sandbox?.sandboxRoot ||
+      "",
+  ).trim();
+  if (!sandboxMode && !sandboxRoot) return "";
+
   const normalizedHostPath = normalizeSlashPath(hostPath || path);
   if (!normalizedHostPath && !String(relativePath || "").trim()) return "";
-
-  const mappedByConfig = mapPathByMappings(
-    normalizedHostPath,
-    resolveSandboxPathMappings(runtime),
-  );
-  if (mappedByConfig) return String(mappedByConfig || "").trim();
 
   const sandboxUserRoot = resolveSandboxUserRoot(runtime);
   const hostBasePath = String(
@@ -212,13 +218,12 @@ export function resolveSandboxPath({
     }
   }
 
-  const sandboxRoot = String(
-    runtime?.systemRuntime?.staticInfo?.sandboxRoot ||
-      runtime?.systemRuntime?.staticInfo?.sandbox?.sandboxRoot ||
-      agentContext?.environment?.staticInfo?.sandboxRoot ||
-      agentContext?.environment?.staticInfo?.sandbox?.sandboxRoot ||
-      "",
-  ).trim();
+  const mappedByConfig = mapPathByMappings(
+    normalizedHostPath,
+    resolveSandboxPathMappings(runtime),
+  );
+  if (mappedByConfig) return String(mappedByConfig || "").trim();
+
   const normalizedSandboxRoot = normalizeSlashPath(sandboxRoot);
   if (normalizedSandboxRoot) {
     if (sandboxUserRoot && normalizedHostPath && normalizedHostBasePath) {
@@ -290,14 +295,6 @@ export function resolveAttachmentDisplayPath({
   purpose = "attachment_display_path",
 } = {}) {
   const sourceMeta = meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {};
-  const metaSandboxPath = String(
-    sourceMeta?.sandboxPath ||
-      sourceMeta?.sandboxViewPath ||
-      sourceMeta?.sandbox_file_path ||
-      "",
-  ).trim();
-  if (metaSandboxPath) return metaSandboxPath;
-
   const resolvedHostPath = String(hostPath || path || sourceMeta?.path || "").trim();
   const resolvedRelativePath = String(relativePath || sourceMeta?.relativePath || "").trim();
   const sandboxPath = resolveSandboxPath({

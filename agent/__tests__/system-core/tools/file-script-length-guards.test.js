@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { createFileTool } from "../../../src/system-core/tools/execution/file-tool.js";
+import { executeToolCall } from "../../../src/system-core/agent/core/execution/tool-runner.js";
+import { transferSemanticContent } from "../../../src/system-core/semantic-transfer/index.js";
 import {
   buildExecutionWorkspaceMeta,
   buildScriptExecutionMeta,
@@ -60,39 +62,61 @@ function parseToolResult(raw = "") {
   return JSON.parse(String(raw || "{}"));
 }
 
-test("execute_script: command 超过 8000 字符时应直接返回长度错误", async () => {
+function buildAttachmentService() {
+  return {
+    async ingestGeneratedArtifacts(payload = {}) {
+      return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map((artifact = {}, index) => ({
+        attachmentId: `att-tool-input-${index + 1}`,
+        sessionId: payload.sessionId,
+        attachmentSource: payload.attachmentSource,
+        name: artifact.name,
+        mimeType: artifact.mimeType,
+        size: Buffer.from(String(artifact.contentBase64 || ""), "base64").length,
+        path: `/host/${artifact.name}`,
+        relativePath: `runtime/attach/${artifact.name}`,
+        generatedByModel: true,
+        generationSource: payload.generationSource,
+      }));
+    },
+  };
+}
+
+test("execute_script: command 超过 200000 字符时由 semantic-transfer 保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-guard-"));
-  const tools = createScriptTool({
-    agentContext: buildAgentContext(basePath, "u-test", {
-      runtime: {
-        sharedTools: {
-          semanticTransfer: {
-            async transferSemanticContent() {
-              return {
-                compactToolPayload: {
-                  transferFiles: [
-                    { attachmentId: "att-script", transferFilePath: "runtime/attach/cmd.txt" },
-                  ],
-                },
-              };
-            },
-          },
-        },
-      },
-    }),
+  let invoked = false;
+  const tool = {
+    async invoke() {
+      invoked = true;
+      throw new Error("execute_script concrete tool must not be invoked for overlong input");
+    },
+  };
+
+  const command = "a".repeat(200001);
+  const runnerResult = await executeToolCall({
+    call: { id: "call_long_script", name: "execute_script", args: { command } },
+    tool,
+    runtime: {
+      basePath,
+      systemRuntime: { userId: "u-test", sessionId: "s-script" },
+      globalConfig: {},
+      userConfig: {},
+      attachmentService: buildAttachmentService(),
+    },
+    agentContext: buildAgentContext(basePath, "u-test"),
+    sessionId: "s-script",
   });
-  const tool = tools.find((item) => item?.name === "execute_script");
-  assert.ok(tool);
+  const result = parseToolResult(runnerResult.toolResultText);
 
-  const command = "a".repeat(8001);
-  const result = parseToolResult(await tool.invoke({ command }));
-
+  assert.equal(invoked, false);
+  assert.equal(runnerResult.success, true);
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, false);
   assert.equal(result.message, "脚本内容过长，请分批执行或拆分脚本/文本后重试");
   assert.equal(Array.isArray(result.transferFiles), true);
   assert.equal(result.transferFiles.length, 1);
-  assert.equal(result.transferFiles[0].attachmentId, "att-script");
+  assert.equal(result.transferFiles[0].name, "execute-script-command.tool-input.sh");
+  assert.equal(typeof result.transferFiles[0].transferFilePath, "string");
+  assert.equal(result.toolInputOverflow?.field, "command");
 });
 
 test("execute_script: 非沙箱返回仅包含当前 host 工作目录视角", async () => {
@@ -232,21 +256,55 @@ test("execute_script: Docker 返回仅保留镜像名和当前 workspace 视角"
   assert.deepEqual(meta.workspace.allowedRoots, ["/workspace", "/project"]);
 });
 
-test("write_file: content 超过 8000 字符时应直接返回长度错误且不写入", async () => {
+test("write_file: content 超过 200000 字符时由 semantic-transfer 保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-guard-"));
+  let invoked = false;
+  const tool = {
+    async invoke() {
+      invoked = true;
+      throw new Error("write_file concrete tool must not be invoked for overlong input");
+    },
+  };
+
+  const filePath = "large.txt";
+  const content = "x".repeat(200001);
+  const runnerResult = await executeToolCall({
+    call: { id: "call_long_write", name: "write_file", args: { filePath, content } },
+    tool,
+    runtime: {
+      basePath,
+      systemRuntime: { userId: "u-test", sessionId: "s-write" },
+      globalConfig: {},
+      userConfig: {},
+      attachmentService: buildAttachmentService(),
+    },
+    agentContext: buildAgentContext(basePath, "u-test"),
+    sessionId: "s-write",
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
+
+  assert.equal(invoked, false);
+  assert.equal(runnerResult.success, true);
+  assert.equal(result.toolName, "write_file");
+  assert.equal(result.ok, false);
+  assert.equal(result.message, "文件内容过长，请分批写入");
+  assert.equal(Array.isArray(result.transferFiles), true);
+  assert.equal(result.transferFiles.length, 1);
+  assert.equal(result.transferFiles[0].name, "large.txt.tool-input.txt");
+  assert.equal(typeof result.transferFiles[0].transferFilePath, "string");
+  assert.equal(result.toolInputOverflow?.field, "content");
+  await assert.rejects(() => fs.access(path.join(basePath, filePath)));
+});
+
+test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-path-view-"));
   const tools = createFileTool({
-    agentContext: buildAgentContext(basePath, "u-test", {
+    agentContext: buildAgentContext(basePath, "admin", {
       runtime: {
-        sharedTools: {
-          semanticTransfer: {
-            async transferSemanticContent() {
-              return {
-                compactToolPayload: {
-                  transferFiles: [
-                    { attachmentId: "att-file", transferFilePath: "runtime/attach/content.txt" },
-                  ],
-                },
-              };
+        globalConfig: {
+          tools: {
+            execute_script: {
+              sandboxMode: false,
             },
           },
         },
@@ -256,21 +314,173 @@ test("write_file: content 超过 8000 字符时应直接返回长度错误且不
   const tool = tools.find((item) => item?.name === "write_file");
   assert.ok(tool);
 
-  const filePath = "large.txt";
-  const content = "x".repeat(8001);
-  const result = parseToolResult(await tool.invoke({ filePath, content }));
+  const runtime = buildAgentContext(basePath, "admin", {
+    runtime: {
+      globalConfig: {
+        tools: {
+          execute_script: {
+            sandboxMode: false,
+          },
+        },
+      },
+    },
+  }).execution.controllers.runtime;
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_write_non_sandbox",
+      name: "write_file",
+      args: { filePath: "runtime/ops_workdir/write-ok.txt", content: "ok" },
+    },
+    tool,
+    runtime,
+    agentContext: buildAgentContext(basePath, "admin", { runtime }),
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "write_file");
-  assert.equal(result.ok, false);
-  assert.equal(result.message, "文件内容过长，请分批写入");
-  assert.equal(Array.isArray(result.transferFiles), true);
-  assert.equal(result.transferFiles.length, 1);
-  assert.equal(result.transferFiles[0].attachmentId, "att-file");
-
-  await assert.rejects(() => fs.access(path.join(basePath, filePath)));
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedPath, path.join(basePath, "runtime/ops_workdir/write-ok.txt"));
 });
 
-test("read_file: 文件内容超过 8000 字符时应直接返回长度错误", async () => {
+test("write_file: 启用沙箱返回沙箱路径视角", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-sandbox-view-"));
+  const basePath = path.join(workspaceRoot, "admin");
+  const tools = createFileTool({
+    agentContext: buildAgentContext(basePath, "admin", {
+      runtime: {
+        globalConfig: {
+          tools: {
+            execute_script: {
+              sandboxMode: true,
+              sandboxProvider: {
+                default: "docker",
+                docker: { dockerContainerScope: "global" },
+              },
+            },
+          },
+        },
+      },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === "write_file");
+  assert.ok(tool);
+
+  const runtime = buildAgentContext(basePath, "admin", {
+    runtime: {
+      globalConfig: {
+        tools: {
+          execute_script: {
+            sandboxMode: true,
+            sandboxProvider: {
+              default: "docker",
+              docker: { dockerContainerScope: "global" },
+            },
+          },
+        },
+      },
+    },
+  }).execution.controllers.runtime;
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_write_sandbox",
+      name: "write_file",
+      args: { filePath: "runtime/ops_workdir/write-ok.txt", content: "ok" },
+    },
+    tool,
+    runtime,
+    agentContext: buildAgentContext(basePath, "admin", { runtime }),
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
+
+  assert.equal(result.toolName, "write_file");
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedPath, "/workspace/admin/runtime/ops_workdir/write-ok.txt");
+  assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), false);
+});
+
+test("search: text 输入超过上限时由 semantic-transfer 保存附件并直接提示", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-guard-"));
+  let invoked = false;
+  const tool = {
+    async invoke() {
+      invoked = true;
+      throw new Error("search concrete tool must not be invoked for overlong text input");
+    },
+  };
+
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_long_search_text",
+      name: "search",
+      args: { source: "text", query: "needle", text: "x".repeat(200001) },
+    },
+    tool,
+    runtime: {
+      basePath,
+      systemRuntime: { userId: "u-test", sessionId: "s-search" },
+      globalConfig: {},
+      userConfig: {},
+      attachmentService: buildAttachmentService(),
+    },
+    agentContext: buildAgentContext(basePath, "u-test"),
+    sessionId: "s-search",
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
+
+  assert.equal(invoked, false);
+  assert.equal(runnerResult.success, true);
+  assert.equal(result.toolName, "search");
+  assert.equal(result.ok, false);
+  assert.equal(result.message, "text is too long; search in smaller chunks");
+  assert.equal(Array.isArray(result.transferFiles), true);
+  assert.equal(result.transferFiles.length, 1);
+  assert.equal(result.transferFiles[0].name, "search-text.tool-input.txt");
+  assert.equal(typeof result.transferFiles[0].transferFilePath, "string");
+  assert.equal(result.toolInputOverflow?.field, "text");
+});
+
+test("patch_file: patch 超过 200000 字符时由 semantic-transfer 保存附件并直接提示", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-guard-"));
+  let invoked = false;
+  const tool = {
+    async invoke() {
+      invoked = true;
+      throw new Error("patch_file concrete tool must not be invoked for overlong input");
+    },
+  };
+
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_long_patch",
+      name: "patch_file",
+      args: { format: "apply_patch", patch: "x".repeat(200001) },
+    },
+    tool,
+    runtime: {
+      basePath,
+      systemRuntime: { userId: "u-test", sessionId: "s-patch" },
+      globalConfig: {},
+      userConfig: {},
+      attachmentService: buildAttachmentService(),
+    },
+    agentContext: buildAgentContext(basePath, "u-test"),
+    sessionId: "s-patch",
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
+
+  assert.equal(invoked, false);
+  assert.equal(runnerResult.success, true);
+  assert.equal(result.toolName, "patch_file");
+  assert.equal(result.ok, false);
+  assert.equal(result.message, "补丁内容过长，请分批应用或拆分 patch 后重试");
+  assert.equal(Array.isArray(result.transferFiles), true);
+  assert.equal(result.transferFiles.length, 1);
+  assert.equal(result.transferFiles[0].name, "patch-file-patch.tool-input.diff");
+  assert.equal(typeof result.transferFiles[0].transferFilePath, "string");
+  assert.equal(result.toolInputOverflow?.field, "patch");
+});
+
+test("read_file: 具体工具不判断大文件，原始内容交由 semantic-transfer 处理", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-guard-"));
   const filePath = path.join(basePath, "large.txt");
   await fs.writeFile(filePath, "y".repeat(8001), "utf8");
@@ -279,11 +489,70 @@ test("read_file: 文件内容超过 8000 字符时应直接返回长度错误", 
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const result = parseToolResult(await tool.invoke({ filePath: "large.txt" }));
+  const result = parseToolResult(await tool.invoke({ filePath: "large.txt", includeLineNumbers: false }));
 
   assert.equal(result.toolName, "read_file");
-  assert.equal(result.ok, false);
-  assert.equal(result.message, "文件内容过长，请分批读取");
+  assert.equal(result.ok, true);
+  assert.equal(result.content.length, 8001);
+  assert.equal(result.contentOmitted, undefined);
+  assert.equal(result.transferEnvelopes, undefined);
+});
+
+test("read_file: 大文件原始结果由 semantic-transfer 转为沙箱视角 original-file envelope", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
+  const basePath = path.join(workspaceRoot, "admin");
+  const hostFilePath = path.join(basePath, "runtime/ops_workdir/large_test_file.txt");
+  await fs.mkdir(path.dirname(hostFilePath), { recursive: true });
+  await fs.writeFile(hostFilePath, "y".repeat(8001), "utf8");
+
+  const agentContext = buildAgentContext(basePath, "admin", {
+    runtime: {
+      userConfig: {
+        tools: {
+          maxToolResultChars: 512,
+        },
+      },
+    },
+  });
+  const runtime = agentContext.execution.controllers.runtime;
+  const tools = createFileTool({ agentContext });
+  const tool = tools.find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  const rawToolResultText = await tool.invoke({
+      filePath: "/workspace/admin/runtime/ops_workdir/large_test_file.txt",
+      includeLineNumbers: true,
+      maxLines: 500,
+  });
+  const rawResult = parseToolResult(rawToolResultText);
+
+  assert.equal(rawResult.toolName, "read_file");
+  assert.equal(rawResult.ok, true);
+  assert.equal(rawResult.content.length > 8000, true);
+  assert.equal(rawResult.contentOmitted, undefined);
+  assert.equal(rawResult.resolvedPath, hostFilePath);
+  assert.equal(rawResult.transferEnvelopes, undefined);
+
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_result_text",
+    call: { name: "read_file" },
+    toolResultText: rawToolResultText,
+    runtime,
+    agentContext,
+  });
+  const result = parseToolResult(transferred.toolResultText);
+
+  assert.equal(result.toolName, "read_file");
+  assert.equal(result.ok, true);
+  assert.equal(result.resolvedPath, undefined);
+  assert.equal(result.content, undefined);
+  assert.equal(JSON.stringify(result).includes(workspaceRoot), false);
+  assert.equal(result.overflow_strategy, "original_file_reference");
+  assert.equal(result.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
+  assert.equal(result.transferEnvelopes?.[0]?.filePath, "/workspace/admin/runtime/ops_workdir/large_test_file.txt");
+  assert.equal(result.transferEnvelopes?.[0]?.storage?.originalFile, true);
+  assert.equal(result.transferEnvelopes?.[0]?.storage?.persisted, false);
 });
 
 test("read_file: should map docker sandbox /workspace/<userId> path to user workspace", async () => {
@@ -293,21 +562,29 @@ test("read_file: should map docker sandbox /workspace/<userId> path to user work
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, "{\"ok\":true}", "utf8");
 
-  const tools = createFileTool({ agentContext: buildAgentContext(basePath, "admin") });
+  const agentContext = buildAgentContext(basePath, "admin");
+  const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const result = parseToolResult(
-    await tool.invoke({
-      filePath: "/workspace/admin/runtime/ops_workdir/result.json",
-    }),
-  );
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_read_workspace_path",
+      name: "read_file",
+      args: { filePath: "/workspace/admin/runtime/ops_workdir/result.json" },
+    },
+    tool,
+    runtime: agentContext.execution.controllers.runtime,
+    agentContext,
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.content, "1 | {\"ok\":true}");
   assert.equal(result.includeLineNumbers, true);
-  assert.equal(result.resolvedPath, filePath);
+  assert.equal(result.resolvedPath, "/workspace/admin/runtime/ops_workdir/result.json");
+  assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), false);
 });
 
 test("read_file: should allow mapped sandbox path that points to mounted host directory", async () => {
@@ -317,8 +594,7 @@ test("read_file: should allow mapped sandbox path that points to mounted host di
   const mountedFile = path.join(mountedRoot, "sandbox-mounted.txt");
   await fs.writeFile(mountedFile, "mounted-ok", "utf8");
 
-  const tools = createFileTool({
-    agentContext: buildAgentContext(basePath, "admin", {
+  const agentContext = buildAgentContext(basePath, "admin", {
       runtime: {
         systemRuntime: {
           userId: "admin",
@@ -334,21 +610,28 @@ test("read_file: should allow mapped sandbox path that points to mounted host di
           },
         },
       },
-    }),
-  });
+    });
+  const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const result = parseToolResult(
-    await tool.invoke({
-      filePath: "/project/sandbox-mounted.txt",
-    }),
-  );
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_read_mounted_path",
+      name: "read_file",
+      args: { filePath: "/project/sandbox-mounted.txt" },
+    },
+    tool,
+    runtime: agentContext.execution.controllers.runtime,
+    agentContext,
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.content, "1 | mounted-ok");
-  assert.equal(result.resolvedPath, mountedFile);
+  assert.equal(result.resolvedPath, "/project/sandbox-mounted.txt");
+  assert.equal(String(result.resolvedPath || "").includes(mountedRoot), false);
 });
 
 test("read_file: should allow docker mount target path under /project", async () => {
@@ -362,8 +645,7 @@ test("read_file: should allow docker mount target path under /project", async ()
   await fs.mkdir(path.dirname(projectFile), { recursive: true });
   await fs.writeFile(projectFile, "project-mounted-ok", "utf8");
 
-  const tools = createFileTool({
-    agentContext: buildAgentContext(basePath, "admin", {
+  const agentContext = buildAgentContext(basePath, "admin", {
       runtime: {
         globalConfig: {
           tools: {
@@ -385,21 +667,28 @@ test("read_file: should allow docker mount target path under /project", async ()
           },
         },
       },
-    }),
-  });
+    });
+  const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const result = parseToolResult(
-    await tool.invoke({
-      filePath: "/project/agent/src/system-core/tools/execution/file-tool.js",
-    }),
-  );
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_read_project_mount_path",
+      name: "read_file",
+      args: { filePath: "/project/agent/src/system-core/tools/execution/file-tool.js" },
+    },
+    tool,
+    runtime: agentContext.execution.controllers.runtime,
+    agentContext,
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.content, "1 | project-mounted-ok");
-  assert.equal(result.resolvedPath, projectFile);
+  assert.equal(result.resolvedPath, "/project/agent/src/system-core/tools/execution/file-tool.js");
+  assert.equal(String(result.resolvedPath || "").includes(projectRoot), false);
 });
 
 test("read_file: 默认返回行号且可关闭行号", async () => {

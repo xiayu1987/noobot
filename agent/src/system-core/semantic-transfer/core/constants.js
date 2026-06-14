@@ -50,6 +50,7 @@ export const TRANSFER_REASON = Object.freeze({
   REUSE_DATA_PROCESSING_ARTIFACT: "reuse_data_processing_artifact",
   EXECUTE_SCRIPT_INPUT_TOO_LONG: "execute_script_input_too_long",
   WRITE_FILE_INPUT_TOO_LONG: "write_file_input_too_long",
+  PATCH_FILE_INPUT_TOO_LONG: "patch_file_input_too_long",
 });
 
 export const DEFAULT_TRANSFER_MIME_TYPE = "text/plain";

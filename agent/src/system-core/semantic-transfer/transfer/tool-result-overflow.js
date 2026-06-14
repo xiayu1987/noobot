@@ -101,6 +101,34 @@ function resolveReadFileOverflowFileAddress({ parsed = {}, pathView = {}, source
   );
 }
 
+function normalizeToolResultPathViews({
+  text = "",
+  runtime = {},
+  agentContext = null,
+} = {}) {
+  const parsed = parseJsonObjectSafely(text);
+  if (!parsed) return String(text || "");
+  const normalized = { ...parsed };
+  const resolvedPath = firstNormalizedString(parsed?.resolvedPath);
+  if (resolvedPath) {
+    const pathView = resolveTransferPathView({
+      runtime,
+      agentContext,
+      path: resolvedPath,
+      hostPath: resolvedPath,
+      purpose: "tool_result_text_path_view",
+    });
+    const displayPath = firstNormalizedString(
+      pathView?.displayPath,
+      pathView?.sandboxPath,
+      pathView?.relativePath,
+      resolvedPath,
+    );
+    if (displayPath) normalized.resolvedPath = displayPath;
+  }
+  return JSON.stringify(normalized);
+}
+
 function compactTransferFile(file = {}) {
   if (!isPlainObject(file)) return null;
   const attachmentMeta = compactObject(file?.attachmentMeta || {});
@@ -282,9 +310,16 @@ function normalizeReadFileOverflowResult({
     hostPath: String(parsed?.resolvedPath || sourcePath).trim(),
     purpose: "read_file_overflow_address",
   });
+  const publicPathView = compactObject({
+    displayPath: pathView?.displayPath,
+    sandboxPath: pathView?.sandboxPath,
+    relativePath: pathView?.relativePath,
+  });
   const fileAddress = resolveReadFileOverflowFileAddress({ parsed, pathView, sourcePath });
   const contentText = String(parsed?.content || "");
-  const contentLength = contentText.length;
+  const contentLength = Number.isFinite(Number(parsed?.contentLength))
+    ? Number(parsed.contentLength)
+    : contentText.length;
   const measuredLength = String(measuredText || rawText || "").length;
   const fileName = String(parsed?.fileName || path.basename(sourcePath)).trim();
   const transferEnvelope = createTransferEnvelope({
@@ -294,13 +329,13 @@ function normalizeReadFileOverflowResult({
     files: [
       {
         filePath: fileAddress,
-        pathView,
+        pathView: publicPathView,
         role: "primary",
         name: fileName,
         mimeType: DEFAULT_TRANSFER_MIME_TYPE,
       },
     ],
-    pathView,
+    pathView: publicPathView,
     storage: {
       kind: TRANSFER_STORAGE_KIND.WORKSPACE,
       originalFile: true,
@@ -420,16 +455,44 @@ export async function normalizeToolResultOverflow({
   const compactedText = compactToolResultTextForModel(rawText);
   const measuredText = String(compactedText || rawText || "");
   const maxChars = resolveToolResultInlineTextLimit(runtime, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS);
+  const parsed = parseJsonObjectSafely(rawText);
+  const isExplicitReadFileOriginalReference =
+    isReadFileToolOverflow({ call, parsed }) &&
+    (parsed?.contentOmitted === true || parsed?.content_omitted === true) &&
+    resolveReadFileOverflowSourcePath(parsed);
+  if (isExplicitReadFileOriginalReference) {
+    const readFileOverflowResult = normalizeReadFileOverflowResult({
+      call,
+      parsed,
+      rawText,
+      measuredText,
+      maxChars,
+      runtime,
+      agentContext,
+    });
+    if (readFileOverflowResult) {
+      return {
+        toolResultText: readFileOverflowResult,
+        overflowed: true,
+        rawLength: rawText.length,
+        measuredLength: measuredText.length,
+      };
+    }
+  }
   if (measuredText.length <= maxChars) {
+    const normalizedMeasuredText = normalizeToolResultPathViews({
+      text: measuredText,
+      runtime,
+      agentContext,
+    });
     return {
-      toolResultText: measuredText,
+      toolResultText: normalizedMeasuredText,
       overflowed: false,
       rawLength: rawText.length,
-      measuredLength: measuredText.length,
+      measuredLength: normalizedMeasuredText.length,
     };
   }
 
-  const parsed = parseJsonObjectSafely(rawText);
   const readFileOverflowResult = normalizeReadFileOverflowResult({
     call,
     parsed,
