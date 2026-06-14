@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgentCapabilityModelInvoker } from "../index.js";
+import { createAgentCapabilityModelInvoker } from "../../../../../src/system-core/agent/core/capability-mini-runner/index.js";
 
 function createFakeModel(responses = []) {
   let index = 0;

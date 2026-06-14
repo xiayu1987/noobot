@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { composeSystemInfoSections } from "../system-prompt-formatter.js";
+import { composeSystemInfoSections } from "../../../../src/system-core/context/formatters/system-prompt-formatter.js";
 
 test("composeSystemInfoSections omits connector prompt blocks when no connector is selected", () => {
   const sections = composeSystemInfoSections({

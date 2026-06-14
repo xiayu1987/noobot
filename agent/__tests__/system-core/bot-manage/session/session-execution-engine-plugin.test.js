@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
-import { SessionExecutionEngine } from "../session-execution-engine.js";
+import { SessionExecutionEngine } from "../../../../src/system-core/bot-manage/session/session-execution-engine.js";
 
 function createWorkspaceService(basePath) {
   return { getWorkspacePath: () => basePath };
