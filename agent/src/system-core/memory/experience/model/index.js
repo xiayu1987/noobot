@@ -102,7 +102,7 @@ function parseExperienceModelText(raw = "") {
 
 function renderExperienceModelText(modelTree = {}) {
   const tree = normalizeModelTree(modelTree);
-  const lines = ["# experience model (text protocol)"];
+  const lines = ["【经验教训字段模型】"];
   for (const domain of Object.keys(tree).sort()) {
     lines.push(`DOMAIN: ${domain}`);
     const categories = tree[domain] && typeof tree[domain] === "object" ? tree[domain] : {};

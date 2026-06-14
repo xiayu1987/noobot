@@ -5,12 +5,26 @@
  */
 import { getExperiencePatchPromptMeta } from "../experience/schema-config.js";
 
+function resolveExperiencePatchPromptMeta(promptI18n = {}, key = "") {
+  const fallback = getExperiencePatchPromptMeta(key);
+  const normalizedKey = String(key || "").trim().toLowerCase();
+  const localized =
+    promptI18n?.experiencePatchProtocols?.[normalizedKey] ||
+    (typeof promptI18n?.experiencePatchProtocol === "function"
+      ? promptI18n.experiencePatchProtocol({ key: normalizedKey })
+      : null);
+  return {
+    protocol: String(localized?.protocol || fallback.protocol || "").trim(),
+    example: String(localized?.example || fallback.example || "").trim(),
+  };
+}
+
 export function buildDailyExperiencePrompt({
   promptI18n = {},
   knownDomainText = "",
   shortMemoryItems = [],
 } = {}) {
-  const patchMeta = getExperiencePatchPromptMeta("daily");
+  const patchMeta = resolveExperiencePatchPromptMeta(promptI18n, "daily");
   const builder = promptI18n?.dailyExperiencePrompt;
   if (typeof builder === "function") {
     const prompt = String(
@@ -46,7 +60,7 @@ export function buildWeeklySummaryPrompt({
   knownCategoryText = "",
   mergedText = "",
 } = {}) {
-  const patchMeta = getExperiencePatchPromptMeta("weekly");
+  const patchMeta = resolveExperiencePatchPromptMeta(promptI18n, "weekly");
   const builder = promptI18n?.weeklySummaryPrompt;
   if (typeof builder === "function") {
     const prompt = String(
@@ -84,7 +98,7 @@ export function buildMonthlySummaryPrompt({
   knownTreeText = "",
   mergedText = "",
 } = {}) {
-  const patchMeta = getExperiencePatchPromptMeta("monthly");
+  const patchMeta = resolveExperiencePatchPromptMeta(promptI18n, "monthly");
   const builder = promptI18n?.monthlySummaryPrompt;
   if (typeof builder === "function") {
     const prompt = String(
@@ -122,7 +136,7 @@ export function buildYearlySummaryPrompt({
   knownTreeText = "",
   mergedText = "",
 } = {}) {
-  const patchMeta = getExperiencePatchPromptMeta("yearly");
+  const patchMeta = resolveExperiencePatchPromptMeta(promptI18n, "yearly");
   const builder = promptI18n?.yearlySummaryPrompt;
   if (typeof builder === "function") {
     const prompt = String(

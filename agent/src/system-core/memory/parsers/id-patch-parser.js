@@ -59,16 +59,19 @@ export function parseIdPatchCommands(text = "", { idPrefix = "" } = {}) {
   const commands = [];
   const normalizedPrefix = String(idPrefix || "").trim().toUpperCase();
   for (const line of splitPatchLines(text)) {
-    const matched = /^(\w+)\s+([A-Za-z]*\d+)(?:\s+([\s\S]*))?$/i.exec(line);
+    const matched =
+      /^(\w+)\s+([A-Za-z]*\s*(?:\[\s*\d+\s*\]|\d+))(?:\s+([\s\S]*))?$/i.exec(
+        line,
+      );
     if (!matched) continue;
     const action = String(matched[1] || "").trim().toUpperCase();
     if (!["ADD", "UPDATE", "DELETE"].includes(action)) continue;
     const token = String(matched[2] || "").trim();
-    const tokenMatched = /^([A-Za-z]*)(\d+)$/i.exec(token);
+    const tokenMatched = /^([A-Za-z]*)\s*(?:\[\s*(\d+)\s*\]|(\d+))$/i.exec(token);
     if (!tokenMatched) continue;
     const tokenPrefix = String(tokenMatched[1] || "").trim().toUpperCase();
     if (normalizedPrefix && tokenPrefix !== normalizedPrefix) continue;
-    const id = Number(tokenMatched[2]);
+    const id = Number(tokenMatched[2] || tokenMatched[3]);
     if (!Number.isFinite(id) || id <= 0) continue;
     commands.push({
       action,

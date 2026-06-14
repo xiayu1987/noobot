@@ -5,14 +5,38 @@
  */
 
 const DAILY_EXPERIENCE_PATCH_EXAMPLE =
-  'ADD D1 domain="Domain" new=true experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';
+  'ADD D[1] domain="Domain" new=true experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';
 
 const WEEKLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD W1 category="Category" experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';
+  'ADD W[1] category="Category" experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"';
 const MONTHLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD M1 category="Category" subcategory="Subcategory" patterns="Pattern 1 || Pattern 2" methodologies="Method 1 || Method 2"';
+  'ADD M[1] category="Category" subcategory="Subcategory" patterns="Pattern 1 || Pattern 2" methodologies="Method 1 || Method 2"';
 const YEARLY_SUMMARY_PATCH_EXAMPLE =
-  'ADD Y1 category="Category" subcategory="Subcategory" principles="Principle 1 || Principle 2" reflections="Reflection 1 || Reflection 2"';
+  'ADD Y[1] category="Category" subcategory="Subcategory" principles="Principle 1 || Principle 2" reflections="Reflection 1 || Reflection 2"';
+
+
+const EXPERIENCE_PATCH_PROTOCOLS = Object.freeze({
+  daily: Object.freeze({
+    protocol:
+      'ADD/UPDATE/DELETE D[integer] domain="Domain" new=true|false experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"',
+    example: DAILY_EXPERIENCE_PATCH_EXAMPLE,
+  }),
+  weekly: Object.freeze({
+    protocol:
+      'ADD/UPDATE/DELETE W[integer] category="Category" experiences="Experience 1 || Experience 2" lessons="Lesson 1 || Lesson 2"',
+    example: WEEKLY_SUMMARY_PATCH_EXAMPLE,
+  }),
+  monthly: Object.freeze({
+    protocol:
+      'ADD/UPDATE/DELETE M[integer] category="Category" subcategory="Subcategory" patterns="Pattern 1 || Pattern 2" methodologies="Method 1 || Method 2"',
+    example: MONTHLY_SUMMARY_PATCH_EXAMPLE,
+  }),
+  yearly: Object.freeze({
+    protocol:
+      'ADD/UPDATE/DELETE Y[integer] category="Category" subcategory="Subcategory" principles="Principle 1 || Principle 2" reflections="Reflection 1 || Reflection 2"',
+    example: YEARLY_SUMMARY_PATCH_EXAMPLE,
+  }),
+});
 
 export const SYSTEM_PROMPT_FORMATTER_I18N = {
   contextPrompt: {
@@ -46,6 +70,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
   },
   memoryPrompt: {
+    experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
     prompt: (params = {}) => {
       const longMemoryModel = String(params.longMemoryModel || "").trim();
       const longMemoryMetadata = String(params.longMemoryMetadata || "").trim();
@@ -54,16 +79,23 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
           ? params.existingLongMemory
           : JSON.stringify(params.existingLongMemory ?? "", null, 2);
       const promptPayload = JSON.stringify(params.promptPayload ?? []);
-      const modelRuleText = longMemoryModel
-        ? `Please strictly follow this long-term memory modeling rule (from long-memory-model.md):\n${longMemoryModel}`
-        : "If no memory model rule is provided, prioritize stable preferences and long-term constraints.";
+      const fieldModelText = longMemoryModel
+        ? `[Long-memory field model from long-memory-model.md]\n${longMemoryModel}`
+        : "[Long-memory field model] If no field model is provided, prioritize stable preferences and long-term constraints.";
       return [
         "You are a long-term memory refiner.",
-        modelRuleText,
+        fieldModelText,
+        "[Long-memory ID+PATCH Protocol]",
+        "Output one command per line. Output commands only; no markdown, JSON, or explanations.",
+        "ADD L[memoryId] [stable long-term memory]",
+        "UPDATE L[memoryId] [updated stable long-term memory]",
+        "DELETE L[memoryId]",
+        "ADD M[metadataId] key=\"field\" value=\"value\"",
+        "UPDATE M[metadataId] key=\"field\" value=\"value\"",
+        "DELETE M[metadataId]",
+        "Hard constraint: L/M IDs must be positive integers; UPDATE/DELETE must reuse existing IDs; ADD must use an unused ID.",
+        "Memory rules: record only stable, long-term, reusable information; do not store temporary tasks, one-off errors, short-term schedules, or unsupported guesses; use UPDATE when new information corrects old information, DELETE when old information expires or is denied, and do not duplicate near-equivalent memories.",
         'Based on "existing long-term memory", "long-memory metadata", and "new short-term memory chunks", output ID+PATCH updates.',
-        "Output ID+PATCH lines only. No markdown or explanations.",
-        "Long-memory patch: ADD/UPDATE/DELETE L[integer] [memory content]",
-        "Long-memory metadata patch: ADD/UPDATE/DELETE M[integer] key=\"field\" value=\"value\"",
         `Existing long-term preferences:\n${existingLongMemory}`,
         `Existing long-memory metadata:\n${longMemoryMetadata || "(empty)"}`,
         `New short-term memory chunks:\n${promptPayload}`,

@@ -29,11 +29,11 @@ test("schema-config exposes prompt protocol/example for all layers", () => {
 test("collectPatchItemsByFieldMap maps aliases/types and required fields", () => {
   const items = collectPatchItemsByFieldMap({
     rawContent: [
-      'ADD Z1 category="架构:设计" experiences="经验1 || 经验1" flag=true',
-      'UPDATE Z1 category="架构/设计" experiences="经验2"',
-      'ADD Z2 category="待删除" experiences="经验x"',
-      "DELETE Z2",
-      "ADD Z3 experiences=\"无分类\"",
+      'ADD Z[1] category="架构:设计" experiences="经验1 || 经验1" flag=true',
+      'UPDATE Z[1] category="架构/设计" experiences="经验2"',
+      'ADD Z[2] category="待删除" experiences="经验x"',
+      "DELETE Z[2]",
+      "ADD Z[3] experiences=\"无分类\"",
     ].join("\n"),
     idPrefix: "Z",
     fieldMap: {
@@ -56,8 +56,8 @@ test("weekly parser handles patch commands and error callback", () => {
   const errors = [];
   const weekly = normalizeWeeklySummaryOutput(
     [
-      'ADD W1 category="工程/质量" experiences="经验A || 经验B" lessons="教训A"',
-      'UPDATE W1 category="工程/质量" experiences="经验C" lessons="教训B"',
+      'ADD W[1] category="工程/质量" experiences="经验A || 经验B" lessons="教训A"',
+      'UPDATE W[1] category="工程/质量" experiences="经验C" lessons="教训B"',
     ].join("\n"),
     "技术域",
     { onParseError: (payload) => errors.push(payload) },
@@ -82,8 +82,8 @@ test("weekly parser handles patch commands and error callback", () => {
 test("monthly/yearly parser groups category sub-items by schema", () => {
   const monthly = normalizeMonthlySummaryOutput(
     [
-      'ADD M1 category="研发效能" subcategory="测试" patterns="回归频繁" methodologies="自动化优先"',
-      'ADD M2 category="研发效能" subcategory="发布" patterns="窗口固定" methodologies="灰度发布"',
+      'ADD M[1] category="研发效能" subcategory="测试" patterns="回归频繁" methodologies="自动化优先"',
+      'ADD M[2] category="研发效能" subcategory="发布" patterns="窗口固定" methodologies="灰度发布"',
     ].join("\n"),
     "技术域",
   );
@@ -95,7 +95,7 @@ test("monthly/yearly parser groups category sub-items by schema", () => {
   ]);
 
   const yearly = normalizeYearlySummaryOutput(
-    'ADD Y1 category="系统设计" subcategory="稳定性" principles="先观测" reflections="容量前置"',
+    'ADD Y[1] category="系统设计" subcategory="稳定性" principles="先观测" reflections="容量前置"',
     "技术域",
   );
   assert.deepEqual(yearly.categories, [
@@ -135,4 +135,15 @@ test("en-US i18n memory prompt uses injected patch protocol/example", () => {
   });
   assert.match(text, /CUSTOM_PROTOCOL/);
   assert.match(text, /CUSTOM_EXAMPLE/);
+});
+
+test("experience prompt builder prefers localized i18n patch protocol", () => {
+  const text = buildDailyExperiencePrompt({
+    promptI18n: EN_AGENT_PROMPT_I18N.memoryPrompt,
+    knownDomainText: "None",
+    shortMemoryItems: [],
+  });
+  assert.match(text, /D\[integer\]/);
+  assert.match(text, /domain="Domain"/);
+  assert.doesNotMatch(text, /整数ID|领域/);
 });
