@@ -5,7 +5,7 @@
  */
 import { toIsoWeekInfo } from "../../utils/date.js";
 import { buildWeeklySummaryPrompt } from "../../prompts/builders.js";
-import { isAbortLikeError, throwIfAborted } from "../workflow.js";
+import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
 
 export async function runWeeklySummaryIfNeeded({
   storage,

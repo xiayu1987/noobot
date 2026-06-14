@@ -14,13 +14,12 @@ import { getModelDefaultFields } from "../spec/defaults.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "../resolver/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
+import {
+  buildPluginModelHeaders,
+  MODEL_NAME_HEADER_KEY,
+  PARENT_SESSION_HEADER_KEY,
+} from "../headers/plugin-headers.js";
 
-const MODEL_NAME_HEADER_KEY = "X-Model-Name";
-const FLOW_HEADER_KEY = "X-Harness-Flow";
-const PURPOSE_HEADER_KEY = "X-Harness-Purpose";
-const DOMAIN_HEADER_KEY = "X-Harness-Domain";
-const SESSION_HEADER_KEY = "X-Harness-Session-Id";
-const PARENT_SESSION_HEADER_KEY = "parentSessionid";
 const DEFAULT_MAIN_FLOW = "agent.main";
 const DEFAULT_MAIN_PURPOSE = "main_agent";
 const DEFAULT_MAIN_DOMAIN = "primary";
@@ -161,10 +160,12 @@ function buildChatModelConfiguration(normalizedSpec = {}, options = {}) {
   const parentSessionId = resolveHeaderParentSessionId(options);
   const defaultHeaders = {
     [MODEL_NAME_HEADER_KEY]: String(normalizedSpec?.model || "").trim(),
-    [FLOW_HEADER_KEY]: DEFAULT_MAIN_FLOW,
-    [PURPOSE_HEADER_KEY]: DEFAULT_MAIN_PURPOSE,
-    [DOMAIN_HEADER_KEY]: DEFAULT_MAIN_DOMAIN,
-    ...(sessionId ? { [SESSION_HEADER_KEY]: sessionId } : {}),
+    ...buildPluginModelHeaders({
+      flow: DEFAULT_MAIN_FLOW,
+      purpose: DEFAULT_MAIN_PURPOSE,
+      domain: DEFAULT_MAIN_DOMAIN,
+      sessionId,
+    }),
     ...(parentSessionId ? { [PARENT_SESSION_HEADER_KEY]: parentSessionId } : {}),
     ...normalizeAdditionalHeaders(options?.additionalHeaders),
   };

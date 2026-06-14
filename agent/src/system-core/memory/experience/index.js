@@ -25,7 +25,7 @@ import {
   writeExperienceModel as writeExperienceModelFile,
   upsertExperienceModelEntries as upsertExperienceModelEntriesInMemory,
 } from "./model/index.js";
-import { isAbortLikeError } from "./workflow.js";
+import { isAbortLikeError } from "./abort-control.js";
 import {
   normalizeExperienceMetadata,
   parseExperienceMetadataText,

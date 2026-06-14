@@ -161,7 +161,7 @@ test("runAgentRuntimeHook exposes hook client channel to plugins and sanitizes f
     assert.equal(typeof ctx?.hookClientChannel?.emit, "function");
     assert.equal(typeof ctx?.emitHookClientEvent, "function");
     ctx.emitHookClientEvent("plugin_step", {
-      plugin: "harness",
+      plugin: "agentPlugin",
       point: "before_turn",
       stage: "trace_done",
       fsmState: "planning",
@@ -183,7 +183,7 @@ test("runAgentRuntimeHook exposes hook client channel to plugins and sanitizes f
   const pluginEvent = events.find((evt) => evt?.event === "hook_plugin_progress");
   assert.ok(pluginEvent);
   assert.equal(pluginEvent?.data?.event, "plugin_step");
-  assert.equal(pluginEvent?.data?.data?.plugin, "harness");
+  assert.equal(pluginEvent?.data?.data?.plugin, "agentPlugin");
   assert.equal(pluginEvent?.data?.data?.fsmState, "planning");
   assert.equal("agent" in (pluginEvent?.data?.data || {}), false);
   assert.equal("agentContext" in (pluginEvent?.data?.data || {}), false);

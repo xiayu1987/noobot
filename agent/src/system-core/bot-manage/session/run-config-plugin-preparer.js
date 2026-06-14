@@ -8,6 +8,12 @@ import { createBotHookManager } from "../hook/index.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
 import { resolvePluginRegisterByCapability } from "../../plugin/plugin-loader.js";
 import { PLUGIN_CAPABILITY } from "../../plugin/capabilities.js";
+import {
+  createPluginSelectorSet,
+  PLUGIN_REGISTRATION_FLAG,
+  PLUGIN_RUNTIME_PROPERTY,
+  PLUGIN_SLOT_KEY,
+} from "../../plugin/plugin-constants.js";
 import { createAgentCapabilityModelInvoker } from "../../agent/core/capability-mini-runner/index.js";
 import {
   createPluginPolicyApi,
@@ -19,97 +25,90 @@ import {
   selectHookManager,
 } from "./session-execution-engine-utils.js";
 
-export class RunConfigExtensionPreparer {
+export class RunConfigPluginPreparer {
   constructor({
     globalConfig = {},
     workspaceService = null,
     loadedDynamicPlugins = null,
-    extensionRuntime = {},
+    pluginRuntime = {},
     normalizeStringArray = null,
-    mergeModelExtensionOptions = null,
-    mergeHarnessExtensionOptions = null,
-    createExtensionResolveModelMessages = null,
-    createHarnessResolveModelMessages = null,
-    createExtensionResolveMessageBlock = null,
-    createHarnessResolveMessageBlock = null,
-    createExtensionMarkMessagesSummarized = null,
-    createHarnessMarkMessagesSummarized = null,
+    mergePluginOptions = null,
+    createPluginResolveModelMessages = null,
+    createPluginResolveMessageBlock = null,
+    createPluginMarkMessagesSummarized = null,
     createDetachedSubSessionRunner = null,
     createBotSubSessionRunner = null,
     createGeneratedArtifactPersister = null,
+    createBotPluginScopedJsonWriter = null,
     createScopedJsonWriter = null,
-    createWorkflowScopedJsonWriter = null,
+    createBotPluginScopedEventLogger = null,
     createScopedEventLogger = null,
-    createWorkflowScopedEventLogger = null,
   } = {}) {
     this.globalConfig = globalConfig;
     this.workspaceService = workspaceService;
     this.loadedDynamicPlugins = loadedDynamicPlugins;
-    this.extensionRuntime = extensionRuntime && typeof extensionRuntime === "object" ? extensionRuntime : {};
+    this.pluginRuntime = pluginRuntime && typeof pluginRuntime === "object" ? pluginRuntime : {};
     this.normalizeStringArray =
       typeof normalizeStringArray === "function" ? normalizeStringArray : (input) => input;
-    this.mergeHarnessExtensionOptions =
-      typeof mergeModelExtensionOptions === "function"
-        ? mergeModelExtensionOptions
-        : typeof mergeHarnessExtensionOptions === "function"
-          ? mergeHarnessExtensionOptions
+    this.mergeAgentPluginOptions =
+      typeof mergePluginOptions === "function"
+        ? mergePluginOptions
         : (...items) => Object.assign({}, ...items.filter((item) => item && typeof item === "object"));
-    this.createHarnessResolveModelMessages =
-      createExtensionResolveModelMessages || createHarnessResolveModelMessages;
-    this.createHarnessResolveMessageBlock =
-      createExtensionResolveMessageBlock || createHarnessResolveMessageBlock;
-    this.createHarnessMarkMessagesSummarized =
-      createExtensionMarkMessagesSummarized || createHarnessMarkMessagesSummarized;
+    this.createAgentPluginResolveModelMessages = createPluginResolveModelMessages;
+    this.createAgentPluginResolveMessageBlock = createPluginResolveMessageBlock;
+    this.createAgentPluginMarkMessagesSummarized = createPluginMarkMessagesSummarized;
     this.createBotSubSessionRunner =
       createDetachedSubSessionRunner || createBotSubSessionRunner;
     this.createGeneratedArtifactPersister = createGeneratedArtifactPersister;
-    this.createWorkflowScopedJsonWriter = createScopedJsonWriter || createWorkflowScopedJsonWriter;
-    this.createWorkflowScopedEventLogger = createScopedEventLogger || createWorkflowScopedEventLogger;
+    this.createBotPluginScopedJsonWriter =
+      createBotPluginScopedJsonWriter || createScopedJsonWriter;
+    this.createBotPluginScopedEventLogger =
+      createBotPluginScopedEventLogger || createScopedEventLogger;
   }
 
   prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    const preparedHarnessConfig = this.prepareHarnessRunConfig({
+    const preparedAgentPluginConfig = this.prepareAgentPluginRunConfig({
       userId,
       runConfig,
       userConfig,
     });
     const preparedBotHookConfig = this.prepareBotHookRunConfig({
-      runConfig: preparedHarnessConfig,
+      runConfig: preparedAgentPluginConfig,
     });
-    return this.prepareWorkflowRunConfig({
+    return this.prepareBotPluginRunConfig({
       userId,
       runConfig: preparedBotHookConfig,
       userConfig,
     });
   }
 
-  resolveHarnessPluginOptions({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    const { harnessPluginSelectors = new Set(["harness"]) } = this.extensionRuntime;
+  resolveAgentPluginOptions({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    const agentPluginSelectors = resolveAgentPluginSelectors(this.pluginRuntime);
     const effectiveConfig = mergeConfig(
       this.globalConfig || {},
       userConfig && typeof userConfig === "object" ? userConfig : {},
     );
-    const effectiveHarness = resolvePluginOptionsFromConfig(
+    const effectiveAgentPlugin = resolvePluginOptionsFromConfig(
       effectiveConfig,
-      harnessPluginSelectors,
+      agentPluginSelectors,
     );
-    if (effectiveHarness?.enabled === false) return { enabled: false, mode: "off" };
-    const runHarness = resolvePluginOptionsFromConfig(
+    if (effectiveAgentPlugin?.enabled === false) return { enabled: false, mode: "off" };
+    const runAgentPlugin = resolvePluginOptionsFromConfig(
       runConfig,
-      harnessPluginSelectors,
+      agentPluginSelectors,
     );
-    if (runHarness?.enabled === false) return { enabled: false, mode: "off" };
+    if (runAgentPlugin?.enabled === false) return { enabled: false, mode: "off" };
     const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
       ? runConfig.selectedPlugins
       : [];
-    const harnessSelected = selectedPlugins.some((item) =>
-      harnessPluginSelectors.has(String(item || "").trim()),
+    const agentPluginSelected = selectedPlugins.some((item) =>
+      agentPluginSelectors.has(String(item || "").trim()),
     );
-    const options = this.mergeHarnessExtensionOptions(
-      effectiveHarness,
-      runHarness,
+    const options = this.mergeAgentPluginOptions(
+      effectiveAgentPlugin,
+      runAgentPlugin,
     );
-    const normalizedMode = String(harnessSelected ? "on" : options?.mode ?? "off")
+    const normalizedMode = String(agentPluginSelected ? "on" : options?.mode ?? "off")
       .trim()
       .toLowerCase();
     const resolvedMode = normalizedMode === "on" ? "on" : "off";
@@ -121,13 +120,13 @@ export class RunConfigExtensionPreparer {
           ? this.workspaceService.getWorkspacePath(userId)
           : "";
     const next = { ...options, enabled: true, mode: "on", basePath };
-    next.resolveModelMessages = this.createHarnessResolveModelMessages({
-      harnessOptions: next,
+    next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
+      agentPluginOptions: next,
     });
-    next.resolveMessageBlock = this.createHarnessResolveMessageBlock({
-      harnessOptions: next,
+    next.resolveMessageBlock = this.createAgentPluginResolveMessageBlock({
+      agentPluginOptions: next,
     });
-    next.markMessagesSummarized = this.createHarnessMarkMessagesSummarized();
+    next.markMessagesSummarized = this.createAgentPluginMarkMessagesSummarized();
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
         ? Math.min(Number(next.miniRunnerMaxTurns), 5)
@@ -155,71 +154,73 @@ export class RunConfigExtensionPreparer {
     return next;
   }
 
-  prepareHarnessRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    const { harnessPluginKey = "harness" } = this.extensionRuntime;
-    const harnessOptions = this.resolveHarnessPluginOptions({
+
+  prepareAgentPluginRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    const agentPluginKey = resolveAgentPluginKey(this.pluginRuntime);
+    const agentPluginOptions = this.resolveAgentPluginOptions({
       userId,
       runConfig,
       userConfig,
     });
-    if (!harnessOptions.enabled) return runConfig;
+    if (!agentPluginOptions.enabled) return runConfig;
     return this.prepareRegisteredPluginRunConfig({
       runConfig,
-      options: harnessOptions,
-      pluginName: harnessPluginKey,
+      options: agentPluginOptions,
+      pluginName: agentPluginKey,
       capability: PLUGIN_CAPABILITY.AGENT_REGISTER,
       managerKey: "hookManager",
       hooksKey: "hooks",
-      runtimeKey: "harness",
-      registrationFlag: "__noobotHarnessPluginRegistered",
+      runtimeKey: PLUGIN_SLOT_KEY.AGENT,
+      registrationFlag: PLUGIN_REGISTRATION_FLAG.AGENT,
       createManager: createAgentHookManager,
     });
   }
 
-  resolveWorkflowPluginOptions({ runConfig = {}, userConfig = {} } = {}) {
-    const { workflowPluginSelectors = new Set(["workflow"]) } = this.extensionRuntime;
+
+  resolveBotPluginOptions({ runConfig = {}, userConfig = {} } = {}) {
+    const botPluginSelectors = resolveBotPluginSelectors(this.pluginRuntime);
     const effectiveConfig = mergeConfig(
       this.globalConfig || {},
       userConfig && typeof userConfig === "object" ? userConfig : {},
     );
-    const effectiveWorkflow = resolvePluginOptionsFromConfig(
+    const effectiveBotPlugin = resolvePluginOptionsFromConfig(
       effectiveConfig,
-      workflowPluginSelectors,
+      botPluginSelectors,
     );
-    if (effectiveWorkflow?.enabled === false) return { enabled: false, mode: "off" };
-    const runWorkflow = resolvePluginOptionsFromConfig(
+    if (effectiveBotPlugin?.enabled === false) return { enabled: false, mode: "off" };
+    const runBotPlugin = resolvePluginOptionsFromConfig(
       runConfig,
-      workflowPluginSelectors,
+      botPluginSelectors,
     );
-    if (runWorkflow?.enabled === false) return { enabled: false, mode: "off" };
+    if (runBotPlugin?.enabled === false) return { enabled: false, mode: "off" };
     const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
       ? runConfig.selectedPlugins
       : [];
-    const workflowSelected = selectedPlugins.some((item) =>
-      workflowPluginSelectors.has(String(item || "").trim()),
+    const botPluginSelected = selectedPlugins.some((item) =>
+      botPluginSelectors.has(String(item || "").trim()),
     );
-    const normalizedEffectiveMode = String(effectiveWorkflow?.mode ?? "off")
+    const normalizedEffectiveMode = String(effectiveBotPlugin?.mode ?? "off")
       .trim()
       .toLowerCase();
-    const normalizedRunMode = String(runWorkflow?.mode ?? "")
+    const normalizedRunMode = String(runBotPlugin?.mode ?? "")
       .trim()
       .toLowerCase();
-    // keep user/global on as baseline; runConfig should primarily elevate workflow,
+    // keep user/global on as baseline; runConfig should primarily elevate the bot plugin,
     // unless it explicitly disables plugin via enabled=false (used by node sub-session strategy)
     const resolvedMode =
-      workflowSelected || normalizedRunMode === "on" || normalizedEffectiveMode === "on"
+      botPluginSelected || normalizedRunMode === "on" || normalizedEffectiveMode === "on"
         ? "on"
         : "off";
     if (resolvedMode !== "on") return { enabled: false, mode: "off" };
     const options = {
-      ...(effectiveWorkflow && typeof effectiveWorkflow === "object" ? effectiveWorkflow : {}),
-      ...(runWorkflow && typeof runWorkflow === "object" ? runWorkflow : {}),
+      ...(effectiveBotPlugin && typeof effectiveBotPlugin === "object" ? effectiveBotPlugin : {}),
+      ...(runBotPlugin && typeof runBotPlugin === "object" ? runBotPlugin : {}),
     };
     const next = { ...options, enabled: true, mode: "on" };
-    next.miniRunnerMaxTurns = BUILTIN_THRESHOLDS.workflow.miniRunnerMaxTurns;
-    next.maxAutoTransitions = BUILTIN_THRESHOLDS.workflow.maxAutoTransitions;
-    next.resolveModelMessages = this.createHarnessResolveModelMessages({
-      harnessOptions: next,
+    next.miniRunnerMaxTurns = BUILTIN_THRESHOLDS.botPlugin.miniRunnerMaxTurns;
+    next.maxAutoTransitions = BUILTIN_THRESHOLDS.botPlugin.maxAutoTransitions;
+    next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
+      botPluginOptions: next,
     });
     if (!String(next?.semanticMode || "").trim()) {
       next.semanticMode = "separate_model";
@@ -231,9 +232,8 @@ export class RunConfigExtensionPreparer {
       next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
         maxTurns: next?.miniRunnerMaxTurns,
         enableToolBinding: false,
-        headerNamespace: "workflow",
-        flowPrefix: "workflow",
-        includeHarnessCompatHeaders: true,
+        headerNamespace: "plugin",
+        flowPrefix: "botPlugin",
         fallbackGlobalConfig: this.globalConfig || {},
         fallbackUserConfig: userConfig && typeof userConfig === "object" ? userConfig : {},
       });
@@ -244,35 +244,37 @@ export class RunConfigExtensionPreparer {
     if (typeof next?.generatedArtifactPersister !== "function") {
       next.generatedArtifactPersister = this.createGeneratedArtifactPersister();
     }
-    if (typeof next?.workflowDialogPersister !== "function") {
-      next.workflowDialogPersister = this.createWorkflowScopedJsonWriter();
+    if (typeof next?.botPluginDialogPersister !== "function") {
+      next.botPluginDialogPersister = this.createBotPluginScopedJsonWriter();
     }
-    if (typeof next?.workflowEventLogger !== "function") {
-      next.workflowEventLogger = this.createWorkflowScopedEventLogger();
+    if (typeof next?.botPluginEventLogger !== "function") {
+      next.botPluginEventLogger = this.createBotPluginScopedEventLogger();
     }
     return next;
   }
 
-  prepareWorkflowRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    const { workflowPluginKey = "workflow" } = this.extensionRuntime;
-    const workflowOptions = this.resolveWorkflowPluginOptions({
+
+  prepareBotPluginRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    const botPluginKey = resolveBotPluginKey(this.pluginRuntime);
+    const botPluginOptions = this.resolveBotPluginOptions({
       userId,
       runConfig,
       userConfig,
     });
-    if (!workflowOptions.enabled) return runConfig;
+    if (!botPluginOptions.enabled) return runConfig;
     return this.prepareRegisteredPluginRunConfig({
       runConfig,
-      options: workflowOptions,
-      pluginName: workflowPluginKey,
+      options: botPluginOptions,
+      pluginName: botPluginKey,
       capability: PLUGIN_CAPABILITY.BOT_REGISTER,
       managerKey: "botHookManager",
       hooksKey: "botHooks",
-      runtimeKey: "workflow",
-      registrationFlag: "__noobotWorkflowPluginRegistered",
+      runtimeKey: PLUGIN_SLOT_KEY.BOT,
+      registrationFlag: PLUGIN_REGISTRATION_FLAG.BOT,
       createManager: createBotHookManager,
     });
   }
+
 
   prepareBotHookRunConfig({ runConfig = {} } = {}) {
     const botHookManager = selectHookManager({
@@ -310,7 +312,8 @@ export class RunConfigExtensionPreparer {
       options,
       runConfig,
     });
-    const alreadyRegistered = manager?.[registrationFlag] === true;
+    const registrationFlags = normalizeRegistrationFlags([registrationFlag]);
+    const alreadyRegistered = registrationFlags.some((flag) => manager?.[flag] === true);
     if (!alreadyRegistered) {
       const registerPlugin = resolvePluginRegisterByCapability(
         this.loadedDynamicPlugins,
@@ -318,11 +321,7 @@ export class RunConfigExtensionPreparer {
       );
       if (typeof registerPlugin === "function") {
         registerPlugin(pluginApi, options);
-        Object.defineProperty(manager, registrationFlag, {
-          value: true,
-          enumerable: false,
-          configurable: true,
-        });
+        defineRegistrationFlags(manager, registrationFlags);
       }
     } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
       // Keep per-run policy patch behavior even when hook registration is reused.
@@ -358,6 +357,7 @@ export class RunConfigExtensionPreparer {
         : {}),
       plugins: {
         ...(runConfig?.plugins || {}),
+        [runtimeKey]: options,
         [pluginName]: options,
       },
     };
@@ -388,4 +388,44 @@ export class RunConfigExtensionPreparer {
       },
     };
   }
+}
+
+function resolveAgentPluginKey(pluginRuntime = {}) {
+  return String(
+    pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY] || PLUGIN_SLOT_KEY.AGENT,
+  ).trim() || PLUGIN_SLOT_KEY.AGENT;
+}
+
+function normalizeRegistrationFlags(flags = []) {
+  return (Array.isArray(flags) ? flags : [])
+    .map((flag) => String(flag || "").trim())
+    .filter(Boolean);
+}
+
+function defineRegistrationFlags(manager = null, flags = []) {
+  if (!manager || typeof manager !== "object") return;
+  for (const flag of normalizeRegistrationFlags(flags)) {
+    Object.defineProperty(manager, flag, {
+      value: true,
+      enumerable: false,
+      configurable: true,
+    });
+  }
+}
+
+
+function resolveBotPluginKey(pluginRuntime = {}) {
+  return String(
+    pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_KEY] || PLUGIN_SLOT_KEY.BOT,
+  ).trim() || PLUGIN_SLOT_KEY.BOT;
+}
+
+function resolveAgentPluginSelectors(pluginRuntime = {}) {
+  return pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS] ||
+    createPluginSelectorSet(PLUGIN_SLOT_KEY.AGENT);
+}
+
+function resolveBotPluginSelectors(pluginRuntime = {}) {
+  return pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_SELECTORS] ||
+    createPluginSelectorSet(PLUGIN_SLOT_KEY.BOT);
 }

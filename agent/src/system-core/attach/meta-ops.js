@@ -9,8 +9,9 @@ import { safeStr, safeNum } from "../utils/shared-utils.js";
 
 const SEMANTIC_TRANSFER_GENERATION_SOURCE_PREFIXES = [
   "semantic_transfer_",
-  "workflow_",
-  "harness_",
+  "plugin_",
+  "bot_plugin_",
+  "agent_plugin_",
 ];
 
 const SEMANTIC_TRANSFER_GENERATION_SOURCE_EXACT = new Set([

@@ -30,9 +30,9 @@ import { createDetachedSubSessionRunner } from "./detached-subsession-runner.js"
 import { ModelMessageRuntimeHelpers } from "./model-message-runtime-helpers.js";
 import { ScopedArtifactPersistenceHelpers } from "./scoped-artifact-persistence-helpers.js";
 import {
-  createDefaultRunConfigExtensionPreparer,
-  getDefaultSessionExtensionRuntime,
-} from "../../plugin/session-extension-runtime-provider.js";
+  createDefaultRunConfigPluginPreparer,
+  getDefaultSessionPluginRuntime,
+} from "../../plugin/session-plugin-runtime-provider.js";
 
 export class SessionExecutionEngine {
   constructor({
@@ -119,7 +119,7 @@ export class SessionExecutionEngine {
       workspaceService: this.workspaceService,
       now: () => this._now(),
     });
-    this.runConfigExtensionPreparer = this._createRunConfigExtensionPreparer();
+    this.runConfigPluginPreparer = this._createRunConfigPluginPreparer();
   }
 
   _initializeExecutionServices() {
@@ -158,17 +158,17 @@ export class SessionExecutionEngine {
     });
   }
 
-  _createRunConfigExtensionPreparer() {
-    return createDefaultRunConfigExtensionPreparer({
+  _createRunConfigPluginPreparer() {
+    return createDefaultRunConfigPluginPreparer({
       globalConfig: this.globalConfig,
       workspaceService: this.workspaceService,
       normalizeStringArray: (input) => this._normalizeStringArray(input),
-      mergeModelExtensionOptions: (...items) => this._mergeModelExtensionOptions(...items),
-      createExtensionResolveModelMessages: (payload = {}) =>
-        this._createExtensionResolveModelMessages(payload),
-      createExtensionResolveMessageBlock: (payload = {}) =>
-        this._createExtensionResolveMessageBlock(payload),
-      createExtensionMarkMessagesSummarized: () => this._createExtensionMarkMessagesSummarized(),
+      mergePluginOptions: (...items) => this._mergePluginOptions(...items),
+      createPluginResolveModelMessages: (payload = {}) =>
+        this._createPluginResolveModelMessages(payload),
+      createPluginResolveMessageBlock: (payload = {}) =>
+        this._createPluginResolveMessageBlock(payload),
+      createPluginMarkMessagesSummarized: () => this._createPluginMarkMessagesSummarized(),
       createDetachedSubSessionRunner: () => this._createDetachedSubSessionRunner(),
       createGeneratedArtifactPersister: () => this._createGeneratedArtifactPersister(),
       createScopedJsonWriter: () => this._createScopedJsonWriter(),
@@ -346,7 +346,7 @@ export class SessionExecutionEngine {
   }
 
   _prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    return this.runConfigExtensionPreparer.prepareRunConfig({
+    return this.runConfigPluginPreparer.prepareRunConfig({
       userId,
       runConfig,
       userConfig,
@@ -428,7 +428,7 @@ export class SessionExecutionEngine {
       configService: this.configService,
       agentRuntimeFacade: this.agentRuntimeFacade,
       errorLogger: this.errorLogger,
-      extensionRuntime: getDefaultSessionExtensionRuntime(),
+      pluginRuntime: getDefaultSessionPluginRuntime(),
       mergeRunConfigWithPluginStrategy: (payload = {}) =>
         this._mergeRunConfigWithPluginStrategy(payload),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
@@ -641,28 +641,28 @@ export class SessionExecutionEngine {
   }
 
 
-  _mergeModelExtensionOptions(...items) {
+  _mergePluginOptions(...items) {
     return this.modelMessageRuntimeHelpers.mergePluginOptions(...items);
   }
 
-  _createExtensionResolveModelMessages(payload = {}) {
+  _createPluginResolveModelMessages(payload = {}) {
     return this.modelMessageRuntimeHelpers.createResolveModelMessages(payload);
   }
 
-  _createExtensionResolveMessageBlock(payload = {}) {
+  _createPluginResolveMessageBlock(payload = {}) {
     return this.modelMessageRuntimeHelpers.createResolveMessageBlock(payload);
   }
 
-  _createExtensionMarkMessagesSummarized() {
+  _createPluginMarkMessagesSummarized() {
     return this.modelMessageRuntimeHelpers.createMarkMessagesSummarized();
   }
 
   _prepareBotHookRunConfig({ runConfig = {} } = {}) {
-    return this.runConfigExtensionPreparer.prepareBotHookRunConfig({ runConfig });
+    return this.runConfigPluginPreparer.prepareBotHookRunConfig({ runConfig });
   }
 
   _buildPluginRegisterApi({ manager = null, pluginName = "", options = {}, runConfig = {} } = {}) {
-    return this.runConfigExtensionPreparer.buildPluginRegisterApi({
+    return this.runConfigPluginPreparer.buildPluginRegisterApi({
       manager,
       pluginName,
       options,

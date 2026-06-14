@@ -106,18 +106,18 @@ test("getRecentSessionMessages filters old dialog injected messages before recen
     { role: "user", content: "first real question", dialogProcessId: "dlg_1" },
     {
       role: "user",
-      content: "[来自harness外部模型输出/planning]\nold plan 1",
+      content: "[Relay from plugin/planning]\nold plan 1",
       dialogProcessId: "dlg_1",
     },
     {
       role: "user",
-      content: "[来自harness外部模型输出/planning_revision]\nold plan 2",
+      content: "[Relay from plugin/planning_revision]\nold plan 2",
       dialogProcessId: "dlg_2",
     },
     { role: "assistant", content: "second real answer", dialogProcessId: "dlg_2" },
     {
       role: "user",
-      content: "[来自harness外部模型输出/planning]\ncurrent plan",
+      content: "[Relay from plugin/planning]\ncurrent plan",
       dialogProcessId: "dlg_3",
     },
     { role: "user", content: "third real question", dialogProcessId: "dlg_3" },
@@ -135,7 +135,7 @@ test("getRecentSessionMessages filters old dialog injected messages before recen
     [
       "first real question",
       "second real answer",
-      "[来自harness外部模型输出/planning]\ncurrent plan",
+      "[Relay from plugin/planning]\ncurrent plan",
       "third real question",
     ],
   );

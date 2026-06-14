@@ -20,6 +20,11 @@ import { ERROR_CODE } from "../../error/constants.js";
 import { MIME_TYPE } from "../../constants/index.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import {
+  buildPluginModelHeaders,
+  MODEL_NAME_HEADER_KEY,
+  PARENT_SESSION_HEADER_KEY,
+} from "../../model/headers/plugin-headers.js";
+import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
   TOOL_CALL_MODE,
@@ -27,12 +32,6 @@ import {
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
 
-const MODEL_NAME_HEADER_KEY = "X-Model-Name";
-const FLOW_HEADER_KEY = "X-Harness-Flow";
-const PURPOSE_HEADER_KEY = "X-Harness-Purpose";
-const DOMAIN_HEADER_KEY = "X-Harness-Domain";
-const SESSION_HEADER_KEY = "X-Harness-Session-Id";
-const PARENT_SESSION_HEADER_KEY = "parentSessionid";
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
 const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
 const MULTIMODAL_DOMAIN_NAME = "tool";
@@ -56,10 +55,12 @@ function buildMultimodalRequestHeaders(modelName = "", runtime = {}) {
   const parentSessionId = resolveParentSessionId({ runtime });
   return {
     [MODEL_NAME_HEADER_KEY]: String(modelName || "").trim() || "unknown_model",
-    [FLOW_HEADER_KEY]: MULTIMODAL_FLOW_NAME,
-    [PURPOSE_HEADER_KEY]: MULTIMODAL_PURPOSE_NAME,
-    [DOMAIN_HEADER_KEY]: MULTIMODAL_DOMAIN_NAME,
-    ...(sessionId ? { [SESSION_HEADER_KEY]: sessionId } : {}),
+    ...buildPluginModelHeaders({
+      flow: MULTIMODAL_FLOW_NAME,
+      purpose: MULTIMODAL_PURPOSE_NAME,
+      domain: MULTIMODAL_DOMAIN_NAME,
+      sessionId,
+    }),
     ...(parentSessionId ? { [PARENT_SESSION_HEADER_KEY]: parentSessionId } : {}),
   };
 }

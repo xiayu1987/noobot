@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { toConversationMessages } from "../../../src/system-core/context/session/message-converter.js";
 
-test("toConversationMessages keeps transferEnvelope/transferEnvelopes for replay and workflow payload", () => {
+test("toConversationMessages keeps transferEnvelope/transferEnvelopes for replay and plugin payload", () => {
   const transferEnvelope = {
     protocol: "noobot.semantic-transfer",
     version: 1,

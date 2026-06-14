@@ -232,8 +232,8 @@ test("resolveModelContextMessages filters injected messages by current dialog", 
 test("resolveModelContextMessages filters injected user messages by current dialog", () => {
   const result = resolveModelContextMessages({
     sourceMessages: [
-      { role: "user", content: "keep", injectedBy: "harness-plugin", dialogProcessId: "d1" },
-      { role: "user", content: "drop", injectedBy: "harness-plugin", dialogProcessId: "d2" },
+      { role: "user", content: "keep", injectedBy: "agent-plugin", dialogProcessId: "d1" },
+      { role: "user", content: "drop", injectedBy: "agent-plugin", dialogProcessId: "d2" },
       { role: "user", content: "normal user" },
     ],
     currentDialogProcessId: "d1",
@@ -244,17 +244,17 @@ test("resolveModelContextMessages filters injected user messages by current dial
   );
 });
 
-test("resolveModelContextMessages treats harness relay message as injected and filters by dialog", () => {
+test("resolveModelContextMessages treats plugin relay message as injected and filters by dialog", () => {
   const result = resolveModelContextMessages({
     sourceMessages: [
       {
         role: "user",
-        content: "[来自harness外部模型输出/planning]\nold",
+        content: "[Relay from plugin/planning]\nold",
         dialogProcessId: "d_old",
       },
       {
         role: "user",
-        content: "[来自harness外部模型输出/planning]\nnew",
+        content: "[Relay from plugin/planning]\nnew",
         dialogProcessId: "d_new",
       },
       { role: "user", content: "normal user" },
@@ -263,9 +263,10 @@ test("resolveModelContextMessages treats harness relay message as injected and f
   });
   assert.deepEqual(
     result.map((item) => item.content),
-    ["[来自harness外部模型输出/planning]\nnew", "normal user"],
+    ["[Relay from plugin/planning]\nnew", "normal user"],
   );
 });
+
 
 test("resolveModelContextMessages supports recent window clipping", () => {
   const result = resolveModelContextMessages({
@@ -283,7 +284,7 @@ test("resolveModelContextMessages supports recent window clipping", () => {
   );
 });
 
-test("resolveModelContextMessages supports harness mode with normalize/filter pipeline", () => {
+test("resolveModelContextMessages supports plugin mode with normalize/filter pipeline", () => {
   const result = resolveModelContextMessages({
     sourceMessages: [
       { role: "assistant", content: "a0", injectedMessage: true, dialogProcessId: "d1" },
@@ -293,7 +294,7 @@ test("resolveModelContextMessages supports harness mode with normalize/filter pi
       { role: "assistant", content: "a2" },
     ],
     currentDialogProcessId: "d1",
-    mode: "harness",
+    mode: "plugin",
     recentLimit: 2,
     normalizeMessage: (item = {}) => ({
       role: String(item?.role || "").trim().toLowerCase(),
@@ -311,10 +312,10 @@ test("resolveModelContextMessages supports harness mode with normalize/filter pi
 test("resolveModelContextMessages keeps latest injected message per type after dialog filtering", () => {
   const result = resolveModelContextMessages({
     sourceMessages: [
-      { role: "user", content: "old summary", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d1" },
-      { role: "user", content: "planning", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning_task", dialogProcessId: "d1" },
-      { role: "user", content: "new summary", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d1" },
-      { role: "user", content: "other dialog newest", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d2" },
+      { role: "user", content: "old summary", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d1" },
+      { role: "user", content: "planning", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "planning_task", dialogProcessId: "d1" },
+      { role: "user", content: "new summary", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d1" },
+      { role: "user", content: "other dialog newest", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance_summary_prompt", dialogProcessId: "d2" },
       { role: "assistant", content: "normal" },
     ],
     currentDialogProcessId: "d1",
@@ -359,7 +360,7 @@ test("resolveMainModelHistoryMessages keeps first actual user and latest assista
 test("resolveMainModelHistoryMessages excludes injected and user meta from actual user selection", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
-      { role: "user", content: "injected", injectedBy: "harness-plugin", dialogProcessId: "d1" },
+      { role: "user", content: "injected", injectedBy: "agent-plugin", dialogProcessId: "d1" },
       { role: "user", content: "meta", additional_kwargs: { noobotInternalMessageType: "user_meta" }, dialogProcessId: "d1" },
       { role: "user", content: "actual", dialogProcessId: "d1" },
       { role: "assistant", content: "old", dialogProcessId: "d1" },
@@ -444,7 +445,7 @@ test("resolveMainModelIncrementalMessages preserves actual order for tool, plugi
       role: "user",
       content: "plugin-guidance",
       injectedMessage: true,
-      injectedBy: "harness-plugin",
+      injectedBy: "agent-plugin",
       injectedMessageType: "guidance",
       dialogProcessId: "d1",
     },

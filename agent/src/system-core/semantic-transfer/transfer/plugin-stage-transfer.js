@@ -38,17 +38,17 @@ function normalizeDetailRefs(detailRefs = []) {
     .filter(Boolean);
 }
 
-export async function transferHarnessStageMessage({
+export async function transferAgentPluginStageMessage({
   runtime = {},
   agentContext = null,
   summary = "",
   detail = "",
-  name = "harness-stage-detail.md",
+  name = "agent-plugin-stage-detail.md",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
   attachmentSource = "model",
-  generationSource = "harness_stage_message",
+  generationSource = "agent_plugin_stage_message",
   source = "plugin",
-  reason = "harness_stage_message",
+  reason = "agent_plugin_stage_message",
   meta = {},
 } = {}) {
   const normalizedSummary = String(summary || "").trim();
@@ -58,15 +58,15 @@ export async function transferHarnessStageMessage({
     reason,
     generationSource,
     fallbackSource: TRANSFER_SOURCE.PLUGIN,
-    fallbackReason: TRANSFER_REASON.HARNESS_STAGE_MESSAGE,
-    defaultGenerationSource: TRANSFER_REASON.HARNESS_STAGE_MESSAGE,
+    fallbackReason: TRANSFER_REASON.AGENT_PLUGIN_STAGE_MESSAGE,
+    defaultGenerationSource: TRANSFER_REASON.AGENT_PLUGIN_STAGE_MESSAGE,
     allowCustom: true,
   });
 
   if (!normalizedDetail) {
     await emitSemanticTransferValidation({
       runtime,
-      scenario: "harness_stage_message",
+      scenario: "agent_plugin_stage_message",
       stats: {
         inputCount: 0,
         outputCount: 0,
@@ -92,7 +92,7 @@ export async function transferHarnessStageMessage({
     runtime,
     agentContext,
     content: normalizedDetail,
-    name: firstNormalizedString(name, "harness-stage-detail.md"),
+    name: firstNormalizedString(name, "agent-plugin-stage-detail.md"),
     mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
     generationSource: intent.generationSource,
@@ -108,7 +108,7 @@ export async function transferHarnessStageMessage({
   const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
   await emitSemanticTransferValidation({
     runtime,
-    scenario: "harness_stage_message",
+    scenario: "agent_plugin_stage_message",
     stats: transferEnvelopesResult?.stats || {},
   });
   return {
@@ -122,7 +122,7 @@ export async function transferHarnessStageMessage({
   };
 }
 
-export function composeHarnessFinalMessage({
+export function composeAgentPluginFinalMessage({
   resultInfo = "",
   detailRefs = [],
   validationInfo = "",

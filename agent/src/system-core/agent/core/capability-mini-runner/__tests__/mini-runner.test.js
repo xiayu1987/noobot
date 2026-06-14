@@ -107,17 +107,17 @@ test("mini-runner preserves standalone system previous-summary context", async (
     purpose: "summary",
     messages: [
       { role: "user", content: "继续" },
-      { role: "system", content: "<!-- harness-current-complete-plan-checklist -->\n当前完整计划\n1. A" },
+      { role: "system", content: "<!-- plugin-current-complete-plan-checklist -->\n当前完整计划\n1. A" },
       {
         role: "system",
-        content: "<!-- harness-previous-summary-context -->\n上一次小结\n[SUMMARY_DETAIL]\n- 上一轮完整证据",
+        content: "<!-- plugin-previous-summary-context -->\n上一次小结\n[SUMMARY_DETAIL]\n- 上一轮完整证据",
       },
       { role: "user", content: "请生成小结" },
     ],
   });
 
   const checklistIndex = seenMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("harness-current-complete-plan-checklist"),
+    String(item?.content || "").includes("plugin-current-complete-plan-checklist"),
   );
   const previousSummaryIndex = seenMessages.findIndex((item = {}) =>
     String(item?.content || "").includes("上一轮完整证据"),

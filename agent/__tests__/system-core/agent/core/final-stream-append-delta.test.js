@@ -23,7 +23,7 @@ test("final streaming append delta: emits only hook-appended suffix after final 
 
   assert.equal(Object.keys(result).includes(FINAL_STREAMING_RESULT_META_KEY), false);
 
-  result.output = "模型最终回答\n\n---\n[Harness-验收] 通过";
+  result.output = "模型最终回答\n\n---\n[Plugin-验收] 通过";
 
   const emitted = emitFinalStreamingAppendDeltaAfterHooks({
     result,
@@ -43,7 +43,7 @@ test("final streaming append delta: emits only hook-appended suffix after final 
   assert.equal(emitted, true);
   const delta = events.find((item) => item?.event === "llm_delta");
   assert.ok(delta);
-  assert.equal(delta.data.text, "\n\n---\n[Harness-验收] 通过");
+  assert.equal(delta.data.text, "\n\n---\n[Plugin-验收] 通过");
   assert.equal(delta.data.type, "final_output_append_delta");
 });
 

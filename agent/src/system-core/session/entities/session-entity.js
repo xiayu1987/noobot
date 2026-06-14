@@ -66,15 +66,15 @@ export function normalizeMessageEntity(
   if (message?.frontendUserMessage === true) {
     normalizedMessage.frontendUserMessage = true;
   }
-  if (message?.workflowMessage === true) {
-    normalizedMessage.workflowMessage = true;
+  if (message?.pluginMessage === true) {
+    normalizedMessage.pluginMessage = true;
   }
   if (
-    message?.workflowMeta &&
-    typeof message.workflowMeta === "object" &&
-    !Array.isArray(message.workflowMeta)
+    message?.pluginMeta &&
+    typeof message.pluginMeta === "object" &&
+    !Array.isArray(message.pluginMeta)
   ) {
-    normalizedMessage.workflowMeta = message.workflowMeta;
+    normalizedMessage.pluginMeta = message.pluginMeta;
   }
 
   const toolCallId = String(message?.tool_call_id || "").trim();

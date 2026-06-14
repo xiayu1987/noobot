@@ -29,7 +29,7 @@ import {
   resolveMessageBlockDialogProcessId,
 } from "./session-execution-engine-utils.js";
 
-const HARNESS_DEEP_MERGE_KEYS = new Set([
+const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
   "capabilityModelByPurpose",
   "capabilityToolAllowlistByPurpose",
@@ -48,7 +48,7 @@ export class ModelMessageRuntimeHelpers {
       const next = { ...acc };
       for (const [key, value] of Object.entries(item)) {
         if (
-          HARNESS_DEEP_MERGE_KEYS.has(key) &&
+          PLUGIN_DEEP_MERGE_KEYS.has(key) &&
           value &&
           typeof value === "object" &&
           !Array.isArray(value)
@@ -67,8 +67,11 @@ export class ModelMessageRuntimeHelpers {
     }, {});
   }
 
-  createResolveModelMessages({ harnessOptions = {} } = {}) {
-    void harnessOptions;
+  createResolveModelMessages({
+    agentPluginOptions = {},
+    botPluginOptions = {},
+  } = {}) {
+    void (agentPluginOptions || botPluginOptions);
     return ({ messages = [], ctx = {} } = {}) => {
       const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object"
         ? ctx.messageBlocks
@@ -113,8 +116,10 @@ export class ModelMessageRuntimeHelpers {
     };
   }
 
-  createResolveMessageBlock({ harnessOptions = {} } = {}) {
-    void harnessOptions;
+  createResolveMessageBlock({
+    agentPluginOptions = {},
+  } = {}) {
+    void agentPluginOptions;
     return ({ scope = "history", messages = [], ctx = {} } = {}) => {
       const source = Array.isArray(messages) ? messages : [];
       const normalizedScope = String(scope || "history").trim().toLowerCase();

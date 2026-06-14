@@ -16,12 +16,11 @@ import {
 } from "../../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import { compactToolResultTextForModel } from "../../../semantic-transfer/core/compact.js";
+import {
+  PLUGIN_MODEL_HEADER_KEY,
+} from "../../../model/headers/plugin-headers.js";
 
 const MAX_MINI_RUNNER_TOOL_TURNS = 5;
-const MODEL_FLOW_HEADER_KEY = "X-Harness-Flow";
-const MODEL_PURPOSE_HEADER_KEY = "X-Harness-Purpose";
-const MODEL_DOMAIN_HEADER_KEY = "X-Harness-Domain";
-const MODEL_SESSION_HEADER_KEY = "X-Harness-Session-Id";
 
 function normalizeTextContent(content = "") {
   if (typeof content === "string") return content;
@@ -98,9 +97,8 @@ export function createAgentCapabilityModelInvoker({
   maxTurns = MAX_MINI_RUNNER_TOOL_TURNS,
   toolAllowlist = [],
   enableToolBinding = false,
-  headerNamespace = "harness",
+  headerNamespace = "plugin",
   flowPrefix = "",
-  includeHarnessCompatHeaders = true,
   fallbackGlobalConfig = null,
   fallbackUserConfig = null,
   createChatModelFn = createChatModel,
@@ -183,15 +181,24 @@ export function createAgentCapabilityModelInvoker({
     const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
     const normalizedDomain = normalizeHeaderValue(domain || "unknown");
     const resolvedHeaderNamespace = normalizeHeaderValue(
-      headerNamespaceOverride || headerNamespace || "harness",
-    ).toLowerCase() || "harness";
+      headerNamespaceOverride || headerNamespace || "plugin",
+    ).toLowerCase() || "plugin";
     const resolvedFlowPrefix = normalizeHeaderValue(
       flowPrefixOverride || flowPrefix || resolvedHeaderNamespace,
     ).toLowerCase() || resolvedHeaderNamespace;
-    const customFlowHeaderKey = `X-${resolvedHeaderNamespace}-Flow`;
-    const customPurposeHeaderKey = `X-${resolvedHeaderNamespace}-Purpose`;
-    const customDomainHeaderKey = `X-${resolvedHeaderNamespace}-Domain`;
-    const customSessionHeaderKey = `X-${resolvedHeaderNamespace}-Session-Id`;
+    const isCanonicalPluginNamespace = resolvedHeaderNamespace === "plugin";
+    const namespaceHeaderKeys = isCanonicalPluginNamespace
+      ? PLUGIN_MODEL_HEADER_KEY
+      : {
+          FLOW: `X-${resolvedHeaderNamespace}-Flow`,
+          PURPOSE: `X-${resolvedHeaderNamespace}-Purpose`,
+          DOMAIN: `X-${resolvedHeaderNamespace}-Domain`,
+          SESSION_ID: `X-${resolvedHeaderNamespace}-Session-Id`,
+        };
+    const customFlowHeaderKey = namespaceHeaderKeys.FLOW;
+    const customPurposeHeaderKey = namespaceHeaderKeys.PURPOSE;
+    const customDomainHeaderKey = namespaceHeaderKeys.DOMAIN;
+    const customSessionHeaderKey = namespaceHeaderKeys.SESSION_ID;
     const flowValue = `${resolvedFlowPrefix}.${normalizedPurpose}`;
     const resolvedSessionId = String(sessionMeta?.sessionId || "").trim();
     const additionalHeaders = {
@@ -199,14 +206,6 @@ export function createAgentCapabilityModelInvoker({
       [customPurposeHeaderKey]: normalizedPurpose,
       [customDomainHeaderKey]: normalizedDomain,
       ...(resolvedSessionId ? { [customSessionHeaderKey]: resolvedSessionId } : {}),
-      ...((includeHarnessCompatHeaders === true || resolvedHeaderNamespace === "harness")
-        ? {
-            [MODEL_FLOW_HEADER_KEY]: flowValue,
-            [MODEL_PURPOSE_HEADER_KEY]: normalizedPurpose,
-            [MODEL_DOMAIN_HEADER_KEY]: normalizedDomain,
-            ...(resolvedSessionId ? { [MODEL_SESSION_HEADER_KEY]: resolvedSessionId } : {}),
-          }
-        : {}),
     };
     const llm = normalizedModelName
       ? createChatModelByNameFn(normalizedModelName, {

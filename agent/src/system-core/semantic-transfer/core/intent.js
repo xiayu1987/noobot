@@ -14,7 +14,7 @@ const KNOWN_REASONS = new Set(Object.values(TRANSFER_REASON));
 
 const SOURCE_ALIAS = Object.freeze({
   child_agent: TRANSFER_SOURCE.CHILD_AGENT,
-  workflow: TRANSFER_SOURCE.PLUGIN,
+  bot_plugin: TRANSFER_SOURCE.PLUGIN,
 });
 
 const REASON_ALIAS = Object.freeze({

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createUserInteractionTool } from "../../../src/system-core/tools/workflow/user-interaction-tool.js";
+import { createUserInteractionTool } from "../../../src/system-core/tools/collaboration/user-interaction-tool.js";
 
 function parseToolJson(raw = "") {
   return JSON.parse(String(raw || "{}"));

@@ -65,7 +65,7 @@
 ### 1.5 agent-collab 异步子任务结果附件保存
 
 - 状态：**已按普通异步任务结果附件保存收口**
-- 文件：`agent/src/system-core/tools/workflow/agent-collab/collab-artifact-persist.js`
+- 文件：`agent/src/system-core/tools/collaboration/agent-collab/collab-artifact-persist.js`
 - 当前调用：`attachmentService.ingestGeneratedArtifacts(...)`
 - 当前用途：async subtask / agent-collab 的子任务结果保存成附件。
 - 判断：**普通 agent-collab / async task 附件保存不走 semantic-transfer**。

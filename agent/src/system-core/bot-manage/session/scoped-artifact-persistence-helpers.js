@@ -49,7 +49,7 @@ export class ScopedArtifactPersistenceHelpers {
         relativeFromWorkspace.startsWith("..") ||
         path.isAbsolute(relativeFromWorkspace)
       ) {
-        throw new Error("workflow scoped output path must be inside workspace");
+        throw new Error("plugin scoped output path must be inside workspace");
       }
       return resolvedAbsoluteDir;
     }
@@ -62,7 +62,7 @@ export class ScopedArtifactPersistenceHelpers {
       relativeFromWorkspace.startsWith("..") ||
       path.isAbsolute(relativeFromWorkspace)
     ) {
-      throw new Error("workflow scoped output path must be inside workspace");
+      throw new Error("plugin scoped output path must be inside workspace");
     }
     return resolvedDir;
   }
@@ -72,9 +72,9 @@ export class ScopedArtifactPersistenceHelpers {
     relativeDir = "",
     absoluteDir = "",
     fileName = "payload.json",
-    userIdError = "workflow scoped writer requires userId",
-    outputDirError = "workflow scoped writer requires output directory",
-    fileNameError = "workflow scoped writer fileName must be plain file name",
+    userIdError = "plugin scoped writer requires userId",
+    outputDirError = "plugin scoped writer requires output directory",
+    fileNameError = "plugin scoped writer fileName must be plain file name",
   } = {}) {
     const normalizedUserId = String(userId || "").trim();
     if (!normalizedUserId) throw new Error(userIdError);
@@ -206,11 +206,11 @@ export class ScopedArtifactPersistenceHelpers {
     };
     emitEvent(
       typeof eventListener === "function" ? eventListener : null,
-      "workflow_subsession_persistence_leak",
+      "plugin_subsession_persistence_leak",
       payload,
     );
     // Runtime assertion log for easier tracing in non-event environments.
-    console.warn("[workflow-subsession-leak]", JSON.stringify(payload));
+    console.warn("[plugin-subsession-leak]", JSON.stringify(payload));
     return false;
   }
 
@@ -227,9 +227,9 @@ export class ScopedArtifactPersistenceHelpers {
         relativeDir,
         absoluteDir,
         fileName,
-        userIdError: "workflow scoped writer requires userId",
-        outputDirError: "workflow scoped writer requires output directory",
-        fileNameError: "workflow scoped writer fileName must be plain file name",
+        userIdError: "plugin scoped writer requires userId",
+        outputDirError: "plugin scoped writer requires output directory",
+        fileNameError: "plugin scoped writer fileName must be plain file name",
       });
       await mkdir(outputDir, { recursive: true });
       await writeFile(
@@ -261,9 +261,9 @@ export class ScopedArtifactPersistenceHelpers {
         relativeDir,
         absoluteDir,
         fileName,
-        userIdError: "workflow event logger requires userId",
-        outputDirError: "workflow event logger requires output directory",
-        fileNameError: "workflow event logger fileName must be plain file name",
+        userIdError: "plugin event logger requires userId",
+        outputDirError: "plugin event logger requires output directory",
+        fileNameError: "plugin event logger fileName must be plain file name",
       });
       await mkdir(outputDir, { recursive: true });
       await appendFile(

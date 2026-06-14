@@ -30,6 +30,7 @@
     "check:plugin-harness-i18n-keyset": "node ./scripts/check-plugin-harness-i18n-keyset.mjs",
     "check:plugin-workflow-src-i18n": "node ./scripts/check-plugin-workflow-src-i18n.mjs",
     "check:plugin-workflow-i18n-keyset": "node ./scripts/check-plugin-workflow-i18n-keyset.mjs",
-    "check:plugin-i18n": "npm run -s check:plugin-harness-src-i18n && npm run -s check:plugin-harness-i18n-keyset && npm run -s check:plugin-workflow-src-i18n && npm run -s check:plugin-workflow-i18n-keyset && npm run -s check:plugin-frontend-i18n"
+    "check:plugin-i18n": "npm run -s check:plugin-harness-src-i18n && npm run -s check:plugin-harness-i18n-keyset && npm run -s check:plugin-workflow-src-i18n && npm run -s check:plugin-workflow-i18n-keyset && npm run -s check:plugin-frontend-i18n",
+    "check:agent-plugin-decoupling": "node ./scripts/check-agent-plugin-decoupling.mjs"
   }
 }

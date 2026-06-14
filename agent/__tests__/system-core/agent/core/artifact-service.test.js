@@ -156,7 +156,7 @@ test("extractAttachmentMetasFromToolResult merges transferResult envelope and de
 
 test("extractAttachmentMetasFromToolResult supports transferEnvelopes-only payload", () => {
   const toolResultText = JSON.stringify({
-    toolName: "workflow_tool",
+    toolName: "plugin_tool",
     ok: true,
     transferEnvelopes: [
       {
@@ -179,7 +179,7 @@ test("extractAttachmentMetasFromToolResult supports transferEnvelopes-only paylo
       },
     ],
   });
-  const metas = extractAttachmentMetasFromToolResult("workflow_tool", toolResultText);
+  const metas = extractAttachmentMetasFromToolResult("plugin_tool", toolResultText);
   assert.equal(metas.length, 1);
   assert.equal(metas[0].attachmentId, "att_r1");
 });
