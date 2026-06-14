@@ -16,6 +16,31 @@ import { buildHookContext } from "../hook/hook-context-builder.js";
 import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 import { transferSemanticContent } from "../../../semantic-transfer/transfer/semantic-transfer.js";
 
+const TOOL_INPUT_TRANSFER_TOOL_NAMES = new Set([
+  "write_file",
+  "execute_script",
+  "search",
+  "patch_file",
+]);
+
+function shouldTransferToolInput(call = {}) {
+  return TOOL_INPUT_TRANSFER_TOOL_NAMES.has(String(call?.name || "").trim());
+}
+
+function mergeToolInputTransferPayload(toolResultText = "", transferPayload = {}) {
+  const normalizedTransferPayload =
+    transferPayload && typeof transferPayload === "object" && !Array.isArray(transferPayload)
+      ? transferPayload
+      : {};
+  if (!Object.keys(normalizedTransferPayload).length) return String(toolResultText || "");
+  const parsed = parseJsonObjectSafely(toolResultText);
+  if (!parsed) return String(toolResultText || "");
+  return JSON.stringify({
+    ...parsed,
+    ...normalizedTransferPayload,
+  });
+}
+
 function resolveToolHookMeta(runtime = {}) {
   const runtimeMeta =
     runtime?.hookManager?.runtime && typeof runtime.hookManager.runtime === "object"
@@ -119,6 +144,73 @@ export async function executeToolCall({
       agentContext,
     }),
   });
+  let toolInputTransferPayload = {};
+  if (shouldTransferToolInput(call)) {
+    try {
+      const inputTransfer = await transferSemanticContent({
+        scenario: "tool",
+        strategy: "tool_input",
+        call,
+        runtime,
+        agentContext,
+        sessionId,
+      });
+      toolInputTransferPayload =
+        inputTransfer?.exceeded === true &&
+        inputTransfer?.compactToolPayload &&
+        typeof inputTransfer.compactToolPayload === "object"
+          ? inputTransfer.compactToolPayload
+          : {};
+      if (
+        inputTransfer?.exceeded === true &&
+        inputTransfer?.toolInputOverflow &&
+        typeof inputTransfer.toolInputOverflow === "object" &&
+        !Array.isArray(inputTransfer.toolInputOverflow)
+      ) {
+        toolResultText = toToolJsonResult(call?.name, {
+          ok: false,
+          message: String(inputTransfer?.message || "").trim() || "tool input is too long",
+          toolInputOverflow: inputTransfer.toolInputOverflow,
+          ...toolInputTransferPayload,
+        });
+        emitEvent(eventListener, "tool_call_end", {
+          turn,
+          tool: call?.name,
+          result: String(toolResultText).slice(0, 200),
+          success: true,
+        });
+        await runAgentRuntimeHook({
+          runtime,
+          point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
+          context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, runtime, {
+            phase: "tool_call",
+            executionScope,
+            turn,
+            status: "success",
+            startedAt: toolStartedAt,
+            endedAt: new Date(Date.now()).toISOString(),
+            durationMs: Date.now() - toolStartedAtMs,
+            call,
+            toolName: call?.name || "",
+            args: call?.args || {},
+            success: true,
+            failureReason: "",
+            toolResultText,
+            agentContext,
+          }),
+        });
+        return {
+          call,
+          toolResultText,
+          extractedAttachmentMetas: [],
+          success: true,
+          failureReason: "",
+        };
+      }
+    } catch {
+      toolInputTransferPayload = {};
+    }
+  }
   try {
     rawResult = await tool.invoke(call?.args || {}, {
       signal: abortSignal,
@@ -139,6 +231,7 @@ export async function executeToolCall({
     });
     toolResultText =
       typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
+    toolResultText = mergeToolInputTransferPayload(toolResultText, toolInputTransferPayload);
     rawToolResultText = toolResultText;
   } catch (error) {
     const isAbort = isAbortError(error);

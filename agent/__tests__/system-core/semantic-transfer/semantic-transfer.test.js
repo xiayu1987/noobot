@@ -91,10 +91,46 @@ test("envelope helpers normalize persisted output and filter invalid envelopes",
   );
 });
 
-test("resolveTransferFilePath preserves sandboxPath priority and fallback path", () => {
+function buildSandboxRuntime(enabled = true, overrides = {}) {
+  return {
+    userId: "admin",
+    basePath: "/host/users/admin",
+    globalConfig: {
+      tools: {
+        execute_script: {
+          sandboxMode: enabled === true,
+          sandboxProvider: {
+            default: "docker",
+            docker: { dockerContainerScope: "global" },
+          },
+        },
+      },
+    },
+    userConfig: {},
+    ...overrides,
+  };
+}
+
+test("resolveTransferFilePath follows sandbox/non-sandbox path view", () => {
   assert.equal(
-    resolveTransferFilePath({ attachmentMeta: { sandboxPath: "/workspace/a.md", path: "/host/a.md" } }),
-    "/workspace/a.md",
+    resolveTransferFilePath({
+      runtime: buildSandboxRuntime(true),
+      attachmentMeta: {
+        path: "/host/users/admin/attachments/a.md",
+        relativePath: "attachments/a.md",
+      },
+    }),
+    "/workspace/admin/attachments/a.md",
+  );
+  assert.equal(
+    resolveTransferFilePath({
+      runtime: buildSandboxRuntime(false),
+      attachmentMeta: {
+        path: "/host/users/admin/attachments/a.md",
+        relativePath: "attachments/a.md",
+      },
+    }),
+    "attachments/a.md",
   );
   assert.equal(
     resolveTransferFilePath({ attachmentMeta: { relativePath: "attachments/a.md", name: "a.md" } }),
@@ -112,20 +148,32 @@ test("resolveTransferPathView keeps sandboxPath semantic separate from relative 
   );
   assert.equal(
     resolveTransferPathView({
+      runtime: buildSandboxRuntime(true),
       attachmentMeta: {
-        sandboxPath: "/workspace/a.md",
+        path: "/host/users/admin/attachments/a.md",
         relativePath: "attachments/a.md",
         name: "a.md",
       },
     }).sandboxPath,
-    "/workspace/a.md",
+    "/workspace/admin/attachments/a.md",
   );
+  const nonSandboxView = resolveTransferPathView({
+    runtime: buildSandboxRuntime(false),
+    attachmentMeta: {
+      path: "/host/users/admin/attachments/a.md",
+      relativePath: "attachments/a.md",
+      name: "a.md",
+    },
+  });
+  assert.equal(nonSandboxView.displayPath, "attachments/a.md");
+  assert.equal(nonSandboxView.sandboxPath, undefined);
 });
 
 test("resolveTransferFilePath tolerates resolver errors and keeps fallback behavior", () => {
   assert.equal(
     resolveTransferFilePath({
       runtime: {
+        ...buildSandboxRuntime(true),
         sharedTools: {
           resolveAttachmentDisplayPath() {
             throw new Error("display resolver failed");
@@ -135,10 +183,59 @@ test("resolveTransferFilePath tolerates resolver errors and keeps fallback behav
           },
         },
       },
-      attachmentMeta: { path: "/host/a.md", relativePath: "attachments/a.md" },
+      attachmentMeta: {
+        path: "/host/users/admin/attachments/a.md",
+        relativePath: "attachments/a.md",
+      },
     }),
-    "/workspace/a.md",
+    "/workspace/admin/attachments/a.md",
   );
+});
+
+test("persisted semantic-transfer file uses sandbox view when sandbox is enabled", async () => {
+  const attachmentService = {
+    async ingestGeneratedArtifacts(payload) {
+      return payload.artifacts.map((artifact) => ({
+        attachmentId: "att-sandbox-view",
+        sessionId: payload.sessionId,
+        attachmentSource: payload.attachmentSource,
+        name: artifact.name,
+        mimeType: artifact.mimeType,
+        size: 3,
+        path: `/host/users/admin/attachments/${artifact.name}`,
+        relativePath: `attachments/${artifact.name}`,
+        generatedByModel: true,
+        generationSource: payload.generationSource,
+      }));
+    },
+  };
+  const runtime = buildSandboxRuntime(true, {
+    systemRuntime: { userId: "admin", sessionId: "s1" },
+    attachmentService,
+    sharedTools: {
+      resolveAttachmentDisplayPath({ hostPath = "", path = "" } = {}) {
+        return String(hostPath || path || "").trim();
+      },
+    },
+  });
+
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_output",
+    runtime,
+    content: "abc",
+    name: "sandbox-output.txt",
+    mimeType: "text/plain",
+    forceAttachment: true,
+    source: "tool",
+    reason: "tool_result_overflow",
+  });
+
+  const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
+  assert.equal(file.filePath, "/workspace/admin/attachments/sandbox-output.txt");
+  assert.equal(file.pathView?.displayPath, "/workspace/admin/attachments/sandbox-output.txt");
+  assert.equal(file.pathView?.sandboxPath, "/workspace/admin/attachments/sandbox-output.txt");
+  assert.equal(file.pathView?.hostPath, "/host/users/admin/attachments/sandbox-output.txt");
 });
 
 test("materializeOutput returns direct for small content and falls back direct when no persister", async () => {
@@ -488,6 +585,237 @@ test("transferSemanticContent returns compact transfer payload for long tool inp
   assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
   assert.equal(Array.isArray(transferred.compactToolPayload?.transferFiles), true);
   assert.equal(transferred.compactToolPayload.transferFiles[0].attachmentId, "tool-input-1");
+});
+
+test("transferSemanticContent tool_input decides call arg overflow inside semantic-transfer", async () => {
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
+    call: {
+      name: "write_file",
+      args: {
+        filePath: "large.txt",
+        content: "x".repeat(200001),
+      },
+    },
+    runtime: {
+      attachmentService: {
+        async ingestGeneratedArtifacts(payload) {
+          return payload.artifacts.map((artifact, index) => ({
+            attachmentId: `tool-call-input-${index + 1}`,
+            sessionId: payload.sessionId,
+            attachmentSource: payload.attachmentSource,
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: 200001,
+            path: `/host/${artifact.name}`,
+            relativePath: `attachments/${artifact.name}`,
+            generatedByModel: true,
+            generationSource: payload.generationSource,
+          }));
+        },
+      },
+      systemRuntime: { userId: "u1", sessionId: "s1" },
+    },
+  });
+
+  assert.equal(transferred.exceeded, true);
+  assert.equal(transferred.message, "文件内容过长，请分批写入");
+  assert.equal(transferred.transferResult?.status, "file");
+  assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
+  assert.equal(transferred.compactToolPayload?.transferFiles?.[0]?.name, "large.txt.tool-input.txt");
+  assert.equal(transferred.compactToolPayload?.message, "文件内容过长，请分批写入");
+});
+
+test("transferSemanticContent tool_input supports patch_file patch overflow", async () => {
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
+    call: {
+      name: "patch_file",
+      args: {
+        format: "apply_patch",
+        patch: "x".repeat(200001),
+      },
+    },
+    runtime: {
+      attachmentService: {
+        async ingestGeneratedArtifacts(payload) {
+          return payload.artifacts.map((artifact, index) => ({
+            attachmentId: `patch-input-${index + 1}`,
+            sessionId: payload.sessionId,
+            attachmentSource: payload.attachmentSource,
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: 200001,
+            path: `/host/${artifact.name}`,
+            relativePath: `attachments/${artifact.name}`,
+            generatedByModel: true,
+            generationSource: payload.generationSource,
+          }));
+        },
+      },
+      systemRuntime: { userId: "u1", sessionId: "s1" },
+    },
+  });
+
+  assert.equal(transferred.exceeded, true);
+  assert.equal(transferred.transferResult?.status, "file");
+  assert.equal(transferred.transferEnvelopes?.[0]?.direction, "input");
+  assert.equal(transferred.compactToolPayload?.transferFiles?.[0]?.name, "patch-file-patch.tool-input.diff");
+  assert.equal(transferred.compactToolPayload?.message, "补丁内容过长，请分批应用或拆分 patch 后重试");
+});
+
+test("transferSemanticContent tool_input overflow returns sandbox path view when sandbox is enabled", async () => {
+  const attachmentService = {
+    async ingestGeneratedArtifacts(payload) {
+      return payload.artifacts.map((artifact) => ({
+        attachmentId: "tool-input-sandbox-view",
+        sessionId: payload.sessionId,
+        attachmentSource: payload.attachmentSource,
+        name: artifact.name,
+        mimeType: artifact.mimeType,
+        size: 200001,
+        path: `/host/users/admin/attachments/${artifact.name}`,
+        relativePath: `attachments/${artifact.name}`,
+        generatedByModel: true,
+        generationSource: payload.generationSource,
+      }));
+    },
+  };
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
+    call: {
+      name: "write_file",
+      args: {
+        filePath: "large.txt",
+        content: "x".repeat(200001),
+      },
+    },
+    runtime: buildSandboxRuntime(true, {
+      systemRuntime: { userId: "admin", sessionId: "s-tool-input-sandbox" },
+      attachmentService,
+    }),
+  });
+
+  const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
+  assert.equal(file.filePath, "/workspace/admin/attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.displayPath, "/workspace/admin/attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.sandboxPath, "/workspace/admin/attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.hostPath, "/host/users/admin/attachments/large.txt.tool-input.txt");
+  assert.equal(
+    transferred.compactToolPayload?.transferFiles?.[0]?.transferFilePath,
+    "/workspace/admin/attachments/large.txt.tool-input.txt",
+  );
+});
+
+test("transferSemanticContent sandbox view prefers default workspace over /project mount", async () => {
+  const projectRoot = "/home/xiayu/projects/noobot";
+  const basePath = `${projectRoot}/workspace/admin`;
+  const attachmentService = {
+    async ingestGeneratedArtifacts(payload) {
+      return payload.artifacts.map((artifact) => ({
+        attachmentId: "tool-input-default-workspace-view",
+        sessionId: payload.sessionId,
+        attachmentSource: payload.attachmentSource,
+        name: artifact.name,
+        mimeType: artifact.mimeType,
+        size: 200001,
+        path: `${basePath}/runtime/ops_workdir/${artifact.name}`,
+        relativePath: `runtime/ops_workdir/${artifact.name}`,
+        generatedByModel: true,
+        generationSource: payload.generationSource,
+      }));
+    },
+  };
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
+    call: {
+      name: "write_file",
+      args: {
+        filePath: "large_file_test.txt",
+        content: "x".repeat(200001),
+      },
+    },
+    runtime: buildSandboxRuntime(true, {
+      userId: "admin",
+      basePath,
+      systemRuntime: { userId: "admin", sessionId: "s-tool-input-default-workspace" },
+      attachmentService,
+      globalConfig: {
+        tools: {
+          execute_script: {
+            sandboxMode: true,
+            sandboxProvider: {
+              default: "docker",
+              docker: {
+                dockerContainerScope: "global",
+                dockerMounts: [{ source: projectRoot, target: "/project" }],
+              },
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  const expectedPath = "/workspace/admin/runtime/ops_workdir/large_file_test.txt.tool-input.txt";
+  const wrongProjectPath = "/project/workspace/admin/runtime/ops_workdir/large_file_test.txt.tool-input.txt";
+  const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
+  assert.equal(file.filePath, expectedPath);
+  assert.equal(file.pathView?.displayPath, expectedPath);
+  assert.equal(file.pathView?.sandboxPath, expectedPath);
+  assert.notEqual(file.filePath, wrongProjectPath);
+  assert.equal(
+    transferred.compactToolPayload?.transferFiles?.[0]?.transferFilePath,
+    expectedPath,
+  );
+});
+
+test("transferSemanticContent tool_input overflow returns non-sandbox path view when sandbox is disabled", async () => {
+  const attachmentService = {
+    async ingestGeneratedArtifacts(payload) {
+      return payload.artifacts.map((artifact) => ({
+        attachmentId: "tool-input-non-sandbox-view",
+        sessionId: payload.sessionId,
+        attachmentSource: payload.attachmentSource,
+        name: artifact.name,
+        mimeType: artifact.mimeType,
+        size: 200001,
+        path: `/host/users/admin/attachments/${artifact.name}`,
+        relativePath: `attachments/${artifact.name}`,
+        generatedByModel: true,
+        generationSource: payload.generationSource,
+      }));
+    },
+  };
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
+    call: {
+      name: "write_file",
+      args: {
+        filePath: "large.txt",
+        content: "x".repeat(200001),
+      },
+    },
+    runtime: buildSandboxRuntime(false, {
+      systemRuntime: { userId: "admin", sessionId: "s-tool-input-non-sandbox" },
+      attachmentService,
+    }),
+  });
+
+  const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
+  assert.equal(file.filePath, "attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.displayPath, "attachments/large.txt.tool-input.txt");
+  assert.equal(file.pathView?.sandboxPath, undefined);
+  assert.equal(file.pathView?.hostPath, "/host/users/admin/attachments/large.txt.tool-input.txt");
+  assert.equal(
+    transferred.compactToolPayload?.transferFiles?.[0]?.transferFilePath,
+    "attachments/large.txt.tool-input.txt",
+  );
 });
 
 test("transferSemanticContent keeps bot_plugin sub-agent transfer output focused on conversion", async () => {

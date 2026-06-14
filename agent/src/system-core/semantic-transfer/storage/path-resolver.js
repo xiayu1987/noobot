@@ -50,9 +50,6 @@ function buildTransferPathResolverPayload({
 function resolveViaRuntimeTransferPathResolvers(payload = {}) {
   const resolverCandidates = [
     payload?.runtime?.sharedTools?.resolveAttachmentDisplayPath,
-    payload?.runtime?.sharedTools?.resolveSandboxPath,
-    payload?.runtime?.sharedTools?.toSandboxPath,
-    payload?.runtime?.sharedTools?.pathMapper?.toSandboxPath,
   ];
 
   for (const resolver of resolverCandidates) {
@@ -88,6 +85,9 @@ export function resolveTransferFilePath({
     purpose,
   });
 
+  const sandboxPath = resolveSandboxPath(resolverPayload);
+  if (sandboxPath) return sandboxPath;
+
   const runtimeResolvedPath = resolveViaRuntimeTransferPathResolvers(resolverPayload);
   if (runtimeResolvedPath) return runtimeResolvedPath;
 
@@ -120,12 +120,7 @@ export function resolveTransferPathView({
     relativePath,
     purpose,
   });
-  const sandboxPath = firstNormalizedString(
-    resolverPayload.meta?.sandboxPath,
-    resolverPayload.meta?.sandboxViewPath,
-    resolverPayload.meta?.sandbox_file_path,
-    resolveSandboxPath(resolverPayload),
-  );
+  const sandboxPath = resolveSandboxPath(resolverPayload);
   const displayPath = resolveTransferFilePath({
     ...resolverPayload,
     attachmentMeta: resolverPayload.meta,

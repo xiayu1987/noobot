@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import path from "node:path";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   TRANSFER_DIRECTION,
@@ -29,14 +30,109 @@ import {
   resolveToolResultInlineTextLimit,
 } from "./tool-result-text.js";
 
+const TOOL_INPUT_OVERFLOW_MAX_CHARS = 200000;
+
+const TOOL_INPUT_OVERFLOW_LIMITS = Object.freeze({
+  WRITE_FILE_CONTENT_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
+  EXECUTE_SCRIPT_COMMAND_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
+  SEARCH_TEXT_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
+  PATCH_FILE_PATCH_CHARS: TOOL_INPUT_OVERFLOW_MAX_CHARS,
+});
+
 function normalizeString(value = "") {
   return String(value || "").trim();
+}
+
+function normalizeRawString(value = "") {
+  return String(value || "");
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function toSafePositiveInt(value, fallback = 0, min = 0) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
   return Math.max(min, Math.floor(parsed));
+}
+
+function basenameOrFallback(value = "", fallback = "tool-input.txt") {
+  const normalized = normalizeString(value);
+  const base = normalized ? path.basename(normalized) : "";
+  return base || fallback;
+}
+
+const TOOL_INPUT_OVERFLOW_POLICIES = Object.freeze([
+  Object.freeze({
+    toolName: "write_file",
+    field: "content",
+    maxChars: TOOL_INPUT_OVERFLOW_LIMITS.WRITE_FILE_CONTENT_CHARS,
+    message: "文件内容过长，请分批写入",
+    reason: TRANSFER_REASON.WRITE_FILE_INPUT_TOO_LONG,
+    name: ({ args = {} } = {}) =>
+      `${basenameOrFallback(args?.filePath, "write-file-content")}.tool-input.txt`,
+    meta: ({ args = {} } = {}) => ({
+      filePath: normalizeString(args?.filePath),
+    }),
+  }),
+  Object.freeze({
+    toolName: "execute_script",
+    field: "command",
+    maxChars: TOOL_INPUT_OVERFLOW_LIMITS.EXECUTE_SCRIPT_COMMAND_CHARS,
+    message: "脚本内容过长，请分批执行或拆分脚本/文本后重试",
+    reason: TRANSFER_REASON.EXECUTE_SCRIPT_INPUT_TOO_LONG,
+    name: () => "execute-script-command.tool-input.sh",
+  }),
+  Object.freeze({
+    toolName: "search",
+    field: "text",
+    maxChars: TOOL_INPUT_OVERFLOW_LIMITS.SEARCH_TEXT_CHARS,
+    message: "text is too long; search in smaller chunks",
+    reason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
+    name: () => "search-text.tool-input.txt",
+    enabled: ({ args = {} } = {}) => normalizeString(args?.source || "files") === "text",
+  }),
+  Object.freeze({
+    toolName: "patch_file",
+    field: "patch",
+    maxChars: TOOL_INPUT_OVERFLOW_LIMITS.PATCH_FILE_PATCH_CHARS,
+    message: "补丁内容过长，请分批应用或拆分 patch 后重试",
+    reason: TRANSFER_REASON.PATCH_FILE_INPUT_TOO_LONG,
+    name: () => "patch-file-patch.tool-input.diff",
+  }),
+]);
+
+function resolveToolInputOverflowFromCall(call = {}) {
+  const toolName = normalizeString(call?.name);
+  const args = isPlainObject(call?.args) ? call.args : {};
+  const policy = TOOL_INPUT_OVERFLOW_POLICIES.find((item) => item.toolName === toolName);
+  if (!policy) return null;
+  if (typeof policy.enabled === "function" && policy.enabled({ call, args }) !== true) {
+    return null;
+  }
+  const text = normalizeRawString(args?.[policy.field]);
+  if (text.length <= Number(policy.maxChars || 0)) return null;
+  const policyMeta =
+    typeof policy.meta === "function" && isPlainObject(policy.meta({ call, args }))
+      ? policy.meta({ call, args })
+      : {};
+  return {
+    toolName,
+    field: policy.field,
+    text,
+    maxChars: Number(policy.maxChars || 0),
+    message: policy.message,
+    name: typeof policy.name === "function" ? policy.name({ call, args }) : "tool-input.txt",
+    mimeType: DEFAULT_TRANSFER_MIME_TYPE,
+    source: TRANSFER_SOURCE.TOOL,
+    reason: policy.reason,
+    meta: {
+      toolName,
+      field: policy.field,
+      ...policyMeta,
+    },
+  };
 }
 
 function remapEnvelopeDirection(envelope = {}, direction = TRANSFER_DIRECTION.OUTPUT) {
@@ -188,6 +284,7 @@ export async function transferToolOutput({
 export async function transferToolInput({
   runtime = {},
   agentContext = null,
+  call = null,
   text = "",
   content = "",
   name = "tool-input.txt",
@@ -202,10 +299,31 @@ export async function transferToolInput({
   forceAttachment = false,
   inlineMaxChars = null,
 } = {}) {
-  const normalizedText = String(text || content || "");
+  const hasExplicitText = text !== "" || content !== "";
+  const callOverflow = !hasExplicitText && call ? resolveToolInputOverflowFromCall(call) : null;
+  if (!hasExplicitText && call && !callOverflow) {
+    return {
+      transferResult: createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.SKIPPED }),
+      transferEnvelopes: [],
+      compactTransferPayload: {},
+      compactToolPayload: {},
+      exceeded: false,
+      skipped: true,
+      textLength: 0,
+    };
+  }
+  const normalizedText = callOverflow ? callOverflow.text : String(text || content || "");
+  const resolvedName = callOverflow?.name || name;
+  const resolvedMimeType = callOverflow?.mimeType || mimeType;
+  const resolvedSource = callOverflow?.source || source;
+  const resolvedReason = callOverflow?.reason || reason;
+  const resolvedMeta = {
+    ...(meta && typeof meta === "object" && !Array.isArray(meta) ? meta : {}),
+    ...(callOverflow?.meta || {}),
+  };
   const intent = resolveTransferIntent({
-    source,
-    reason,
+    source: resolvedSource,
+    reason: resolvedReason,
     generationSource,
     fallbackSource: TRANSFER_SOURCE.TOOL,
     fallbackReason: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_INPUT,
@@ -213,17 +331,17 @@ export async function transferToolInput({
     allowCustom: true,
   });
   const resolvedInlineLimit = inlineMaxChars == null
-    ? resolveToolResultInlineTextLimit(runtime)
+    ? (callOverflow?.maxChars ?? resolveToolResultInlineTextLimit(runtime))
     : inlineMaxChars;
   const maxInline = toSafePositiveInt(resolvedInlineLimit, resolveToolResultInlineTextLimit(runtime), 0);
   const shouldPersist = forceAttachment === true || normalizedText.length > maxInline;
 
   if (!shouldPersist) {
     const envelope = directInput(normalizedText, {
-      ...meta,
+      ...resolvedMeta,
       source: intent.source,
       reason: intent.reason,
-      mimeType,
+      mimeType: resolvedMimeType,
       originalLength: normalizedText.length,
     });
     return await buildTransferResponse({
@@ -247,8 +365,8 @@ export async function transferToolInput({
     runtime,
     agentContext,
     content: normalizedText,
-    name: firstNormalizedString(name, "tool-input.txt"),
-    mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
+    name: firstNormalizedString(resolvedName, "tool-input.txt"),
+    mimeType: firstNormalizedString(resolvedMimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
     generationSource: intent.generationSource,
     source: intent.source,
@@ -256,7 +374,7 @@ export async function transferToolInput({
     storage,
     producer,
     meta: {
-      ...meta,
+      ...resolvedMeta,
       originalLength: normalizedText.length,
     },
   });
@@ -287,9 +405,20 @@ export async function transferToolInput({
       exceeded: true,
       textLength: normalizedText.length,
       inlineContent: "",
+      ...(callOverflow?.message ? { message: callOverflow.message } : {}),
+      ...(callOverflow
+        ? {
+            toolInputOverflow: {
+              toolName: callOverflow.toolName,
+              field: callOverflow.field,
+              maxChars: maxInline,
+              textLength: normalizedText.length,
+              message: callOverflow.message,
+            },
+          }
+        : {}),
     },
     runtime,
     scenario: "tool_input",
   });
 }
-

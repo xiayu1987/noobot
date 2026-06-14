@@ -34,6 +34,8 @@ const DEFAULT_CONFIG = {
   unknownFlowName: 'unknown_flow',
   unknownSessionId: 'unknown_session',
   modelNameHeaderKey: 'x-model-name',
+  flowHeaderKeys: ['x-plugin-flow', 'x-harness-flow'],
+  sessionIdHeaderKeys: ['x-plugin-session-id', 'x-harness-session-id'],
   harnessFlowHeaderKey: 'x-harness-flow',
   sessionIdHeaderKey: 'x-harness-session-id',
   parentSessionIdHeaderKey: 'parentsessionid',
@@ -98,11 +100,28 @@ const UNKNOWN_MODEL_NAME = String(config.unknownModelName || DEFAULT_CONFIG.unkn
 const UNKNOWN_FLOW_NAME = String(config.unknownFlowName || DEFAULT_CONFIG.unknownFlowName);
 const UNKNOWN_SESSION_ID = String(config.unknownSessionId || DEFAULT_CONFIG.unknownSessionId);
 const MODEL_NAME_HEADER_KEY = String(config.modelNameHeaderKey || DEFAULT_CONFIG.modelNameHeaderKey).toLowerCase();
-const HARNESS_FLOW_HEADER_KEY = String(config.harnessFlowHeaderKey || DEFAULT_CONFIG.harnessFlowHeaderKey).toLowerCase();
-const SESSION_ID_HEADER_KEY = String(config.sessionIdHeaderKey || DEFAULT_CONFIG.sessionIdHeaderKey).toLowerCase();
 const PARENT_SESSION_ID_HEADER_KEY = String(
   config.parentSessionIdHeaderKey || DEFAULT_CONFIG.parentSessionIdHeaderKey,
 ).toLowerCase();
+const FLOW_HEADER_KEYS = normalizeHeaderKeyCandidates(
+  config.flowHeaderKeys,
+  [
+    config.flowHeaderKey,
+    config.pluginFlowHeaderKey,
+    'x-plugin-flow',
+    config.harnessFlowHeaderKey,
+    DEFAULT_CONFIG.harnessFlowHeaderKey,
+  ],
+);
+const SESSION_ID_HEADER_KEYS = normalizeHeaderKeyCandidates(
+  config.sessionIdHeaderKeys,
+  [
+    config.pluginSessionIdHeaderKey,
+    'x-plugin-session-id',
+    config.sessionIdHeaderKey,
+    DEFAULT_CONFIG.sessionIdHeaderKey,
+  ],
+);
 const MAX_LOG_FILE_SIZE = Number(config.maxLogFileSizeBytes) > 0
   ? Number(config.maxLogFileSizeBytes)
   : DEFAULT_CONFIG.maxLogFileSizeBytes;
@@ -112,6 +131,39 @@ let lastCleanupAt = 0;
 
 function pad(numberValue, lengthValue = 2) {
   return String(numberValue).padStart(lengthValue, '0');
+}
+
+function normalizeHeaderKeyCandidates(primaryKeys = [], fallbackKeys = []) {
+  const keys = [
+    ...(Array.isArray(primaryKeys) ? primaryKeys : [primaryKeys]),
+    ...(Array.isArray(fallbackKeys) ? fallbackKeys : [fallbackKeys]),
+  ]
+    .map((key) => String(key || '').trim().toLowerCase())
+    .filter(Boolean);
+  return Array.from(new Set(keys));
+}
+
+function getHeaderValue(headers = {}, candidateKeys = []) {
+  if (!headers || typeof headers !== 'object') return '';
+  const keys = Array.isArray(candidateKeys) ? candidateKeys : [candidateKeys];
+  const normalizedHeaders = Object.fromEntries(
+    Object.entries(headers)
+      .map(([key, value]) => [String(key || '').trim().toLowerCase(), value])
+      .filter(([key]) => Boolean(key)),
+  );
+  for (const key of keys) {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    if (!normalizedKey) continue;
+    const rawHeaderValue = normalizedHeaders[normalizedKey];
+    if (Array.isArray(rawHeaderValue)) {
+      const value = String(rawHeaderValue[0] || '').trim();
+      if (value) return value;
+      continue;
+    }
+    const value = String(rawHeaderValue || '').trim();
+    if (value) return value;
+  }
+  return '';
 }
 
 function formatDateForFile(date = new Date()) {
@@ -307,21 +359,11 @@ function appendLog(
 }
 
 function extractModelNameFromHeaders(headers = {}) {
-  if (!headers || typeof headers !== 'object') return '';
-  const rawHeaderValue = headers[MODEL_NAME_HEADER_KEY];
-  if (Array.isArray(rawHeaderValue)) {
-    return String(rawHeaderValue[0] || '').trim();
-  }
-  return String(rawHeaderValue || '').trim();
+  return getHeaderValue(headers, [MODEL_NAME_HEADER_KEY]);
 }
 
 function extractSessionIdFromHeaders(headers = {}) {
-  if (!headers || typeof headers !== 'object') return '';
-  const rawHeaderValue = headers[SESSION_ID_HEADER_KEY];
-  if (Array.isArray(rawHeaderValue)) {
-    return String(rawHeaderValue[0] || '').trim();
-  }
-  return String(rawHeaderValue || '').trim();
+  return getHeaderValue(headers, SESSION_ID_HEADER_KEYS);
 }
 
 function extractParentSessionIdFromHeaders(headers = {}) {
@@ -329,30 +371,19 @@ function extractParentSessionIdFromHeaders(headers = {}) {
   const candidates = [
     PARENT_SESSION_ID_HEADER_KEY,
     'parentsessionid',
+    'parent-sessionid',
+    'parent-session-id',
+    'x-plugin-parent-session-id',
+    'x-plugin-parent-sessionid',
     'x-parent-session-id',
     'x-parent-sessionid',
     'x-harness-parent-session-id',
   ];
-  for (const key of candidates) {
-    const rawHeaderValue = headers[key];
-    if (Array.isArray(rawHeaderValue)) {
-      const value = String(rawHeaderValue[0] || '').trim();
-      if (value) return value;
-      continue;
-    }
-    const value = String(rawHeaderValue || '').trim();
-    if (value) return value;
-  }
-  return '';
+  return getHeaderValue(headers, candidates);
 }
 
 function extractHarnessFlowFromHeaders(headers = {}) {
-  if (!headers || typeof headers !== 'object') return '';
-  const rawHeaderValue = headers[HARNESS_FLOW_HEADER_KEY];
-  if (Array.isArray(rawHeaderValue)) {
-    return String(rawHeaderValue[0] || '').trim();
-  }
-  return String(rawHeaderValue || '').trim();
+  return getHeaderValue(headers, FLOW_HEADER_KEYS);
 }
 
 function resolveRequestModelName(req) {

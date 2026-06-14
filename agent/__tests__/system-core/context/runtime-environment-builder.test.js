@@ -117,6 +117,75 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   }
 });
 
+test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePath when caller passes partial runtime", async () => {
+  const runtime = buildRuntimeContext({
+    userId: "admin",
+    basePath: "/home/xiayu/projects/noobot/workspace/admin",
+    globalConfig: {
+      tools: {
+        execute_script: {
+          sandboxMode: true,
+          sandboxProvider: {
+            default: "docker",
+            docker: {
+              dockerContainerScope: "global",
+              dockerMounts: [
+                { source: "/home/xiayu/projects/noobot", target: "/project" },
+              ],
+            },
+          },
+        },
+      },
+    },
+    attachmentService: {
+      async ingestGeneratedArtifacts(payload) {
+        return payload.artifacts.map((artifact) => ({
+          attachmentId: "att-runtime-context-basepath",
+          sessionId: payload.sessionId,
+          attachmentSource: payload.attachmentSource,
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: 200001,
+          path: `/home/xiayu/projects/noobot/workspace/admin/runtime/ops_workdir/${artifact.name}`,
+          relativePath: `runtime/ops_workdir/${artifact.name}`,
+          generatedByModel: true,
+          generationSource: payload.generationSource,
+        }));
+      },
+    },
+    systemRuntime: {
+      userId: "admin",
+      sessionId: "s1",
+      rootSessionId: "r1",
+      config: { allowUserInteraction: true },
+    },
+  });
+  await initializeRuntimeEnvironment(runtime);
+
+  const transferred = await runtime.sharedTools.semanticTransfer.transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
+    runtime: {},
+    call: {
+      name: "write_file",
+      args: {
+        filePath: "large_file_test.txt",
+        content: "x".repeat(200001),
+      },
+    },
+  });
+  const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
+
+  assert.equal(
+    file.filePath,
+    "/workspace/admin/runtime/ops_workdir/large_file_test.txt.tool-input.txt",
+  );
+  assert.notEqual(
+    file.filePath,
+    "/project/workspace/admin/runtime/ops_workdir/large_file_test.txt.tool-input.txt",
+  );
+});
+
 test("initializeRuntimeEnvironment passes semantic-transfer strict envelope validation config", async () => {
   const runtime = buildRuntimeContext({
     userId: "u1",

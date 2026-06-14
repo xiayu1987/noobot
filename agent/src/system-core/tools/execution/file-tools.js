@@ -11,10 +11,8 @@ import {
   assertAndResolveUserWorkspaceFilePath,
   assertValidFileNameFromPath,
 } from "../core/check-tool-input.js";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
-import { TRANSFER_REASON, TRANSFER_SOURCE } from "../../semantic-transfer/core/constants.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
@@ -23,9 +21,6 @@ import {
   DEFAULT_READ_MAX_LINES,
   DEFAULT_SEARCH_CONTEXT_LINES,
   DEFAULT_SEARCH_MAX_RESULTS,
-  MAX_FILE_CONTENT_BYTES_PRECHECK,
-  MAX_FILE_CONTENT_CHARS,
-  MAX_SEARCH_TEXT_CHARS,
   exists,
   formatLinesWithNumbers,
   splitLines,
@@ -78,9 +73,6 @@ function buildPatchFailurePayload({
 }
 
 export function createFileTool({ agentContext }) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-
   const readFileTool = new DynamicStructuredTool({
     name: TOOL_NAME.READ_FILE,
     description: tTool(agentContext, "tools.file.readDescriptionWithLineNumbers"),
@@ -99,25 +91,9 @@ export function createFileTool({ agentContext }) {
         fieldName: "filePath",
         mustExist: true,
       });
-      const fileStat = await stat(resolvedPath);
+      await stat(resolvedPath);
       const hasRange = Number.isFinite(Number(startLine)) || Number.isFinite(Number(endLine));
-      if (!hasRange && Number(fileStat?.size || 0) > MAX_FILE_CONTENT_BYTES_PRECHECK) {
-        return toToolJsonResult(TOOL_NAME.READ_FILE, {
-          ok: false,
-          message: tTool(agentContext, "tools.file.readContentTooLong"),
-          resolvedPath,
-          fileName: path.basename(resolvedPath),
-        });
-      }
       const rawContent = await readFile(resolvedPath, "utf8");
-      if (!hasRange && rawContent.length > MAX_FILE_CONTENT_CHARS) {
-        return toToolJsonResult(TOOL_NAME.READ_FILE, {
-          ok: false,
-          message: tTool(agentContext, "tools.file.readContentTooLong"),
-          resolvedPath,
-          fileName: path.basename(resolvedPath),
-        });
-      }
       const allLines = splitLines(rawContent);
       if (rawContent.endsWith("\n")) allLines.pop();
       const totalLines = allLines.length;
@@ -132,14 +108,6 @@ export function createFileTool({ agentContext }) {
         ? formatLinesWithNumbers(selectedLines, start)
         : selectedLines.join("\n");
       const truncated = end < requestedEnd || end < totalLines;
-      if (content.length > MAX_FILE_CONTENT_CHARS) {
-        return toToolJsonResult(TOOL_NAME.READ_FILE, {
-          ok: false,
-          message: tTool(agentContext, "tools.file.readContentTooLong"),
-          resolvedPath,
-          fileName: path.basename(resolvedPath),
-        });
-      }
       return toToolJsonResult(TOOL_NAME.READ_FILE, {
         ok: true,
         resolvedPath,
@@ -177,42 +145,6 @@ export function createFileTool({ agentContext }) {
           fileName: path.basename(resolvedPath),
         });
       }
-      if (String(content || "").length > MAX_FILE_CONTENT_CHARS) {
-        let transferPayload = {};
-        if (typeof transferSemanticContent === "function") {
-          try {
-            const transferred = await transferSemanticContent({
-              scenario: "tool",
-              strategy: "tool_input",
-              text: String(content || ""),
-              inlineMaxChars: MAX_FILE_CONTENT_CHARS,
-              name: `${path.basename(resolvedPath)}.tool-input.txt`,
-              mimeType: "text/plain",
-              source: TRANSFER_SOURCE.TOOL,
-              reason: TRANSFER_REASON.WRITE_FILE_INPUT_TOO_LONG,
-              meta: {
-                toolName: TOOL_NAME.WRITE_FILE,
-                field: "content",
-                resolvedPath,
-              },
-            });
-            transferPayload =
-              transferred?.compactToolPayload &&
-              typeof transferred.compactToolPayload === "object"
-                ? transferred.compactToolPayload
-                : {};
-          } catch {
-            transferPayload = {};
-          }
-        }
-        return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
-          ok: false,
-          message: tTool(agentContext, "tools.file.writeContentTooLong"),
-          resolvedPath,
-          fileName: path.basename(resolvedPath),
-          ...transferPayload,
-        });
-      }
       await mkdir(path.dirname(resolvedPath), { recursive: true });
       await writeFile(resolvedPath, content, "utf8");
       return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
@@ -246,9 +178,6 @@ export function createFileTool({ agentContext }) {
       }
       if (normalizedSource === "text") {
         const normalizedText = String(text || "");
-        if (normalizedText.length > MAX_SEARCH_TEXT_CHARS) {
-          return toToolJsonResult(TOOL_NAME.SEARCH, { ok: false, message: "text is too long; search in smaller chunks" });
-        }
         const result = searchInText({ text: normalizedText, query: normalizedQuery, isRegex, caseSensitive, contextLines, maxResults });
         return toToolJsonResult(TOOL_NAME.SEARCH, {
           ok: true,
