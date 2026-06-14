@@ -15,7 +15,10 @@ import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
 const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
 const MAX_PLAN_UPDATE_ATTEMPTS = WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts;
-const PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
+const FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.full.planning.summary.turnsThreshold;
+const PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.programming.planning.summary.turnsThreshold;
 const FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.full.planning.planUpdate.triggerTurnsThreshold;
 const PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
@@ -428,7 +431,10 @@ test("planning thresholds use full-mode defaults from modeThresholds", async () 
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
     scenario: "full",
-    counters: { llmTurns: 8, planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1 },
+    counters: {
+      llmTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
+      planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
+    },
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
 
@@ -439,11 +445,11 @@ test("planning thresholds use full-mode defaults from modeThresholds", async () 
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
 
-test("planning thresholds use programming-mode overrides: summary 12 and configured plan-update", async () => {
+test("planning thresholds use programming-mode overrides: configured summary and plan-update", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeProgrammingThresholds = createPlanningAgentContext({
     scenario: "programming",
-    counters: { llmTurns: 8, planUpdateTurns: 3 },
+    counters: { llmTurns: PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD - 2, planUpdateTurns: 3 },
   });
   await planningHandler({
     capability: "planning",
@@ -457,7 +463,7 @@ test("planning thresholds use programming-mode overrides: summary 12 and configu
   const atProgrammingThresholds = createPlanningAgentContext({
     scenario: "programming",
     counters: {
-      llmTurns: 12,
+      llmTurns: PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD,
       planUpdateTurns: PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
     },
   });
@@ -754,7 +760,7 @@ test("separate_model summary does not consume refinement attempts", async () => 
 test("planning summary threshold by turns is independent from plan update attempts", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({
-    counters: { llmTurns: LLM_SUMMARY_THRESHOLD, planUpdateAttempts: 0 },
+    counters: { llmTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD, planUpdateAttempts: 0 },
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
   await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
@@ -789,7 +795,7 @@ test("planning schedules summary after a single model tool burst reaches summary
   const agentContext = createPlanningAgentContext({
     counters: { llmTurns: 1, planUpdateAttempts: 0 },
   });
-  const calls = Array.from({ length: LLM_SUMMARY_THRESHOLD }, (_item, index) => ({
+  const calls = Array.from({ length: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD }, (_item, index) => ({
     id: `call_${index}`,
     name: `tool_${index}`,
     args: {},
@@ -849,7 +855,7 @@ test("planning does not schedule tool-burst summary by default", async () => {
   const agentContext = createPlanningAgentContext({
     counters: { llmTurns: 1, planUpdateAttempts: 0 },
   });
-  const calls = Array.from({ length: LLM_SUMMARY_THRESHOLD }, (_item, index) => ({
+  const calls = Array.from({ length: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD }, (_item, index) => ({
     id: `call_default_off_${index}`,
     name: `tool_${index}`,
     args: {},

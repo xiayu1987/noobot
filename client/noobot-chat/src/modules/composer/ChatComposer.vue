@@ -4,8 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { computed, ref } from "vue";
 import {
   VideoPause,
   MoreFilled,
@@ -15,6 +14,9 @@ import {
 } from "@element-plus/icons-vue";
 import ConnectorSelectorPanel from "./ConnectorSelectorPanel.vue";
 import ComposerAttachmentToolbar from "./ComposerAttachmentToolbar.vue";
+import ComposerSelectedTags from "./ComposerSelectedTags.vue";
+import { useComposerMediaCapture } from "./useComposerMediaCapture";
+import { useComposerOptions } from "./useComposerOptions";
 import { useLocale } from "../../shared/i18n/useLocale";
 
 const props = defineProps({
@@ -51,148 +53,58 @@ const emit = defineEmits([
 
 const attachmentToolbarRef = ref();
 const morePanelVisible = ref(false);
-const cameraInputRef = ref(null);
-const cameraDialogVisible = ref(false);
-const cameraVideoRef = ref(null);
-const cameraStreamRef = ref(null);
-const micRecording = ref(false);
-const micRecorderRef = ref(null);
-const micStreamRef = ref(null);
-const micChunksRef = ref([]);
-const micDurationSeconds = ref(0);
-const micDurationTimerRef = ref(null);
-const micAutoStopTimerRef = ref(null);
-const micPointerStartYRef = ref(0);
-const micSlideCancelReady = ref(false);
-const micCancelBySendingRef = ref(false);
 const iconButtonClassName = "composer-icon-btn";
-const MIC_MAX_DURATION_SECONDS = 60;
-const MIC_SLIDE_CANCEL_THRESHOLD = 44;
 const { translate } = useLocale();
-const selectedConnectorNames = computed(() => {
-  const selectedSource =
-    props?.connectorPanelState?.selectedConnectors &&
-    typeof props.connectorPanelState.selectedConnectors === "object"
-      ? props.connectorPanelState.selectedConnectors
-      : {};
-  return ["database", "terminal", "email"]
-    .map((key) => String(selectedSource?.[key] || "").trim())
-    .filter(Boolean);
-});
-const attachmentCount = computed(() => (props.uploadFiles || []).length);
+
+const {
+  selectedConnectorNames,
+  attachmentCount,
+  normalizedScenarioOptions,
+  selectedScenarioLabel,
+  selectedScenarioDescription,
+  normalizedPluginOptions,
+  selectedPluginKeySet,
+  selectedPluginLabels,
+  resolveScenarioLabel,
+  onPluginToggle,
+  onProgrammingScenarioToggle,
+  onScenarioSelect,
+} = useComposerOptions(props, emit, translate);
+
 const sendDisabled = computed(
   () =>
     (!String(props.modelValue || "").trim() && !attachmentCount.value) ||
     !props.connected ||
     (props.interactionActive && props.sending),
 );
-const captureActionsDisabled = computed(() => Boolean(props.sending));
-const micStatusText = computed(() => {
-  if (!micRecording.value) return "";
-  if (micSlideCancelReady.value) return translate("composer.recordingWillCancel");
-  return translate("composer.recordingReleaseToSend", {
-    seconds: micDurationSeconds.value,
-  });
-});
-const recordingTimeText = computed(() => {
-  const totalSeconds = Math.max(0, Number(micDurationSeconds.value || 0));
-  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
-  const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${minutes}:${seconds}`;
-});
+
+function emitAppendUploads(files = []) {
+  if (captureActionsDisabled.value) return;
+  emit("append-uploads", Array.isArray(files) ? files : []);
+}
+
+const {
+  cameraInputRef,
+  cameraDialogVisible,
+  cameraVideoRef,
+  micRecording,
+  micSlideCancelReady,
+  captureActionsDisabled,
+  micStatusText,
+  recordingTimeText,
+  openCameraCapture,
+  onCameraCaptureChange,
+  stopCameraPreview,
+  capturePhotoFromCamera,
+  onMicPointerDown,
+  onMicPointerMove,
+  onMicPointerUpOrCancel,
+} = useComposerMediaCapture(props, emitAppendUploads, translate);
+
 const sendButtonText = computed(() => {
   if (micRecording.value) return recordingTimeText.value;
   return props.sending ? translate("composer.sending") : translate("composer.send");
 });
-const normalizedScenarioOptions = computed(() => {
-  const sourceOptions = Array.isArray(props.scenarioOptions)
-    ? props.scenarioOptions
-    : [];
-  return sourceOptions
-    .map((scenarioItem) => ({
-      key: String(scenarioItem?.key || "").trim(),
-      label: String(scenarioItem?.label || "").trim(),
-      description: String(scenarioItem?.description || "").trim(),
-    }))
-    .filter((scenarioItem) => Boolean(scenarioItem.key));
-});
-const selectedScenarioLabel = computed(() => {
-  const currentScenario = String(props.botScenario || "").trim();
-  if (!currentScenario) return "";
-  const matchedScenario = normalizedScenarioOptions.value.find(
-    (scenarioItem) => scenarioItem.key === currentScenario,
-  );
-  if (matchedScenario) return resolveScenarioLabel(matchedScenario);
-  if (currentScenario.toLowerCase() === "programming") {
-    return translate("composer.scenarioProgramming");
-  }
-  return currentScenario;
-});
-
-const selectedScenarioDescription = computed(() => {
-  const currentScenario = String(props.botScenario || "").trim();
-  if (!currentScenario) return "";
-  const matchedScenario = normalizedScenarioOptions.value.find(
-    (scenarioItem) => scenarioItem.key === currentScenario,
-  );
-  return String(matchedScenario?.description || "").trim();
-});
-
-const normalizedPluginOptions = computed(() => {
-  const sourcePlugins = Array.isArray(props.availablePlugins)
-    ? props.availablePlugins
-    : [];
-  return sourcePlugins
-    .map((pluginItem) => ({
-      key: String(pluginItem?.key || pluginItem?.name || "").trim(),
-      label: String(pluginItem?.label || pluginItem?.name || pluginItem?.key || "").trim(),
-      description: String(pluginItem?.description || "").trim(),
-      enabled: pluginItem?.enabled === true,
-      mode: String(pluginItem?.mode || "")
-        .trim()
-        .toLowerCase() === "on"
-        ? "on"
-        : "off",
-    }))
-    .filter((pluginItem) => Boolean(pluginItem.key));
-});
-
-const selectedPluginKeySet = computed(
-  () =>
-    new Set(
-      (Array.isArray(props.selectedPlugins) ? props.selectedPlugins : [])
-        .map((pluginKey) => String(pluginKey || "").trim())
-        .filter(Boolean),
-    ),
-);
-
-const selectedPluginLabels = computed(() =>
-  normalizedPluginOptions.value
-    .filter((pluginItem) => selectedPluginKeySet.value.has(pluginItem.key))
-    .map((pluginItem) => pluginItem.label || pluginItem.key),
-);
-
-function onSelectedPluginsChange(pluginKeys = []) {
-  emit(
-    "update:selectedPlugins",
-    (Array.isArray(pluginKeys) ? pluginKeys : [])
-      .map((pluginKey) => String(pluginKey || "").trim())
-      .filter(Boolean),
-  );
-}
-
-function onPluginToggle(pluginKey = "") {
-  const key = String(pluginKey || "").trim();
-  if (!key) return;
-  const current = new Set(
-    (Array.isArray(props.selectedPlugins) ? props.selectedPlugins : [])
-      .map((item) => String(item || "").trim())
-      .filter(Boolean),
-  );
-  if (current.has(key)) current.delete(key);
-  else current.add(key);
-  onSelectedPluginsChange(Array.from(current));
-}
 
 function onInputChange(value) {
   emit("update:modelValue", value);
@@ -200,11 +112,6 @@ function onInputChange(value) {
 
 function onUploadChange(file, fileList) {
   emit("upload-change", file, fileList);
-}
-
-function emitAppendUploads(files = []) {
-  if (captureActionsDisabled.value) return;
-  emit("append-uploads", Array.isArray(files) ? files : []);
 }
 
 function clearUploadSelection() {
@@ -237,30 +144,6 @@ function onStreamOutputChange(value) {
   emit("update:streamOutput", Boolean(value));
 }
 
-function onProgrammingScenarioToggle() {
-  const currentScenario = String(props.botScenario || "").trim();
-  emit("update:botScenario", currentScenario === "programming" ? "" : "programming");
-}
-
-function onScenarioSelect(scenarioKey = "") {
-  const normalizedScenarioKey = String(scenarioKey || "").trim();
-  if (!normalizedScenarioKey) return;
-  emit("update:botScenario", normalizedScenarioKey);
-}
-
-function resolveScenarioLabel(scenarioItem = {}) {
-  const scenarioKey = String(scenarioItem?.key || "").trim().toLowerCase();
-  const customLabel = String(scenarioItem?.label || "").trim();
-  if (customLabel) return customLabel;
-  if (scenarioKey === "programming") {
-    return translate("composer.scenarioProgramming");
-  }
-  if (scenarioKey === "full") {
-    return translate("composer.scenarioFull");
-  }
-  return String(scenarioItem?.key || "").trim();
-}
-
 function onConnectorSelected(connectorType = "", connectorName = "") {
   emit("connector-selected", {
     connectorType: String(connectorType || "").trim(),
@@ -272,240 +155,6 @@ function toggleMorePanel() {
   morePanelVisible.value = !morePanelVisible.value;
 }
 
-function clearMicTimers() {
-  clearInterval(micDurationTimerRef.value);
-  clearTimeout(micAutoStopTimerRef.value);
-  micDurationTimerRef.value = null;
-  micAutoStopTimerRef.value = null;
-}
-
-function stopMicStreamTracks() {
-  micStreamRef.value?.getTracks?.().forEach((track) => track.stop());
-  micStreamRef.value = null;
-}
-
-async function startMicRecording() {
-  if (captureActionsDisabled.value) return;
-  if (micRecording.value) return;
-  if (!navigator?.mediaDevices?.getUserMedia) {
-    ElMessage.error(translate("composer.micUnsupported"));
-    return;
-  }
-  try {
-    const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    micStreamRef.value = mediaStream;
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm")
-      ? "audio/webm"
-      : "";
-    const mediaRecorder = mimeType
-      ? new MediaRecorder(mediaStream, { mimeType })
-      : new MediaRecorder(mediaStream);
-    micChunksRef.value = [];
-    micDurationSeconds.value = 0;
-    micSlideCancelReady.value = false;
-    micCancelBySendingRef.value = false;
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data && event.data.size > 0) {
-        micChunksRef.value.push(event.data);
-      }
-    };
-    mediaRecorder.onstop = () => {
-      clearMicTimers();
-      const chunks = [...micChunksRef.value];
-      micChunksRef.value = [];
-      if (
-        micCancelBySendingRef.value ||
-        micSlideCancelReady.value ||
-        captureActionsDisabled.value
-      ) {
-        micCancelBySendingRef.value = false;
-        micSlideCancelReady.value = false;
-        if (!captureActionsDisabled.value) {
-          ElMessage.info(translate("composer.recordingCanceled"));
-        }
-      } else if (chunks.length) {
-        const recordingMimeType = mediaRecorder.mimeType || "audio/webm";
-        const audioBlob = new Blob(chunks, { type: recordingMimeType });
-        const extension = recordingMimeType.includes("ogg") ? "ogg" : "webm";
-        const audioFile = new File(
-          [audioBlob],
-          `voice-${Date.now()}.${extension}`,
-          { type: recordingMimeType },
-        );
-        emitAppendUploads([audioFile]);
-      }
-      micDurationSeconds.value = 0;
-      micPointerStartYRef.value = 0;
-      stopMicStreamTracks();
-      micRecorderRef.value = null;
-      micRecording.value = false;
-    };
-    mediaRecorder.start();
-    micDurationTimerRef.value = setInterval(() => {
-      micDurationSeconds.value += 1;
-    }, 1000);
-    micAutoStopTimerRef.value = setTimeout(() => {
-      if (mediaRecorder.state !== "inactive") {
-        ElMessage.info(translate("composer.recordingMaxReached", { max: MIC_MAX_DURATION_SECONDS }));
-        mediaRecorder.stop();
-      }
-    }, MIC_MAX_DURATION_SECONDS * 1000);
-    micRecorderRef.value = mediaRecorder;
-    micRecording.value = true;
-  } catch (error) {
-    ElMessage.error(error?.message || translate("composer.micStartFailed"));
-    micRecording.value = false;
-  }
-}
-
-function stopMicRecording() {
-  if (!micRecording.value) return;
-  const mediaRecorder = micRecorderRef.value;
-  if (!mediaRecorder) return;
-  if (mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop();
-    return;
-  }
-  micRecording.value = false;
-}
-
-function onMicPointerDown(event) {
-  if (captureActionsDisabled.value) return;
-  event.preventDefault();
-  micPointerStartYRef.value = Number(event.clientY || 0);
-  micSlideCancelReady.value = false;
-  event.currentTarget?.setPointerCapture?.(event.pointerId);
-  startMicRecording();
-}
-
-function onMicPointerMove(event) {
-  if (captureActionsDisabled.value) return;
-  if (!micRecording.value) return;
-  const currentPointerY = Number(event.clientY || 0);
-  const deltaY = micPointerStartYRef.value - currentPointerY;
-  micSlideCancelReady.value = deltaY >= MIC_SLIDE_CANCEL_THRESHOLD;
-}
-
-function onMicPointerUpOrCancel(event) {
-  if (captureActionsDisabled.value) return;
-  event.preventDefault();
-  event.currentTarget?.releasePointerCapture?.(event.pointerId);
-  stopMicRecording();
-}
-
-function isLikelyMobileDevice() {
-  const uaText = String(navigator?.userAgent || "");
-  const mobilePattern = /iPhone|iPad|iPod|Android/i;
-  return mobilePattern.test(uaText);
-}
-
-function openCameraCapture() {
-  if (captureActionsDisabled.value) return;
-  const mobileDevice = isLikelyMobileDevice();
-  if (mobileDevice) {
-    cameraInputRef.value?.click?.();
-    return;
-  }
-  if (!navigator?.mediaDevices?.getUserMedia) {
-    cameraInputRef.value?.click?.();
-    return;
-  }
-  startCameraPreview();
-}
-
-async function startCameraPreview() {
-  try {
-    const mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" },
-    });
-    cameraStreamRef.value = mediaStream;
-    cameraDialogVisible.value = true;
-    await Promise.resolve();
-    const videoElement = cameraVideoRef.value;
-    if (!videoElement) return;
-    videoElement.srcObject = mediaStream;
-    await videoElement.play();
-  } catch (error) {
-    ElMessage.error(error?.message || translate("composer.cameraStartFailed"));
-    cameraInputRef.value?.click?.();
-  }
-}
-
-function stopCameraPreview() {
-  const videoElement = cameraVideoRef.value;
-  if (videoElement) {
-    videoElement.pause?.();
-    videoElement.srcObject = null;
-  }
-  cameraStreamRef.value?.getTracks?.().forEach((track) => track.stop());
-  cameraStreamRef.value = null;
-  cameraDialogVisible.value = false;
-}
-
-async function capturePhotoFromCamera() {
-  if (captureActionsDisabled.value) return;
-  const videoElement = cameraVideoRef.value;
-  if (!videoElement) return;
-  const width = Number(videoElement.videoWidth || 0);
-  const height = Number(videoElement.videoHeight || 0);
-  if (!width || !height) {
-    ElMessage.warning(translate("composer.cameraFrameNotReady"));
-    return;
-  }
-  const canvasElement = document.createElement("canvas");
-  canvasElement.width = width;
-  canvasElement.height = height;
-  const canvasContext = canvasElement.getContext("2d");
-  if (!canvasContext) {
-    ElMessage.error(translate("composer.cameraCanvasUnavailable"));
-    return;
-  }
-  canvasContext.drawImage(videoElement, 0, 0, width, height);
-  const photoBlob = await new Promise((resolve) => {
-    canvasElement.toBlob((blobData) => resolve(blobData), "image/jpeg", 0.92);
-  });
-  if (!photoBlob) {
-    ElMessage.error(translate("composer.cameraCaptureFailed"));
-    return;
-  }
-  const photoFile = new File([photoBlob], `camera-${Date.now()}.jpg`, {
-    type: "image/jpeg",
-  });
-  emitAppendUploads([photoFile]);
-  stopCameraPreview();
-}
-
-function onCameraCaptureChange(event) {
-  if (captureActionsDisabled.value) return;
-  const inputElement = event?.target;
-  const selectedFiles = Array.from(inputElement?.files || []);
-  if (selectedFiles.length) emitAppendUploads(selectedFiles);
-  if (inputElement) inputElement.value = "";
-}
-
-watch(
-  () => props.sending,
-  (sendingNow) => {
-    if (!sendingNow) return;
-    if (cameraDialogVisible.value) {
-      stopCameraPreview();
-    }
-    if (micRecording.value) {
-      micCancelBySendingRef.value = true;
-      stopMicRecording();
-    }
-  },
-);
-
-onBeforeUnmount(() => {
-  stopCameraPreview();
-  micSlideCancelReady.value = true;
-  stopMicRecording();
-  stopMicStreamTracks();
-  micChunksRef.value = [];
-  clearMicTimers();
-});
-
 defineExpose({
   clearUploadSelection,
 });
@@ -514,31 +163,11 @@ defineExpose({
 <template>
   <div class="composer-wrapper">
     <!-- 顶部选中标签 -->
-    <div
-      v-if="selectedConnectorNames.length || selectedScenarioLabel || selectedPluginLabels.length"
-      class="selected-connectors-row"
-    >
-      <span
-        v-if="selectedScenarioLabel"
-        class="selected-connector-name selected-scenario-name"
-      >
-        {{ translate("composer.botScenario") }}: {{ selectedScenarioLabel }}
-      </span>
-      <span
-        v-for="(connectorName, connectorIndex) in selectedConnectorNames"
-        :key="`${connectorName}-${connectorIndex}`"
-        class="selected-connector-name"
-      >
-        {{ connectorName }}
-      </span>
-      <span
-        v-for="(pluginLabel, pluginIndex) in selectedPluginLabels"
-        :key="`plugin-${pluginLabel}-${pluginIndex}`"
-        class="selected-connector-name selected-plugin-name"
-      >
-        {{ pluginLabel }}
-      </span>
-    </div>
+    <ComposerSelectedTags
+      :selected-connector-names="selectedConnectorNames"
+      :selected-scenario-label="selectedScenarioLabel"
+      :selected-plugin-labels="selectedPluginLabels"
+    />
 
     <div class="composer">
       <!-- 停止按钮 -->
@@ -780,46 +409,6 @@ defineExpose({
 .composer:focus-within {
   border-color: color-mix(in srgb, var(--noobot-base-blue-500) 36%, transparent);
   box-shadow: var(--noobot-focus-ring);
-}
-
-/* ================= 顶部选中标签 (胶囊风格) ================= */
-.selected-connectors-row {
-  max-width: 800px;
-  margin: 0 auto 12px;
-  padding: 0 4px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.selected-connector-name {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: var(--noobot-fill-soft, #f4f4f5);
-  color: var(--noobot-text-secondary, #52525b);
-  border: 1px solid transparent;
-  border-radius: 20px; /* 胶囊圆角 */
-  padding: 4px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
-}
-
-.selected-connector-name:hover {
-  background: var(--noobot-fill-hover, #e4e4e7);
-}
-
-.selected-scenario-name {
-  border-color: rgba(59, 130, 246, 0.25);
-}
-
-
-.selected-plugin-name {
-  border-color: rgba(14, 165, 233, 0.28);
-  background: color-mix(in srgb, var(--noobot-cyber-cyan, #0ea5e9) 10%, transparent);
 }
 
 /* ================= 悬浮停止按钮 ================= */
@@ -1076,12 +665,6 @@ defineExpose({
     border-radius: 12px; 
   }
   .more-panel-overlay { left: 12px; right: 12px; }
-  .selected-connectors-row {
-    margin-bottom: 8px;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    scrollbar-width: none;
-  }
   .composer-options,
   .scenario-selector,
   .plugin-selector {
