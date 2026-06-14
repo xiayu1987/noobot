@@ -780,6 +780,58 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
 });
 
+test("patch_file: 默认使用主流 git diff/unified_diff 并兼容 git 元数据", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-git-diff-"));
+  await fs.mkdir(path.join(basePath, "src"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "src/a.txt"), "one\n--- literal\nthree\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const gitDiff = [
+    "diff --git a/src/a.txt b/src/a.txt",
+    "index 83db48f..bf269f4 100644",
+    "--- a/src/a.txt",
+    "+++ b/src/a.txt",
+    "@@ -1,3 +1,3 @@",
+    " one",
+    "---- literal",
+    "+--- changed literal",
+    " three",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ patch: gitDiff }));
+  assert.equal(result.ok, true);
+  assert.equal(result.format, "unified_diff");
+  assert.equal(await fs.readFile(path.join(basePath, "src/a.txt"), "utf8"), "one\n--- changed literal\nthree\n");
+});
+
+test("patch_file: 不填 format 时仍自动识别旧 apply_patch 格式", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-autodetect-"));
+  await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "patch_file");
+  assert.ok(tool);
+
+  const applyPatch = [
+    "*** Begin Patch",
+    "*** Update File: a.txt",
+    "@@",
+    " one",
+    "-two",
+    "+TWO",
+    " three",
+    "*** End Patch",
+    "",
+  ].join("\n");
+
+  const result = parseToolResult(await tool.invoke({ patch: applyPatch }));
+  assert.equal(result.ok, true);
+  assert.equal(result.format, "apply_patch");
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+});
+
 test("patch_file: hunk 不匹配时返回带行号上下文", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-context-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\nfour\n", "utf8");
