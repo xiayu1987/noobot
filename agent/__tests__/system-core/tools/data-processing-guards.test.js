@@ -131,6 +131,84 @@ test("doc_to_data: direct text result returns preview when over semantic-transfe
   assert.equal(payload.transferEnvelopes.length, 1);
 });
 
+
+test("doc_to_data: backwrites parsed result to source attachment from inputAttachmentMetas", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-backwrite-input-"));
+  const textPath = path.join(basePath, "runtime", "ops_workdir", "source.md");
+  await fs.mkdir(path.dirname(textPath), { recursive: true });
+  await fs.writeFile(textPath, "source text\n".repeat(20), "utf8");
+
+  const linkCalls = [];
+  const attachmentService = {
+    async ingestGeneratedArtifacts(payload = {}) {
+      const outputDir = path.join(basePath, "runtime", "attach", "scoped", "s1", "model");
+      await fs.mkdir(outputDir, { recursive: true });
+      return Promise.all(
+        (payload.artifacts || []).map(async (artifact, index) => {
+          const outputPath = path.join(outputDir, `${index}-${artifact.name}`);
+          await fs.writeFile(outputPath, Buffer.from(artifact.contentBase64 || "", "base64"));
+          return {
+            attachmentId: `parsed-${index + 1}`,
+            sessionId: "s1",
+            attachmentSource: "model",
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: (await fs.stat(outputPath)).size,
+            path: outputPath,
+            relativePath: path.relative(basePath, outputPath),
+            generatedByModel: true,
+            generationSource: payload.generationSource,
+          };
+        }),
+      );
+    },
+    async linkParsedResultToAttachment(payload = {}) {
+      linkCalls.push(payload);
+      return {
+        attachmentId: payload.sourceAttachmentId,
+        sessionId: payload.sourceSessionId,
+        attachmentSource: payload.sourceAttachmentSource,
+        path: payload.sourceAttachmentPath,
+        parsedResultAttachmentId: payload.parsedAttachmentMeta?.attachmentId,
+        parsedResultPath: payload.parsedAttachmentMeta?.path,
+        parsedResultRelativePath: payload.parsedAttachmentMeta?.relativePath,
+        parsedResultTool: payload.toolName,
+        parsedResultUpdatedAt: "2026-06-15T00:00:00.000Z",
+      };
+    },
+  };
+  const agentContext = buildAgentContext(basePath);
+  const runtime = agentContext.execution.controllers.runtime;
+  runtime.userId = "admin";
+  runtime.systemRuntime = { sessionId: "s1" };
+  runtime.attachmentService = attachmentService;
+  runtime.inputAttachmentMetas = [
+    {
+      attachmentId: "source-att",
+      sessionId: "s1",
+      attachmentSource: "user",
+      name: "source.md",
+      mimeType: "text/markdown",
+      size: (await fs.stat(textPath)).size,
+      path: textPath,
+      relativePath: path.relative(basePath, textPath),
+    },
+  ];
+
+  const tools = createDoc2DataTool({ agentContext });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
+  assert.ok(tool);
+
+  const payload = JSON.parse(await tool.invoke({ filePath: "runtime/ops_workdir/source.md" }));
+  assert.equal(payload.ok, true);
+  assert.equal(payload.summary.source_attachment_backwritten, true);
+  assert.equal(linkCalls.length, 1);
+  assert.equal(linkCalls[0]?.sourceAttachmentId, "source-att");
+  assert.equal(linkCalls[0]?.parsedAttachmentMeta?.attachmentId, "parsed-1");
+  assert.equal(runtime.inputAttachmentMetas[0]?.parsedResultAttachmentId, "parsed-1");
+  assert.equal(runtime.inputAttachmentMetas[0]?.parsedResultTool, TOOL_NAME.DOC_TO_DATA);
+});
+
 test("doc_to_data: reuses generated data artifact instead of creating recursive copies", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-reuse-"));
   const textPath = path.join(basePath, "runtime", "attach", "scoped", "s1", "model", "existing.md");

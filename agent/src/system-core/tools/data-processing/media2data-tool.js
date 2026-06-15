@@ -56,9 +56,10 @@ function normalizeMediaInputPath(rawFilePath = "") {
 function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = {}) {
   const normalizedInputPath = normalizeMediaInputPath(filePath);
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const runtimeAttachmentMetas = Array.isArray(runtime?.attachmentMetas)
-    ? runtime.attachmentMetas
-    : [];
+  const runtimeAttachmentMetas = [
+    ...(Array.isArray(runtime?.inputAttachmentMetas) ? runtime.inputAttachmentMetas : []),
+    ...(Array.isArray(runtime?.attachmentMetas) ? runtime.attachmentMetas : []),
+  ];
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) {
     return {
       resolvedInputPath: normalizedInputPath,
@@ -335,13 +336,14 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
-    if (Array.isArray(runtime?.attachmentMetas)) {
-      const sourceAttachmentIndex = runtime.attachmentMetas.findIndex(
+    for (const bucketName of ["inputAttachmentMetas", "attachmentMetas"]) {
+      if (!Array.isArray(runtime?.[bucketName])) continue;
+      const sourceAttachmentIndex = runtime[bucketName].findIndex(
         (item) => String(item?.attachmentId || "").trim() === sourceAttachmentId,
       );
       if (sourceAttachmentIndex >= 0) {
-        runtime.attachmentMetas[sourceAttachmentIndex] = {
-          ...(runtime.attachmentMetas[sourceAttachmentIndex] || {}),
+        runtime[bucketName][sourceAttachmentIndex] = {
+          ...(runtime[bucketName][sourceAttachmentIndex] || {}),
           ...(updatedSourceAttachment || {}),
         };
       }

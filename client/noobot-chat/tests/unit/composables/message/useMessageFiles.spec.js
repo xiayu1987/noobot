@@ -179,4 +179,55 @@ describe("useMessageFiles", () => {
     });
   });
 
+
+  it("keeps parsed result metadata from attachmentMetas", () => {
+    const messageItem = {
+      role: "user",
+      dialogProcessId: "dp-1",
+      content: "source",
+      attachmentMetas: [
+        {
+          attachmentId: "src-1",
+          name: "source.pdf",
+          parsedResultAttachmentId: "parsed-1",
+          parsedResultUrl: "/api/attachments/parsed-1",
+          parsedResultName: "source.md",
+        },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toHaveLength(1);
+    expect(displayedAttachmentMetas.value[0]).toMatchObject({
+      attachmentId: "src-1",
+      parsedResultAttachmentId: "parsed-1",
+      parsedResultUrl: "/api/attachments/parsed-1",
+      parsedResultName: "source.md",
+    });
+  });
+
+  it("does not read legacy attachments fallback", () => {
+    const messageItem = {
+      role: "user",
+      dialogProcessId: "dp-1",
+      content: "source",
+      attachments: [
+        { attachmentId: "legacy-1", name: "legacy.pdf" },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
 });

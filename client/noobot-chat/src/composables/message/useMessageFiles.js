@@ -77,9 +77,7 @@ function extractCandidatePathsFromText(content = "") {
 function getMessageAttachmentMetas(messageItem = {}) {
   const base = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
-    : Array.isArray(messageItem?.attachments)
-      ? messageItem.attachments
-      : [];
+    : [];
   const transferMetas = getMessageTransferAttachmentMetas(messageItem);
   return transferMetas.length ? mergeAttachmentMetas(transferMetas, base) : base;
 }

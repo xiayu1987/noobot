@@ -59,4 +59,48 @@ describe("messageModel semantic transfer", () => {
       sandboxPath: "/workspace/u1/report.md",
     });
   });
+
+  it("normalizes parsed result metadata from attachmentMetas", () => {
+    const message = buildViewMessage(
+      {
+        role: "user",
+        content: "source",
+        attachmentMetas: [
+          {
+            attachmentId: "src-1",
+            name: "source.pdf",
+            mimeType: "application/pdf",
+            parsedResultAttachmentId: "parsed-1",
+            parsedResultRelativePath: "runtime/attach/parsed/source.md",
+          },
+        ],
+      },
+      { userId: "admin" },
+    );
+
+    expect(message.attachmentMetas).toHaveLength(1);
+    expect(message.attachmentMetas[0]).toMatchObject({
+      attachmentId: "src-1",
+      parsedResultAttachmentId: "parsed-1",
+      parsedResultRelativePath: "runtime/attach/parsed/source.md",
+      parsedResultName: "source.md",
+    });
+    expect(message.attachmentMetas[0].parsedResultUrl).toContain("parsed-1");
+  });
+
+  it("does not fall back to legacy attachments", () => {
+    const message = buildViewMessage({
+      role: "user",
+      content: "source",
+      attachments: [
+        {
+          attachmentId: "legacy-1",
+          name: "legacy.pdf",
+        },
+      ],
+    });
+
+    expect(message.attachmentMetas).toEqual([]);
+  });
+
 });
