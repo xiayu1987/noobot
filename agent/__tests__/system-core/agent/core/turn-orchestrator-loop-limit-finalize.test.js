@@ -78,7 +78,7 @@ function createModelState(llm, defaultModelSpec = null) {
   };
 }
 
-test("loop over max turns: inject finalize prompt once and stop if next turn still asks tools", async () => {
+test("loop over max turns: inject finalize prompt first, then no-tools finalize if still asks tools", async () => {
   let toolInvokeCount = 0;
   const tool = {
     name: "execute_script",
@@ -100,6 +100,12 @@ test("loop over max turns: inject finalize prompt once and stop if next turn sti
       additional_kwargs: {},
       response_metadata: {},
     },
+    {
+      content: "最终总结",
+      tool_calls: [],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
   ]);
 
   const result = await runFunctionCallLoop({
@@ -109,8 +115,10 @@ test("loop over max turns: inject finalize prompt once and stop if next turn sti
   });
 
   assert.equal(toolInvokeCount, 1, "grace turn should not execute tools again");
-  assert.match(result.output, /上限|limit/i);
-  assert.equal(capturedInvocations.length, 2);
+  assert.equal(result.output, "最终总结");
+  assert.equal(capturedInvocations.length, 3);
+  assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "auto");
+  assert.equal(capturedNoToolInvokeOptions[2]?.tool_choice, "none");
   const secondInvocationMessages = capturedInvocations[1] || [];
   const finalizePromptMessage = [...secondInvocationMessages]
     .reverse()
@@ -153,7 +161,7 @@ test("when model returns no tool calls, add a user prompt to use tools and retry
   };
   const result = await runFunctionCallLoop({
     modelState,
-    loopState: createLoopState({ maxTurns: 1, tool }),
+    loopState: createLoopState({ maxTurns: 3, tool }),
     turn: 1,
   });
 
@@ -309,7 +317,7 @@ test("phaseSummaryNoToolsNextTurn enforces one no-tools round even when tools ar
   assert.equal(modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn, false);
 });
 
-test("loop over max turns: next turn no-tool response will keep retrying and finally stop at limit", async () => {
+test("loop over max turns: next turn no-tool response returns directly", async () => {
   let toolInvokeCount = 0;
   const tool = {
     name: "execute_script",
@@ -318,7 +326,7 @@ test("loop over max turns: next turn no-tool response will keep retrying and fin
       return "{\"ok\":true}";
     },
   };
-  const { llm } = createToolCallingLlm([
+  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
     {
       content: "",
       tool_calls: [{ id: "call_1", name: "execute_script", args: {} }],
@@ -340,7 +348,8 @@ test("loop over max turns: next turn no-tool response will keep retrying and fin
   });
 
   assert.equal(toolInvokeCount, 1);
-  assert.match(result.output, /上限|limit/i);
+  assert.equal(result.output, "最终结论");
+  assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "auto");
 });
 
 test("auto tool_choice should not force non-thinking params", async () => {
@@ -375,10 +384,11 @@ test("auto tool_choice should not force non-thinking params", async () => {
 
   assert.equal(toolInvokeCount, 1);
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
-  assert.equal(capturedNoToolInvokeOptions[0]?.enable_thinking, undefined);
-  assert.equal(capturedNoToolInvokeOptions[0]?.preserve_thinking, undefined);
-  assert.equal(capturedNoToolInvokeOptions[0]?.thinking_budget, undefined);
-  assert.match(result.output, /上限|limit/i);
+  assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "auto");
+  assert.equal(capturedNoToolInvokeOptions[1]?.enable_thinking, undefined);
+  assert.equal(capturedNoToolInvokeOptions[1]?.preserve_thinking, undefined);
+  assert.equal(capturedNoToolInvokeOptions[1]?.thinking_budget, undefined);
+  assert.equal(result.output, "收尾结果");
 });
 
 test("multiple tool calls are replayed as one assistant/tool pair per loop without extra LLM calls", async () => {

@@ -140,10 +140,22 @@ export function createTurnOrchestrator({
       }
 
       if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted === true) {
-        const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
-        traces.push({ tool: "system", args: { turn, maxTurns }, result: limitMsg });
         emitEvent(eventListener, "tool_loop_limit_reached", { turn, maxTurns });
-        return buildLoopResultFn({ output: limitMsg, traces, loopState });
+        const finalResult = await invokeNoToolsTurnFn({
+          modelState,
+          loopState,
+          turn,
+          forceToolChoiceNone: true,
+        });
+        return buildLoopResultFn({
+          output: finalResult.output,
+          traces,
+          loopState,
+          turnTaskStore: finalResult.turnTaskStore,
+          turnMessageStore: finalResult.turnMessageStore,
+          modelMessages: finalResult.modelMessages,
+          finalStreaming: finalResult.finalStreaming,
+        });
       }
 
       if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted !== true) {
@@ -210,6 +222,19 @@ export function createTurnOrchestrator({
       } = withToolsResult;
 
       if (!calls.length) {
+        if (isOverMaxTurns) {
+          loopState.toolChoiceRetryPrompted = false;
+          removeToolChoiceRequiredRetryPrompts(loopState.messages);
+          return buildLoopResultFn({
+            output: aiContentText,
+            traces,
+            loopState,
+            turnTaskStore,
+            turnMessageStore,
+            modelMessages: loopState.messages,
+            finalStreaming: withToolsResult.finalStreaming,
+          });
+        }
         const forceTool = resolveForceToolCall(systemRuntime?.config || {});
         if (!forceTool) {
           loopState.toolChoiceRetryPrompted = false;
@@ -254,25 +279,41 @@ export function createTurnOrchestrator({
       loopState.toolChoiceRetryPrompted = false;
 
       if (isOverMaxTurns) {
-        const limitMsg = tEngine(runtime, "toolLoopLimitReached", { maxTurns });
-        traces.push({
-          tool: "system",
-          args: { turn, maxTurns, toolCallCount: calls.length },
-          result: limitMsg,
-        });
+        const lastMessage = Array.isArray(loopState?.messages)
+          ? loopState.messages[loopState.messages.length - 1]
+          : null;
+        const lastToolCalls = Array.isArray(lastMessage?.tool_calls)
+          ? lastMessage.tool_calls
+          : [];
+        if (lastToolCalls.length) {
+          loopState.messages.pop();
+        }
+        if (turnMessageStore && typeof turnMessageStore.updateLast === "function") {
+          turnMessageStore.updateLast(
+            { type: "message", tool_calls: [] },
+            (item = {}) => item?.role === "assistant" && item?.type === "tool_call",
+          );
+        }
         emitEvent(eventListener, "tool_loop_limit_reached", {
           turn,
           maxTurns,
           toolCallCount: calls.length,
           afterFinalizePrompt: true,
         });
+        const finalResult = await invokeNoToolsTurnFn({
+          modelState,
+          loopState,
+          turn,
+          forceToolChoiceNone: true,
+        });
         return buildLoopResultFn({
-          output: limitMsg,
+          output: finalResult.output,
           traces,
           loopState,
-          turnTaskStore,
-          turnMessageStore,
-          modelMessages: loopState.messages,
+          turnTaskStore: finalResult.turnTaskStore,
+          turnMessageStore: finalResult.turnMessageStore,
+          modelMessages: finalResult.modelMessages,
+          finalStreaming: finalResult.finalStreaming,
         });
       }
 
