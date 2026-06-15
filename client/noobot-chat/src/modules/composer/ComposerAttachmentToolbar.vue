@@ -28,7 +28,6 @@ function clearUploadSelection() {
 
 function onClearUploads() {
   emit("clear-uploads");
-  clearUploadSelection();
 }
 
 defineExpose({
