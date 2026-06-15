@@ -268,8 +268,9 @@ defineExpose({
   position: relative;
   max-width: 800px;
   margin: 0 auto;
-  background: var(--noobot-panel-bg, #ffffff);
-  border: 1px solid var(--noobot-panel-border, #e4e4e7);
+  /* 更多操作面板需要实底，避免使用带 transparent 的 panel token 导致透出背景 */
+  background: var(--noobot-surface-sidebar, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 24%, var(--noobot-panel-border, #e4e4e7));
   border-radius: 16px; /* 更现代的大圆角 */
   padding: 12px 16px;
   display: flex;
@@ -300,8 +301,10 @@ defineExpose({
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  background: var(--noobot-panel-bg, #ffffff);
+  /* 更多操作面板需要实底，避免使用带 transparent 的 panel token 导致透出背景 */
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 90%, var(--noobot-base-blue-500, #3b82f6));
   border: 1px solid var(--noobot-panel-border, #e4e4e7);
+  outline: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 16%, transparent);
   border-radius: 16px;
   overflow-x: hidden; overflow-y: auto; /* 确保内部元素不溢出圆角，同时允许垂直滚动 */
   box-shadow: none;
@@ -312,8 +315,16 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  background: var(--noobot-panel-head-bg, #f3f4f6);
-  border-bottom: 1px solid var(--noobot-panel-border, #e4e4e7);
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 84%, var(--noobot-base-blue-500, #3b82f6));
+  border-bottom: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, #3b82f6) 22%, var(--noobot-panel-border, #e4e4e7));
+}
+
+:root[data-theme="light"] .more-panel {
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 94%, var(--noobot-base-blue-500, #3b82f6));
+}
+
+:root[data-theme="light"] .more-actions-row {
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, #ffffff) 90%, var(--noobot-base-blue-500, #3b82f6));
 }
 
 .more-panel-title {
