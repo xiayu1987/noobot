@@ -33,8 +33,8 @@ describe("reconnectReplay support modules", () => {
 
   it("clears pending interaction timers and cache expired refresh timer on cleanup", () => {
     vi.useFakeTimers();
-    const interactionTimer = setTimeout(() => {}, 10_000);
-    const refreshTimer = setTimeout(() => {}, 10_000);
+    const interactionTimer = setTimeout(() => {}, 10000);
+    const refreshTimer = setTimeout(() => {}, 10000);
     const missingInteractionPayloadTimers = new Map([["dp-1", interactionTimer]]);
     const setCacheExpiredRefreshTimer = vi.fn();
 

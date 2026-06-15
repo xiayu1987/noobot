@@ -327,7 +327,7 @@ test("separate_model summary request extracts previous summary relay into standa
   );
 });
 
-test("inject mode: overflow summary keeps higher priority than revision", async () => {
+test("inject mode: revision keeps higher priority than overflow summary for cache-friendly flow", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({
     pending: {
@@ -343,11 +343,11 @@ test("inject mode: overflow summary keeps higher priority than revision", async 
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
   assert.equal(
     ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
-    true,
+    false,
   );
   assert.equal(
     ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
-    false,
+    true,
   );
 });
 

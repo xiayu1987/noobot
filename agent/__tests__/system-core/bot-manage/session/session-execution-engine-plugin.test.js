@@ -6,6 +6,7 @@ import path from "node:path";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 import { SessionExecutionEngine } from "../../../../src/system-core/bot-manage/session/session-execution-engine.js";
+import { AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS, AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS } from "../../../../src/system-core/bot-manage/session/run-config-plugin-preparer.js";
 
 function createWorkspaceService(basePath) {
   return { getWorkspacePath: () => basePath };
@@ -183,7 +184,7 @@ test("SessionExecutionEngine defaults plugin miniRunnerMaxTurns to 5", async () 
     },
   });
 
-  assert.equal(prepared.plugins.agentPlugin.miniRunnerMaxTurns, 5);
+  assert.equal(prepared.plugins.agentPlugin.miniRunnerMaxTurns, AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS);
 });
 
 test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
@@ -203,7 +204,7 @@ test("SessionExecutionEngine caps plugin miniRunnerMaxTurns at 5", async () => {
     },
   });
 
-  assert.equal(prepared.plugins.agentPlugin.miniRunnerMaxTurns, 5);
+  assert.equal(prepared.plugins.agentPlugin.miniRunnerMaxTurns, AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS);
 });
 
 test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning", async () => {
@@ -223,7 +224,7 @@ test("SessionExecutionEngine raises plugin timeoutMs for separate_model planning
     },
   });
 
-  assert.equal(prepared.plugins.agentPlugin.timeoutMs, 180_000);
+  assert.equal(prepared.plugins.agentPlugin.timeoutMs, AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS);
 });
 
 test("SessionExecutionEngine injects bot plugin resolveModelMessages without plugin window config", async () => {

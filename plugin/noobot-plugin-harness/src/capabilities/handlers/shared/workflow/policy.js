@@ -6,10 +6,6 @@
 
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 
-export const GUIDANCE_PRIORITY_ORDER = Object.freeze([
-  ...WORKFLOW_PARAMS.guidance.scheduler.priorityOrder,
-]);
-
 export const ACCEPTANCE_PHASE_BLOCKER_KEYS = Object.freeze([
   ...WORKFLOW_PARAMS.acceptance.phase.blockerKeys,
 ]);
@@ -17,8 +13,12 @@ export const ACCEPTANCE_PHASE_BLOCKER_KEYS = Object.freeze([
 export function hasAcceptancePhaseBlockers(state = {}) {
   const pending = state?.pending && typeof state.pending === "object" ? state.pending : {};
   const hasPlanUpdatePending = pending.planRevision === true || pending.planRefinement === true;
+  // Cache-friendly orchestration: a pending summary alone should not block
+  // phase acceptance. Summary may rewrite/prune history and reduce provider
+  // prefix-cache hits, while phase acceptance can usually run against the
+  // existing stable context. Hard overflow is handled separately by the
+  // forced-acceptance path.
   return (
-    pending.summary === true ||
     Boolean(pending.guidance) ||
     hasPlanUpdatePending ||
     state?.flags?.planningCaptured !== true

@@ -18,9 +18,9 @@ const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_START_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.startTimeoutMs;
 const DEFAULT_IDLE_TIMEOUT_MS = BUILTIN_THRESHOLDS.openvscode.idleTimeoutMs;
-const DEFAULT_CLEANUP_INTERVAL_MS = 60_000;
-const DEFAULT_SHUTDOWN_GRACE_MS = 5_000;
-const DEFAULT_TOUCH_PERSIST_INTERVAL_MS = 30_000;
+const DEFAULT_CLEANUP_INTERVAL_MS = 60000;
+const DEFAULT_SHUTDOWN_GRACE_MS = 5000;
+const DEFAULT_TOUCH_PERSIST_INTERVAL_MS = 30000;
 const IDE_PATH_PREFIX = "/ide";
 const IDE_TOKEN_QUERY_KEY = "tkn";
 const IDE_TOKEN_HEADER_KEY = "x-ide-token";
@@ -104,7 +104,7 @@ function getOpenVSCodeConfig(globalConfig = {}) {
       key: "cleanupIntervalMs",
       legacyKey: "cleanup_interval_ms",
       fallback: DEFAULT_CLEANUP_INTERVAL_MS,
-      min: 1_000,
+      min: 1000,
     }),
     shutdownGraceMs: resolveOpenVSCodeTimeMs({
       envName: "OPENVSCODE_SERVER_SHUTDOWN_GRACE_MS",

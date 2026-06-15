@@ -100,20 +100,20 @@ export const config = {
     "AGENT_PROXY_CHANNEL_RETENTION_MS",
     "channelRetentionMs",
     10 * 60 * 1000,
-    10_000,
+    10000,
   ),
   apiKeyRetentionMs: envTimeMs(
     "AGENT_PROXY_API_KEY_RETENTION_MS",
     "apiKeyRetentionMs",
     24 * 60 * 60 * 1000,
-    60_000,
+    60000,
   ),
   maxChannelEvents: envNumber("AGENT_PROXY_MAX_CHANNEL_EVENTS", "maxChannelEvents", 2000, 100),
   cleanupIntervalMs: envTimeMs(
     "AGENT_PROXY_CLEANUP_INTERVAL_MS",
     "cleanupIntervalMs",
-    15_000,
-    5_000,
+    15000,
+    5000,
   ),
   maxConnections: envNumber("AGENT_PROXY_MAX_CONNECTIONS", "maxConnections", 1000, 10),
   maxBodySize: envNumber(
@@ -126,13 +126,13 @@ export const config = {
     "AGENT_PROXY_REQUEST_ID_TTL_MS",
     "requestIdTtlMs",
     11 * 60 * 1000,
-    5_000,
+    5000,
   ),
   httpUpstreamTimeoutMs: envTimeMs(
     "AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS",
     "httpUpstreamTimeoutMs",
-    60_000,
-    5_000,
+    60000,
+    5000,
   ),
   trustedOrigins: envList("AGENT_PROXY_TRUSTED_ORIGINS", "trustedOrigins", ""),
   trustedIps: envList("AGENT_PROXY_TRUSTED_IPS", "trustedIps", ""),
@@ -145,8 +145,8 @@ export const config = {
   httpRateLimitWindowMs: envTimeMs(
     "AGENT_PROXY_HTTP_RATE_LIMIT_WINDOW_MS",
     "httpRateLimitWindowMs",
-    60_000,
-    1_000,
+    60000,
+    1000,
   ),
   httpRateLimitMaxRequests: envNumber(
     "AGENT_PROXY_HTTP_RATE_LIMIT_MAX_REQUESTS",
@@ -157,8 +157,8 @@ export const config = {
   wsRateLimitWindowMs: envTimeMs(
     "AGENT_PROXY_WS_RATE_LIMIT_WINDOW_MS",
     "wsRateLimitWindowMs",
-    60_000,
-    1_000,
+    60000,
+    1000,
   ),
   wsRateLimitMaxUpgrades: envNumber(
     "AGENT_PROXY_WS_RATE_LIMIT_MAX_UPGRADES",
@@ -174,8 +174,8 @@ export const config = {
   ideWsRateLimitWindowMs: envTimeMs(
     "AGENT_PROXY_IDE_WS_RATE_LIMIT_WINDOW_MS",
     "ideWsRateLimitWindowMs",
-    60_000,
-    1_000,
+    60000,
+    1000,
   ),
   ideWsRateLimitMaxUpgrades: envNumber(
     "AGENT_PROXY_IDE_WS_RATE_LIMIT_MAX_UPGRADES",
@@ -191,8 +191,8 @@ export const config = {
   ideHttpRateLimitWindowMs: envTimeMs(
     "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_WINDOW_MS",
     "ideHttpRateLimitWindowMs",
-    60_000,
-    1_000,
+    60000,
+    1000,
   ),
   ideHttpRateLimitMaxRequests: envNumber(
     "AGENT_PROXY_IDE_HTTP_RATE_LIMIT_MAX_REQUESTS",

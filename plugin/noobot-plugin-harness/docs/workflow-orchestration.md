@@ -16,7 +16,7 @@ Planning, guidance, acceptance, and review follow the matrix below:
 | Flow | Trigger | Arbitrate | Execute | Observe |
 | --- | --- | --- | --- | --- |
 | Planning | At `before_llm_call`, run workflow tick: threshold checks update pending states (`summary`/`planUpdate`/`phaseAcceptance`) | Fixed action `planning_bootstrap` (`planning_capture` at `after_llm_call`) | Runs by mode: `runPlanningBySeparateModel` or `maybeInjectPlanningPrompt`; capture by `maybeCapturePlanningResult` | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`planning`) |
-| Guidance | Pending states come from failure thresholds and summary/plan-update signals | `resolveNextGuidanceAction` chooses: `summary_overflow > guidance > plan_update > summary_turns` | One execution path per mode (inject/separate-model), including plan-update and summary/guidance chaining | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`guidance`) |
+| Guidance | Pending states come from failure thresholds and summary/plan-update signals | `resolveNextGuidanceAction` chooses: `guidance > plan_update > summary_overflow > summary_turns`; summary defers when phase acceptance is ready so the stable context prefix remains provider-cache friendly | One execution path per mode (inject/separate-model), including plan-update and summary/guidance chaining | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`guidance`) |
 | Acceptance | Multi-hook triggers from `pending.phaseAcceptance`, `pending.acceptanceSemanticValidation`, and overflow flags | `resolveAcceptanceDecision` picks `phase_acceptance` / `forced_acceptance` / `acceptance_semantic_validation` etc. | Executes phase acceptance, semantic validation, final-output guard, and tool guards by hook and mode | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`acceptance`) |
 | Review | Triggered on review hooks (`before_final_output`, `on_error`, `on_abort`, etc.) | Fixed action `review_report` | Builds report and conditionally attaches it to final output | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`review`) |
 
@@ -34,19 +34,34 @@ Standard events (all four domains):
 
 ## Concurrent Trigger Priority
 
-Current guidance scheduler decision order (`before_llm_call`):
+Current guidance scheduler decision order (`before_llm_call`) is cache-friendly:
 
-1. `summary_overflow`
-   Trigger condition: `pending.summary === true && flags.summaryByCharsPrompted === true`
-2. `guidance`
+1. `guidance`
    Trigger condition: `pending.guidance != null`
-3. `plan_update_revision` / `plan_update_refinement`
-   Trigger condition: `pending.planUpdate === true` (or legacy `pending.planRevision === true`)
+2. `plan_update_revision` / `plan_update_refinement`
+   Trigger condition: `pending.planUpdate === true` (or legacy `pending.planRevision === true` / `pending.planRefinement === true`)
+3. `summary_overflow`
+   Trigger condition: `pending.summary === true && flags.summaryByCharsPrompted === true`
 4. `summary_turns`
    Trigger condition: `pending.summary === true && flags.summaryByCharsPrompted !== true`
 5. `none`
 
-`phase_acceptance` is not selected by guidance scheduler, but is included in decision snapshots as a blocked lower-priority pending flow when applicable.
+`phase_acceptance` is not selected by guidance scheduler. When only summary and phase acceptance are pending, summary defers in the guidance domain so the later acceptance domain can run phase acceptance first. True hard overflow still uses the `overflowForceAcceptancePending` forced-acceptance override.
+
+
+## Scheduler Architecture And Failure Isolation
+
+Ordering decisions live in `src/capabilities/handlers/shared/workflow/scheduler.js`. The complete order is described by one config item, `WORKFLOW_PARAMS.workflow.scheduler.order` (flow / subflow / action / executor / kind), and the scheduler derives executors and sorting from it with these layers:
+
+- Strategy: `WORKFLOW_ACTION_PRIORITY` defines the cache-friendly business priority.
+- Chain of Responsibility: `resolveBlockReason(...)` applies blockers one by one (for example, summary defers when phase acceptance is eligible).
+- Command routing: `WORKFLOW_ACTION_EXECUTOR` maps each action to an executor domain (planning/guidance/acceptance).
+
+Rules:
+
+1. The scheduler only returns `chosenAction / deferredActions / blockedActions / blockedReasons`; it does not mutate state or execute actions.
+2. Handler execution must follow `chosenAction` exactly and must not let another pending action preempt inside the executor.
+3. The capability runtime is fail-open per flow: if one flow throws, it records `capability_flow_failed` and continues running later flows on the same hook.
 
 ## Decision Log Event
 
@@ -158,7 +173,7 @@ Planning inject and separate-model paths now share an intermediate message plan:
 
 ### Acceptance
 
-- Phase acceptance can be scheduled in planning flow when threshold reached and higher-priority pendings are clear.
+- Phase acceptance can be scheduled in planning flow when threshold reached; it is blocked by guidance / plan update / missing planning capture, but not by ordinary summary pending so stable provider prefix-cache context is preserved.
 - Semantic acceptance validation is triggered by acceptance flow (active or forced), depending on mode and options.
 
 ## Responsibility Matrix (Unified Semantics)

@@ -17,6 +17,19 @@ function deepFreeze(value) {
 // Keep shape stable by domain -> concern -> knobs.
 export const WORKFLOW_PARAMS = deepFreeze({
   workflow: {
+    scheduler: {
+      order: [
+        { flow: "final_acceptance", subflow: "forced", action: "forced_acceptance", executor: "acceptance", kind: "guard", hardOverride: true },
+        { flow: "guidance", subflow: "failure_recovery", action: "guidance", executor: "guidance", kind: "workflow" },
+        { flow: "planning", subflow: "bootstrap", action: "planning_bootstrap", executor: "planning", kind: "workflow" },
+        { flow: "plan_update", subflow: "revision", action: "plan_update_revision", executor: "guidance", kind: "workflow" },
+        { flow: "plan_update", subflow: "refinement", action: "plan_update_refinement", executor: "guidance", kind: "workflow" },
+        { flow: "phase_acceptance", subflow: "phase", action: "phase_acceptance", executor: "acceptance", kind: "workflow" },
+        { flow: "summary", subflow: "overflow", action: "summary_overflow", executor: "guidance", kind: "workflow" },
+        { flow: "summary", subflow: "turns", action: "summary_turns", executor: "guidance", kind: "workflow" },
+        { flow: "phase_acceptance", subflow: "semantic_validation", action: "acceptance_semantic_validation", executor: "acceptance", kind: "workflow" },
+      ],
+    },
     events: {
       priorityDecision: "workflow_priority_decision",
       executionResult: "workflow_execution_result",
@@ -105,6 +118,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
         separateModelRelaySkippedTurnEnded: "planning_separate_model_relay_skipped_turn_ended",
         separateModelRelayInjectedAsSystemContext: "planning_separate_model_relay_injected_as_system_context",
         capabilityModelTrace: "capability_model_trace",
+        capabilityFlowFailed: "capability_flow_failed",
       },
     },
   },
@@ -199,9 +213,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
       consecutive: 3,
       accumulated: 10,
     },
-    scheduler: {
-      priorityOrder: ["summary_overflow", "guidance", "plan_update", "summary_turns"],
-    },
     decisions: {
       action: {
         summary: "summary",
@@ -255,7 +266,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
       // Fallback default. Mode-specific phase acceptance thresholds live in
       // top-level modeThresholds.<mode>.acceptance.phase.
       triggerTurnsThreshold: 9,
-      blockerKeys: ["summary", "guidance", "planUpdate", "planningCaptured"],
+      blockerKeys: ["guidance", "planUpdate", "planningCaptured"],
     },
     tools: {
       taskAcceptanceToolName: "request_task_acceptance",
