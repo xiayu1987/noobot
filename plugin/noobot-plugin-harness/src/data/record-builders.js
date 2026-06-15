@@ -90,17 +90,12 @@ export function buildEvent({ point, ctx = {}, options = {}, pluginName = "", plu
     : [];
   const toolTurnLimitReached = resolveToolTurnLimitReached(capabilityLogs);
   return {
+    kind: "hook",
     eventId: crypto.randomUUID(),
-    plugin: pluginName,
-    version: pluginVersion,
     point,
     phase: ctx.phase || undefined,
     status: ctx.status || undefined,
     timestamp: nowIso(),
-    userId: ctx.userId || undefined,
-    sessionId: ctx.sessionId || undefined,
-    parentSessionId: ctx.parentSessionId || undefined,
-    dialogProcessId: resolveDialogProcessIdFromContext(ctx) || undefined,
     caller: ctx.caller || undefined,
     turn: ctx.turn,
     mode: ctx.mode,

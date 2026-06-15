@@ -105,8 +105,6 @@ export function createRunPaths(ctx = {}, options = {}) {
     contextSnapshot: path.join(runDir, "context-snapshot.json"),
     events: path.join(runDir, "events.jsonl"),
     prompts: path.join(runDir, "prompts.jsonl"),
-    toolCalls: path.join(runDir, "tool-calls.jsonl"),
-    stateCommits: path.join(runDir, "state-commits.jsonl"),
     policyChecks: path.join(runDir, "policy-checks.json"),
     capabilityTraces: path.join(runDir, "capability-traces.jsonl"),
   };
