@@ -26,7 +26,7 @@ import {
   resolveWorkflowMode,
   runWorkflowLifecycle,
 } from "../shared/workflow/pattern.js";
-import { resolveProgrammingModeFromContext } from "../shared/workflow/prompts.js";
+import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
 function isMessageSummarized(message = {}) {
@@ -68,11 +68,11 @@ function normalizePositiveInteger(value = 0, fallback = 0) {
 
 function resolvePlanningTurnThresholds(ctx = {}) {
   const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
-  const programmingMode = resolveProgrammingModeFromContext(ctx) === true;
-  const scopedMode = programmingMode ? modeThresholds.programming : modeThresholds.full;
+  const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
+  const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full;
   const scoped = scopedMode?.planning || {};
   return {
-    mode: programmingMode ? "programming" : "full",
+    mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
     summaryTurnsThreshold: normalizePositiveInteger(
       scoped?.summary?.turnsThreshold,
       DEFAULT_LLM_SUMMARY_THRESHOLD,

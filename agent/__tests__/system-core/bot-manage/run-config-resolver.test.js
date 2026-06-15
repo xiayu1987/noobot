@@ -168,6 +168,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "search",
     "patch_file",
     "execute_script",
+    "process_content_task",
     "task_summary",
     "request_help",
     "call_service",

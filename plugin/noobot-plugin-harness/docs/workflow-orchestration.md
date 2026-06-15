@@ -132,9 +132,9 @@ Unified observation/lifecycle entry:
   - `PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS`
   - `FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW`
 - Plan update trigger:
-  - `state.counters.planUpdateTurns >= PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD` (mode-specific via `WORKFLOW_PARAMS.modeThresholds.<full|programming>.planning.planUpdate`)
+  - `state.counters.planUpdateTurns >= PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD` (mode-specific via `WORKFLOW_PARAMS.modeThresholds.<full|programming|text>.planning.planUpdate`)
 - Phase acceptance scheduling threshold:
-  - `state.counters.phaseAcceptanceTurns >= PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD` (mode-specific via `WORKFLOW_PARAMS.modeThresholds.<full|programming>.acceptance.phase`)
+  - `state.counters.phaseAcceptanceTurns >= PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD` (mode-specific via `WORKFLOW_PARAMS.modeThresholds.<full|programming|text>.acceptance.phase`)
 
 ### Guidance (tool-failure recovery)
 

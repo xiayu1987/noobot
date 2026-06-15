@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveScenarioProfile } from "../../../src/system-core/context/builders/scenario-resolver.js";
+import {
+  resolveBuiltinScenarios,
+  sanitizeScenarioConfig,
+} from "../../../src/system-core/config/core/builtin-scenarios.js";
 
 test("resolveScenarioProfile prefers runConfig scenarioProfile over builtin scenario definition", () => {
   const result = resolveScenarioProfile({
@@ -95,4 +99,65 @@ test("resolveScenarioProfile localizes builtin scenario names from runtime local
 
   assert.equal(english.name, "Programming");
   assert.equal(chinese.name, "编程");
+});
+
+test("resolveScenarioProfile supports builtin text scenario without a hard-coded default model", () => {
+  const result = resolveScenarioProfile({
+    runConfig: { scenario: "text", locale: "zh-CN" },
+    effectiveConfig: {},
+  });
+
+  assert.equal(result.key, "text");
+  assert.equal(result.name, "文本");
+  assert.equal(result.description, "文本情景：适合写作、改写、摘要、翻译与内容整理。");
+  assert.equal(result.model, "");
+  assert.deepEqual(result.tools, [
+    "read_file",
+    "write_file",
+    "search",
+    "patch_file",
+    "execute_script",
+    "process_content_task",
+    "task_summary",
+    "request_help",
+  ]);
+  assert.deepEqual(result.context, [
+    "scenario",
+    "system_runtime",
+    "base_prompt",
+    "services",
+    "mcp_servers",
+  ]);
+  assert.deepEqual(result.services, ["web_search_service"]);
+  assert.deepEqual(result.mcpServers, []);
+});
+
+test("sanitizeScenarioConfig keeps only configured text model and ignores text tool overrides", () => {
+  const sanitized = sanitizeScenarioConfig({
+    default: "text",
+    definitions: {
+      text: {
+        model: " custom text model ",
+        tools: ["unsafe_tool"],
+        context: ["attachments"],
+      },
+    },
+  });
+
+  assert.deepEqual(sanitized, {
+    default: "text",
+    definitions: {
+      text: { model: " custom text model " },
+    },
+  });
+});
+
+test("resolveBuiltinScenarios resolves text model from config like programming", () => {
+  const result = resolveBuiltinScenarios(
+    { definitions: { text: { model: "global-text-model" } } },
+    { definitions: { text: { model: "user-text-model" } } },
+  );
+
+  assert.equal(result.definitions.text.model, "user-text-model");
+  assert.equal(result.definitions.programming.model, "");
 });

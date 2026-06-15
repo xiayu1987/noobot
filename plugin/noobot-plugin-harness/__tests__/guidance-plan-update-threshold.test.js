@@ -27,6 +27,12 @@ const FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.full.acceptance.phase.triggerTurnsThreshold;
 const PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.modeThresholds.programming.acceptance.phase.triggerTurnsThreshold;
+const TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.text.planning.summary.turnsThreshold;
+const TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.text.planning.planUpdate.triggerTurnsThreshold;
+const TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.modeThresholds.text.acceptance.phase.triggerTurnsThreshold;
 
 function createAgentContext({
   planText = "1. 主任务\n",
@@ -529,6 +535,74 @@ test("phase acceptance threshold uses programming-mode override", async () => {
   );
   assert.equal(acceptanceLog?.detail?.triggerTurns, PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD);
   assert.equal(acceptanceLog?.detail?.thresholdMode, "programming");
+});
+
+
+test("planning thresholds use text-mode overrides: configured summary and plan-update", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const beforeTextThresholds = createPlanningAgentContext({
+    scenario: "text",
+    counters: {
+      llmTurns: TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD - 2,
+      planUpdateTurns: TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 2,
+    },
+  });
+  await planningHandler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: beforeTextThresholds },
+    meta: {},
+  });
+  assert.equal(beforeTextThresholds.payload.harness.state.pending.summary, false);
+  assert.equal(beforeTextThresholds.payload.harness.state.pending.planRevision, false);
+
+  const atTextThresholds = createPlanningAgentContext({
+    scenario: "文本",
+    counters: {
+      llmTurns: TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD,
+      planUpdateTurns: TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD - 1,
+    },
+  });
+  await planningHandler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atTextThresholds },
+    meta: {},
+  });
+  assert.equal(atTextThresholds.payload.harness.state.pending.summary, true);
+  assert.equal(atTextThresholds.payload.harness.state.pending.planRevision, true);
+  assert.equal(atTextThresholds.payload.harness.state.counters.planUpdateTurns, 0);
+});
+
+test("phase acceptance threshold uses text-mode override", async () => {
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const atTextPhaseAcceptance = createPlanningAgentContext({
+    scenario: "text",
+    counters: {
+      llmTurns: 0,
+      planUpdateTurns: 0,
+      phaseAcceptanceTurns: TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD - 1,
+    },
+  });
+  atTextPhaseAcceptance.payload.harness.state.flags = {
+    planningCaptured: true,
+  };
+  await planningHandler({
+    capability: "planning",
+    point: "before_llm_call",
+    ctx: {
+      messages: [{ role: "user", content: "继续任务" }],
+      agentContext: atTextPhaseAcceptance,
+    },
+    meta: {},
+  });
+  assert.equal(atTextPhaseAcceptance.payload.harness.state.pending.phaseAcceptance, true);
+  assert.equal(atTextPhaseAcceptance.payload.harness.state.counters.phaseAcceptanceTurns, 0);
+  const acceptanceLog = atTextPhaseAcceptance.payload.harness.logs.acceptance.find(
+    (item = {}) => item?.event === "phase_acceptance_scheduled_by_turn_threshold",
+  );
+  assert.equal(acceptanceLog?.detail?.triggerTurns, TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD);
+  assert.equal(acceptanceLog?.detail?.thresholdMode, "text");
 });
 
 test("planning plan-update threshold keeps pressure while pending plan-update blocks scheduling", async () => {

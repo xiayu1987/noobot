@@ -39,20 +39,38 @@ function isProgrammingScenarioText(value = "") {
   return text === "programming" || text === "coding" || text.includes("programming") || text.includes("coding") || text.includes("\u7f16\u7a0b");
 }
 
-export function resolveProgrammingModeFromContext(ctx = {}) {
+function isTextScenarioText(value = "") {
+  const text = normalizeScenarioText(value);
+  return text === "text" || text.includes("text") || text.includes("\u6587\u672c");
+}
+
+function resolveRunConfigCandidatesFromContext(ctx = {}) {
   const runtime = ctx?.agentContext?.execution?.controllers?.runtime || ctx?.runtime || null;
-  const candidates = [
+  return [
     ctx?.runConfig,
     runtime?.runConfig,
     runtime?.systemRuntime?.runConfig,
     ctx?.agentContext?.runConfig,
   ].filter((item) => item && typeof item === "object");
+}
+
+export function resolveWorkflowThresholdModeFromContext(ctx = {}) {
+  const candidates = resolveRunConfigCandidatesFromContext(ctx);
   for (const runConfig of candidates) {
-    if (isProgrammingScenarioText(runConfig?.scenario)) return true;
-    if (isProgrammingScenarioText(runConfig?.scenarioProfile?.key)) return true;
-    if (isProgrammingScenarioText(runConfig?.scenarioProfile?.name)) return true;
+    if (isTextScenarioText(runConfig?.scenario)) return "text";
+    if (isTextScenarioText(runConfig?.scenarioProfile?.key)) return "text";
+    if (isTextScenarioText(runConfig?.scenarioProfile?.name)) return "text";
   }
-  return false;
+  for (const runConfig of candidates) {
+    if (isProgrammingScenarioText(runConfig?.scenario)) return "programming";
+    if (isProgrammingScenarioText(runConfig?.scenarioProfile?.key)) return "programming";
+    if (isProgrammingScenarioText(runConfig?.scenarioProfile?.name)) return "programming";
+  }
+  return "full";
+}
+
+export function resolveProgrammingModeFromContext(ctx = {}) {
+  return resolveWorkflowThresholdModeFromContext(ctx) === "programming";
 }
 
 export function getPlanningPromptMarker(locale = LOCALE.ZH_CN) {

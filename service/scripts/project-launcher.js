@@ -95,6 +95,7 @@ const CONFIG_TEXT_BILINGUAL_PAIRS = [
     en: "General scenario: no tool/context restrictions, capabilities are chosen based on task needs.",
   },
   { zh: "编程", en: "Programming" },
+  { zh: "文本", en: "Text" },
   {
     zh: "优先分析代码结构，再构建完整上下文后执行修改与验证。",
     en: "Prioritize code structure analysis, then build full context before making changes and verification.",
@@ -465,18 +466,21 @@ function resolveTemplateProvider(providers = {}, format = "") {
   return isPlainObject(firstProvider) ? firstProvider : null;
 }
 
-const BUILTIN_SCENARIO_KEYS = new Set(["full", "programming"]);
+const BUILTIN_SCENARIO_KEYS = new Set(["full", "programming", "text"]);
 
 function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { programmingModel = "" } = {}) {
   const source = isPlainObject(scenarios) ? scenarios : {};
   const defaultScenario = String(source.default || "full").trim();
   const definitions = isPlainObject(source.definitions) ? source.definitions : {};
   const programming = isPlainObject(definitions.programming) ? definitions.programming : {};
+  const text = isPlainObject(definitions.text) ? definitions.text : {};
   const model = String(programmingModel || programming.model || "").trim();
+  const textModel = String(text.model || "").trim();
   return {
     default: BUILTIN_SCENARIO_KEYS.has(defaultScenario) ? defaultScenario : "full",
     definitions: {
       programming: model ? { model } : {},
+      text: textModel ? { model: textModel } : {},
     },
   };
 }

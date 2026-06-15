@@ -173,5 +173,7 @@ export default {
   "scenarios.full.name": "全能",
   "scenarios.full.description": "通用情景：不限制工具和上下文，按任务需要自主选择能力。",
   "scenarios.programming.name": "编程",
-  "scenarios.programming.description": "编程情景：处理代码时优先使用 search 定位、read_file 读取、patch_file 修改，必要时再用 write_file 写入/创建文件；保留代码修改所需的文件、符号、测试与失败尝试上下文。"
+  "scenarios.programming.description": "编程情景：处理代码时优先使用 search 定位、read_file 读取、patch_file 修改，必要时再用 write_file 写入/创建文件；可使用内容处理工具；保留代码修改所需的文件、符号、测试与失败尝试上下文。",
+  "scenarios.text.name": "文本",
+  "scenarios.text.description": "文本情景：适合写作、改写、摘要、翻译与内容整理。"
 };
