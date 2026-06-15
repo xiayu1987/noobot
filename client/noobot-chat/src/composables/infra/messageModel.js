@@ -91,9 +91,7 @@ function isHarnessInjectedMessage(messageItem = {}) {
 function createMessageModel(messageItem = {}) {
   const normalizedAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
-    : Array.isArray(messageItem?.attachments)
-      ? messageItem.attachments
-      : [];
+    : [];
   const transferEnvelope =
     normalizeTransferEnvelope(messageItem?.transferEnvelope) ||
     normalizeTransferEnvelope(messageItem?.transferResult?.envelope);
@@ -160,9 +158,7 @@ function buildViewMessage(
 ) {
   const sourceAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
-    : Array.isArray(messageItem?.attachments)
-      ? messageItem.attachments
-      : [];
+    : [];
   const transferAttachmentMetas = getMessageTransferAttachmentMetas(messageItem);
   const normalizedAttachments = (transferAttachmentMetas.length
     ? mergeAttachmentMetas(transferAttachmentMetas, normalizeArray(sourceAttachmentMetas))

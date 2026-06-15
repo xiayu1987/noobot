@@ -502,13 +502,12 @@ export class AttachmentService {
         ? sessionPayload.messages
         : [];
       let changed = false;
-      const nextMessages = messages.map((messageItem) => {
-        const attachmentMetas = Array.isArray(messageItem?.attachmentMetas)
-          ? messageItem.attachmentMetas
-          : [];
-        if (!attachmentMetas.length) return messageItem;
-        let messageChanged = false;
-        const nextAttachmentMetas = attachmentMetas.map((attachmentItem) => {
+      const syncAttachmentBucket = (attachmentItems = []) => {
+        if (!Array.isArray(attachmentItems) || !attachmentItems.length) {
+          return { items: attachmentItems, changed: false };
+        }
+        let bucketChanged = false;
+        const nextItems = attachmentItems.map((attachmentItem) => {
           const attachmentId = safeStr(attachmentItem?.attachmentId);
           const attachmentPath = safeStr(attachmentItem?.path);
           const isMatchedAttachment =
@@ -518,17 +517,25 @@ export class AttachmentService {
               actualPath: attachmentPath,
             });
           if (!isMatchedAttachment) return attachmentItem;
-          messageChanged = true;
-          changed = true;
+          bucketChanged = true;
           return {
             ...(attachmentItem || {}),
             ...nextParsedFields,
           };
         });
+        return { items: nextItems, changed: bucketChanged };
+      };
+      const nextMessages = messages.map((messageItem) => {
+        const attachmentMetas = Array.isArray(messageItem?.attachmentMetas)
+          ? messageItem.attachmentMetas
+          : [];
+        const syncedAttachmentMetas = syncAttachmentBucket(attachmentMetas);
+        const messageChanged = syncedAttachmentMetas.changed;
         if (!messageChanged) return messageItem;
+        changed = true;
         return {
           ...(messageItem || {}),
-          attachmentMetas: nextAttachmentMetas,
+          ...(attachmentMetas.length ? { attachmentMetas: syncedAttachmentMetas.items } : {}),
         };
       });
       if (!changed) continue;

@@ -102,6 +102,15 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
               attachmentSource: sourceAttachment.attachmentSource,
             },
           ],
+          attachments: [
+            {
+              attachmentId: sourceAttachment.attachmentId,
+              path: sourceAttachment.path,
+              relativePath: sourceAttachment.relativePath,
+              sessionId: sourceAttachment.sessionId,
+              attachmentSource: sourceAttachment.attachmentSource,
+            },
+          ],
         },
       ],
     };
@@ -129,6 +138,8 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
     const pluginAttachment = pluginSnapshot?.messages?.[0]?.attachmentMetas?.[0] || {};
     assert.equal(runtimeAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
     assert.equal(pluginAttachment.parsedResultAttachmentId, parsedAttachment.attachmentId);
+    assert.equal(runtimeSnapshot?.messages?.[0]?.attachments?.[0]?.parsedResultAttachmentId, undefined);
+    assert.equal(pluginSnapshot?.messages?.[0]?.attachments?.[0]?.parsedResultAttachmentId, undefined);
     assert.equal(runtimeAttachment.parsedResultTool, "doc_to_data");
     assert.equal(pluginAttachment.parsedResultTool, "doc_to_data");
   });

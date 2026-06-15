@@ -306,9 +306,10 @@ function isImageInputFile(filePath = "") {
 function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}) {
   const normalizedInputPath = String(filePath || "").trim();
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const runtimeAttachmentMetas = Array.isArray(runtime?.attachmentMetas)
-    ? runtime.attachmentMetas
-    : [];
+  const runtimeAttachmentMetas = [
+    ...(Array.isArray(runtime?.inputAttachmentMetas) ? runtime.inputAttachmentMetas : []),
+    ...(Array.isArray(runtime?.attachmentMetas) ? runtime.attachmentMetas : []),
+  ];
   if (!normalizedInputPath || !runtimeAttachmentMetas.length) return null;
   const inputBaseName = path.basename(normalizedInputPath);
   const inputAttachmentId = String(inputBaseName || "").split(".")[0];
@@ -525,13 +526,14 @@ async function backwriteParsedResultToSourceAttachment({
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
       sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
     });
-    if (Array.isArray(runtime?.attachmentMetas)) {
-      const sourceAttachmentIndex = runtime.attachmentMetas.findIndex(
+    for (const bucketName of ["inputAttachmentMetas", "attachmentMetas"]) {
+      if (!Array.isArray(runtime?.[bucketName])) continue;
+      const sourceAttachmentIndex = runtime[bucketName].findIndex(
         (item) => String(item?.attachmentId || "").trim() === sourceAttachmentId,
       );
       if (sourceAttachmentIndex >= 0) {
-        runtime.attachmentMetas[sourceAttachmentIndex] = {
-          ...(runtime.attachmentMetas[sourceAttachmentIndex] || {}),
+        runtime[bucketName][sourceAttachmentIndex] = {
+          ...(runtime[bucketName][sourceAttachmentIndex] || {}),
           ...(updatedSourceAttachment || {}),
         };
       }
