@@ -9,10 +9,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { normalizeOptions } from "../src/core/options.js";
+import { DEFAULT_WORKFLOW_DENY_TOOL_NAMES, normalizeOptions } from "../src/core/options.js";
 import { createRegisterNoobotPlugin } from "../src/core/plugin.js";
 import { createRegisterWorkflowHooks } from "../src/core/hooks.js";
-import { PLUGIN_NAME, WORKFLOW_BOT_HOOK_POINTS } from "../src/core/constants.js";
+import { PLUGIN_NAME, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../src/core/constants.js";
 import { parseWorkflowDslText } from "../src/protocol/text-protocol.js";
 
 function createMockBotHookManager() {
@@ -72,10 +72,10 @@ test("normalizeOptions applies workflow execution defaults", () => {
     enabled: true,
     mode: "on",
   });
-  assert.equal(options.timeoutMs, 18_000_000);
-  assert.equal(options.maxAutoTransitions, 10);
-  assert.equal(options.maxParallelNodeAgents, 4);
-  assert.equal(options.miniRunnerMaxTurns, 3);
+  assert.equal(options.timeoutMs, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_TIMEOUT_MS);
+  assert.equal(options.maxAutoTransitions, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS);
+  assert.equal(options.maxParallelNodeAgents, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS);
+  assert.equal(options.miniRunnerMaxTurns, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MINI_RUNNER_MAX_TURNS);
 });
 
 test("normalizeOptions keeps valid workflow execution overrides", () => {
@@ -98,11 +98,7 @@ test("normalizeOptions provides default workflow denyToolNames", () => {
     enabled: true,
     mode: "on",
   });
-  assert.deepEqual(options.denyToolNames, [
-    "delegate_task_async",
-    "wait_async_task_result",
-    "plan_multi_task_collaboration",
-  ]);
+  assert.deepEqual(options.denyToolNames, [...DEFAULT_WORKFLOW_DENY_TOOL_NAMES]);
 });
 
 test("normalizeOptions keeps custom denyToolNames from workflow plugin config", () => {

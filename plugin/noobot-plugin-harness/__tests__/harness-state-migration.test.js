@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
+import { HARNESS_BUCKET_VERSION } from "../src/capabilities/handlers/shared/constants.js";
 
 test("ensureHarnessBucket normalizes plan-update counters and pending fields", () => {
   const ctx = {
@@ -53,8 +54,8 @@ test("ensureHarnessBucket normalizes plan-update counters and pending fields", (
   assert.equal("planUpdateContext" in state.pending, false);
   assert.equal(state.flags.planUpdateCapturePending, false);
   assert.equal("planRevisionCapturePending" in state.flags, false);
-  assert.equal(holder.bucket.__harnessBucketVersion, 4);
-  assert.equal(state.__harnessBucketVersion, 4);
+  assert.equal(holder.bucket.__harnessBucketVersion, HARNESS_BUCKET_VERSION);
+  assert.equal(state.__harnessBucketVersion, HARNESS_BUCKET_VERSION);
 });
 
 test("ensureHarnessBucket keeps state version as alias of bucket version", () => {
@@ -75,7 +76,7 @@ test("ensureHarnessBucket keeps state version as alias of bucket version", () =>
   };
   const holder = ensureHarnessBucket(ctx);
   assert.ok(holder);
-  assert.equal(holder.state.__harnessBucketVersion, 4);
+  assert.equal(holder.state.__harnessBucketVersion, HARNESS_BUCKET_VERSION);
   holder.state.__harnessBucketVersion = 5;
   assert.equal(holder.bucket.__harnessBucketVersion, 5);
   assert.equal(holder.state.__harnessBucketVersion, 5);

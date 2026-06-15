@@ -16,7 +16,7 @@ Planning / Guidance / Acceptance / Review 统一采用下表范式：
 | 流程 | Trigger（触发） | Arbitrate（裁决） | Execute（执行） | Observe（观测） |
 | --- | --- | --- | --- | --- |
 | Planning | 在 `before_llm_call` 执行 workflow tick：基于轮次/字符阈值更新 `pending`（summary/planUpdate/phaseAcceptance） | 固定选择 `planning_bootstrap`（`after_llm_call` 选择 `planning_capture`） | 按模式执行：`runPlanningBySeparateModel` 或 `maybeInjectPlanningPrompt`；`after_llm_call` 捕获 `maybeCapturePlanningResult` | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`planning`） |
-| Guidance | 工具失败阈值/summary/planUpdate 形成 `pending` | `resolveNextGuidanceAction` 选择本轮动作：`summary_overflow > guidance > plan_update > summary_turns` | 统一执行入口按模式运行：inject 或 separate_model（含 plan_update 与 summary/guidance 联动） | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`guidance`） |
+| Guidance | 工具失败阈值/summary/planUpdate 形成 `pending` | `resolveNextGuidanceAction` 选择本轮动作：`guidance > plan_update > summary_overflow > summary_turns`；当 `phaseAcceptance` 已可执行时，summary 会让路以保留稳定上下文前缀缓存 | 统一执行入口按模式运行：inject 或 separate_model（含 plan_update 与 summary/guidance 联动） | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`guidance`） |
 | Acceptance | 在多 hook 点读取 `pending.phaseAcceptance`、`pending.acceptanceSemanticValidation`、`overflowForceAcceptancePending` | `resolveAcceptanceDecision` 根据 hook 与 pending 选择：`phase_acceptance` / `forced_acceptance` / `acceptance_semantic_validation` 等 | 按 hook 与模式执行 phase acceptance、semantic validation、final output guard、tool guard | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`acceptance`） |
 | Review | 在 review 相关 hook（如 `before_final_output`/`on_error`/`on_abort`）触发 | 固定选择 `review_report` | 生成报告并按配置决定是否附加到最终输出 | 统一写入 `workflow_priority_decision` + `workflow_execution_result`（domain=`review`） |
 
@@ -34,19 +34,19 @@ Planning / Guidance / Acceptance / Review 统一采用下表范式：
 
 ## 并发触发优先级
 
-当前 `before_llm_call` 下 guidance 调度顺序：
+当前 `before_llm_call` 下 guidance 调度顺序采用 cache-friendly 主线：
 
-1. `summary_overflow`
-   触发条件：`pending.summary === true && flags.summaryByCharsPrompted === true`
-2. `guidance`
+1. `guidance`
    触发条件：`pending.guidance != null`
-3. `plan_update_revision` / `plan_update_refinement`
-   触发条件：`pending.planUpdate === true`（或兼容旧字段 `pending.planRevision === true`）
+2. `plan_update_revision` / `plan_update_refinement`
+   触发条件：`pending.planUpdate === true`（或兼容旧字段 `pending.planRevision === true` / `pending.planRefinement === true`）
+3. `summary_overflow`
+   触发条件：`pending.summary === true && flags.summaryByCharsPrompted === true`
 4. `summary_turns`
    触发条件：`pending.summary === true && flags.summaryByCharsPrompted !== true`
 5. `none`
 
-`phase_acceptance` 不由 guidance scheduler 直接选择执行，但会在决策快照中以“被阻塞的低优先级流程”出现。
+`phase_acceptance` 不由 guidance scheduler 直接选择执行；当仅有 summary 与 phase acceptance 同时 pending 时，summary 会在 guidance 域让路，让后续 acceptance 域执行阶段验收。真正的硬溢出由 `overflowForceAcceptancePending` 走 forced acceptance 抢占路径。
 
 ## 决策日志事件
 
@@ -164,7 +164,7 @@ Planning 注入与 separate-model 现在共享消息中间表示：
 
 ### Acceptance
 
-- Phase Acceptance：由 planning 触发调度，且仅在高优先级 pending 清空时执行。
+- Phase Acceptance：由 planning 触发调度；会被 guidance / plan update / planning 未捕获阻塞，但普通 summary pending 不再阻塞，以保持 provider prefix-cache 友好。
 - Semantic Validation：由 acceptance 流程触发（主动验收或兜底验收），依赖模式与配置项。
 
 ## 职责归属矩阵（统一语义）

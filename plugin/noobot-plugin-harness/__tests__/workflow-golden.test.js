@@ -43,7 +43,7 @@ function createAgentContext({
   };
 }
 
-test("golden: summary_overflow outranks guidance and plan_update", () => {
+test("golden: guidance outranks summary_overflow and plan_update", () => {
   const decision = resolveGuidancePriorityDecision({
     pending: {
       summary: true,
@@ -55,7 +55,7 @@ test("golden: summary_overflow outranks guidance and plan_update", () => {
       summaryByCharsPrompted: true,
     },
   });
-  assert.equal(decision.chosenAction, "summary_overflow");
+  assert.equal(decision.chosenAction, "guidance");
 });
 
 test("golden: guidance outranks plan_update", () => {
@@ -73,7 +73,7 @@ test("golden: guidance outranks plan_update", () => {
   assert.equal(decision.chosenAction, "guidance");
 });
 
-test("golden: phase_acceptance is blocked when summary is pending", async () => {
+test("golden: phase_acceptance can run when only summary is pending", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({
     pending: {
@@ -86,7 +86,7 @@ test("golden: phase_acceptance is blocked when summary is pending", async () => 
   const decisionLog = agentContext.payload.harness.logs.acceptance.find(
     (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "before_llm_call",
   );
-  assert.equal(decisionLog?.detail?.chosenReason, "phase_acceptance_blocked");
+  assert.equal(decisionLog?.detail?.chosenReason, "phase_acceptance_pending");
   assert.match(
     String(decisionLog?.detail?.chosenReasonLabel || ""),
     /阶段验收|Phase acceptance/i,

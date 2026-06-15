@@ -63,7 +63,7 @@ function getPostgresPool(pg, conn = {}) {
     statement_timeout: conn.timeoutMs,
     query_timeout: conn.timeoutMs,
     connectionTimeoutMillis: conn.timeoutMs,
-    idleTimeoutMillis: 60_000,
+    idleTimeoutMillis: 60000,
     max: 5,
   });
   postgresPools.set(key, { pool, createdAt: Date.now() });

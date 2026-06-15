@@ -20,7 +20,7 @@ import {
   PLUGIN_MODEL_HEADER_KEY,
 } from "../../../model/headers/plugin-headers.js";
 
-const MAX_MINI_RUNNER_TOOL_TURNS = 5;
+export const MAX_MINI_RUNNER_TOOL_TURNS = 5;
 
 function normalizeTextContent(content = "") {
   if (typeof content === "string") return content;

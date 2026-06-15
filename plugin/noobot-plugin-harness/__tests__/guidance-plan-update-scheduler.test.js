@@ -12,7 +12,7 @@ import {
   resolvePendingPlanUpdate,
 } from "../src/capabilities/handlers/planning/plan-update-scheduler.js";
 
-test("scheduler priority: overflow-summary > guidance > revision > refinement > turn-summary", () => {
+test("scheduler priority: guidance > revision > refinement > summary", () => {
   assert.deepEqual(
     resolveNextGuidanceAction({
       flags: { summaryByCharsPrompted: true },
@@ -23,7 +23,7 @@ test("scheduler priority: overflow-summary > guidance > revision > refinement > 
         planRevisionContext: { targetMainStepIndexes: [] },
       },
     }),
-    { action: "summary", stage: "", reason: "pending_summary_overflow" },
+    { action: "guidance", stage: "", reason: "pending_guidance" },
   );
 
   assert.deepEqual(
@@ -127,12 +127,28 @@ test("priority decision snapshot exposes chosen and blocked actions", () => {
   assert.equal(decision.chosenAction, "plan_update_revision");
   assert.equal(decision.chosenReason, "pending_revision");
   assert.match(String(decision.chosenReasonLabel || ""), /待处理的计划修订|revision/i);
-  assert.deepEqual(decision.blockedActions, ["summary_turns", "phase_acceptance"]);
+  assert.deepEqual(decision.blockedActions, ["phase_acceptance"]);
   assert.equal(Array.isArray(decision.blockedReasonLabels), true);
   assert.equal(decision.blockedReasonLabels.length > 0, true);
   assert.equal(decision.pendingSnapshot.summary?.active, true);
   assert.equal(decision.pendingSnapshot.flags?.summaryByCharsPrompted, false);
   assert.equal(decision.pendingSnapshot.phaseAcceptance?.active, true);
+});
+
+test("scheduler defers summary when phase acceptance is ready", () => {
+  const decision = resolveGuidancePriorityDecision({
+    pending: {
+      summary: true,
+      phaseAcceptance: true,
+    },
+    flags: {
+      summaryByCharsPrompted: true,
+      planningCaptured: true,
+    },
+  });
+  assert.equal(decision.chosenAction, "none");
+  assert.deepEqual(decision.blockedActions, ["summary_overflow"]);
+  assert.deepEqual(decision.pendingSnapshot.phaseAcceptance?.blockedBy, []);
 });
 
 test("priority decision exposes localized reason labels by locale", () => {

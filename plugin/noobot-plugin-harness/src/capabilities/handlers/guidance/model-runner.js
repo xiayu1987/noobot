@@ -292,7 +292,7 @@ export async function runPlanUpdateAfterSummary(
   return true;
 }
 
-export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
+export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action = "auto" } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -300,10 +300,14 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
   if (!invoker) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
 
+  const requestedAction = String(action || "auto").trim().toLowerCase();
+  const allowSummary = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
+  const allowGuidance = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.guidance;
+
   let purpose = "";
   let prompt = "";
   let reason = "";
-  if (state.pending.summary === true) {
+  if (allowSummary && state.pending.summary === true) {
     purpose = "summary";
     // Snapshot current message boundary for summary marking. In separate_model
     // mode, marking happens later (after external model returns), so without
@@ -317,7 +321,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}) {
     });
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
-  } else if (state.pending.guidance) {
+  } else if (allowGuidance && state.pending.guidance) {
     purpose = "guidance";
     reason = state.pending.guidance;
     prompt = buildGuidancePromptContent(locale, reason);

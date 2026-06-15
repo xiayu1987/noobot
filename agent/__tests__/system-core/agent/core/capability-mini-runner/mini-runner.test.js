@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgentCapabilityModelInvoker } from "../../../../../src/system-core/agent/core/capability-mini-runner/index.js";
+import {
+  MAX_MINI_RUNNER_TOOL_TURNS,
+  createAgentCapabilityModelInvoker,
+} from "../../../../../src/system-core/agent/core/capability-mini-runner/index.js";
 
 function createFakeModel(responses = []) {
   let index = 0;
@@ -219,8 +222,8 @@ test("mini-runner caps tool turns at 5 and returns default planning output when 
     ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
   });
 
-  assert.equal(executedCount, 5);
-  assert.equal(result.turn, 5);
+  assert.equal(executedCount, MAX_MINI_RUNNER_TOOL_TURNS);
+  assert.equal(result.turn, MAX_MINI_RUNNER_TOOL_TURNS);
   assert.equal(result.finishedReason, "max_turn_reached_finalized");
   assert.equal(result.toolTurnLimitReached, true);
   assert.equal(result.traces.at(-1)?.toolTurnLimitReached, true);

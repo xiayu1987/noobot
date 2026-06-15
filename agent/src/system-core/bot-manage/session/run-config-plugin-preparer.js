@@ -25,6 +25,9 @@ import {
   selectHookManager,
 } from "./session-execution-engine-utils.js";
 
+export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = 5;
+export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS = 180000;
+
 export class RunConfigPluginPreparer {
   constructor({
     globalConfig = {},
@@ -129,8 +132,8 @@ export class RunConfigPluginPreparer {
     next.markMessagesSummarized = this.createAgentPluginMarkMessagesSummarized();
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
-        ? Math.min(Number(next.miniRunnerMaxTurns), 5)
-        : 5;
+        ? Math.min(Number(next.miniRunnerMaxTurns), AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS)
+        : AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS;
     if (!String(next?.planningGuidanceMode || "").trim()) {
       next.planningGuidanceMode = "separate_model";
     }
@@ -138,8 +141,8 @@ export class RunConfigPluginPreparer {
       const timeoutMs = Number(next?.timeoutMs);
       // Separate-model planning performs external model calls; 1s timeout is too
       // aggressive and causes repeated scheduling across turns.
-      if (!Number.isFinite(timeoutMs) || timeoutMs < 180_000) {
-        next.timeoutMs = 180_000;
+      if (!Number.isFinite(timeoutMs) || timeoutMs < AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS) {
+        next.timeoutMs = AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS;
       }
     }
     if (

@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRegisterWorkflowHooks } from "../src/core/hooks.js";
-import { WORKFLOW_BOT_HOOK_POINTS } from "../src/core/constants.js";
+import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../src/core/constants.js";
 
 function createMockBotHookManager() {
   const listeners = new Map();
@@ -585,7 +585,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
       enabled: true,
       mode: "on",
       parallelNodeExecution: true,
-      maxParallelNodeAgents: 4,
+      maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
         output: [
           "WORKFLOW_DSL/1",
@@ -735,7 +735,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
       enabled: true,
       mode: "on",
       parallelNodeExecution: true,
-      maxParallelNodeAgents: 4,
+      maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
         output: [
           "WORKFLOW_DSL/1",
@@ -995,7 +995,7 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
       enabled: true,
       mode: "on",
       parallelNodeExecution: true,
-      maxParallelNodeAgents: 4,
+      maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
         output: [
           "WORKFLOW_DSL/1",
@@ -1054,7 +1054,7 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
       enabled: true,
       mode: "on",
       parallelNodeExecution: true,
-      maxParallelNodeAgents: 4,
+      maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
         output: [
           "WORKFLOW_DSL/1",

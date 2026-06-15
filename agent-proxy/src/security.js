@@ -52,7 +52,7 @@ export function buildSecurityHeaders() {
   };
 }
 
-export function createFixedWindowRateLimiter({ windowMs = 60_000, maxRequests = 100 } = {}) {
+export function createFixedWindowRateLimiter({ windowMs = 60000, maxRequests = 100 } = {}) {
   const buckets = new Map();
 
   return {

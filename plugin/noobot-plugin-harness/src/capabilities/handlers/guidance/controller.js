@@ -105,11 +105,11 @@ async function executeGuidanceWorkflowAction({
 
   if (mode === "separate_model") {
     if (nextAction.action === GUIDANCE_DECISION.action.summary) {
-      const result = await runGuidanceBySeparateModel(ctx, meta);
+      const result = await runGuidanceBySeparateModel(ctx, meta, { action: nextAction.action });
       changed = result || changed;
       executedPrimary = result === true;
     } else if (nextAction.action === GUIDANCE_DECISION.action.guidance) {
-      const result = await runGuidanceBySeparateModel(ctx, meta);
+      const result = await runGuidanceBySeparateModel(ctx, meta, { action: nextAction.action });
       changed = result || changed;
       executedPrimary = result === true;
     } else if (nextAction.action === GUIDANCE_DECISION.action.planUpdate) {
@@ -123,13 +123,14 @@ async function executeGuidanceWorkflowAction({
         : {};
       const hasSummaryOrGuidancePending = pending.summary === true || Boolean(pending.guidance);
       if (hasSummaryOrGuidancePending) {
-        const followupChanged = await runGuidanceBySeparateModel(ctx, meta);
+        const followupAction = resolveNextGuidanceAction(holder?.state || {});
+        const followupChanged = await runGuidanceBySeparateModel(ctx, meta, { action: followupAction.action });
         changed = followupChanged || changed;
         executedFollowup = followupChanged === true;
       }
     }
   } else if (nextAction.action === "summary" || nextAction.action === "guidance") {
-    const result = maybeInjectGuidanceOrSummaryPrompt(ctx);
+    const result = maybeInjectGuidanceOrSummaryPrompt(ctx, { action: nextAction.action });
     changed = result || changed;
     executedPrimary = result === true;
   } else if (nextAction.action === "plan_update") {

@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 
-import { RunConfigPluginPreparer } from "../../../src/system-core/bot-manage/session/run-config-plugin-preparer.js";
+import {
+  AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS,
+  AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS,
+  RunConfigPluginPreparer,
+} from "../../../src/system-core/bot-manage/session/run-config-plugin-preparer.js";
 import { createSessionPluginRuntime } from "../../../src/system-core/bot-manage/session/session-plugin-runtime-adapter.js";
 import { PLUGIN_CAPABILITY } from "../../../src/system-core/plugin/capabilities.js";
 
@@ -124,9 +128,9 @@ test("RunConfigPluginPreparer resolves agent plugin options with workspace baseP
   assert.equal(options.enabled, true);
   assert.equal(options.mode, "on");
   assert.equal(options.basePath, path.join("/tmp/noobot-preparer-base", "u1"));
-  assert.equal(options.miniRunnerMaxTurns, 5);
+  assert.equal(options.miniRunnerMaxTurns, AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS);
   assert.equal(options.planningGuidanceMode, "separate_model");
-  assert.equal(options.timeoutMs, 180_000);
+  assert.equal(options.timeoutMs, AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS);
   assert.equal(typeof options.resolveModelMessages, "function");
   assert.equal(typeof options.resolveMessageBlock, "function");
   assert.equal(typeof options.markMessagesSummarized, "function");

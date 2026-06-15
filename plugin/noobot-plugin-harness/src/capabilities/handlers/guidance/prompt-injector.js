@@ -34,7 +34,7 @@ export function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", {
   });
 }
 
-export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
+export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto" } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -42,7 +42,11 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
 
-  if (state.pending.summary === true) {
+  const requestedAction = String(action || "auto").trim().toLowerCase();
+  const allowSummary = requestedAction === "auto" || requestedAction === "summary";
+  const allowGuidance = requestedAction === "auto" || requestedAction === "guidance";
+
+  if (allowSummary && state.pending.summary === true) {
     // Freeze the summary scope at injection time so later tool calls in the same
     // loop are never treated as "already summarized".
     state.pending.summaryCheckpointMessageCount = messages.length;
@@ -107,7 +111,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}) {
     return true;
   }
 
-  if (!state.pending.guidance) return false;
+  if (!allowGuidance || !state.pending.guidance) return false;
   const reason = state.pending.guidance;
   injectMessageWithPolicy(ctx, {
     role: "system",

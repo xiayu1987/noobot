@@ -12,6 +12,9 @@ import { applyMemoryTakeover } from "./takeover/memory-takeover.js";
 import { resolveTakeoverPriority, sortTakeovers } from "./takeover/priority.js";
 import { cleanupExpiredPendingOnHook } from "./pending-cleanup.js";
 import { markHarnessTurnLifecycle } from "./handlers/shared/runtime/lifecycle-utils.js";
+import { appendCapabilityLog } from "./handlers/shared/attachment-log-utils.js";
+import { safeError } from "../data/record-builders.js";
+import { WORKFLOW_PARAMS } from "../core/workflow-params.js";
 
 function normalizeBlockList(value) {
   return Array.isArray(value) ? value : [];
@@ -161,13 +164,35 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
         if (typeof handler !== "function") continue;
 
         const profileState = resolvedProfile[capability] || {};
-        const result = await handler({
-          capability,
-          point,
-          ctx,
-          profile: profileState,
-          meta,
-        });
+        let result = null;
+        try {
+          result = await handler({
+            capability,
+            point,
+            ctx,
+            profile: profileState,
+            meta,
+          });
+        } catch (error) {
+          const normalizedError = safeError(error);
+          appendCapabilityLog(ctx, {
+            domain: capability,
+            event: WORKFLOW_PARAMS.logging.events.shared.capabilityFlowFailed,
+            detail: {
+              point,
+              capability,
+              error: normalizedError,
+            },
+          });
+          results.push({
+            capability,
+            point,
+            status: "error",
+            changed: false,
+            error: normalizedError,
+          });
+          continue;
+        }
         const directives = resolveTakeoverDirectives(result);
         const priorityContext = { point, ctx, profile: profileState };
 

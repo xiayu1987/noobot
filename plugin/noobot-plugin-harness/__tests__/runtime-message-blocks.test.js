@@ -79,3 +79,39 @@ test("capability runtime applies message blocks only once per runtime turn conte
     ["sys1", "h1", "u1", "after-first-call"],
   );
 });
+
+
+test("capability runtime keeps later flows running when one flow fails", async () => {
+  const calls = [];
+  const runtime = createCapabilityRuntime({
+    handlers: {
+      planning: async () => {
+        calls.push("planning");
+        throw Object.assign(new Error("planning boom"), { code: "PLANNING_BOOM" });
+      },
+      guidance: async () => {
+        calls.push("guidance");
+        return { capability: "guidance", status: "active", changed: true };
+      },
+      acceptance: async () => {
+        calls.push("acceptance");
+        return { capability: "acceptance", status: "active", changed: false };
+      },
+    },
+    profile: {
+      review: { enabled: false },
+    },
+  });
+  const agentContext = { payload: { harness: {} } };
+  const results = await runtime.runHook("before_llm_call", { agentContext, messages: [] }, {});
+
+  assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
+  assert.equal(results[0]?.status, "error");
+  assert.equal(results[0]?.error?.code, "PLANNING_BOOM");
+  assert.equal(results[1]?.capability, "guidance");
+  assert.equal(results[2]?.capability, "acceptance");
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some((item = {}) => item.event === "capability_flow_failed"),
+    true,
+  );
+});
