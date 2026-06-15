@@ -79,8 +79,6 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
             contextSnapshot: paths.contextSnapshot,
             events: paths.events,
             prompts: paths.prompts,
-            toolCalls: paths.toolCalls,
-            stateCommits: paths.stateCommits,
             policyChecks: paths.policyChecks,
             capabilityTraces: paths.capabilityTraces,
           }
@@ -209,25 +207,6 @@ export async function traceHook(point, ctx, options, plugin = {}) {
     options.jsonlFlushIntervalMs,
     { reason: flushReason },
   );
-  if (point.includes("tool_call")) {
-    await appendJsonlBuffered(
-      paths.toolCalls,
-      event,
-      options.jsonlFlushStrategy || options.jsonlBatchSize,
-      options.jsonlFlushIntervalMs,
-      { reason: flushReason },
-    );
-  }
-  if (point.includes("state_commit")) {
-    await appendJsonlBuffered(
-      paths.stateCommits,
-      event,
-      options.jsonlFlushStrategy || options.jsonlBatchSize,
-      options.jsonlFlushIntervalMs,
-      { reason: flushReason },
-    );
-  }
-
   const capabilityTraceLogs = (Array.isArray(event.capabilityLogs) ? event.capabilityLogs : []).filter(
     (log) => log?.event === "capability_model_trace",
   );
@@ -238,10 +217,10 @@ export async function traceHook(point, ctx, options, plugin = {}) {
         eventId: event.eventId,
         point,
         timestamp: event.timestamp,
-        userId: event.userId,
-        sessionId: event.sessionId,
+        userId: ctx.userId,
+        sessionId: ctx.sessionId,
         dialogProcessId: resolveDialogProcessIdFromContext({
-          dialogProcessId: event.dialogProcessId,
+          dialogProcessId: ctx.dialogProcessId,
         }),
         ...log,
       },

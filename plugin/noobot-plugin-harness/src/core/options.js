@@ -64,6 +64,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
     maxRetry: 5,
     maxBufferEntries: HARNESS_LIMITS.JSONL_MAX_BUFFER_ENTRIES,
     maxBufferBytes: HARNESS_LIMITS.JSONL_MAX_BUFFER_BYTES,
+    maxFileBytes: 5 * 1024 * 1024,
+    maxFiles: 20,
   }),
   maxRuns: 100,
   maxRunAgeDays: 30,
@@ -115,6 +117,18 @@ const HarnessOptionsSchema = z
           .finite()
           .positive()
           .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxBufferBytes),
+        maxFileBytes: z.coerce
+          .number()
+          .int()
+          .finite()
+          .nonnegative()
+          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFileBytes),
+        maxFiles: z.coerce
+          .number()
+          .int()
+          .finite()
+          .nonnegative()
+          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxFiles),
       })
       .partial()
       .default(DEFAULT_OPTIONS.jsonlFlushStrategy),

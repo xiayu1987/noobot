@@ -190,6 +190,8 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
     const maxRetry = Number(input?.maxRetry);
     const maxBufferEntries = Number(input?.maxBufferEntries);
     const maxBufferBytes = Number(input?.maxBufferBytes);
+    const maxFileBytes = Number(input?.maxFileBytes);
+    const maxFiles = Number(input?.maxFiles);
     return {
       maxSize: Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
       maxTime: Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
@@ -210,6 +212,14 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
         Number.isFinite(maxBufferBytes) && maxBufferBytes > 0
           ? Math.trunc(maxBufferBytes)
           : DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
+      maxFileBytes:
+        Number.isFinite(maxFileBytes) && maxFileBytes >= 0
+          ? Math.trunc(maxFileBytes)
+          : DEFAULT_JSONL_FLUSH_STRATEGY.maxFileBytes,
+      maxFiles:
+        Number.isFinite(maxFiles) && maxFiles >= 0
+          ? Math.trunc(maxFiles)
+          : DEFAULT_JSONL_FLUSH_STRATEGY.maxFiles,
     };
   }
   const resolvedBatch = Number(batchSize);
@@ -225,6 +235,8 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
     maxRetry: DEFAULT_JSONL_FLUSH_STRATEGY.maxRetry,
     maxBufferEntries: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferEntries,
     maxBufferBytes: DEFAULT_JSONL_FLUSH_STRATEGY.maxBufferBytes,
+    maxFileBytes: DEFAULT_JSONL_FLUSH_STRATEGY.maxFileBytes,
+    maxFiles: DEFAULT_JSONL_FLUSH_STRATEGY.maxFiles,
   };
 }
 
@@ -392,7 +404,7 @@ async function flushJsonlBuffer(filePath, strategy = DEFAULT_JSONL_FLUSH_STRATEG
   jsonlBuffers.set(filePath, newBuffer); // Atomically replace with new empty buffer
 
   try {
-    await appendFileValidated(filePath, lines);
+    await appendFileValidated(filePath, lines, strategy);
     jsonlFlushFailures.delete(filePath);
     const current = jsonlBuffers.get(filePath);
     if (Array.isArray(current) && current.length === 0) {
@@ -485,9 +497,66 @@ export async function appendJsonl(filePath, record) {
   await appendFileValidated(filePath, line);
 }
 
-async function appendFileValidated(filePath, content) {
+function buildRotatedJsonlPath(filePath = "") {
+  const parsed = path.parse(filePath);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return path.join(parsed.dir, `${parsed.name}.${stamp}.${suffix}${parsed.ext || ".jsonl"}`);
+}
+
+function isRotatedJsonlForFile(entryName = "", filePath = "") {
+  const parsed = path.parse(filePath);
+  const ext = parsed.ext || ".jsonl";
+  return String(entryName || "").startsWith(`${parsed.name}.`) && String(entryName || "").endsWith(ext);
+}
+
+async function pruneRotatedJsonlFiles(filePath = "", maxFiles = 0) {
+  const keep = Number(maxFiles);
+  if (!Number.isFinite(keep) || keep <= 0) return;
+  const dir = path.dirname(filePath);
+  let entries = [];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  const rotated = [];
+  for (const entry of entries) {
+    if (!entry?.isFile?.() || !isRotatedJsonlForFile(entry.name, filePath)) continue;
+    const rotatedPath = path.join(dir, entry.name);
+    try {
+      const stat = await fs.stat(rotatedPath);
+      rotated.push({ path: rotatedPath, mtimeMs: Number(stat?.mtimeMs || 0) });
+    } catch {
+      // best-effort pruning
+    }
+  }
+  if (rotated.length <= keep) return;
+  rotated.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  for (const item of rotated.slice(keep)) {
+    await fs.unlink(item.path).catch(() => {});
+  }
+}
+
+async function rotateJsonlIfNeeded(filePath = "", content = "", strategy = DEFAULT_JSONL_FLUSH_STRATEGY) {
+  const maxFileBytes = Number(strategy?.maxFileBytes);
+  if (!Number.isFinite(maxFileBytes) || maxFileBytes <= 0) return;
+  let currentSize = 0;
+  try {
+    const stat = await fs.stat(filePath);
+    currentSize = Number(stat?.size || 0);
+  } catch {
+    return;
+  }
+  if (currentSize <= 0 || currentSize + estimateUtf8Bytes(content) <= maxFileBytes) return;
+  await fs.rename(filePath, buildRotatedJsonlPath(filePath));
+  await pruneRotatedJsonlFiles(filePath, strategy?.maxFiles);
+}
+
+async function appendFileValidated(filePath, content, strategy = null) {
   await withRunWriteLock(filePath, async () => {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
+    if (strategy) await rotateJsonlIfNeeded(filePath, content, strategy);
     await fs.appendFile(filePath, content, "utf-8");
   });
 }

@@ -240,13 +240,13 @@ test("harness plugin rejects illegal FSM transitions and audits state commits", 
   });
 
   const runDir = path.join(basePath, "runtime", "harness", "runs", "dp-fsm");
-  await waitForFile(path.join(runDir, "state-commits.jsonl"));
+  await waitForFile(path.join(runDir, "events.jsonl"));
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(manifest.fsmStatus, "failed");
 
-  const commits = await readJsonl(path.join(runDir, "state-commits.jsonl"));
-  assert.equal(commits.some((item) => item.type === "fsm_transition_rejected"), true);
-  assert.equal(commits.some((item) => item.type === "fsm_transition" && item.to === "failed"), true);
+  const commits = await readJsonl(path.join(runDir, "events.jsonl"));
+  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition_rejected"), true);
+  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "failed"), true);
 });
 
 test("harness plugin can resume FSM from manifest checkpoint", async () => {
@@ -291,10 +291,10 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
   assert.equal(manifest.fsmStatus, "planned");
   assert.equal(manifest.fsm?.resumedFromCheckpoint, true);
 
-  await waitForFile(path.join(runDir, "state-commits.jsonl"));
-  const commits = await readJsonl(path.join(runDir, "state-commits.jsonl"));
-  assert.equal(commits.some((item) => item.type === "fsm_resume"), true);
-  assert.equal(commits.some((item) => item.type === "fsm_transition" && item.to === "planned"), true);
+  await waitForFile(path.join(runDir, "events.jsonl"));
+  const commits = await readJsonl(path.join(runDir, "events.jsonl"));
+  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_resume"), true);
+  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "planned"), true);
 });
 
 test("harness FSM transition matrix (table-driven)", async () => {
@@ -313,7 +313,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
   );
   const runDir = path.join(basePath, "runtime", "harness", "runs", runId);
   const manifestPath = path.join(runDir, "harness-run.json");
-  const stateCommitsPath = path.join(runDir, "state-commits.jsonl");
+  const eventsPath = path.join(runDir, "events.jsonl");
 
   const cases = [
     {
@@ -387,12 +387,13 @@ test("harness FSM transition matrix (table-driven)", async () => {
     const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
     assert.equal(manifest.fsmStatus, item.expectedState, item.name);
 
-    await waitForFile(stateCommitsPath);
-    const commits = await readJsonl(stateCommitsPath);
+    await waitForFile(eventsPath);
+    const commits = await readJsonl(eventsPath);
     assert.equal(commits.length > seenCommits, true, `${item.name}: no new state commit`);
-    const last = commits[commits.length - 1];
+    const last = commits.findLast((commit) => commit.kind === "fsm" && commit.type === item.expectedCommitType);
     seenCommits = commits.length;
 
+    assert.ok(last, `${item.name}: missing ${item.expectedCommitType}`);
     assert.equal(last.type, item.expectedCommitType, item.name);
     assert.equal(last.accepted, item.expectedAccepted, item.name);
     if (item.expectedAccepted) {
@@ -441,8 +442,8 @@ test("harness FSM remains planning when checklist is absent", async () => {
 
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(manifest.fsmStatus, "planning");
-  const commits = await readJsonl(path.join(runDir, "state-commits.jsonl"));
-  assert.equal(commits.some((item) => item.type === "fsm_transition" && item.to === "planned"), false);
+  const commits = await readJsonl(path.join(runDir, "events.jsonl"));
+  assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "planned"), false);
 });
 
 test("harness policy prompt de-dupes against messageBlocks source during pseudo tool turns", async () => {

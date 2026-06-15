@@ -41,6 +41,8 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(options.fsmEnabled, false);
   assert.equal(options.summaryOnToolBurstThreshold, false);
   assert.deepEqual(options.denyToolNames, [...DEFAULT_HARNESS_DENY_TOOL_NAMES]);
+  assert.equal(options.jsonlFlushStrategy.maxFileBytes, 5 * 1024 * 1024);
+  assert.equal(options.jsonlFlushStrategy.maxFiles, 20);
 });
 
 test("normalizeOptions enables optional tool-burst summary trigger", () => {
@@ -69,6 +71,51 @@ test("appendJsonlBuffered supports adaptive flush by reason", async () => {
   assert.match(second, /"id":2/);
 
   await flushAllJsonlBuffers();
+});
+
+test("appendJsonlBuffered rotates active JSONL and prunes old archives", async () => {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-jsonl-rotate-"));
+  const filePath = path.join(base, "events.jsonl");
+  const strategy = {
+    maxSize: 1,
+    maxTime: 60000,
+    onTerminal: true,
+    onError: true,
+    maxFileBytes: 80,
+    maxFiles: 2,
+  };
+
+  await appendJsonlBuffered(filePath, { id: 1, payload: "x".repeat(120) }, strategy, 0, {
+    reason: "terminal",
+  });
+  await appendJsonlBuffered(filePath, { id: 2, payload: "y".repeat(120) }, strategy, 0, {
+    reason: "terminal",
+  });
+
+  const afterSecond = await fs.readdir(base);
+  const rotatedAfterSecond = afterSecond.filter(
+    (name) => name !== "events.jsonl" && name.startsWith("events.") && name.endsWith(".jsonl"),
+  );
+  assert.equal(rotatedAfterSecond.length, 1);
+
+  const activeAfterSecond = await fs.readFile(filePath, "utf8");
+  assert.match(activeAfterSecond, /"id":2/);
+  assert.doesNotMatch(activeAfterSecond, /"id":1/);
+
+  await appendJsonlBuffered(filePath, { id: 3, payload: "z".repeat(120) }, strategy, 0, {
+    reason: "terminal",
+  });
+  await appendJsonlBuffered(filePath, { id: 4, payload: "w".repeat(120) }, strategy, 0, {
+    reason: "terminal",
+  });
+
+  const entries = await fs.readdir(base);
+  const rotated = entries.filter(
+    (name) => name !== "events.jsonl" && name.startsWith("events.") && name.endsWith(".jsonl"),
+  );
+  assert.equal(rotated.length, 2);
+  const active = await fs.readFile(filePath, "utf8");
+  assert.match(active, /"id":4/);
 });
 
 test("pending states are auto-cleaned by hook turns without timers", async () => {
