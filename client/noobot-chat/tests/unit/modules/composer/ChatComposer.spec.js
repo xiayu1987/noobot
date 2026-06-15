@@ -1,4 +1,4 @@
-import { defineComponent, h, nextTick } from "vue";
+import { defineComponent, h, nextTick, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChatComposer from "../../../../src/modules/composer/ChatComposer.vue";
@@ -208,21 +208,44 @@ describe("ChatComposer interactions", () => {
     expect(findSendButton(wrapper).attributes("data-loading")).toBe("true");
   });
 
-  it("emits upload changes and clears attachment selection", async () => {
-    const wrapper = mountComposer();
+  it("emits upload changes and clears attachment selection through the owner flow", async () => {
+    const file = new File(["hello"], "hello.txt", { type: "text/plain" });
+    const ownerClearUploads = vi.fn();
+    const OwnerHarness = defineComponent({
+      components: { ChatComposer },
+      setup() {
+        const composerRef = ref(null);
+        const uploadFiles = ref([]);
+        function onClearUploads() {
+          ownerClearUploads();
+          uploadFiles.value = [];
+          composerRef.value?.clearUploadSelection?.();
+        }
+        return { composerRef, uploadFiles, onClearUploads };
+      },
+      template:
+        '<ChatComposer ref="composerRef" :connected="true" :upload-files="uploadFiles" @clear-uploads="onClearUploads" />',
+    });
+
+    const wrapper = mount(OwnerHarness, {
+      global: { stubs: globalStubs },
+      attachTo: document.body,
+    });
+    const composer = wrapper.findComponent(ChatComposer);
     await wrapper.find("button[title='更多操作']").trigger("click");
 
-    const file = new File(["hello"], "hello.txt", { type: "text/plain" });
     const upload = wrapper.findComponent(ElUploadStub);
     upload.props("onChange")(file, [file]);
-    expect(wrapper.emitted("upload-change")?.[0]).toEqual([file, [file]]);
+    expect(composer.emitted("upload-change")?.[0]).toEqual([file, [file]]);
 
-    await wrapper.setProps({ uploadFiles: [file] });
+    wrapper.vm.uploadFiles = [file];
+    await nextTick();
     expect(wrapper.find(".attachment-name").text()).toBe("hello.txt");
 
     await wrapper.find(".clear-files-btn").trigger("click");
-    expect(wrapper.emitted("clear-uploads")).toHaveLength(1);
+    expect(ownerClearUploads).toHaveBeenCalledTimes(1);
     expect(upload.vm.$.exposed.clearFiles).toHaveBeenCalledTimes(1);
+    expect(wrapper.find(".attachment-name").exists()).toBe(false);
   });
 
   it("appends camera input photos as attachments", async () => {
