@@ -173,5 +173,7 @@ export default {
   "scenarios.full.name": "All-around",
   "scenarios.full.description": "General scenario: no restrictions on tools and context; autonomously selects capabilities as needed.",
   "scenarios.programming.name": "Programming",
-  "scenarios.programming.description": "Programming scenario: when handling code, prioritize using search to locate, read_file to read, and patch_file to modify; use write_file to write/create files only when necessary; retain the context of files, symbols, tests, and failed attempts required for code changes."
+  "scenarios.programming.description": "Programming scenario: when handling code, prioritize using search to locate, read_file to read, and patch_file to modify; use write_file to write/create files only when necessary; content processing tools are available; retain the context of files, symbols, tests, and failed attempts required for code changes.",
+  "scenarios.text.name": "Text",
+  "scenarios.text.description": "Text scenario: suited for writing, rewriting, summarizing, translating, and content organization."
 };

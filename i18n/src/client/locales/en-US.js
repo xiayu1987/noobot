@@ -244,6 +244,7 @@ export const enUSMessages = {
     "noAvailablePlugins": "No available plugins",
     "scenarioFull": "Full",
     "scenarioProgramming": "Programming",
+    "scenarioText": "Text",
     "sending": "Sending",
     "send": "Send",
     "attachments": "Attachments",

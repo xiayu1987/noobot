@@ -7,8 +7,9 @@
 import { isPlainObject } from "../../utils/shared-utils.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
-export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming"]);
+export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming", "text"]);
 export const PROGRAMMING_SCENARIO_KEY = "programming";
+export const TEXT_SCENARIO_KEY = "text";
 
 // 编程场景工具分两层维护，但对运行时输出为一个最终白名单：
 // - required：代码任务安全推进的硬依赖，不能被 deny 策略移除。
@@ -20,6 +21,7 @@ export const PROGRAMMING_REQUIRED_TOOL_NAMES = Object.freeze([
   "search",
   "patch_file",
   "execute_script",
+  "process_content_task",
 ]);
 export const PROGRAMMING_AUXILIARY_TOOL_NAMES = Object.freeze([
   "task_summary",
@@ -56,6 +58,21 @@ export const BUILTIN_SCENARIOS = Object.freeze({
       services: Object.freeze(["web_search_service"]),
       mcpServers: Object.freeze([]),
     }),
+    text: Object.freeze({
+      name: "文本",
+      description: "文本情景：适合写作、改写、摘要、翻译与内容整理。",
+      model: "",
+      tools: PROGRAMMING_TOOL_NAMES,
+      context: Object.freeze([
+        "scenario",
+        "system_runtime",
+        "base_prompt",
+        "services",
+        "mcp_servers",
+      ]),
+      services: Object.freeze(["web_search_service"]),
+      mcpServers: Object.freeze([]),
+    }),
   }),
 });
 
@@ -67,6 +84,10 @@ const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
   programming: Object.freeze({
     name: "scenarios.programming.name",
     description: "scenarios.programming.description",
+  }),
+  text: Object.freeze({
+    name: "scenarios.text.name",
+    description: "scenarios.text.description",
   }),
 });
 
@@ -104,6 +125,19 @@ export function getBuiltinScenarios(locale) {
           BUILTIN_SCENARIOS.definitions.programming.description,
         ),
       }),
+      text: Object.freeze({
+        ...BUILTIN_SCENARIOS.definitions.text,
+        name: localizeScenarioText(
+          locale,
+          BUILTIN_SCENARIO_I18N_KEYS.text.name,
+          BUILTIN_SCENARIOS.definitions.text.name,
+        ),
+        description: localizeScenarioText(
+          locale,
+          BUILTIN_SCENARIO_I18N_KEYS.text.description,
+          BUILTIN_SCENARIOS.definitions.text.description,
+        ),
+      }),
     }),
   });
 }
@@ -117,13 +151,16 @@ function normalizeScenarioKey(value = "") {
   return BUILTIN_SCENARIO_KEYS.includes(key) ? key : "";
 }
 
-function readProgrammingModel(sourceScenarios = {}) {
+function readScenarioModel(sourceScenarios = {}, scenarioKey = "") {
   const source = isPlainObject(sourceScenarios) ? sourceScenarios : {};
   const definitions = isPlainObject(source?.definitions) ? source.definitions : {};
-  const programming = isPlainObject(definitions?.[PROGRAMMING_SCENARIO_KEY])
-    ? definitions[PROGRAMMING_SCENARIO_KEY]
+  const scenario = isPlainObject(definitions?.[scenarioKey])
+    ? definitions[scenarioKey]
     : {};
-  return String(programming?.model || "").trim();
+  if (!Object.prototype.hasOwnProperty.call(scenario, "model")) {
+    return undefined;
+  }
+  return typeof scenario.model === "string" ? scenario.model : undefined;
 }
 
 export function sanitizeScenarioConfig(input = {}) {
@@ -133,13 +170,15 @@ export function sanitizeScenarioConfig(input = {}) {
   if (defaultScenario) {
     out.default = defaultScenario;
   }
-  const programmingModel = readProgrammingModel(source);
-  if (programmingModel) {
-    out.definitions = {
-      [PROGRAMMING_SCENARIO_KEY]: {
-        model: programmingModel,
-      },
-    };
+  const definitions = {};
+  for (const scenarioKey of [PROGRAMMING_SCENARIO_KEY, TEXT_SCENARIO_KEY]) {
+    const model = readScenarioModel(source, scenarioKey);
+    if (model !== undefined) {
+      definitions[scenarioKey] = { model };
+    }
+  }
+  if (Object.keys(definitions).length > 0) {
+    out.definitions = definitions;
   }
   return out;
 }
@@ -149,14 +188,16 @@ export function resolveBuiltinScenarios(globalScenarios = {}, userScenarios = {}
   const globalSafe = sanitizeScenarioConfig(globalScenarios);
   const userSafe = sanitizeScenarioConfig(userScenarios);
   const definitions = cloneJson(builtinScenarios.definitions);
-  const globalProgrammingModel = readProgrammingModel(globalSafe);
-  const userProgrammingModel = readProgrammingModel(userSafe);
-  const programmingModel = userProgrammingModel || globalProgrammingModel;
-  if (programmingModel) {
-    definitions[PROGRAMMING_SCENARIO_KEY] = {
-      ...definitions[PROGRAMMING_SCENARIO_KEY],
-      model: programmingModel,
-    };
+  for (const scenarioKey of [PROGRAMMING_SCENARIO_KEY, TEXT_SCENARIO_KEY]) {
+    const globalModel = readScenarioModel(globalSafe, scenarioKey);
+    const userModel = readScenarioModel(userSafe, scenarioKey);
+    const model = userModel || globalModel;
+    if (model !== undefined && model !== "") {
+      definitions[scenarioKey] = {
+        ...definitions[scenarioKey],
+        model,
+      };
+    }
   }
   return {
     default: userSafe.default || globalSafe.default || builtinScenarios.default,

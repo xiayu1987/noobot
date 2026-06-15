@@ -244,6 +244,7 @@ export const zhCNMessages = {
     "noAvailablePlugins": "暂无可用插件",
     "scenarioFull": "全能",
     "scenarioProgramming": "编程",
+    "scenarioText": "文本",
     "sending": "发送中",
     "send": "发送",
     "attachments": "附件",

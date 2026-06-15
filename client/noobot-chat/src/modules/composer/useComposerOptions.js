@@ -30,6 +30,7 @@ export function useComposerOptions(props, emit, translate) {
     const customLabel = String(scenarioItem?.label || "").trim();
     if (customLabel) return customLabel;
     if (scenarioKey === "programming") return translate("composer.scenarioProgramming");
+    if (scenarioKey === "text") return translate("composer.scenarioText");
     if (scenarioKey === "full") return translate("composer.scenarioFull");
     return String(scenarioItem?.key || "").trim();
   }
@@ -42,6 +43,7 @@ export function useComposerOptions(props, emit, translate) {
     );
     if (matchedScenario) return resolveScenarioLabel(matchedScenario);
     if (currentScenario.toLowerCase() === "programming") return translate("composer.scenarioProgramming");
+    if (currentScenario.toLowerCase() === "text") return translate("composer.scenarioText");
     return currentScenario;
   });
 

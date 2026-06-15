@@ -151,6 +151,9 @@
     "definitions": {
       "programming": {
         "model": "GLM_5_1"
+      },
+      "text": {
+        "model": "GLM_5_1"
       }
     }
   },

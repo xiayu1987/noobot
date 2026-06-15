@@ -207,7 +207,7 @@ test("sanitizeUserConfig: scenarios 仅允许默认情景与 programming.model",
   });
 });
 
-test("mergeConfig: full/programming 为内置情景且用户只能覆盖 programming.model", () => {
+test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内置模型", () => {
   const out = mergeConfig(
     {
       scenarios: {
@@ -240,7 +240,7 @@ test("mergeConfig: full/programming 为内置情景且用户只能覆盖 program
   );
 
   assert.equal(out.scenarios.default, "programming");
-  assert.deepEqual(Object.keys(out.scenarios.definitions).sort(), ["full", "programming"]);
+  assert.deepEqual(Object.keys(out.scenarios.definitions).sort(), ["full", "programming", "text"]);
   assert.equal(out.scenarios.definitions.full.name, "全能");
   assert.deepEqual(out.scenarios.definitions.full.tools, ["*"]);
   assert.equal(out.scenarios.definitions.programming.name, "编程");
@@ -251,7 +251,10 @@ test("mergeConfig: full/programming 为内置情景且用户只能覆盖 program
     "search",
     "patch_file",
     "execute_script",
+    "process_content_task",
     "task_summary",
     "request_help",
   ]);
+  assert.equal(out.scenarios.definitions.text.name, "文本");
+  assert.equal(out.scenarios.definitions.text.model, "");
 });

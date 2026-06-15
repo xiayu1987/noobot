@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { pathToFileURL } from "node:url";
 
-const FILE_OPS_MODULE_PATH =
-  "/home/xiayu/projects/noobot/agent/src/system-core/memory/storage/file-ops.js";
+const FILE_OPS_MODULE_URL = new URL(
+  "../../../src/system-core/memory/storage/file-ops.js",
+  import.meta.url,
+);
 
 function buildFreshModuleUrl() {
-  const url = pathToFileURL(FILE_OPS_MODULE_PATH);
+  const url = new URL(FILE_OPS_MODULE_URL);
   url.searchParams.set("t", `${Date.now()}-${Math.random()}`);
   return String(url);
 }
