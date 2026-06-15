@@ -12,7 +12,7 @@ defineProps({
   title: { type: String, default: "" },
   userId: { type: String, default: "" },
   isSuperAdmin: { type: Boolean, default: false },
-  canUseIDE: { type: Boolean, default: false },
+  canUseIde: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["toggle-sidebar", "open-openvscode", "open-workspace", "open-user-settings", "open-config-params"]);
@@ -50,7 +50,7 @@ function handleHeaderAction(command = "") {
       <div class="header-spacer"></div>
       <div class="desktop-header-actions">
         <el-button
-          v-if="canUseIDE || isSuperAdmin"
+          v-if="canUseIde || isSuperAdmin"
           class="workspace-btn noobot-action-btn noobot-flat-soft-btn"
           @click="emit('open-openvscode')"
         >
@@ -108,7 +108,7 @@ function handleHeaderAction(command = "") {
         />
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item v-if="canUseIDE || isSuperAdmin" command="openvscode">{{ translate("common.openVSCode") }}</el-dropdown-item>
+            <el-dropdown-item v-if="canUseIde || isSuperAdmin" command="openvscode">{{ translate("common.openVSCode") }}</el-dropdown-item>
             <el-dropdown-item command="workspace">{{ translate("common.workspace") }}</el-dropdown-item>
             <el-dropdown-item v-if="isSuperAdmin" command="user-settings">{{ translate("common.userSettings") }}</el-dropdown-item>
             <el-dropdown-item command="config-params">{{ translate("common.configParams") }}</el-dropdown-item>
