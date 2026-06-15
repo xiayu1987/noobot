@@ -29,7 +29,7 @@ export const DEFAULT_TOOL_FAILURE_HELP_COUNT = 3;
  * 工具调用循环默认最大轮数
  * 内置阈值，不通过配置覆盖
  */
-export const DEFAULT_MAX_TOOL_LOOP_TURNS = 300;
+export const DEFAULT_MAX_TOOL_LOOP_TURNS = 250;
 
 /**
  * 阶段小结默认触发工具循环轮数。
