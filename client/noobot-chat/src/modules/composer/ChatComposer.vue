@@ -120,7 +120,6 @@ function clearUploadSelection() {
 
 function onClearUploads() {
   emit("clear-uploads");
-  clearUploadSelection();
 }
 
 function onSend() {
