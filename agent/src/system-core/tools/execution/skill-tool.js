@@ -12,6 +12,7 @@ import { normalizeSkillAction, SKILL_ACTION } from "../../config/core/enums.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../error/index.js";
 import { safeJoin } from "../../utils/fs-safe.js";
+import { resolveSandboxPath } from "../../utils/sandbox-path-resolver.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
@@ -23,6 +24,18 @@ function getBasePath(agentContext) {
     agentContext?.environment?.workspace?.basePath ||
     runtime?.basePath ||
     ""
+  );
+}
+
+function toSkillDisplayPath({ filePath = "", runtime = {}, agentContext = null } = {}) {
+  const normalizedPath = String(filePath || "").trim();
+  if (!normalizedPath) return "";
+  return (
+    resolveSandboxPath({
+      hostPath: normalizedPath,
+      runtime,
+      agentContext,
+    }) || normalizedPath
   );
 }
 
@@ -61,20 +74,22 @@ export function createSkillTool({ agentContext }) {
 
       for (const entry of level1) {
         const level1Path = entry.name;
+        const level1FullPath = path.join(rootDir, level1Path);
         items.push({
           name: entry.name,
           type: entry.isDirectory() ? "dir" : "file",
-          path: path.join(rootDir, level1Path),
+          path: toSkillDisplayPath({ filePath: level1FullPath, runtime, agentContext }),
         });
 
         if (!entry.isDirectory()) continue;
-        const level2Dir = path.join(rootDir, entry.name);
+        const level2Dir = level1FullPath;
         const level2 = await readdir(level2Dir, { withFileTypes: true });
         for (const child of level2) {
+          const childFullPath = path.join(level2Dir, child.name);
           items.push({
             name: child.name,
             type: child.isDirectory() ? "dir" : "file",
-            path: path.join(level2Dir, child.name),
+            path: toSkillDisplayPath({ filePath: childFullPath, runtime, agentContext }),
           });
         }
       }
