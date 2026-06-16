@@ -131,6 +131,7 @@ function createMessageModel(messageItem = {}) {
     tool_calls: normalizeArray(messageItem.tool_calls),
     tool_call_id: messageItem.tool_call_id || "",
     dialogProcessId: messageItem.dialogProcessId || "",
+    parentDialogProcessId: messageItem.parentDialogProcessId || "",
     modelAlias: messageItem.modelAlias || "",
     modelName: messageItem.modelName || messageItem.model || "",
     modelRuns: normalizeArray(messageItem.modelRuns),

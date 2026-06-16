@@ -103,6 +103,17 @@ describe("messageModel semantic transfer", () => {
     expect(message.attachmentMetas).toEqual([]);
   });
 
+  it("preserves parent dialog process id for related attachment aggregation", () => {
+    const message = buildViewMessage({
+      role: "assistant",
+      content: "done",
+      dialogProcessId: "child-dp",
+      parentDialogProcessId: "root-dp",
+    });
+
+    expect(message.parentDialogProcessId).toBe("root-dp");
+  });
+
 });
 
 describe("messageModel workflow messages", () => {
