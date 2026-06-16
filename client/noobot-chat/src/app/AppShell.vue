@@ -22,6 +22,7 @@ import { useLocale } from "../shared/i18n/useLocale";
 import { useMarkdownRenderer } from "../composables/infra/useMarkdownRenderer";
 import { useReconnect } from "../composables/infra/useReconnect";
 import { usePanelState } from "../composables/infra/usePanelState";
+import { PSEUDO_PANEL, usePseudoRoute } from "../composables/infra/usePseudoRoute";
 import { frontendConfig } from "../shared/config/frontendConfig";
 import { postOpenVSCodeServerApi } from "../services/api/chatApi";
 
@@ -69,6 +70,7 @@ const selectedPlugins = ref(
 );
 const composerRef = ref();
 const messageListPanelRef = ref();
+const composerMorePanelVisible = ref(false);
 
 function safeParseStringArray(rawValue = "") {
   try {
@@ -259,117 +261,6 @@ function formatTime(ts) {
   });
 }
 
-const PSEUDO_ROUTE_SESSION_KEY = "session";
-const PSEUDO_ROUTE_PANEL_KEY = "panel";
-const PANEL_WORKSPACE = "workspace";
-const PANEL_USER_SETTINGS = "user-settings";
-const PANEL_CONFIG_PARAMS = "config-params";
-const PANEL_SIDEBAR = "sidebar";
-
-const applyingPseudoHistory = ref(false);
-const initialPseudoRouteApplied = ref(false);
-
-function normalizePanel(panel = "") {
-  const value = String(panel || "").trim();
-  if (
-    value === PANEL_WORKSPACE ||
-    value === PANEL_USER_SETTINGS ||
-    value === PANEL_CONFIG_PARAMS ||
-    value === PANEL_SIDEBAR
-  ) {
-    return value;
-  }
-  return "";
-}
-
-function parsePseudoRouteFromLocation() {
-  const params = new URLSearchParams(window.location.search || "");
-  return {
-    sessionId: String(params.get(PSEUDO_ROUTE_SESSION_KEY) || "").trim(),
-    panel: normalizePanel(params.get(PSEUDO_ROUTE_PANEL_KEY) || ""),
-  };
-}
-
-function resolveActivePseudoPanel() {
-  if (workspaceVisible.value) return PANEL_WORKSPACE;
-  if (userSettingsVisible.value) return PANEL_USER_SETTINGS;
-  if (configParamsVisible.value) return PANEL_CONFIG_PARAMS;
-  if (mobileSidebarOpen.value && isMobile.value) return PANEL_SIDEBAR;
-  return "";
-}
-
-function buildPseudoRouteFromCurrentState(patch = {}) {
-  const currentSessionId = String(activeSessionId.value || "").trim();
-  const currentPanel = resolveActivePseudoPanel();
-  const nextSessionId = Object.prototype.hasOwnProperty.call(patch, "sessionId")
-    ? String(patch.sessionId || "").trim()
-    : currentSessionId;
-  const nextPanel = Object.prototype.hasOwnProperty.call(patch, "panel")
-    ? normalizePanel(patch.panel)
-    : currentPanel;
-  return { sessionId: nextSessionId, panel: nextPanel };
-}
-
-function writePseudoRouteHistory(route = {}, { mode = "replace" } = {}) {
-  const nextRoute = buildPseudoRouteFromCurrentState(route);
-  const params = new URLSearchParams(window.location.search || "");
-  if (nextRoute.sessionId) {
-    params.set(PSEUDO_ROUTE_SESSION_KEY, nextRoute.sessionId);
-  } else {
-    params.delete(PSEUDO_ROUTE_SESSION_KEY);
-  }
-  if (nextRoute.panel) {
-    params.set(PSEUDO_ROUTE_PANEL_KEY, nextRoute.panel);
-  } else {
-    params.delete(PSEUDO_ROUTE_PANEL_KEY);
-  }
-  const query = params.toString();
-  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash || ""}`;
-  const nextState = {
-    ...(history.state && typeof history.state === "object" ? history.state : {}),
-    noobotPseudoRoute: nextRoute,
-  };
-  if (mode === "push") {
-    history.pushState(nextState, "", nextUrl);
-    return;
-  }
-  history.replaceState(nextState, "", nextUrl);
-}
-
-async function applyPseudoRoute(route = {}) {
-  const targetSessionId = String(route.sessionId || "").trim();
-  const targetPanel = normalizePanel(route.panel || "");
-  applyingPseudoHistory.value = true;
-  try {
-    closeAllDrawers();
-    closeMobileSidebar();
-    if (targetSessionId) {
-      await handleSelectSession(targetSessionId, {
-        fromHistory: true,
-        force: true,
-        preserveCurrentMessages: true,
-        silent: true,
-      });
-    }
-    if (targetPanel === PANEL_WORKSPACE) openWorkspaceRaw();
-    if (targetPanel === PANEL_USER_SETTINGS && isSuperAdmin.value) openUserSettingsRaw();
-    if (targetPanel === PANEL_CONFIG_PARAMS) openConfigParamsRaw();
-    if (targetPanel === PANEL_SIDEBAR) openMobileSidebar();
-  } finally {
-    applyingPseudoHistory.value = false;
-  }
-}
-
-function pushPseudoRoute(route = {}) {
-  if (applyingPseudoHistory.value) return;
-  writePseudoRouteHistory(route, { mode: "push" });
-}
-
-function replacePseudoRoute(route = {}) {
-  if (applyingPseudoHistory.value) return;
-  writePseudoRouteHistory(route, { mode: "replace" });
-}
-
 function scrollBottom() {
   nextTick(() => {
     const messageListPanel = messageListPanelRef.value;
@@ -455,6 +346,59 @@ const { reconnectActiveSession } = useReconnect({
   handleReconnect,
 });
 
+
+function closeComposerMorePanel() {
+  composerMorePanelVisible.value = false;
+}
+
+function closeAllPseudoPanels() {
+  closeAllDrawers();
+  closeMobileSidebar();
+  closeComposerMorePanel();
+}
+
+function resolveActivePseudoPanel() {
+  if (workspaceVisible.value) return PSEUDO_PANEL.WORKSPACE;
+  if (userSettingsVisible.value) return PSEUDO_PANEL.USER_SETTINGS;
+  if (configParamsVisible.value) return PSEUDO_PANEL.CONFIG_PARAMS;
+  if (mobileSidebarOpen.value && isMobile.value) return PSEUDO_PANEL.SIDEBAR;
+  if (composerMorePanelVisible.value) return PSEUDO_PANEL.COMPOSER;
+  return "";
+}
+
+async function applyPseudoRouteToUi(route = {}) {
+  const targetSessionId = String(route.sessionId || "").trim();
+  const targetPanel = String(route.panel || "").trim();
+  closeAllPseudoPanels();
+  if (targetSessionId) {
+    await handleSelectSession(targetSessionId, {
+      fromHistory: true,
+      force: true,
+      preserveCurrentMessages: true,
+      silent: true,
+    });
+  }
+  if (targetPanel === PSEUDO_PANEL.WORKSPACE) openWorkspaceRaw();
+  if (targetPanel === PSEUDO_PANEL.USER_SETTINGS && isSuperAdmin.value) openUserSettingsRaw();
+  if (targetPanel === PSEUDO_PANEL.CONFIG_PARAMS) openConfigParamsRaw();
+  if (targetPanel === PSEUDO_PANEL.SIDEBAR) openMobileSidebar();
+  if (targetPanel === PSEUDO_PANEL.COMPOSER) composerMorePanelVisible.value = true;
+}
+
+const {
+  initialPseudoRouteApplied,
+  parsePseudoRouteFromLocation,
+  applyPseudoRoute,
+  pushPseudoRoute,
+  replacePseudoRoute,
+  addPseudoRoutePopStateListener,
+  removePseudoRoutePopStateListener,
+} = usePseudoRoute({
+  resolveCurrentSessionId: () => activeSessionId.value,
+  resolveCurrentPanel: resolveActivePseudoPanel,
+  applyRoute: applyPseudoRouteToUi,
+});
+
 // --- Session handlers ---
 async function handleSelectSession(sessionId, options = {}) {
   const { fromHistory = false, ...selectOptions } = options || {};
@@ -498,10 +442,11 @@ function openWorkspace() {
     notifyUi({ type: "warning", message: translate("common.userIdRequired") });
     return;
   }
+  closeComposerMorePanel();
   openWorkspaceRaw();
   pushPseudoRoute({
     sessionId: activeSessionId.value,
-    panel: PANEL_WORKSPACE,
+    panel: PSEUDO_PANEL.WORKSPACE,
   });
 }
 
@@ -515,10 +460,11 @@ async function openUserSettings() {
     });
     return;
   }
+  closeComposerMorePanel();
   openUserSettingsRaw();
   pushPseudoRoute({
     sessionId: activeSessionId.value,
-    panel: PANEL_USER_SETTINGS,
+    panel: PSEUDO_PANEL.USER_SETTINGS,
   });
 }
 
@@ -563,26 +509,53 @@ function shouldOpenOpenVSCodeInCurrentTab() {
 
 function openConfigParams() {
   if (!ensureConnected()) return;
+  closeComposerMorePanel();
   openConfigParamsRaw();
   pushPseudoRoute({
     sessionId: activeSessionId.value,
-    panel: PANEL_CONFIG_PARAMS,
+    panel: PSEUDO_PANEL.CONFIG_PARAMS,
   });
 }
 
 function handleToggleSidebar() {
   toggleSidebar();
   if (isMobile.value) {
+    if (mobileSidebarOpen.value) closeComposerMorePanel();
     pushPseudoRoute({
       sessionId: activeSessionId.value,
-      panel: mobileSidebarOpen.value ? PANEL_SIDEBAR : "",
+      panel: mobileSidebarOpen.value ? PSEUDO_PANEL.SIDEBAR : "",
     });
   }
 }
 
 function handleCloseMobileSidebar() {
   closeMobileSidebar();
-  replacePseudoRoute({ panel: "" });
+  pushPseudoRoute({ panel: "" });
+}
+
+function handleComposerMorePanelVisibleUpdate(value) {
+  const nextVisible = Boolean(value);
+  if (composerMorePanelVisible.value === nextVisible) return;
+  if (nextVisible) {
+    closeAllDrawers();
+    closeMobileSidebar();
+  }
+  composerMorePanelVisible.value = nextVisible;
+  pushPseudoRoute({
+    sessionId: activeSessionId.value,
+    panel: nextVisible ? PSEUDO_PANEL.COMPOSER : "",
+  });
+}
+
+function handleDrawerModelUpdate(drawer = {}, value = false) {
+  const nextVisible = Boolean(value);
+  const model = drawer?.model;
+  if (!model || typeof model !== "object" || !("value" in model)) return;
+  if (model.value === nextVisible) return;
+  model.value = nextVisible;
+  if (!nextVisible) {
+    pushPseudoRoute({ panel: "" });
+  }
 }
 
 // --- Interaction handlers ---
@@ -606,18 +579,8 @@ function handleInteractionCancel() {
   }
 }
 
-// --- Lifecycle ---
-async function handlePseudoRoutePopState(event) {
-  const routeFromState =
-    event?.state && typeof event.state === "object" ? event.state.noobotPseudoRoute : null;
-  const route = routeFromState && typeof routeFromState === "object"
-    ? routeFromState
-    : parsePseudoRouteFromLocation();
-  await applyPseudoRoute(route);
-}
-
 async function onAppMounted() {
-  window.addEventListener("popstate", handlePseudoRoutePopState);
+  addPseudoRoutePopStateListener();
   const autoConnected = await tryAutoConnect();
   if (autoConnected) {
     replacePseudoRoute();
@@ -628,7 +591,7 @@ async function onAppMounted() {
 }
 
 function onAppUnmounted() {
-  window.removeEventListener("popstate", handlePseudoRoutePopState);
+  removePseudoRoutePopStateListener();
   releaseAllPreviewUrls();
 }
 
@@ -646,7 +609,15 @@ watch(
 );
 
 watch(
-  [activeSessionId, workspaceVisible, userSettingsVisible, configParamsVisible, mobileSidebarOpen, isMobile],
+  [
+    activeSessionId,
+    workspaceVisible,
+    userSettingsVisible,
+    configParamsVisible,
+    mobileSidebarOpen,
+    isMobile,
+    composerMorePanelVisible,
+  ],
   () => {
     replacePseudoRoute();
   },
@@ -856,6 +827,7 @@ const drawerPanels = computed(() => [
       <ChatComposer
         ref="composerRef"
         v-model="input"
+        :more-panel-visible="composerMorePanelVisible"
         :upload-files="uploadFiles"
         :connector-panel-state="activeSession?.connectorPanelState || {}"
         :sending="sending"
@@ -876,6 +848,7 @@ const drawerPanels = computed(() => [
         @update:stream-output="onStreamOutputUpdate"
         @update:bot-scenario="onBotScenarioUpdate"
         @update:selected-plugins="onSelectedPluginsUpdate"
+        @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"
         @clear-uploads="clearUploads"
         @connector-selected="onConnectorSelected"
         @send="send"
@@ -893,7 +866,8 @@ const drawerPanels = computed(() => [
       <el-drawer
         v-for="drawer in drawerPanels"
         :key="drawer.key"
-        v-model="drawer.model.value"
+        :model-value="drawer.model.value"
+        @update:model-value="handleDrawerModelUpdate(drawer, $event)"
         :title="drawer.title"
         :size="drawerSize"
         destroy-on-close
