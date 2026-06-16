@@ -22,7 +22,7 @@ function createInMemorySessionRepository() {
   };
 }
 
-test("appendLog keeps only latest dialogProcessId logs", async () => {
+test("appendLog preserves logs and dialogProcessId for each dialog", async () => {
   const sessionRepository = createInMemorySessionRepository();
   const repo = new ExecutionLogRepository({
     sessionRepository,
@@ -43,9 +43,13 @@ test("appendLog keeps only latest dialogProcessId logs", async () => {
   });
 
   const bundle = await repo.getBundle("u1", "s1");
-  assert.equal(bundle.logs.length, 1);
-  assert.equal(bundle.logs[0].dialogProcessId, "d2");
+  assert.equal(bundle.logs.length, 3);
+  assert.equal(bundle.dialogProcessId, "d2");
   assert.equal(bundle.logs[0].event, "start");
+  assert.equal(bundle.logs[0].dialogProcessId, "d1");
+  assert.equal(bundle.logs[1].dialogProcessId, "d1");
+  assert.equal(bundle.logs[2].event, "start");
+  assert.equal(bundle.logs[2].dialogProcessId, "d2");
 });
 
 test("appendLog without dialogProcessId stays in current latest dialog", async () => {
@@ -65,6 +69,7 @@ test("appendLog without dialogProcessId stays in current latest dialog", async (
 
   const bundle = await repo.getBundle("u1", "s1");
   assert.equal(bundle.logs.length, 2);
+  assert.equal(bundle.dialogProcessId, "d1");
   assert.equal(bundle.logs[0].dialogProcessId, "d1");
   assert.equal(bundle.logs[1].dialogProcessId, "d1");
 });

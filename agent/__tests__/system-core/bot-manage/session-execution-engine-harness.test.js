@@ -368,18 +368,19 @@ test("harness records tool call and state commit hook artifacts", async () => {
 
   const runDir = path.join(tempRoot, "u1", "runtime", "harness", "runs", dialogProcessId);
   const events = await fs.readFile(path.join(runDir, "events.jsonl"), "utf8");
-  const toolCalls = await fs.readFile(path.join(runDir, "tool-calls.jsonl"), "utf8");
-  const stateCommits = await fs.readFile(path.join(runDir, "state-commits.jsonl"), "utf8");
+  const eventRecords = events.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 
   assert.match(events, /before_tool_call/);
   assert.match(events, /after_tool_call/);
   assert.match(events, /tool_call_error/);
   assert.match(events, /before_state_commit/);
   assert.match(events, /after_state_commit/);
-  assert.match(toolCalls, /demo_tool/);
-  assert.match(toolCalls, /failing_tool/);
-  assert.match(toolCalls, /tool_call_error/);
-  assert.match(stateCommits, /assistant_message/);
-  assert.match(stateCommits, /tool_result/);
+  const hookPayloadOf = (event) => event.payload || event.data || event;
+  const hookToolOf = (event) => hookPayloadOf(event).tool || hookPayloadOf(event).toolName;
+  assert.ok(eventRecords.some((event) => event.kind === "hook" && hookToolOf(event) === "demo_tool"));
+  assert.ok(eventRecords.some((event) => event.kind === "hook" && hookToolOf(event) === "failing_tool"));
+  assert.ok(eventRecords.some((event) => event.kind === "hook" && event.point === "tool_call_error"));
+  assert.ok(eventRecords.some((event) => event.kind === "hook" && hookPayloadOf(event).commitType === "assistant_message"));
+  assert.ok(eventRecords.some((event) => event.kind === "hook" && hookPayloadOf(event).commitType === "tool_result"));
   assert.equal(turnMessageStore.items.length, 2);
 });

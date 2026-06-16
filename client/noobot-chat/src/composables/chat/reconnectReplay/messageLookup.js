@@ -26,12 +26,12 @@ export function hasAssistantMessageWithContent(activeSession, content = "") {
   );
 }
 
-export function mergeRealtimeLogs(targetMessage, newLogs, { maxCount = 10 } = {}) {
+export function mergeRealtimeLogs(targetMessage, newLogs) {
   if (!targetMessage || !newLogs?.length) return;
   targetMessage.realtimeLogs = [
     ...(targetMessage.realtimeLogs || []),
     ...newLogs,
-  ].slice(-maxCount);
+  ].slice(-10);
 }
 
 export function findLatestAssistantMessageForRealtimeLogs({

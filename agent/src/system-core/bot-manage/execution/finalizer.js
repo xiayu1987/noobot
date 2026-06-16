@@ -15,6 +15,7 @@ import {
 } from "../../attach/meta-ops.js";
 import { getTransferAttachmentMetas } from "../../semantic-transfer/storage/consumer.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { summarizeExecutionLogs } from "../../tracking/execution-log/execution-log-summary.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -269,6 +270,7 @@ export class SessionExecutionFinalizer {
       });
       executionLogs = [];
     }
+    const executionSummary = summarizeExecutionLogs(executionLogs, { dialogProcessId });
     this.upsertParentAsyncTask({
       parentAsyncResultContainer: resolvedParentAsyncResultContainer,
       sessionId,
@@ -287,6 +289,7 @@ export class SessionExecutionFinalizer {
           messages: turnMessages,
           turnTasks: agentResult?.turnTasks || [],
           executionLogs,
+          executionSummary,
           dialogProcessId,
         },
       },
@@ -302,6 +305,7 @@ export class SessionExecutionFinalizer {
       messages: turnMessages,
       turnTasks: agentResult?.turnTasks || [],
       executionLogs,
+      executionSummary,
       dialogProcessId,
       ...(resolvedParentAsyncResultContainer
         ? { parentAsyncResultContainer: resolvedParentAsyncResultContainer }

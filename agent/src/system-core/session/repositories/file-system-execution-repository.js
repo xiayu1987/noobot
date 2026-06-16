@@ -3,7 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { fsMkdir } from "../../store/fs-adapter.js";
+import path from "node:path";
+import { appendFile, writeFile } from "node:fs/promises";
+import { fsMkdir, fsReadFile } from "../../store/fs-adapter.js";
 
 export class FileSystemExecutionRepository {
   constructor({
@@ -30,23 +32,38 @@ export class FileSystemExecutionRepository {
       sessionId,
       parentSessionId,
     );
-    return { sessionDir, executionFile };
+    return {
+      sessionDir,
+      executionFile,
+      executionEventsFile: path.join(sessionDir, "execution.jsonl"),
+    };
+  }
+
+  async _readJsonlLogs(executionEventsFile) {
+    try {
+      const raw = await fsReadFile(executionEventsFile, "utf8");
+      return raw.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    } catch {
+      return [];
+    }
   }
 
   async getBundle(userId, sessionId, parentSessionId = "") {
-    const { executionFile } = await this._resolveExecutionScope(
+    const { executionFile, executionEventsFile } = await this._resolveExecutionScope(
       userId,
       sessionId,
       parentSessionId,
     );
     const bundle = await this.storageService.readJson(executionFile, {
       sessionId,
-      logs: [],
       updatedAt: this.now(),
     });
+    const jsonlLogs = await this._readJsonlLogs(executionEventsFile);
+    const dialogProcessId = String(bundle?.dialogProcessId || "").trim();
     return {
       sessionId: String(bundle?.sessionId || sessionId || "").trim(),
-      logs: Array.isArray(bundle?.logs) ? bundle.logs : [],
+      ...(dialogProcessId ? { dialogProcessId } : {}),
+      logs: jsonlLogs,
       updatedAt: bundle?.updatedAt || this.now(),
     };
   }
@@ -60,7 +77,27 @@ export class FileSystemExecutionRepository {
     await fsMkdir(sessionDir, { recursive: true });
     await this.storageService.writeJsonAtomic(executionFile, {
       sessionId,
-      logs: Array.isArray(executionBundle?.logs) ? executionBundle.logs : [],
+      ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
+      updatedAt: this.now(),
+    });
+  }
+
+  async appendLog(userId, sessionId, executionLog = {}, executionBundle = {}, parentSessionId = "") {
+    const { sessionDir, executionFile, executionEventsFile } = await this._resolveExecutionScope(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    await fsMkdir(sessionDir, { recursive: true });
+    const serializedLog = `${JSON.stringify(executionLog)}\n`;
+    if (executionBundle?.resetExecutionLogs === true) {
+      await writeFile(executionEventsFile, serializedLog, "utf8");
+    } else {
+      await appendFile(executionEventsFile, serializedLog, "utf8");
+    }
+    await this.storageService.writeJsonAtomic(executionFile, {
+      sessionId,
+      ...(executionBundle?.dialogProcessId ? { dialogProcessId: executionBundle.dialogProcessId } : {}),
       updatedAt: this.now(),
     });
   }

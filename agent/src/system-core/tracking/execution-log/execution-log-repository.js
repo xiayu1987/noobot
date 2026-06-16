@@ -77,6 +77,27 @@ export class ExecutionLogRepository {
     );
   }
 
+  async _appendLogStore(
+    userId,
+    sessionId,
+    normalizedLog = {},
+    bundle = {},
+    parentSessionId = "",
+  ) {
+    if (this.executionRepository?.appendLog) {
+      return this.executionRepository.appendLog(
+        userId,
+        sessionId,
+        normalizedLog,
+        bundle,
+        parentSessionId,
+      );
+    }
+    bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
+    bundle.logs.push(normalizedLog);
+    return this._saveBundleStore(userId, sessionId, bundle, parentSessionId);
+  }
+
   async getBundle(userId, sessionId, parentSessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
@@ -108,22 +129,27 @@ export class ExecutionLogRepository {
         .reverse()
         .map((logItem) => resolveMessageDialogProcessId(logItem))
         .find(Boolean);
-      const targetDialogProcessId = incomingDialogProcessId || existingLatestDialogProcessId;
+      const bundleDialogProcessId = resolveMessageDialogProcessId(bundle);
+      const targetDialogProcessId = incomingDialogProcessId || bundleDialogProcessId || existingLatestDialogProcessId;
+      let resetExecutionLogs = false;
       if (!incomingDialogProcessId && targetDialogProcessId) {
         normalizedLog.dialogProcessId = targetDialogProcessId;
       }
       if (targetDialogProcessId) {
-        bundle.logs = bundle.logs.filter(
-          (logItem) => resolveMessageDialogProcessId(logItem) === targetDialogProcessId,
-        );
+        bundle.dialogProcessId = targetDialogProcessId;
       } else {
-        bundle.logs = [];
+        delete bundle.dialogProcessId;
       }
-      bundle.logs.push(normalizedLog);
       bundle.updatedAt = this.now();
-      await this._saveBundleStore(
+      if (resetExecutionLogs) {
+        bundle.resetExecutionLogs = true;
+      } else {
+        delete bundle.resetExecutionLogs;
+      }
+      await this._appendLogStore(
         userId,
         normalizedSessionId,
+        normalizedLog,
         bundle,
         parentSessionId,
       );

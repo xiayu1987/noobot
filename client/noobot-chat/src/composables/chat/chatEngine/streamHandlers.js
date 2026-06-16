@@ -9,6 +9,8 @@ import { applyDoneMessagesPatch } from "./messagePatch";
 import {
   normalizeExecutionLogForRealtime,
   normalizeTrimmedString,
+  sanitizeExecutionLogForDisplay,
+  stripInternalEventPlaceholderLines,
 } from "./utils";
 import {
   normalizeInteractionRequestPayload,
@@ -21,7 +23,10 @@ export function handleThinkingStreamEvent({
   classifyRealtimeLog,
   scrollOnFirstResponseOnce,
 }) {
-  const item = classifyRealtimeLog(data);
+  const item = sanitizeExecutionLogForDisplay(classifyRealtimeLog(data));
+  if (!item || !normalizeTrimmedString(item.text)) {
+    return;
+  }
   if (!item.subAgentCall && item.dialogProcessId) {
     botMessage.dialogProcessId = item.dialogProcessId;
   }
@@ -31,7 +36,7 @@ export function handleThinkingStreamEvent({
 }
 
 export function handleDeltaStreamEvent({ data, botMessage, scrollOnFirstResponseOnce }) {
-  const chunkText = String(data?.text || "");
+  const chunkText = stripInternalEventPlaceholderLines(data?.text || "");
   if (data?.dialogProcessId && !normalizeTrimmedString(botMessage.dialogProcessId)) {
     botMessage.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
   }
@@ -108,19 +113,27 @@ export function handleDoneStreamEvent({
 }) {
   clearPendingInteraction();
   botMessage.dialogProcessId = data?.dialogProcessId || botMessage.dialogProcessId || "";
-  if (!requestedTextStreaming && Array.isArray(data?.executionLogs)) {
-    const doneRealtimeLogs = data.executionLogs
+  const executionSummarySteps = Array.isArray(data?.executionSummary?.steps)
+    ? data.executionSummary.steps
+    : [];
+  const doneExecutionLogSource = executionSummarySteps.length
+    ? executionSummarySteps
+    : Array.isArray(data?.executionLogs)
+      ? data.executionLogs
+      : [];
+  if (!requestedTextStreaming && doneExecutionLogSource.length) {
+    const doneRealtimeLogs = doneExecutionLogSource
       .map((executionLogItem) =>
         classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
       )
-      .filter(Boolean);
+      .map((item) => sanitizeExecutionLogForDisplay(item))
+      .filter((item) => item && normalizeTrimmedString(item.text));
     if (doneRealtimeLogs.length) {
-      botMessage.realtimeLogs = [...(botMessage.realtimeLogs || []), ...doneRealtimeLogs].slice(
-        -10,
-      );
+      botMessage.realtimeLogs = [...(botMessage.realtimeLogs || []), ...doneRealtimeLogs].slice(-10);
       botMessage.executionLogTotal = Math.max(
         Number(botMessage.executionLogTotal || 0),
         doneRealtimeLogs.length,
+        Number(data?.executionSummary?.returned || 0),
         Number(data?.executionLogs?.length || 0),
       );
       if (!normalizeTrimmedString(botMessage.dialogProcessId)) {

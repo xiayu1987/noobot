@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
 import {
   findReconnectDoneEnvelopeWithMessages,
   getReconnectEnvelopeSequence,
@@ -165,7 +166,10 @@ export function applyReconnectEnvelopeToTargetMessage({
   if (eventName === StreamEventEnum.DELTA) {
     targetMessage.content += String(eventData?.text || "");
   } else if (eventName === StreamEventEnum.THINKING) {
-    const logItem = classifyRealtimeLog(eventData);
+    const logItem = sanitizeExecutionLogForDisplay(classifyRealtimeLog(eventData));
+    if (!logItem || !_trimStr(logItem.text)) {
+      return true;
+    }
     if (logItem?.dialogProcessId && !_trimStr(targetMessage?.dialogProcessId)) {
       targetMessage.dialogProcessId = _trimStr(logItem.dialogProcessId);
     }
@@ -179,16 +183,26 @@ export function applyReconnectEnvelopeToTargetMessage({
     onAttachmentMetas?.(targetMessage, eventData?.attachmentMetas || []);
   } else if (eventName === StreamEventEnum.DONE) {
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
-    if (Array.isArray(eventData?.executionLogs) && eventData.executionLogs.length) {
-      const doneRealtimeLogs = eventData.executionLogs
+    const executionSummarySteps = Array.isArray(eventData?.executionSummary?.steps)
+      ? eventData.executionSummary.steps
+      : [];
+    const doneExecutionLogSource = executionSummarySteps.length
+      ? executionSummarySteps
+      : Array.isArray(eventData?.executionLogs)
+        ? eventData.executionLogs
+        : [];
+    if (doneExecutionLogSource.length) {
+      const doneRealtimeLogs = doneExecutionLogSource
         .map((executionLogItem) =>
           classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
         )
-        .filter(Boolean);
+        .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
+        .filter((logItem) => logItem && _trimStr(logItem.text));
       if (doneRealtimeLogs.length) {
         targetMessage.executionLogTotal = Math.max(
           Number(targetMessage.executionLogTotal || 0),
           doneRealtimeLogs.length,
+          Number(eventData?.executionSummary?.returned || 0),
           Number(eventData?.executionLogs?.length || 0),
         );
         mergeRealtimeLogs(targetMessage, doneRealtimeLogs);

@@ -24,16 +24,16 @@ export function _matchesDialogProcessId(msg, dpId) {
 export function normalizeExecutionLogForRealtime(logItem = {}) {
   const data = logItem?.data && typeof logItem.data === "object" ? logItem.data : {};
   const rawEvent = _trimStr(logItem?.event);
-  const text = _trimStr(data?.text);
+  const text = _trimStr(data?.text || logItem?.text);
   return {
     ...data,
-    event: String(data?.event || rawEvent || "system").trim() || "system",
-    type: String(data?.type || logItem?.type || "system").trim() || "system",
-    category: String(data?.category || logItem?.category || "system").trim() || "system",
+    event: String(data?.event || rawEvent || logItem?.status || "execution_step").trim() || "execution_step",
+    type: String(data?.type || logItem?.type || "execution").trim() || "execution",
+    category: String(data?.category || logItem?.category || "execution").trim() || "execution",
     dialogProcessId: String(
       data?.dialogProcessId || logItem?.dialogProcessId || "",
     ).trim(),
     ts: _trimStr(data?.ts || logItem?.ts) || new Date().toISOString(),
-    text: text || (rawEvent ? `[${rawEvent}]` : ""),
+    text,
   };
 }

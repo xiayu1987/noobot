@@ -25,6 +25,7 @@ import { usePanelState } from "../composables/infra/usePanelState";
 import { PSEUDO_PANEL, usePseudoRoute } from "../composables/infra/usePseudoRoute";
 import { frontendConfig } from "../shared/config/frontendConfig";
 import { postOpenVSCodeServerApi } from "../services/api/chatApi";
+import { sanitizeExecutionLogText } from "../composables/chat/chatEngine/utils";
 
 // --- Markdown rendering (module-level singleton) ---
 const { renderMarkdown } = useMarkdownRenderer();
@@ -220,7 +221,7 @@ const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 
 function classifyRealtimeLog(data = {}) {
   const eventName = String(data.event || "").trim();
-  const text = String(data.text || "").trim();
+  const text = sanitizeExecutionLogText(data.text || "");
   const category = String(data.category || "").trim();
   const type = String(data.type || "").trim();
   const isTool =
@@ -231,9 +232,10 @@ function classifyRealtimeLog(data = {}) {
     text.startsWith("[tool]") ||
     text.includes('"tool_call_id"');
   return {
+    ...data,
     event: eventName || "system",
     type: type || (isTool ? "tool_call" : "system"),
-    text: text || (eventName ? `[${eventName}]` : ""),
+    text,
     dialogProcessId: String(data.dialogProcessId || ""),
     ts: String(data.ts || new Date().toISOString()),
     category: isTool ? "tool" : "system",

@@ -15,6 +15,22 @@ const SEMANTIC_TRANSFER_EVENTS = new Set([
   "semantic_transfer_legacy_input_warning",
 ]);
 
+function buildToolText(tool = "", suffix = "") {
+  return [String(tool || "").trim(), String(suffix || "").trim()]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function hasSemanticTransferInfo(value = {}) {
+  return Boolean(
+    value?.transferEnvelope ||
+      (Array.isArray(value?.transferEnvelopes) && value.transferEnvelopes.length > 0) ||
+      (Array.isArray(value?.transferFiles) && value.transferFiles.length > 0) ||
+      value?.resultTransfer ||
+      value?.toolResultTransfer,
+  );
+}
+
 function resolveErrorType(rawEvent = "") {
   const normalized = String(rawEvent || "").toLowerCase();
   if (normalized.includes("llm")) return "llm_error";
@@ -118,7 +134,7 @@ export function normalizeSseLogEvent(evt = {}) {
         turn: data.turn || 0,
         tool: data.tool || "",
         args: data.args || {},
-        text: `${data.tool || ""} ${JSON.stringify(data.args || {})}`,
+        text: buildToolText(data.tool, "started"),
       },
     };
   }
@@ -127,6 +143,11 @@ export function normalizeSseLogEvent(evt = {}) {
     const dialogProcessId = resolveDialogProcessIdFromContext({
       dialogProcessId: data.dialogProcessId,
     });
+    const result = data.result || "";
+    const resultText = hasSemanticTransferInfo(result)
+      ? "completed semantic-transfer"
+      : "completed";
+
     return {
       event: "thinking",
       data: {
@@ -138,8 +159,8 @@ export function normalizeSseLogEvent(evt = {}) {
         ts,
         turn: data.turn || 0,
         tool: data.tool || "",
-        result: data.result || "",
-        text: `${data.tool || ""} ${String(data.result || "")}`,
+        result,
+        text: buildToolText(data.tool, resultText),
       },
     };
   }
@@ -155,7 +176,7 @@ export function normalizeSseLogEvent(evt = {}) {
       rawEvent: rawEvent || "system",
       ts,
       ...data,
-      text: `${rawEvent || "system"} ${JSON.stringify(data)}`,
+      text: String(rawEvent || data.event || data.type || "system"),
     },
   };
 }

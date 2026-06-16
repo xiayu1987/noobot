@@ -55,20 +55,35 @@ test("session/task/execution repositories should keep file ownership boundaries"
     });
     assert.equal(await exists(sessionScope.taskFile), true);
 
-    await runtime.repositories.fileSystemExecutionRepository.saveBundle(
+    await runtime.repositories.executionRepository.appendLog(
       userId,
       sessionId,
-      { logs: [{ event: "start" }] },
+      { event: "start", dialogProcessId: "dp-1" },
     );
     assert.equal(await exists(sessionScope.executionFile), true);
+    const executionEventsFile = path.join(sessionScope.sessionDir, "execution.jsonl");
+    assert.equal(await exists(executionEventsFile), true);
 
     const taskBundle = JSON.parse(await readFile(sessionScope.taskFile, "utf8"));
     assert.equal(taskBundle.currentTaskId, "t1");
     const executionBundle = JSON.parse(
       await readFile(sessionScope.executionFile, "utf8"),
     );
-    assert.equal(Array.isArray(executionBundle.logs), true);
-    assert.equal(executionBundle.logs.length, 1);
+    assert.equal("logs" in executionBundle, false);
+    assert.equal(executionBundle.dialogProcessId, "dp-1");
+    const executionEvents = (await readFile(executionEventsFile, "utf8"))
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    assert.equal(executionEvents.length, 1);
+    assert.equal(executionEvents[0].event, "start");
+    assert.equal(executionEvents[0].dialogProcessId, "dp-1");
+    const restoredBundle = await runtime.repositories.executionRepository.getBundle(userId, sessionId);
+    assert.equal(restoredBundle.dialogProcessId, "dp-1");
+    assert.equal(restoredBundle.logs.length, 1);
+    assert.equal(restoredBundle.logs[0].event, "start");
+    assert.equal(restoredBundle.logs[0].dialogProcessId, "dp-1");
   });
 });
 
