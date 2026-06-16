@@ -31,6 +31,7 @@ const props = defineProps({
   selectedPlugins: { type: Array, default: () => [] },
   interactionActive: { type: Boolean, default: false },
   connectorPanelState: { type: Object, default: () => ({}) },
+  morePanelVisible: { type: Boolean, default: null },
 });
 
 const emit = defineEmits([
@@ -40,6 +41,7 @@ const emit = defineEmits([
   "update:streamOutput",
   "update:botScenario",
   "update:selectedPlugins",
+  "update:morePanelVisible",
   "upload-change",
   "append-uploads",
   "clear-uploads",
@@ -49,8 +51,20 @@ const emit = defineEmits([
 ]);
 
 const attachmentToolbarRef = ref();
-const morePanelVisible = ref(false);
+const localMorePanelVisible = ref(false);
 const { translate } = useLocale();
+
+const effectiveMorePanelVisible = computed({
+  get: () =>
+    props.morePanelVisible === null
+      ? localMorePanelVisible.value
+      : Boolean(props.morePanelVisible),
+  set: (value) => {
+    const nextVisible = Boolean(value);
+    localMorePanelVisible.value = nextVisible;
+    emit("update:morePanelVisible", nextVisible);
+  },
+});
 
 const {
   selectedConnectorNames,
@@ -147,7 +161,7 @@ function onConnectorSelected(connectorType = "", connectorName = "") {
 }
 
 function toggleMorePanel() {
-  morePanelVisible.value = !morePanelVisible.value;
+  effectiveMorePanelVisible.value = !effectiveMorePanelVisible.value;
 }
 
 defineExpose({
@@ -167,13 +181,13 @@ defineExpose({
     <div class="composer">
       <!-- 连接器面板 -->
       <el-collapse-transition>
-        <div v-show="morePanelVisible" class="more-panel-overlay">
+        <div v-show="effectiveMorePanelVisible" class="more-panel-overlay">
           <div class="more-panel">
             <div class="more-actions-row">
               <span class="more-panel-title">{{ translate("common.moreActions") }}</span>
               <el-button
                 class="more-collapse-btn"
-                @click="morePanelVisible = false"
+                @click="effectiveMorePanelVisible = false"
               >
                 <span>{{ translate("message.collapse") }}</span>
                 <el-icon><ArrowDown /></el-icon>

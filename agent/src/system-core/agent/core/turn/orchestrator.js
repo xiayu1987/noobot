@@ -10,7 +10,10 @@ import {
 } from "../../../context/session/summarized-message-policy.js";
 import { emitEvent } from "../../../event/index.js";
 import { tEngine } from "../i18n-adapter.js";
-import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
+import {
+  DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS,
+  TASK_SUMMARY_TOOL_NAME,
+} from "../constants/index.js";
 import { handleEngineError } from "../error/index.js";
 import {
   maybePromptHelpToolByFailure,
@@ -63,7 +66,10 @@ export function createTurnOrchestrator({
   async function runFunctionCallLoop({ modelState, loopState, turn = 1 }) {
     const { tools, traces, maxTurns } = loopState;
     const { abortSignal, runtime, eventListener } = modelState;
-    const isOverMaxTurns = turn > maxTurns;
+    const overMaxTurnsCount = Math.max(0, Number(turn || 0) - Number(maxTurns || 0));
+    const loopLimitBufferTurns = DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS;
+    const isOverMaxTurns = overMaxTurnsCount > 0;
+    const isBeyondLoopLimitBuffer = overMaxTurnsCount > loopLimitBufferTurns;
 
     try {
       assertNotAbortedFn(abortSignal, runtime);
@@ -139,8 +145,13 @@ export function createTurnOrchestrator({
         return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
       }
 
-      if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted === true) {
-        emitEvent(eventListener, "tool_loop_limit_reached", { turn, maxTurns });
+      if (isBeyondLoopLimitBuffer && loopState?.loopLimitFinalizePrompted === true) {
+        emitEvent(eventListener, "tool_loop_limit_reached", {
+          turn,
+          maxTurns,
+          bufferTurns: loopLimitBufferTurns,
+          overMaxTurnsCount,
+        });
         const finalResult = await invokeNoToolsTurnFn({
           modelState,
           loopState,
@@ -173,6 +184,8 @@ export function createTurnOrchestrator({
         emitEvent(eventListener, "tool_loop_limit_finalize_prompted", {
           turn,
           maxTurns,
+          bufferTurns: loopLimitBufferTurns,
+          overMaxTurnsCount,
         });
       }
 
@@ -278,7 +291,7 @@ export function createTurnOrchestrator({
       }
       loopState.toolChoiceRetryPrompted = false;
 
-      if (isOverMaxTurns) {
+      if (isBeyondLoopLimitBuffer) {
         const lastMessage = Array.isArray(loopState?.messages)
           ? loopState.messages[loopState.messages.length - 1]
           : null;
@@ -297,6 +310,8 @@ export function createTurnOrchestrator({
         emitEvent(eventListener, "tool_loop_limit_reached", {
           turn,
           maxTurns,
+          bufferTurns: loopLimitBufferTurns,
+          overMaxTurnsCount,
           toolCallCount: calls.length,
           afterFinalizePrompt: true,
         });

@@ -78,7 +78,7 @@ function createModelState(llm, defaultModelSpec = null) {
   };
 }
 
-test("loop over max turns: inject finalize prompt first, then no-tools finalize if still asks tools", async () => {
+test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-tools finalize if still asks tools", async () => {
   let toolInvokeCount = 0;
   const tool = {
     name: "execute_script",
@@ -101,6 +101,30 @@ test("loop over max turns: inject finalize prompt first, then no-tools finalize 
       response_metadata: {},
     },
     {
+      content: "",
+      tool_calls: [{ id: "call_3", name: "execute_script", args: {} }],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+    {
+      content: "",
+      tool_calls: [{ id: "call_4", name: "execute_script", args: {} }],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+    {
+      content: "",
+      tool_calls: [{ id: "call_5", name: "execute_script", args: {} }],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+    {
+      content: "",
+      tool_calls: [{ id: "call_6", name: "execute_script", args: {} }],
+      additional_kwargs: {},
+      response_metadata: {},
+    },
+    {
       content: "最终总结",
       tool_calls: [],
       additional_kwargs: {},
@@ -114,11 +138,11 @@ test("loop over max turns: inject finalize prompt first, then no-tools finalize 
     turn: 1,
   });
 
-  assert.equal(toolInvokeCount, 1, "grace turn should not execute tools again");
+  assert.equal(toolInvokeCount, 6, "should execute initial turn plus 5 over-limit buffer turns");
   assert.equal(result.output, "最终总结");
-  assert.equal(capturedInvocations.length, 3);
+  assert.equal(capturedInvocations.length, 7);
   assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "auto");
-  assert.equal(capturedNoToolInvokeOptions[2]?.tool_choice, "none");
+  assert.equal(capturedNoToolInvokeOptions[6]?.tool_choice, "none");
   const secondInvocationMessages = capturedInvocations[1] || [];
   const finalizePromptMessage = [...secondInvocationMessages]
     .reverse()

@@ -32,6 +32,15 @@ export const DEFAULT_TOOL_FAILURE_HELP_COUNT = 3;
 export const DEFAULT_MAX_TOOL_LOOP_TURNS = 250;
 
 /**
+ * 超过工具调用循环最大轮数后的缓冲轮数。
+ *
+ * 达到 maxTurns 后，先给模型最多 5 轮继续收尾/自纠的机会；如果缓冲轮
+ * 之后仍未结束工具循环，则强制切换到无工具模型调用生成最终答复。
+ * 内置阈值，不通过配置覆盖。
+ */
+export const DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS = 5;
+
+/**
  * 阶段小结默认触发工具循环轮数。
  * 内置阈值，不通过配置覆盖。
  */
