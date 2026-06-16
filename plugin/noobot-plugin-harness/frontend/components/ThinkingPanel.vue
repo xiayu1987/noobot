@@ -7,6 +7,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useHarnessLocale } from "../i18n";
 import { isHarnessInjectedMessage } from "../../../../client/noobot-chat/src/composables/infra/messageModel";
+import { sanitizeExecutionLogForDisplay } from "../../../../client/noobot-chat/src/composables/chat/chatEngine/utils";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -31,20 +32,34 @@ const { translate } = useHarnessLocale();
 const nowTick = ref(Date.now());
 const detailExpansionTick = ref(0);
 let timer = null;
+const EXECUTION_LOG_DISPLAY_LIMIT = 10;
 
 function getRealtimeLogs(messageItem = {}) {
-  return (messageItem.realtimeLogs || []).slice(-10);
+  return (messageItem.realtimeLogs || [])
+    .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
+    .filter(Boolean)
+    .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
 }
 
 function getAllRealtimeLogs(messageItem = {}) {
   return Array.isArray(messageItem?.realtimeLogs) ? messageItem.realtimeLogs : [];
 }
 
+function getExecutionLogs(messageItem = {}) {
+  const realtimeLogs = getRealtimeLogs(messageItem);
+  if (realtimeLogs.length > 0) return realtimeLogs;
+  return getCompletedToolLogsForMessage(messageItem).slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+}
+
+function getExecutionLogCount(messageItem = {}) {
+  return getExecutionLogs(messageItem).length;
+}
+
 function hasThinkingLogs(messageItem = {}) {
   if (!messageItem || messageItem.role !== "assistant") return false;
   if (messageItem.pending) return true;
   const hasRealtimeLogs = Array.isArray(messageItem.realtimeLogs)
-    ? messageItem.realtimeLogs.length > 0
+    ? getRealtimeLogs(messageItem).length > 0
     : false;
   if (hasRealtimeLogs) return true;
   return getCompletedToolLogsForMessage(messageItem).length > 0;
@@ -167,8 +182,10 @@ function getCompletedToolLogsForMessage(messageItem = {}) {
   const completedToolLogs = Array.isArray(messageItem?.completedToolLogs)
     ? messageItem.completedToolLogs
     : [];
-  if (completedToolLogs.length > 0) return completedToolLogs;
-  return buildFallbackCompletedToolLogs(messageItem);
+  const sourceToolLogs = completedToolLogs.length > 0
+    ? completedToolLogs
+    : buildFallbackCompletedToolLogs(messageItem);
+  return sourceToolLogs.map((logItem) => sanitizeExecutionLogForDisplay(logItem)).filter(Boolean);
 }
 
 function getInjectedMessageCount() {
@@ -266,16 +283,6 @@ function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
   detailExpansionTick.value += 1;
 }
 
-function getExecutionLogCount(messageItem = {}) {
-  return Math.max(
-    Number(messageItem?.executionLogTotal || 0),
-    getAllRealtimeLogs(messageItem).length,
-  );
-}
-
-function getExecutionLogs(messageItem = {}) {
-  return getRealtimeLogs(messageItem);
-}
 
 function getThinkingDetailCount(messageItem = {}) {
   return getCompletedToolLogsForMessage(messageItem).length;

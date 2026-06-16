@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildViewMessage } from "../../../../src/composables/infra/messageModel";
+import { buildViewMessage, foldConversationMessages } from "../../../../src/composables/infra/messageModel";
 
 const envelope = {
   protocol: "noobot.semantic-transfer",
@@ -104,3 +104,31 @@ describe("messageModel semantic transfer", () => {
   });
 
 });
+
+describe("messageModel execution logs", () => {
+  it("keeps only latest 10 realtime logs when merging completed assistant messages", () => {
+    const messages = foldConversationMessages([
+      {
+        role: "assistant",
+        content: "part 1",
+        dialogProcessId: "dp-logs",
+        realtimeLogs: Array.from({ length: 6 }, (_, index) => ({ text: `log-${index + 1}` })),
+        executionLogTotal: 6,
+      },
+      {
+        role: "assistant",
+        content: "part 2",
+        dialogProcessId: "dp-logs",
+        realtimeLogs: Array.from({ length: 6 }, (_, index) => ({ text: `log-${index + 7}` })),
+        executionLogTotal: 12,
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].realtimeLogs).toHaveLength(10);
+    expect(messages[0].realtimeLogs[0].text).toBe("log-3");
+    expect(messages[0].realtimeLogs[9].text).toBe("log-12");
+    expect(messages[0].executionLogTotal).toBe(12);
+  });
+});
+

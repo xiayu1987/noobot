@@ -27,6 +27,7 @@ export { SystemErrorLogger } from "./error-log/system-error-logger.js";
 export { normalizeExecutionLogEntity } from "./execution-log/execution-log-entities.js";
 export { ExecutionLogRepository } from "./execution-log/execution-log-repository.js";
 export { ExecutionLogService } from "./execution-log/execution-log-service.js";
+export { summarizeExecutionLogs } from "./execution-log/execution-log-summary.js";
 
 // Event log
 export { classifyExecutionEvent, normalizeSseLogEvent } from "./event-log/log-normalizer.js";

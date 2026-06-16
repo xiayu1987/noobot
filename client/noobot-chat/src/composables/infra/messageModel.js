@@ -15,6 +15,8 @@ function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+const EXECUTION_LOG_DISPLAY_LIMIT = 10;
+
 function resolveBaseName(filePath = "") {
   const normalized = String(filePath || "").trim().replaceAll("\\", "/");
   if (!normalized) return "";
@@ -225,6 +227,13 @@ function foldConversationMessages(messages = [], buildView) {
     }
     const previousToolCalls = normalizeArray(previousMessage?.tool_calls);
     const currentToolCalls = normalizeArray(currentMessage?.tool_calls);
+    const previousRealtimeLogs = normalizeArray(previousMessage?.realtimeLogs);
+    const currentRealtimeLogs = normalizeArray(currentMessage?.realtimeLogs);
+    previousMessage.realtimeLogs = [
+      ...previousRealtimeLogs,
+      ...currentRealtimeLogs,
+    ].slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+
     previousMessage.tool_calls = [...previousToolCalls, ...currentToolCalls];
     previousMessage.executionLogTotal = Math.max(
       Number(previousMessage?.executionLogTotal || 0),
@@ -273,6 +282,7 @@ function foldConversationMessages(messages = [], buildView) {
 }
 
 export {
+  EXECUTION_LOG_DISPLAY_LIMIT,
   buildAppendMessage,
   buildViewMessage,
   foldConversationMessages,

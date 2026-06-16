@@ -151,6 +151,8 @@ function getArrayItems(value = null) {
   return Array.isArray(value) ? value : [];
 }
 
+const EXECUTION_LOG_DISPLAY_LIMIT = 10;
+
 function hasArrayItems(value = null) {
   return Array.isArray(value) && value.length > 0;
 }
@@ -342,8 +344,10 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   if (existingCompletedToolLogs.length && !hasArrayItems(sourceMessage?.completedToolLogs)) {
     targetMessage.completedToolLogs = existingCompletedToolLogs;
   }
-  if (existingRealtimeLogs.length && !hasArrayItems(sourceMessage?.realtimeLogs)) {
-    targetMessage.realtimeLogs = existingRealtimeLogs;
+  if (hasArrayItems(sourceMessage?.realtimeLogs)) {
+    targetMessage.realtimeLogs = sourceMessage.realtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+  } else if (existingRealtimeLogs.length) {
+    targetMessage.realtimeLogs = existingRealtimeLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT);
   }
   if (!sourceTransferResult && existingTransferResult) {
     targetMessage.transferResult = existingTransferResult;

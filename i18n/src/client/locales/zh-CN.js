@@ -216,6 +216,8 @@ export const zhCNMessages = {
     "copyText": "文本复制",
     "thinkingExpand": "💡 展开思考过程",
     "thinkingElapsed": "思考耗时：{duration}",
+    "executionCommandStarted": "开始：执行命令：{command}",
+    "executionCommandCompleted": "完成：执行命令：{command}",
     "executionProcess": "执行过程 ({count})",
     "injectedMessages": "注入消息 ({count})",
     "noInjectedMessages": "暂无注入消息",

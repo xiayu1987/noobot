@@ -5,6 +5,7 @@
  */
 import { promoteSessionIdentityToBackendId } from "../../infra/sessionIdentity";
 import { findReconnectDoneEnvelopeWithMessages } from "../../infra/reconnectReplayModel";
+import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
 import { _trimStr } from "./utils";
 import {
   findLatestAssistantMessageForRealtimeLogs,
@@ -75,18 +76,28 @@ export function applyDoneRealtimeLogsFromReconnectBatch({
   const doneEnvelopeWithMessages = findReconnectDoneEnvelopeWithMessages(messages);
   if (!doneEnvelopeWithMessages) return false;
   const doneData = doneEnvelopeWithMessages.data || {};
-  if (!Array.isArray(doneData?.executionLogs) || !doneData.executionLogs.length) return true;
-  const doneRealtimeLogs = doneData.executionLogs
+  const executionSummarySteps = Array.isArray(doneData?.executionSummary?.steps)
+    ? doneData.executionSummary.steps
+    : [];
+  const doneExecutionLogSource = executionSummarySteps.length
+    ? executionSummarySteps
+    : Array.isArray(doneData?.executionLogs)
+      ? doneData.executionLogs
+      : [];
+  if (!doneExecutionLogSource.length) return true;
+  const doneRealtimeLogs = doneExecutionLogSource
     .map((executionLogItem) =>
       classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
     )
-    .filter(Boolean);
+    .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
+    .filter((logItem) => logItem && _trimStr(logItem.text));
   if (!doneRealtimeLogs.length) return true;
   const targetMessage = findLatestAssistantMessageForRealtimeLogs({ activeSession, normalizedDpId });
   if (targetMessage) {
     targetMessage.executionLogTotal = Math.max(
       Number(targetMessage.executionLogTotal || 0),
       doneRealtimeLogs.length,
+      Number(doneData?.executionSummary?.returned || 0),
       Number(doneData?.executionLogs?.length || 0),
     );
     mergeRealtimeLogs(targetMessage, doneRealtimeLogs);

@@ -33,7 +33,6 @@ function handleToggle() {
     :style="{ marginLeft: `${Math.max(0, Number(indent || 0))}px` }"
   >
     <span v-if="prefixText" class="base-thinking-log-line__prefix">{{ prefixText }}</span>
-    <span class="base-thinking-log-line__event">[{{ eventText }}]</span>
     <span
       class="base-thinking-log-line__text"
       :class="{ 'is-expandable': expandable, 'is-expanded': expanded }"
@@ -64,10 +63,6 @@ function handleToggle() {
   flex: 0 0 auto;
   color: var(--noobot-thinking-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-.base-thinking-log-line__event {
-  flex: 0 0 auto;
-  color: var(--noobot-thinking-event);
 }
 .base-thinking-log-line__text {
   min-width: 0;

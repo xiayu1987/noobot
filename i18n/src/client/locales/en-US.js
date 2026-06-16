@@ -216,6 +216,8 @@ export const enUSMessages = {
     "copyText": "Copy Text",
     "thinkingExpand": "💡 Expand Thinking",
     "thinkingElapsed": "Thinking time: {duration}",
+    "executionCommandStarted": "Started: Command: {command}",
+    "executionCommandCompleted": "Completed: Command: {command}",
     "executionProcess": "Execution ({count})",
     "injectedMessages": "Injected Messages ({count})",
     "noInjectedMessages": "No injected messages",

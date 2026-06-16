@@ -8,3 +8,4 @@
 export { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 export { ExecutionLogRepository } from "./execution-log-repository.js";
 export { ExecutionLogService } from "./execution-log-service.js";
+export { summarizeExecutionLogs } from "./execution-log-summary.js";

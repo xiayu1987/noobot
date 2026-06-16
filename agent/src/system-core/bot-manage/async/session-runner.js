@@ -19,6 +19,7 @@ import {
 } from "./constants.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { summarizeExecutionLogs } from "../../tracking/execution-log/execution-log-summary.js";
 
 const POLL_INTERVAL_MS = 300;
 
@@ -103,6 +104,7 @@ export class AsyncSessionRunner {
       sessionId,
     });
 
+    const executionLogs = executionBundle?.logs || [];
     return {
       ok: true,
       status: SESSION_ASYNC_STATUS.COMPLETED,
@@ -111,7 +113,8 @@ export class AsyncSessionRunner {
       result: {
         answer,
         dialogProcessId,
-        executionLogs: executionBundle?.logs || [],
+        executionLogs,
+        executionSummary: summarizeExecutionLogs(executionLogs, { dialogProcessId }),
       },
     };
   }
