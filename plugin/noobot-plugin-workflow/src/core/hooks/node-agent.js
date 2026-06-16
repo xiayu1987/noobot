@@ -139,6 +139,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     ).length > 0,
   );
   if (!hasTransferFiles && !failedResults.length) return "";
+  let customUpstreamMessage = "";
   if (typeof options?.workflowNodeSystemMessageBuilder === "function") {
     try {
       const customMessage = String(
@@ -149,7 +150,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
           attachmentMetas: [],
         }) || "",
       ).trim();
-      if (customMessage) return customMessage;
+      if (customMessage) customUpstreamMessage = customMessage;
     } catch {
       // Fall back to the built-in message.
     }
@@ -211,7 +212,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     pendingStep?.nodeId ||
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
   ).trim();
-  const message = [
+  const message = customUpstreamMessage || [
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_ATTACHMENTS_TITLE),
     "",
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_LINE, { name: pendingName }),
@@ -224,18 +225,22 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     lines.length ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_RESULT_TITLE) : "",
     ...lines,
   ].join("\n");
-  if (!failureLines.length) return message;
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
   if (typeof transferSemanticContent !== "function") return message;
   try {
+    const strategy = failureLines.length
+      ? "bot_plugin_failure_propagation"
+      : "bot_plugin_upstream_injection";
     const transferred = await transferSemanticContent({
-      scenario: "workflow",
-      strategy: "workflow_failure_propagation",
+      scenario: "bot_plugin",
+      strategy,
       content: message,
       meta: {
         pendingNodeId: String(pendingStep?.nodeId || "").trim(),
         pendingNodeName: pendingName,
+        upstreamResultCount: normalizedResults.length,
+        upstreamAttachmentLineCount: lines.length,
         failureCount: failureLines.length,
       },
     });

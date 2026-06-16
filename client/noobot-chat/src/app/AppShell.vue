@@ -63,6 +63,7 @@ const botScenario = ref(
   String(localStorage.getItem("noobot_bot_scenario") || "").trim(),
 );
 const SELECTED_PLUGINS_STORAGE_KEY = "noobot_selected_plugins";
+const DEFAULT_ON_PLUGINS_STORAGE_KEY = "noobot_default_on_plugins";
 const hasStoredSelectedPlugins = ref(
   localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY) !== null,
 );
@@ -156,6 +157,27 @@ function persistSelectedPlugins() {
   localStorage.setItem(SELECTED_PLUGINS_STORAGE_KEY, JSON.stringify(selectedPlugins.value));
 }
 
+function getDefaultOnPluginKeys(pluginOptions = []) {
+  return (Array.isArray(pluginOptions) ? pluginOptions : [])
+    .filter(
+      (pluginItem) =>
+        pluginItem?.enabled === true &&
+        String(pluginItem?.mode || "").toLowerCase() === "on",
+    )
+    .map((pluginItem) => String(pluginItem?.key || "").trim())
+    .filter(Boolean);
+}
+
+function persistDefaultOnPluginKeys(pluginKeys = []) {
+  const normalizedPluginKeys = (Array.isArray(pluginKeys) ? pluginKeys : [])
+    .map((pluginKey) => String(pluginKey || "").trim())
+    .filter(Boolean);
+  localStorage.setItem(
+    DEFAULT_ON_PLUGINS_STORAGE_KEY,
+    JSON.stringify(Array.from(new Set(normalizedPluginKeys))),
+  );
+}
+
 function syncSelectedPluginsWithConfig() {
   const pluginOptions = Array.isArray(availablePlugins.value) ? availablePlugins.value : [];
   if (!pluginOptions.length) {
@@ -166,18 +188,29 @@ function syncSelectedPluginsWithConfig() {
   const enabledPluginKeySet = new Set(
     pluginOptions.filter((item) => item.enabled === true).map((item) => item.key),
   );
+  const defaultOnPluginKeys = getDefaultOnPluginKeys(pluginOptions);
+  const previousDefaultOnPluginKeySet = new Set(
+    safeParseStringArray(localStorage.getItem(DEFAULT_ON_PLUGINS_STORAGE_KEY)),
+  );
   if (!hasStoredSelectedPlugins.value) {
-    selectedPlugins.value = pluginOptions
-      .filter(
-        (pluginItem) =>
-          pluginItem.enabled === true && String(pluginItem.mode || "").toLowerCase() === "on",
-      )
-      .map((pluginItem) => pluginItem.key);
+    selectedPlugins.value = defaultOnPluginKeys;
+    persistDefaultOnPluginKeys(defaultOnPluginKeys);
     return;
   }
-  selectedPlugins.value = selectedPlugins.value.filter((pluginKey) =>
-    availablePluginKeySet.has(pluginKey) && enabledPluginKeySet.has(pluginKey),
+  const selectedPluginKeySet = new Set(
+    selectedPlugins.value.filter((pluginKey) =>
+      availablePluginKeySet.has(pluginKey) && enabledPluginKeySet.has(pluginKey),
+    ),
   );
+  // 配置从“非工作流/插件 off”切回“插件 mode=on”时，本地已持久化的 []
+  // 不应永久压过新的后端默认开启配置；只补齐“本次配置新增为默认开启”的插件。
+  for (const pluginKey of defaultOnPluginKeys) {
+    if (!previousDefaultOnPluginKeySet.has(pluginKey)) {
+      selectedPluginKeySet.add(pluginKey);
+    }
+  }
+  selectedPlugins.value = Array.from(selectedPluginKeySet);
+  persistDefaultOnPluginKeys(defaultOnPluginKeys);
   persistSelectedPlugins();
 }
 

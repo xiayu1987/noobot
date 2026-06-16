@@ -90,6 +90,25 @@ function isHarnessInjectedMessage(messageItem = {}) {
   );
 }
 
+function normalizeWorkflowMeta(messageItem = {}) {
+  return messageItem?.workflowMeta &&
+    typeof messageItem.workflowMeta === "object" &&
+    !Array.isArray(messageItem.workflowMeta)
+    ? messageItem.workflowMeta
+    : null;
+}
+
+function isWorkflowMessageLike(messageItem = {}) {
+  if (messageItem?.workflowMessage === true) return true;
+  const type = String(messageItem?.type || "").trim().toLowerCase();
+  if (type === "workflow") return true;
+  const workflowMeta = normalizeWorkflowMeta(messageItem);
+  const source = String(workflowMeta?.source || "").trim().toLowerCase();
+  if (source === "workflow-plugin") return true;
+  const phase = String(workflowMeta?.phase || "").trim().toLowerCase();
+  return Boolean(workflowMeta && phase);
+}
+
 function createMessageModel(messageItem = {}) {
   const normalizedAttachmentMetas = Array.isArray(messageItem?.attachmentMetas)
     ? messageItem.attachmentMetas
@@ -104,6 +123,7 @@ function createMessageModel(messageItem = {}) {
       ? messageItem.transferResult
       : null;
   const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
+  const workflowMeta = normalizeWorkflowMeta(messageItem);
   return {
     role: messageItem.role || "assistant",
     content: messageItem.content || "",
@@ -134,13 +154,8 @@ function createMessageModel(messageItem = {}) {
     taskId: messageItem.taskId || "",
     injectedMessage: messageItem.injectedMessage === true,
     injectedBy: String(messageItem.injectedBy || "").trim(),
-    workflowMessage: messageItem.workflowMessage === true,
-    workflowMeta:
-      messageItem?.workflowMeta &&
-      typeof messageItem.workflowMeta === "object" &&
-      !Array.isArray(messageItem.workflowMeta)
-        ? messageItem.workflowMeta
-        : null,
+    workflowMessage: isWorkflowMessageLike(messageItem),
+    workflowMeta,
   };
 }
 
@@ -288,4 +303,5 @@ export {
   foldConversationMessages,
   createMessageModel,
   isHarnessInjectedMessage,
+  isWorkflowMessageLike,
 };

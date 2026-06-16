@@ -108,7 +108,7 @@ function createAttachmentPersister({ prefix = "att", counterRef = { value: 0 } }
 function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 } } = {}) {
   return {
     async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
-      if (String(scenario || "") !== "workflow" || !String(strategy || "").startsWith("workflow_")) {
+      if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
         return { transferResult: { ok: false, status: "failed" }, transferEnvelope: null, transferEnvelopes: [] };
       }
       counterRef.value += 1;
@@ -434,7 +434,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
             sharedTools: {
               semanticTransfer: {
                 async transferSemanticContent({ scenario = "", strategy = "" } = {}) {
-                  if (String(scenario || "") !== "workflow" || String(strategy || "") !== "workflow_subagent_result") {
+                  if (String(scenario || "") !== "bot_plugin" || String(strategy || "") !== "bot_plugin_subagent_result") {
                     return { transferResult: { ok: false, status: "failed" }, transferEnvelope: null, transferEnvelopes: [] };
                   }
                   return {
@@ -554,8 +554,8 @@ test("workflow hook routes final attachment summary composition through semantic
 
   const hasFinalSummaryCall = semanticTransferCalls.some(
     (item = {}) =>
-      String(item?.scenario || "").trim() === "workflow" &&
-      String(item?.strategy || "").trim() === "workflow_final_return" &&
+      String(item?.scenario || "").trim() === "bot_plugin" &&
+      String(item?.strategy || "").trim() === "bot_plugin_final_return" &&
       String(item?.generationSource || "").trim() === "workflow_planning_final_attachment_summary",
   );
   assert.equal(hasFinalSummaryCall, true);
@@ -565,18 +565,39 @@ test("workflow hook routes final attachment summary composition through semantic
   const transferEnvelopes = Array.isArray(workflowTurnMessage?.transferEnvelopes)
     ? workflowTurnMessage.transferEnvelopes
     : [];
+  const workflowPayloadTransferEnvelopes = Array.isArray(agentResult?.workflow?.transferEnvelopes)
+    ? agentResult.workflow.transferEnvelopes
+    : [];
   assert.equal(
     transferEnvelopes.some(
       (item = {}) => String(item?.files?.[0]?.attachmentMeta?.attachmentId || "").trim() === "wf-semantic-final-1",
     ),
     true,
   );
+  assert.equal(
+    String(workflowTurnMessage?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId || "").trim(),
+    "wf-semantic-final-1",
+  );
+  assert.equal(
+    workflowPayloadTransferEnvelopes.some(
+      (item = {}) => String(item?.files?.[0]?.attachmentMeta?.attachmentId || "").trim() === "wf-semantic-final-1",
+    ),
+    true,
+  );
+  assert.equal(
+    String(agentResult?.workflow?.transferEnvelope?.files?.[0]?.attachmentMeta?.attachmentId || "").trim(),
+    "wf-semantic-final-1",
+  );
+  const workflowContent = String(workflowTurnMessage?.content || "");
+  assert.match(workflowContent, /final-summary\.md/);
+  assert.doesNotMatch(workflowContent, /node-summary\.md/);
 });
 
 test("workflow hook injects upstream node result attachments into downstream sub-session system messages", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
+  const semanticTransferCalls = [];
   let artifactCounter = 0;
 
   registerWorkflowHooks({
@@ -653,8 +674,10 @@ test("workflow hook injects upstream node result attachments into downstream sub
           runtime: {
             sharedTools: {
               semanticTransfer: {
-                async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
-                  if (String(scenario || "") !== "workflow" || !String(strategy || "").startsWith("workflow_")) {
+                async transferSemanticContent(payload = {}) {
+                  semanticTransferCalls.push(payload);
+                  const { scenario = "", strategy = "", messages = [] } = payload;
+                  if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
                     return {
                       transferResult: { ok: false, status: "failed" },
                       transferEnvelope: null,
@@ -690,6 +713,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
                     transferResult: { ok: true, status: "file", envelope },
                     transferEnvelope: envelope,
                     transferEnvelopes: [envelope],
+                    injectionMessage: String(payload?.content || ""),
                   };
                 },
               },
@@ -720,6 +744,12 @@ test("workflow hook injects upstream node result attachments into downstream sub
   assert.match(nodeESystem, /节点B/);
   assert.match(nodeESystem, /节点C/);
   assert.doesNotMatch(nodeESystem, /节点A \/ workflow-node-1-节点A-result\.md/);
+  assert.equal(
+    semanticTransferCalls.some(
+      (item = {}) => String(item?.strategy || "") === "bot_plugin_upstream_injection",
+    ),
+    true,
+  );
 });
 
 
@@ -793,7 +823,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
             sharedTools: {
               semanticTransfer: {
                 async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
-                  if (String(scenario || "") !== "workflow" || !String(strategy || "").startsWith("workflow_")) {
+                  if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
                     return {
                       transferResult: { ok: false, status: "failed" },
                       transferEnvelope: null,

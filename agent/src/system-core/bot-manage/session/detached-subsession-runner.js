@@ -47,7 +47,7 @@ export function createDetachedSubSessionRunner({
     const sourceContext =
       parentContext && typeof parentContext === "object" ? parentContext : {};
     const inheritedRuntime = getRuntimeFromAgentContext(
-      sourceContext?.agentContext || sourceContext,
+      sourceContext?.agentContext || sourceContext?.runtimeAgentContext || sourceContext,
       null,
     );
     const inheritedAbortSignal =
