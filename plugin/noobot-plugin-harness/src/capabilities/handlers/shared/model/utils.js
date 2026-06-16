@@ -59,25 +59,51 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
   return "";
 }
 
-function resolveAgentModelMessages(ctx = {}, fallbackMessages = []) {
+function collectPayloadMessages(payloadMessages = null) {
+  if (!payloadMessages || typeof payloadMessages !== "object" || Array.isArray(payloadMessages)) {
+    return [];
+  }
+  return [
+    ...(Array.isArray(payloadMessages.system) ? payloadMessages.system : []),
+    ...(Array.isArray(payloadMessages.history) ? payloadMessages.history : []),
+    ...(Array.isArray(payloadMessages.incremental) ? payloadMessages.incremental : []),
+  ];
+}
+
+function shouldUsePayloadMessageFallback(purpose = "") {
+  const normalizedPurpose = String(purpose || "").trim().toLowerCase();
+  return (
+    normalizedPurpose.includes("acceptance") ||
+    normalizedPurpose.includes("review") ||
+    normalizedPurpose.includes("final")
+  );
+}
+
+function resolveContextMessages(ctx = {}, { includePayloadMessages = false } = {}) {
+  if (Array.isArray(ctx?.messages) && ctx.messages.length) return ctx.messages;
+  if (!includePayloadMessages) return [];
+  const agentPayloadMessages = collectPayloadMessages(ctx?.agentContext?.payload?.messages);
+  if (agentPayloadMessages.length) return agentPayloadMessages;
+  const runtimePayloadMessages = collectPayloadMessages(ctx?.runtimeAgentContext?.payload?.messages);
+  if (runtimePayloadMessages.length) return runtimePayloadMessages;
+  return [];
+}
+
+function resolveAgentModelMessages(ctx = {}, fallbackMessages = [], { includePayloadMessages = false } = {}) {
   if (Array.isArray(fallbackMessages) && fallbackMessages.length) {
     return fallbackMessages;
   }
-  if (Array.isArray(ctx?.messages) && ctx.messages.length) {
-    return ctx.messages;
-  }
-  return [];
+  return resolveContextMessages(ctx, { includePayloadMessages });
 }
 
 export function resolveCapabilityModelMessages(
   meta = {},
   { ctx = {}, purpose = "", messages = [] } = {},
 ) {
+  const includePayloadMessages = shouldUsePayloadMessageFallback(purpose);
   const sourceMessages = Array.isArray(messages) && messages.length
     ? messages
-    : Array.isArray(ctx?.messages)
-      ? ctx.messages
-      : [];
+    : resolveContextMessages(ctx, { includePayloadMessages });
   const resolver = meta?.harness?.resolveModelMessages;
   if (typeof resolver === "function") {
     try {
@@ -91,7 +117,7 @@ export function resolveCapabilityModelMessages(
       // fall through to local compatibility fallback
     }
   }
-  return resolveAgentModelMessages(ctx, sourceMessages);
+  return resolveAgentModelMessages(ctx, sourceMessages, { includePayloadMessages });
 }
 
 export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {

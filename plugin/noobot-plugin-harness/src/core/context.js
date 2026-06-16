@@ -23,11 +23,49 @@ export function extractRuntime(ctx = {}) {
   return ctx?.agentContext?.execution?.controllers?.runtime || null;
 }
 
-function resolveUnifiedMessages(ctx = {}) {
+function resolvePayloadMessageBlocks(payloadMessages = null) {
+  if (!payloadMessages || typeof payloadMessages !== "object" || Array.isArray(payloadMessages)) {
+    return null;
+  }
+  return {
+    system: Array.isArray(payloadMessages.system) ? payloadMessages.system : [],
+    history: Array.isArray(payloadMessages.history) ? payloadMessages.history : [],
+    incremental: Array.isArray(payloadMessages.incremental) ? payloadMessages.incremental : [],
+  };
+}
+
+function flattenMessageBlocks(blocks = null) {
+  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) return [];
+  return [
+    ...(Array.isArray(blocks.system) ? blocks.system : []),
+    ...(Array.isArray(blocks.history) ? blocks.history : []),
+    ...(Array.isArray(blocks.incremental) ? blocks.incremental : []),
+  ];
+}
+
+function shouldUseAgentContextMessageFallback(point = "") {
+  const normalizedPoint = String(point || "").trim().toLowerCase();
+  return normalizedPoint === "before_final_output";
+}
+
+function resolveUnifiedMessageBlocks(ctx = {}, { includeAgentContextMessages = false } = {}) {
+  if (ctx?.messageBlocks && typeof ctx.messageBlocks === "object" && !Array.isArray(ctx.messageBlocks)) {
+    return resolvePayloadMessageBlocks(ctx.messageBlocks);
+  }
+  if (!includeAgentContextMessages) return null;
+  return (
+    resolvePayloadMessageBlocks(ctx?.agentContext?.payload?.messages) ||
+    resolvePayloadMessageBlocks(ctx?.runtimeAgentContext?.payload?.messages)
+  );
+}
+
+function resolveUnifiedMessages(ctx = {}, { includeAgentContextMessages = false } = {}) {
   if (Array.isArray(ctx?.messages)) return ctx.messages;
   if (Array.isArray(ctx?.result?.modelMessages)) return ctx.result.modelMessages;
   if (Array.isArray(ctx?.result?.turnMessages)) return ctx.result.turnMessages;
-  return null;
+  const blocks = resolveUnifiedMessageBlocks(ctx, { includeAgentContextMessages });
+  const flattened = flattenMessageBlocks(blocks);
+  return flattened.length ? flattened : null;
 }
 
 function resolveUnifiedCalls(ctx = {}) {
@@ -50,7 +88,13 @@ export function normalizeHookContextProtocol(point = "", ctx = {}) {
   const normalizedPoint = String(point || ctx?.point || "").trim();
   if (normalizedPoint && !ctx.point) ctx.point = normalizedPoint;
 
-  const unifiedMessages = resolveUnifiedMessages(ctx);
+  const includeAgentContextMessages = shouldUseAgentContextMessageFallback(normalizedPoint);
+  const unifiedMessageBlocks = resolveUnifiedMessageBlocks(ctx, { includeAgentContextMessages });
+  if (unifiedMessageBlocks && (!ctx.messageBlocks || typeof ctx.messageBlocks !== "object" || Array.isArray(ctx.messageBlocks))) {
+    ctx.messageBlocks = unifiedMessageBlocks;
+  }
+
+  const unifiedMessages = resolveUnifiedMessages(ctx, { includeAgentContextMessages });
   if (unifiedMessages && !Array.isArray(ctx.messages)) {
     ctx.messages = unifiedMessages;
   }

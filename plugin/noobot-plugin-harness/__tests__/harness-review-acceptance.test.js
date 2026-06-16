@@ -512,7 +512,13 @@ test("harness acceptance semantic validation uses separate model when enabled", 
 
   const agentContext = {
     payload: {
-      messages: { system: [], history: [] },
+      messages: {
+        system: [{ role: "system", content: "系统上下文：必须保留" }],
+        history: [
+          { role: "user", content: "用户原始需求：执行核心任务", frontendUserMessage: true },
+          { role: "assistant", content: "执行过程上下文：已完成核心任务" },
+        ],
+      },
       harness: {
         taskChecklist: [{ index: 1, task: "执行核心任务", owner: "primary_task_owner" }],
         state: {
@@ -537,6 +543,8 @@ test("harness acceptance semantic validation uses separate model when enabled", 
 
   assert.equal(invocations.length, 2);
   assert.equal(invocations[0].purpose, "phase_acceptance_before_final");
+  assert.match(invocations[0].messages.map((item = {}) => String(item.content || "")).join("\n"), /用户原始需求：执行核心任务/);
+  assert.match(invocations[0].messages.map((item = {}) => String(item.content || "")).join("\n"), /执行过程上下文：已完成核心任务/);
   assert.equal(invocations[1].purpose, "acceptance_semantic_validation");
   assert.equal(invocations[1].promptVersion, "v1");
   assert.equal(invocations[1].envelopeType, "structured_v1");

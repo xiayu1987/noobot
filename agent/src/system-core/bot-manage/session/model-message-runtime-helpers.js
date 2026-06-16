@@ -37,6 +37,52 @@ const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "review",
 ]);
 
+function collectPayloadMessages(payloadMessages = null) {
+  if (!payloadMessages || typeof payloadMessages !== "object" || Array.isArray(payloadMessages)) {
+    return [];
+  }
+  return [
+    ...(Array.isArray(payloadMessages.system) ? payloadMessages.system : []),
+    ...(Array.isArray(payloadMessages.history) ? payloadMessages.history : []),
+    ...(Array.isArray(payloadMessages.incremental) ? payloadMessages.incremental : []),
+  ];
+}
+
+function shouldUsePayloadMessageFallback(purpose = "") {
+  const normalizedPurpose = String(purpose || "").trim().toLowerCase();
+  return (
+    normalizedPurpose.includes("acceptance") ||
+    normalizedPurpose.includes("review") ||
+    normalizedPurpose.includes("final")
+  );
+}
+
+function resolveContextSourceMessages(ctx = {}, { includePayloadMessages = false } = {}) {
+  if (Array.isArray(ctx?.messages) && ctx.messages.length) return ctx.messages;
+  if (!includePayloadMessages) return [];
+  const agentPayloadMessages = collectPayloadMessages(ctx?.agentContext?.payload?.messages);
+  if (agentPayloadMessages.length) return agentPayloadMessages;
+  const runtimePayloadMessages = collectPayloadMessages(ctx?.runtimeAgentContext?.payload?.messages);
+  if (runtimePayloadMessages.length) return runtimePayloadMessages;
+  return [];
+}
+
+function resolveContextMessageBlocks(ctx = {}, { includePayloadMessages = false } = {}) {
+  if (ctx?.messageBlocks && typeof ctx.messageBlocks === "object" && !Array.isArray(ctx.messageBlocks)) {
+    return ctx.messageBlocks;
+  }
+  if (!includePayloadMessages) return null;
+  const agentPayloadMessages = ctx?.agentContext?.payload?.messages;
+  if (agentPayloadMessages && typeof agentPayloadMessages === "object" && !Array.isArray(agentPayloadMessages)) {
+    return agentPayloadMessages;
+  }
+  const runtimePayloadMessages = ctx?.runtimeAgentContext?.payload?.messages;
+  if (runtimePayloadMessages && typeof runtimePayloadMessages === "object" && !Array.isArray(runtimePayloadMessages)) {
+    return runtimePayloadMessages;
+  }
+  return null;
+}
+
 export class ModelMessageRuntimeHelpers {
   constructor({ session = null } = {}) {
     this.session = session;
@@ -72,16 +118,13 @@ export class ModelMessageRuntimeHelpers {
     botPluginOptions = {},
   } = {}) {
     void (agentPluginOptions || botPluginOptions);
-    return ({ messages = [], ctx = {} } = {}) => {
-      const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object"
-        ? ctx.messageBlocks
-        : null;
+    return ({ messages = [], ctx = {}, purpose = "" } = {}) => {
+      const includePayloadMessages = shouldUsePayloadMessageFallback(purpose);
+      const blocks = resolveContextMessageBlocks(ctx, { includePayloadMessages });
       const explicitMessages = Array.isArray(messages) ? messages : [];
       const source = explicitMessages.length
         ? explicitMessages
-        : Array.isArray(ctx?.messages)
-          ? ctx.messages
-          : [];
+        : resolveContextSourceMessages(ctx, { includePayloadMessages });
       const currentDialogProcessId = resolveDialogProcessId({
         ctx,
         messages: source,

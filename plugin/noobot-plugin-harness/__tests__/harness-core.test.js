@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
+import { normalizeHookContextProtocol } from "../src/core/context.js";
 import { injectPrompt } from "../src/tracing/buffer-manager.js";
 import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
@@ -65,6 +66,33 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
   assert.equal(second.state.counters.llmTurns, 9);
   assert.equal(second.state.flags.planningCaptured, true);
   assert.equal(second.state.signals.successfulToolCount, 3);
+});
+
+
+test("normalizeHookContextProtocol exposes agentContext payload messages for before_final_output", () => {
+  const ctx = {
+    agentContext: {
+      payload: {
+        messages: {
+          system: [{ role: "system", content: "system ctx" }],
+          history: [{ role: "user", content: "history ctx" }],
+          incremental: [{ role: "assistant", content: "incremental ctx" }],
+        },
+      },
+    },
+  };
+
+  normalizeHookContextProtocol("before_final_output", ctx);
+
+  assert.equal(ctx.point, "before_final_output");
+  assert.deepEqual(ctx.messageBlocks.system, [{ role: "system", content: "system ctx" }]);
+  assert.deepEqual(ctx.messageBlocks.history, [{ role: "user", content: "history ctx" }]);
+  assert.deepEqual(ctx.messageBlocks.incremental, [{ role: "assistant", content: "incremental ctx" }]);
+  assert.deepEqual(ctx.messages.map((item = {}) => item.content), [
+    "system ctx",
+    "history ctx",
+    "incremental ctx",
+  ]);
 });
 
 test("harness plugin writes manifest, events and context snapshot", async () => {
