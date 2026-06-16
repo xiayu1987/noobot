@@ -105,6 +105,33 @@ describe("messageModel semantic transfer", () => {
 
 });
 
+describe("messageModel workflow messages", () => {
+  it("infers workflow messages from type/workflowMeta for card matching and folding", () => {
+    const messages = foldConversationMessages([
+      {
+        role: "assistant",
+        content: "normal",
+        dialogProcessId: "dp-workflow",
+      },
+      {
+        role: "assistant",
+        type: "workflow",
+        content: "workflow plan",
+        dialogProcessId: "dp-workflow",
+        workflowMeta: {
+          source: "workflow-plugin",
+          phase: "planning",
+          payload: { semantic: { nodes: [{ id: "n1", type: "action" }] } },
+        },
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1].workflowMessage).toBe(true);
+    expect(messages[1].workflowMeta?.source).toBe("workflow-plugin");
+  });
+});
+
 describe("messageModel execution logs", () => {
   it("keeps only latest 10 realtime logs when merging completed assistant messages", () => {
     const messages = foldConversationMessages([

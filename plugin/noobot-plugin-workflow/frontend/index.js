@@ -7,6 +7,22 @@ import WorkflowMessageCard from "./components/WorkflowMessageCard.vue";
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
+function isWorkflowMessageLike(messageItem = {}) {
+  if (messageItem?.workflowMessage === true) return true;
+  const type = String(messageItem?.type || "").trim().toLowerCase();
+  if (type === "workflow") return true;
+  const workflowMeta =
+    messageItem?.workflowMeta &&
+    typeof messageItem.workflowMeta === "object" &&
+    !Array.isArray(messageItem.workflowMeta)
+      ? messageItem.workflowMeta
+      : null;
+  const source = String(workflowMeta?.source || "").trim().toLowerCase();
+  if (source === "workflow-plugin") return true;
+  const phase = String(workflowMeta?.phase || "").trim().toLowerCase();
+  return Boolean(workflowMeta && phase);
+}
+
 export function registerFrontendPlugin(ctx = {}) {
   const register = ctx?.registerFrontendPlugin;
   if (typeof register !== "function") {
@@ -23,7 +39,7 @@ export function registerFrontendPlugin(ctx = {}) {
         slot: "pre",
         priority: 100,
         component: WorkflowMessageCard,
-        match: (messageItem = {}) => messageItem?.workflowMessage === true,
+        match: (messageItem = {}) => isWorkflowMessageLike(messageItem),
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},
           userId: String(context?.userId || ""),

@@ -130,3 +130,48 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
   assert.deepEqual(fullTurnLog.attachmentMetas, []);
   assert.equal(JSON.parse(fullTurnLog.content).sessionPersistence, "summary_only");
 });
+
+test("SessionTurnPersister preserves workflow message metadata for workflow graph rendering", async () => {
+  const appendedTurns = [];
+  const executionLogs = [];
+  const session = {
+    appendExecutionLog: async (payload = {}) => {
+      executionLogs.push(payload);
+    },
+    appendTurn: async (payload = {}) => {
+      appendedTurns.push(payload);
+    },
+  };
+  const persister = new SessionTurnPersister({ session });
+  const workflowMeta = {
+    source: "workflow-plugin",
+    phase: "planning",
+    payload: {
+      semantic: {
+        nodes: [{ id: "a1", type: "action", name: "A1" }],
+        flowtos: [{ from: "start", to: "a1" }],
+      },
+    },
+  };
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      {
+        role: "assistant",
+        type: "workflow",
+        content: "WORKFLOW_DSL/1",
+        workflowMessage: true,
+        workflowMeta,
+      },
+    ],
+    dialogProcessId: "dp1",
+  });
+
+  assert.equal(appendedTurns.length, 1);
+  assert.equal(appendedTurns[0].workflowMessage, true);
+  assert.equal(appendedTurns[0].workflowMeta?.payload?.semantic?.nodes?.length, 1);
+  assert.equal(executionLogs[0]?.data?.workflowMessage, true);
+  assert.equal(executionLogs[0]?.data?.workflowMeta?.payload?.semantic?.flowtos?.length, 1);
+});

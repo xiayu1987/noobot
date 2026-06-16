@@ -242,6 +242,38 @@ test("createDetachedSubSessionRunner prepares context, runs agent, emits runtime
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);
 });
 
+
+test("createDetachedSubSessionRunner inherits user interaction bridge from runtimeAgentContext", async () => {
+  const { calls, deps } = createDefaultDeps();
+  const runner = createDetachedSubSessionRunner(deps);
+  const bridge = { requestUserInteraction: async () => ({ confirmed: true }) };
+
+  await runner({
+    parentContext: {
+      userId: "u1",
+      sessionId: "parent1",
+      dialogProcessId: "parent-dialog",
+      runtimeAgentContext: {
+        execution: {
+          controllers: {
+            runtime: {
+              userInteractionBridge: bridge,
+            },
+          },
+        },
+      },
+      runConfig: {},
+    },
+    message: "needs user input",
+    strategy: { sessionId: "sub-runtime-bridge" },
+  });
+
+  assert.equal(
+    calls.prepareAgentTurnExecutionPayload.buildContextPayload.userInteractionBridge,
+    bridge,
+  );
+});
+
 test("createDetachedSubSessionRunner persists bot plugin sub-session snapshot when output dir resolves", async () => {
   const { calls, deps } = createDefaultDeps({
     resolvePluginScopedDir(payload = {}) {

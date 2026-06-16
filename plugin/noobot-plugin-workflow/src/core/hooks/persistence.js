@@ -181,8 +181,8 @@ export async function persistWorkflowNodeResultAttachment({
     let transferPayload = normalizeWorkflowTransferPayload();
     if (typeof semanticTransferContent === "function") {
       const transferred = await semanticTransferContent({
-        scenario: "workflow",
-        strategy: "workflow_subagent_result",
+        scenario: "bot_plugin",
+        strategy: "bot_plugin_subagent_result",
         messages: [
           {
             nodeId,
@@ -251,14 +251,16 @@ export async function appendWorkflowPlanningMessage({
   const baseTransferPayload = normalizeWorkflowTransferPayload(baseWorkflowPayload);
   let composedTransferPayload = normalizeWorkflowTransferPayload();
   const transferPathBlock = buildWorkflowTransferPathBlockWithContext(workflowPayload, ctx);
+  let finalTransferAttempted = false;
   if (transferPathBlock) {
     const runtime = resolveWorkflowRuntimeFromContext(ctx);
     const semanticTransferContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
     if (typeof semanticTransferContent === "function") {
+      finalTransferAttempted = true;
       try {
         const transferred = await semanticTransferContent({
-          scenario: "workflow",
-          strategy: "workflow_final_return",
+          scenario: "bot_plugin",
+          strategy: "bot_plugin_final_return",
           messages: [
             {
               id: "workflow-final-attachment-summary",
@@ -287,8 +289,8 @@ export async function appendWorkflowPlanningMessage({
     }
   }
   const mergedTransferPayload = normalizeWorkflowTransferPayload({
-    transferResult: baseTransferPayload.transferResult || composedTransferPayload.transferResult || null,
-    transferEnvelope: baseTransferPayload.transferEnvelope || composedTransferPayload.transferEnvelope || null,
+    transferResult: composedTransferPayload.transferResult || baseTransferPayload.transferResult || null,
+    transferEnvelope: composedTransferPayload.transferEnvelope || baseTransferPayload.transferEnvelope || null,
     transferEnvelopes: [
       ...(Array.isArray(baseTransferPayload.transferEnvelopes) ? baseTransferPayload.transferEnvelopes : []),
       ...(Array.isArray(composedTransferPayload.transferEnvelopes)
@@ -302,12 +304,19 @@ export async function appendWorkflowPlanningMessage({
     ctx,
   });
   const attachmentPathBlock =
-    transferPathBlock || buildWorkflowAttachmentPathBlockWithContext(compatAttachmentMetas, ctx);
+    buildWorkflowTransferPathBlockWithContext(composedTransferPayload, ctx) ||
+    (finalTransferAttempted
+      ? ""
+      : buildWorkflowTransferPathBlockWithContext(mergedTransferPayload, ctx) ||
+        (composedTransferPayload.transferEnvelopes.length || composedTransferPayload.transferEnvelope
+          ? ""
+          : buildWorkflowAttachmentPathBlockWithContext(compatAttachmentMetas, ctx)));
   const content = [semanticText || sourceText || "", attachmentPathBlock]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join("\n\n");
-  const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(workflowPayload);
+  applyWorkflowTransferPayload(baseWorkflowPayload, mergedTransferPayload);
+  const sessionWorkflowPayload = sanitizeWorkflowPayloadForSessionMessage(baseWorkflowPayload);
   const workflowMessage = {
     role: "assistant",
     type: "workflow",

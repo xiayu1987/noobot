@@ -76,6 +76,16 @@ export function normalizeMessageEntity(
   ) {
     normalizedMessage.pluginMeta = message.pluginMeta;
   }
+  if (message?.workflowMessage === true) {
+    normalizedMessage.workflowMessage = true;
+  }
+  if (
+    message?.workflowMeta &&
+    typeof message.workflowMeta === "object" &&
+    !Array.isArray(message.workflowMeta)
+  ) {
+    normalizedMessage.workflowMeta = message.workflowMeta;
+  }
 
   const toolCallId = String(message?.tool_call_id || "").trim();
   const toolName = String(message?.toolName || message?.tool_name || "").trim();
