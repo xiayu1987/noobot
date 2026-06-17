@@ -41,7 +41,10 @@ export const enUSMessages = {
     "deleteSession": "Delete session",
     "selectedConnectors": "Currently Selected Connectors",
     "unselected": "Not selected",
-    "emptyChatHint": "Start a new conversation with Noobot"
+    "emptyChatHint": "Start a new conversation with Noobot",
+    "chatNavigator": "Conversation navigation",
+    "showChatNavigator": "Show conversation navigation",
+    "hideChatNavigator": "Hide conversation navigation"
   },
   "settings": {
     "userParams": "User Params",

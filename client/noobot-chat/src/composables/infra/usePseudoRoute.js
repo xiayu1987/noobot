@@ -15,6 +15,7 @@ export const PSEUDO_PANEL = Object.freeze({
   SIDEBAR: "sidebar",
   COMPOSER: "composer",
   THINKING_DETAILS: "thinking-details",
+  CHAT_NAVIGATOR: "chat-navigator",
 });
 
 const DEFAULT_ALLOWED_PANELS = new Set(Object.values(PSEUDO_PANEL));

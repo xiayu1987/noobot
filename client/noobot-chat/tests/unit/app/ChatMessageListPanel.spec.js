@@ -112,4 +112,24 @@ describe("ChatMessageListPanel", () => {
     expect(counters.mounted).toBe(1);
     expect(counters.unmounted).toBe(0);
   });
+
+  it("renders stable anchors and exposes scrollToMessageAnchor", () => {
+    const wrapper = mountPanel({
+      activeSession: {
+        messages: [
+          { role: RoleEnum.USER, dialogProcessId: "dp-user", content: "hello" },
+          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-assistant", content: "hi" },
+        ],
+      },
+    });
+
+    const anchors = wrapper.findAll("[data-chat-message-anchor]");
+    expect(anchors).toHaveLength(2);
+    expect(anchors[0].attributes("id")).toBe("chat-message-user-dp-user-0");
+    expect(anchors[0].attributes("data-chat-message-anchor")).toBe("chat-message-user-dp-user-0");
+    expect(wrapper.vm.getMessageAnchorId({ role: RoleEnum.ASSISTANT, dialogProcessId: "dp-assistant" }, 1)).toBe(
+      "chat-message-assistant-dp-assistant-1",
+    );
+    expect(typeof wrapper.vm.scrollToMessageAnchor).toBe("function");
+  });
 });
