@@ -94,9 +94,12 @@ test("summary prompts require file method and multi-segment line only in program
   assert.match(programmingPrompt, /Blocking risk（必须停）/);
   assert.match(programmingPrompt, /Managed risk（可先改但必须验证）/);
   assert.match(programmingPrompt, /Informational risk（只记录不阻塞）/);
-  assert.match(programmingPrompt, /file=\[文件路径\]/);
-  assert.match(programmingPrompt, /method=\[方法\/函数名\]/);
-  assert.match(programmingPrompt, /line=\[行号\/行号范围，可多段逗号分隔\]/);
+  assert.match(programmingPrompt, /file=- method=- line=-/);
+  assert.match(programmingPrompt, /禁止编造文件、函数或行号/);
+  assert.match(programmingPrompt, /line 只有上下文存在明确行号时填写/);
+  assert.match(programmingPrompt, /file=\[文件路径\|-\]/);
+  assert.match(programmingPrompt, /method=\[方法\/函数名\|-\]/);
+  assert.match(programmingPrompt, /line=\[行号\/行号范围\|-，可多段逗号分隔\]/);
   assert.match(programmingPrompt, /line=10-20,35,48-52/);
   assert.match(programmingPrompt, /编程模式.*file.*method.*line/);
 
@@ -116,11 +119,12 @@ test("summary prompts require file method and multi-segment line only in program
   assert.match(programmingProtocol, /exactly one \[NEXT_ACTION\] text block/);
   assert.match(programmingProtocol, /action=edit\|test\|inspect\|ask_user\|final/);
   assert.match(programmingProtocol, /blocking=true\|false/);
-  assert.match(programmingProtocol, /file=\[file path\]/);
-  assert.match(programmingProtocol, /method=\[method\/function name\]/);
-  assert.match(programmingProtocol, /line=\[line number\/range; comma-separated multi-segments allowed\]/);
-  assert.match(programmingProtocol, /10-20,35,48-52/);
-  assert.match(programmingProtocol, /programming mode.*file.*method.*line/i);
+  assert.match(programmingProtocol, /file=- method=- line=-/);
+  assert.match(programmingProtocol, /never fabricate file\/function\/line/);
+  assert.match(programmingProtocol, /file=\[file path\|-\]/);
+  assert.match(programmingProtocol, /method=\[method\/function name\|-\]/);
+  assert.match(programmingProtocol, /line=\[line number\/range\|-; comma-separated multi-segments allowed\]/);
+  assert.match(programmingProtocol, /file\/method\/line or -/);
 });
 
 test("programming prompts add action-first execution principles only in programming mode", () => {
