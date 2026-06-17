@@ -13,7 +13,9 @@ import {
   LOCALE,
   PLAN_REFINEMENT_TOOL_NAME,
   appendCapabilityLog,
+  clearPendingPlanRefinement,
   ensureHarnessBucket,
+  syncPlanRefinementPolicyFlag,
   translateI18nText,
 } from "./deps.js";
 import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
@@ -45,6 +47,15 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           status: "not_ready",
           tool: PLAN_REFINEMENT_TOOL_NAME,
           reason: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.NOT_READY_REASON),
+        };
+      }
+      if (syncPlanRefinementPolicyFlag(toolCtx, state, toolMeta) !== true) {
+        clearPendingPlanRefinement(state);
+        return {
+          ok: false,
+          status: "disabled",
+          tool: PLAN_REFINEMENT_TOOL_NAME,
+          reason: "plan_refinement_disabled",
         };
       }
       const refinementResult = await runPlanningRefinementBySeparateModel(
@@ -90,6 +101,10 @@ export function ensurePlanRefinementTool(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { state } = holder;
+  if (syncPlanRefinementPolicyFlag(ctx, state, meta) !== true) {
+    clearPendingPlanRefinement(state);
+    return false;
+  }
   if (state?.flags?.planningCaptured !== true) return false;
   const registry = ctx?.agentContext?.payload?.tools?.registry;
   if (!Array.isArray(registry)) return false;

@@ -38,3 +38,8 @@ export { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine
 
 
 export { disableBlockedToolsInRegistry, resolveSceneToolNames } from "../shared/tool-utils.js";
+
+export {
+  clearPendingPlanRefinement,
+  syncPlanRefinementPolicyFlag,
+} from "../shared/workflow/plan-refinement-policy.js";

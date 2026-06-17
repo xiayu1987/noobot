@@ -58,6 +58,9 @@ export function resolvePendingPlanUpdateForWorkflow(state = {}) {
         : [],
     };
   }
+  if (state?.flags?.planRefinementEnabled === false) {
+    return { active: false, stage: "", action: "", reason: "", targetMainStepIndexes: [] };
+  }
   if (pending.planRefinement === true) {
     const context = pending.planRefinementContext && typeof pending.planRefinementContext === "object"
       ? pending.planRefinementContext
