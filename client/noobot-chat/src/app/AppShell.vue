@@ -82,6 +82,29 @@ const thinkingDetailsAllMessages = ref([]);
 const chatNavigatorVisible = ref(true);
 const mobileChatNavigatorVisible = ref(false);
 const currentMessageAnchorId = ref("");
+const mobileChatNavigatorTriggerPosition = ref(loadMobileChatNavigatorTriggerPosition());
+const mobileChatNavigatorTriggerDragging = ref(false);
+const mobileChatNavigatorTriggerMoved = ref(false);
+const mobileChatNavigatorTriggerPointer = {
+  id: null,
+  startX: 0,
+  startY: 0,
+  offsetX: 0,
+  offsetY: 0,
+};
+const MOBILE_CHAT_NAVIGATOR_DRAGGING_CLASS = "noobot-mobile-chat-navigator-dragging";
+
+function preventMobileChatNavigatorDocumentTouch(event) {
+  if (!mobileChatNavigatorTriggerDragging.value) return;
+  event?.preventDefault?.();
+}
+
+function setMobileChatNavigatorDragLock(locked) {
+  document?.documentElement?.classList?.toggle(MOBILE_CHAT_NAVIGATOR_DRAGGING_CLASS, Boolean(locked));
+  document?.body?.classList?.toggle(MOBILE_CHAT_NAVIGATOR_DRAGGING_CLASS, Boolean(locked));
+  if (locked) window?.addEventListener?.("touchmove", preventMobileChatNavigatorDocumentTouch, { passive: false });
+  else window?.removeEventListener?.("touchmove", preventMobileChatNavigatorDocumentTouch, { passive: false });
+}
 
 function safeParseStringArray(rawValue = "") {
   try {
@@ -92,6 +115,116 @@ function safeParseStringArray(rawValue = "") {
   } catch {
     return [];
   }
+}
+
+
+function loadMobileChatNavigatorTriggerPosition() {
+  const defaultPosition = { right: 16, bottom: 112 };
+  try {
+    const rawValue = localStorage.getItem("noobot_mobile_chat_navigator_trigger_position");
+    if (!rawValue) return defaultPosition;
+    const parsed = JSON.parse(rawValue);
+    const left = Number(parsed?.left);
+    const top = Number(parsed?.top);
+    return Number.isFinite(left) && Number.isFinite(top) ? { left, top } : defaultPosition;
+  } catch {
+    return defaultPosition;
+  }
+}
+
+const mobileChatNavigatorTriggerStyle = computed(() => {
+  const position = mobileChatNavigatorTriggerPosition.value || {};
+  if (Number.isFinite(Number(position.left)) && Number.isFinite(Number(position.top))) {
+    return {
+      left: `${Number(position.left)}px`,
+      top: `${Number(position.top)}px`,
+      right: "auto",
+      bottom: "auto",
+    };
+  }
+  return {
+    right: `calc(${Number(position.right ?? 16)}px + env(safe-area-inset-right))`,
+    bottom: `calc(${Number(position.bottom ?? 112)}px + env(safe-area-inset-bottom))`,
+    left: "auto",
+    top: "auto",
+  };
+});
+
+function clampMobileChatNavigatorTriggerPosition(left, top) {
+  const triggerSize = 44;
+  const edgeGap = 8;
+  const viewportWidth = Number(window?.innerWidth || 0);
+  const viewportHeight = Number(window?.innerHeight || 0);
+  return {
+    left: Math.min(Math.max(edgeGap, Number(left || 0)), Math.max(edgeGap, viewportWidth - triggerSize - edgeGap)),
+    top: Math.min(Math.max(edgeGap, Number(top || 0)), Math.max(edgeGap, viewportHeight - triggerSize - edgeGap)),
+  };
+}
+
+function persistMobileChatNavigatorTriggerPosition(position = {}) {
+  try {
+    localStorage.setItem(
+      "noobot_mobile_chat_navigator_trigger_position",
+      JSON.stringify({ left: Math.round(Number(position.left || 0)), top: Math.round(Number(position.top || 0)) }),
+    );
+  } catch {
+    // Ignore storage quota/privacy errors.
+  }
+}
+
+function preventMobileChatNavigatorTriggerGesture(event) {
+  event?.stopPropagation?.();
+  if (event?.cancelable) event.preventDefault?.();
+}
+
+function handleMobileChatNavigatorTriggerPointerDown(event) {
+  if (!isMobile.value || !event?.currentTarget) return;
+  preventMobileChatNavigatorTriggerGesture(event);
+  const rect = event.currentTarget.getBoundingClientRect?.();
+  if (!rect) return;
+  mobileChatNavigatorTriggerDragging.value = true;
+  mobileChatNavigatorTriggerMoved.value = false;
+  mobileChatNavigatorTriggerPointer.id = event.pointerId;
+  mobileChatNavigatorTriggerPointer.startX = event.clientX;
+  mobileChatNavigatorTriggerPointer.startY = event.clientY;
+  mobileChatNavigatorTriggerPointer.offsetX = event.clientX - rect.left;
+  mobileChatNavigatorTriggerPointer.offsetY = event.clientY - rect.top;
+  setMobileChatNavigatorDragLock(true);
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+}
+
+function handleMobileChatNavigatorTriggerPointerMove(event) {
+  if (!mobileChatNavigatorTriggerDragging.value || event.pointerId !== mobileChatNavigatorTriggerPointer.id) return;
+  preventMobileChatNavigatorTriggerGesture(event);
+  const deltaX = Math.abs(event.clientX - mobileChatNavigatorTriggerPointer.startX);
+  const deltaY = Math.abs(event.clientY - mobileChatNavigatorTriggerPointer.startY);
+  if (deltaX > 4 || deltaY > 4) mobileChatNavigatorTriggerMoved.value = true;
+  mobileChatNavigatorTriggerPosition.value = clampMobileChatNavigatorTriggerPosition(
+    event.clientX - mobileChatNavigatorTriggerPointer.offsetX,
+    event.clientY - mobileChatNavigatorTriggerPointer.offsetY,
+  );
+}
+
+function handleMobileChatNavigatorTriggerPointerUp(event) {
+  if (!mobileChatNavigatorTriggerDragging.value || event.pointerId !== mobileChatNavigatorTriggerPointer.id) return;
+  preventMobileChatNavigatorTriggerGesture(event);
+  mobileChatNavigatorTriggerDragging.value = false;
+  mobileChatNavigatorTriggerPointer.id = null;
+  setMobileChatNavigatorDragLock(false);
+  if (mobileChatNavigatorTriggerMoved.value) {
+    persistMobileChatNavigatorTriggerPosition(mobileChatNavigatorTriggerPosition.value);
+    window.setTimeout(() => {
+      mobileChatNavigatorTriggerMoved.value = false;
+    }, 0);
+    return;
+  }
+  mobileChatNavigatorTriggerMoved.value = false;
+  openChatMessageNavigator();
+}
+
+function handleMobileChatNavigatorTriggerClick() {
+  if (mobileChatNavigatorTriggerMoved.value) return;
+  openChatMessageNavigator();
 }
 
 // --- API connection ---
@@ -760,6 +893,7 @@ async function onAppMounted() {
 function onAppUnmounted() {
   removePseudoRoutePopStateListener();
   unbindChatMessageScrollSync();
+  setMobileChatNavigatorDragLock(false);
   releaseAllPreviewUrls();
 }
 
@@ -1043,11 +1177,21 @@ const drawerPanels = computed(() => [
         <el-button
           v-if="isMobile && chatMessageNavItems.length"
           class="mobile-chat-message-nav-trigger"
+          :class="{ 'is-dragging': mobileChatNavigatorTriggerDragging }"
+          :style="mobileChatNavigatorTriggerStyle"
           type="primary"
           circle
           size="large"
           :aria-label="translate('common.chatNavigator')"
-          @click="openChatMessageNavigator"
+          @click="handleMobileChatNavigatorTriggerClick"
+          @pointerdown="handleMobileChatNavigatorTriggerPointerDown"
+          @pointermove="handleMobileChatNavigatorTriggerPointerMove"
+          @pointerup="handleMobileChatNavigatorTriggerPointerUp"
+          @pointercancel="handleMobileChatNavigatorTriggerPointerUp"
+          @touchstart.stop.prevent
+          @touchmove.stop.prevent
+          @touchend.stop.prevent
+          @touchcancel.stop.prevent
         >
           <el-icon class="mobile-chat-message-nav-trigger-icon"><Tickets /></el-icon>
         </el-button>
@@ -1158,6 +1302,7 @@ const drawerPanels = computed(() => [
   overflow: hidden;
   color: var(--noobot-text-main);
   position: relative;
+  overscroll-behavior: none;
 }
 
 .main-content {
@@ -1166,6 +1311,14 @@ const drawerPanels = computed(() => [
   flex-direction: column;
   background: var(--noobot-panel-bg);
   min-width: 0;
+  min-height: 0;
+  overscroll-behavior: none;
+}
+
+.app-shell-root,
+.chat-content-body,
+.chat-composer-body {
+  overscroll-behavior: none;
 }
 
 @media (min-width: 961px) {
@@ -1253,8 +1406,6 @@ const drawerPanels = computed(() => [
 
 .mobile-chat-message-nav-trigger {
   position: fixed;
-  right: max(12px, env(safe-area-inset-right));
-  top: calc(72px + env(safe-area-inset-top));
   z-index: 16;
   width: 44px;
   height: 44px;
@@ -1262,6 +1413,33 @@ const drawerPanels = computed(() => [
   background: var(--noobot-panel-bg);
   color: var(--el-color-primary);
   box-shadow: var(--noobot-card-shadow);
+  touch-action: none;
+  overscroll-behavior: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.mobile-chat-message-nav-trigger.is-dragging {
+  cursor: grabbing;
+  opacity: 0.92;
+}
+
+:global(html.noobot-mobile-chat-navigator-dragging),
+:global(body.noobot-mobile-chat-navigator-dragging) {
+  overscroll-behavior-y: none;
+  touch-action: none;
+}
+
+:global(body.noobot-mobile-chat-navigator-dragging) {
+  overflow: hidden;
+}
+
+:global(body.noobot-mobile-chat-navigator-dragging) .app-shell-root,
+:global(body.noobot-mobile-chat-navigator-dragging) .chat-page,
+:global(body.noobot-mobile-chat-navigator-dragging) .main-content,
+:global(body.noobot-mobile-chat-navigator-dragging) .chat-content-body {
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .mobile-chat-message-nav-trigger-icon {
