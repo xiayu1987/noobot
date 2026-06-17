@@ -22,6 +22,12 @@ function createCtx() {
   };
 }
 
+test("workflow params define plan refinement defaults by scenario mode", () => {
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.full.planning.planRefinement.enabled, true);
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.text.planning.planRefinement.enabled, true);
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.programming.planning.planRefinement.enabled, false);
+});
+
 test("planning result pipeline captures plan text directly", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
@@ -41,6 +47,78 @@ test("planning result pipeline captures plan text directly", async () => {
     ctx.agentContext.payload.harness.state.pending.planRefinementContext.targetMainStepIndexes,
     [1, 2],
   );
+});
+
+test("planning result pipeline disables plan refinement by default in programming scenario", async () => {
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.programming.planning.planRefinement.enabled, false);
+
+  const ctx = createCtx();
+  ctx.runConfig = {
+    scenarioProfile: { key: "programming", name: "编程" },
+  };
+
+  const result = await processPlanningResult(ctx, {}, {
+    source: "after_llm_call",
+    rawText: "1. 解析附件\n2. 执行核心任务",
+    locale: LOCALE.ZH_CN,
+  });
+
+  assert.equal(result.captured, true);
+  assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
+  assert.notEqual(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinementContext, null);
+});
+
+test("planning result pipeline allows explicit plan refinement enablement in programming scenario", async () => {
+  const ctx = createCtx();
+  ctx.runConfig = {
+    scenarioProfile: { key: "programming", name: "编程" },
+  };
+
+  const result = await processPlanningResult(ctx, { harness: { planRefinementEnabled: true } }, {
+    source: "after_llm_call",
+    rawText: "1. 解析附件\n2. 执行核心任务",
+    locale: LOCALE.ZH_CN,
+  });
+
+  assert.equal(result.captured, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.deepEqual(
+    ctx.agentContext.payload.harness.state.pending.planRefinementContext.targetMainStepIndexes,
+    [1, 2],
+  );
+});
+
+test("planning result pipeline honors explicit plan refinement disablement outside programming scenario", async () => {
+  const ctx = createCtx();
+  const result = await processPlanningResult(ctx, { harness: { planRefinementEnabled: false } }, {
+    source: "after_llm_call",
+    rawText: "1. 解析附件\n2. 执行核心任务",
+    locale: LOCALE.ZH_CN,
+  });
+
+  assert.equal(result.captured, true);
+  assert.notEqual(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinementContext, null);
+});
+
+test("planning result pipeline enables plan refinement by default in text scenario", async () => {
+  assert.equal(WORKFLOW_PARAMS.modeThresholds.text.planning.planRefinement.enabled, true);
+
+  const ctx = createCtx();
+  ctx.runConfig = {
+    scenarioProfile: { key: "text", name: "文本" },
+  };
+  const result = await processPlanningResult(ctx, {}, {
+    source: "after_llm_call",
+    rawText: "1. 梳理文本\n2. 输出结果",
+    locale: LOCALE.ZH_CN,
+  });
+
+  assert.equal(result.captured, true);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
+  assert.deepEqual(ctx.agentContext.payload.harness.state.pending.planRefinementContext.targetMainStepIndexes, [1, 2]);
 });
 
 test("planning result pipeline supports ID+PATCH main plan text", async () => {

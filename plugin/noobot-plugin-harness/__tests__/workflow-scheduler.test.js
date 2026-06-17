@@ -91,3 +91,18 @@ test("workflow scheduler hard overflow forced acceptance overrides normal action
     "summary_overflow",
   ]);
 });
+
+test("workflow scheduler skips pending plan refinement when refinement is disabled", () => {
+  const decision = resolveWorkflowActionDecision({
+    pending: {
+      planRefinement: true,
+      planRefinementContext: { targetMainStepIndexes: [1, 2] },
+    },
+    flags: {
+      planningCaptured: true,
+      planRefinementEnabled: false,
+    },
+  });
+
+  assert.notEqual(decision.chosenAction, "plan_update_refinement");
+});

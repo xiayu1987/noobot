@@ -11,8 +11,10 @@ import {
   appendCapabilityLog,
   canAttemptPlanUpdate,
   ensureHarnessBucket,
+  clearPendingPlanRefinement,
   getDefaultTaskOwner,
   setPendingPlanUpdate,
+  syncPlanRefinementPolicyFlag,
   translateI18nText,
 } from "./deps.js";
 import {
@@ -150,7 +152,7 @@ function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
   return true;
 }
 
-function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source = "unknown", summary = "") {
+function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source = "unknown", summary = "", meta = {}) {
   const parsedProtocol = parsePlanningTextProtocol(rawText);
   const normalized = String(parsedProtocol.planText || "").trim();
   if (!normalized) return false;
@@ -201,10 +203,15 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
   }
   state.counters.planningCaptureAttempts = 0;
   state.flags.planningCaptured = true;
+  const planRefinementEnabled = syncPlanRefinementPolicyFlag(ctx, state, meta);
+  if (planRefinementEnabled !== true) {
+    clearPendingPlanRefinement(state);
+  }
   const changedMainStepIndexes = Array.isArray(bucket.lastRevisionChangedMainStepIndexes)
     ? bucket.lastRevisionChangedMainStepIndexes
     : [];
   if (
+    planRefinementEnabled === true &&
     changedMainStepIndexes.length &&
     canAttemptPlanUpdate(ctx, state, { increment: false, stage: "refinement" })
   ) {
@@ -231,7 +238,7 @@ function applyDefaultPlanText(ctx = {}, locale = LOCALE.ZH_CN, reason = "") {
   if (!holder) return false;
   const { bucket, state } = holder;
   const fallbackText = translateI18nText(locale, HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_PLAN_TEXT);
-  const applied = applyPlanText(ctx, bucket, state, fallbackText, "default_plan_text");
+  const applied = applyPlanText(ctx, bucket, state, fallbackText, "default_plan_text", "", {});
   if (!applied) return false;
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
@@ -246,7 +253,7 @@ function applyDefaultPlanText(ctx = {}, locale = LOCALE.ZH_CN, reason = "") {
 
 export async function processPlanningResult(
   ctx = {},
-  _meta = {},
+  meta = {},
   {
     source = "unknown",
     rawText = "",
@@ -260,7 +267,7 @@ export async function processPlanningResult(
   const { bucket, state } = holder;
   const responseText = String(rawText || "").trim();
   if (responseText) {
-    const applied = applyPlanText(ctx, bucket, state, responseText, source);
+    const applied = applyPlanText(ctx, bucket, state, responseText, source, "", meta);
     if (!applied) {
       const attempts = increasePlanningCaptureAttempts(state);
       const shouldRetry = attempts < MAX_PLANNING_CAPTURE_ATTEMPTS;

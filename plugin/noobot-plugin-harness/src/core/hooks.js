@@ -305,6 +305,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                   acceptance: options.acceptance,
                   review: options.review,
                   pendingTtlHookTurns: options.pendingTtlHookTurns,
+                  planRefinementEnabled: options.planRefinementEnabled,
                   runTraceSink: createRunTraceSinkFn(ctx, options),
                 },
               });

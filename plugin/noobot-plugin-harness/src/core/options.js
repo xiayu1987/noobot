@@ -79,6 +79,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
 const HarnessOptionsSchema = z
   .object({
     planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
+    planRefinementEnabled: z.boolean().optional(),
+    enablePlanRefinement: z.boolean().optional(),
     summaryOnToolBurstThreshold: z.boolean().default(DEFAULT_OPTIONS.summaryOnToolBurstThreshold),
     enableToolBurstSummary: z.boolean().optional(),
     summaryDetailSaveToAttachment: z.boolean().default(DEFAULT_OPTIONS.summaryDetailSaveToAttachment),
@@ -92,6 +94,7 @@ const HarnessOptionsSchema = z
     miniRunnerToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.miniRunnerToolAllowlist),
     acceptance: z.record(z.any()).optional(),
     review: z.record(z.any()).optional(),
+    planning: z.record(z.any()).optional(),
     pendingTtlHookTurns: z.coerce.number().int().finite().nonnegative().default(DEFAULT_OPTIONS.pendingTtlHookTurns),
     manifestDebounceMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
     jsonlBatchSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlBatchSize),
@@ -159,8 +162,25 @@ function normalizeModelByPurpose(...items) {
   return out;
 }
 
+function resolveExplicitPlanRefinementEnabledOption(source = {}) {
+  if (!source || typeof source !== "object") return undefined;
+  const candidates = [
+    source.planRefinementEnabled,
+    source.enablePlanRefinement,
+    source.planRefinement?.enabled,
+    source.refinement?.enabled,
+    source.planning?.refinement?.enabled,
+    source.planning?.planRefinement?.enabled,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "boolean") return candidate;
+  }
+  return undefined;
+}
+
 export function normalizeOptions(userOptions = {}, api = {}) {
   const merged = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
+  const planRefinementEnabled = resolveExplicitPlanRefinementEnabledOption(merged);
   const hasCustomFlushStrategy =
     (userOptions &&
       typeof userOptions === "object" &&
@@ -204,6 +224,7 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       safe.summaryDetailSaveToAttachment === true || safe.saveSummaryDetailToAttachment === true,
     saveSummaryDetailToAttachment:
       safe.summaryDetailSaveToAttachment === true || safe.saveSummaryDetailToAttachment === true,
+    planRefinementEnabled,
     capabilityModelInvoker:
       typeof safe.capabilityModelInvoker === "function" ? safe.capabilityModelInvoker : null,
     capabilityModelByPurpose,
