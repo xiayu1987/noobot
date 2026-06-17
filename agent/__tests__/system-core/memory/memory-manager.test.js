@@ -142,6 +142,37 @@ test("long memory update applies L/M patch commands", async () => {
   assert.match(metadataDoc, /M1 key="communication_style" value="concise"/);
 });
 
+test("long memory update materializes metadata-only patches into long-memory.md", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const userId = "admin";
+  const userRoot = path.join(workspaceRoot, userId);
+  await mkdir(path.join(userRoot, "memory"), { recursive: true });
+
+  const service = new MemoryManager({ workspaceRoot });
+  const changed = await service.longMemory.update(
+    userRoot,
+    [
+      'ADD M[1] key="interests" value="工具测试与验证"',
+      'ADD M[2] key="personality" value="偏好先复现再修复"',
+    ].join("\n"),
+  );
+  assert.equal(changed, true);
+
+  const longMemoryDoc = await readFile(
+    path.join(userRoot, "memory/long-memory.md"),
+    "utf8",
+  );
+  assert.match(String(longMemoryDoc || ""), /1\. interests: 工具测试与验证/);
+  assert.match(String(longMemoryDoc || ""), /2\. personality: 偏好先复现再修复/);
+
+  const metadataDoc = await readFile(
+    path.join(userRoot, "memory/long-memory/metadata.md"),
+    "utf8",
+  );
+  assert.match(metadataDoc, /M1 key="interests" value="工具测试与验证"/);
+  assert.match(metadataDoc, /M2 key="personality" value="偏好先复现再修复"/);
+});
+
 test("captureSessionToShortMemory skips injected messages", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
   const userId = "admin";

@@ -94,6 +94,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         "UPDATE M[metadataId] key=\"field\" value=\"value\"",
         "DELETE M[metadataId]",
         "Hard constraint: L/M IDs must be positive integers; UPDATE/DELETE must reuse existing IDs; ADD must use an unused ID.",
+        "Hard constraint: long-memory body content must be written through L commands; M commands are only auxiliary retrieval/classification metadata, so do not output M commands without corresponding L memories.",
         "Memory rules: record only stable, long-term, reusable information; do not store temporary tasks, one-off errors, short-term schedules, or unsupported guesses; use UPDATE when new information corrects old information, DELETE when old information expires or is denied, and do not duplicate near-equivalent memories.",
         'Based on "existing long-term memory", "long-memory metadata", and "new short-term memory chunks", output ID+PATCH updates.',
         `Existing long-term preferences:\n${existingLongMemory}`,
