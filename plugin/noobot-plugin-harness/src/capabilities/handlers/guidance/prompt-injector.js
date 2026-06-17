@@ -26,11 +26,12 @@ import {
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
-export function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", { includeMarker = false } = {}) {
+export function buildGuidancePromptContent(locale = LOCALE.ZH_CN, reason = "", { includeMarker = false, programmingMode = false } = {}) {
   return buildGuidanceFailurePromptText({
     locale,
     marker: includeMarker ? getGuidanceMarker(locale) : "",
     reason,
+    programmingMode,
   });
 }
 
@@ -95,7 +96,9 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto" }
     if (!userInjection.injected) return false;
     injectMessageWithPolicy(ctx, {
       role: "user",
-      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary"),
+      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
+        programmingMode: resolveProgrammingModeFromContext(ctx),
+      }),
       injectedMessageType: "guidance_summary_responsibility_constraint",
       injectAt: "append",
       dedupe: false,
@@ -115,7 +118,10 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto" }
   const reason = state.pending.guidance;
   injectMessageWithPolicy(ctx, {
     role: "system",
-    content: buildGuidancePromptContent(locale, reason, { includeMarker: true }),
+    content: buildGuidancePromptContent(locale, reason, {
+      includeMarker: true,
+      programmingMode: resolveProgrammingModeFromContext(ctx),
+    }),
     injectedMessageType: `guidance_failure:${String(reason || "").trim() || "unknown"}`,
     injectAt: "prepend",
     avoidBreakToolCallContinuity: true,

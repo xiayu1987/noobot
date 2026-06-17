@@ -24,6 +24,7 @@ import {
 import {
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildPlanningMainPrompt,
+  resolveProgrammingModeFromContext,
   getPlanningContextSummaryHeader,
   getPlanningPromptMarker,
   getPlanningPromptToolsHeader,
@@ -163,6 +164,7 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
     locale,
     marker: getPlanningPromptMarker(locale),
     data: { userGoal },
+    programmingMode: resolveProgrammingModeFromContext(_ctx),
   });
 }
 
@@ -242,7 +244,9 @@ export function buildPlanningMessagePlan(
       kind: "planning_responsibility_constraint",
       injectRole: "user",
       separateRole: "task",
-      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "planning"),
+      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "planning", {
+        programmingMode: resolveProgrammingModeFromContext(ctx),
+      }),
     },
   ]);
 }

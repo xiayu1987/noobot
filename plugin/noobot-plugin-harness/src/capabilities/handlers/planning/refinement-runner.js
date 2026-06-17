@@ -27,6 +27,7 @@ import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-cont
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
+  resolveProgrammingModeFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   formatOperationDirectoryForRelay,
@@ -108,7 +109,9 @@ export async function runPlanningRefinementBySeparateModel(
     agentMessages,
     task: refinementTask,
     postTaskMessages: [
-      buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement"),
+      buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
+        programmingMode: resolveProgrammingModeFromContext(ctx),
+      }),
     ],
   });
 

@@ -93,9 +93,13 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     RESPONSIBILITY_STAGE_PHASE_ACCEPTANCE: "responsibilityStagePhaseAcceptance",
     RESPONSIBILITY_STAGE_FINAL_ACCEPTANCE: "responsibilityStageFinalAcceptance",
     RESPONSIBILITY_CONSTRAINT_TEMPLATE: "responsibilityConstraintTemplate",
+    PROGRAMMING_EXECUTION_PRINCIPLES: "programmingExecutionPrinciples",
+    PROGRAMMING_RISK_TAXONOMY: "programmingRiskTaxonomy",
     GUIDANCE_FAILURE_PROMPT_TEMPLATE: "guidanceFailurePromptTemplate",
     PLANNING_LATEST_USER_GOAL_FALLBACK: "planningLatestUserGoalFallback",
     PLANNING_MAIN_PROMPT_GOAL: "planningMainPromptGoal",
+    PLANNING_MAIN_PROMPT_GOAL_PROGRAMMING_FAST:
+      "planningMainPromptGoalProgrammingFast",
     PLANNING_MAIN_USER_GOAL_HEADER: "planningMainUserGoalHeader",
     PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL: "planningMainCurrentTaskGoalProtocol",
     PLANNING_MAIN_CONSTRAINT: "planningMainConstraint",
@@ -126,6 +130,8 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     GUIDANCE_SUMMARY_DETAIL_HEADER: "guidanceSummaryDetailHeader",
     GUIDANCE_SUMMARY_DETAIL_SAMPLE: "guidanceSummaryDetailSample",
     GUIDANCE_SUMMARY_NEXT_SUGGESTION_SAMPLE: "guidanceSummaryNextSuggestionSample",
+    GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_SAMPLE: "guidanceSummaryProgrammingNextActionSample",
+    GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_RULES: "guidanceSummaryProgrammingNextActionRules",
     GUIDANCE_SUMMARY_RULES: "guidanceSummaryRules",
     PREVIOUS_SUMMARY_CONTEXT_HEADER: "previousSummaryContextHeader",
     ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER: "acceptanceMainPlanContextHeader",
@@ -408,6 +414,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStageFinalAcceptance: "总体验收",
     responsibilityConstraintTemplate:
       "职责约束：你当前仅负责「{stage}」。只做该职责范围内的事，禁止越权。",
+    programmingExecutionPrinciples:
+      "编程执行原则：\n1. 默认不要等待所有风险点解除。\n2. 对可逆代码改动，优先小步修改并立即验证。\n3. 未知点应转化为验证动作，而不是长期阻塞。\n4. 只有不可逆、安全、生产数据、凭证、破坏性操作、需求冲突才需要停下确认。\n5. 每轮最多解决一个最小闭环：修改 -> 验证 -> 修正。",
+    programmingRiskTaxonomy:
+      "编程风险分级：\nA. Blocking risk（必须停）：破坏性/不可逆、安全/密钥/权限、生产数据/生产配置、破坏公开 API、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止代码修改；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先改但必须验证）：调用链不确定、测试可能失败、边界条件不全、类型/构建可能报错。不得阻塞最小可逆修改；必须转成 npm test/lint/build/相关测试等验证动作。\nC. Informational risk（只记录不阻塞）：命名风格、未来重构、更优雅方案等；只记录，不得阻塞执行。",
     guidanceFailurePromptTemplate:
       "工具失败达到阈值({reason})，请分析工具失败原因，并且给予修复建议。",
     acceptanceMainPlanContextHeader: "计划清单上下文如下（验收时必须完整对齐）：",
@@ -423,6 +433,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "小结清单 #{index}/{total}（阶段验收时必须参考）：",
     planningMainPromptGoal:
       "目标：根据用户需求生成宏观主计划。仅限宏观步骤，严禁输出任何子计划或实施细节。",
+    planningMainPromptGoalProgrammingFast:
+      "目标：生成用于编程执行的最小可执行计划切片。不要试图一次性解除所有风险，也不要等待所有不确定性消失；除非涉及不可逆操作、数据删除、安全凭证、生产发布、生产数据或需求冲突，否则默认采用 小步修改 -> 验证 -> 修正 的闭环，优先进行最小可逆代码修改，然后运行最小验证，再根据结果继续修正。计划应倾向于：找到最相关入口 -> 做最小可逆修改 -> 运行局部测试/构建 -> 根据失败信息修正 -> 最后补充验收说明。",
     planningMainUserGoalHeader: "【用户目标】",
     planningMainCurrentTaskGoalProtocol:
       "在计划 patch 行之前，必须用以下文本协议输出当前任务目标：[CURRENT_TASK_GOAL]\\n<由计划模型提炼的一句话当前任务目标>\\n[PLAN]",
@@ -469,6 +481,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryDetailSample: "- 证据/日志/风险分析 ...",
     guidanceSummaryNextSuggestionSample:
       "- 下一步优先执行最高优先级的未完成/风险计划项，并给出可验证动作。",
+    guidanceSummaryProgrammingNextActionSample:
+      "[NEXT_ACTION]\naction = edit|test|inspect|ask_user|final\ntarget = 文件路径/命令/问题\nreason = 简短原因\nblocking = true|false",
+    guidanceSummaryProgrammingNextActionRules:
+      "编程模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 edit、test、inspect、ask_user、final 之一；target 必须是具体文件路径、命令或需要询问用户的问题；reason 必须简短；blocking=true 仅用于不可逆、安全、生产数据、凭证、破坏性操作或需求冲突，否则用 blocking=false 并继续小步执行。",
     guidanceSummaryRules:
       "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结必须整合上一轮小结结果：仍有效的已完成事项、进行中事项、风险、待办和证据都要保留或更新，不得遗漏；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节；SUMMARY_DETAIL 后必须输出 [NEXT_EXECUTION_SUGGESTION]，集中给出下一步可执行建议。",
     previousSummaryContextHeader: "【上一次小结】",
@@ -516,7 +532,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryProgrammingLine4:
       "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径] method=[方法/函数名] line=[行号/行号范围，可多段逗号分隔] [小结内容]",
     protocolSummaryProgrammingLine6:
-      "编程模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION] 集中给出下一步执行建议；涉及代码、文件变更、测试结果或定位证据时必须写明 file、method 与 line（line 支持多段，如 10-20,35,48-52）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、下一步执行建议、文件、方法、行号与问题说明。小结后请继续任务。",
+      "编程模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=edit|test|inspect|ask_user|final，target=文件路径/命令/问题，reason=简短原因，blocking=true|false）；涉及代码、文件变更、测试结果或定位证据时必须写明 file、method 与 line（line 支持多段，如 10-20,35,48-52）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、文件、方法、行号与问题说明。小结后请继续任务。",
     protocolAcceptanceTitlePhase:
       "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
     protocolAcceptanceTitleFinal:
@@ -622,6 +638,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStageFinalAcceptance: "final acceptance",
     responsibilityConstraintTemplate:
       "Responsibility constraint: You are only responsible for {stage}. Do only this scope; do not perform out-of-scope tasks.",
+    programmingExecutionPrinciples:
+      "Programming execution principles:\n1. By default, do not wait until every risk is eliminated.\n2. For reversible code changes, prefer a small edit and immediate verification.\n3. Convert unknowns into verification actions instead of long-term blockers.\n4. Stop for confirmation only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks.\n5. Each round should complete at most one minimal loop: edit -> verify -> fix.",
+    programmingRiskTaxonomy:
+      "Programming risk taxonomy:\nA. Blocking risk (must stop): destructive/irreversible changes, security/secrets/permissions, production data/config, breaking public APIs, unresolvable requirement conflicts, or costly unverifiable changes. Only this class may block code edits; convert it to ask_user or an explicit blocking note.\nB. Managed risk (edit then verify): uncertain call chain, likely test failure, incomplete edge cases, or type/build risk. Do not block the smallest reversible edit; convert it to npm test/lint/build/targeted-test verification.\nC. Informational risk (record only): naming style, future refactor, or more elegant design; record only, never block execution.",
     guidanceFailurePromptTemplate:
       "Guidance triggered by tool failure threshold ({reason}). Please analyze the causes of tool failures and provide suggestions for fixes.",
     acceptanceMainPlanContextHeader:
@@ -638,6 +658,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "Summary checklist #{index}/{total} (must be considered during phase acceptance):",
     planningMainPromptGoal:
       "Goal: Generate a high-level main plan from the user goal. Only high-level steps; no sub-steps or implementation details.",
+    planningMainPromptGoalProgrammingFast:
+      "Goal: generate the smallest executable plan slice for programming work. Do not try to eliminate every risk at once, and do not wait until every uncertainty is gone; unless the task involves irreversible operations, data deletion, security credentials, production release, production data, or requirement conflicts, default to the small edit -> verify -> fix loop: make the smallest reversible code change, run the smallest verification, then continue based on the result. The plan should prefer: find the most relevant entry point -> make the smallest reversible edit -> run local tests/build -> fix based on failures -> add final acceptance notes.",
     planningMainUserGoalHeader: "[User Goal]",
     planningMainCurrentTaskGoalProtocol:
       "Before plan patch lines, output the current task goal using this text protocol: [CURRENT_TASK_GOAL]\\n<one concise current task goal synthesized by the planning model>\\n[PLAN]",
@@ -680,6 +702,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryDetailSample: "- evidence / logs / risk analysis ...",
     guidanceSummaryNextSuggestionSample:
       "- Next, execute the highest-priority unfinished/risky plan item with concrete verification.",
+    guidanceSummaryProgrammingNextActionSample:
+      "[NEXT_ACTION]\naction = edit|test|inspect|ask_user|final\ntarget = file path/command/question\nreason = brief reason\nblocking = true|false",
+    guidanceSummaryProgrammingNextActionRules:
+      "In programming mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of edit, test, inspect, ask_user, final; target must be a concrete file path, command, or user-facing question; reason must be brief; use blocking=true only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks; otherwise use blocking=false and continue the small-step execution loop.",
     guidanceSummaryRules:
       "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; this summary must integrate the previous summary results: keep or update all still-valid completed items, in-progress items, risks, todos, and evidence without omissions; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer; after SUMMARY_DETAIL, output [NEXT_EXECUTION_SUGGESTION] with centralized actionable next execution suggestions.",
     previousSummaryContextHeader: "[Previous Summary]",
@@ -728,7 +754,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryProgrammingLine4:
       "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path] method=[method/function name] line=[line number/range; comma-separated multi-segments allowed] [summary content]",
     protocolSummaryProgrammingLine6:
-      "In programming mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL with centralized next execution suggestions; when code, file changes, test results, or location evidence is involved, include file, method, and line (comma-separated multi-segments such as 10-20,35,48-52 are accepted). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, next execution suggestion, file, method, line, and issue notes. Then continue with the task.",
+      "In programming mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=edit|test|inspect|ask_user|final, target=file path/command/question, reason=brief reason, blocking=true|false); when code, file changes, test results, or location evidence is involved, include file, method, and line (comma-separated multi-segments such as 10-20,35,48-52 are accepted). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, file, method, line, and issue notes. Then continue with the task.",
     protocolAcceptanceTitlePhase:
       "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
     protocolAcceptanceTitleFinal:

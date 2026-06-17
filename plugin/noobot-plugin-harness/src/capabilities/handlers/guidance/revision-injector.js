@@ -37,6 +37,7 @@ import {
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
+  resolveProgrammingModeFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   formatOperationDirectoryForRelay,
@@ -149,6 +150,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
     content: buildWorkflowResponsibilityConstraintUserPrompt(
       locale,
       pendingData.stage === "revision" ? "revision" : "refinement",
+      { programmingMode: resolveProgrammingModeFromContext(ctx) },
     ),
     injectedMessageType: pendingData.stage === "revision"
       ? "planning_revision_responsibility_constraint"
