@@ -404,7 +404,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
           changed = result || changed;
           executedPrimary = result === true || executedPrimary;
         } else {
-          const result = maybeInjectPhaseAcceptancePrompt(ctx) || false;
+          const result = maybeInjectPhaseAcceptancePrompt(ctx, meta) || false;
           changed = result || changed;
           executedPrimary = result === true || executedPrimary;
         }
@@ -412,7 +412,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
         point === "before_llm_call" &&
         decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceSemanticValidation
       ) {
-        const result = maybeInjectAcceptanceSemanticValidationPrompt(ctx) || false;
+        const result = maybeInjectAcceptanceSemanticValidationPrompt(ctx, meta) || false;
         changed = result || changed;
         executedPrimary = result === true || executedPrimary;
       }

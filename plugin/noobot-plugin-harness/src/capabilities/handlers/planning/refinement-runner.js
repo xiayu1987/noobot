@@ -27,7 +27,9 @@ import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-cont
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
+  resolveExecutionFirstModeFromContext,
   resolveProgrammingModeFromContext,
+  resolveWorkflowStrategyFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   formatOperationDirectoryForRelay,
@@ -65,6 +67,9 @@ export async function runPlanningRefinementBySeparateModel(
     return { applied: false, status: "invoker_missing" };
   }
   const locale = state?.locale || LOCALE.ZH_CN;
+  const programmingMode = resolveProgrammingModeFromContext(ctx);
+  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
   const explicitTargetIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
     : [];
@@ -110,7 +115,9 @@ export async function runPlanningRefinementBySeparateModel(
     task: refinementTask,
     postTaskMessages: [
       buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
-        programmingMode: resolveProgrammingModeFromContext(ctx),
+        programmingMode,
+        workflowStrategy,
+        executionFirstMode,
       }),
     ],
   });

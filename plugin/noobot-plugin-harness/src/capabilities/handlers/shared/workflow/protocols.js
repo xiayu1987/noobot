@@ -75,16 +75,25 @@ function resolveSummaryPatchProtocolOptions(input = LOCALE.ZH_CN) {
     return {
       locale: resolveLocale(input.locale),
       programmingMode: input.programmingMode === true || input.isProgrammingMode === true,
+      executionFirstMode: input.executionFirstMode === true || input.isExecutionFirstMode === true,
+      riskFirstMode: input.riskFirstMode === true || input.isRiskFirstMode === true,
     };
   }
   return {
     locale: resolveLocale(input),
     programmingMode: false,
+    executionFirstMode: false,
+    riskFirstMode: false,
   };
 }
 
 export function buildSummaryPatchProtocolText(options = LOCALE.ZH_CN) {
-  const { locale: normalizedLocale, programmingMode } = resolveSummaryPatchProtocolOptions(options);
+  const {
+    locale: normalizedLocale,
+    programmingMode,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveSummaryPatchProtocolOptions(options);
   const summaryLine3 = programmingMode
     ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_LINE3
     : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE3;
@@ -93,7 +102,11 @@ export function buildSummaryPatchProtocolText(options = LOCALE.ZH_CN) {
     : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE4;
   const summaryLine6 = programmingMode
     ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_LINE6
-    : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE6;
+    : executionFirstMode
+      ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_EXECUTION_FIRST_LINE6
+      : riskFirstMode
+        ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_RISK_FIRST_LINE6
+      : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE6;
   return [
     translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE1),
     translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE2),

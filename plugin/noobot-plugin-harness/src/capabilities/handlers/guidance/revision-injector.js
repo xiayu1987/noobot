@@ -37,7 +37,10 @@ import {
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
+  resolveExecutionFirstModeFromContext,
   resolveProgrammingModeFromContext,
+  resolveRiskFirstModeFromContext,
+  resolveWorkflowStrategyFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   formatOperationDirectoryForRelay,
@@ -107,7 +110,7 @@ export function schedulePlanUpdateByInject(
   });
 }
 
-export function maybeInjectPlanUpdatePrompt(ctx = {}) {
+export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -116,6 +119,10 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
+  const programmingMode = resolveProgrammingModeFromContext(ctx);
+  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
+  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
   const systemChecklistContent = buildPlanChecklistSystemContent({
     locale,
     planText: bucket?.planText || "",
@@ -150,7 +157,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}) {
     content: buildWorkflowResponsibilityConstraintUserPrompt(
       locale,
       pendingData.stage === "revision" ? "revision" : "refinement",
-      { programmingMode: resolveProgrammingModeFromContext(ctx) },
+      { programmingMode, workflowStrategy, executionFirstMode, riskFirstMode },
     ),
     injectedMessageType: pendingData.stage === "revision"
       ? "planning_revision_responsibility_constraint"
