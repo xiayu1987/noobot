@@ -142,6 +142,13 @@ export class SessionTurnPersister {
     transferResult = null,
     transferEnvelope = null,
     transferEnvelopes = [],
+    isMonotonic = false,
+    monotonic = false,
+    monotonicState = "",
+    stopState = "",
+    state = "",
+    status = "",
+    channelState = "",
   }) {
     const sessionAttachmentMetas = filterSessionAttachmentMetas(attachmentMetas);
     const sessionContent =
@@ -211,6 +218,13 @@ export class SessionTurnPersister {
       ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
       ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
+      isMonotonic: isMonotonic === true,
+      monotonic: monotonic === true,
+      monotonicState: String(monotonicState || "").trim(),
+      stopState: String(stopState || "").trim(),
+      state: String(state || "").trim(),
+      status: String(status || "").trim(),
+      channelState: String(channelState || "").trim(),
       modelResponseMetadata:
         modelResponseMetadata &&
         typeof modelResponseMetadata === "object" &&
@@ -264,6 +278,13 @@ export class SessionTurnPersister {
       ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
       ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
+      isMonotonic,
+      monotonic,
+      monotonicState,
+      stopState,
+      state,
+      status,
+      channelState,
     });
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
   }
@@ -367,6 +388,14 @@ export class SessionTurnPersister {
   } = {}) {
     const content = (partialAssistant?.content ?? "").trim();
     const dialogProcessId = resolveMessageDialogProcessId(partialAssistant);
+    await this.session?.markUserMessageMonotonic?.({
+      userId,
+      sessionId,
+      parentSessionId,
+      dialogProcessId,
+      state: "stopped",
+      stopState: "stopped",
+    });
     if (!userId || !sessionId || !content || !dialogProcessId) return false;
     const sessionBundle = await this.session.getSessionBundle({
       userId,
@@ -393,6 +422,13 @@ export class SessionTurnPersister {
       parentDialogProcessId,
       modelAlias: (partialAssistant?.modelAlias ?? "").trim(),
       modelName: (partialAssistant?.modelName ?? "").trim(),
+      isMonotonic: true,
+      monotonic: true,
+      monotonicState: "monotonic",
+      stopState: "stopped",
+      state: "stopped",
+      status: "stopped",
+      channelState: "stopped",
       eventListener: null,
     });
     return true;

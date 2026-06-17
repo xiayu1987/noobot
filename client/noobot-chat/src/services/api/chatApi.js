@@ -98,6 +98,36 @@ export async function getWorkflowSessionDetailApi(
   );
 }
 
+export async function deleteSessionMessagesFromApi(
+  {
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    anchor = {},
+    expectedVersion = undefined,
+    idempotencyKey = "",
+  },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const body = {
+    parentSessionId: String(parentSessionId || "").trim(),
+    anchor: anchor && typeof anchor === "object" && !Array.isArray(anchor) ? anchor : {},
+    idempotencyKey: String(idempotencyKey || "").trim(),
+  };
+  if (expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "") {
+    body.expectedVersion = expectedVersion;
+  }
+  return runFetch(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/messages/delete-from`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
 export async function deleteSessionApi(
   { userId = "", sessionId = "" },
   { fetcher } = {},

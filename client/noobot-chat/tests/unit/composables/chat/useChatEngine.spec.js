@@ -573,4 +573,275 @@ describe("useChatEngine", () => {
       response: "post_action_notice_ack",
     });
   });
+
+  it("prepareMonotonicMessageAction stops first and waits until sending settles", async () => {
+    vi.useFakeTimers();
+    const { engine, deps, sending, activeSession } = createHarness({
+      sessionId: "local-monotonic-stop",
+      deps: {
+        monotonicActionStopTimeoutMs: 500,
+        monotonicActionStopPollIntervalMs: 10,
+      },
+    });
+    activeSession.value.messages.push({
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      pending: true,
+      dialogProcessId: "dp-stop",
+    });
+    sending.value = true;
+    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
+      setTimeout(onForceStop, 20);
+      return true;
+    });
+
+    const actionPromise = engine.prepareMonotonicMessageAction();
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30);
+    await expect(actionPromise).resolves.toBe(true);
+    expect(sending.value).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("prepareMonotonicMessageAction warns and rejects when stop does not settle", async () => {
+    vi.useFakeTimers();
+    const notify = vi.fn();
+    const { engine, deps, sending } = createHarness({
+      sessionId: "local-monotonic-timeout",
+      deps: {
+        notify,
+        monotonicActionStopTimeoutMs: 30,
+        monotonicActionStopPollIntervalMs: 10,
+      },
+    });
+    sending.value = true;
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
+
+    const actionPromise = engine.prepareMonotonicMessageAction();
+    const rejectionExpectation = expect(actionPromise).rejects.toThrow(
+      "chat.monotonicActionStopTimeout",
+    );
+    await vi.advanceTimersByTimeAsync(40);
+
+    await rejectionExpectation;
+    expect(notify).toHaveBeenCalledWith({
+      type: "warning",
+      message: "chat.monotonicActionStopTimeout",
+    });
+    expect(sending.value).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("cascadeDeleteMessagesFrom resolves assistant target to user message and removes the user turn", () => {
+    const { engine, activeSession } = createHarness({ sessionId: "local-cascade" });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    const tail = { id: "m3", role: RoleEnum.USER, content: "tail" };
+    activeSession.value.messages = [first, target, tail];
+    activeSession.value.rawMessages = [first, target, tail];
+    activeSession.value.messageCount = 3;
+    activeSession.value.lastMessage = tail;
+
+    expect(engine.cascadeDeleteMessagesFrom(target)).toBe(true);
+
+    expect(activeSession.value.messages).toEqual([]);
+    expect(activeSession.value.rawMessages).toEqual([]);
+    expect(activeSession.value.messageCount).toBe(0);
+    expect(activeSession.value.lastMessage).toBe(null);
+    expect(activeSession.value.updatedAt).toBeTruthy();
+  });
+
+  it("deleteMonotonicMessage stops before cascading deletion from resolved user message", async () => {
+    const { engine, activeSession, sending, deps } = createHarness({ sessionId: "local-delete" });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    sending.value = true;
+    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
+      onForceStop();
+      return true;
+    });
+
+    await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
+
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
+    expect(activeSession.value.messages).toEqual([]);
+  });
+
+  it("resendMonotonicMessage stops, cascades deletion, then sends edited content", async () => {
+    const stream = vi.fn(async () => {});
+    const { engine, activeSession, sending, deps, input } = createHarness({
+      sessionId: "local-resend",
+      stream,
+    });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    sending.value = true;
+    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onForceStop) => {
+      onForceStop();
+      return true;
+    });
+
+    await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
+
+    expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0][0].message).toBe("edited question");
+    expect(activeSession.value.messages[0]).toEqual(expect.objectContaining({
+      role: RoleEnum.USER,
+      content: "edited question",
+    }));
+    expect(input.value).toBe("");
+  });
+
+
+  it("deleteMonotonicMessage resolves assistant dialogId to user anchor and applies backend snapshot", async () => {
+    const backendSession = makeSession("local-delete-api", {
+      messages: [{ id: "m1", role: RoleEnum.USER, content: "first" }],
+      rawMessages: [{ id: "m1", role: RoleEnum.USER, content: "first" }],
+      messageCount: 1,
+      version: 3,
+    });
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      session: backendSession,
+      deletedCount: 2,
+      anchorIndex: 1,
+      version: 3,
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-delete-api",
+      deps: { deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const first = { dialogId: "dp-legacy", role: RoleEnum.USER, content: "first" };
+    const target = { dialogId: "dp-legacy", role: RoleEnum.ASSISTANT, content: "target" };
+    const tail = { id: "m3", role: RoleEnum.USER, content: "tail" };
+    activeSession.value.messages = [first, target, tail];
+    activeSession.value.rawMessages = [first, target, tail];
+    activeSession.value.version = 2;
+
+    await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
+
+    expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(expect.objectContaining({
+      anchor: { dialogProcessId: "dp-legacy" },
+      expectedVersion: 2,
+    }), expect.any(Object));
+    expect(applySessionDetail).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: "local-delete-api",
+      sessions: [expect.objectContaining({
+        sessionId: "local-delete-api",
+        messages: backendSession.messages,
+      })],
+    }), { preserveCurrentMessages: false });
+    expect(activeSession.value.messages).toHaveLength(1);
+  });
+
+  it("deleteMonotonicMessage does not locally delete when backend returns failure", async () => {
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({ ok: false, status: 409 }));
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-delete-api-fail",
+      deps: { deleteSessionMessagesFromApi },
+    });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    activeSession.value.version = 2;
+
+    await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(false);
+
+    expect(activeSession.value.messages).toEqual([first, target]);
+  });
+
+  it("resendMonotonicMessage does not send when backend delete fails", async () => {
+    const stream = vi.fn(async () => {});
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({ ok: false, status: 404 }));
+    const { engine, activeSession, input } = createHarness({
+      sessionId: "local-resend-api-fail",
+      stream,
+      deps: { deleteSessionMessagesFromApi },
+    });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    input.value = "draft before resend";
+
+    await expect(engine.resendMonotonicMessage(target, "edited retry text")).resolves.toBe(false);
+
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([first, target]);
+    expect(input.value).toBe("draft before resend");
+  });
+
+
+  it("deleteMonotonicMessage does not delete when stop precondition fails", async () => {
+    vi.useFakeTimers();
+    const { engine, activeSession, sending } = createHarness({ sessionId: "local-delete-fail" });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    sending.value = true;
+    const actionPromise = engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 });
+    const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
+    await vi.advanceTimersByTimeAsync(25);
+    await rejectionExpectation;
+    expect(activeSession.value.messages).toEqual([first, target]);
+    expect(activeSession.value.rawMessages).toEqual([first, target]);
+    vi.useRealTimers();
+  });
+
+  it("resendMonotonicMessage does not delete or send when stop precondition fails", async () => {
+    vi.useFakeTimers();
+    const stream = vi.fn(async () => {});
+    const { engine, activeSession, sending, input } = createHarness({ sessionId: "local-resend-fail", stream });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    sending.value = true;
+    const actionPromise = engine.resendMonotonicMessage(target, "edited", { timeoutMs: 20, pollIntervalMs: 5 });
+    const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
+    await vi.advanceTimersByTimeAsync(25);
+    await rejectionExpectation;
+    expect(activeSession.value.messages).toEqual([first, target]);
+    expect(stream).not.toHaveBeenCalled();
+    expect(input.value).toBe("hello");
+    vi.useRealTimers();
+  });
+
+  it("resendMonotonicMessage rolls back cascade deletion when send fails", async () => {
+    const stream = vi.fn(async () => {
+      throw new Error("network failed");
+    });
+    const { engine, activeSession, input } = createHarness({ sessionId: "local-resend-send-fail", stream });
+    const first = { id: "m1", role: RoleEnum.USER, content: "first" };
+    const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
+    activeSession.value.messages = [first, target];
+    activeSession.value.rawMessages = [first, target];
+    activeSession.value.messageCount = 2;
+    activeSession.value.lastMessage = target;
+    activeSession.value.updatedAt = "before";
+    input.value = "draft before resend";
+
+    await expect(engine.resendMonotonicMessage(target, "edited retry text")).resolves.toBe(false);
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(activeSession.value.messages).toEqual([first, target]);
+    expect(activeSession.value.rawMessages).toEqual([first, target]);
+    expect(activeSession.value.messageCount).toBe(2);
+    expect(activeSession.value.lastMessage).toStrictEqual(target);
+    expect(activeSession.value.updatedAt).toBe("before");
+    expect(input.value).toBe("draft before resend");
+  });
+
 });

@@ -20,6 +20,9 @@ const props = defineProps({
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
+  sending: { type: Boolean, default: false },
+  deleteMonotonicMessage: { type: Function, default: null },
+  resendMonotonicMessage: { type: Function, default: null },
   emptyLogoSrc: { type: String, default: "" },
 });
 
@@ -34,6 +37,9 @@ const messageItemSharedProps = computed(() => ({
   formatTime: props.formatTime,
   formatFileSize: props.formatFileSize,
   isImageMime: props.isImageMime,
+  sending: props.sending,
+  deleteMonotonicMessage: props.deleteMonotonicMessage,
+  resendMonotonicMessage: props.resendMonotonicMessage,
 }));
 
 function setScrollTop(top = 0) {

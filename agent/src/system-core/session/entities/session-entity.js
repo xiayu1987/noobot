@@ -66,6 +66,20 @@ export function normalizeMessageEntity(
   if (message?.frontendUserMessage === true) {
     normalizedMessage.frontendUserMessage = true;
   }
+  if (message?.isMonotonic === true || message?.monotonic === true) {
+    normalizedMessage.isMonotonic = true;
+    normalizedMessage.monotonic = true;
+  }
+  const monotonicState = String(message?.monotonicState || "").trim();
+  if (monotonicState) normalizedMessage.monotonicState = monotonicState;
+  const stopState = String(message?.stopState || "").trim();
+  if (stopState) normalizedMessage.stopState = stopState;
+  const state = String(message?.state || "").trim();
+  if (state) normalizedMessage.state = state;
+  const status = String(message?.status || "").trim();
+  if (status) normalizedMessage.status = status;
+  const channelState = String(message?.channelState || "").trim();
+  if (channelState) normalizedMessage.channelState = channelState;
   if (message?.pluginMessage === true) {
     normalizedMessage.pluginMessage = true;
   }

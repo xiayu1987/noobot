@@ -197,6 +197,14 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.appendTurn(payload);
     },
 
+    async deleteFromMessage(payload = {}) {
+      return sessionMessageService.deleteFromMessage(payload);
+    },
+
+    async markUserMessageMonotonic(payload = {}) {
+      return sessionMessageService.markUserMessageMonotonic(payload);
+    },
+
     async markSessionMessagesSummarized(payload = {}) {
       return sessionMessageService.markSessionMessagesSummarized(payload);
     },

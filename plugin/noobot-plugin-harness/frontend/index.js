@@ -5,11 +5,143 @@
  */
 import ThinkingPanel from "../../../client/noobot-chat/src/shared/message/ThinkingPanel.vue";
 import AssistantCopyActions from "./components/AssistantCopyActions.vue";
+import MonotonicMessageActions from "./components/MonotonicMessageActions.vue";
 import MessageStatusRow from "./components/MessageStatusRow.vue";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
 import MessageAttachments from "./components/MessageAttachments.vue";
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
+
+function normalizeText(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isMonotonicMessage(messageItem = {}) {
+  if (!messageItem || typeof messageItem !== "object") return false;
+  if (messageItem.isMonotonic === true || messageItem.monotonic === true) return true;
+  if (normalizeText(messageItem.monotonicState) === "monotonic") return true;
+  if (normalizeText(messageItem.stopState) === "stopped") return true;
+  const state = normalizeText(messageItem.state || messageItem.status || messageItem.channelState);
+  if (["completed", "done", "stopped"].includes(state)) return true;
+  const label = normalizeText(messageItem.statusLabel);
+  return ["generated", "已生成", "stopped", "已停止"].includes(label);
+}
+
+function isUserMessage(messageItem = {}) {
+  return normalizeText(messageItem?.role) === "user";
+}
+
+function getMessageRoundId(messageItem = {}) {
+  return normalizeText(messageItem?.dialogProcessId || messageItem?.dialogId);
+}
+
+function findMessageIndex(targetMessage = {}, allMessages = []) {
+  const targetId = normalizeText(targetMessage?.id || targetMessage?.messageId);
+  const targetTs = targetMessage?.ts;
+  return allMessages.findIndex((messageItem) => {
+    if (messageItem === targetMessage) return true;
+    if (targetId && normalizeText(messageItem?.id || messageItem?.messageId) === targetId) return true;
+    return targetTs !== undefined && messageItem?.ts === targetTs;
+  });
+}
+
+function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
+  if (!messageItem || typeof messageItem !== "object") return null;
+  if (isUserMessage(messageItem)) return messageItem;
+  const messages = Array.isArray(allMessages) ? allMessages : [];
+  const directIndex = findMessageIndex(messageItem, messages);
+  if (directIndex >= 0 && isUserMessage(messages[directIndex])) {
+    return messages[directIndex];
+  }
+  const targetRoundId = getMessageRoundId(messageItem);
+  if (targetRoundId) {
+    const sameRoundUserMessage = messages.find(
+      (item) => isUserMessage(item) && getMessageRoundId(item) === targetRoundId,
+    );
+    if (sameRoundUserMessage) return sameRoundUserMessage;
+  }
+  if (directIndex >= 0) {
+    for (let index = directIndex - 1; index >= 0; index -= 1) {
+      if (isUserMessage(messages[index])) return messages[index];
+    }
+  }
+  return null;
+}
+
+function isSameMessage(left = {}, right = {}) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftId = normalizeText(left?.id || left?.messageId);
+  const rightId = normalizeText(right?.id || right?.messageId);
+  if (leftId && rightId && leftId === rightId) return true;
+  return left?.ts !== undefined && right?.ts !== undefined && left.ts === right.ts;
+}
+
+function attachMonotonicSource(sourceMap, userMessage, sourceMessage) {
+  if (!isUserMessage(userMessage) || !isMonotonicMessage(sourceMessage)) return;
+  if (!sourceMap.has(userMessage)) sourceMap.set(userMessage, sourceMessage);
+}
+
+function buildMonotonicSourceMap(allMessages = []) {
+  const messages = Array.isArray(allMessages) ? allMessages : [];
+  const sourceMap = new Map();
+
+  for (const messageItem of messages) {
+    if (isUserMessage(messageItem) && isMonotonicMessage(messageItem)) {
+      attachMonotonicSource(sourceMap, messageItem, messageItem);
+    }
+  }
+
+  for (let index = 0; index < messages.length; index += 1) {
+    const sourceMessage = messages[index];
+    if (isUserMessage(sourceMessage) || !isMonotonicMessage(sourceMessage)) continue;
+
+    const sourceRoundId = getMessageRoundId(sourceMessage);
+    if (sourceRoundId) {
+      const sameRoundUserMessage = messages.find(
+        (item) => isUserMessage(item) && getMessageRoundId(item) === sourceRoundId,
+      );
+      if (sameRoundUserMessage) {
+        attachMonotonicSource(sourceMap, sameRoundUserMessage, sourceMessage);
+        continue;
+      }
+    }
+
+    for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) {
+      const candidate = messages[prevIndex];
+      if (isUserMessage(candidate)) {
+        attachMonotonicSource(sourceMap, candidate, sourceMessage);
+        break;
+      }
+    }
+  }
+
+  return sourceMap;
+}
+
+function getCachedMonotonicSourceMap(allMessages = []) {
+  // Message monotonic flags are often applied in-place after Stop/channel-state
+  // events. Caching only by array identity/length makes the action buttons stale
+  // until a full remount. Rebuild from the current message fields every render.
+  return buildMonotonicSourceMap(Array.isArray(allMessages) ? allMessages : []);
+}
+
+function getMonotonicSourceForUser(userMessage = {}, allMessages = []) {
+  if (!isUserMessage(userMessage)) return null;
+  const messages = Array.isArray(allMessages) ? allMessages : [];
+  if (!messages.length) {
+    return isMonotonicMessage(userMessage) ? userMessage : null;
+  }
+  const sourceMap = getCachedMonotonicSourceMap(messages);
+  const directSource = sourceMap.get(userMessage);
+  if (directSource) return directSource;
+  const userIndex = findMessageIndex(userMessage, messages);
+  if (userIndex >= 0) return sourceMap.get(messages[userIndex]) || null;
+  for (const [mappedUser, sourceMessage] of sourceMap.entries()) {
+    if (isSameMessage(mappedUser, userMessage)) return sourceMessage;
+  }
+  return null;
+}
 
 export function registerFrontendPlugin(ctx = {}) {
   const register = ctx?.registerFrontendPlugin;
@@ -92,6 +224,40 @@ export function registerFrontendPlugin(ctx = {}) {
               typeof context?.onCopyMessageText === "function"
                 ? context.onCopyMessageText
                 : null,
+            translate:
+              typeof context?.translate === "function" ? context.translate : (key = "") => key,
+          };
+        },
+      },
+      {
+        id: "monotonic-message-actions",
+        capability: "message.action.monotonic",
+        priority: 110,
+        component: MonotonicMessageActions,
+        match: (messageItem = {}) => isUserMessage(messageItem) || isMonotonicMessage(messageItem),
+        resolveProps: (context = {}) => {
+          const messageItem =
+            context?.messageItem && typeof context.messageItem === "object"
+              ? context.messageItem
+              : {};
+          const allMessages = Array.isArray(context?.allMessages) ? context.allMessages : [];
+          const monotonicUserTarget = resolveMonotonicUserTarget(
+            messageItem,
+            allMessages,
+          );
+          const canDelete = typeof context?.deleteMonotonicMessage === "function";
+          const canResend = typeof context?.resendMonotonicMessage === "function";
+          const shouldMountOnCurrentUser =
+            isUserMessage(messageItem) &&
+            Boolean(monotonicUserTarget) &&
+            isSameMessage(messageItem, monotonicUserTarget) &&
+            Boolean(getMonotonicSourceForUser(messageItem, allMessages));
+          return {
+            visible: shouldMountOnCurrentUser && (canDelete || canResend),
+            disabled: context?.sending === true,
+            messageItem: monotonicUserTarget || messageItem,
+            onDelete: canDelete ? context.deleteMonotonicMessage : null,
+            onResend: canResend ? context.resendMonotonicMessage : null,
             translate:
               typeof context?.translate === "function" ? context.translate : (key = "") => key,
           };

@@ -66,6 +66,23 @@ export function registerSessionRoutes(
     }),
   );
 
+
+  app.post(
+    "/internal/session/:userId/:sessionId/messages/delete-from",
+    jsonRoute(async (req, res) => {
+      const { userId, sessionId } = req.params;
+      const result = await bot.session.deleteFromMessage({
+        userId,
+        sessionId,
+        parentSessionId: String(req.body?.parentSessionId || "").trim(),
+        anchor: req.body?.anchor || {},
+        expectedVersion: req.body?.expectedVersion,
+        idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
+      });
+      res.json({ ok: true, ...result });
+    }),
+  );
+
   app.delete(
     "/internal/session/:userId/:sessionId",
     jsonRoute(

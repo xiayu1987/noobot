@@ -299,6 +299,8 @@ export function useChatList({
     );
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
     sessionItem.currentTaskStatus = "idle";
+    if (mainSessionDoc.version !== undefined) sessionItem.version = mainSessionDoc.version;
+    if (mainSessionDoc.revision !== undefined) sessionItem.revision = mainSessionDoc.revision;
     sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
     sessionItem.updatedAt = mainSessionDoc.updatedAt || sessionItem.updatedAt;
 
