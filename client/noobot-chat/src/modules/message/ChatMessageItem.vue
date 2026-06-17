@@ -6,6 +6,8 @@
 <script setup>
 import SharedChatMessageItem from "../../shared/message/SharedChatMessageItem.vue";
 
+defineEmits(["open-thinking-details"]);
+
 const props = defineProps({
   messageItem: { type: Object, required: true },
   allMessages: { type: Array, default: () => [] },
@@ -28,5 +30,5 @@ const props = defineProps({
 </script>
 
 <template>
-  <SharedChatMessageItem v-bind="props" />
+  <SharedChatMessageItem v-bind="props" @open-thinking-details="$emit('open-thinking-details', $event)" />
 </template>

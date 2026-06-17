@@ -4,10 +4,10 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useHarnessLocale } from "../i18n";
-import { isHarnessInjectedMessage } from "../../../../client/noobot-chat/src/composables/infra/messageModel";
-import { sanitizeExecutionLogForDisplay } from "../../../../client/noobot-chat/src/composables/chat/chatEngine/utils";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useLocale } from "../i18n/useLocale";
+import { isHarnessInjectedMessage } from "../../composables/infra/messageModel";
+import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -17,18 +17,21 @@ import {
   BaseTabPanelBody,
   BaseThinkingLogLine,
   BaseThinkingPanelShell,
-} from "../../../../client/noobot-chat/src/shared/ui";
+} from "../ui";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   allMessages: { type: Array, default: () => [] },
+  variant: { type: String, default: "panel" },
 });
+
+const emit = defineEmits(["open-thinking-details"]);
 
 const injectedMessages = computed(() => getInjectedMessagesForMessage(props.messageItem));
 const hasThinking = computed(
   () => hasThinkingLogs(props.messageItem) || injectedMessages.value.length > 0,
 );
-const { translate } = useHarnessLocale();
+const { translate } = useLocale();
 const nowTick = ref(Date.now());
 const detailExpansionTick = ref(0);
 let timer = null;
@@ -269,6 +272,10 @@ function collapseThinkingPanel(messageItem = {}) {
   messageItem.thinkingOpenNames = [];
 }
 
+function openThinkingDetailDrawer() {
+  emit("open-thinking-details", { messageItem: props.messageItem, allMessages: props.allMessages });
+}
+
 function getThinkingDetailItemKey(groupedToolLogs, toolLogItem, toolLogIndex) {
   return `${String(groupedToolLogs?.key || "")}|${toolLogIndex}|${String(toolLogItem?.ts || "")}|${String(toolLogItem?.event || "")}`;
 }
@@ -302,6 +309,10 @@ function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
 
 function getThinkingDetailCount(messageItem = {}) {
   return getCompletedToolLogsForMessage(messageItem).length;
+}
+
+function getThinkingDetailLabel(messageItem = {}) {
+  return translate("message.thinkingDetails", { count: getThinkingDetailCount(messageItem) });
 }
 
 function getThinkingTreePrefix(toolLogItem = {}) {
@@ -399,6 +410,7 @@ function stopTimer() {
   timer = null;
 }
 
+
 watch(
   () => Boolean(props.messageItem?.pending),
   (pending) => {
@@ -408,9 +420,13 @@ watch(
   { immediate: true },
 );
 
-onMounted(() => {
-  if (props.messageItem?.pending) startTimer();
-});
+watch(
+  () => props.messageItem?.pending,
+  (pending) => {
+    if (pending) startTimer();
+  },
+  { immediate: true },
+);
 
 onBeforeUnmount(() => {
   stopTimer();
@@ -418,7 +434,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <template v-if="hasThinking">
+  <template v-if="variant !== 'details' && hasThinking">
       <BaseThinkingPanelShell
         v-model="messageItem.thinkingOpenNames"
         item-name="thinking-panel"
@@ -452,58 +468,13 @@ onBeforeUnmount(() => {
                 v-if="!getExecutionLogCount(messageItem) && !messageItem.pending"
                 :text="translate('message.noExecutionLogs')"
               />
-            </BaseTabPanelBody>
-          </el-tab-pane>
-          <el-tab-pane :label="translate('message.thinkingDetails', { count: getThinkingDetailCount(messageItem) })">
-            <BaseTabPanelBody>
-              <template v-if="!messageItem.pending">
-                <div
-                  v-for="(groupedToolLogs, groupedToolLogsIndex) in groupCompletedToolLogs(messageItem)"
-                  :key="`tool-group-${groupedToolLogsIndex}`"
-                  class="thinking-group"
-                >
-                  <BaseMetaLabel class="thinking-group-title" :text="groupedToolLogs.label" />
-                  <div
-                    v-for="(toolLogItem, toolLogIndex) in groupedToolLogs.items"
-                    :key="`tool-log-${groupedToolLogsIndex}-${toolLogIndex}`"
-                  >
-                    <BaseThinkingLogLine
-                      :indent="Number(toolLogItem.indent || 0)"
-                      :prefix-text="getThinkingTreePrefix(toolLogItem)"
-                      :event-text="toolLogItem.type || toolLogItem.event"
-                      :content-text="toolLogItem.text"
-                      :tool="true"
-                      :expandable="true"
-                      :expanded="
-                        isThinkingDetailExpanded(
-                          messageItem,
-                          getThinkingDetailItemKey(
-                            groupedToolLogs,
-                            toolLogItem,
-                            toolLogIndex,
-                          ),
-                        )
-                      "
-                      :title-text="toolLogItem.text || ''"
-                      @toggle="
-                        toggleThinkingDetailExpanded(
-                          messageItem,
-                          getThinkingDetailItemKey(
-                            groupedToolLogs,
-                            toolLogItem,
-                            toolLogIndex,
-                          ),
-                        )
-                      "
-                    />
-                  </div>
-                </div>
-                <BaseEmptyHint
-                  v-if="!getThinkingDetailCount(messageItem)"
-                  :text="translate('message.noToolCalls')"
+              <div class="thinking-execution-actions">
+                <BasePillButton
+                  class="thinking-detail-action-button"
+                  :label="getThinkingDetailLabel(messageItem)"
+                  @click="openThinkingDetailDrawer"
                 />
-              </template>
-              <BaseEmptyHint v-else :text="translate('message.detailsAfterDone')" />
+              </div>
             </BaseTabPanelBody>
           </el-tab-pane>
           <el-tab-pane :label="translate('message.injectedMessages', { count: getInjectedMessageCount() })">
@@ -529,6 +500,53 @@ onBeforeUnmount(() => {
         </template>
       </BaseThinkingPanelShell>
   </template>
+  <BaseTabPanelBody v-else-if="hasThinking">
+          <template v-if="!messageItem.pending">
+            <BaseSectionHeader
+              class="thinking-detail-title-row"
+              :title="getThinkingDetailLabel(messageItem)"
+            />
+            <div
+              v-for="(groupedToolLogs, groupedToolLogsIndex) in groupCompletedToolLogs(messageItem)"
+              :key="`tool-group-${groupedToolLogsIndex}`"
+              class="thinking-group"
+            >
+              <BaseMetaLabel class="thinking-group-title" :text="groupedToolLogs.label" />
+              <div
+                v-for="(toolLogItem, toolLogIndex) in groupedToolLogs.items"
+                :key="`tool-log-${groupedToolLogsIndex}-${toolLogIndex}`"
+              >
+                <BaseThinkingLogLine
+                  :indent="Number(toolLogItem.indent || 0)"
+                  :prefix-text="getThinkingTreePrefix(toolLogItem)"
+                  :event-text="toolLogItem.type || toolLogItem.event"
+                  :content-text="toolLogItem.text"
+                  :tool="true"
+                  :expandable="true"
+                  :expanded="
+                    isThinkingDetailExpanded(
+                      messageItem,
+                      getThinkingDetailItemKey(groupedToolLogs, toolLogItem, toolLogIndex),
+                    )
+                  "
+                  :title-text="toolLogItem.text || ''"
+                  @toggle="
+                    toggleThinkingDetailExpanded(
+                      messageItem,
+                      getThinkingDetailItemKey(groupedToolLogs, toolLogItem, toolLogIndex),
+                    )
+                  "
+                />
+              </div>
+            </div>
+            <BaseEmptyHint
+              v-if="!getThinkingDetailCount(messageItem)"
+              :text="translate('message.noToolCalls')"
+            />
+          </template>
+          <BaseEmptyHint v-else :text="translate('message.detailsAfterDone')" />
+  </BaseTabPanelBody>
+  <template v-else></template>
 </template>
 
 <style scoped>
@@ -542,6 +560,17 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.thinking-detail-title-row {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--noobot-divider);
+}
+
+.thinking-detail-title-row :deep(.base-section-header__title) {
+  color: var(--noobot-thinking-header);
+  font-weight: 600;
+}
+
 .thinking-elapsed {
   font-size: 11px;
   color: var(--noobot-thinking-muted);
@@ -550,6 +579,49 @@ onBeforeUnmount(() => {
   min-height: 20px;
   line-height: 1.2;
   border-radius: 999px;
+}
+
+.thinking-execution-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--noobot-divider);
+}
+
+.thinking-detail-action-button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--noobot-primary, #409eff) 42%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 6%, transparent));
+  color: var(--noobot-primary, #409eff);
+  font-weight: 600;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.thinking-detail-action-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--noobot-primary, #409eff) 62%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, #409eff) 20%, transparent), color-mix(in srgb, var(--noobot-primary, #409eff) 10%, transparent));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--noobot-primary, #409eff) 18%, transparent);
+}
+
+.thinking-detail-action-button:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--noobot-primary, #409eff) 14%, transparent);
+}
+
+@media (max-width: 720px) {
+  .thinking-execution-actions {
+    justify-content: stretch;
+  }
+
+  .thinking-detail-action-button {
+    width: 100%;
+    min-height: 42px;
+    justify-content: center;
+  }
 }
 
 .thinking-group {

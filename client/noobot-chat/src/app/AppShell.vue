@@ -14,6 +14,7 @@ import ChatComposer from "../modules/composer/ChatComposer.vue";
 import ConversationStateDebugPanel from "../modules/debug/ConversationStateDebugPanel.vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageListPanel from "./ChatMessageListPanel.vue";
+import ThinkingPanel from "../shared/message/ThinkingPanel.vue";
 import SessionSidebar from "../modules/session/SessionSidebar.vue";
 import { useApiConnection } from "../composables/infra/useApiConnection";
 import { useChatSession } from "../composables/chat/useChatSession";
@@ -73,6 +74,9 @@ const selectedPlugins = ref(
 const composerRef = ref();
 const messageListPanelRef = ref();
 const composerMorePanelVisible = ref(false);
+const thinkingDetailsVisible = ref(false);
+const thinkingDetailsMessageItem = ref(null);
+const thinkingDetailsAllMessages = ref([]);
 
 function safeParseStringArray(rawValue = "") {
   try {
@@ -390,6 +394,7 @@ function closeAllPseudoPanels() {
   closeAllDrawers();
   closeMobileSidebar();
   closeComposerMorePanel();
+  closeThinkingDetailsPanel();
 }
 
 function resolveActivePseudoPanel() {
@@ -398,6 +403,7 @@ function resolveActivePseudoPanel() {
   if (configParamsVisible.value) return PSEUDO_PANEL.CONFIG_PARAMS;
   if (mobileSidebarOpen.value && isMobile.value) return PSEUDO_PANEL.SIDEBAR;
   if (composerMorePanelVisible.value) return PSEUDO_PANEL.COMPOSER;
+  if (thinkingDetailsVisible.value) return PSEUDO_PANEL.THINKING_DETAILS;
   return "";
 }
 
@@ -418,6 +424,7 @@ async function applyPseudoRouteToUi(route = {}) {
   if (targetPanel === PSEUDO_PANEL.CONFIG_PARAMS) openConfigParamsRaw();
   if (targetPanel === PSEUDO_PANEL.SIDEBAR) openMobileSidebar();
   if (targetPanel === PSEUDO_PANEL.COMPOSER) composerMorePanelVisible.value = true;
+  if (targetPanel === PSEUDO_PANEL.THINKING_DETAILS) openThinkingDetailsPanel({ pushRoute: false });
 }
 
 const {
@@ -582,6 +589,58 @@ function handleComposerMorePanelVisibleUpdate(value) {
   });
 }
 
+function resolveFallbackThinkingDetailsPayload() {
+  const messages = activeSession.value?.rawMessages || activeSession.value?.messages || [];
+  const messageItem = [...messages].reverse().find((item = {}) =>
+    item?.role === "assistant" && (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs))
+  );
+  return { messageItem: messageItem || null, allMessages: messages };
+}
+
+function closeThinkingDetailsPanel() {
+  thinkingDetailsVisible.value = false;
+}
+
+function getThinkingDetailsCount(messageItem = {}) {
+  if (Array.isArray(messageItem?.completedToolLogs)) {
+    return messageItem.completedToolLogs.length;
+  }
+  if (Array.isArray(messageItem?.toolCalls)) {
+    return messageItem.toolCalls.length;
+  }
+  if (Array.isArray(messageItem?.realtimeLogs)) {
+    return messageItem.realtimeLogs.filter((logItem = {}) => {
+      const event = String(logItem?.event || logItem?.type || "").toLowerCase();
+      return event.includes("tool") || event.includes("function");
+    }).length;
+  }
+  return 0;
+}
+
+function getThinkingDetailsTitle(messageItem = {}) {
+  return translate("message.thinkingDetails", { count: getThinkingDetailsCount(messageItem) });
+}
+
+function openThinkingDetailsPanel(payload = {}) {
+  const fallbackPayload = resolveFallbackThinkingDetailsPayload();
+  const messageItem = payload?.messageItem || fallbackPayload.messageItem;
+  if (!messageItem) return;
+  closeAllDrawers();
+  closeMobileSidebar();
+  closeComposerMorePanel();
+  thinkingDetailsMessageItem.value = messageItem;
+  thinkingDetailsAllMessages.value = Array.isArray(payload?.allMessages)
+    ? payload.allMessages
+    : fallbackPayload.allMessages;
+  thinkingDetailsVisible.value = true;
+  if (payload?.pushRoute !== false) {
+    pushPseudoRoute({
+      sessionId: activeSessionId.value,
+      panel: PSEUDO_PANEL.THINKING_DETAILS,
+    });
+  }
+}
+
 function handleDrawerModelUpdate(drawer = {}, value = false) {
   const nextVisible = Boolean(value);
   const model = drawer?.model;
@@ -652,6 +711,7 @@ watch(
     mobileSidebarOpen,
     isMobile,
     composerMorePanelVisible,
+    thinkingDetailsVisible,
   ],
   () => {
     replacePseudoRoute();
@@ -772,6 +832,17 @@ const drawerPanels = computed(() => [
     },
   },
   {
+    key: "thinking-details",
+    model: thinkingDetailsVisible,
+    title: getThinkingDetailsTitle(thinkingDetailsMessageItem.value || {}),
+    component: ThinkingPanel,
+    props: {
+      messageItem: thinkingDetailsMessageItem.value || {},
+      allMessages: thinkingDetailsAllMessages.value,
+      variant: "details",
+    },
+  },
+  {
     key: "config-params",
     model: configParamsVisible,
     title: translate("common.configParams"),
@@ -849,6 +920,7 @@ const drawerPanels = computed(() => [
         :format-file-size="formatFileSize"
         :is-image-mime="isImageMime"
         :empty-logo-src="noobotLogo"
+        @open-thinking-details="openThinkingDetailsPanel"
       />
 
       <UserInteractionForm

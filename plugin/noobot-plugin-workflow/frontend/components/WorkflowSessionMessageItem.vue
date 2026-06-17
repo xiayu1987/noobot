@@ -17,6 +17,12 @@ const props = defineProps({
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
 });
+
+const emit = defineEmits(["open-thinking-details"]);
+
+function handleOpenThinkingDetails(payload = {}) {
+  emit("open-thinking-details", payload);
+}
 </script>
 
 <template>
@@ -24,5 +30,6 @@ const props = defineProps({
     v-bind="props"
     attachment-preview-dialog-class="workflow-session-preview-dialog"
     file-preview-dialog-class="workflow-session-preview-dialog"
+    @open-thinking-details="handleOpenThinkingDetails"
   />
 </template>

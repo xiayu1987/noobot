@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import ThinkingPanel from "./components/ThinkingPanel.vue";
+import ThinkingPanel from "../../../client/noobot-chat/src/shared/message/ThinkingPanel.vue";
 import AssistantCopyActions from "./components/AssistantCopyActions.vue";
 import MessageStatusRow from "./components/MessageStatusRow.vue";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
@@ -54,6 +54,13 @@ export function registerFrontendPlugin(ctx = {}) {
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},
           allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
+        }),
+        resolveListeners: (context = {}) => ({
+          "open-thinking-details": (payload = {}) => {
+            if (typeof context?.onOpenThinkingDetails === "function") {
+              context.onOpenThinkingDetails(payload);
+            }
+          },
         }),
       },
     ],

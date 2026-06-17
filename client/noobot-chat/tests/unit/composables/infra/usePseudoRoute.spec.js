@@ -23,6 +23,8 @@ describe("usePseudoRoute", () => {
       sessionId: "s1",
       panel: PSEUDO_PANEL.WORKSPACE,
     });
+    resetUrl("/chat?session=s1&panel=thinking-details");
+    expect(parsePseudoRouteFromLocation().panel).toBe(PSEUDO_PANEL.THINKING_DETAILS);
     expect(normalizePseudoPanel("unknown")).toBe("");
     expect(isSamePseudoRoute({ sessionId: "s1", panel: "workspace" }, { sessionId: "s1", panel: "workspace" })).toBe(true);
   });
@@ -34,14 +36,14 @@ describe("usePseudoRoute", () => {
       resolveCurrentPanel: () => "",
     });
 
-    router.pushPseudoRoute({ sessionId: "s1", panel: PSEUDO_PANEL.COMPOSER });
+    router.pushPseudoRoute({ sessionId: "s1", panel: PSEUDO_PANEL.THINKING_DETAILS });
 
     expect(window.location.pathname).toBe("/chat");
-    expect(window.location.search).toBe("?keep=1&session=s1&panel=composer");
+    expect(window.location.search).toBe("?keep=1&session=s1&panel=thinking-details");
     expect(window.location.hash).toBe("#top");
     expect(window.history.state.noobotPseudoRoute).toEqual({
       sessionId: "s1",
-      panel: PSEUDO_PANEL.COMPOSER,
+      panel: PSEUDO_PANEL.THINKING_DETAILS,
     });
   });
 
@@ -81,6 +83,22 @@ describe("usePseudoRoute", () => {
     expect(window.history.state.noobotPseudoRoute).toEqual({
       sessionId: "s1",
       panel: PSEUDO_PANEL.COMPOSER,
+    });
+  });
+
+  it("clears thinking details panel while preserving active session", () => {
+    resetUrl("/chat?session=s1&panel=thinking-details&keep=1");
+    const router = usePseudoRoute({
+      resolveCurrentSessionId: () => "s1",
+      resolveCurrentPanel: () => PSEUDO_PANEL.THINKING_DETAILS,
+    });
+
+    router.pushPseudoRoute({ panel: "" });
+
+    expect(window.location.search).toBe("?session=s1&keep=1");
+    expect(window.history.state.noobotPseudoRoute).toEqual({
+      sessionId: "s1",
+      panel: "",
     });
   });
 
