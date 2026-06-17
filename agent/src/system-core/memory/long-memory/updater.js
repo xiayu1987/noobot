@@ -79,6 +79,20 @@ function renderMetadataItems(items = []) {
     .trim();
 }
 
+function renderLongMemoryFromMetadataItems(items = []) {
+  return normalizeMetadataItems(items)
+    .map((item) => {
+      const key = String(item?.key || "").trim();
+      const value = String(item?.value || "").trim();
+      const content = key ? `${key}: ${value}` : value;
+      return { id: Number(item.id), content };
+    })
+    .filter((item) => Number.isFinite(item.id) && item.id > 0 && item.content)
+    .map((item) => `${item.id}. ${item.content}`)
+    .join("\n")
+    .trim();
+}
+
 function applyLongMemoryPatch(existingText = "", patchText = "") {
   const map = new Map(
     parseLongMemoryItemsFromText(existingText).map((item) => [Number(item.id), item]),
@@ -159,11 +173,17 @@ export async function updateLongMemory(storage, basePath, patchText) {
   const existingMetadataItems = existingMetadataText
     ? parseMetadataItemsFromText(existingMetadataText)
     : normalizeMetadataItems(legacyMetadata?.items);
+  const hasLongMemoryPatchCommands =
+    parseIdPatchCommands(patchText, { idPrefix: "L" }).length > 0;
   const memoryPatchResult = applyLongMemoryPatch(existingLongMemory, patchText);
   const metadataPatchResult = applyLongMemoryMetadataPatch(existingMetadataItems, patchText);
   if (!memoryPatchResult.changed && !metadataPatchResult.changed) return false;
 
-  const nextMemory = memoryPatchResult.text;
+  const nextMemory =
+    String(memoryPatchResult.text || "").trim() ||
+    (hasLongMemoryPatchCommands
+      ? ""
+      : renderLongMemoryFromMetadataItems(metadataPatchResult.items));
   await storage.ensureDir(path.dirname(longPath));
   await storage.writeText(longPath, `${nextMemory}${nextMemory ? "\n" : ""}`);
 
