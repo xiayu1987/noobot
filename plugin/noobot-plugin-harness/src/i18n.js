@@ -476,7 +476,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummarySampleRiskHighProgramming:
       "2. [plan=8][status=todo][risk=高][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ...",
     guidanceSummaryProgrammingRules:
-      "编程模式附加要求：涉及代码、文件变更、测试结果或定位证据的小结条目必须包含 file=[文件路径]、method=[方法/函数名] 与 line=[行号/行号范围，可多段逗号分隔]。",
+      "编程模式附加要求：涉及具体代码位置、文件变更、测试失败定位、错误堆栈或日志定位时，必须包含 file、method、line；没有可靠代码位置时使用 file=- method=- line=-，禁止编造文件、函数或行号；line 只有上下文存在明确行号时填写，否则使用 line=-。",
     guidanceSummaryDetailHeader: "## 详细明细",
     guidanceSummaryDetailSample: "- 证据/日志/风险分析 ...",
     guidanceSummaryNextSuggestionSample:
@@ -528,11 +528,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryLine6:
       "必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION] 集中给出下一步执行建议。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、下一步执行建议与问题说明。小结后请继续任务。",
     protocolSummaryProgrammingLine3:
-      "ADD S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径] method=[方法/函数名] line=[行号/行号范围，可多段逗号分隔] [小结内容]",
+      "ADD S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径|-] method=[方法/函数名|-] line=[行号/行号范围|-，可多段逗号分隔] [小结内容]",
     protocolSummaryProgrammingLine4:
-      "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径] method=[方法/函数名] line=[行号/行号范围，可多段逗号分隔] [小结内容]",
+      "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径|-] method=[方法/函数名|-] line=[行号/行号范围|-，可多段逗号分隔] [小结内容]",
     protocolSummaryProgrammingLine6:
-      "编程模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=edit|test|inspect|ask_user|final，target=文件路径/命令/问题，reason=简短原因，blocking=true|false）；涉及代码、文件变更、测试结果或定位证据时必须写明 file、method 与 line（line 支持多段，如 10-20,35,48-52）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、文件、方法、行号与问题说明。小结后请继续任务。",
+      "编程模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=edit|test|inspect|ask_user|final，target=文件路径/命令/问题，reason=简短原因，blocking=true|false）；涉及具体代码位置、文件变更、测试失败定位、错误堆栈或日志定位时必须写明 file、method、line；没有可靠代码位置时使用 file=- method=- line=-；line 只有上下文存在明确行号时填写，否则使用 line=-；禁止编造文件、函数或行号。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、文件、方法、行号或 - 与问题说明。小结后请继续任务。",
     protocolAcceptanceTitlePhase:
       "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
     protocolAcceptanceTitleFinal:
@@ -697,7 +697,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummarySampleRiskHighProgramming:
       "2. [plan=8][status=todo][risk=high][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ...",
     guidanceSummaryProgrammingRules:
-      "Programming-mode additional requirement: summary items involving code, file changes, test results, or location evidence must include file=[file path], method=[method/function name], and line=[line number/range; comma-separated multi-segments allowed].",
+      "Programming-mode additional requirement: include file, method, and line when there is a concrete code location, file change, test-failure location, stack trace, or log location; use file=- method=- line=- when no reliable code location exists, and never fabricate file/function/line; fill line only when explicit line numbers exist in context, otherwise use line=-.",
     guidanceSummaryDetailHeader: "## Detailed notes",
     guidanceSummaryDetailSample: "- evidence / logs / risk analysis ...",
     guidanceSummaryNextSuggestionSample:
@@ -750,11 +750,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryLine6:
       "Align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL with centralized next execution suggestions. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, next execution suggestion, and issue notes. Then continue with the task.",
     protocolSummaryProgrammingLine3:
-      "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path] method=[method/function name] line=[line number/range; comma-separated multi-segments allowed] [summary content]",
+      "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path|-] method=[method/function name|-] line=[line number/range|-; comma-separated multi-segments allowed] [summary content]",
     protocolSummaryProgrammingLine4:
-      "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path] method=[method/function name] line=[line number/range; comma-separated multi-segments allowed] [summary content]",
+      "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path|-] method=[method/function name|-] line=[line number/range|-; comma-separated multi-segments allowed] [summary content]",
     protocolSummaryProgrammingLine6:
-      "In programming mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=edit|test|inspect|ask_user|final, target=file path/command/question, reason=brief reason, blocking=true|false); when code, file changes, test results, or location evidence is involved, include file, method, and line (comma-separated multi-segments such as 10-20,35,48-52 are accepted). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, file, method, line, and issue notes. Then continue with the task.",
+      "In programming mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=edit|test|inspect|ask_user|final, target=file path/command/question, reason=brief reason, blocking=true|false); include file, method, and line only for concrete code locations, file changes, test-failure locations, stack traces, or log locations; use file=- method=- line=- when no reliable code location exists; fill line only when explicit line numbers exist in context, otherwise use line=-; never fabricate file/function/line. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, file/method/line or -, and issue notes. Then continue with the task.",
     protocolAcceptanceTitlePhase:
       "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
     protocolAcceptanceTitleFinal:
