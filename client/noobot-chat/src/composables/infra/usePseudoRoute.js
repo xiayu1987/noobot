@@ -14,6 +14,7 @@ export const PSEUDO_PANEL = Object.freeze({
   CONFIG_PARAMS: "config-params",
   SIDEBAR: "sidebar",
   COMPOSER: "composer",
+  THINKING_DETAILS: "thinking-details",
 });
 
 const DEFAULT_ALLOWED_PANELS = new Set(Object.values(PSEUDO_PANEL));

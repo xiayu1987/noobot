@@ -26,6 +26,7 @@ const props = defineProps({
   formatFileSize: { type: Function, default: (value = 0) => `${Number(value || 0)} B` },
   isImageMime: { type: Function, default: (mimeType = "") => String(mimeType || "").startsWith("image/") },
 });
+const emit = defineEmits(["open-thinking-details"]);
 const { translate } = useWorkflowLocale();
 
 const viewerVisible = ref(false);
@@ -42,6 +43,10 @@ const PSEUDO_ROUTE_PANEL_KEY = "panel";
 const PSEUDO_ROUTE_WORKFLOW_PANEL = "workflow-node-session";
 const PSEUDO_ROUTE_WORKFLOW_DIALOG_KEY = "workflowDialogId";
 const PSEUDO_ROUTE_WORKFLOW_ROOT_KEY = "workflowRootSessionId";
+
+function handleOpenThinkingDetails(payload = {}) {
+  emit("open-thinking-details", payload);
+}
 
 const workflowMeta = computed(() =>
   props.messageItem?.workflowMeta &&
@@ -842,6 +847,7 @@ watch(
             :format-time="formatTime"
             :format-file-size="formatFileSize"
             :is-image-mime="isImageMime"
+            @open-thinking-details="handleOpenThinkingDetails"
           />
         </div>
         <BaseEmptyHint

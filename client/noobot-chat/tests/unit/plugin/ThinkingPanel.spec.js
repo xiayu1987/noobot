@@ -1,12 +1,13 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
-import ThinkingPanel from "../../../../../plugin/noobot-plugin-harness/frontend/components/ThinkingPanel.vue";
+import ThinkingPanel from "../../../src/shared/message/ThinkingPanel.vue";
 
-function mountThinkingPanel(messageItem) {
+function mountThinkingPanel(messageItem, props = {}) {
   return mount(ThinkingPanel, {
     props: {
       messageItem,
       allMessages: [],
+      ...props,
     },
     global: {
       stubs: {
@@ -19,6 +20,10 @@ function mountThinkingPanel(messageItem) {
         "el-tab-pane": {
           props: ["label"],
           template: '<div class="tab-pane" :data-label="label"><slot /></div>',
+        },
+        "el-drawer": {
+          props: ["modelValue", "title", "size"],
+          template: '<aside v-if="modelValue" class="thinking-detail-drawer" :data-title="title" :data-size="size"><slot /></aside>',
         },
         BaseTabPanelBody: {
           template: '<div class="tab-body"><slot /></div>',
@@ -45,7 +50,7 @@ function mountThinkingPanel(messageItem) {
         },
         BasePillButton: {
           props: ["label"],
-          template: '<button>{{ label }}</button>',
+          template: '<button><slot />{{ label }}</button>',
         },
       },
     },
@@ -76,7 +81,7 @@ describe("ThinkingPanel", () => {
     expect(executionPane.attributes("data-label")).toContain("12");
   });
 
-  it("keeps all completed tool logs in thinking details", () => {
+  it("emits thinking details event from execution process detail button", async () => {
     const completedToolLogs = Array.from({ length: 12 }, (_, index) => ({
       event: "tool_result",
       type: "tool_result",
@@ -93,10 +98,42 @@ describe("ThinkingPanel", () => {
       completedToolLogs,
     });
 
-    const detailLines = wrapper.findAll(".tab-pane")[1].findAll(".execution-log-line");
+    const detailButton = wrapper.find("button");
+    expect(detailButton.text()).toContain("12");
+    expect(detailButton.text()).not.toContain("({count})");
+    await detailButton.trigger("click");
+
+    expect(wrapper.emitted("open-thinking-details")?.[0]?.[0]).toMatchObject({
+      messageItem: { completedToolLogs },
+      allMessages: [],
+    });
+    expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
+    expect(wrapper.findAll(".tab-pane")).toHaveLength(2);
+  });
+
+  it("renders all thinking logs in details variant without local drawer", () => {
+    const completedToolLogs = Array.from({ length: 12 }, (_, index) => ({
+      event: "tool_result",
+      type: "tool_result",
+      text: `cmd-${index + 1}`,
+    }));
+
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      realtimeLogs: [],
+      completedToolLogs,
+    }, { variant: "details" });
+
+    expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
+    expect(wrapper.findAll(".tab-pane")).toHaveLength(0);
+    expect(wrapper.find("header").text()).toContain("12");
+    expect(wrapper.find("header").text()).not.toContain("({count})");
+    const detailLines = wrapper.findAll(".execution-log-line");
     expect(detailLines).toHaveLength(12);
     expect(detailLines[0].text()).toBe("完成：执行命令：cmd-1");
     expect(detailLines[11].text()).toBe("完成：执行命令：cmd-12");
+    expect(wrapper.text()).not.toContain("思考明细 ({count})");
   });
 
   it("shows cumulative execution count while rendering only latest ten realtime logs", () => {

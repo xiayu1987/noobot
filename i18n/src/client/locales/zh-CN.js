@@ -222,6 +222,7 @@ export const zhCNMessages = {
     "injectedMessages": "注入消息 ({count})",
     "noInjectedMessages": "暂无注入消息",
     "thinkingDetails": "思考明细 ({count})",
+    "details": "明细",
     "waitingRealtimeLog": "执行中，等待实时日志...",
     "noExecutionLogs": "无执行过程日志",
     "noToolCalls": "暂无工具调用记录",

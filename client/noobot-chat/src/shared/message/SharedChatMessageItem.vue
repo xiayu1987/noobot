@@ -25,6 +25,8 @@ import {
   resolveMessageActionRenderers,
 } from "../../plugins/frontend-plugin-registry";
 
+const emit = defineEmits(["open-thinking-details"]);
+
 const props = defineProps({
   messageItem: { type: Object, required: true },
   allMessages: { type: Array, default: () => [] },
@@ -136,6 +138,7 @@ function resolveRendererContext() {
     onDownloadFile,
     onOpenAttachmentPreview: openAttachmentPreview,
     onDownloadAttachment,
+    onOpenThinkingDetails: handleOpenThinkingDetails,
   };
 }
 
@@ -145,6 +148,14 @@ function resolveRendererListeners(renderer = {}) {
 
 function resolveActionRendererProps(renderer = {}) {
   return resolveMessageActionProps(renderer, resolveRendererContext());
+}
+
+function handleOpenThinkingDetails(payload = {}) {
+  emit("open-thinking-details", {
+    messageItem: props.messageItem,
+    allMessages: props.allMessages,
+    ...(payload && typeof payload === "object" ? payload : {}),
+  });
 }
 
 async function handleCopyAssistantMessageRich() {
@@ -173,6 +184,7 @@ async function handleCopyAssistantMessageText() {
       :key="renderer.id"
       v-bind="resolveRendererProps(renderer)"
       v-on="resolveRendererListeners(renderer)"
+      @open-thinking-details="handleOpenThinkingDetails"
     />
 
     <BaseMessageErrorAlert :error="messageItem.error" />
@@ -196,6 +208,7 @@ async function handleCopyAssistantMessageText() {
       :key="renderer.id"
       v-bind="resolveRendererProps(renderer)"
       v-on="resolveRendererListeners(renderer)"
+      @open-thinking-details="handleOpenThinkingDetails"
     />
   </BaseMessageShell>
 

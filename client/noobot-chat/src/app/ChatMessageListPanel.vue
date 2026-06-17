@@ -8,6 +8,8 @@ import { computed, ref } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
 import { useLocale } from "../shared/i18n/useLocale";
 
+defineEmits(["open-thinking-details"]);
+
 const props = defineProps({
   loadingSessionDetail: { type: Boolean, default: false },
   activeSession: { type: Object, default: () => ({}) },
@@ -92,6 +94,7 @@ defineExpose({
             v-if="shouldRenderMessageInChat(messageItem)"
             v-bind="messageItemSharedProps"
             :message-item="messageItem"
+            @open-thinking-details="$emit('open-thinking-details', $event)"
           />
         </template>
       </div>

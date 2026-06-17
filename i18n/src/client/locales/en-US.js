@@ -222,6 +222,7 @@ export const enUSMessages = {
     "injectedMessages": "Injected Messages ({count})",
     "noInjectedMessages": "No injected messages",
     "thinkingDetails": "Thinking Details ({count})",
+    "details": "Details",
     "waitingRealtimeLog": "Running, waiting for realtime logs...",
     "noExecutionLogs": "No execution logs",
     "noToolCalls": "No tool call records yet",
