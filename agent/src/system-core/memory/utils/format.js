@@ -5,11 +5,32 @@
  */
 import { dedupeTextList, stripMarkdownFence } from "./text.js";
 
+function normalizeContentBlock(block) {
+  if (block === null || block === undefined) return "";
+  if (typeof block === "string") return block;
+  if (typeof block !== "object") return String(block || "");
+
+  const text = block.text ?? block.content ?? block.output_text;
+  if (typeof text === "string") return text;
+  if (Array.isArray(text)) {
+    return text.map(normalizeContentBlock).filter(Boolean).join("\n");
+  }
+  return "";
+}
+
 export function normalizeModelContent(rawContent) {
   if (rawContent === undefined) return "";
   if (typeof rawContent === "string") return rawContent;
+  if (Array.isArray(rawContent)) {
+    const text = rawContent.map(normalizeContentBlock).filter(Boolean).join("\n");
+    if (text) return text;
+  }
+  if (rawContent && typeof rawContent === "object") {
+    const text = normalizeContentBlock(rawContent);
+    if (text) return text;
+  }
   try {
-    return JSON.parse(JSON.stringify(rawContent));
+    return JSON.stringify(rawContent ?? "");
   } catch {
     return String(rawContent ?? "");
   }
@@ -46,4 +67,3 @@ export function formatDomainBlock({
     "",
   ].join("\n");
 }
-

@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 import { MemoryManager } from "../../../src/system-core/memory/index.js";
+import { resetModelAdapter, setModelAdapter } from "../../../src/system-core/model/index.js";
 
 async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
   let lastError = null;
@@ -171,6 +172,114 @@ test("long memory update materializes metadata-only patches into long-memory.md"
   );
   assert.match(metadataDoc, /M1 key="interests" value="工具测试与验证"/);
   assert.match(metadataDoc, /M2 key="personality" value="偏好先复现再修复"/);
+});
+
+
+test("maybeSummarize writes object-shaped long memory model output", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const userId = "admin";
+  const userRoot = path.join(workspaceRoot, userId);
+  await mkdir(path.join(userRoot, "memory"), { recursive: true });
+
+  const shortItems = Array.from({ length: 30 }, (_, index) => ({
+    records: [
+      { role: "user", content: `用户消息 ${index + 1}` },
+      { role: "assistant", content: `助手回复 ${index + 1}` },
+    ],
+    createdAt: new Date(2026, 0, index + 1).toISOString(),
+  }));
+  await writeFile(
+    path.join(userRoot, "memory/short-memory.json"),
+    JSON.stringify({ items: shortItems }, null, 2),
+  );
+
+  setModelAdapter({
+    resolveDefaultModelSpec: () => ({ alias: "mock-memory-model" }),
+    createChatModelByName: () => ({
+      invoke: async () => ({
+        content: [
+          { type: "text", text: "UPDATE L[1] 喜欢结构化输出\nADD L[2] 倾向先验证再实现" },
+          { type: "text", text: 'ADD M[1] key="communication_style" value="concise"' },
+        ],
+      }),
+    }),
+  });
+
+  try {
+    const service = new MemoryManager({ workspaceRoot });
+    await service.maybeSummarize({ userId, userConfig: {} });
+  } finally {
+    resetModelAdapter();
+  }
+
+  const longMemoryDoc = await readFile(
+    path.join(userRoot, "memory/long-memory.md"),
+    "utf8",
+  );
+  assert.match(String(longMemoryDoc || ""), /1\. 喜欢结构化输出/);
+  assert.match(String(longMemoryDoc || ""), /2\. 倾向先验证再实现/);
+
+  const metadataDoc = await readFile(
+    path.join(userRoot, "memory/long-memory/metadata.md"),
+    "utf8",
+  );
+  assert.match(metadataDoc, /M1 key="communication_style" value="concise"/);
+});
+
+
+test("maybeSummarize does not clear short memory for unreadable long memory patch", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const userId = "admin";
+  const userRoot = path.join(workspaceRoot, userId);
+  await mkdir(path.join(userRoot, "memory"), { recursive: true });
+  const shortItems = Array.from({ length: 30 }, (_, index) => ({
+    records: [{ role: "user", content: `用户消息 ${index + 1}` }],
+    createdAt: new Date(2026, 0, index + 1).toISOString(),
+  }));
+  await writeFile(path.join(userRoot, "memory/short-memory.json"), JSON.stringify({ items: shortItems }, null, 2));
+  setModelAdapter({
+    resolveDefaultModelSpec: () => ({ alias: "mock-memory-model" }),
+    createChatModelByName: () => ({ invoke: async () => ({ content: "这是稳定但不符合 ID+PATCH 协议的文本" }) }),
+  });
+  try {
+    const service = new MemoryManager({ workspaceRoot });
+    await service.maybeSummarize({ userId, userConfig: {} });
+  } finally {
+    resetModelAdapter();
+  }
+  const shortDoc = JSON.parse(await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"));
+  assert.equal(shortDoc.items.length, 30);
+  await assert.rejects(readFile(path.join(userRoot, "memory/long-memory.md"), "utf8"));
+});
+
+test("long memory update treats equivalent legal patch as unchanged", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const userId = "admin";
+  const userRoot = path.join(workspaceRoot, userId);
+  await mkdir(path.join(userRoot, "memory/long-memory"), { recursive: true });
+  await writeFile(path.join(userRoot, "memory/long-memory.md"), "1. 喜欢结构化输出\n");
+  await writeFile(path.join(userRoot, "memory/long-memory/metadata.md"), 'M1 key="communication_style" value="concise"\n');
+  const service = new MemoryManager({ workspaceRoot });
+  const changed = await service.longMemory.update(userRoot, [
+    "UPDATE L[1] 喜欢结构化输出",
+    'UPDATE M[1] key="communication_style" value="concise"',
+  ].join("\n"));
+  assert.equal(changed, false);
+});
+
+test("long memory update accepts colon separator in stable text protocol", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const userId = "admin";
+  const userRoot = path.join(workspaceRoot, userId);
+  await mkdir(path.join(userRoot, "memory"), { recursive: true });
+  const service = new MemoryManager({ workspaceRoot });
+  const changed = await service.longMemory.update(userRoot, [
+    "ADD L[1]: 喜欢先复现再修复",
+    'ADD M[1]： key="workflow" value="先复现再修复"',
+  ].join("\n"));
+  assert.equal(changed, true);
+  const longMemoryDoc = await readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
+  assert.match(longMemoryDoc, /1\. 喜欢先复现再修复/);
 });
 
 test("captureSessionToShortMemory skips injected messages", async () => {
