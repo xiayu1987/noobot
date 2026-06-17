@@ -4,3 +4,8 @@ export { default as SettingsActionGroup } from "./SettingsActionGroup.vue";
 export { default as SettingsPanelHeader } from "./SettingsPanelHeader.vue";
 export { default as SettingsJsonEditor } from "./SettingsJsonEditor.vue";
 export { default as SettingsTreeActionButton } from "./SettingsTreeActionButton.vue";
+export { default as WorkspaceResetDialog } from "./WorkspaceResetDialog.vue";
+export { default as WorkspaceEditorPanel } from "./WorkspaceEditorPanel.vue";
+export { default as WorkspaceResourcePanel } from "./WorkspaceResourcePanel.vue";
+export { default as WorkspaceResourceToolbar } from "./WorkspaceResourceToolbar.vue";
+export { default as WorkspaceParamTreeSection } from "./WorkspaceParamTreeSection.vue";
