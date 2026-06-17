@@ -41,6 +41,7 @@ import {
   buildAcceptanceValidationRequestPromptText,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildPhaseAcceptanceRequestPromptText,
+  resolveProgrammingModeFromContext,
   getAllPhaseAcceptanceReportsMarker,
   getAllSummaryReportsMarker,
   getAcceptanceMainPlanContextMarker,
@@ -140,6 +141,7 @@ function buildFinalAcceptanceSemanticValidationMessages({
   planContextContent = "",
   phaseReportsContents = [],
   requestContent = "",
+  programmingMode = false,
 } = {}) {
   const messages = [];
   if (String(planContextContent || "").trim()) {
@@ -154,7 +156,9 @@ function buildFinalAcceptanceSemanticValidationMessages({
     messages.push({ role: "user", content: String(requestContent || "").trim() });
     messages.push({
       role: "user",
-      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance"),
+      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
+        programmingMode,
+      }),
     });
   }
   return messages;
@@ -248,16 +252,19 @@ function buildAcceptancePromptParts({
         data: { latestCompleteSummaryText: resolveLatestCompleteSummaryText({ bucket, ctx }) },
       })
     : [];
+  const programmingMode = resolveProgrammingModeFromContext(ctx);
   const requestContent = phase
     ? buildPhaseAcceptanceRequestPromptText({
         locale,
         marker: getPhaseAcceptanceRequestMarker(locale),
         data: { requestPayload },
+        programmingMode,
       })
     : buildAcceptanceValidationRequestPromptText({
         locale,
         marker: getAcceptanceSemanticValidationMarker(locale),
         data: { requestPayload },
+        programmingMode,
       });
   void state;
   return { planContextContent, summaryReportsContents, phaseReportsContents, requestContent };
@@ -270,6 +277,7 @@ function buildPhaseAcceptanceMessages({
   planContextContent = "",
   phaseReportsContents = [],
   requestContent = "",
+  programmingMode = false,
 } = {}) {
   const messages = [];
   for (const item of Array.isArray(agentMessages) ? agentMessages : []) {
@@ -292,7 +300,9 @@ function buildPhaseAcceptanceMessages({
     messages.push({ role: "user", content: String(requestContent || "").trim() });
     messages.push({
       role: "user",
-      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance"),
+      content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
+        programmingMode,
+      }),
     });
   }
   return messages;
@@ -325,7 +335,9 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
   pushRoleMessage(
     messages,
     "user",
-    buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance"),
+    buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
+      programmingMode: resolveProgrammingModeFromContext(ctx),
+    }),
   );
   setPendingStateWithMeta(state, "phaseAcceptance", false);
   setCaptureFlagStateWithMeta(state, "phaseAcceptanceCapturePending", true);
@@ -419,6 +431,7 @@ export async function runPhaseAcceptanceBySeparateModel(
           planContextContent,
           phaseReportsContents,
           requestContent,
+          programmingMode: resolveProgrammingModeFromContext(ctx),
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance"),
@@ -546,6 +559,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
           planContextContent,
           phaseReportsContents,
           requestContent,
+          programmingMode: resolveProgrammingModeFromContext(ctx),
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance_before_final"),
@@ -649,6 +663,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
     locale,
     marker: getAcceptanceSemanticValidationMarker(locale),
     data: { requestPayload },
+    programmingMode: resolveProgrammingModeFromContext(ctx),
   });
   const systemInjection = injectMessageWithPolicy(ctx, {
     role: "system",
@@ -680,7 +695,9 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   if (!userInjection.injected) return false;
   injectMessageWithPolicy(ctx, {
     role: "user",
-    content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance"),
+    content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
+      programmingMode: resolveProgrammingModeFromContext(ctx),
+    }),
     injectedMessageType: "acceptance_responsibility_constraint",
     injectAt: "append",
     dedupe: false,
@@ -774,6 +791,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     data: {
       requestPayload,
     },
+    programmingMode: resolveProgrammingModeFromContext(ctx),
   });
   const mainPlanContextPrompt = buildAcceptanceMainPlanContextPromptText({
     locale,
@@ -790,6 +808,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     planContextContent: mainPlanContextPrompt,
     phaseReportsContents: phaseReportsPrompts,
     requestContent: prompt,
+    programmingMode: resolveProgrammingModeFromContext(ctx),
   });
   let response = null;
   try {

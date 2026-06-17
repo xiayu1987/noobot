@@ -182,7 +182,9 @@ export async function runPlanUpdateAfterSummary(
     agentMessages: revisionBaseMessages,
     task: revisionTask,
     postTaskMessages: [
-      buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision"),
+      buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
+        programmingMode: resolveProgrammingModeFromContext(ctx),
+      }),
     ],
   });
   let revisionResponse = null;
@@ -324,7 +326,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   } else if (allowGuidance && state.pending.guidance) {
     purpose = "guidance";
     reason = state.pending.guidance;
-    prompt = buildGuidancePromptContent(locale, reason);
+    prompt = buildGuidancePromptContent(locale, reason, {
+      programmingMode: resolveProgrammingModeFromContext(ctx),
+    });
     setPendingStateWithMeta(state, "guidance", null);
     state.counters.consecutiveToolFailures = 0;
     state.counters.totalToolFailures = 0;
@@ -362,7 +366,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     task: prompt,
     postTaskMessages:
       purpose === "summary"
-        ? [buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary")]
+        ? [buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
+            programmingMode: resolveProgrammingModeFromContext(ctx),
+          })]
         : [],
   });
 

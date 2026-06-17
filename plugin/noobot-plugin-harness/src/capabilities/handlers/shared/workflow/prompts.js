@@ -107,9 +107,31 @@ export function buildPostPlanUserFollowupPrompt(
   return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_PLANNING);
 }
 
+export function buildProgrammingExecutionPrinciplesText(locale = LOCALE.ZH_CN) {
+  return translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PROGRAMMING_EXECUTION_PRINCIPLES,
+  );
+}
+
+export function buildProgrammingRiskTaxonomyText(locale = LOCALE.ZH_CN) {
+  return translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PROGRAMMING_RISK_TAXONOMY,
+  );
+}
+
+function buildProgrammingExecutionPolicyText(locale = LOCALE.ZH_CN) {
+  return [
+    buildProgrammingExecutionPrinciplesText(locale),
+    buildProgrammingRiskTaxonomyText(locale),
+  ].filter(Boolean).join("\n\n");
+}
+
 export function buildWorkflowResponsibilityConstraintUserPrompt(
   locale = LOCALE.ZH_CN,
   stage = "planning",
+  options = {},
 ) {
   const normalizedStage = String(stage || "planning").trim().toLowerCase();
   let stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_PLANNING;
@@ -122,7 +144,9 @@ export function buildWorkflowResponsibilityConstraintUserPrompt(
     normalizedStage.includes("final_acceptance")
   ) stageKey = HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_STAGE_FINAL_ACCEPTANCE;
   const stageLabel = translateI18nText(locale, stageKey);
-  return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_CONSTRAINT_TEMPLATE, { stage: stageLabel });
+  const base = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.RESPONSIBILITY_CONSTRAINT_TEMPLATE, { stage: stageLabel });
+  if (options?.programmingMode !== true && options?.isProgrammingMode !== true) return base;
+  return [base, "", buildProgrammingExecutionPolicyText(locale)].filter(Boolean).join("\n");
 }
 
 export function getPlanningRevisionMarker(locale = LOCALE.ZH_CN) {
@@ -149,11 +173,16 @@ export function buildGuidanceFailurePromptText({
   locale = LOCALE.ZH_CN,
   marker = "",
   reason = "",
+  programmingMode = false,
 } = {}) {
   const message = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_FAILURE_PROMPT_TEMPLATE, {
     reason: String(reason || "").trim(),
   });
-  return [String(marker || "").trim(), message].filter(Boolean).join("\n");
+  return [
+    String(marker || "").trim(),
+    message,
+    programmingMode === true ? buildProgrammingExecutionPolicyText(locale) : "",
+  ].filter(Boolean).join("\n");
 }
 
 export function getAcceptanceSemanticValidationMarker(locale = LOCALE.ZH_CN) {
@@ -191,16 +220,19 @@ export function buildAcceptancePatchProtocolText(options = {}) {
 }
 
 export function buildPlanningMainPrompt(options = {}) {
-  const { locale, marker, data } = normalizePromptOptions(options);
+  const { locale, marker, data, programmingMode } = normalizePromptOptions(options);
   const userGoal = String(data.userGoal || options?.userGoal || "").trim();
   const goal = String(userGoal || "").trim() || translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
   const currentTaskGoalProtocol = translateI18nText(
     locale,
     HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL,
   );
+  const goalPromptKey = programmingMode
+    ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL_PROGRAMMING_FAST
+    : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL;
   return [
     String(marker || "").trim(),
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_PROMPT_GOAL),
+    translateI18nText(locale, goalPromptKey),
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_USER_GOAL_HEADER),
     goal,
@@ -208,6 +240,8 @@ export function buildPlanningMainPrompt(options = {}) {
     buildPlanningMainPatchProtocolCoreText({ locale, actions: ["ADD"] }),
     "",
     currentTaskGoalProtocol,
+    "",
+    programmingMode ? buildProgrammingExecutionPolicyText(locale) : "",
     "",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_MAIN_CONSTRAINT),
     "",
@@ -295,7 +329,9 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     : "1. [plan=2][status=done][evidence=...] ...";
   const nextSuggestionSample = translateI18nText(
     locale,
-    HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_NEXT_SUGGESTION_SAMPLE,
+    programmingMode
+      ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_SAMPLE
+      : HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_NEXT_SUGGESTION_SAMPLE,
   );
   const riskSampleKey = programmingMode
     ? HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_SAMPLE_RISK_HIGH_PROGRAMMING
@@ -315,6 +351,8 @@ export function buildGuidanceSummaryPromptText(options = {}) {
     "[SUMMARY_END]",
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_RULES),
     programmingMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_RULES) : "",
+    programmingMode ? translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_RULES) : "",
+    programmingMode ? buildProgrammingExecutionPolicyText(locale) : "",
     buildSummaryPatchProtocolCoreText({ locale, programmingMode }),
   ].filter(Boolean).join("\n");
 }
@@ -373,12 +411,13 @@ export function buildAcceptanceMainPlanContextPromptText(options = {}) {
 }
 
 export function buildPhaseAcceptanceRequestPromptText(options = {}) {
-  const { locale, marker, data } = normalizePromptOptions(options);
+  const { locale, marker, data, programmingMode } = normalizePromptOptions(options);
   const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? {};
   const payloadText = JSON.stringify(payload || {}, null, 2);
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_GOAL),
+    programmingMode ? buildProgrammingRiskTaxonomyText(locale) : "",
     buildAcceptancePatchProtocolText({ locale, mode: "phase" }),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PHASE_ACCEPTANCE_REQUEST_CONSTRAINT),
     payloadText,
@@ -441,12 +480,13 @@ export function buildAllSummaryReportSystemContents(options = {}) {
 }
 
 export function buildAcceptanceValidationRequestPromptText(options = {}) {
-  const { locale, marker, data } = normalizePromptOptions(options);
+  const { locale, marker, data, programmingMode } = normalizePromptOptions(options);
   const payload = data.requestPayload ?? data.payload ?? options?.requestPayload ?? options?.payload ?? null;
   const payloadText = JSON.stringify(payload || {}, null, 2);
   return [
     String(marker || "").trim(),
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.FINAL_ACCEPTANCE_REQUEST_GOAL),
+    programmingMode ? buildProgrammingRiskTaxonomyText(locale) : "",
     buildAcceptancePatchProtocolText({ locale, mode: "final" }),
     payloadText,
   ].filter(Boolean).join("\n");
