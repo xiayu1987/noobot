@@ -41,7 +41,10 @@ export const zhCNMessages = {
     "deleteSession": "删除会话",
     "selectedConnectors": "当前已选连接器",
     "unselected": "未勾选",
-    "emptyChatHint": "开始与 Noobot 的全新对话"
+    "emptyChatHint": "开始与 Noobot 的全新对话",
+    "chatNavigator": "对话导航",
+    "showChatNavigator": "显示对话导航",
+    "hideChatNavigator": "隐藏对话导航"
   },
   "settings": {
     "userParams": "用户参数",

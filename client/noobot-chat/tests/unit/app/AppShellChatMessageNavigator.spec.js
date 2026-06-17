@@ -1,0 +1,72 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const appShellSource = readFileSync(
+  resolve(__dirname, "../../../src/app/AppShell.vue"),
+  "utf8",
+);
+
+describe("AppShell chat message navigator", () => {
+  it("builds navigator items from active session messages and delegates selection to the message list", () => {
+    expect(appShellSource).toContain("const chatMessageNavItems = computed(() =>");
+    expect(appShellSource).toContain("activeSession.value?.messages || []");
+    expect(appShellSource).toContain("messageListPanelRef.value?.getMessageAnchorId?.(messageItem, messageIndex)");
+    expect(appShellSource).toContain("function handleSelectChatMessageNavItem(item = {})");
+    expect(appShellSource).toContain("messageListPanelRef.value?.scrollToMessageAnchor?.(item?.id)");
+  });
+
+  it("syncs the highlighted navigator item from scroll position", () => {
+    expect(appShellSource).toContain("function syncCurrentMessageAnchorId()");
+    expect(appShellSource).toContain('querySelectorAll?.("[data-chat-message-anchor]")');
+    expect(appShellSource).toContain("currentMessageAnchorId.value = String(");
+    expect(appShellSource).toContain("function bindChatMessageScrollSync()");
+    expect(appShellSource).toContain('wrapRef.addEventListener?.("scroll", syncCurrentMessageAnchorId, { passive: true })');
+    expect(appShellSource).toContain("nextTick(bindChatMessageScrollSync)");
+  });
+
+  it("uses Element Plus anchor on desktop and drawer on mobile", () => {
+    expect(appShellSource).toContain("<el-affix :offset=\"80\">");
+    expect(appShellSource).toContain("<ChatMessageNavigator");
+    expect(appShellSource).toContain("v-model=\"mobileChatNavigatorVisible\"");
+    expect(appShellSource).toContain("class=\"chat-message-nav-drawer noobot-side-drawer\"");
+    expect(appShellSource).toContain("if (isMobile.value) {");
+    expect(appShellSource).toContain("mobileChatNavigatorVisible.value = false;");
+  });
+
+  it("reserves desktop navigator space only inside the chat content body", () => {
+    expect(appShellSource).toContain('<main class="main-content">');
+    expect(appShellSource).toContain("<ChatMainHeader");
+    expect(appShellSource).toContain('<div class="chat-content-body">');
+    expect(appShellSource).toContain('<div class="chat-composer-body">');
+    expect(appShellSource.indexOf("<ChatMainHeader")).toBeLessThan(appShellSource.indexOf('<div class="chat-content-body">'));
+    expect(appShellSource.indexOf('<div class="chat-content-body">')).toBeLessThan(appShellSource.indexOf('<div class="chat-composer-body">'));
+    expect(appShellSource.indexOf('<div class="chat-composer-body">')).toBeLessThan(appShellSource.indexOf('<ChatComposer'));
+    expect(appShellSource).toContain(".chat-content-body {\n  position: relative;");
+    expect(appShellSource).toContain(".chat-content-body,\n  .chat-composer-body {\n    padding-right: 268px;");
+    expect(appShellSource).toContain(".chat-composer-body {\n  flex-shrink: 0;");
+    expect(appShellSource).not.toContain(".main-content {\n    padding-right: 268px;");
+    expect(appShellSource).toContain("top: 18px;");
+  });
+
+  it("keeps the navigator polished and the mobile trigger reachable", () => {
+    expect(appShellSource).toContain("chat-message-nav-title-group");
+    expect(appShellSource).toContain("{{ chatMessageNavItems.length }}");
+    expect(appShellSource).toContain("position: fixed;");
+    expect(appShellSource).toContain("top: calc(72px + env(safe-area-inset-top));");
+    expect(appShellSource).toContain(":aria-label=\"translate('common.chatNavigator')\"");
+  });
+
+  it("uses Element Plus icons, theme variables, and pseudo route for the mobile navigator", () => {
+    expect(appShellSource).toContain('import { Tickets } from "@element-plus/icons-vue"');
+    expect(appShellSource).toContain("<el-icon><Tickets /></el-icon>");
+    expect(appShellSource).toContain("<el-icon class=\"mobile-chat-message-nav-trigger-icon\"><Tickets /></el-icon>");
+    expect(appShellSource).toContain("function openChatMessageNavigator()");
+    expect(appShellSource).toContain("panel: PSEUDO_PANEL.CHAT_NAVIGATOR");
+    expect(appShellSource).toContain("@closed=\"pushPseudoRoute({ panel: '' })\"");
+    expect(appShellSource).toContain("background: var(--noobot-panel-bg);");
+    expect(appShellSource).toContain("border: 1px solid var(--noobot-border-soft);");
+  });
+});

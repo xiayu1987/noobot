@@ -45,6 +45,7 @@ function getWrapRef() {
 }
 
 function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
+  const stableIndex = Number.isFinite(Number(messageIndex)) ? Number(messageIndex) : 0;
   const role = String(messageItem?.role || "").trim();
   const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
   const taskId = String(messageItem?.taskId || "").trim();
@@ -53,15 +54,34 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
   // snapshots/replay patch an existing message. If the key changes Vue remounts
   // the message component, which looks like the AI message flashes and can also
   // make the previous message blink when a DONE snapshot is folded back.
-  const stablePrimaryId = dialogProcessId || taskId || toolCallId || String(messageIndex);
-  return [role, stablePrimaryId, messageIndex]
-    .map((item) => String(item || "").replaceAll("|", "/"))
+  const stablePrimaryId = dialogProcessId || taskId || toolCallId || String(stableIndex);
+  return [role, stablePrimaryId, stableIndex]
+    .map((item) => String(item ?? "").replaceAll("|", "/"))
     .join("|");
+}
+
+function getMessageAnchorId(messageItem = {}, messageIndex = 0) {
+  return `chat-message-${getMessageRenderKey(messageItem, messageIndex)
+    .replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function scrollToMessageAnchor(anchorId = "") {
+  const wrapRef = getWrapRef();
+  const id = String(anchorId || "").trim();
+  if (!wrapRef || !id) return false;
+  const target = wrapRef.querySelector?.(`#${CSS.escape(id)}`);
+  if (!target) return false;
+  const offset = 16;
+  const nextTop = target.offsetTop - offset;
+  wrapRef.scrollTo?.({ top: Math.max(0, nextTop), behavior: "smooth" });
+  return true;
 }
 
 defineExpose({
   setScrollTop,
   getWrapRef,
+  getMessageAnchorId,
+  scrollToMessageAnchor,
 });
 </script>
 
@@ -90,12 +110,18 @@ defineExpose({
           v-for="(messageItem, messageIndex) in activeSession?.messages || []"
           :key="getMessageRenderKey(messageItem, messageIndex)"
         >
-          <ChatMessageItem
+          <div
             v-if="shouldRenderMessageInChat(messageItem)"
-            v-bind="messageItemSharedProps"
-            :message-item="messageItem"
-            @open-thinking-details="$emit('open-thinking-details', $event)"
-          />
+            :id="getMessageAnchorId(messageItem, messageIndex)"
+            class="chat-message-anchor"
+            :data-chat-message-anchor="getMessageAnchorId(messageItem, messageIndex)"
+          >
+            <ChatMessageItem
+              v-bind="messageItemSharedProps"
+              :message-item="messageItem"
+              @open-thinking-details="$emit('open-thinking-details', $event)"
+            />
+          </div>
         </template>
       </div>
     </el-scrollbar>

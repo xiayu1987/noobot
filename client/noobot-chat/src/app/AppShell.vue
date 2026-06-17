@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { Tickets } from "@element-plus/icons-vue";
 import noobotLogo from "../shared/assets/noobot.svg";
 import WorkspacePanel from "../modules/settings/WorkspacePanel.vue";
 import UserSettingsPanel from "../modules/settings/UserSettingsPanel.vue";
@@ -14,6 +15,7 @@ import ChatComposer from "../modules/composer/ChatComposer.vue";
 import ConversationStateDebugPanel from "../modules/debug/ConversationStateDebugPanel.vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageListPanel from "./ChatMessageListPanel.vue";
+import ChatMessageNavigator from "./ChatMessageNavigator.vue";
 import ThinkingPanel from "../shared/message/ThinkingPanel.vue";
 import SessionSidebar from "../modules/session/SessionSidebar.vue";
 import { useApiConnection } from "../composables/infra/useApiConnection";
@@ -77,6 +79,9 @@ const composerMorePanelVisible = ref(false);
 const thinkingDetailsVisible = ref(false);
 const thinkingDetailsMessageItem = ref(null);
 const thinkingDetailsAllMessages = ref([]);
+const chatNavigatorVisible = ref(true);
+const mobileChatNavigatorVisible = ref(false);
+const currentMessageAnchorId = ref("");
 
 function safeParseStringArray(rawValue = "") {
   try {
@@ -155,6 +160,72 @@ const availablePlugins = computed(() => {
     })
     .filter((pluginItem) => Boolean(pluginItem.key) && pluginItem.enabled === true);
 });
+
+const chatMessageNavItems = computed(() =>
+  (activeSession.value?.messages || [])
+    .map((messageItem = {}, messageIndex = 0) => {
+      if (!shouldRenderMessageInChat(messageItem)) return null;
+      const anchorId = messageListPanelRef.value?.getMessageAnchorId?.(messageItem, messageIndex);
+      const role = String(messageItem?.role || translate("common.session")).trim();
+      const content = String(messageItem?.content || messageItem?.text || "").replace(/\s+/g, " ").trim();
+      return {
+        id: anchorId || `chat-message-${messageIndex}`,
+        title: `${messageIndex + 1}. ${role}${content ? `：${content.slice(0, 28)}` : ""}`,
+      };
+    })
+    .filter(Boolean),
+);
+
+function handleSelectChatMessageNavItem(item = {}) {
+  currentMessageAnchorId.value = String(item?.id || "");
+  messageListPanelRef.value?.scrollToMessageAnchor?.(item?.id);
+  if (isMobile.value) {
+    mobileChatNavigatorVisible.value = false;
+    pushPseudoRoute({ panel: "" });
+  }
+}
+
+function openChatMessageNavigator() {
+  mobileChatNavigatorVisible.value = true;
+  pushPseudoRoute({
+    sessionId: activeSessionId.value,
+    panel: PSEUDO_PANEL.CHAT_NAVIGATOR,
+  });
+}
+
+function syncCurrentMessageAnchorId() {
+  const wrapRef = messageListPanelRef.value?.getWrapRef?.();
+  if (!wrapRef) return;
+  const anchors = Array.from(wrapRef.querySelectorAll?.("[data-chat-message-anchor]") || []);
+  if (!anchors.length) {
+    currentMessageAnchorId.value = "";
+    return;
+  }
+  const threshold = Number(wrapRef.scrollTop || 0) + 24;
+  let currentAnchor = anchors[0];
+  for (const anchor of anchors) {
+    if (Number(anchor.offsetTop || 0) <= threshold) currentAnchor = anchor;
+    else break;
+  }
+  currentMessageAnchorId.value = String(
+    currentAnchor?.dataset?.chatMessageAnchor || currentAnchor?.id || "",
+  );
+}
+
+function bindChatMessageScrollSync() {
+  const wrapRef = messageListPanelRef.value?.getWrapRef?.();
+  if (!wrapRef || wrapRef.__noobotChatNavScrollSyncBound) return;
+  wrapRef.addEventListener?.("scroll", syncCurrentMessageAnchorId, { passive: true });
+  wrapRef.__noobotChatNavScrollSyncBound = true;
+  syncCurrentMessageAnchorId();
+}
+
+function unbindChatMessageScrollSync() {
+  const wrapRef = messageListPanelRef.value?.getWrapRef?.();
+  if (!wrapRef || !wrapRef.__noobotChatNavScrollSyncBound) return;
+  wrapRef.removeEventListener?.("scroll", syncCurrentMessageAnchorId);
+  delete wrapRef.__noobotChatNavScrollSyncBound;
+}
 
 function persistSelectedPlugins() {
   hasStoredSelectedPlugins.value = true;
@@ -404,6 +475,7 @@ function resolveActivePseudoPanel() {
   if (mobileSidebarOpen.value && isMobile.value) return PSEUDO_PANEL.SIDEBAR;
   if (composerMorePanelVisible.value) return PSEUDO_PANEL.COMPOSER;
   if (thinkingDetailsVisible.value) return PSEUDO_PANEL.THINKING_DETAILS;
+  if (mobileChatNavigatorVisible.value && isMobile.value) return PSEUDO_PANEL.CHAT_NAVIGATOR;
   return "";
 }
 
@@ -425,6 +497,7 @@ async function applyPseudoRouteToUi(route = {}) {
   if (targetPanel === PSEUDO_PANEL.SIDEBAR) openMobileSidebar();
   if (targetPanel === PSEUDO_PANEL.COMPOSER) composerMorePanelVisible.value = true;
   if (targetPanel === PSEUDO_PANEL.THINKING_DETAILS) openThinkingDetailsPanel({ pushRoute: false });
+  if (targetPanel === PSEUDO_PANEL.CHAT_NAVIGATOR && isMobile.value) mobileChatNavigatorVisible.value = true;
 }
 
 const {
@@ -686,6 +759,7 @@ async function onAppMounted() {
 
 function onAppUnmounted() {
   removePseudoRoutePopStateListener();
+  unbindChatMessageScrollSync();
   releaseAllPreviewUrls();
 }
 
@@ -734,6 +808,22 @@ watch(
     replacePseudoRoute();
   },
   { immediate: true },
+);
+
+watch(
+  chatMessageNavItems,
+  () => {
+    nextTick(bindChatMessageScrollSync);
+  },
+  { flush: "post", immediate: true },
+);
+
+watch(
+  () => activeSessionId.value,
+  () => {
+    currentMessageAnchorId.value = "";
+    nextTick(bindChatMessageScrollSync);
+  },
 );
 
 function onAllowUserInteractionUpdate(value) {
@@ -908,59 +998,101 @@ const drawerPanels = computed(() => [
         @open-config-params="openConfigParams"
       />
 
-      <ChatMessageListPanel
-        ref="messageListPanelRef"
-        :loading-session-detail="loadingSessionDetail"
-        :active-session="activeSession || {}"
-        :should-render-message-in-chat="shouldRenderMessageInChat"
-        :user-id="userId"
-        :auth-fetch="authFetch"
-        :render-markdown="renderMarkdown"
-        :format-time="formatTime"
-        :format-file-size="formatFileSize"
-        :is-image-mime="isImageMime"
-        :empty-logo-src="noobotLogo"
-        @open-thinking-details="openThinkingDetailsPanel"
-      />
+      <div class="chat-content-body">
+        <ChatMessageListPanel
+          ref="messageListPanelRef"
+          :loading-session-detail="loadingSessionDetail"
+          :active-session="activeSession || {}"
+          :should-render-message-in-chat="shouldRenderMessageInChat"
+          :user-id="userId"
+          :auth-fetch="authFetch"
+          :render-markdown="renderMarkdown"
+          :format-time="formatTime"
+          :format-file-size="formatFileSize"
+          :is-image-mime="isImageMime"
+          :empty-logo-src="noobotLogo"
+          @open-thinking-details="openThinkingDetailsPanel"
+        />
 
-      <UserInteractionForm
-        v-if="pendingInteractionRequest"
-        :request="pendingInteractionRequest"
-        :submitting="interactionSubmitting"
-        @confirm="handleInteractionConfirm"
-        @cancel="handleInteractionCancel"
-      />
+        <aside
+          v-if="!isMobile && chatMessageNavItems.length"
+          class="chat-message-nav-panel noobot-flat-card"
+        >
+          <div class="chat-message-nav-header">
+            <div class="chat-message-nav-title-group">
+              <span class="chat-message-nav-icon"><el-icon><Tickets /></el-icon></span>
+              <div>
+                <span class="chat-message-nav-title">{{ translate("common.chatNavigator") }}</span>
+                <span class="chat-message-nav-count">{{ chatMessageNavItems.length }}</span>
+              </div>
+            </div>
+            <el-button text size="small" class="chat-message-nav-toggle" @click="chatNavigatorVisible = !chatNavigatorVisible">
+              {{ chatNavigatorVisible ? translate("common.hideChatNavigator") : translate("common.showChatNavigator") }}
+            </el-button>
+          </div>
+          <el-affix :offset="80">
+            <ChatMessageNavigator
+              v-show="chatNavigatorVisible"
+              :items="chatMessageNavItems"
+              :current-id="currentMessageAnchorId"
+              @select="handleSelectChatMessageNavItem"
+            />
+          </el-affix>
+        </aside>
 
-      <ChatComposer
-        ref="composerRef"
-        v-model="input"
-        :more-panel-visible="composerMorePanelVisible"
-        :upload-files="uploadFiles"
-        :connector-panel-state="activeSession?.connectorPanelState || {}"
-        :sending="sending"
-        :can-stop="sending"
-        :connected="connected"
-        :allow-user-interaction="allowUserInteraction"
-        :force-tool="forceTool"
-        :stream-output="streamOutput"
-        :bot-scenario="botScenario"
-        :scenario-options="availableBotScenarios"
-        :available-plugins="availablePlugins"
-        :selected-plugins="selectedPlugins"
-        :interaction-active="Boolean(pendingInteractionRequest)"
-        @upload-change="onUploadChange"
-        @append-uploads="appendUploads"
-        @update:allow-user-interaction="onAllowUserInteractionUpdate"
-        @update:force-tool="onForceToolUpdate"
-        @update:stream-output="onStreamOutputUpdate"
-        @update:bot-scenario="onBotScenarioUpdate"
-        @update:selected-plugins="onSelectedPluginsUpdate"
-        @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"
-        @clear-uploads="clearUploads"
-        @connector-selected="onConnectorSelected"
-        @send="send"
-        @stop="stopSending"
-      />
+        <el-button
+          v-if="isMobile && chatMessageNavItems.length"
+          class="mobile-chat-message-nav-trigger"
+          type="primary"
+          circle
+          size="large"
+          :aria-label="translate('common.chatNavigator')"
+          @click="openChatMessageNavigator"
+        >
+          <el-icon class="mobile-chat-message-nav-trigger-icon"><Tickets /></el-icon>
+        </el-button>
+      </div>
+
+      <div class="chat-composer-body">
+        <UserInteractionForm
+          v-if="pendingInteractionRequest"
+          :request="pendingInteractionRequest"
+          :submitting="interactionSubmitting"
+          @confirm="handleInteractionConfirm"
+          @cancel="handleInteractionCancel"
+        />
+
+        <ChatComposer
+          ref="composerRef"
+          v-model="input"
+          :more-panel-visible="composerMorePanelVisible"
+          :upload-files="uploadFiles"
+          :connector-panel-state="activeSession?.connectorPanelState || {}"
+          :sending="sending"
+          :can-stop="sending"
+          :connected="connected"
+          :allow-user-interaction="allowUserInteraction"
+          :force-tool="forceTool"
+          :stream-output="streamOutput"
+          :bot-scenario="botScenario"
+          :scenario-options="availableBotScenarios"
+          :available-plugins="availablePlugins"
+          :selected-plugins="selectedPlugins"
+          :interaction-active="Boolean(pendingInteractionRequest)"
+          @upload-change="onUploadChange"
+          @append-uploads="appendUploads"
+          @update:allow-user-interaction="onAllowUserInteractionUpdate"
+          @update:force-tool="onForceToolUpdate"
+          @update:stream-output="onStreamOutputUpdate"
+          @update:bot-scenario="onBotScenarioUpdate"
+          @update:selected-plugins="onSelectedPluginsUpdate"
+          @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"
+          @clear-uploads="clearUploads"
+          @connector-selected="onConnectorSelected"
+          @send="send"
+          @stop="stopSending"
+        />
+      </div>
       <ConversationStateDebugPanel
         v-if="showConversationStateDebugPanel"
         :sending="sending"
@@ -984,6 +1116,21 @@ const drawerPanels = computed(() => [
           :is="drawer.component"
           v-bind="drawer.props"
           @workspace-reset="drawer.onWorkspaceReset?.()"
+        />
+      </el-drawer>
+      <el-drawer
+        v-if="isMobile"
+        v-model="mobileChatNavigatorVisible"
+        :title="translate('common.chatNavigator')"
+        @closed="pushPseudoRoute({ panel: '' })"
+        direction="rtl"
+        size="82%"
+        class="chat-message-nav-drawer noobot-side-drawer"
+      >
+        <ChatMessageNavigator
+          :items="chatMessageNavItems"
+          :current-id="currentMessageAnchorId"
+          @select="handleSelectChatMessageNavItem"
         />
       </el-drawer>
     </div>
@@ -1019,6 +1166,114 @@ const drawerPanels = computed(() => [
   flex-direction: column;
   background: var(--noobot-panel-bg);
   min-width: 0;
+}
+
+@media (min-width: 961px) {
+  .chat-content-body,
+  .chat-composer-body {
+    padding-right: 268px;
+  }
+}
+
+.chat-content-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.chat-composer-body {
+  flex-shrink: 0;
+  background: var(--noobot-panel-bg);
+  box-sizing: border-box;
+}
+
+.chat-message-nav-panel {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 8;
+  width: 236px;
+  max-width: 24vw;
+  padding: 12px;
+  border: 1px solid var(--noobot-border-soft);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--el-color-primary) 10%, transparent), transparent 62%),
+    var(--noobot-panel-bg);
+  box-shadow: var(--noobot-card-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.chat-message-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--noobot-text-main);
+}
+
+.chat-message-nav-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chat-message-nav-icon {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+  font-weight: 700;
+}
+
+.chat-message-nav-title {
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.chat-message-nav-count {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--noobot-text-secondary);
+}
+
+.chat-message-nav-toggle {
+  flex: 0 0 auto;
+}
+
+.mobile-chat-message-nav-trigger {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  top: calc(72px + env(safe-area-inset-top));
+  z-index: 16;
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary) 24%, transparent);
+  background: var(--noobot-panel-bg);
+  color: var(--el-color-primary);
+  box-shadow: var(--noobot-card-shadow);
+}
+
+.mobile-chat-message-nav-trigger-icon {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+@media (max-width: 960px) {
+  .chat-message-nav-panel {
+    display: none;
+  }
 }
 :deep(.workspace-drawer .el-tree) {
   --el-tree-node-hover-bg-color: var(--noobot-surface-item-hover);
