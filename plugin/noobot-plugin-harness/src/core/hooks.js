@@ -291,6 +291,11 @@ export function createRegisterHarnessHooks(deps = {}) {
                 pluginVersion: plugin.version,
                 harness: {
                   planningGuidanceMode: options.planningGuidanceMode,
+                  nonProgrammingWorkflowStrategy: options.nonProgrammingWorkflowStrategy,
+                  workflowStrategy: {
+                    nonProgramming: options.nonProgrammingWorkflowStrategy,
+                  },
+                  nonProgrammingExecutionFirst: options.nonProgrammingExecutionFirst !== false,
                   summaryOnToolBurstThreshold: options.summaryOnToolBurstThreshold === true,
                   summaryDetailSaveToAttachment: options.summaryDetailSaveToAttachment === true,
                   saveSummaryDetailToAttachment: options.summaryDetailSaveToAttachment === true,

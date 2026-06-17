@@ -41,7 +41,10 @@ import {
   buildAcceptanceValidationRequestPromptText,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildPhaseAcceptanceRequestPromptText,
+  resolveExecutionFirstModeFromContext,
   resolveProgrammingModeFromContext,
+  resolveRiskFirstModeFromContext,
+  resolveWorkflowStrategyFromContext,
   getAllPhaseAcceptanceReportsMarker,
   getAllSummaryReportsMarker,
   getAcceptanceMainPlanContextMarker,
@@ -142,6 +145,9 @@ function buildFinalAcceptanceSemanticValidationMessages({
   phaseReportsContents = [],
   requestContent = "",
   programmingMode = false,
+  executionFirstMode = false,
+  riskFirstMode = false,
+  workflowStrategy = "",
 } = {}) {
   const messages = [];
   if (String(planContextContent || "").trim()) {
@@ -158,6 +164,9 @@ function buildFinalAcceptanceSemanticValidationMessages({
       role: "user",
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
         programmingMode,
+        workflowStrategy,
+        executionFirstMode,
+        riskFirstMode,
       }),
     });
   }
@@ -224,6 +233,7 @@ function buildAcceptancePromptParts({
   requestPayload = {},
   phase = false,
   ctx = {},
+  meta = {},
 } = {}) {
   const mainPlanContext = resolveAcceptanceMainPlanContext(
     {
@@ -253,18 +263,27 @@ function buildAcceptancePromptParts({
       })
     : [];
   const programmingMode = resolveProgrammingModeFromContext(ctx);
+  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
+  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
   const requestContent = phase
     ? buildPhaseAcceptanceRequestPromptText({
         locale,
         marker: getPhaseAcceptanceRequestMarker(locale),
         data: { requestPayload },
         programmingMode,
+        workflowStrategy,
+        executionFirstMode,
+        riskFirstMode,
       })
     : buildAcceptanceValidationRequestPromptText({
         locale,
         marker: getAcceptanceSemanticValidationMarker(locale),
         data: { requestPayload },
         programmingMode,
+        workflowStrategy,
+        executionFirstMode,
+        riskFirstMode,
       });
   void state;
   return { planContextContent, summaryReportsContents, phaseReportsContents, requestContent };
@@ -278,6 +297,9 @@ function buildPhaseAcceptanceMessages({
   phaseReportsContents = [],
   requestContent = "",
   programmingMode = false,
+  executionFirstMode = false,
+  riskFirstMode = false,
+  workflowStrategy = "",
 } = {}) {
   const messages = [];
   for (const item of Array.isArray(agentMessages) ? agentMessages : []) {
@@ -302,13 +324,16 @@ function buildPhaseAcceptanceMessages({
       role: "user",
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
         programmingMode,
+        workflowStrategy,
+        executionFirstMode,
+        riskFirstMode,
       }),
     });
   }
   return messages;
 }
 
-export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
+export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -316,6 +341,10 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
+  const programmingMode = resolveProgrammingModeFromContext(ctx);
+  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
+  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
   const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
     bucket,
     state,
@@ -323,6 +352,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
     phase: true,
     requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
     ctx,
+    meta,
   });
   for (const content of summaryReportsContents) {
     pushRoleMessage(messages, "system", content);
@@ -336,7 +366,10 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}) {
     messages,
     "user",
     buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
-      programmingMode: resolveProgrammingModeFromContext(ctx),
+      programmingMode,
+      workflowStrategy,
+      executionFirstMode,
+      riskFirstMode,
     }),
   );
   setPendingStateWithMeta(state, "phaseAcceptance", false);
@@ -386,7 +419,7 @@ export async function runPhaseAcceptanceBySeparateModel(
   if (!shouldRun) return false;
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) {
-    return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx);
+    return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx, meta);
   }
   const locale = state?.locale || LOCALE.ZH_CN;
   const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
@@ -396,6 +429,7 @@ export async function runPhaseAcceptanceBySeparateModel(
     phase: true,
     requestPayload: buildPhaseAcceptanceRequestPayload({ bucket, state }),
     ctx,
+    meta,
   });
   const agentMessages = resolveCapabilityModelMessages(meta, {
     ctx,
@@ -432,6 +466,9 @@ export async function runPhaseAcceptanceBySeparateModel(
           phaseReportsContents,
           requestContent,
           programmingMode: resolveProgrammingModeFromContext(ctx),
+          workflowStrategy: resolveWorkflowStrategyFromContext(ctx, meta),
+          executionFirstMode: resolveExecutionFirstModeFromContext(ctx, meta),
+          riskFirstMode: resolveRiskFirstModeFromContext(ctx, meta),
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance"),
@@ -513,6 +550,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     phase: true,
     requestPayload,
     ctx,
+    meta,
   });
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) {
@@ -560,6 +598,9 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
           phaseReportsContents,
           requestContent,
           programmingMode: resolveProgrammingModeFromContext(ctx),
+          workflowStrategy: resolveWorkflowStrategyFromContext(ctx, meta),
+          executionFirstMode: resolveExecutionFirstModeFromContext(ctx, meta),
+          riskFirstMode: resolveRiskFirstModeFromContext(ctx, meta),
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance_before_final"),
@@ -633,7 +674,7 @@ export function scheduleAcceptanceSemanticValidationByInject(ctx = {}, baseRepor
   });
 }
 
-export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
+export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -646,6 +687,10 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
+  const programmingMode = resolveProgrammingModeFromContext(ctx);
+  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
+  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
   const promptPayload = pendingData.payload && typeof pendingData.payload === "object" ? pendingData.payload : {};
   const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale, ctx);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
@@ -663,7 +708,10 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
     locale,
     marker: getAcceptanceSemanticValidationMarker(locale),
     data: { requestPayload },
-    programmingMode: resolveProgrammingModeFromContext(ctx),
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
   });
   const systemInjection = injectMessageWithPolicy(ctx, {
     role: "system",
@@ -696,7 +744,10 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}) {
   injectMessageWithPolicy(ctx, {
     role: "user",
     content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
-      programmingMode: resolveProgrammingModeFromContext(ctx),
+      programmingMode,
+      workflowStrategy,
+      executionFirstMode,
+      riskFirstMode,
     }),
     injectedMessageType: "acceptance_responsibility_constraint",
     injectAt: "append",
@@ -792,6 +843,9 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
       requestPayload,
     },
     programmingMode: resolveProgrammingModeFromContext(ctx),
+    workflowStrategy: resolveWorkflowStrategyFromContext(ctx, meta),
+    executionFirstMode: resolveExecutionFirstModeFromContext(ctx, meta),
+    riskFirstMode: resolveRiskFirstModeFromContext(ctx, meta),
   });
   const mainPlanContextPrompt = buildAcceptanceMainPlanContextPromptText({
     locale,
@@ -809,6 +863,9 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     phaseReportsContents: phaseReportsPrompts,
     requestContent: prompt,
     programmingMode: resolveProgrammingModeFromContext(ctx),
+    workflowStrategy: resolveWorkflowStrategyFromContext(ctx, meta),
+    executionFirstMode: resolveExecutionFirstModeFromContext(ctx, meta),
+    riskFirstMode: resolveRiskFirstModeFromContext(ctx, meta),
   });
   let response = null;
   try {

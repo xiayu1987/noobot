@@ -95,11 +95,19 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     RESPONSIBILITY_CONSTRAINT_TEMPLATE: "responsibilityConstraintTemplate",
     PROGRAMMING_EXECUTION_PRINCIPLES: "programmingExecutionPrinciples",
     PROGRAMMING_RISK_TAXONOMY: "programmingRiskTaxonomy",
+    EXECUTION_FIRST_PRINCIPLES: "executionFirstPrinciples",
+    EXECUTION_FIRST_RISK_TAXONOMY: "executionFirstRiskTaxonomy",
+    RISK_FIRST_PRINCIPLES: "riskFirstPrinciples",
+    RISK_FIRST_RISK_TAXONOMY: "riskFirstRiskTaxonomy",
     GUIDANCE_FAILURE_PROMPT_TEMPLATE: "guidanceFailurePromptTemplate",
     PLANNING_LATEST_USER_GOAL_FALLBACK: "planningLatestUserGoalFallback",
     PLANNING_MAIN_PROMPT_GOAL: "planningMainPromptGoal",
     PLANNING_MAIN_PROMPT_GOAL_PROGRAMMING_FAST:
       "planningMainPromptGoalProgrammingFast",
+    PLANNING_MAIN_PROMPT_GOAL_EXECUTION_FIRST:
+      "planningMainPromptGoalExecutionFirst",
+    PLANNING_MAIN_PROMPT_GOAL_RISK_FIRST:
+      "planningMainPromptGoalRiskFirst",
     PLANNING_MAIN_USER_GOAL_HEADER: "planningMainUserGoalHeader",
     PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL: "planningMainCurrentTaskGoalProtocol",
     PLANNING_MAIN_CONSTRAINT: "planningMainConstraint",
@@ -132,6 +140,10 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     GUIDANCE_SUMMARY_NEXT_SUGGESTION_SAMPLE: "guidanceSummaryNextSuggestionSample",
     GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_SAMPLE: "guidanceSummaryProgrammingNextActionSample",
     GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_RULES: "guidanceSummaryProgrammingNextActionRules",
+    GUIDANCE_SUMMARY_EXECUTION_FIRST_NEXT_ACTION_SAMPLE: "guidanceSummaryExecutionFirstNextActionSample",
+    GUIDANCE_SUMMARY_EXECUTION_FIRST_NEXT_ACTION_RULES: "guidanceSummaryExecutionFirstNextActionRules",
+    GUIDANCE_SUMMARY_RISK_FIRST_NEXT_ACTION_SAMPLE: "guidanceSummaryRiskFirstNextActionSample",
+    GUIDANCE_SUMMARY_RISK_FIRST_NEXT_ACTION_RULES: "guidanceSummaryRiskFirstNextActionRules",
     GUIDANCE_SUMMARY_RULES: "guidanceSummaryRules",
     PREVIOUS_SUMMARY_CONTEXT_HEADER: "previousSummaryContextHeader",
     ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER: "acceptanceMainPlanContextHeader",
@@ -168,6 +180,8 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PROTOCOL_SUMMARY_PROGRAMMING_LINE3: "protocolSummaryProgrammingLine3",
     PROTOCOL_SUMMARY_PROGRAMMING_LINE4: "protocolSummaryProgrammingLine4",
     PROTOCOL_SUMMARY_PROGRAMMING_LINE6: "protocolSummaryProgrammingLine6",
+    PROTOCOL_SUMMARY_EXECUTION_FIRST_LINE6: "protocolSummaryExecutionFirstLine6",
+    PROTOCOL_SUMMARY_RISK_FIRST_LINE6: "protocolSummaryRiskFirstLine6",
     PROTOCOL_ACCEPTANCE_TITLE_PHASE: "protocolAcceptanceTitlePhase",
     PROTOCOL_ACCEPTANCE_TITLE_FINAL: "protocolAcceptanceTitleFinal",
     PROTOCOL_ACCEPTANCE_OUTPUT_RULE: "protocolAcceptanceOutputRule",
@@ -418,6 +432,14 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "编程执行原则：\n1. 默认不要等待所有风险点解除。\n2. 对可逆代码改动，优先小步修改并立即验证。\n3. 未知点应转化为验证动作，而不是长期阻塞。\n4. 只有不可逆、安全、生产数据、凭证、破坏性操作、需求冲突才需要停下确认。\n5. 每轮最多解决一个最小闭环：修改 -> 验证 -> 修正。",
     programmingRiskTaxonomy:
       "编程风险分级：\nA. Blocking risk（必须停）：破坏性/不可逆、安全/密钥/权限、生产数据/生产配置、破坏公开 API、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止代码修改；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先改但必须验证）：调用链不确定、测试可能失败、边界条件不全、类型/构建可能报错。不得阻塞最小可逆修改；必须转成 npm test/lint/build/相关测试等验证动作。\nC. Informational risk（只记录不阻塞）：命名风格、未来重构、更优雅方案等；只记录，不得阻塞执行。",
+    executionFirstPrinciples:
+      "执行优先原则：\n1. 默认不要等待所有风险点解除。\n2. 对可逆、低成本、可验证动作，优先小步执行并快速验证。\n3. 未知点应转化为检查、验证或反馈动作，而不是长期阻塞。\n4. 只有不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突才需要停下确认。\n5. 每轮最多解决一个最小闭环：执行 -> 验证 -> 修正。",
+    executionFirstRiskTaxonomy:
+      "执行优先风险分级：\nA. Blocking risk（必须停）：不可逆/破坏性、安全/隐私/合规、资金/生产环境、公开承诺、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止执行；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先做但必须验证）：信息不完整、结果可能失败、边界条件不全、质量不确定。不得阻塞最小可逆动作；必须转成检查、验证、对比或反馈动作。\nC. Informational risk（只记录不阻塞）：风格偏好、未来优化、更优雅方案等；只记录，不得阻塞执行。",
+    riskFirstPrinciples:
+      "风险优先原则：\n1. 默认先识别会影响正确性、安全、成本、承诺或可逆性的关键风险。\n2. 对高影响或不可逆风险，先检查、澄清或降级风险，再执行。\n3. 可低成本验证的不确定性，应转成 inspect、verify 或 ask_user，而不是直接承诺结果。\n4. 只有风险已降级为可管理、可验证或用户明确授权后，才推进实际执行。\n5. 每轮最多解决一个风险闭环：识别 -> 降级/确认 -> 再决定是否执行。",
+    riskFirstRiskTaxonomy:
+      "风险优先风险分级：\nA. Blocking risk（必须先处理）：不可逆/破坏性、安全/隐私/合规、资金/生产环境、公开承诺、需求冲突、无法验证且代价高；必须 inspect、ask_user 或先给出降级动作。\nB. Managed risk（先降级再做）：信息不足、质量不确定、边界不清、依赖外部反馈；优先转成检查、验证、对比、试点或确认动作。\nC. Informational risk（记录即可）：风格偏好、未来优化、轻微不确定性；记录但不得伪装成阻塞风险。",
     guidanceFailurePromptTemplate:
       "工具失败达到阈值({reason})，请分析工具失败原因，并且给予修复建议。",
     acceptanceMainPlanContextHeader: "计划清单上下文如下（验收时必须完整对齐）：",
@@ -435,6 +457,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "目标：根据用户需求生成宏观主计划。仅限宏观步骤，严禁输出任何子计划或实施细节。",
     planningMainPromptGoalProgrammingFast:
       "目标：生成用于编程执行的最小可执行计划切片。不要试图一次性解除所有风险，也不要等待所有不确定性消失；除非涉及不可逆操作、数据删除、安全凭证、生产发布、生产数据或需求冲突，否则默认采用 小步修改 -> 验证 -> 修正 的闭环，优先进行最小可逆代码修改，然后运行最小验证，再根据结果继续修正。计划应倾向于：找到最相关入口 -> 做最小可逆修改 -> 运行局部测试/构建 -> 根据失败信息修正 -> 最后补充验收说明。",
+    planningMainPromptGoalExecutionFirst:
+      "目标：生成面向执行的最小可执行计划切片。不要试图一次性解除所有风险，也不要等待所有不确定性消失；除非涉及不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则默认采用 小步执行 -> 验证/反馈 -> 修正 的闭环。计划应倾向于：找到最相关入口 -> 做最小可逆动作 -> 运行最小验证/检查 -> 根据结果修正 -> 最后补充验收说明。",
+    planningMainPromptGoalRiskFirst:
+      "目标：生成面向风险降级的最小计划切片。计划仍然是计划，但优先识别会阻塞执行的关键风险；不要罗列无限风险，只输出能推进决策的宏观步骤。默认采用 识别风险 -> 检查/澄清/降级 -> 决定是否执行 的闭环。计划应倾向于：找到最关键不确定点 -> 做最小检查或确认 -> 将风险降级为可执行动作 -> 再推进执行或验收说明。",
     planningMainUserGoalHeader: "【用户目标】",
     planningMainCurrentTaskGoalProtocol:
       "在计划 patch 行之前，必须用以下文本协议输出当前任务目标：[CURRENT_TASK_GOAL]\\n<由计划模型提炼的一句话当前任务目标>\\n[PLAN]",
@@ -485,6 +511,14 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "[NEXT_ACTION]\naction = edit|test|inspect|ask_user|final\ntarget = 文件路径/命令/问题\nreason = 简短原因\nblocking = true|false",
     guidanceSummaryProgrammingNextActionRules:
       "编程模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 edit、test、inspect、ask_user、final 之一；target 必须是具体文件路径、命令或需要询问用户的问题；reason 必须简短；blocking=true 仅用于不可逆、安全、生产数据、凭证、破坏性操作或需求冲突，否则用 blocking=false 并继续小步执行。",
+    guidanceSummaryExecutionFirstNextActionSample:
+      "[NEXT_ACTION]\naction = do|verify|inspect|ask_user|final\ntarget = 对象/动作/问题\nreason = 简短原因\nblocking = true|false",
+    guidanceSummaryExecutionFirstNextActionRules:
+      "执行优先模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 do、verify、inspect、ask_user、final 之一；target 必须是具体对象、动作或需要询问用户的问题；reason 必须简短；blocking=true 仅用于不可逆/破坏性、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则用 blocking=false 并继续小步执行。",
+    guidanceSummaryRiskFirstNextActionSample:
+      "[NEXT_ACTION]\naction = inspect|verify|mitigate|ask_user|final\ntarget = 风险点/检查动作/问题\nreason = 简短原因\nblocking = true|false",
+    guidanceSummaryRiskFirstNextActionRules:
+      "风险优先模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 inspect、verify、mitigate、ask_user、final 之一；target 必须是具体风险点、检查动作或需要询问用户的问题；reason 必须简短；blocking=true 仅用于尚未降级的 Blocking risk，否则用 blocking=false 并给出下一步降级或验收动作。",
     guidanceSummaryRules:
       "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结必须整合上一轮小结结果：仍有效的已完成事项、进行中事项、风险、待办和证据都要保留或更新，不得遗漏；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节；SUMMARY_DETAIL 后必须输出 [NEXT_EXECUTION_SUGGESTION]，集中给出下一步可执行建议。",
     previousSummaryContextHeader: "【上一次小结】",
@@ -533,6 +567,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径|-] method=[方法/函数名|-] line=[行号/行号范围|-，可多段逗号分隔] [小结内容]",
     protocolSummaryProgrammingLine6:
       "编程模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=edit|test|inspect|ask_user|final，target=文件路径/命令/问题，reason=简短原因，blocking=true|false）；涉及具体代码位置、文件变更、测试失败定位、错误堆栈或日志定位时必须写明 file、method、line；没有可靠代码位置时使用 file=- method=- line=-；line 只有上下文存在明确行号时填写，否则使用 line=-；禁止编造文件、函数或行号。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、文件、方法、行号或 - 与问题说明。小结后请继续任务。",
+    protocolSummaryExecutionFirstLine6:
+      "执行优先模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=do|verify|inspect|ask_user|final，target=对象/动作/问题，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作与问题说明。小结后请继续任务。",
+    protocolSummaryRiskFirstLine6:
+      "风险优先模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=inspect|verify|mitigate|ask_user|final，target=风险点/检查动作/问题，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一风险降级动作与问题说明。小结后请继续任务。",
     protocolAcceptanceTitlePhase:
       "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
     protocolAcceptanceTitleFinal:
@@ -642,6 +680,14 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "Programming execution principles:\n1. By default, do not wait until every risk is eliminated.\n2. For reversible code changes, prefer a small edit and immediate verification.\n3. Convert unknowns into verification actions instead of long-term blockers.\n4. Stop for confirmation only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks.\n5. Each round should complete at most one minimal loop: edit -> verify -> fix.",
     programmingRiskTaxonomy:
       "Programming risk taxonomy:\nA. Blocking risk (must stop): destructive/irreversible changes, security/secrets/permissions, production data/config, breaking public APIs, unresolvable requirement conflicts, or costly unverifiable changes. Only this class may block code edits; convert it to ask_user or an explicit blocking note.\nB. Managed risk (edit then verify): uncertain call chain, likely test failure, incomplete edge cases, or type/build risk. Do not block the smallest reversible edit; convert it to npm test/lint/build/targeted-test verification.\nC. Informational risk (record only): naming style, future refactor, or more elegant design; record only, never block execution.",
+    executionFirstPrinciples:
+      "Execution-first principles:\n1. By default, do not wait until every risk is eliminated.\n2. For reversible, low-cost, verifiable actions, prefer a small action and quick verification.\n3. Convert unknowns into inspection, verification, or feedback actions instead of long-term blockers.\n4. Stop for confirmation only for irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts.\n5. Each round should complete at most one minimal loop: execute -> verify -> fix.",
+    executionFirstRiskTaxonomy:
+      "Execution-first risk taxonomy:\nA. Blocking risk (must stop): irreversible/destructive, security/privacy/compliance, money/production, public commitments, unresolvable requirement conflicts, or costly unverifiable actions. Only this class may block execution; convert it to ask_user or an explicit blocking note.\nB. Managed risk (do then verify): incomplete information, likely failure, incomplete edge cases, or quality uncertainty. Do not block the smallest reversible action; convert it to inspection, verification, comparison, or feedback.\nC. Informational risk (record only): style preference, future optimization, or more elegant approach; record only, never block execution.",
+    riskFirstPrinciples:
+      "Risk-first principles:\n1. First identify key risks that affect correctness, safety, cost, commitments, or reversibility.\n2. For high-impact or irreversible risks, inspect, clarify, or reduce the risk before execution.\n3. Convert low-cost uncertainty into inspect, verify, or ask_user actions instead of committing to results directly.\n4. Proceed to execution only after the risk is reduced to manageable/verifiable or explicitly authorized by the user.\n5. Each round should complete at most one risk loop: identify -> reduce/confirm -> decide whether to execute.",
+    riskFirstRiskTaxonomy:
+      "Risk-first risk taxonomy:\nA. Blocking risk (handle first): irreversible/destructive, security/privacy/compliance, money/production, public commitments, requirement conflicts, or costly unverifiable actions; must inspect, ask_user, or provide a risk-reduction action first.\nB. Managed risk (reduce then do): incomplete information, quality uncertainty, unclear boundaries, or external feedback dependency; prefer inspection, verification, comparison, pilot, or confirmation.\nC. Informational risk (record only): style preference, future optimization, or minor uncertainty; record it but do not present it as a blocker.",
     guidanceFailurePromptTemplate:
       "Guidance triggered by tool failure threshold ({reason}). Please analyze the causes of tool failures and provide suggestions for fixes.",
     acceptanceMainPlanContextHeader:
@@ -660,6 +706,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "Goal: Generate a high-level main plan from the user goal. Only high-level steps; no sub-steps or implementation details.",
     planningMainPromptGoalProgrammingFast:
       "Goal: generate the smallest executable plan slice for programming work. Do not try to eliminate every risk at once, and do not wait until every uncertainty is gone; unless the task involves irreversible operations, data deletion, security credentials, production release, production data, or requirement conflicts, default to the small edit -> verify -> fix loop: make the smallest reversible code change, run the smallest verification, then continue based on the result. The plan should prefer: find the most relevant entry point -> make the smallest reversible edit -> run local tests/build -> fix based on failures -> add final acceptance notes.",
+    planningMainPromptGoalExecutionFirst:
+      "Goal: generate the smallest executable plan slice for execution. Do not try to eliminate every risk at once, and do not wait until every uncertainty is gone; unless the task involves irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts, default to the small action -> verify/feedback -> fix loop. The plan should prefer: find the most relevant entry point -> take the smallest reversible action -> run the smallest verification/inspection -> fix based on results -> add final acceptance notes.",
+    planningMainPromptGoalRiskFirst:
+      "Goal: generate the smallest plan slice for risk reduction. This is still a plan, but it should prioritize key risks that may block execution; do not list unlimited risks, only high-level steps that move the decision forward. Default to the identify risk -> inspect/clarify/reduce -> decide whether to execute loop. The plan should prefer: find the key uncertainty -> perform the smallest inspection or confirmation -> reduce the risk into an executable action -> then proceed to execution or acceptance notes.",
     planningMainUserGoalHeader: "[User Goal]",
     planningMainCurrentTaskGoalProtocol:
       "Before plan patch lines, output the current task goal using this text protocol: [CURRENT_TASK_GOAL]\\n<one concise current task goal synthesized by the planning model>\\n[PLAN]",
@@ -706,6 +756,14 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "[NEXT_ACTION]\naction = edit|test|inspect|ask_user|final\ntarget = file path/command/question\nreason = brief reason\nblocking = true|false",
     guidanceSummaryProgrammingNextActionRules:
       "In programming mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of edit, test, inspect, ask_user, final; target must be a concrete file path, command, or user-facing question; reason must be brief; use blocking=true only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks; otherwise use blocking=false and continue the small-step execution loop.",
+    guidanceSummaryExecutionFirstNextActionSample:
+      "[NEXT_ACTION]\naction = do|verify|inspect|ask_user|final\ntarget = object/action/question\nreason = brief reason\nblocking = true|false",
+    guidanceSummaryExecutionFirstNextActionRules:
+      "In execution-first mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of do, verify, inspect, ask_user, final; target must be a concrete object, action, or user-facing question; reason must be brief; use blocking=true only for irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts; otherwise use blocking=false and continue the small-step execution loop.",
+    guidanceSummaryRiskFirstNextActionSample:
+      "[NEXT_ACTION]\naction = inspect|verify|mitigate|ask_user|final\ntarget = risk/inspection action/question\nreason = brief reason\nblocking = true|false",
+    guidanceSummaryRiskFirstNextActionRules:
+      "In risk-first mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of inspect, verify, mitigate, ask_user, final; target must be a concrete risk, inspection action, or user-facing question; reason must be brief; use blocking=true only for unreduced Blocking risk; otherwise use blocking=false and provide the next risk-reduction or acceptance action.",
     guidanceSummaryRules:
       "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; this summary must integrate the previous summary results: keep or update all still-valid completed items, in-progress items, risks, todos, and evidence without omissions; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer; after SUMMARY_DETAIL, output [NEXT_EXECUTION_SUGGESTION] with centralized actionable next execution suggestions.",
     previousSummaryContextHeader: "[Previous Summary]",
@@ -755,6 +813,10 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path|-] method=[method/function name|-] line=[line number/range|-; comma-separated multi-segments allowed] [summary content]",
     protocolSummaryProgrammingLine6:
       "In programming mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=edit|test|inspect|ask_user|final, target=file path/command/question, reason=brief reason, blocking=true|false); include file, method, and line only for concrete code locations, file changes, test-failure locations, stack traces, or log locations; use file=- method=- line=- when no reliable code location exists; fill line only when explicit line numbers exist in context, otherwise use line=-; never fabricate file/function/line. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, file/method/line or -, and issue notes. Then continue with the task.",
+    protocolSummaryExecutionFirstLine6:
+      "In execution-first mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=do|verify|inspect|ask_user|final, target=object/action/question, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, and issue notes. Then continue with the task.",
+    protocolSummaryRiskFirstLine6:
+      "In risk-first mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=inspect|verify|mitigate|ask_user|final, target=risk/inspection action/question, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single risk-reduction action, and issue notes. Then continue with the task.",
     protocolAcceptanceTitlePhase:
       "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
     protocolAcceptanceTitleFinal:

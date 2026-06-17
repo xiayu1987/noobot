@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../src/core/options.js";
+import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
 import { appendJsonlBuffered, flushAllJsonlBuffers } from "../src/store/store.js";
 import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
 import { HARNESS_HOOK_POINTS } from "../src/core/constants.js";
@@ -39,10 +40,32 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(options.jsonlFlushStrategy.onTerminal, false);
   assert.equal(options.jsonlFlushStrategy.onError, true);
   assert.equal(options.fsmEnabled, false);
+  assert.equal(options.nonProgrammingWorkflowStrategy, "execution_first");
+  assert.equal(options.nonProgrammingExecutionFirst, true);
   assert.equal(options.summaryOnToolBurstThreshold, false);
   assert.deepEqual(options.denyToolNames, [...DEFAULT_HARNESS_DENY_TOOL_NAMES]);
   assert.equal(options.jsonlFlushStrategy.maxFileBytes, 5 * 1024 * 1024);
   assert.equal(options.jsonlFlushStrategy.maxFiles, 20);
+});
+
+test("normalizeOptions resolves non-programming workflow strategy and legacy aliases", () => {
+  assert.equal(
+    normalizeOptions({}).nonProgrammingWorkflowStrategy,
+    WORKFLOW_PARAMS.workflow.strategy.nonProgramming.defaultMode,
+  );
+  assert.equal(WORKFLOW_PARAMS.workflow.strategy.nonProgramming.defaultMode, "execution_first");
+  assert.equal(normalizeOptions({}).nonProgrammingExecutionFirst, true);
+  assert.equal(
+    normalizeOptions({ nonProgrammingWorkflowStrategy: "risk_first" }).nonProgrammingWorkflowStrategy,
+    "risk_first",
+  );
+  assert.equal(normalizeOptions({ nonProgrammingWorkflowStrategy: "risk_first" }).nonProgrammingExecutionFirst, false);
+  assert.equal(normalizeOptions({ workflowStrategy: "execution-first" }).nonProgrammingWorkflowStrategy, "execution_first");
+  assert.equal(normalizeOptions({ promptStrategy: "riskFirst" }).nonProgrammingWorkflowStrategy, "risk_first");
+  assert.equal(normalizeOptions({ nonProgrammingExecutionFirst: false }).nonProgrammingExecutionFirst, false);
+  assert.equal(normalizeOptions({ executionFirst: false }).nonProgrammingExecutionFirst, false);
+  assert.equal(normalizeOptions({ actionFirst: false }).nonProgrammingExecutionFirst, false);
+  assert.equal(normalizeOptions({ executionFirstForNonProgramming: false }).nonProgrammingExecutionFirst, false);
 });
 
 test("normalizeOptions enables optional tool-burst summary trigger", () => {

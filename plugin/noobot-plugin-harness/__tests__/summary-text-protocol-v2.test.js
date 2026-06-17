@@ -16,6 +16,7 @@ import {
   buildGuidanceSummaryPromptText,
   buildPhaseAcceptanceRequestPromptText,
   buildPlanningMainPrompt,
+  resolveWorkflowStrategyFromContext,
   buildWorkflowResponsibilityConstraintUserPrompt,
 } from "../src/capabilities/handlers/shared/workflow/prompts.js";
 import { buildSummaryPatchProtocolText } from "../src/capabilities/handlers/shared/workflow/protocols.js";
@@ -125,6 +126,118 @@ test("summary prompts require file method and multi-segment line only in program
   assert.match(programmingProtocol, /method=\[method\/function name\|-\]/);
   assert.match(programmingProtocol, /line=\[line number\/range\|-; comma-separated multi-segments allowed\]/);
   assert.match(programmingProtocol, /file\/method\/line or -/);
+});
+
+test("non-programming execution-first prompts use generic next action without code locations", () => {
+  const disabledPrompt = buildGuidanceSummaryPromptText({
+    locale: "zh-CN",
+    executionFirstMode: false,
+  });
+  assert.doesNotMatch(disabledPrompt, /action = do\|verify\|inspect\|ask_user\|final/);
+  assert.doesNotMatch(disabledPrompt, /执行优先风险分级/);
+
+  const prompt = buildGuidanceSummaryPromptText({
+    locale: "zh-CN",
+    executionFirstMode: true,
+  });
+  assert.match(prompt, /执行优先原则/);
+  assert.match(prompt, /执行优先风险分级/);
+  assert.match(prompt, /\[NEXT_ACTION\]/);
+  assert.match(prompt, /action = do\|verify\|inspect\|ask_user\|final/);
+  assert.match(prompt, /target = 对象\/动作\/问题/);
+  assert.match(prompt, /必须且只允许输出 1 个 \[NEXT_ACTION\]/);
+  assert.doesNotMatch(prompt, /file=\[文件路径\|-\]/);
+  assert.doesNotMatch(prompt, /method=\[方法\/函数名\|-\]/);
+  assert.doesNotMatch(prompt, /line=\[行号\/行号范围\|-/);
+  assert.doesNotMatch(prompt, /file=- method=- line=-/);
+
+  const protocol = buildSummaryPatchProtocolText({
+    locale: "zh-CN",
+    executionFirstMode: true,
+  });
+  assert.match(protocol, /action=do\|verify\|inspect\|ask_user\|final/);
+  assert.match(protocol, /target=对象\/动作\/问题/);
+  assert.doesNotMatch(protocol, /file=\[文件路径\|-\]/);
+  assert.doesNotMatch(protocol, /method=\[方法\/函数名\|-\]/);
+  assert.doesNotMatch(protocol, /line=\[行号\/行号范围\|-/);
+});
+
+test("non-programming execution-first planning prompt stays plan-focused but action-first", () => {
+  const prompt = buildPlanningMainPrompt({
+    locale: "zh-CN",
+    data: { userGoal: "整理会议纪要" },
+    executionFirstMode: true,
+  });
+  assert.match(prompt, /目标：生成面向执行的最小可执行计划切片/);
+  assert.match(prompt, /默认采用 小步执行 -> 验证\/反馈 -> 修正 的闭环/);
+  assert.match(prompt, /计划应倾向于：找到最相关入口 -> 做最小可逆动作/);
+  assert.match(prompt, /执行优先风险分级/);
+  assert.doesNotMatch(prompt, /生成用于编程执行的最小可执行计划切片/);
+  assert.doesNotMatch(prompt, /做最小可逆修改 -> 运行局部测试\/构建/);
+});
+
+test("non-programming risk-first prompts use the same strategy pattern without code locations", () => {
+  const prompt = buildGuidanceSummaryPromptText({
+    locale: "zh-CN",
+    workflowStrategy: "risk_first",
+  });
+  assert.match(prompt, /风险优先原则/);
+  assert.match(prompt, /风险优先风险分级/);
+  assert.match(prompt, /\[NEXT_ACTION\]/);
+  assert.match(prompt, /action = inspect\|verify\|mitigate\|ask_user\|final/);
+  assert.match(prompt, /target = 风险点\/检查动作\/问题/);
+  assert.match(prompt, /必须且只允许输出 1 个 \[NEXT_ACTION\]/);
+  assert.doesNotMatch(prompt, /file=\[文件路径\|-\]/);
+  assert.doesNotMatch(prompt, /method=\[方法\/函数名\|-\]/);
+  assert.doesNotMatch(prompt, /line=\[行号\/行号范围\|-/);
+
+  const planningPrompt = buildPlanningMainPrompt({
+    locale: "zh-CN",
+    data: { userGoal: "整理会议纪要" },
+    workflowStrategy: "risk_first",
+  });
+  assert.match(planningPrompt, /目标：生成面向风险降级的最小计划切片/);
+  assert.match(planningPrompt, /计划仍然是计划/);
+  assert.match(planningPrompt, /识别风险 -> 检查\/澄清\/降级 -> 决定是否执行/);
+  assert.doesNotMatch(planningPrompt, /生成用于编程执行/);
+
+  const protocol = buildSummaryPatchProtocolText({
+    locale: "zh-CN",
+    riskFirstMode: true,
+  });
+  assert.match(protocol, /action=inspect\|verify\|mitigate\|ask_user\|final/);
+  assert.match(protocol, /target=风险点\/检查动作\/问题/);
+  assert.doesNotMatch(protocol, /file=\[文件路径\|-\]/);
+});
+
+test("programming scenario always resolves execution-first workflow strategy", () => {
+  const strategy = resolveWorkflowStrategyFromContext(
+    {
+      runConfig: {
+        scenario: "programming",
+        plugins: {
+          harness: {
+            nonProgrammingWorkflowStrategy: "risk_first",
+          },
+        },
+      },
+    },
+    {
+      harness: {
+        nonProgrammingWorkflowStrategy: "risk_first",
+      },
+    },
+  );
+  assert.equal(strategy, "execution_first");
+
+  const prompt = buildPlanningMainPrompt({
+    locale: "zh-CN",
+    data: { userGoal: "修复 bug" },
+    programmingMode: true,
+    workflowStrategy: "risk_first",
+  });
+  assert.match(prompt, /生成用于编程执行的最小可执行计划切片/);
+  assert.doesNotMatch(prompt, /风险降级的最小计划切片/);
 });
 
 test("programming prompts add action-first execution principles only in programming mode", () => {

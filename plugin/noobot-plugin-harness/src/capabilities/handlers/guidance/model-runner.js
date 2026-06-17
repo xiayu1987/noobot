@@ -53,7 +53,10 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
   buildPreviousSummaryContextMessages,
+  resolveExecutionFirstModeFromContext,
   resolveProgrammingModeFromContext,
+  resolveRiskFirstModeFromContext,
+  resolveWorkflowStrategyFromContext,
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
 } from "../shared/workflow/prompts.js";
@@ -155,6 +158,10 @@ export async function runPlanUpdateAfterSummary(
     return false;
   }
   const locale = state?.locale || LOCALE.ZH_CN;
+  const programmingMode = resolveProgrammingModeFromContext(ctx);
+  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
+  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
   const fallbackMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "summary",
@@ -183,7 +190,10 @@ export async function runPlanUpdateAfterSummary(
     task: revisionTask,
     postTaskMessages: [
       buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
-        programmingMode: resolveProgrammingModeFromContext(ctx),
+        programmingMode,
+        workflowStrategy,
+        executionFirstMode,
+        riskFirstMode,
       }),
     ],
   });
@@ -301,6 +311,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
+  const programmingMode = resolveProgrammingModeFromContext(ctx);
+  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
+  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
 
   const requestedAction = String(action || "auto").trim().toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
@@ -319,7 +333,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       : null;
     prompt = buildGuidanceSummaryPromptText({
       locale,
-      programmingMode: resolveProgrammingModeFromContext(ctx),
+      programmingMode,
+      workflowStrategy,
+      executionFirstMode,
+      riskFirstMode,
     });
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
@@ -327,7 +344,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     purpose = "guidance";
     reason = state.pending.guidance;
     prompt = buildGuidancePromptContent(locale, reason, {
-      programmingMode: resolveProgrammingModeFromContext(ctx),
+      programmingMode,
+      workflowStrategy,
+      executionFirstMode,
+      riskFirstMode,
     });
     setPendingStateWithMeta(state, "guidance", null);
     state.counters.consecutiveToolFailures = 0;
@@ -367,7 +387,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     postTaskMessages:
       purpose === "summary"
         ? [buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
-            programmingMode: resolveProgrammingModeFromContext(ctx),
+            programmingMode,
+            workflowStrategy,
+            executionFirstMode,
+            riskFirstMode,
           })]
         : [],
   });

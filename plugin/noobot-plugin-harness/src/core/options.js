@@ -35,6 +35,10 @@ export const DEFAULT_OPTIONS = Object.freeze({
   timeoutMs: 1000,
   maxPreviewChars: 1200,
   planningGuidanceMode: "separate_model",
+  nonProgrammingWorkflowStrategy: WORKFLOW_PARAMS.workflow.strategy.nonProgramming.defaultMode,
+  nonProgrammingExecutionFirst:
+    WORKFLOW_PARAMS.workflow.strategy.nonProgramming.defaultMode ===
+    WORKFLOW_PARAMS.workflow.strategy.modes.executionFirst,
   summaryOnToolBurstThreshold: false,
   summaryDetailSaveToAttachment: false,
   capabilityModelInvoker: null,
@@ -79,6 +83,15 @@ export const DEFAULT_OPTIONS = Object.freeze({
 const HarnessOptionsSchema = z
   .object({
     planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
+    nonProgrammingWorkflowStrategy: z.string().trim().optional(),
+    nonProgrammingPromptStrategy: z.string().trim().optional(),
+    workflowStrategy: z.string().trim().optional(),
+    promptStrategy: z.string().trim().optional(),
+    workflowMode: z.string().trim().optional(),
+    nonProgrammingExecutionFirst: z.boolean().default(DEFAULT_OPTIONS.nonProgrammingExecutionFirst),
+    executionFirst: z.boolean().optional(),
+    actionFirst: z.boolean().optional(),
+    executionFirstForNonProgramming: z.boolean().optional(),
     planRefinementEnabled: z.boolean().optional(),
     enablePlanRefinement: z.boolean().optional(),
     summaryOnToolBurstThreshold: z.boolean().default(DEFAULT_OPTIONS.summaryOnToolBurstThreshold),
@@ -178,7 +191,48 @@ function resolveExplicitPlanRefinementEnabledOption(source = {}) {
   return undefined;
 }
 
+function normalizeWorkflowStrategyName(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const normalized = raw
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+  const modes = WORKFLOW_PARAMS.workflow.strategy.modes;
+  if (
+    normalized === modes.executionFirst ||
+    normalized === "execution" ||
+    normalized === "execute_first" ||
+    normalized === "action_first"
+  ) return modes.executionFirst;
+  if (
+    normalized === modes.riskFirst ||
+    normalized === "risk" ||
+    normalized === "safety_first"
+  ) return modes.riskFirst;
+  return "";
+}
+
+function resolveNonProgrammingWorkflowStrategyOption(source = {}, { useDefault = true } = {}) {
+  const params = WORKFLOW_PARAMS.workflow.strategy.nonProgramming;
+  for (const key of params.optionKeys) {
+    const normalized = normalizeWorkflowStrategyName(source?.[key]);
+    if (normalized && params.supportedModes.includes(normalized)) return normalized;
+  }
+  for (const key of params.legacyExecutionFirstBooleanOptionKeys) {
+    if (typeof source?.[key] !== "boolean") continue;
+    return source[key]
+      ? WORKFLOW_PARAMS.workflow.strategy.modes.executionFirst
+      : WORKFLOW_PARAMS.workflow.strategy.modes.riskFirst;
+  }
+  return useDefault ? params.defaultMode : "";
+}
+
 export function normalizeOptions(userOptions = {}, api = {}) {
+  const explicitOptions = {
+    ...(userOptions || {}),
+    ...(api.options?.harness || {}),
+  };
   const merged = { ...DEFAULT_OPTIONS, ...(userOptions || {}), ...(api.options?.harness || {}) };
   const planRefinementEnabled = resolveExplicitPlanRefinementEnabledOption(merged);
   const hasCustomFlushStrategy =
@@ -211,6 +265,9 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     safe.capabilityModelByPurpose,
     safe.stepModels,
   );
+  const nonProgrammingWorkflowStrategy =
+    resolveNonProgrammingWorkflowStrategyOption(explicitOptions, { useDefault: false }) ||
+    resolveNonProgrammingWorkflowStrategyOption(safe);
 
   return {
     ...merged,
@@ -218,6 +275,9 @@ export function normalizeOptions(userOptions = {}, api = {}) {
     planningGuidanceMode:
       String(safe.planningGuidanceMode || DEFAULT_OPTIONS.planningGuidanceMode).trim() ||
       DEFAULT_OPTIONS.planningGuidanceMode,
+    nonProgrammingWorkflowStrategy,
+    nonProgrammingExecutionFirst:
+      nonProgrammingWorkflowStrategy === WORKFLOW_PARAMS.workflow.strategy.modes.executionFirst,
     summaryOnToolBurstThreshold:
       safe.enableToolBurstSummary === true || safe.summaryOnToolBurstThreshold === true,
     summaryDetailSaveToAttachment:
