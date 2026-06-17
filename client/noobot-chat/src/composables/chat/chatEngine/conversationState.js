@@ -201,6 +201,43 @@ export function createChatEngineConversationState({
     );
   }
 
+  function markUserMessageDialogProcessId({ targetAssistantMessage = null, dialogProcessId = "" } = {}) {
+    const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
+    const messages = Array.isArray(activeSession?.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    if (!normalizedDialogProcessId || !messages.length) return false;
+    const assistantIndex = targetAssistantMessage
+      ? messages.findIndex((messageItem) => messageItem === targetAssistantMessage)
+      : messages.length;
+    const startIndex = assistantIndex >= 0 ? assistantIndex - 1 : messages.length - 1;
+    for (let index = startIndex; index >= 0; index -= 1) {
+      const messageItem = messages[index];
+      if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.USER) continue;
+      const currentDialogProcessId = normalizeTrimmedString(
+        messageItem?.dialogProcessId || messageItem?.dialogId,
+      );
+      if (currentDialogProcessId && currentDialogProcessId !== normalizedDialogProcessId) {
+        return false;
+      }
+      messageItem.dialogProcessId = normalizedDialogProcessId;
+      const rawMessages = Array.isArray(activeSession?.value?.rawMessages)
+        ? activeSession.value.rawMessages
+        : [];
+      const rawUserMessage = rawMessages.find((rawMessage) => rawMessage === messageItem) ||
+        rawMessages.find(
+          (rawMessage) =>
+            normalizeTrimmedString(rawMessage?.role) === RoleEnum.USER &&
+            rawMessage?.ts !== undefined &&
+            messageItem?.ts !== undefined &&
+            rawMessage.ts === messageItem.ts,
+        );
+      if (rawUserMessage) rawUserMessage.dialogProcessId = normalizedDialogProcessId;
+      return true;
+    }
+    return false;
+  }
+
   function findTargetAssistantMessage({ botMessage = null, dialogProcessId = "" } = {}) {
     if (botMessage && String(botMessage?.role || "").trim() === RoleEnum.ASSISTANT) {
       return botMessage;
@@ -261,12 +298,11 @@ export function createChatEngineConversationState({
       botMessage,
       dialogProcessId,
     });
-    if (
-      dialogProcessId &&
-      targetAssistantMessage &&
-      !String(targetAssistantMessage?.dialogProcessId || "").trim()
-    ) {
-      targetAssistantMessage.dialogProcessId = dialogProcessId;
+    if (dialogProcessId && targetAssistantMessage) {
+      if (!String(targetAssistantMessage?.dialogProcessId || "").trim()) {
+        targetAssistantMessage.dialogProcessId = dialogProcessId;
+      }
+      markUserMessageDialogProcessId({ targetAssistantMessage, dialogProcessId });
     }
     if (isInFlightConversationState(state)) {
       sending.value = true;

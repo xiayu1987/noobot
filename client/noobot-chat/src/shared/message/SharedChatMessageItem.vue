@@ -37,6 +37,9 @@ const props = defineProps({
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
+  sending: { type: Boolean, default: false },
+  deleteMonotonicMessage: { type: Function, default: null },
+  resendMonotonicMessage: { type: Function, default: null },
   attachmentPreviewDialogClass: {
     type: String,
     default: "attachment-preview-dialog",
@@ -111,6 +114,9 @@ const postMessageCardRenderers = computed(() =>
 const messageActionRenderers = computed(() =>
   resolveMessageActionRenderers(props.messageItem),
 );
+const hideMessageMarkdownForInlineEditor = computed(() =>
+  props.messageItem?.role === "user" && props.messageItem?.__monotonicEditing === true,
+);
 
 function resolveRendererProps(renderer = {}) {
   return resolveMessageCardProps(renderer, resolveRendererContext());
@@ -126,6 +132,9 @@ function resolveRendererContext() {
     formatTime: props.formatTime,
     formatFileSize: props.formatFileSize,
     isImageMime: props.isImageMime,
+    sending: props.sending,
+    deleteMonotonicMessage: props.deleteMonotonicMessage,
+    resendMonotonicMessage: props.resendMonotonicMessage,
     onCopyMessageRich: handleCopyAssistantMessageRich,
     onCopyMessageText: handleCopyAssistantMessageText,
     translate,
@@ -189,17 +198,18 @@ async function handleCopyAssistantMessageText() {
 
     <BaseMessageErrorAlert :error="messageItem.error" />
 
+    <BaseMarkdownContent
+      v-if="!hideMessageMarkdownForInlineEditor"
+      ref="messageMarkdownRef"
+      :content="messageItem.content"
+      :render-markdown="renderMarkdown"
+    />
+
     <component
       :is="renderer.component"
       v-for="renderer in messageActionRenderers"
       :key="renderer.id"
       v-bind="resolveActionRendererProps(renderer)"
-    />
-
-    <BaseMarkdownContent
-      ref="messageMarkdownRef"
-      :content="messageItem.content"
-      :render-markdown="renderMarkdown"
     />
 
     <component

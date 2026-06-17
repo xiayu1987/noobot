@@ -21,7 +21,12 @@ export function withJsonError(
       const fallbackMessage = fallbackErrorKey
         ? translateText(fallbackErrorKey, req?.locale)
         : "";
-      res.status(statusCode).json({
+      const errorStatusCode = Number(error?.statusCode || error?.status || 0);
+      const responseStatusCode =
+        Number.isInteger(errorStatusCode) && errorStatusCode >= 400 && errorStatusCode < 600
+          ? errorStatusCode
+          : statusCode;
+      res.status(responseStatusCode).json({
         ok: false,
         error: error?.message || fallbackMessage || String(error || "request failed"),
       });

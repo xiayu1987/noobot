@@ -28,6 +28,12 @@ import {
 } from "./chatEngine/streamHandlers";
 import { normalizeTrimmedString } from "./chatEngine/utils";
 
+const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS = 3000;
+const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS = 50;
+const delay = (ms) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
+
 export function useChatEngine({
   userId,
   allowUserInteraction,
@@ -51,6 +57,8 @@ export function useChatEngine({
   fetchSessionDetail,
   applySessionDetail,
   refreshSessionConnectorsAsync,
+  deleteSessionMessagesFromApi,
+  authFetch,
   connectorTypeSet,
   upsertConnectedConnectorInPanelState,
   pendingInteractionRequest,
@@ -64,6 +72,8 @@ export function useChatEngine({
   chatWebSocketClient,
   ensureConnected,
   notify = () => {},
+  monotonicActionStopTimeoutMs = DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS,
+  monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
 } = {}) {
   const { translate, locale } = useLocale();
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
@@ -138,10 +148,220 @@ export function useChatEngine({
     });
   }
 
+  async function waitForSendingSettled({
+    timeoutMs = monotonicActionStopTimeoutMs,
+    pollIntervalMs = monotonicActionStopPollIntervalMs,
+  } = {}) {
+    if (!sending?.value) return true;
+    const startedAt = Date.now();
+    const normalizedTimeoutMs = Math.max(0, Number(timeoutMs) || 0);
+    const normalizedPollIntervalMs = Math.max(1, Number(pollIntervalMs) || 1);
+    while (sending.value) {
+      if (Date.now() - startedAt >= normalizedTimeoutMs) {
+        return false;
+      }
+      await delay(normalizedPollIntervalMs);
+    }
+    return true;
+  }
+
+  async function prepareMonotonicMessageAction({ timeoutMs, pollIntervalMs } = {}) {
+    if (!sending?.value) return true;
+    stopSending();
+    const settled = await waitForSendingSettled({ timeoutMs, pollIntervalMs });
+    if (!settled) {
+      const message = translate("chat.monotonicActionStopTimeout");
+      notify({ type: "warning", message });
+      throw new Error(message);
+    }
+    return true;
+  }
+
+  function isUserMessage(message = {}) {
+    return normalizeTrimmedString(message?.role).toLowerCase() === "user";
+  }
+
+  function getMessageRoundId(message = {}) {
+    return normalizeTrimmedString(message?.dialogProcessId || message?.dialogId);
+  }
+
+  function findMessageIndex(targetMessage = {}, messages = []) {
+    const targetId = normalizeTrimmedString(targetMessage?.id || targetMessage?.messageId);
+    const targetTs = targetMessage?.ts;
+    return messages.findIndex((message) => {
+      if (message === targetMessage) return true;
+      if (targetId && normalizeTrimmedString(message?.id || message?.messageId) === targetId) return true;
+      return targetTs !== undefined && message?.ts === targetTs;
+    });
+  }
+
+  function resolveMonotonicUserTarget(targetMessage = {}) {
+    const messages = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    if (!targetMessage || typeof targetMessage !== "object") return null;
+    if (isUserMessage(targetMessage)) return targetMessage;
+
+    const directIndex = findMessageIndex(targetMessage, messages);
+    if (directIndex >= 0 && isUserMessage(messages[directIndex])) {
+      return messages[directIndex];
+    }
+
+    const targetRoundId = getMessageRoundId(targetMessage);
+    if (targetRoundId) {
+      const sameRoundUserMessage = messages.find(
+        (message) => isUserMessage(message) && getMessageRoundId(message) === targetRoundId,
+      );
+      if (sameRoundUserMessage) return sameRoundUserMessage;
+    }
+
+    const targetIndex = directIndex;
+    if (targetIndex >= 0) {
+      for (let index = targetIndex - 1; index >= 0; index -= 1) {
+        if (isUserMessage(messages[index])) return messages[index];
+      }
+    }
+
+    return null;
+  }
+
+  function findMessageCascadeStartIndex(targetMessage = {}) {
+    const messages = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    if (!isUserMessage(targetMessage)) return -1;
+    return findMessageIndex(targetMessage, messages);
+  }
+
+  function buildMonotonicMessageAnchor(targetMessage = {}) {
+    const messageId = normalizeTrimmedString(targetMessage?.id || targetMessage?.messageId);
+    if (messageId) return { messageId };
+    const dialogProcessId = normalizeTrimmedString(
+      targetMessage?.dialogProcessId || targetMessage?.dialogId,
+    );
+    if (dialogProcessId) return { dialogProcessId };
+    if (targetMessage?.ts !== undefined && targetMessage?.ts !== null) {
+      return { ts: targetMessage.ts };
+    }
+    return {};
+  }
+
+  function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
+    const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+    if (Array.isArray(source.sessions) && String(source.sessionId || "").trim()) {
+      return source;
+    }
+    const session = source.session && typeof source.session === "object" && !Array.isArray(source.session)
+      ? source.session
+      : source.messages && Array.isArray(source.messages)
+        ? source
+        : null;
+    if (!session) return null;
+    const sessionId = normalizeTrimmedString(session.sessionId || source.sessionId || fallbackSessionId);
+    if (!sessionId) return null;
+    return {
+      ...source,
+      sessionId,
+      sessions: [
+        {
+          ...session,
+          sessionId: normalizeTrimmedString(session.sessionId || sessionId),
+        },
+      ],
+    };
+  }
+
+  function syncSessionMessageSummary(session) {
+    if (!session) return;
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    session.messageCount = messages.length;
+    session.lastMessage = messages.length ? messages[messages.length - 1] : null;
+    session.updatedAt = new Date().toISOString();
+  }
+
+  function cascadeDeleteMessagesFrom(targetMessage = {}) {
+    const session = activeSession.value;
+    if (!session) return false;
+    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
+    if (!userTargetMessage) return false;
+    const startIndex = findMessageCascadeStartIndex(userTargetMessage);
+    if (startIndex < 0) return false;
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    const removedMessages = messages.slice(startIndex);
+    session.messages = messages.slice(0, startIndex);
+    if (Array.isArray(session.rawMessages)) {
+      const removedSet = new Set(removedMessages);
+      session.rawMessages = session.rawMessages.filter((message) => !removedSet.has(message));
+      if (session.rawMessages.length > session.messages.length) {
+        session.rawMessages = session.rawMessages.slice(0, session.messages.length);
+      }
+    }
+    syncSessionMessageSummary(session);
+    clearPendingInteraction?.();
+    return true;
+  }
+
+  async function deleteMonotonicMessage(targetMessage = {}, options = {}) {
+    await prepareMonotonicMessageAction(options);
+    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
+    if (!userTargetMessage) return false;
+    if (typeof deleteSessionMessagesFromApi === "function") {
+      const sessionId = normalizeTrimmedString(
+        activeSession.value?.backendSessionId || activeSessionId.value,
+      );
+      const result = await deleteSessionMessagesFromApi({
+        userId: userId?.value || userId,
+        sessionId,
+        parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
+        anchor: buildMonotonicMessageAnchor(userTargetMessage),
+        expectedVersion: activeSession.value?.version ?? activeSession.value?.revision,
+      }, { fetcher: authFetch });
+      const payload = typeof result?.json === "function" ? await result.json() : result;
+      if (result?.ok === false || payload?.ok === false) return false;
+      const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
+      if (!sessionDetail) return false;
+      applySessionDetail?.(sessionDetail, { preserveCurrentMessages: false });
+      clearPendingInteraction?.();
+      return true;
+    }
+    return cascadeDeleteMessagesFrom(userTargetMessage);
+  }
+
+  async function resendMonotonicMessage(targetMessage = {}, editedContent = "", options = {}) {
+    const text = String(editedContent || "").trim();
+    if (!text) return false;
+    await prepareMonotonicMessageAction(options);
+    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
+    if (!userTargetMessage) return false;
+    const session = activeSession.value;
+    const previousMessages = Array.isArray(session?.messages) ? [...session.messages] : null;
+    const previousRawMessages = Array.isArray(session?.rawMessages) ? [...session.rawMessages] : null;
+    const previousMessageCount = session?.messageCount;
+    const previousLastMessage = session?.lastMessage;
+    const previousUpdatedAt = session?.updatedAt;
+    const previousInput = input.value;
+    const deleted = await deleteMonotonicMessage(userTargetMessage, { ...options, timeoutMs: 0 });
+    if (!deleted) return false;
+    input.value = text;
+    const sent = await send();
+    if (!sent) {
+      if (session && previousMessages && previousRawMessages) {
+        session.messages = previousMessages;
+        session.rawMessages = previousRawMessages;
+        session.messageCount = previousMessageCount;
+        session.lastMessage = previousLastMessage;
+        session.updatedAt = previousUpdatedAt;
+      }
+      input.value = previousInput;
+      return false;
+    }
+    return true;
+  }
+
   async function send() {
-    if (!ensureConnected()) return;
-    if (sending.value || !activeSession.value) return;
-    if (!input.value.trim() && uploadFiles.value.length === 0) return;
+    if (!ensureConnected()) return false;
+    if (sending.value || !activeSession.value) return false;
+    if (!input.value.trim() && uploadFiles.value.length === 0) return false;
 
     sending.value = true;
     const {
@@ -261,6 +481,7 @@ export function useChatEngine({
         applySessionDetail,
         refreshSessionConnectorsAsync,
       });
+      return true;
     } catch (error) {
       if (
         applyStopRequestedState({
@@ -270,7 +491,7 @@ export function useChatEngine({
           applyConversationState,
         })
       ) {
-        return;
+        return false;
       }
       applySendErrorState({
         error,
@@ -281,6 +502,7 @@ export function useChatEngine({
         notify,
         translate,
       });
+      return false;
     } finally {
       finalizeSendCleanup({
         chatWebSocketClient,
@@ -299,5 +521,10 @@ export function useChatEngine({
   return {
     send,
     stopSending,
+    prepareMonotonicMessageAction,
+    resolveMonotonicUserTarget,
+    cascadeDeleteMessagesFrom,
+    deleteMonotonicMessage,
+    resendMonotonicMessage,
   };
 }

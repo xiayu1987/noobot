@@ -6,6 +6,31 @@
 import { RoleEnum } from "../../../shared/constants/chatConstants";
 import { normalizeTrimmedString } from "./utils";
 
+function markLatestUserMessageStopped(activeSession, pendingAssistantMessage = null) {
+  const messages = Array.isArray(activeSession?.value?.messages)
+    ? activeSession.value.messages
+    : [];
+  const pendingDialogProcessId = normalizeTrimmedString(pendingAssistantMessage?.dialogProcessId);
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((messageItem) => {
+      if (normalizeTrimmedString(messageItem?.role) !== RoleEnum.USER) return false;
+      if (!pendingDialogProcessId) return true;
+      const userDialogProcessId = normalizeTrimmedString(
+        messageItem?.dialogProcessId || messageItem?.dialogId,
+      );
+      return !userDialogProcessId || userDialogProcessId === pendingDialogProcessId;
+    });
+  if (!latestUserMessage) return;
+  if (pendingDialogProcessId && !normalizeTrimmedString(latestUserMessage?.dialogProcessId || latestUserMessage?.dialogId)) {
+    latestUserMessage.dialogProcessId = pendingDialogProcessId;
+  }
+  latestUserMessage.stopState = "stopped";
+  latestUserMessage.monotonicState = "monotonic";
+  latestUserMessage.isMonotonic = true;
+  latestUserMessage.monotonic = true;
+}
+
 export function forceStopUiFinalize({
   sending,
   activeSession,
@@ -15,11 +40,15 @@ export function forceStopUiFinalize({
 } = {}) {
   if (!sending?.value) return;
   const pendingAssistantMessage = findTargetAssistantMessage?.();
+  markLatestUserMessageStopped(activeSession, pendingAssistantMessage);
+  const fallbackDialogProcessId = normalizeTrimmedString(
+    pendingAssistantMessage?.dialogProcessId,
+  );
   applyConversationState?.(
     {
       state: "stopped",
       sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
-      dialogProcessId: String(pendingAssistantMessage?.dialogProcessId || ""),
+      dialogProcessId: fallbackDialogProcessId,
     },
     { botMessage: pendingAssistantMessage },
   );
@@ -42,6 +71,7 @@ export function stopSending({
         normalizeTrimmedString(messageItem?.role) === RoleEnum.ASSISTANT &&
         Boolean(messageItem?.pending),
     );
+  markLatestUserMessageStopped(activeSession, pendingAssistantMessage);
   return chatWebSocketClient?.requestStop?.(
     {
       partialAssistant: {

@@ -24,6 +24,39 @@ function dedupeAttachmentMetas(attachmentMetas = []) {
   });
 }
 
+function normalizeAnchorValue(value = "") {
+  return String(value || "").trim();
+}
+
+function resolveMessageId(message = {}) {
+  return normalizeAnchorValue(
+    message?.messageId || message?.id || message?.message_id || "",
+  );
+}
+
+function resolveSessionVersion(session = {}) {
+  const version = Number(session?.version ?? session?.revision ?? 0);
+  return Number.isFinite(version) ? version : 0;
+}
+
+function createMessageAnchorMatcher(anchor = {}) {
+  const messageId = normalizeAnchorValue(anchor?.messageId);
+  if (messageId) {
+    return (messageItem) => resolveMessageId(messageItem) === messageId;
+  }
+  const dialogProcessId = resolveDialogProcessIdFromContext({
+    dialogProcessId: anchor?.dialogProcessId,
+  });
+  if (dialogProcessId) {
+    return (messageItem) => resolveMessageDialogProcessId(messageItem) === dialogProcessId;
+  }
+  const ts = normalizeAnchorValue(anchor?.ts);
+  if (ts) {
+    return (messageItem) => normalizeAnchorValue(messageItem?.ts) === ts;
+  }
+  return null;
+}
+
 export class SessionMessageService {
   constructor({
     sessionRepo,
@@ -66,6 +99,13 @@ export class SessionMessageService {
     workflowMeta = null,
     transferEnvelope = null,
     transferEnvelopes = [],
+    isMonotonic = false,
+    monotonic = false,
+    monotonicState = "",
+    stopState = "",
+    state = "",
+    status = "",
+    channelState = "",
   }) {
     const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
       userId,
@@ -132,6 +172,13 @@ export class SessionMessageService {
           ? transferEnvelope
           : null,
       transferEnvelopes: Array.isArray(transferEnvelopes) ? transferEnvelopes : [],
+      isMonotonic: isMonotonic === true,
+      monotonic: monotonic === true,
+      monotonicState: String(monotonicState || "").trim(),
+      stopState: String(stopState || "").trim(),
+      state: String(state || "").trim(),
+      status: String(status || "").trim(),
+      channelState: String(channelState || "").trim(),
       ts: this.now(),
     }, this.now);
 
@@ -159,6 +206,123 @@ export class SessionMessageService {
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+  }
+
+  async deleteFromMessage({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    anchor = {},
+    expectedVersion = null,
+    idempotencyKey = "",
+  } = {}) {
+    if (!userId || !sessionId) {
+      const error = new Error("userId and sessionId are required");
+      error.statusCode = 400;
+      throw error;
+    }
+    const matcher = createMessageAnchorMatcher(anchor);
+    if (!matcher) {
+      const error = new Error("message anchor is required");
+      error.statusCode = 400;
+      throw error;
+    }
+    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+    );
+    if (!session) {
+      const error = new Error("session not found");
+      error.statusCode = 404;
+      throw error;
+    }
+    const currentVersion = resolveSessionVersion(session);
+    if (expectedVersion !== null && expectedVersion !== undefined && expectedVersion !== "") {
+      const normalizedExpectedVersion = Number(expectedVersion);
+      if (!Number.isFinite(normalizedExpectedVersion) || normalizedExpectedVersion !== currentVersion) {
+        const error = new Error("session version conflict");
+        error.statusCode = 409;
+        error.currentVersion = currentVersion;
+        throw error;
+      }
+    }
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    const anchorIndex = messages.findIndex((messageItem) => matcher(messageItem));
+    if (anchorIndex < 0) {
+      const error = new Error("message anchor not found");
+      error.statusCode = 404;
+      throw error;
+    }
+    const deletedCount = messages.length - anchorIndex;
+    session.messages = messages.slice(0, anchorIndex);
+    session.updatedAt = this.now();
+    session.version = currentVersion + 1;
+    session.revision = session.version;
+    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    return { session, deletedCount, anchorIndex, version: session.version, idempotencyKey };
+  }
+
+  async markUserMessageMonotonic({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    dialogProcessId = "",
+    state = "stopped",
+    stopState = "stopped",
+  } = {}) {
+    if (!userId || !sessionId) return { marked: false, reason: "missing_session" };
+    const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+    const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+    );
+    if (!session) return { marked: false, reason: "session_not_found" };
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    const targetIndex = (() => {
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const messageItem = messages[index];
+        if (String(messageItem?.role || "").trim() !== "user") continue;
+        if (!normalizedDialogProcessId) return index;
+        const messageDialogProcessId = resolveMessageDialogProcessId(messageItem);
+        if (!messageDialogProcessId || messageDialogProcessId === normalizedDialogProcessId) return index;
+      }
+      return -1;
+    })();
+    if (targetIndex < 0) return { marked: false, reason: "user_message_not_found" };
+
+    const targetMessage = messages[targetIndex];
+    targetMessage.isMonotonic = true;
+    targetMessage.monotonic = true;
+    targetMessage.monotonicState = "monotonic";
+    const normalizedStopState = String(stopState || "").trim();
+    if (normalizedStopState) targetMessage.stopState = normalizedStopState;
+    const normalizedState = String(state || "").trim();
+    if (normalizedState) targetMessage.state = normalizedState;
+    session.updatedAt = this.now();
+    const currentVersion = resolveSessionVersion(session);
+    session.version = currentVersion + 1;
+    session.revision = session.version;
+    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId);
+    return {
+      marked: true,
+      session,
+      messageIndex: targetIndex,
+      version: session.version,
+    };
   }
 
   async markSessionMessagesSummarized({

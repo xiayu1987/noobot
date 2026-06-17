@@ -125,6 +125,8 @@ function createMessageModel(messageItem = {}) {
   const transferEnvelopes = getMessageTransferEnvelopes(messageItem);
   const workflowMeta = normalizeWorkflowMeta(messageItem);
   return {
+    id: messageItem.id || "",
+    messageId: messageItem.messageId || messageItem.id || "",
     role: messageItem.role || "assistant",
     content: messageItem.content || "",
     type: messageItem.type || "message",
@@ -150,8 +152,14 @@ function createMessageModel(messageItem = {}) {
     expandedDetailLogKeys: normalizeArray(messageItem.expandedDetailLogKeys),
     error: messageItem.error || "",
     pending: Boolean(messageItem.pending),
+    state: messageItem.state || "",
+    status: messageItem.status || "",
+    channelState: messageItem.channelState || "",
     statusLabel: messageItem.statusLabel || "",
     ts: messageItem.ts || new Date().toISOString(),
+    monotonicState: messageItem.monotonicState || "",
+    stopState: messageItem.stopState || "",
+    isMonotonic: messageItem.isMonotonic === true || messageItem.monotonic === true,
     taskId: messageItem.taskId || "",
     injectedMessage: messageItem.injectedMessage === true,
     injectedBy: String(messageItem.injectedBy || "").trim(),

@@ -18,6 +18,9 @@ const props = defineProps({
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
+  sending: { type: Boolean, default: false },
+  deleteMonotonicMessage: { type: Function, default: null },
+  resendMonotonicMessage: { type: Function, default: null },
   attachmentPreviewDialogClass: {
     type: String,
     default: "attachment-preview-dialog",

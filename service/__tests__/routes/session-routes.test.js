@@ -77,6 +77,103 @@ test("session-routes: 会话查询异常返回 400 + 标准错误体", async () 
   });
 });
 
+test("session-routes: delete-from 路由透传请求体并返回后端快照", async () => {
+  const calls = [];
+  const app = express();
+  app.use(express.json());
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+        deleteFromMessage: async (payload) => {
+          calls.push(payload);
+          return {
+            session: { id: payload.sessionId, messages: [{ id: "m1" }], version: 3 },
+            deletedCount: 2,
+            anchorIndex: 1,
+            version: 3,
+          };
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/delete-from`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parentSessionId: " parent-1 ",
+        anchor: { dialogProcessId: "dp-1" },
+        expectedVersion: 2,
+        idempotencyKey: " idem-1 ",
+      }),
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.deletedCount, 2);
+    assert.equal(payload.anchorIndex, 1);
+    assert.deepEqual(calls[0], {
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "parent-1",
+      anchor: { dialogProcessId: "dp-1" },
+      expectedVersion: 2,
+      idempotencyKey: "idem-1",
+    });
+  });
+});
+
+test("session-routes: delete-from 保留服务层 404/409 状态码", async () => {
+  const app = express();
+  app.use(express.json());
+  const errors = [404, 409];
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+        deleteFromMessage: async () => {
+          const statusCode = errors.shift();
+          const error = new Error(`delete-from-${statusCode}`);
+          error.statusCode = statusCode;
+          throw error;
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    for (const statusCode of [404, 409]) {
+      const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/delete-from`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anchor: { messageId: "m-missing" } }),
+      });
+      const payload = await response.json();
+      assert.equal(response.status, statusCode);
+      assert.equal(payload.ok, false);
+      assert.equal(payload.error, `delete-from-${statusCode}`);
+    }
+  });
+});
+
 test("session-routes: 插件诊断接口返回发现/加载/错误信息", async () => {
   const app = express();
   registerSessionRoutes(app, {

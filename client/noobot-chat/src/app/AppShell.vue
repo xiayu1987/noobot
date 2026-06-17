@@ -536,6 +536,8 @@ const {
   deleteSession,
   send,
   stopSending,
+  deleteMonotonicMessage,
+  resendMonotonicMessage,
   refreshSessionConnectorsAsync,
   updateSessionSelectedConnector,
   pendingInteractionRequest,
@@ -1145,6 +1147,9 @@ const drawerPanels = computed(() => [
           :format-file-size="formatFileSize"
           :is-image-mime="isImageMime"
           :empty-logo-src="noobotLogo"
+          :sending="sending"
+          :delete-monotonic-message="deleteMonotonicMessage"
+          :resend-monotonic-message="resendMonotonicMessage"
           @open-thinking-details="openThinkingDetailsPanel"
         />
 
