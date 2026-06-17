@@ -52,7 +52,23 @@ function getExecutionLogs(messageItem = {}) {
 }
 
 function getExecutionLogCount(messageItem = {}) {
+  const explicitTotal = toValidExecutionLogTotal(
+    messageItem.executionLogTotal ?? messageItem.execution_log_total,
+  );
+  if (explicitTotal !== null) return explicitTotal;
+
+  const realtimeLogs = getAllRealtimeLogs(messageItem);
+  if (realtimeLogs.length > 0) return realtimeLogs.length;
+
+  const completedToolLogs = getCompletedToolLogsForMessage(messageItem);
+  if (completedToolLogs.length > 0) return completedToolLogs.length;
+
   return getExecutionLogs(messageItem).length;
+}
+
+function toValidExecutionLogTotal(value) {
+  const total = Number(value);
+  return Number.isFinite(total) && total >= 0 ? total : null;
 }
 
 function hasThinkingLogs(messageItem = {}) {

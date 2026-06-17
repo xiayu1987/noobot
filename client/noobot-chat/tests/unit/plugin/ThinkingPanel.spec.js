@@ -73,7 +73,7 @@ describe("ThinkingPanel", () => {
     expect(lines).toHaveLength(10);
     expect(lines[0].text()).toBe("完成：执行命令：cmd-3");
     expect(lines[9].text()).toBe("完成：执行命令：cmd-12");
-    expect(executionPane.attributes("data-label")).toContain("10");
+    expect(executionPane.attributes("data-label")).toContain("12");
   });
 
   it("keeps all completed tool logs in thinking details", () => {
@@ -97,5 +97,30 @@ describe("ThinkingPanel", () => {
     expect(detailLines).toHaveLength(12);
     expect(detailLines[0].text()).toBe("完成：执行命令：cmd-1");
     expect(detailLines[11].text()).toBe("完成：执行命令：cmd-12");
+  });
+
+  it("shows cumulative execution count while rendering only latest ten realtime logs", () => {
+    const realtimeLogs = Array.from({ length: 12 }, (_, index) => ({
+      event: "thinking",
+      type: "thinking",
+      text: `log-${index + 1}`,
+      ts: `2026-06-16T00:00:${String(index).padStart(2, "0")}Z`,
+    }));
+
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      realtimeLogs,
+      executionLogTotal: 12,
+      completedToolLogs: [],
+    });
+
+    const executionPane = wrapper.findAll(".tab-pane")[0];
+    const lines = executionPane.findAll(".execution-log-line");
+
+    expect(lines).toHaveLength(10);
+    expect(lines[0].text()).toBe("log-3");
+    expect(lines[9].text()).toBe("log-12");
+    expect(executionPane.attributes("data-label")).toContain("12");
   });
 });
