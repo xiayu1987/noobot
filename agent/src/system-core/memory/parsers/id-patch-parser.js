@@ -60,7 +60,7 @@ export function parseIdPatchCommands(text = "", { idPrefix = "" } = {}) {
   const normalizedPrefix = String(idPrefix || "").trim().toUpperCase();
   for (const line of splitPatchLines(text)) {
     const matched =
-      /^(\w+)\s+([A-Za-z]*\s*(?:\[\s*\d+\s*\]|\d+))(?:\s+([\s\S]*))?$/i.exec(
+      /^(\w+)\s+([A-Za-z]*\s*(?:\[\s*\d+\s*\]|\d+))\s*[:：]?\s*([\s\S]*)$/i.exec(
         line,
       );
     if (!matched) continue;
