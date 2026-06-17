@@ -55,7 +55,12 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain("chat-message-nav-title-group");
     expect(appShellSource).toContain("{{ chatMessageNavItems.length }}");
     expect(appShellSource).toContain("position: fixed;");
-    expect(appShellSource).toContain("top: calc(72px + env(safe-area-inset-top));");
+    expect(appShellSource).toContain("const defaultPosition = { right: 16, bottom: 112 };");
+    expect(appShellSource).toContain(":style=\"mobileChatNavigatorTriggerStyle\"");
+    expect(appShellSource).toContain("@pointerdown=\"handleMobileChatNavigatorTriggerPointerDown\"");
+    expect(appShellSource).toContain("@pointermove=\"handleMobileChatNavigatorTriggerPointerMove\"");
+    expect(appShellSource).toContain("touch-action: none;");
+    expect(appShellSource).toContain("overscroll-behavior: none;");
     expect(appShellSource).toContain(":aria-label=\"translate('common.chatNavigator')\"");
   });
 
@@ -69,4 +74,39 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain("background: var(--noobot-panel-bg);");
     expect(appShellSource).toContain("border: 1px solid var(--noobot-border-soft);");
   });
+
+  it("lets users drag and persist the mobile navigator trigger position", () => {
+    expect(appShellSource).toContain("function loadMobileChatNavigatorTriggerPosition()");
+    expect(appShellSource).toContain("noobot_mobile_chat_navigator_trigger_position");
+    expect(appShellSource).toContain("function clampMobileChatNavigatorTriggerPosition(left, top)");
+    expect(appShellSource).toContain("function persistMobileChatNavigatorTriggerPosition(position = {})");
+    expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerDown(event)");
+    expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerMove(event)");
+    expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerUp(event)");
+    expect(appShellSource).toContain("function preventMobileChatNavigatorTriggerGesture(event)");
+    expect(appShellSource).toContain("if (event?.cancelable) event.preventDefault?.();");
+    expect(appShellSource).toContain("function preventMobileChatNavigatorDocumentTouch(event)");
+    expect(appShellSource).toContain("function setMobileChatNavigatorDragLock(locked)");
+    expect(appShellSource).toContain("window?.addEventListener?.(\"touchmove\", preventMobileChatNavigatorDocumentTouch, { passive: false })");
+    expect(appShellSource).toContain("setMobileChatNavigatorDragLock(true)");
+    expect(appShellSource).toContain("setMobileChatNavigatorDragLock(false)");
+    expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerClick()");
+    expect(appShellSource).toContain("@click=\"handleMobileChatNavigatorTriggerClick\"");
+    expect(appShellSource).toContain("@pointercancel=\"handleMobileChatNavigatorTriggerPointerUp\"");
+    expect(appShellSource).toContain("openChatMessageNavigator();\n}");
+    expect(appShellSource).toContain("@touchstart.stop.prevent");
+    expect(appShellSource).toContain("@touchmove.stop.prevent");
+    expect(appShellSource).toContain("@touchend.stop.prevent");
+    expect(appShellSource).toContain("@touchcancel.stop.prevent");
+    expect(appShellSource).toContain(".mobile-chat-message-nav-trigger.is-dragging");
+    expect(appShellSource).toContain(":global(html.noobot-mobile-chat-navigator-dragging)");
+    expect(appShellSource).toContain("overscroll-behavior-y: none;");
+    expect(appShellSource).toContain("overflow: hidden;");
+    expect(appShellSource).toContain(".app-shell-root,\n.chat-content-body,\n.chat-composer-body {\n  overscroll-behavior: none;");
+    expect(appShellSource).toContain(".main-content {\n  flex: 1;");
+    expect(appShellSource).toContain("min-height: 0;\n  overscroll-behavior: none;");
+    expect(appShellSource).toContain(":global(body.noobot-mobile-chat-navigator-dragging) .main-content");
+    expect(appShellSource).toContain(":global(body.noobot-mobile-chat-navigator-dragging) .chat-content-body");
+  });
+
 });
