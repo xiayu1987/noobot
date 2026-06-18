@@ -44,7 +44,11 @@ export function prepareChatSend({
   const botMessage = appendMessage(RoleEnum.ASSISTANT, "");
   botMessage.pending = true;
   botMessage.statusLabel = "";
-  botMessage.executionLogTotal = Number(botMessage.executionLogTotal || 0);
+  botMessage.attachmentMetas = [];
+  botMessage.realtimeLogs = [];
+  botMessage.completedToolLogs = [];
+  botMessage.tool_calls = [];
+  botMessage.executionLogTotal = 0;
   applyConversationState(
     {
       state: "sending",

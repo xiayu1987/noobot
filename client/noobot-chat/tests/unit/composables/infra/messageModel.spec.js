@@ -146,6 +146,72 @@ describe("messageModel workflow messages", () => {
 });
 
 describe("messageModel execution logs", () => {
+  it("does not merge a new pending assistant placeholder with previous turn state", () => {
+    const messages = foldConversationMessages([
+      {
+        role: "assistant",
+        content: "previous answer",
+        dialogProcessId: "dp-same-until-stream-arrives",
+        attachmentMetas: [{ attachmentId: "att-prev", name: "previous.md" }],
+        realtimeLogs: [{ text: "previous tool log" }],
+        completedToolLogs: [{ text: "previous completed tool" }],
+        tool_calls: [{ id: "tool-prev" }],
+        executionLogTotal: 1,
+      },
+      {
+        role: "assistant",
+        content: "",
+        dialogProcessId: "dp-same-until-stream-arrives",
+        pending: true,
+        attachmentMetas: [],
+        realtimeLogs: [],
+        completedToolLogs: [],
+        tool_calls: [],
+        executionLogTotal: 0,
+        statusLabel: "",
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1].pending).toBe(true);
+    expect(messages[1].attachmentMetas).toEqual([]);
+    expect(messages[1].realtimeLogs).toEqual([]);
+    expect(messages[1].completedToolLogs).toEqual([]);
+    expect(messages[1].tool_calls).toEqual([]);
+    expect(messages[1].executionLogTotal).toBe(0);
+    expect(messages[1].statusLabel).toBe("");
+  });
+
+  it("fills the new assistant turn only after non-pending stream events arrive", () => {
+    const messages = foldConversationMessages([
+      {
+        role: "assistant",
+        content: "new partial answer",
+        dialogProcessId: "dp-new-stream",
+        attachmentMetas: [{ attachmentId: "att-new", name: "new.md" }],
+        realtimeLogs: [{ text: "new tool log" }],
+        tool_calls: [{ id: "tool-new" }],
+        executionLogTotal: 1,
+      },
+      {
+        role: "assistant",
+        content: "new continuation",
+        dialogProcessId: "dp-new-stream",
+        realtimeLogs: [{ text: "new tool log 2" }],
+        executionLogTotal: 2,
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toContain("new partial answer");
+    expect(messages[0].content).toContain("new continuation");
+    expect(messages[0].attachmentMetas).toHaveLength(1);
+    expect(messages[0].attachmentMetas[0]).toMatchObject({ attachmentId: "att-new" });
+    expect(messages[0].realtimeLogs).toHaveLength(2);
+    expect(messages[0].tool_calls).toHaveLength(1);
+    expect(messages[0].executionLogTotal).toBe(2);
+  });
+
   it("keeps only latest 10 realtime logs when merging completed assistant messages", () => {
     const messages = foldConversationMessages([
       {

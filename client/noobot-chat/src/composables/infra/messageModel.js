@@ -245,6 +245,8 @@ function foldConversationMessages(messages = [], buildView) {
       previousRole === "assistant" &&
       previousMessage?.workflowMessage !== true &&
       currentMessage?.workflowMessage !== true &&
+      previousMessage?.pending !== true &&
+      currentMessage?.pending !== true &&
       currentDialogProcessId &&
       previousDialogProcessId &&
       currentDialogProcessId === previousDialogProcessId &&
