@@ -15,7 +15,8 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain("activeSession.value?.messages || []");
     expect(appShellSource).toContain("messageListPanelRef.value?.getMessageAnchorId?.(messageItem, messageIndex)");
     expect(appShellSource).toContain("function handleSelectChatMessageNavItem(item = {})");
-    expect(appShellSource).toContain("messageListPanelRef.value?.scrollToMessageAnchor?.(item?.id)");
+    expect(appShellSource).toContain("const anchor = String(item?.id || \"\").trim();");
+    expect(appShellSource).toContain("messageListPanelRef.value?.scrollToMessageAnchor?.(anchor)");
   });
 
   it("syncs the highlighted navigator item from scroll position", () => {
@@ -70,7 +71,9 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain("<el-icon class=\"mobile-chat-message-nav-trigger-icon\"><Tickets /></el-icon>");
     expect(appShellSource).toContain("function openChatMessageNavigator()");
     expect(appShellSource).toContain("panel: PSEUDO_PANEL.CHAT_NAVIGATOR");
-    expect(appShellSource).toContain("@closed=\"pushPseudoRoute({ panel: '' })\"");
+    expect(appShellSource).toContain("function handleMobileChatNavigatorClosed()");
+    expect(appShellSource).toContain("@closed=\"handleMobileChatNavigatorClosed\"");
+    expect(appShellSource).toContain("replacePseudoRoute({");
     expect(appShellSource).toContain("background: var(--noobot-panel-bg);");
     expect(appShellSource).toContain("border: 1px solid var(--noobot-border-soft);");
   });
