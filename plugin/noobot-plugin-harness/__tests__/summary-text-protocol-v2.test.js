@@ -211,9 +211,9 @@ test("non-programming risk-first prompts use the same strategy pattern without c
     data: { userGoal: "整理会议纪要" },
     workflowStrategy: "risk_first",
   });
-  assert.match(planningPrompt, /目标：生成面向风险降级的最小计划切片/);
-  assert.match(planningPrompt, /计划仍然是计划/);
-  assert.match(planningPrompt, /识别风险 -> 检查\/澄清\/降级 -> 决定是否执行/);
+  assert.match(planningPrompt, /目标：生成兼顾风险控制与执行推进的最小计划切片/);
+  assert.match(planningPrompt, /非阻塞风险应转成检查\/验证动作并继续推进/);
+  assert.doesNotMatch(planningPrompt, /消除.*风险|所有风险.*解除|只有风险.*才/);
   assert.doesNotMatch(planningPrompt, /生成用于编程执行/);
 
   const protocol = buildSummaryPatchProtocolText({
@@ -270,8 +270,9 @@ test("post-plan followup prompt branches by execution-first workflow strategy", 
     workflowStrategy: "risk_first",
     riskFirstMode: true,
   });
-  assert.doesNotMatch(riskPrompt, /关键风险|风险优先策略|风险优先|risk first/i);
-  assert.doesNotMatch(riskPrompt, /执行优先/);
+  assert.match(riskPrompt, /阻塞执行的关键风险/);
+  assert.match(riskPrompt, /非阻塞风险.*继续执行/);
+  assert.doesNotMatch(riskPrompt, /执行优先|消除.*风险|所有风险.*解除/);
 
   const defaultPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "refinement");
   assert.match(defaultPrompt, /执行优先/);
