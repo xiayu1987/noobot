@@ -33,6 +33,7 @@ import {
   buildPostPlanUserFollowupPrompt,
   getPlanningContextSummaryHeader,
   getPlanningSeparateModelEmptyRelay,
+  resolveWorkflowStrategyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   compactOperationDirectoryForPrompt,
@@ -277,6 +278,11 @@ async function handleSeparateModelPlanningProcessResult(
   responseText = "",
 ) {
   const operationDirectory = resolveOperationDirectoryContext(ctx);
+  const {
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx);
   const relayText = [
     responseText || getPlanningSeparateModelEmptyRelay(locale),
     formatOperationDirectoryForRelay(operationDirectory),
@@ -313,7 +319,11 @@ async function handleSeparateModelPlanningProcessResult(
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "planning_followup",
-    content: buildPostPlanUserFollowupPrompt(locale, "planning"),
+    content: buildPostPlanUserFollowupPrompt(locale, "planning", {
+      executionFirstMode,
+      workflowStrategy,
+      riskFirstMode,
+    }),
     dedupe: true,
   });
   logPlanningCaptureResult(ctx, processed, {

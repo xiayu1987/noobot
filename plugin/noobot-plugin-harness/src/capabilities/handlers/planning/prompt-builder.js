@@ -24,9 +24,7 @@ import {
 import {
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildPlanningMainPrompt,
-  resolveExecutionFirstModeFromContext,
-  resolveProgrammingModeFromContext,
-  resolveWorkflowStrategyFromContext,
+  resolveWorkflowStrategyFlagsFromContext,
   getPlanningContextSummaryHeader,
   getPlanningPromptMarker,
   getPlanningPromptToolsHeader,
@@ -162,15 +160,18 @@ export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {
 export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}) {
   const userGoal = resolveLatestUserMessageText(_ctx) ||
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
-  const programmingMode = resolveProgrammingModeFromContext(_ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(_ctx, _meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(_ctx, _meta);
   return buildPlanningMainPrompt({
     locale,
     marker: getPlanningPromptMarker(locale),
     data: { userGoal },
     programmingMode,
     workflowStrategy,
-    executionFirstMode: resolveExecutionFirstModeFromContext(_ctx, _meta),
+    executionFirstMode,
   });
 }
 
@@ -221,9 +222,12 @@ export function buildPlanningMessagePlan(
     bucket,
     ctx,
   });
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
-  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   return createMessagePlan([
     {
       kind: "planning_context_summary",
@@ -257,6 +261,7 @@ export function buildPlanningMessagePlan(
         programmingMode,
         workflowStrategy,
         executionFirstMode,
+        riskFirstMode,
       }),
     },
   ]);

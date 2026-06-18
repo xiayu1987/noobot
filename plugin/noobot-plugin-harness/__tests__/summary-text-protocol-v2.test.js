@@ -13,6 +13,7 @@ import {
 } from "../src/capabilities/handlers/shared/plan/summary-text-protocol.js";
 import {
   buildAcceptanceValidationRequestPromptText,
+  buildPostPlanUserFollowupPrompt,
   buildGuidanceSummaryPromptText,
   buildPhaseAcceptanceRequestPromptText,
   buildPlanningMainPrompt,
@@ -145,6 +146,13 @@ test("non-programming execution-first prompts use generic next action without co
   assert.match(prompt, /\[NEXT_ACTION\]/);
   assert.match(prompt, /action = do\|verify\|inspect\|ask_user\|final/);
   assert.match(prompt, /target = 对象\/动作\/问题/);
+  assert.match(prompt, /iteration_mode = smallest_slice_loop/);
+  assert.match(prompt, /next_slice = 下一最小切片/);
+  assert.match(prompt, /last_check = 最近验证\/检查\|-/);
+  assert.match(prompt, /result_state = done\|needs_fix\|blocked\|unknown/);
+  assert.match(prompt, /artifact_path = 产物\/代码路径\|-/);
+  assert.match(prompt, /validation_cmd = 验证命令\|-/);
+  assert.match(prompt, /fallback_check = 替代检查\|-/);
   assert.match(prompt, /必须且只允许输出 1 个 \[NEXT_ACTION\]/);
   assert.doesNotMatch(prompt, /file=\[文件路径\|-\]/);
   assert.doesNotMatch(prompt, /method=\[方法\/函数名\|-\]/);
@@ -157,6 +165,13 @@ test("non-programming execution-first prompts use generic next action without co
   });
   assert.match(protocol, /action=do\|verify\|inspect\|ask_user\|final/);
   assert.match(protocol, /target=对象\/动作\/问题/);
+  assert.match(protocol, /iteration_mode=smallest_slice_loop/);
+  assert.match(protocol, /next_slice=下一最小切片/);
+  assert.match(protocol, /last_check=最近验证\/检查\|-/);
+  assert.match(protocol, /result_state=done\|needs_fix\|blocked\|unknown/);
+  assert.match(protocol, /artifact_path=产物\/代码路径\|-/);
+  assert.match(protocol, /validation_cmd=验证命令\|-/);
+  assert.match(protocol, /fallback_check=替代检查\|-/);
   assert.doesNotMatch(protocol, /file=\[文件路径\|-\]/);
   assert.doesNotMatch(protocol, /method=\[方法\/函数名\|-\]/);
   assert.doesNotMatch(protocol, /line=\[行号\/行号范围\|-/);
@@ -169,7 +184,7 @@ test("non-programming execution-first planning prompt stays plan-focused but act
     executionFirstMode: true,
   });
   assert.match(prompt, /目标：生成面向执行的最小可执行计划切片/);
-  assert.match(prompt, /默认采用 小步执行 -> 验证\/反馈 -> 修正 的闭环/);
+  assert.match(prompt, /按最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续），不断推进/);
   assert.match(prompt, /计划应倾向于：找到最相关入口 -> 做最小可逆动作/);
   assert.match(prompt, /执行优先风险分级/);
   assert.doesNotMatch(prompt, /生成用于编程执行的最小可执行计划切片/);
@@ -240,6 +255,43 @@ test("programming scenario always resolves execution-first workflow strategy", (
   assert.doesNotMatch(prompt, /风险降级的最小计划切片/);
 });
 
+test("post-plan followup prompt branches by execution-first workflow strategy", () => {
+  const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
+    executionFirstMode: true,
+    workflowStrategy: "execution_first",
+    riskFirstMode: false,
+  });
+  assert.match(executionPrompt, /执行优先/);
+  assert.match(executionPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
+  assert.doesNotMatch(executionPrompt, /风险优先策略|风险优先/);
+
+  const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
+    executionFirstMode: false,
+    workflowStrategy: "risk_first",
+    riskFirstMode: true,
+  });
+  assert.doesNotMatch(riskPrompt, /关键风险|风险优先策略|风险优先|risk first/i);
+  assert.doesNotMatch(riskPrompt, /执行优先/);
+
+  const defaultPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "refinement");
+  assert.match(defaultPrompt, /执行优先/);
+  assert.match(defaultPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
+  assert.doesNotMatch(defaultPrompt, /风险优先策略|风险优先/);
+});
+
+test("post-plan followup prompt normalizes workflow strategy aliases", () => {
+  const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
+    workflowStrategy: "safety-first",
+  });
+  assert.doesNotMatch(riskPrompt, /执行优先|最小切片/);
+
+  const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
+    workflowStrategy: "actionFirst",
+  });
+  assert.match(executionPrompt, /执行优先/);
+  assert.match(executionPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
+});
+
 test("programming prompts add action-first execution principles only in programming mode", () => {
   const normalPlanningPrompt = buildPlanningMainPrompt({
     locale: "zh-CN",
@@ -255,7 +307,8 @@ test("programming prompts add action-first execution principles only in programm
     programmingMode: true,
   });
   assert.match(programmingPlanningPrompt, /生成用于编程执行的最小可执行计划切片/);
-  assert.match(programmingPlanningPrompt, /找到最相关入口 -> 做最小可逆修改 -> 运行局部测试\/构建 -> 根据失败信息修正 -> 最后补充验收说明/);
+  assert.match(programmingPlanningPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
+  assert.match(programmingPlanningPrompt, /找到最相关入口 -> 做最小可逆修改 -> 运行局部测试\/构建 -> 根据失败信息修正 -> 继续下一切片或补充验收说明/);
   assert.doesNotMatch(programmingPlanningPrompt, /生成宏观主计划/);
   assert.match(programmingPlanningPrompt, /默认不要等待所有风险点解除/);
   assert.match(programmingPlanningPrompt, /修改 -> 验证 -> 修正/);

@@ -41,10 +41,7 @@ import {
   buildAcceptanceValidationRequestPromptText,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildPhaseAcceptanceRequestPromptText,
-  resolveExecutionFirstModeFromContext,
-  resolveProgrammingModeFromContext,
-  resolveRiskFirstModeFromContext,
-  resolveWorkflowStrategyFromContext,
+  resolveWorkflowStrategyFlagsFromContext,
   getAllPhaseAcceptanceReportsMarker,
   getAllSummaryReportsMarker,
   getAcceptanceMainPlanContextMarker,
@@ -262,10 +259,12 @@ function buildAcceptancePromptParts({
         data: { latestCompleteSummaryText: resolveLatestCompleteSummaryText({ bucket, ctx }) },
       })
     : [];
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
-  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
-  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   const requestContent = phase
     ? buildPhaseAcceptanceRequestPromptText({
         locale,
@@ -341,10 +340,12 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
-  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
-  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent } = buildAcceptancePromptParts({
     bucket,
     state,
@@ -465,10 +466,7 @@ export async function runPhaseAcceptanceBySeparateModel(
           planContextContent,
           phaseReportsContents,
           requestContent,
-          programmingMode: resolveProgrammingModeFromContext(ctx),
-          workflowStrategy: resolveWorkflowStrategyFromContext(ctx, meta),
-          executionFirstMode: resolveExecutionFirstModeFromContext(ctx, meta),
-          riskFirstMode: resolveRiskFirstModeFromContext(ctx, meta),
+          ...resolveWorkflowStrategyFlagsFromContext(ctx, meta),
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance"),
@@ -597,10 +595,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
           planContextContent,
           phaseReportsContents,
           requestContent,
-          programmingMode: resolveProgrammingModeFromContext(ctx),
-          workflowStrategy: resolveWorkflowStrategyFromContext(ctx, meta),
-          executionFirstMode: resolveExecutionFirstModeFromContext(ctx, meta),
-          riskFirstMode: resolveRiskFirstModeFromContext(ctx, meta),
+          ...resolveWorkflowStrategyFlagsFromContext(ctx, meta),
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance_before_final"),
@@ -687,10 +682,12 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
-  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
-  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   const promptPayload = pendingData.payload && typeof pendingData.payload === "object" ? pendingData.payload : {};
   const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale, ctx);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
@@ -842,10 +839,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     data: {
       requestPayload,
     },
-    programmingMode: resolveProgrammingModeFromContext(ctx),
-    workflowStrategy: resolveWorkflowStrategyFromContext(ctx, meta),
-    executionFirstMode: resolveExecutionFirstModeFromContext(ctx, meta),
-    riskFirstMode: resolveRiskFirstModeFromContext(ctx, meta),
+    ...resolveWorkflowStrategyFlagsFromContext(ctx, meta),
   });
   const mainPlanContextPrompt = buildAcceptanceMainPlanContextPromptText({
     locale,
@@ -862,10 +856,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     planContextContent: mainPlanContextPrompt,
     phaseReportsContents: phaseReportsPrompts,
     requestContent: prompt,
-    programmingMode: resolveProgrammingModeFromContext(ctx),
-    workflowStrategy: resolveWorkflowStrategyFromContext(ctx, meta),
-    executionFirstMode: resolveExecutionFirstModeFromContext(ctx, meta),
-    riskFirstMode: resolveRiskFirstModeFromContext(ctx, meta),
+    ...resolveWorkflowStrategyFlagsFromContext(ctx, meta),
   });
   let response = null;
   try {

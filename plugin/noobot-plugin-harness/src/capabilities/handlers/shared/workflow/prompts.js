@@ -7,6 +7,7 @@ import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { resolveCompletePlanChecklistText } from "../plan/checklist-context.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
+import { normalizeWorkflowStrategyName } from "../../../../core/workflow-strategy.js";
 import {
   buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText,
   buildPlanningMainPatchProtocolText as buildPlanningMainPatchProtocolCoreText,
@@ -20,27 +21,6 @@ const PLAN_UPDATE_POLICY = Object.freeze({
 });
 
 const WORKFLOW_STRATEGY_MODES = WORKFLOW_PARAMS.workflow.strategy.modes;
-
-function normalizeWorkflowStrategyName(value = "") {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const normalized = raw
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[\s-]+/g, "_")
-    .toLowerCase();
-  if (
-    normalized === WORKFLOW_STRATEGY_MODES.executionFirst ||
-    normalized === "execution" ||
-    normalized === "execute_first" ||
-    normalized === "action_first"
-  ) return WORKFLOW_STRATEGY_MODES.executionFirst;
-  if (
-    normalized === WORKFLOW_STRATEGY_MODES.riskFirst ||
-    normalized === "risk" ||
-    normalized === "safety_first"
-  ) return WORKFLOW_STRATEGY_MODES.riskFirst;
-  return "";
-}
 
 function resolvePromptWorkflowStrategy(source = {}, data = {}) {
   const candidates = [
@@ -209,6 +189,17 @@ export function resolveRiskFirstModeFromContext(ctx = {}, meta = {}) {
   return resolveWorkflowStrategyFromContext(ctx, meta) === WORKFLOW_STRATEGY_MODES.riskFirst;
 }
 
+export function resolveWorkflowStrategyFlagsFromContext(ctx = {}, meta = {}) {
+  const programmingMode = resolveProgrammingModeFromContext(ctx);
+  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  return {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode: workflowStrategy === WORKFLOW_STRATEGY_MODES.executionFirst,
+    riskFirstMode: !programmingMode && workflowStrategy === WORKFLOW_STRATEGY_MODES.riskFirst,
+  };
+}
+
 export function getPlanningPromptMarker(locale = LOCALE.ZH_CN) {
   void locale;
   return "<!-- harness-planning-bootstrap -->";
@@ -234,13 +225,35 @@ export function getPlanningSeparateModelEmptyRelay(locale = LOCALE.ZH_CN) {
 export function buildPostPlanUserFollowupPrompt(
   locale = LOCALE.ZH_CN,
   stage = "planning",
+  options = {},
 ) {
   const normalizedStage = String(stage || "planning").trim().toLowerCase();
-  const isRefinement = normalizedStage.includes("refinement");
-  const isRevision = normalizedStage.includes("revision");
-  if (isRefinement) return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_REFINEMENT);
-  if (isRevision) return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_REVISION);
-  return translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_PLANNING);
+  const promptOptions = normalizePromptOptions(options);
+  const riskFirstMode = promptOptions.riskFirstMode === true || (
+    promptOptions.executionFirstMode !== true &&
+    promptOptions.workflowStrategy === WORKFLOW_STRATEGY_MODES.riskFirst
+  );
+  const keyPairsByStage = {
+    refinement: [
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_REFINEMENT,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_REFINEMENT_RISK_FIRST,
+    ],
+    revision: [
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_REVISION,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_REVISION_RISK_FIRST,
+    ],
+    planning: [
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_PLANNING,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_PLANNING_RISK_FIRST,
+    ],
+  };
+  const stageKey = normalizedStage.includes("refinement")
+    ? "refinement"
+    : normalizedStage.includes("revision")
+      ? "revision"
+      : "planning";
+  const [executionFirstKey, riskFirstKey] = keyPairsByStage[stageKey];
+  return translateI18nText(locale, riskFirstMode ? riskFirstKey : executionFirstKey);
 }
 
 export function buildProgrammingExecutionPrinciplesText(locale = LOCALE.ZH_CN) {

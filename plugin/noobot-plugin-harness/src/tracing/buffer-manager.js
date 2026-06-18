@@ -40,6 +40,8 @@ import {
   resolveLocale as resolveHarnessLocale,
   translateI18nText,
 } from "../capabilities/handlers/shared/i18n.js";
+import { WORKFLOW_PARAMS } from "../core/workflow-params.js";
+import { normalizeWorkflowStrategyName } from "../core/workflow-strategy.js";
 
 function resolveFlushReasonByPoint(point = "") {
   if (
@@ -145,6 +147,31 @@ function isHarnessPromptAlreadyInjectedInContext(ctx = {}, id = "") {
   );
 }
 
+function resolvePolicyPromptI18nKey(options = {}) {
+  const strategy = normalizeWorkflowStrategyName(
+    options.nonProgrammingWorkflowStrategy ||
+      options.promptStrategy ||
+      options.workflowMode ||
+      options.workflowStrategy?.nonProgramming ||
+      options.workflowStrategy,
+  );
+  if (
+    strategy === WORKFLOW_PARAMS.workflow.strategy.modes.riskFirst ||
+    options.riskFirstMode === true ||
+    options.nonProgrammingExecutionFirst === false
+  ) {
+    return HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY;
+  }
+  if (
+    strategy === WORKFLOW_PARAMS.workflow.strategy.modes.executionFirst ||
+    options.executionFirstMode === true ||
+    options.nonProgrammingExecutionFirst === true
+  ) {
+    return HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_EXECUTION;
+  }
+  return HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY;
+}
+
 export async function injectPrompt(point, ctx, options, plugin = {}) {
   if (!options.enabled || !options.promptPolicy) return;
   const id =
@@ -154,7 +181,7 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
   const locale = resolveHarnessLocale(ctx);
   const resolveDefaultPrompt = () => (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
     ? translateI18nText(locale, HARNESS_I18N_KEYSET.SYSTEM_PROMPT.FINAL_RESPONSE)
-    : translateI18nText(locale, HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY));
+    : translateI18nText(locale, resolvePolicyPromptI18nKey(options)));
   const configuredPrompt = String(
     point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText,
   ).trim();

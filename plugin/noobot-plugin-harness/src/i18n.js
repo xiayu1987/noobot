@@ -86,6 +86,9 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     POST_PLAN_FOLLOWUP_REFINEMENT: "postPlanFollowupRefinement",
     POST_PLAN_FOLLOWUP_REVISION: "postPlanFollowupRevision",
     POST_PLAN_FOLLOWUP_PLANNING: "postPlanFollowupPlanning",
+    POST_PLAN_FOLLOWUP_REFINEMENT_RISK_FIRST: "postPlanFollowupRefinementRiskFirst",
+    POST_PLAN_FOLLOWUP_REVISION_RISK_FIRST: "postPlanFollowupRevisionRiskFirst",
+    POST_PLAN_FOLLOWUP_PLANNING_RISK_FIRST: "postPlanFollowupPlanningRiskFirst",
     RESPONSIBILITY_STAGE_PLANNING: "responsibilityStagePlanning",
     RESPONSIBILITY_STAGE_REVISION: "responsibilityStageRevision",
     RESPONSIBILITY_STAGE_REFINEMENT: "responsibilityStageRefinement",
@@ -210,6 +213,7 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
   }),
   SYSTEM_PROMPT: Object.freeze({
     POLICY: "harnessPolicyPrompt",
+    POLICY_EXECUTION: "harnessPolicyExecutionPrompt",
     FINAL_RESPONSE: "harnessFinalResponsePrompt",
   }),
 });
@@ -363,6 +367,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     reviewHeader: "[Harness-Review]",
     harnessPolicyPrompt: 
       "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
+    harnessPolicyExecutionPrompt:
+      "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进任务；最终回复保持精简且完整。",
     harnessFinalResponsePrompt:
       "最终回复请包含：做了什么、改了哪些文件、验证情况或未验证原因、下一步建议。",
     acceptanceRawTitle: "[Harness-验收]",
@@ -415,11 +421,17 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningDefaultPlanText:
       "1. 需求澄清与约束确认\n2. 实施并验证核心改动\n3. 最终验收与交付",
     postPlanFollowupPlanning:
-      "计划已完成。请调用工具，严格按照计划顺序执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
+      "计划已完成。请调用工具，严格按照计划顺序执行任务；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
     postPlanFollowupRevision:
-      "计划修正已完成。请调用工具，严格按照计划顺序执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
+      "计划修正已完成。请调用工具，严格按照计划顺序执行任务；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
     postPlanFollowupRefinement:
-      "计划细化已完成。请调用工具，严格按照计划顺序执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
+      "计划细化已完成。请调用工具，严格按照计划顺序执行任务；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
+    postPlanFollowupPlanningRiskFirst:
+      "计划已完成。请调用工具逐项执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项。",
+    postPlanFollowupRevisionRiskFirst:
+      "计划修正已完成。请调用工具逐项执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项。",
+    postPlanFollowupRefinementRiskFirst:
+      "计划细化已完成。请调用工具逐项执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项。",
     responsibilityStagePlanning: "规划",
     responsibilityStageRevision: "计划修正",
     responsibilityStageRefinement: "计划细化",
@@ -456,9 +468,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoal:
       "目标：根据用户需求生成宏观主计划。仅限宏观步骤，严禁输出任何子计划或实施细节。",
     planningMainPromptGoalProgrammingFast:
-      "目标：生成用于编程执行的最小可执行计划切片。不要试图一次性解除所有风险，也不要等待所有不确定性消失；除非涉及不可逆操作、数据删除、安全凭证、生产发布、生产数据或需求冲突，否则默认采用 小步修改 -> 验证 -> 修正 的闭环，优先进行最小可逆代码修改，然后运行最小验证，再根据结果继续修正。计划应倾向于：找到最相关入口 -> 做最小可逆修改 -> 运行局部测试/构建 -> 根据失败信息修正 -> 最后补充验收说明。",
+      "目标：生成用于编程执行的最小可执行计划切片。不要等到所有不确定性消失；除非涉及不可逆、数据删除、安全凭证、生产发布、生产数据或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆修改 -> 运行局部测试/构建 -> 根据失败信息修正 -> 继续下一切片或补充验收说明。",
     planningMainPromptGoalExecutionFirst:
-      "目标：生成面向执行的最小可执行计划切片。不要试图一次性解除所有风险，也不要等待所有不确定性消失；除非涉及不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则默认采用 小步执行 -> 验证/反馈 -> 修正 的闭环。计划应倾向于：找到最相关入口 -> 做最小可逆动作 -> 运行最小验证/检查 -> 根据结果修正 -> 最后补充验收说明。",
+      "目标：生成面向执行的最小可执行计划切片。不要等到所有不确定性消失；除非涉及不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆动作 -> 运行最小验证/检查 -> 根据结果修正 -> 继续下一切片或补充验收说明。",
     planningMainPromptGoalRiskFirst:
       "目标：生成面向风险降级的最小计划切片。计划仍然是计划，但优先识别会阻塞执行的关键风险；不要罗列无限风险，只输出能推进决策的宏观步骤。默认采用 识别风险 -> 检查/澄清/降级 -> 决定是否执行 的闭环。计划应倾向于：找到最关键不确定点 -> 做最小检查或确认 -> 将风险降级为可执行动作 -> 再推进执行或验收说明。",
     planningMainUserGoalHeader: "【用户目标】",
@@ -512,9 +524,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryProgrammingNextActionRules:
       "编程模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 edit、test、inspect、ask_user、final 之一；target 必须是具体文件路径、命令或需要询问用户的问题；reason 必须简短；blocking=true 仅用于不可逆、安全、生产数据、凭证、破坏性操作或需求冲突，否则用 blocking=false 并继续小步执行。",
     guidanceSummaryExecutionFirstNextActionSample:
-      "[NEXT_ACTION]\naction = do|verify|inspect|ask_user|final\ntarget = 对象/动作/问题\nreason = 简短原因\nblocking = true|false",
+      "[NEXT_ACTION]\naction = do|verify|inspect|ask_user|final\ntarget = 对象/动作/问题\niteration_mode = smallest_slice_loop\nnext_slice = 下一最小切片\nlast_check = 最近验证/检查|-\nresult_state = done|needs_fix|blocked|unknown\nartifact_path = 产物/代码路径|-\nvalidation_cmd = 验证命令|-\nfallback_check = 替代检查|-\nreason = 简短原因\nblocking = true|false",
     guidanceSummaryExecutionFirstNextActionRules:
-      "执行优先模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 do、verify、inspect、ask_user、final 之一；target 必须是具体对象、动作或需要询问用户的问题；reason 必须简短；blocking=true 仅用于不可逆/破坏性、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则用 blocking=false 并继续小步执行。",
+      "执行优先（最小切片，持续推进计划）模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 do、verify、inspect、ask_user、final 之一；target 必须是具体对象、动作或需要询问用户的问题；用 iteration_mode=smallest_slice_loop 表明持续按最小切片推进；next_slice 写下一步最小动作；last_check 写最近验证/检查或 -；result_state 写 done、needs_fix、blocked 或 unknown；若非编程任务中出现代码/文件/命令，artifact_path、validation_cmd、fallback_check 有则填写，无则用 -；reason 必须简短；blocking=true 仅用于不可逆/破坏性、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则用 blocking=false 并继续执行下一切片。",
     guidanceSummaryRiskFirstNextActionSample:
       "[NEXT_ACTION]\naction = inspect|verify|mitigate|ask_user|final\ntarget = 风险点/检查动作/问题\nreason = 简短原因\nblocking = true|false",
     guidanceSummaryRiskFirstNextActionRules:
@@ -568,7 +580,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryProgrammingLine6:
       "编程模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=edit|test|inspect|ask_user|final，target=文件路径/命令/问题，reason=简短原因，blocking=true|false）；涉及具体代码位置、文件变更、测试失败定位、错误堆栈或日志定位时必须写明 file、method、line；没有可靠代码位置时使用 file=- method=- line=-；line 只有上下文存在明确行号时填写，否则使用 line=-；禁止编造文件、函数或行号。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、文件、方法、行号或 - 与问题说明。小结后请继续任务。",
     protocolSummaryExecutionFirstLine6:
-      "执行优先模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=do|verify|inspect|ask_user|final，target=对象/动作/问题，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作与问题说明。小结后请继续任务。",
+      "执行优先（最小切片，持续推进计划）模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=do|verify|inspect|ask_user|final，target=对象/动作/问题，iteration_mode=smallest_slice_loop，next_slice=下一最小切片，last_check=最近验证/检查|-，result_state=done|needs_fix|blocked|unknown，artifact_path=产物/代码路径|-，validation_cmd=验证命令|-，fallback_check=替代检查|-，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、循环字段、可选编程字段与问题说明。小结后请继续任务。",
     protocolSummaryRiskFirstLine6:
       "风险优先模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=inspect|verify|mitigate|ask_user|final，target=风险点/检查动作/问题，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一风险降级动作与问题说明。小结后请继续任务。",
     protocolAcceptanceTitlePhase:
@@ -611,6 +623,8 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     reviewHeader: "[Harness-Review]",
     harnessPolicyPrompt:
       "Noobot Harness reminder: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; keep the final response concise and complete.",
+    harnessPolicyExecutionPrompt:
+      "Noobot Harness reminder: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; execution-first: continuously execute smallest slices (execute -> verify/feedback -> fix -> continue) to advance the task; keep the final response concise and complete.",
     harnessFinalResponsePrompt:
       "Final response should include: what was done, which files were changed, validation status (or why not validated), and next-step suggestions.",
     acceptanceRawTitle: "[Harness-Acceptance]",
@@ -663,11 +677,17 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningDefaultPlanText:
       "1. Clarify requirements and constraints\n2. Implement and verify core changes\n3. Final acceptance and delivery",
     postPlanFollowupPlanning:
-      "Plan is ready. Continue the task step by step with tools.",
+      "Plan is ready. Continue with tools in plan order; execution-first: continuously execute smallest slices (execute -> verify/feedback -> fix -> continue) to advance the task. Handle one plan item at a time, then continue based on the result until all plan items are done.",
     postPlanFollowupRevision:
-      "Plan revision is done. Continue the task step by step with tools.",
+      "Plan revision is done. Continue with tools in plan order; execution-first: continuously execute smallest slices (execute -> verify/feedback -> fix -> continue) to advance the task. Handle one plan item at a time, then continue based on the result until all plan items are done.",
     postPlanFollowupRefinement:
-      "Plan refinement is done. Continue the task step by step with tools.",
+      "Plan refinement is done. Continue with tools in plan order; execution-first: continuously execute smallest slices (execute -> verify/feedback -> fix -> continue) to advance the task. Handle one plan item at a time, then continue based on the result until all plan items are done.",
+    postPlanFollowupPlanningRiskFirst:
+      "Plan is ready. Continue step by step with tools in plan order. Handle one plan item at a time, then continue based on the result.",
+    postPlanFollowupRevisionRiskFirst:
+      "Plan revision is done. Continue step by step with tools in plan order. Handle one plan item at a time, then continue based on the result.",
+    postPlanFollowupRefinementRiskFirst:
+      "Plan refinement is done. Continue step by step with tools in plan order. Handle one plan item at a time, then continue based on the result.",
     responsibilityStagePlanning: "planning",
     responsibilityStageRevision: "plan revision",
     responsibilityStageRefinement: "plan refinement",
@@ -705,9 +725,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoal:
       "Goal: Generate a high-level main plan from the user goal. Only high-level steps; no sub-steps or implementation details.",
     planningMainPromptGoalProgrammingFast:
-      "Goal: generate the smallest executable plan slice for programming work. Do not try to eliminate every risk at once, and do not wait until every uncertainty is gone; unless the task involves irreversible operations, data deletion, security credentials, production release, production data, or requirement conflicts, default to the small edit -> verify -> fix loop: make the smallest reversible code change, run the smallest verification, then continue based on the result. The plan should prefer: find the most relevant entry point -> make the smallest reversible edit -> run local tests/build -> fix based on failures -> add final acceptance notes.",
+      "Goal: generate the smallest executable plan slice for programming work. Do not wait until every uncertainty is gone; unless the task involves irreversible operations, data deletion, security credentials, production release, production data, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> make the smallest reversible edit -> run local tests/build -> fix based on failures -> continue to the next slice or add acceptance notes.",
     planningMainPromptGoalExecutionFirst:
-      "Goal: generate the smallest executable plan slice for execution. Do not try to eliminate every risk at once, and do not wait until every uncertainty is gone; unless the task involves irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts, default to the small action -> verify/feedback -> fix loop. The plan should prefer: find the most relevant entry point -> take the smallest reversible action -> run the smallest verification/inspection -> fix based on results -> add final acceptance notes.",
+      "Goal: generate the smallest executable plan slice for execution. Do not wait until every uncertainty is gone; unless the task involves irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> take the smallest reversible action -> run the smallest verification/inspection -> fix based on results -> continue to the next slice or add acceptance notes.",
     planningMainPromptGoalRiskFirst:
       "Goal: generate the smallest plan slice for risk reduction. This is still a plan, but it should prioritize key risks that may block execution; do not list unlimited risks, only high-level steps that move the decision forward. Default to the identify risk -> inspect/clarify/reduce -> decide whether to execute loop. The plan should prefer: find the key uncertainty -> perform the smallest inspection or confirmation -> reduce the risk into an executable action -> then proceed to execution or acceptance notes.",
     planningMainUserGoalHeader: "[User Goal]",
@@ -757,9 +777,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryProgrammingNextActionRules:
       "In programming mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of edit, test, inspect, ask_user, final; target must be a concrete file path, command, or user-facing question; reason must be brief; use blocking=true only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks; otherwise use blocking=false and continue the small-step execution loop.",
     guidanceSummaryExecutionFirstNextActionSample:
-      "[NEXT_ACTION]\naction = do|verify|inspect|ask_user|final\ntarget = object/action/question\nreason = brief reason\nblocking = true|false",
+      "[NEXT_ACTION]\naction = do|verify|inspect|ask_user|final\ntarget = object/action/question\niteration_mode = smallest_slice_loop\nnext_slice = next smallest slice\nlast_check = latest verification/inspection|-\nresult_state = done|needs_fix|blocked|unknown\nartifact_path = artifact/code path|-\nvalidation_cmd = validation command|-\nfallback_check = fallback check|-\nreason = brief reason\nblocking = true|false",
     guidanceSummaryExecutionFirstNextActionRules:
-      "In execution-first mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of do, verify, inspect, ask_user, final; target must be a concrete object, action, or user-facing question; reason must be brief; use blocking=true only for irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts; otherwise use blocking=false and continue the small-step execution loop.",
+      "In execution-first (smallest slice, continuous plan advancement) mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of do, verify, inspect, ask_user, final; target must be a concrete object, action, or user-facing question; use iteration_mode=smallest_slice_loop to show continuous smallest-slice progress; next_slice is the next minimal action; last_check is the latest verification/inspection or -; result_state is done, needs_fix, blocked, or unknown; if a non-programming task includes code/files/commands, fill artifact_path, validation_cmd, and fallback_check when available, otherwise use -; reason must be brief; use blocking=true only for irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts; otherwise use blocking=false and continue with the next slice.",
     guidanceSummaryRiskFirstNextActionSample:
       "[NEXT_ACTION]\naction = inspect|verify|mitigate|ask_user|final\ntarget = risk/inspection action/question\nreason = brief reason\nblocking = true|false",
     guidanceSummaryRiskFirstNextActionRules:
@@ -814,7 +834,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryProgrammingLine6:
       "In programming mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=edit|test|inspect|ask_user|final, target=file path/command/question, reason=brief reason, blocking=true|false); include file, method, and line only for concrete code locations, file changes, test-failure locations, stack traces, or log locations; use file=- method=- line=- when no reliable code location exists; fill line only when explicit line numbers exist in context, otherwise use line=-; never fabricate file/function/line. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, file/method/line or -, and issue notes. Then continue with the task.",
     protocolSummaryExecutionFirstLine6:
-      "In execution-first mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=do|verify|inspect|ask_user|final, target=object/action/question, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, and issue notes. Then continue with the task.",
+      "In execution-first (smallest slice, continuous plan advancement) mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=do|verify|inspect|ask_user|final, target=object/action/question, iteration_mode=smallest_slice_loop, next_slice=next smallest slice, last_check=latest verification/inspection|-, result_state=done|needs_fix|blocked|unknown, artifact_path=artifact/code path|-, validation_cmd=validation command|-, fallback_check=fallback check|-, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, loop fields, optional programming fields, and issue notes. Then continue with the task.",
     protocolSummaryRiskFirstLine6:
       "In risk-first mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=inspect|verify|mitigate|ask_user|final, target=risk/inspection action/question, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single risk-reduction action, and issue notes. Then continue with the task.",
     protocolAcceptanceTitlePhase:

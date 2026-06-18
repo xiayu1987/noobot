@@ -53,10 +53,7 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
   buildPreviousSummaryContextMessages,
-  resolveExecutionFirstModeFromContext,
-  resolveProgrammingModeFromContext,
-  resolveRiskFirstModeFromContext,
-  resolveWorkflowStrategyFromContext,
+  resolveWorkflowStrategyFlagsFromContext,
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
 } from "../shared/workflow/prompts.js";
@@ -158,10 +155,12 @@ export async function runPlanUpdateAfterSummary(
     return false;
   }
   const locale = state?.locale || LOCALE.ZH_CN;
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
-  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
-  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   const fallbackMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "summary",
@@ -275,7 +274,11 @@ export async function runPlanUpdateAfterSummary(
   relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose: "next_phase_plan_followup",
-    content: buildPostPlanUserFollowupPrompt(locale, "revision"),
+    content: buildPostPlanUserFollowupPrompt(locale, "revision", {
+      executionFirstMode,
+      workflowStrategy,
+      riskFirstMode,
+    }),
     dedupe: true,
   });
   changed = true;
@@ -311,10 +314,12 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
-  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
-  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
 
   const requestedAction = String(action || "auto").trim().toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
