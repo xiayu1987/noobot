@@ -1,0 +1,59 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { filterForModelContext } from "../../../context/session/message-context-policy.js";
+import { invokeLlmWithTransientRetry } from "../llm-invoker.js";
+import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
+
+export function createBoundLlmToolChoiceInvoker({
+  adaptedBinding,
+  boundTools,
+  invokeLlm,
+  messages,
+  modelState,
+  runtime,
+  abortSignal,
+  turn,
+}) {
+  return async function invokeBoundLlmWithToolChoice(
+    toolChoiceOverride = "",
+    llmOverride = null,
+    invokeMode = "with_tools",
+  ) {
+    return invokeLlmWithTransientRetry({
+      modelState,
+      turn,
+      mode: invokeMode,
+      invoke: ({ callbacks }) => {
+        const baseBindOptions =
+          adaptedBinding?.bindOptions && typeof adaptedBinding.bindOptions === "object"
+            ? adaptedBinding.bindOptions
+            : {};
+        const effectiveToolChoice = String(
+          toolChoiceOverride || baseBindOptions?.tool_choice || "",
+        ).trim();
+        const effectiveBindOptions = {
+          ...baseBindOptions,
+          ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
+        };
+        const targetLlm = llmOverride || invokeLlm;
+        const boundLlm = Object.keys(effectiveBindOptions).length
+          ? targetLlm.bindTools(boundTools, effectiveBindOptions)
+          : targetLlm.bindTools(boundTools);
+        const nonThinkingOverrides = resolveNonThinkingCallOverrides(
+          runtime,
+          effectiveToolChoice,
+          modelState?.defaultModelSpec || {},
+        );
+        return boundLlm.invoke(filterForModelContext(messages), {
+          callbacks,
+          signal: abortSignal,
+          ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
+          ...nonThinkingOverrides,
+        });
+      },
+    });
+  };
+}

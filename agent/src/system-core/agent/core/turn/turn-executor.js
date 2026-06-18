@@ -3,28 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AIMessage } from "@langchain/core/messages";
 import { filterForModelContext } from "../../../context/session/message-context-policy.js";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
 } from "../../../context/session/current-turn-store.js";
-import {
-  adaptToolsForBinding,
-  appendToolCompatibilityLog,
-  createChatModelFromSpec,
-  normalizeToolCalls,
-  registerToolCallStreamingMismatch,
-  resolveRetryInvokeLlm,
-  resolveInvokeLlm,
-  shouldRetryToolCallStreamingMismatch,
-} from "../../../model/index.js";
+import { resolveInvokeLlm } from "../../../model/index.js";
 import { emitEvent } from "../../../event/index.js";
 import { createStateCommitter } from "../execution/state-committer.js";
-import {
-  extractAttachmentMetasFromToolResult,
-  persistModelGeneratedArtifacts,
-} from "../media/artifact-service.js";
+import { persistModelGeneratedArtifacts } from "../media/artifact-service.js";
 import {
   extractAiReasoningText,
   invokeLlmWithTransientRetry,
@@ -34,269 +21,30 @@ import { resolveCurrentModelInfo } from "../model/model-manager.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
-import { mergeConfig, normalizeBooleanLike, resolveRunConfigValue } from "../../../config/index.js";
-
-function clonePlainObjectWithoutToolCalls(value = null) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const cloned = { ...value };
-  delete cloned.tool_calls;
-  delete cloned.toolCalls;
-  delete cloned.function_call;
-  return cloned;
-}
-
-export function formatToolCallsForStorage(toolCalls = []) {
-  return (Array.isArray(toolCalls) ? toolCalls : [])
-    .map((call = {}) => ({
-      id: String(call?.id || ""),
-      type: "function",
-      function: {
-        name: String(call?.name || ""),
-        arguments: JSON.stringify(call?.args || {}),
-      },
-    }))
-    .filter((call) => call.function.name);
-}
-
-export function formatToolCallsForLangChain(toolCalls = []) {
-  return (Array.isArray(toolCalls) ? toolCalls : [])
-    .map((call = {}) => ({
-      id: String(call?.id || ""),
-      name: String(call?.name || ""),
-      args: call?.args || {},
-      type: "tool_call",
-    }))
-    .filter((call) => call.name);
-}
-
-export function buildAssistantModelMessageForToolCalls({
-  ai = {},
-  contentText = "",
-  toolCalls = [],
-} = {}) {
-  const rawContent =
-    typeof ai?.content === "string" || Array.isArray(ai?.content)
-      ? ai.content
-      : String(contentText || "");
-  return new AIMessage({
-    content: rawContent,
-    tool_calls: formatToolCallsForLangChain(toolCalls),
-    additional_kwargs: clonePlainObjectWithoutToolCalls(ai?.additional_kwargs) || {},
-    response_metadata: clonePlainObjectWithoutToolCalls(ai?.response_metadata) || {},
-  });
-}
-
-function isRequiredToolChoiceUnsupportedError(error = null) {
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    message.includes("tool_choice parameter does not support being set to required") ||
-    (message.includes("tool_choice") &&
-      message.includes("thinking mode") &&
-      message.includes("required"))
-  );
-}
-
-function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", modelSpec = {}) {
-  const normalizedToolChoice = String(toolChoice || "").trim().toLowerCase();
-  const providerFormat = String(modelSpec?.format || "").trim().toLowerCase();
-  const hasEnableThinkingConfig = Object.prototype.hasOwnProperty.call(
-    modelSpec || {},
-    "enable_thinking",
-  );
-  const modelEnableThinking =
-    hasEnableThinkingConfig && typeof modelSpec?.enable_thinking === "boolean"
-      ? modelSpec.enable_thinking
-      : undefined;
-  if (normalizedToolChoice === "required") {
-    return {
-      enable_thinking: false,
-      preserve_thinking: false,
-      thinking_budget: 0,
-    };
-  }
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  if (!systemRuntime || systemRuntime.forceNonThinkingMode !== true) {
-    if (providerFormat === "dashscope" && modelEnableThinking !== true) {
-      return {
-        enable_thinking: false,
-        preserve_thinking: false,
-        thinking_budget: 0,
-      };
-    }
-    return {};
-  }
-  return {
-    enable_thinking: false,
-    preserve_thinking: false,
-    thinking_budget: 0,
-  };
-}
-
-function resolveLlmForRequiredToolChoice({ modelState, eventListener, turn }) {
-  try {
-    return createChatModelFromSpec(
-      {
-        ...(modelState?.defaultModelSpec || {}),
-        ...(modelState?.activeModelName
-          ? { model: String(modelState.activeModelName || "").trim() }
-          : {}),
-        ...(modelState?.activeModelAlias
-          ? { alias: String(modelState.activeModelAlias || "").trim() }
-          : {}),
-      },
-      {
-        streaming: false,
-        context: {
-          runtime: modelState?.runtime || {},
-          agentContext: modelState?.agentContext || null,
-          sessionId: String(
-            modelState?.runtime?.systemRuntime?.sessionId || modelState?.runtime?.sessionId || "",
-          ).trim(),
-        },
-      },
-    );
-  } catch {
-    emitEvent(eventListener, "tool_choice_required_non_thinking_model_fallback_skipped", {
-      turn,
-      reason: "model_create_failed_fallback_to_current",
-    });
-    return resolveInvokeLlm(modelState, "with_tools");
-  }
-}
-
-function shouldUseFinalStreaming(modelState = {}) {
-  if (!modelState?.eventListener?.onEvent) return false;
-  const runtime = modelState?.runtime || {};
-  const runConfig =
-    runtime?.runConfig && typeof runtime.runConfig === "object" && !Array.isArray(runtime.runConfig)
-      ? runtime.runConfig
-      : {};
-  const effectiveConfig = mergeConfig(
-    modelState?.globalConfig || {},
-    modelState?.userConfig || {},
-  );
-  return resolveRunConfigValue({
-    runConfig,
-    config: effectiveConfig,
-    key: "streaming",
-    normalize: (value) => normalizeBooleanLike(value, false),
-    fallback: false,
-  });
-}
-
-function createFinalStreamingLlm(modelState = {}) {
-  return createChatModelFromSpec(
-    {
-      ...(modelState?.defaultModelSpec || {}),
-      ...(modelState?.activeModelName
-        ? { model: String(modelState.activeModelName || "").trim() }
-        : {}),
-      ...(modelState?.activeModelAlias
-        ? { alias: String(modelState.activeModelAlias || "").trim() }
-        : {}),
-    },
-    {
-      streaming: true,
-      context: {
-        runtime: modelState?.runtime || {},
-        agentContext: modelState?.agentContext || null,
-        sessionId: String(
-          modelState?.runtime?.systemRuntime?.sessionId || modelState?.runtime?.sessionId || "",
-        ).trim(),
-      },
-    },
-  );
-}
-
-async function maybeInvokeFinalStreamingNoTools({
-  modelState,
-  baseMessages = [],
-  fallbackAi = null,
-  fallbackText = "",
-  turn,
-  mode = "final_stream_no_tools",
-} = {}) {
-  if (!shouldUseFinalStreaming(modelState)) {
-    return {
-      ai: fallbackAi,
-      text: String(fallbackText || ""),
-      streamed: false,
-    };
-  }
-
-  const { eventListener, runtime, abortSignal } = modelState;
-  let streamingLlm = null;
-  try {
-    streamingLlm = createFinalStreamingLlm(modelState);
-  } catch (error) {
-    emitEvent(eventListener, "llm_final_stream_create_failed_fallback_non_streaming", {
-      turn,
-      mode,
-      error: error?.message || String(error),
-    });
-    return {
-      ai: fallbackAi,
-      text: String(fallbackText || ""),
-      streamed: false,
-    };
-  }
-
-  emitEvent(eventListener, "llm_final_stream_start", { turn, mode });
-  try {
-    const streamedAi = await invokeLlmWithTransientRetry({
-      modelState,
-      turn,
-      mode,
-      invoke: ({ callbacks }) =>
-        streamingLlm.invoke(filterForModelContext(baseMessages), {
-          callbacks,
-          signal: abortSignal,
-          ...resolveNonThinkingCallOverrides(
-            runtime,
-            "none",
-            modelState?.defaultModelSpec || {},
-          ),
-        }),
-    });
-    const streamedText = normalizeAiTextContent(streamedAi?.content, {
-      additionalKwargs: streamedAi?.additional_kwargs ?? null,
-      allowReasoningFallback: false,
-    });
-    emitEvent(eventListener, "llm_final_stream_end", {
-      turn,
-      mode,
-      textChars: streamedText.length,
-    });
-    return {
-      ai: streamedAi,
-      text: streamedText || String(fallbackText || ""),
-      streamed: true,
-      mode,
-    };
-  } catch (error) {
-    emitEvent(eventListener, "llm_final_stream_failed_fallback_non_streaming", {
-      turn,
-      mode,
-      error: error?.message || String(error),
-    });
-    return {
-      ai: fallbackAi,
-      text: String(fallbackText || ""),
-      streamed: false,
-    };
-  }
-}
-
-function buildReasoningRetrySystemMessage(reasoningText = "", locale = "zh-CN") {
-  const isEn = String(locale || "").trim().toLowerCase() === "en-us";
-  return [
-    "<!-- noobot-reasoning-retry -->",
-    isEn
-      ? "The prior model reasoning is reference-only, not final answer. Return final answer directly."
-      : "以下是上次模型返回的思考内容，仅供参考，不代表最终答案。请直接给出最终答案。",
-    String(reasoningText || "").trim(),
-  ].join("\n");
-}
+import {
+  isRequiredToolChoiceUnsupportedError,
+  resolveNonThinkingCallOverrides,
+} from "./tool-choice-strategy.js";
+import {
+  buildAssistantModelMessageForToolCalls,
+  formatToolCallsForStorage,
+} from "./tool-call-message.js";
+import {
+  buildReasoningRetrySystemMessage,
+  maybeInvokeFinalStreamingNoTools,
+} from "./turn-stage.js";
+import { prepareToolBinding } from "./tool-binding-preparer.js";
+import { createBoundLlmToolChoiceInvoker } from "./tool-invoke-strategy.js";
+import {
+  maybeRetryToolCallStreamingMismatch,
+  normalizeToolTurnAi,
+} from "./tool-call-retry-stage.js";
+export { normalizeToolResultAttachmentMetas } from "./tool-result-normalizer.js";
+export {
+  buildAssistantModelMessageForToolCalls,
+  formatToolCallsForLangChain,
+  formatToolCallsForStorage,
+} from "./tool-call-message.js";
 
 export async function invokeNoToolsTurn({
   modelState,
@@ -509,90 +257,26 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
 
-  const adaptedBinding = adaptToolsForBinding(tools, modelState);
-  const configuredToolChoice = String(adaptedBinding?.bindOptions?.tool_choice || "").trim();
-  const invokeLlm =
-    configuredToolChoice === "required"
-      ? resolveLlmForRequiredToolChoice({ modelState, eventListener, turn })
-      : resolveInvokeLlm(modelState, "with_tools");
-  if (configuredToolChoice === "required") {
-    emitEvent(eventListener, "tool_choice_required_forced_non_thinking_model", {
-      turn,
-    });
-  }
-  const boundTools = Array.isArray(adaptedBinding?.tools) ? adaptedBinding.tools : [];
-  const toolMap = new Map(boundTools.map((tool) => [tool.name, tool]));
-
-  if (Array.isArray(adaptedBinding?.droppedToolNames) && adaptedBinding.droppedToolNames.length) {
-    emitEvent(eventListener, "tool_binding_adapter_dropped_tools", {
-      turn,
-      droppedTools: adaptedBinding.droppedToolNames,
-    });
-    appendToolCompatibilityLog({
-      modelState,
-      runtime,
-      event: "tool_binding_adapter_dropped_tools",
-      tools: adaptedBinding.droppedToolNames,
-    }).catch(() => {});
-  }
-
-  if (
-    Array.isArray(adaptedBinding?.strictDowngradedTools) &&
-    adaptedBinding.strictDowngradedTools.length
-  ) {
-    emitEvent(eventListener, "tool_binding_adapter_strict_downgraded", {
-      turn,
-      incompatibleTools: adaptedBinding.strictDowngradedTools,
-    });
-  }
-
-  emitEvent(eventListener, "tool_binding_ready", {
+  const { adaptedBinding, configuredToolChoice, invokeLlm, boundTools, toolMap } = prepareToolBinding({
+    tools,
+    modelState,
+    runtime,
+    eventListener,
     turn,
-    toolCount: boundTools.length,
-    toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
-    bindOptions: adaptedBinding?.bindOptions || {},
   });
 
   emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools" });
 
-  const invokeBoundLlmWithToolChoice = async (
-    toolChoiceOverride = "",
-    llmOverride = null,
-    invokeMode = "with_tools",
-  ) =>
-    invokeLlmWithTransientRetry({
-      modelState,
-      turn,
-      mode: invokeMode,
-      invoke: ({ callbacks }) => {
-        const baseBindOptions =
-          adaptedBinding?.bindOptions && typeof adaptedBinding.bindOptions === "object"
-            ? adaptedBinding.bindOptions
-            : {};
-        const effectiveToolChoice = String(
-          toolChoiceOverride || baseBindOptions?.tool_choice || "",
-        ).trim();
-        const effectiveBindOptions = {
-          ...baseBindOptions,
-          ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
-        };
-        const targetLlm = llmOverride || invokeLlm;
-        const boundLlm = Object.keys(effectiveBindOptions).length
-          ? targetLlm.bindTools(boundTools, effectiveBindOptions)
-          : targetLlm.bindTools(boundTools);
-        const nonThinkingOverrides = resolveNonThinkingCallOverrides(
-          runtime,
-          effectiveToolChoice,
-          modelState?.defaultModelSpec || {},
-        );
-        return boundLlm.invoke(filterForModelContext(messages), {
-          callbacks,
-          signal: abortSignal,
-          ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),
-          ...nonThinkingOverrides,
-        });
-      },
-    });
+  const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
+    adaptedBinding,
+    boundTools,
+    invokeLlm,
+    messages,
+    modelState,
+    runtime,
+    abortSignal,
+    turn,
+  });
 
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
@@ -664,11 +348,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }
   }
 
-  let { rawCalls, calls } = normalizeToolCalls(ai);
-  let aiContentText = normalizeAiTextContent(ai.content, {
-    additionalKwargs: ai?.additional_kwargs ?? null,
-    allowReasoningFallback: false,
-  });
+  let { rawCalls, calls, aiContentText } = normalizeToolTurnAi(ai);
   const reasoningText = extractAiReasoningText(ai);
   if (!aiContentText && !calls.length && reasoningText) {
     emitEvent(eventListener, "llm_reasoning_only_retry_scheduled", {
@@ -681,31 +361,16 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       content: buildReasoningRetrySystemMessage(reasoningText, locale),
     });
     ai = await invokeBoundLlmWithToolChoice();
-    ({ rawCalls, calls } = normalizeToolCalls(ai));
-    aiContentText = normalizeAiTextContent(ai.content, {
-      additionalKwargs: ai?.additional_kwargs ?? null,
-      allowReasoningFallback: false,
-    });
+    ({ rawCalls, calls, aiContentText } = normalizeToolTurnAi(ai));
   }
-  if (shouldRetryToolCallStreamingMismatch({ ai, calls })) {
-    registerToolCallStreamingMismatch(modelState, {
-      mode: "with_tools",
-      reason: "finish_reason_tool_calls_but_no_calls_detected",
-    });
-    const retryLlm = resolveRetryInvokeLlm(modelState, {
-      mode: "with_tools",
-      reason: "finish_reason_tool_calls_but_no_calls_detected",
-    });
-    ai = await invokeBoundLlmWithToolChoice(
-      "",
-      retryLlm,
-      "with_tools_non_streaming_retry",
-    );
-    ({ rawCalls, calls } = normalizeToolCalls(ai));
-    aiContentText = normalizeAiTextContent(ai.content, {
-      additionalKwargs: ai?.additional_kwargs ?? null,
-      allowReasoningFallback: false,
-    });
+  const toolCallStreamingRetry = await maybeRetryToolCallStreamingMismatch({
+    ai,
+    calls,
+    modelState,
+    invokeBoundLlmWithToolChoice,
+  });
+  if (toolCallStreamingRetry) {
+    ({ ai, rawCalls, calls, aiContentText } = toolCallStreamingRetry);
   }
   await runAgentRuntimeHook({
     runtime,
@@ -836,14 +501,3 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   };
 }
 
-export function normalizeToolResultAttachmentMetas(toolCallResult = {}, call = {}) {
-  const toolResultText = String(toolCallResult?.toolResultText || "");
-  const fallbackExtractedAttachmentMetas = extractAttachmentMetasFromToolResult(
-    call?.name || "",
-    toolResultText,
-  );
-  return Array.isArray(toolCallResult?.extractedAttachmentMetas) &&
-    toolCallResult.extractedAttachmentMetas.length
-    ? toolCallResult.extractedAttachmentMetas
-    : fallbackExtractedAttachmentMetas;
-}
