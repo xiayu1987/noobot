@@ -474,7 +474,7 @@ test("harness FSM remains planning when checklist is absent", async () => {
   assert.equal(commits.some((item) => item.kind === "fsm" && item.type === "fsm_transition" && item.to === "planned"), false);
 });
 
-test("harness policy prompt de-dupes against messageBlocks source during pseudo tool turns", async () => {
+test("harness policy prompt is promoted to system when stale policy exists in messageBlocks", async () => {
   const policyMessage = {
     role: "user",
     content: "<!-- noobot-harness-policy -->\npolicy",
@@ -503,13 +503,20 @@ test("harness policy prompt de-dupes against messageBlocks source during pseudo 
     ctx.messages.filter((item = {}) =>
       String(item?.content || "").includes("noobot-harness-policy"),
     ).length,
-    0,
+    1,
+  );
+  assert.equal(ctx.messages[0]?.role, "system");
+  assert.equal(
+    ctx.messageBlocks.system.filter((item = {}) =>
+      String(item?.content || "").includes("noobot-harness-policy"),
+    ).length,
+    1,
   );
   assert.equal(
     ctx.messageBlocks.incremental.filter((item = {}) =>
       String(item?.content || "").includes("noobot-harness-policy"),
     ).length,
-    1,
+    0,
   );
 });
 

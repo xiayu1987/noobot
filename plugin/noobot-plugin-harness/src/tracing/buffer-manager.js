@@ -129,24 +129,6 @@ export async function updateManifest(paths, ctx = {}, patch = {}, options = {}, 
   );
 }
 
-function collectPromptScanMessageLists(ctx = {}) {
-  const lists = [];
-  if (Array.isArray(ctx?.messages)) lists.push(ctx.messages);
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
-  if (blocks) {
-    if (Array.isArray(blocks.system)) lists.push(blocks.system);
-    if (Array.isArray(blocks.history)) lists.push(blocks.history);
-    if (Array.isArray(blocks.incremental)) lists.push(blocks.incremental);
-  }
-  return lists;
-}
-
-function isHarnessPromptAlreadyInjectedInContext(ctx = {}, id = "") {
-  return collectPromptScanMessageLists(ctx).some((messages) =>
-    isHarnessPromptAlreadyInjected(messages, id),
-  );
-}
-
 function resolvePolicyPromptI18nKey(options = {}) {
   const strategy = normalizeWorkflowStrategyName(
     options.nonProgrammingWorkflowStrategy ||
@@ -188,11 +170,17 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
   const content = configuredPrompt || resolveDefaultPrompt();
   if (!content) return;
 
-  if (isHarnessPromptAlreadyInjectedInContext(ctx, id)) return;
+  const alreadyInCurrentMessages = Array.isArray(ctx?.messages) &&
+    isHarnessPromptAlreadyInjected(ctx.messages, id);
+  if (alreadyInCurrentMessages && point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return;
 
+  const isPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL;
   const injected = injectSystemMessages(ctx, {
     skipIds: new Set(),
     prompts: [{ id, content, priority: options.promptPriority, mode: "after_system" }],
+    systemBlockIds: isPolicyPrompt ? new Set([id]) : new Set(),
+    syncMessageBlocksSystem: isPolicyPrompt,
+    persistToCurrentTurn: !isPolicyPrompt,
   });
 
   if (!injected || !options.writePrompts) return;

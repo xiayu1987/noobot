@@ -116,6 +116,67 @@ function readLegacyPromptEntries() {
   }));
 }
 
+
+function isPromptMessage(message = {}, id = "") {
+  const promptId = String(id || "").trim();
+  if (!promptId) return false;
+  return String(message?.content || "").includes(`<!-- ${promptId} -->`);
+}
+
+function isSystemRoleMessage(message = {}) {
+  return resolveMessageRole(message) === "system";
+}
+
+function removePromptMessagesFromList(messages = [], id = "", { removeSystem = false } = {}) {
+  if (!Array.isArray(messages)) return 0;
+  let removed = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] || {};
+    if (!isPromptMessage(message, id)) continue;
+    if (!removeSystem && isSystemRoleMessage(message)) continue;
+    messages.splice(index, 1);
+    removed += 1;
+  }
+  if (removed) rebuildInjectedPromptCache(messages);
+  return removed;
+}
+
+function normalizeSystemPromptPlacement(ctx = {}, id = "") {
+  const promptId = String(id || "").trim();
+  if (!promptId) return;
+  removePromptMessagesFromList(ctx?.messages, promptId, { removeSystem: false });
+  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+  if (!blocks) return;
+  removePromptMessagesFromList(blocks.history, promptId, { removeSystem: true });
+  removePromptMessagesFromList(blocks.incremental, promptId, { removeSystem: true });
+  removePromptMessagesFromList(blocks.system, promptId, { removeSystem: false });
+}
+
+function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = new Set()) {
+  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+  if (!blocks) return 0;
+  const systemIds = ids instanceof Set ? ids : new Set(Array.isArray(ids) ? ids : []);
+  if (!systemIds.size) return 0;
+  if (!Array.isArray(blocks.system)) blocks.system = [];
+  if (!Array.isArray(blocks.history)) blocks.history = [];
+  if (!Array.isArray(blocks.incremental)) blocks.incremental = [];
+
+  let changed = 0;
+  for (const id of systemIds) {
+    removePromptMessagesFromList(blocks.history, id, { removeSystem: true });
+    removePromptMessagesFromList(blocks.incremental, id, { removeSystem: true });
+    const existingSystem = blocks.system.find((message) => isPromptMessage(message, id));
+    if (existingSystem) continue;
+    const source = (Array.isArray(promptMessages) ? promptMessages : [])
+      .find((message) => isPromptMessage(message, id) && isSystemRoleMessage(message));
+    if (!source) continue;
+    blocks.system.push(source);
+    changed += 1;
+  }
+  if (changed) rebuildInjectedPromptCache(blocks.system);
+  return changed;
+}
+
 function resolveMessageRole(message = {}) {
   const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
   if (role) return role;
@@ -159,6 +220,13 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     Array.isArray(options?.prompts) ? options.prompts : readLegacyPromptEntries(),
   );
   if (!promptEntries.length) return false;
+
+  const systemBlockIds = options.systemBlockIds instanceof Set
+    ? options.systemBlockIds
+    : new Set(Array.isArray(options.systemBlockIds) ? options.systemBlockIds : []);
+  for (const id of systemBlockIds) {
+    normalizeSystemPromptPlacement(ctx, id);
+  }
 
   let injected = false;
   const cache = getOrCreateInjectedPromptCache(messages);
@@ -221,10 +289,23 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     messages.push(item);
   }
 
+  const promptMessages = [...prependItems, ...afterSystemItems, ...appendItems];
   if (injected) {
-    persistPromptMessagesToCurrentTurn(ctx, [...prependItems, ...afterSystemItems, ...appendItems]);
+    if (options.persistToCurrentTurn !== false) {
+      persistPromptMessagesToCurrentTurn(ctx, promptMessages);
+    }
     // P2#5: refresh cache once to keep replace/remove semantics consistent
     rebuildInjectedPromptCache(messages);
+  }
+
+  if (options.syncMessageBlocksSystem === true && systemBlockIds.size) {
+    const syncSource = injected
+      ? promptMessages
+      : messages.filter((message) =>
+          isSystemRoleMessage(message) &&
+          Array.from(systemBlockIds).some((id) => isPromptMessage(message, id)),
+        );
+    syncSystemPromptMessagesToBlocks(ctx, syncSource, systemBlockIds);
   }
 
   return injected;
