@@ -582,3 +582,26 @@ test("cleanup should remove expired terminal channel and stale request mapping",
   assert.equal(manager.requestChannelMap.has("req-cleanup"), false);
   assert.deepEqual(closed, [{ code: 1000, reason: "cleanup" }]);
 });
+
+test("cleanup should remove expired idle channel without subscribers", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-idle-cleanup" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-idle-cleanup",
+  });
+  const closed = [];
+  channel.upstreamSocket = {
+    close(code, reason) {
+      closed.push({ code, reason });
+    },
+  };
+
+  channel.status = "idle";
+  channel.updatedAtMs = 1;
+
+  manager.cleanupExpiredChannels();
+
+  assert.equal(manager.hasChannel(channelKey), false);
+  assert.deepEqual(closed, [{ code: 1000, reason: "cleanup" }]);
+});
