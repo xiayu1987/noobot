@@ -138,10 +138,10 @@ export default {
   "tools.search.fieldText": "待搜索文本（source=text 时使用）。",
   "tools.search.fieldContextLines": "上下文行数。",
   "tools.search.fieldMaxResults": "最大命中数。",
-  "tools.patch_file.description": "按补丁修改文件，优先支持主流 unified_diff/git diff；兼容 apply_patch。",
+  "tools.patch_file.description": "按补丁修改文件；兼容 git/unified diff 行数不准和 apply_patch。",
   "tools.patch_file.fieldFormat": "补丁格式；不填时自动识别，默认按 unified_diff/git diff 解析。",
-  "tools.patch_file.fieldPatch": "补丁内容，推荐使用 git diff/unified diff 格式。",
-  "tools.patch_file.fieldStrip": "unified_diff/git diff 路径层级，git diff 默认 strip=1 会去掉 a/、b/。",
+  "tools.patch_file.fieldPatch": "补丁内容；推荐先读文件，用精确上下文；不必手算 unified diff 行数。",
+  "tools.patch_file.fieldStrip": "diff 路径层级；默认 strip=1 去掉 a/、b/，并兼容 /project 等虚拟前缀。",
   "tools.patch_file.fieldDryRun": "只验证不写入。",
   "services.handlerModuleNotFound": "未找到 service handler 模块",
   "services.handlerNotFound": "未找到 service handler",
@@ -173,7 +173,7 @@ export default {
   "scenarios.full.name": "全能",
   "scenarios.full.description": "通用情景：不限制工具和上下文，按任务需要自主选择能力。",
   "scenarios.programming.name": "编程",
-  "scenarios.programming.description": "编程情景：处理代码时优先使用 search 定位、read_file 读取、patch_file 修改，必要时再用 write_file 写入/创建文件；可使用内容处理工具；保留代码修改所需的文件、符号、测试与失败尝试上下文。",
+  "scenarios.programming.description": "编程情景：先 search/read_file 确认真实内容，再用 patch_file 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 write_file。",
   "scenarios.text.name": "文本",
   "scenarios.text.description": "文本情景：适合写作、改写、摘要、翻译与内容整理。"
 };

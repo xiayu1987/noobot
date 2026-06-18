@@ -7,6 +7,7 @@ import { ref } from "vue";
 
 export const PSEUDO_ROUTE_SESSION_KEY = "session";
 export const PSEUDO_ROUTE_PANEL_KEY = "panel";
+export const PSEUDO_ROUTE_ANCHOR_KEY = "anchor";
 
 export const PSEUDO_PANEL = Object.freeze({
   WORKSPACE: "workspace",
@@ -42,6 +43,7 @@ export function normalizePseudoRoute(route = {}, { allowedPanels = DEFAULT_ALLOW
   return {
     sessionId: String(route?.sessionId || "").trim(),
     panel: normalizePseudoPanel(route?.panel || "", allowedPanels),
+    anchor: String(route?.anchor || "").trim(),
   };
 }
 
@@ -50,7 +52,8 @@ export function isSamePseudoRoute(left = {}, right = {}, options = {}) {
   const normalizedRight = normalizePseudoRoute(right, options);
   return (
     normalizedLeft.sessionId === normalizedRight.sessionId &&
-    normalizedLeft.panel === normalizedRight.panel
+    normalizedLeft.panel === normalizedRight.panel &&
+    normalizedLeft.anchor === normalizedRight.anchor
   );
 }
 
@@ -60,6 +63,7 @@ export function parsePseudoRouteFromLocation(locationObject = getSafeWindow()?.l
     {
       sessionId: params.get(PSEUDO_ROUTE_SESSION_KEY),
       panel: params.get(PSEUDO_ROUTE_PANEL_KEY),
+      anchor: params.get(PSEUDO_ROUTE_ANCHOR_KEY),
     },
     options,
   );
@@ -69,6 +73,7 @@ export function usePseudoRoute({
   allowedPanels = DEFAULT_ALLOWED_PANELS,
   resolveCurrentSessionId = () => "",
   resolveCurrentPanel = () => "",
+  resolveCurrentAnchor = () => "",
   applyRoute = async () => {},
 } = {}) {
   const allowedPanelSet = allowedPanels instanceof Set ? allowedPanels : new Set(allowedPanels || []);
@@ -87,6 +92,7 @@ export function usePseudoRoute({
     return normalizeRoute({
       sessionId: resolveCurrentSessionId(),
       panel: resolveCurrentPanel(),
+      anchor: resolveCurrentAnchor(),
     });
   }
 
@@ -95,6 +101,7 @@ export function usePseudoRoute({
     return normalizeRoute({
       sessionId: hasOwn(patch, "sessionId") ? patch.sessionId : currentRoute.sessionId,
       panel: hasOwn(patch, "panel") ? patch.panel : currentRoute.panel,
+      anchor: hasOwn(patch, "anchor") ? patch.anchor : currentRoute.anchor,
     });
   }
 
@@ -110,6 +117,11 @@ export function usePseudoRoute({
       params.set(PSEUDO_ROUTE_PANEL_KEY, nextRoute.panel);
     } else {
       params.delete(PSEUDO_ROUTE_PANEL_KEY);
+    }
+    if (nextRoute.anchor) {
+      params.set(PSEUDO_ROUTE_ANCHOR_KEY, nextRoute.anchor);
+    } else {
+      params.delete(PSEUDO_ROUTE_ANCHOR_KEY);
     }
     const query = params.toString();
     return `${locationObject?.pathname || "/"}${query ? `?${query}` : ""}${locationObject?.hash || ""}`;

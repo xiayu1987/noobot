@@ -45,7 +45,7 @@ export const BUILTIN_SCENARIOS = Object.freeze({
     }),
     programming: Object.freeze({
       name: "编程",
-      description: "编程情景：处理代码时优先使用 search 定位、read_file 读取、patch_file 修改，必要时再用 write_file 写入/创建文件；保留代码修改所需的文件、符号、测试与失败尝试上下文。",
+      description: "编程情景：先 search/read_file 确认真实内容，再用 patch_file 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 write_file。",
       model: "",
       tools: PROGRAMMING_TOOL_NAMES,
       context: Object.freeze([

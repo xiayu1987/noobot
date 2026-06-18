@@ -138,10 +138,10 @@ export default {
   "tools.search.fieldText": "Text to search (used when source=text).",
   "tools.search.fieldContextLines": "Number of context lines.",
   "tools.search.fieldMaxResults": "Maximum matches.",
-  "tools.patch_file.description": "Apply file patches, primarily using mainstream unified_diff/git diff; apply_patch remains compatible.",
+  "tools.patch_file.description": "Apply patches; tolerant of git/unified diff hunk count mistakes and apply_patch.",
   "tools.patch_file.fieldFormat": "Patch format; omitted means auto-detect, defaulting to unified_diff/git diff.",
-  "tools.patch_file.fieldPatch": "Patch content; git diff/unified diff format is recommended.",
-  "tools.patch_file.fieldStrip": "Path strip level for unified_diff/git diff; strip=1 removes git a/ and b/ prefixes.",
+  "tools.patch_file.fieldPatch": "Patch content; read the file first and use exact context; unified diff counts need not be hand-computed.",
+  "tools.patch_file.fieldStrip": "Diff path strip level; default strip=1 removes a/ and b/, with virtual prefixes like /project tolerated.",
   "tools.patch_file.fieldDryRun": "Validate only, do not write.",
   "services.handlerModuleNotFound": "service handler module not found",
   "services.handlerNotFound": "service handler not found",
@@ -173,7 +173,7 @@ export default {
   "scenarios.full.name": "All-around",
   "scenarios.full.description": "General scenario: no restrictions on tools and context; autonomously selects capabilities as needed.",
   "scenarios.programming.name": "Programming",
-  "scenarios.programming.description": "Programming scenario: when handling code, prioritize using search to locate, read_file to read, and patch_file to modify; use write_file to write/create files only when necessary; content processing tools are available; retain the context of files, symbols, tests, and failed attempts required for code changes.",
+  "scenarios.programming.description": "Programming scenario: use search/read_file to confirm real content before patch_file; prefer exact-context patches and avoid hand-computing unified diff counts; after patch failure, reread then retry; use write_file only when needed.",
   "scenarios.text.name": "Text",
   "scenarios.text.description": "Text scenario: suited for writing, rewriting, summarizing, translating, and content organization."
 };
