@@ -368,7 +368,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     harnessPolicyPrompt: 
       "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
     harnessPolicyExecutionPrompt:
-      "Noobot Harness 提醒：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进任务；最终回复保持精简且完整。",
+      "Noobot Harness 执行优先：遵守用户隔离；先读必要上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务。验证是完成条件：优先跑相关测试/检查/构建，失败先修复重试；无法验证必须说明原因。仅在不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或需求冲突时停下确认。最终回复简洁说明结果与验证。",
     harnessFinalResponsePrompt:
       "最终回复请包含：做了什么、改了哪些文件、验证情况或未验证原因、下一步建议。",
     acceptanceRawTitle: "[Harness-验收]",
@@ -421,11 +421,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningDefaultPlanText:
       "1. 需求澄清与约束确认\n2. 实施并验证核心改动\n3. 最终验收与交付",
     postPlanFollowupPlanning:
-      "计划已完成。请调用工具，严格按照计划顺序执行任务；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
+      "计划已完成。请调用工具按计划推进；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续）。每个切片必须验证，未验证不得视为完成；低风险可逆动作不要长期等待。",
     postPlanFollowupRevision:
-      "计划修正已完成。请调用工具，严格按照计划顺序执行任务；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
+      "计划修正已完成。请调用工具按计划推进；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续）。每个切片必须验证，未验证不得视为完成；低风险可逆动作不要长期等待。",
     postPlanFollowupRefinement:
-      "计划细化已完成。请调用工具，严格按照计划顺序执行任务；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项，直到全部计划执行完毕。",
+      "计划细化已完成。请调用工具按计划推进；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续）。每个切片必须验证，未验证不得视为完成；低风险可逆动作不要长期等待。",
     postPlanFollowupPlanningRiskFirst:
       "计划已完成。请调用工具逐项执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项。",
     postPlanFollowupRevisionRiskFirst:
@@ -441,11 +441,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityConstraintTemplate:
       "职责约束：你当前仅负责「{stage}」。只做该职责范围内的事，禁止越权。",
     programmingExecutionPrinciples:
-      "编程执行原则：\n1. 默认不要等待所有风险点解除。\n2. 对可逆代码改动，优先小步修改并立即验证。\n3. 未知点应转化为验证动作，而不是长期阻塞。\n4. 只有不可逆、安全、生产数据、凭证、破坏性操作、需求冲突才需要停下确认。\n5. 每轮最多解决一个最小闭环：修改 -> 验证 -> 修正。",
+      "编程执行原则：\n1. 默认不要等待所有风险点解除，先读必要上下文，再做最小可逆修改。\n2. 验证是完成条件：优先跑相关测试、lint、类型检查或构建。\n3. 每轮闭环：修改 -> 验证 -> 修正；失败先按错误修正并重试，不能只停留在改代码。\n4. 未知点应转化为验证动作，而不是长期阻塞。\n5. 只有不可逆、安全、生产数据、凭证、破坏性操作、需求冲突才停下确认。",
     programmingRiskTaxonomy:
       "编程风险分级：\nA. Blocking risk（必须停）：破坏性/不可逆、安全/密钥/权限、生产数据/生产配置、破坏公开 API、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止代码修改；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先改但必须验证）：调用链不确定、测试可能失败、边界条件不全、类型/构建可能报错。不得阻塞最小可逆修改；必须转成 npm test/lint/build/相关测试等验证动作。\nC. Informational risk（只记录不阻塞）：命名风格、未来重构、更优雅方案等；只记录，不得阻塞执行。",
     executionFirstPrinciples:
-      "执行优先原则：\n1. 默认不要等待所有风险点解除。\n2. 对可逆、低成本、可验证动作，优先小步执行并快速验证。\n3. 未知点应转化为检查、验证或反馈动作，而不是长期阻塞。\n4. 只有不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突才需要停下确认。\n5. 每轮最多解决一个最小闭环：执行 -> 验证 -> 修正。",
+      "执行优先原则：\n1. 先读必要上下文，再做最小可逆动作。\n2. 验证是完成条件：执行后必须检查、测试、对比或观察结果。\n3. 失败先按反馈修正并重试，不要只做动作不验证。\n4. 只有不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或需求冲突才停下确认。",
     executionFirstRiskTaxonomy:
       "执行优先风险分级：\nA. Blocking risk（必须停）：不可逆/破坏性、安全/隐私/合规、资金/生产环境、公开承诺、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止执行；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先做但必须验证）：信息不完整、结果可能失败、边界条件不全、质量不确定。不得阻塞最小可逆动作；必须转成检查、验证、对比或反馈动作。\nC. Informational risk（只记录不阻塞）：风格偏好、未来优化、更优雅方案等；只记录，不得阻塞执行。",
     riskFirstPrinciples:
@@ -468,9 +468,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoal:
       "目标：根据用户需求生成宏观主计划。仅限宏观步骤，严禁输出任何子计划或实施细节。",
     planningMainPromptGoalProgrammingFast:
-      "目标：生成用于编程执行的最小可执行计划切片。不要等到所有不确定性消失；除非涉及不可逆、数据删除、安全凭证、生产发布、生产数据或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆修改 -> 运行局部测试/构建 -> 根据失败信息修正 -> 继续下一切片或补充验收说明。",
+      "目标：生成用于编程执行的最小可执行计划切片。每个切片必须包含验证动作；不要等到所有不确定性消失。除非涉及不可逆、数据删除、安全凭证、生产发布、生产数据或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆修改 -> 运行局部测试/构建 -> 根据失败信息修正 -> 继续下一切片或补充验收说明；无法验证时必须写明未验证原因。",
     planningMainPromptGoalExecutionFirst:
-      "目标：生成面向执行的最小可执行计划切片。不要等到所有不确定性消失；除非涉及不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆动作 -> 运行最小验证/检查 -> 根据结果修正 -> 继续下一切片或补充验收说明。",
+      "目标：生成面向执行的最小可执行计划切片。每个切片必须包含验证动作；不要等到所有不确定性消失。除非涉及不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆动作 -> 运行最小验证/检查 -> 根据结果修正 -> 继续下一切片或补充验收说明；无法验证时必须写明未验证原因。",
     planningMainPromptGoalRiskFirst:
       "目标：生成面向风险降级的最小计划切片。计划仍然是计划，但优先识别会阻塞执行的关键风险；不要罗列无限风险，只输出能推进决策的宏观步骤。默认采用 识别风险 -> 检查/澄清/降级 -> 决定是否执行 的闭环。计划应倾向于：找到最关键不确定点 -> 做最小检查或确认 -> 将风险降级为可执行动作 -> 再推进执行或验收说明。",
     planningMainUserGoalHeader: "【用户目标】",
@@ -624,7 +624,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     harnessPolicyPrompt:
       "Noobot Harness reminder: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; keep the final response concise and complete.",
     harnessPolicyExecutionPrompt:
-      "Noobot Harness reminder: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; execution-first: continuously execute smallest slices (execute -> verify/feedback -> fix -> continue) to advance the task; keep the final response concise and complete.",
+      "Noobot Harness execution-first: read necessary context, then take the smallest reversible action; loop execute -> verify/observe -> fix -> continue. Verification is required for completion: prefer relevant tests/checks/builds; fix failures and retry, or state why verification was impossible. Stop for confirmation only for irreversible/destructive, security/privacy, production/money, costly external actions, or requirement conflicts. Final response: concise result and validation.",
     harnessFinalResponsePrompt:
       "Final response should include: what was done, which files were changed, validation status (or why not validated), and next-step suggestions.",
     acceptanceRawTitle: "[Harness-Acceptance]",
@@ -677,11 +677,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningDefaultPlanText:
       "1. Clarify requirements and constraints\n2. Implement and verify core changes\n3. Final acceptance and delivery",
     postPlanFollowupPlanning:
-      "Plan is ready. Continue with tools in plan order; execution-first: continuously execute smallest slices (execute -> verify/feedback -> fix -> continue) to advance the task. Handle one plan item at a time, then continue based on the result until all plan items are done.",
+      "Plan is ready. Continue with tools in plan order; complete minimal loops: execute -> verify/observe -> fix -> continue. Every slice must be verified; unverified work is not done. Do not wait on low-risk reversible actions.",
     postPlanFollowupRevision:
-      "Plan revision is done. Continue with tools in plan order; execution-first: continuously execute smallest slices (execute -> verify/feedback -> fix -> continue) to advance the task. Handle one plan item at a time, then continue based on the result until all plan items are done.",
+      "Plan revision is done. Continue with tools in plan order; complete minimal loops: execute -> verify/observe -> fix -> continue. Every slice must be verified; unverified work is not done. Do not wait on low-risk reversible actions.",
     postPlanFollowupRefinement:
-      "Plan refinement is done. Continue with tools in plan order; execution-first: continuously execute smallest slices (execute -> verify/feedback -> fix -> continue) to advance the task. Handle one plan item at a time, then continue based on the result until all plan items are done.",
+      "Plan refinement is done. Continue with tools in plan order; complete minimal loops: execute -> verify/observe -> fix -> continue. Every slice must be verified; unverified work is not done. Do not wait on low-risk reversible actions.",
     postPlanFollowupPlanningRiskFirst:
       "Plan is ready. Continue step by step with tools in plan order. Handle one plan item at a time, then continue based on the result.",
     postPlanFollowupRevisionRiskFirst:
@@ -697,11 +697,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityConstraintTemplate:
       "Responsibility constraint: You are only responsible for {stage}. Do only this scope; do not perform out-of-scope tasks.",
     programmingExecutionPrinciples:
-      "Programming execution principles:\n1. By default, do not wait until every risk is eliminated.\n2. For reversible code changes, prefer a small edit and immediate verification.\n3. Convert unknowns into verification actions instead of long-term blockers.\n4. Stop for confirmation only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks.\n5. Each round should complete at most one minimal loop: edit -> verify -> fix.",
+      "Programming execution principles:\n1. By default, do not wait until every risk is eliminated; read necessary context, then make the smallest reversible edit.\n2. Verification is required for completion: prefer relevant tests, lint, type checks, or builds.\n3. Loop: edit -> verify -> fix; fix failures and retry, do not only edit code without checking it.\n4. Convert unknowns into verification actions instead of long-term blockers.\n5. Stop only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks.",
     programmingRiskTaxonomy:
       "Programming risk taxonomy:\nA. Blocking risk (must stop): destructive/irreversible changes, security/secrets/permissions, production data/config, breaking public APIs, unresolvable requirement conflicts, or costly unverifiable changes. Only this class may block code edits; convert it to ask_user or an explicit blocking note.\nB. Managed risk (edit then verify): uncertain call chain, likely test failure, incomplete edge cases, or type/build risk. Do not block the smallest reversible edit; convert it to npm test/lint/build/targeted-test verification.\nC. Informational risk (record only): naming style, future refactor, or more elegant design; record only, never block execution.",
     executionFirstPrinciples:
-      "Execution-first principles:\n1. By default, do not wait until every risk is eliminated.\n2. For reversible, low-cost, verifiable actions, prefer a small action and quick verification.\n3. Convert unknowns into inspection, verification, or feedback actions instead of long-term blockers.\n4. Stop for confirmation only for irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts.\n5. Each round should complete at most one minimal loop: execute -> verify -> fix.",
+      "Execution-first principles:\n1. Read necessary context, then take the smallest reversible action.\n2. Verification is required for completion: check, test, compare, or observe after acting.\n3. Fix failures and retry; do not only act without verifying.\n4. Stop for confirmation only for irreversible/destructive, security/privacy, production/money, costly external actions, or requirement conflicts.",
     executionFirstRiskTaxonomy:
       "Execution-first risk taxonomy:\nA. Blocking risk (must stop): irreversible/destructive, security/privacy/compliance, money/production, public commitments, unresolvable requirement conflicts, or costly unverifiable actions. Only this class may block execution; convert it to ask_user or an explicit blocking note.\nB. Managed risk (do then verify): incomplete information, likely failure, incomplete edge cases, or quality uncertainty. Do not block the smallest reversible action; convert it to inspection, verification, comparison, or feedback.\nC. Informational risk (record only): style preference, future optimization, or more elegant approach; record only, never block execution.",
     riskFirstPrinciples:
@@ -725,9 +725,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoal:
       "Goal: Generate a high-level main plan from the user goal. Only high-level steps; no sub-steps or implementation details.",
     planningMainPromptGoalProgrammingFast:
-      "Goal: generate the smallest executable plan slice for programming work. Do not wait until every uncertainty is gone; unless the task involves irreversible operations, data deletion, security credentials, production release, production data, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> make the smallest reversible edit -> run local tests/build -> fix based on failures -> continue to the next slice or add acceptance notes.",
+      "Goal: generate the smallest executable plan slice for programming work. Every slice must include verification. Do not wait until every uncertainty is gone; unless the task involves irreversible operations, data deletion, security credentials, production release, production data, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> make the smallest reversible edit -> run local tests/build -> fix based on failures -> continue to the next slice or add acceptance notes; if verification is impossible, state why.",
     planningMainPromptGoalExecutionFirst:
-      "Goal: generate the smallest executable plan slice for execution. Do not wait until every uncertainty is gone; unless the task involves irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> take the smallest reversible action -> run the smallest verification/inspection -> fix based on results -> continue to the next slice or add acceptance notes.",
+      "Goal: generate the smallest executable plan slice for execution. Every slice must include verification. Do not wait until every uncertainty is gone; unless the task involves irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> take the smallest reversible action -> run the smallest verification/inspection -> fix based on results -> continue to the next slice or add acceptance notes; if verification is impossible, state why.",
     planningMainPromptGoalRiskFirst:
       "Goal: generate the smallest plan slice for risk reduction. This is still a plan, but it should prioritize key risks that may block execution; do not list unlimited risks, only high-level steps that move the decision forward. Default to the identify risk -> inspect/clarify/reduce -> decide whether to execute loop. The plan should prefer: find the key uncertainty -> perform the smallest inspection or confirmation -> reduce the risk into an executable action -> then proceed to execution or acceptance notes.",
     planningMainUserGoalHeader: "[User Goal]",
