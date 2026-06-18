@@ -230,4 +230,126 @@ describe("useMessageFiles", () => {
     expect(displayedAttachmentMetas.value).toEqual([]);
   });
 
+  it("does not backfill previously written files while current assistant is pending", () => {
+    const messageItem = {
+      role: "assistant",
+      pending: true,
+      dialogProcessId: "dp-1",
+      messageRoundId: "round-2",
+      hasFirstStreamEvent: false,
+      content: "",
+    };
+    const previousToolMessage = {
+      role: "tool",
+      dialogProcessId: "dp-1",
+      messageRoundId: "round-1",
+      content: JSON.stringify({
+        toolName: "write_file",
+        state: "OK",
+        resolvedPath: "/workspace/admin/previous.md",
+        fileName: "previous.md",
+      }),
+    };
+    const { writtenFiles } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [previousToolMessage, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(writtenFiles.value).toEqual([]);
+  });
+
+  it("does not backfill written files from a previous assistant round after current round starts streaming", () => {
+    const messageItem = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      messageRoundId: "round-2",
+      content: "",
+    };
+    const previousToolMessage = {
+      role: "tool",
+      dialogProcessId: "dp-1",
+      messageRoundId: "round-1",
+      content: JSON.stringify({
+        toolName: "write_file",
+        state: "OK",
+        resolvedPath: "/workspace/admin/previous.md",
+        fileName: "previous.md",
+      }),
+    };
+    const currentToolMessage = {
+      role: "tool",
+      dialogProcessId: "dp-1",
+      messageRoundId: "round-2",
+      content: JSON.stringify({
+        toolName: "write_file",
+        state: "OK",
+        resolvedPath: "/workspace/admin/current.md",
+        fileName: "current.md",
+      }),
+    };
+    const { writtenFiles } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [previousToolMessage, currentToolMessage, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(writtenFiles.value.map((item) => item.fileName)).toEqual(["current.md"]);
+  });
+
+  it("does not backfill previous assistant attachments while current assistant is pending", () => {
+    const messageItem = {
+      role: "assistant",
+      pending: true,
+      dialogProcessId: "dp-1",
+      attachmentMetas: [],
+    };
+    const previousAssistantMessage = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      attachmentMetas: [
+        { attachmentId: "prev-1", name: "previous-result.md" },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [previousAssistantMessage, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
+  it("does not backfill attachments from a previous assistant round after current round starts streaming", () => {
+    const messageItem = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      messageRoundId: "round-2",
+      attachmentMetas: [],
+    };
+    const previousAssistantMessage = {
+      role: "assistant",
+      pending: false,
+      dialogProcessId: "dp-1",
+      messageRoundId: "round-1",
+      attachmentMetas: [
+        { attachmentId: "prev-1", name: "previous-result.md" },
+      ],
+    };
+    const { displayedAttachmentMetas } = useMessageFiles({
+      getMessageItem: () => messageItem,
+      getAllMessages: () => [previousAssistantMessage, messageItem],
+      getSessionDocs: () => [],
+      getUserId: () => "admin",
+    });
+
+    expect(displayedAttachmentMetas.value).toEqual([]);
+  });
+
 });

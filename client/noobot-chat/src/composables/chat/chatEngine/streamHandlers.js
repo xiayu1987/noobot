@@ -17,6 +17,11 @@ import {
   resolveConnectorStatusPayload,
 } from "../interactionPayload";
 
+function markFirstStreamEvent(botMessage) {
+  if (!botMessage) return;
+  botMessage.hasFirstStreamEvent = true;
+}
+
 export function handleThinkingStreamEvent({
   data,
   botMessage,
@@ -30,6 +35,7 @@ export function handleThinkingStreamEvent({
   if (!item.subAgentCall && item.dialogProcessId) {
     botMessage.dialogProcessId = item.dialogProcessId;
   }
+  markFirstStreamEvent(botMessage);
   botMessage.executionLogTotal = Number(botMessage.executionLogTotal || 0) + 1;
   botMessage.realtimeLogs = [...(botMessage.realtimeLogs || []), item].slice(-10);
   scrollOnFirstResponseOnce();
@@ -42,6 +48,7 @@ export function handleDeltaStreamEvent({ data, botMessage, scrollOnFirstResponse
   }
   botMessage.content += chunkText;
   if (chunkText) {
+    markFirstStreamEvent(botMessage);
     scrollOnFirstResponseOnce();
   }
 }
@@ -70,6 +77,7 @@ export function handleAttachmentMetasStreamEvent({
   mergeAssistantAttachmentMetas,
   scrollOnFirstResponseOnce,
 }) {
+  markFirstStreamEvent(botMessage);
   mergeAssistantAttachmentMetas(botMessage, data?.attachmentMetas || []);
   scrollOnFirstResponseOnce();
 }
@@ -112,6 +120,7 @@ export function handleDoneStreamEvent({
   scrollBottom,
 }) {
   clearPendingInteraction();
+  markFirstStreamEvent(botMessage);
   botMessage.dialogProcessId = data?.dialogProcessId || botMessage.dialogProcessId || "";
   const executionSummarySteps = Array.isArray(data?.executionSummary?.steps)
     ? data.executionSummary.steps

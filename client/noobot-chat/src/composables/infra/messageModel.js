@@ -132,6 +132,7 @@ function createMessageModel(messageItem = {}) {
     tool_call_id: messageItem.tool_call_id || "",
     dialogProcessId: messageItem.dialogProcessId || "",
     parentDialogProcessId: messageItem.parentDialogProcessId || "",
+    messageRoundId: messageItem.messageRoundId || "",
     modelAlias: messageItem.modelAlias || "",
     modelName: messageItem.modelName || messageItem.model || "",
     modelRuns: normalizeArray(messageItem.modelRuns),
@@ -154,6 +155,7 @@ function createMessageModel(messageItem = {}) {
     status: messageItem.status || "",
     channelState: messageItem.channelState || "",
     statusLabel: messageItem.statusLabel || "",
+    hasFirstStreamEvent: messageItem.hasFirstStreamEvent === true,
     ts: messageItem.ts || new Date().toISOString(),
     monotonicState: messageItem.monotonicState || "",
     stopState: messageItem.stopState || "",
@@ -168,12 +170,13 @@ function createMessageModel(messageItem = {}) {
   };
 }
 
-function buildAppendMessage(role, content = "", attachmentMetas = []) {
+function buildAppendMessage(role, content = "", attachmentMetas = [], options = {}) {
   return createMessageModel({
     role,
     content,
     type: "message",
     attachmentMetas,
+    messageRoundId: options?.messageRoundId || "",
     ts: Date.now(),
   });
 }

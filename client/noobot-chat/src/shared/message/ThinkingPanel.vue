@@ -48,6 +48,24 @@ function getAllRealtimeLogs(messageItem = {}) {
   return Array.isArray(messageItem?.realtimeLogs) ? messageItem.realtimeLogs : [];
 }
 
+function getMessageRoundId(messageItem = {}) {
+  return String(messageItem?.messageRoundId || "").trim();
+}
+
+function isSameMessageRound(rootMessage = {}, candidateMessage = {}) {
+  const rootRoundId = getMessageRoundId(rootMessage);
+  if (!rootRoundId) return true;
+  return getMessageRoundId(candidateMessage) === rootRoundId;
+}
+
+function isFreshPendingAssistant(messageItem = {}) {
+  return (
+    String(messageItem?.role || "").trim() === "assistant" &&
+    messageItem?.pending === true &&
+    messageItem?.hasFirstStreamEvent !== true
+  );
+}
+
 function getExecutionLogs(messageItem = {}) {
   const realtimeLogs = getRealtimeLogs(messageItem);
   if (realtimeLogs.length > 0) return realtimeLogs;
@@ -87,22 +105,27 @@ function hasThinkingLogs(messageItem = {}) {
 
 function getInjectedMessagesForMessage(messageItem = {}) {
   if (!messageItem || messageItem.role !== "assistant") return [];
+  if (isFreshPendingAssistant(messageItem)) return [];
   const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
   return candidateMessages.filter((item = {}) => {
     if (!isHarnessInjectedMessage(item)) return false;
+    if (!isSameMessageRound(messageItem, item)) return false;
     if (!dialogProcessId) return true;
     return String(item?.dialogProcessId || "").trim() === dialogProcessId;
   });
 }
 
 function getScopedMessagesForMessage(messageItem = {}) {
+  if (isFreshPendingAssistant(messageItem)) return [];
   const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
   const candidateMessages = Array.isArray(props.allMessages) ? props.allMessages : [];
-  if (!dialogProcessId) return candidateMessages;
-  return candidateMessages.filter(
-    (item = {}) => String(item?.dialogProcessId || "").trim() === dialogProcessId,
-  );
+  return candidateMessages.filter((item = {}) => {
+    if (dialogProcessId && String(item?.dialogProcessId || "").trim() !== dialogProcessId) {
+      return false;
+    }
+    return isSameMessageRound(messageItem, item);
+  });
 }
 
 function isToolRelatedMessage(messageItem = {}) {
@@ -346,16 +369,7 @@ function formatDuration(ms = 0) {
 }
 
 function getThinkingDurationMs(messageItem = {}) {
-  const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
-  const candidateMessages = Array.isArray(props.allMessages)
-    ? props.allMessages
-    : [];
-  const scopedMessages = dialogProcessId
-    ? candidateMessages.filter(
-        (item) =>
-          String(item?.dialogProcessId || "").trim() === dialogProcessId,
-      )
-    : candidateMessages;
+  const scopedMessages = getScopedMessagesForMessage(messageItem);
   const scopedTimes = scopedMessages
     .map((item) => parseTimeMs(item?.ts))
     .filter((timeValue) => timeValue > 0);

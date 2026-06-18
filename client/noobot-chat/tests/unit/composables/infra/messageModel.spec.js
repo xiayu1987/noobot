@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildViewMessage, foldConversationMessages } from "../../../../src/composables/infra/messageModel";
+import { buildAppendMessage, buildViewMessage, foldConversationMessages } from "../../../../src/composables/infra/messageModel";
 
 const envelope = {
   protocol: "noobot.semantic-transfer",
@@ -146,6 +146,20 @@ describe("messageModel workflow messages", () => {
 });
 
 describe("messageModel execution logs", () => {
+  it("preserves messageRoundId on appended and view messages", () => {
+    const appended = buildAppendMessage("assistant", "", [], {
+      messageRoundId: "round-2",
+    });
+    const viewed = buildViewMessage({
+      role: "assistant",
+      content: "done",
+      messageRoundId: "round-1",
+    });
+
+    expect(appended.messageRoundId).toBe("round-2");
+    expect(viewed.messageRoundId).toBe("round-1");
+  });
+
   it("does not merge a new pending assistant placeholder with previous turn state", () => {
     const messages = foldConversationMessages([
       {

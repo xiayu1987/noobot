@@ -11,6 +11,33 @@ import {
   pickAssistantMessagesForCurrentTurn,
 } from "./utils";
 
+function findCurrentTurnStartIndex(messages = []) {
+  const messageList = Array.isArray(messages) ? messages : [];
+  for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const messageItem = messageList[messageIndex] || {};
+    if (String(messageItem?.role || "") !== "user") continue;
+    if (messageItem?.injectedMessage === true) continue;
+    return messageIndex;
+  }
+  for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    if (String(messageList[messageIndex]?.role || "") === "user") return messageIndex;
+  }
+  return 0;
+}
+
+function stampCurrentTurnMessageRoundId(messages = [], messageRoundId = "") {
+  const normalizedMessageRoundId = normalizeTrimmedString(messageRoundId);
+  const messageList = Array.isArray(messages) ? messages : [];
+  if (!normalizedMessageRoundId || !messageList.length) return messageList;
+  const currentTurnStartIndex = findCurrentTurnStartIndex(messageList);
+  for (let messageIndex = currentTurnStartIndex; messageIndex < messageList.length; messageIndex += 1) {
+    const messageItem = messageList[messageIndex];
+    if (!messageItem || typeof messageItem !== "object") continue;
+    messageItem.messageRoundId = messageItem.messageRoundId || normalizedMessageRoundId;
+  }
+  return messageList;
+}
+
 export function applyDoneMessagesPatch({
   data = {},
   botMessage = null,
@@ -23,10 +50,12 @@ export function applyDoneMessagesPatch({
     return false;
   }
 
-  activeSession.value.rawMessages = data.messages.map((messageItem) =>
-    makeViewMessage(messageItem),
+  const rawMessagesForView = stampCurrentTurnMessageRoundId(
+    data.messages.map((messageItem) => makeViewMessage(messageItem)),
+    botMessage.messageRoundId,
   );
-  const folded = foldMessagesForView(data.messages);
+  activeSession.value.rawMessages = rawMessagesForView;
+  const folded = foldMessagesForView(rawMessagesForView);
   const assistantMessagesForCurrentTurn = pickAssistantMessagesForCurrentTurn({
     foldedMessages: folded,
     dialogProcessId: botMessage.dialogProcessId || data.dialogProcessId,
@@ -77,6 +106,8 @@ export function applyDoneMessagesPatch({
       const signature = buildWorkflowMessageSignature(workflowMessageItem);
       if (!signature || existingWorkflowSignatures.has(signature)) continue;
       const viewWorkflowMessage = makeViewMessage(workflowMessageItem);
+      viewWorkflowMessage.messageRoundId = viewWorkflowMessage.messageRoundId || botMessage.messageRoundId || "";
+      viewWorkflowMessage.hasFirstStreamEvent = true;
       viewWorkflowMessage.pending = false;
       sessionMessages.push(viewWorkflowMessage);
       existingWorkflowSignatures.add(signature);
