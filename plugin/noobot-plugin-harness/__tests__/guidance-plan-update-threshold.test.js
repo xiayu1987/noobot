@@ -431,6 +431,17 @@ test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets"
   assert.equal(canAttemptPlanRevision({}, state, { increment: false, stage: "refinement" }), true);
 });
 
+test("programming mode workflow thresholds match configured tuning", () => {
+  assert.equal(PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD, 16);
+  assert.equal(PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD, 14);
+  assert.equal(PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD, 15);
+  assert.equal(
+    PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD >
+      PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+    true,
+  );
+});
+
 
 
 test("planning thresholds use full-mode defaults from modeThresholds", async () => {

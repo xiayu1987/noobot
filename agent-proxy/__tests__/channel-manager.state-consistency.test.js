@@ -505,3 +505,80 @@ test("newly attached subscriber should receive no_conversation snapshot state", 
   const stateEvents = listEvents(client, "channel_state");
   assert.equal(stateEvents.some((item) => item?.data?.state === "no_conversation"), true);
 });
+
+test("detachSocketFromAllChannels should detach terminal subscribers and schedule cleanup", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-detach" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-detach",
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  manager.attachSubscriber(channel, client);
+  channel.status = "done";
+  const beforeDetachMs = Date.now();
+
+  assert.doesNotThrow(() => manager.detachSocketFromAllChannels(client));
+  assert.equal(channel.subscribers.has(client), false);
+  assert.equal(client.__agentProxyChannelKeys.size, 0);
+  assert.equal(client.__agentProxyActiveChannelKey, "");
+  assert.deepEqual(client.__agentProxyLastSequenceByChannel, {});
+  assert.equal(channel.cleanupAfterMs >= beforeDetachMs, true);
+});
+
+test("interaction_response should resolve channel by pending requestId", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-resolve" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-resolve",
+  });
+
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-resolve",
+    sessionId: "session-resolve",
+    dialogProcessId: "dp-resolve",
+    seq: 1,
+  });
+
+  const resolvedChannel = manager.resolveChannelFromSocketMessage(
+    createMockSocket({ apiKey: "api-key-2", userId: "user-1" }),
+    {
+      action: "interaction_response",
+      requestId: "req-resolve",
+    },
+  );
+
+  assert.equal(resolvedChannel, channel);
+});
+
+test("cleanup should remove expired terminal channel and stale request mapping", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-cleanup" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-cleanup",
+  });
+  const closed = [];
+  channel.upstreamSocket = {
+    close(code, reason) {
+      closed.push({ code, reason });
+    },
+  };
+
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-cleanup",
+    sessionId: "session-cleanup",
+    dialogProcessId: "dp-cleanup",
+    seq: 1,
+  });
+  channel.status = "done";
+  channel.cleanupAfterMs = Date.now() - 1;
+
+  manager.cleanupExpiredChannels();
+
+  assert.equal(manager.hasChannel(channelKey), false);
+  assert.equal(manager.requestChannelMap.has("req-cleanup"), false);
+  assert.deepEqual(closed, [{ code: 1000, reason: "cleanup" }]);
+});
