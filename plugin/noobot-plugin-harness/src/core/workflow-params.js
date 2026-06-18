@@ -174,7 +174,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
           turnsThreshold: 16,
         },
         planUpdate: {
-          triggerTurnsThreshold: 14,
+          triggerTurnsThreshold: 17,
         },
         planRefinement: {
           enabled: false,
