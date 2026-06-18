@@ -22,7 +22,6 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../../hook/index.js";
 import { buildHookContext } from "../hook/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../../context/agent-context-accessor.js";
 import {
-  isRequiredToolChoiceUnsupportedError,
   resolveNonThinkingCallOverrides,
 } from "./tool-choice-strategy.js";
 import {
@@ -39,6 +38,8 @@ import {
   maybeRetryToolCallStreamingMismatch,
   normalizeToolTurnAi,
 } from "./tool-call-retry-stage.js";
+import { maybeRetryReasoningOnlyWithTools } from "./tool-reasoning-retry-stage.js";
+import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
 export { normalizeToolResultAttachmentMetas } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -321,47 +322,32 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
         agentContext: modelState?.agentContext || null,
       }),
     });
-    if (configuredToolChoice === "required" && isRequiredToolChoiceUnsupportedError(error)) {
-      const systemRuntimeForFallback = getSystemRuntimeFromRuntime(runtime);
-      systemRuntimeForFallback.toolChoiceRequiredUnsupported = true;
-      systemRuntimeForFallback.forceNonThinkingMode = true;
-      const currentModelInfo = resolveCurrentModelInfo(modelState);
-      emitEvent(eventListener, "tool_choice_downgraded_to_auto", {
-        turn,
-        reason: "required_invalid_in_thinking_mode_no_retry",
-        modelAlias: currentModelInfo.modelAlias,
-        modelName: currentModelInfo.modelName,
-      });
-      ai = {
-        content: "",
-        tool_calls: [],
-        additional_kwargs: {},
-        response_metadata: {
-          noobot: {
-            toolChoiceDowngradedToAuto: true,
-            downgradedAtTurn: turn,
-          },
-        },
-      };
-    } else {
+    ai = maybeCreateRequiredToolChoiceUnsupportedFallbackAi({
+      error,
+      configuredToolChoice,
+      runtime,
+      eventListener,
+      turn,
+      modelState,
+    });
+    if (!ai) {
       throw error;
     }
   }
 
   let { rawCalls, calls, aiContentText } = normalizeToolTurnAi(ai);
-  const reasoningText = extractAiReasoningText(ai);
-  if (!aiContentText && !calls.length && reasoningText) {
-    emitEvent(eventListener, "llm_reasoning_only_retry_scheduled", {
-      turn,
-      mode: "with_tools",
-      reasoningChars: reasoningText.length,
-    });
-    messages.push({
-      role: "system",
-      content: buildReasoningRetrySystemMessage(reasoningText, locale),
-    });
-    ai = await invokeBoundLlmWithToolChoice();
-    ({ rawCalls, calls, aiContentText } = normalizeToolTurnAi(ai));
+  const reasoningOnlyRetry = await maybeRetryReasoningOnlyWithTools({
+    ai,
+    calls,
+    aiContentText,
+    messages,
+    invokeBoundLlmWithToolChoice,
+    eventListener,
+    turn,
+    locale,
+  });
+  if (reasoningOnlyRetry) {
+    ({ ai, rawCalls, calls, aiContentText } = reasoningOnlyRetry);
   }
   const toolCallStreamingRetry = await maybeRetryToolCallStreamingMismatch({
     ai,
