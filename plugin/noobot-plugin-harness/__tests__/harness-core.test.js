@@ -12,8 +12,9 @@ import path from "node:path";
 import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
 import { registerNoobotPlugin } from "../src/index.js";
 import { normalizeHookContextProtocol } from "../src/core/context.js";
-import { injectPrompt } from "../src/tracing/buffer-manager.js";
+import { injectPrompt, resolvePolicyPromptSelection } from "../src/tracing/buffer-manager.js";
 import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
+import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../src/capabilities/handlers/shared/constants.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
 
 test("ensureHarnessBucket fast-path keeps initialized references stable", async () => {
@@ -501,28 +502,29 @@ test("harness policy prompt is promoted to system when stale policy exists in me
 
   assert.equal(
     ctx.messages.filter((item = {}) =>
-      String(item?.content || "").includes("noobot-harness-policy"),
+      item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
     ).length,
     1,
   );
   assert.equal(ctx.messages[0]?.role, "system");
   assert.equal(
     ctx.messageBlocks.system.filter((item = {}) =>
-      String(item?.content || "").includes("noobot-harness-policy"),
+      item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
     ).length,
     1,
   );
   assert.equal(
     ctx.messageBlocks.incremental.filter((item = {}) =>
-      String(item?.content || "").includes("noobot-harness-policy"),
+      item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy" ||
+        String(item?.content || "").includes("noobot-harness-policy"),
     ).length,
     0,
   );
 });
 
-test("harness policy prompt branches by workflow strategy without explicit risk-first wording", async () => {
-  const buildInjectedPolicy = async (extraOptions = {}) => {
-    const ctx = { messages: [{ role: "user", content: "hello" }] };
+test("harness policy prompt matrix exposes scenario and workflow mode", async () => {
+  const buildInjectedPolicy = async (extraOptions = {}, ctxPatch = {}) => {
+    const ctx = { messages: [{ role: "user", content: "hello" }], ...ctxPatch };
     await injectPrompt("before_llm_call", ctx, {
       enabled: true,
       promptPolicy: true,
@@ -535,21 +537,144 @@ test("harness policy prompt branches by workflow strategy without explicit risk-
   };
 
   const executionFirstPrompt = await buildInjectedPolicy({ workflowStrategy: "execution_first" });
-  assert.match(executionFirstPrompt, /noobot-harness-policy/);
+  assert.doesNotMatch(executionFirstPrompt, /noobot-harness-policy/);
+  assert.match(executionFirstPrompt, /\[HARNESS_POLICY_SELECTION\]/);
+  assert.match(executionFirstPrompt, /scenario = general/);
+  assert.match(executionFirstPrompt, /workflow_mode = execution_first/);
+  assert.match(executionFirstPrompt, /policy_prompt = harness_policy\/general\/execution_first/);
   assert.match(executionFirstPrompt, /用户隔离/);
   assert.match(executionFirstPrompt, /执行优先/);
   assert.match(executionFirstPrompt, /最小切片/);
   assert.match(executionFirstPrompt, /不断推进任务/);
 
   const riskPrompt = await buildInjectedPolicy({ workflowStrategy: "risk_first" });
-  assert.match(riskPrompt, /noobot-harness-policy/);
-  assert.doesNotMatch(riskPrompt, /风险优先|risk first/i);
-  assert.doesNotMatch(riskPrompt, /执行优先|最小切片|不断推进任务/);
+  assert.match(riskPrompt, /scenario = general/);
+  assert.match(riskPrompt, /workflow_mode = risk_first/);
+  assert.match(riskPrompt, /policy_prompt = harness_policy\/general\/risk_first/);
+  assert.match(riskPrompt, /按用户目标正常推进/);
+  assert.match(riskPrompt, /非阻塞风险记录为检查、验证或小步试做/);
+  assert.doesNotMatch(riskPrompt, /风险优先|执行优先|最小切片|不断推进任务|风险.*消除|消除.*风险|风险.*解除/);
+
+  const textPrompt = await buildInjectedPolicy(
+    { workflowStrategy: "risk_first" },
+    { runConfig: { scenario: "text" } },
+  );
+  assert.match(textPrompt, /scenario = text/);
+  assert.match(textPrompt, /workflow_mode = risk_first/);
+  assert.match(textPrompt, /policy_prompt = harness_policy\/text\/risk_first/);
+  assert.match(textPrompt, /建议外部文本拿到就消费/);
+  assert.match(textPrompt, /来源文件路径/);
+
+  const programmingPrompt = await buildInjectedPolicy(
+    { workflowStrategy: "risk_first" },
+    { runConfig: { scenario: "programming" } },
+  );
+  assert.match(programmingPrompt, /scenario = programming/);
+  assert.match(programmingPrompt, /workflow_mode = execution_first/);
+  assert.match(programmingPrompt, /policy_prompt = harness_policy\/programming\/execution_first/);
+  assert.match(programmingPrompt, /最小可逆修改/);
+  assert.match(programmingPrompt, /相关测试、lint、类型检查或构建/);
 
   const defaultPrompt = await buildInjectedPolicy();
-  assert.match(defaultPrompt, /noobot-harness-policy/);
+  assert.match(defaultPrompt, /scenario = general/);
+  assert.match(defaultPrompt, /workflow_mode = base/);
+  assert.match(defaultPrompt, /policy_prompt = harness_policy\/general\/base/);
   assert.match(defaultPrompt, /用户隔离/);
   assert.doesNotMatch(defaultPrompt, /执行优先|风险优先|risk first/i);
+});
+
+
+test("harness policy selection resolver maps scenario and mode to explicit i18n keys", () => {
+  assert.deepEqual(
+    resolvePolicyPromptSelection({}, {}).policyPromptId,
+    "harness_policy/general/base",
+  );
+  assert.equal(
+    resolvePolicyPromptSelection({}, { workflowStrategy: "execution_first" }).i18nKey,
+    "harnessPolicyGeneralExecutionFirstPrompt",
+  );
+  assert.equal(
+    resolvePolicyPromptSelection({ runConfig: { scenario: "text" } }, { workflowStrategy: "risk_first" }).i18nKey,
+    "harnessPolicyTextRiskFirstPrompt",
+  );
+  assert.equal(
+    resolvePolicyPromptSelection({ runConfig: { scenario: "programming" } }, { workflowStrategy: "risk_first" }).i18nKey,
+    "harnessPolicyProgrammingExecutionFirstPrompt",
+  );
+});
+
+test("harness policy prompt survives agent-side system message compaction", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      basePath,
+      trace: false,
+      resolveMessageBlock: ({ scope, messages }) => {
+        if (scope === "system") return [];
+        return messages;
+      },
+    },
+  );
+  const ctx = {
+    userId: "u-policy-compact",
+    sessionId: "s-policy-compact",
+    dialogProcessId: "dp-policy-compact",
+    messageBlocks: {
+      system: [{ role: "system", content: "base system" }],
+      history: [],
+      incremental: [{ role: "user", content: "hello" }],
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  assert.equal(
+    ctx.messages.filter((item = {}) =>
+      item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
+    ).length,
+    1,
+  );
+  assert.equal(
+    ctx.messageBlocks.system.filter((item = {}) =>
+      item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
+    ).length,
+    1,
+  );
+});
+
+test("harness policy preservation ignores ordinary system text that only mentions policy marker", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      basePath,
+      trace: false,
+      promptPolicy: false,
+      resolveMessageBlock: ({ scope }) => scope === "system" ? [] : [],
+    },
+  );
+  const ctx = {
+    userId: "u-policy-false-positive",
+    sessionId: "s-policy-false-positive",
+    dialogProcessId: "dp-policy-false-positive",
+    messageBlocks: {
+      system: [{ role: "system", content: "ordinary docs mention <!-- noobot-harness-policy --> but not a prompt marker" }],
+      history: [],
+      incremental: [{ role: "user", content: "hello" }],
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  assert.equal(
+    ctx.messages.some((item = {}) =>
+      String(item?.content || "").includes("ordinary docs mention"),
+    ),
+    false,
+  );
 });
 
 test("harness plugin injects prompt into before_llm_call messages", async () => {
@@ -566,7 +691,8 @@ test("harness plugin injects prompt into before_llm_call messages", async () => 
   });
 
   assert.equal(messages[0].role, "system");
-  assert.match(messages[0].content, /noobot-harness-policy/);
+  assert.equal(messages[0]?.[HARNESS_PROMPT_INJECTION_ID_FIELD], "noobot-harness-policy");
+  assert.doesNotMatch(messages[0].content, /noobot-harness-policy/);
   assert.match(messages[0].content, /用户隔离/);
 });
 

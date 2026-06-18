@@ -15,6 +15,13 @@ import {
   normalizeHookContextProtocol,
 } from "./context.js";
 import { HARNESS_HOOK_POINTS } from "./constants.js";
+import {
+  HARNESS_MESSAGE_BLOCK_POLICY_FIELD,
+  HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD,
+  HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD,
+  HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
+  HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD,
+} from "../capabilities/handlers/shared/constants.js";
 
 export const HARNESS_TRACE_POINTS = Object.freeze([
   HARNESS_HOOK_POINTS.BEFORE_CONTEXT_BUILD,
@@ -133,6 +140,48 @@ function mergeUniqueByReference(primary = [], extras = []) {
   return merged;
 }
 
+
+function readMessageBlockPolicy(message = {}) {
+  const policy =
+    message?.[HARNESS_MESSAGE_BLOCK_POLICY_FIELD] ||
+    message?.lc_kwargs?.[HARNESS_MESSAGE_BLOCK_POLICY_FIELD] ||
+    message?.additional_kwargs?.[HARNESS_MESSAGE_BLOCK_POLICY_FIELD] ||
+    message?.lc_kwargs?.additional_kwargs?.[HARNESS_MESSAGE_BLOCK_POLICY_FIELD] ||
+    null;
+  return policy && typeof policy === "object" && !Array.isArray(policy) ? policy : null;
+}
+
+function shouldPreserveSystemMessage(message = {}) {
+  if (resolveMessageRole(message) !== "system") return false;
+  const policy = readMessageBlockPolicy(message);
+  return policy?.[HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD] === HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM &&
+    policy?.[HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD] === true;
+}
+
+function resolvePreservedSystemMessageSignature(message = {}) {
+  if (!shouldPreserveSystemMessage(message)) return "";
+  const policy = readMessageBlockPolicy(message);
+  const slot = String(policy?.[HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD] || "").trim();
+  if (slot) return `message_block_policy:${HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM}:${slot}`;
+  return `message_block_policy:${HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM}:${String(message?.content || "")}`;
+}
+
+function preserveSystemMessagesByPolicy(source = [], resolved = []) {
+  const output = Array.isArray(resolved) ? [...resolved] : [];
+  const signatures = new Set(
+    output
+      .map((message = {}) => resolvePreservedSystemMessageSignature(message))
+      .filter(Boolean),
+  );
+  for (const message of Array.isArray(source) ? source : []) {
+    const signature = resolvePreservedSystemMessageSignature(message);
+    if (!signature || signatures.has(signature)) continue;
+    output.push(message);
+    signatures.add(signature);
+  }
+  return output;
+}
+
 function resolveFrontendUserAnchoredIncremental(source = [], resolved = []) {
   const sourceList = Array.isArray(source) ? source : [];
   const resolvedList = Array.isArray(resolved) ? resolved : [];
@@ -191,7 +240,10 @@ function compactFinalMessageBlocks(point = "", ctx = {}, options = {}) {
     ctx,
   });
 
-  const system = Array.isArray(systemResolved) ? systemResolved : systemSource;
+  const system = preserveSystemMessagesByPolicy(
+    systemSource,
+    Array.isArray(systemResolved) ? systemResolved : systemSource,
+  );
   const history = Array.isArray(historyResolved) ? historyResolved : historySource;
   const incrementalBase = resolveFrontendUserAnchoredIncremental(
     incrementalSource,

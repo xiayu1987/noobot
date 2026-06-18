@@ -162,6 +162,7 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
   } = resolveWorkflowStrategyFlagsFromContext(_ctx, _meta);
@@ -170,6 +171,7 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
     marker: getPlanningPromptMarker(locale),
     data: { userGoal },
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
   });
@@ -224,6 +226,7 @@ export function buildPlanningMessagePlan(
   });
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
@@ -259,6 +262,7 @@ export function buildPlanningMessagePlan(
       separateRole: "task",
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "planning", {
         programmingMode,
+        textMode,
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,

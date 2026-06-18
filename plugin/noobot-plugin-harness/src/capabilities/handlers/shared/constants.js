@@ -80,6 +80,12 @@ export const HARNESS_INJECTED_MESSAGE_FLAG_VALUE = true;
 export const HARNESS_INJECTED_MESSAGE_BY_FIELD = "injectedBy";
 export const HARNESS_INJECTED_MESSAGE_BY_VALUE = "harness-plugin";
 export const HARNESS_INJECTED_MESSAGE_TYPE_FIELD = "injectedMessageType";
+export const HARNESS_PROMPT_INJECTION_ID_FIELD = "promptInjectionId";
+export const HARNESS_MESSAGE_BLOCK_POLICY_FIELD = "messageBlockPolicy";
+export const HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD = "scope";
+export const HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM = "system";
+export const HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD = "preserve";
+export const HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD = "slot";
 
 export const PROMPT_JSON_FORMAT_EXAMPLES = HARNESS_PROMPT_JSON_FORMAT_EXAMPLES;
 

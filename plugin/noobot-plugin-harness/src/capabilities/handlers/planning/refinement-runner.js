@@ -67,6 +67,7 @@ export async function runPlanningRefinementBySeparateModel(
   const locale = state?.locale || LOCALE.ZH_CN;
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
@@ -117,6 +118,7 @@ export async function runPlanningRefinementBySeparateModel(
     postTaskMessages: [
       buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
         programmingMode,
+        textMode,
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
