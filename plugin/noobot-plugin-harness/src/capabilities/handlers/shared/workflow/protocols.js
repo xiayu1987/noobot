@@ -5,6 +5,12 @@
  */
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
+import {
+  HARNESS_SCENARIO,
+  HARNESS_WORKFLOW_MODE,
+  resolveHarnessScenarioFromOptions,
+  resolveHarnessWorkflowModeFromOptions,
+} from "./matrix-resolver.js";
 
 function resolveLocale(locale = LOCALE.ZH_CN) {
   return locale === LOCALE.EN_US ? LOCALE.EN_US : LOCALE.ZH_CN;
@@ -75,46 +81,114 @@ function resolveSummaryPatchProtocolOptions(input = LOCALE.ZH_CN) {
     return {
       locale: resolveLocale(input.locale),
       programmingMode: input.programmingMode === true || input.isProgrammingMode === true,
+      textMode: input.textMode === true || input.isTextMode === true,
       executionFirstMode: input.executionFirstMode === true || input.isExecutionFirstMode === true,
       riskFirstMode: input.riskFirstMode === true || input.isRiskFirstMode === true,
+      nonProgrammingExecutionFirst: input.nonProgrammingExecutionFirst,
+      workflowStrategy: input.workflowStrategy,
+      nonProgrammingWorkflowStrategy: input.nonProgrammingWorkflowStrategy,
+      promptStrategy: input.promptStrategy,
+      workflowMode: input.workflowMode,
+      scenario: input.scenario,
+      scenarioKey: input.scenarioKey,
+      scenarioProfile: input.scenarioProfile,
+      data: input.data,
     };
   }
   return {
     locale: resolveLocale(input),
     programmingMode: false,
+    textMode: false,
     executionFirstMode: false,
     riskFirstMode: false,
   };
 }
 
+export const SUMMARY_PROTOCOL_SCENARIO = HARNESS_SCENARIO;
+export const SUMMARY_PROTOCOL_WORKFLOW_MODE = HARNESS_WORKFLOW_MODE;
+
+const SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO = Object.freeze({
+  [SUMMARY_PROTOCOL_SCENARIO.GENERAL]: Object.freeze({
+    addKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_GENERAL_ADD_COMMAND,
+    updateKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_GENERAL_UPDATE_COMMAND,
+    overviewFields: Object.freeze(["plan", "status", "evidence", "file", "line"]),
+  }),
+  [SUMMARY_PROTOCOL_SCENARIO.TEXT]: Object.freeze({
+    addKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_ADD_COMMAND,
+    updateKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_UPDATE_COMMAND,
+    overviewFields: Object.freeze(["plan", "status", "evidence", "file", "line", "path", "text"]),
+  }),
+  [SUMMARY_PROTOCOL_SCENARIO.PROGRAMMING]: Object.freeze({
+    addKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_ADD_COMMAND,
+    updateKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_UPDATE_COMMAND,
+    overviewFields: Object.freeze(["plan", "status", "evidence", "file", "method", "line"]),
+  }),
+});
+
+const SUMMARY_PROTOCOL_RULE_KEYS_BY_MODE = Object.freeze({
+  [SUMMARY_PROTOCOL_WORKFLOW_MODE.BASE]: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_GENERAL_RULES,
+  [SUMMARY_PROTOCOL_WORKFLOW_MODE.EXECUTION_FIRST]: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_EXECUTION_FIRST_RULES,
+  [SUMMARY_PROTOCOL_WORKFLOW_MODE.RISK_FIRST]: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_RISK_FIRST_RULES,
+});
+
+function resolveSummaryProtocolRuleKeys({ scenario, workflowMode } = {}) {
+  if (scenario === SUMMARY_PROTOCOL_SCENARIO.PROGRAMMING) {
+    return [HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_RULES];
+  }
+  if (
+    scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT &&
+    workflowMode === SUMMARY_PROTOCOL_WORKFLOW_MODE.EXECUTION_FIRST
+  ) {
+    return [
+      HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_OUTPUT_FIRST_RULES,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_RULES,
+    ];
+  }
+  const ruleKeys = [
+    SUMMARY_PROTOCOL_RULE_KEYS_BY_MODE[workflowMode] ||
+      SUMMARY_PROTOCOL_RULE_KEYS_BY_MODE[SUMMARY_PROTOCOL_WORKFLOW_MODE.BASE],
+  ];
+  if (scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT) {
+    ruleKeys.push(HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_RULES);
+  }
+  return ruleKeys.filter(Boolean);
+}
+
+export function resolveSummaryPatchProtocolSelection(options = LOCALE.ZH_CN) {
+  const normalized = resolveSummaryPatchProtocolOptions(options);
+  const scenario = resolveHarnessScenarioFromOptions(normalized);
+  const workflowMode = resolveHarnessWorkflowModeFromOptions(normalized, { scenario });
+  const command = SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO[scenario] ||
+    SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO[SUMMARY_PROTOCOL_SCENARIO.GENERAL];
+  const ruleKeys = resolveSummaryProtocolRuleKeys({ scenario, workflowMode });
+  return Object.freeze({
+    scenario,
+    workflowMode,
+    protocolFamily: "summary_text_v2 + summary_patch_v1",
+    protocolId: `summary_patch_v1/${scenario}/${workflowMode}`,
+    nextActionProtocolId: scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT &&
+      workflowMode === SUMMARY_PROTOCOL_WORKFLOW_MODE.EXECUTION_FIRST
+      ? "next_action/text_output_first"
+      : `next_action/${workflowMode}`,
+    addCommandKey: command.addKey,
+    updateCommandKey: command.updateKey,
+    deleteCommandKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_DELETE_COMMAND,
+    ruleKeys: Object.freeze([...ruleKeys]),
+    overviewFields: Object.freeze([...(command.overviewFields || [])]),
+  });
+}
+
 export function buildSummaryPatchProtocolText(options = LOCALE.ZH_CN) {
-  const {
-    locale: normalizedLocale,
-    programmingMode,
-    executionFirstMode,
-    riskFirstMode,
-  } = resolveSummaryPatchProtocolOptions(options);
-  const summaryLine3 = programmingMode
-    ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_LINE3
-    : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE3;
-  const summaryLine4 = programmingMode
-    ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_LINE4
-    : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE4;
-  const summaryLine6 = programmingMode
-    ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_LINE6
-    : executionFirstMode
-      ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_EXECUTION_FIRST_LINE6
-      : riskFirstMode
-        ? HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_RISK_FIRST_LINE6
-      : HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE6;
+  const { locale: normalizedLocale } = resolveSummaryPatchProtocolOptions(options);
+  const selection = resolveSummaryPatchProtocolSelection(options);
   return [
-    translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE1),
-    translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE2),
-    translateI18nText(normalizedLocale, summaryLine3),
-    translateI18nText(normalizedLocale, summaryLine4),
-    translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_LINE5),
-    translateI18nText(normalizedLocale, summaryLine6),
-  ].join("\n");
+    translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TITLE),
+    translateI18nText(normalizedLocale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_SYNTAX_HEADER),
+    translateI18nText(normalizedLocale, selection.addCommandKey),
+    translateI18nText(normalizedLocale, selection.updateCommandKey),
+    translateI18nText(normalizedLocale, selection.deleteCommandKey),
+    ...selection.ruleKeys.map((key) => translateI18nText(normalizedLocale, key)),
+  ].filter(Boolean).join("\n");
 }
 
 export function buildAcceptancePatchProtocolText({

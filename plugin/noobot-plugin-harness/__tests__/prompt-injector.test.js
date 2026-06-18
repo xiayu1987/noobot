@@ -6,6 +6,7 @@ import {
   isHarnessPromptAlreadyInjected,
   markPromptAsInjected,
 } from "../src/prompt/prompt-injector.js";
+import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../src/capabilities/handlers/shared/constants.js";
 
 test("injectSystemMessages skips already injected prompt IDs and injects missing ones", () => {
   const messages = [
@@ -23,12 +24,16 @@ test("injectSystemMessages skips already injected prompt IDs and injects missing
   );
 
   assert.equal(changed, true);
-  const policyCount = messages.filter((item) => String(item.content || "").includes("noobot-harness-policy")).length;
-  const finalCount = messages.filter((item) =>
-    String(item.content || "").includes("noobot-harness-final-response"),
-  ).length;
-  assert.equal(policyCount, 1);
-  assert.equal(finalCount, 1);
+  assert.equal(isHarnessPromptAlreadyInjected(messages, "noobot-harness-policy"), true);
+  assert.equal(isHarnessPromptAlreadyInjected(messages, "noobot-harness-final-response"), true);
+  assert.equal(
+    messages.filter((item) => item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-final-response").length,
+    1,
+  );
+  assert.equal(
+    messages.some((item) => String(item.content || "").includes("noobot-harness-final-response")),
+    false,
+  );
 });
 
 test("markPromptAsInjected updates cache without rescanning", () => {
@@ -69,6 +74,7 @@ test("after_system mode preserves leading system messages", () => {
 
   assert.equal(changed, true);
   assert.equal(messages[0]?.content, "system context");
-  assert.match(String(messages[1]?.content || ""), /noobot-harness-policy/);
+  assert.equal(messages[1]?.[HARNESS_PROMPT_INJECTION_ID_FIELD], "noobot-harness-policy");
+  assert.equal(String(messages[1]?.content || ""), "policy");
   assert.equal(messages[2]?.content, "user task");
 });

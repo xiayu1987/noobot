@@ -5,6 +5,9 @@
  */
 import {
   HARNESS_INJECTED_MESSAGE_FLAG_FIELD,
+  HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
+  HARNESS_INJECTED_MESSAGE_TYPE_FIELD,
+  HARNESS_PROMPT_INJECTION_ID_FIELD,
 } from "../capabilities/handlers/shared/constants.js";
 import {
   buildHarnessInjectedMessage,
@@ -17,7 +20,29 @@ const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility
 const injectedPromptCache = new WeakMap();
 const HARNESS_MARKER_PATTERN = /<!--\s*([^<>]*?)\s*-->/g;
 
-function scanInjectedIdsInContent(content = "", target = new Set()) {
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function readMessageField(message = {}, field = "") {
+  const key = String(field || "").trim();
+  if (!key) return undefined;
+  return message?.[key] ??
+    message?.lc_kwargs?.[key] ??
+    message?.additional_kwargs?.[key] ??
+    message?.lc_kwargs?.additional_kwargs?.[key];
+}
+
+function resolvePromptInjectionIdFromMetadata(message = {}) {
+  const direct = String(readMessageField(message, HARNESS_PROMPT_INJECTION_ID_FIELD) || "").trim();
+  if (direct) return direct;
+  const injectedMessageType = String(readMessageField(message, HARNESS_INJECTED_MESSAGE_TYPE_FIELD) || "").trim();
+  const prefix = "harness_prompt:";
+  if (injectedMessageType.startsWith(prefix)) return injectedMessageType.slice(prefix.length).trim();
+  return "";
+}
+
+function scanLegacyInjectedIdsInContent(content = "", target = new Set()) {
   const text = typeof content === "string" ? content : "";
   if (!text) return target;
   HARNESS_MARKER_PATTERN.lastIndex = 0;
@@ -30,10 +55,16 @@ function scanInjectedIdsInContent(content = "", target = new Set()) {
   return target;
 }
 
+function scanInjectedIdsInMessage(message = {}, target = new Set()) {
+  const metadataId = resolvePromptInjectionIdFromMetadata(message);
+  if (metadataId) target.add(metadataId);
+  return scanLegacyInjectedIdsInContent(message?.content, target);
+}
+
 function rebuildInjectedPromptCache(messages = []) {
   const ids = new Set();
   for (const msg of messages) {
-    scanInjectedIdsInContent(msg?.content, ids);
+    scanInjectedIdsInMessage(msg, ids);
   }
   const entry = { ids, scannedLength: messages.length };
   injectedPromptCache.set(messages, entry);
@@ -50,7 +81,7 @@ function getOrCreateInjectedPromptCache(messages = []) {
   if (messages.length < scannedLength) return rebuildInjectedPromptCache(messages);
   if (messages.length > scannedLength) {
     for (let index = scannedLength; index < messages.length; index += 1) {
-      scanInjectedIdsInContent(messages[index]?.content, ids);
+      scanInjectedIdsInMessage(messages[index], ids);
     }
     current.ids = ids;
     current.scannedLength = messages.length;
@@ -63,9 +94,7 @@ export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
   if (!Array.isArray(messages)) return false;
   const cache = getOrCreateInjectedPromptCache(messages);
   if (cache.ids.has(id)) return true;
-  const found = messages.some((msg) =>
-    String(msg?.content || "").includes(`<!-- ${id} -->`),
-  );
+  const found = messages.some((msg) => resolvePromptInjectionIdFromMetadata(msg) === id);
   if (found) {
     cache.ids.add(id);
     cache.scannedLength = messages.length;
@@ -103,6 +132,9 @@ function normalizePromptEntries(prompts = []) {
       content: String(item?.content || ""),
       priority: Number.isFinite(Number(item?.priority)) ? Number(item.priority) : 50,
       mode: String(item?.mode || "prepend").trim().toLowerCase(),
+      messageBlockPolicy: isPlainObject(item?.messageBlockPolicy)
+        ? { ...item.messageBlockPolicy }
+        : null,
     }))
     .filter((item) => item.id && item.content);
 }
@@ -113,6 +145,9 @@ function readLegacyPromptEntries() {
     content: String(value?.content || ""),
     priority: Number.isFinite(Number(value?.priority)) ? Number(value.priority) : 50,
     mode: String(value?.mode || "prepend").trim().toLowerCase(),
+    messageBlockPolicy: isPlainObject(value?.messageBlockPolicy)
+      ? { ...value.messageBlockPolicy }
+      : null,
   }));
 }
 
@@ -120,7 +155,17 @@ function readLegacyPromptEntries() {
 function isPromptMessage(message = {}, id = "") {
   const promptId = String(id || "").trim();
   if (!promptId) return false;
+  if (resolvePromptInjectionIdFromMetadata(message) === promptId) return true;
   return String(message?.content || "").includes(`<!-- ${promptId} -->`);
+}
+
+function isAnyPromptInjectionMessage(message = {}) {
+  if (resolvePromptInjectionIdFromMetadata(message)) return true;
+  return (
+    (message?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] === HARNESS_INJECTED_MESSAGE_FLAG_VALUE ||
+      isSystemRoleMessage(message)) &&
+    String(message?.content || "").startsWith("<!-- noobot-harness")
+  );
 }
 
 function isSystemRoleMessage(message = {}) {
@@ -241,35 +286,48 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   const afterSystemItems = [];
   const appendItems = [];
 
-  for (const { id, content, mode } of sorted) {
+  for (const { id, content, mode, messageBlockPolicy } of sorted) {
     if (options.skipIds?.has(id)) continue;
 
-    const marker = `<!-- ${id} -->\n${content}`;
+    const promptContent = content;
     if (mode === "replace") {
       // Replace: remove existing harness prompts and add this one
       for (let i = messages.length - 1; i >= 0; i--) {
-        if (
-          (messages[i]?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] === true || messages[i]?.role === "system") &&
-          String(messages[i]?.content || "").startsWith("<!-- noobot-harness")
-        ) {
+        if (isAnyPromptInjectionMessage(messages[i])) {
           messages.splice(i, 1);
         }
       }
       prependItems.push(
-        buildHarnessInjectedMessage(marker, { injectedMessageType: `harness_prompt:${id}` }),
+        buildHarnessInjectedMessage(promptContent, {
+          injectedMessageType: `harness_prompt:${id}`,
+          promptInjectionId: id,
+          messageBlockPolicy,
+        }),
       );
     } else if (mode === "append") {
       appendItems.push(
-        buildHarnessInjectedMessage(marker, { injectedMessageType: `harness_prompt:${id}` }),
+        buildHarnessInjectedMessage(promptContent, {
+          injectedMessageType: `harness_prompt:${id}`,
+          promptInjectionId: id,
+          messageBlockPolicy,
+        }),
       );
     } else if (mode === "after_system") {
       afterSystemItems.push(
-        buildHarnessInjectedMessage(marker, { injectedMessageType: `harness_prompt:${id}` }),
+        buildHarnessInjectedMessage(promptContent, {
+          injectedMessageType: `harness_prompt:${id}`,
+          promptInjectionId: id,
+          messageBlockPolicy,
+        }),
       );
     } else {
       // prepend (default)
       prependItems.push(
-        buildHarnessInjectedMessage(marker, { injectedMessageType: `harness_prompt:${id}` }),
+        buildHarnessInjectedMessage(promptContent, {
+          injectedMessageType: `harness_prompt:${id}`,
+          promptInjectionId: id,
+          messageBlockPolicy,
+        }),
       );
     }
     injected = true;

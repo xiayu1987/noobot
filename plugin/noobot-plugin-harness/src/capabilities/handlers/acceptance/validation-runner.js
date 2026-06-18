@@ -142,6 +142,7 @@ function buildFinalAcceptanceSemanticValidationMessages({
   phaseReportsContents = [],
   requestContent = "",
   programmingMode = false,
+  textMode = false,
   executionFirstMode = false,
   riskFirstMode = false,
   workflowStrategy = "",
@@ -161,6 +162,7 @@ function buildFinalAcceptanceSemanticValidationMessages({
       role: "user",
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
         programmingMode,
+        textMode,
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
@@ -261,6 +263,7 @@ function buildAcceptancePromptParts({
     : [];
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
@@ -271,6 +274,7 @@ function buildAcceptancePromptParts({
         marker: getPhaseAcceptanceRequestMarker(locale),
         data: { requestPayload },
         programmingMode,
+        textMode,
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
@@ -280,6 +284,7 @@ function buildAcceptancePromptParts({
         marker: getAcceptanceSemanticValidationMarker(locale),
         data: { requestPayload },
         programmingMode,
+        textMode,
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
@@ -296,6 +301,7 @@ function buildPhaseAcceptanceMessages({
   phaseReportsContents = [],
   requestContent = "",
   programmingMode = false,
+  textMode = false,
   executionFirstMode = false,
   riskFirstMode = false,
   workflowStrategy = "",
@@ -323,6 +329,7 @@ function buildPhaseAcceptanceMessages({
       role: "user",
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
         programmingMode,
+        textMode,
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
@@ -342,6 +349,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
@@ -368,6 +376,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
     "user",
     buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
       programmingMode,
+      textMode,
       workflowStrategy,
       executionFirstMode,
       riskFirstMode,
@@ -684,6 +693,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   const locale = state?.locale || LOCALE.ZH_CN;
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
@@ -706,6 +716,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
     marker: getAcceptanceSemanticValidationMarker(locale),
     data: { requestPayload },
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
@@ -742,6 +753,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
     role: "user",
     content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "final_acceptance", {
       programmingMode,
+      textMode,
       workflowStrategy,
       executionFirstMode,
       riskFirstMode,

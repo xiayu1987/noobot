@@ -118,6 +118,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   const locale = state?.locale || LOCALE.ZH_CN;
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,

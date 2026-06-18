@@ -157,6 +157,7 @@ export async function runPlanUpdateAfterSummary(
   const locale = state?.locale || LOCALE.ZH_CN;
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
@@ -190,6 +191,7 @@ export async function runPlanUpdateAfterSummary(
     postTaskMessages: [
       buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
         programmingMode,
+        textMode,
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
@@ -316,6 +318,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const locale = state?.locale || LOCALE.ZH_CN;
   const {
     programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
@@ -339,6 +342,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     prompt = buildGuidanceSummaryPromptText({
       locale,
       programmingMode,
+      textMode,
       workflowStrategy,
       executionFirstMode,
       riskFirstMode,
@@ -350,6 +354,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     reason = state.pending.guidance;
     prompt = buildGuidancePromptContent(locale, reason, {
       programmingMode,
+      textMode,
       workflowStrategy,
       executionFirstMode,
       riskFirstMode,
@@ -393,6 +398,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       purpose === "summary"
         ? [buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
             programmingMode,
+            textMode,
             workflowStrategy,
             executionFirstMode,
             riskFirstMode,

@@ -36,12 +36,19 @@ import {
 } from "../fsm/transitions.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import {
+  HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD,
+  HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD,
+  HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
+  HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD,
+} from "../capabilities/handlers/shared/constants.js";
+import {
   HARNESS_I18N_KEYSET,
   resolveLocale as resolveHarnessLocale,
   translateI18nText,
 } from "../capabilities/handlers/shared/i18n.js";
-import { WORKFLOW_PARAMS } from "../core/workflow-params.js";
-import { normalizeWorkflowStrategyName } from "../core/workflow-strategy.js";
+import { buildDefaultPolicyPrompt } from "./policy-prompt-matrix.js";
+
+export { resolvePolicyPromptSelection } from "./policy-prompt-matrix.js";
 
 function resolveFlushReasonByPoint(point = "") {
   if (
@@ -129,31 +136,6 @@ export async function updateManifest(paths, ctx = {}, patch = {}, options = {}, 
   );
 }
 
-function resolvePolicyPromptI18nKey(options = {}) {
-  const strategy = normalizeWorkflowStrategyName(
-    options.nonProgrammingWorkflowStrategy ||
-      options.promptStrategy ||
-      options.workflowMode ||
-      options.workflowStrategy?.nonProgramming ||
-      options.workflowStrategy,
-  );
-  if (
-    strategy === WORKFLOW_PARAMS.workflow.strategy.modes.riskFirst ||
-    options.riskFirstMode === true ||
-    options.nonProgrammingExecutionFirst === false
-  ) {
-    return HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY;
-  }
-  if (
-    strategy === WORKFLOW_PARAMS.workflow.strategy.modes.executionFirst ||
-    options.executionFirstMode === true ||
-    options.nonProgrammingExecutionFirst === true
-  ) {
-    return HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_EXECUTION;
-  }
-  return HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY;
-}
-
 export async function injectPrompt(point, ctx, options, plugin = {}) {
   if (!options.enabled || !options.promptPolicy) return;
   const id =
@@ -163,7 +145,7 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
   const locale = resolveHarnessLocale(ctx);
   const resolveDefaultPrompt = () => (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
     ? translateI18nText(locale, HARNESS_I18N_KEYSET.SYSTEM_PROMPT.FINAL_RESPONSE)
-    : translateI18nText(locale, resolvePolicyPromptI18nKey(options)));
+    : buildDefaultPolicyPrompt(locale, ctx, options));
   const configuredPrompt = String(
     point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText,
   ).trim();
@@ -177,7 +159,19 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
   const isPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL;
   const injected = injectSystemMessages(ctx, {
     skipIds: new Set(),
-    prompts: [{ id, content, priority: options.promptPriority, mode: "after_system" }],
+    prompts: [{
+      id,
+      content,
+      priority: options.promptPriority,
+      mode: "after_system",
+      messageBlockPolicy: isPolicyPrompt
+        ? {
+            [HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD]: HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
+            [HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD]: true,
+            [HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD]: "policy",
+          }
+        : null,
+    }],
     systemBlockIds: isPolicyPrompt ? new Set([id]) : new Set(),
     syncMessageBlocksSystem: isPolicyPrompt,
     persistToCurrentTurn: !isPolicyPrompt,
