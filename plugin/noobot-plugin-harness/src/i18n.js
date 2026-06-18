@@ -427,11 +427,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     postPlanFollowupRefinement:
       "计划细化已完成。请调用工具按计划推进；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续）。每个切片必须验证，未验证不得视为完成；低风险可逆动作不要长期等待。",
     postPlanFollowupPlanningRiskFirst:
-      "计划已完成。请调用工具逐项执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项。",
+      "计划已完成。请调用工具按计划推进；先处理会阻塞执行的关键风险。非阻塞风险转成检查/验证动作后继续执行。",
     postPlanFollowupRevisionRiskFirst:
-      "计划修正已完成。请调用工具逐项执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项。",
+      "计划修正已完成。请调用工具按计划推进；先处理会阻塞执行的关键风险。非阻塞风险转成检查/验证动作后继续执行。",
     postPlanFollowupRefinementRiskFirst:
-      "计划细化已完成。请调用工具逐项执行任务。每次仅处理一个计划项，完成后基于执行结果再继续下一项。",
+      "计划细化已完成。请调用工具按计划推进；先处理会阻塞执行的关键风险。非阻塞风险转成检查/验证动作后继续执行。",
     responsibilityStagePlanning: "规划",
     responsibilityStageRevision: "计划修正",
     responsibilityStageRefinement: "计划细化",
@@ -443,15 +443,15 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     programmingExecutionPrinciples:
       "编程执行原则：\n1. 默认不要等待所有风险点解除，先读必要上下文，再做最小可逆修改。\n2. 验证是完成条件：优先跑相关测试、lint、类型检查或构建。\n3. 每轮闭环：修改 -> 验证 -> 修正；失败先按错误修正并重试，不能只停留在改代码。\n4. 未知点应转化为验证动作，而不是长期阻塞。\n5. 只有不可逆、安全、生产数据、凭证、破坏性操作、需求冲突才停下确认。",
     programmingRiskTaxonomy:
-      "编程风险分级：\nA. Blocking risk（必须停）：破坏性/不可逆、安全/密钥/权限、生产数据/生产配置、破坏公开 API、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止代码修改；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先改但必须验证）：调用链不确定、测试可能失败、边界条件不全、类型/构建可能报错。不得阻塞最小可逆修改；必须转成 npm test/lint/build/相关测试等验证动作。\nC. Informational risk（只记录不阻塞）：命名风格、未来重构、更优雅方案等；只记录，不得阻塞执行。",
+      "编程风险优先风险分级：\nA. Blocking risk（必须停）：破坏性/不可逆、安全/密钥/权限、生产数据/生产配置、破坏公开 API、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止代码修改；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先改但必须验证）：调用链不确定、测试可能失败、边界条件不全、类型/构建可能报错。不得阻塞最小可逆修改；必须转成 npm test/lint/build/相关测试等验证动作。\nC. Informational risk（只记录不阻塞）：命名风格、未来重构、更优雅方案等；只记录，不得阻塞执行。",
     executionFirstPrinciples:
       "执行优先原则：\n1. 先读必要上下文，再做最小可逆动作。\n2. 验证是完成条件：执行后必须检查、测试、对比或观察结果。\n3. 失败先按反馈修正并重试，不要只做动作不验证。\n4. 只有不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或需求冲突才停下确认。",
     executionFirstRiskTaxonomy:
       "执行优先风险分级：\nA. Blocking risk（必须停）：不可逆/破坏性、安全/隐私/合规、资金/生产环境、公开承诺、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止执行；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先做但必须验证）：信息不完整、结果可能失败、边界条件不全、质量不确定。不得阻塞最小可逆动作；必须转成检查、验证、对比或反馈动作。\nC. Informational risk（只记录不阻塞）：风格偏好、未来优化、更优雅方案等；只记录，不得阻塞执行。",
     riskFirstPrinciples:
-      "风险优先原则：\n1. 默认先识别会影响正确性、安全、成本、承诺或可逆性的关键风险。\n2. 对高影响或不可逆风险，先检查、澄清或降级风险，再执行。\n3. 可低成本验证的不确定性，应转成 inspect、verify 或 ask_user，而不是直接承诺结果。\n4. 只有风险已降级为可管理、可验证或用户明确授权后，才推进实际执行。\n5. 每轮最多解决一个风险闭环：识别 -> 降级/确认 -> 再决定是否执行。",
+      "风险优先原则：\n1. 先识别会影响正确性、安全、成本、承诺或可逆性的关键风险。\n2. 只让真正阻塞的风险暂停执行；普通不确定性转成检查、验证或小步试做。\n3. 对高影响或不可逆动作，先检查、澄清或请求确认。\n4. 风险已可管理或可验证时，就继续执行并验证结果。",
     riskFirstRiskTaxonomy:
-      "风险优先风险分级：\nA. Blocking risk（必须先处理）：不可逆/破坏性、安全/隐私/合规、资金/生产环境、公开承诺、需求冲突、无法验证且代价高；必须 inspect、ask_user 或先给出降级动作。\nB. Managed risk（先降级再做）：信息不足、质量不确定、边界不清、依赖外部反馈；优先转成检查、验证、对比、试点或确认动作。\nC. Informational risk（记录即可）：风格偏好、未来优化、轻微不确定性；记录但不得伪装成阻塞风险。",
+      "风险优先风险分级：\nA. Blocking risk（先处理）：不可逆/破坏性、安全/隐私/合规、资金/生产环境、公开承诺、明显需求冲突、无法验证且代价高；先 inspect、ask_user 或给出降级动作。\nB. Managed risk（边做边控）：信息不足、质量不确定、边界不清；转成检查、验证、对比或试点，不阻塞可逆小步执行。\nC. Informational risk（记录即可）：风格偏好、未来优化、轻微不确定性；记录但不得伪装成阻塞风险。",
     guidanceFailurePromptTemplate:
       "工具失败达到阈值({reason})，请分析工具失败原因，并且给予修复建议。",
     acceptanceMainPlanContextHeader: "计划清单上下文如下（验收时必须完整对齐）：",
@@ -472,7 +472,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoalExecutionFirst:
       "目标：生成面向执行的最小可执行计划切片。每个切片必须包含验证动作；不要等到所有不确定性消失。除非涉及不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆动作 -> 运行最小验证/检查 -> 根据结果修正 -> 继续下一切片或补充验收说明；无法验证时必须写明未验证原因。",
     planningMainPromptGoalRiskFirst:
-      "目标：生成面向风险降级的最小计划切片。计划仍然是计划，但优先识别会阻塞执行的关键风险；不要罗列无限风险，只输出能推进决策的宏观步骤。默认采用 识别风险 -> 检查/澄清/降级 -> 决定是否执行 的闭环。计划应倾向于：找到最关键不确定点 -> 做最小检查或确认 -> 将风险降级为可执行动作 -> 再推进执行或验收说明。",
+      "目标：生成兼顾风险控制与执行推进的最小计划切片。优先识别会阻塞执行的关键风险，不要罗列无限风险；非阻塞风险应转成检查/验证动作并继续推进。计划应倾向于：找到关键不确定点 -> 做最小检查或确认 -> 形成可执行动作 -> 执行并验证。",
     planningMainUserGoalHeader: "【用户目标】",
     planningMainCurrentTaskGoalProtocol:
       "在计划 patch 行之前，必须用以下文本协议输出当前任务目标：[CURRENT_TASK_GOAL]\\n<由计划模型提炼的一句话当前任务目标>\\n[PLAN]",
@@ -683,11 +683,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     postPlanFollowupRefinement:
       "Plan refinement is done. Continue with tools in plan order; complete minimal loops: execute -> verify/observe -> fix -> continue. Every slice must be verified; unverified work is not done. Do not wait on low-risk reversible actions.",
     postPlanFollowupPlanningRiskFirst:
-      "Plan is ready. Continue step by step with tools in plan order. Handle one plan item at a time, then continue based on the result.",
+      "Plan is ready. Continue with tools in plan order; handle key blocking risks first. Convert non-blocking risks into inspection/verification actions and keep executing.",
     postPlanFollowupRevisionRiskFirst:
-      "Plan revision is done. Continue step by step with tools in plan order. Handle one plan item at a time, then continue based on the result.",
+      "Plan revision is done. Continue with tools in plan order; handle key blocking risks first. Convert non-blocking risks into inspection/verification actions and keep executing.",
     postPlanFollowupRefinementRiskFirst:
-      "Plan refinement is done. Continue step by step with tools in plan order. Handle one plan item at a time, then continue based on the result.",
+      "Plan refinement is done. Continue with tools in plan order; handle key blocking risks first. Convert non-blocking risks into inspection/verification actions and keep executing.",
     responsibilityStagePlanning: "planning",
     responsibilityStageRevision: "plan revision",
     responsibilityStageRefinement: "plan refinement",
@@ -705,9 +705,9 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     executionFirstRiskTaxonomy:
       "Execution-first risk taxonomy:\nA. Blocking risk (must stop): irreversible/destructive, security/privacy/compliance, money/production, public commitments, unresolvable requirement conflicts, or costly unverifiable actions. Only this class may block execution; convert it to ask_user or an explicit blocking note.\nB. Managed risk (do then verify): incomplete information, likely failure, incomplete edge cases, or quality uncertainty. Do not block the smallest reversible action; convert it to inspection, verification, comparison, or feedback.\nC. Informational risk (record only): style preference, future optimization, or more elegant approach; record only, never block execution.",
     riskFirstPrinciples:
-      "Risk-first principles:\n1. First identify key risks that affect correctness, safety, cost, commitments, or reversibility.\n2. For high-impact or irreversible risks, inspect, clarify, or reduce the risk before execution.\n3. Convert low-cost uncertainty into inspect, verify, or ask_user actions instead of committing to results directly.\n4. Proceed to execution only after the risk is reduced to manageable/verifiable or explicitly authorized by the user.\n5. Each round should complete at most one risk loop: identify -> reduce/confirm -> decide whether to execute.",
+      "Risk-first principles:\n1. First identify key risks that affect correctness, safety, cost, commitments, or reversibility.\n2. Only truly blocking risks should pause execution; convert normal uncertainty into inspection, verification, or a small trial.\n3. For high-impact or irreversible actions, inspect, clarify, or ask for confirmation first.\n4. When a risk is manageable or verifiable, continue execution and verify the result.",
     riskFirstRiskTaxonomy:
-      "Risk-first risk taxonomy:\nA. Blocking risk (handle first): irreversible/destructive, security/privacy/compliance, money/production, public commitments, requirement conflicts, or costly unverifiable actions; must inspect, ask_user, or provide a risk-reduction action first.\nB. Managed risk (reduce then do): incomplete information, quality uncertainty, unclear boundaries, or external feedback dependency; prefer inspection, verification, comparison, pilot, or confirmation.\nC. Informational risk (record only): style preference, future optimization, or minor uncertainty; record it but do not present it as a blocker.",
+      "Risk-first risk taxonomy:\nA. Blocking risk (handle first): irreversible/destructive, security/privacy/compliance, money/production, public commitments, clear requirement conflicts, or costly unverifiable actions; inspect, ask_user, or reduce risk first.\nB. Managed risk (control while doing): incomplete information, quality uncertainty, or unclear boundaries; convert to inspection, verification, comparison, or a pilot without blocking reversible small steps.\nC. Informational risk (record only): style preference, future optimization, or minor uncertainty; record it but do not present it as a blocker.",
     guidanceFailurePromptTemplate:
       "Guidance triggered by tool failure threshold ({reason}). Please analyze the causes of tool failures and provide suggestions for fixes.",
     acceptanceMainPlanContextHeader:
@@ -729,7 +729,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoalExecutionFirst:
       "Goal: generate the smallest executable plan slice for execution. Every slice must include verification. Do not wait until every uncertainty is gone; unless the task involves irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> take the smallest reversible action -> run the smallest verification/inspection -> fix based on results -> continue to the next slice or add acceptance notes; if verification is impossible, state why.",
     planningMainPromptGoalRiskFirst:
-      "Goal: generate the smallest plan slice for risk reduction. This is still a plan, but it should prioritize key risks that may block execution; do not list unlimited risks, only high-level steps that move the decision forward. Default to the identify risk -> inspect/clarify/reduce -> decide whether to execute loop. The plan should prefer: find the key uncertainty -> perform the smallest inspection or confirmation -> reduce the risk into an executable action -> then proceed to execution or acceptance notes.",
+      "Goal: generate the smallest plan slice that balances risk control with execution progress. Prioritize key risks that may block execution, but do not list unlimited risks; convert non-blocking risks into inspection/verification actions and keep moving. Prefer: find the key uncertainty -> perform the smallest inspection or confirmation -> form an executable action -> execute and verify.",
     planningMainUserGoalHeader: "[User Goal]",
     planningMainCurrentTaskGoalProtocol:
       "Before plan patch lines, output the current task goal using this text protocol: [CURRENT_TASK_GOAL]\\n<one concise current task goal synthesized by the planning model>\\n[PLAN]",
