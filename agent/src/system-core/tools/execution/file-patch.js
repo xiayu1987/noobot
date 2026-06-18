@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import path from "node:path";
 import { recoverableToolError } from "../../error/index.js";
 import { ERROR_CODE } from "../../error/constants.js";
 import {
@@ -10,11 +11,13 @@ import {
   assertValidFileNameFromPath,
 } from "../core/check-tool-input.js";
 import {
+  exists,
   isForbiddenWorkspaceRelativePath,
   normalizeSlash,
   splitLines,
   toPositiveInt,
 } from "./file-utils.js";
+import { getBasePathFromAgentContext } from "../../context/agent-context-accessor.js";
 
 function parseUnifiedHunkHeader(header = "") {
   const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/.exec(header);
@@ -39,6 +42,73 @@ function stripDiffPath(rawPath = "", strip = 1) {
   const parts = normalized.split("/").filter(Boolean);
   const stripCount = toPositiveInt(strip, 1, 0, 10);
   return parts.slice(stripCount).join("/") || normalized;
+}
+
+function uniqueStrings(values = []) {
+  return Array.from(new Set(values.map((item) => String(item || "").trim()).filter(Boolean)));
+}
+
+function buildPatchPathCandidates(filePath = "", agentContext = {}) {
+  const normalized = normalizeSlash(String(filePath || "").trim());
+  if (!normalized || normalized === "/dev/null") return [normalized];
+  const parts = normalized.split("/").filter(Boolean);
+  const candidates = [parts.join("/") || normalized];
+  const workspaceBaseName = path.basename(path.resolve(getBasePathFromAgentContext(agentContext) || "."));
+  const virtualRoots = new Set(["project", "workspace", "workdir", "repo", "repository", workspaceBaseName].filter(Boolean));
+  if (virtualRoots.has(parts[0]) && parts.length > 1) {
+    candidates.push(parts.slice(1).join("/"));
+  }
+  return uniqueStrings(candidates);
+}
+
+async function resolveCompatibleWorkspaceFilePath({
+  filePath = "",
+  agentContext = {},
+  fieldName = "filePath",
+  mustExist = false,
+} = {}) {
+  const candidates = buildPatchPathCandidates(filePath, agentContext);
+  let firstError = null;
+  if (mustExist) {
+    for (const candidate of candidates) {
+      try {
+        const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
+          filePath: candidate,
+          agentContext,
+          fieldName,
+          mustExist: false,
+        });
+        if (await exists(resolvedPath)) return { displayPath: candidate, resolvedPath };
+      } catch (error) {
+        firstError ||= error;
+      }
+    }
+    if (firstError && candidates.length === 1) throw firstError;
+    return {
+      displayPath: filePath,
+      resolvedPath: await assertAndResolveUserWorkspaceFilePath({ filePath, agentContext, fieldName, mustExist: true }),
+    };
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
+        filePath: candidate,
+        agentContext,
+        fieldName,
+        mustExist: false,
+      });
+      if (await exists(path.dirname(resolvedPath))) return { displayPath: candidate, resolvedPath };
+    } catch (error) {
+      firstError ||= error;
+    }
+  }
+  if (firstError && candidates.length === 1) throw firstError;
+  const fallback = candidates[0] || filePath;
+  return {
+    displayPath: fallback,
+    resolvedPath: await assertAndResolveUserWorkspaceFilePath({ filePath: fallback, agentContext, fieldName, mustExist: false }),
+  };
 }
 
 function normalizePatchText(patch = "") {
@@ -74,35 +144,28 @@ export function parseUnifiedDiff(patch = "", strip = 1) {
       const hunkLines = [];
       let oldSeen = 0;
       let newSeen = 0;
-      while (i < lines.length && (oldSeen < header.oldCount || newSeen < header.newCount)) {
+      while (i < lines.length) {
         if (lines[i] === "\\ No newline at end of file") {
           i += 1;
           continue;
         }
+        if (lines[i].startsWith("@@") || lines[i].startsWith("diff --git ")) break;
+        if (lines[i].startsWith("--- ") && lines[i + 1]?.startsWith("+++ ")) break;
         const prefix = lines[i][0];
-        if (![" ", "+", "-"].includes(prefix)) {
-          break;
-        }
+        if (![" ", "+", "-"].includes(prefix)) break;
         hunkLines.push({ type: prefix, text: lines[i].slice(1) });
         if (prefix !== "+") oldSeen += 1;
         if (prefix !== "-") newSeen += 1;
         i += 1;
       }
-      if (oldSeen !== header.oldCount || newSeen !== header.newCount) {
-        throw recoverableToolError("invalid unified diff: hunk body does not match header line counts", {
-          code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-          details: {
-            field: "patch",
-            oldStart: header.oldStart,
-            oldCount: header.oldCount,
-            oldSeen,
-            newStart: header.newStart,
-            newCount: header.newCount,
-            newSeen,
-          },
-        });
-      }
-      hunks.push({ ...header, lines: hunkLines });
+      hunks.push({
+        ...header,
+        oldCount: oldSeen,
+        newCount: newSeen,
+        declaredOldCount: header.oldCount,
+        declaredNewCount: header.newCount,
+        lines: hunkLines,
+      });
     }
     filePatches.push({
       oldPath,
@@ -313,13 +376,31 @@ export async function resolvePatchTargets({ patches = [], agentContext = {} } = 
         details: { field: "patch", filePath: targetPath },
       });
     }
-    const resolvedNewPath = item.newPath && item.newPath !== "/dev/null"
-      ? await assertAndResolveUserWorkspaceFilePath({ filePath: item.newPath, agentContext, fieldName: "patch.newPath", mustExist: false })
-      : "";
-    const resolvedOldPath = item.oldPath && item.oldPath !== "/dev/null"
-      ? await assertAndResolveUserWorkspaceFilePath({ filePath: item.oldPath, agentContext, fieldName: "patch.oldPath", mustExist: item.mode !== "add" })
-      : "";
-    resolved.push({ ...item, resolvedOldPath, resolvedNewPath });
+    const oldInfo = item.oldPath && item.oldPath !== "/dev/null"
+      ? await resolveCompatibleWorkspaceFilePath({
+        filePath: item.oldPath,
+        agentContext,
+        fieldName: "patch.oldPath",
+        mustExist: item.mode !== "add",
+      })
+      : { displayPath: item.oldPath, resolvedPath: "" };
+    const newInfo = item.newPath && item.newPath !== "/dev/null"
+      ? item.mode !== "add" && item.oldPath === item.newPath && oldInfo.resolvedPath
+        ? oldInfo
+        : await resolveCompatibleWorkspaceFilePath({
+          filePath: item.newPath,
+          agentContext,
+          fieldName: "patch.newPath",
+          mustExist: false,
+        })
+      : { displayPath: item.newPath, resolvedPath: "" };
+    resolved.push({
+      ...item,
+      oldPath: oldInfo.displayPath || item.oldPath,
+      newPath: newInfo.displayPath || item.newPath,
+      resolvedOldPath: oldInfo.resolvedPath,
+      resolvedNewPath: newInfo.resolvedPath,
+    });
   }
   return resolved;
 }

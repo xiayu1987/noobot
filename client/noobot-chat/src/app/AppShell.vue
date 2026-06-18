@@ -310,12 +310,17 @@ const chatMessageNavItems = computed(() =>
 );
 
 function handleSelectChatMessageNavItem(item = {}) {
-  currentMessageAnchorId.value = String(item?.id || "");
-  messageListPanelRef.value?.scrollToMessageAnchor?.(item?.id);
+  const anchor = String(item?.id || "").trim();
+  currentMessageAnchorId.value = anchor;
+  messageListPanelRef.value?.scrollToMessageAnchor?.(anchor);
   if (isMobile.value) {
     mobileChatNavigatorVisible.value = false;
-    pushPseudoRoute({ panel: "" });
   }
+  pushPseudoRoute({
+    sessionId: activeSessionId.value,
+    panel: "",
+    anchor,
+  });
 }
 
 function openChatMessageNavigator() {
@@ -323,6 +328,15 @@ function openChatMessageNavigator() {
   pushPseudoRoute({
     sessionId: activeSessionId.value,
     panel: PSEUDO_PANEL.CHAT_NAVIGATOR,
+    anchor: currentMessageAnchorId.value,
+  });
+}
+
+function handleMobileChatNavigatorClosed() {
+  replacePseudoRoute({
+    sessionId: activeSessionId.value,
+    panel: "",
+    anchor: currentMessageAnchorId.value,
   });
 }
 
@@ -601,6 +615,7 @@ function closeAllPseudoPanels() {
   closeMobileSidebar();
   closeComposerMorePanel();
   closeThinkingDetailsPanel();
+  mobileChatNavigatorVisible.value = false;
 }
 
 function resolveActivePseudoPanel() {
@@ -617,6 +632,7 @@ function resolveActivePseudoPanel() {
 async function applyPseudoRouteToUi(route = {}) {
   const targetSessionId = String(route.sessionId || "").trim();
   const targetPanel = String(route.panel || "").trim();
+  const targetAnchor = String(route.anchor || "").trim();
   closeAllPseudoPanels();
   if (targetSessionId) {
     await handleSelectSession(targetSessionId, {
@@ -633,6 +649,11 @@ async function applyPseudoRouteToUi(route = {}) {
   if (targetPanel === PSEUDO_PANEL.COMPOSER) composerMorePanelVisible.value = true;
   if (targetPanel === PSEUDO_PANEL.THINKING_DETAILS) openThinkingDetailsPanel({ pushRoute: false });
   if (targetPanel === PSEUDO_PANEL.CHAT_NAVIGATOR && isMobile.value) mobileChatNavigatorVisible.value = true;
+  if (targetAnchor) {
+    currentMessageAnchorId.value = targetAnchor;
+    await nextTick();
+    messageListPanelRef.value?.scrollToMessageAnchor?.(targetAnchor);
+  }
 }
 
 const {
@@ -646,6 +667,7 @@ const {
 } = usePseudoRoute({
   resolveCurrentSessionId: () => activeSessionId.value,
   resolveCurrentPanel: resolveActivePseudoPanel,
+  resolveCurrentAnchor: () => currentMessageAnchorId.value,
   applyRoute: applyPseudoRouteToUi,
 });
 
@@ -1271,7 +1293,7 @@ const drawerPanels = computed(() => [
         v-if="isMobile"
         v-model="mobileChatNavigatorVisible"
         :title="translate('common.chatNavigator')"
-        @closed="pushPseudoRoute({ panel: '' })"
+        @closed="handleMobileChatNavigatorClosed"
         direction="rtl"
         size="82%"
         class="chat-message-nav-drawer noobot-side-drawer"

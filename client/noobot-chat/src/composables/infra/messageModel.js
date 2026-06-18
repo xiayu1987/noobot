@@ -178,6 +178,10 @@ function buildAppendMessage(role, content = "", attachmentMetas = []) {
   });
 }
 
+function resolveStableMessageIdentity(messageItem = {}) {
+  return String(messageItem?.messageId || messageItem?.id || "").trim();
+}
+
 function buildViewMessage(
   messageItem = {},
   { userId = "", isImageMime = () => false } = {},
@@ -226,6 +230,15 @@ function foldConversationMessages(messages = [], buildView) {
     const previousDialogProcessId = String(
       previousMessage?.dialogProcessId || "",
     ).trim();
+    const currentStableMessageIdentity = resolveStableMessageIdentity(currentMessage);
+    const previousStableMessageIdentity = resolveStableMessageIdentity(previousMessage);
+    const hasDifferentStableMessageIdentity =
+      currentStableMessageIdentity &&
+      previousStableMessageIdentity &&
+      currentStableMessageIdentity !== previousStableMessageIdentity;
+    const hasUnpairedStableMessageIdentity = Boolean(
+      currentStableMessageIdentity || previousStableMessageIdentity,
+    ) && currentStableMessageIdentity !== previousStableMessageIdentity;
     const canMergeAssistantMessage =
       previousMessage &&
       currentRole === "assistant" &&
@@ -234,7 +247,9 @@ function foldConversationMessages(messages = [], buildView) {
       currentMessage?.workflowMessage !== true &&
       currentDialogProcessId &&
       previousDialogProcessId &&
-      currentDialogProcessId === previousDialogProcessId;
+      currentDialogProcessId === previousDialogProcessId &&
+      !hasDifferentStableMessageIdentity &&
+      !hasUnpairedStableMessageIdentity;
     if (!canMergeAssistantMessage) {
       mergedMessages.push(currentMessage);
       continue;
