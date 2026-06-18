@@ -54,6 +54,7 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
   const stableIndex = Number.isFinite(Number(messageIndex)) ? Number(messageIndex) : 0;
   const role = String(messageItem?.role || "").trim();
   const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
+  const messageRoundId = String(messageItem?.messageRoundId || "").trim();
   const taskId = String(messageItem?.taskId || "").trim();
   const toolCallId = String(messageItem?.tool_call_id || "").trim();
   // Do not include content or ts in the key: both can change when backend
@@ -61,6 +62,11 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
   // the message component, which looks like the AI message flashes and can also
   // make the previous message blink when a DONE snapshot is folded back.
   const stablePrimaryId = dialogProcessId || taskId || toolCallId || String(stableIndex);
+  if (role === "assistant" && messageRoundId) {
+    return [role, messageRoundId, stableIndex]
+      .map((item) => String(item ?? "").replaceAll("|", "/"))
+      .join("|");
+  }
   return [role, stablePrimaryId, stableIndex]
     .map((item) => String(item ?? "").replaceAll("|", "/"))
     .join("|");

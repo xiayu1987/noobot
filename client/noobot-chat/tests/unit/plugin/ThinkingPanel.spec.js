@@ -160,4 +160,104 @@ describe("ThinkingPanel", () => {
     expect(lines[9].text()).toBe("log-12");
     expect(executionPane.attributes("data-label")).toContain("12");
   });
+
+  it("does not backfill injected messages from previous round while current assistant is pending", () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: true,
+        dialogProcessId: "dialog-1",
+        messageRoundId: "round-2",
+        hasFirstStreamEvent: false,
+        realtimeLogs: [],
+        completedToolLogs: [],
+        executionLogTotal: 0,
+      },
+      {
+        allMessages: [
+          {
+            role: "user",
+            dialogProcessId: "dialog-1",
+            messageRoundId: "round-1",
+            injectedMessage: true,
+            injectedBy: "harness-plugin",
+            content: "previous injected context",
+          },
+        ],
+      },
+    );
+
+    expect(wrapper.text()).not.toContain("previous injected context");
+  });
+
+  it("does not backfill previous tool logs while current assistant is pending", () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: true,
+        dialogProcessId: "dialog-1",
+        realtimeLogs: [],
+        completedToolLogs: [],
+        executionLogTotal: 0,
+      },
+      {
+        allMessages: [
+          {
+            role: "assistant",
+            pending: false,
+            dialogProcessId: "dialog-1",
+            tool_calls: [{ function: { name: "previous_tool" } }],
+          },
+          {
+            role: "tool",
+            dialogProcessId: "dialog-1",
+            content: JSON.stringify({ toolName: "previous_tool", ok: true }),
+          },
+        ],
+      },
+    );
+
+    expect(wrapper.text()).not.toContain("previous_tool");
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
+  });
+
+  it("does not backfill previous round tool logs after current round starts streaming", () => {
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        pending: false,
+        dialogProcessId: "dialog-1",
+        messageRoundId: "round-2",
+        realtimeLogs: [],
+        completedToolLogs: [],
+        executionLogTotal: 0,
+      },
+      {
+        allMessages: [
+          {
+            role: "assistant",
+            pending: false,
+            dialogProcessId: "dialog-1",
+            messageRoundId: "round-1",
+            tool_calls: [{ function: { name: "previous_tool" } }],
+          },
+          {
+            role: "tool",
+            dialogProcessId: "dialog-1",
+            messageRoundId: "round-1",
+            content: JSON.stringify({ toolName: "previous_tool", ok: true }),
+          },
+          {
+            role: "tool",
+            dialogProcessId: "dialog-1",
+            messageRoundId: "round-2",
+            content: JSON.stringify({ toolName: "current_tool", ok: true }),
+          },
+        ],
+      },
+    );
+
+    expect(wrapper.text()).not.toContain("previous_tool");
+    expect(wrapper.text()).toContain("current_tool");
+  });
 });

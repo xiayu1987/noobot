@@ -13,7 +13,6 @@ import { emitEvent } from "../../../event/index.js";
 import { createStateCommitter } from "../execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../media/artifact-service.js";
 import {
-  extractAiReasoningText,
   invokeLlmWithTransientRetry,
   normalizeAiTextContent,
 } from "../llm-invoker.js";
@@ -29,7 +28,6 @@ import {
   formatToolCallsForStorage,
 } from "./tool-call-message.js";
 import {
-  buildReasoningRetrySystemMessage,
   maybeInvokeFinalStreamingNoTools,
 } from "./turn-stage.js";
 import { prepareToolBinding } from "./tool-binding-preparer.js";
@@ -39,7 +37,11 @@ import {
   normalizeToolTurnAi,
 } from "./tool-call-retry-stage.js";
 import { maybeRetryReasoningOnlyWithTools } from "./tool-reasoning-retry-stage.js";
+import { maybeRetryReasoningOnlyNoTools } from "./no-tools-reasoning-retry-stage.js";
+import { finalizeNoToolsStreamingTurn } from "./no-tools-final-stream-stage.js";
+import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
+import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
 export { normalizeToolResultAttachmentMetas } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
@@ -149,82 +151,42 @@ export async function invokeNoToolsTurn({
     additionalKwargs: modelResponse?.additional_kwargs ?? null,
     allowReasoningFallback: false,
   });
-  const reasoningText = extractAiReasoningText(modelResponse);
-  if (!responseContentText && reasoningText) {
-    emitEvent(eventListener, "llm_reasoning_only_retry_scheduled", {
-      turn,
-      mode: "no_tools",
-      reasoningChars: reasoningText.length,
-    });
-    messages.push({
-      role: "system",
-      content: buildReasoningRetrySystemMessage(reasoningText, locale),
-    });
-    modelResponse = await invokeLlmWithTransientRetry({
-      modelState,
-      turn,
-      mode: "no_tools_reasoning_retry",
-      invoke: ({ callbacks }) =>
-        invokeLlm.invoke(filterForModelContext(messages), {
-          callbacks,
-          signal: abortSignal,
-          ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
-          ...resolveNonThinkingCallOverrides(
-            runtime,
-            forceToolChoiceNone ? "none" : "",
-            modelState?.defaultModelSpec || {},
-          ),
-        }),
-    });
-    responseContentText = normalizeAiTextContent(modelResponse?.content, {
-      additionalKwargs: modelResponse?.additional_kwargs ?? null,
-      allowReasoningFallback: false,
-    });
-  }
-  const finalStreamResult = await maybeInvokeFinalStreamingNoTools({
+  const reasoningOnlyRetry = await maybeRetryReasoningOnlyNoTools({
+    modelResponse,
+    responseContentText,
+    messages,
+    invokeLlm,
     modelState,
-    baseMessages: messages,
-    fallbackAi: modelResponse,
-    fallbackText: responseContentText,
+    runtime,
+    abortSignal,
+    forceToolChoiceNone,
+    eventListener,
     turn,
-    mode: forceToolChoiceNone
-      ? "final_stream_no_tools_forced_none"
-      : "final_stream_no_tools",
+    locale,
   });
-  modelResponse = finalStreamResult.ai || modelResponse;
-  responseContentText = finalStreamResult.text || responseContentText;
-  messages.push(modelResponse);
+  if (reasoningOnlyRetry) {
+    ({ modelResponse, responseContentText } = reasoningOnlyRetry);
+  }
+  const finalStreamingTurn = await finalizeNoToolsStreamingTurn({
+    modelState,
+    messages,
+    modelResponse,
+    responseContentText,
+    turn,
+    forceToolChoiceNone,
+  });
+  ({ modelResponse, responseContentText } = finalStreamingTurn);
+  const { finalStreamResult } = finalStreamingTurn;
 
-  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
-  const currentModelInfo = resolveCurrentModelInfo(modelState);
-  const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
-  const stateCommitter = createStateCommitter({
+  const { turnMessageStore, turnTaskStore } = await commitNoToolsTurnState({
+    modelState,
+    loopState,
     messages,
     traces,
-    turnMessageStore,
-    dialogProcessId,
-    runtime,
-    agentContext: modelState?.agentContext || null,
+    modelResponse,
+    responseContentText,
+    turn,
   });
-
-  await stateCommitter.pushAssistantMessage({
-    content: responseContentText,
-    rawModelContent: modelResponse?.content ?? null,
-    modelAdditionalKwargs: modelResponse?.additional_kwargs ?? null,
-    modelResponseMetadata: modelResponse?.response_metadata ?? null,
-    type: "message",
-    toolCalls: [],
-    modelAlias: currentModelInfo.modelAlias,
-    modelName: currentModelInfo.modelName,
-  });
-  await persistModelGeneratedArtifacts({
-    aiContent: modelResponse?.content,
-    runtime,
-    eventListener,
-    dialogProcessId,
-    turnMessageStore,
-  });
-  emitEvent(eventListener, "llm_call_end", { turn, hasToolCalls: false, mode: "no_tools" });
 
   return {
     output: responseContentText,
@@ -439,22 +401,14 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     turn,
     hasToolCalls: Boolean(calls.length),
   });
-  if (!rawCalls.length && String(adaptedBinding?.bindOptions?.tool_choice || "") === "required") {
-    const systemRuntimeForRequired = getSystemRuntimeFromRuntime(runtime);
-    systemRuntimeForRequired.toolChoiceRequiredUnsupported = true;
-    emitEvent(eventListener, "llm_tool_choice_required_not_followed", {
-      turn,
-      toolChoice: "required",
-      modelAlias: currentModelInfo.modelAlias,
-      modelName: currentModelInfo.modelName,
-    });
-    emitEvent(eventListener, "tool_choice_downgraded_to_auto", {
-      turn,
-      reason: "required_not_followed",
-      modelAlias: currentModelInfo.modelAlias,
-      modelName: currentModelInfo.modelName,
-    });
-  }
+  handleRequiredToolChoiceNotFollowed({
+    rawCalls,
+    adaptedBinding,
+    runtime,
+    eventListener,
+    turn,
+    currentModelInfo,
+  });
 
   return {
     ai,

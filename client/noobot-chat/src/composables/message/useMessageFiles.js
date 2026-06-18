@@ -82,6 +82,24 @@ function getMessageAttachmentMetas(messageItem = {}) {
   return transferMetas.length ? mergeAttachmentMetas(transferMetas, base) : base;
 }
 
+function getMessageRoundId(messageItem = {}) {
+  return String(messageItem?.messageRoundId || "").trim();
+}
+
+function isSameMessageRound(rootMessage = {}, candidateMessage = {}) {
+  const rootRoundId = getMessageRoundId(rootMessage);
+  if (!rootRoundId) return true;
+  return getMessageRoundId(candidateMessage) === rootRoundId;
+}
+
+function isFreshPendingAssistant(messageItem = {}) {
+  return (
+    String(messageItem?.role || "").trim() === "assistant" &&
+    messageItem?.pending === true &&
+    messageItem?.hasFirstStreamEvent !== true
+  );
+}
+
 function isHarnessPluginInjectedMessage(messageItem = {}) {
   return (
     messageItem?.injectedMessage === true &&
@@ -253,6 +271,7 @@ export function useMessageFiles({
 
   const writtenFiles = computed(() => {
     const messageItem = getMessageItem() || {};
+    if (isFreshPendingAssistant(messageItem)) return [];
     const dialogProcessId = String(messageItem?.dialogProcessId || "").trim();
     if (!dialogProcessId) return [];
     const out = [];
@@ -268,6 +287,7 @@ export function useMessageFiles({
 
     for (const sessionMessage of candidateMessages) {
       if (String(sessionMessage?.role || "") !== "tool") continue;
+      if (!isSameMessageRound(messageItem, sessionMessage)) continue;
       const currentDialogId = String(sessionMessage?.dialogProcessId || "").trim();
       const parentId = String(sessionMessage?.parentDialogProcessId || "").trim();
       if (!relatedDialogIds.has(currentDialogId) && !relatedDialogIds.has(parentId)) {
@@ -316,6 +336,9 @@ export function useMessageFiles({
     if (String(messageItem?.role || "").trim() !== "assistant") {
       return baseAttachmentMetas;
     }
+    if (isFreshPendingAssistant(messageItem)) {
+      return baseAttachmentMetas;
+    }
     const rootDialogProcessId = String(messageItem?.dialogProcessId || "").trim();
     if (!rootDialogProcessId) return baseAttachmentMetas;
 
@@ -336,6 +359,9 @@ export function useMessageFiles({
       const messageParentDialogProcessId = String(
         sessionMessage?.parentDialogProcessId || "",
       ).trim();
+      if (!isSameMessageRound(messageItem, sessionMessage)) {
+        continue;
+      }
       if (
         !relatedDialogProcessIdSet.has(messageDialogProcessId) &&
         !relatedDialogProcessIdSet.has(messageParentDialogProcessId)
