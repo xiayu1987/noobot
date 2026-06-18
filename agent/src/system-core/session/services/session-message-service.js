@@ -95,8 +95,6 @@ export class SessionMessageService {
     frontendUserMessage = false,
     pluginMessage = false,
     pluginMeta = null,
-    workflowMessage = false,
-    workflowMeta = null,
     transferEnvelope = null,
     transferEnvelopes = [],
     isMonotonic = false,
@@ -159,13 +157,6 @@ export class SessionMessageService {
         typeof pluginMeta === "object" &&
         !Array.isArray(pluginMeta)
           ? pluginMeta
-          : null,
-      workflowMessage: workflowMessage === true,
-      workflowMeta:
-        workflowMeta &&
-        typeof workflowMeta === "object" &&
-        !Array.isArray(workflowMeta)
-          ? workflowMeta
           : null,
       transferEnvelope:
         transferEnvelope && typeof transferEnvelope === "object" && !Array.isArray(transferEnvelope)

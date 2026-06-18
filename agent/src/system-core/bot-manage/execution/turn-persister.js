@@ -137,8 +137,6 @@ export class SessionTurnPersister {
     frontendUserMessage = false,
     pluginMessage = false,
     pluginMeta = null,
-    workflowMessage = false,
-    workflowMeta = null,
     transferResult = null,
     transferEnvelope = null,
     transferEnvelopes = [],
@@ -208,13 +206,6 @@ export class SessionTurnPersister {
         !Array.isArray(pluginMeta)
           ? pluginMeta
           : null,
-      workflowMessage: workflowMessage === true,
-      workflowMeta:
-        workflowMeta &&
-        typeof workflowMeta === "object" &&
-        !Array.isArray(workflowMeta)
-          ? workflowMeta
-          : null,
       ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
       ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
@@ -273,8 +264,6 @@ export class SessionTurnPersister {
       frontendUserMessage,
       pluginMessage,
       pluginMeta,
-      workflowMessage,
-      workflowMeta,
       ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
       ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
@@ -345,13 +334,6 @@ export class SessionTurnPersister {
           typeof messageItem.pluginMeta === "object" &&
           !Array.isArray(messageItem.pluginMeta)
             ? messageItem.pluginMeta
-            : null,
-        workflowMessage: messageItem.workflowMessage === true,
-        workflowMeta:
-          messageItem.workflowMeta &&
-          typeof messageItem.workflowMeta === "object" &&
-          !Array.isArray(messageItem.workflowMeta)
-            ? messageItem.workflowMeta
             : null,
         transferResult:
           messageItem.transferResult &&

@@ -16,6 +16,7 @@ import ConversationStateDebugPanel from "../modules/debug/ConversationStateDebug
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageListPanel from "./ChatMessageListPanel.vue";
 import ChatMessageNavigator from "./ChatMessageNavigator.vue";
+import { buildAppShellDrawerPanels } from "./state/drawerPanelsState";
 import ThinkingPanel from "../shared/message/ThinkingPanel.vue";
 import SessionSidebar from "../modules/session/SessionSidebar.vue";
 import { useApiConnection } from "../composables/infra/useApiConnection";
@@ -28,7 +29,60 @@ import { usePanelState } from "../composables/infra/usePanelState";
 import { PSEUDO_PANEL, usePseudoRoute } from "../composables/infra/usePseudoRoute";
 import { frontendConfig } from "../shared/config/frontendConfig";
 import { postOpenVSCodeServerApi } from "../services/api/chatApi";
-import { sanitizeExecutionLogText } from "../composables/chat/chatEngine/utils";
+import {
+  clampMobileChatNavigatorTriggerPosition,
+  loadMobileChatNavigatorTriggerPosition,
+  persistMobileChatNavigatorTriggerPosition,
+} from "./mobileChatNavigatorTriggerPosition";
+import { createChatMessageScrollSync } from "./chatMessageScrollSync";
+import {
+  hasStoredSelectedPluginKeys,
+  loadSelectedPluginKeys,
+  normalizeAvailablePlugins,
+  persistSelectedPlugins as persistSelectedPluginsState,
+  syncSelectedPluginsWithConfig as syncSelectedPluginsWithConfigState,
+} from "./state/pluginSelectionState";
+import {
+  closeChatMessageNavigator,
+  openChatMessageNavigator as openChatMessageNavigatorState,
+  selectChatMessageNavigatorItem,
+} from "./state/chatMessageNavigatorState";
+import {
+  buildThinkingDetailsRoute,
+  getThinkingDetailsTitle as getThinkingDetailsTitleState,
+  resolveFallbackThinkingDetailsPayload as resolveFallbackThinkingDetailsPayloadState,
+  resolveThinkingDetailsPanelPayload,
+} from "./state/thinkingDetailsState";
+import { buildChatMessageNavItems } from "./state/chatMessageNavItemsState";
+import {
+  buildClosePseudoPanelRoute,
+  buildPanelPseudoRoute,
+  buildPanelVisibilityPseudoRoute,
+  buildSessionPseudoRoute,
+  resolveActivePseudoPanel as resolveActivePseudoPanelState,
+} from "./payload/appShellRoutePayload";
+import {
+  classifyRealtimeLog,
+  formatFileSize,
+  formatTime,
+  hasActiveSessionForReconnect as hasActiveSessionForReconnectState,
+  isImageMime,
+} from "./state/sessionMessageState";
+import {
+  shouldOpenOpenVSCodeInCurrentTab as shouldOpenOpenVSCodeInCurrentTabState,
+  submitInteractionCancel,
+  submitInteractionConfirm,
+  updateDrawerModelVisibility,
+} from "./appShellEventHandlers";
+import {
+  loadUiPreferences,
+  normalizeAvailableBotScenarios,
+  syncBotScenarioWithConfig as syncBotScenarioWithConfigState,
+  updateAllowUserInteractionPreference,
+  updateBotScenarioPreference,
+  updateForceToolPreference,
+  updateStreamOutputPreference,
+} from "./storage/uiPreferencesStorage";
 
 // --- Markdown rendering (module-level singleton) ---
 const { renderMarkdown } = useMarkdownRenderer();
@@ -56,23 +110,14 @@ const {
 } = usePanelState();
 
 // --- LocalStorage-backed refs ---
-const userId = ref(localStorage.getItem("noobot_user_id") || "user-001");
-const allowUserInteraction = ref(
-  localStorage.getItem("noobot_allow_user_interaction") !== "false",
-);
-const forceTool = ref(localStorage.getItem("noobot_force_tool") === "true");
-const streamOutput = ref(localStorage.getItem("noobot_stream_output") !== "false");
-const botScenario = ref(
-  String(localStorage.getItem("noobot_bot_scenario") || "").trim(),
-);
-const SELECTED_PLUGINS_STORAGE_KEY = "noobot_selected_plugins";
-const DEFAULT_ON_PLUGINS_STORAGE_KEY = "noobot_default_on_plugins";
-const hasStoredSelectedPlugins = ref(
-  localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY) !== null,
-);
-const selectedPlugins = ref(
-  safeParseStringArray(localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY)),
-);
+const uiPreferences = loadUiPreferences();
+const userId = ref(uiPreferences.userId);
+const allowUserInteraction = ref(uiPreferences.allowUserInteraction);
+const forceTool = ref(uiPreferences.forceTool);
+const streamOutput = ref(uiPreferences.streamOutput);
+const botScenario = ref(uiPreferences.botScenario);
+const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys());
+const selectedPlugins = ref(loadSelectedPluginKeys());
 const composerRef = ref();
 const messageListPanelRef = ref();
 const composerMorePanelVisible = ref(false);
@@ -106,32 +151,6 @@ function setMobileChatNavigatorDragLock(locked) {
   else window?.removeEventListener?.("touchmove", preventMobileChatNavigatorDocumentTouch, { passive: false });
 }
 
-function safeParseStringArray(rawValue = "") {
-  try {
-    const parsed = JSON.parse(String(rawValue || "[]"));
-    return Array.isArray(parsed)
-      ? parsed.map((item) => String(item || "").trim()).filter(Boolean)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-
-function loadMobileChatNavigatorTriggerPosition() {
-  const defaultPosition = { right: 16, bottom: 112 };
-  try {
-    const rawValue = localStorage.getItem("noobot_mobile_chat_navigator_trigger_position");
-    if (!rawValue) return defaultPosition;
-    const parsed = JSON.parse(rawValue);
-    const left = Number(parsed?.left);
-    const top = Number(parsed?.top);
-    return Number.isFinite(left) && Number.isFinite(top) ? { left, top } : defaultPosition;
-  } catch {
-    return defaultPosition;
-  }
-}
-
 const mobileChatNavigatorTriggerStyle = computed(() => {
   const position = mobileChatNavigatorTriggerPosition.value || {};
   if (Number.isFinite(Number(position.left)) && Number.isFinite(Number(position.top))) {
@@ -149,28 +168,6 @@ const mobileChatNavigatorTriggerStyle = computed(() => {
     top: "auto",
   };
 });
-
-function clampMobileChatNavigatorTriggerPosition(left, top) {
-  const triggerSize = 44;
-  const edgeGap = 8;
-  const viewportWidth = Number(window?.innerWidth || 0);
-  const viewportHeight = Number(window?.innerHeight || 0);
-  return {
-    left: Math.min(Math.max(edgeGap, Number(left || 0)), Math.max(edgeGap, viewportWidth - triggerSize - edgeGap)),
-    top: Math.min(Math.max(edgeGap, Number(top || 0)), Math.max(edgeGap, viewportHeight - triggerSize - edgeGap)),
-  };
-}
-
-function persistMobileChatNavigatorTriggerPosition(position = {}) {
-  try {
-    localStorage.setItem(
-      "noobot_mobile_chat_navigator_trigger_position",
-      JSON.stringify({ left: Math.round(Number(position.left || 0)), top: Math.round(Number(position.top || 0)) }),
-    );
-  } catch {
-    // Ignore storage quota/privacy errors.
-  }
-}
 
 function preventMobileChatNavigatorTriggerGesture(event) {
   event?.stopPropagation?.();
@@ -254,287 +251,95 @@ const {
 });
 
 // --- Bot scenario ---
-const availableBotScenarios = computed(() => {
-  const definitions =
-    scenarioConfig?.value?.definitions &&
-    typeof scenarioConfig.value.definitions === "object"
-      ? scenarioConfig.value.definitions
-      : {};
-  const scenarioKeys = Object.keys(definitions)
-    .map((scenarioKey) => String(scenarioKey || "").trim())
-    .filter(Boolean);
-  if (!scenarioKeys.length) return [];
-  return scenarioKeys.map((scenarioKey) => ({
-    key: scenarioKey,
-    label: String(definitions?.[scenarioKey]?.name || "").trim(),
-    description: String(definitions?.[scenarioKey]?.description || "").trim(),
-  }));
-});
+const availableBotScenarios = computed(() => normalizeAvailableBotScenarios(
+  scenarioConfig?.value?.definitions,
+));
 
 const availablePlugins = computed(() => {
   const definitions =
     scenarioConfig?.value?.plugins && typeof scenarioConfig.value.plugins === "object"
       ? scenarioConfig.value.plugins
       : {};
-  return Object.entries(definitions)
-    .map(([pluginKey, pluginDefinition]) => {
-      const source = pluginDefinition && typeof pluginDefinition === "object" ? pluginDefinition : {};
-      return {
-        key: String(pluginKey || "").trim(),
-        label: String(source?.label || source?.name || pluginKey || "").trim(),
-        description: String(source?.description || "").trim(),
-        enabled: source?.enabled === true,
-        mode: String(source?.mode || "")
-          .trim()
-          .toLowerCase() === "on"
-          ? "on"
-          : "off",
-      };
-    })
-    .filter((pluginItem) => Boolean(pluginItem.key) && pluginItem.enabled === true);
+  return normalizeAvailablePlugins(definitions);
 });
 
-const chatMessageNavItems = computed(() =>
-  (activeSession.value?.messages || [])
-    .map((messageItem = {}, messageIndex = 0) => {
-      if (!shouldRenderMessageInChat(messageItem)) return null;
-      const anchorId = messageListPanelRef.value?.getMessageAnchorId?.(messageItem, messageIndex);
-      const role = String(messageItem?.role || translate("common.session")).trim();
-      const content = String(messageItem?.content || messageItem?.text || "").replace(/\s+/g, " ").trim();
-      return {
-        id: anchorId || `chat-message-${messageIndex}`,
-        title: `${messageIndex + 1}. ${role}${content ? `：${content.slice(0, 28)}` : ""}`,
-      };
-    })
-    .filter(Boolean),
-);
+const chatMessageNavItems = computed(() => buildChatMessageNavItems({
+  messages: activeSession.value?.messages || [],
+  shouldRenderMessageInChat,
+  getMessageAnchorId: messageListPanelRef.value?.getMessageAnchorId,
+  translateSession: () => translate("common.session"),
+}));
 
 function handleSelectChatMessageNavItem(item = {}) {
-  const anchor = String(item?.id || "").trim();
-  currentMessageAnchorId.value = anchor;
-  messageListPanelRef.value?.scrollToMessageAnchor?.(anchor);
-  if (isMobile.value) {
-    mobileChatNavigatorVisible.value = false;
-  }
-  pushPseudoRoute({
-    sessionId: activeSessionId.value,
-    panel: "",
-    anchor,
+  selectChatMessageNavigatorItem({
+    item,
+    currentMessageAnchorId,
+    messageListPanelRef,
+    isMobile,
+    mobileChatNavigatorVisible,
+    activeSessionId,
+    pushPseudoRoute,
   });
 }
 
 function openChatMessageNavigator() {
-  mobileChatNavigatorVisible.value = true;
-  pushPseudoRoute({
-    sessionId: activeSessionId.value,
-    panel: PSEUDO_PANEL.CHAT_NAVIGATOR,
-    anchor: currentMessageAnchorId.value,
+  openChatMessageNavigatorState({
+    mobileChatNavigatorVisible,
+    activeSessionId,
+    currentMessageAnchorId,
+    chatNavigatorPanel: PSEUDO_PANEL.CHAT_NAVIGATOR,
+    pushPseudoRoute,
   });
 }
 
 function handleMobileChatNavigatorClosed() {
-  replacePseudoRoute({
-    sessionId: activeSessionId.value,
-    panel: "",
-    anchor: currentMessageAnchorId.value,
+  closeChatMessageNavigator({
+    activeSessionId,
+    currentMessageAnchorId,
+    replacePseudoRoute,
   });
 }
 
-function syncCurrentMessageAnchorId() {
-  const wrapRef = messageListPanelRef.value?.getWrapRef?.();
-  if (!wrapRef) return;
-  const anchors = Array.from(wrapRef.querySelectorAll?.("[data-chat-message-anchor]") || []);
-  if (!anchors.length) {
-    currentMessageAnchorId.value = "";
-    return;
-  }
-  const threshold = Number(wrapRef.scrollTop || 0) + 24;
-  let currentAnchor = anchors[0];
-  for (const anchor of anchors) {
-    if (Number(anchor.offsetTop || 0) <= threshold) currentAnchor = anchor;
-    else break;
-  }
-  currentMessageAnchorId.value = String(
-    currentAnchor?.dataset?.chatMessageAnchor || currentAnchor?.id || "",
-  );
-}
-
-function bindChatMessageScrollSync() {
-  const wrapRef = messageListPanelRef.value?.getWrapRef?.();
-  if (!wrapRef || wrapRef.__noobotChatNavScrollSyncBound) return;
-  wrapRef.addEventListener?.("scroll", syncCurrentMessageAnchorId, { passive: true });
-  wrapRef.__noobotChatNavScrollSyncBound = true;
-  syncCurrentMessageAnchorId();
-}
-
-function unbindChatMessageScrollSync() {
-  const wrapRef = messageListPanelRef.value?.getWrapRef?.();
-  if (!wrapRef || !wrapRef.__noobotChatNavScrollSyncBound) return;
-  wrapRef.removeEventListener?.("scroll", syncCurrentMessageAnchorId);
-  delete wrapRef.__noobotChatNavScrollSyncBound;
-}
-
-function persistSelectedPlugins() {
-  hasStoredSelectedPlugins.value = true;
-  localStorage.setItem(SELECTED_PLUGINS_STORAGE_KEY, JSON.stringify(selectedPlugins.value));
-}
-
-function getDefaultOnPluginKeys(pluginOptions = []) {
-  return (Array.isArray(pluginOptions) ? pluginOptions : [])
-    .filter(
-      (pluginItem) =>
-        pluginItem?.enabled === true &&
-        String(pluginItem?.mode || "").toLowerCase() === "on",
-    )
-    .map((pluginItem) => String(pluginItem?.key || "").trim())
-    .filter(Boolean);
-}
-
-function persistDefaultOnPluginKeys(pluginKeys = []) {
-  const normalizedPluginKeys = (Array.isArray(pluginKeys) ? pluginKeys : [])
-    .map((pluginKey) => String(pluginKey || "").trim())
-    .filter(Boolean);
-  localStorage.setItem(
-    DEFAULT_ON_PLUGINS_STORAGE_KEY,
-    JSON.stringify(Array.from(new Set(normalizedPluginKeys))),
-  );
-}
-
-function syncSelectedPluginsWithConfig() {
-  const pluginOptions = Array.isArray(availablePlugins.value) ? availablePlugins.value : [];
-  if (!pluginOptions.length) {
-    // 连接前 scenarioConfig 为空，避免把本地已选插件误清空并持久化。
-    return;
-  }
-  const availablePluginKeySet = new Set(pluginOptions.map((item) => item.key));
-  const enabledPluginKeySet = new Set(
-    pluginOptions.filter((item) => item.enabled === true).map((item) => item.key),
-  );
-  const defaultOnPluginKeys = getDefaultOnPluginKeys(pluginOptions);
-  const previousDefaultOnPluginKeySet = new Set(
-    safeParseStringArray(localStorage.getItem(DEFAULT_ON_PLUGINS_STORAGE_KEY)),
-  );
-  if (!hasStoredSelectedPlugins.value) {
-    selectedPlugins.value = defaultOnPluginKeys;
-    persistDefaultOnPluginKeys(defaultOnPluginKeys);
-    return;
-  }
-  const selectedPluginKeySet = new Set(
-    selectedPlugins.value.filter((pluginKey) =>
-      availablePluginKeySet.has(pluginKey) && enabledPluginKeySet.has(pluginKey),
-    ),
-  );
-  // 配置从“非工作流/插件 off”切回“插件 mode=on”时，本地已持久化的 []
-  // 不应永久压过新的后端默认开启配置；只补齐“本次配置新增为默认开启”的插件。
-  for (const pluginKey of defaultOnPluginKeys) {
-    if (!previousDefaultOnPluginKeySet.has(pluginKey)) {
-      selectedPluginKeySet.add(pluginKey);
-    }
-  }
-  selectedPlugins.value = Array.from(selectedPluginKeySet);
-  persistDefaultOnPluginKeys(defaultOnPluginKeys);
-  persistSelectedPlugins();
-}
-
-function syncBotScenarioWithConfig() {
-  const configuredDefaultScenario = String(
-    scenarioConfig?.value?.default || "",
-  ).trim();
-  const currentScenario = String(botScenario.value || "").trim();
-  const savedScenario = String(localStorage.getItem("noobot_bot_scenario") || "").trim();
-  const availableScenarioKeySet = new Set(
-    availableBotScenarios.value
-      .map((scenarioItem) => String(scenarioItem?.key || "").trim())
-      .filter(Boolean),
-  );
-
-  if (!availableScenarioKeySet.size) {
-    botScenario.value =
-      currentScenario || savedScenario || configuredDefaultScenario || "";
-    return;
-  }
-
-  if (savedScenario && availableScenarioKeySet.has(savedScenario)) {
-    botScenario.value = savedScenario;
-    return;
-  }
-
-  if (currentScenario && availableScenarioKeySet.has(currentScenario)) {
-    return;
-  }
-
-  const nextScenario =
-    (configuredDefaultScenario && availableScenarioKeySet.has(configuredDefaultScenario)
-      ? configuredDefaultScenario
-      : "") || "";
-  botScenario.value = nextScenario;
-  localStorage.setItem("noobot_bot_scenario", nextScenario);
-}
-
-// --- Chat session ---
-const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
-
-function classifyRealtimeLog(data = {}) {
-  const eventName = String(data.event || "").trim();
-  const text = sanitizeExecutionLogText(data.text || "");
-  const category = String(data.category || "").trim();
-  const type = String(data.type || "").trim();
-  const isTool =
-    category === "tool" ||
-    TOOL_LOG_TYPES.has(type) ||
-    TOOL_LOG_TYPES.has(eventName) ||
-    eventName.startsWith("tool_") ||
-    text.startsWith("[tool]") ||
-    text.includes('"tool_call_id"');
-  return {
-    ...data,
-    event: eventName || "system",
-    type: type || (isTool ? "tool_call" : "system"),
-    text,
-    dialogProcessId: String(data.dialogProcessId || ""),
-    ts: String(data.ts || new Date().toISOString()),
-    category: isTool ? "tool" : "system",
-    subAgentCall: Boolean(data.subAgentCall),
-    subAgentSessionId: String(data.subAgentSessionId || ""),
-    subAgentLabel: String(data.subAgentLabel || ""),
-    subAgentTask: String(data.subAgentTask || ""),
-  };
-}
-
-function isImageMime(type = "") {
-  return type.startsWith("image/");
-}
-
-function formatFileSize(size = 0) {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatTime(ts) {
-  return new Date(ts).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const {
+  bindChatMessageScrollSync,
+  unbindChatMessageScrollSync,
+} = createChatMessageScrollSync({
+  currentMessageAnchorId,
+  messageListPanelRef,
+});
 
 function scrollBottom() {
   nextTick(() => {
-    const messageListPanel = messageListPanelRef.value;
-    if (!messageListPanel) return;
-    const run = () => {
-      const wrap = messageListPanel.getWrapRef?.();
-      const top = Number(wrap?.scrollHeight || 0);
-      if (typeof messageListPanel.setScrollTop === "function") {
-        messageListPanel.setScrollTop(top);
-        return;
-      }
-      wrap?.scrollTo?.({ top, behavior: "smooth" });
-    };
-    requestAnimationFrame(() => requestAnimationFrame(run));
+    const panel = messageListPanelRef.value;
+    const wrapRef = panel?.getWrapRef?.();
+    if (!wrapRef) return;
+    const top = Number(wrapRef.scrollHeight || 0);
+    if (typeof panel?.setScrollTop === "function") panel.setScrollTop(top);
+    else wrapRef.scrollTop = top;
   });
 }
 
+function persistSelectedPlugins() {
+  persistSelectedPluginsState({ selectedPlugins, hasStoredSelectedPlugins });
+}
+
+function syncSelectedPluginsWithConfig() {
+  syncSelectedPluginsWithConfigState({
+    pluginOptions: availablePlugins.value,
+    selectedPlugins,
+    hasStoredSelectedPlugins,
+  });
+}
+
+function syncBotScenarioWithConfig() {
+  syncBotScenarioWithConfigState({
+    configuredDefaultScenario: scenarioConfig?.value?.default,
+    availableBotScenarios: availableBotScenarios.value,
+    preferenceRef: botScenario,
+  });
+}
+
+// --- Chat session ---
 const {
   input,
   uploadFiles,
@@ -592,11 +397,10 @@ const showConversationStateDebugPanel = computed(
 
 // --- Reconnect ---
 function hasActiveSessionForReconnect() {
-  return Boolean(
-    String(activeSession.value?.backendSessionId || "").trim() ||
-      String(activeSession.value?.id || "").trim() ||
-      String(activeSessionId.value || "").trim(),
-  );
+  return hasActiveSessionForReconnectState({
+    activeSession: activeSession.value,
+    activeSessionId: activeSessionId.value,
+  });
 }
 
 const { reconnectActiveSession } = useReconnect({
@@ -619,14 +423,17 @@ function closeAllPseudoPanels() {
 }
 
 function resolveActivePseudoPanel() {
-  if (workspaceVisible.value) return PSEUDO_PANEL.WORKSPACE;
-  if (userSettingsVisible.value) return PSEUDO_PANEL.USER_SETTINGS;
-  if (configParamsVisible.value) return PSEUDO_PANEL.CONFIG_PARAMS;
-  if (mobileSidebarOpen.value && isMobile.value) return PSEUDO_PANEL.SIDEBAR;
-  if (composerMorePanelVisible.value) return PSEUDO_PANEL.COMPOSER;
-  if (thinkingDetailsVisible.value) return PSEUDO_PANEL.THINKING_DETAILS;
-  if (mobileChatNavigatorVisible.value && isMobile.value) return PSEUDO_PANEL.CHAT_NAVIGATOR;
-  return "";
+  return resolveActivePseudoPanelState({
+    workspaceVisible: workspaceVisible.value,
+    userSettingsVisible: userSettingsVisible.value,
+    configParamsVisible: configParamsVisible.value,
+    mobileSidebarOpen: mobileSidebarOpen.value,
+    isMobile: isMobile.value,
+    composerMorePanelVisible: composerMorePanelVisible.value,
+    thinkingDetailsVisible: thinkingDetailsVisible.value,
+    mobileChatNavigatorVisible: mobileChatNavigatorVisible.value,
+    panels: PSEUDO_PANEL,
+  });
 }
 
 async function applyPseudoRouteToUi(route = {}) {
@@ -684,10 +491,7 @@ async function handleSelectSession(sessionId, options = {}) {
     nextSessionId &&
     nextSessionId !== previousSessionId
   ) {
-    pushPseudoRoute({
-      sessionId: nextSessionId,
-      panel: "",
-    });
+    pushPseudoRoute(buildSessionPseudoRoute(nextSessionId));
   }
 }
 
@@ -716,10 +520,7 @@ function openWorkspace() {
   }
   closeComposerMorePanel();
   openWorkspaceRaw();
-  pushPseudoRoute({
-    sessionId: activeSessionId.value,
-    panel: PSEUDO_PANEL.WORKSPACE,
-  });
+  pushPseudoRoute(buildPanelPseudoRoute(activeSessionId.value, PSEUDO_PANEL.WORKSPACE));
 }
 
 async function openUserSettings() {
@@ -734,10 +535,7 @@ async function openUserSettings() {
   }
   closeComposerMorePanel();
   openUserSettingsRaw();
-  pushPseudoRoute({
-    sessionId: activeSessionId.value,
-    panel: PSEUDO_PANEL.USER_SETTINGS,
-  });
+  pushPseudoRoute(buildPanelPseudoRoute(activeSessionId.value, PSEUDO_PANEL.USER_SETTINGS));
 }
 
 async function openOpenVSCode() {
@@ -776,33 +574,31 @@ async function openOpenVSCode() {
 
 function shouldOpenOpenVSCodeInCurrentTab() {
   const userAgent = typeof navigator === "undefined" ? "" : String(navigator.userAgent || "");
-  return isMobile.value || /Android/i.test(userAgent);
+  return shouldOpenOpenVSCodeInCurrentTabState({ isMobile: isMobile.value, userAgent });
 }
 
 function openConfigParams() {
   if (!ensureConnected()) return;
   closeComposerMorePanel();
   openConfigParamsRaw();
-  pushPseudoRoute({
-    sessionId: activeSessionId.value,
-    panel: PSEUDO_PANEL.CONFIG_PARAMS,
-  });
+  pushPseudoRoute(buildPanelPseudoRoute(activeSessionId.value, PSEUDO_PANEL.CONFIG_PARAMS));
 }
 
 function handleToggleSidebar() {
   toggleSidebar();
   if (isMobile.value) {
     if (mobileSidebarOpen.value) closeComposerMorePanel();
-    pushPseudoRoute({
+    pushPseudoRoute(buildPanelVisibilityPseudoRoute({
       sessionId: activeSessionId.value,
-      panel: mobileSidebarOpen.value ? PSEUDO_PANEL.SIDEBAR : "",
-    });
+      visible: mobileSidebarOpen.value,
+      panel: PSEUDO_PANEL.SIDEBAR,
+    }));
   }
 }
 
 function handleCloseMobileSidebar() {
   closeMobileSidebar();
-  pushPseudoRoute({ panel: "" });
+  pushPseudoRoute(buildClosePseudoPanelRoute());
 }
 
 function handleComposerMorePanelVisibleUpdate(value) {
@@ -813,94 +609,61 @@ function handleComposerMorePanelVisibleUpdate(value) {
     closeMobileSidebar();
   }
   composerMorePanelVisible.value = nextVisible;
-  pushPseudoRoute({
+  pushPseudoRoute(buildPanelVisibilityPseudoRoute({
     sessionId: activeSessionId.value,
-    panel: nextVisible ? PSEUDO_PANEL.COMPOSER : "",
-  });
+    visible: nextVisible,
+    panel: PSEUDO_PANEL.COMPOSER,
+  }));
 }
 
 function resolveFallbackThinkingDetailsPayload() {
-  const messages = activeSession.value?.rawMessages || activeSession.value?.messages || [];
-  const messageItem = [...messages].reverse().find((item = {}) =>
-    item?.role === "assistant" && (item?.pending || Array.isArray(item?.realtimeLogs) || Array.isArray(item?.completedToolLogs))
-  );
-  return { messageItem: messageItem || null, allMessages: messages };
+  return resolveFallbackThinkingDetailsPayloadState(activeSession.value);
 }
 
 function closeThinkingDetailsPanel() {
   thinkingDetailsVisible.value = false;
 }
 
-function getThinkingDetailsCount(messageItem = {}) {
-  if (Array.isArray(messageItem?.completedToolLogs)) {
-    return messageItem.completedToolLogs.length;
-  }
-  if (Array.isArray(messageItem?.toolCalls)) {
-    return messageItem.toolCalls.length;
-  }
-  if (Array.isArray(messageItem?.realtimeLogs)) {
-    return messageItem.realtimeLogs.filter((logItem = {}) => {
-      const event = String(logItem?.event || logItem?.type || "").toLowerCase();
-      return event.includes("tool") || event.includes("function");
-    }).length;
-  }
-  return 0;
-}
-
 function getThinkingDetailsTitle(messageItem = {}) {
-  return translate("message.thinkingDetails", { count: getThinkingDetailsCount(messageItem) });
+  return getThinkingDetailsTitleState(messageItem, translate);
 }
 
 function openThinkingDetailsPanel(payload = {}) {
   const fallbackPayload = resolveFallbackThinkingDetailsPayload();
-  const messageItem = payload?.messageItem || fallbackPayload.messageItem;
+  const { messageItem, allMessages } = resolveThinkingDetailsPanelPayload(payload, fallbackPayload);
   if (!messageItem) return;
   closeAllDrawers();
   closeMobileSidebar();
   closeComposerMorePanel();
   thinkingDetailsMessageItem.value = messageItem;
-  thinkingDetailsAllMessages.value = Array.isArray(payload?.allMessages)
-    ? payload.allMessages
-    : fallbackPayload.allMessages;
+  thinkingDetailsAllMessages.value = allMessages;
   thinkingDetailsVisible.value = true;
   if (payload?.pushRoute !== false) {
-    pushPseudoRoute({
-      sessionId: activeSessionId.value,
-      panel: PSEUDO_PANEL.THINKING_DETAILS,
-    });
+    pushPseudoRoute(buildThinkingDetailsRoute(activeSessionId.value, PSEUDO_PANEL.THINKING_DETAILS));
   }
 }
 
 function handleDrawerModelUpdate(drawer = {}, value = false) {
-  const nextVisible = Boolean(value);
-  const model = drawer?.model;
-  if (!model || typeof model !== "object" || !("value" in model)) return;
-  if (model.value === nextVisible) return;
-  model.value = nextVisible;
-  if (!nextVisible) {
-    pushPseudoRoute({ panel: "" });
-  }
+  const { closed } = updateDrawerModelVisibility({ drawer, value });
+  if (closed) pushPseudoRoute(buildClosePseudoPanelRoute());
 }
 
 // --- Interaction handlers ---
 function handleInteractionConfirm(payload = {}) {
-  try {
-    submitInteractionResponse(payload || {});
-  } catch (error) {
-    notifyUi({ type: "error", message: error.message || translate("common.interactionSubmitFailed") });
-  }
+  submitInteractionConfirm({
+    payload,
+    submitInteractionResponse,
+    notify: notifyUi,
+    translate,
+  });
 }
 
 function handleInteractionCancel() {
-  try {
-    submitInteractionResponse({
-      confirmed: false,
-      cancelled: true,
-      response: "cancelled",
-    });
-  } catch (error) {
-    notifyUi({ type: "error", message: error.message || translate("common.interactionCancelFailed") });
-  }
+  submitInteractionCancel({
+    submitInteractionResponse,
+    notify: notifyUi,
+    translate,
+  });
 }
 
 async function onAppMounted() {
@@ -985,33 +748,23 @@ watch(
 );
 
 function onAllowUserInteractionUpdate(value) {
-  allowUserInteraction.value = Boolean(value);
-  localStorage.setItem(
-    "noobot_allow_user_interaction",
-    allowUserInteraction.value ? "true" : "false",
-  );
+  updateAllowUserInteractionPreference({ preferenceRef: allowUserInteraction, value });
 }
 
 function onForceToolUpdate(value) {
-  forceTool.value = Boolean(value);
-  localStorage.setItem("noobot_force_tool", forceTool.value ? "true" : "false");
+  updateForceToolPreference({ preferenceRef: forceTool, value });
 }
 
 function onStreamOutputUpdate(value) {
-  streamOutput.value = Boolean(value);
-  localStorage.setItem("noobot_stream_output", streamOutput.value ? "true" : "false");
+  updateStreamOutputPreference({ preferenceRef: streamOutput, value });
 }
 
 function onBotScenarioUpdate(value = "") {
-  const nextScenario = String(value || "").trim();
-  const availableScenarioKeySet = new Set(
-    availableBotScenarios.value
-      .map((scenarioItem) => String(scenarioItem?.key || "").trim())
-      .filter(Boolean),
-  );
-  botScenario.value =
-    nextScenario && availableScenarioKeySet.has(nextScenario) ? nextScenario : "";
-  localStorage.setItem("noobot_bot_scenario", botScenario.value);
+  updateBotScenarioPreference({
+    preferenceRef: botScenario,
+    value,
+    availableBotScenarios: availableBotScenarios.value,
+  });
 }
 
 function onSelectedPluginsUpdate(value = []) {
@@ -1053,57 +806,27 @@ async function onConnectorSelected({
   }
 }
 
-const drawerPanels = computed(() => [
-  {
-    key: "workspace",
-    model: workspaceVisible,
-    title: translate("common.workspace"),
-    component: WorkspacePanel,
-    props: {
-      userId: userId.value,
-      apiKey: apiKey.value,
-      connected: connected.value,
-      active: workspaceVisible.value,
-      isSuperAdmin: isSuperAdmin.value,
-    },
-    onWorkspaceReset: handleWorkspaceReset,
-  },
-  {
-    key: "user-settings",
-    model: userSettingsVisible,
-    title: translate("common.userSettings"),
-    component: UserSettingsPanel,
-    props: {
-      apiKey: apiKey.value,
-      connected: connected.value,
-      active: userSettingsVisible.value,
-    },
-  },
-  {
-    key: "thinking-details",
-    model: thinkingDetailsVisible,
-    title: getThinkingDetailsTitle(thinkingDetailsMessageItem.value || {}),
-    component: ThinkingPanel,
-    props: {
-      messageItem: thinkingDetailsMessageItem.value || {},
-      allMessages: thinkingDetailsAllMessages.value,
-      variant: "details",
-    },
-  },
-  {
-    key: "config-params",
-    model: configParamsVisible,
-    title: translate("common.configParams"),
-    component: ConfigParamsPanel,
-    props: {
-      userId: userId.value,
-      isSuperAdmin: isSuperAdmin.value,
-      apiKey: apiKey.value,
-      connected: connected.value,
-      active: configParamsVisible.value,
-    },
-  },
-]);
+const drawerPanels = computed(() =>
+  buildAppShellDrawerPanels({
+    translate,
+    workspaceVisible,
+    userSettingsVisible,
+    thinkingDetailsVisible,
+    configParamsVisible,
+    WorkspacePanel,
+    UserSettingsPanel,
+    ThinkingPanel,
+    ConfigParamsPanel,
+    userId: userId.value,
+    apiKey: apiKey.value,
+    connected: connected.value,
+    isSuperAdmin: isSuperAdmin.value,
+    thinkingDetailsMessageItem: thinkingDetailsMessageItem.value || {},
+    thinkingDetailsAllMessages: thinkingDetailsAllMessages.value,
+    getThinkingDetailsTitle,
+    handleWorkspaceReset,
+  })
+);
 </script>
 
 <template>

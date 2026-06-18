@@ -330,9 +330,10 @@ export async function appendWorkflowPlanningMessage({
     ...(mergedTransferPayload.transferEnvelopes.length
       ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
       : {}),
-    workflowMessage: true,
-    workflowMeta: {
+    pluginMessage: true,
+    pluginMeta: {
       source: "workflow-plugin",
+      kind: "workflow",
       phase: "planning",
       semanticInvokerUsed: semanticResolution?.invoked === true,
       sourceTextPreview: String(sourceText || "").slice(0, 800),
@@ -341,10 +342,10 @@ export async function appendWorkflowPlanningMessage({
     },
   };
   const existing = turnMessages.find((messageItem = {}) => {
-    if (messageItem?.workflowMessage !== true) return false;
+    if (messageItem?.pluginMessage !== true) return false;
     if (String(messageItem?.dialogProcessId || "").trim() !== dialogProcessId) return false;
-    const meta = messageItem?.workflowMeta && typeof messageItem.workflowMeta === "object"
-      ? messageItem.workflowMeta
+    const meta = messageItem?.pluginMeta && typeof messageItem.pluginMeta === "object"
+      ? messageItem.pluginMeta
       : {};
     return String(meta?.source || "").trim() === "workflow-plugin";
   });

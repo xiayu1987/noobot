@@ -27,8 +27,8 @@ function getBasePath(agentContext) {
   );
 }
 
-function toSkillDisplayPath({ filePath = "", runtime = {}, agentContext = null } = {}) {
-  const normalizedPath = String(filePath || "").trim();
+function toSkillDisplayPath({ targetPath = "", runtime = {}, agentContext = null } = {}) {
+  const normalizedPath = String(targetPath || "").trim();
   if (!normalizedPath) return "";
   return (
     resolveSandboxPath({
@@ -78,7 +78,7 @@ export function createSkillTool({ agentContext }) {
         items.push({
           name: entry.name,
           type: entry.isDirectory() ? "dir" : "file",
-          path: toSkillDisplayPath({ filePath: level1FullPath, runtime, agentContext }),
+          path: toSkillDisplayPath({ targetPath: level1FullPath, runtime, agentContext }),
         });
 
         if (!entry.isDirectory()) continue;
@@ -89,7 +89,7 @@ export function createSkillTool({ agentContext }) {
           items.push({
             name: child.name,
             type: child.isDirectory() ? "dir" : "file",
-            path: toSkillDisplayPath({ filePath: childFullPath, runtime, agentContext }),
+            path: toSkillDisplayPath({ targetPath: childFullPath, runtime, agentContext }),
           });
         }
       }

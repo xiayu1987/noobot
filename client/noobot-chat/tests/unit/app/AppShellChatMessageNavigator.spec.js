@@ -8,24 +8,53 @@ const appShellSource = readFileSync(
   resolve(__dirname, "../../../src/app/AppShell.vue"),
   "utf8",
 );
+const mobileChatNavigatorTriggerPositionSource = readFileSync(
+  resolve(__dirname, "../../../src/app/mobileChatNavigatorTriggerPosition.js"),
+  "utf8",
+);
+const chatMessageScrollSyncSource = readFileSync(
+  resolve(__dirname, "../../../src/app/chatMessageScrollSync.js"),
+  "utf8",
+);
+const chatMessageNavigatorStateSource = readFileSync(
+  resolve(__dirname, "../../../src/app/state/chatMessageNavigatorState.js"),
+  "utf8",
+);
+const chatMessageNavItemsStateSource = readFileSync(
+  resolve(__dirname, "../../../src/app/state/chatMessageNavItemsState.js"),
+  "utf8",
+);
 
 describe("AppShell chat message navigator", () => {
   it("builds navigator items from active session messages and delegates selection to the message list", () => {
     expect(appShellSource).toContain("const chatMessageNavItems = computed(() =>");
-    expect(appShellSource).toContain("activeSession.value?.messages || []");
-    expect(appShellSource).toContain("messageListPanelRef.value?.getMessageAnchorId?.(messageItem, messageIndex)");
+    expect(appShellSource).toContain("buildChatMessageNavItems({");
+    expect(appShellSource).toContain("messages: activeSession.value?.messages || []");
+    expect(appShellSource).toContain("getMessageAnchorId: messageListPanelRef.value?.getMessageAnchorId");
+    expect(chatMessageNavItemsStateSource).toContain("export function buildChatMessageNavItems({");
+    expect(chatMessageNavItemsStateSource).toContain("shouldRenderMessageInChat");
+    expect(chatMessageNavItemsStateSource).toContain("getMessageAnchorId(messageItem, messageIndex)");
+    expect(chatMessageNavItemsStateSource).toContain("content.slice(0, 28)");
     expect(appShellSource).toContain("function handleSelectChatMessageNavItem(item = {})");
-    expect(appShellSource).toContain("const anchor = String(item?.id || \"\").trim();");
-    expect(appShellSource).toContain("messageListPanelRef.value?.scrollToMessageAnchor?.(anchor)");
+    expect(appShellSource).toContain("selectChatMessageNavigatorItem({");
+    expect(chatMessageNavigatorStateSource).toContain("function normalizeChatMessageNavigatorAnchor(item = {})");
+    expect(chatMessageNavigatorStateSource).toContain("return String(item?.id || \"\").trim();");
+    expect(chatMessageNavigatorStateSource).toContain("messageListPanelRef.value?.scrollToMessageAnchor?.(anchor)");
   });
 
   it("syncs the highlighted navigator item from scroll position", () => {
-    expect(appShellSource).toContain("function syncCurrentMessageAnchorId()");
-    expect(appShellSource).toContain('querySelectorAll?.("[data-chat-message-anchor]")');
-    expect(appShellSource).toContain("currentMessageAnchorId.value = String(");
-    expect(appShellSource).toContain("function bindChatMessageScrollSync()");
-    expect(appShellSource).toContain('wrapRef.addEventListener?.("scroll", syncCurrentMessageAnchorId, { passive: true })');
+    expect(appShellSource).toContain('import { createChatMessageScrollSync } from "./chatMessageScrollSync";');
+    expect(appShellSource).toContain("} = createChatMessageScrollSync({");
+    expect(appShellSource).toContain("currentMessageAnchorId,");
+    expect(appShellSource).toContain("messageListPanelRef,");
+    expect(chatMessageScrollSyncSource).toContain("function syncCurrentMessageAnchorId()");
+    expect(chatMessageScrollSyncSource).toContain('querySelectorAll?.("[data-chat-message-anchor]")');
+    expect(chatMessageScrollSyncSource).toContain("currentMessageAnchorId.value = String(");
+    expect(chatMessageScrollSyncSource).toContain("function bindChatMessageScrollSync()");
+    expect(chatMessageScrollSyncSource).toContain('wrapRef.addEventListener?.("scroll", syncCurrentMessageAnchorId, { passive: true })');
+    expect(chatMessageScrollSyncSource).toContain("function unbindChatMessageScrollSync()");
     expect(appShellSource).toContain("nextTick(bindChatMessageScrollSync)");
+    expect(appShellSource).toContain("unbindChatMessageScrollSync();");
   });
 
   it("uses Element Plus anchor on desktop and drawer on mobile", () => {
@@ -56,7 +85,9 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain("chat-message-nav-title-group");
     expect(appShellSource).toContain("{{ chatMessageNavItems.length }}");
     expect(appShellSource).toContain("position: fixed;");
-    expect(appShellSource).toContain("const defaultPosition = { right: 16, bottom: 112 };");
+    expect(mobileChatNavigatorTriggerPositionSource).toContain(
+      "DEFAULT_MOBILE_CHAT_NAVIGATOR_TRIGGER_POSITION = { right: 16, bottom: 112 }",
+    );
     expect(appShellSource).toContain(":style=\"mobileChatNavigatorTriggerStyle\"");
     expect(appShellSource).toContain("@pointerdown=\"handleMobileChatNavigatorTriggerPointerDown\"");
     expect(appShellSource).toContain("@pointermove=\"handleMobileChatNavigatorTriggerPointerMove\"");
@@ -69,20 +100,32 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain('import { Tickets } from "@element-plus/icons-vue"');
     expect(appShellSource).toContain("<el-icon><Tickets /></el-icon>");
     expect(appShellSource).toContain("<el-icon class=\"mobile-chat-message-nav-trigger-icon\"><Tickets /></el-icon>");
+    expect(appShellSource).toContain("} from \"./state/chatMessageNavigatorState\";");
     expect(appShellSource).toContain("function openChatMessageNavigator()");
-    expect(appShellSource).toContain("panel: PSEUDO_PANEL.CHAT_NAVIGATOR");
+    expect(appShellSource).toContain("openChatMessageNavigatorState({");
+    expect(appShellSource).toContain("chatNavigatorPanel: PSEUDO_PANEL.CHAT_NAVIGATOR");
     expect(appShellSource).toContain("function handleMobileChatNavigatorClosed()");
+    expect(appShellSource).toContain("closeChatMessageNavigator({");
     expect(appShellSource).toContain("@closed=\"handleMobileChatNavigatorClosed\"");
-    expect(appShellSource).toContain("replacePseudoRoute({");
+    expect(chatMessageNavigatorStateSource).toContain("replacePseudoRoute(buildChatMessageNavigatorCloseRoute({");
     expect(appShellSource).toContain("background: var(--noobot-panel-bg);");
     expect(appShellSource).toContain("border: 1px solid var(--noobot-border-soft);");
   });
 
   it("lets users drag and persist the mobile navigator trigger position", () => {
-    expect(appShellSource).toContain("function loadMobileChatNavigatorTriggerPosition()");
-    expect(appShellSource).toContain("noobot_mobile_chat_navigator_trigger_position");
-    expect(appShellSource).toContain("function clampMobileChatNavigatorTriggerPosition(left, top)");
-    expect(appShellSource).toContain("function persistMobileChatNavigatorTriggerPosition(position = {})");
+    expect(appShellSource).toContain("} from \"./mobileChatNavigatorTriggerPosition\";");
+    expect(mobileChatNavigatorTriggerPositionSource).toContain(
+      "function loadMobileChatNavigatorTriggerPosition()",
+    );
+    expect(mobileChatNavigatorTriggerPositionSource).toContain(
+      "noobot_mobile_chat_navigator_trigger_position",
+    );
+    expect(mobileChatNavigatorTriggerPositionSource).toContain(
+      "function clampMobileChatNavigatorTriggerPosition(left, top)",
+    );
+    expect(mobileChatNavigatorTriggerPositionSource).toContain(
+      "function persistMobileChatNavigatorTriggerPosition(position = {})",
+    );
     expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerDown(event)");
     expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerMove(event)");
     expect(appShellSource).toContain("function handleMobileChatNavigatorTriggerPointerUp(event)");

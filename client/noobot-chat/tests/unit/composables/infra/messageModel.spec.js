@@ -117,7 +117,7 @@ describe("messageModel semantic transfer", () => {
 });
 
 describe("messageModel workflow messages", () => {
-  it("infers workflow messages from type/workflowMeta for card matching and folding", () => {
+  it("infers workflow messages from canonical pluginMeta for card matching and folding", () => {
     const messages = foldConversationMessages([
       {
         role: "assistant",
@@ -129,8 +129,10 @@ describe("messageModel workflow messages", () => {
         type: "workflow",
         content: "workflow plan",
         dialogProcessId: "dp-workflow",
-        workflowMeta: {
+        pluginMessage: true,
+        pluginMeta: {
           source: "workflow-plugin",
+          kind: "workflow",
           phase: "planning",
           payload: { semantic: { nodes: [{ id: "n1", type: "action" }] } },
         },

@@ -6,6 +6,7 @@
 <script setup>
 import { nextTick, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { translateHarnessFallback, useHarnessLocale } from "../i18n";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -20,10 +21,14 @@ const operating = ref(false);
 const editing = ref(false);
 const draftContent = ref("");
 const textareaRef = ref(null);
+const { translate: translateHarness } = useHarnessLocale();
 
-function t(key, fallback) {
-  const translated = props.translate(key);
-  return translated && translated !== key ? translated : fallback;
+function t(key) {
+  const fallbackTranslated = translateHarnessFallback(key);
+  const translated = props.translate(key, fallbackTranslated);
+  if (translated && translated !== key) return translated;
+  const localTranslated = translateHarness(key);
+  return localTranslated && localTranslated !== key ? localTranslated : fallbackTranslated;
 }
 
 function markEditing(value) {
@@ -39,7 +44,7 @@ async function runAction(action) {
   try {
     await action();
   } catch (error) {
-    ElMessage.error(error?.message || t("message.monotonicActionFailed", "操作失败，请稍后重试"));
+    ElMessage.error(error?.message || t("message.monotonicActionFailed"));
   } finally {
     operating.value = false;
   }
@@ -65,7 +70,7 @@ function handleCancelEdit() {
 async function handleSendEdited() {
   const nextContent = String(draftContent.value || "").trim();
   if (!nextContent) {
-    ElMessage.error(t("message.contentRequired", "内容不能为空"));
+    ElMessage.error(t("message.contentRequired"));
     return;
   }
   await runAction(async () => {
@@ -77,12 +82,12 @@ async function handleSendEdited() {
 async function handleDelete() {
   await runAction(async () => {
     await ElMessageBox.confirm(
-      t("message.monotonicDeleteConfirm", "将删除这条消息及其之后的所有消息，是否继续？"),
-      t("message.monotonicDeleteTitle", "删除单调消息"),
+      t("message.monotonicDeleteConfirm"),
+      t("message.monotonicDeleteTitle"),
       {
         type: "warning",
-        confirmButtonText: t("common.confirm", "确认"),
-        cancelButtonText: t("common.cancel", "取消"),
+        confirmButtonText: t("common.confirm"),
+        cancelButtonText: t("common.cancel"),
       },
     );
     await props.onDelete(props.messageItem);
@@ -99,7 +104,7 @@ async function handleDelete() {
           v-model="draftContent"
           class="monotonic-edit-textarea"
           :disabled="disabled || operating"
-          :placeholder="t('message.monotonicEditPlaceholder', '编辑这条消息后重新发送')"
+          :placeholder="t('message.monotonicEditPlaceholder')"
           rows="4"
           @keydown.ctrl.enter.prevent="handleSendEdited"
           @keydown.meta.enter.prevent="handleSendEdited"
@@ -107,7 +112,7 @@ async function handleDelete() {
         />
         <div class="monotonic-edit-footer">
           <span class="monotonic-edit-tip">
-            {{ t("message.monotonicEditTip", "发送会先删除这条消息及其之后的消息，再重新生成。") }}
+            {{ t("message.monotonicEditTip") }}
           </span>
           <div class="monotonic-edit-buttons">
             <button
@@ -116,7 +121,7 @@ async function handleDelete() {
               :disabled="operating"
               @click="handleCancelEdit"
             >
-              {{ t("common.cancel", "取消") }}
+              {{ t("common.cancel") }}
             </button>
             <button
               type="button"
@@ -125,7 +130,7 @@ async function handleDelete() {
               @click="handleSendEdited"
             >
               <span v-if="operating" class="monotonic-spinner" />
-              {{ t("message.monotonicSendEdited", "发送") }}
+              {{ t("message.monotonicSendEdited") }}
             </button>
           </div>
         </div>
@@ -141,7 +146,7 @@ async function handleDelete() {
           @click="handleEdit"
         >
           <span class="monotonic-btn-icon">✎</span>
-          {{ t("message.monotonicEdit", "编辑") }}
+          {{ t("message.monotonicEdit") }}
         </button>
         <button
           v-if="onDelete"
@@ -151,7 +156,7 @@ async function handleDelete() {
           @click="handleDelete"
         >
           <span class="monotonic-btn-icon">⌫</span>
-          {{ t("message.monotonicDelete", "删除") }}
+          {{ t("message.monotonicDelete") }}
         </button>
       </div>
     </template>

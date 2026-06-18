@@ -16,6 +16,9 @@ function normalizeText(value = "") {
   return String(value || "").trim().toLowerCase();
 }
 
+const GENERATED_STATUS_LABEL = "\u5df2\u751f\u6210";
+const STOPPED_STATUS_LABEL = "\u5df2\u505c\u6b62";
+
 function isMonotonicMessage(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return false;
   if (messageItem.isMonotonic === true || messageItem.monotonic === true) return true;
@@ -24,7 +27,7 @@ function isMonotonicMessage(messageItem = {}) {
   const state = normalizeText(messageItem.state || messageItem.status || messageItem.channelState);
   if (["completed", "done", "stopped"].includes(state)) return true;
   const label = normalizeText(messageItem.statusLabel);
-  return ["generated", "已生成", "stopped", "已停止"].includes(label);
+  return ["generated", GENERATED_STATUS_LABEL, "stopped", STOPPED_STATUS_LABEL].includes(label);
 }
 
 function isUserMessage(messageItem = {}) {
