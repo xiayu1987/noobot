@@ -399,7 +399,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
   assert.equal(Array.isArray(beforeContext.overrideAgentResult?.turnMessages), true);
   assert.equal(
     beforeContext.overrideAgentResult.turnMessages.some(
-      (item) => item?.workflowMessage === true,
+      (item) => item?.pluginMessage === true && item?.pluginMeta?.kind === "workflow",
     ),
     true,
   );

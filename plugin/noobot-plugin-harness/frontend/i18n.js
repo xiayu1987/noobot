@@ -10,17 +10,43 @@ const FALLBACK_LOCALE = "zh-CN";
 
 const HARNESS_FRONTEND_MESSAGES = Object.freeze({
   "zh-CN": Object.freeze({
+    common: Object.freeze({
+      confirm: "确认",
+      cancel: "取消",
+    }),
     message: Object.freeze({
       toolResultFallback: "tool_result",
       injectedSourceHarness: "harness-plugin",
       unknownShort: "unknown",
+      monotonicActionFailed: "操作失败，请稍后重试",
+      contentRequired: "内容不能为空",
+      monotonicDeleteConfirm: "将删除这条消息及其之后的所有消息，是否继续？",
+      monotonicDeleteTitle: "删除单调消息",
+      monotonicEditPlaceholder: "编辑这条消息后重新发送",
+      monotonicEditTip: "发送会先删除这条消息及其之后的消息，再重新生成。",
+      monotonicSendEdited: "发送",
+      monotonicEdit: "编辑",
+      monotonicDelete: "删除",
     }),
   }),
   "en-US": Object.freeze({
+    common: Object.freeze({
+      confirm: "Confirm",
+      cancel: "Cancel",
+    }),
     message: Object.freeze({
       toolResultFallback: "tool_result",
       injectedSourceHarness: "harness-plugin",
       unknownShort: "unknown",
+      monotonicActionFailed: "Action failed. Please try again later.",
+      contentRequired: "Content is required",
+      monotonicDeleteConfirm: "Delete this message and all following messages?",
+      monotonicDeleteTitle: "Delete monotonic message",
+      monotonicEditPlaceholder: "Edit this message and send again",
+      monotonicEditTip: "Sending will delete this message and all following messages, then regenerate.",
+      monotonicSendEdited: "Send",
+      monotonicEdit: "Edit",
+      monotonicDelete: "Delete",
     }),
   }),
 });
@@ -38,6 +64,14 @@ function applyParams(text = "", params = {}) {
     output = output.replaceAll(`{${key}}`, String(value ?? ""));
   }
   return output;
+}
+
+
+export function translateHarnessFallback(key = "", params = {}) {
+  const fallbackTable = HARNESS_FRONTEND_MESSAGES[FALLBACK_LOCALE] || {};
+  const raw = resolvePath(fallbackTable, key);
+  if (raw === undefined || raw === null) return String(key || "");
+  return applyParams(raw, params);
 }
 
 export function useHarnessLocale() {

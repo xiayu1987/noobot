@@ -91,22 +91,20 @@ function isHarnessInjectedMessage(messageItem = {}) {
 }
 
 function normalizeWorkflowMeta(messageItem = {}) {
-  return messageItem?.workflowMeta &&
-    typeof messageItem.workflowMeta === "object" &&
-    !Array.isArray(messageItem.workflowMeta)
-    ? messageItem.workflowMeta
+  return messageItem?.pluginMeta &&
+    typeof messageItem.pluginMeta === "object" &&
+    !Array.isArray(messageItem.pluginMeta)
+    ? messageItem.pluginMeta
     : null;
 }
 
 function isWorkflowMessageLike(messageItem = {}) {
-  if (messageItem?.workflowMessage === true) return true;
   const type = String(messageItem?.type || "").trim().toLowerCase();
-  if (type === "workflow") return true;
   const workflowMeta = normalizeWorkflowMeta(messageItem);
   const source = String(workflowMeta?.source || "").trim().toLowerCase();
-  if (source === "workflow-plugin") return true;
+  const kind = String(workflowMeta?.kind || "").trim().toLowerCase();
   const phase = String(workflowMeta?.phase || "").trim().toLowerCase();
-  return Boolean(workflowMeta && phase);
+  return type === "workflow" && source === "workflow-plugin" && kind === "workflow" && Boolean(phase);
 }
 
 function createMessageModel(messageItem = {}) {
@@ -164,6 +162,8 @@ function createMessageModel(messageItem = {}) {
     injectedMessage: messageItem.injectedMessage === true,
     injectedBy: String(messageItem.injectedBy || "").trim(),
     workflowMessage: isWorkflowMessageLike(messageItem),
+    pluginMessage: messageItem.pluginMessage === true,
+    pluginMeta: workflowMeta,
     workflowMeta,
   };
 }

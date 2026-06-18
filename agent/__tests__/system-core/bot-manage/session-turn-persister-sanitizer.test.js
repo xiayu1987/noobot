@@ -131,7 +131,7 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
   assert.equal(JSON.parse(fullTurnLog.content).sessionPersistence, "summary_only");
 });
 
-test("SessionTurnPersister preserves workflow message metadata for workflow graph rendering", async () => {
+test("SessionTurnPersister persists canonical plugin metadata without old concrete-plugin fields", async () => {
   const appendedTurns = [];
   const executionLogs = [];
   const session = {
@@ -143,8 +143,9 @@ test("SessionTurnPersister preserves workflow message metadata for workflow grap
     },
   };
   const persister = new SessionTurnPersister({ session });
-  const workflowMeta = {
+  const pluginMeta = {
     source: "workflow-plugin",
+    kind: "workflow",
     phase: "planning",
     payload: {
       semantic: {
@@ -162,16 +163,20 @@ test("SessionTurnPersister preserves workflow message metadata for workflow grap
         role: "assistant",
         type: "workflow",
         content: "WORKFLOW_DSL/1",
-        workflowMessage: true,
-        workflowMeta,
+        pluginMessage: true,
+        pluginMeta,
       },
     ],
     dialogProcessId: "dp1",
   });
 
   assert.equal(appendedTurns.length, 1);
-  assert.equal(appendedTurns[0].workflowMessage, true);
-  assert.equal(appendedTurns[0].workflowMeta?.payload?.semantic?.nodes?.length, 1);
-  assert.equal(executionLogs[0]?.data?.workflowMessage, true);
-  assert.equal(executionLogs[0]?.data?.workflowMeta?.payload?.semantic?.flowtos?.length, 1);
+  assert.equal(appendedTurns[0].pluginMessage, true);
+  assert.equal(appendedTurns[0].pluginMeta?.payload?.semantic?.nodes?.length, 1);
+  assert.equal(appendedTurns[0].workflowMessage, undefined);
+  assert.equal(appendedTurns[0].workflowMeta, undefined);
+  assert.equal(executionLogs[0]?.data?.pluginMessage, true);
+  assert.equal(executionLogs[0]?.data?.pluginMeta?.payload?.semantic?.flowtos?.length, 1);
+  assert.equal(executionLogs[0]?.data?.workflowMessage, undefined);
+  assert.equal(executionLogs[0]?.data?.workflowMeta, undefined);
 });

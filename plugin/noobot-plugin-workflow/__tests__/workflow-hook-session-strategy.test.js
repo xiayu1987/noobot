@@ -176,7 +176,7 @@ function callsByNodeName(calls = []) {
 }
 
 function workflowTurn(agentResult) {
-  return (agentResult?.turnMessages || []).find((item) => item?.workflowMessage === true);
+  return (agentResult?.turnMessages || []).find((item) => item?.pluginMessage === true && item?.pluginMeta?.kind === "workflow");
 }
 test("workflow hook uses injected sub-session strategy and marks workflow message", async () => {
   const hookManager = createMockBotHookManager();
@@ -347,9 +347,9 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
   assert.equal(String(workflowTurnMessage?.content || "").includes("message-node-done"), false);
   assert.equal(String(workflowTurnMessage?.content || "").includes("answer-node-done"), false);
-  assert.equal(workflowTurnMessage?.workflowMeta?.source, "workflow-plugin");
+  assert.equal(workflowTurnMessage?.pluginMeta?.source, "workflow-plugin");
   assert.equal(
-    workflowTurnMessage?.workflowMeta?.payload?.execution?.nodeAgentRuns?.[0]?.nodeResultText,
+    workflowTurnMessage?.pluginMeta?.payload?.execution?.nodeAgentRuns?.[0]?.nodeResultText,
     undefined,
   );
   const hasPayloadBuiltEvent = eventLogCalls.some(

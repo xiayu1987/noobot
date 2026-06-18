@@ -49,10 +49,10 @@ function handleOpenThinkingDetails(payload = {}) {
 }
 
 const workflowMeta = computed(() =>
-  props.messageItem?.workflowMeta &&
-  typeof props.messageItem.workflowMeta === "object" &&
-  !Array.isArray(props.messageItem.workflowMeta)
-    ? props.messageItem.workflowMeta
+  props.messageItem?.pluginMeta &&
+  typeof props.messageItem.pluginMeta === "object" &&
+  !Array.isArray(props.messageItem.pluginMeta)
+    ? props.messageItem.pluginMeta
     : {},
 );
 
@@ -491,7 +491,7 @@ function normalizeNodeMessageForDisplay(messageItem = {}) {
   const content = String(item?.content || "").trim();
   return {
     ...item,
-    workflowMessage: false,
+    pluginMessage: false,
     content: content || renderableMessageContent(item),
   };
 }

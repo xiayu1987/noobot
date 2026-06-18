@@ -73,7 +73,7 @@ const TOOL_INPUT_OVERFLOW_POLICIES = Object.freeze([
     name: ({ args = {} } = {}) =>
       `${basenameOrFallback(args?.filePath, "write-file-content")}.tool-input.txt`,
     meta: ({ args = {} } = {}) => ({
-      filePath: normalizeString(args?.filePath),
+      targetPath: normalizeString(args?.filePath),
     }),
   }),
   Object.freeze({
