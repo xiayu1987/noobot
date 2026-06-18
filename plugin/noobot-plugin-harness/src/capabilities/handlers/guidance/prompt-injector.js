@@ -19,10 +19,7 @@ import {
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildGuidanceFailurePromptText,
   buildGuidanceSummaryPromptText,
-  resolveExecutionFirstModeFromContext,
-  resolveProgrammingModeFromContext,
-  resolveRiskFirstModeFromContext,
-  resolveWorkflowStrategyFromContext,
+  resolveWorkflowStrategyFlagsFromContext,
   getGuidanceMarker,
   getGuidanceSummaryMarker,
 } from "../shared/workflow/prompts.js";
@@ -58,10 +55,12 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
   const locale = state?.locale || LOCALE.ZH_CN;
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
-  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
-  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
 
   const requestedAction = String(action || "auto").trim().toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === "summary";

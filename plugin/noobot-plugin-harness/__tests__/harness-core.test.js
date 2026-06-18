@@ -513,6 +513,38 @@ test("harness policy prompt de-dupes against messageBlocks source during pseudo 
   );
 });
 
+test("harness policy prompt branches by workflow strategy without explicit risk-first wording", async () => {
+  const buildInjectedPolicy = async (extraOptions = {}) => {
+    const ctx = { messages: [{ role: "user", content: "hello" }] };
+    await injectPrompt("before_llm_call", ctx, {
+      enabled: true,
+      promptPolicy: true,
+      promptText: "",
+      promptPriority: 80,
+      writePrompts: false,
+      ...extraOptions,
+    });
+    return String(ctx.messages[0]?.content || "");
+  };
+
+  const executionFirstPrompt = await buildInjectedPolicy({ workflowStrategy: "execution_first" });
+  assert.match(executionFirstPrompt, /noobot-harness-policy/);
+  assert.match(executionFirstPrompt, /用户隔离/);
+  assert.match(executionFirstPrompt, /执行优先/);
+  assert.match(executionFirstPrompt, /最小切片/);
+  assert.match(executionFirstPrompt, /不断推进任务/);
+
+  const riskPrompt = await buildInjectedPolicy({ workflowStrategy: "risk_first" });
+  assert.match(riskPrompt, /noobot-harness-policy/);
+  assert.doesNotMatch(riskPrompt, /风险优先|risk first/i);
+  assert.doesNotMatch(riskPrompt, /执行优先|最小切片|不断推进任务/);
+
+  const defaultPrompt = await buildInjectedPolicy();
+  assert.match(defaultPrompt, /noobot-harness-policy/);
+  assert.match(defaultPrompt, /用户隔离/);
+  assert.doesNotMatch(defaultPrompt, /执行优先|风险优先|risk first/i);
+});
+
 test("harness plugin injects prompt into before_llm_call messages", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();

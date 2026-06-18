@@ -37,10 +37,7 @@ import {
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
-  resolveExecutionFirstModeFromContext,
-  resolveProgrammingModeFromContext,
-  resolveRiskFirstModeFromContext,
-  resolveWorkflowStrategyFromContext,
+  resolveWorkflowStrategyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   formatOperationDirectoryForRelay,
@@ -119,10 +116,12 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
-  const executionFirstMode = resolveExecutionFirstModeFromContext(ctx, meta);
-  const riskFirstMode = resolveRiskFirstModeFromContext(ctx, meta);
+  const {
+    programmingMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   const systemChecklistContent = buildPlanChecklistSystemContent({
     locale,
     planText: bucket?.planText || "",
@@ -206,6 +205,11 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
           : [],
       });
       const locale = state?.locale || LOCALE.ZH_CN;
+      const {
+        workflowStrategy,
+        executionFirstMode,
+        riskFirstMode,
+      } = resolveWorkflowStrategyFlagsFromContext(currentCtx);
       if (applied) {
         relaySeparateModelOutputAsUserMessage(currentCtx, {
           locale,
@@ -220,7 +224,11 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
               ? "next_phase_plan_followup"
               : "next_phase_plan_refinement_followup",
           content: [
-            buildPostPlanUserFollowupPrompt(locale, stage),
+            buildPostPlanUserFollowupPrompt(locale, stage, {
+              executionFirstMode,
+              workflowStrategy,
+              riskFirstMode,
+            }),
             stage === "refinement"
               ? formatOperationDirectoryForRelay(resolveOperationDirectoryContext(currentCtx))
               : "",
