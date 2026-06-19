@@ -8,6 +8,10 @@ import {
   translateI18nText,
 } from "../capabilities/handlers/shared/i18n.js";
 import {
+  HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS,
+  LOCALE,
+} from "../i18n.js";
+import {
   HARNESS_SCENARIO,
   resolveHarnessScenarioFromContext,
 } from "../capabilities/handlers/shared/workflow/matrix-resolver.js";
@@ -40,6 +44,7 @@ export function buildPolicyPromptSelectionProfileText(selection = {}) {
     `scenario = ${selection.scenario || HARNESS_SCENARIO.GENERAL}`,
     `policy_prompt = ${selection.policyPromptId || "harness_policy/general"}`,
     `i18n_key = ${selection.i18nKey || HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL}`,
+    `policy_source = ${selection.policySource || "default"}`,
     "[/HARNESS_POLICY_SELECTION]",
   ].join("\n");
 }
@@ -50,7 +55,19 @@ function buildDynamicPolicyPromptSelection(dynamicPolicyPrompt = {}) {
     scenario,
     policyPromptId: `harness_policy/dynamic/${scenario}`,
     i18nKey: "dynamic_policy_prompt",
+    policySource: "dynamic",
   });
+}
+
+function resolvePolicyLocale(locale = "") {
+  return String(locale || "").toLowerCase().startsWith("en") ? LOCALE.EN_US : LOCALE.ZH_CN;
+}
+
+function resolveDefaultScenarioPolicyText(locale = "", scenario = HARNESS_SCENARIO.GENERAL) {
+  const resolvedLocale = resolvePolicyLocale(locale);
+  const policyByScenario = HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[resolvedLocale] ||
+    HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.ZH_CN] || {};
+  return String(policyByScenario?.[scenario] || policyByScenario?.[HARNESS_SCENARIO.GENERAL] || "").trim();
 }
 
 export function buildDefaultPolicyPrompt(locale = "", ctx = {}, options = {}) {
@@ -62,6 +79,11 @@ export function buildDefaultPolicyPrompt(locale = "", ctx = {}, options = {}) {
     ].filter(Boolean).join("\n");
   }
   const selection = resolvePolicyPromptSelection(ctx, options);
-  const body = translateI18nText(locale, selection.i18nKey);
-  return [buildPolicyPromptSelectionProfileText(selection), body].filter(Boolean).join("\n");
+  const basePolicyBody = translateI18nText(locale, selection.i18nKey);
+  const scenarioPolicyBody = resolveDefaultScenarioPolicyText(locale, selection.scenario);
+  return [
+    buildPolicyPromptSelectionProfileText(selection),
+    basePolicyBody,
+    scenarioPolicyBody,
+  ].filter(Boolean).join("\n\n");
 }

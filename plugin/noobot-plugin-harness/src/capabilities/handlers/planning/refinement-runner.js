@@ -208,6 +208,7 @@ export async function runPlanningRefinementBySeparateModel(
         buildPostPlanUserFollowupPrompt(locale, "refinement", {
           programmingMode,
           textMode,
+          dynamicPolicyPrompt,
         }),
         formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
       ].filter(Boolean).join("\n\n"),

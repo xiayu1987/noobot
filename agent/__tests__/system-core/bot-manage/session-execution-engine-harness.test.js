@@ -84,7 +84,8 @@ test("RunConfigPluginPreparer.prepareAgentPluginRunConfig registers harness plug
 
   assert.equal(messages[0].role, "system");
   assert.match(messages[0].content, /\[HARNESS_POLICY_SELECTION\]/);
-  assert.match(messages[0].content, /policy_prompt = harness_policy\/general\/execution_first/);
+  assert.match(messages[0].content, /policy_prompt = harness_policy\/general/);
+  assert.doesNotMatch(messages[0].content, /execution_first|risk_first/);
   assert.equal(messages[1].role, "user");
   assert.equal(messages[1].content, "hello");
 

@@ -357,6 +357,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
       programmingMode,
       textMode,
       dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
     }),
   );
   setPendingStateWithMeta(state, "phaseAcceptance", false);
@@ -731,6 +732,7 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
       programmingMode,
       textMode,
       dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
     }),
     injectedMessageType: "acceptance_responsibility_constraint",
     injectAt: "append",

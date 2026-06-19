@@ -17,11 +17,13 @@ export function createMessagePlan(items = []) {
 }
 
 export function renderMessagePlanForInject(plan = []) {
-  return (Array.isArray(plan) ? plan : []).map((item = {}) => ({
-    kind: String(item.kind || "").trim(),
-    role: String(item.injectRole || "").trim() || "system",
-    content: String(item.content || "").trim(),
-  }));
+  return (Array.isArray(plan) ? plan : [])
+    .filter((item = {}) => String(item?.separateRole || "").trim() !== "workflow_policy")
+    .map((item = {}) => ({
+      kind: String(item.kind || "").trim(),
+      role: String(item.injectRole || "").trim() || "system",
+      content: String(item.content || "").trim(),
+    }));
 }
 
 export function renderMessagePlanForSeparateModel({

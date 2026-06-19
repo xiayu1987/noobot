@@ -798,8 +798,9 @@ test("planning revision followup uses dynamic programming scenario over initial 
     /next_phase_plan_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
-  assert.match(followupText, /执行策略/);
-  assert.match(followupText, /最小切片循环执行/);
+  assert.match(followupText, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(followupText, /\[HARNESS_SCENARIO_POLICY\]/);
+  assert.doesNotMatch(followupText, /Dynamic policy: perform smallest-slice reversible code changes and verify after each step/);
   assert.doesNotMatch(followupText, /文本场景批次产出/);
   assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);
 });

@@ -154,9 +154,8 @@ test("harness initial planning keeps scenario policy out of text protocol and re
   );
 
   assert.equal(planningIndex >= 0, true);
-  assert.equal(policyIndex > planningIndex, true);
-  assert.equal(responsibilityIndex > policyIndex, true);
-  assert.equal(messages[policyIndex].role, "system");
+  assert.equal(policyIndex, -1);
+  assert.equal(responsibilityIndex > planningIndex, true);
   assert.equal(messages[responsibilityIndex].role, "user");
   assert.doesNotMatch(String(messages[planningIndex].content || ""), /Dynamic test scenario policy/);
   assert.doesNotMatch(String(messages[responsibilityIndex].content || ""), /Dynamic test scenario policy/);
@@ -772,9 +771,8 @@ test("harness planning followup uses text deliverable-batch policy in text scena
     /planning_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
-  assert.match(followupText, /文本场景批次产出/);
-  assert.match(followupText, /可交付文本批次/);
-  assert.match(followupText, /建议外部文本拿到就保真消费/);
+  assert.match(followupText, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(followupText, /\[HARNESS_SCENARIO_POLICY\]/);
   assert.doesNotMatch(followupText, /最小切片循环执行/);
 });
 
@@ -881,9 +879,8 @@ test("harness planning followup uses dynamic programming scenario over initial t
     /planning_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
-  assert.match(followupText, /执行策略/);
-  assert.match(followupText, /最小切片循环执行/);
-  assert.doesNotMatch(followupText, /文本场景批次产出/);
+  assert.doesNotMatch(followupText, /文本场景策略/);
+  assert.doesNotMatch(followupText, /Dynamic policy: perform smallest-slice reversible code changes and verify after each step/);
   assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);
 });
 
