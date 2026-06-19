@@ -37,7 +37,7 @@ import {
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
-  resolveWorkflowStrategyFlagsFromContext,
+  resolveScenarioPolicyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   formatOperationDirectoryForRelay,
@@ -120,11 +120,8 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
   const systemChecklistContent = buildPlanChecklistSystemContent({
     locale,
     planText: bucket?.planText || "",
@@ -159,7 +156,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
     content: buildWorkflowResponsibilityConstraintUserPrompt(
       locale,
       pendingData.stage === "revision" ? "revision" : "refinement",
-      { programmingMode, textMode, workflowStrategy, executionFirstMode, riskFirstMode, dynamicPolicyPrompt },
+      { programmingMode, textMode, dynamicPolicyPrompt },
     ),
     injectedMessageType: pendingData.stage === "revision"
       ? "planning_revision_responsibility_constraint"
@@ -215,11 +212,8 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
       const {
         programmingMode,
         textMode,
-        workflowStrategy,
-        executionFirstMode,
-        riskFirstMode,
         dynamicPolicyPrompt,
-      } = resolveWorkflowStrategyFlagsFromContext(currentCtx);
+      } = resolveScenarioPolicyFlagsFromContext(currentCtx);
       const dynamicPolicyPromptAfterPlanUpdate = dynamicPolicyPrompt;
       if (applied) {
         relaySeparateModelOutputAsUserMessage(currentCtx, {
@@ -238,9 +232,6 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
             buildPostPlanUserFollowupPrompt(locale, stage, {
               programmingMode,
               textMode,
-              executionFirstMode,
-              workflowStrategy,
-              riskFirstMode,
               dynamicPolicyPrompt: dynamicPolicyPromptAfterPlanUpdate,
             }),
             stage === "refinement"
