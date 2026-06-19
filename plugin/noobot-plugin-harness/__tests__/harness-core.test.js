@@ -560,7 +560,7 @@ test("harness policy prompt matrix exposes scenario without workflow mode", asyn
   assert.match(textPrompt, /复杂任务必须先分文件/);
   assert.match(textPrompt, /外部文本到手先保真消费/);
   assert.match(textPrompt, /边查\/边搜\/边核对，边写\/边产出/);
-  assert.match(textPrompt, /每轮至少推进一个可交付文件/);
+  assert.match(textPrompt, /建议每轮推进一个可交付单元/);
   assert.match(textPrompt, /每批.*检查/);
   assert.match(textPrompt, /来源路径/);
 
@@ -617,7 +617,7 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(zh, /复杂任务必须先分文件/);
   assert.match(zh, /每批.*检查/);
   assert.match(zh, /边查\/边搜\/边核对，边写\/边产出/);
-  assert.match(zh, /每轮至少推进一个可交付文件/);
+  assert.match(zh, /建议每轮推进一个可交付单元/);
   assert.match(zh, /编程示例：/);
   assert.match(zh, /编程场景动态策略/);
   assert.match(zh, /做最小切片可逆动作/);
@@ -638,7 +638,7 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(en, /complex tasks must be split into files first/);
   assert.match(en, /each batch/);
   assert.match(en, /Search\/check while writing and producing/i);
-  assert.match(en, /at least one deliverable file/);
+  assert.match(en, /recommended to advance one deliverable unit each turn/);
   assert.match(en, /Programming example:/);
   assert.match(en, /Programming-scenario dynamic policy/);
   assert.match(en, /smallest-slice reversible action/);
