@@ -204,6 +204,8 @@ export async function runPlanningRefinementBySeparateModel(
       purpose: "next_phase_plan_refinement_followup",
       content: [
         buildPostPlanUserFollowupPrompt(locale, "refinement", {
+          programmingMode,
+          textMode,
           executionFirstMode,
           workflowStrategy,
           riskFirstMode,

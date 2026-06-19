@@ -277,6 +277,8 @@ export async function runPlanUpdateAfterSummary(
     locale,
     purpose: "next_phase_plan_followup",
     content: buildPostPlanUserFollowupPrompt(locale, "revision", {
+      programmingMode,
+      textMode,
       executionFirstMode,
       workflowStrategy,
       riskFirstMode,

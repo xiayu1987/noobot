@@ -157,7 +157,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
     content: buildWorkflowResponsibilityConstraintUserPrompt(
       locale,
       pendingData.stage === "revision" ? "revision" : "refinement",
-      { programmingMode, workflowStrategy, executionFirstMode, riskFirstMode },
+      { programmingMode, textMode, workflowStrategy, executionFirstMode, riskFirstMode },
     ),
     injectedMessageType: pendingData.stage === "revision"
       ? "planning_revision_responsibility_constraint"
@@ -207,6 +207,8 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
       });
       const locale = state?.locale || LOCALE.ZH_CN;
       const {
+        programmingMode,
+        textMode,
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
@@ -226,6 +228,8 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
               : "next_phase_plan_refinement_followup",
           content: [
             buildPostPlanUserFollowupPrompt(locale, stage, {
+              programmingMode,
+              textMode,
               executionFirstMode,
               workflowStrategy,
               riskFirstMode,
