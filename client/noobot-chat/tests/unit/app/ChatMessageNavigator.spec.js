@@ -12,6 +12,7 @@ const navigatorSource = readFileSync(
 describe("ChatMessageNavigator theme colors", () => {
   it("uses theme-aware el-anchor container colors", () => {
     expect(navigatorSource).toContain("class=\"chat-message-navigator\"");
+    expect(navigatorSource).toContain(":marker=\"false\"");
     expect(navigatorSource).toContain("background: color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color)) 92%");
     expect(navigatorSource).toContain("color: var(--noobot-text-main, var(--el-text-color-primary));");
     expect(navigatorSource).toContain("border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 72%, transparent);");
@@ -26,5 +27,13 @@ describe("ChatMessageNavigator theme colors", () => {
     expect(navigatorSource).toContain("color: var(--noobot-text-main, var(--el-text-color-primary));");
     expect(navigatorSource).toContain("background: var(--noobot-surface-primary-soft, var(--el-color-primary-light-9));");
     expect(navigatorSource).toContain("color: var(--noobot-text-strong, var(--el-text-color-primary));");
+  });
+
+  it("renders the current marker on the active link instead of Element Plus absolute marker", () => {
+    expect(navigatorSource).toContain(":marker=\"false\"");
+    expect(navigatorSource).toContain(":deep(.el-anchor__link::before)");
+    expect(navigatorSource).toContain(":deep(.el-anchor__item.is-current .el-anchor__link::before)");
+    expect(navigatorSource).toContain("background: var(--el-anchor-marker-bg-color, var(--el-color-primary));");
+    expect(navigatorSource).toContain("transform: translateY(-50%);");
   });
 });
