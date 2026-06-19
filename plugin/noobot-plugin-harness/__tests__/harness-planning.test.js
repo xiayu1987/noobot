@@ -17,11 +17,11 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
   const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(roles.includes("user"), true);
+  assert.equal(roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)), true);
   const first = messages[0] || {};
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
-  assert.equal(String(last.role || ""), "user");
+  assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
 
 test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
@@ -115,6 +115,51 @@ test("harness planning prompt includes current tool names and descriptions", asy
   assert.match(toolsPromptText, /"name": "read_file"/);
   assert.match(toolsPromptText, /"description": "读取文件内容"/);
   assert.match(toolsPromptText, /"name": "web_to_data"/);
+});
+
+test("harness initial planning keeps scenario policy out of text protocol and responsibility", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+
+  const messages = [{ role: "user", content: "整理这些文本资料" }];
+  const ctx = {
+    messages,
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+        harness: { dynamicPolicyPrompt: { prompt: "Dynamic test scenario policy" } },
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            runConfig: { scenario: "text" },
+            systemRuntime: { config: {}, runConfig: { scenario: "text" } },
+          },
+        },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  const planningIndex = messages.findIndex((item = {}) =>
+    /harness-planning-bootstrap/.test(String(item?.content || "")),
+  );
+  const policyIndex = messages.findIndex((item = {}) =>
+    /Dynamic test scenario policy/.test(String(item?.content || "")),
+  );
+  const responsibilityIndex = messages.findIndex((item = {}) =>
+    /职责约束：你当前仅负责「规划」/.test(String(item?.content || "")),
+  );
+
+  assert.equal(planningIndex >= 0, true);
+  assert.equal(policyIndex > planningIndex, true);
+  assert.equal(responsibilityIndex > policyIndex, true);
+  assert.equal(messages[policyIndex].role, "system");
+  assert.equal(messages[responsibilityIndex].role, "user");
+  assert.doesNotMatch(String(messages[planningIndex].content || ""), /Dynamic test scenario policy/);
+  assert.doesNotMatch(String(messages[responsibilityIndex].content || ""), /Dynamic test scenario policy/);
 });
 
 test("harness planning captures checklist and forces acceptance at final output", async () => {
@@ -729,8 +774,121 @@ test("harness planning followup uses text output policy in text scenario", async
   const followupText = String(followupMessage?.content || "");
   assert.match(followupText, /文本场景产出优先/);
   assert.match(followupText, /可交付文本批次/);
-  assert.match(followupText, /保真消费来源文本/);
+  assert.match(followupText, /建议外部文本拿到就保真消费/);
   assert.doesNotMatch(followupText, /最小切片循环执行/);
+});
+
+test("harness planning captures dynamic policy prompt protocol from separate model", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => ({
+        content: [
+          "1. 消费资料并形成阶段产物",
+          "2. 检查来源与格式",
+          "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+          "scenario = text",
+          "workflow_mode = execution_first",
+          "reason = use task-specific output policy",
+          "prompt:",
+          "Dynamic policy: produce deliverable text batches, preserve source paths, and avoid tiny execution slices.",
+          "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+        ].join("\n"),
+      }),
+    },
+  );
+
+  const ctx = {
+    messages: [{ role: "user", content: "整理资料" }],
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+        harness: {},
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            runConfig: { scenario: "text" },
+            systemRuntime: { config: {}, runConfig: { scenario: "text" } },
+          },
+        },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
+  assert.equal(dynamicPolicyPrompt.scenario, "text");
+  assert.equal(dynamicPolicyPrompt.workflowMode, "execution_first");
+  assert.match(
+    String(dynamicPolicyPrompt.prompt || ""),
+    /Dynamic policy: produce deliverable text batches/,
+  );
+});
+
+test("harness planning followup uses dynamic programming scenario over initial text scenario", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => ({
+        content: [
+          "1. 检查仓库",
+          "2. 修改代码并运行测试",
+          "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+          "scenario = programming",
+          "workflow_mode = execution_first",
+          "reason = actual user intent is code change",
+          "prompt:",
+          "Dynamic policy: perform smallest-slice reversible code changes and verify after each step.",
+          "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+        ].join("\n"),
+      }),
+    },
+  );
+
+  const ctx = {
+    messages: [{ role: "user", content: "修一下 harness 插件里的代码" }],
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+        harness: {},
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            runConfig: { scenario: "text" },
+            systemRuntime: { config: {}, runConfig: { scenario: "text" } },
+          },
+        },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
+  assert.equal(dynamicPolicyPrompt.scenario, "programming");
+  assert.equal(dynamicPolicyPrompt.workflowMode, "execution_first");
+
+  const followupMessage = ctx.messages.find((item = {}) =>
+    /planning_followup/.test(String(item?.content || "")),
+  );
+  const followupText = String(followupMessage?.content || "");
+  assert.match(followupText, /执行优先/);
+  assert.match(followupText, /最小切片循环执行/);
+  assert.doesNotMatch(followupText, /文本场景产出优先/);
+  assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);
 });
 
 test("harness writes capability model traces to dedicated jsonl artifact", async () => {
@@ -840,7 +998,7 @@ test("harness planning separate model uses resolved planning tool allowlist", as
     /规划输入上下文摘要（精简）如下/.test(String(item?.content || "")));
   assert.match(String(constraintPrompt?.content || ""), /"latestUserGoal": "开始任务"/);
   const taskPrompt = invocations[0].messages.find((item = {}) =>
-    String(item?.role || "") === "user" &&
+    String(item?.role || "") === "system" &&
     /harness-planning-bootstrap/.test(String(item?.content || "")));
   assert.match(String(taskPrompt?.content || ""), /\[CURRENT_TASK_GOAL\]/);
   assert.match(String(taskPrompt?.content || ""), /\[PLAN\]/);

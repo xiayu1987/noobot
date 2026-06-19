@@ -47,8 +47,40 @@ import {
   translateI18nText,
 } from "../capabilities/handlers/shared/i18n.js";
 import { buildDefaultPolicyPrompt } from "./policy-prompt-matrix.js";
+import {
+  buildDynamicPolicyPromptSignature,
+  resolveActiveDynamicPolicyPromptFromContext,
+} from "../capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
 
 export { resolvePolicyPromptSelection } from "./policy-prompt-matrix.js";
+
+function resolveHarnessBucket(ctx = {}) {
+  const bucket = ctx?.agentContext?.payload?.harness;
+  return bucket && typeof bucket === "object" ? bucket : null;
+}
+
+function shouldRefreshPolicyPromptForDynamicChange(ctx = {}, activeDynamicPolicyPrompt = null) {
+  const bucket = resolveHarnessBucket(ctx);
+  if (!bucket || !activeDynamicPolicyPrompt) return false;
+  const refresh = bucket.policyPromptRefresh && typeof bucket.policyPromptRefresh === "object"
+    ? bucket.policyPromptRefresh
+    : null;
+  if (refresh?.pending === true) return true;
+  const signature = buildDynamicPolicyPromptSignature(activeDynamicPolicyPrompt);
+  if (!signature) return false;
+  return String(bucket.injectedPolicyPromptSignature || "") !== signature;
+}
+
+function markPolicyPromptRefreshed(ctx = {}, activeDynamicPolicyPrompt = null) {
+  const bucket = resolveHarnessBucket(ctx);
+  if (!bucket || !activeDynamicPolicyPrompt) return;
+  const signature = buildDynamicPolicyPromptSignature(activeDynamicPolicyPrompt);
+  if (signature) bucket.injectedPolicyPromptSignature = signature;
+  if (bucket.policyPromptRefresh && typeof bucket.policyPromptRefresh === "object") {
+    bucket.policyPromptRefresh.pending = false;
+    bucket.policyPromptRefresh.injectedAt = nowIso();
+  }
+}
 
 function resolveFlushReasonByPoint(point = "") {
   if (
@@ -151,6 +183,11 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
   ).trim();
   const content = configuredPrompt || resolveDefaultPrompt();
   if (!content) return;
+  const activeDynamicPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL
+    ? resolveActiveDynamicPolicyPromptFromContext(ctx)
+    : null;
+  const refreshPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL &&
+    shouldRefreshPolicyPromptForDynamicChange(ctx, activeDynamicPolicyPrompt);
 
   const alreadyInCurrentMessages = Array.isArray(ctx?.messages) &&
     isHarnessPromptAlreadyInjected(ctx.messages, id);
@@ -163,7 +200,7 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
       id,
       content,
       priority: options.promptPriority,
-      mode: "after_system",
+      mode: refreshPolicyPrompt ? "replace" : "after_system",
       messageBlockPolicy: isPolicyPrompt
         ? {
             [HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD]: HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
@@ -176,6 +213,10 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
     syncMessageBlocksSystem: isPolicyPrompt,
     persistToCurrentTurn: !isPolicyPrompt,
   });
+
+  if (injected && isPolicyPrompt && activeDynamicPolicyPrompt) {
+    markPolicyPromptRefreshed(ctx, activeDynamicPolicyPrompt);
+  }
 
   if (!injected || !options.writePrompts) return;
   const paths = createRunPaths(ctx, options);

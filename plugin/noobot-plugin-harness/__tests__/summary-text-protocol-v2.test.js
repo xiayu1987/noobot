@@ -22,6 +22,7 @@ import {
   buildPhaseAcceptanceRequestPromptText,
   buildPlanningMainPrompt,
   resolveWorkflowStrategyFromContext,
+  resolveWorkflowStrategyFlagsFromContext,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildTextScenarioConsumptionPolicyText,
 } from "../src/capabilities/handlers/shared/workflow/prompts.js";
@@ -400,7 +401,7 @@ test("text scenario post-plan followup suggests consuming external text promptly
   });
   assert.match(executionPrompt, /产出优先/);
   assert.match(executionPrompt, /文本场景/);
-  assert.match(executionPrompt, /保真消费来源文本/);
+  assert.match(executionPrompt, /建议外部文本拿到就保真消费/);
   assert.match(executionPrompt, /可交付文本批次/);
   assert.match(executionPrompt, /外部文本.*拿到.*优先在本轮阅读、提取并消费/);
   assert.match(executionPrompt, /file、line、path、text/);
@@ -429,8 +430,43 @@ test("text-mode post-plan followup follows text output policy from resolved flag
   });
   assert.match(prompt, /文本场景产出优先/);
   assert.match(prompt, /可交付文本批次/);
-  assert.match(prompt, /保真消费来源文本/);
+  assert.match(prompt, /建议外部文本拿到就保真消费/);
   assert.doesNotMatch(prompt, /最小切片循环执行/);
+});
+
+test("dynamic policy scenario overrides initial text mode for post-plan followup flags", () => {
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          dynamicPolicyPrompt: {
+            scenario: "programming",
+            workflowMode: "execution_first",
+            prompt: "Dynamic programming policy",
+          },
+        },
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            runConfig: { scenario: "text" },
+            systemRuntime: { runConfig: { scenario: "text" } },
+          },
+        },
+      },
+    },
+  };
+  const flags = resolveWorkflowStrategyFlagsFromContext(ctx);
+  assert.equal(flags.programmingMode, true);
+  assert.equal(flags.textMode, false);
+  assert.equal(flags.executionFirstMode, true);
+  assert.equal(flags.riskFirstMode, false);
+
+  const prompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", flags);
+  assert.match(prompt, /执行优先/);
+  assert.match(prompt, /最小切片循环执行/);
+  assert.doesNotMatch(prompt, /文本场景产出优先/);
+  assert.doesNotMatch(prompt, /建议外部文本拿到就保真消费/);
 });
 
 test("text scenario consumption wording is advisory instead of mandatory", () => {
@@ -469,11 +505,11 @@ test("programming prompts add action-first execution principles only in programm
     programmingMode: true,
   });
   assert.match(programmingPlanningPrompt, /生成用于编程执行的最小可执行计划切片/);
-  assert.match(programmingPlanningPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
-  assert.match(programmingPlanningPrompt, /找到最相关入口 -> 做最小可逆修改 -> 运行局部测试\/构建 -> 根据失败信息修正 -> 继续下一切片或补充验收说明/);
+  assert.match(programmingPlanningPrompt, /做最小切片可逆动作；循环执行 -> 验证\/反馈 -> 修正 -> 继续，不断推进任务/);
+  assert.match(programmingPlanningPrompt, /找到最相关入口 -> 做最小切片可逆动作 -> 运行局部测试\/构建 -> 根据失败信息修正 -> 继续下一切片或补充验收说明/);
   assert.doesNotMatch(programmingPlanningPrompt, /生成宏观主计划/);
   assert.match(programmingPlanningPrompt, /默认不要因普通风险点长期等待/g);
-  assert.match(programmingPlanningPrompt, /修改 -> 验证 -> 修正/);
+  assert.match(programmingPlanningPrompt, /循环执行 -> 验证\/反馈 -> 修正 -> 继续/);
   assert.match(programmingPlanningPrompt, /Blocking risk（必须停）/);
   assert.match(programmingPlanningPrompt, /Managed risk（可先改但必须验证）/);
   assert.match(programmingPlanningPrompt, /Informational risk（只记录不阻塞）/);
@@ -483,6 +519,24 @@ test("programming prompts add action-first execution principles only in programm
     "planning",
   );
   assert.doesNotMatch(normalResponsibilityPrompt, /默认不要因普通风险点长期等待/g);
+  assert.match(normalResponsibilityPrompt, /初始场景\/模式与当前用户实际意图不匹配/);
+  assert.match(normalResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
+  assert.match(normalResponsibilityPrompt, /scenario = general\|text\|programming/);
+  assert.match(normalResponsibilityPrompt, /workflow_mode = base\|execution_first\|risk_first/);
+
+  const revisionResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(
+    "zh-CN",
+    "revision",
+  );
+  assert.match(revisionResponsibilityPrompt, /初始场景\/模式与当前用户实际意图不匹配/);
+  assert.match(revisionResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
+
+  const refinementResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(
+    "zh-CN",
+    "refinement",
+  );
+  assert.doesNotMatch(refinementResponsibilityPrompt, /初始场景\/模式与当前用户实际意图不匹配/);
+  assert.doesNotMatch(refinementResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
 
   const programmingResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(
     "zh-CN",

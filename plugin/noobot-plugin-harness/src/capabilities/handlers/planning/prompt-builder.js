@@ -23,6 +23,7 @@ import {
 } from "../shared/operation-directory.js";
 import {
   buildWorkflowResponsibilityConstraintUserPrompt,
+  buildWorkflowStrategyPolicyPromptText,
   buildPlanningMainPrompt,
   resolveWorkflowStrategyFlagsFromContext,
   getPlanningContextSummaryHeader,
@@ -157,7 +158,7 @@ export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {
   ].join("\n");
 }
 
-export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}) {
+export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}, options = {}) {
   const userGoal = resolveLatestUserMessageText(_ctx) ||
     translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
   const {
@@ -174,6 +175,7 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
     textMode,
     workflowStrategy,
     executionFirstMode,
+    includeWorkflowPolicy: options?.includeWorkflowPolicy !== false,
   });
 }
 
@@ -213,6 +215,7 @@ export function buildPlanningMessagePlan(
     contextSummaryContent = "",
     toolContextContent = "",
     taskContent = "",
+    includeWorkflowPolicy = false,
   } = {},
 ) {
   const bucket = ctx?.agentContext?.payload?.harness && typeof ctx.agentContext.payload.harness === "object"
@@ -230,7 +233,16 @@ export function buildPlanningMessagePlan(
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
+    dynamicPolicyPrompt,
   } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+  const workflowPolicyPrompt = buildWorkflowStrategyPolicyPromptText(locale, {
+    programmingMode,
+    textMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+    dynamicPolicyPrompt,
+  });
   return createMessagePlan([
     {
       kind: "planning_context_summary",
@@ -254,7 +266,13 @@ export function buildPlanningMessagePlan(
       kind: "planning_task",
       injectRole: "user",
       separateRole: "task",
-      content: taskContent || buildPlanningPromptBase(locale, ctx, meta),
+      content: taskContent || buildPlanningPromptBase(locale, ctx, meta, { includeWorkflowPolicy }),
+    },
+    {
+      kind: "planning_workflow_policy",
+      injectRole: "system",
+      separateRole: "workflow_policy",
+      content: workflowPolicyPrompt,
     },
     {
       kind: "planning_responsibility_constraint",
@@ -266,6 +284,8 @@ export function buildPlanningMessagePlan(
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
+        dynamicPolicyPrompt,
+        includeWorkflowPolicy,
       }),
     },
   ]);
@@ -285,7 +305,9 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
     injectMessageWithPolicy(ctx, {
       role: messageItem.role,
       content: messageItem.content,
-      injectedMessageType: messageItem.kind || "planning_prompt",
+      injectedMessageType: messageItem.kind === "planning_workflow_policy"
+        ? "workflow_policy"
+        : messageItem.kind || "planning_prompt",
       injectAt: "append",
       avoidBreakToolCallContinuity: true,
     });

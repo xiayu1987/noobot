@@ -279,7 +279,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
 
   // Sort by priority (descending)
   const sorted = promptEntries
-    .filter((item) => !existingIds.has(item.id))
+    .filter((item) => item.mode === "replace" || !existingIds.has(item.id))
     .sort((a, b) => b.priority - a.priority);
 
   const prependItems = [];

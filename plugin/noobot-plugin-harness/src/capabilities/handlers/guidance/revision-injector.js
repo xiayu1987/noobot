@@ -43,6 +43,7 @@ import {
   formatOperationDirectoryForRelay,
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
+import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 
@@ -122,6 +123,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
+    dynamicPolicyPrompt,
   } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   const systemChecklistContent = buildPlanChecklistSystemContent({
     locale,
@@ -157,7 +159,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
     content: buildWorkflowResponsibilityConstraintUserPrompt(
       locale,
       pendingData.stage === "revision" ? "revision" : "refinement",
-      { programmingMode, textMode, workflowStrategy, executionFirstMode, riskFirstMode },
+      { programmingMode, textMode, workflowStrategy, executionFirstMode, riskFirstMode, dynamicPolicyPrompt },
     ),
     injectedMessageType: pendingData.stage === "revision"
       ? "planning_revision_responsibility_constraint"
@@ -198,6 +200,10 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
       if (!canAttemptPlanUpdate(currentCtx, state, { increment: true, stage })) {
         return { applied: false, detail: { stage, reason: "max_revision_attempts" } };
       }
+      applyDynamicPolicyPromptFromText(currentCtx, responseText, {
+        source: stage === "revision" ? "planning_revision_inject" : "planning_refinement_inject",
+        stage,
+      });
       const applied = applyRevisedPlanFromText(currentCtx, responseText, {
         source: stage === "revision" ? "planning_revision_inject" : "planning_refinement_inject",
         stage,
@@ -212,7 +218,9 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
+        dynamicPolicyPrompt,
       } = resolveWorkflowStrategyFlagsFromContext(currentCtx);
+      const dynamicPolicyPromptAfterPlanUpdate = dynamicPolicyPrompt;
       if (applied) {
         relaySeparateModelOutputAsUserMessage(currentCtx, {
           locale,
@@ -233,6 +241,7 @@ export async function maybeCapturePlanUpdateByInject(ctx = {}) {
               executionFirstMode,
               workflowStrategy,
               riskFirstMode,
+              dynamicPolicyPrompt: dynamicPolicyPromptAfterPlanUpdate,
             }),
             stage === "refinement"
               ? formatOperationDirectoryForRelay(resolveOperationDirectoryContext(currentCtx))

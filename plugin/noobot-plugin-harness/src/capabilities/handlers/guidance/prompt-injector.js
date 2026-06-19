@@ -32,9 +32,12 @@ export function buildGuidancePromptContent(
   {
     includeMarker = false,
     programmingMode = false,
+    textMode = false,
     executionFirstMode = false,
     riskFirstMode = false,
     workflowStrategy = "",
+    dynamicPolicyPrompt = "",
+    includeWorkflowPolicy = true,
   } = {},
 ) {
   return buildGuidanceFailurePromptText({
@@ -42,9 +45,12 @@ export function buildGuidancePromptContent(
     marker: includeMarker ? getGuidanceMarker(locale) : "",
     reason,
     programmingMode,
+    textMode,
     executionFirstMode,
     riskFirstMode,
     workflowStrategy,
+    dynamicPolicyPrompt,
+    includeWorkflowPolicy,
   });
 }
 
@@ -61,6 +67,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
+    dynamicPolicyPrompt,
   } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
 
   const requestedAction = String(action || "auto").trim().toLowerCase();
@@ -111,6 +118,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
+        dynamicPolicyPrompt,
       }),
       injectedMessageType: "guidance_summary_prompt",
       injectAt: "append",
@@ -126,6 +134,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
         workflowStrategy,
         executionFirstMode,
         riskFirstMode,
+        dynamicPolicyPrompt,
       }),
       injectedMessageType: "guidance_summary_responsibility_constraint",
       injectAt: "append",
@@ -153,6 +162,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
       workflowStrategy,
       executionFirstMode,
       riskFirstMode,
+      dynamicPolicyPrompt,
     }),
     injectedMessageType: `guidance_failure:${String(reason || "").trim() || "unknown"}`,
     injectAt: "prepend",
