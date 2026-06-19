@@ -17,6 +17,7 @@ const emit = defineEmits(["select"]);
     v-if="items.length"
     class="chat-message-navigator"
     :container="null"
+    :marker="false"
     :offset="16"
     :bound="80"
     @click.prevent
@@ -59,7 +60,12 @@ const emit = defineEmits(["select"]);
   border-radius: 999px;
 }
 
+:deep(.el-anchor__item) {
+  position: relative;
+}
+
 :deep(.el-anchor__link) {
+  position: relative;
   max-width: 188px;
   margin: 2px 0;
   padding: 7px 10px 7px 12px;
@@ -79,6 +85,20 @@ const emit = defineEmits(["select"]);
     transform 0.18s ease;
 }
 
+:deep(.el-anchor__link::before) {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 3px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--el-anchor-marker-bg-color, var(--el-color-primary));
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 0.18s ease;
+}
+
 :deep(.el-anchor__link:hover) {
   color: var(--noobot-text-main, var(--el-text-color-primary));
   background: var(--noobot-fill-hover, var(--el-fill-color-light));
@@ -86,12 +106,18 @@ const emit = defineEmits(["select"]);
   transform: translateX(2px);
 }
 
+:deep(.el-anchor__item.is-current .el-anchor__link),
 :deep(.el-anchor__link.is-current) {
   color: var(--noobot-text-strong, var(--el-text-color-primary));
   background: var(--noobot-surface-primary-soft, var(--el-color-primary-light-9));
   border-color: color-mix(in srgb, var(--el-color-primary) 42%, var(--noobot-panel-border, var(--el-border-color)));
   font-weight: 700;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+}
+
+:deep(.el-anchor__item.is-current .el-anchor__link::before),
+:deep(.el-anchor__link.is-current::before) {
+  opacity: 1;
 }
 
 @media (max-width: 720px) {

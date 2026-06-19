@@ -10,7 +10,7 @@ import {
   PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
-  buildCapabilityModelMessages,
+  buildCapabilityProtocolModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
   getTransferPayloadFromAttachmentMetas,
@@ -27,7 +27,8 @@ import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-cont
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
-  resolveWorkflowStrategyFlagsFromContext,
+  buildScenarioPolicyPromptText,
+  resolveScenarioPolicyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   formatOperationDirectoryForRelay,
@@ -68,10 +69,8 @@ export async function runPlanningRefinementBySeparateModel(
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+    dynamicPolicyPrompt,
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
   const explicitTargetIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
     : [];
@@ -111,19 +110,22 @@ export async function runPlanningRefinementBySeparateModel(
       ctx,
     }),
   ];
-  const refinementMessages = buildCapabilityModelMessages({
+  const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
+    programmingMode,
+    textMode,
+    dynamicPolicyPrompt,
+  });
+  const refinementMessages = buildCapabilityProtocolModelMessages({
     locale,
     agentMessages,
-    task: refinementTask,
-    postTaskMessages: [
-      buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
-        programmingMode,
-        textMode,
-        workflowStrategy,
-        executionFirstMode,
-        riskFirstMode,
-      }),
-    ],
+    protocolPrompt: refinementTask,
+    workflowPolicyPrompt,
+    responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
+      programmingMode,
+      textMode,
+      dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
+    }),
   });
 
   let refinementResponse = null;
@@ -206,9 +208,7 @@ export async function runPlanningRefinementBySeparateModel(
         buildPostPlanUserFollowupPrompt(locale, "refinement", {
           programmingMode,
           textMode,
-          executionFirstMode,
-          workflowStrategy,
-          riskFirstMode,
+          dynamicPolicyPrompt,
         }),
         formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
       ].filter(Boolean).join("\n\n"),

@@ -21,11 +21,11 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
   const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(roles.includes("user"), true);
+  assert.equal(roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)), true);
   const first = messages[0] || {};
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
-  assert.equal(String(last.role || ""), "user");
+  assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
 
 test("harness review generates review report at final output", async () => {
@@ -343,7 +343,10 @@ test("harness full engineering capability flow plans, guides, accepts and review
     messages,
     agentContext,
   });
-  assert.match(String(messages[0]?.content || ""), /harness-guidance/);
+  const guidancePromptMessage = messages[messages.length - 1] || {};
+  assert.equal(String(guidancePromptMessage?.role || ""), "user");
+  assert.match(String(guidancePromptMessage?.content || ""), /harness-guidance/);
+  assert.match(String(guidancePromptMessage?.content || ""), /工具失败达到阈值/);
   assert.equal(agentContext.payload.harness.state.pending.guidance, null);
 
   await hookManager.emit("after_tool_call", {
@@ -799,7 +802,7 @@ test("phase acceptance separate model receives context, summaries, revised plan,
   assert.match(String(messages[summaryIndexes[0]].content || ""), /详细内容不应作为小结清单/);
   assert.equal(messages[planIndex].role, "system");
   assert.equal(messages[phaseIndexes[0]].role, "system");
-  assert.equal(messages[requestIndex].role, "user");
+  assert.equal(messages[requestIndex].role, "system");
   assert.equal(
     summaryIndexes[0] > 0 &&
       planIndex > summaryIndexes[0] &&
@@ -928,7 +931,7 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   assert.equal(messages[summaryIndex]?.role, "system");
   assert.equal(messages[planIndex]?.role, "system");
   assert.equal(messages[phaseReportIndex]?.role, "system");
-  assert.equal(messages[requestIndex]?.role, "user");
+  assert.equal(messages[requestIndex]?.role, "system");
   assert.equal(messages[responsibilityIndex]?.role, "user");
   assert.equal(historyUserIndex < historyAssistantIndex, true);
   assert.equal(historyAssistantIndex < toolCallSemanticIndex, true);
@@ -1106,7 +1109,7 @@ test("final acceptance separate model receives revised plan, all phase checklist
   assert.equal(phaseIndexes.length >= 2, true);
   assert.equal(messages[phaseIndexes[0]].role, "system");
   assert.equal(messages[phaseIndexes[1]].role, "system");
-  assert.equal(messages[requestIndex].role, "user");
+  assert.equal(messages[requestIndex].role, "system");
   assert.equal(
     planIndex > -1 &&
       phaseIndexes[0] > planIndex &&
