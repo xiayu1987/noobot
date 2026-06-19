@@ -60,11 +60,17 @@ function normalizeMessageCardEntry(entry = {}, pluginId = "", pluginCapabilities
   };
 }
 
+function normalizeMessageActionPlacement(value = "") {
+  const placement = normalizeString(value) || "post-content";
+  return placement === "after-pre-cards" ? placement : "post-content";
+}
+
 function normalizeMessageActionEntry(entry = {}, pluginId = "", pluginCapabilities = []) {
   const id = normalizeString(entry?.id) || `${pluginId}:message-action`;
   return {
     id,
     pluginId,
+    placement: normalizeMessageActionPlacement(entry?.placement),
     capability:
       normalizeString(entry?.capability) ||
       pluginCapabilities[0] ||
@@ -189,8 +195,10 @@ export function resolveMessageCardListeners(renderer = {}, context = {}) {
   }
 }
 
-export function resolveMessageActionRenderers(messageItem = {}) {
+export function resolveMessageActionRenderers(messageItem = {}, options = {}) {
+  const requestedPlacement = normalizeString(options?.placement) || "";
   return frontendPluginStore.messageActions
+    .filter((item) => !requestedPlacement || item.placement === requestedPlacement)
     .filter((item) => {
       try {
         return item.match(messageItem) === true;

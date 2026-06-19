@@ -111,8 +111,11 @@ const preMessageCardRenderers = computed(() =>
 const postMessageCardRenderers = computed(() =>
   resolveMessageCardRenderers(props.messageItem, { slot: "post" }),
 );
-const messageActionRenderers = computed(() =>
-  resolveMessageActionRenderers(props.messageItem),
+const preContentMessageActionRenderers = computed(() =>
+  resolveMessageActionRenderers(props.messageItem, { placement: "after-pre-cards" }),
+);
+const postContentMessageActionRenderers = computed(() =>
+  resolveMessageActionRenderers(props.messageItem, { placement: "post-content" }),
 );
 const hideMessageMarkdownForInlineEditor = computed(() =>
   props.messageItem?.role === "user" && props.messageItem?.__monotonicEditing === true,
@@ -198,6 +201,13 @@ async function handleCopyAssistantMessageText() {
 
     <BaseMessageErrorAlert :error="messageItem.error" />
 
+    <component
+      :is="renderer.component"
+      v-for="renderer in preContentMessageActionRenderers"
+      :key="renderer.id"
+      v-bind="resolveActionRendererProps(renderer)"
+    />
+
     <BaseMarkdownContent
       v-if="!hideMessageMarkdownForInlineEditor"
       ref="messageMarkdownRef"
@@ -207,7 +217,7 @@ async function handleCopyAssistantMessageText() {
 
     <component
       :is="renderer.component"
-      v-for="renderer in messageActionRenderers"
+      v-for="renderer in postContentMessageActionRenderers"
       :key="renderer.id"
       v-bind="resolveActionRendererProps(renderer)"
     />
