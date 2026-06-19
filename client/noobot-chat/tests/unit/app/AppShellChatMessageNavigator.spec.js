@@ -49,7 +49,9 @@ describe("AppShell chat message navigator", () => {
     expect(appShellSource).toContain("messageListPanelRef,");
     expect(chatMessageScrollSyncSource).toContain("function syncCurrentMessageAnchorId()");
     expect(chatMessageScrollSyncSource).toContain('querySelectorAll?.("[data-chat-message-anchor]")');
-    expect(chatMessageScrollSyncSource).toContain("currentMessageAnchorId.value = String(");
+    expect(chatMessageScrollSyncSource).toContain("const nextAnchorId = getAnchorId(currentAnchor);");
+    expect(chatMessageScrollSyncSource).toContain("if (shouldKeepNavigatorScrollLock(wrapRef, nextAnchorId)) return;");
+    expect(chatMessageScrollSyncSource).toContain("currentMessageAnchorId.value = nextAnchorId;");
     expect(chatMessageScrollSyncSource).toContain("function bindChatMessageScrollSync()");
     expect(chatMessageScrollSyncSource).toContain('wrapRef.addEventListener?.("scroll", syncCurrentMessageAnchorId, { passive: true })');
     expect(chatMessageScrollSyncSource).toContain("function unbindChatMessageScrollSync()");
