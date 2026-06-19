@@ -19,7 +19,7 @@ import {
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildGuidanceFailurePromptText,
   buildGuidanceSummaryPromptText,
-  resolveWorkflowStrategyFlagsFromContext,
+  resolveScenarioPolicyFlagsFromContext,
   getGuidanceMarker,
   getGuidanceSummaryMarker,
 } from "../shared/workflow/prompts.js";
@@ -32,9 +32,9 @@ export function buildGuidancePromptContent(
   {
     includeMarker = false,
     programmingMode = false,
-    executionFirstMode = false,
-    riskFirstMode = false,
-    workflowStrategy = "",
+    textMode = false,
+    dynamicPolicyPrompt = "",
+    includeWorkflowPolicy = true,
   } = {},
 ) {
   return buildGuidanceFailurePromptText({
@@ -42,9 +42,9 @@ export function buildGuidancePromptContent(
     marker: includeMarker ? getGuidanceMarker(locale) : "",
     reason,
     programmingMode,
-    executionFirstMode,
-    riskFirstMode,
-    workflowStrategy,
+    textMode,
+    dynamicPolicyPrompt,
+    includeWorkflowPolicy,
   });
 }
 
@@ -58,10 +58,8 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+    dynamicPolicyPrompt,
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
 
   const requestedAction = String(action || "auto").trim().toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === "summary";
@@ -108,9 +106,8 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
         marker: getGuidanceSummaryMarker(locale),
         programmingMode,
         textMode,
-        workflowStrategy,
-        executionFirstMode,
-        riskFirstMode,
+        dynamicPolicyPrompt,
+        includeWorkflowPolicy: false,
       }),
       injectedMessageType: "guidance_summary_prompt",
       injectAt: "append",
@@ -123,9 +120,8 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
         programmingMode,
         textMode,
-        workflowStrategy,
-        executionFirstMode,
-        riskFirstMode,
+        dynamicPolicyPrompt,
+        includeWorkflowPolicy: false,
       }),
       injectedMessageType: "guidance_summary_responsibility_constraint",
       injectAt: "append",
@@ -145,17 +141,16 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
   if (!allowGuidance || !state.pending.guidance) return false;
   const reason = state.pending.guidance;
   injectMessageWithPolicy(ctx, {
-    role: "system",
+    role: "user",
     content: buildGuidancePromptContent(locale, reason, {
       includeMarker: true,
       programmingMode,
       textMode,
-      workflowStrategy,
-      executionFirstMode,
-      riskFirstMode,
+      dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
     }),
     injectedMessageType: `guidance_failure:${String(reason || "").trim() || "unknown"}`,
-    injectAt: "prepend",
+    injectAt: "append",
     avoidBreakToolCallContinuity: true,
   });
   setPendingStateWithMeta(state, "guidance", null);

@@ -17,33 +17,6 @@ function deepFreeze(value) {
 // Keep shape stable by domain -> concern -> knobs.
 export const WORKFLOW_PARAMS = deepFreeze({
   workflow: {
-    strategy: {
-      modes: {
-        executionFirst: "execution_first",
-        riskFirst: "risk_first",
-      },
-      programming: {
-        mode: "execution_first",
-        supportedModes: ["execution_first"],
-      },
-      nonProgramming: {
-        defaultMode: "execution_first",
-        supportedModes: ["execution_first", "risk_first"],
-        optionKeys: [
-          "nonProgrammingWorkflowStrategy",
-          "nonProgrammingPromptStrategy",
-          "workflowStrategy",
-          "promptStrategy",
-          "workflowMode",
-        ],
-        legacyExecutionFirstBooleanOptionKeys: [
-          "nonProgrammingExecutionFirst",
-          "executionFirstForNonProgramming",
-          "executionFirst",
-          "actionFirst",
-        ],
-      },
-    },
     scheduler: {
       order: [
         { flow: "final_acceptance", subflow: "forced", action: "forced_acceptance", executor: "acceptance", kind: "guard", hardOverride: true },

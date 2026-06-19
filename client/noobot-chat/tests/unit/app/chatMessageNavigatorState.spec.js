@@ -43,12 +43,14 @@ describe("chatMessageNavigatorState", () => {
     const currentMessageAnchorId = ref("");
     const mobileChatNavigatorVisible = ref(true);
     const scrollToMessageAnchor = vi.fn();
+    const wrapRef = {};
+    const getWrapRef = vi.fn(() => wrapRef);
     const pushPseudoRoute = vi.fn();
 
     selectChatMessageNavigatorItem({
       item: { id: " chat-message-3 " },
       currentMessageAnchorId,
-      messageListPanelRef: ref({ scrollToMessageAnchor }),
+      messageListPanelRef: ref({ getWrapRef, scrollToMessageAnchor }),
       isMobile: ref(true),
       mobileChatNavigatorVisible,
       activeSessionId: ref("session-2"),
@@ -56,6 +58,8 @@ describe("chatMessageNavigatorState", () => {
     });
 
     expect(currentMessageAnchorId.value).toBe("chat-message-3");
+    expect(getWrapRef).toHaveBeenCalledBefore(scrollToMessageAnchor);
+    expect(wrapRef.__noobotChatNavPendingAnchor).toMatchObject({ anchor: "chat-message-3" });
     expect(scrollToMessageAnchor).toHaveBeenCalledWith("chat-message-3");
     expect(mobileChatNavigatorVisible.value).toBe(false);
     expect(pushPseudoRoute).toHaveBeenCalledWith({

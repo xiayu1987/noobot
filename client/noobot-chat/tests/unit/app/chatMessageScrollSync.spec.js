@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createChatMessageScrollSync } from "../../../src/app/chatMessageScrollSync";
+import {
+  CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS,
+  createChatMessageScrollSync,
+  lockChatMessageScrollSyncToAnchor,
+} from "../../../src/app/chatMessageScrollSync";
 
 function createAnchor({ top, anchorId = "", id = "" }) {
   return {
@@ -53,6 +57,84 @@ describe("chat message scroll sync", () => {
     syncCurrentMessageAnchorId();
 
     expect(currentMessageAnchorId.value).toBe("message-2");
+  });
+
+  it("keeps the clicked navigator target highlighted while smooth scrolling past middle anchors", () => {
+    const currentMessageAnchorId = { value: "message-4" };
+    const wrapRef = createWrapRef(
+      [
+        createAnchor({ top: 0, anchorId: "message-1" }),
+        createAnchor({ top: 100, anchorId: "message-2" }),
+        createAnchor({ top: 200, anchorId: "message-3" }),
+        createAnchor({ top: 300, anchorId: "message-4" }),
+      ],
+      176,
+    );
+    const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+    const { syncCurrentMessageAnchorId } = createChatMessageScrollSync({
+      currentMessageAnchorId,
+      messageListPanelRef,
+    });
+
+    lockChatMessageScrollSyncToAnchor(wrapRef, "message-4");
+    syncCurrentMessageAnchorId();
+
+    expect(currentMessageAnchorId.value).toBe("message-4");
+  });
+
+  it("releases the navigator scroll lock when the target anchor becomes current", () => {
+    const currentMessageAnchorId = { value: "message-4" };
+    const wrapRef = createWrapRef(
+      [
+        createAnchor({ top: 0, anchorId: "message-1" }),
+        createAnchor({ top: 100, anchorId: "message-2" }),
+        createAnchor({ top: 200, anchorId: "message-3" }),
+        createAnchor({ top: 300, anchorId: "message-4" }),
+      ],
+      276,
+    );
+    const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+    const { syncCurrentMessageAnchorId } = createChatMessageScrollSync({
+      currentMessageAnchorId,
+      messageListPanelRef,
+    });
+
+    lockChatMessageScrollSyncToAnchor(wrapRef, "message-4");
+    syncCurrentMessageAnchorId();
+    wrapRef.scrollTop = 76;
+    syncCurrentMessageAnchorId();
+
+    expect(currentMessageAnchorId.value).toBe("message-2");
+  });
+
+  it("expires the navigator scroll lock and resumes normal scroll sync", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-19T00:00:00.000Z"));
+    try {
+      const currentMessageAnchorId = { value: "message-4" };
+      const wrapRef = createWrapRef(
+        [
+          createAnchor({ top: 0, anchorId: "message-1" }),
+          createAnchor({ top: 100, anchorId: "message-2" }),
+          createAnchor({ top: 200, anchorId: "message-3" }),
+          createAnchor({ top: 300, anchorId: "message-4" }),
+        ],
+        176,
+      );
+      const messageListPanelRef = { value: { getWrapRef: () => wrapRef } };
+      const { syncCurrentMessageAnchorId } = createChatMessageScrollSync({
+        currentMessageAnchorId,
+        messageListPanelRef,
+      });
+
+      lockChatMessageScrollSyncToAnchor(wrapRef, "message-4");
+      vi.advanceTimersByTime(CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS + 1);
+      syncCurrentMessageAnchorId();
+
+      expect(currentMessageAnchorId.value).toBe("message-3");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("binds passive scroll sync only once and performs an immediate sync", () => {

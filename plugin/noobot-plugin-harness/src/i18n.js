@@ -9,6 +9,59 @@ export const LOCALE = Object.freeze({
   EN_US: "en-US",
 });
 
+
+// -----------------------------------------------------------------------------
+// Harness 默认场景策略文本
+// -----------------------------------------------------------------------------
+// 这里是 general / text / programming 三个场景的默认策略正文。
+// 这些文本会并入主流程 system 层 [HARNESS_POLICY_SELECTION] 策略消息；动态策略只替换正文部分。
+export const HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS = Object.freeze({
+  [LOCALE.ZH_CN]: Object.freeze({
+    general: `通用场景策略：
+1. 先读必要上下文，再做最小可逆动作；执行后必须检查、测试、对比或观察结果。
+2. 失败先按反馈修正并重试；信息不完整、质量不确定等普通风险转成检查/验证/对比动作，不阻塞推进。
+3. 只有不可逆/破坏性、安全隐私、生产/资金、高成本外部动作、公开承诺或需求冲突才停下确认。
+4. 风格偏好、未来优化等信息性风险只记录，不阻塞执行。`,
+
+    text: `文本场景策略：
+1. 复杂任务必须先分文件：按文件拆成交付单元，逐文件产出与维护；不要把完整内容一次写进单个文件或单次回复。
+2. 边查/边搜/边核对，边写/边产出；不要等资料全部收集完才开始产出。
+3. 建议每轮推进一个可交付单元，如文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项。
+4. 外部文本到手先保真消费，提取来源路径、事实、约束、依据、交付要求和可复用片段。
+5. 每批轻量检查来源、覆盖、关键事实和格式；普通不确定性写入说明或待核对项后继续推进。
+6. 只有合规、安全、承诺、不可逆、高成本外部动作或明确需求冲突才停下确认。`,
+
+    programming: `编程场景策略：
+1. 先读必要代码、配置、测试和上下文，做最小切片可逆改动；循环执行 -> 验证/反馈 -> 修正 -> 继续。
+2. 验证是完成条件：优先跑相关测试、lint、类型检查或构建；失败先按错误修正并重试。
+3. 调用链不确定、测试可能失败、边界不全、类型/构建风险等普通风险不阻塞改动，必须转成验证动作。
+4. 只有破坏性/不可逆、安全/密钥/权限、生产数据/配置、破坏公开 API、无法合理假设的需求冲突或高代价且无法验证时才停下确认。
+5. 命名风格、未来重构、更优雅方案等信息性风险只记录，不阻塞执行。`,
+  }),
+  [LOCALE.EN_US]: Object.freeze({
+    general: `General-scenario policy:
+1. Read necessary context, then take the smallest reversible action; after acting, check, test, compare, or observe the result.
+2. Fix failures and retry; incomplete information or quality uncertainty should become inspection/verification/comparison actions, not blockers.
+3. Stop for confirmation only for irreversible/destructive actions, security/privacy, production/money, costly external actions, public commitments, or requirement conflicts.
+4. Style preferences and future improvements are informational; record them without blocking execution.`,
+
+    text: `Text-scenario policy:
+1. Complex tasks must be split into files first: make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response.
+2. Search/check while writing and producing; do not wait until all material is collected before producing.
+3. It is recommended to advance one deliverable unit each turn, such as a file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify.
+4. Faithfully consume external text once available; extract source paths, facts, constraints, evidence, delivery requirements, and reusable snippets.
+5. For each batch, lightly check source traceability, coverage, key facts, and format; record ordinary uncertainty as notes or items to verify and continue.
+6. Stop for confirmation only for compliance, safety, commitments, irreversible actions, costly external actions, or clear requirement conflicts.`,
+
+    programming: `Programming-scenario policy:
+1. Read necessary code, configuration, tests, and context, then make the smallest-slice reversible change; loop execute -> verify/feedback -> fix -> continue.
+2. Verification is required for completion: prefer relevant tests, lint, type checks, or builds; fix failures and retry.
+3. Uncertain call chains, likely test failures, incomplete edge cases, or type/build risk do not block edits; convert them into verification actions.
+4. Stop for confirmation only for destructive/irreversible changes, security/secrets/permissions, production data/config, breaking public APIs, unresolvable requirement conflicts, or costly unverifiable changes.
+5. Naming style, future refactors, and more elegant approaches are informational; record them without blocking execution.`,
+  }),
+});
+
 export const HARNESS_I18N_KEYSET = Object.freeze({
   REVIEW: Object.freeze({
     HEADER: "reviewHeader",
@@ -86,16 +139,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     POST_PLAN_FOLLOWUP_REFINEMENT: "postPlanFollowupRefinement",
     POST_PLAN_FOLLOWUP_REVISION: "postPlanFollowupRevision",
     POST_PLAN_FOLLOWUP_PLANNING: "postPlanFollowupPlanning",
-    POST_PLAN_FOLLOWUP_REFINEMENT_RISK_FIRST: "postPlanFollowupRefinementRiskFirst",
-    POST_PLAN_FOLLOWUP_REVISION_RISK_FIRST: "postPlanFollowupRevisionRiskFirst",
-    POST_PLAN_FOLLOWUP_PLANNING_RISK_FIRST: "postPlanFollowupPlanningRiskFirst",
-    POST_PLAN_FOLLOWUP_REFINEMENT_TEXT_OUTPUT_FIRST:
-      "postPlanFollowupRefinementTextOutputFirst",
-    POST_PLAN_FOLLOWUP_REVISION_TEXT_OUTPUT_FIRST:
-      "postPlanFollowupRevisionTextOutputFirst",
-    POST_PLAN_FOLLOWUP_PLANNING_TEXT_OUTPUT_FIRST:
-      "postPlanFollowupPlanningTextOutputFirst",
-    POST_PLAN_FOLLOWUP_TEXT_CONSUMPTION: "postPlanFollowupTextConsumption",
     RESPONSIBILITY_STAGE_PLANNING: "responsibilityStagePlanning",
     RESPONSIBILITY_STAGE_REVISION: "responsibilityStageRevision",
     RESPONSIBILITY_STAGE_REFINEMENT: "responsibilityStageRefinement",
@@ -103,25 +146,22 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     RESPONSIBILITY_STAGE_PHASE_ACCEPTANCE: "responsibilityStagePhaseAcceptance",
     RESPONSIBILITY_STAGE_FINAL_ACCEPTANCE: "responsibilityStageFinalAcceptance",
     RESPONSIBILITY_CONSTRAINT_TEMPLATE: "responsibilityConstraintTemplate",
-    PROGRAMMING_EXECUTION_PRINCIPLES: "programmingExecutionPrinciples",
-    PROGRAMMING_RISK_TAXONOMY: "programmingRiskTaxonomy",
-    EXECUTION_FIRST_PRINCIPLES: "executionFirstPrinciples",
-    EXECUTION_FIRST_RISK_TAXONOMY: "executionFirstRiskTaxonomy",
-    TEXT_SCENARIO_CONSUMPTION_POLICY: "textScenarioConsumptionPolicy",
-    TEXT_SCENARIO_OUTPUT_FIRST_POLICY: "textScenarioOutputFirstPolicy",
-    RISK_FIRST_PRINCIPLES: "riskFirstPrinciples",
-    RISK_FIRST_RISK_TAXONOMY: "riskFirstRiskTaxonomy",
+    RESPONSIBILITY_SCENARIO_MISMATCH_PROTOCOL:
+      "responsibilityScenarioMismatchProtocol",
+    SCENARIO_POLICY_GENERAL: "scenarioPolicyGeneral",
+    SCENARIO_POLICY_TEXT: "scenarioPolicyText",
+    SCENARIO_POLICY_PROGRAMMING: "scenarioPolicyProgramming",
     GUIDANCE_FAILURE_PROMPT_TEMPLATE: "guidanceFailurePromptTemplate",
+    DYNAMIC_POLICY_PROMPT_PROTOCOL_INSTRUCTION:
+      "dynamicPolicyPromptProtocolInstruction",
     PLANNING_LATEST_USER_GOAL_FALLBACK: "planningLatestUserGoalFallback",
     PLANNING_MAIN_PROMPT_GOAL: "planningMainPromptGoal",
     PLANNING_MAIN_PROMPT_GOAL_PROGRAMMING_FAST:
       "planningMainPromptGoalProgrammingFast",
-    PLANNING_MAIN_PROMPT_GOAL_EXECUTION_FIRST:
-      "planningMainPromptGoalExecutionFirst",
-    PLANNING_MAIN_PROMPT_GOAL_TEXT_OUTPUT_FIRST:
-      "planningMainPromptGoalTextOutputFirst",
-    PLANNING_MAIN_PROMPT_GOAL_RISK_FIRST:
-      "planningMainPromptGoalRiskFirst",
+    PLANNING_MAIN_PROMPT_GOAL_ACTION:
+      "planningMainPromptGoalAction",
+    PLANNING_MAIN_PROMPT_GOAL_TEXT:
+      "planningMainPromptGoalText",
     PLANNING_MAIN_USER_GOAL_HEADER: "planningMainUserGoalHeader",
     PLANNING_MAIN_CURRENT_TASK_GOAL_PROTOCOL: "planningMainCurrentTaskGoalProtocol",
     PLANNING_MAIN_CONSTRAINT: "planningMainConstraint",
@@ -157,12 +197,10 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     GUIDANCE_SUMMARY_NEXT_SUGGESTION_SAMPLE: "guidanceSummaryNextSuggestionSample",
     GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_SAMPLE: "guidanceSummaryProgrammingNextActionSample",
     GUIDANCE_SUMMARY_PROGRAMMING_NEXT_ACTION_RULES: "guidanceSummaryProgrammingNextActionRules",
-    GUIDANCE_SUMMARY_EXECUTION_FIRST_NEXT_ACTION_SAMPLE: "guidanceSummaryExecutionFirstNextActionSample",
-    GUIDANCE_SUMMARY_EXECUTION_FIRST_NEXT_ACTION_RULES: "guidanceSummaryExecutionFirstNextActionRules",
-    GUIDANCE_SUMMARY_TEXT_OUTPUT_NEXT_ACTION_SAMPLE: "guidanceSummaryTextOutputNextActionSample",
-    GUIDANCE_SUMMARY_TEXT_OUTPUT_NEXT_ACTION_RULES: "guidanceSummaryTextOutputNextActionRules",
-    GUIDANCE_SUMMARY_RISK_FIRST_NEXT_ACTION_SAMPLE: "guidanceSummaryRiskFirstNextActionSample",
-    GUIDANCE_SUMMARY_RISK_FIRST_NEXT_ACTION_RULES: "guidanceSummaryRiskFirstNextActionRules",
+    GUIDANCE_SUMMARY_ACTION_NEXT_ACTION_SAMPLE: "guidanceSummaryActionNextActionSample",
+    GUIDANCE_SUMMARY_ACTION_NEXT_ACTION_RULES: "guidanceSummaryActionNextActionRules",
+    GUIDANCE_SUMMARY_TEXT_NEXT_ACTION_SAMPLE: "guidanceSummaryTextNextActionSample",
+    GUIDANCE_SUMMARY_TEXT_NEXT_ACTION_RULES: "guidanceSummaryTextNextActionRules",
     GUIDANCE_SUMMARY_RULES: "guidanceSummaryRules",
     PREVIOUS_SUMMARY_CONTEXT_HEADER: "previousSummaryContextHeader",
     ACCEPTANCE_MAIN_PLAN_CONTEXT_HEADER: "acceptanceMainPlanContextHeader",
@@ -202,10 +240,9 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PROTOCOL_SUMMARY_TEXT_UPDATE_COMMAND: "protocolSummaryTextUpdateCommand",
     PROTOCOL_SUMMARY_TEXT_RULES: "protocolSummaryTextRules",
     PROTOCOL_SUMMARY_PROGRAMMING_RULES: "protocolSummaryProgrammingRules",
-    PROTOCOL_SUMMARY_EXECUTION_FIRST_RULES: "protocolSummaryExecutionFirstRules",
-    PROTOCOL_SUMMARY_TEXT_OUTPUT_FIRST_RULES:
-      "protocolSummaryTextOutputFirstRules",
-    PROTOCOL_SUMMARY_RISK_FIRST_RULES: "protocolSummaryRiskFirstRules",
+    PROTOCOL_SUMMARY_ACTION_RULES: "protocolSummaryActionRules",
+    PROTOCOL_SUMMARY_TEXT_DELIVERY_RULES:
+      "protocolSummaryTextDeliveryRules",
     PROTOCOL_ACCEPTANCE_TITLE_PHASE: "protocolAcceptanceTitlePhase",
     PROTOCOL_ACCEPTANCE_TITLE_FINAL: "protocolAcceptanceTitleFinal",
     PROTOCOL_ACCEPTANCE_OUTPUT_RULE: "protocolAcceptanceOutputRule",
@@ -233,13 +270,9 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     TASK_DEFAULT_NAME_TEMPLATE: "checklistTaskDefaultNameTemplate",
   }),
   SYSTEM_PROMPT: Object.freeze({
-    POLICY_GENERAL_BASE: "harnessPolicyGeneralBasePrompt",
-    POLICY_GENERAL_EXECUTION_FIRST: "harnessPolicyGeneralExecutionFirstPrompt",
-    POLICY_GENERAL_RISK_FIRST: "harnessPolicyGeneralRiskFirstPrompt",
-    POLICY_TEXT_BASE: "harnessPolicyTextBasePrompt",
-    POLICY_TEXT_EXECUTION_FIRST: "harnessPolicyTextExecutionFirstPrompt",
-    POLICY_TEXT_RISK_FIRST: "harnessPolicyTextRiskFirstPrompt",
-    POLICY_PROGRAMMING_EXECUTION_FIRST: "harnessPolicyProgrammingExecutionFirstPrompt",
+    POLICY_GENERAL: "harnessPolicyGeneralPrompt",
+    POLICY_TEXT: "harnessPolicyTextPrompt",
+    POLICY_PROGRAMMING: "harnessPolicyProgrammingPrompt",
     FINAL_RESPONSE: "harnessFinalResponsePrompt",
   }),
 });
@@ -391,20 +424,12 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[来自harness外部模型输出/{purpose}]",
     reviewHeader: "[Harness-Review]",
-    harnessPolicyGeneralBasePrompt:
-      "Noobot Harness 通用策略：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；最终回复保持精简且完整。",
-    harnessPolicyGeneralExecutionFirstPrompt:
-      "Noobot Harness 通用/执行优先策略：遵守用户隔离；先读必要上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务。验证是完成条件：优先跑相关测试/检查/构建，失败先修复重试；无法验证必须说明原因。仅在不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或需求冲突时停下确认。最终回复简洁说明结果与验证。",
-    harnessPolicyGeneralRiskFirstPrompt:
-      "Noobot Harness 通用策略：遵守用户隔离；按用户目标正常推进。遇到不确定性时，把非阻塞风险记录为检查、验证或小步试做；只有不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或明确需求冲突才停下确认。最终回复简洁说明结果、风险处理与验证。",
-    harnessPolicyTextBasePrompt:
-      "Noobot Harness 文本场景策略：遵守用户隔离；建议外部文本一旦来自用户输入、附件、工具结果、文件或其他来源，就优先阅读、提取并沉淀到当前任务状态/小结/产物，降低上下文裁剪后丢失的概率；建议保留关键文本内容和文件路径（无路径用 -）；最终回复保持精简且完整。",
-    harnessPolicyTextExecutionFirstPrompt:
-      "Noobot Harness 文本场景/产出优先策略：遵守用户隔离；文本模式核心是多产出，建议外部文本拿到就保真消费，优先提取关键文本内容、来源文件路径、事实、约束、关键依据、交付要求和可复用片段；按可交付文本批次持续产出；内容复杂时可以边查/边搜/边核对，边写/边产出，不必等全部资料完全收集后才开始形成产物；轻量检查覆盖、来源和格式后继续扩展，不因普通不确定性长期等待；最终回复简洁说明文本处理结果、路径、产出和检查。",
-    harnessPolicyTextRiskFirstPrompt:
-      "Noobot Harness 文本场景策略：遵守用户隔离；建议外部文本拿到就消费，优先沉淀关键文本内容与来源文件路径，降低丢失风险；文本中的非阻塞不确定性转成检查/验证动作并继续推进；只有合规、安全、承诺、不可逆或明确需求冲突才停下确认。最终回复简洁说明文本结论、路径、风险处理与验证。",
-    harnessPolicyProgrammingExecutionFirstPrompt:
-      "Noobot Harness 编程场景/执行优先策略：遵守用户隔离；先读必要代码、配置、测试和上下文，再做最小可逆修改；循环修改 -> 验证/反馈 -> 修正 -> 继续。验证是完成条件：优先运行相关测试、lint、类型检查或构建；失败先按错误修复并重试；只有不可逆/破坏性、安全凭证、生产数据、生产发布或需求冲突时停下确认。最终回复简洁说明改动文件与验证。",
+    harnessPolicyGeneralPrompt:
+      "Noobot Harness 通用策略：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；先读必要上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务。验证是完成条件：优先跑相关测试/检查/构建，失败先修复重试；无法验证必须说明原因。仅在不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或需求冲突时停下确认。最终回复简洁说明结果与验证。",
+    harnessPolicyTextPrompt:
+      "Noobot Harness 文本场景策略：遵守用户隔离；复杂任务必须先分文件，按文件拆成交付单元，逐文件产出与维护，禁止把完整内容一次写进单个文件或单次回复；边查/边搜/边核对，边写/边产出，不等资料全部收集完才开始产出；建议每轮推进一个可交付单元，如文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项；外部文本到手先保真消费并保留来源路径、事实、约束、依据和可复用片段；每批检查来源、覆盖、关键事实和格式。",
+    harnessPolicyProgrammingPrompt:
+      "Noobot Harness 编程场景策略：遵守用户隔离；先读必要代码、配置、测试和上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务。验证是完成条件：优先运行相关测试、lint、类型检查或构建；失败先按错误修复并重试；只有不可逆/破坏性、安全凭证、生产数据、生产发布或需求冲突时停下确认。最终回复简洁说明改动文件与验证。",
     harnessFinalResponsePrompt:
       "最终回复请包含：做了什么、改了哪些文件、验证情况或未验证原因、下一步建议。",
     acceptanceRawTitle: "[Harness-验收]",
@@ -457,25 +482,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningDefaultPlanText:
       "1. 需求澄清与约束确认\n2. 实施并验证核心改动\n3. 最终验收与交付",
     postPlanFollowupPlanning:
-      "计划已完成。请调用工具按计划推进；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续）。每个切片必须验证，未验证不得视为完成；低风险可逆动作不要长期等待。",
+      "计划已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     postPlanFollowupRevision:
-      "计划修正已完成。请调用工具按计划推进；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续）。每个切片必须验证，未验证不得视为完成；低风险可逆动作不要长期等待。",
+      "计划修正已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     postPlanFollowupRefinement:
-      "计划细化已完成。请调用工具按计划推进；执行优先：最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续）。每个切片必须验证，未验证不得视为完成；低风险可逆动作不要长期等待。",
-    postPlanFollowupPlanningRiskFirst:
-      "计划已完成。请调用工具按计划正常推进；遇到非阻塞风险时转成检查/验证动作后继续执行，仅真正阻塞风险才暂停确认。",
-    postPlanFollowupRevisionRiskFirst:
-      "计划修正已完成。请调用工具按计划正常推进；遇到非阻塞风险时转成检查/验证动作后继续执行，仅真正阻塞风险才暂停确认。",
-    postPlanFollowupRefinementRiskFirst:
-      "计划细化已完成。请调用工具按计划正常推进；遇到非阻塞风险时转成检查/验证动作后继续执行，仅真正阻塞风险才暂停确认。",
-    postPlanFollowupPlanningTextOutputFirst:
-      "计划已完成。请调用工具按计划推进；文本场景产出优先：先保真消费来源文本，再按可交付文本批次批量抽取、归并、撰写或改写；内容复杂时可以边查/边搜/边核对，边写/边产出；轻量检查覆盖、来源和格式后继续扩展产出；低风险普通不确定性不要长期等待。",
-    postPlanFollowupRevisionTextOutputFirst:
-      "计划修正已完成。请调用工具按计划推进；文本场景产出优先：先保真消费来源文本，再按可交付文本批次批量抽取、归并、撰写或改写；内容复杂时可以边查/边搜/边核对，边写/边产出；轻量检查覆盖、来源和格式后继续扩展产出；低风险普通不确定性不要长期等待。",
-    postPlanFollowupRefinementTextOutputFirst:
-      "计划细化已完成。请调用工具按计划推进；文本场景产出优先：先保真消费来源文本，再按可交付文本批次批量抽取、归并、撰写或改写；内容复杂时可以边查/边搜/边核对，边写/边产出；轻量检查覆盖、来源和格式后继续扩展产出；低风险普通不确定性不要长期等待。",
-    postPlanFollowupTextConsumption:
-      "文本场景建议：外部文本一旦从用户输入、附件、工具结果、文件或其他来源拿到，就优先在本轮阅读、提取并消费，沉淀关键文本内容/原文片段/结论与来源文件路径；建议相关小结带 file、line、path、text（无值用 -），降低后续上下文裁剪导致丢失的风险。",
+      "计划细化已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     responsibilityStagePlanning: "规划",
     responsibilityStageRevision: "计划修正",
     responsibilityStageRefinement: "计划细化",
@@ -484,24 +495,15 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStageFinalAcceptance: "总体验收",
     responsibilityConstraintTemplate:
       "职责约束：你当前仅负责「{stage}」。只做该职责范围内的事，禁止越权。",
-    programmingExecutionPrinciples:
-      "编程执行原则：\n1. 默认不要因普通风险点长期等待，先读必要上下文，再做最小可逆修改。\n2. 验证是完成条件：优先跑相关测试、lint、类型检查或构建。\n3. 每轮闭环：修改 -> 验证 -> 修正；失败先按错误修正并重试，不能只停留在改代码。\n4. 未知点应转化为验证动作，而不是长期阻塞。\n5. 只有不可逆、安全、生产数据、凭证、破坏性操作、需求冲突才停下确认。",
-    programmingRiskTaxonomy:
-      "编程风险分级：\nA. Blocking risk（必须停）：破坏性/不可逆、安全/密钥/权限、生产数据/生产配置、破坏公开 API、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止代码修改；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先改但必须验证）：调用链不确定、测试可能失败、边界条件不全、类型/构建可能报错。不得阻塞最小可逆修改；必须转成 npm test/lint/build/相关测试等验证动作。\nC. Informational risk（只记录不阻塞）：命名风格、未来重构、更优雅方案等；只记录，不得阻塞执行。",
-    executionFirstPrinciples:
-      "执行优先原则：\n1. 先读必要上下文，再做最小可逆动作。\n2. 验证是完成条件：执行后必须检查、测试、对比或观察结果。\n3. 失败先按反馈修正并重试，不要只做动作不验证。\n4. 只有不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或需求冲突才停下确认。",
-    executionFirstRiskTaxonomy:
-      "执行优先风险分级：\nA. Blocking risk（必须停）：不可逆/破坏性、安全/隐私/合规、资金/生产环境、公开承诺、无法合理假设的需求冲突、无法验证且代价高。只有这类风险可以阻止执行；转为 ask_user 或明确阻塞说明。\nB. Managed risk（可先做但必须验证）：信息不完整、结果可能失败、边界条件不全、质量不确定。不得阻塞最小可逆动作；必须转成检查、验证、对比或反馈动作。\nC. Informational risk（只记录不阻塞）：风格偏好、未来优化、更优雅方案等；只记录，不得阻塞执行。",
-    textScenarioConsumptionPolicy:
-      "文本场景外部文本消费建议：\n1. 一旦从用户输入、附件、工具结果、文件或外部来源获得文本内容，建议优先阅读、提取、归并到当前任务状态/小结/产物中，尽量避免只记录“稍后再看”。\n2. 为降低上下文裁剪或附件丢失风险，建议把外部文本的关键原文片段/结论与来源文件路径（没有路径用 -）写入 SUMMARY_OVERVIEW 或当前产物。\n3. 长文本优先围绕用户目标分批形成可直接使用的摘要、抽取表、对比结论、改写稿、清单或阶段产物，同时保留相关事实、约束、数字、日期、名称、路径和证据。",
-    textScenarioOutputFirstPolicy:
-      "文本场景产出优先原则：\n1. 文本模式核心是多产出；保真消费来源文本是为了支撑更多、更准、更可追溯的产物。\n2. 以“可交付文本批次”推进：每轮尽量形成可直接使用的摘要、抽取表、改写稿、对比结论、清单或阶段产物，而不是停在过小动作。\n3. 内容复杂或事实密集时，可以边查/边搜/边核对，边写/边产出；不要等全部资料完全收集后才开始形成产物。\n4. 轻量检查覆盖、来源、关键事实和格式；发现遗漏或偏差就修正并继续扩展产出。\n5. 只有合规、安全、承诺、不可逆、高成本外部动作或明确需求冲突才停下确认；普通不确定性写入说明、假设或待核对项并继续产出。",
-    riskFirstPrinciples:
-      "风险处理原则：\n1. 按用户目标正常推进，不把普通不确定性当作阻塞条件。\n2. 非阻塞风险必须转成检查、验证、对比或小步试做，并继续执行。\n3. 只有不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或明确需求冲突才暂停确认。\n4. 每个风险条目都要给出可验证动作或降级动作，不能把普通风险当作继续执行的前置条件。",
-    riskFirstRiskTaxonomy:
-      "风险处理分级：\nA. Blocking risk（仅这类可暂停）：不可逆/破坏性、安全/隐私/合规、资金/生产环境、公开承诺、明显需求冲突、无法验证且代价高；转为 ask_user、降级方案或明确阻塞说明。\nB. Managed risk（执行中验证）：信息不足、质量不确定、边界不清；转成检查、验证、对比或试点，不阻塞可逆小步执行。\nC. Informational risk（记录即可）：风格偏好、未来优化、轻微不确定性；记录但不得伪装成阻塞风险。",
+    responsibilityScenarioMismatchProtocol:
+      "如果初始场景与当前用户实际意图不匹配，必须在本次输出中追加且只追加一个 [{block}] 文本协议块，返回当前实际场景；scenario 使用 general|text|programming，reason 简述不匹配原因，prompt 写当前实际场景对应的简洁处理策略。协议格式：\n[{block}]\nscenario = general|text|programming\nreason = 初始场景与当前实际意图不匹配\nprompt:\n<当前实际场景对应的处理策略>\n[/{block}]",
+    scenarioPolicyGeneral: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.ZH_CN].general,
+    scenarioPolicyText: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.ZH_CN].text,
+    scenarioPolicyProgramming: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.ZH_CN].programming,
     guidanceFailurePromptTemplate:
       "工具失败达到阈值({reason})，请分析工具失败原因，并且给予修复建议。",
+    dynamicPolicyPromptProtocolInstruction:
+      "可选动态策略提示词协议：\n请根据用户实际意图判断是否需要调整处理风格；只有当前任务需要比默认矩阵更合适的场景策略时，才追加且只追加一个 [{block}] 块；否则不要输出该块。scenario 必须符合用户实际意图。\n该 prompt 只描述处理事情的风格/执行策略，不要涉及具体任务本身、任务结论、计划项、文件名或业务内容；尽量简洁，并且可直接作为后续主流程、followup 与 harness 辅助调用的统一场景策略块使用。\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<用于替换默认场景提示词的策略提示词>\n[/{block}]\n文本示例：\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\n文本场景动态策略：复杂任务必须先分文件，按文件拆成交付单元，逐文件产出与维护，禁止把完整内容一次写进单个文件或单次回复；边查/边搜/边核对，边写/边产出，不等资料全部收集完才开始产出；建议每轮推进一个可交付单元，如文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项；外部文本到手先保真消费并保留来源；每批检查事实、来源和格式。\n[/{block}]\n编程示例：\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\n编程场景动态策略：先读取相关代码、配置、测试和上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务；验证是完成条件，优先运行相关测试、lint、类型检查或构建，失败先按反馈修正并重试；最终说明改动文件与验证结果。\n[/{block}]",
     acceptanceMainPlanContextHeader: "计划清单上下文如下（验收时必须完整对齐）：",
     phaseAcceptanceRequestGoal:
       "目标：基于前面的上下文与 system 提供的计划修正后计划清单，仅进行当前阶段验收。",
@@ -516,13 +518,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoal:
       "目标：根据用户需求生成宏观主计划。仅限宏观步骤，严禁输出任何子计划或实施细节。",
     planningMainPromptGoalProgrammingFast:
-      "目标：生成用于编程执行的最小可执行计划切片。每个切片必须包含验证动作；不要等到所有不确定性消失。除非涉及不可逆、数据删除、安全凭证、生产发布、生产数据或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆修改 -> 运行局部测试/构建 -> 根据失败信息修正 -> 继续下一切片或补充验收说明；无法验证时必须写明未验证原因。",
-    planningMainPromptGoalExecutionFirst:
-      "目标：生成面向执行的最小可执行计划切片。每个切片必须包含验证动作；不要等到所有不确定性消失。除非涉及不可逆/破坏性操作、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则按最小切片循环执行（执行 -> 验证/反馈 -> 修正 -> 继续），不断推进。计划应倾向于：找到最相关入口 -> 做最小可逆动作 -> 运行最小验证/检查 -> 根据结果修正 -> 继续下一切片或补充验收说明；无法验证时必须写明未验证原因。",
-    planningMainPromptGoalTextOutputFirst:
-      "目标：生成面向文本多产出的可交付批次计划。每个批次应能形成可直接使用的文本产物或阶段结果；不要等到所有不确定性消失。优先安排：保真消费来源文本 -> 批量提取事实、约束、关键依据、交付要求和可复用片段 -> 归并、撰写、改写或对比成可交付产物；内容复杂时安排边查/边搜/边核对、边写/边产出的批次 -> 轻量检查覆盖、来源、关键事实和格式 -> 继续扩展下一批次或补充验收说明；无法检查时必须写明原因。",
-    planningMainPromptGoalRiskFirst:
-      "目标：生成可执行的最小计划切片，并把不确定性转成检查/验证动作。不要罗列无限风险，也不要因普通风险长期等待；非阻塞风险应写入验证动作并继续推进。计划应倾向于：确认关键约束 -> 形成可执行动作 -> 执行并验证。",
+      "目标：生成用于编程场景的可执行计划。计划项应包含明确目标、关键对象、必要验证或检查方式；具体推进方式遵守系统场景策略。",
+    planningMainPromptGoalAction:
+      "目标：生成适用于通用场景的可执行计划。计划项应包含明确目标、关键对象、必要验证或检查方式；具体推进方式遵守系统场景策略。",
+    planningMainPromptGoalText:
+      "目标：生成面向文本场景的可交付批次计划。每个批次应能形成可直接使用的文本产物或阶段结果，并包含必要的来源、覆盖或格式检查；具体推进方式遵守系统场景策略。",
     planningMainUserGoalHeader: "【用户目标】",
     planningMainCurrentTaskGoalProtocol:
       "在计划 patch 行之前，必须用以下文本协议输出当前任务目标：[CURRENT_TASK_GOAL]\\n<由计划模型提炼的一句话当前任务目标>\\n[PLAN]",
@@ -564,7 +564,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummarySampleRiskHighProgramming:
       "2. [plan=8][status=todo][risk=高][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ...",
     guidanceSummaryProgrammingRules:
-      "编程模式附加要求：涉及具体代码位置、文件变更、测试失败定位、错误堆栈或日志定位时，必须包含 file、method、line；没有可靠代码位置时使用 file=- method=- line=-，禁止编造文件、函数或行号；line 只有上下文存在明确行号时填写，否则使用 line=-。",
+      "编程场景附加要求：涉及具体代码位置、文件变更、测试失败定位、错误堆栈或日志定位时，必须包含 file、method、line；没有可靠代码位置时使用 file=- method=- line=-，禁止编造文件、函数或行号；line 只有上下文存在明确行号时填写，否则使用 line=-。",
     guidanceSummaryTextScenarioRules:
       "文本场景附加建议：外部文本信息一旦出现在用户输入、附件、工具结果、文件或其他来源中，建议在本轮优先消费并沉淀，降低后续上下文裁剪导致丢失的风险；SUMMARY_OVERVIEW 的每条相关小结建议包含 path（文件路径或 -）与 text（关键文本内容/原文片段/结论），SUMMARY_DETAIL 保留可追溯证据。",
     guidanceSummaryTextOverviewSample:
@@ -578,19 +578,15 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryProgrammingNextActionSample:
       "[NEXT_ACTION]\naction = edit|test|inspect|ask_user|final\ntarget = 文件路径/命令/问题\nreason = 简短原因\nblocking = true|false",
     guidanceSummaryProgrammingNextActionRules:
-      "编程模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 edit、test、inspect、ask_user、final 之一；target 必须是具体文件路径、命令或需要询问用户的问题；reason 必须简短；blocking=true 仅用于不可逆、安全、生产数据、凭证、破坏性操作或需求冲突，否则用 blocking=false 并继续小步执行。",
-    guidanceSummaryExecutionFirstNextActionSample:
+      "编程场景的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 edit、test、inspect、ask_user、final 之一；target 必须是具体文件路径、命令或需要询问用户的问题；reason 必须简短；blocking 根据统一场景策略填写 true|false。",
+    guidanceSummaryActionNextActionSample:
       "[NEXT_ACTION]\naction = do|verify|inspect|ask_user|final\ntarget = 对象/动作/问题\niteration_mode = smallest_slice_loop\nnext_slice = 下一最小切片\nlast_check = 最近验证/检查|-\nresult_state = done|needs_fix|blocked|unknown\nartifact_path = 产物/代码路径|-\nvalidation_cmd = 验证命令|-\nfallback_check = 替代检查|-\nreason = 简短原因\nblocking = true|false",
-    guidanceSummaryExecutionFirstNextActionRules:
-      "执行优先（最小切片，持续推进计划）模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 do、verify、inspect、ask_user、final 之一；target 必须是具体对象、动作或需要询问用户的问题；用 iteration_mode=smallest_slice_loop 表明持续按最小切片推进；next_slice 写下一步最小动作；last_check 写最近验证/检查或 -；result_state 写 done、needs_fix、blocked 或 unknown；若非编程任务中出现代码/文件/命令，artifact_path、validation_cmd、fallback_check 有则填写，无则用 -；reason 必须简短；blocking=true 仅用于不可逆/破坏性、安全/隐私/合规、资金/生产环境、高成本外部动作或需求冲突，否则用 blocking=false 并继续执行下一切片。",
-    guidanceSummaryTextOutputNextActionSample:
+    guidanceSummaryActionNextActionRules:
+      "通用场景的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 do、verify、inspect、ask_user、final 之一；target 必须是具体对象、动作或需要询问用户的问题；iteration_mode、next_slice、last_check、result_state、artifact_path、validation_cmd、fallback_check 按字段含义填写；reason 必须简短；blocking 根据统一场景策略填写 true|false。",
+    guidanceSummaryTextNextActionSample:
       "[NEXT_ACTION]\naction = consume|extract|draft|expand|revise|verify|ask_user|final\ntarget = 文本来源/产物/处理对象/问题\nbatch_mode = deliverable_text_batch\nbatch_scope = 本轮可交付文本批次\noutput_goal = 本轮要产出的内容\ncoverage_check = 来源覆盖/关键事实/格式检查|-\nresult_state = done|needs_more_text|needs_fix|blocked|unknown\nartifact_path = 产物路径|-\nreason = 简短原因\nblocking = true|false",
-    guidanceSummaryTextOutputNextActionRules:
-      "文本产出优先模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 consume、extract、draft、expand、revise、verify、ask_user、final 之一；target 必须是具体文本来源、产物、处理对象或需要询问用户的问题；用 batch_mode=deliverable_text_batch 表明按可交付文本批次持续推进；batch_scope 写本轮批次范围；output_goal 写本轮要形成的文本产物；内容复杂或事实密集时，下一步可以设计为边查/边搜/边核对、边写/边产出；coverage_check 写来源覆盖、关键事实或格式检查结果，没有则用 -；result_state 写 done、needs_more_text、needs_fix、blocked 或 unknown；artifact_path 有产物路径则填写，否则用 -；reason 必须简短；blocking=true 仅用于合规、安全、承诺、不可逆、高成本外部动作或需求冲突，否则用 blocking=false 并继续扩展产出。",
-    guidanceSummaryRiskFirstNextActionSample:
-      "[NEXT_ACTION]\naction = inspect|verify|mitigate|ask_user|final\ntarget = 风险点/检查动作/问题\nreason = 简短原因\nblocking = true|false",
-    guidanceSummaryRiskFirstNextActionRules:
-      "风险处理模式的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 inspect、verify、mitigate、ask_user、final 之一；target 必须是具体检查动作、验证动作、降级动作或需要询问用户的问题；reason 必须简短；blocking=true 仅用于 Blocking risk，否则用 blocking=false 并给出可继续执行的下一步动作。",
+    guidanceSummaryTextNextActionRules:
+      "文本场景的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 consume、extract、draft、expand、revise、verify、ask_user、final 之一；target、batch_mode、batch_scope、output_goal、coverage_check、result_state、artifact_path、reason 按字段含义填写；blocking 根据统一场景策略填写 true|false。",
     guidanceSummaryRules:
       "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结必须整合上一轮小结结果：仍有效的已完成事项、进行中事项、风险、待办和证据都要保留或更新，不得遗漏；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节；SUMMARY_DETAIL 后必须输出 [NEXT_EXECUTION_SUGGESTION]，集中给出下一步可执行建议。",
     previousSummaryContextHeader: "【上一次小结】",
@@ -632,7 +628,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "UPDATE S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径|-] line=[行号/行号范围|-] [小结内容]",
     protocolSummaryDeleteCommand: "DELETE S[小结ID]",
     protocolSummaryGeneralRules:
-      "必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION] 集中给出下一步执行建议。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、file、line、下一步执行建议与问题说明；没有位置时使用 file=- line=-。小结后请继续任务。",
+      "必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION] 集中给出下一步执行建议。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、file、line、下一步执行建议与问题说明；没有位置时使用 file=- line=-。",
     protocolSummaryProgrammingAddCommand:
       "ADD S[小结ID] plan=[主计划ID] status=[done|in_progress|risk|todo] evidence=[简短证据] file=[文件路径|-] method=[方法/函数名|-] line=[行号/行号范围|-，可多段逗号分隔] [小结内容]",
     protocolSummaryProgrammingUpdateCommand:
@@ -644,13 +640,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryTextRules:
       "文本场景建议把已获得的外部文本优先消费并沉淀；SUMMARY_OVERVIEW 每条相关小结保持 file、line、path 与 text 字段完整；file/line 没有位置时用 -，path 写来源文件路径或 -，text 写关键文本内容/原文片段/结论；SUMMARY_DETAIL 写来源、处理依据、保留/删除原因和风险，降低外部文本因上下文裁剪丢失的风险。",
     protocolSummaryProgrammingRules:
-      "编程模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=edit|test|inspect|ask_user|final，target=文件路径/命令/问题，reason=简短原因，blocking=true|false）；涉及具体代码位置、文件变更、测试失败定位、错误堆栈或日志定位时必须写明 file、method、line；没有可靠代码位置时使用 file=- method=- line=-；line 只有上下文存在明确行号时填写，否则使用 line=-；禁止编造文件、函数或行号。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、文件、方法、行号或 - 与问题说明。小结后请继续任务。",
-    protocolSummaryExecutionFirstRules:
-      "执行优先（最小切片，持续推进计划）模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=do|verify|inspect|ask_user|final，target=对象/动作/问题，iteration_mode=smallest_slice_loop，next_slice=下一最小切片，last_check=最近验证/检查|-，result_state=done|needs_fix|blocked|unknown，artifact_path=产物/代码路径|-，validation_cmd=验证命令|-，fallback_check=替代检查|-，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、循环字段、可选编程字段与问题说明。小结后请继续任务。",
-    protocolSummaryTextOutputFirstRules:
-      "文本产出优先模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=consume|extract|draft|expand|revise|verify|ask_user|final，target=文本来源/产物/处理对象/问题，batch_mode=deliverable_text_batch，batch_scope=本轮可交付文本批次，output_goal=本轮要产出的内容，coverage_check=来源覆盖/关键事实/格式检查|-，result_state=done|needs_more_text|needs_fix|blocked|unknown，artifact_path=产物路径|-，reason=简短原因，blocking=true|false）。内容复杂或事实密集时，下一步可以边查/边搜/边核对、边写/边产出，不必等全部资料完全收集后才开始形成产物。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、批次字段、产物路径或 - 与问题说明。小结后请继续任务。",
-    protocolSummaryRiskFirstRules:
-      "风险处理模式必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=inspect|verify|mitigate|ask_user|final，target=检查动作/验证动作/降级动作/问题，reason=简短原因，blocking=true|false）。blocking=true 仅用于真正阻塞风险；否则必须给出可继续执行的下一步动作。小结后请继续任务。",
+      "编程场景必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=edit|test|inspect|ask_user|final，target=文件路径/命令/问题，reason=简短原因，blocking=true|false）；涉及具体代码位置、文件变更、测试失败定位、错误堆栈或日志定位时必须写明 file、method、line；没有可靠代码位置时使用 file=- method=- line=-；line 只有上下文存在明确行号时填写，否则使用 line=-；禁止编造文件、函数或行号。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、文件、方法、行号或 - 与问题说明。",
+    protocolSummaryActionRules:
+      "通用场景必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=do|verify|inspect|ask_user|final，target=对象/动作/问题，iteration_mode=smallest_slice_loop，next_slice=下一最小切片，last_check=最近验证/检查|-，result_state=done|needs_fix|blocked|unknown，artifact_path=产物/代码路径|-，validation_cmd=验证命令|-，fallback_check=替代检查|-，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、循环字段、可选编程字段与问题说明；没有位置时使用 file=- line=-。",
+    protocolSummaryTextDeliveryRules:
+      "文本场景必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=consume|extract|draft|expand|revise|verify|ask_user|final，target=文本来源/产物/处理对象/问题，batch_mode=deliverable_text_batch，batch_scope=本轮可交付文本批次，output_goal=本轮要产出的内容，coverage_check=来源覆盖/关键事实/格式检查|-，result_state=done|needs_more_text|needs_fix|blocked|unknown，artifact_path=产物路径|-，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、批次字段、产物路径或 - 与问题说明。",
     protocolAcceptanceTitlePhase:
       "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
     protocolAcceptanceTitleFinal:
@@ -689,20 +683,12 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[Relay from harness external model/{purpose}]",
     reviewHeader: "[Harness-Review]",
-    harnessPolicyGeneralBasePrompt:
-      "Noobot Harness general policy: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; keep the final response concise and complete.",
-    harnessPolicyGeneralExecutionFirstPrompt:
-      "Noobot Harness general/execution-first policy: enforce user isolation; read necessary context, then take the smallest reversible action; loop execute -> verify/observe -> fix -> continue. Verification is required for completion: prefer relevant tests/checks/builds; fix failures and retry, or state why verification was impossible. Stop for confirmation only for irreversible/destructive, security/privacy, production/money, costly external actions, or requirement conflicts. Final response: concise result and validation.",
-    harnessPolicyGeneralRiskFirstPrompt:
-      "Noobot Harness general policy: enforce user isolation and proceed normally toward the user goal. Convert non-blocking uncertainty into inspection, verification, or small trials; stop for confirmation only for irreversible/destructive operations, security/privacy, production/money, costly external actions, or clear requirement conflicts. Final response: concise result, risk handling, and validation.",
-    harnessPolicyTextBasePrompt:
-      "Noobot Harness text-scenario policy: enforce user isolation; once external text is obtained from user input, attachments, tool results, files, or other sources, prefer reading, extracting, and persisting it into task state/summary/artifacts to reduce loss from context pruning; preserve key text content and source file path when possible (use - when absent). Final response: concise and complete.",
-    harnessPolicyTextExecutionFirstPrompt:
-      "Noobot Harness text-scenario/output-first policy: enforce user isolation; text mode optimizes for more output, and faithful consumption of source text supports more accurate, traceable output; consume external text as soon as it is available, extract key text, source paths, facts, constraints, supporting evidence, delivery requirements, and reusable snippets; keep producing in deliverable text batches; when content is complex, search/check while writing and producing instead of waiting until all material is collected; do lightweight coverage/source/format checks and continue expanding output without waiting indefinitely on ordinary uncertainty. Final response: concise text-processing result, paths, output, and checks.",
-    harnessPolicyTextRiskFirstPrompt:
-      "Noobot Harness text-scenario policy: enforce user isolation; prefer consuming external text as soon as it is available and persisting key text plus source file paths to reduce loss; convert non-blocking uncertainty into inspection/verification actions and keep moving. Stop only for compliance, safety, commitments, irreversible actions, or clear requirement conflicts. Final response: concise text conclusions, paths, risk handling, and validation.",
-    harnessPolicyProgrammingExecutionFirstPrompt:
-      "Noobot Harness programming-scenario/execution-first policy: enforce user isolation; read necessary code, configuration, tests, and context before making the smallest reversible edit; loop edit -> verify/feedback -> fix -> continue. Verification is required for completion: prefer targeted tests, lint, type checks, or builds; fix failures and retry. Stop for confirmation only for irreversible/destructive operations, security credentials, production data, production release, or requirement conflicts. Final response: concise changed files and validation.",
+    harnessPolicyGeneralPrompt:
+      "Noobot Harness general policy: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; read necessary context, then take the smallest reversible action; loop execute -> verify/observe -> fix -> continue. Verification is required for completion: prefer relevant tests/checks/builds; fix failures and retry, or state why verification was impossible. Stop for confirmation only for irreversible/destructive, security/privacy, production/money, costly external actions, or requirement conflicts. Final response: concise result and validation.",
+    harnessPolicyTextPrompt:
+      "Noobot Harness text-scenario policy: enforce user isolation; complex tasks must be split into files first; make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response; search/check while writing and producing instead of waiting until all material is collected; it is recommended to advance one deliverable unit each turn, such as a file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify; faithfully consume external text and preserve source paths, facts, constraints, evidence, and reusable snippets; check sources, coverage, key facts, and format for each batch.",
+    harnessPolicyProgrammingPrompt:
+      "Noobot Harness programming-scenario policy: enforce user isolation; read necessary code, configuration, tests, and context, then take the smallest-slice reversible action; loop execute -> verify/feedback -> fix -> continue, continuously advancing the task. Verification is required for completion: prefer targeted tests, lint, type checks, or builds; fix failures and retry. Stop for confirmation only for irreversible/destructive operations, security credentials, production data, production release, or requirement conflicts. Final response: concise changed files and validation.",
     harnessFinalResponsePrompt:
       "Final response should include: what was done, which files were changed, validation status (or why not validated), and next-step suggestions.",
     acceptanceRawTitle: "[Harness-Acceptance]",
@@ -755,25 +741,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningDefaultPlanText:
       "1. Clarify requirements and constraints\n2. Implement and verify core changes\n3. Final acceptance and delivery",
     postPlanFollowupPlanning:
-      "Plan is ready. Continue with tools in plan order; complete minimal loops: execute -> verify/observe -> fix -> continue. Every slice must be verified; unverified work is not done. Do not wait on low-risk reversible actions.",
+      "Plan is ready. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
     postPlanFollowupRevision:
-      "Plan revision is done. Continue with tools in plan order; complete minimal loops: execute -> verify/observe -> fix -> continue. Every slice must be verified; unverified work is not done. Do not wait on low-risk reversible actions.",
+      "Plan revision is done. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
     postPlanFollowupRefinement:
-      "Plan refinement is done. Continue with tools in plan order; complete minimal loops: execute -> verify/observe -> fix -> continue. Every slice must be verified; unverified work is not done. Do not wait on low-risk reversible actions.",
-    postPlanFollowupPlanningRiskFirst:
-      "Plan is ready. Continue with tools in plan order; handle key blocking risks first. Convert non-blocking risks into inspection/verification actions and keep executing.",
-    postPlanFollowupRevisionRiskFirst:
-      "Plan revision is done. Continue with tools in plan order; handle key blocking risks first. Convert non-blocking risks into inspection/verification actions and keep executing.",
-    postPlanFollowupRefinementRiskFirst:
-      "Plan refinement is done. Continue with tools in plan order; convert non-blocking risks into inspection/verification actions and keep executing. Pause only for genuinely blocking risks.",
-    postPlanFollowupPlanningTextOutputFirst:
-      "Plan is ready. Continue with tools in plan order; text scenario is output-first: faithfully consume source text, then batch-extract, merge, draft, or rewrite in deliverable text batches; when content is complex, search/check while writing and producing; do lightweight coverage, source, and format checks, then keep expanding output. Do not wait indefinitely on low-risk ordinary uncertainty.",
-    postPlanFollowupRevisionTextOutputFirst:
-      "Plan revision is done. Continue with tools in plan order; text scenario is output-first: faithfully consume source text, then batch-extract, merge, draft, or rewrite in deliverable text batches; when content is complex, search/check while writing and producing; do lightweight coverage, source, and format checks, then keep expanding output. Do not wait indefinitely on low-risk ordinary uncertainty.",
-    postPlanFollowupRefinementTextOutputFirst:
-      "Plan refinement is done. Continue with tools in plan order; text scenario is output-first: faithfully consume source text, then batch-extract, merge, draft, or rewrite in deliverable text batches; when content is complex, search/check while writing and producing; do lightweight coverage, source, and format checks, then keep expanding output. Do not wait indefinitely on low-risk ordinary uncertainty.",
-    postPlanFollowupTextConsumption:
-      "Text-scenario suggestion: once external text is obtained from user input, attachments, tool results, files, or other sources, prefer consuming it in this turn: read, extract, and preserve key text/original snippets/conclusions plus source file path. Related summaries should include file, line, path, and text (use - when absent) to reduce loss from context trimming.",
+      "Plan refinement is done. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
     responsibilityStagePlanning: "planning",
     responsibilityStageRevision: "plan revision",
     responsibilityStageRefinement: "plan refinement",
@@ -782,24 +754,15 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStageFinalAcceptance: "final acceptance",
     responsibilityConstraintTemplate:
       "Responsibility constraint: You are only responsible for {stage}. Do only this scope; do not perform out-of-scope tasks.",
-    programmingExecutionPrinciples:
-      "Programming execution principles:\n1. By default, do not wait until every risk is eliminated; read necessary context, then make the smallest reversible edit.\n2. Verification is required for completion: prefer relevant tests, lint, type checks, or builds.\n3. Loop: edit -> verify -> fix; fix failures and retry, do not only edit code without checking it.\n4. Convert unknowns into verification actions instead of long-term blockers.\n5. Stop only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks.",
-    programmingRiskTaxonomy:
-      "Programming risk taxonomy:\nA. Blocking risk (must stop): destructive/irreversible changes, security/secrets/permissions, production data/config, breaking public APIs, unresolvable requirement conflicts, or costly unverifiable changes. Only this class may block code edits; convert it to ask_user or an explicit blocking note.\nB. Managed risk (edit then verify): uncertain call chain, likely test failure, incomplete edge cases, or type/build risk. Do not block the smallest reversible edit; convert it to npm test/lint/build/targeted-test verification.\nC. Informational risk (record only): naming style, future refactor, or more elegant design; record only, never block execution.",
-    executionFirstPrinciples:
-      "Execution-first principles:\n1. Read necessary context, then take the smallest reversible action.\n2. Verification is required for completion: check, test, compare, or observe after acting.\n3. Fix failures and retry; do not only act without verifying.\n4. Stop for confirmation only for irreversible/destructive, security/privacy, production/money, costly external actions, or requirement conflicts.",
-    executionFirstRiskTaxonomy:
-      "Execution-first risk taxonomy:\nA. Blocking risk (must stop): irreversible/destructive, security/privacy/compliance, money/production, public commitments, unresolvable requirement conflicts, or costly unverifiable actions. Only this class may block execution; convert it to ask_user or an explicit blocking note.\nB. Managed risk (do then verify): incomplete information, likely failure, incomplete edge cases, or quality uncertainty. Do not block the smallest reversible action; convert it to inspection, verification, comparison, or feedback.\nC. Informational risk (record only): style preference, future optimization, or more elegant approach; record only, never block execution.",
-    textScenarioConsumptionPolicy:
-      "Text-scenario external-text consumption suggestions:\n1. Once text is obtained from user input, attachments, tool results, files, or external sources, prefer reading it promptly and folding it into task state, summary, or artifacts; try not to only note that it will be read later.\n2. To reduce loss from context pruning or attachment disappearance, consider including key source text snippets/conclusions and the source file path (use - when absent) in SUMMARY_OVERVIEW or the current artifact.\n3. For long text, prioritize deliverable batches aligned to the user goal, such as usable summaries, extraction tables, comparisons, rewrites, checklists, or stage artifacts, while preserving relevant facts, constraints, numbers, dates, names, paths, and evidence.",
-    textScenarioOutputFirstPolicy:
-      "Text-scenario output-first principles:\n1. Text mode optimizes for more output; faithful source-text consumption supports more accurate, traceable artifacts.\n2. Advance by deliverable text batches: each turn should preferably create a usable summary, extraction table, rewrite, comparison, checklist, or stage artifact instead of stopping at overly tiny actions.\n3. When content is complex or fact-dense, search/check while writing and producing; do not wait until all material is fully collected before forming artifacts.\n4. Do lightweight checks for coverage, source traceability, key facts, and format; fix omissions or drift, then continue expanding output.\n5. Stop for confirmation only for compliance, safety, commitments, irreversible actions, costly external actions, or clear requirement conflicts; record ordinary uncertainty as notes, assumptions, or items to check and keep producing.",
-    riskFirstPrinciples:
-      "Risk-handling principles:\n1. Proceed normally toward the user goal; do not treat ordinary uncertainty as a blocker.\n2. Convert non-blocking risks into inspection, verification, comparison, or small trials and keep moving.\n3. Stop for confirmation only for irreversible/destructive, security/privacy, production/money, costly external actions, or clear requirement conflicts.\n4. Every risk item must include a verifiable or fallback action; do not treat ordinary risks as prerequisites for continuing.",
-    riskFirstRiskTaxonomy:
-      "Risk-handling taxonomy:\nA. Blocking risk (only this may pause): irreversible/destructive, security/privacy/compliance, money/production, public commitments, clear requirement conflicts, or costly unverifiable actions; convert to ask_user, fallback, or an explicit blocking note.\nB. Managed risk (verify while doing): incomplete information, quality uncertainty, or unclear boundaries; convert to inspection, verification, comparison, or a pilot without blocking reversible small steps.\nC. Informational risk (record only): style preference, future optimization, or minor uncertainty; record it but do not present it as a blocker.",
+    responsibilityScenarioMismatchProtocol:
+      "If the initial scenario does not match the user's current actual intent, append exactly one [{block}] text-protocol block in this output to return the current actual scenario. Use scenario=general|text|programming; reason briefly explains the mismatch; prompt contains the concise handling policy for the current actual scenario. Protocol format:\n[{block}]\nscenario = general|text|programming\nreason = initial scenario does not match current actual intent\nprompt:\n<handling policy for the current actual scenario>\n[/{block}]",
+    scenarioPolicyGeneral: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.EN_US].general,
+    scenarioPolicyText: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.EN_US].text,
+    scenarioPolicyProgramming: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.EN_US].programming,
     guidanceFailurePromptTemplate:
       "Guidance triggered by tool failure threshold ({reason}). Please analyze the causes of tool failures and provide suggestions for fixes.",
+    dynamicPolicyPromptProtocolInstruction:
+      "Optional dynamic policy prompt protocol:\nJudge from the user's actual intent whether the handling style should be adjusted. Only if the current task needs a more suitable scenario policy than the default matrix, append exactly one [{block}] block; otherwise omit it. scenario must match the user's actual intent.\nThe prompt should describe only the handling style/execution policy, not the concrete task, task conclusions, plan items, file names, or business content. Keep it concise and directly usable as the unified scenario policy block for the main flow, followups, and auxiliary harness calls.\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<policy prompt replacing the default scenario prompt>\n[/{block}]\nText example:\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\nText-scenario dynamic policy: complex tasks must be split into files first; make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response; search/check while writing and producing instead of waiting until all material is collected; it is recommended to advance one deliverable unit each turn, such as a file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify; faithfully consume external text and preserve sources; check facts, sources, and format for each batch.\n[/{block}]\nProgramming example:\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\nProgramming-scenario dynamic policy: read relevant code, configuration, tests, and context, then take the smallest-slice reversible action; loop execute -> verify/feedback -> fix -> continue, continuously advancing the task; verification is required for completion, so prefer relevant tests, lint, type checks, or builds, fix failures based on feedback, and retry; final response must state changed files and verification results.\n[/{block}]",
     acceptanceMainPlanContextHeader:
       "Plan checklist context (must be fully respected during acceptance validation):",
     phaseAcceptanceRequestGoal:
@@ -815,13 +778,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainPromptGoal:
       "Goal: Generate a high-level main plan from the user goal. Only high-level steps; no sub-steps or implementation details.",
     planningMainPromptGoalProgrammingFast:
-      "Goal: generate the smallest executable plan slice for programming work. Every slice must include verification. Do not wait until every uncertainty is gone; unless the task involves irreversible operations, data deletion, security credentials, production release, production data, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> make the smallest reversible edit -> run local tests/build -> fix based on failures -> continue to the next slice or add acceptance notes; if verification is impossible, state why.",
-    planningMainPromptGoalExecutionFirst:
-      "Goal: generate the smallest executable plan slice for execution. Every slice must include verification. Do not wait until every uncertainty is gone; unless the task involves irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts, continuously execute smallest slices (execute -> verify/feedback -> fix -> continue). Prefer: find the most relevant entry point -> take the smallest reversible action -> run the smallest verification/inspection -> fix based on results -> continue to the next slice or add acceptance notes; if verification is impossible, state why.",
-    planningMainPromptGoalTextOutputFirst:
-      "Goal: generate a deliverable-batch plan for high-throughput text output. Each batch should produce directly usable text artifacts or stage results; do not wait until every uncertainty is gone. Prefer: faithfully consume source text -> batch-extract facts, constraints, supporting evidence, delivery requirements, and reusable snippets -> merge, draft, rewrite, or compare into deliverable artifacts; for complex content, plan batches that search/check while writing and producing -> do lightweight coverage/source/key-fact/format checks -> continue the next batch or add acceptance notes; if checking is impossible, state why.",
-    planningMainPromptGoalRiskFirst:
-      "Goal: generate the smallest plan slice that balances risk control with execution progress. Prioritize key risks that may block execution, but do not list unlimited risks; convert non-blocking risks into inspection/verification actions and keep moving. Prefer: find the key uncertainty -> perform the smallest inspection or confirmation -> form an executable action -> execute and verify.",
+      "Goal: generate an executable plan for programming scenarios. Each plan item should include a clear target, key object, and necessary verification or inspection; follow the unified scenario policy below for execution style.",
+    planningMainPromptGoalAction:
+      "Goal: generate an executable plan for general scenarios. Each plan item should include a clear target, key object, and necessary verification or inspection; follow the unified scenario policy below for execution style.",
+    planningMainPromptGoalText:
+      "Goal: generate a deliverable-batch plan for text scenarios. Each batch should produce directly usable text artifacts or stage results and include necessary source, coverage, or format checks; follow the unified scenario policy below for delivery style.",
     planningMainUserGoalHeader: "[User Goal]",
     planningMainCurrentTaskGoalProtocol:
       "Before plan patch lines, output the current task goal using this text protocol: [CURRENT_TASK_GOAL]\\n<one concise current task goal synthesized by the planning model>\\n[PLAN]",
@@ -859,7 +820,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummarySampleRiskHighProgramming:
       "2. [plan=8][status=todo][risk=high][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ...",
     guidanceSummaryProgrammingRules:
-      "Programming-mode additional requirement: include file, method, and line when there is a concrete code location, file change, test-failure location, stack trace, or log location; use file=- method=- line=- when no reliable code location exists, and never fabricate file/function/line; fill line only when explicit line numbers exist in context, otherwise use line=-.",
+      "Programming-scenario additional requirement: include file, method, and line when there is a concrete code location, file change, test-failure location, stack trace, or log location; use file=- method=- line=- when no reliable code location exists, and never fabricate file/function/line; fill line only when explicit line numbers exist in context, otherwise use line=-.",
     guidanceSummaryTextScenarioRules:
       "Text-scenario additional suggestion: once external text appears in user input, attachments, tool results, files, or any other source, prefer consuming and persisting it in this turn to reduce later loss from context pruning; each relevant SUMMARY_OVERVIEW item should include path (file path or -) and text (key source text/snippet/conclusion), while SUMMARY_DETAIL keeps traceable evidence.",
     guidanceSummaryTextOverviewSample:
@@ -873,19 +834,15 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryProgrammingNextActionSample:
       "[NEXT_ACTION]\naction = edit|test|inspect|ask_user|final\ntarget = file path/command/question\nreason = brief reason\nblocking = true|false",
     guidanceSummaryProgrammingNextActionRules:
-      "In programming mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of edit, test, inspect, ask_user, final; target must be a concrete file path, command, or user-facing question; reason must be brief; use blocking=true only for irreversible, security, production-data, credential, destructive-operation, or requirement-conflict risks; otherwise use blocking=false and continue the small-step execution loop.",
-    guidanceSummaryExecutionFirstNextActionSample:
+      "In programming scenarios, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of edit, test, inspect, ask_user, final; target must be a concrete file path, command, or user-facing question; reason must be brief; set blocking=true|false according to the unified scenario policy.",
+    guidanceSummaryActionNextActionSample:
       "[NEXT_ACTION]\naction = do|verify|inspect|ask_user|final\ntarget = object/action/question\niteration_mode = smallest_slice_loop\nnext_slice = next smallest slice\nlast_check = latest verification/inspection|-\nresult_state = done|needs_fix|blocked|unknown\nartifact_path = artifact/code path|-\nvalidation_cmd = validation command|-\nfallback_check = fallback check|-\nreason = brief reason\nblocking = true|false",
-    guidanceSummaryExecutionFirstNextActionRules:
-      "In execution-first (smallest slice, continuous plan advancement) mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of do, verify, inspect, ask_user, final; target must be a concrete object, action, or user-facing question; use iteration_mode=smallest_slice_loop to show continuous smallest-slice progress; next_slice is the next minimal action; last_check is the latest verification/inspection or -; result_state is done, needs_fix, blocked, or unknown; if a non-programming task includes code/files/commands, fill artifact_path, validation_cmd, and fallback_check when available, otherwise use -; reason must be brief; use blocking=true only for irreversible/destructive operations, security/privacy/compliance, money/production, costly external actions, or requirement conflicts; otherwise use blocking=false and continue with the next slice.",
-    guidanceSummaryTextOutputNextActionSample:
+    guidanceSummaryActionNextActionRules:
+      "For general scenarios, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of do, verify, inspect, ask_user, final; target, iteration_mode, next_slice, last_check, result_state, artifact_path, validation_cmd, fallback_check, and reason must follow the field meanings; set blocking=true|false according to the unified scenario policy.",
+    guidanceSummaryTextNextActionSample:
       "[NEXT_ACTION]\naction = consume|extract|draft|expand|revise|verify|ask_user|final\ntarget = text source/artifact/object/question\nbatch_mode = deliverable_text_batch\nbatch_scope = current deliverable text batch\noutput_goal = output to produce in this turn\ncoverage_check = source coverage/key facts/format check|-\nresult_state = done|needs_more_text|needs_fix|blocked|unknown\nartifact_path = artifact path|-\nreason = brief reason\nblocking = true|false",
-    guidanceSummaryTextOutputNextActionRules:
-      "In text output-first mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of consume, extract, draft, expand, revise, verify, ask_user, final; target must be a concrete text source, artifact, processing object, or user-facing question; use batch_mode=deliverable_text_batch to show continuous deliverable-batch progress; batch_scope is the current batch scope; output_goal is the text artifact to produce in this turn; for complex or fact-dense content, the next action may search/check while writing and producing; coverage_check is source coverage, key-fact, or format checking result, or -; result_state is done, needs_more_text, needs_fix, blocked, or unknown; fill artifact_path when available, otherwise use -; reason must be brief; use blocking=true only for compliance, safety, commitments, irreversible actions, costly external actions, or requirement conflicts; otherwise use blocking=false and keep expanding output.",
-    guidanceSummaryRiskFirstNextActionSample:
-      "[NEXT_ACTION]\naction = inspect|verify|mitigate|ask_user|final\ntarget = risk/inspection action/question\nreason = brief reason\nblocking = true|false",
-    guidanceSummaryRiskFirstNextActionRules:
-      "In risk-handling mode, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of inspect, verify, mitigate, ask_user, final; target must be a concrete inspection, verification, fallback action, or user-facing question; reason must be brief; use blocking=true only for Blocking risk; otherwise use blocking=false and provide the next action that can continue execution.",
+    guidanceSummaryTextNextActionRules:
+      "For text scenarios, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of consume, extract, draft, expand, revise, verify, ask_user, final; target, batch_mode, batch_scope, output_goal, coverage_check, result_state, artifact_path, and reason must follow the field meanings; set blocking=true|false according to the unified scenario policy.",
     guidanceSummaryRules:
       "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; this summary must integrate the previous summary results: keep or update all still-valid completed items, in-progress items, risks, todos, and evidence without omissions; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer; after SUMMARY_DETAIL, output [NEXT_EXECUTION_SUGGESTION] with centralized actionable next execution suggestions.",
     previousSummaryContextHeader: "[Previous Summary]",
@@ -928,7 +885,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
       "UPDATE S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path|-] line=[line number/range|-] [summary content]",
     protocolSummaryDeleteCommand: "DELETE S[summary_id]",
     protocolSummaryGeneralRules:
-      "Align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL with centralized next execution suggestions. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, file, line, next execution suggestion, and issue notes; use file=- line=- when no location exists. Then continue with the task.",
+      "Align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL with centralized next execution suggestions. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, file, line, next execution suggestion, and issue notes; use file=- line=- when no location exists.",
     protocolSummaryProgrammingAddCommand:
       "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path|-] method=[method/function name|-] line=[line number/range|-; comma-separated multi-segments allowed] [summary content]",
     protocolSummaryProgrammingUpdateCommand:
@@ -940,13 +897,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     protocolSummaryTextRules:
       "In text scenarios, prefer consuming and persisting obtained external text promptly; keep file, line, path, and text fields complete for every relevant SUMMARY_OVERVIEW item; use file/line as - when no location exists, path as the source file path or -, and text as the key source text/snippet/conclusion; SUMMARY_DETAIL should include source, reasoning, keep/delete reasons, and risks to reduce loss from context pruning.",
     protocolSummaryProgrammingRules:
-      "In programming mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=edit|test|inspect|ask_user|final, target=file path/command/question, reason=brief reason, blocking=true|false); include file, method, and line only for concrete code locations, file changes, test-failure locations, stack traces, or log locations; use file=- method=- line=- when no reliable code location exists; fill line only when explicit line numbers exist in context, otherwise use line=-; never fabricate file/function/line. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, file/method/line or -, and issue notes. Then continue with the task.",
-    protocolSummaryExecutionFirstRules:
-      "In execution-first (smallest slice, continuous plan advancement) mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=do|verify|inspect|ask_user|final, target=object/action/question, iteration_mode=smallest_slice_loop, next_slice=next smallest slice, last_check=latest verification/inspection|-, result_state=done|needs_fix|blocked|unknown, artifact_path=artifact/code path|-, validation_cmd=validation command|-, fallback_check=fallback check|-, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, loop fields, optional programming fields, and issue notes. Then continue with the task.",
-    protocolSummaryTextOutputFirstRules:
-      "In text output-first mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=consume|extract|draft|expand|revise|verify|ask_user|final, target=text source/artifact/object/question, batch_mode=deliverable_text_batch, batch_scope=current deliverable text batch, output_goal=output to produce in this turn, coverage_check=source coverage/key facts/format check|-, result_state=done|needs_more_text|needs_fix|blocked|unknown, artifact_path=artifact path|-, reason=brief reason, blocking=true|false). For complex or fact-dense content, the next action may search/check while writing and producing instead of waiting until all material is collected. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, batch fields, artifact path or -, and issue notes. Then continue with the task.",
-    protocolSummaryRiskFirstRules:
-      "In risk-handling mode, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=inspect|verify|mitigate|ask_user|final, target=inspection/verification/fallback action/question, reason=brief reason, blocking=true|false). Use blocking=true only for truly blocking risks; otherwise provide a next action that can continue execution. Then continue with the task.",
+      "In programming scenarios, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=edit|test|inspect|ask_user|final, target=file path/command/question, reason=brief reason, blocking=true|false); include file, method, and line only for concrete code locations, file changes, test-failure locations, stack traces, or log locations; use file=- method=- line=- when no reliable code location exists; fill line only when explicit line numbers exist in context, otherwise use line=-; never fabricate file/function/line. If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, file/method/line or -, and issue notes.",
+    protocolSummaryActionRules:
+      "For general scenarios, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=do|verify|inspect|ask_user|final, target=object/action/question, iteration_mode=smallest_slice_loop, next_slice=next smallest slice, last_check=latest verification/inspection|-, result_state=done|needs_fix|blocked|unknown, artifact_path=artifact/code path|-, validation_cmd=validation command|-, fallback_check=fallback check|-, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, loop fields, optional programming fields, and issue notes; use file=- line=- when no location exists.",
+    protocolSummaryTextDeliveryRules:
+      "For text scenarios, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=consume|extract|draft|expand|revise|verify|ask_user|final, target=text source/artifact/object/question, batch_mode=deliverable_text_batch, batch_scope=current deliverable text batch, output_goal=output to produce in this turn, coverage_check=source coverage/key facts/format check|-, result_state=done|needs_more_text|needs_fix|blocked|unknown, artifact_path=artifact path|-, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, batch fields, artifact path or -, and issue notes.",
     protocolAcceptanceTitlePhase:
       "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
     protocolAcceptanceTitleFinal:

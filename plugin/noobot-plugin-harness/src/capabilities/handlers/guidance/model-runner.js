@@ -11,7 +11,7 @@ import {
   PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
-  buildCapabilityModelMessages,
+  buildCapabilityProtocolModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
   getTransferPayloadFromAttachmentMetas,
@@ -53,15 +53,17 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
   buildPreviousSummaryContextMessages,
-  resolveWorkflowStrategyFlagsFromContext,
+  resolveScenarioPolicyFlagsFromContext,
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
+  buildScenarioPolicyPromptText,
 } from "../shared/workflow/prompts.js";
 import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
 import {
   formatOperationDirectoryForRelay,
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
+import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -158,10 +160,8 @@ export async function runPlanUpdateAfterSummary(
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+    dynamicPolicyPrompt,
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
   const fallbackMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "summary",
@@ -184,19 +184,22 @@ export async function runPlanUpdateAfterSummary(
       ctx,
     }),
   ];
-  const revisionMessagesFinal = buildCapabilityModelMessages({
+  const revisionWorkflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
+    programmingMode,
+    textMode,
+    dynamicPolicyPrompt,
+  });
+  const revisionMessagesFinal = buildCapabilityProtocolModelMessages({
     locale,
     agentMessages: revisionBaseMessages,
-    task: revisionTask,
-    postTaskMessages: [
-      buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
-        programmingMode,
-        textMode,
-        workflowStrategy,
-        executionFirstMode,
-        riskFirstMode,
-      }),
-    ],
+    protocolPrompt: revisionTask,
+    workflowPolicyPrompt: revisionWorkflowPolicyPrompt,
+    responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
+      programmingMode,
+      textMode,
+      dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
+    }),
   });
   let revisionResponse = null;
   try {
@@ -242,6 +245,12 @@ export async function runPlanUpdateAfterSummary(
   const revisionText =
     extractRawTextContent(revisionResponse?.content) ||
     String(revisionResponse?.text || revisionResponse?.output || "").trim();
+  applyDynamicPolicyPromptFromText(ctx, revisionText, {
+    source: "planning_revision",
+    stage: "revision",
+  });
+  const flagsAfterRevision = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const dynamicPolicyPromptAfterRevision = flagsAfterRevision.dynamicPolicyPrompt || dynamicPolicyPrompt;
   const revisionAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_revision",
     content: revisionText,
@@ -277,11 +286,9 @@ export async function runPlanUpdateAfterSummary(
     locale,
     purpose: "next_phase_plan_followup",
     content: buildPostPlanUserFollowupPrompt(locale, "revision", {
-      programmingMode,
-      textMode,
-      executionFirstMode,
-      workflowStrategy,
-      riskFirstMode,
+      programmingMode: flagsAfterRevision.programmingMode,
+      textMode: flagsAfterRevision.textMode,
+                        dynamicPolicyPrompt: dynamicPolicyPromptAfterRevision,
     }),
     dedupe: true,
   });
@@ -321,10 +328,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+    dynamicPolicyPrompt,
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
 
   const requestedAction = String(action || "auto").trim().toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
@@ -345,9 +350,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       locale,
       programmingMode,
       textMode,
-      workflowStrategy,
-      executionFirstMode,
-      riskFirstMode,
+      dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
     });
     setPendingStateWithMeta(state, "summary", false);
     state.counters.llmTurns = 0;
@@ -357,9 +361,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     prompt = buildGuidancePromptContent(locale, reason, {
       programmingMode,
       textMode,
-      workflowStrategy,
-      executionFirstMode,
-      riskFirstMode,
+      dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
     });
     setPendingStateWithMeta(state, "guidance", null);
     state.counters.consecutiveToolFailures = 0;
@@ -392,20 +395,25 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
           ...modelMessages,
           ...planChecklistContextMessages,
         ];
-  const invokerMessages = buildCapabilityModelMessages({
+  const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
+    programmingMode,
+    textMode,
+    dynamicPolicyPrompt,
+  });
+  const invokerMessages = buildCapabilityProtocolModelMessages({
     locale,
     agentMessages: modelMessagesWithChecklist,
-    task: prompt,
-    postTaskMessages:
+    protocolPrompt: prompt,
+    workflowPolicyPrompt,
+    responsibilityPrompt:
       purpose === "summary"
-        ? [buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
+        ? buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
             programmingMode,
             textMode,
-            workflowStrategy,
-            executionFirstMode,
-            riskFirstMode,
-          })]
-        : [],
+            dynamicPolicyPrompt,
+            includeWorkflowPolicy: false,
+          })
+        : "",
   });
 
   let response = null;

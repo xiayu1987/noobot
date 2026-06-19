@@ -33,13 +33,14 @@ import {
   buildPostPlanUserFollowupPrompt,
   getPlanningContextSummaryHeader,
   getPlanningSeparateModelEmptyRelay,
-  resolveWorkflowStrategyFlagsFromContext,
+  resolveScenarioPolicyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   compactOperationDirectoryForPrompt,
   formatOperationDirectoryForRelay,
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
+import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -181,6 +182,7 @@ function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOC
   const messagePlan = buildPlanningMessagePlan(locale, ctx, meta, {
     contextSummaryContent:
       `${getPlanningContextSummaryHeader(locale)}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
+    includeWorkflowPolicy: false,
   });
   const messages = renderMessagePlanForSeparateModel({
     locale,
@@ -279,13 +281,15 @@ async function handleSeparateModelPlanningProcessResult(
   meta = {},
 ) {
   const operationDirectory = resolveOperationDirectoryContext(ctx);
+  applyDynamicPolicyPromptFromText(ctx, responseText, {
+    source: "planning",
+    stage: "planning",
+  });
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+    dynamicPolicyPrompt,
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
   const relayText = [
     responseText || getPlanningSeparateModelEmptyRelay(locale),
     formatOperationDirectoryForRelay(operationDirectory),
@@ -325,9 +329,7 @@ async function handleSeparateModelPlanningProcessResult(
     content: buildPostPlanUserFollowupPrompt(locale, "planning", {
       programmingMode,
       textMode,
-      executionFirstMode,
-      workflowStrategy,
-      riskFirstMode,
+      dynamicPolicyPrompt,
     }),
     dedupe: true,
   });

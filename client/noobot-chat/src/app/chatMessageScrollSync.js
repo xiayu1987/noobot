@@ -1,3 +1,33 @@
+const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY = "__noobotChatNavPendingAnchor";
+export const CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS = 1400;
+
+function getAnchorId(anchor = {}) {
+  return String(anchor?.dataset?.chatMessageAnchor || anchor?.id || "");
+}
+
+export function lockChatMessageScrollSyncToAnchor(wrapRef, anchor = "") {
+  const normalizedAnchor = String(anchor || "").trim();
+  if (!wrapRef || !normalizedAnchor) return;
+  wrapRef[CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY] = {
+    anchor: normalizedAnchor,
+    expiresAt: Date.now() + CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS,
+  };
+}
+
+function shouldKeepNavigatorScrollLock(wrapRef, nextAnchorId = "") {
+  const lock = wrapRef?.[CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY];
+  if (!lock) return false;
+  if (Date.now() > Number(lock.expiresAt || 0)) {
+    delete wrapRef[CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY];
+    return false;
+  }
+  if (String(nextAnchorId || "") === lock.anchor) {
+    delete wrapRef[CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_KEY];
+    return false;
+  }
+  return true;
+}
+
 export function createChatMessageScrollSync({ currentMessageAnchorId, messageListPanelRef }) {
   function syncCurrentMessageAnchorId() {
     const wrapRef = messageListPanelRef.value?.getWrapRef?.();
@@ -13,9 +43,9 @@ export function createChatMessageScrollSync({ currentMessageAnchorId, messageLis
       if (Number(anchor.offsetTop || 0) <= threshold) currentAnchor = anchor;
       else break;
     }
-    currentMessageAnchorId.value = String(
-      currentAnchor?.dataset?.chatMessageAnchor || currentAnchor?.id || "",
-    );
+    const nextAnchorId = getAnchorId(currentAnchor);
+    if (shouldKeepNavigatorScrollLock(wrapRef, nextAnchorId)) return;
+    currentMessageAnchorId.value = nextAnchorId;
   }
 
   function bindChatMessageScrollSync() {

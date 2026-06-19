@@ -21,9 +21,9 @@ import {
   resolveGuidanceSummaryPromptProtocolSelection,
   buildPhaseAcceptanceRequestPromptText,
   buildPlanningMainPrompt,
-  resolveWorkflowStrategyFromContext,
+    resolveScenarioPolicyFlagsFromContext,
   buildWorkflowResponsibilityConstraintUserPrompt,
-  buildTextScenarioConsumptionPolicyText,
+  buildDefaultScenarioPolicyText,
 } from "../src/capabilities/handlers/shared/workflow/prompts.js";
 import { buildSummaryPatchProtocolText } from "../src/capabilities/handlers/shared/workflow/protocols.js";
 
@@ -98,10 +98,6 @@ test("summary prompts require file and line in every scenario, method only in pr
   assert.match(programmingPrompt, /action = edit\|test\|inspect\|ask_user\|final/);
   assert.match(programmingPrompt, /blocking = true\|false/);
   assert.match(programmingPrompt, /必须且只允许输出 1 个 \[NEXT_ACTION\]/);
-  assert.match(programmingPrompt, /默认不要因普通风险点长期等待/g);
-  assert.match(programmingPrompt, /Blocking risk（必须停）/);
-  assert.match(programmingPrompt, /Managed risk（可先改但必须验证）/);
-  assert.match(programmingPrompt, /Informational risk（只记录不阻塞）/);
   assert.match(programmingPrompt, /file=- method=- line=-/);
   assert.match(programmingPrompt, /禁止编造文件、函数或行号/);
   assert.match(programmingPrompt, /line 只有上下文存在明确行号时填写/);
@@ -109,7 +105,7 @@ test("summary prompts require file and line in every scenario, method only in pr
   assert.match(programmingPrompt, /method=\[方法\/函数名\|-\]/);
   assert.match(programmingPrompt, /line=\[行号\/行号范围\|-，可多段逗号分隔\]/);
   assert.match(programmingPrompt, /line=10-20,35,48-52/);
-  assert.match(programmingPrompt, /编程模式.*file.*method.*line/);
+  assert.match(programmingPrompt, /编程场景.*file.*method.*line/);
 
   const normalProtocol = buildSummaryPatchProtocolText("en-US");
   assert.match(normalProtocol, /\[NEXT_EXECUTION_SUGGESTION\] after SUMMARY_DETAIL/);
@@ -136,52 +132,47 @@ test("summary prompts require file and line in every scenario, method only in pr
   assert.match(programmingProtocol, /file\/method\/line or -/);
 });
 
-test("summary selection matrix makes scenario mode prompt and protocol explicit", () => {
+test("summary selection matrix uses explicit scenario without workflow mode", () => {
   const cases = [
     {
       options: { locale: "zh-CN" },
       scenario: "general",
-      workflowMode: "base",
-      promptId: "guidance_summary_instruction/general/base",
-      protocolId: "summary_patch_v1/general/base",
+      promptId: "guidance_summary_instruction/general",
+      protocolId: "summary_patch_v1/general",
       fields: ["plan", "status", "evidence", "file", "line"],
     },
     {
-      options: { locale: "zh-CN", textMode: true, executionFirstMode: true },
+      options: { locale: "zh-CN", textMode: true },
       scenario: "text",
-      workflowMode: "execution_first",
-      promptId: "guidance_summary_instruction/text/execution_first",
-      protocolId: "summary_patch_v1/text/execution_first",
+      promptId: "guidance_summary_instruction/text",
+      protocolId: "summary_patch_v1/text",
       fields: ["plan", "status", "evidence", "file", "line", "path", "text"],
     },
     {
-      options: { locale: "zh-CN", textMode: true, workflowStrategy: "risk_first" },
+      options: { locale: "zh-CN", textMode: true },
       scenario: "text",
-      workflowMode: "risk_first",
-      promptId: "guidance_summary_instruction/text/risk_first",
-      protocolId: "summary_patch_v1/text/risk_first",
+      promptId: "guidance_summary_instruction/text",
+      protocolId: "summary_patch_v1/text",
       fields: ["plan", "status", "evidence", "file", "line", "path", "text"],
     },
     {
-      options: { locale: "zh-CN", programmingMode: true, workflowStrategy: "risk_first" },
+      options: { locale: "zh-CN", programmingMode: true },
       scenario: "programming",
-      workflowMode: "execution_first",
-      promptId: "guidance_summary_instruction/programming/execution_first",
-      protocolId: "summary_patch_v1/programming/execution_first",
+      promptId: "guidance_summary_instruction/programming",
+      protocolId: "summary_patch_v1/programming",
       fields: ["plan", "status", "evidence", "file", "method", "line"],
     },
   ];
   for (const item of cases) {
     const selection = resolveGuidanceSummaryPromptProtocolSelection(item.options);
     assert.equal(selection.scenario, item.scenario);
-    assert.equal(selection.workflowMode, item.workflowMode);
     assert.equal(selection.instructionPromptId, item.promptId);
     assert.equal(selection.protocolId, item.protocolId);
     assert.deepEqual([...selection.protocolFields], item.fields);
 
     const profile = buildGuidanceSummarySelectionProfileText(item.options);
     assert.match(profile, new RegExp(`scenario = ${item.scenario}`));
-    assert.match(profile, new RegExp(`workflow_mode = ${item.workflowMode}`));
+    assert.doesNotMatch(profile, new RegExp("workflow" + "_mode"));
     assert.match(profile, new RegExp(`instruction_prompt = ${item.promptId.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&")}`));
     assert.match(profile, new RegExp(`patch_protocol = ${item.protocolId.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&")}`));
   }
@@ -191,7 +182,6 @@ test("text scenario summary prompt consumes external text and records path/text 
   const instruction = buildGuidanceSummaryInstructionPromptText({
     locale: "zh-CN",
     textMode: true,
-    executionFirstMode: true,
   });
   assert.match(instruction, /文本场景附加建议/);
   assert.match(instruction, /外部文本信息一旦出现在用户输入、附件、工具结果、文件或其他来源中，建议在本轮优先消费并沉淀/);
@@ -199,13 +189,11 @@ test("text scenario summary prompt consumes external text and records path/text 
   assert.match(instruction, /\[path=docs\/input\.txt\]\[text=关键文本片段\/结论\]/);
   assert.match(instruction, /action = consume\|extract\|draft\|expand\|revise\|verify\|ask_user\|final/);
   assert.match(instruction, /batch_mode = deliverable_text_batch/);
-  assert.match(instruction, /文本模式核心是多产出/);
   assert.doesNotMatch(instruction, /summary_patch_v1/);
 
   const protocol = buildGuidanceSummaryProtocolPromptText({
     locale: "zh-CN",
     textMode: true,
-    executionFirstMode: true,
   });
   assert.match(protocol, /summary_patch_v1/);
   assert.match(protocol, /path=\[文件路径\|-\]/);
@@ -218,27 +206,21 @@ test("text scenario summary prompt consumes external text and records path/text 
   const combined = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
     textMode: true,
-    workflowStrategy: "risk_first",
   });
-  assert.match(combined, /文本场景外部文本消费建议/);
-  assert.match(combined, /action = inspect\|verify\|mitigate\|ask_user\|final/);
+  assert.match(combined, /文本场景附加建议/);
+  assert.match(combined, /action = consume\|extract\|draft\|expand\|revise\|verify\|ask_user\|final/);
   assert.match(combined, /path=\[文件路径\|-\]/);
 });
 
-test("non-programming execution-first prompts use generic next action without code locations", () => {
+test("non-programming unified action prompts use generic next action without code locations", () => {
   const disabledPrompt = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
-    executionFirstMode: false,
   });
-  assert.doesNotMatch(disabledPrompt, /action = do\|verify\|inspect\|ask_user\|final/);
-  assert.doesNotMatch(disabledPrompt, /执行优先风险分级/);
+  assert.match(disabledPrompt, /action = do\|verify\|inspect\|ask_user\|final/);
 
   const prompt = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
-    executionFirstMode: true,
   });
-  assert.match(prompt, /执行优先原则/);
-  assert.match(prompt, /执行优先风险分级/);
   assert.match(prompt, /\[NEXT_ACTION\]/);
   assert.match(prompt, /action = do\|verify\|inspect\|ask_user\|final/);
   assert.match(prompt, /target = 对象\/动作\/问题/);
@@ -257,7 +239,6 @@ test("non-programming execution-first prompts use generic next action without co
 
   const protocol = buildSummaryPatchProtocolText({
     locale: "zh-CN",
-    executionFirstMode: true,
   });
   assert.match(protocol, /action=do\|verify\|inspect\|ask_user\|final/);
   assert.match(protocol, /target=对象\/动作\/问题/);
@@ -273,31 +254,26 @@ test("non-programming execution-first prompts use generic next action without co
   assert.doesNotMatch(protocol, /method=\[方法\/函数名\|-\]/);
 });
 
-test("non-programming execution-first planning prompt stays plan-focused but action-first", () => {
+test("non-programming unified planning prompt stays plan-focused but action-oriented", () => {
   const prompt = buildPlanningMainPrompt({
     locale: "zh-CN",
     data: { userGoal: "整理会议纪要" },
-    executionFirstMode: true,
   });
-  assert.match(prompt, /目标：生成面向执行的最小可执行计划切片/);
-  assert.match(prompt, /按最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续），不断推进/);
-  assert.match(prompt, /计划应倾向于：找到最相关入口 -> 做最小可逆动作/);
-  assert.match(prompt, /执行优先风险分级/);
+  assert.match(prompt, /目标：生成适用于通用场景的可执行计划/);
+  assert.match(prompt, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(prompt, /\[HARNESS_SCENARIO_POLICY\]/);
   assert.doesNotMatch(prompt, /生成用于编程执行的最小可执行计划切片/);
   assert.doesNotMatch(prompt, /做最小可逆修改 -> 运行局部测试\/构建/);
 });
 
-test("non-programming risk-first prompts use the same strategy pattern without code locations", () => {
+test("general scenario uses the unified action strategy without code locations", () => {
   const prompt = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
-    workflowStrategy: "risk_first",
   });
-  assert.match(prompt, /风险处理原则/);
-  assert.match(prompt, /风险处理分级/);
-  assert.doesNotMatch(prompt, /风险优先|风险.*消除|消除.*风险|风险.*解除/);
+  assert.doesNotMatch(prompt, new RegExp("风险" + "优先|风险.*消除|消除.*风险|风险.*解除"));
   assert.match(prompt, /\[NEXT_ACTION\]/);
-  assert.match(prompt, /action = inspect\|verify\|mitigate\|ask_user\|final/);
-  assert.match(prompt, /target = 风险点\/检查动作\/问题/);
+  assert.match(prompt, /action = do\|verify\|inspect\|ask_user\|final/);
+  assert.match(prompt, /target = 对象\/动作\/问题/);
   assert.match(prompt, /必须且只允许输出 1 个 \[NEXT_ACTION\]/);
   assert.match(prompt, /file=\[文件路径\|-\]/);
   assert.match(prompt, /line=\[行号\/行号范围\|-\]/);
@@ -306,136 +282,136 @@ test("non-programming risk-first prompts use the same strategy pattern without c
   const planningPrompt = buildPlanningMainPrompt({
     locale: "zh-CN",
     data: { userGoal: "整理会议纪要" },
-    workflowStrategy: "risk_first",
   });
-  assert.match(planningPrompt, /目标：生成可执行的最小计划切片/);
-  assert.match(planningPrompt, /非阻塞风险应写入验证动作并继续推进/);
+  assert.match(planningPrompt, /目标：生成适用于通用场景的可执行计划/);
+  assert.doesNotMatch(planningPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
+  assert.match(planningPrompt, /具体推进方式遵守系统场景策略/);
   assert.doesNotMatch(planningPrompt, /消除.*风险|所有风险.*解除|只有风险.*才/);
   assert.doesNotMatch(planningPrompt, /生成用于编程执行/);
 
   const protocol = buildSummaryPatchProtocolText({
     locale: "zh-CN",
-    riskFirstMode: true,
   });
-  assert.match(protocol, /action=inspect\|verify\|mitigate\|ask_user\|final/);
-  assert.match(protocol, /target=检查动作\/验证动作\/降级动作\/问题/);
+  assert.match(protocol, /action=do\|verify\|inspect\|ask_user\|final/);
+  assert.match(protocol, /target=对象\/动作\/问题/);
   assert.match(protocol, /file=\[文件路径\|-\]/);
   assert.match(protocol, /line=\[行号\/行号范围\|-\]/);
 });
 
-test("programming scenario always resolves execution-first workflow strategy", () => {
-  const strategy = resolveWorkflowStrategyFromContext(
-    {
-      runConfig: {
-        scenario: "programming",
-        plugins: {
-          harness: {
-            nonProgrammingWorkflowStrategy: "risk_first",
-          },
-        },
-      },
-    },
-    {
-      harness: {
-        nonProgrammingWorkflowStrategy: "risk_first",
-      },
-    },
-  );
-  assert.equal(strategy, "execution_first");
-
+test("programming scenario uses programming action policy", () => {
   const prompt = buildPlanningMainPrompt({
     locale: "zh-CN",
     data: { userGoal: "修复 bug" },
     programmingMode: true,
-    workflowStrategy: "risk_first",
   });
-  assert.match(prompt, /生成用于编程执行的最小可执行计划切片/);
+  assert.match(prompt, /生成用于编程场景的可执行计划/);
+  assert.doesNotMatch(prompt, /\[HARNESS_SCENARIO_POLICY\]/);
   assert.doesNotMatch(prompt, /风险降级的最小计划切片/);
 });
 
-test("post-plan followup prompt branches by execution-first workflow strategy", () => {
+test("post-plan followup prompt uses unified action workflow strategy", () => {
   const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
-    executionFirstMode: true,
-    workflowStrategy: "execution_first",
-    riskFirstMode: false,
   });
-  assert.match(executionPrompt, /执行优先/);
-  assert.match(executionPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
-  assert.doesNotMatch(executionPrompt, /风险优先策略|风险优先/);
+  assert.match(executionPrompt, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(executionPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
+  assert.doesNotMatch(executionPrompt, new RegExp("风险" + "优先策略|风险" + "优先"));
 
   const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
-    executionFirstMode: false,
-    workflowStrategy: "risk_first",
-    riskFirstMode: true,
   });
-  assert.match(riskPrompt, /按计划正常推进/);
-  assert.match(riskPrompt, /非阻塞风险.*继续执行/);
-  assert.doesNotMatch(riskPrompt, /先处理|风险优先|风险.*消除|消除.*风险|风险.*解除/);
-  assert.doesNotMatch(riskPrompt, /执行优先|消除.*风险|所有风险.*解除/);
+  assert.match(riskPrompt, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(riskPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
+  assert.doesNotMatch(riskPrompt, new RegExp("先处理|风险" + "优先|风险.*消除|消除.*风险|风险.*解除"));
+  assert.doesNotMatch(riskPrompt, new RegExp("风险" + "优先|消除.*风险|所有风险.*解除"));
 
   const defaultPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "refinement");
-  assert.match(defaultPrompt, /执行优先/);
-  assert.match(defaultPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
-  assert.doesNotMatch(defaultPrompt, /风险优先策略|风险优先/);
+  assert.match(defaultPrompt, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(defaultPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
+  assert.doesNotMatch(defaultPrompt, new RegExp("风险" + "优先策略|风险" + "优先"));
 });
 
-test("post-plan followup prompt normalizes workflow strategy aliases", () => {
-  const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
-    workflowStrategy: "safety-first",
-  });
-  assert.doesNotMatch(riskPrompt, /执行优先|最小切片/);
+test("post-plan followup prompt uses the default action strategy consistently", () => {
+  const planningPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning");
+  assert.match(planningPrompt, /具体推进方式遵守系统场景策略/);
+  assert.match(planningPrompt, /复杂任务建议不要试图一次完成/);
+  assert.match(planningPrompt, /分批推进/);
+  assert.doesNotMatch(planningPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
 
-  const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
-    workflowStrategy: "actionFirst",
-  });
-  assert.match(executionPrompt, /执行优先/);
-  assert.match(executionPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
+  const revisionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision");
+  assert.match(revisionPrompt, /具体推进方式遵守系统场景策略/);
+  assert.match(revisionPrompt, /复杂任务建议不要试图一次完成/);
+  assert.match(revisionPrompt, /分批推进/);
+  assert.doesNotMatch(revisionPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
+
+  const refinementPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "refinement");
+  assert.match(refinementPrompt, /具体推进方式遵守系统场景策略/);
+  assert.match(refinementPrompt, /复杂任务建议不要试图一次完成/);
+  assert.match(refinementPrompt, /分批推进/);
+  assert.doesNotMatch(refinementPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
 });
 
 
 test("text scenario post-plan followup suggests consuming external text promptly", () => {
   const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
     scenario: "text",
-    workflowStrategy: "execution_first",
   });
-  assert.match(executionPrompt, /产出优先/);
-  assert.match(executionPrompt, /文本场景/);
-  assert.match(executionPrompt, /保真消费来源文本/);
-  assert.match(executionPrompt, /可交付文本批次/);
-  assert.match(executionPrompt, /外部文本.*拿到.*优先在本轮阅读、提取并消费/);
-  assert.match(executionPrompt, /file、line、path、text/);
-  assert.match(executionPrompt, /上下文裁剪.*丢失/);
+  assert.match(executionPrompt, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(executionPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
 
   const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
     data: { scenario: "text" },
-    workflowStrategy: "risk_first",
   });
-  assert.match(riskPrompt, /按计划正常推进/);
-  assert.match(riskPrompt, /外部文本.*优先在本轮阅读、提取并消费/);
-  assert.doesNotMatch(riskPrompt, /先处理|风险优先|风险.*消除|消除.*风险|风险.*解除/);
+  assert.doesNotMatch(riskPrompt, new RegExp("先处理|风险" + "优先|风险.*消除|消除.*风险|风险.*解除"));
 
   const generalPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
-    workflowStrategy: "execution_first",
   });
   assert.doesNotMatch(generalPrompt, /file、line、path、text/);
 });
 
-test("text-mode post-plan followup follows text output policy from resolved flags", () => {
+test("text-mode post-plan followup follows text deliverable-batch policy from resolved flags", () => {
   const prompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
     textMode: true,
-    workflowStrategy: "execution_first",
-    executionFirstMode: true,
-    riskFirstMode: false,
   });
-  assert.match(prompt, /文本场景产出优先/);
-  assert.match(prompt, /可交付文本批次/);
-  assert.match(prompt, /保真消费来源文本/);
+  assert.match(prompt, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(prompt, /\[HARNESS_SCENARIO_POLICY\]/);
   assert.doesNotMatch(prompt, /最小切片循环执行/);
+});
+
+test("dynamic policy scenario overrides initial text mode for post-plan followup flags", () => {
+  const ctx = {
+    agentContext: {
+      payload: {
+        harness: {
+          dynamicPolicyPrompt: {
+            scenario: "programming",
+                  prompt: "Dynamic programming policy",
+          },
+        },
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            runConfig: { scenario: "text" },
+            systemRuntime: { runConfig: { scenario: "text" } },
+          },
+        },
+      },
+    },
+  };
+  const flags = resolveScenarioPolicyFlagsFromContext(ctx);
+  assert.equal(flags.programmingMode, true);
+  assert.equal(flags.textMode, false);
+
+  const prompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", flags);
+  assert.match(prompt, /具体推进方式遵守系统场景策略/);
+  assert.doesNotMatch(prompt, /\[HARNESS_SCENARIO_POLICY\]/);
+  assert.doesNotMatch(prompt, /Dynamic programming policy/);
+  assert.doesNotMatch(prompt, /文本场景策略/);
+  assert.doesNotMatch(prompt, /建议外部文本拿到就保真消费/);
 });
 
 test("text scenario consumption wording is advisory instead of mandatory", () => {
   const texts = [
-    buildTextScenarioConsumptionPolicyText("zh-CN"),
+    buildDefaultScenarioPolicyText("zh-CN", { textMode: true }),
     buildGuidanceSummaryInstructionPromptText({ locale: "zh-CN", textMode: true }),
     buildGuidanceSummaryProtocolPromptText({ locale: "zh-CN", textMode: true }),
     buildPostPlanUserFollowupPrompt("zh-CN", "planning", { scenario: "text" }),
@@ -443,8 +419,7 @@ test("text scenario consumption wording is advisory instead of mandatory", () =>
       locale: "zh-CN",
       data: { userGoal: "整理长文本" },
       textMode: true,
-      workflowStrategy: "execution_first",
-    }),
+      }),
   ].join("\n");
   assert.match(texts, /建议|优先|尽量|降低/);
   assert.doesNotMatch(texts, /外部文本[^。；\n]*(必须|禁止|不得)/);
@@ -459,39 +434,49 @@ test("programming prompts add action-first execution principles only in programm
     locale: "zh-CN",
     data: { userGoal: "修复 bug" },
   });
-  assert.match(normalPlanningPrompt, /生成宏观主计划/);
-  assert.doesNotMatch(normalPlanningPrompt, /默认不要因普通风险点长期等待/g);
-  assert.doesNotMatch(normalPlanningPrompt, /最小可执行计划切片/);
+  assert.match(normalPlanningPrompt, /生成适用于通用场景的可执行计划/);
+  assert.doesNotMatch(normalPlanningPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
 
   const programmingPlanningPrompt = buildPlanningMainPrompt({
     locale: "zh-CN",
     data: { userGoal: "修复 bug" },
     programmingMode: true,
   });
-  assert.match(programmingPlanningPrompt, /生成用于编程执行的最小可执行计划切片/);
-  assert.match(programmingPlanningPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
-  assert.match(programmingPlanningPrompt, /找到最相关入口 -> 做最小可逆修改 -> 运行局部测试\/构建 -> 根据失败信息修正 -> 继续下一切片或补充验收说明/);
+  assert.match(programmingPlanningPrompt, /生成用于编程场景的可执行计划/);
+  assert.doesNotMatch(programmingPlanningPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
   assert.doesNotMatch(programmingPlanningPrompt, /生成宏观主计划/);
-  assert.match(programmingPlanningPrompt, /默认不要因普通风险点长期等待/g);
-  assert.match(programmingPlanningPrompt, /修改 -> 验证 -> 修正/);
-  assert.match(programmingPlanningPrompt, /Blocking risk（必须停）/);
-  assert.match(programmingPlanningPrompt, /Managed risk（可先改但必须验证）/);
-  assert.match(programmingPlanningPrompt, /Informational risk（只记录不阻塞）/);
 
   const normalResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(
     "zh-CN",
     "planning",
   );
-  assert.doesNotMatch(normalResponsibilityPrompt, /默认不要因普通风险点长期等待/g);
+  assert.doesNotMatch(normalResponsibilityPrompt, /编程场景策略/);
+  assert.match(normalResponsibilityPrompt, /初始场景与当前用户实际意图不匹配/);
+  assert.match(normalResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
+  assert.match(normalResponsibilityPrompt, /scenario = general\|text\|programming/);
+  assert.doesNotMatch(normalResponsibilityPrompt, new RegExp("workflow" + "_mode"));
+
+  const revisionResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(
+    "zh-CN",
+    "revision",
+  );
+  assert.match(revisionResponsibilityPrompt, /初始场景与当前用户实际意图不匹配/);
+  assert.match(revisionResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
+
+  const refinementResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(
+    "zh-CN",
+    "refinement",
+  );
+  assert.doesNotMatch(refinementResponsibilityPrompt, /初始场景与当前用户实际意图不匹配/);
+  assert.doesNotMatch(refinementResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
 
   const programmingResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(
     "zh-CN",
     "planning",
     { programmingMode: true },
   );
-  assert.match(programmingResponsibilityPrompt, /默认不要因普通风险点长期等待/g);
-  assert.match(programmingResponsibilityPrompt, /未知点应转化为验证动作/);
-  assert.match(programmingResponsibilityPrompt, /只有这类风险可以阻止代码修改/);
+  assert.doesNotMatch(programmingResponsibilityPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
+  assert.doesNotMatch(programmingResponsibilityPrompt, /编程场景策略/);
 });
 
 test("programming acceptance prompts include risk taxonomy without changing text protocol", () => {
@@ -500,7 +485,6 @@ test("programming acceptance prompts include risk taxonomy without changing text
     data: { requestPayload: { acceptanceType: "phase" } },
   });
   assert.match(normalPhasePrompt, /验收 ID\+PATCH 协议/);
-  assert.doesNotMatch(normalPhasePrompt, /Blocking risk（必须停）/);
 
   const programmingPhasePrompt = buildPhaseAcceptanceRequestPromptText({
     locale: "zh-CN",
@@ -508,9 +492,6 @@ test("programming acceptance prompts include risk taxonomy without changing text
     programmingMode: true,
   });
   assert.match(programmingPhasePrompt, /验收 ID\+PATCH 协议/);
-  assert.match(programmingPhasePrompt, /Blocking risk（必须停）/);
-  assert.match(programmingPhasePrompt, /Managed risk（可先改但必须验证）/);
-  assert.match(programmingPhasePrompt, /Informational risk（只记录不阻塞）/);
 
   const programmingFinalPrompt = buildAcceptanceValidationRequestPromptText({
     locale: "zh-CN",
@@ -518,5 +499,4 @@ test("programming acceptance prompts include risk taxonomy without changing text
     programmingMode: true,
   });
   assert.match(programmingFinalPrompt, /验收 ID\+PATCH 协议/);
-  assert.match(programmingFinalPrompt, /只有这类风险可以阻止代码修改/);
 });

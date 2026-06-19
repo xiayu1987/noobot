@@ -40,7 +40,7 @@ export {
 } from "../shared/model/utils.js";
 
 export { extractRawTextContent } from "../shared/message/utils.js";
-export { buildCapabilityModelMessages } from "../shared/model/message-factory.js";
+export { buildCapabilityModelMessages, buildCapabilityProtocolModelMessages } from "../shared/model/message-factory.js";
 export { invokeWithReasoningRetry } from "../shared/model/invocation-utils.js";
 
 export { buildPlanSnapshot, defaultTaskChecklist, normalizeChecklistItem } from "../shared/checklist-utils.js";
