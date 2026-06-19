@@ -8,7 +8,6 @@ import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 export const DYNAMIC_POLICY_PROMPT_BLOCK = "HARNESS_DYNAMIC_POLICY_PROMPT";
 const MAX_DYNAMIC_POLICY_PROMPT_CHARS = 4000;
 const VALID_SCENARIOS = new Set(["general", "text", "programming"]);
-const VALID_WORKFLOW_MODES = new Set(["base", "execution_first", "risk_first"]);
 
 function normalizeText(value = "") {
   return String(value || "").trim();
@@ -20,14 +19,6 @@ function normalizeScenario(value = "") {
   if (text.includes("program") || text.includes("coding") || text.includes("\u7f16\u7a0b")) return "programming";
   if (text.includes("text") || text.includes("\u6587\u672c")) return "text";
   return "general";
-}
-
-function normalizeWorkflowMode(value = "") {
-  const text = normalizeText(value).toLowerCase().replace(/[-\s]+/g, "_");
-  if (VALID_WORKFLOW_MODES.has(text)) return text;
-  if (text.includes("risk")) return "risk_first";
-  if (text.includes("execution") || text.includes("action") || text.includes("output")) return "execution_first";
-  return "base";
 }
 
 function clipPrompt(text = "") {
@@ -76,9 +67,6 @@ export function parseDynamicPolicyPromptProtocol(text = "") {
   if (!prompt) return null;
   return {
     scenario: normalizeScenario(readField(lines, "scenario")),
-    workflowMode: normalizeWorkflowMode(
-      readField(lines, "workflow_mode") || readField(lines, "workflowMode") || readField(lines, "mode"),
-    ),
     reason: readField(lines, "reason"),
     prompt,
   };
@@ -88,7 +76,6 @@ export function buildDynamicPolicyPromptSignature(record = null) {
   if (!record || typeof record !== "object") return "";
   return JSON.stringify({
     scenario: normalizeScenario(record.scenario),
-    workflowMode: normalizeWorkflowMode(record.workflowMode || record.workflow_mode),
     prompt: clipPrompt(record.prompt),
   });
 }
@@ -128,7 +115,6 @@ export function resolveActiveDynamicPolicyPromptFromContext(ctx = {}) {
   if (!prompt) return null;
   return {
     scenario: normalizeScenario(record.scenario),
-    workflowMode: normalizeWorkflowMode(record.workflowMode || record.workflow_mode),
     reason: normalizeText(record.reason),
     source: normalizeText(record.source),
     stage: normalizeText(record.stage),

@@ -7,7 +7,6 @@ import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import { resolveCompletePlanChecklistText } from "../plan/checklist-context.js";
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
-import { normalizeWorkflowStrategyName } from "../../../../core/workflow-strategy.js";
 import {
   buildAcceptancePatchProtocolText as buildAcceptancePatchProtocolCoreText,
   buildPlanningMainPatchProtocolText as buildPlanningMainPatchProtocolCoreText,
@@ -48,12 +47,10 @@ const PLAN_UPDATE_POLICY = Object.freeze({
   MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,
 });
 
-const WORKFLOW_STRATEGY_MODES = WORKFLOW_PARAMS.workflow.strategy.modes;
 
 function normalizePromptOptions(options = {}) {
   const source = options && typeof options === "object" ? options : {};
   const data = source.data && typeof source.data === "object" ? source.data : {};
-  const workflowStrategy = resolvePromptWorkflowStrategy(source, data);
   const programmingMode = source.programmingMode === true || source.isProgrammingMode === true || data.programmingMode === true;
   const textMode = !programmingMode && resolveTextModeFromPromptSource(source, data);
   return {
@@ -62,21 +59,8 @@ function normalizePromptOptions(options = {}) {
     data,
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode:
-      programmingMode ||
-      workflowStrategy === WORKFLOW_STRATEGY_MODES.executionFirst ||
-      source.executionFirstMode === true ||
-      source.isExecutionFirstMode === true ||
-      data.executionFirstMode === true,
-    riskFirstMode:
-      !programmingMode &&
-      (
-        workflowStrategy === WORKFLOW_STRATEGY_MODES.riskFirst ||
-        source.riskFirstMode === true ||
-        source.isRiskFirstMode === true ||
-        data.riskFirstMode === true
-      ),
+    executionFirstMode: true,
+    riskFirstMode: false,
   };
 }
 
@@ -124,10 +108,7 @@ export function buildPostPlanUserFollowupPrompt(
 ) {
   const normalizedStage = String(stage || "planning").trim().toLowerCase();
   const promptOptions = normalizePromptOptions(options);
-  const riskFirstMode = promptOptions.riskFirstMode === true || (
-    promptOptions.executionFirstMode !== true &&
-    promptOptions.workflowStrategy === WORKFLOW_STRATEGY_MODES.riskFirst
-  );
+  const riskFirstMode = false;
   const keyPairsByStage = {
     refinement: [
       HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.POST_PLAN_FOLLOWUP_REFINEMENT,
@@ -260,8 +241,8 @@ function buildWorkflowStrategyPolicyText(
     parts.push(buildTextScenarioOutputFirstPolicyText(locale));
   } else if (programmingMode === true || executionFirstMode === true) {
     parts.push(buildExecutionFirstPolicyText(locale, { programmingMode }));
-  } else if (riskFirstMode === true) {
-    parts.push(buildRiskFirstPolicyText(locale));
+  } else {
+    parts.push(buildExecutionFirstPolicyText(locale, { programmingMode }));
   }
   if (textMode === true) parts.push(buildTextScenarioConsumptionPolicyText(locale));
   return parts.filter(Boolean).join("\n\n");
@@ -314,19 +295,8 @@ export function buildWorkflowResponsibilityConstraintUserPrompt(
   const base = baseParts.join("\n");
   const programmingMode = options?.programmingMode === true || options?.isProgrammingMode === true;
   const textMode = !programmingMode && (options?.textMode === true || options?.isTextMode === true);
-  const workflowStrategy = normalizeWorkflowStrategyName(options?.workflowStrategy || options?.promptStrategy || "");
-  const executionFirstMode =
-    programmingMode ||
-    workflowStrategy === WORKFLOW_STRATEGY_MODES.executionFirst ||
-    options?.executionFirstMode === true ||
-    options?.isExecutionFirstMode === true;
-  const riskFirstMode =
-    !programmingMode &&
-    (
-      workflowStrategy === WORKFLOW_STRATEGY_MODES.riskFirst ||
-      options?.riskFirstMode === true ||
-      options?.isRiskFirstMode === true
-    );
+  const executionFirstMode = true;
+  const riskFirstMode = false;
   if (options?.includeWorkflowPolicy === false) return base;
   const policy = buildWorkflowStrategyPolicyText(locale, {
     programmingMode,
@@ -367,7 +337,6 @@ export function buildGuidanceFailurePromptText({
   textMode = false,
   executionFirstMode = false,
   riskFirstMode = false,
-  workflowStrategy = "",
   dynamicPolicyPrompt = "",
   includeWorkflowPolicy = true,
 } = {}) {
@@ -380,12 +349,8 @@ export function buildGuidanceFailurePromptText({
     includeWorkflowPolicy === false ? "" : buildWorkflowStrategyPolicyText(locale, {
       programmingMode,
       textMode,
-      executionFirstMode:
-        executionFirstMode === true ||
-        normalizeWorkflowStrategyName(workflowStrategy) === WORKFLOW_STRATEGY_MODES.executionFirst,
-      riskFirstMode:
-        riskFirstMode === true ||
-        normalizeWorkflowStrategyName(workflowStrategy) === WORKFLOW_STRATEGY_MODES.riskFirst,
+      executionFirstMode: true,
+      riskFirstMode: false,
       dynamicPolicyPrompt,
     }),
   ].filter(Boolean).join("\n");

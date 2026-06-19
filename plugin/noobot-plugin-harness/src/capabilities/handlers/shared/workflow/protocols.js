@@ -7,9 +7,7 @@ import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import {
   HARNESS_SCENARIO,
-  HARNESS_WORKFLOW_MODE,
   resolveHarnessScenarioFromOptions,
-  resolveHarnessWorkflowModeFromOptions,
 } from "./matrix-resolver.js";
 
 function resolveLocale(locale = LOCALE.ZH_CN) {
@@ -82,13 +80,6 @@ function resolveSummaryPatchProtocolOptions(input = LOCALE.ZH_CN) {
       locale: resolveLocale(input.locale),
       programmingMode: input.programmingMode === true || input.isProgrammingMode === true,
       textMode: input.textMode === true || input.isTextMode === true,
-      executionFirstMode: input.executionFirstMode === true || input.isExecutionFirstMode === true,
-      riskFirstMode: input.riskFirstMode === true || input.isRiskFirstMode === true,
-      nonProgrammingExecutionFirst: input.nonProgrammingExecutionFirst,
-      workflowStrategy: input.workflowStrategy,
-      nonProgrammingWorkflowStrategy: input.nonProgrammingWorkflowStrategy,
-      promptStrategy: input.promptStrategy,
-      workflowMode: input.workflowMode,
       scenario: input.scenario,
       scenarioKey: input.scenarioKey,
       scenarioProfile: input.scenarioProfile,
@@ -99,14 +90,10 @@ function resolveSummaryPatchProtocolOptions(input = LOCALE.ZH_CN) {
     locale: resolveLocale(input),
     programmingMode: false,
     textMode: false,
-    executionFirstMode: false,
-    riskFirstMode: false,
   };
 }
 
 export const SUMMARY_PROTOCOL_SCENARIO = HARNESS_SCENARIO;
-export const SUMMARY_PROTOCOL_WORKFLOW_MODE = HARNESS_WORKFLOW_MODE;
-
 const SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO = Object.freeze({
   [SUMMARY_PROTOCOL_SCENARIO.GENERAL]: Object.freeze({
     addKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_GENERAL_ADD_COMMAND,
@@ -125,51 +112,32 @@ const SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO = Object.freeze({
   }),
 });
 
-const SUMMARY_PROTOCOL_RULE_KEYS_BY_MODE = Object.freeze({
-  [SUMMARY_PROTOCOL_WORKFLOW_MODE.BASE]: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_GENERAL_RULES,
-  [SUMMARY_PROTOCOL_WORKFLOW_MODE.EXECUTION_FIRST]: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_EXECUTION_FIRST_RULES,
-  [SUMMARY_PROTOCOL_WORKFLOW_MODE.RISK_FIRST]: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_RISK_FIRST_RULES,
-});
-
-function resolveSummaryProtocolRuleKeys({ scenario, workflowMode } = {}) {
+function resolveSummaryProtocolRuleKeys({ scenario } = {}) {
   if (scenario === SUMMARY_PROTOCOL_SCENARIO.PROGRAMMING) {
     return [HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_PROGRAMMING_RULES];
   }
-  if (
-    scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT &&
-    workflowMode === SUMMARY_PROTOCOL_WORKFLOW_MODE.EXECUTION_FIRST
-  ) {
+  if (scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT) {
     return [
       HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_OUTPUT_FIRST_RULES,
       HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_RULES,
     ];
   }
-  const ruleKeys = [
-    SUMMARY_PROTOCOL_RULE_KEYS_BY_MODE[workflowMode] ||
-      SUMMARY_PROTOCOL_RULE_KEYS_BY_MODE[SUMMARY_PROTOCOL_WORKFLOW_MODE.BASE],
-  ];
-  if (scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT) {
-    ruleKeys.push(HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_TEXT_RULES);
-  }
-  return ruleKeys.filter(Boolean);
+  return [HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_EXECUTION_FIRST_RULES];
 }
 
 export function resolveSummaryPatchProtocolSelection(options = LOCALE.ZH_CN) {
   const normalized = resolveSummaryPatchProtocolOptions(options);
   const scenario = resolveHarnessScenarioFromOptions(normalized);
-  const workflowMode = resolveHarnessWorkflowModeFromOptions(normalized, { scenario });
   const command = SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO[scenario] ||
     SUMMARY_PROTOCOL_COMMAND_KEYS_BY_SCENARIO[SUMMARY_PROTOCOL_SCENARIO.GENERAL];
-  const ruleKeys = resolveSummaryProtocolRuleKeys({ scenario, workflowMode });
+  const ruleKeys = resolveSummaryProtocolRuleKeys({ scenario });
   return Object.freeze({
     scenario,
-    workflowMode,
     protocolFamily: "summary_text_v2 + summary_patch_v1",
-    protocolId: `summary_patch_v1/${scenario}/${workflowMode}`,
-    nextActionProtocolId: scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT &&
-      workflowMode === SUMMARY_PROTOCOL_WORKFLOW_MODE.EXECUTION_FIRST
-      ? "next_action/text_output_first"
-      : `next_action/${workflowMode}`,
+    protocolId: `summary_patch_v1/${scenario}`,
+    nextActionProtocolId: scenario === SUMMARY_PROTOCOL_SCENARIO.TEXT
+      ? "next_action/text"
+      : "next_action/default",
     addCommandKey: command.addKey,
     updateCommandKey: command.updateKey,
     deleteCommandKey: HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.PROTOCOL_SUMMARY_DELETE_COMMAND,

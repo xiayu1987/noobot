@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
-import { normalizeWorkflowStrategyName } from "../../../../core/workflow-strategy.js";
 import { resolveActiveDynamicPolicyPromptFromContext } from "./dynamic-policy-prompt.js";
 
 export const HARNESS_SCENARIO = Object.freeze({
@@ -12,14 +10,6 @@ export const HARNESS_SCENARIO = Object.freeze({
   TEXT: "text",
   PROGRAMMING: "programming",
 });
-
-export const HARNESS_WORKFLOW_MODE = Object.freeze({
-  BASE: "base",
-  EXECUTION_FIRST: WORKFLOW_PARAMS.workflow.strategy.modes.executionFirst,
-  RISK_FIRST: WORKFLOW_PARAMS.workflow.strategy.modes.riskFirst,
-});
-
-const WORKFLOW_STRATEGY_MODES = WORKFLOW_PARAMS.workflow.strategy.modes;
 
 export function normalizeScenarioText(value = "") {
   return String(value || "").trim().toLowerCase();
@@ -56,31 +46,6 @@ export function resolveHarnessOptionCandidates(ctx = {}, meta = {}) {
     ...runConfigs.map((item) => item?.plugins?.harness),
     ...runConfigs.map((item) => item?.harness),
   ].filter((item) => item && typeof item === "object");
-}
-
-export function readFirstBooleanOption(candidates = [], keys = []) {
-  for (const source of Array.isArray(candidates) ? candidates : []) {
-    if (!source || typeof source !== "object") continue;
-    for (const key of keys) {
-      if (typeof source?.[key] === "boolean") return source[key];
-    }
-  }
-  return undefined;
-}
-
-export function readFirstStringOption(candidates = [], keys = []) {
-  for (const source of Array.isArray(candidates) ? candidates : []) {
-    if (!source || typeof source !== "object") continue;
-    for (const key of keys) {
-      const value = source?.[key];
-      if (typeof value === "string" && value.trim()) return value;
-    }
-    const nested = source?.workflowStrategy;
-    if (nested && typeof nested === "object" && typeof nested.nonProgramming === "string") {
-      return nested.nonProgramming;
-    }
-  }
-  return "";
 }
 
 function scenarioCandidatesFromOptions(options = {}) {
@@ -135,66 +100,9 @@ export function resolveHarnessScenarioFromContext(ctx = {}, options = {}) {
   return HARNESS_SCENARIO.GENERAL;
 }
 
-export function resolvePromptWorkflowStrategy(source = {}, data = {}) {
-  const candidates = [
-    source.nonProgrammingWorkflowStrategy,
-    source.promptStrategy,
-    source.workflowMode,
-    source.workflowStrategy?.nonProgramming,
-    source.workflowStrategy,
-    data.nonProgrammingWorkflowStrategy,
-    data.promptStrategy,
-    data.workflowMode,
-    data.workflowStrategy?.nonProgramming,
-    data.workflowStrategy,
-  ];
-  for (const candidate of candidates) {
-    const normalized = normalizeWorkflowStrategyName(candidate);
-    if (normalized) return normalized;
-  }
-  if (source.riskFirstMode === true || source.isRiskFirstMode === true || data.riskFirstMode === true) {
-    return WORKFLOW_STRATEGY_MODES.riskFirst;
-  }
-  if (
-    source.executionFirstMode === true ||
-    source.isExecutionFirstMode === true ||
-    source.nonProgrammingExecutionFirst === true ||
-    data.executionFirstMode === true ||
-    data.nonProgrammingExecutionFirst === true
-  ) return WORKFLOW_STRATEGY_MODES.executionFirst;
-  return "";
-}
-
-export function resolveHarnessWorkflowModeFromOptions(options = {}, { scenario = undefined } = {}) {
-  const source = options && typeof options === "object" ? options : {};
-  const data = source.data && typeof source.data === "object" ? source.data : {};
-  const resolvedScenario = scenario || resolveHarnessScenarioFromOptions(source);
-  if (resolvedScenario === HARNESS_SCENARIO.PROGRAMMING) return HARNESS_WORKFLOW_MODE.EXECUTION_FIRST;
-  const workflowStrategy = resolvePromptWorkflowStrategy(source, data);
-  if (
-    workflowStrategy === WORKFLOW_STRATEGY_MODES.executionFirst ||
-    source.executionFirstMode === true ||
-    source.isExecutionFirstMode === true ||
-    source.nonProgrammingExecutionFirst === true ||
-    data.executionFirstMode === true ||
-    data.nonProgrammingExecutionFirst === true
-  ) return HARNESS_WORKFLOW_MODE.EXECUTION_FIRST;
-  if (
-    workflowStrategy === WORKFLOW_STRATEGY_MODES.riskFirst ||
-    source.riskFirstMode === true ||
-    source.isRiskFirstMode === true ||
-    source.nonProgrammingExecutionFirst === false ||
-    data.riskFirstMode === true ||
-    data.nonProgrammingExecutionFirst === false
-  ) return HARNESS_WORKFLOW_MODE.RISK_FIRST;
-  return HARNESS_WORKFLOW_MODE.BASE;
-}
-
 export function resolveHarnessScenarioMode(ctx = {}, options = {}) {
-  const scenario = resolveHarnessScenarioFromContext(ctx, options);
   return Object.freeze({
-    scenario,
-    workflowMode: resolveHarnessWorkflowModeFromOptions(options, { scenario }),
+    scenario: resolveHarnessScenarioFromContext(ctx, options),
   });
 }
 
@@ -213,48 +121,29 @@ export function resolveTextModeFromContext(ctx = {}) {
   return resolveWorkflowThresholdModeFromContext(ctx) === "text";
 }
 
-export function resolveWorkflowStrategyFromContext(ctx = {}, meta = {}) {
-  if (resolveProgrammingModeFromContext(ctx)) {
-    return WORKFLOW_PARAMS.workflow.strategy.programming.mode;
-  }
-  const nonProgrammingStrategyParams = WORKFLOW_PARAMS.workflow.strategy.nonProgramming;
-  const candidates = resolveHarnessOptionCandidates(ctx, meta);
-  const explicitStrategy = normalizeWorkflowStrategyName(
-    readFirstStringOption(candidates, nonProgrammingStrategyParams.optionKeys),
-  );
-  if (
-    explicitStrategy &&
-    nonProgrammingStrategyParams.supportedModes.includes(explicitStrategy)
-  ) return explicitStrategy;
-  const legacyExecutionFirst = readFirstBooleanOption(
-    candidates,
-    nonProgrammingStrategyParams.legacyExecutionFirstBooleanOptionKeys,
-  );
-  if (typeof legacyExecutionFirst === "boolean") {
-    return legacyExecutionFirst
-      ? WORKFLOW_STRATEGY_MODES.executionFirst
-      : WORKFLOW_STRATEGY_MODES.riskFirst;
-  }
-  return nonProgrammingStrategyParams.defaultMode;
+export function resolvePromptWorkflowStrategy() {
+  return "";
 }
 
-export function resolveNonProgrammingExecutionFirstFromContext(ctx = {}, meta = {}) {
-  if (resolveProgrammingModeFromContext(ctx)) return true;
-  return resolveWorkflowStrategyFromContext(ctx, meta) === WORKFLOW_STRATEGY_MODES.executionFirst;
+export function resolveWorkflowStrategyFromContext() {
+  return "";
 }
 
-export function resolveExecutionFirstModeFromContext(ctx = {}, meta = {}) {
-  return resolveWorkflowStrategyFromContext(ctx, meta) === WORKFLOW_STRATEGY_MODES.executionFirst;
+export function resolveNonProgrammingExecutionFirstFromContext() {
+  return true;
 }
 
-export function resolveRiskFirstModeFromContext(ctx = {}, meta = {}) {
-  return resolveWorkflowStrategyFromContext(ctx, meta) === WORKFLOW_STRATEGY_MODES.riskFirst;
+export function resolveExecutionFirstModeFromContext() {
+  return true;
 }
 
-export function resolveWorkflowStrategyFlagsFromContext(ctx = {}, meta = {}) {
+export function resolveRiskFirstModeFromContext() {
+  return false;
+}
+
+export function resolveWorkflowStrategyFlagsFromContext(ctx = {}) {
   const dynamicPolicyPromptRecord = resolveActiveDynamicPolicyPromptFromContext(ctx);
   const dynamicScenario = String(dynamicPolicyPromptRecord?.scenario || "").trim();
-  const dynamicWorkflowMode = normalizeWorkflowStrategyName(dynamicPolicyPromptRecord?.workflowMode || "");
   const dynamicProgrammingMode = dynamicScenario === HARNESS_SCENARIO.PROGRAMMING;
   const dynamicTextMode = dynamicScenario === HARNESS_SCENARIO.TEXT;
   const programmingMode = dynamicProgrammingMode || (
@@ -265,15 +154,11 @@ export function resolveWorkflowStrategyFlagsFromContext(ctx = {}, meta = {}) {
     dynamicTextMode ||
     resolveTextModeFromContext(ctx)
   );
-  const workflowStrategy = programmingMode
-    ? WORKFLOW_STRATEGY_MODES.executionFirst
-    : dynamicWorkflowMode || resolveWorkflowStrategyFromContext(ctx, meta);
   return {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode: programmingMode || workflowStrategy === WORKFLOW_STRATEGY_MODES.executionFirst,
-    riskFirstMode: !programmingMode && workflowStrategy === WORKFLOW_STRATEGY_MODES.riskFirst,
+    executionFirstMode: true,
+    riskFirstMode: false,
     dynamicPolicyPrompt: dynamicPolicyPromptRecord?.prompt || "",
     dynamicPolicyPromptRecord,
   };

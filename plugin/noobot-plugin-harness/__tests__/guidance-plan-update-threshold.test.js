@@ -780,7 +780,6 @@ test("planning revision followup uses dynamic programming scenario over initial 
             revisedPlan,
             "[HARNESS_DYNAMIC_POLICY_PROMPT]",
             "scenario = programming",
-            "workflow_mode = execution_first",
             "reason = actual user intent is code change",
             "prompt:",
             "Dynamic policy: perform smallest-slice reversible code changes and verify after each step.",
@@ -799,7 +798,7 @@ test("planning revision followup uses dynamic programming scenario over initial 
     /next_phase_plan_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
-  assert.match(followupText, /执行优先/);
+  assert.match(followupText, /执行策略/);
   assert.match(followupText, /最小切片循环执行/);
   assert.doesNotMatch(followupText, /文本场景产出优先/);
   assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);
