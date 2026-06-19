@@ -1,3 +1,5 @@
+import { lockChatMessageScrollSyncToAnchor } from "../chatMessageScrollSync";
+
 export function normalizeChatMessageNavigatorAnchor(item = {}) {
   return String(item?.id || "").trim();
 }
@@ -36,6 +38,7 @@ export function selectChatMessageNavigatorItem({
 } = {}) {
   const anchor = normalizeChatMessageNavigatorAnchor(item);
   currentMessageAnchorId.value = anchor;
+  lockChatMessageScrollSyncToAnchor(messageListPanelRef.value?.getWrapRef?.(), anchor);
   messageListPanelRef.value?.scrollToMessageAnchor?.(anchor);
   if (isMobile.value) {
     mobileChatNavigatorVisible.value = false;
