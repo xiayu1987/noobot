@@ -222,7 +222,7 @@ export const enUSMessages = {
     "executionCommandStarted": "Started: Command: {command}",
     "executionCommandCompleted": "Completed: Command: {command}",
     "executionProcess": "Execution ({count})",
-    "injectedMessages": "Injected Messages ({count})",
+    "injectedMessages": "harness ({count})",
     "noInjectedMessages": "No injected messages",
     "thinkingDetails": "Thinking Details ({count})",
     "details": "Details",
