@@ -21,8 +21,7 @@ import {
   resolveGuidanceSummaryPromptProtocolSelection,
   buildPhaseAcceptanceRequestPromptText,
   buildPlanningMainPrompt,
-  resolveWorkflowStrategyFromContext,
-  resolveWorkflowStrategyFlagsFromContext,
+    resolveScenarioPolicyFlagsFromContext,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildTextScenarioConsumptionPolicyText,
 } from "../src/capabilities/handlers/shared/workflow/prompts.js";
@@ -110,7 +109,7 @@ test("summary prompts require file and line in every scenario, method only in pr
   assert.match(programmingPrompt, /method=\[方法\/函数名\|-\]/);
   assert.match(programmingPrompt, /line=\[行号\/行号范围\|-，可多段逗号分隔\]/);
   assert.match(programmingPrompt, /line=10-20,35,48-52/);
-  assert.match(programmingPrompt, /编程模式.*file.*method.*line/);
+  assert.match(programmingPrompt, /编程场景.*file.*method.*line/);
 
   const normalProtocol = buildSummaryPatchProtocolText("en-US");
   assert.match(normalProtocol, /\[NEXT_EXECUTION_SUGGESTION\] after SUMMARY_DETAIL/);
@@ -147,7 +146,7 @@ test("summary selection matrix uses explicit scenario without workflow mode", ()
       fields: ["plan", "status", "evidence", "file", "line"],
     },
     {
-      options: { locale: "zh-CN", textMode: true, executionFirstMode: true },
+      options: { locale: "zh-CN", textMode: true },
       scenario: "text",
       promptId: "guidance_summary_instruction/text",
       protocolId: "summary_patch_v1/text",
@@ -187,7 +186,6 @@ test("text scenario summary prompt consumes external text and records path/text 
   const instruction = buildGuidanceSummaryInstructionPromptText({
     locale: "zh-CN",
     textMode: true,
-    executionFirstMode: true,
   });
   assert.match(instruction, /文本场景附加建议/);
   assert.match(instruction, /外部文本信息一旦出现在用户输入、附件、工具结果、文件或其他来源中，建议在本轮优先消费并沉淀/);
@@ -195,13 +193,12 @@ test("text scenario summary prompt consumes external text and records path/text 
   assert.match(instruction, /\[path=docs\/input\.txt\]\[text=关键文本片段\/结论\]/);
   assert.match(instruction, /action = consume\|extract\|draft\|expand\|revise\|verify\|ask_user\|final/);
   assert.match(instruction, /batch_mode = deliverable_text_batch/);
-  assert.match(instruction, /文本模式核心是多产出/);
+  assert.match(instruction, /文本场景核心是多产出/);
   assert.doesNotMatch(instruction, /summary_patch_v1/);
 
   const protocol = buildGuidanceSummaryProtocolPromptText({
     locale: "zh-CN",
     textMode: true,
-    executionFirstMode: true,
   });
   assert.match(protocol, /summary_patch_v1/);
   assert.match(protocol, /path=\[文件路径\|-\]/);
@@ -223,14 +220,12 @@ test("text scenario summary prompt consumes external text and records path/text 
 test("non-programming unified action prompts use generic next action without code locations", () => {
   const disabledPrompt = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
-    executionFirstMode: false,
   });
   assert.match(disabledPrompt, /action = do\|verify\|inspect\|ask_user\|final/);
   assert.match(disabledPrompt, /风险分级/);
 
   const prompt = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
-    executionFirstMode: true,
   });
   assert.match(prompt, /执行原则/);
   assert.match(prompt, /风险分级/);
@@ -252,7 +247,6 @@ test("non-programming unified action prompts use generic next action without cod
 
   const protocol = buildSummaryPatchProtocolText({
     locale: "zh-CN",
-    executionFirstMode: true,
   });
   assert.match(protocol, /action=do\|verify\|inspect\|ask_user\|final/);
   assert.match(protocol, /target=对象\/动作\/问题/);
@@ -272,7 +266,6 @@ test("non-programming unified planning prompt stays plan-focused but action-orie
   const prompt = buildPlanningMainPrompt({
     locale: "zh-CN",
     data: { userGoal: "整理会议纪要" },
-    executionFirstMode: true,
   });
   assert.match(prompt, /目标：生成面向执行的最小可执行计划切片/);
   assert.match(prompt, /按最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续），不断推进/);
@@ -282,7 +275,7 @@ test("non-programming unified planning prompt stays plan-focused but action-orie
   assert.doesNotMatch(prompt, /做最小可逆修改 -> 运行局部测试\/构建/);
 });
 
-test("legacy risk-first aliases use the unified action strategy without code locations", () => {
+test("general scenario uses the unified action strategy without code locations", () => {
   const prompt = buildGuidanceSummaryPromptText({
     locale: "zh-CN",
   });
@@ -308,7 +301,6 @@ test("legacy risk-first aliases use the unified action strategy without code loc
 
   const protocol = buildSummaryPatchProtocolText({
     locale: "zh-CN",
-    riskFirstMode: true,
   });
   assert.match(protocol, /action=do\|verify\|inspect\|ask_user\|final/);
   assert.match(protocol, /target=对象\/动作\/问题/);
@@ -328,16 +320,12 @@ test("programming scenario uses programming action policy", () => {
 
 test("post-plan followup prompt uses unified action workflow strategy", () => {
   const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
-    executionFirstMode: true,
-    riskFirstMode: false,
   });
   assert.match(executionPrompt, /执行策略/);
   assert.match(executionPrompt, /最小切片循环执行（执行 -> 验证\/反馈 -> 修正 -> 继续）/);
   assert.doesNotMatch(executionPrompt, new RegExp("风险" + "优先策略|风险" + "优先"));
 
   const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
-    executionFirstMode: false,
-    riskFirstMode: true,
   });
   assert.match(riskPrompt, /执行策略/);
   assert.match(riskPrompt, /最小切片循环执行/);
@@ -363,7 +351,7 @@ test("text scenario post-plan followup suggests consuming external text promptly
   const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
     scenario: "text",
   });
-  assert.match(executionPrompt, /产出优先/);
+  assert.match(executionPrompt, /批次产出/);
   assert.match(executionPrompt, /文本场景/);
   assert.match(executionPrompt, /建议外部文本拿到就保真消费/);
   assert.match(executionPrompt, /可交付文本批次/);
@@ -374,7 +362,7 @@ test("text scenario post-plan followup suggests consuming external text promptly
   const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
     data: { scenario: "text" },
   });
-  assert.match(riskPrompt, /文本场景产出优先/);
+  assert.match(riskPrompt, /文本场景批次产出/);
   assert.match(riskPrompt, /外部文本.*优先在本轮阅读、提取并消费/);
   assert.doesNotMatch(riskPrompt, new RegExp("先处理|风险" + "优先|风险.*消除|消除.*风险|风险.*解除"));
 
@@ -383,13 +371,11 @@ test("text scenario post-plan followup suggests consuming external text promptly
   assert.doesNotMatch(generalPrompt, /file、line、path、text/);
 });
 
-test("text-mode post-plan followup follows text output policy from resolved flags", () => {
+test("text-mode post-plan followup follows text deliverable-batch policy from resolved flags", () => {
   const prompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
     textMode: true,
-    executionFirstMode: true,
-    riskFirstMode: false,
   });
-  assert.match(prompt, /文本场景产出优先/);
+  assert.match(prompt, /文本场景批次产出/);
   assert.match(prompt, /可交付文本批次/);
   assert.match(prompt, /建议外部文本拿到就保真消费/);
   assert.doesNotMatch(prompt, /最小切片循环执行/);
@@ -416,16 +402,14 @@ test("dynamic policy scenario overrides initial text mode for post-plan followup
       },
     },
   };
-  const flags = resolveWorkflowStrategyFlagsFromContext(ctx);
+  const flags = resolveScenarioPolicyFlagsFromContext(ctx);
   assert.equal(flags.programmingMode, true);
   assert.equal(flags.textMode, false);
-  assert.equal(flags.executionFirstMode, true);
-  assert.equal(flags.riskFirstMode, false);
 
   const prompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", flags);
   assert.match(prompt, /执行策略/);
   assert.match(prompt, /最小切片循环执行/);
-  assert.doesNotMatch(prompt, /文本场景产出优先/);
+  assert.doesNotMatch(prompt, /文本场景批次产出/);
   assert.doesNotMatch(prompt, /建议外部文本拿到就保真消费/);
 });
 

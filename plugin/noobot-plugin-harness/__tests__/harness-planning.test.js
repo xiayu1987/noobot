@@ -735,7 +735,7 @@ test("harness planning uses plan text flow without json repair", async () => {
   assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, true);
 });
 
-test("harness planning followup uses text output policy in text scenario", async () => {
+test("harness planning followup uses text deliverable-batch policy in text scenario", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin(
     { hookManager },
@@ -772,7 +772,7 @@ test("harness planning followup uses text output policy in text scenario", async
     /planning_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
-  assert.match(followupText, /文本场景产出优先/);
+  assert.match(followupText, /文本场景批次产出/);
   assert.match(followupText, /可交付文本批次/);
   assert.match(followupText, /建议外部文本拿到就保真消费/);
   assert.doesNotMatch(followupText, /最小切片循环执行/);
@@ -883,7 +883,7 @@ test("harness planning followup uses dynamic programming scenario over initial t
   const followupText = String(followupMessage?.content || "");
   assert.match(followupText, /执行策略/);
   assert.match(followupText, /最小切片循环执行/);
-  assert.doesNotMatch(followupText, /文本场景产出优先/);
+  assert.doesNotMatch(followupText, /文本场景批次产出/);
   assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);
 });
 

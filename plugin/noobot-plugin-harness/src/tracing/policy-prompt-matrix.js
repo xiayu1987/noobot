@@ -18,15 +18,15 @@ import {
 export const POLICY_PROMPT_SCENARIO = HARNESS_SCENARIO;
 
 export const POLICY_PROMPT_KEY_BY_SCENARIO = Object.freeze({
-  [HARNESS_SCENARIO.GENERAL]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_BASE,
-  [HARNESS_SCENARIO.TEXT]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_TEXT_BASE,
-  [HARNESS_SCENARIO.PROGRAMMING]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_PROGRAMMING_EXECUTION_FIRST,
+  [HARNESS_SCENARIO.GENERAL]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL,
+  [HARNESS_SCENARIO.TEXT]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_TEXT,
+  [HARNESS_SCENARIO.PROGRAMMING]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_PROGRAMMING,
 });
 
 export function resolvePolicyPromptSelection(ctx = {}, options = {}) {
   const scenario = resolveHarnessScenarioFromContext(ctx, options);
   const i18nKey = POLICY_PROMPT_KEY_BY_SCENARIO[scenario] ||
-    HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_BASE;
+    HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL;
   return Object.freeze({
     scenario,
     policyPromptId: `harness_policy/${scenario}`,
@@ -39,7 +39,7 @@ export function buildPolicyPromptSelectionProfileText(selection = {}) {
     "[HARNESS_POLICY_SELECTION]",
     `scenario = ${selection.scenario || HARNESS_SCENARIO.GENERAL}`,
     `policy_prompt = ${selection.policyPromptId || "harness_policy/general"}`,
-    `i18n_key = ${selection.i18nKey || HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_BASE}`,
+    `i18n_key = ${selection.i18nKey || HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL}`,
     "[/HARNESS_POLICY_SELECTION]",
   ].join("\n");
 }

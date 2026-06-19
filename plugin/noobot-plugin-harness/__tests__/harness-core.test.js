@@ -557,7 +557,7 @@ test("harness policy prompt matrix exposes scenario without workflow mode", asyn
   );
   assert.match(textPrompt, /scenario = text/);
     assert.match(textPrompt, /policy_prompt = harness_policy\/text/);
-  assert.match(textPrompt, /文本模式核心是多产出/);
+  assert.match(textPrompt, /文本场景核心是多产出/);
   assert.match(textPrompt, /建议外部文本拿到就保真消费/);
   assert.match(textPrompt, /按可交付文本批次持续产出/);
   assert.match(textPrompt, /来源文件路径/);
@@ -588,15 +588,15 @@ test("harness policy selection resolver maps scenario to i18n keys", () => {
   );
   assert.equal(
     resolvePolicyPromptSelection({}, {}).i18nKey,
-    "harnessPolicyGeneralBasePrompt",
+    "harnessPolicyGeneralPrompt",
   );
   assert.equal(
     resolvePolicyPromptSelection({ runConfig: { scenario: "text" } }, {}).i18nKey,
-    "harnessPolicyTextBasePrompt",
+    "harnessPolicyTextPrompt",
   );
   assert.equal(
     resolvePolicyPromptSelection({ runConfig: { scenario: "programming" } }, {}).i18nKey,
-    "harnessPolicyProgrammingExecutionFirstPrompt",
+    "harnessPolicyProgrammingPrompt",
   );
 });
 
@@ -612,7 +612,7 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(zh, /尽量简洁/);
   assert.match(zh, /文本示例：/);
   assert.match(zh, /文本场景动态策略/);
-  assert.match(zh, /文本模式核心是多产出/);
+  assert.match(zh, /文本场景核心是多产出/);
   assert.match(zh, /按可交付文本批次持续产出/);
   assert.match(zh, /编程示例：/);
   assert.match(zh, /编程场景动态策略/);
@@ -631,7 +631,7 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(en, /Keep it concise/);
   assert.match(en, /Text example:/);
   assert.match(en, /Text-scenario dynamic policy/);
-  assert.match(en, /text mode optimizes for more output/);
+  assert.match(en, /text scenarios optimize for more output/);
   assert.match(en, /deliverable text batches/);
   assert.match(en, /Programming example:/);
   assert.match(en, /Programming-scenario dynamic policy/);
@@ -667,7 +667,7 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
   assert.doesNotMatch(prompt, /source = planning/);
   assert.doesNotMatch(prompt, /reason = task-specific text delivery policy/);
   assert.doesNotMatch(prompt, /updated_at/);
-  assert.doesNotMatch(prompt, /Noobot Harness text-scenario\/output-first policy/);
+  assert.doesNotMatch(prompt, /Noobot Harness text-scenario\/text-delivery policy/);
 
   await injectPrompt("before_llm_call", ctx, {
     enabled: true,

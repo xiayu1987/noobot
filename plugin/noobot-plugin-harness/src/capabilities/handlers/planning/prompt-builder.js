@@ -23,9 +23,9 @@ import {
 } from "../shared/operation-directory.js";
 import {
   buildWorkflowResponsibilityConstraintUserPrompt,
-  buildWorkflowStrategyPolicyPromptText,
+  buildScenarioPolicyPromptText,
   buildPlanningMainPrompt,
-  resolveWorkflowStrategyFlagsFromContext,
+  resolveScenarioPolicyFlagsFromContext,
   getPlanningContextSummaryHeader,
   getPlanningPromptMarker,
   getPlanningPromptToolsHeader,
@@ -164,17 +164,13 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-  } = resolveWorkflowStrategyFlagsFromContext(_ctx, _meta);
+  } = resolveScenarioPolicyFlagsFromContext(_ctx, _meta);
   return buildPlanningMainPrompt({
     locale,
     marker: getPlanningPromptMarker(locale),
     data: { userGoal },
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
     includeWorkflowPolicy: options?.includeWorkflowPolicy !== false,
   });
 }
@@ -230,17 +226,11 @@ export function buildPlanningMessagePlan(
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
-  const workflowPolicyPrompt = buildWorkflowStrategyPolicyPromptText(locale, {
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
   });
   return createMessagePlan([
@@ -281,9 +271,6 @@ export function buildPlanningMessagePlan(
       content: buildWorkflowResponsibilityConstraintUserPrompt(locale, "planning", {
         programmingMode,
         textMode,
-        workflowStrategy,
-        executionFirstMode,
-        riskFirstMode,
         dynamicPolicyPrompt,
         includeWorkflowPolicy,
       }),

@@ -53,10 +53,10 @@ import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
   buildPreviousSummaryContextMessages,
-  resolveWorkflowStrategyFlagsFromContext,
+  resolveScenarioPolicyFlagsFromContext,
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
-  buildWorkflowStrategyPolicyPromptText,
+  buildScenarioPolicyPromptText,
 } from "../shared/workflow/prompts.js";
 import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-context.js";
 import {
@@ -160,11 +160,8 @@ export async function runPlanUpdateAfterSummary(
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
   const fallbackMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "summary",
@@ -187,12 +184,9 @@ export async function runPlanUpdateAfterSummary(
       ctx,
     }),
   ];
-  const revisionWorkflowPolicyPrompt = buildWorkflowStrategyPolicyPromptText(locale, {
+  const revisionWorkflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
   });
   const revisionMessagesFinal = buildCapabilityProtocolModelMessages({
@@ -203,9 +197,6 @@ export async function runPlanUpdateAfterSummary(
     responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "revision", {
       programmingMode,
       textMode,
-      workflowStrategy,
-      executionFirstMode,
-      riskFirstMode,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),
@@ -258,7 +249,7 @@ export async function runPlanUpdateAfterSummary(
     source: "planning_revision",
     stage: "revision",
   });
-  const flagsAfterRevision = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+  const flagsAfterRevision = resolveScenarioPolicyFlagsFromContext(ctx, meta);
   const dynamicPolicyPromptAfterRevision = flagsAfterRevision.dynamicPolicyPrompt || dynamicPolicyPrompt;
   const revisionAttachmentMetas = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_revision",
@@ -297,10 +288,7 @@ export async function runPlanUpdateAfterSummary(
     content: buildPostPlanUserFollowupPrompt(locale, "revision", {
       programmingMode: flagsAfterRevision.programmingMode,
       textMode: flagsAfterRevision.textMode,
-      executionFirstMode: flagsAfterRevision.executionFirstMode,
-      workflowStrategy: flagsAfterRevision.workflowStrategy,
-      riskFirstMode: flagsAfterRevision.riskFirstMode,
-      dynamicPolicyPrompt: dynamicPolicyPromptAfterRevision,
+                        dynamicPolicyPrompt: dynamicPolicyPromptAfterRevision,
     }),
     dedupe: true,
   });
@@ -340,11 +328,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
 
   const requestedAction = String(action || "auto").trim().toLowerCase();
   const allowSummary = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
@@ -365,9 +350,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       locale,
       programmingMode,
       textMode,
-      workflowStrategy,
-      executionFirstMode,
-      riskFirstMode,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     });
@@ -379,9 +361,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     prompt = buildGuidancePromptContent(locale, reason, {
       programmingMode,
       textMode,
-      workflowStrategy,
-      executionFirstMode,
-      riskFirstMode,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     });
@@ -416,12 +395,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
           ...modelMessages,
           ...planChecklistContextMessages,
         ];
-  const workflowPolicyPrompt = buildWorkflowStrategyPolicyPromptText(locale, {
+  const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
   });
   const invokerMessages = buildCapabilityProtocolModelMessages({
@@ -434,9 +410,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
         ? buildWorkflowResponsibilityConstraintUserPrompt(locale, "summary", {
             programmingMode,
             textMode,
-            workflowStrategy,
-            executionFirstMode,
-            riskFirstMode,
             dynamicPolicyPrompt,
             includeWorkflowPolicy: false,
           })

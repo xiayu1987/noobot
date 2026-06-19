@@ -27,8 +27,8 @@ import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-cont
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
-  buildWorkflowStrategyPolicyPromptText,
-  resolveWorkflowStrategyFlagsFromContext,
+  buildScenarioPolicyPromptText,
+  resolveScenarioPolicyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
 import {
   formatOperationDirectoryForRelay,
@@ -69,11 +69,8 @@ export async function runPlanningRefinementBySeparateModel(
   const {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
+  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
   const explicitTargetIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
     : [];
@@ -113,12 +110,9 @@ export async function runPlanningRefinementBySeparateModel(
       ctx,
     }),
   ];
-  const workflowPolicyPrompt = buildWorkflowStrategyPolicyPromptText(locale, {
+  const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
-    workflowStrategy,
-    executionFirstMode,
-    riskFirstMode,
     dynamicPolicyPrompt,
   });
   const refinementMessages = buildCapabilityProtocolModelMessages({
@@ -129,9 +123,6 @@ export async function runPlanningRefinementBySeparateModel(
     responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
       programmingMode,
       textMode,
-      workflowStrategy,
-      executionFirstMode,
-      riskFirstMode,
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     }),
@@ -217,9 +208,6 @@ export async function runPlanningRefinementBySeparateModel(
         buildPostPlanUserFollowupPrompt(locale, "refinement", {
           programmingMode,
           textMode,
-          executionFirstMode,
-          workflowStrategy,
-          riskFirstMode,
         }),
         formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
       ].filter(Boolean).join("\n\n"),

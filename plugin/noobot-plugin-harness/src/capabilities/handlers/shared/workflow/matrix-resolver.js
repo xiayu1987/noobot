@@ -100,12 +100,6 @@ export function resolveHarnessScenarioFromContext(ctx = {}, options = {}) {
   return HARNESS_SCENARIO.GENERAL;
 }
 
-export function resolveHarnessScenarioMode(ctx = {}, options = {}) {
-  return Object.freeze({
-    scenario: resolveHarnessScenarioFromContext(ctx, options),
-  });
-}
-
 export function resolveWorkflowThresholdModeFromContext(ctx = {}) {
   const scenario = resolveHarnessScenarioFromContext(ctx);
   if (scenario === HARNESS_SCENARIO.PROGRAMMING) return "programming";
@@ -121,27 +115,7 @@ export function resolveTextModeFromContext(ctx = {}) {
   return resolveWorkflowThresholdModeFromContext(ctx) === "text";
 }
 
-export function resolvePromptWorkflowStrategy() {
-  return "";
-}
-
-export function resolveWorkflowStrategyFromContext() {
-  return "";
-}
-
-export function resolveNonProgrammingExecutionFirstFromContext() {
-  return true;
-}
-
-export function resolveExecutionFirstModeFromContext() {
-  return true;
-}
-
-export function resolveRiskFirstModeFromContext() {
-  return false;
-}
-
-export function resolveWorkflowStrategyFlagsFromContext(ctx = {}) {
+export function resolveScenarioPolicyFlagsFromContext(ctx = {}) {
   const dynamicPolicyPromptRecord = resolveActiveDynamicPolicyPromptFromContext(ctx);
   const dynamicScenario = String(dynamicPolicyPromptRecord?.scenario || "").trim();
   const dynamicProgrammingMode = dynamicScenario === HARNESS_SCENARIO.PROGRAMMING;
@@ -157,8 +131,6 @@ export function resolveWorkflowStrategyFlagsFromContext(ctx = {}) {
   return {
     programmingMode,
     textMode,
-    executionFirstMode: true,
-    riskFirstMode: false,
     dynamicPolicyPrompt: dynamicPolicyPromptRecord?.prompt || "",
     dynamicPolicyPromptRecord,
   };
