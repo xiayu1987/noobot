@@ -13,6 +13,11 @@ import { createAgentHookManager } from "../../../agent/src/system-core/hook/inde
 import { registerNoobotPlugin } from "../src/index.js";
 import { normalizeHookContextProtocol } from "../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../src/tracing/buffer-manager.js";
+import { buildDefaultPolicyPrompt } from "../src/tracing/policy-prompt-matrix.js";
+import {
+  applyDynamicPolicyPromptFromText,
+  buildDynamicPolicyPromptProtocolInstruction,
+} from "../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
 import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
 import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../src/capabilities/handlers/shared/constants.js";
 import { exists, waitForFile, readJsonl } from "./test-helpers.js";
@@ -562,7 +567,9 @@ test("harness policy prompt matrix exposes scenario and workflow mode", async ()
   assert.match(textPrompt, /scenario = text/);
   assert.match(textPrompt, /workflow_mode = risk_first/);
   assert.match(textPrompt, /policy_prompt = harness_policy\/text\/risk_first/);
-  assert.match(textPrompt, /建议外部文本拿到就消费/);
+  assert.match(textPrompt, /文本模式核心是多产出/);
+  assert.match(textPrompt, /建议外部文本拿到就保真消费/);
+  assert.match(textPrompt, /按可交付文本批次持续产出/);
   assert.match(textPrompt, /来源文件路径/);
 
   const programmingPrompt = await buildInjectedPolicy(
@@ -572,7 +579,8 @@ test("harness policy prompt matrix exposes scenario and workflow mode", async ()
   assert.match(programmingPrompt, /scenario = programming/);
   assert.match(programmingPrompt, /workflow_mode = execution_first/);
   assert.match(programmingPrompt, /policy_prompt = harness_policy\/programming\/execution_first/);
-  assert.match(programmingPrompt, /最小可逆修改/);
+  assert.match(programmingPrompt, /最小切片可逆动作/);
+  assert.match(programmingPrompt, /循环执行 -> 验证\/反馈 -> 修正 -> 继续，不断推进任务/);
   assert.match(programmingPrompt, /相关测试、lint、类型检查或构建/);
 
   const defaultPrompt = await buildInjectedPolicy();
@@ -601,6 +609,155 @@ test("harness policy selection resolver maps scenario and mode to explicit i18n 
     resolvePolicyPromptSelection({ runConfig: { scenario: "programming" } }, { workflowStrategy: "risk_first" }).i18nKey,
     "harnessPolicyProgrammingExecutionFirstPrompt",
   );
+});
+
+test("dynamic policy prompt protocol instruction is localized", () => {
+  const zh = buildDynamicPolicyPromptProtocolInstruction("zh-CN");
+  assert.match(zh, /可选动态策略提示词协议/);
+  assert.match(zh, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
+  assert.match(zh, /<用于替换默认场景\/模式提示词的策略提示词>/);
+  assert.match(zh, /根据用户实际意图判断是否需要调整处理风格/);
+  assert.match(zh, /scenario 与 workflow_mode 必须符合用户实际意图/);
+  assert.match(zh, /只描述处理事情的风格\/执行策略/);
+  assert.match(zh, /不要涉及具体任务本身、任务结论、计划项、文件名或业务内容/);
+  assert.match(zh, /尽量简洁/);
+  assert.match(zh, /文本示例：/);
+  assert.match(zh, /文本场景动态策略/);
+  assert.match(zh, /文本模式核心是多产出/);
+  assert.match(zh, /按可交付文本批次持续产出/);
+  assert.match(zh, /编程示例：/);
+  assert.match(zh, /编程场景动态策略/);
+  assert.match(zh, /做最小切片可逆动作/);
+  assert.match(zh, /循环执行 -> 验证\/反馈 -> 修正 -> 继续，不断推进任务/);
+  assert.doesNotMatch(zh, /Optional dynamic policy prompt protocol/);
+
+  const en = buildDynamicPolicyPromptProtocolInstruction("en-US");
+  assert.match(en, /Optional dynamic policy prompt protocol/);
+  assert.match(en, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
+  assert.match(en, /<policy prompt replacing the default scenario\/mode prompt>/);
+  assert.match(en, /Judge from the user's actual intent whether the handling style should be adjusted/);
+  assert.match(en, /scenario and workflow_mode must match the user's actual intent/);
+  assert.match(en, /describe only the handling style\/execution policy/);
+  assert.match(en, /not the concrete task, task conclusions, plan items, file names, or business content/);
+  assert.match(en, /Keep it concise/);
+  assert.match(en, /Text example:/);
+  assert.match(en, /Text-scenario dynamic policy/);
+  assert.match(en, /text mode optimizes for more output/);
+  assert.match(en, /deliverable text batches/);
+  assert.match(en, /Programming example:/);
+  assert.match(en, /Programming-scenario dynamic policy/);
+  assert.match(en, /smallest-slice reversible action/);
+  assert.match(en, /loop execute -> verify\/feedback -> fix -> continue/);
+  assert.doesNotMatch(en, /可选动态策略提示词协议/);
+});
+
+test("dynamic policy prompt overrides default scenario/mode policy prompt", async () => {
+  const ctx = {
+    messages: [{ role: "user", content: "continue" }],
+    agentContext: {
+      payload: {
+        harness: {
+          dynamicPolicyPrompt: {
+            scenario: "text",
+            workflowMode: "execution_first",
+            source: "planning",
+            stage: "planning",
+            reason: "task-specific text delivery policy",
+            prompt: "Dynamic output policy: produce deliverable batches and preserve citations.",
+            updatedAt: "2026-06-19T00:00:00.000Z",
+          },
+        },
+      },
+    },
+  };
+
+  const prompt = buildDefaultPolicyPrompt("en-US", ctx, { workflowStrategy: "risk_first" });
+  assert.match(prompt, /\[HARNESS_POLICY_SELECTION\]/);
+  assert.match(prompt, /scenario = text/);
+  assert.match(prompt, /workflow_mode = execution_first/);
+  assert.match(prompt, /policy_prompt = harness_policy\/dynamic\/text\/execution_first/);
+  assert.match(prompt, /Dynamic output policy: produce deliverable batches and preserve citations\./);
+  assert.doesNotMatch(prompt, /source = planning/);
+  assert.doesNotMatch(prompt, /reason = task-specific text delivery policy/);
+  assert.doesNotMatch(prompt, /updated_at/);
+  assert.doesNotMatch(prompt, /Noobot Harness text-scenario\/output-first policy/);
+
+  await injectPrompt("before_llm_call", ctx, {
+    enabled: true,
+    promptPolicy: true,
+    promptText: "",
+    promptPriority: 80,
+    writePrompts: false,
+  });
+  assert.match(
+    String(ctx.messages[0]?.content || ""),
+    /Dynamic output policy: produce deliverable batches and preserve citations/,
+  );
+  assert.equal(
+    ctx.messages.filter((item = {}) =>
+      /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || "")),
+    ).length,
+    1,
+  );
+});
+
+test("dynamic policy prompt change refreshes the unique main-flow policy selection", async () => {
+  const ctx = {
+    messages: [{ role: "user", content: "continue" }],
+    agentContext: { payload: { harness: {} } },
+  };
+
+  applyDynamicPolicyPromptFromText(ctx, [
+    "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+    "scenario = text",
+    "workflow_mode = execution_first",
+    "reason = first policy",
+    "prompt:",
+    "Dynamic policy one",
+    "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+  ].join("\n"), { source: "planning", stage: "planning" });
+
+  await injectPrompt("before_llm_call", ctx, {
+    enabled: true,
+    promptPolicy: true,
+    promptText: "",
+    promptPriority: 80,
+    writePrompts: false,
+  });
+  assert.equal(ctx.agentContext.payload.harness.policyPromptRefresh.pending, false);
+  assert.equal(
+    ctx.messages.filter((item = {}) => /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || ""))).length,
+    1,
+  );
+  assert.match(String(ctx.messages[0]?.content || ""), /Dynamic policy one/);
+
+  applyDynamicPolicyPromptFromText(ctx, [
+    "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+    "scenario = programming",
+    "workflow_mode = execution_first",
+    "reason = changed policy",
+    "prompt:",
+    "Dynamic policy two",
+    "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+  ].join("\n"), { source: "planning_revision", stage: "revision" });
+  assert.equal(ctx.agentContext.payload.harness.policyPromptRefresh.pending, true);
+
+  await injectPrompt("before_llm_call", ctx, {
+    enabled: true,
+    promptPolicy: true,
+    promptText: "",
+    promptPriority: 80,
+    writePrompts: false,
+  });
+
+  const policyMessages = ctx.messages.filter((item = {}) =>
+    /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || "")),
+  );
+  assert.equal(policyMessages.length, 1);
+  assert.match(String(policyMessages[0]?.content || ""), /scenario = programming/);
+  assert.match(String(policyMessages[0]?.content || ""), /Dynamic policy two/);
+  assert.doesNotMatch(String(policyMessages[0]?.content || ""), /Dynamic policy one/);
+  assert.equal(ctx.agentContext.payload.harness.policyPromptRefresh.pending, false);
 });
 
 test("harness policy prompt survives agent-side system message compaction", async () => {

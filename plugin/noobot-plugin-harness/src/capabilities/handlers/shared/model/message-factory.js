@@ -136,30 +136,67 @@ function rewriteMessageForCapabilityContext(message = {}, locale = "zh-CN") {
   return passthrough;
 }
 
+function normalizeModelMessageRole(role = "", fallback = "user") {
+  const normalized = String(role || "").trim().toLowerCase();
+  return normalized || fallback;
+}
+
+function normalizeTextList(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
 export function buildCapabilityModelMessages({
   locale = "zh-CN",
   agentMessages = [],
   constraints = [],
   task = "",
+  postTaskSystemMessages = [],
   postTaskMessages = [],
+  taskRole = "user",
+  postTaskRole = "user",
 } = {}) {
   const normalizedTask = String(task || "").trim();
-  const normalizedPostTaskMessages = (Array.isArray(postTaskMessages) ? postTaskMessages : [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
+  const normalizedPostTaskSystemMessages = normalizeTextList(postTaskSystemMessages);
+  const normalizedPostTaskMessages = normalizeTextList(postTaskMessages);
   const flattenedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
     .map((item = {}) => rewriteMessageForCapabilityContext(item, locale))
     .filter((item) => item && String(item.content || "").trim());
-  const constraintMessages = (Array.isArray(constraints) ? constraints : [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
+  const constraintMessages = normalizeTextList(constraints)
     .map((content) => ({ role: "system", content }));
   const output = [...flattenedAgentMessages, ...constraintMessages];
+  const resolvedTaskRole = normalizeModelMessageRole(taskRole, "user");
+  const resolvedPostTaskRole = normalizeModelMessageRole(postTaskRole, resolvedTaskRole);
   if (normalizedTask) {
-    output.push({ role: "user", content: normalizedTask });
+    output.push({ role: resolvedTaskRole, content: normalizedTask });
+  }
+  for (const content of normalizedPostTaskSystemMessages) {
+    output.push({ role: "system", content });
   }
   for (const content of normalizedPostTaskMessages) {
-    output.push({ role: "user", content });
+    output.push({ role: resolvedPostTaskRole, content });
   }
   return output;
+}
+
+
+export function buildCapabilityProtocolModelMessages({
+  locale = "zh-CN",
+  agentMessages = [],
+  contextMessages = [],
+  protocolPrompt = "",
+  workflowPolicyPrompt = "",
+  responsibilityPrompt = "",
+} = {}) {
+  return buildCapabilityModelMessages({
+    locale,
+    agentMessages,
+    constraints: contextMessages,
+    task: protocolPrompt,
+    taskRole: "system",
+    postTaskSystemMessages: [workflowPolicyPrompt],
+    postTaskMessages: [responsibilityPrompt],
+    postTaskRole: "user",
+  });
 }

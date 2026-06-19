@@ -740,6 +740,71 @@ test("separate_model refinement-only flow runs planning_refinement directly", as
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
 });
 
+
+test("planning revision followup uses dynamic programming scenario over initial text scenario", async () => {
+  const agentContext = createAgentContext({
+    counters: { llmTurns: 16, planUpdateTurns: -100 },
+  });
+  agentContext.execution = {
+    controllers: {
+      runtime: {
+        runConfig: { scenario: "text" },
+        systemRuntime: { runConfig: { scenario: "text" } },
+      },
+    },
+  };
+  const ctx = {
+    agentContext,
+    messages: [{ role: "user", content: "继续修代码" }],
+  };
+  const revisedPlan = JSON.stringify({
+    totalGoal: "修复代码",
+    taskOwner: "primary_task_owner",
+    taskChecklist: [
+      {
+        index: 1,
+        task: "修改代码并验证",
+        owner: "primary_task_owner",
+        input: "当前仓库",
+        output: "通过测试的代码修改",
+        files: { create: [], modify: ["plugin/noobot-plugin-harness/src/index.js"], delete: [] },
+      },
+    ],
+  });
+  const meta = {
+    harness: {
+      capabilityModelInvoker: async (payload = {}) => {
+        if (payload.purpose === "planning_refinement") return { content: "" };
+        return {
+          content: [
+            revisedPlan,
+            "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+            "scenario = programming",
+            "workflow_mode = execution_first",
+            "reason = actual user intent is code change",
+            "prompt:",
+            "Dynamic policy: perform smallest-slice reversible code changes and verify after each step.",
+            "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+          ].join("\n"),
+        };
+      },
+    },
+  };
+
+  const changed = await runPlanUpdateAfterSummary(ctx, meta);
+  assert.equal(changed, true);
+  assert.equal(agentContext.payload.harness.dynamicPolicyPrompt?.scenario, "programming");
+
+  const followupMessage = ctx.messages.find((item = {}) =>
+    /next_phase_plan_followup/.test(String(item?.content || "")),
+  );
+  const followupText = String(followupMessage?.content || "");
+  assert.match(followupText, /执行优先/);
+  assert.match(followupText, /最小切片循环执行/);
+  assert.doesNotMatch(followupText, /文本场景产出优先/);
+  assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);
+});
+
 test("runPlanUpdateAfterSummary does not start revision when refinement is already pending", async () => {
   const invocations = [];
   const ctx = {

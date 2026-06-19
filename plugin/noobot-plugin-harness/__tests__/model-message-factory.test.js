@@ -157,3 +157,22 @@ test("buildCapabilityModelMessages does not clip capability agent context in plu
   );
   assert.equal(output.at(-1).content, "task");
 });
+
+test("buildCapabilityModelMessages orders protocol, scenario policy, then responsibility", () => {
+  const output = buildCapabilityModelMessages({
+    locale: "zh-CN",
+    agentMessages: [{ role: "user", content: "actual user request" }],
+    task: "protocol prompt",
+    taskRole: "system",
+    postTaskSystemMessages: ["scenario mode policy"],
+    postTaskMessages: ["responsibility constraint"],
+    postTaskRole: "user",
+  });
+
+  assert.deepEqual(output, [
+    { role: "user", content: "actual user request" },
+    { role: "system", content: "protocol prompt" },
+    { role: "system", content: "scenario mode policy" },
+    { role: "user", content: "responsibility constraint" },
+  ]);
+});

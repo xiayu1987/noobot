@@ -31,7 +31,7 @@ export {
   extractRawTextContent,
   sanitizeInternalMessages,
 } from "../shared/message/utils.js";
-export { buildCapabilityModelMessages } from "../shared/model/message-factory.js";
+export { buildCapabilityProtocolModelMessages } from "../shared/model/message-factory.js";
 export { invokeWithReasoningRetry } from "../shared/model/invocation-utils.js";
 export { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 export { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";

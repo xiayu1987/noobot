@@ -13,6 +13,9 @@ import {
   resolveHarnessScenarioFromContext,
   resolveHarnessWorkflowModeFromOptions,
 } from "../capabilities/handlers/shared/workflow/matrix-resolver.js";
+import {
+  resolveActiveDynamicPolicyPromptFromContext,
+} from "../capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
 
 export const POLICY_PROMPT_SCENARIO = HARNESS_SCENARIO;
 export const POLICY_PROMPT_WORKFLOW_MODE = HARNESS_WORKFLOW_MODE;
@@ -61,7 +64,25 @@ export function buildPolicyPromptSelectionProfileText(selection = {}) {
   ].join("\n");
 }
 
+function buildDynamicPolicyPromptSelection(dynamicPolicyPrompt = {}) {
+  const scenario = String(dynamicPolicyPrompt?.scenario || HARNESS_SCENARIO.GENERAL).trim() || HARNESS_SCENARIO.GENERAL;
+  const workflowMode = String(dynamicPolicyPrompt?.workflowMode || HARNESS_WORKFLOW_MODE.BASE).trim() || HARNESS_WORKFLOW_MODE.BASE;
+  return Object.freeze({
+    scenario,
+    workflowMode,
+    policyPromptId: `harness_policy/dynamic/${scenario}/${workflowMode}`,
+    i18nKey: "dynamic_policy_prompt",
+  });
+}
+
 export function buildDefaultPolicyPrompt(locale = "", ctx = {}, options = {}) {
+  const dynamicPolicyPrompt = resolveActiveDynamicPolicyPromptFromContext(ctx);
+  if (dynamicPolicyPrompt) {
+    return [
+      buildPolicyPromptSelectionProfileText(buildDynamicPolicyPromptSelection(dynamicPolicyPrompt)),
+      dynamicPolicyPrompt.prompt,
+    ].filter(Boolean).join("\n");
+  }
   const selection = resolvePolicyPromptSelection(ctx, options);
   const body = translateI18nText(locale, selection.i18nKey);
   return [buildPolicyPromptSelectionProfileText(selection), body].filter(Boolean).join("\n");

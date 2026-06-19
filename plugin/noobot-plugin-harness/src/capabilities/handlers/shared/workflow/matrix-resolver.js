@@ -5,6 +5,7 @@
  */
 import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
 import { normalizeWorkflowStrategyName } from "../../../../core/workflow-strategy.js";
+import { resolveActiveDynamicPolicyPromptFromContext } from "./dynamic-policy-prompt.js";
 
 export const HARNESS_SCENARIO = Object.freeze({
   GENERAL: "general",
@@ -251,14 +252,29 @@ export function resolveRiskFirstModeFromContext(ctx = {}, meta = {}) {
 }
 
 export function resolveWorkflowStrategyFlagsFromContext(ctx = {}, meta = {}) {
-  const programmingMode = resolveProgrammingModeFromContext(ctx);
-  const textMode = !programmingMode && resolveTextModeFromContext(ctx);
-  const workflowStrategy = resolveWorkflowStrategyFromContext(ctx, meta);
+  const dynamicPolicyPromptRecord = resolveActiveDynamicPolicyPromptFromContext(ctx);
+  const dynamicScenario = String(dynamicPolicyPromptRecord?.scenario || "").trim();
+  const dynamicWorkflowMode = normalizeWorkflowStrategyName(dynamicPolicyPromptRecord?.workflowMode || "");
+  const dynamicProgrammingMode = dynamicScenario === HARNESS_SCENARIO.PROGRAMMING;
+  const dynamicTextMode = dynamicScenario === HARNESS_SCENARIO.TEXT;
+  const programmingMode = dynamicProgrammingMode || (
+    !dynamicTextMode &&
+    resolveProgrammingModeFromContext(ctx)
+  );
+  const textMode = !programmingMode && (
+    dynamicTextMode ||
+    resolveTextModeFromContext(ctx)
+  );
+  const workflowStrategy = programmingMode
+    ? WORKFLOW_STRATEGY_MODES.executionFirst
+    : dynamicWorkflowMode || resolveWorkflowStrategyFromContext(ctx, meta);
   return {
     programmingMode,
     textMode,
     workflowStrategy,
-    executionFirstMode: workflowStrategy === WORKFLOW_STRATEGY_MODES.executionFirst,
+    executionFirstMode: programmingMode || workflowStrategy === WORKFLOW_STRATEGY_MODES.executionFirst,
     riskFirstMode: !programmingMode && workflowStrategy === WORKFLOW_STRATEGY_MODES.riskFirst,
+    dynamicPolicyPrompt: dynamicPolicyPromptRecord?.prompt || "",
+    dynamicPolicyPromptRecord,
   };
 }

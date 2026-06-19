@@ -36,7 +36,7 @@ export {
   markMessagesSummarized,
   resolveInjectedMessageSummarizer,
 } from "../shared/message/utils.js";
-export { buildCapabilityModelMessages } from "../shared/model/message-factory.js";
+export { buildCapabilityProtocolModelMessages } from "../shared/model/message-factory.js";
 export { invokeWithReasoningRetry } from "../shared/model/invocation-utils.js";
 
 export { HARNESS_I18N_KEYSET, translateI18nText } from "../shared/i18n.js";

@@ -10,7 +10,7 @@ import {
   PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
-  buildCapabilityModelMessages,
+  buildCapabilityProtocolModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
   getTransferPayloadFromAttachmentMetas,
@@ -27,6 +27,7 @@ import { buildPlanChecklistContextMessages } from "../shared/plan/checklist-cont
 import {
   buildPostPlanUserFollowupPrompt,
   buildWorkflowResponsibilityConstraintUserPrompt,
+  buildWorkflowStrategyPolicyPromptText,
   resolveWorkflowStrategyFlagsFromContext,
 } from "../shared/workflow/prompts.js";
 import {
@@ -71,6 +72,7 @@ export async function runPlanningRefinementBySeparateModel(
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
+    dynamicPolicyPrompt,
   } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   const explicitTargetIndexes = Array.isArray(targetMainStepIndexes)
     ? targetMainStepIndexes.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
@@ -111,19 +113,28 @@ export async function runPlanningRefinementBySeparateModel(
       ctx,
     }),
   ];
-  const refinementMessages = buildCapabilityModelMessages({
+  const workflowPolicyPrompt = buildWorkflowStrategyPolicyPromptText(locale, {
+    programmingMode,
+    textMode,
+    workflowStrategy,
+    executionFirstMode,
+    riskFirstMode,
+    dynamicPolicyPrompt,
+  });
+  const refinementMessages = buildCapabilityProtocolModelMessages({
     locale,
     agentMessages,
-    task: refinementTask,
-    postTaskMessages: [
-      buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
-        programmingMode,
-        textMode,
-        workflowStrategy,
-        executionFirstMode,
-        riskFirstMode,
-      }),
-    ],
+    protocolPrompt: refinementTask,
+    workflowPolicyPrompt,
+    responsibilityPrompt: buildWorkflowResponsibilityConstraintUserPrompt(locale, "refinement", {
+      programmingMode,
+      textMode,
+      workflowStrategy,
+      executionFirstMode,
+      riskFirstMode,
+      dynamicPolicyPrompt,
+      includeWorkflowPolicy: false,
+    }),
   });
 
   let refinementResponse = null;
