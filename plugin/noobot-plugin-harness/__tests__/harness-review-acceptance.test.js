@@ -343,7 +343,10 @@ test("harness full engineering capability flow plans, guides, accepts and review
     messages,
     agentContext,
   });
-  assert.match(String(messages[0]?.content || ""), /harness-guidance/);
+  const guidancePromptMessage = messages[messages.length - 1] || {};
+  assert.equal(String(guidancePromptMessage?.role || ""), "user");
+  assert.match(String(guidancePromptMessage?.content || ""), /harness-guidance/);
+  assert.match(String(guidancePromptMessage?.content || ""), /工具失败达到阈值/);
   assert.equal(agentContext.payload.harness.state.pending.guidance, null);
 
   await hookManager.emit("after_tool_call", {

@@ -141,7 +141,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
   if (!allowGuidance || !state.pending.guidance) return false;
   const reason = state.pending.guidance;
   injectMessageWithPolicy(ctx, {
-    role: "system",
+    role: "user",
     content: buildGuidancePromptContent(locale, reason, {
       includeMarker: true,
       programmingMode,
@@ -150,7 +150,7 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
       includeWorkflowPolicy: false,
     }),
     injectedMessageType: `guidance_failure:${String(reason || "").trim() || "unknown"}`,
-    injectAt: "prepend",
+    injectAt: "append",
     avoidBreakToolCallContinuity: true,
   });
   setPendingStateWithMeta(state, "guidance", null);

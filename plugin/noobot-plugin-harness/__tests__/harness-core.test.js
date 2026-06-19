@@ -557,10 +557,12 @@ test("harness policy prompt matrix exposes scenario without workflow mode", asyn
   );
   assert.match(textPrompt, /scenario = text/);
     assert.match(textPrompt, /policy_prompt = harness_policy\/text/);
-  assert.match(textPrompt, /文本场景核心是多产出/);
-  assert.match(textPrompt, /建议外部文本拿到就保真消费/);
-  assert.match(textPrompt, /按可交付文本批次持续产出/);
-  assert.match(textPrompt, /来源文件路径/);
+  assert.match(textPrompt, /复杂任务必须先分文件/);
+  assert.match(textPrompt, /外部文本到手先保真消费/);
+  assert.match(textPrompt, /边查\/边搜\/边核对，边写\/边产出/);
+  assert.match(textPrompt, /每轮至少推进一个可交付文件/);
+  assert.match(textPrompt, /每批.*检查/);
+  assert.match(textPrompt, /来源路径/);
 
   const programmingPrompt = await buildInjectedPolicy(
     {},
@@ -612,8 +614,10 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(zh, /尽量简洁/);
   assert.match(zh, /文本示例：/);
   assert.match(zh, /文本场景动态策略/);
-  assert.match(zh, /文本场景核心是多产出/);
-  assert.match(zh, /按可交付文本批次持续产出/);
+  assert.match(zh, /复杂任务必须先分文件/);
+  assert.match(zh, /每批.*检查/);
+  assert.match(zh, /边查\/边搜\/边核对，边写\/边产出/);
+  assert.match(zh, /每轮至少推进一个可交付文件/);
   assert.match(zh, /编程示例：/);
   assert.match(zh, /编程场景动态策略/);
   assert.match(zh, /做最小切片可逆动作/);
@@ -631,8 +635,10 @@ test("dynamic policy prompt protocol instruction is localized", () => {
   assert.match(en, /Keep it concise/);
   assert.match(en, /Text example:/);
   assert.match(en, /Text-scenario dynamic policy/);
-  assert.match(en, /text scenarios optimize for more output/);
-  assert.match(en, /deliverable text batches/);
+  assert.match(en, /complex tasks must be split into files first/);
+  assert.match(en, /each batch/);
+  assert.match(en, /Search\/check while writing and producing/i);
+  assert.match(en, /at least one deliverable file/);
   assert.match(en, /Programming example:/);
   assert.match(en, /Programming-scenario dynamic policy/);
   assert.match(en, /smallest-slice reversible action/);
