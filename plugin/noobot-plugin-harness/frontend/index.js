@@ -208,6 +208,7 @@ export function registerFrontendPlugin(ctx = {}) {
       {
         id: "assistant-copy-actions",
         capability: "message.action.assistant.copy",
+        placement: "after-pre-cards",
         priority: 100,
         component: AssistantCopyActions,
         match: (messageItem = {}) => messageItem?.role === "assistant",
