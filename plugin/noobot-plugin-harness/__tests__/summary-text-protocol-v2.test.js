@@ -332,11 +332,21 @@ test("post-plan followup prompt uses unified action workflow strategy", () => {
 test("post-plan followup prompt uses the default action strategy consistently", () => {
   const planningPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning");
   assert.match(planningPrompt, /具体推进方式遵守系统场景策略/);
+  assert.match(planningPrompt, /复杂任务建议不要试图一次完成/);
+  assert.match(planningPrompt, /分批推进/);
   assert.doesNotMatch(planningPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
 
   const revisionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision");
   assert.match(revisionPrompt, /具体推进方式遵守系统场景策略/);
+  assert.match(revisionPrompt, /复杂任务建议不要试图一次完成/);
+  assert.match(revisionPrompt, /分批推进/);
   assert.doesNotMatch(revisionPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
+
+  const refinementPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "refinement");
+  assert.match(refinementPrompt, /具体推进方式遵守系统场景策略/);
+  assert.match(refinementPrompt, /复杂任务建议不要试图一次完成/);
+  assert.match(refinementPrompt, /分批推进/);
+  assert.doesNotMatch(refinementPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
 });
 
 

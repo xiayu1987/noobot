@@ -24,11 +24,12 @@ export const HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS = Object.freeze({
 4. 风格偏好、未来优化等信息性风险只记录，不阻塞执行。`,
 
     text: `文本场景策略：
-1. 核心是多产出：外部文本拿到后优先保真消费，提取关键文本、来源路径、事实、约束、依据、交付要求和可复用片段。
-2. 按可交付文本批次持续产出；内容复杂时可以边查/边搜/边核对，边写/边产出，不必等资料完全收集后才形成产物。
-3. 每轮尽量产出可直接使用的摘要、抽取表、改写稿、对比结论、清单或阶段产物，并轻量检查覆盖、来源、关键事实和格式。
-4. 为降低上下文裁剪或附件丢失风险，建议把关键原文片段/结论与来源路径写入小结或当前产物。
-5. 只有合规、安全、承诺、不可逆、高成本外部动作或明确需求冲突才停下确认；普通不确定性写入说明、假设或待核对项并继续产出。`,
+1. 复杂任务必须先分文件：按文件拆成交付单元，逐文件产出与维护；不要把完整内容一次写进单个文件或单次回复。
+2. 边查/边搜/边核对，边写/边产出；不要等资料全部收集完才开始产出。
+3. 每轮至少推进一个可交付文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项。
+4. 外部文本到手先保真消费，提取来源路径、事实、约束、依据、交付要求和可复用片段。
+5. 每批轻量检查来源、覆盖、关键事实和格式；普通不确定性写入说明或待核对项后继续推进。
+6. 只有合规、安全、承诺、不可逆、高成本外部动作或明确需求冲突才停下确认。`,
 
     programming: `编程场景策略：
 1. 先读必要代码、配置、测试和上下文，做最小切片可逆改动；循环执行 -> 验证/反馈 -> 修正 -> 继续。
@@ -45,11 +46,12 @@ export const HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS = Object.freeze({
 4. Style preferences and future improvements are informational; record them without blocking execution.`,
 
     text: `Text-scenario policy:
-1. Optimize for more output: once external text is available, faithfully consume it and extract key text, source paths, facts, constraints, evidence, delivery requirements, and reusable snippets.
-2. Keep producing in deliverable text batches; for complex content, search/check while writing and producing instead of waiting until all material is fully collected.
-3. Each turn should preferably create a usable summary, extraction table, rewrite, comparison, checklist, or stage artifact, with lightweight checks for coverage, source traceability, key facts, and format.
-4. To reduce loss from context pruning or missing attachments, preserve key source snippets/conclusions and source paths in summaries or current artifacts.
-5. Stop for confirmation only for compliance, safety, commitments, irreversible actions, costly external actions, or clear requirement conflicts; record ordinary uncertainty as notes, assumptions, or items to check and keep producing.`,
+1. Complex tasks must be split into files first: make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response.
+2. Search/check while writing and producing; do not wait until all material is collected before producing.
+3. Each turn must advance at least one deliverable file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify.
+4. Faithfully consume external text once available; extract source paths, facts, constraints, evidence, delivery requirements, and reusable snippets.
+5. For each batch, lightly check source traceability, coverage, key facts, and format; record ordinary uncertainty as notes or items to verify and continue.
+6. Stop for confirmation only for compliance, safety, commitments, irreversible actions, costly external actions, or clear requirement conflicts.`,
 
     programming: `Programming-scenario policy:
 1. Read necessary code, configuration, tests, and context, then make the smallest-slice reversible change; loop execute -> verify/feedback -> fix -> continue.
@@ -425,7 +427,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     harnessPolicyGeneralPrompt:
       "Noobot Harness 通用策略：遵守用户隔离；附件先转文本再处理；未知规则、模板、路径、配置先读后用；先读必要上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务。验证是完成条件：优先跑相关测试/检查/构建，失败先修复重试；无法验证必须说明原因。仅在不可逆/破坏性、安全隐私、生产/资金、高成本外部动作或需求冲突时停下确认。最终回复简洁说明结果与验证。",
     harnessPolicyTextPrompt:
-      "Noobot Harness 文本场景策略：遵守用户隔离；文本场景核心是多产出，建议外部文本拿到就保真消费，优先提取关键文本内容、来源文件路径、事实、约束、关键依据、交付要求和可复用片段；按可交付文本批次持续产出；内容复杂时可以边查/边搜/边核对，边写/边产出，不必等全部资料完全收集后才开始形成产物；建议将关键文本内容、原文片段、结论与来源文件路径沉淀到当前任务状态/小结/产物，降低上下文裁剪后丢失的概率；最终回复保持精简且完整。",
+      "Noobot Harness 文本场景策略：遵守用户隔离；复杂任务必须先分文件，按文件拆成交付单元，逐文件产出与维护，禁止把完整内容一次写进单个文件或单次回复；边查/边搜/边核对，边写/边产出，不等资料全部收集完才开始产出；每轮至少推进一个可交付文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项；外部文本到手先保真消费并保留来源路径、事实、约束、依据和可复用片段；每批检查来源、覆盖、关键事实和格式。",
     harnessPolicyProgrammingPrompt:
       "Noobot Harness 编程场景策略：遵守用户隔离；先读必要代码、配置、测试和上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务。验证是完成条件：优先运行相关测试、lint、类型检查或构建；失败先按错误修复并重试；只有不可逆/破坏性、安全凭证、生产数据、生产发布或需求冲突时停下确认。最终回复简洁说明改动文件与验证。",
     harnessFinalResponsePrompt:
@@ -480,11 +482,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningDefaultPlanText:
       "1. 需求澄清与约束确认\n2. 实施并验证核心改动\n3. 最终验收与交付",
     postPlanFollowupPlanning:
-      "计划已完成。请调用工具按计划推进；具体推进方式遵守系统场景策略。",
+      "计划已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     postPlanFollowupRevision:
-      "计划修正已完成。请调用工具按计划推进；具体推进方式遵守系统场景策略。",
+      "计划修正已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     postPlanFollowupRefinement:
-      "计划细化已完成。请调用工具按计划推进；具体推进方式遵守系统场景策略。",
+      "计划细化已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     responsibilityStagePlanning: "规划",
     responsibilityStageRevision: "计划修正",
     responsibilityStageRefinement: "计划细化",
@@ -501,7 +503,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceFailurePromptTemplate:
       "工具失败达到阈值({reason})，请分析工具失败原因，并且给予修复建议。",
     dynamicPolicyPromptProtocolInstruction:
-      "可选动态策略提示词协议：\n请根据用户实际意图判断是否需要调整处理风格；只有当前任务需要比默认矩阵更合适的场景策略时，才追加且只追加一个 [{block}] 块；否则不要输出该块。scenario 必须符合用户实际意图。\n该 prompt 只描述处理事情的风格/执行策略，不要涉及具体任务本身、任务结论、计划项、文件名或业务内容；尽量简洁，并且可直接作为后续主流程、followup 与 harness 辅助调用的统一场景策略块使用。\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<用于替换默认场景提示词的策略提示词>\n[/{block}]\n文本示例：\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\n文本场景动态策略：文本场景核心是多产出，建议外部文本拿到就保真消费，优先提取关键文本内容、来源文件路径、事实、约束、关键依据、交付要求和可复用片段；按可交付文本批次持续产出；内容复杂时可以边查/边搜/边核对，边写/边产出，不必等全部资料完全收集后才开始形成产物。\n[/{block}]\n编程示例：\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\n编程场景动态策略：先读取相关代码、配置、测试和上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务；验证是完成条件，优先运行相关测试、lint、类型检查或构建，失败先按反馈修正并重试；最终说明改动文件与验证结果。\n[/{block}]",
+      "可选动态策略提示词协议：\n请根据用户实际意图判断是否需要调整处理风格；只有当前任务需要比默认矩阵更合适的场景策略时，才追加且只追加一个 [{block}] 块；否则不要输出该块。scenario 必须符合用户实际意图。\n该 prompt 只描述处理事情的风格/执行策略，不要涉及具体任务本身、任务结论、计划项、文件名或业务内容；尽量简洁，并且可直接作为后续主流程、followup 与 harness 辅助调用的统一场景策略块使用。\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<用于替换默认场景提示词的策略提示词>\n[/{block}]\n文本示例：\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\n文本场景动态策略：复杂任务必须先分文件，按文件拆成交付单元，逐文件产出与维护，禁止把完整内容一次写进单个文件或单次回复；边查/边搜/边核对，边写/边产出，不等资料全部收集完才开始产出；每轮至少推进一个可交付文件、章节、表格、摘要、清单、对比或阶段稿，并标明来源、假设或待核对项；外部文本到手先保真消费并保留来源；每批检查事实、来源和格式。\n[/{block}]\n编程示例：\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\n编程场景动态策略：先读取相关代码、配置、测试和上下文，做最小切片可逆动作；循环执行 -> 验证/反馈 -> 修正 -> 继续，不断推进任务；验证是完成条件，优先运行相关测试、lint、类型检查或构建，失败先按反馈修正并重试；最终说明改动文件与验证结果。\n[/{block}]",
     acceptanceMainPlanContextHeader: "计划清单上下文如下（验收时必须完整对齐）：",
     phaseAcceptanceRequestGoal:
       "目标：基于前面的上下文与 system 提供的计划修正后计划清单，仅进行当前阶段验收。",
@@ -684,7 +686,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     harnessPolicyGeneralPrompt:
       "Noobot Harness general policy: enforce user isolation; convert attachments to text before processing; read unknown rules/templates/paths/configuration before use; read necessary context, then take the smallest reversible action; loop execute -> verify/observe -> fix -> continue. Verification is required for completion: prefer relevant tests/checks/builds; fix failures and retry, or state why verification was impossible. Stop for confirmation only for irreversible/destructive, security/privacy, production/money, costly external actions, or requirement conflicts. Final response: concise result and validation.",
     harnessPolicyTextPrompt:
-      "Noobot Harness text-scenario policy: enforce user isolation; text scenarios optimize for more output; once external text is available, faithfully consume it first, prioritizing key text content, source file paths, facts, constraints, supporting evidence, delivery requirements, and reusable snippets; keep producing in deliverable text batches; when content is complex, search/check while writing and producing instead of waiting until all material is fully collected; persist key text content, source snippets, conclusions, and source file paths into task state/summary/artifacts to reduce loss from context pruning. Final response: concise and complete.",
+      "Noobot Harness text-scenario policy: enforce user isolation; complex tasks must be split into files first; make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response; search/check while writing and producing instead of waiting until all material is collected; each turn must advance at least one deliverable file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify; faithfully consume external text and preserve source paths, facts, constraints, evidence, and reusable snippets; check sources, coverage, key facts, and format for each batch.",
     harnessPolicyProgrammingPrompt:
       "Noobot Harness programming-scenario policy: enforce user isolation; read necessary code, configuration, tests, and context, then take the smallest-slice reversible action; loop execute -> verify/feedback -> fix -> continue, continuously advancing the task. Verification is required for completion: prefer targeted tests, lint, type checks, or builds; fix failures and retry. Stop for confirmation only for irreversible/destructive operations, security credentials, production data, production release, or requirement conflicts. Final response: concise changed files and validation.",
     harnessFinalResponsePrompt:
@@ -739,11 +741,11 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     planningDefaultPlanText:
       "1. Clarify requirements and constraints\n2. Implement and verify core changes\n3. Final acceptance and delivery",
     postPlanFollowupPlanning:
-      "Plan is ready. Continue with tools in plan order; follow the unified scenario policy below for how to proceed.",
+      "Plan is ready. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
     postPlanFollowupRevision:
-      "Plan revision is done. Continue with tools in plan order; follow the unified scenario policy below for how to proceed.",
+      "Plan revision is done. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
     postPlanFollowupRefinement:
-      "Plan refinement is done. Continue with tools in plan order; follow the unified scenario policy below for how to proceed.",
+      "Plan refinement is done. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
     responsibilityStagePlanning: "planning",
     responsibilityStageRevision: "plan revision",
     responsibilityStageRefinement: "plan refinement",
@@ -760,7 +762,7 @@ const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceFailurePromptTemplate:
       "Guidance triggered by tool failure threshold ({reason}). Please analyze the causes of tool failures and provide suggestions for fixes.",
     dynamicPolicyPromptProtocolInstruction:
-      "Optional dynamic policy prompt protocol:\nJudge from the user's actual intent whether the handling style should be adjusted. Only if the current task needs a more suitable scenario policy than the default matrix, append exactly one [{block}] block; otherwise omit it. scenario must match the user's actual intent.\nThe prompt should describe only the handling style/execution policy, not the concrete task, task conclusions, plan items, file names, or business content. Keep it concise and directly usable as the unified scenario policy block for the main flow, followups, and auxiliary harness calls.\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<policy prompt replacing the default scenario prompt>\n[/{block}]\nText example:\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\nText-scenario dynamic policy: text scenarios optimize for more output; once external text is available, faithfully consume it first, prioritizing key text content, source file paths, facts, constraints, supporting evidence, delivery requirements, and reusable snippets; keep producing in deliverable text batches; when content is complex, search/check while writing and producing instead of waiting until all material is fully collected.\n[/{block}]\nProgramming example:\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\nProgramming-scenario dynamic policy: read relevant code, configuration, tests, and context, then take the smallest-slice reversible action; loop execute -> verify/feedback -> fix -> continue, continuously advancing the task; verification is required for completion, so prefer relevant tests, lint, type checks, or builds, fix failures based on feedback, and retry; final response must state changed files and verification results.\n[/{block}]",
+      "Optional dynamic policy prompt protocol:\nJudge from the user's actual intent whether the handling style should be adjusted. Only if the current task needs a more suitable scenario policy than the default matrix, append exactly one [{block}] block; otherwise omit it. scenario must match the user's actual intent.\nThe prompt should describe only the handling style/execution policy, not the concrete task, task conclusions, plan items, file names, or business content. Keep it concise and directly usable as the unified scenario policy block for the main flow, followups, and auxiliary harness calls.\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<policy prompt replacing the default scenario prompt>\n[/{block}]\nText example:\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\nText-scenario dynamic policy: complex tasks must be split into files first; make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response; search/check while writing and producing instead of waiting until all material is collected; each turn must advance at least one deliverable file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify; faithfully consume external text and preserve sources; check facts, sources, and format for each batch.\n[/{block}]\nProgramming example:\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\nProgramming-scenario dynamic policy: read relevant code, configuration, tests, and context, then take the smallest-slice reversible action; loop execute -> verify/feedback -> fix -> continue, continuously advancing the task; verification is required for completion, so prefer relevant tests, lint, type checks, or builds, fix failures based on feedback, and retry; final response must state changed files and verification results.\n[/{block}]",
     acceptanceMainPlanContextHeader:
       "Plan checklist context (must be fully respected during acceptance validation):",
     phaseAcceptanceRequestGoal:
