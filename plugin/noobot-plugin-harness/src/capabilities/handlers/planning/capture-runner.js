@@ -276,13 +276,16 @@ async function handleSeparateModelPlanningProcessResult(
   processed = {},
   locale = LOCALE.ZH_CN,
   responseText = "",
+  meta = {},
 ) {
   const operationDirectory = resolveOperationDirectoryContext(ctx);
   const {
+    programmingMode,
+    textMode,
     workflowStrategy,
     executionFirstMode,
     riskFirstMode,
-  } = resolveWorkflowStrategyFlagsFromContext(ctx);
+  } = resolveWorkflowStrategyFlagsFromContext(ctx, meta);
   const relayText = [
     responseText || getPlanningSeparateModelEmptyRelay(locale),
     formatOperationDirectoryForRelay(operationDirectory),
@@ -320,6 +323,8 @@ async function handleSeparateModelPlanningProcessResult(
     locale,
     purpose: "planning_followup",
     content: buildPostPlanUserFollowupPrompt(locale, "planning", {
+      programmingMode,
+      textMode,
       executionFirstMode,
       workflowStrategy,
       riskFirstMode,
@@ -410,7 +415,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       repairInvoker: invoker,
       appendCapabilityModelTraceLog,
     });
-    return await handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText);
+    return await handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText, meta);
   } finally {
     state.flags.planningSeparateModelInFlight = false;
   }

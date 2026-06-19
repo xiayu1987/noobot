@@ -420,6 +420,19 @@ test("text scenario post-plan followup suggests consuming external text promptly
   assert.doesNotMatch(generalPrompt, /file、line、path、text/);
 });
 
+test("text-mode post-plan followup follows text output policy from resolved flags", () => {
+  const prompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
+    textMode: true,
+    workflowStrategy: "execution_first",
+    executionFirstMode: true,
+    riskFirstMode: false,
+  });
+  assert.match(prompt, /文本场景产出优先/);
+  assert.match(prompt, /可交付文本批次/);
+  assert.match(prompt, /保真消费来源文本/);
+  assert.doesNotMatch(prompt, /最小切片循环执行/);
+});
+
 test("text scenario consumption wording is advisory instead of mandatory", () => {
   const texts = [
     buildTextScenarioConsumptionPolicyText("zh-CN"),

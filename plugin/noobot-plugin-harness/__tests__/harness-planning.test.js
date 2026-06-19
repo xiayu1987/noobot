@@ -690,6 +690,49 @@ test("harness planning uses plan text flow without json repair", async () => {
   assert.equal(String(ctx.agentContext.payload.harness.planText || "").trim().length > 0, true);
 });
 
+test("harness planning followup uses text output policy in text scenario", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => ({ content: "1. 批量抽取资料\n2. 撰写阶段产物" }),
+    },
+  );
+
+  const ctx = {
+    messages: [{ role: "user", content: "整理这些文本资料" }],
+    agentContext: {
+      payload: {
+        messages: { system: [], history: [] },
+        tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
+        harness: {},
+      },
+      execution: {
+        controllers: {
+          runtime: {
+            runConfig: { scenario: "text" },
+            systemRuntime: { config: {}, runConfig: { scenario: "text" } },
+          },
+        },
+      },
+    },
+  };
+
+  await hookManager.emit("before_llm_call", ctx);
+
+  const followupMessage = ctx.messages.find((item = {}) =>
+    /planning_followup/.test(String(item?.content || "")),
+  );
+  const followupText = String(followupMessage?.content || "");
+  assert.match(followupText, /文本场景产出优先/);
+  assert.match(followupText, /可交付文本批次/);
+  assert.match(followupText, /保真消费来源文本/);
+  assert.doesNotMatch(followupText, /最小切片循环执行/);
+});
+
 test("harness writes capability model traces to dedicated jsonl artifact", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
