@@ -156,7 +156,7 @@ export function maybeInjectPlanUpdatePrompt(ctx = {}, meta = {}) {
     content: buildWorkflowResponsibilityConstraintUserPrompt(
       locale,
       pendingData.stage === "revision" ? "revision" : "refinement",
-      { programmingMode, textMode, dynamicPolicyPrompt },
+      { programmingMode, textMode, dynamicPolicyPrompt, includeWorkflowPolicy: false },
     ),
     injectedMessageType: pendingData.stage === "revision"
       ? "planning_revision_responsibility_constraint"
