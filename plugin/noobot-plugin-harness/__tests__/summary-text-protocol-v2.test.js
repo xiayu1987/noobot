@@ -439,10 +439,19 @@ test("text scenario consumption wording is advisory instead of mandatory", () =>
     buildGuidanceSummaryInstructionPromptText({ locale: "zh-CN", textMode: true }),
     buildGuidanceSummaryProtocolPromptText({ locale: "zh-CN", textMode: true }),
     buildPostPlanUserFollowupPrompt("zh-CN", "planning", { scenario: "text" }),
+    buildPlanningMainPrompt({
+      locale: "zh-CN",
+      data: { userGoal: "整理长文本" },
+      textMode: true,
+      workflowStrategy: "execution_first",
+    }),
   ].join("\n");
   assert.match(texts, /建议|优先|尽量|降低/);
   assert.doesNotMatch(texts, /外部文本[^。；\n]*(必须|禁止|不得)/);
   assert.doesNotMatch(texts, /(必须|禁止|不得)[^。；\n]*外部文本/);
+  assert.doesNotMatch(texts, /长文本可先抽取结构、要点、风险和待办/);
+  assert.doesNotMatch(texts, /结构、要点、风险和待办/);
+  assert.doesNotMatch(texts, /风险\/待办/);
 });
 
 test("programming prompts add action-first execution principles only in programming mode", () => {
