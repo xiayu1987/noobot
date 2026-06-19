@@ -222,7 +222,7 @@ export const zhCNMessages = {
     "executionCommandStarted": "开始：执行命令：{command}",
     "executionCommandCompleted": "完成：执行命令：{command}",
     "executionProcess": "执行过程 ({count})",
-    "injectedMessages": "harness ({count})",
+    "injectedMessages": "注入消息 ({count})",
     "noInjectedMessages": "暂无注入消息",
     "thinkingDetails": "思考明细 ({count})",
     "details": "明细",
