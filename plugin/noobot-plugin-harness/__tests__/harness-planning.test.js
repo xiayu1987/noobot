@@ -792,7 +792,6 @@ test("harness planning captures dynamic policy prompt protocol from separate mod
           "2. 检查来源与格式",
           "[HARNESS_DYNAMIC_POLICY_PROMPT]",
           "scenario = text",
-          "workflow_mode = execution_first",
           "reason = use task-specific output policy",
           "prompt:",
           "Dynamic policy: produce deliverable text batches, preserve source paths, and avoid tiny execution slices.",
@@ -825,7 +824,6 @@ test("harness planning captures dynamic policy prompt protocol from separate mod
 
   const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
   assert.equal(dynamicPolicyPrompt.scenario, "text");
-  assert.equal(dynamicPolicyPrompt.workflowMode, "execution_first");
   assert.match(
     String(dynamicPolicyPrompt.prompt || ""),
     /Dynamic policy: produce deliverable text batches/,
@@ -846,7 +844,6 @@ test("harness planning followup uses dynamic programming scenario over initial t
           "2. 修改代码并运行测试",
           "[HARNESS_DYNAMIC_POLICY_PROMPT]",
           "scenario = programming",
-          "workflow_mode = execution_first",
           "reason = actual user intent is code change",
           "prompt:",
           "Dynamic policy: perform smallest-slice reversible code changes and verify after each step.",
@@ -879,13 +876,12 @@ test("harness planning followup uses dynamic programming scenario over initial t
 
   const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
   assert.equal(dynamicPolicyPrompt.scenario, "programming");
-  assert.equal(dynamicPolicyPrompt.workflowMode, "execution_first");
 
   const followupMessage = ctx.messages.find((item = {}) =>
     /planning_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
-  assert.match(followupText, /执行优先/);
+  assert.match(followupText, /执行策略/);
   assert.match(followupText, /最小切片循环执行/);
   assert.doesNotMatch(followupText, /文本场景产出优先/);
   assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);

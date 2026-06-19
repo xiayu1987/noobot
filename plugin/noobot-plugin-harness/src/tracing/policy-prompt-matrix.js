@@ -9,46 +9,27 @@ import {
 } from "../capabilities/handlers/shared/i18n.js";
 import {
   HARNESS_SCENARIO,
-  HARNESS_WORKFLOW_MODE,
   resolveHarnessScenarioFromContext,
-  resolveHarnessWorkflowModeFromOptions,
 } from "../capabilities/handlers/shared/workflow/matrix-resolver.js";
 import {
   resolveActiveDynamicPolicyPromptFromContext,
 } from "../capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
 
 export const POLICY_PROMPT_SCENARIO = HARNESS_SCENARIO;
-export const POLICY_PROMPT_WORKFLOW_MODE = HARNESS_WORKFLOW_MODE;
 
-export const POLICY_PROMPT_KEY_BY_SCENARIO_MODE = Object.freeze({
-  [HARNESS_SCENARIO.GENERAL]: Object.freeze({
-    [HARNESS_WORKFLOW_MODE.BASE]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_BASE,
-    [HARNESS_WORKFLOW_MODE.EXECUTION_FIRST]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_EXECUTION_FIRST,
-    [HARNESS_WORKFLOW_MODE.RISK_FIRST]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_RISK_FIRST,
-  }),
-  [HARNESS_SCENARIO.TEXT]: Object.freeze({
-    [HARNESS_WORKFLOW_MODE.BASE]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_TEXT_BASE,
-    [HARNESS_WORKFLOW_MODE.EXECUTION_FIRST]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_TEXT_EXECUTION_FIRST,
-    [HARNESS_WORKFLOW_MODE.RISK_FIRST]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_TEXT_RISK_FIRST,
-  }),
-  [HARNESS_SCENARIO.PROGRAMMING]: Object.freeze({
-    [HARNESS_WORKFLOW_MODE.EXECUTION_FIRST]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_PROGRAMMING_EXECUTION_FIRST,
-  }),
+export const POLICY_PROMPT_KEY_BY_SCENARIO = Object.freeze({
+  [HARNESS_SCENARIO.GENERAL]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_BASE,
+  [HARNESS_SCENARIO.TEXT]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_TEXT_BASE,
+  [HARNESS_SCENARIO.PROGRAMMING]: HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_PROGRAMMING_EXECUTION_FIRST,
 });
 
 export function resolvePolicyPromptSelection(ctx = {}, options = {}) {
   const scenario = resolveHarnessScenarioFromContext(ctx, options);
-  const workflowMode = resolveHarnessWorkflowModeFromOptions(options, { scenario });
-  const scenarioMatrix = POLICY_PROMPT_KEY_BY_SCENARIO_MODE[scenario] ||
-    POLICY_PROMPT_KEY_BY_SCENARIO_MODE[HARNESS_SCENARIO.GENERAL];
-  const i18nKey = scenarioMatrix?.[workflowMode] ||
-    scenarioMatrix?.[HARNESS_WORKFLOW_MODE.BASE] ||
-    scenarioMatrix?.[HARNESS_WORKFLOW_MODE.EXECUTION_FIRST] ||
+  const i18nKey = POLICY_PROMPT_KEY_BY_SCENARIO[scenario] ||
     HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_BASE;
   return Object.freeze({
     scenario,
-    workflowMode,
-    policyPromptId: `harness_policy/${scenario}/${workflowMode}`,
+    policyPromptId: `harness_policy/${scenario}`,
     i18nKey,
   });
 }
@@ -57,8 +38,7 @@ export function buildPolicyPromptSelectionProfileText(selection = {}) {
   return [
     "[HARNESS_POLICY_SELECTION]",
     `scenario = ${selection.scenario || HARNESS_SCENARIO.GENERAL}`,
-    `workflow_mode = ${selection.workflowMode || HARNESS_WORKFLOW_MODE.BASE}`,
-    `policy_prompt = ${selection.policyPromptId || "harness_policy/general/base"}`,
+    `policy_prompt = ${selection.policyPromptId || "harness_policy/general"}`,
     `i18n_key = ${selection.i18nKey || HARNESS_I18N_KEYSET.SYSTEM_PROMPT.POLICY_GENERAL_BASE}`,
     "[/HARNESS_POLICY_SELECTION]",
   ].join("\n");
@@ -66,11 +46,9 @@ export function buildPolicyPromptSelectionProfileText(selection = {}) {
 
 function buildDynamicPolicyPromptSelection(dynamicPolicyPrompt = {}) {
   const scenario = String(dynamicPolicyPrompt?.scenario || HARNESS_SCENARIO.GENERAL).trim() || HARNESS_SCENARIO.GENERAL;
-  const workflowMode = String(dynamicPolicyPrompt?.workflowMode || HARNESS_WORKFLOW_MODE.BASE).trim() || HARNESS_WORKFLOW_MODE.BASE;
   return Object.freeze({
     scenario,
-    workflowMode,
-    policyPromptId: `harness_policy/dynamic/${scenario}/${workflowMode}`,
+    policyPromptId: `harness_policy/dynamic/${scenario}`,
     i18nKey: "dynamic_policy_prompt",
   });
 }
