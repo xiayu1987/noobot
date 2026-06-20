@@ -207,7 +207,6 @@ export class SessionTurnPersister {
           ? pluginMeta
           : null,
       ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
-      ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
       isMonotonic: isMonotonic === true,
       monotonic: monotonic === true,
@@ -265,7 +264,6 @@ export class SessionTurnPersister {
       pluginMessage,
       pluginMeta,
       ...(sessionTransferResult ? { transferResult: sessionTransferResult } : {}),
-      ...(sessionTransferEnvelope ? { transferEnvelope: sessionTransferEnvelope } : {}),
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
       isMonotonic,
       monotonic,

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../../src/system-core/session/services/session-message-service.js";
 
-test("SessionMessageService.appendTurn persists transferEnvelope/transferEnvelopes with legacy fallback fields", async () => {
+test("SessionMessageService.appendTurn persists transferEnvelopes and merges legacy transferEnvelope", async () => {
   const saved = [];
   const sessionRepo = {
     async resolveParentSessionId() {
@@ -55,7 +55,7 @@ test("SessionMessageService.appendTurn persists transferEnvelope/transferEnvelop
   const lastMessage = saved[0]?.messages?.[0];
   assert.equal(Array.isArray(lastMessage?.attachmentMetas), true);
   assert.equal(lastMessage?.attachmentMetas?.length, 1);
-  assert.deepEqual(lastMessage?.transferEnvelope, transferEnvelope);
+  assert.equal("transferEnvelope" in lastMessage, false);
   assert.deepEqual(lastMessage?.transferEnvelopes, [transferEnvelope]);
 });
 

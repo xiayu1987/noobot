@@ -120,7 +120,7 @@ test("ScopedArtifactPersistenceHelpers normalizes detached sub-session messages 
   assert.equal(normalized.tool_call_id, "tc1");
   assert.equal(normalized.ts, "2026-02-03T04:05:06.000Z");
   assert.deepEqual(normalized.attachmentMetas, [{ attachmentId: "a1", mimeType: "text/plain" }]);
-  assert.deepEqual(normalized.transferEnvelope, { envelopeId: "e1" });
+  assert.equal(Object.hasOwn(normalized, "transferEnvelope"), false);
   assert.deepEqual(normalized.transferResult, { envelope: { envelopeId: "e2" } });
   assert.deepEqual(normalized.transferEnvelopes, [{ envelopeId: "e3" }]);
   assert.equal(normalized.injectedMessage, true);

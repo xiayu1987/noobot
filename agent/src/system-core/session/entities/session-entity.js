@@ -6,6 +6,20 @@
 
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 
+function normalizeTransferEnvelopesFromMessage(message = {}) {
+  const seen = new Set();
+  return [
+    ...(Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : []),
+    message?.transferEnvelope,
+  ].filter((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const key = JSON.stringify(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
     selectedConnectors && typeof selectedConnectors === "object"
@@ -44,13 +58,9 @@ export function normalizeMessageEntity(
   if (normalizedAttachmentMetas.length) {
     normalizedMessage.attachmentMetas = normalizedAttachmentMetas;
   }
-  if (message?.transferEnvelope && typeof message.transferEnvelope === "object" && !Array.isArray(message.transferEnvelope)) {
-    normalizedMessage.transferEnvelope = message.transferEnvelope;
-  }
-  if (Array.isArray(message?.transferEnvelopes) && message.transferEnvelopes.length) {
-    normalizedMessage.transferEnvelopes = message.transferEnvelopes.filter(
-      (item) => item && typeof item === "object" && !Array.isArray(item),
-    );
+  const normalizedTransferEnvelopes = normalizeTransferEnvelopesFromMessage(message);
+  if (normalizedTransferEnvelopes.length) {
+    normalizedMessage.transferEnvelopes = normalizedTransferEnvelopes;
   }
   if (message?.injectedMessage === true) {
     normalizedMessage.injectedMessage = true;

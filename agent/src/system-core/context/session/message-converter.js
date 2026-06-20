@@ -3,6 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+function normalizeTransferEnvelopesFromRecord(item = {}) {
+  const seen = new Set();
+  return [
+    ...(Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : []),
+    item?.transferEnvelope,
+  ].filter((envelope) => {
+    if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return false;
+    const key = JSON.stringify(envelope);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function toConversationMessages(sessionRecords = []) {
   return (sessionRecords || []).map((item) => {
     const attachmentMetas = Array.isArray(item.attachmentMetas)
@@ -10,11 +24,7 @@ export function toConversationMessages(sessionRecords = []) {
       : Array.isArray(item.attachments)
         ? item.attachments
         : [];
-    const transferEnvelope =
-      item?.transferEnvelope && typeof item.transferEnvelope === "object" && !Array.isArray(item.transferEnvelope)
-        ? item.transferEnvelope
-        : null;
-    const transferEnvelopes = Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [];
+    const transferEnvelopes = normalizeTransferEnvelopesFromRecord(item);
     return {
       role: item.role || "user",
       content: item.content || "",
@@ -39,7 +49,6 @@ export function toConversationMessages(sessionRecords = []) {
           ? item.modelResponseMetadata
           : null,
       ...(attachmentMetas.length ? { attachmentMetas } : {}),
-      ...(transferEnvelope ? { transferEnvelope } : {}),
       ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
     };
   });

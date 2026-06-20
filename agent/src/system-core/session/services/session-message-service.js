@@ -179,7 +179,6 @@ export class SessionMessageService {
     const transferAttachmentMetas = getTransferAttachmentMetas(
       [
         transferEnvelope,
-        turn?.transferEnvelope,
         turn?.transferResult?.envelope,
         ...(Array.isArray(transferEnvelopes) ? transferEnvelopes : []),
         ...(Array.isArray(turn?.transferEnvelopes) ? turn.transferEnvelopes : []),
