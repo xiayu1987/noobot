@@ -6,8 +6,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
 import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
 import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
+
+const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 
 test("planning handler prunes oldest tool-call pair after second char-overflow summary round", async () => {
   const planningHandler = createPlanningHandler({
@@ -21,7 +24,7 @@ test("planning handler prunes oldest tool-call pair after second char-overflow s
     },
   };
   const messages = [
-    { role: "user", content: "x".repeat(149995) },
+    { role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD - 5) },
     {
       role: "assistant",
       content: "",
@@ -70,7 +73,7 @@ test("acceptance handler rewrites calls to forced acceptance when overflow remai
     },
   };
   const messages = [
-    { role: "user", content: "x".repeat(200000) },
+    { role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1) },
     {
       role: "assistant",
       content: "",
