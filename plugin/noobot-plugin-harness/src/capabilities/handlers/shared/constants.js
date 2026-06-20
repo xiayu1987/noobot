@@ -18,15 +18,15 @@ export const FAILURE_THRESHOLD = Object.freeze({
   ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
 });
 
-export const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.planning.summary.turnsThreshold;
+export const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.turnsThreshold;
 export const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD =
-  WORKFLOW_PARAMS.planning.summary.messageCharsThreshold;
+  WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 export const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
-  ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.planning.summary.overflowPolicy.enablePruneAfterSummary,
+  ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.guidance.summary.overflowPolicy.enablePruneAfterSummary,
   PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS:
-    WORKFLOW_PARAMS.planning.summary.overflowPolicy.pruneTriggerAfterCharSummaryRounds,
+    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.pruneTriggerAfterCharSummaryRounds,
   FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
-    WORKFLOW_PARAMS.planning.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
+    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
 });
 
 export const LOCALE = HARNESS_LOCALE;

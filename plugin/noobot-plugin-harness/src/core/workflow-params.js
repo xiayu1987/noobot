@@ -185,16 +185,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
     },
   },
   planning: {
-    summary: {
-      // Fallback defaults. Mode-specific summary thresholds live in top-level modeThresholds.<mode>.guidance.summary.
-      turnsThreshold: 8,
-      messageCharsThreshold: 150000,
-      overflowPolicy: {
-        enablePruneAfterSummary: true,
-        pruneTriggerAfterCharSummaryRounds: 1,
-        forceAcceptanceWhenStillOverflow: true,
-      },
-    },
     planUpdate: {
       revisionMaxAttempts: 10,
       refinementMaxAttempts: 10,
@@ -239,6 +229,16 @@ export const WORKFLOW_PARAMS = deepFreeze({
     },
   },
   guidance: {
+    summary: {
+      // Fallback defaults. Mode-specific summary thresholds live in top-level modeThresholds.<mode>.guidance.summary.
+      turnsThreshold: 8,
+      messageCharsThreshold: 150000,
+      overflowPolicy: {
+        enablePruneAfterSummary: true,
+        pruneTriggerAfterCharSummaryRounds: 1,
+        forceAcceptanceWhenStillOverflow: true,
+      },
+    },
     failureThreshold: {
       consecutive: 3,
       accumulated: 10,
