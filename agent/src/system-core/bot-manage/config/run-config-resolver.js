@@ -32,6 +32,18 @@ export class RunConfigResolver {
       : [];
   }
 
+  readModelSelectionValue(modelConfig = "") {
+    if (typeof modelConfig === "string") return modelConfig.trim();
+    if (!isPlainObject(modelConfig)) return "";
+    return String(
+      modelConfig?.value ||
+        modelConfig?.alias ||
+        modelConfig?.key ||
+        modelConfig?.model ||
+        "",
+    ).trim();
+  }
+
   resolveAlwaysIncludedToolNames(runConfig = {}) {
     const alwaysIncludedToolNames = new Set(
       resolveForceToolCall(runConfig) ? ["final_answer"] : [],
@@ -212,6 +224,9 @@ export class RunConfigResolver {
     const scenarioName = (scenarioDefinition?.name ?? "").trim();
     const scenarioDescription = (scenarioDefinition?.description ?? "").trim();
     const scenarioModelName = (scenarioDefinition?.model ?? "").trim();
+    const selectedModelName = this.readModelSelectionValue(
+      normalizedRunConfig?.config?.selectedModel ?? normalizedRunConfig?.selectedModel,
+    );
     const resolvedRunConfig = {
       ...normalizedRunConfig,
       scenario: resolvedScenarioKey,
@@ -229,7 +244,9 @@ export class RunConfigResolver {
     const requestedRuntimeModel = String(
       normalizedRunConfig?.runtimeModel || "",
     ).trim();
-    if (!requestedRuntimeModel && scenarioModelName) {
+    if (!requestedRuntimeModel && selectedModelName) {
+      resolvedRunConfig.runtimeModel = selectedModelName;
+    } else if (!requestedRuntimeModel && scenarioModelName) {
       resolvedRunConfig.runtimeModel = scenarioModelName;
     }
     if (scenarioToolNames.length && !hasAllTools) {

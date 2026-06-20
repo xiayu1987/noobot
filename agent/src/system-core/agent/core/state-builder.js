@@ -58,11 +58,16 @@ export function createStateBuilder({
 
     normalizeSystemRuntimeCountersFn(sys, userMessage);
 
+    const runConfig = runtime?.runConfig || {};
+    const runConfigConfig =
+      runConfig?.config && typeof runConfig.config === "object" && !Array.isArray(runConfig.config)
+        ? runConfig.config
+        : {};
     const selectedModelSpec = resolveEffectiveModelSpecFn({
       globalConfig,
       userConfig,
-      selectedModel: runtime?.runConfig?.config?.selectedModel,
-      scenario: runtime?.runConfig?.config?.scenario,
+      selectedModel: runConfigConfig.selectedModel ?? runConfig.selectedModel,
+      scenario: runConfigConfig.scenario ?? runConfig.scenario,
     });
     const maxToolLoopTurns = resolveMaxToolLoopTurnsFn({
       systemRuntime: sys,

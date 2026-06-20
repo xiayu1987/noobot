@@ -182,3 +182,28 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
   ]);
   assert.deepEqual(resolved.scenarioProfile.services, ["web_search_service"]);
 });
+
+test("resolveScenarioRunConfig should prefer selectedModel over scenario model", () => {
+  const resolver = new RunConfigResolver({
+    globalConfig: {
+      scenarios: {
+        definitions: {
+          programming: {
+            model: "code-model",
+          },
+        },
+      },
+    },
+  });
+
+  const resolved = resolver.resolveScenarioRunConfig(
+    {
+      scenario: "programming",
+      selectedModel: "user-selected-model",
+      config: { selectedModel: "config-selected-model" },
+    },
+    {},
+  );
+
+  assert.equal(resolved.runtimeModel, "config-selected-model");
+});

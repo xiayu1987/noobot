@@ -84,3 +84,60 @@ test("resolveLlmForTurn should switch model by runtimeModel and emit model_switc
     }
   }
 });
+
+test("resolveLlmForTurn should recreate llm from selected defaultModelSpec without resolving global default", () => {
+  const previousApiKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+  try {
+    const events = [];
+    const modelState = {
+      llm: { id: "old-llm" },
+      activeModelName: "scenario-default-model",
+      activeModelAlias: "scenario_default",
+      eventListener: {
+        onEvent(payload = {}) {
+          events.push(payload);
+        },
+      },
+      runtime: {},
+      globalConfig: {
+        defaultProvider: "scenario_default",
+        providers: {
+          scenario_default: {
+            model: "scenario-default-model",
+            format: "openai_compatible",
+            enabled: true,
+          },
+          selected_alias: {
+            model: "selected-model",
+            format: "openai_compatible",
+            enabled: true,
+          },
+        },
+      },
+      userConfig: {},
+      defaultModelSpec: {
+        alias: "selected_alias",
+        model: "selected-model",
+        format: "openai_compatible",
+        enabled: true,
+      },
+    };
+
+    resolveLlmForTurn(modelState);
+
+    assert.equal(modelState.activeModelAlias, "selected_alias");
+    assert.equal(modelState.activeModelName, "selected-model");
+    assert.equal(modelState.llm?.model, "selected-model");
+    const switched = events.find((item) => item?.event === "model_switched");
+    assert.ok(switched);
+    assert.equal(switched?.data?.alias, "selected_alias");
+    assert.equal(switched?.data?.model, "selected-model");
+  } finally {
+    if (previousApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = previousApiKey;
+    }
+  }
+});
