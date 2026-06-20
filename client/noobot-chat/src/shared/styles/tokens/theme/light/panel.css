@@ -4,6 +4,8 @@
   --noobot-panel-bg: color-mix(in srgb, var(--noobot-base-white) 92%, transparent);
   --noobot-panel-head-bg: color-mix(in srgb, var(--noobot-base-slate-50) 95%, transparent);
   --noobot-panel-border: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
+  --noobot-control-bg: color-mix(in srgb, var(--noobot-base-white) 96%, var(--noobot-base-slate-50));
+  --noobot-control-menu-bg: var(--noobot-base-white);
   --noobot-divider: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);
   --noobot-mask-bg: color-mix(in srgb, var(--noobot-base-slate-900) 24%, transparent);
   --noobot-danger-soft: color-mix(in srgb, var(--noobot-base-red-500) 12%, transparent);

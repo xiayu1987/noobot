@@ -2,10 +2,49 @@
 .el-input__wrapper,
 .el-textarea__inner,
 .el-select__wrapper {
-  background: transparent !important;
+  background: var(--noobot-control-bg, var(--noobot-panel-bg)) !important;
   border: 1px solid var(--noobot-glass-border) !important;
   box-shadow: none !important;
   color: var(--noobot-text-main) !important;
+}
+
+.el-select__wrapper .el-select__placeholder,
+.el-select__wrapper .el-select__selected-item,
+.el-select__wrapper .el-select__selected-item span {
+  color: var(--noobot-text-main) !important;
+}
+
+.el-select__wrapper .el-select__placeholder.is-transparent {
+  color: var(--noobot-text-muted) !important;
+}
+
+.el-select-dropdown,
+.el-select-dropdown__wrap,
+.el-select-dropdown__list {
+  background: var(--noobot-control-menu-bg, var(--noobot-panel-bg)) !important;
+}
+
+.el-select-dropdown.el-popper {
+  border: 1px solid var(--noobot-panel-border) !important;
+}
+
+.el-select-dropdown__item {
+  color: var(--noobot-text-main) !important;
+}
+
+.el-select-dropdown__item.hover,
+.el-select-dropdown__item:hover {
+  background: var(--noobot-surface-item-hover) !important;
+  color: var(--noobot-text-strong) !important;
+}
+
+.el-select-dropdown__item.is-selected {
+  background: var(--noobot-surface-primary-soft) !important;
+  color: var(--noobot-text-accent) !important;
+}
+
+.el-select-dropdown__item.is-disabled {
+  color: var(--noobot-text-muted) !important;
 }
 
 .el-input__wrapper.is-focus,
